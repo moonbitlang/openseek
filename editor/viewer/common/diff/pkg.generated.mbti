@@ -58,6 +58,10 @@ pub fn DocumentDiffOptions::equal(Self, Self) -> Bool
 pub fn DocumentDiffOptions::not_equal(Self, Self) -> Bool
 pub fn DocumentDiffOptions::to_repr(Self) -> @debug.Repr
 
+pub(all) enum DocumentDiffWorkerKind {
+  Line
+}
+
 pub struct LineDocumentDiffProvider {
   _unit : Unit
 } derive(Eq, @debug.Debug)
@@ -67,6 +71,7 @@ pub fn LineDocumentDiffProvider::equal(Self, Self) -> Bool
 pub fn LineDocumentDiffProvider::not_equal(Self, Self) -> Bool
 pub fn LineDocumentDiffProvider::on_did_change(Self, () -> Unit) -> @common.Disposable
 pub fn LineDocumentDiffProvider::to_repr(Self) -> @debug.Repr
+pub fn LineDocumentDiffProvider::worker_kind(Self) -> DocumentDiffWorkerKind?
 pub impl DocumentDiffProvider for LineDocumentDiffProvider
 
 pub(all) struct LineRangeMapping {
@@ -93,4 +98,5 @@ pub fn RangeMapping::to_repr(Self) -> @debug.Repr
 pub(open) trait DocumentDiffProvider {
   fn compute_diff(Self, @model.TextSnapshot, @model.TextSnapshot, DocumentDiffOptions) -> DocumentDiff raise
   fn on_did_change(Self, () -> Unit) -> @common.Disposable
+  fn worker_kind(Self) -> DocumentDiffWorkerKind? = _
 }

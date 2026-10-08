@@ -28,6 +28,8 @@ pub struct MoonFragmentDiffProvider {
 } derive(Eq, @debug.Debug)
 pub fn MoonFragmentDiffProvider::MoonFragmentDiffProvider(@diff.DocumentDiff) -> Self
 pub fn MoonFragmentDiffProvider::as_document_diff_provider(Self) -> &@diff.DocumentDiffProvider
+#deprecated
+pub fn MoonFragmentDiffProvider::worker_kind(Self) -> @diff.DocumentDiffWorkerKind?
 pub impl @diff.DocumentDiffProvider for MoonFragmentDiffProvider
 
 pub(all) struct SectionedSemanticReviewPlan {

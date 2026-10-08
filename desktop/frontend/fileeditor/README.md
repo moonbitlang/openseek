@@ -26,3 +26,13 @@ Drag listeners store the newest requested size and publish CSS plus active
 surface layout in one shared editor animation frame. Mouseup cancels a pending
 frame and commits the final size. Source initialization finishes restore/fold,
 synchronous geometry, reveal and stable lexical demand before its first paint.
+
+Large code sources are prepared through `Viewer.prepare_model` before their
+atomic show transaction. A preparation holds its own source lease and a
+cancelable job. A new show, clear, conversation or checkout boundary cancels
+that job and releases the lease. Large reloads detach before changing the cached
+model, so the outgoing folding contribution cannot scan the new content inline.
+The model/version/rules-specific structural folding cache never shares mutable
+collapse flags; stored view states remain the authority for user fold choices.
+A late or failed preparation cannot publish the previous file under a new tab.
+The package ships the matching `editor-code-worker.js` beside `frontend.js`.

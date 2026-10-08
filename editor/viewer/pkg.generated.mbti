@@ -186,6 +186,13 @@ pub fn MermaidDiagram::MermaidDiagram(@dom.Element, String, dark_mode~ : Bool, o
 pub fn MermaidDiagram::dispose(Self) -> Unit
 pub fn MermaidDiagram::set_dark_mode(Self, Bool) -> Unit
 
+pub(all) enum ModelPreparationFailure {
+  Unavailable
+  Computation
+  InvalidResponse
+  TimedOut
+}
+
 type Viewer
 pub fn Viewer::add_overlay_widget(Self, @browser.OverlayWidget) -> Unit
 pub fn Viewer::change_view_zones(Self, (@browser.ViewZoneChangeAccessor) -> Unit raise) -> Unit
@@ -240,6 +247,7 @@ pub fn Viewer::on_mouse_down(Self, (@browser.EditorMouseEvent) -> Unit) -> @comm
 pub fn Viewer::on_mouse_leave(Self, (@browser.PartialEditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_mouse_move(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_mouse_up(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
+pub fn Viewer::prepare_model(Self, @model.TextModel, (Result[Unit, ModelPreparationFailure]) -> Unit) -> @common.Disposable
 pub fn Viewer::remove_decorations(Self, Array[String]) -> Unit
 pub fn Viewer::remove_overlay_widget(Self, @browser.OverlayWidget) -> Unit
 pub fn Viewer::render(Self) -> Unit

@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/editor/internal/viewer/code_worker_protocol" @worker_protocol,
+  "moonbitlang/editor/internal/viewer/browser/code_worker",
+  "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/localization",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/editor/base/common" @base_common,

@@ -104,6 +104,9 @@ pub struct DiffEditorWidget {
   mut pending_original_scroll_left_echo : Double?
   mut pending_modified_scroll_top_echo : Double?
   mut pending_modified_scroll_left_echo : Double?
+  /// Canonical horizontal offset is independent of the modified vertical
+  /// anchor: modified can have less overflow and clamp locally.
+  mut shared_scroll_left : Double
   mut disposed : Bool
 }
 
@@ -271,6 +274,7 @@ pub fn DiffEditorWidget::create(
     pending_original_scroll_left_echo: None,
     pending_modified_scroll_top_echo: None,
     pending_modified_scroll_left_echo: None,
+    shared_scroll_left: 0.0,
     disposed: false,
   }
   widget.lifetime.push(
@@ -441,14 +445,10 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
   )
   self.lifetime.push(
     self.editors.original.on_did_scroll_change(event => {
-      let scroll_top_echo = self.consume_scroll_top_echo(
-        OriginalScrollPane,
-        event.scroll_top,
-      )
-      let scroll_left_echo = self.consume_scroll_left_echo(
-        OriginalScrollPane,
-        event.scroll_left,
-      )
+      let scroll_top_echo = event.scroll_top_changed &&
+        self.consume_scroll_top_echo(OriginalScrollPane, event.scroll_top)
+      let scroll_left_echo = event.scroll_left_changed &&
+        self.consume_scroll_left_echo(OriginalScrollPane, event.scroll_left)
       // Layout and Markdown presentation changes can publish scroll facts from
       // the first pane render before the paired geometry transaction is ready.
       // The protected modified anchor is restored when the barrier closes, so
@@ -465,6 +465,7 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
       }
       if event.scroll_left_changed {
         if !scroll_left_echo {
+          self.shared_scroll_left = event.scroll_left
           self.pending_layout_modified_viewport = None
           self.sync_scroll_left_to(ModifiedScrollPane, event.scroll_left)
         }
@@ -475,14 +476,10 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
     self.editors.modified.on_did_scroll_change(event => {
       self.refresh_overview_viewport()
       self.layout_hunk_actions()
-      let scroll_top_echo = self.consume_scroll_top_echo(
-        ModifiedScrollPane,
-        event.scroll_top,
-      )
-      let scroll_left_echo = self.consume_scroll_left_echo(
-        ModifiedScrollPane,
-        event.scroll_left,
-      )
+      let scroll_top_echo = event.scroll_top_changed &&
+        self.consume_scroll_top_echo(ModifiedScrollPane, event.scroll_top)
+      let scroll_left_echo = event.scroll_left_changed &&
+        self.consume_scroll_left_echo(ModifiedScrollPane, event.scroll_left)
       if self.layout_render_remaining > 0 &&
         self.pending_layout_modified_viewport is Some(_) {
         return
@@ -500,6 +497,7 @@ fn DiffEditorWidget::install_event_bridges(self : DiffEditorWidget) -> Unit {
       }
       if event.scroll_left_changed {
         if !scroll_left_echo {
+          self.shared_scroll_left = event.scroll_left
           self.pending_layout_modified_viewport = None
           self.sync_scroll_left_to(OriginalScrollPane, event.scroll_left)
         }
@@ -740,7 +738,8 @@ fn DiffEditorWidget::restore_modified_viewport_and_sync_original(
     self.pending_modified_scroll_left_echo = Some(after_left)
   }
   self.sync_scroll_top_to(OriginalScrollPane, after_top)
-  self.sync_scroll_left_to(OriginalScrollPane, after_left)
+  self.sync_scroll_left_to(ModifiedScrollPane, self.shared_scroll_left)
+  self.sync_scroll_left_to(OriginalScrollPane, self.shared_scroll_left)
 }
 
 ///|
@@ -1410,6 +1409,7 @@ pub fn DiffEditorWidget::set_model(
   // DiffEditorViewModel is the sole pair/ownership authority. Its synchronous
   // model event mirrors the committed pair into both kernels before the diff
   // update event clears or rebuilds feature artifacts.
+  self.shared_scroll_left = 0.0
   let previous = self.view_model.set_model(model)
   // A model transaction clears a previous provider/validator failure
   // synchronously. Reconciliation can be held behind the render barrier, so
@@ -1573,8 +1573,10 @@ pub fn DiffEditorWidget::set_scroll_left(
     self.editors.modified.get_layout_info().content_width
   if modified > original {
     self.editors.modified.set_scroll_left(scroll_left)
+    self.shared_scroll_left = self.editors.modified.get_scroll_left()
   } else {
     self.editors.original.set_scroll_left(scroll_left)
+    self.shared_scroll_left = self.editors.original.get_scroll_left()
   }
 }
 

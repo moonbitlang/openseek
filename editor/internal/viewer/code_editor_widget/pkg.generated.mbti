@@ -5,6 +5,7 @@ import {
   "moonbit-community/rabbita/dom",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "moonbitlang/editor/internal/viewer/browser/code_worker",
   "moonbitlang/editor/language",
   "moonbitlang/editor/platform/log",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
@@ -21,6 +22,8 @@ import {
 
 // Values
 pub fn code_editor_references_preview_factory(CodeEditorServices, CodeEditorOptions) -> @moonbitlang/editor/internal/viewer/contrib/references/browser.ReferencesPeekPreviewFactory
+
+pub fn compute_prepared_folding(String, String, Bool, Int, Int, Bool) -> (@moonbitlang/editor/internal/viewer/contrib/folding/browser.FoldingRegions, @moonbitlang/editor/internal/viewer/contrib/folding/browser.FoldingRegions)
 
 pub fn overlay_widget(String, @dom.Element) -> @moonbitlang/editor/viewer/browser.OverlayWidget
 
@@ -255,6 +258,7 @@ pub fn CodeEditorWidget::on_mouse_down(Self, (@moonbitlang/editor/viewer/browser
 pub fn CodeEditorWidget::on_mouse_leave(Self, (@moonbitlang/editor/viewer/browser.PartialEditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::on_mouse_move(Self, (@moonbitlang/editor/viewer/browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::on_mouse_up(Self, (@moonbitlang/editor/viewer/browser.EditorMouseEvent) -> Unit) -> @common.Disposable
+pub fn CodeEditorWidget::prepare_model(Self, @model.TextModel, (Result[Unit, @code_worker.CodeWorkerFailure]) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::remove_decorations(Self, Array[String]) -> Unit
 pub fn CodeEditorWidget::remove_overlay_widget(Self, @moonbitlang/editor/viewer/browser.OverlayWidget) -> Unit
 pub fn CodeEditorWidget::render(Self) -> Unit

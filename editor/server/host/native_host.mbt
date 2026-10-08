@@ -621,7 +621,15 @@ fn static_route(path : String) -> (String, String)? {
     "/style.css" => Some(("style.css", "text/css; charset=utf-8"))
     "/codicon.ttf" => Some(("codicon.ttf", "font/ttf"))
     "/editor.mjs" => Some(("editor.mjs", "text/javascript; charset=utf-8"))
+    "/editor-code-worker.js" =>
+      Some(("editor-code-worker.js", "text/javascript; charset=utf-8"))
     "/embed.mjs" => Some(("embed.mjs", "text/javascript; charset=utf-8"))
+    "/browser-tests/editor-code-worker.js" =>
+      Some(
+        (
+          "browser-tests/editor-code-worker.js", "text/javascript; charset=utf-8",
+        ),
+      )
     "/browser-tests/runner.html" =>
       Some(("browser-tests/runner.html", "text/html; charset=utf-8"))
     "/browser-tests/runner.mjs" =>

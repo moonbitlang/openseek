@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/editor/viewer/common/diff",
+  "moonbitlang/editor/internal/viewer/contrib/folding/browser" @folding_browser,
+}
+
+supported_targets = "js"
+
+import {
+  "moonbitlang/editor/viewer/common/model",
+} for "wbtest"

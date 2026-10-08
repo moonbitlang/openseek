@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/editor/tests/browser/moonbit/code_work",
   "moonbitlang/editor/tests/browser/moonbit/agent_feedback",
   "moonbitlang/editor/tests/browser/moonbit/base_browser" @base_browser_scenario,
   "moonbitlang/editor/tests/browser/moonbit/component",

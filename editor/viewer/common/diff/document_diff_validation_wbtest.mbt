@@ -161,3 +161,53 @@ test "visibility never bypasses document mapping validation" {
     normalize_and_validate_document_diff(unequal_gap, source, source) is None,
   )
 }
+
+///|
+test "document diff accepts the EOF newline anchor but rejects consuming unchanged preceding text" {
+  let original = @model.TextSnapshot("keep\ntail")
+  let modified = @model.TextSnapshot("keep")
+  let removed : DocumentDiff = {
+    changes: [
+      DocumentDiffChange(
+        DetailedLineRangeMapping(
+          LineRange(2, 3),
+          LineRange(2, 2),
+          Some([RangeMapping(Range(1, 5, 2, 5), Range(1, 5, 1, 5))]),
+        ),
+      ),
+    ],
+  }
+  assert_eq(
+    normalize_and_validate_document_diff(removed, original, modified),
+    Some(removed),
+  )
+  let added : DocumentDiff = {
+    changes: [
+      DocumentDiffChange(
+        DetailedLineRangeMapping(
+          LineRange(2, 2),
+          LineRange(2, 3),
+          Some([RangeMapping(Range(1, 5, 1, 5), Range(1, 5, 2, 5))]),
+        ),
+      ),
+    ],
+  }
+  assert_eq(
+    normalize_and_validate_document_diff(added, modified, original),
+    Some(added),
+  )
+  let invalid : DocumentDiff = {
+    changes: [
+      DocumentDiffChange(
+        DetailedLineRangeMapping(
+          LineRange(2, 3),
+          LineRange(2, 2),
+          Some([RangeMapping(Range(1, 4, 2, 5), Range(1, 5, 1, 5))]),
+        ),
+      ),
+    ],
+  }
+  assert_true(
+    normalize_and_validate_document_diff(invalid, original, modified) is None,
+  )
+}

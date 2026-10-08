@@ -91,3 +91,11 @@ pub fn overlay_widget(
 
 ///|
 pub extend ViewerViewState with Debug::{to_repr}
+
+///|
+pub(all) enum ModelPreparationFailure {
+  Unavailable
+  Computation
+  InvalidResponse
+  TimedOut
+}

@@ -54,3 +54,26 @@ fn file_placeholder(markdown : Bool) -> String {
     (Japanese, true) => "表示する Markdown ファイルを選択"
   }
 }
+
+///|
+fn source_preparation_notice(timed_out : Bool) -> String {
+  match (viewer_localization.language(), timed_out) {
+    (English, true) => "File preparation timed out. Reload the file to retry."
+    (English, false) => "Could not prepare the file. Reload the file to retry."
+    (Spanish, true) =>
+      "La preparación del archivo agotó el tiempo. Recarga el archivo para reintentar."
+    (Spanish, false) =>
+      "No se pudo preparar el archivo. Recarga el archivo para reintentar."
+    (SimplifiedChinese, true) => "文件准备超时，请重新加载文件。"
+    (SimplifiedChinese, false) =>
+      "无法准备文件，请重新加载文件。"
+    (TraditionalChinese, true) =>
+      "檔案準備逾時，請重新載入檔案。"
+    (TraditionalChinese, false) =>
+      "無法準備檔案，請重新載入檔案。"
+    (Japanese, true) =>
+      "ファイルの準備がタイムアウトしました。再読み込みして再試行してください。"
+    (Japanese, false) =>
+      "ファイルを準備できませんでした。再読み込みして再試行してください。"
+  }
+}

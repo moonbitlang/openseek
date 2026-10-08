@@ -96,6 +96,21 @@ The host owns files, transport, persistence, reload policy, shell chrome, and
 error presentation. The viewer owns readonly rendering, selection, scrolling,
 widgets, language-feature presentation, and editor events.
 
+OpenSeek's source host retains bounded resource models through explicit leases
+in `desktop/frontend/fileeditor`; model cache policy does not move into the
+generic viewer. `Viewer.prepare_model` can prepare large sources' structural
+folding before attachment. The version/rules-specific cache owns immutable
+ranges, while each view owns its collapse flags. Source initialization commits
+restore/fold, final geometry, reveal and stable visible token demand before paint.
+
+`internal/workers/code` compiles the same pure folding and Line diff algorithms
+to `editor-code-worker.js`. The browser worker client owns one thread and timer
+per job and terminates the actual computation on completion, cancellation or
+deadline. A closed JSON protocol preserves UTF16 mappings and typed failures;
+model/version/provider generations fence publication. Custom diff providers
+remain synchronous unless they opt into the built-in worker algorithm. Host
+builds publish the worker beside their HTML entry, resolved using `document.baseURI`.
+
 `ViewerServices(resource_path_label=...)` lets each host supply workspace-relative
 paths for Code and Markdown Peek labels. It returns `None` for resources without
 a host label; resource identity, model resolution, and navigation still use the

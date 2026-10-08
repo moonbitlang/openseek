@@ -1,0 +1,58 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/internal/viewer/code_worker_protocol"
+
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/editor/internal/viewer/contrib/folding/browser",
+  "moonbitlang/editor/viewer/common/diff",
+}
+
+// Values
+pub fn decode_diff(Array[WorkerDiffChange]) -> @diff.DocumentDiff
+
+pub fn decode_folds(Array[PreparedFoldRange]) -> @browser.FoldingRegions
+
+pub fn encode_diff(@diff.DocumentDiff) -> CodeWorkerResponse
+
+pub fn encode_folds(@browser.FoldingRegions) -> Array[PreparedFoldRange]
+
+// Errors
+
+// Types and methods
+pub(all) enum CodeWorkerRequest {
+  Diff(original~ : String, modified~ : String, ignore_trim_whitespace~ : Bool)
+  Folding(text~ : String, language_id~ : String, off_side~ : Bool, tab_size~ : Int, limit~ : Int, outline~ : Bool)
+} derive(ToJson, @json.FromJson)
+pub fn CodeWorkerRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CodeWorkerRequest::to_json(Self) -> Json
+
+pub(all) enum CodeWorkerResponse {
+  Diff(Array[WorkerDiffChange])
+  Folding(Array[PreparedFoldRange], Array[PreparedFoldRange]?)
+  Failed
+} derive(ToJson, @json.FromJson)
+pub fn CodeWorkerResponse::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CodeWorkerResponse::to_json(Self) -> Json
+
+pub(all) struct PreparedFoldRange {
+  start : Int
+  end : Int
+  kind : String?
+} derive(ToJson, @json.FromJson)
+pub fn PreparedFoldRange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PreparedFoldRange::to_json(Self) -> Json
+
+pub(all) struct WorkerDiffChange {
+  original_start : Int
+  original_end : Int
+  modified_start : Int
+  modified_end : Int
+  ignored : Bool
+  inner_changes : Array[(Int, Int, Int, Int, Int, Int, Int, Int)]?
+} derive(ToJson, @json.FromJson)
+pub fn WorkerDiffChange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorkerDiffChange::to_json(Self) -> Json
+
+// Type aliases
+
+// Traits

@@ -1,0 +1,15 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/tests/browser/moonbit/code_work"
+
+// Values
+pub fn run_prepared_folding_test() -> Unit
+
+pub fn run_worker_timeout_test() -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

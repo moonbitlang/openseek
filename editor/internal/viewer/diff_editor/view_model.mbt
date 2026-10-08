@@ -21,6 +21,7 @@ pub(all) enum DiffEditorViewModelState {
 priv enum DiffEditorViewModelFailure {
   ProviderError
   ValidationRejected
+  WorkerFailed(@code_worker.CodeWorkerFailure)
 }
 
 ///|
@@ -37,6 +38,7 @@ pub struct DiffEditorViewModel {
   mut current_diff : @diff.DocumentDiff?
   priv mut failure : DiffEditorViewModelFailure?
   mut generation : Int
+  priv mut worker_job : @base_common.Disposable?
   immediate : @base_browser.RunOnceScheduler
   content_debounce : @base_browser.RunOnceScheduler
   did_change_model : @base_common.Emitter[Unit]
@@ -60,6 +62,7 @@ pub fn DiffEditorViewModel::DiffEditorViewModel(
     current_diff: None,
     failure: None,
     generation: 0,
+    worker_job: None,
     immediate: @base_browser.RunOnceScheduler::new_with_timer(
       0, schedule_timeout,
     ),
@@ -112,6 +115,7 @@ pub fn DiffEditorViewModel::set_model(
   if self.disposed || same_model_pair(previous, model) {
     return None
   }
+  self.cancel_worker()
   self.generation += 1
   self.immediate.cancel()
   self.content_debounce.cancel()
@@ -170,6 +174,7 @@ fn DiffEditorViewModel::clear_model_pair_on_will_dispose(
     // must never clear the newly installed pair.
     return
   }
+  self.cancel_worker()
   self.generation += 1
   self.immediate.cancel()
   self.content_debounce.cancel()
@@ -222,6 +227,7 @@ pub fn DiffEditorViewModel::update_options(
 
 ///|
 fn DiffEditorViewModel::begin_pending(self : DiffEditorViewModel) -> Unit {
+  self.cancel_worker()
   self.generation += 1
   self.current_diff = None
   self.failure = None
@@ -304,45 +310,79 @@ fn DiffEditorViewModel::compute_current(self : DiffEditorViewModel) -> Unit {
   let modified_version = model.modified.get_version_id()
   let original = model.original.snapshot()
   let modified = model.modified.snapshot()
-  let computed = Some(
-    self.provider.compute_diff(original, modified, self.options),
-  ) catch {
-    _ => None
-  }
-  if self.disposed || self.generation != generation {
-    return
-  }
-  guard self.model is Some(current) &&
-    current.original.identity() == original_identity &&
-    current.modified.identity() == modified_identity &&
-    current.original.get_version_id() == original_version &&
-    current.modified.get_version_id() == modified_version else {
-    return
-  }
-  match computed {
-    Some(result) =>
-      match
-        @diff.normalize_and_validate_document_diff(result, original, modified) {
-        Some(result) => {
-          self.current_diff = Some(result)
-          self.failure = None
-          self.state = Ready
+  let complete = (
+    computed : Result[@diff.DocumentDiff, DiffEditorViewModelFailure],
+  ) => {
+    if self.disposed || self.generation != generation {
+      return
+    }
+    guard self.model is Some(current) &&
+      current.original.identity() == original_identity &&
+      current.modified.identity() == modified_identity &&
+      current.original.get_version_id() == original_version &&
+      current.modified.get_version_id() == modified_version else {
+      return
+    }
+    self.worker_job = None
+    match computed {
+      Ok(result) =>
+        match
+          @diff.normalize_and_validate_document_diff(result, original, modified) {
+          Some(result) => {
+            self.current_diff = Some(result)
+            self.failure = None
+            self.state = Ready
+          }
+          None => {
+            self.current_diff = None
+            self.failure = Some(ValidationRejected)
+            self.state = Failed
+          }
         }
-        None => {
-          self.current_diff = None
-          self.failure = Some(ValidationRejected)
-          self.state = Failed
-          self.did_update.fire(())
-          return
-        }
+      Err(error) => {
+        self.current_diff = None
+        self.failure = Some(error)
+        self.state = Failed
       }
-    _ => {
-      self.current_diff = None
-      self.failure = Some(ProviderError)
-      self.state = Failed
+    }
+    self.did_update.fire(())
+  }
+  if self.provider.worker_kind() is Some(Line) {
+    let job = @code_worker.compute(
+      Diff(
+        original=original.get_value(),
+        modified=modified.get_value(),
+        ignore_trim_whitespace=self.options.ignore_trim_whitespace,
+      ),
+      result => {
+        match result {
+          Ok(Diff(changes)) =>
+            complete(Ok(@worker_protocol.decode_diff(changes)))
+          Ok(_) => complete(Err(WorkerFailed(InvalidResponse)))
+          Err(error) => complete(Err(WorkerFailed(error)))
+        }
+      },
+    )
+    if job is Some(job) {
+      self.worker_job = Some(job)
+      return
     }
   }
-  self.did_update.fire(())
+  let computed = Ok(
+    self.provider.compute_diff(original, modified, self.options),
+  ) catch {
+    _ => Err(ProviderError)
+  }
+  complete(computed)
+}
+
+///|
+fn DiffEditorViewModel::cancel_worker(self : DiffEditorViewModel) -> Unit {
+  match self.worker_job {
+    Some(job) => job.dispose()
+    None => ()
+  }
+  self.worker_job = None
 }
 
 ///|
@@ -354,6 +394,7 @@ pub fn DiffEditorViewModel::get_failure_diagnostic(
   match self.failure {
     Some(ProviderError) => Some("provider error")
     Some(ValidationRejected) => Some("validator rejection")
+    Some(WorkerFailed(error)) => Some("worker: " + error.to_repr().to_string())
     None => None
   }
 }
@@ -408,6 +449,7 @@ pub fn DiffEditorViewModel::dispose(self : DiffEditorViewModel) -> Unit {
     return
   }
   self.disposed = true
+  self.cancel_worker()
   self.generation += 1
   self.immediate.dispose()
   self.content_debounce.dispose()

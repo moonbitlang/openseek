@@ -101,13 +101,25 @@ fn document_line_range_contains_range(
   snapshot : @model.TextSnapshot,
 ) -> Bool {
   if !parent.is_empty() {
-    let start_is_inside = child.start_line_number >= parent.start_line_number &&
+    // An EOF insertion/deletion includes the preceding newline because no
+    // following newline exists. Its character range starts at the previous
+    // line's end; it must not consume any unchanged character on that line.
+    let starts_at_eof_newline = parent.start_line_number > 1 &&
+      parent.end_line_number_exclusive == snapshot.line_count() + 1 &&
+      child.start_line_number == parent.start_line_number - 1 &&
+      child.start_column ==
+      snapshot.get_line_max_column(child.start_line_number) &&
+      child.end_line_number >= parent.start_line_number
+    let start_is_inside = starts_at_eof_newline ||
       (
-        child.start_line_number < parent.end_line_number_exclusive ||
+        child.start_line_number >= parent.start_line_number &&
         (
-          child.is_empty() &&
-          child.start_line_number == parent.end_line_number_exclusive &&
-          child.start_column == 1
+          child.start_line_number < parent.end_line_number_exclusive ||
+          (
+            child.is_empty() &&
+            child.start_line_number == parent.end_line_number_exclusive &&
+            child.start_column == 1
+          )
         )
       )
     let end_is_inside = child.end_line_number < parent.end_line_number_exclusive ||

@@ -57,6 +57,9 @@ pub(open) trait DocumentDiffProvider {
   /// model pair must be recomputed. Immutable providers return a no-op
   /// disposable and never invoke the listener.
   fn on_did_change(Self, () -> Unit) -> @base_common.Disposable
+
+  /// Opt in only when the provider is exactly the built-in serializable algorithm.
+  fn worker_kind(Self) -> DocumentDiffWorkerKind? = _
 }
 
 ///|
@@ -82,3 +85,13 @@ pub extend DocumentDiffChange with Debug::{to_repr}
 
 ///|
 pub extend DocumentDiffChange with Eq::{equal, not_equal}
+
+///|
+pub(all) enum DocumentDiffWorkerKind {
+  Line
+}
+
+///|
+impl DocumentDiffProvider with fn worker_kind(_self) {
+  None
+}

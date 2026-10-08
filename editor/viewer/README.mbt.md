@@ -38,6 +38,17 @@ normal view lines and auxiliary `render_lines` output. The renderer's overflow
 marker shows omitted characters; the model stays complete. `Unlimited` is an
 explicit host opt-in. Lexical limits are independently owned by `TextModel`.
 
+`Viewer.prepare_model(model, callback)` prepares structural folding for a
+large detached source (at least 2,000 lines or 65,536 UTF16 units). It returns
+a cancelable disposable and reports an explicit preparation failure. A warm
+model/version/rules cache completes immediately; views decode independent
+collapse flags. Small sources, too-large fallback models and custom marker
+closures use the synchronous compatibility path. Hosts that require initial
+folding can prepare before attachment, then restore/fold, layout, reveal,
+publish stable demand and render as one show transaction. Cancel preparation
+before replacing the model or disposing the host. The browser distribution
+must include `editor-code-worker.js` beside its HTML entry.
+
 ## Diagram embedding
 
 Consumers with their own Markdown parser can use `render_diago_diagram_svg`

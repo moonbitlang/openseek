@@ -39,6 +39,7 @@ async fn main {
     @fs.rmdir(browser_tests_dir, recursive=true)
   }
   @fs.mkdir(browser_tests_dir, recursive=true)
+  @fs.write_file(browser_tests_dir + "/editor-code-worker.js", @fs.read_file("web/dist/editor-code-worker.js"), create_mode=@fs.CreateOrTruncate)
   @fs.write_file(
     browser_tests_dir + "/runner.mjs",
     generated_js.replace(

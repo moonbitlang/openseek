@@ -432,3 +432,9 @@ pub extend MoonFragmentDiffProvider with @diff.DocumentDiffProvider::{
   compute_diff,
   on_did_change,
 }
+
+///|
+#deprecated
+pub extend MoonFragmentDiffProvider with @diff.DocumentDiffProvider::{
+  worker_kind,
+}

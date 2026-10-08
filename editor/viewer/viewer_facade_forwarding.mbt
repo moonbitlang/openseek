@@ -329,3 +329,29 @@ pub fn Viewer::get_decorations_in_range(
 ) -> Array[@model.ModelDecoration] {
   self.widget.get_decorations_in_range(range)
 }
+
+///|
+/// Prepare large folding inputs before an atomic set_model/restore/fold/paint
+/// transaction. Disposing the returned handle cancels the preparation.
+pub fn Viewer::prepare_model(
+  self : Viewer,
+  model : @model.TextModel,
+  ready : (Result[Unit, ModelPreparationFailure]) -> Unit,
+) -> @base_common.Disposable {
+  self.widget.prepare_model(model, result => {
+    ready(
+      match result {
+        Ok(_) => Ok(())
+        Err(error) =>
+          Err(
+            match error {
+              Unavailable => Unavailable
+              Computation => Computation
+              InvalidResponse => InvalidResponse
+              TimedOut => TimedOut
+            },
+          )
+      },
+    )
+  })
+}
