@@ -195,6 +195,12 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // which is the already-accepted `moon run` shape; what the prefix buys is
   // that only the review FORM of this program exists in a turn's vocabulary.
   ("codex", ["review"]),
+  // Compile documents and raster previews for read_image visual review.
+  ("typst", ["compile"]),
+  ("typst", ["fonts"]),
+  ("typst", ["help"]),
+  ("typst", ["--help"]),
+  ("typst", ["--version"]),
   // The only two read-only utilities without a MoonBit equivalent worth using:
   // `rg` searches a whole tree faster than a snippet can walk it, and `diff`
   // produces a structured comparison. Their mutating counterparts (`rm`, `mv`,
