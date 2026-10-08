@@ -300,6 +300,7 @@ async fn run_general(
         session,
         append_item=(session, item) => turn.record(store.append(session, item)),
         job_log_dir=store.job_logs_dir(id),
+        session_scratch_dir=store.scratch_dir(id),
         api_key~,
         model~,
         task~,

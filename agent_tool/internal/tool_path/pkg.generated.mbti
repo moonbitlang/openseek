@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/internal/tool_path"
+
+import {
+  "moonbitlang/openseek/agent_tool/write_scope",
+}
+
+// Values
+pub fn is_session(String) -> Bool
+
+pub async fn resolve(String, String, session_dir? : String) -> String
+
+pub async fn scope(String, @write_scope.WriteScope?, String?) -> @write_scope.WriteScope?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

@@ -2,6 +2,7 @@
 package "moonbitlang/openseek/agent_tool/write_scope"
 
 // Values
+pub async fn with_session(WriteScope?, WriteScope, String) -> WriteScope
 
 // Errors
 

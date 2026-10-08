@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/internal/workspace_path",
+}
+
+supported_targets = "+wasm+native"

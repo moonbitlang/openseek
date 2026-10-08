@@ -119,6 +119,7 @@ pub fn definition(
   workspace_root~ : String,
   read_only? : Bool = false,
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
@@ -178,6 +179,7 @@ pub fn definition(
           input,
           read_only~,
           file_state~,
+          session_dir?,
           write_scope?,
           saved~,
           bg_runtime?,
@@ -308,6 +310,7 @@ async fn execute(
   input : @decode.MbtxInput,
   read_only~ : Bool,
   file_state~ : @agent_tool.FileStateMap,
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
   saved~ : Ref[String?],
   bg_runtime? : @bgjobs.BgJobRuntime,
@@ -325,6 +328,16 @@ async fn execute(
   subrun? : @host.SubrunInjection,
   program? : @ptc.Program,
 ) -> @agent_tool.ToolAction {
+  // Only the bundled reader gives arguments file-selector semantics. Arbitrary
+  // script arguments remain opaque, including strings beginning with @session/.
+  let script_args = if input.program is File("@builtin/read.mbtx") {
+    resolve_read_args(workspace_root, input.args, session_dir?) catch {
+      error =>
+        return @agent_tool.respond("invalid read path: \{error}", is_error=true)
+    }
+  } else {
+    input.args
+  }
   // Read once, before validation/approval, then compile this same snapshot.
   // A saved script has the same isolation and execution path as inline code.
   let (source, source_name, script_path) = match input.program {
@@ -343,6 +356,7 @@ async fn execute(
           source,
           read_only~,
           file_state~,
+          session_dir?,
           write_scope?,
         )
       }) catch {
@@ -355,7 +369,9 @@ async fn execute(
       saved.val = Some(filename)
       // The same resolution `save_script` used; a script that could be saved
       // resolves, so a failure here only costs the cache its dedicated dir.
-      let path = try resolve_filename(workspace_root, filename) catch {
+      let path = try
+        resolve_filename(workspace_root, filename, session_dir?)
+      catch {
         _ => None
       } noraise {
         path => Some(path)
@@ -375,7 +391,7 @@ async fn execute(
       if bundled is Some(source) {
         (source, filename, Some(filename))
       } else {
-        let path = resolve_filename(workspace_root, filename) catch {
+        let path = resolve_filename(workspace_root, filename, session_dir?) catch {
           error =>
             return @agent_tool.respond(
               "error: mbtx \{@tool_error.failure_message("\{error}")}",
@@ -385,7 +401,7 @@ async fn execute(
         let source = read_script_snapshot(file_state, path) catch {
           error =>
             return @agent_tool.respond(
-              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
+              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new workspace or @session/ script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
               is_error=true,
             )
         }
@@ -868,7 +884,7 @@ async fn execute(
           },
           artifact,
           "--",
-          ..input.args,
+          ..script_args,
         ]
         Some(("moonrun", run_argv, notes))
       }
@@ -891,7 +907,7 @@ async fn execute(
           ["--warn-list", WarnOffList]
         },
         "--",
-        ..input.args,
+        ..script_args,
       ],
       "",
     ),
@@ -1649,7 +1665,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             "source",
             Json({
               "type": "string",
-              "description": "Complete .mbtx program. Alone: run inline. With a workspace filename: save and run, then reuse filename-only calls. Cannot accompany a namespaced filename. Different existing content is never overwritten.",
+              "description": "Complete .mbtx program. Alone: run inline. With a workspace or @session/ filename: save and run, then reuse filename-only calls. Cannot accompany an @builtin/ filename. Different existing content is never overwritten.",
             }),
           ),
           (
@@ -1657,7 +1673,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run in workspace or session storage, refusing to overwrite different content. @session/ stores scripts for this session; only @builtin/ scripts are read-only. cwd controls execution only.",
             },
           ),
           (
@@ -1828,7 +1844,7 @@ fn description(
     #|
     #|Every call requires a short description and at least one of source or
     #|filename. There are three valid ways to supply the program:
-    #|- source + filename: save the source to that workspace filename and run it.
+    #|- source + filename: save the source to that workspace or @session/ filename and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
@@ -1869,8 +1885,8 @@ fn description(
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
     #|(architecture, validation, extension points).
-    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source. Namespaced
-    #|scripts are read-only. Only @builtin/ is supported; skill namespaces are
+    #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source.
+    #|@builtin/ scripts are read-only. @session/ stores reusable session scripts; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.
     #|Ordinary names such as check.mbtx select workspace files. Use
     #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve

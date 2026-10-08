@@ -54,6 +54,7 @@
 pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
@@ -175,6 +176,7 @@ pub fn definition(
         workspace_root,
         file_state,
         arguments,
+        session_dir?,
         write_scope?,
       )
     }),
@@ -186,6 +188,7 @@ async fn execute_with_workspace(
   workspace_root : String,
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
@@ -198,7 +201,10 @@ async fn execute_with_workspace(
       )
     }
   }
-  let path = @workspace_path.resolve(workspace_root, input.path)
+  let path = @tool_path.resolve(workspace_root, input.path, session_dir?) catch {
+    error => return @agent_tool.respond("invalid path: \{error}", is_error=true)
+  }
+  let write_scope = @tool_path.scope(workspace_root, write_scope, session_dir)
   // Containment gate for confined (worker) registries. Previews write
   // nothing, so they stay readable everywhere; the write itself is gated
   // again in commit_edit, immediately before the file is touched.

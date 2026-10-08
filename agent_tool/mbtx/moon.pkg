@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_tool/internal/tool_path",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",

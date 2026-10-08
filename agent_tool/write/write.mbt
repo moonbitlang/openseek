@@ -33,6 +33,7 @@
 pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
@@ -81,6 +82,7 @@ pub fn definition(
           workspace_root,
           file_state,
           arguments,
+          session_dir?,
           write_scope?,
           approval?,
         )
@@ -94,6 +96,7 @@ async fn execute_with_workspace(
   workspace_root : String,
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.ToolAction {
@@ -106,12 +109,23 @@ async fn execute_with_workspace(
       )
     }
   }
-  let path = @workspace_path.resolve(workspace_root, input.path)
-  write_file(input, path~, file_state~, write_scope?, approval?)
+  let path = @tool_path.resolve(workspace_root, input.path, session_dir?) catch {
+    error => return @agent_tool.respond("invalid path: \{error}", is_error=true)
+  }
+  let write_scope = @tool_path.scope(workspace_root, write_scope, session_dir)
+  write_file(
+    input,
+    path~,
+    file_state~,
+    write_scope?,
+    approval?,
+    session_owned=@tool_path.is_session(input.path),
+  )
 }
 
 ///|
 async fn write_file(
+  session_owned~ : Bool,
   input : @decode.WriteInput,
   path~ : String,
   file_state~ : @agent_tool.FileStateMap,
@@ -171,7 +185,7 @@ async fn write_file(
     file_state~,
     write_scope?,
     approval?,
-    reason?=if source_overwrite {
+    reason?=if source_overwrite && !session_owned {
       Some("overwrite an existing source file with the supplied full contents")
     } else {
       None

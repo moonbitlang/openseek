@@ -1,16 +1,18 @@
 ///|
 /// The embedded source a `@builtin/` filename selects, or `None` for an
-/// ordinary workspace filename. Bundled workflows are compiled into the binary
+/// workspace or session filename. Bundled workflows are compiled into the binary
 /// (see `generated_bundled_workflows.mbt`), so they run the same whether or not
 /// an installation's `share/workflow/` sits beside the executable.
 ///
 /// Raises for an unknown @ namespace or an unknown bundled name, so a typo never
 /// falls through to a workspace file.
 fn bundled_source(filename : String) -> String? raise {
-  guard filename.has_prefix("@") else { return None }
+  guard filename.has_prefix("@") && !@tool_path.is_session(filename) else {
+    return None
+  }
   guard filename.strip_prefix("@builtin/") is Some(name) else {
     fail(
-      "unknown script namespace in \{filename}. Only @builtin/ is supported. Use ./\{filename} for a literal workspace path",
+      "unknown script namespace in \{filename}. Supported namespaces are @builtin/ and @session/. Use ./\{filename} for a literal workspace path",
     )
   }
   guard bundled_workflow(name) is Some(source) else {
@@ -23,19 +25,22 @@ fn bundled_source(filename : String) -> String? raise {
 let bundled_workflow_hint : String = " Bundled workflows: @builtin/read.mbtx, @builtin/rg.mbtx (ripgrep search), @builtin/check.mbtx, @builtin/test.mbtx, @builtin/check-test.mbtx, @builtin/info-fmt.mbtx, @builtin/check-json.mbtx, @builtin/ci-watch.mbtx (GitHub CI status), @builtin/fix-deprecations.mbtx (ptc=true; one guarded edit per deprecation site). Agent workflows (subrun=true): @builtin/review.mbtx (independent worktree audit; criteria in args), @builtin/change-review.mbtx, @builtin/repo-map.mbtx. Ordinary filenames select workspace files."
 
 ///|
-/// Resolve a workspace script path. Namespaced filenames never name a
-/// workspace file; `bundled_source` handles them.
-fn resolve_filename(workspace_root : String, filename : String) -> String raise {
-  guard !filename.has_prefix("@") else {
+/// Resolve a saved workspace or session script; bundled scripts are read-only.
+async fn resolve_filename(
+  workspace_root : String,
+  filename : String,
+  session_dir? : String,
+) -> String {
+  guard !filename.has_prefix("@") || @tool_path.is_session(filename) else {
     fail(
       "\{filename} is a namespaced script and is read-only. Use ./\{filename} for a literal workspace path",
     )
   }
-  @workspace_path.resolve(workspace_root, filename)
+  @tool_path.resolve(workspace_root, filename, session_dir?)
 }
 
 ///|
-test "only the builtin namespace selects bundled workflows" {
+async test "only the builtin namespace selects bundled workflows" {
   assert_true(bundled_source("@builtin/check.mbtx") is Some(_))
   for name in ["check.mbtx", "./@builtin/check.mbtx", "scripts/check.mbtx"] {
     assert_true(bundled_source(name) is None)
@@ -89,4 +94,32 @@ async test "every share/workflow script is embedded verbatim and named in the hi
       msg="\{name} missing from the bundled workflow hint",
     )
   }
+}
+
+///|
+/// Resolve the bundled reader's path[:start[:end]] selectors in the host.
+async fn resolve_read_args(
+  workspace_root : String,
+  args : Array[String],
+  session_dir? : String,
+) -> Array[String] {
+  [
+    for arg in args => {
+      if @tool_path.is_session(arg) {
+        match arg.split_once(":") {
+          Some((path, lines)) => {
+            guard lines
+              .split(":")
+              .all(part => !part.is_empty() && part.all(c => c.is_ascii_digit())) else {
+              fail("invalid @session/ read selector: \{arg}")
+            }
+            "\{@tool_path.resolve(workspace_root, path.to_owned(), session_dir?)}:\{lines}"
+          }
+          None => @tool_path.resolve(workspace_root, arg, session_dir?)
+        }
+      } else {
+        arg
+      }
+    }
+  ]
 }

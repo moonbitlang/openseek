@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub fn definition(workspace_root? : String, file_state? : @agent_tool.FileStateMap, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel) -> @agent_tool.AgentToolDefinition
+pub fn definition(workspace_root? : String, file_state? : @agent_tool.FileStateMap, session_dir? : String, write_scope? : @write_scope.WriteScope, approval? : @agent_runtime.ApprovalChannel) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

@@ -161,3 +161,33 @@ async test "a POSIX backslash is a filename byte, not a separator" {
     }
   })
 }
+
+///|
+async test "session overlay preserves worker confinement and protects the scratch root" {
+  @vfs.with_tmpdir(root => {
+    @fs.mkdir("\{root}/project")
+    @fs.mkdir("\{root}/scratch")
+    let base = match
+      @write_scope.WriteScope::create(root="\{root}/project", allowed_paths=[
+        "src",
+      ]) {
+      Ok(scope) => scope
+      Err(reason) => fail(reason)
+    }
+    let scratch = match
+      @write_scope.WriteScope::create(root="\{root}/scratch") {
+      Ok(scope) => scope
+      Err(reason) => fail(reason)
+    }
+    let scope = @write_scope.with_session(
+      Some(base),
+      scratch,
+      "\{root}/project",
+    )
+    assert_true(scope.check("\{root}/scratch/file") is Ok(None))
+    assert_true(scope.check("\{root}/project/src/file") is Ok(None))
+    assert_true(scope.check("\{root}/project/other") is Ok(Some(_)))
+    assert_true(scope.check("\{root}/scratch") is Err(_))
+    assert_true(scope.check("\{root}/outside") is Ok(Some(_)))
+  })
+}

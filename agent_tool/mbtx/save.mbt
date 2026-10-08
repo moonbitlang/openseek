@@ -7,6 +7,7 @@ async fn save_script(
   source : String,
   read_only~ : Bool,
   file_state~ : @agent_tool.FileStateMap,
+  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> Unit {
   guard !read_only else {
@@ -14,8 +15,14 @@ async fn save_script(
       "this read-only tool cannot save scripts. Run an existing filename without source, or use source alone",
     )
   }
-  let path = resolve_filename(workspace_root, filename)
-  let scope = match @write_scope.WriteScope::create(root=workspace_root) {
+  let path = resolve_filename(workspace_root, filename, session_dir?)
+  let root = if @tool_path.is_session(filename) && session_dir is Some(session) {
+    session
+  } else {
+    workspace_root
+  }
+  let write_scope = @tool_path.scope(workspace_root, write_scope, session_dir)
+  let scope = match @write_scope.WriteScope::create(root~) {
     Ok(scope) => scope
     Err(reason) => fail(reason)
   }

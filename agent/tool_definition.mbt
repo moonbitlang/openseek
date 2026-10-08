@@ -60,6 +60,7 @@ pub async fn[X] build_tools(
   scope : @agent_runtime.AgentTaskScope[X],
   on_background_wake? : () -> Unit,
   job_log_dir? : String,
+  session_scratch_dir? : String,
   extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
   mbtx_subrun? : @host.SubrunInjection,
 ) -> @agent_tool.Tools {
@@ -86,6 +87,9 @@ pub async fn[X] build_tools(
       }
     })
   })
+  // Durable sessions supply their own directory; ephemeral registries keep it
+  // only for this runtime. Per-call mbtx cleanup never owns this directory.
+  let session_dir = session_scratch_dir.unwrap_or("\{scratch}/session")
   let spill_dir = match job_log_dir {
     Some(root) => {
       // tmpdir already reserved this unique runtime name. mkdir below is
@@ -171,10 +175,11 @@ pub async fn[X] build_tools(
     })
   })
   let file_tools = [
-    @edit.definition(workspace_root~, file_state~),
-    @multi_edit.definition(workspace_root~, file_state~),
+    @edit.definition(workspace_root~, file_state~, session_dir~),
+    @multi_edit.definition(workspace_root~, file_state~, session_dir~),
     @write.definition(
       workspace_root~,
+      session_dir~,
       file_state~,
       approval?=runtime.approval_channel(),
     ),
@@ -183,6 +188,7 @@ pub async fn[X] build_tools(
   file_tools.push(
     @remove.definition(
       workspace_root~,
+      session_dir~,
       file_state~,
       approval?=runtime.approval_channel(),
     ),
@@ -214,6 +220,7 @@ pub async fn[X] build_tools(
       // would have nowhere to leave a transcript.
       @mbtx.definition(
         workspace_root~,
+        session_dir~,
         file_state~,
         bg_runtime~,
         job_dir=scratch,

@@ -1,5 +1,5 @@
 ///|
-/// A write-containment scope for confined file tools (worker subagents).
+/// A write policy for file tools, optionally extended with session scratch.
 ///
 /// `deny_reason` decides whether a path may be the target of a write-class
 /// operation (write, edit, remove): the lexically normalized request AND its
@@ -7,7 +7,8 @@
 /// when the scope carries `allowed_paths` — both must fall under one of those
 /// component-wise prefixes. Resolution realpaths the nearest EXISTING ancestor
 /// so a symlinked directory cannot smuggle a write out of the root, and a
-/// dangling symlink (final or ancestor) fails closed.
+/// dangling symlink (final or ancestor) fails closed. A session overlay adds
+/// its own confined subtree without changing the underlying workspace policy.
 ///
 /// Callers gate once at path resolution for a good early error, and AGAIN
 /// immediately before each write — including revert/rollback writes: the
@@ -17,13 +18,17 @@
 /// ancestors of an allowed path are implied, and a symlinked ancestor is
 /// already caught by the resolved-location check on the target itself.
 struct WriteScope {
-  /// Canonical (realpath'd) absolute root every write must stay under.
+  /// Canonical base root for workspace paths and relative-path resolution.
   root : String
   /// Component-wise relative prefixes; empty means root-only confinement.
   allowed : Array[Array[String]]
   /// Human-readable prefix list for deny messages.
   allowed_display : String
   grants : Map[String, String]
+  /// Independently confined scratch storage; never widened by approval.
+  session_root : String?
+  /// Preserve an originally unrestricted workspace policy outside scratch.
+  unrestricted : Bool
 }
 
 ///|
@@ -52,11 +57,13 @@ pub async fn WriteScope::create(
     allowed,
     allowed_display: allowed_paths.join(", "),
     grants: Map([]),
+    session_root: None,
+    unrestricted: false,
   })
 }
 
 ///|
-/// The canonical root every admitted write stays under.
+/// The canonical base root, excluding any session scratch overlay.
 pub fn WriteScope::root(self : WriteScope) -> String {
   self.root
 }
@@ -80,6 +87,40 @@ pub async fn WriteScope::check(
   self : WriteScope,
   path : String,
 ) -> Result[String?, String] {
+  let requested = self.absolutize(path)
+  let session_target = match self.session_root {
+    None => None
+    Some(root) =>
+      if @workspace_path.is_under_workspace_root(root, requested) ||
+        (
+          resolve_existing_prefix(requested) is Some(resolved) &&
+          @workspace_path.is_under_workspace_root(root, resolved)
+        ) {
+        Some(root)
+      } else {
+        None
+      }
+  }
+  if session_target is Some(root) {
+    if requested == root || resolve_existing_prefix(requested) == Some(root) {
+      return Err("the session scratch root cannot be a write target")
+    }
+    let confined : WriteScope = {
+      root,
+      allowed: [],
+      allowed_display: "",
+      grants: Map([]),
+      session_root: None,
+      unrestricted: false,
+    }
+    return match confined.check(requested) {
+      Ok(Some(reason)) => Err(reason)
+      result => result
+    }
+  }
+  if self.unrestricted {
+    return Ok(None)
+  }
   // On POSIX a backslash is a legal filename byte, but every path helper in
   // this codebase (and the prefix slicing below) treats it as a separator —
   // a component literally named `src\x` would resolve as `src/x` and slip
@@ -90,7 +131,6 @@ pub async fn WriteScope::check(
       "path contains a backslash, which this platform treats as a filename byte; confined writes refuse it",
     )
   }
-  let requested = self.absolutize(path)
   guard resolve_existing_prefix(requested) is Some(resolved) else {
     return Err(
       "path does not resolve to a real location under the writable root (dangling or unreadable symlink)",
@@ -310,4 +350,24 @@ pub fn WriteScope::with_grants(
     exact[self.absolutize(path)] = destination
   }
   { ..self, grants: exact, }
+}
+
+///|
+/// Overlay session-owned scratch on a registry's existing write policy.
+/// Scratch containment failures are invalid targets, never approval requests.
+pub async fn with_session(
+  scope : WriteScope?,
+  session : WriteScope,
+  workspace_root : String,
+) -> WriteScope {
+  match scope {
+    Some(scope) => { ..scope, session_root: Some(session.root), }
+    None => {
+      let base = match WriteScope::create(root=workspace_root) {
+        Ok(scope) => scope
+        Err(reason) => fail(reason)
+      }
+      { ..base, session_root: Some(session.root), unrestricted: true, }
+    }
+  }
 }
