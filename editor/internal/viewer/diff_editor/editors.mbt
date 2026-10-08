@@ -240,8 +240,13 @@ fn DiffEditorEditors::layout(
   _layout : DiffEditorLayout,
 ) -> Unit {
   if !self.disposed {
-    self.original.layout()
-    self.modified.layout()
+    // Both panes expose current geometry before either completion callback can
+    // reconcile zones. Painting them here also avoids a second native frame
+    // when the host's drag already runs in the shared coordinator.
+    self.original.layout(postpone_rendering=true)
+    self.modified.layout(postpone_rendering=true)
+    self.original.render()
+    self.modified.render()
   }
 }
 

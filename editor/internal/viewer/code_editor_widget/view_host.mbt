@@ -175,6 +175,26 @@ fn CodeEditorWidget::flush_render(self : CodeEditorWidget) -> Unit {
 }
 
 ///|
+/// Flushes the pending paint once. A render-completion or layout listener may
+/// reenter; its changes remain queued rather than recursively painting halfway
+/// through the current DOM transaction.
+pub fn CodeEditorWidget::render(self : CodeEditorWidget) -> Unit {
+  if self.disposed {
+    return
+  }
+  if self.rendering {
+    self.schedule_render()
+    return
+  }
+  self.cancel_render_frame()
+  self.rendering = true
+  defer {
+    self.rendering = false
+  }
+  self.flush_render()
+}
+
+///|
 /// Publishes one completed DOM paint after all geometry and coalesced scroll
 /// facts from that paint have committed. DiffEditor uses this seam instead of
 /// inferring paint completion from optional scroll-extent changes.
@@ -254,7 +274,6 @@ fn CodeEditorWidget::schedule_render(self : CodeEditorWidget) -> Unit {
   }
   match self.mount {
     Headless => ()
-    Mounted(mounted) =>
-      mounted.schedule_render(() => if !self.disposed { self.flush_render() })
+    Mounted(mounted) => mounted.schedule_render(() => self.render())
   }
 }

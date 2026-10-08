@@ -240,7 +240,7 @@ pub fn CodeEditorWidget::handle_initialized(Self) -> Unit
 pub fn CodeEditorWidget::has_text_focus(Self) -> Bool
 pub fn CodeEditorWidget::has_widget_focus(Self) -> Bool
 pub fn CodeEditorWidget::is_disposed(Self) -> Bool
-pub fn CodeEditorWidget::layout(Self) -> Unit
+pub fn CodeEditorWidget::layout(Self, dimension? : @config.EditorDimension, postpone_rendering? : Bool) -> Unit
 pub fn CodeEditorWidget::on_context_menu(Self, (@moonbitlang/editor/viewer/browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::on_did_change_cursor_position(Self, (@editor_api.CursorPositionChangedEvent) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::on_did_change_cursor_selection(Self, (@editor_api.CursorSelectionChangedEvent) -> Unit) -> @common.Disposable
@@ -257,6 +257,7 @@ pub fn CodeEditorWidget::on_mouse_move(Self, (@moonbitlang/editor/viewer/browser
 pub fn CodeEditorWidget::on_mouse_up(Self, (@moonbitlang/editor/viewer/browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn CodeEditorWidget::remove_decorations(Self, Array[String]) -> Unit
 pub fn CodeEditorWidget::remove_overlay_widget(Self, @moonbitlang/editor/viewer/browser.OverlayWidget) -> Unit
+pub fn CodeEditorWidget::render(Self) -> Unit
 pub fn CodeEditorWidget::render_lines(Self, @model.TextModel, @common.LineRange, decorations? : Array[CodeEditorRenderLinesDecoration], line_class_name? : String, margin_line_class_name? : String, render_margin_line_numbers? : Bool) -> CodeEditorRenderedLines?
 pub fn CodeEditorWidget::restore_stable_viewport_state(Self, StableCodeEditorViewportState) -> Bool
 pub fn CodeEditorWidget::restore_view_state(Self, CodeEditorViewState?) -> Unit

@@ -9,6 +9,30 @@ The js-only public façade for three readonly surfaces:
 `pkg.generated.mbti` is the authoritative API. This page records ownership and
 dependency rules that are intentionally not encoded in public signatures.
 
+## Layout and initialization
+
+`Viewer::layout(dimension?, postpone_rendering=false)` commits the current
+client-box geometry synchronously and normally paints the dirty view before
+returning. A supplied `EditorDimension` uses untransformed client pixels;
+omitting it measures the mounted host. Both axes retain the 5px minimum.
+Repeated unchanged layouts do not publish configuration changes. Set
+`postpone_rendering=true` to commit both panes or restore/reveal a document
+before calling `render()` once. Ordinary input/token events still coalesce
+through the shared animation-frame coordinator. Reentrant render listeners
+queue their next paint instead of recursively flushing an unfinished view.
+
+Hosts finish a model transaction in this order: attach, restore/fold/options,
+layout with postponed paint, final reveal, `handle_initialized()`, `render()`.
+Initialization publishes stable visible token demand; scrolling retains its
+50ms debounce. Diff synchronously measures both pane client boxes after its
+pane CSS transaction and preserves the generation-fenced render barrier for
+zones, connectors, overview and viewport restoration.
+
+A mounted blank host resolves font metrics before constructing a model view,
+so the first projection uses measured advances and gutter digits. Headless
+widgets retain estimated metrics. The initial-size browser case uses a
+proportional font to ensure the gutter does not change at first model paint.
+
 ## Diagram embedding
 
 Consumers with their own Markdown parser can use `render_diago_diagram_svg`

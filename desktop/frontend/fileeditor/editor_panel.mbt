@@ -1519,6 +1519,12 @@ fn show_file_in_viewer(
         search_highlights
       },
     )
+    // Resolve final geometry before reveal/stable demand. Until now the first
+    // visible range could spend 50ms in the scrolling debounce before colors
+    // caught up with the text that was already on screen.
+    if !show_markdown && editor_surface_host_visible(ViewerHostId) {
+      viewer.layout(postpone_rendering=true)
+    }
     if range is Some(range) {
       if show_markdown {
         markdown_viewer.reveal_range_in_center(range)
@@ -1543,6 +1549,12 @@ fn show_file_in_viewer(
           highlight.set([target.decoration]) |> ignore
         }
         viewer.reveal_range_in_center(range)
+      }
+    }
+    if !show_markdown {
+      viewer.handle_initialized()
+      if editor_surface_host_visible(ViewerHostId) {
+        viewer.render()
       }
     }
   })

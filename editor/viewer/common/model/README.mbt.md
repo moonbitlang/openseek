@@ -30,6 +30,11 @@ to reload, so unchanged CRLF/CR input does not destroy view/decorations state.
 Token counts are maintained by the syntactic store at batch commits; reading
 them does not scan the document or drive tokenization.
 
+Stable visible demand uses inclusive model-line bounds. A range containing
+only the first invalid line must tokenize that line synchronously; it does not
+wait for the idle worker. Only a range strictly before the invalid frontier is
+already complete. This matters when folding leaves a single visible header.
+
 ```mbt check
 ///|
 fn doc(text : String) -> @model.TextModel raise {

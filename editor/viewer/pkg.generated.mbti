@@ -226,7 +226,7 @@ pub fn Viewer::get_width_of_line(Self, Int) -> Double
 pub fn Viewer::handle_initialized(Self) -> Unit
 pub fn Viewer::has_text_focus(Self) -> Bool
 pub fn Viewer::has_widget_focus(Self) -> Bool
-pub fn Viewer::layout(Self) -> Unit
+pub fn Viewer::layout(Self, dimension? : @config.EditorDimension, postpone_rendering? : Bool) -> Unit
 pub fn Viewer::on_context_menu(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_did_change_cursor_position(Self, (@editor_api.CursorPositionChangedEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_did_change_cursor_selection(Self, (@editor_api.CursorSelectionChangedEvent) -> Unit) -> @common.Disposable
@@ -242,6 +242,7 @@ pub fn Viewer::on_mouse_move(Self, (@browser.EditorMouseEvent) -> Unit) -> @comm
 pub fn Viewer::on_mouse_up(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::remove_decorations(Self, Array[String]) -> Unit
 pub fn Viewer::remove_overlay_widget(Self, @browser.OverlayWidget) -> Unit
+pub fn Viewer::render(Self) -> Unit
 pub fn Viewer::restore_view_state(Self, ViewerViewState?) -> Unit
 pub fn Viewer::reveal_line(Self, Int) -> Unit
 pub fn Viewer::reveal_line_in_center(Self, Int) -> Unit

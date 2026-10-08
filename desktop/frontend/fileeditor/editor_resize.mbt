@@ -40,7 +40,7 @@ let resizing : Ref[Bool] = Ref(false)
 ///|
 /// Whether a viewer re-measure is already queued for the next frame, so a burst
 /// of `mousemove`s re-measures at most once per frame.
-let remeasure_pending : Ref[Bool] = Ref(false)
+let remeasure_pending : Ref[@common.Disposable?] = Ref(None)
 
 ///|
 /// Install the resize listeners once the handle is in the DOM: a `mousedown` on
@@ -96,7 +96,7 @@ fn on_resize_move(event : @dom.Event) -> Unit {
     return
   }
   let rect = content.get_bounding_client_rect()
-  set_editor_width(
+  editor_width.val = Some(
     drag_size(
       rect.get_right() - mouse.get_client_x(),
       floor=MinEditorWidth.to_double(),
@@ -121,6 +121,14 @@ fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int {
 fn end_drag(active : Ref[Bool]) -> Unit {
   guard active.val else { return }
   active.val = false
+  match remeasure_pending.val {
+    Some(frame) => {
+      remeasure_pending.val = None
+      frame.dispose()
+    }
+    None => ()
+  }
+  sync_root_style()
   set_root_class("")
   layout_active_editor_surface()
 }
@@ -161,24 +169,6 @@ fn sync_root_style() -> Unit {
 }
 
 ///|
-fn set_editor_width(width : Int) -> Unit {
-  editor_width.val = Some(width)
-  sync_root_style()
-}
-
-///|
-fn set_tree_height(height : Int) -> Unit {
-  tree_height.val = Some(height)
-  sync_root_style()
-}
-
-///|
-fn set_tree_width(width : Int) -> Unit {
-  tree_width.val = Some(width)
-  sync_root_style()
-}
-
-///|
 /// Toggle a class on the document element (empty string clears it).
 fn set_root_class(class_name : String) -> Unit {
   if document_element() is Some(root) {
@@ -196,7 +186,7 @@ fn document_element() -> @dom.Element? {
 /// flood of `mousemove`s does not thrash its layout (the viewer fills its host
 /// with absolutely-positioned layers and cannot see a CSS width change itself).
 fn schedule_remeasure() -> Unit {
-  if remeasure_pending.val ||
+  if remeasure_pending.val is Some(_) ||
     (
       mounted_viewer() is None &&
       mounted_markdown_viewer() is None &&
@@ -204,10 +194,14 @@ fn schedule_remeasure() -> Unit {
     ) {
     return
   }
-  remeasure_pending.val = true
-  @dom.window().request_animation_frame(_ => {
-    remeasure_pending.val = false
-    layout_active_editor_surface()
-  })
-  |> ignore
+  remeasure_pending.val = Some(
+    @base_browser.schedule_at_next_animation_frame(
+      () => {
+        remeasure_pending.val = None
+        sync_root_style()
+        layout_active_editor_surface()
+      },
+      priority=200,
+    ),
+  )
 }

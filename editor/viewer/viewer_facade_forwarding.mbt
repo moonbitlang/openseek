@@ -30,8 +30,17 @@ pub fn Viewer::get_options(self : Viewer) -> ViewerOptions {
 }
 
 ///|
-pub fn Viewer::layout(self : Viewer) -> Unit {
-  self.widget.layout()
+pub fn Viewer::layout(
+  self : Viewer,
+  dimension? : @config.EditorDimension,
+  postpone_rendering? : Bool = false,
+) -> Unit {
+  self.widget.layout(dimension?, postpone_rendering~)
+}
+
+///|
+pub fn Viewer::render(self : Viewer) -> Unit {
+  self.widget.render()
 }
 
 ///|
