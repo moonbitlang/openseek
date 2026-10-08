@@ -86,6 +86,7 @@ priv struct Entry {
   changes_open : Bool
   changes_collapsed : Array[String]
   followup_menu_open : Bool
+  add_menu_open : Bool
   image_reads : Int
   image_error : String?
   pending_submission : PendingSubmission?
@@ -115,6 +116,7 @@ fn Entry::Entry(input : Input) -> Entry {
     changes_open: false,
     changes_collapsed: [],
     followup_menu_open: false,
+    add_menu_open: false,
     image_reads: 0,
     image_error: None,
     pending_submission: None,
@@ -206,6 +208,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
         _ => self.followup_choice
       },
       followup_menu_open: false,
+      add_menu_open: false,
       pending_submission: None,
       history_back: None,
     }
@@ -379,6 +382,8 @@ priv enum Msg {
   FollowupMenuToggled
   FollowupMenuDismissed
   FollowupSelected(String)
+  AddMenuToggled
+  AddMenuDismissed
   SymbolsLoaded(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
@@ -715,6 +720,13 @@ fn Model::update(
         @cmd.none,
       )
     }
+    AddMenuToggled =>
+      (
+        self.with_entry({ ..entry, add_menu_open: !entry.add_menu_open, }),
+        @cmd.none,
+      )
+    AddMenuDismissed =>
+      (self.with_entry({ ..entry, add_menu_open: false, }), @cmd.none)
     TextChanged(value) => {
       let (next, command) = entry.edited(input, value, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)

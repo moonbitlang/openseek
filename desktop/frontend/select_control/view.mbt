@@ -15,11 +15,15 @@ pub(all) struct Group {
 }
 
 ///|
-/// The two visual forms used by the desktop. Both share menu rows, keyboard
+/// The visual forms used by the desktop. All share menu rows, keyboard
 /// behavior, focus restoration, and accessibility; only their trigger geometry
 /// and popup sizing differ.
 pub(all) enum Presentation {
   Composer(String, Bool)
+  // A composer picker whose trigger is a glyph icon instead of a value label:
+  // the caller supplies the rendered icon, so the trigger draws neither a
+  // selected label nor a chevron.
+  ComposerIcon(@html.Html)
   Setting
 }
 
@@ -50,6 +54,7 @@ fn Presentation::root_class(self : Presentation) -> String {
       } else {
         "custom-select composer-picker"
       }
+    ComposerIcon(_) => "custom-select composer-picker"
     Setting => "custom-select setting-select"
   }
 }
@@ -59,6 +64,7 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
   let state = if open { " open" } else { "" }
   match self {
     Composer(_, _) => "custom-select-button composer-model" + state
+    ComposerIcon(_) => "custom-select-button composer-icon" + state
     Setting => "custom-select-button setting-select-button" + state
   }
 }
@@ -66,7 +72,8 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
 ///|
 fn Presentation::menu_class(self : Presentation) -> String {
   match self {
-    Composer(_, _) => "menu-surface custom-select-menu composer-picker-menu"
+    Composer(_, _) | ComposerIcon(_) =>
+      "menu-surface custom-select-menu composer-picker-menu"
     Setting => "menu-surface custom-select-menu setting-select-menu"
   }
 }
@@ -83,6 +90,7 @@ fn Presentation::trigger_contents(
         @html.span(class="composer-model-label", selected_label),
         @html.span(class="composer-model-chevron", ""),
       ]
+    ComposerIcon(icon) => [icon]
     Setting =>
       [
         @html.span(class="setting-select-label", selected_label),

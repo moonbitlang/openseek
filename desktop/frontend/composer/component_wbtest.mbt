@@ -1017,3 +1017,42 @@ test "a shell command is accepted only where sending is" {
     ),
   )
 }
+
+///|
+test "the add menu toggles, dismisses, and closes with an accepted draft" {
+  let base = Input::fixture("send me")
+  let input = {
+    ..base,
+    presentation: { ..base.presentation, images_enabled: true, },
+  }
+  let (opened, _) = Model(input).update(
+    input,
+    AddMenuToggled,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_true(opened.active(input).add_menu_open)
+  let (closed, _) = opened.update(
+    input,
+    AddMenuToggled,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_false(closed.active(input).add_menu_open)
+  let (dismissed, _) = opened.update(
+    input,
+    AddMenuDismissed,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  assert_false(dismissed.active(input).add_menu_open)
+  // The root accepting the draft clears it, taking an open menu with it.
+  let (submitted, _) = opened.update(
+    input,
+    SubmitRequested,
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let accepted = { ..input, submission_sequence: 1, }
+  assert_false(submitted.active(accepted).add_menu_open)
+}
