@@ -50,7 +50,7 @@
 .codex-request-action-primary:not(:disabled):hover {
   border-color: var(--color-accent-strong);
   background: var(--color-accent-strong);
-  color: var(--color-on-accent);
+  color: var(--color-on-accent-strong);
 }
 
 .codex-request-action-danger {
@@ -63,7 +63,7 @@
   background: color-mix(
     in srgb,
     var(--color-danger-soft) 78%,
-    var(--color-danger)
+    var(--color-bg-surface)
   );
 }
 

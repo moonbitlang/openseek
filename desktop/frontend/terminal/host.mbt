@@ -220,10 +220,9 @@ fn mount_tab(
         options["fontFamily"] = (style.get_with_string("fontFamily") : @js.Value)
         options["scrollback"] = 10000
         options["theme"] = (style.get_with_string("theme") : @js.Value)
-        // ANSI colors and command-supplied colors can disappear against the
-        // app's surface. Adjust their foreground against the actual cell
-        // background in either theme, including after a theme switch.
-        options["minimumContrastRatio"] = 4.5
+        // xterm halves this target for dim cells, so 9 keeps their target at
+        // 4.5 while adjusting ANSI and command-supplied colors in both themes.
+        options["minimumContrastRatio"] = 9.0
         let ctor : @js.Value = module_.get_with_string("Terminal")
         let term : @js.Value = ctor.new([options.to_value()])
         let fit_ctor : @js.Value = module_.get_with_string("FitAddon")

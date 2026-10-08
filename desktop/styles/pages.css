@@ -47,7 +47,7 @@
     --button-color: var(--color-on-accent);
     --button-border-color: var(--color-accent);
     --button-background: var(--color-accent);
-    --button-hover-color: var(--color-on-accent);
+    --button-hover-color: var(--color-on-accent-strong);
     --button-hover-border-color: var(--color-accent-strong);
     --button-hover-background: var(--color-accent-strong);
     --button-disabled-opacity: 0.7;
@@ -60,7 +60,7 @@
     --button-hover-background: color-mix(
       in srgb,
       var(--color-danger-soft) 75%,
-      var(--color-danger)
+      var(--color-bg-surface)
     );
   }
 }

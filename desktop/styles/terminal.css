@@ -161,3 +161,9 @@ html.is-resizing-terminal * {
 .terminal-instance .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: inherit;
 }
+/* xterm checks contrast before its default dim CSS halves the color's alpha.
+   Give unadjusted dim cells an opaque muted foreground; xterm's inline
+   contrast-corrected colors still take precedence. */
+#terminal-host .xterm-rows .xterm-dim {
+  color: var(--color-text-muted);
+}
