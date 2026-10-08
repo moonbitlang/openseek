@@ -71,6 +71,10 @@ test('Chinese covers feature pages, composer and dock after live switching', asy
   await expect(page.getByRole('button', { name: /搜索 在工作区中搜索文本/ })).toBeVisible();
   await page.getByRole('button', { name: '技能', exact: true }).click();
   await expect(page.getByRole('heading', { name: '技能', exact: true })).toBeVisible();
+  const back = page.getByRole('button', { name: '返回对话', exact: true });
+  await expect(back).toHaveAttribute('title', '返回对话');
+  await expect(back).toHaveText('');
+  await page.locator('main > .topbar').screenshot({ path: test.info().outputPath('chinese-management-header.png') });
   await expect(page.getByPlaceholder('搜索技能…')).toBeVisible();
   await page.getByRole('button', { name: '定时任务', exact: true }).click();
   await expect(page.getByRole('heading', { name: '定时任务', exact: true })).toBeVisible();

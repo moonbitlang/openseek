@@ -1,0 +1,7 @@
+import {
+  "openseek_desktop/frontend/icons",
+  "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/cmd",
+}
+
+supported_targets = "js"

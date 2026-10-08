@@ -16,6 +16,8 @@ pub fn icon_archive() -> @html.Html
 
 pub fn icon_arrow_down() -> @html.Html
 
+pub fn icon_arrow_left() -> @html.Html
+
 pub fn icon_arrow_up() -> @html.Html
 
 pub fn icon_book() -> @html.Html
