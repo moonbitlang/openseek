@@ -486,6 +486,7 @@ html.is-resizing .sidebar-resize-handle {
   white-space: nowrap;
 }
 .workspace-disclosure > .sidebar-icon {
+  flex: none;
   color: var(--color-text-secondary);
 }
 .workspace-disclosure:focus-visible,
