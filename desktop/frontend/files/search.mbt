@@ -51,21 +51,24 @@ pub fn Search::rank(
   self : Search,
   query : String,
   limit? : Int = DefaultMaxRows,
+  include_directories? : Bool = false,
 ) -> Array[Match] {
   @file_search_score.rank_paths(
     query,
-    self.candidates.map(path => path.0),
+    self.candidates
+    .filter(path => include_directories || !path.0.has_suffix("/"))
+    .map(path => path.0),
     limit,
   ).map(path => Match::of_path(Relative(path)))
 }
 
 ///|
 fn Match::of_path(path : @pathx.Relative) -> Match {
-  let name = match [..path.0.split("/")] {
+  let name = match [..path.0.trim_end(chars="/").split("/")] {
     [] => path.0
     [.., last] => last.to_owned()
   }
-  { path, name, }
+  { path, name: if path.0.has_suffix("/") { "\{name}/" } else { name }, }
 }
 
 ///|

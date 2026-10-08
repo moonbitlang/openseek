@@ -2512,15 +2512,18 @@ pub fn SearchFilesPayload::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SearchFilesReply {
   files : Array[String]
+  directories : Array[String]
   from_cache : Bool
   limit_hit : Bool
   cancelled : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SearchFilesReply::equal(Self, Self) -> Bool
 pub fn SearchFilesReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SearchFilesReply::not_equal(Self, Self) -> Bool
 pub fn SearchFilesReply::to_json(Self) -> Json
 pub fn SearchFilesReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SearchFilesReply
+pub impl @json.FromJson for SearchFilesReply
 
 pub(all) struct SearchSemanticPayload {
   root : String

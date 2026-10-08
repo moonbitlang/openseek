@@ -752,7 +752,9 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
         "text": @mention_context.encode([mention.ref_], ""),
       })
     }
-    @mention_context.Symbol(..)
+    // The tagged envelope preserves directory identity in app-server history.
+    @mention_context.Directory(..)
+    | @mention_context.Symbol(..)
     | @mention_context.SemanticSearch(_)
     | @mention_context.Annotation(..)
     | @mention_context.ReviewChanges(_) =>

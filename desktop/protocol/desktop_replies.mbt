@@ -1285,10 +1285,37 @@ pub(all) struct ReadDirReply {
 ///|
 pub(all) struct SearchFilesReply {
   files : Array[String]
+  // Ranked independently so directory mentions cannot displace Quick Open files.
+  directories : Array[String]
   from_cache : Bool
   limit_hit : Bool
   cancelled : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for SearchFilesReply with fn to_json(self) {
+  {
+    "files": self.files,
+    "directories": self.directories,
+    "from_cache": self.from_cache,
+    "limit_hit": self.limit_hit,
+    "cancelled": self.cancelled,
+  }
+}
+
+///|
+pub impl FromJson for SearchFilesReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "file and directory search reply")
+  // Every field is required; null and malformed values fail decoding.
+  // Unknown fields are ignored, as with the other Desktop reply codecs.
+  {
+    files: object.required_string_array("files"),
+    directories: object.required_string_array("directories"),
+    from_cache: object.required_bool("from_cache"),
+    limit_hit: object.required_bool("limit_hit"),
+    cancelled: object.required_bool("cancelled"),
+  }
+}
 
 ///|
 /// One match range within the source line. Columns are one-based UTF-16
