@@ -1647,16 +1647,18 @@ pub impl ToJson for InstallSkillReply
 pub impl @json.FromJson for InstallSkillReply
 
 pub(all) struct InstalledSkill {
-  id : String
+  skill : SkillRef
   name : String
   description : String
   source : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn InstalledSkill::equal(Self, Self) -> Bool
 pub fn InstalledSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstalledSkill::not_equal(Self, Self) -> Bool
 pub fn InstalledSkill::to_json(Self) -> Json
 pub fn InstalledSkill::to_repr(Self) -> @debug.Repr
+pub impl ToJson for InstalledSkill
+pub impl @json.FromJson for InstalledSkill
 
 pub(all) enum InstalledSkillsReply {
   InstalledSkills(Array[InstalledSkill])
@@ -2971,6 +2973,21 @@ pub fn SkillContentReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SkillContentReply
 pub impl @json.FromJson for SkillContentReply
 
+pub(all) enum SkillRef {
+  User(String)
+  Builtin(String)
+} derive(Eq, Hash, @debug.Debug)
+pub fn SkillRef::equal(Self, Self) -> Bool
+pub fn SkillRef::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SkillRef::hash(Self) -> Int
+pub fn SkillRef::hash_combine(Self, Hasher) -> Unit
+pub fn SkillRef::not_equal(Self, Self) -> Bool
+pub fn SkillRef::to_json(Self) -> Json
+pub fn SkillRef::to_repr(Self) -> @debug.Repr
+pub fn SkillRef::value(Self) -> String
+pub impl ToJson for SkillRef
+pub impl @json.FromJson for SkillRef
+
 pub(all) enum SkillsCatalogReply {
   SkillsCatalog(Array[MarketSkill])
   SkillsCatalogError(String)
@@ -3263,13 +3280,15 @@ pub impl ToJson for UiLanguagePreference
 pub impl @json.FromJson for UiLanguagePreference
 
 pub(all) struct UninstallSkillPayload {
-  id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  skill : SkillRef
+} derive(Eq, @debug.Debug)
 pub fn UninstallSkillPayload::equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UninstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::to_json(Self) -> Json
 pub fn UninstallSkillPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UninstallSkillPayload
+pub impl @json.FromJson for UninstallSkillPayload
 
 pub(all) enum UninstallSkillReply {
   SkillUninstalled

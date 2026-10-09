@@ -80,10 +80,12 @@ pub async fn configured_system_prompt(
   // section: like the cwd they vary per project (and change when skills are
   // edited), so they must sit after all globally shared text to keep it
   // prefix-cache hittable.
-  let skills_section = skills_prompt_section_for_cwd(
+  let user_skills = discover_user_skills(
     global_dir=global_skills_dir,
     workspace_root~,
   )
+  let builtin_skills = @agent_skill.builtin_skills()
+  let skills_section = skills_prompt_section(user_skills~, builtin_skills~)
   if skills_section is Some(section) {
     prompt <+ "\n\n\{section}"
   }
@@ -140,7 +142,7 @@ fn default_global_skills_dir() -> String? {
 }
 
 ///|
-/// The skills advertised to the model: the user-level library (`global_dir`,
+/// Discover user skills: the user-level library (`global_dir`,
 /// defaulting to `$HOME/.openseek/skills` or `%USERPROFILE%/.openseek/skills`
 /// when empty) merged with the
 /// workspace library under `.openseek/skills`, listing `<name>.md` files and
@@ -149,10 +151,10 @@ fn default_global_skills_dir() -> String? {
 /// directories advertise nothing — and eval harnesses point `global_dir` at
 /// a path inside the trial workspace so the developer's own library never
 /// leaks into trials.
-async fn skills_prompt_section_for_cwd(
+async fn discover_user_skills(
   global_dir~ : String,
   workspace_root~ : String,
-) -> String? {
+) -> Array[@agent_skill.Skill] {
   let resolved_global_dir = if global_dir != "" {
     Some(@workspace_path.resolve(workspace_root, global_dir))
   } else {
@@ -163,12 +165,26 @@ async fn skills_prompt_section_for_cwd(
   } else {
     []
   }
-  @agent_skill.skills_prompt_section(
-    @agent_skill.merge_skills(
-      global_skills,
-      overrides=@agent_skill.discover_skills(
-        @workspace_path.resolve(workspace_root, ".openseek/skills"),
-      ),
+  @agent_skill.merge_skills(
+    global_skills,
+    overrides=@agent_skill.discover_skills(
+      @workspace_path.resolve(workspace_root, ".openseek/skills"),
     ),
   )
+}
+
+///|
+/// Render already-discovered skills without filesystem or environment access.
+fn skills_prompt_section(
+  user_skills~ : Array[@agent_skill.Skill],
+  builtin_skills~ : Array[@agent_skill.BuiltinSkill],
+) -> String? {
+  let ordinary = @agent_skill.skills_prompt_section(user_skills)
+  let builtin = @agent_skill.builtin_skills_prompt_section(builtin_skills)
+  match (ordinary, builtin) {
+    (Some(a), Some(b)) => Some("\{a}\n\n\{b}")
+    (Some(a), None) => Some(a)
+    (None, Some(b)) => Some(b)
+    (None, None) => None
+  }
 }

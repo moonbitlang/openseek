@@ -15,6 +15,8 @@ an environment override or a working-directory fallback. The prompt's
   and full-stack web applications with Rabbita, read on demand.
 - `moongrep/`: OpenSeek-maintained reference for the structural search and
   lint tool, moved out of the system prompt and read on demand.
+- `skills/`: builtin Wasm skills and their manifest; see
+  [skills/README.md](skills/README.md) for the files to update when adding one.
 - `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
 
 The documentation comes from https://github.com/moonbitlang/moonbit-docs.
