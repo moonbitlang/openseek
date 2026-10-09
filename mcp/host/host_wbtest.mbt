@@ -233,3 +233,22 @@ test "an oversized reply is replaced with an error" {
   let small : Json = { "version": 1, "content": "ok", "is_error": false }
   assert_eq(deliverable(small), small)
 }
+
+///|
+async test "MCP retains the default 64 KiB body limit when PTC allows large writes" {
+  @async.with_timeout(3000, () => {
+    @async.with_task_group(group => {
+      let service = Service::start(group, [])
+      let client = @socket.Tcp::connect(service.server.addr)
+      defer client.close()
+      client.write(
+        @utf8.encode(
+          "POST /call HTTP/1.1\r\nAuthorization: Bearer \{service.token}\r\nContent-Length: 65537\r\n\r\n",
+        ),
+      )
+      let response = @utf8.decode(client.read_all())
+      assert_true(response.contains("Invalid MCP host request"), msg=response)
+      assert_true(response.contains("nothing executed"))
+    })
+  })
+}

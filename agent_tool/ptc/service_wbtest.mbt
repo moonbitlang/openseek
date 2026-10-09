@@ -269,7 +269,7 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
         "X-Long: \{"x".repeat(8192)}\r\n",
         "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n",
         "Content-Length: 0\r\ncontent-length: 0\r\n",
-        "Content-Length: 65537\r\n",
+        "Content-Length: 25165825\r\n",
       ] {
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
@@ -319,32 +319,30 @@ async test "HTTP admission reports size limits and malformed input distinctly" {
       let (_, token) = capability(program.env())
       let head = "POST /call HTTP/1.1\r\nAuthorization: Bearer \{token}\r\n"
       let chunked = head + "Transfer-Encoding: chunked\r\n\r\n"
-      // Exceed the wire cap by one byte, with a decoded body below 64 KiB.
-      // Send no excess unread bytes that could reset TCP and hide the reply.
-      let framing = "1\r\nx\r\n".repeat(22000)
-      let oversized = chunked +
-        framing[:131073 - @utf8.encode(chunked).length()].to_owned()
+      // Exceed the chunk-framing cap while keeping the decoded body small.
+      // Stop at the rejected chunk header so unread bytes cannot reset TCP.
+      let oversized = chunked + "1\r\nx\r\n".repeat(13107) + "1\r\n"
       for
         (input, reason) in [
           (
-            head + "Content-Length: 65537\r\n\r\n",
-            "PTC request too large: Request exceeds 64 KiB",
+            head + "Content-Length: 25165825\r\n\r\n",
+            "PTC request too large: Request exceeds 25165824 bytes",
           ),
           (
             head + "Content-Length: 999999999999999999999999\r\n\r\n",
-            "PTC request too large: Request exceeds 64 KiB",
+            "PTC request too large: Request exceeds 25165824 bytes",
           ),
           (
-            chunked + "10001\r\n",
-            "PTC request too large: Request exceeds 64 KiB",
+            chunked + "1800001\r\n",
+            "PTC request too large: Request exceeds 25165824 bytes",
           ),
           (
             chunked + "ffffffff\r\n",
-            "PTC request too large: Request exceeds 64 KiB",
+            "PTC request too large: Request exceeds 25165824 bytes",
           ),
           (
-            chunked + "8000\r\n" + "x".repeat(32768) + "\r\n8001\r\n",
-            "PTC request too large: Request exceeds 64 KiB",
+            chunked + "8000\r\n" + "x".repeat(32768) + "\r\n17f8001\r\n",
+            "PTC request too large: Request exceeds 25165824 bytes",
           ),
           (oversized, "PTC request too large: Request framing too large"),
           (head + "Content-Length: invalid\r\n\r\n", "Invalid Content-Length"),
@@ -669,7 +667,7 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
         "0\r\n\r\n"
       for
         chunks in [
-          "-1\r\n", "10001\r\n", "1;extension\r\n", "1\r\nx!\n", "0\r\nTrailer: x\r\n\r\n",
+          "-1\r\n", "1800001\r\n", "1;extension\r\n", "1\r\nx!\n", "0\r\nTrailer: x\r\n\r\n",
           framed,
         ] {
         let client = @socket.Tcp::connect(service.server.addr)

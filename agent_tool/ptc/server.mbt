@@ -22,7 +22,7 @@ const SendTimeoutMs : Int32 = 5000
 
 ///|
 /// A serialized reply above this is replaced by an explicit "executed but
-/// oversized" error; the request body cap lives in `request.mbt`.
+/// oversized" error; the binary-write request body cap is 24 MiB.
 const MaxReplyChars : Int32 = 65536
 
 ///|
@@ -115,6 +115,20 @@ fn call_entry(
   status : String,
   result? : Json,
 ) -> Json {
+  // Retain the call's metadata, not programmatically generated binary bodies.
+  // Apply this to every status, including interrupted and failed calls.
+  let arguments = match (name, arguments) {
+    ("write", Object(fields)) if fields.get("encoding") == Some(Json("base64")) => {
+      let summary = fields.copy()
+      if summary.get("content") is Some(String(content)) {
+        summary["content_base64_chars"] = Json(content.length())
+      }
+      summary.remove("content")
+      summary["content_omitted"] = Json(true)
+      Json::object(summary)
+    }
+    _ => arguments
+  }
   let fields : Map[String, Json] = {
     "name": Json(name),
     "arguments": arguments,
@@ -159,7 +173,7 @@ pub async fn Service::start(
     ) => {
       let conn = @http.ServerConnection(socket)
       defer conn.close()
-      let reader = @loopback_http.RequestReader(socket)
+      let reader = @loopback_http.RequestReader(socket, max_body_bytes=25165824)
       // Bound the entire admission phase, starting at acceptance, including
       // partial headers. No executor is reserved until authentication and body
       // framing have both succeeded.
@@ -173,7 +187,13 @@ pub async fn Service::start(
         guard !headers.contains("origin") && program is Some(program) else {
           return None
         }
-        Some((program, reader.body(headers)))
+        let input = reader.body(headers)
+        guard reader.body_size() <= 65536 ||
+          input
+          is { "name": "write", "arguments": { "encoding": "base64", .. }, .. } else {
+          fail("Request exceeds 64 KiB (only Base64 write allows up to 24 MiB)")
+        }
+        Some((program, input))
       }) catch {
         error => {
           let message = match error {

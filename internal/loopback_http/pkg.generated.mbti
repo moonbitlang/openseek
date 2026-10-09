@@ -15,8 +15,9 @@ pub suberror RequestTooLarge {
 
 // Types and methods
 type RequestReader
-pub fn RequestReader::RequestReader(@socket.Tcp) -> Self
+pub fn RequestReader::RequestReader(@socket.Tcp, max_body_bytes? : Int32) -> Self
 pub async fn RequestReader::body(Self, Map[String, String]) -> @json.Json
+pub fn RequestReader::body_size(Self) -> Int32
 pub async fn RequestReader::head(Self) -> Map[String, String]
 
 // Type aliases

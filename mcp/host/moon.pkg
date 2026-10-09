@@ -13,6 +13,7 @@ import {
 
 import {
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
 } for "wbtest"
 
 supported_targets = "+wasm+native"

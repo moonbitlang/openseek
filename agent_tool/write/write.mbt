@@ -7,8 +7,10 @@
 /// ## Arguments
 /// - `path` (string, required): filesystem path to write. `filename` is accepted
 ///   as an alias; if both are supplied, their values must match.
-/// - `content` (string, required): text to write. The file is truncated
+/// - `content` (string, required): text or Base64 to write. The file is truncated
 ///   before writing.
+/// - `encoding` ("text" | "base64", optional, default "text"): UTF-8 text or
+///   canonical padded Base64 (at most 16 MiB decoded).
 /// - `revert_on_parse_errors` (boolean, optional, default true): before a new
 ///   syncheck input (`.mbt`, `.mbt.md`, `.mbtx`, `moon.mod`, `moon.pkg`) is written,
 ///   its content is parsed standalone (`moonc syncheck`); content with lex/parse
@@ -42,9 +44,11 @@ pub fn definition(
     program_callable=true,
     description=(
       #|Create a new file at arguments.path with arguments.content (missing parent
-      #|directories are created), or overwrite an existing non-source file.
-      #|Overwriting an existing .mbt/.mbt.md source file is rejected.
-      #|Use edit or multi_edit to change existing source.
+      #|directories are created), or overwrite an existing non-source file. encoding defaults
+      #|to text (UTF-8); use base64 for binary artifacts (canonical padded Base64, no
+      #|whitespace, at most 16 MiB decoded). Source/manifest checks apply to decoded
+      #|UTF-8 contents in either encoding. Overwriting an existing .mbt/.mbt.md source
+      #|file is rejected. Use edit or multi_edit to change existing source.
       #|Syntax-checkable content (.mbt, .mbt.md, .mbtx, moon.mod, moon.pkg) that fails to lex/parse is rejected
       #|BEFORE writing or approval — see revert_on_parse_errors. Do not
       #|create Markdown or README files unless the user explicitly asks for them.
@@ -54,6 +58,12 @@ pub fn definition(
       "properties": {
         "path": { "type": "string" },
         "content": { "type": "string" },
+        "encoding": {
+          "type": "string",
+          "enum": ["text", "base64"],
+          "default": "text",
+          "description": "Content encoding: UTF-8 text or canonical padded Base64 (16 MiB decoded limit).",
+        },
         "revert_on_parse_errors": {
           "type": "boolean",
           "description": (
@@ -127,12 +137,32 @@ async fn write_file(
     )
   }
 
-  if @manifest_error.write_error(path, input.content) is Some(message) {
-    return err(message)
-  }
-  // Classify the source and syntax gate by both the requested path and the
-  // resolved target. New paths have no realpath yet.
+  // Classify checks by both the requested path and its resolved target.
   let target = @fs.realpath(path) catch { _ => path }
+  let bytes = match input.encoding {
+    Text => @utf8.encode(input.content)
+    Base64 =>
+      decode_base64(input.content) catch {
+        error => return err(@tool_error.failure_message("\{error}"))
+      }
+  }
+  let text = match input.encoding {
+    Text => Some(input.content)
+    Base64 if requires_text(path) || requires_text(target) => {
+      let decoded = @utf8.decode(bytes) catch {
+        _ => return err("source and manifest content must be valid UTF-8")
+      }
+      Some(decoded)
+    }
+    Base64 => None
+  }
+  if text is Some(content) {
+    for checked_path in (if path == target { [path] } else { [path, target] }) {
+      if @manifest_error.write_error(checked_path, content) is Some(message) {
+        return err(message)
+      }
+    }
+  }
   let initially_exists = @fs.exists(path)
   if initially_exists && (is_mbt_source(path) || is_mbt_source(target)) {
     return err(
@@ -148,26 +178,37 @@ async fn write_file(
   // `alias.txt -> moon.pkg`) is caught too. A non-parsing file is never a
   // valid intermediate state; syntax failures never become approval requests.
   // Fail-open: when the gate cannot run (moonc missing), write as usual.
-  if input.revert_on_parse_errors {
+  if input.revert_on_parse_errors && text is Some(content) {
     for gate_path in @auto_check.gate_paths(path, target) {
-      let gate = @auto_check.content_parse_errors(gate_path, input.content) catch {
+      let gate = @auto_check.content_parse_errors(gate_path, content) catch {
         _ => None
       }
       if gate is Some(gate) && gate.errors.length() > 0 {
         let bound = if gate.truncated { "≥" } else { "" }
         return @agent_tool.respond(
-          write_reject_report(path, input.content, gate),
+          write_reject_report(path, content, gate),
           is_error=true,
           brief="write rejected (\{bound}\{gate.errors.length()} parse error(s))",
         )
       }
     }
   }
+  let digest = @crypto.bytes_to_hex_string(@crypto.sha256(bytes))
   let write_scope = @permission.authorize(
     [path],
     target_path=path,
     tool_name="write",
-    arguments={ "path": path, "content": input.content },
+    arguments=match text {
+      Some(content) => { "path": path, "content": content }
+      None =>
+        {
+          "path": path,
+          "encoding": "base64",
+          "bytes": bytes.length(),
+          "sha256": digest,
+          "content_omitted": true,
+        }
+    },
     file_state~,
     write_scope?,
     approval?,
@@ -187,9 +228,9 @@ async fn write_file(
   let existed = initially_exists && @fs.exists(path)
   // Exclusive creation rejects dangling symlinks and new paths that gained a
   // file after classification.
-  @fs.write_text(
+  @fs.write_binary(
     path,
-    input.content,
+    bytes,
     create_mode=if existed { CreateOrTruncate } else { CreateNew },
   )
   // Record this write's provenance and content digest for the session so
@@ -197,11 +238,21 @@ async fn write_file(
   // overwrote, and confirm its content has not been rebound since. A write is
   // a wholesale replacement, so the file now holds the agent's content
   // regardless of what was there — no continuity check is needed.
-  let digest = @agent_tool.content_digest(input.content)
   if existed {
     file_state.record_modified(path, digest)
   } else {
     file_state.record_created(path, digest)
+  }
+  if input.encoding is Base64 {
+    let suffix = if existed { " (overwrote existing file)" } else { "" }
+    let summary = "ok: wrote \{bytes.length()} bytes to \{path}\{suffix} (sha256: \{digest})"
+    return @agent_tool.respond(
+      @auto_check.append_summary(path, summary),
+      brief=@agent_tool.brief_line(
+        "wrote \{bytes.length()} bytes to \{input.path}",
+      ),
+      data={ "bytes": bytes.length(), "sha256": digest },
+    )
   }
   let chars = input.content.length()
   // Line count matches read's `split("\n")` total, so the numbers agree across

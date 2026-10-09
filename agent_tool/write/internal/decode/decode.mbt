@@ -7,7 +7,16 @@
 pub struct WriteInput {
   path : String
   content : String
+  encoding : Encoding
   revert_on_parse_errors : Bool
+}
+
+///|
+/// How the content string represents the bytes to write.
+#derive(Debug)
+pub enum Encoding {
+  Text
+  Base64
 }
 
 ///|
@@ -34,6 +43,11 @@ pub fn decode(arguments : Json) -> WriteInput raise {
   }
   match arguments {
     { "content": String(content), .. } => {
+      let encoding = match fields.get("encoding") {
+        None | Some(String("text")) => Text
+        Some(String("base64")) => Base64
+        _ => fail("arguments.encoding to be \"text\" or \"base64\"")
+      }
       let revert_on_parse_errors = match arguments {
         { "revert_on_parse_errors": true, .. } => true
         { "revert_on_parse_errors": false, .. } => false
@@ -42,7 +56,7 @@ pub fn decode(arguments : Json) -> WriteInput raise {
           fail("arguments.revert_on_parse_errors to be a boolean")
         _ => true
       }
-      { path, content, revert_on_parse_errors, }
+      { path, content, encoding, revert_on_parse_errors, }
     }
     _ => fail("arguments.content")
   }
@@ -52,3 +66,8 @@ pub fn decode(arguments : Json) -> WriteInput raise {
 #doc(hidden)
 #deprecated
 pub extend WriteInput with Debug::{to_repr}
+
+///|
+#doc(hidden)
+#deprecated
+pub extend Encoding with Debug::{to_repr}
