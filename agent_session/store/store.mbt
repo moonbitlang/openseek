@@ -868,28 +868,3 @@ pub async fn SessionStore::scratch_dir(
 ) -> String {
   @workspace_path.resolve(@fs.realpath("."), "\{self.session_dir(id)}/scratch")
 }
-
-///|
-/// Update host context without replacing events or overwriting a newer writer.
-pub async fn SessionStore::update_system_prompt(
-  self : SessionStore,
-  session : @agent_session.Session,
-  prompt : String,
-) -> @agent_session.Session {
-  ensure_session_dir(self, session.id())
-  with_session_lock(self, session.id(), Exclusive, () => {
-    ensure_session_is_current(self, session) |> ignore
-    let next = @agent_session.Session(
-      session.id(),
-      system_prompt=prompt,
-      events=session.events(),
-    )
-    write_text_atomic(
-      self.session_file_path(session.id()),
-      session_file_text(next),
-      dirs=self.session_dir_chain(session.id()),
-    )
-    record_mark(self, next)
-    next
-  })
-}

@@ -255,58 +255,21 @@ async test "load_or_new_session recovers empty interrupted session directory" {
 }
 
 ///|
-async test "scratch context upgrades old sessions without rebuilding prompts or losing events" {
+async test "resuming an existing session preserves its prompt and stored file" {
   @vfs.with_tmpdir(root => {
-    let store = @store.SessionStore("\{root}/old")
+    let store = @store.SessionStore(root)
     let id = @agent_session.SessionId("old-session")
     let old = @agent_session.Session(id, system_prompt="original custom prompt").append(
       User(UserMessage(Content([Text("keep history")]))),
     )
     store.create(old)
+    let before = @fs.read_file(store.session_file(id)).binary()
     let parsed = @testkit.run_matches(
       argv=["--system-prompt-file", "missing-prompt.md", "write", "MoonBit"],
       env={ "DEEPSEEK": "test-key" },
     )
-    let upgraded = @setup.load_or_new_session(
-      store,
-      id,
-      parsed,
-      Deepseek(V4Pro),
-    )
-    assert_true(
-      upgraded
-      .system_prompt()
-      .has_prefix("original custom prompt\n\n## Environment\n"),
-    )
-    assert_true(
-      upgraded
-      .system_prompt()
-      .contains(store.scratch_dir(id).to_json().stringify()),
-    )
-    assert_eq(upgraded.events(), old.events())
-    assert_eq(store.load(id), upgraded)
-    assert_eq(
-      @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro)),
-      upgraded,
-    )
-    @fs.rename("\{root}/old", "\{root}/moved")
-    let moved = @store.SessionStore("\{root}/moved")
-    let resumed = @setup.load_or_new_session(moved, id, parsed, Deepseek(V4Pro))
-    assert_true(
-      resumed
-      .system_prompt()
-      .contains(moved.scratch_dir(id).to_json().stringify()),
-    )
-    assert_false(
-      resumed
-      .system_prompt()
-      .contains(store.scratch_dir(id).to_json().stringify()),
-    )
-    assert_eq(resumed.events(), old.events())
-    let next = moved.append(
-      resumed,
-      User(UserMessage(Content([Text("continue")]))),
-    )
-    assert_eq(next.last_sequence(), 2)
+    let resumed = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
+    assert_eq(resumed, old)
+    assert_eq(@fs.read_file(store.session_file(id)).binary(), before)
   })
 }

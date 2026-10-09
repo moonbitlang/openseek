@@ -107,7 +107,6 @@ pub async fn load_or_new_session(
 ) -> @agent_session.Session {
   // The prompt is built only when actually creating a fresh session: a
   // re-load must not read prompt files again.
-  let session_scratch_dir = store.scratch_dir(id)
   async fn fresh() -> @agent_session.Session {
     Session(
       id,
@@ -115,24 +114,15 @@ pub async fn load_or_new_session(
         matches,
         model,
         workspace_root~,
-        session_scratch_dir~,
+        session_scratch_dir=store.scratch_dir(id),
       ),
     )
   }
 
   if store.exists(id) {
-    let loaded = store.load(id) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => return fresh()
+    store.load(id) catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() => fresh()
       error => raise error
-    }
-    let prompt = with_session_scratch(
-      loaded.system_prompt(),
-      session_scratch_dir,
-    )
-    if prompt == loaded.system_prompt() {
-      loaded
-    } else {
-      store.update_system_prompt(loaded, prompt)
     }
   } else {
     fresh()
