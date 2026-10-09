@@ -17,7 +17,9 @@ body.
 
 Missing parent directories are created so a single `write` can lay down a file
 in a fresh package directory without a separate `mkdir` step; the created path
-stays inside the resolved workspace root.
+is checked against the write scope when the caller supplies one. Relative
+paths resolve against the configured workspace root; that root alone is not
+a containment boundary.
 
 ## API Style
 
@@ -55,12 +57,37 @@ work; in `.mbt.md` only the checked (`mbt check` / `moonbit check`) fenced block
 are parsed. `revert_on_parse_errors=false` opts out for deliberately non-parsing
 fixtures.
 
+## Binary artifacts
+
+Set `encoding: "base64"` to write binary contents; omission or `"text"` keeps
+the existing UTF-8 text behavior. `content` remains a string in both cases.
+Base64 must use the standard alphabet and canonical padding, with no whitespace
+or data-URL prefix. Empty content writes zero bytes. The decoded limit is 16 MiB;
+invalid or oversized content is rejected before filesystem changes.
+
+```json
+{"path": "assets/sample.bin", "content": "AP+A", "encoding": "base64"}
+```
+
+This writes the bytes `00 ff 80`. Source and manifest destinations, including
+resolved symlink targets, require valid UTF-8 after decoding and retain the
+manifest guards, syntax gate, source overwrite approval and configured write
+scope. Binary encoding grants no extra path permissions. Ordinary binary files
+are not required to be UTF-8 or validated as a particular file format.
+
+Binary success replies report decoded bytes and SHA-256 in both the summary and
+`data: {bytes, sha256}`. File provenance records the digest of the actual bytes.
+Source approvals show decoded text; binary path approvals show size and digest.
+PTC scripts can generate Base64 and call `write` without printing the payload:
+the PTC trace omits the content and retains the encoded length and result metadata.
+
 ## Arguments
 
 | Name      | Type   | Required | Notes |
 | --------- | ------ | -------- | ----- |
 | `path`    | string | yes | Filesystem path. Relative paths resolve against the agent process's current working directory. |
-| `content` | string | yes | Full file body. Empty strings are accepted and produce a zero-byte file. |
+| `encoding` | `"text"` or `"base64"` | no (default `"text"`) | How `content` represents file bytes. Explicit `null` and unknown values are rejected. |
+| `content` | string | yes | Full text body or Base64 payload. Empty strings are accepted and produce a zero-byte file. |
 | `revert_on_parse_errors` | boolean | no (default `true`) | Reject new syncheck-input content (`.mbt`, `.mbt.md`, `moon.mod`, `moon.pkg`) that fails to lex/parse before anything is written, returning the errors with excerpts. In `.mbt.md` only the checked fenced blocks are parsed. Set `false` only to intentionally create a non-parsing file (e.g. a fixture). |
 
 ## Action

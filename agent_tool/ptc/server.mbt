@@ -97,6 +97,20 @@ fn call_entry(
   status : String,
   result? : Json,
 ) -> Json {
+  // Retain the call's metadata, not programmatically generated binary bodies.
+  // Apply this to every status, including interrupted and failed calls.
+  let arguments = match (name, arguments) {
+    ("write", Object(fields)) if fields.get("encoding") == Some(Json("base64")) => {
+      let summary = fields.copy()
+      if summary.get("content") is Some(String(content)) {
+        summary["content_base64_chars"] = content.length().to_json()
+      }
+      summary.remove("content")
+      summary["content_omitted"] = true.to_json()
+      Json::object(summary)
+    }
+    _ => arguments
+  }
   let fields : Map[String, Json] = {
     "name": name.to_json(),
     "arguments": arguments,
