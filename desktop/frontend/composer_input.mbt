@@ -223,7 +223,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
-      images_enabled: conv.engine_model is (DsPro | DsFlash) &&
+      images_enabled: conv.engine_model is DsFlash &&
       self.api_provider is (Deepseek | Custom),
       context,
       status,
