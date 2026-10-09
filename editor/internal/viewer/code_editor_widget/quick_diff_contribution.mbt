@@ -30,18 +30,14 @@ fn register_quick_diff_contribution(
       // `QuickDiffWorkbenchController.onEditorsChanged` re-evaluates the
       // decorator when an editor's model changes.
       state.listeners.push(
-        viewer.on_did_change_model(_ => {
-          viewer.quick_diff_update(state.collection)
-        }),
+        viewer.on_did_change_model(_ => viewer.quick_diff_update(state)),
       )
       // `QuickDiffModel`'s recompute on modified-side content changes
       // (`onDidChangeContent` → `triggerDiff`): a `set_value` flush both
       // changes the diff input and destroys the collection's decorations, so
       // the decorator re-runs against the new snapshot.
       state.listeners.push(
-        viewer.on_did_change_model_content(_ => {
-          viewer.quick_diff_update(state.collection)
-        }),
+        viewer.on_did_change_model_content(_ => viewer.quick_diff_update(state)),
       )
       // `QuickDiffModel`'s recompute on quick-diff (provider/original) changes,
       // scoped to this editor's resource.
@@ -49,11 +45,11 @@ fn register_quick_diff_contribution(
         viewer.services.quick_diff.on_did_change_original(resource => {
           if viewer.get_model() is Some(model) &&
             model.uri.to_string() == resource.to_string() {
-            viewer.quick_diff_update(state.collection)
+            viewer.quick_diff_update(state)
           }
         }),
       )
-      viewer.quick_diff_update(state.collection)
+      viewer.quick_diff_update(state)
       []
     },
   )

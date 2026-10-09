@@ -154,6 +154,7 @@ pub struct DiffEditorWidget {
   mut pending_original_scroll_left_echo : Double?
   mut pending_modified_scroll_top_echo : Double?
   mut pending_modified_scroll_left_echo : Double?
+  mut shared_scroll_left : Double
   mut disposed : Bool
   // private fields
 }

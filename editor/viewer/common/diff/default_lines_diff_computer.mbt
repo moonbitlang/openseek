@@ -153,3 +153,13 @@ pub extend LineDocumentDiffProvider with Eq::{equal, not_equal}
 
 ///|
 pub extend LineDocumentDiffProvider with DocumentDiffProvider::{on_did_change}
+
+///|
+pub impl DocumentDiffProvider for LineDocumentDiffProvider with fn worker_kind(
+  _self,
+) {
+  Some(Line)
+}
+
+///|
+pub extend LineDocumentDiffProvider with DocumentDiffProvider::{worker_kind}

@@ -2,10 +2,9 @@
 // (`MonospaceLineBreaksComputerFactory`, `createLineBreaks`,
 // `computeCharWidth`, `canBreak`, `computeWrappedTextIndentLength`).
 // Deviations:
-//   - The incremental `createLineBreaksFromPreviousLineBreaks` path is not
-//     ported — the readonly viewer reconstructs projections wholesale
-//     (`construct_lines`), so every request takes the `createLineBreaks`
-//     path (Monaco's own path whenever there is no previous break data).
+//   - Previous breaks are reused only for column-only changes without
+//     injections. Arrays remain immutable to retained projection readers;
+//     the TS global array pool is represented by ordinary owned arrays.
 //   - The experimental `wrapOnEscapedLineFeeds` option (and its
 //     `isEscapedLineBreakAtPosition` scan) is not ported — no option surface.
 //   - `add_request` receives the line's text and injected text directly
@@ -124,6 +123,7 @@ priv struct LineBreaksRequest {
   model_line_number : Int
   line_text : String
   injected_text : Array[InjectedText]
+  previous : ModelLineProjectionData?
 }
 
 ///|
@@ -167,8 +167,9 @@ pub fn LineBreaksComputer::add_request(
   model_line_number : Int,
   line_text : String,
   injected_text : Array[InjectedText],
+  previous? : ModelLineProjectionData,
 ) -> Unit {
-  self.requests.push({ model_line_number, line_text, injected_text, })
+  self.requests.push({ model_line_number, line_text, injected_text, previous, })
 }
 
 ///|
@@ -188,14 +189,48 @@ pub fn LineBreaksComputer::finalize(
       result.push(None)
       continue
     }
-    let projected_line = ProjectedTextLine::from_injected_text(
-      request.line_text,
-      request.injected_text,
-    )
+    if !has_injections &&
+      request.previous is Some(previous) &&
+      previous.projected_line.injections.is_empty() &&
+      self.wrapping_column.to_double() >= columns_for_full_width_char.max(2.0) &&
+      !previous.segments.any(segment => {
+        segment.start_offset == segment.end_offset
+      }) &&
+      previous.end_visible_column is Some(end_visible_column) {
+      result.push(
+        create_line_breaks_from_previous(
+          self.classifier,
+          previous,
+          request.line_text,
+          end_visible_column,
+          self.tab_size,
+          self.wrapping_column,
+          columns_for_full_width_char,
+          self.wrapping_indent,
+          self.word_break == KeepAll,
+        ),
+      )
+      continue
+    }
+    let projected_line = if has_injections {
+      Some(
+        ProjectedTextLine::from_injected_text(
+          request.line_text,
+          request.injected_text,
+        ),
+      )
+    } else {
+      None
+    }
+    let line_text = match projected_line {
+      Some(projected) => projected.text
+      None => request.line_text
+    }
     result.push(
       create_line_breaks(
         self.classifier,
         request.model_line_number,
+        line_text,
         projected_line,
         has_injections,
         self.tab_size,
@@ -218,7 +253,8 @@ pub fn LineBreaksComputer::finalize(
 fn create_line_breaks(
   classifier : WrappingCharacterClassifier,
   model_line_number : Int,
-  projected_line : ProjectedTextLine,
+  line_text : String,
+  projected_line : ProjectedTextLine?,
   has_injections : Bool,
   tab_size : Int,
   first_line_break_column : Int,
@@ -226,7 +262,6 @@ fn create_line_breaks(
   wrapping_indent : @editor_api.WrappingIndent,
   is_keep_all : Bool,
 ) -> ModelLineProjectionData? {
-  let line_text = projected_line.text
   let len = line_text.length()
   if first_line_break_column <= 0 || len <= 1 {
     if !has_injections {
@@ -237,7 +272,10 @@ fn create_line_breaks(
     return Some(
       materialize_projection_data(
         model_line_number,
-        projected_line,
+        match projected_line {
+          Some(projected) => projected
+          None => ProjectedTextLine::identity(line_text)
+        },
         [len],
         [0.0],
         0,
@@ -319,10 +357,287 @@ fn create_line_breaks(
   breaking_offsets_visible_column.push(visible_column)
   Some(
     materialize_projection_data(
-      model_line_number, projected_line, breaking_offsets, breaking_offsets_visible_column,
+      model_line_number,
+      match projected_line {
+        Some(projected) => projected
+        None => ProjectedTextLine::identity(line_text)
+      },
+      breaking_offsets,
+      breaking_offsets_visible_column,
       wrapped_text_indent_length,
     ),
   )
+}
+
+///|
+/// Algorithm-fidelity port of createLineBreaksFromPreviousLineBreaks at the
+/// pinned VS Code source. Search from the nearest old visible break, first
+/// right then left; backward tabs restart forward from the previous anchor.
+fn create_line_breaks_from_previous(
+  classifier : WrappingCharacterClassifier,
+  previous : ModelLineProjectionData,
+  text : String,
+  end_visible_column : Double,
+  tab_size : Int,
+  first_column : Int,
+  fullwidth : Double,
+  indent : @editor_api.WrappingIndent,
+  keep_all : Bool,
+) -> ModelLineProjectionData? {
+  let len = text.length()
+  if first_column <= 0 || len <= 1 {
+    return None
+  }
+  let previous_offsets = previous.segments.map(segment => segment.end_offset)
+  let previous_columns = Array::makei(previous.segments.length(), index => {
+    if index + 1 < previous.segments.length() {
+      previous.segments[index + 1].start_visible_column
+    } else {
+      end_visible_column
+    }
+  })
+  let wrapped_indent = compute_wrapped_text_indent_length(
+    text, tab_size, first_column, fullwidth, indent,
+  )
+  let wrapped_column = first_column.to_double() - wrapped_indent.to_double()
+  let offsets : Array[Int] = []
+  let columns : Array[Double] = []
+  let mut last_offset = 0
+  let mut last_column = 0.0
+  let mut target = first_column.to_double()
+  let mut previous_index = closest_previous_break(previous_columns, 0, target)
+  while previous_index < previous_offsets.length() {
+    let mut anchor_offset = if previous_index < 0 {
+      0
+    } else {
+      previous_offsets[previous_index]
+    }
+    let mut anchor_column = if previous_index < 0 {
+      0.0
+    } else {
+      previous_columns[previous_index]
+    }
+    if last_offset > anchor_offset {
+      anchor_offset = last_offset
+      anchor_column = last_column
+    }
+    let mut break_offset = 0
+    let mut break_column = 0.0
+    let mut forced_offset = 0
+    let mut forced_column = 0.0
+    if anchor_column <= target {
+      let mut visible = anchor_column
+      // Null at the start is the source algorithm's CharCode.Null, not a
+      // missing document value. All accesses below operate on known bounds.
+      let mut previous_char = if anchor_offset == 0 {
+        0
+      } else {
+        text[anchor_offset - 1].to_int()
+      }
+      let mut previous_class = if anchor_offset == 0 {
+        CHARACTER_CLASS_NONE
+      } else {
+        classifier.get(previous_char)
+      }
+      let mut fits = true
+      let mut i = anchor_offset
+      while i < len {
+        let start = i
+        let char_code = text[i].to_int()
+        let (char_class, width) = if @base_common.is_high_surrogate(char_code) {
+          i += 1
+          (CHARACTER_CLASS_NONE, 2.0)
+        } else {
+          (
+            classifier.get(char_code),
+            compute_char_width(char_code, visible, tab_size, fullwidth),
+          )
+        }
+        if start > last_offset &&
+          can_break(
+            previous_char, previous_class, char_code, char_class, keep_all,
+          ) {
+          break_offset = start
+          break_column = visible
+        }
+        visible += width
+        if visible > target {
+          if start > last_offset {
+            forced_offset = start
+            forced_column = visible - width
+          } else {
+            forced_offset = i + 1
+            forced_column = visible
+          }
+          if visible - break_column > wrapped_column {
+            break_offset = 0
+          }
+          fits = false
+          break
+        }
+        previous_char = char_code
+        previous_class = char_class
+        i += 1
+      }
+      if fits {
+        if !offsets.is_empty() {
+          offsets.push(previous_offsets[previous_offsets.length() - 1])
+          columns.push(end_visible_column)
+        }
+        break
+      }
+    }
+    if break_offset == 0 {
+      let mut visible = anchor_column
+      let mut char_code : Int? = if anchor_offset < len {
+        Some(text[anchor_offset].to_int())
+      } else {
+        None
+      }
+      let mut char_class = char_code
+        .map(code => classifier.get(code))
+        .unwrap_or(CHARACTER_CLASS_NONE)
+      let mut hit_tab = false
+      let mut i = anchor_offset - 1
+      while i >= last_offset {
+        let start = i + 1
+        let previous_char = text[i].to_int()
+        if previous_char == 9 {
+          hit_tab = true
+          break
+        }
+        let (previous_class, width) = if @base_common.is_low_surrogate(
+            previous_char,
+          ) {
+          i -= 1
+          (CHARACTER_CLASS_NONE, 2.0)
+        } else {
+          (
+            classifier.get(previous_char),
+            if @base_common.is_full_width_character(previous_char) {
+              fullwidth
+            } else {
+              1.0
+            },
+          )
+        }
+        if visible <= target {
+          if forced_offset == 0 {
+            forced_offset = start
+            forced_column = visible
+          }
+          if visible <= target - wrapped_column {
+            break
+          }
+          let legal = match char_code {
+            Some(code) =>
+              can_break(
+                previous_char, previous_class, code, char_class, keep_all,
+              )
+            None =>
+              previous_class == CHARACTER_CLASS_BREAK_AFTER ||
+              (!keep_all && previous_class == CHARACTER_CLASS_BREAK_IDEOGRAPHIC)
+          }
+          if legal {
+            break_offset = start
+            break_column = visible
+            break
+          }
+        }
+        visible -= width
+        char_code = Some(previous_char)
+        char_class = previous_class
+        i -= 1
+      }
+      if break_offset != 0 {
+        let remaining = wrapped_column - (forced_column - break_column)
+        if remaining <= tab_size.to_double() {
+          let width = if forced_offset < len {
+            let code = text[forced_offset].to_int()
+            if @base_common.is_high_surrogate(code) {
+              2.0
+            } else {
+              compute_char_width(code, forced_column, tab_size, fullwidth)
+            }
+          } else {
+            // The source's charCodeAt(end) falls through to a unit width.
+            1.0
+          }
+          if remaining - width < 0.0 {
+            break_offset = 0
+          }
+        }
+      }
+      if hit_tab {
+        previous_index -= 1
+        continue
+      }
+    }
+    if break_offset == 0 {
+      break_offset = forced_offset
+      break_column = forced_column
+    }
+    if break_offset <= last_offset {
+      let code = text[last_offset].to_int()
+      if @base_common.is_high_surrogate(code) {
+        break_offset = last_offset + 2
+        break_column = last_column + 2.0
+      } else {
+        break_offset = last_offset + 1
+        break_column = last_column +
+          compute_char_width(code, last_column, tab_size, fullwidth)
+      }
+    }
+    last_offset = break_offset
+    last_column = break_column
+    offsets.push(break_offset)
+    columns.push(break_column)
+    target = break_column + wrapped_column
+    while previous_index < 0 ||
+          (
+            previous_index < previous_columns.length() &&
+            previous_columns[previous_index] < break_column
+          ) {
+      previous_index += 1
+    }
+    if previous_index < previous_columns.length() {
+      previous_index = closest_previous_break(
+        previous_columns, previous_index, target,
+      )
+    }
+  }
+  if offsets.is_empty() {
+    None
+  } else {
+    Some(
+      materialize_projection_data(
+        previous.model_line_number,
+        previous.projected_line,
+        offsets,
+        columns,
+        wrapped_indent,
+      ),
+    )
+  }
+}
+
+///|
+fn closest_previous_break(
+  columns : Array[Double],
+  start : Int,
+  target : Double,
+) -> Int {
+  let mut index = start
+  let mut best = (columns[index] - target).abs()
+  while index + 1 < columns.length() {
+    let distance = (columns[index + 1] - target).abs()
+    if distance >= best {
+      break
+    }
+    best = distance
+    index += 1
+  }
+  index
 }
 
 ///|
@@ -370,6 +685,9 @@ fn materialize_projection_data(
     projected_line.model_line_length,
     projected_line,
     segments,
+    end_visible_column?=breaking_offsets_visible_column.get(
+      breaking_offsets_visible_column.length() - 1,
+    ),
   )
 }
 

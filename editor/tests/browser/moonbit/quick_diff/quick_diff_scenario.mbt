@@ -68,7 +68,11 @@ fn wait_for_text(
   needle : String,
   remaining : Int,
 ) -> Unit {
-  if @support.query_text(".viewer-host") is Some(text) && text.contains(needle) {
+  if @support.query_text(".viewer-host") is Some(text) &&
+    text.contains(needle) &&
+    @support.query_count(".margin-view-overlays .cldr.dirty-diff-added") == 1 &&
+    @support.query_count(".margin-view-overlays .cldr.dirty-diff-modified") == 1 &&
+    @support.query_count(".margin-view-overlays .cldr.dirty-diff-deleted") == 1 {
     let added = @support.query_count(
       ".margin-view-overlays .cldr.dirty-diff-added",
     )

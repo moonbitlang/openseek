@@ -15,6 +15,20 @@
 // `content_left = line_numbers_width + decorations_width`.
 
 ///|
+/// The untransformed client box supplied by a host that already knows its
+/// pane geometry. Like browser measurement, both axes have a 5px minimum.
+pub(all) struct EditorDimension {
+  width : Double
+  height : Double
+} derive(Eq, Debug)
+
+///|
+pub extend EditorDimension with Eq::{equal, not_equal}
+
+///|
+pub extend EditorDimension with Debug::{to_repr}
+
+///|
 pub(all) struct EditorLayoutInfo {
   /// Full editor width.
   width : Double

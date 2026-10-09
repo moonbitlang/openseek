@@ -75,7 +75,13 @@ the caller's original `aria-hidden` state.
 contribution owns one model-scoped viewport-width observer and invalidates all
 live comment size observers when that width changes. Resize notifications and
 explicit viewport/renderer/image invalidations are coalesced through the
-realm-global `base/browser` animation-frame coordinator. A connected offscreen
+realm-global `base/browser` animation-frame coordinator. A shared height queue
+handles at most 32 comments per frame, with visible zones first. Each batch
+reads visible heights, temporarily exposes all selected hidden nodes together,
+reads their geometry, and restores every style before delivering any callback.
+Remaining requests continue in later frames, so thousands of offscreen
+comments cannot force one layout per comment in a single animation frame.
+A connected offscreen
 ViewZone is temporarily laid out invisibly using its already pinned
 viewport-safe width and horizontal offset; measurement never replaces
 `width` or `left`, and every touched inline style and priority is restored

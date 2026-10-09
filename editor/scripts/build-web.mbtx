@@ -54,10 +54,13 @@ async fn main {
   if !@fs.exists(source_dir) || !@fs.exists(embed_source_dir) {
     fail("missing js artifacts for the web entry points; run `moon build` first")
   }
+  let worker_source_dir = resolved_build_dir("internal/workers/code", ["code.js"])
   let target_dir = "web/dist"
   if !@fs.exists(target_dir) {
     @fs.mkdir(target_dir, recursive=true)
   }
+
+  @fs.write_file("\{target_dir}/editor-code-worker.js", @fs.read_file("\{worker_source_dir}/code.js"), create_mode=@fs.CreateOrTruncate)
 
   let generated_js = @fs.read_file("\{source_dir}/web.js").text()
   @fs.write_file(

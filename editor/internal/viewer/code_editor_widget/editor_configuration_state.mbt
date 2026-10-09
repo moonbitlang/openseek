@@ -392,7 +392,7 @@ fn EditorConfigurationSnapshot::view_lines_configuration(
     wsmiddot_width=self.font_info.wsmiddot_width,
     use_monospace_optimizations=self.font_info.is_monospace,
     can_use_halfwidth_rightwards_arrow=self.font_info.can_use_halfwidth_rightwards_arrow,
-    stop_rendering_line_after=-1,
+    stop_rendering_line_after=self.options.line_rendering_limit.stop_offset(),
     render_whitespace=self.options.render_whitespace,
     render_control_characters=self.options.render_control_characters,
     font_ligatures=self.font_info.font_feature_settings !=
@@ -493,6 +493,10 @@ fn EditorConfigurationEventSnapshot::changed_event(
   if previous.options.render_control_characters !=
     current_configuration.options.render_control_characters {
     changed.push(RenderControlCharacters)
+  }
+  if previous.options.line_rendering_limit !=
+    current_configuration.options.line_rendering_limit {
+    changed.push(StopRenderingLineAfter)
   }
   if previous.options.render_line_highlight !=
     current_configuration.options.render_line_highlight {

@@ -40,6 +40,9 @@ pub struct ContiguousTokensStoreUpdate {
 struct ContiguousTokensStore {
   line_tokens : Array[SyntacticLineTokens]
   mut len : Int
+  // Every missing/empty line contributes one default token. Retain only the
+  // excess stored tokens so reads never walk the model's uninitialized tail.
+  mut additional_token_count : Int
   language_id_codec : @services.LanguageIdCodec
 }
 
@@ -49,7 +52,7 @@ struct ContiguousTokensStore {
 pub fn ContiguousTokensStore::ContiguousTokensStore(
   language_id_codec : @services.LanguageIdCodec,
 ) -> ContiguousTokensStore {
-  { line_tokens: [], len: 0, language_id_codec, }
+  { line_tokens: [], len: 0, additional_token_count: 0, language_id_codec, }
 }
 
 ///|
@@ -58,6 +61,26 @@ pub fn ContiguousTokensStore::ContiguousTokensStore(
 pub fn ContiguousTokensStore::flush(self : ContiguousTokensStore) -> Unit {
   self.line_tokens.clear()
   self.len = 0
+  self.additional_token_count = 0
+}
+
+///|
+/// Constant-time count of stored/default syntactic tokens. The caller's live
+/// line count includes the uninitialized suffix; content replacement flushes
+/// the store before publishing tokens for that new line domain.
+pub fn ContiguousTokensStore::token_count(
+  self : ContiguousTokensStore,
+  line_count : Int,
+) -> Int {
+  line_count + self.additional_token_count
+}
+
+///|
+fn SyntacticLineTokens::additional_count(self : SyntacticLineTokens) -> Int {
+  match self {
+    Words(words) => words.length() / 2 - 1
+    Missing | Empty => 0
+  }
 }
 
 ///|
@@ -178,6 +201,8 @@ fn ContiguousTokensStore::set_tokens(
   )
   self.ensure_line(line_index)
   let old_tokens = self.line_tokens[line_index]
+  self.additional_token_count += new_tokens.additional_count() -
+    old_tokens.additional_count()
   self.line_tokens[line_index] = new_tokens
   if check_equality {
     !syntactic_line_tokens_equal(old_tokens, new_tokens)

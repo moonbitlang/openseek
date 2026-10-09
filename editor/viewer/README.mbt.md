@@ -9,6 +9,46 @@ The js-only public façade for three readonly surfaces:
 `pkg.generated.mbti` is the authoritative API. This page records ownership and
 dependency rules that are intentionally not encoded in public signatures.
 
+## Layout and initialization
+
+`Viewer::layout(dimension?, postpone_rendering=false)` commits the current
+client-box geometry synchronously and normally paints the dirty view before
+returning. A supplied `EditorDimension` uses untransformed client pixels;
+omitting it measures the mounted host. Both axes retain the 5px minimum.
+Repeated unchanged layouts do not publish configuration changes. Set
+`postpone_rendering=true` to commit both panes or restore/reveal a document
+before calling `render()` once. Ordinary input/token events still coalesce
+through the shared animation-frame coordinator. Reentrant render listeners
+queue their next paint instead of recursively flushing an unfinished view.
+
+Hosts finish a model transaction in this order: attach, restore/fold/options,
+layout with postponed paint, final reveal, `handle_initialized()`, `render()`.
+Initialization publishes stable visible token demand; scrolling retains its
+50ms debounce. Diff synchronously measures both pane client boxes after its
+pane CSS transaction and preserves the generation-fenced render barrier for
+zones, connectors, overview and viewport restoration.
+
+A mounted blank host resolves font metrics before constructing a model view,
+so the first projection uses measured advances and gutter digits. Headless
+widgets retain estimated metrics. The initial-size browser case uses a
+proportional font to ensure the gutter does not change at first model paint.
+
+`ViewerOptions::line_rendering_limit` defaults to `Characters(10000)` for both
+normal view lines and auxiliary `render_lines` output. The renderer's overflow
+marker shows omitted characters; the model stays complete. `Unlimited` is an
+explicit host opt-in. Lexical limits are independently owned by `TextModel`.
+
+`Viewer.prepare_model(model, callback)` prepares structural folding for a
+large detached source (at least 2,000 lines or 65,536 UTF16 units). It returns
+a cancelable disposable and reports an explicit preparation failure. A warm
+model/version/rules cache completes immediately; views decode independent
+collapse flags. Small sources, too-large fallback models and custom marker
+closures use the synchronous compatibility path. Hosts that require initial
+folding can prepare before attachment, then restore/fold, layout, reveal,
+publish stable demand and render as one show transaction. Cancel preparation
+before replacing the model or disposing the host. The browser distribution
+must include `editor-code-worker.js` beside its HTML entry.
+
 ## Diagram embedding
 
 Consumers with their own Markdown parser can use `render_diago_diagram_svg`
@@ -186,6 +226,21 @@ overflow (Original on a tie); its normal scroll synchronization updates the
 other pane, which clamps at its own limit without feeding that clamp back.
 Repeating the host offset, including during vertical host scrolling, leaves
 both horizontal positions unchanged.
+
+In Inline layout the visible modified pane owns the shared horizontal range.
+Its clamp resets the hidden original pane too. A real wheel, scrollbar, touch
+or navigation gesture invalidates a pending layout anchor before child event
+handling, so a completed render cannot restore an older viewport over new input.
+
+While a same-version provider/options recomputation is Pending, navigation
+and actions are invalidated but the last committed alignment geometry stays
+visible until the replacement result is ready. Changed model identities or
+content versions discard that geometry immediately. The hidden-layout
+one-shot reveal and both-axis browser cases cover these transitions.
+
+Geometry-only reconciliation repositions existing hunk action DOM. A new diff
+generation or explicit host renderer update rebuilds it; ordinary layout does
+not close an open action menu or replace its focused button.
 
 This is a behavior port of VS Code
 [`DiffEditorItemTemplate.setScrollLeft` at `07c20d96`](https://github.com/microsoft/vscode/blob/07c20d96cf3f2cbc8142ac7079ba9048cf7f6134/src/vs/editor/browser/widget/multiDiffEditor/diffEditorItemTemplate.ts#L234-L240).

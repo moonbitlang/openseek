@@ -158,6 +158,15 @@ pub fn on_did_resolve_hover(
 
 ///|
 /// Publishes one view-model-build observation to the matching live viewer.
+pub fn has_view_model_built_listeners(viewer_id : String) -> Bool {
+  match viewer_entries.get(viewer_id) {
+    Some(entry) => entry.did_build_view_model.has_listeners()
+    None => false
+  }
+}
+
+///|
+/// Publishes one view-model-build observation to the matching live viewer.
 pub fn publish_view_model_built(
   viewer_id : String,
   observation : ViewModelBuiltObservation,

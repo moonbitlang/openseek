@@ -96,6 +96,7 @@ struct CodeEditorWidget {
   /// primitive. A waiter captures `render_generation + 1`, so a callback from
   /// an older layout transaction can never satisfy a newer render fence.
   mut render_generation : Int
+  mut rendering : Bool
   did_render : @base_common.Emitter[Int]
   mut pending_rendered : PendingRendered?
   mut scroll_dirty : Bool
@@ -199,6 +200,7 @@ fn CodeEditorWidget::CodeEditorWidget(
     overlay_widgets: Map([]),
     overview_rulers: [],
     render_generation: 0,
+    rendering: false,
     did_render: Emitter(),
     pending_rendered: None,
     scroll_dirty: false,
@@ -951,12 +953,32 @@ pub fn CodeEditorWidget::dispose(self : CodeEditorWidget) -> Unit {
 }
 
 ///|
-/// Re-measures the viewer box after a host-observed layout change —
-/// `layout()`. The explicit-dimension form is not ported: the viewer always
-/// measures its host element.
-pub fn CodeEditorWidget::layout(self : CodeEditorWidget) -> Unit {
-  self.configuration.request_measure()
-  self.schedule_render()
+/// Commits geometry immediately, independently of the optional deferred paint.
+/// The default matches Monaco's layout(dimension, postponeRendering=false).
+pub fn CodeEditorWidget::layout(
+  self : CodeEditorWidget,
+  dimension? : @config.EditorDimension,
+  postpone_rendering? : Bool = false,
+) -> Unit {
+  if self.disposed {
+    return
+  }
+  let previous = self.configuration.event_snapshot()
+  let requested = self.configuration.consume_measure_request()
+  self.measure(dimension?)
+  let changed = requested ||
+    previous.changed_event(self.configuration.event_snapshot()) is Some(_)
+  let pending = match self.mount {
+    Headless => false
+    Mounted(mounted) => mounted.has_pending_render()
+  }
+  if changed || pending {
+    if postpone_rendering {
+      self.schedule_render()
+    } else {
+      self.render()
+    }
+  }
 }
 
 ///|

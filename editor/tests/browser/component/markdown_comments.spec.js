@@ -1025,6 +1025,11 @@ test('interactive Diago controls pan zoom fit resize and keep sibling state inde
     await expect
       .poll(async () => (await viewportGeometry(large)).wrapperWidth)
       .toBeGreaterThan(beforeResponsiveResize.wrapperWidth + 100);
+    // Host layout commits the width synchronously; the diagram's native
+    // ResizeObserver updates its transform in a later rendering step.
+    await expect
+      .poll(async () => (await viewportGeometry(large)).transform)
+      .not.toBe(beforeResponsiveResize.transform);
     const afterResponsiveResize = await viewportGeometry(large);
     expectNear(
       afterResponsiveResize.wrapperHeight,
@@ -1032,9 +1037,6 @@ test('interactive Diago controls pan zoom fit resize and keep sibling state inde
       1,
     );
     expectNear(afterResponsiveResize.scale, beforeResponsiveResize.scale, 0.002);
-    expect(afterResponsiveResize.transform).not.toBe(
-      beforeResponsiveResize.transform,
-    );
 
     // A pure horizontal source scroll must not enter the diagram resize or
     // transform paths. In particular, its caller-selected height is stable.

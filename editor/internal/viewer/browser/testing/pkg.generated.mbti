@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub fn has_view_model_built_listeners(String) -> Bool
+
 pub fn on_did_build_view_model(String, (ViewModelBuiltObservation) -> Unit) -> @common.Disposable
 
 pub fn on_did_render_model(String, (ModelRenderedObservation) -> Unit) -> @common.Disposable

@@ -69,6 +69,13 @@ pub fn TextModel::same(self : TextModel, other : TextModel) -> Bool {
 }
 
 ///|
+/// Construction-fixed large-file escape hatch, shared by lexical work, view
+/// projection and folding. A later content replacement keeps this decision.
+pub fn TextModel::is_too_large_for_tokenization(self : TextModel) -> Bool {
+  self.tokenization_state.too_large
+}
+
+///|
 /// Stable process-local key for identity-indexed package services.
 ///
 /// Most callers should prefer `same`; this numeric form exists for maps that
@@ -92,6 +99,7 @@ pub fn TextModel::TextModel(
   version : Int,
   revision : String,
   text : String,
+  tokenization_line_limit? : TokenizationLineLimit = Characters(20000),
 ) -> TextModel {
   let model = new_text_model(
     uri,
@@ -102,6 +110,7 @@ pub fn TextModel::TextModel(
     text,
     None,
     None,
+    tokenization_line_limit~,
   )
   offer_text_model_browser_diagnostic(model => model.get_attached_editor_count())
   model
@@ -121,6 +130,7 @@ fn new_text_model(
   text : String,
   support_resolver : ((String) -> InternalTokenizationSupportAdapter?)?,
   unexpected_error_observer : ((String) -> Unit)?,
+  tokenization_line_limit? : TokenizationLineLimit = Characters(20000),
 ) -> TextModel {
   let display_name = if display_name == "" {
     uri.to_string()
@@ -140,6 +150,7 @@ fn new_text_model(
     language_id~,
     attached_count=Ref(0),
     too_large=is_too_large_for_tokenization,
+    line_limit=tokenization_line_limit,
     disposing=Ref(false),
     scheduler=Ref(None),
     report_unexpected_error=message => {
@@ -378,10 +389,18 @@ pub fn TextModel::get_position_at(
 
 ///|
 /// Full normalized document text. Mirrors `getValue` (`textModel.ts:799`):
-/// derive the full model range, then read that range. U+FEFF is ordinary
+/// return the snapshot's already-normalized value. U+FEFF is ordinary
 /// Viewer content and there is no EOL or preserve-BOM selector.
 pub fn TextModel::get_value(self : TextModel) -> String {
-  self.get_value_in_range(self.get_full_model_range())
+  self.snapshot.get_value()
+}
+
+///|
+/// Compares host input using the model's fixed-LF text representation without
+/// building another snapshot or reconstructing the stored document.
+pub fn TextModel::has_same_content(self : TextModel, content : String) -> Bool {
+  self.snapshot.get_value() == content ||
+  self.snapshot.get_value() == normalize_eol(content)
 }
 
 ///|

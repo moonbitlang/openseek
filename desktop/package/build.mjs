@@ -245,6 +245,9 @@ class Build {
     await this.commandRun("moon", ["build", "frontend", "--target", "js", ...release], {
       cwd: this.desktop,
     });
+    await this.commandRun("moon", ["build", "internal/workers/code", "--target", "js", ...release], {
+      cwd: join(this.repo, "editor"),
+    });
     if (browser) {
       // The console bundle openseek-api serves: the same document and
       // frontend.js the packaged app loads, so the e2e suite can drive one
@@ -268,9 +271,14 @@ class Build {
         await cp(this.frontendBundle(profile), join(output, "frontend.js"));
       }
       await this.sharedWeb(output);
+      await cp(this.codeWorkerBundle(profile), join(output, "editor-code-worker.js"));
       return;
     }
     await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
+  }
+
+  codeWorkerBundle(profile) {
+    return join(this.repo, `editor/_build/js/${profile}/build/moonbitlang/editor/internal/workers/code/code.js`);
   }
 
   // The unminified MoonBit output of the frontend executable.
@@ -354,6 +362,7 @@ class Build {
     await mkdir(join(root, "licenses/ripgrep"), { recursive: true });
     await cp(join(this.desktop, "index.html"), join(root, "web/index.html"));
     await cp(this.frontendBundle(profile), join(root, "web/frontend.js"));
+    await cp(this.codeWorkerBundle(profile), join(root, "web/editor-code-worker.js"));
     await cp(join(this.repo, "web/index.html"), join(root, "web/viz/index.html"));
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     await this.sharedWeb(join(root, "web"));

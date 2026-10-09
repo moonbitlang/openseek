@@ -28,7 +28,14 @@ pub fn run_initial_size_test() -> Unit {
 
   let viewer = @viewer.Viewer::create(
     host,
-    options=ViewerOptions(soft_wrap=false, font_size=12.0, line_height=18.0),
+    // A proportional font deliberately differs from the headless estimate.
+    // Its gutter must already use measured digits before a model is attached.
+    options=ViewerOptions(
+      soft_wrap=false,
+      font_family="Arial",
+      font_size=31.0,
+      line_height=40.0,
+    ),
   )
   let mut rendered_notifications = 0
   let rendered_subscription = @viewer_testing.on_did_render_model(
@@ -72,6 +79,40 @@ pub fn run_initial_size_test() -> Unit {
     "model attach used the zero-height single-line visible range",
   )
   viewer.handle_initialized()
+  viewer.render()
+  ctx.assert_true(
+    initial_layout.content_left == viewer.get_layout_info().content_left,
+    "blank mounted host kept estimated font metrics until model render",
+  )
+  let before_width = initial_size_editor_width(host)
+  host.set_attribute("style", "display:block;width:410px;height:220px;")
+  viewer.layout(
+    dimension={ width: 410.0, height: 220.0, },
+    postpone_rendering=true,
+  )
+  ctx.assert_true(
+    viewer.get_layout_info().width == 410.0 &&
+    viewer.get_layout_info().height == 220.0,
+    "postponed layout did not commit dimensions synchronously",
+  )
+  ctx.assert_true(
+    initial_size_editor_width(host) == before_width,
+    "postponed layout painted before the explicit render",
+  )
+  viewer.render()
+  ctx.assert_true(
+    initial_size_editor_width(host) == 410.0,
+    "explicit render did not paint the already committed dimensions",
+  )
+  host.set_attribute("style", "display:block;width:370px;height:200px;")
+  viewer.layout()
+  ctx.assert_true(
+    viewer.get_layout_info().width == 370.0 &&
+    viewer.get_layout_info().height == 200.0 &&
+    initial_size_editor_width(host) == 370.0,
+    "default layout left the editor behind its container until a later frame",
+  )
+  ctx.metric_number("synchronousLayoutWidth", viewer.get_layout_info().width)
   initial_size_next_frame(() => {
     ctx.assert_true(
       rendered_notifications > 0,
@@ -110,3 +151,6 @@ extern "js" fn initial_size_client_height(element : @rdom.Element) -> Double = "
 
 ///|
 extern "js" fn initial_size_next_frame(callback : () -> Unit) -> Unit = "(callback) => requestAnimationFrame(callback)"
+
+///|
+extern "js" fn initial_size_editor_width(element : @rdom.Element) -> Double = "(element) => { const viewport = element.querySelector('.editor-scrollable'); return viewport.offsetLeft + viewport.clientWidth; }"

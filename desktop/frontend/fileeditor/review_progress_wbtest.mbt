@@ -185,6 +185,51 @@ test "hunk and file review progress stay linked in both directions" {
 }
 
 ///|
+test "late file coverage completes viewed semantic hunks only for the current generation" {
+  let (state, ctx, selected) = review_progress_state()
+  let hunk = review_test_hunk(2, 4, 2, 4)
+  let position = ReviewHunkPosition::from_zero_based(Some(0), 1)
+  let announce = (state : State, coverage : ReviewHunk?, generation : Int) => {
+    update(
+      test_emit(),
+      ReviewActiveHunkChanged(
+        ready=true,
+        change=selected,
+        review_generation=generation,
+        surface_generation=state.review_hunk_surface_generation,
+        hunk=Some(hunk),
+        file_changes=coverage,
+        position~,
+      ),
+      state,
+      ctx,
+    ).1
+  }
+  // Semantic sections can be ready while the whole-file Line worker is pending.
+  let active = announce(state, None, 1)
+  let viewed = update(test_emit(), ToggleActiveReviewHunk, active, ctx).1
+  assert_true(viewed.changed_file_review_state(selected) is ReviewInProgress)
+  assert_true(viewed.review_hunk_state(selected, hunk) is ReviewHunkViewed)
+  let stale = announce(viewed, Some(hunk), 0)
+  assert_true(stale.changed_file_review_state(selected) is ReviewInProgress)
+  let remaining = review_test_hunk(8, 9, 8, 10)
+  let partial = announce(viewed, Some(hunk.union(remaining)), 1)
+  assert_true(partial.changed_file_review_state(selected) is ReviewInProgress)
+  // Publishing the verified universe must settle earlier progress without
+  // another user click. Publishing it before any click cannot mark the file.
+  let untouched = announce(state, Some(hunk), 1)
+  assert_true(untouched.changed_file_review_state(selected) is ReviewUnviewed)
+  let complete = announce(viewed, Some(hunk), 1)
+  assert_true(complete.changed_file_review_state(selected) is ReviewComplete)
+  let unviewed = update(test_emit(), ToggleActiveReviewHunk, complete, ctx).1
+  assert_true(unviewed.changed_file_review_state(selected) is ReviewUnviewed)
+  let still_unviewed = announce(unviewed, Some(hunk), 1)
+  assert_true(
+    still_unviewed.changed_file_review_state(selected) is ReviewUnviewed,
+  )
+}
+
+///|
 test "active hunk requires exact row, diff generation, and surface generation" {
   let (state, ctx, selected) = review_progress_state()
   let hunk = review_test_hunk(2, 4, 2, 4)

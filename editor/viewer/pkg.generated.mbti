@@ -186,6 +186,13 @@ pub fn MermaidDiagram::MermaidDiagram(@dom.Element, String, dark_mode~ : Bool, o
 pub fn MermaidDiagram::dispose(Self) -> Unit
 pub fn MermaidDiagram::set_dark_mode(Self, Bool) -> Unit
 
+pub(all) enum ModelPreparationFailure {
+  Unavailable
+  Computation
+  InvalidResponse
+  TimedOut
+}
+
 type Viewer
 pub fn Viewer::add_overlay_widget(Self, @browser.OverlayWidget) -> Unit
 pub fn Viewer::change_view_zones(Self, (@browser.ViewZoneChangeAccessor) -> Unit raise) -> Unit
@@ -226,7 +233,7 @@ pub fn Viewer::get_width_of_line(Self, Int) -> Double
 pub fn Viewer::handle_initialized(Self) -> Unit
 pub fn Viewer::has_text_focus(Self) -> Bool
 pub fn Viewer::has_widget_focus(Self) -> Bool
-pub fn Viewer::layout(Self) -> Unit
+pub fn Viewer::layout(Self, dimension? : @config.EditorDimension, postpone_rendering? : Bool) -> Unit
 pub fn Viewer::on_context_menu(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_did_change_cursor_position(Self, (@editor_api.CursorPositionChangedEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_did_change_cursor_selection(Self, (@editor_api.CursorSelectionChangedEvent) -> Unit) -> @common.Disposable
@@ -240,8 +247,10 @@ pub fn Viewer::on_mouse_down(Self, (@browser.EditorMouseEvent) -> Unit) -> @comm
 pub fn Viewer::on_mouse_leave(Self, (@browser.PartialEditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_mouse_move(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
 pub fn Viewer::on_mouse_up(Self, (@browser.EditorMouseEvent) -> Unit) -> @common.Disposable
+pub fn Viewer::prepare_model(Self, @model.TextModel, (Result[Unit, ModelPreparationFailure]) -> Unit) -> @common.Disposable
 pub fn Viewer::remove_decorations(Self, Array[String]) -> Unit
 pub fn Viewer::remove_overlay_widget(Self, @browser.OverlayWidget) -> Unit
+pub fn Viewer::render(Self) -> Unit
 pub fn Viewer::restore_view_state(Self, ViewerViewState?) -> Unit
 pub fn Viewer::reveal_line(Self, Int) -> Unit
 pub fn Viewer::reveal_line_in_center(Self, Int) -> Unit
@@ -274,7 +283,7 @@ pub fn Viewer::show_references(Self, @common.Position, Array[@language.Location]
 pub fn Viewer::update_options(Self, ViewerOptions) -> Unit
 
 type ViewerOptions derive(Eq, @debug.Debug)
-pub fn ViewerOptions::ViewerOptions(soft_wrap? : Bool, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int, line_numbers_min_chars? : Int, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, show_unused? : Bool, show_deprecated? : Bool, code_lens? : Bool, code_lens_font_family? : String, code_lens_font_size? : Double, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
+pub fn ViewerOptions::ViewerOptions(soft_wrap? : Bool, tab_size? : Int, wrapping_indent? : @editor_api.WrappingIndent, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, line_rendering_limit? : @config.LineRenderingLimit, render_line_highlight? : @editor_api.RenderLineHighlight, render_line_highlight_only_when_focus? : Bool, render_validation_decorations? : @editor_api.RenderValidationDecorations, theme? : String, placeholder? : String, line_decorations_width? : Int, line_numbers_min_chars? : Int, folding? : Bool, show_folding_controls? : @editor_api.ShowFoldingControls, folding_highlight? : Bool, folding_maximum_regions? : Int, unfold_on_click_after_end_of_line? : Bool, smooth_scrolling? : Bool, show_unused? : Bool, show_deprecated? : Bool, code_lens? : Bool, code_lens_font_family? : String, code_lens_font_size? : Double, font_family? : String, font_weight? : String, font_size? : Double, line_height? : Double, letter_spacing? : Double) -> Self
 pub fn ViewerOptions::default() -> Self
 pub fn ViewerOptions::equal(Self, Self) -> Bool
 pub fn ViewerOptions::line_height(Self) -> Double

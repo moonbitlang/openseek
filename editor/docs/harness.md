@@ -122,6 +122,13 @@ layouts; it rejects ambiguous layouts rather than risking a stale artifact from
 a different `moon.work` context. Staging replaces that generated directory, so
 obsolete per-scenario pages cannot remain reachable.
 
+Both assemblers stage `editor-code-worker.js` beside the HTML entry. The
+production shell and browser-test static routes serve their respective copies;
+the worker client resolves its URL against `document.baseURI`. Desktop browser
+and macOS package assemblers publish the same artifact beside their frontend
+entry. Real Worker timeout/cancellation and prepared default folding scenarios
+exercise this deployment contract, as well as model/version freshness.
+
 ### Browser scenario ownership
 
 A browser-visible contract normally has two adjacent owners:

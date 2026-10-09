@@ -1,32 +1,124 @@
-// The editor-side half of `vscode/src/vs/workbench/contrib/scm/browser/
-// quickDiffDecorator.ts` (checked-in vscode submodule): what
-// `QuickDiffDecorator` does with its `codeEditor` — own a decorations
-// collection and refill it from the quick-diff changes. The `CodeEditorWidget`-touching
-// body lives here as root composition glue; the pure pieces (change
-// computation and decoration construction) live in
-// `internal/viewer/contrib/quick_diff/`. Those packages are dependencies of
-// `viewer` and cannot import the facade back without creating a package cycle.
+// VS Code quickDiffModel's 200ms coalescing + editor worker computation.
+// Only fresh, validated results reach decorations. A failed/timed-out job
+// clears the gutter; it is never represented as a successful empty diff.
 
 ///|
-/// Recomputes the quick-diff gutter decorations for the current model. The
-/// source splits this across `QuickDiffModel`'s throttled recompute and
-/// `QuickDiffDecorator.onDidChange`; the viewer's models are immutable and
-/// the service stores one original per resource, so both collapse into one
-/// synchronous pass: no model, or no stored original for it, clears the
-/// collection (the decorator disposal path upstream).
+priv struct QuickDiffCache {
+  identity : Int
+  version : Int
+  original : String
+  changes : Array[@diff.DetailedLineRangeMapping]
+}
+
+///|
+fn QuickDiffContributionState::cancel(
+  self : QuickDiffContributionState,
+) -> Unit {
+  self.generation += 1
+  self.scheduler.cancel()
+  match self.worker_job {
+    Some(job) => job.dispose()
+    None => ()
+  }
+  self.worker_job = None
+}
+
+///|
 fn CodeEditorWidget::quick_diff_update(
   self : CodeEditorWidget,
-  collection : EditorDecorationsCollection,
+  state : QuickDiffContributionState,
 ) -> Unit {
+  state.cancel()
   guard self.is_code_presentation() &&
     self.get_model() is Some(model) &&
     self.services.quick_diff.get_original_content(model.uri) is Some(original) else {
-    collection.set([]) |> ignore
+    state.cached = None
+    state.collection.set([]) |> ignore
     return
   }
-  let changes = @quick_diff_browser.compute_changes(
-    @base_common.split_lines(original),
-    model.get_lines_content(),
-  )
-  collection.set(@quick_diff_browser.changes_to_decorations(changes)) |> ignore
+  let identity = model.identity()
+  let version = model.get_version_id()
+  if state.cached is Some(cached) &&
+    cached.identity == identity &&
+    cached.version == version &&
+    cached.original == original {
+    state.collection.set(
+      @quick_diff_browser.changes_to_decorations(cached.changes),
+    )
+    |> ignore
+    return
+  }
+  state.collection.set([]) |> ignore
+  let generation = state.generation
+  let original_snapshot = @model.TextSnapshot(original)
+  let modified_snapshot = model.snapshot
+  let complete = (result : @diff.DocumentDiff?) => {
+    if self.disposed ||
+      generation != state.generation ||
+      !(self.get_model() is Some(current) &&
+      current.identity() == identity &&
+      current.get_version_id() == version) ||
+      self.services.quick_diff.get_original_content(model.uri) != Some(original) {
+      return
+    }
+    state.worker_job = None
+    let validated = match result {
+      Some(result) =>
+        @diff.normalize_and_validate_document_diff(
+          result, original_snapshot, modified_snapshot,
+        )
+      None => None
+    }
+    match validated {
+      Some(document) => {
+        let changes = document.changes.map(change => change.mapping)
+        state.cached = Some({ identity, version, original, changes, })
+        state.collection.set(
+          @quick_diff_browser.changes_to_decorations(changes),
+        )
+        |> ignore
+      }
+      None => {
+        state.cached = None
+        state.collection.set([]) |> ignore
+      }
+    }
+  }
+  let compute = () => {
+    if generation != state.generation {
+      return
+    }
+    let job = @code_worker.compute(
+      Diff(
+        original=original_snapshot.get_value(),
+        modified=modified_snapshot.get_value(),
+        ignore_trim_whitespace=false,
+      ),
+      result => {
+        match result {
+          Ok(Diff(changes)) =>
+            complete(Some(@worker_protocol.decode_diff(changes)))
+          _ => complete(None)
+        }
+      },
+    )
+    match job {
+      Some(job) => state.worker_job = Some(job)
+      None =>
+        complete(
+          Some(
+            @diff.LineDocumentDiffProvider().compute_diff(
+              original_snapshot,
+              modified_snapshot,
+              { ignore_trim_whitespace: false, },
+            ),
+          ),
+        )
+    }
+  }
+  if @code_worker.available() {
+    state.scheduler.schedule(compute)
+  } else {
+    compute()
+  }
 }

@@ -30,11 +30,12 @@ pub fn DiffEditorWidget::set_hunk_action_renderer(
   if width != previous_width {
     self.layout()
   }
-  self.render_hunk_actions()
+  self.render_hunk_actions(force=true)
 }
 
 ///|
 fn DiffEditorWidget::clear_hunk_actions(self : DiffEditorWidget) -> Unit {
+  self.hunk_actions_generation = None
   for (_, node) in self.hunk_actions {
     self.root.remove_child(node.as_node())
   }
@@ -141,7 +142,19 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
 }
 
 ///|
-fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
+fn DiffEditorWidget::render_hunk_actions(
+  self : DiffEditorWidget,
+  force? : Bool = false,
+) -> Unit {
+  // Geometry-only reconciliation moves existing actions. Replacing their DOM
+  // after a render would close an open menu and move focus during a gesture.
+  if !force &&
+    self.view_model.get_state() == Ready &&
+    self.diff_state is Some(_) &&
+    self.hunk_actions_generation == Some(self.view_model.generation) {
+    self.layout_hunk_actions()
+    return
+  }
   let mut focused : (Int, Int?, String?)? = None
   for (index, node) in self.hunk_actions {
     if @base_browser.element_contains_active_element(node) {
@@ -188,6 +201,9 @@ fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
         @base_browser.focus_prevent_scroll(action)
       }
     }
+  }
+  if self.view_model.get_state() == Ready && self.diff_state is Some(_) {
+    self.hunk_actions_generation = Some(self.view_model.generation)
   }
   self.layout_hunk_actions()
 }

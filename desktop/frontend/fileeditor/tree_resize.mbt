@@ -110,7 +110,7 @@ fn on_tree_resize_move(event : @dom.Event) -> Unit {
   }
   let rect = body.get_bounding_client_rect()
   if tree_docked_right() {
-    set_tree_width(
+    tree_width.val = Some(
       drag_size(
         rect.get_right() - mouse.get_client_x(),
         floor=MinTreeWidth.to_double(),
@@ -118,7 +118,7 @@ fn on_tree_resize_move(event : @dom.Event) -> Unit {
       ),
     )
   } else {
-    set_tree_height(
+    tree_height.val = Some(
       drag_size(
         rect.get_bottom() - mouse.get_client_y(),
         floor=MinTreeHeight.to_double(),

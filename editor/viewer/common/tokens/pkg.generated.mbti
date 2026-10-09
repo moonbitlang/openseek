@@ -46,6 +46,7 @@ pub fn ContiguousTokensStore::ContiguousTokensStore(@services.LanguageIdCodec) -
 pub fn ContiguousTokensStore::flush(Self) -> Unit
 pub fn ContiguousTokensStore::get_tokens(Self, String, Int, String) -> LineTokens
 pub fn ContiguousTokensStore::set_multiline_tokens(Self, Array[ContiguousMultilineTokens], String, (Int) -> Int) -> ContiguousTokensStoreUpdate
+pub fn ContiguousTokensStore::token_count(Self, Int) -> Int
 
 pub struct ContiguousTokensStoreChange {
   from_line_number : Int

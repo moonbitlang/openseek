@@ -1,6 +1,59 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+test('Line diff replaces the outgoing file with a preparation error and can retry', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.workingFiles['src/lib.mbt'] = Array.from({ length: 700 }, (_, index) =>
+    `fn incoming_${index}() -> Int {\n  ${index}\n}\n`).join('');
+  await page.addInitScript(() => {
+    const NativeWorker = window.Worker;
+    window.failSourcePreparation = true;
+    window.failedSourcePreparations = 0;
+    window.Worker = class extends NativeWorker {
+      constructor(url, options) {
+        super(url, options);
+        this.isCodeWorker = String(url).endsWith('/editor-code-worker.js');
+      }
+
+      postMessage(payload, ...options) {
+        if (this.isCodeWorker && window.failSourcePreparation && JSON.parse(payload)[0] === 'Folding') {
+          window.failedSourcePreparations++;
+          // Only replace the worker reply. The real file loading, preparation
+          // completion, surface selection and model ownership still run.
+          queueMicrotask(() => this.onmessage?.({ data: 'invalid worker reply' }));
+          return;
+        }
+        super.postMessage(payload, ...options);
+      }
+    };
+  });
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  const line = page.getByRole('button', { name: 'Line diff', exact: true });
+  await line.click();
+  const diff = page.locator('#diff-editor-host');
+  await expect(diff).toContainText('working tree');
+
+  await page.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+  await line.click();
+  await expect.poll(() => page.evaluate(() => window.failedSourcePreparations)).toBeGreaterThan(0);
+  await expect(diff).toBeVisible();
+  await expect(diff).toContainText('Could not prepare the file. Reload the file to retry.');
+  await expect(diff).not.toContainText('working tree');
+
+  await page.evaluate(() => { window.failSourcePreparation = false; });
+  await page.locator('.editor-tab').filter({ hasText: 'main.mbt' }).click();
+  await expect(diff).toContainText('working tree');
+  await page.locator('.editor-tab').filter({ hasText: 'lib.mbt' }).click();
+  await expect(line).toHaveAttribute('aria-pressed', 'true');
+  await expect(diff).toContainText('incoming_0');
+  await expect(diff).not.toContainText('Could not prepare the file.');
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('reopening a deleted review keeps Diff without reading the missing file', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];

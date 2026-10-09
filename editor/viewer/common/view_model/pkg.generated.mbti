@@ -120,7 +120,7 @@ pub fn InjectedText::not_equal(Self, Self) -> Bool
 pub fn InjectedText::to_repr(Self) -> @debug.Repr
 
 type LineBreaksComputer
-pub fn LineBreaksComputer::add_request(Self, Int, String, Array[InjectedText]) -> Unit
+pub fn LineBreaksComputer::add_request(Self, Int, String, Array[InjectedText], previous? : ModelLineProjectionData) -> Unit
 pub fn LineBreaksComputer::finalize(Self) -> Array[ModelLineProjectionData?]
 
 pub enum ModelLineProjection {
@@ -145,8 +145,9 @@ pub struct ModelLineProjectionData {
   line_length : Int
   projected_line : ProjectedTextLine
   segments : Array[ModelLineProjectionSegment]
+  // private fields
 } derive(Eq, @debug.Debug)
-pub fn ModelLineProjectionData::ModelLineProjectionData(Int, Int, ProjectedTextLine, Array[ModelLineProjectionSegment]) -> Self
+pub fn ModelLineProjectionData::ModelLineProjectionData(Int, Int, ProjectedTextLine, Array[ModelLineProjectionSegment], end_visible_column? : Double) -> Self
 pub fn ModelLineProjectionData::equal(Self, Self) -> Bool
 pub fn ModelLineProjectionData::not_equal(Self, Self) -> Bool
 pub fn ModelLineProjectionData::segment_at_view_line_index(Self, Int) -> ModelLineProjectionSegment
@@ -211,10 +212,8 @@ pub fn ProjectedLinePartKind::to_repr(Self) -> @debug.Repr
 pub struct ProjectedTextLine {
   text : String
   model_line_length : Int
-  model_columns : Array[Int]
-  injected_text_indices : Array[Int]
-  model_to_projected_columns : Array[Int]
   parts : Array[ProjectedLinePart]
+  injections : Array[ProjectedLinePart]
 } derive(Eq, @debug.Debug)
 pub fn ProjectedTextLine::equal(Self, Self) -> Bool
 pub fn ProjectedTextLine::from_injected_text(String, Array[InjectedText]) -> Self

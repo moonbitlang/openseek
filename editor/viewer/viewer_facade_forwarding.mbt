@@ -30,8 +30,17 @@ pub fn Viewer::get_options(self : Viewer) -> ViewerOptions {
 }
 
 ///|
-pub fn Viewer::layout(self : Viewer) -> Unit {
-  self.widget.layout()
+pub fn Viewer::layout(
+  self : Viewer,
+  dimension? : @config.EditorDimension,
+  postpone_rendering? : Bool = false,
+) -> Unit {
+  self.widget.layout(dimension?, postpone_rendering~)
+}
+
+///|
+pub fn Viewer::render(self : Viewer) -> Unit {
+  self.widget.render()
 }
 
 ///|
@@ -319,4 +328,30 @@ pub fn Viewer::get_decorations_in_range(
   range : @base_common.Range,
 ) -> Array[@model.ModelDecoration] {
   self.widget.get_decorations_in_range(range)
+}
+
+///|
+/// Prepare large folding inputs before an atomic set_model/restore/fold/paint
+/// transaction. Disposing the returned handle cancels the preparation.
+pub fn Viewer::prepare_model(
+  self : Viewer,
+  model : @model.TextModel,
+  ready : (Result[Unit, ModelPreparationFailure]) -> Unit,
+) -> @base_common.Disposable {
+  self.widget.prepare_model(model, result => {
+    ready(
+      match result {
+        Ok(_) => Ok(())
+        Err(error) =>
+          Err(
+            match error {
+              Unavailable => Unavailable
+              Computation => Computation
+              InvalidResponse => InvalidResponse
+              TimedOut => TimedOut
+            },
+          )
+      },
+    )
+  })
 }

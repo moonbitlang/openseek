@@ -1,0 +1,34 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/internal/viewer/browser/code_worker"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/editor/base/common",
+  "moonbitlang/editor/internal/viewer/code_worker_protocol",
+}
+
+// Values
+pub fn available() -> Bool
+
+pub fn compute(@code_worker_protocol.CodeWorkerRequest, (Result[@code_worker_protocol.CodeWorkerResponse, CodeWorkerFailure]) -> Unit, max_time_ms? : Int) -> @common.Disposable?
+
+pub fn parse_wire_json(String) -> Json raise
+
+pub fn stringify_wire_json(Json) -> String raise
+
+// Errors
+
+// Types and methods
+pub(all) enum CodeWorkerFailure {
+  Unavailable
+  Computation
+  InvalidResponse
+  TimedOut
+} derive(Eq, @debug.Debug)
+pub fn CodeWorkerFailure::equal(Self, Self) -> Bool
+pub fn CodeWorkerFailure::not_equal(Self, Self) -> Bool
+pub fn CodeWorkerFailure::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

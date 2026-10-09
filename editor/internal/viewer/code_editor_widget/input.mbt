@@ -197,16 +197,19 @@ fn remove_element_if_contained(
 
 ///|
 /// Re-derives the active `FontInfo` from the current options: through
-/// `FontMeasurements.readFontInfo` when a DOM view exists (Monaco's
+/// `FontMeasurements.readFontInfo` as soon as the host is mounted (Monaco's
 /// `_readConfiguration`), the headless estimate otherwise. A changed line
 /// height re-flows the layout; the view root is restyled in place.
 fn CodeEditorWidget::refresh_font_info(self : CodeEditorWidget) -> Unit {
   let bare = self.configuration.snapshot().options.bare_font_info(
     pixel_ratio=@base_browser.device_pixel_ratio(),
   )
-  let font_info = match self.current_code_view() {
-    Some(_) => @browser_config.font_measurements().read_font_info(bare)
-    None => @config.FontInfo::estimated(bare)
+  // Resolve before model projection/DOM construction. Deferring the first
+  // measurement until a feedback/options update forces layout of a new large
+  // view and may also rewrap it from estimated to measured character widths.
+  let font_info = match self.mount {
+    Mounted(_) => @browser_config.font_measurements().read_font_info(bare)
+    Headless => @config.FontInfo::estimated(bare)
   }
   if !self.configuration.commit_font_info(font_info) {
     return
@@ -266,12 +269,18 @@ fn read_container_size(container : @rdom.Element) -> (Double, Double) {
 /// the derived gutter width feed the layout model and every later hit
 /// test. DOM scroll offsets are treated only as browser reveal deltas;
 /// `ViewLayout` owns the editor scroll truth.
-fn CodeEditorWidget::measure(self : CodeEditorWidget) -> Unit {
-  let container = match self.mount {
-    Headless => return
-    Mounted(mounted) => mounted.container
+fn CodeEditorWidget::measure(
+  self : CodeEditorWidget,
+  dimension? : @config.EditorDimension,
+) -> Unit {
+  let (width, height) = match dimension {
+    Some(size) => (size.width.max(5.0), size.height.max(5.0))
+    None =>
+      match self.mount {
+        Headless => return
+        Mounted(mounted) => read_container_size(mounted.container)
+      }
   }
-  let (width, height) = read_container_size(container)
   let previous_configuration = self.configuration.event_snapshot()
   let event_batch = self.begin_view_event_batch()
   self.refresh_font_info()

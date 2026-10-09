@@ -26,6 +26,8 @@ fn run_scenario(scenario : String) -> Unit {
     "markdown-folding" => @component.run_markdown_folding_test()
     "model-swap" => @model_swap.run_model_swap_test()
     "peek-references" => @peek_references.run_peek_references_browser_test()
+    "prepared-folding" => @code_work.run_prepared_folding_test()
+    "worker-timeout" => @code_work.run_worker_timeout_test()
     "quick-diff" => @quick_diff.run_quick_diff_test()
     "read-api" => @read_api.run_read_api_test()
     "render-invalidation" => @component.run_render_invalidation_test()

@@ -131,6 +131,50 @@ test "stable attached ranges refresh synchronously without a scheduler" {
 }
 
 ///|
+// Folded source may publish a visible range containing only the first invalid
+// line. Its inclusive end must not skip that line and wait for idle work.
+test "single visible frontier line tokenizes synchronously and carries state" {
+  let harness = backend_harness(["one", "two", "three"])
+  let views = AttachedViews()
+  let calls : Array[(String, @syntax.TokenizerState)] = []
+  let initial = @syntax.TokenizerState()
+  let next = initial.push_mode(b'l')
+  let backend = TokenizerSyntaxTokenBackend::new_with_support_resolver(
+    harness.model_state,
+    views,
+    _ => {
+      Some(
+        InternalTokenizationSupportAdapter(initial_state=() => initial, tokenize_encoded=(
+          text,
+          _has_eol,
+          state,
+        ) => {
+          calls.push((text, state))
+          { tokens: [0, tag_to_metadata(Plain)], end_state: next, }
+        }),
+      )
+    },
+  )
+  let events : Array[ModelTokensChangedEvent] = []
+  backend.on_did_change_tokens(event => events.push(event)) |> ignore
+  let view = views.attach_view()
+  view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
+  assert_eq(calls, [("one", initial)])
+  assert_eq(events.length(), 1)
+  assert_eq(events[0].ranges[0].from_line_number, 1)
+  assert_eq(events[0].ranges[0].to_line_number, 1)
+  view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
+  assert_eq(calls.length(), 1)
+  view.set_visible_lines([{ start_line_number: 2, end_line_number: 2, }], true)
+  assert_eq(calls, [("one", initial), ("two", next)])
+  assert_eq(events.length(), 2)
+  assert_eq(events[1].ranges[0].from_line_number, 2)
+  assert_eq(events[1].ranges[0].to_line_number, 2)
+  view.set_visible_lines([{ start_line_number: 1, end_line_number: 1, }], true)
+  assert_eq(calls.length(), 2)
+}
+
+///|
 test "scheduler None enqueues nothing; late scheduler wakes once and stale generation is inert" {
   let harness = backend_harness(["one", "two"])
   let calls : Array[String] = []

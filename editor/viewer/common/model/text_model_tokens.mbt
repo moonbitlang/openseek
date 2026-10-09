@@ -413,7 +413,10 @@ fn TokenizerWithStateStoreAndTextModel::tokenize_heuristically(
   end_line_number : Int,
 ) -> HeuristicTokenizationResult {
   let first_invalid = self.base.store.get_first_invalid_end_state_line_number_or_max()
-  if end_line_number <= first_invalid {
+  // Both bounds are inclusive. A single visible frontier line (common after
+  // folding) still needs tokens; only ranges strictly before it are complete.
+  // The pinned upstream uses <= here, but that skips this boundary until idle.
+  if end_line_number < first_invalid {
     return { heuristic_tokens: false, }
   }
   if start_line_number <= first_invalid {
@@ -533,7 +536,8 @@ fn safe_tokenize(
   model_state : TokenizationModelState,
 ) -> EncodedTokenizationResult {
   let mut result : EncodedTokenizationResult? = None
-  match support {
+  match
+    (if model_state.line_limit.allows(text.length()) { support } else { None }) {
     Some(tokenization_support) =>
       try tokenization_support.tokenize(text, has_eol, state) catch {
         error => (model_state.report_unexpected_error)("\{Repr(error)}")

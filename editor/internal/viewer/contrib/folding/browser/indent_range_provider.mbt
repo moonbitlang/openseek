@@ -199,7 +199,7 @@ let folding_ranges_limit_default : FoldingLimitReporter = {
 /// contribute `#region`/`#endregion`-style ranges. Monaco's combined
 /// single-regex fast path collapses into the separate start/end probe order
 /// (start wins), which is its own fallback branch.
-fn compute_ranges(
+pub fn compute_ranges(
   model : @model.TextModel,
   off_side : Bool,
   markers? : @languages.FoldingMarkers,

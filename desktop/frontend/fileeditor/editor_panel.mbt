@@ -152,6 +152,10 @@ priv struct ViewerHost {
   // the Rabbita model.
   view_states : Map[String, @viewer.ViewerViewState]
   markdown_view_states : Map[String, @viewer.MarkdownViewerViewState]
+  source_models : SourceModelCache
+  mut source_lease : SourceModelLease?
+  mut source_preparation : SourcePreparation?
+  mut show_generation : Int
 }
 
 ///|
@@ -190,6 +194,10 @@ let viewer_state : ViewerHost = {
   font_size: DefaultEditorFontSize,
   view_states: Map([]),
   markdown_view_states: Map([]),
+  source_models: SourceModelCache(),
+  source_lease: None,
+  source_preparation: None,
+  show_generation: 0,
 }
 
 ///|
@@ -1063,13 +1071,21 @@ fn show_transient_navigation_target_highlight(
 
 ///|
 fn dispose_markdown_model(model : @viewer.MarkdownViewerModel) -> Unit {
-  model.model.dispose()
+  dispose_source_model(Some(model.model))
 }
 
 ///|
 fn dispose_source_model(model : @model.TextModel?) -> Unit {
   match model {
-    Some(model) => model.dispose()
+    Some(model) =>
+      match viewer_state.source_lease {
+        Some(lease) if lease.model.same(model) => {
+          viewer_state.source_lease = None
+          lease.dispose()
+        }
+        // Models created outside the cache keep their caller-owned lifecycle.
+        _ => model.dispose()
+      }
     None => ()
   }
 }
@@ -1296,254 +1312,403 @@ fn show_file_in_viewer(
   search_highlights? : @grep_search.EditorHighlights,
 ) -> @cmd.Cmd {
   let show = after_render_effect(() => {
-    // A fast host (including the browser fixture) may settle `read_file`
-    // before the mount command from the open action reaches its after-render
-    // phase. Commit the document in that same phase so the stable hosts and
-    // their widgets exist before either the source model or MBTI SVG is set.
-    guard viewer_state.viewer is Some(viewer) &&
-      viewer_state.markdown_viewer is Some(markdown_viewer) else {
-      return
-    }
-    let show_markdown = uses_markdown_presentation(name)
-    // The URI is the file's absolute path and host identity. The hover
-    // provider pairs it with the active navigation root. A notice document
-    // (withheld binary/oversized file) has no file behind it, so its inert
-    // scheme never parses as a model path and hover stays off.
-    let uri = if live {
-      model_uri_of(document)
-    } else {
-      // A deleted preview has no file behind it. Keep the document's full
-      // path so equal basenames in different directories do not alias one
-      // Viewer model and leak its view state across tabs.
-      @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
-        _ => return
+    cancel_source_preparation()
+    let mut prepared_reload = false
+    let commit = () => {
+      // A fast host (including the browser fixture) may settle `read_file`
+      // before the mount command from the open action reaches its after-render
+      // phase. Commit the document in that same phase so the stable hosts and
+      // their widgets exist before either the source model or MBTI SVG is set.
+      guard viewer_state.viewer is Some(viewer) &&
+        viewer_state.markdown_viewer is Some(markdown_viewer) else {
+        return
       }
-    }
-    if uses_mbti_presentation(name) {
-      show_mbti_diagram(uri, content)
-    }
-    if !uses_moon_mod_presentation(name) {
-      clear_package_graph()
-    }
-    // Whether anything needs redrawing is decided here, against the document
-    // the viewer really shows — the update loop only says "show this", it
-    // does not guess at the screen from its tab cache. When the viewer
-    // already displays this exact text (a reload that found the disk
-    // unchanged, or a jump into the file on screen), the model is left
-    // untouched so the selection, scroll, and feedback bubbles survive; a
-    // jump's reveal and annotation still apply below, over the kept document.
-    let code_model = viewer.get_model()
-    let markdown_model = markdown_viewer.get_model()
-    let same_code_resource = !show_markdown &&
-      code_model is Some(current) &&
-      current.uri.to_string() == uri.to_string()
-    let same_document = if show_markdown {
-      markdown_model is Some(current) &&
-      current.model.uri.to_string() == uri.to_string() &&
-      current.model.get_value() == content &&
-      current.resource_kind == markdown_resource_kind(name)
-    } else {
-      code_model is Some(current) &&
-      current.uri.to_string() == uri.to_string() &&
-      current.get_value() == content
-    }
-    let previous_uri = match code_model {
-      Some(model) => Some(model.uri)
-      None => markdown_model.map(model => model.model.uri)
-    }
-    let restore_view_state = should_restore_view_state(
-      restore_scroll, previous_uri, uri,
-    )
-    // Decorations live on the current text model. Remove the previous
-    // persistent point highlight before a possible model swap. Symbol jumps
-    // use fresh transient collections that retire themselves after 350ms.
-    if viewer_state.point_range_highlight is Some(highlight) {
-      highlight.clear()
-    }
-    if viewer_state.search_match_highlights is Some(highlights) {
-      highlights.clear()
-    }
-    if same_code_resource && !same_document {
-      // VS Code reloads an existing text-file model in place. The readonly
-      // Viewer uses its whole-value flush lane, bracketed by view-state
-      // persistence so folding contribution state survives the decorations
-      // that `set_value` deliberately destroys.
-      let current_view_state = viewer.save_view_state()
-      viewer.set_value(content)
-      viewer.restore_view_state(current_view_state)
-    } else if !same_document {
-      // Park the outgoing document's view state for its tab's return.
-      if viewer_state.document is Some(prev) {
-        if code_model is Some(_) && viewer.save_view_state() is Some(view_state) {
-          viewer_state.view_states[prev.to_string()] = view_state
-        }
-        if markdown_model is Some(_) &&
-          markdown_viewer.save_view_state() is Some(view_state) {
-          viewer_state.markdown_view_states[prev.to_string()] = view_state
+      let show_markdown = uses_markdown_presentation(name)
+      // The URI is the file's absolute path and host identity. The hover
+      // provider pairs it with the active navigation root. A notice document
+      // (withheld binary/oversized file) has no file behind it, so its inert
+      // scheme never parses as a model path and hover stays off.
+      let uri = if live {
+        model_uri_of(document)
+      } else {
+        // A deleted preview has no file behind it. Keep the document's full
+        // path so equal basenames in different directories do not alias one
+        // Viewer model and leak its view state across tabs.
+        @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
+          _ => return
         }
       }
-      viewer_state.version += 1
-      let version = viewer_state.version
-      let text_model = @model.TextModel(
-        uri,
-        name,
-        language_id(name),
-        version,
-        "v" + version.to_string(),
-        content,
-      )
-      if show_markdown {
-        // The public surfaces are mutually exclusive model owners. Detach and
-        // retire Code before installing the rich Markdown model.
+      if uses_mbti_presentation(name) {
+        show_mbti_diagram(uri, content)
+      }
+      if !uses_moon_mod_presentation(name) {
+        clear_package_graph()
+      }
+      // Whether anything needs redrawing is decided here, against the document
+      // the viewer really shows — the update loop only says "show this", it
+      // does not guess at the screen from its tab cache. When the viewer
+      // already displays this exact text (a reload that found the disk
+      // unchanged, or a jump into the file on screen), the model is left
+      // untouched so the selection, scroll, and feedback bubbles survive; a
+      // jump's reveal and annotation still apply below, over the kept document.
+      let code_model = viewer.get_model()
+      let markdown_model = markdown_viewer.get_model()
+      let source_scope : SourceModelScope = { owner, root, }
+      let same_scope = viewer_state.source_models.scope == Some(source_scope)
+      if !same_scope {
+        viewer_state.view_states.clear()
+        viewer_state.markdown_view_states.clear()
+      }
+      let same_code_resource = same_scope &&
+        !show_markdown &&
+        code_model is Some(current) &&
+        current.uri.to_string() == uri.to_string()
+      let same_document = same_scope &&
+        (if show_markdown {
+          markdown_model is Some(current) &&
+          current.model.uri.to_string() == uri.to_string() &&
+          current.model.has_same_content(content) &&
+          current.resource_kind == markdown_resource_kind(name)
+        } else {
+          code_model is Some(current) &&
+          current.uri.to_string() == uri.to_string() &&
+          current.has_same_content(content)
+        })
+      let previous_uri = match code_model {
+        Some(model) => Some(model.uri)
+        None => markdown_model.map(model => model.model.uri)
+      }
+      let restore_view_state = should_restore_view_state(
+          restore_scroll, previous_uri, uri,
+        ) ||
+        prepared_reload
+      // Decorations live on the current text model. Remove the previous
+      // persistent point highlight before a possible model swap. Symbol jumps
+      // use fresh transient collections that retire themselves after 350ms.
+      if viewer_state.point_range_highlight is Some(highlight) {
+        highlight.clear()
+      }
+      if viewer_state.search_match_highlights is Some(highlights) {
+        highlights.clear()
+      }
+      if same_code_resource && !same_document {
+        // VS Code reloads an existing text-file model in place. The readonly
+        // Viewer uses its whole-value flush lane, bracketed by view-state
+        // persistence so folding contribution state survives the decorations
+        // that `set_value` deliberately destroys.
+        let current_view_state = viewer.save_view_state()
+        viewer.set_value(content)
+        viewer.restore_view_state(current_view_state)
+      } else if !same_document {
+        // Park the outgoing document's view state for its tab's return.
+        if same_scope && viewer_state.document is Some(prev) {
+          if code_model is Some(_) &&
+            viewer.save_view_state() is Some(view_state) {
+            viewer_state.view_states[prev.to_string()] = view_state
+          }
+          if markdown_model is Some(_) &&
+            markdown_viewer.save_view_state() is Some(view_state) {
+            viewer_state.markdown_view_states[prev.to_string()] = view_state
+          }
+        }
+        viewer_state.version += 1
+        let version = viewer_state.version
+        let source_lease = viewer_state.source_models.acquire(
+          source_scope,
+          document,
+          uri,
+          content,
+          () => {
+            @model.TextModel(
+              uri,
+              name,
+              language_id(name),
+              version,
+              "v" + version.to_string(),
+              content,
+            )
+          },
+        )
+        let text_model = source_lease.model
+        if show_markdown {
+          // The public surfaces are mutually exclusive model owners. Detach and
+          // retire Code before installing the rich Markdown model.
+          viewer.set_model(None)
+          dispose_source_model(code_model)
+          let previous = markdown_viewer.set_model(
+            Some(
+              @viewer.MarkdownViewerModel(
+                text_model,
+                markdown_resource_kind(name),
+              ),
+            ),
+          )
+          match previous {
+            Some(previous) => dispose_markdown_model(previous)
+            None => ()
+          }
+          if restore_view_state &&
+            viewer_state.markdown_view_states.get(document.to_string())
+            is Some(saved) {
+            markdown_viewer.restore_view_state(Some(saved))
+          }
+        } else {
+          // `MarkdownViewer::set_model` returns only after its attachment and
+          // bridges are detached, so the caller-owned TextModel can be retired
+          // immediately before Code takes over.
+          match markdown_viewer.set_model(None) {
+            Some(previous) => dispose_markdown_model(previous)
+            None => ()
+          }
+          viewer.set_model(Some(text_model))
+          dispose_source_model(code_model)
+          let restored_code_view_state = if restore_view_state &&
+            viewer_state.view_states.get(document.to_string()) is Some(saved) {
+            viewer.restore_view_state(Some(saved))
+            true
+          } else {
+            false
+          }
+          // Match the reference workbench's host policy: ordinary `.mbt` files
+          // open as a top-level outline. `set_model` computes folding ranges
+          // synchronously, so this is stable initialization state rather than a
+          // delayed render effect. A restored state already carries the user's
+          // fold choices, so the initial policy must not run over it.
+          if !restored_code_view_state && should_auto_fold_top_level(text_model) {
+            viewer.fold_top_level()
+          }
+        }
+        viewer_state.source_lease = Some(source_lease)
+      } else if show_markdown {
         viewer.set_model(None)
         dispose_source_model(code_model)
-        let previous = markdown_viewer.set_model(
-          Some(
-            @viewer.MarkdownViewerModel(
-              text_model,
-              markdown_resource_kind(name),
-            ),
-          ),
-        )
-        match previous {
-          Some(previous) => dispose_markdown_model(previous)
-          None => ()
-        }
-        if restore_view_state &&
-          viewer_state.markdown_view_states.get(document.to_string())
-          is Some(saved) {
-          markdown_viewer.restore_view_state(Some(saved))
-        }
       } else {
-        // `MarkdownViewer::set_model` returns only after its attachment and
-        // bridges are detached, so the caller-owned TextModel can be retired
-        // immediately before Code takes over.
         match markdown_viewer.set_model(None) {
           Some(previous) => dispose_markdown_model(previous)
           None => ()
         }
-        viewer.set_model(Some(text_model))
-        dispose_source_model(code_model)
-        let restored_code_view_state = if restore_view_state &&
-          viewer_state.view_states.get(document.to_string()) is Some(saved) {
-          viewer.restore_view_state(Some(saved))
-          true
-        } else {
-          false
+      }
+      // Gate incoming diagnostics and navigation to the file now on screen; a
+      // deleted preview or a notice document takes neither.
+      viewer_state.document = Some(document)
+      viewer_state.live = live
+      viewer_state.navigation = navigation_context_for_file(
+        owner, root, document,
+      )
+      // Commenting (select → inline input → composer chip) is for real files;
+      // a notice document has nothing behind it to comment on.
+      if viewer_state.services is Some(services) {
+        // Only the displayed resource needs a stored baseline. Retire the
+        // outgoing URI before publishing the incoming one so tab switches and
+        // conversation changes cannot accumulate up-to-1-MiB HEAD blobs.
+        if previous_uri is Some(previous) &&
+          previous.to_string() != uri.to_string() {
+          services.quick_diff.set_original_content(previous, None)
         }
-        // Match the reference workbench's host policy: ordinary `.mbt` files
-        // open as a top-level outline. `set_model` computes folding ranges
-        // synchronously, so this is stable initialization state rather than a
-        // delayed render effect. A restored state already carries the user's
-        // fold choices, so the initial policy must not run over it.
-        if !restored_code_view_state && should_auto_fold_top_level(text_model) {
-          viewer.fold_top_level()
+        // The service is resource-keyed, so setting this after `set_model` also
+        // handles a late HEAD reply for the document already on screen. The
+        // service event makes the gutter recompute without replacing the model.
+        services.quick_diff.set_original_content(
+          uri,
+          if show_markdown {
+            None
+          } else {
+            review_original
+          },
+        )
+        // MarkdownViewer has no code-feedback contribution, but the same live
+        // resource may be mounted in DiffEditor's modified code kernel. Keep the
+        // resource enabled so review comments remain available there.
+        services.feedback.set_feedback_enabled(uri, live)
+        if live && !show_markdown {
+          // A fresh document view starts with no bubbles (comments become
+          // chips the moment they are filed, so anything lingering here is a
+          // previous jump's re-display); an annotation chip's jump then
+          // re-shows its comment over the commented range. `Submitted` keeps
+          // the display copy quiet: it fires no `did_add_feedback` (so the
+          // chip callback cannot mint a duplicate) and draws no Created-state
+          // button bar. A same-document show only re-stages bubbles for a
+          // jump that carries an annotation — a plain unchanged reload must
+          // not clear what the user is looking at (or typing into).
+          if !same_document || annotation is Some(_) {
+            services.feedback.clear_feedback(uri)
+            if annotation is Some(text) && range is Some(range) {
+              services.feedback.add_feedback(
+                uri,
+                range,
+                text,
+                state=@agent_feedback_api.Submitted,
+              )
+              |> ignore
+            }
+          }
         }
       }
-    } else if show_markdown {
-      viewer.set_model(None)
-      dispose_source_model(code_model)
+      match diff {
+        Some((original, modified)) =>
+          show_diff_comparison(owner, name, uri, document, original, modified)
+        // The sibling comparison is intentionally parked when the source
+        // surface is active or a replacement pair is still loading. CSS alone
+        // selects the visible surface; keeping this bounded two-model cache
+        // avoids a blank repaint and makes View file a non-destructive toggle.
+        None => ()
+      }
+      set_search_match_highlights(
+        if show_markdown {
+          None
+        } else {
+          search_highlights
+        },
+      )
+      // Resolve final geometry before reveal/stable demand. Until now the first
+      // visible range could spend 50ms in the scrolling debounce before colors
+      // caught up with the text that was already on screen.
+      if !show_markdown && editor_surface_host_visible(ViewerHostId) {
+        viewer.layout(postpone_rendering=true)
+      }
+      if range is Some(range) {
+        if show_markdown {
+          markdown_viewer.reveal_range_in_center(range)
+        } else {
+          let target = navigation_target_presentation(range)
+          viewer.set_position(target.position)
+          let search_match = match search_highlights {
+            Some(highlights) => highlights.ranges().contains(range)
+            None => false
+          }
+          if search_match {
+            ()
+          } else if target.is_transient {
+            if viewer.get_model() is Some(target_model) {
+              show_transient_navigation_target_highlight(
+                viewer,
+                target_model,
+                target.decoration,
+              )
+            }
+          } else if viewer_state.point_range_highlight is Some(highlight) {
+            highlight.set([target.decoration]) |> ignore
+          }
+          viewer.reveal_range_in_center(range)
+        }
+      }
+      if !show_markdown {
+        viewer.handle_initialized()
+        if editor_surface_host_visible(ViewerHostId) {
+          viewer.render()
+        }
+      }
+      viewer_state.source_models.trim()
+    }
+    guard viewer_state.viewer is Some(viewer) else { return }
+    // Rich presentations and an unchanged/active resource retain their existing
+    // synchronous path. Prepare only a newly attached code source.
+    let scope : SourceModelScope = { owner, root, }
+    if uses_markdown_presentation(name) ||
+      uses_mbti_presentation(name) ||
+      uses_moon_mod_presentation(name) ||
+      (
+        viewer_state.source_models.scope == Some(scope) &&
+        viewer.get_model() is Some(current) &&
+        current.uri ==
+        (if live {
+          model_uri_of(document)
+        } else {
+          @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
+            _ => return
+          }
+        }) &&
+        (
+          current.has_same_content(content) ||
+          (current.get_line_count() < 2000 && content.length() < 65536)
+        )
+      ) {
+      commit()
+      return
+    }
+    let uri = if live {
+      model_uri_of(document)
     } else {
+      @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
+        _ => return
+      }
+    }
+    let same_scope = viewer_state.source_models.scope == Some(scope)
+    let previous = viewer.get_model()
+    prepared_reload = same_scope &&
+      previous is Some(current) &&
+      current.uri == uri
+    if !same_scope {
+      viewer_state.view_states.clear()
+      viewer_state.markdown_view_states.clear()
+    } else if viewer_state.document is Some(previous_uri) {
+      if viewer.save_view_state() is Some(saved) {
+        viewer_state.view_states[previous_uri.to_string()] = saved
+      }
+      if viewer_state.markdown_viewer is Some(markdown_viewer) &&
+        markdown_viewer.save_view_state() is Some(saved) {
+        viewer_state.markdown_view_states[previous_uri.to_string()] = saved
+      }
+    }
+    if viewer_state.services is Some(services) && previous is Some(previous) {
+      services.quick_diff.set_original_content(previous.uri, None)
+    }
+    // Detach before a cached set_value flush; otherwise an active folding
+    // contribution would still scan the entire new source on the main thread.
+    viewer.set_model(None)
+    dispose_source_model(previous)
+    if viewer_state.markdown_viewer is Some(markdown_viewer) {
       match markdown_viewer.set_model(None) {
         Some(previous) => dispose_markdown_model(previous)
         None => ()
       }
     }
-    // Gate incoming diagnostics and navigation to the file now on screen; a
-    // deleted preview or a notice document takes neither.
-    viewer_state.document = Some(document)
-    viewer_state.live = live
-    viewer_state.navigation = navigation_context_for_file(owner, root, document)
-    // Commenting (select → inline input → composer chip) is for real files;
-    // a notice document has nothing behind it to comment on.
-    if viewer_state.services is Some(services) {
-      // Only the displayed resource needs a stored baseline. Retire the
-      // outgoing URI before publishing the incoming one so tab switches and
-      // conversation changes cannot accumulate up-to-1-MiB HEAD blobs.
-      if previous_uri is Some(previous) &&
-        previous.to_string() != uri.to_string() {
-        services.quick_diff.set_original_content(previous, None)
-      }
-      // The service is resource-keyed, so setting this after `set_model` also
-      // handles a late HEAD reply for the document already on screen. The
-      // service event makes the gutter recompute without replacing the model.
-      services.quick_diff.set_original_content(
-        uri,
-        if show_markdown {
-          None
-        } else {
-          review_original
-        },
-      )
-      // MarkdownViewer has no code-feedback contribution, but the same live
-      // resource may be mounted in DiffEditor's modified code kernel. Keep the
-      // resource enabled so review comments remain available there.
-      services.feedback.set_feedback_enabled(uri, live)
-      if live && !show_markdown {
-        // A fresh document view starts with no bubbles (comments become
-        // chips the moment they are filed, so anything lingering here is a
-        // previous jump's re-display); an annotation chip's jump then
-        // re-shows its comment over the commented range. `Submitted` keeps
-        // the display copy quiet: it fires no `did_add_feedback` (so the
-        // chip callback cannot mint a duplicate) and draws no Created-state
-        // button bar. A same-document show only re-stages bubbles for a
-        // jump that carries an annotation — a plain unchanged reload must
-        // not clear what the user is looking at (or typing into).
-        if !same_document || annotation is Some(_) {
-          services.feedback.clear_feedback(uri)
-          if annotation is Some(text) && range is Some(range) {
-            services.feedback.add_feedback(
-              uri,
-              range,
-              text,
-              state=@agent_feedback_api.Submitted,
-            )
-            |> ignore
-          }
-        }
-      }
-    }
-    match diff {
-      Some((original, modified)) =>
-        show_diff_comparison(owner, name, uri, document, original, modified)
-      // The sibling comparison is intentionally parked when the source
-      // surface is active or a replacement pair is still loading. CSS alone
-      // selects the visible surface; keeping this bounded two-model cache
-      // avoids a blank repaint and makes View file a non-destructive toggle.
-      None => ()
-    }
-    set_search_match_highlights(
-      if show_markdown {
-        None
-      } else {
-        search_highlights
+    viewer_state.document = None
+    viewer_state.live = false
+    viewer_state.navigation = None
+    let lease = viewer_state.source_models.acquire(
+      scope,
+      document,
+      uri,
+      content,
+      () => {
+        @model.TextModel(
+          uri,
+          name,
+          language_id(name),
+          viewer_state.version + 1,
+          "v" + (viewer_state.version + 1).to_string(),
+          content,
+        )
       },
     )
-    if range is Some(range) {
-      if show_markdown {
-        markdown_viewer.reveal_range_in_center(range)
-      } else {
-        let target = navigation_target_presentation(range)
-        viewer.set_position(target.position)
-        let search_match = match search_highlights {
-          Some(highlights) => highlights.ranges().contains(range)
-          None => false
-        }
-        if search_match {
-          ()
-        } else if target.is_transient {
-          if viewer.get_model() is Some(target_model) {
-            show_transient_navigation_target_highlight(
-              viewer,
-              target_model,
-              target.decoration,
-            )
-          }
-        } else if viewer_state.point_range_highlight is Some(highlight) {
-          highlight.set([target.decoration]) |> ignore
-        }
-        viewer.reveal_range_in_center(range)
-      }
+    let preparation : SourcePreparation = {
+      lease,
+      channel: owner.channel,
+      document,
+      live,
+      generation: viewer_state.show_generation,
+      diagnostics: None,
+      job: None,
+    }
+    viewer_state.source_preparation = Some(preparation)
+    let job = viewer.prepare_model(lease.model, result => {
+      preparation.finish(result, commit, error => {
+        show_source_preparation_failure(
+          viewer,
+          document,
+          error,
+          diff_owner?=if diff is Some(_) { Some(owner) } else { None },
+        )
+      })
+    })
+    if viewer_state.source_preparation is Some(pending) &&
+      physical_equal(pending, preparation) {
+      preparation.job = Some(job)
+      // The first incoming frame is already restored/folded.
+      viewer.render()
+    } else {
+      job.dispose()
     }
   })
   @cmd.batch([show, request_viewer_remeasure()])
@@ -1583,6 +1748,7 @@ fn clear_quick_diff_baseline() -> @cmd.Cmd {
 /// Only ordinary MoonBit `.mbt` source files opt in. Interfaces, literate
 /// documents, extensionless sources, and other languages stay expanded.
 fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
+  !text_model.is_too_large_for_tokenization() &&
   text_model.get_language_id() == "moonbit" &&
   text_model.display_name.has_suffix(".mbt")
 }
@@ -1596,6 +1762,7 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    cancel_source_preparation()
     viewer_state.view_states.clear()
     viewer_state.markdown_view_states.clear()
     if viewer_state.viewer is Some(viewer) {
@@ -1626,6 +1793,7 @@ fn clear_viewer() -> @cmd.Cmd {
     clear_package_graph()
     clear_diff_comparison()
     clear_semantic_review_editors()
+    viewer_state.source_models.clear()
   })
 }
 
@@ -1637,6 +1805,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    cancel_source_preparation()
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1674,13 +1843,15 @@ fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     viewer_state.view_states.remove(path.to_string())
     viewer_state.markdown_view_states.remove(path.to_string())
+    viewer_state.source_models.retire_document(path)
   })
 }
 
 ///|
 /// Draw the language server's diagnostics for the file at `absolute` onto the
 /// viewer — but only while it still shows that file, so a push that raced a
-/// file switch or a cleared panel is dropped. The diagnostics are keyed to the
+/// file switch or a cleared panel is dropped. A matching batch received during
+/// preparation waits for the model to commit. The diagnostics are keyed to the
 /// model's own URI, so the viewer's marker-decoration service renders their
 /// squiggles on the document on screen.
 fn apply_diagnostics(
@@ -1689,19 +1860,38 @@ fn apply_diagnostics(
   diagnostics : Array[@protocol.LspDiagnostic],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if @resource.belongs_to(absolute, channel) &&
-      viewer_state.live &&
-      viewer_state.document == Some(absolute) &&
-      viewer_state.services is Some(services) {
-      let uri = model_uri_of(absolute)
-      services.markers.set_diagnostics(
-        DiagnosticsOwner,
-        uri,
-        DiagnosticsProjection(diagnostics).to_viewer(),
-      )
-      refresh_semantic_modified_diagnostics(uri)
-    }
+    apply_diagnostics_now(channel, absolute, diagnostics)
   })
+}
+
+///|
+fn apply_diagnostics_now(
+  channel : @interop.ChannelId,
+  absolute : @common.Uri,
+  diagnostics : Array[@protocol.LspDiagnostic],
+) -> Unit {
+  guard @resource.belongs_to(absolute, channel) else { return }
+  if viewer_state.source_preparation is Some(preparation) &&
+    preparation.live &&
+    preparation.channel == channel &&
+    preparation.document == absolute {
+    // A later publish replaces the loaded batch, including an explicitly empty
+    // batch that clears earlier problems. Cancellation drops this storage with
+    // its preparation rather than carrying markers into the next document.
+    preparation.diagnostics = Some(diagnostics)
+    return
+  }
+  if viewer_state.live &&
+    viewer_state.document == Some(absolute) &&
+    viewer_state.services is Some(services) {
+    let uri = model_uri_of(absolute)
+    services.markers.set_diagnostics(
+      DiagnosticsOwner,
+      uri,
+      DiagnosticsProjection(diagnostics).to_viewer(),
+    )
+    refresh_semantic_modified_diagnostics(uri)
+  }
 }
 
 ///|
@@ -1729,4 +1919,89 @@ fn language_id(name : String) -> String {
   } else {
     "plaintext"
   }
+}
+
+///|
+priv struct SourcePreparation {
+  lease : SourceModelLease
+  channel : @interop.ChannelId
+  document : @common.Uri
+  live : Bool
+  generation : Int
+  mut diagnostics : Array[@protocol.LspDiagnostic]?
+  mut job : @common.Disposable?
+}
+
+///|
+fn SourcePreparation::finish(
+  self : SourcePreparation,
+  result : Result[Unit, @viewer.ModelPreparationFailure],
+  commit : () -> Unit,
+  on_failure : (@viewer.ModelPreparationFailure) -> Unit,
+) -> Unit {
+  guard self.generation == viewer_state.show_generation else { return }
+  viewer_state.source_preparation = None
+  match self.job {
+    Some(job) => job.dispose()
+    None => ()
+  }
+  match result {
+    Ok(_) => {
+      commit()
+      if self.diagnostics is Some(diagnostics) {
+        apply_diagnostics_now(self.channel, self.document, diagnostics)
+      }
+    }
+    Err(error) => on_failure(error)
+  }
+  self.lease.dispose()
+  viewer_state.source_models.trim()
+}
+
+///|
+fn cancel_source_preparation() -> Unit {
+  viewer_state.show_generation += 1
+  match viewer_state.source_preparation {
+    Some(preparation) => {
+      viewer_state.source_preparation = None
+      match preparation.job {
+        Some(job) => job.dispose()
+        None => ()
+      }
+      preparation.lease.dispose()
+    }
+    None => ()
+  }
+}
+
+///|
+/// A failed preparation is a visible notice, never the previous file's text
+/// under the incoming tab. Reload retries the original cached source.
+fn show_source_preparation_failure(
+  viewer : @viewer.Viewer,
+  document : @common.Uri,
+  failure : @viewer.ModelPreparationFailure,
+  diff_owner? : @interop.ConversationKey,
+) -> Unit {
+  let message = source_preparation_notice(failure is TimedOut)
+  let uri = @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
+    _ => return
+  }
+  let previous = viewer.get_model()
+  viewer.set_model(
+    Some(@model.TextModel(uri, "notice.txt", "plaintext", 1, "1", message)),
+  )
+  dispose_source_model(previous)
+  viewer_state.document = None
+  viewer_state.live = false
+  viewer_state.navigation = None
+  if diff_owner is Some(owner) {
+    // The dock's settled Diff document keeps this sibling visible. Replace its
+    // outgoing pair with an inert notice too; the hidden source notice alone
+    // would leave the previous file's comparison under the incoming tab.
+    show_diff_comparison(owner, "notice.txt", uri, document, "", message)
+  }
+  viewer.layout(postpone_rendering=true)
+  viewer.handle_initialized()
+  viewer.render()
 }

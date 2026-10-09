@@ -1,5 +1,13 @@
 # viewer/common/model
 
+The model-owned `TokenizationLineLimit` defaults to `Characters(20000)`.
+Lines at or above that UTF16 length receive a plain token covering the full
+line and carry their input tokenizer state unchanged, matching VS Code's
+TextMate line-limit wrapper. This bounds a single synchronous tokenizer call;
+the complete text remains available to copy, selection and providers. Hosts
+can explicitly construct a model with `Unlimited`. Shared viewers borrow this
+one policy instead of competing over model token state.
+
 Immutable text snapshots, readonly editor models, guides, and mutable model
 decorations. This is the viewer's reduced `vs/editor/common/model` boundary.
 
@@ -22,6 +30,18 @@ U+FEFF is ordinary content, U+2028/U+2029 are not line breaks, and every
 other UTF-16 unit (including lone surrogates) is retained exactly once.
 `get_value`, lengths, ranges, offsets, positions, provider boundaries, and
 content events therefore all use one coherent UTF-16 coordinate system.
+
+`TextModel::get_value()` returns the stored normalized string directly.
+`has_same_content(raw)` compares host input in that same fixed-LF representation
+without creating another snapshot. Hosts should use it when deciding whether
+to reload, so unchanged CRLF/CR input does not destroy view/decorations state.
+Token counts are maintained by the syntactic store at batch commits; reading
+them does not scan the document or drive tokenization.
+
+Stable visible demand uses inclusive model-line bounds. A range containing
+only the first invalid line must tokenize that line synchronously; it does not
+wait for the idle worker. Only a range strictly before the invalid frontier is
+already complete. This matters when folding leaves a single visible header.
 
 ```mbt check
 ///|

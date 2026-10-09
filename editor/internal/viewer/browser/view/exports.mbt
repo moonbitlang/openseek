@@ -46,6 +46,7 @@ pub(all) enum ViewConfigurationOption {
   StickyScroll
   RenderWhitespace
   RenderControlCharacters
+  StopRenderingLineAfter
   RenderLineHighlight
   RenderLineHighlightOnlyWhenFocus
   RenderValidationDecorations

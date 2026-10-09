@@ -17,6 +17,8 @@ pub const MAX_FOLDING_REGIONS : Int = 0xFFFF
 
 pub const OUTLINE_BODY_FOLDING_RANGE_TYPE : String = "editor.outlineBody"
 
+pub fn compute_ranges(@model.TextModel, Bool, markers? : @languages.FoldingMarkers, folding_ranges_limit? : FoldingLimitReporter, tab_size? : Int) -> FoldingRegions
+
 pub fn set_collapse_state_at_level(FoldingModel, Int, Bool, Array[Int]) -> Unit
 
 pub fn set_collapse_state_levels_down(FoldingModel, Bool, levels? : Int, line_numbers? : Array[Int]) -> Unit

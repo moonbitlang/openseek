@@ -112,13 +112,24 @@ fn ContentHoverContributionState::dispose_retained_browser_resources(
 priv struct QuickDiffContributionState {
   collection : EditorDecorationsCollection
   listeners : Array[@base_common.Disposable]
+  scheduler : @base_browser.RunOnceScheduler
+  mut generation : Int
+  mut worker_job : @base_common.Disposable?
+  mut cached : QuickDiffCache?
 }
 
 ///|
 fn QuickDiffContributionState::QuickDiffContributionState(
   collection : EditorDecorationsCollection,
 ) -> QuickDiffContributionState {
-  { collection, listeners: [], }
+  {
+    collection,
+    listeners: [],
+    scheduler: RunOnceScheduler(200),
+    generation: 0,
+    worker_job: None,
+    cached: None,
+  }
 }
 
 ///|
@@ -192,6 +203,9 @@ fn EditorContributionEntry::dispose(
     }
     ContentHover(state) => state.dispose_behavior()
     QuickDiff(state) => {
+      state.cancel()
+      state.scheduler.dispose()
+      state.cached = None
       state.collection.clear()
       for listener in state.listeners {
         listener.dispose()

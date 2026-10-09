@@ -46,11 +46,26 @@ pub fn CodeEditorWidget::fold_top_level(self : CodeEditorWidget) -> Unit {
   guard controller.folding_model is Some(folding_model) else { return }
   if folding_model.text_model().get_language_id() == "moonbit" {
     let current_regions = folding_model.regions()
-    let outline_regions = moonbit_outline_folding_regions(
-      folding_model.text_model().snapshot,
-      current_regions,
-      self.get_options().folding_maximum_regions,
-    )
+    let outline_regions = if has_moonbit_outline_folding_ranges(current_regions) {
+      current_regions
+    } else {
+      match self.prepared_folding(folding_model.text_model()) {
+        Some(cached) => @worker_protocol.decode_folds(cached.outlined)
+        None => {
+          let ranges = moonbit_outline_folding_regions(
+            folding_model.text_model().snapshot,
+            current_regions,
+            self.get_options().folding_maximum_regions,
+          )
+          self.store_prepared_folding(
+            folding_model.text_model(),
+            @worker_protocol.encode_folds(current_regions),
+            @worker_protocol.encode_folds(ranges),
+          )
+          ranges
+        }
+      }
+    }
     if !physical_equal(current_regions, outline_regions) {
       folding_model.update_post(outline_regions)
     }
@@ -66,6 +81,9 @@ fn CodeEditorWidget::folding_on_model_changed(self : CodeEditorWidget) -> Unit {
   guard self.is_code_presentation() else { return }
   let options = self.get_options()
   guard options.folding && self.get_model() is Some(model) else { return }
+  if model.is_too_large_for_tokenization() {
+    return
+  }
   let decoration_provider = @folding_browser.FoldingDecorationProvider(
     model,
     owner_id=self.editor_id,
@@ -160,17 +178,36 @@ fn CodeEditorWidget::trigger_folding_model_changed(
     controller,
     folding_model.text_model(),
   )
-  let provider_ranges = provider.compute()
+  let cached = self.prepared_folding(folding_model.text_model())
+  let provider_ranges = match cached {
+    Some(cached) => @worker_protocol.decode_folds(cached.provider)
+    None => provider.compute()
+  }
   let folding_ranges = if folding_model.text_model().get_language_id() ==
     "moonbit" &&
     has_moonbit_outline_folding_ranges(folding_model.regions()) {
-    moonbit_outline_folding_regions(
-      folding_model.text_model().snapshot,
-      provider_ranges,
-      self.get_options().folding_maximum_regions,
-    )
+    match cached {
+      Some(cached) => @worker_protocol.decode_folds(cached.outlined)
+      None =>
+        moonbit_outline_folding_regions(
+          folding_model.text_model().snapshot,
+          provider_ranges,
+          self.get_options().folding_maximum_regions,
+        )
+    }
   } else {
     provider_ranges
+  }
+  if cached is None &&
+    (
+      folding_model.text_model().get_language_id() != "moonbit" ||
+      has_moonbit_outline_folding_ranges(folding_ranges)
+    ) {
+    self.store_prepared_folding(
+      folding_model.text_model(),
+      @worker_protocol.encode_folds(provider_ranges),
+      @worker_protocol.encode_folds(folding_ranges),
+    )
   }
   // some cursors might have moved into hidden regions, make sure they are
   // in expanded regions
