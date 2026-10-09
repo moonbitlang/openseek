@@ -17,10 +17,9 @@ Each session lives under:
   openseek_session-<session-id>.jsonl
   session.lock
   session-title            (only once a user title is set)
-  scratch/                 (agent intermediate files, exposed as @session/)
 ```
 
-`openseek_session-<session-id>.jsonl` holds the durable conversation history: its first
+`openseek_session-<session-id>.jsonl` is the whole durable session: its first
 line is a header record (`{"version":1,"id":...,"system_prompt":...}`) and
 every following line is one typed `SessionEvent`. Events are append-only.
 Loading replays the event lines into an immutable `agent_session.Session`.
@@ -36,11 +35,6 @@ self-naming.
 `session.lock` is an implementation detail used to serialize writers and keep a
 reader from seeing a half-updated session. It carries no id suffix: it already
 lives inside the per-id directory and is never collected alongside the jsonl.
-
-`scratch/` is created when file tools first use it. It survives runtime shutdown
-and moves with the session during archive/restore; permanent session deletion
-removes it together with the transcript. It is separate from disposable mbtx
-build directories and background job logs.
 
 ## API Shape
 

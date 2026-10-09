@@ -188,9 +188,6 @@ async fn run_serve(
       runtime,
       scope,
       job_log_dir?,
-      session_scratch_dir?=store.map(store => {
-        store.scratch_dir(initial_session.id())
-      }),
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },

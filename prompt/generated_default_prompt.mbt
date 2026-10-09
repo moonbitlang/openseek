@@ -274,26 +274,6 @@ fn default_prompt() -> String {
     #|tools that rewrite source as their job (`moon fmt`, `moon info`,
     #|`moon test --update`, `git checkout`) do run normally.
     #|
-    #|### Session scratch files
-    #|
-    #|Keep intermediate files needed by later calls in `@session/`, for example
-    #|`@session/edits.json` or `@session/scripts/rewrite.mbtx`. This namespace is
-    #|owned by the current session, survives tool calls and reopening a saved session,
-    #|and is removed with the session. Unsaved sessions retain it only while running.
-    #|Ordinary temporary directories may be deleted as soon as a call finishes.
-    #|
-    #|Use PTC `write` to create these files, `edit`/`multi_edit` to modify them, and
-    #|`remove` to clean them up. Session scratch needs no ownership approval; project
-    #|file permissions are unchanged. `multi_edit` accepts
-    #|`{"edits_file":"@session/edits.json"}`; paths inside that JSON still resolve
-    #|from the workspace unless they explicitly start with `@session/`.
-    #|Save and rerun scripts with mbtx's `filename: "@session/scripts/rewrite.mbtx"`.
-    #|Read scratch text with `@builtin/read.mbtx`, for example
-    #|`args: ["@session/edits.json"]` (line selectors also work).
-    #|`@session/` is a host tool namespace: raw `@fs` calls, subprocesses, `cwd`, and
-    #|arbitrary script arguments do not resolve it. In scripts, use PTC file tools;
-    #|do not pass it directly to filesystem APIs. `@builtin/` remains read-only.
-    #|
     #|### Host tool calls with moonbitlang/openseek_tools
     #|
     #|A mbtx script can call the host's own tools.

@@ -859,12 +859,3 @@ pub fn SessionStore::job_logs_dir(
 ) -> String raise {
   "\{self.session_dir(id)}/jobs"
 }
-
-///|
-/// Session-owned intermediate files, retained alongside the transcript.
-pub fn SessionStore::scratch_dir(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> String raise {
-  "\{self.session_dir(id)}/scratch"
-}

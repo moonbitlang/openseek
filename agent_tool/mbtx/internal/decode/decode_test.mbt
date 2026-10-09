@@ -97,7 +97,7 @@ test "decode rejects saving to a namespace with retry guidance" {
   catch {
     error => {
       let message = error.to_string()
-      assert_true(message.contains("@builtin/ scripts are read-only"))
+      assert_true(message.contains("Namespaced scripts are read-only"))
       assert_true(message.contains("without source"))
       assert_true(message.contains("@builtin/check.mbtx"))
     }
@@ -161,13 +161,4 @@ test "description is optional presentation metadata" {
     @decode.decode({ "source": "x", "description": "" }).description,
     Some(""),
   )
-}
-
-///|
-test "decode accepts saving session scratch scripts" {
-  let input = @decode.decode({
-    "source": "fn main {}",
-    "filename": "@session/test.mbtx",
-  })
-  assert_true(input.program is Save("fn main {}", "@session/test.mbtx"))
 }

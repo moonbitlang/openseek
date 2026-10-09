@@ -11,7 +11,6 @@
 pub fn definition(
   workspace_root? : String = ".",
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
-  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
@@ -142,7 +141,6 @@ pub fn definition(
         workspace_root,
         file_state,
         arguments,
-        session_dir?,
         write_scope?,
       )
     }),
@@ -154,7 +152,6 @@ async fn execute_with_workspace(
   workspace_root : String,
   file_state : @agent_tool.FileStateMap,
   arguments : Json,
-  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let args = @decode.decode_args(arguments) catch {
@@ -168,7 +165,7 @@ async fn execute_with_workspace(
   // Concatenate the inline edits with the response file's edits (inline first).
   let edits = args.inline
   if args.edits_file is Some(spec) {
-    match load_edits_file(workspace_root, spec, session_dir?) {
+    match load_edits_file(workspace_root, spec) {
       Ok(file_edits) => edits.append(file_edits)
       Err(action) => return action
     }
@@ -187,8 +184,7 @@ async fn execute_with_workspace(
     revert_on_parse_errors=args.revert_on_parse_errors,
     revert_if_warning_delta_greater_or_equal=args.revert_if_warning_delta_greater_or_equal,
     file_state~,
-    session_dir?,
-    write_scope?=@tool_path.scope(workspace_root, write_scope, session_dir),
+    write_scope?,
   )
 }
 
@@ -199,7 +195,6 @@ async fn execute_with_workspace(
 async fn load_edits_file(
   workspace_root : String,
   spec : String,
-  session_dir? : String,
 ) -> Result[Array[@decode.MultiEditItem], @agent_tool.ToolAction] {
   fn failed(message : String) -> @agent_tool.ToolAction {
     @agent_tool.respond(message, is_error=true, brief="multi_edit", data={
@@ -207,9 +202,7 @@ async fn load_edits_file(
     })
   }
 
-  let path = @tool_path.resolve(workspace_root, spec, session_dir?) catch {
-    error => return Err(failed("invalid edits_file: \{error}"))
-  }
+  let path = @workspace_path.resolve(workspace_root, spec)
   let text = @fs.read_file(path).text() catch {
     error =>
       return Err(
@@ -281,7 +274,6 @@ async fn multi_edit_files(
   revert_on_parse_errors~ : Bool,
   revert_if_warning_delta_greater_or_equal~ : Int?,
   file_state~ : @agent_tool.FileStateMap,
-  session_dir? : String,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   let brief = "multi_edit"
@@ -294,16 +286,11 @@ async fn multi_edit_files(
         {
           index,
           file: item.file,
-          path: @tool_path.resolve(workspace_root, item.file, session_dir?),
+          path: @workspace_path.resolve(workspace_root, item.file),
           item,
         } : ResolvedEdit)
     }
-  ] catch {
-    error =>
-      return @agent_tool.respond("invalid edit path: \{error}", is_error=true, data={
-        "outcome": "error",
-      })
-  }
+  ]
   // A file's edits must form one contiguous block so each file is read,
   // validated, and written exactly once.
   if check_contiguity(resolved) is Some(message) {

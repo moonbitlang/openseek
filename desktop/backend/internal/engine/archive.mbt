@@ -757,8 +757,7 @@ async test "archive and restore move a subagent session family together" {
   let archived = store + "/archived/sessions/"
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-3", "chat-sr-2"]
   for session_id in family {
-    @fsx.ensure_dir(Path(live + session_id + "/scratch"))
-    @fs.write_file(live + session_id + "/scratch/edits.json", "[]")
+    @fsx.ensure_dir(Path(live + session_id))
   }
   // Text that resembles the marker and an unrelated conversation must not be
   // swept into the family.
@@ -778,10 +777,7 @@ async test "archive and restore move a subagent session family together" {
   }
   for session_id in family {
     assert_false(@fsx.is_dir(Path(live + session_id)))
-    assert_eq(
-      @fs.read_file(archived + session_id + "/scratch/edits.json").text(),
-      "[]",
-    )
+    assert_true(@fsx.is_dir(Path(archived + session_id)))
   }
   assert_true(@fsx.is_dir(Path(live + "chat-sr-x")))
   assert_true(@fsx.is_dir(Path(live + "other")))
@@ -793,10 +789,7 @@ async test "archive and restore move a subagent session family together" {
     assert_true(restored_events.contains(session_id))
   }
   for session_id in family {
-    assert_eq(
-      @fs.read_file(live + session_id + "/scratch/edits.json").text(),
-      "[]",
-    )
+    assert_true(@fsx.is_dir(Path(live + session_id)))
     assert_false(@fsx.is_dir(Path(archived + session_id)))
   }
   assert_true(manager.record_guards.is_empty())
@@ -825,8 +818,7 @@ async test "permanent deletion removes one archived session family only" {
   let archived = store + "/archived/sessions/"
   let family = ["chat", "chat-sr-1", "chat-sr-1-sr-2", "chat-sr-4"]
   for session_id in family {
-    @fsx.ensure_dir(Path(archived + session_id + "/scratch"))
-    @fs.write_file(archived + session_id + "/scratch/edits.json", "[]")
+    @fsx.ensure_dir(Path(archived + session_id))
   }
   @fsx.ensure_dir(Path(archived + "other"))
   let manager = new_engine_manager("unused")

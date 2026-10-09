@@ -21,7 +21,6 @@ async fn run_task_turn(
   approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
-  session_scratch_dir? : String,
   delegate~ : Bool,
 ) -> Unit {
   @async.with_task_group() <| group => {
@@ -72,7 +71,6 @@ async fn run_task_turn(
       extra_tools~,
       mbtx_subrun?,
       job_log_dir?,
-      session_scratch_dir?,
     )
     let on_goal_met = if delegate && @options.review_gate_enabled(matches) {
       Some(

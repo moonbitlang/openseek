@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/agent_tool/internal/tool_path",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/edit/internal/decode",
   "moonbitlang/openseek/agent_tool/internal/matching",
@@ -9,6 +8,7 @@ import {
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/internal/line_offset",
   "moonbitlang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/async",
   "moonbitlang/async/fs",
 }
