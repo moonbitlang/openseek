@@ -5,11 +5,14 @@ import {
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/deepseek",
 }
 
 // Values
 pub async fn capture_goal_baseline(String) -> String
+
+pub fn child_session(@store.SessionStore, @agent_session.SessionId) -> @agent_subrun.ChildSession raise
 
 pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, workspace_root? : String) -> String
 

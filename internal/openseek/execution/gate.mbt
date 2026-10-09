@@ -99,6 +99,9 @@ pub fn build_goal_met_gate(
       },
     ]
     let input = review_subrun_input(goal, baseline)
+    // A durable reviewer's id is recorded before it is launched, and that
+    // can fail. Like every other failure shape here it degrades to a notice:
+    // the gate is advisory, and nothing was launched.
     let result = @agent_subrun.run_subrun(
       command=self_exe,
       args~,
@@ -109,7 +112,12 @@ pub fn build_goal_met_gate(
       label=@agent_tool.brief_line(goal, limit=48),
       cwd=workspace_root,
       child_session?,
-    )
+    ) catch {
+      error =>
+        return Some(
+          "[review] unavailable (\{@agent_tool.brief_line("\{error}", limit=200)}) — treat the met claim as unaudited.",
+        )
+    }
     match result.value() {
       Some(report) => Some(report.digest())
       None =>

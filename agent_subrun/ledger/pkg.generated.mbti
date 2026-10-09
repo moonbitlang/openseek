@@ -1,0 +1,16 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_subrun/ledger"
+
+// Values
+
+// Errors
+
+// Types and methods
+type Ledger
+pub async fn Ledger::allocate(Self, count~ : Int, owner~ : String) -> Int
+pub async fn Ledger::close(Self) -> Unit
+pub async fn Ledger::open(String, floor~ : Int, dirs? : Array[String], sync_dir? : async (String) -> Unit) -> Self?
+
+// Type aliases
+
+// Traits

@@ -660,7 +660,19 @@ async fn execute(
   // snippet cannot name a session that was not reserved for it.
   let reservation = if input.subrun {
     match subrun {
-      Some(injection) => Some(injection.reserve(result_root=snippet_tmp))
+      // The block is recorded durably before it is handed out, so reserving
+      // can fail. A snippet must not run as a workflow on ids nobody
+      // recorded: say why and stop here.
+      Some(injection) =>
+        Some(
+          injection.reserve(result_root=snippet_tmp) catch {
+            error =>
+              return @agent_tool.respond(
+                "mbtx: `subrun` is unavailable: \{@tool_error.failure_message("\{error}")}. Retry without `subrun` and do the work in this snippet directly.",
+                is_error=true,
+              )
+          },
+        )
       // Asked, and cannot be served: say so. A snippet that believed it had a
       // handoff would spawn children with no transcript, and the model would
       // learn nothing until its subagents failed to appear anywhere.

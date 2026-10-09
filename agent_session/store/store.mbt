@@ -859,3 +859,28 @@ pub fn SessionStore::job_logs_dir(
 ) -> String raise {
   "\{self.session_dir(id)}/jobs"
 }
+
+///|
+/// Return the prospective path of a session's subagent ledger without
+/// creating anything: the engine's durable record of the child ordinals it
+/// has handed out for this session (see `agent_subrun/ledger`). It lives in
+/// the session's own directory, so it moves with archives and is removed
+/// with the session.
+pub fn SessionStore::subagents_path(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/subagents.jsonl"
+}
+
+///|
+/// The directories a durable file in a session's directory depends on,
+/// innermost first: the session directory, `sessions/`, and the root. A
+/// writer that creates such a file syncs these after its first write, so the
+/// file itself — not only its bytes — survives a power loss.
+pub fn SessionStore::durable_dirs(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> Array[String] raise {
+  self.session_dir_chain(id)
+}

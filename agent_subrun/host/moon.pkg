@@ -2,6 +2,7 @@ import {
 }
 
 import {
+  "moonbitlang/async",
   "moonbitlang/workflow/hosted",
   "moonbitlang/core/env",
   "moonbitlang/core/json",

@@ -535,7 +535,7 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
-test "the reservation reaches the guest, and only its own directory is writable" {
+async test "the reservation reaches the guest, and only its own directory is writable" {
   fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
     SubrunInjection(
       exe="/opt/openseek",
@@ -599,7 +599,7 @@ test "the reservation reaches the guest, and only its own directory is writable"
 /// run modules, and the module alone names no program to run. The entry is
 /// generated per reservation rather than living in `spawnable_commands` for
 /// exactly that reason — the model's vocabulary does not grow.
-test "a wasm engine is admitted as its runtime plus the chosen module" {
+async test "a wasm engine is admitted as its runtime plus the chosen module" {
   let injection = @host.SubrunInjection(
     exe="moonrun",
     launch_prefix=["/engine/openseek.wasm", "--"],

@@ -65,8 +65,9 @@ struct SubrunInjection {
   workspace_root : String
   model : String?
   api_url : String?
-  /// Reserve N consecutive child ordinals and return the first.
-  reserve_ordinals : (Int) -> Int
+  /// Reserve N consecutive child ordinals and return the first. It raises
+  /// when they cannot be reserved; nothing was reserved then.
+  reserve_ordinals : async (Int) -> Int
   /// The standing goal at reservation time, if one stands.
   criteria : () -> AuditCriteria?
 }
@@ -82,6 +83,10 @@ struct SubrunInjection {
 /// it. Tests pass a local counter so ordinals do not depend on what earlier
 /// tests in the process reserved.
 ///
+/// The allocator is awaited and may fail: a durable session records every
+/// block before it is handed out, and a block that could not be recorded is
+/// not handed out at all.
+///
 /// `exe` is the program to spawn, and `launch_prefix` the argv tokens that
 /// precede the child's own args. A native engine is its own ABSOLUTE
 /// executable; a wasm build — whose argv[0] is a module no OS will exec —
@@ -95,7 +100,7 @@ pub fn SubrunInjection::SubrunInjection(
   session_root~ : String,
   parent~ : String,
   workspace_root~ : String,
-  reserve_ordinals~ : (Int) -> Int,
+  reserve_ordinals~ : async (Int) -> Int,
   model? : String,
   api_url? : String,
   criteria? : () -> AuditCriteria? = () => None,
@@ -213,7 +218,12 @@ pub fn SubrunReservation::spawn_prefix(
 /// write the same document. `attempt_id` in the resulting ledger is the
 /// rendered `child_id` — `<parent>-sr-N` — which is exactly the session id the
 /// transcript viewer links to and the desktop's progress probe tails.
-pub fn SubrunInjection::reserve(
+///
+/// Raises when the block cannot be reserved — the allocator's record could
+/// not be written, or another engine process owns this session's subagents.
+/// The caller then has no reservation and must not run the snippet as a
+/// workflow.
+pub async fn SubrunInjection::reserve(
   self : SubrunInjection,
   result_root~ : String,
 ) -> SubrunReservation {

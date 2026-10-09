@@ -365,24 +365,20 @@ async test "child_session appends session argv derived from the sub-run id" {
     println("skipped: cannot spawn sh")
     return
   }
-  let result = run_script(
-    script,
-    child_session=ChildSession(root="/tmp/subrun-root", parent="parent-id"),
-  )
-  guard result.value() is Some(argv) else {
-    fail("expected a captured report, got \{Repr(result.terminal())}")
-  }
-  assert_eq(
-    argv,
-    "--session parent-id-\{result.subrun_id()} --session-root /tmp/subrun-root",
-  )
+  with_session("parent-id", (session, _) => {
+    let result = run_script(script, child_session=session)
+    guard result.value() is Some(argv) else {
+      fail("expected a captured report, got \{Repr(result.terminal())}")
+    }
+    assert_eq(result.subrun_id(), "sr-1")
+    assert_eq(argv, "--session parent-id-sr-1 --session-root /store")
+  })
 }
 
 ///|
-/// The ChildSession ordinal floor bumps the process counter monotonically:
-/// a resumed parent that scanned 49_999 persisted children never hands out
-/// a session id an earlier process already used. (The floor is absurdly
-/// high so no other test's allocations can reach it first.)
+/// A resumed parent that scanned 49_999 persisted children never hands out
+/// a session id an earlier process already used, and what it does hand out
+/// is on record before the child is launched.
 async test "child_session's ordinal floor skips persisted ids" {
   let script =
     #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$3\"}"
@@ -390,27 +386,57 @@ async test "child_session's ordinal floor skips persisted ids" {
     println("skipped: cannot spawn sh")
     return
   }
-  let result = run_script(
-    script,
-    child_session=ChildSession(
-      root="/tmp/subrun-root",
-      parent="resumed",
-      first_free=50_000,
-    ),
-  )
-  guard result.value() is Some(session_arg) else {
-    fail("expected a captured report, got \{Repr(result.terminal())}")
+  with_session("resumed", first_free=50_000, (session, dir) => {
+    let result = run_script(script, child_session=session)
+    guard result.value() is Some(session_arg) else {
+      fail("expected a captured report, got \{Repr(result.terminal())}")
+    }
+    // $3 is the --session value: parent + the allocated id.
+    assert_eq(result.subrun_id(), "sr-50000")
+    assert_eq(session_arg, "resumed-sr-50000")
+    let second = run_script(script, child_session=session)
+    assert_eq(second.subrun_id(), "sr-50001")
+    let recorded = @fs.read_file("\{dir}/subagents.jsonl").text()
+    assert_true(recorded.contains("\"first\":50000"))
+    assert_true(recorded.contains("\"owner\":\"engine\""))
+  })
+}
+
+///|
+/// A durable child is never launched on an id the ledger does not hold: when
+/// the record cannot be WRITTEN, nothing is spawned and nothing is announced,
+/// and the next launch is offered the ordinal the failed one never got.
+async test "a child whose ordinal cannot be recorded is not launched" {
+  let script =
+    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"ran\"}"
+  guard can_spawn_sh() else {
+    println("skipped: cannot spawn sh")
+    return
   }
-  // $3 is the --session value: parent + the allocated id, at or past the floor.
-  assert_eq(session_arg, "resumed-\{result.subrun_id()}")
-  guard result.subrun_id().strip_prefix("sr-") is Some(digits) else {
-    fail("unexpected subrun id \{result.subrun_id()}")
-  }
-  let mut ordinal = 0
-  for c in digits {
-    ordinal = ordinal * 10 + (c.to_int() - '0'.to_int())
-  }
-  assert_true(ordinal >= 50_000)
+  with_session("unwritable", (session, dir) => {
+    // One ordinary launch first: the ledger exists and is this session's.
+    assert_eq(run_script(script, child_session=session).subrun_id(), "sr-1")
+    // Now it cannot be appended to.
+    @fs.chmod("\{dir}/subagents.jsonl", 0o444)
+    let events : Array[@protocol.Event] = []
+    let refused = try
+      run_script(script, child_session=session, emit_event=event => {
+        events.push(event)
+      })
+    catch {
+      _ => true
+    } noraise {
+      _ => false
+    }
+    @fs.chmod("\{dir}/subagents.jsonl", 0o644)
+    guard refused else {
+      // Running as a user the mode does not bind (root): nothing to observe.
+      println("skipped: a read-only file is still writable here")
+      return
+    }
+    assert_eq(events.length(), 0)
+    assert_eq(run_script(script, child_session=session).subrun_id(), "sr-2")
+  })
 }
 
 ///|

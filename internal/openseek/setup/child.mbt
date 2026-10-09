@@ -1,4 +1,23 @@
 ///|
+/// The children of session `id` in `store`: where their transcripts go and
+/// the ledger their ordinals come from.
+///
+/// The lowest unused ordinal is read from the store when the ledger is
+/// opened, not here: a child that predates the ledger can appear in between.
+pub fn child_session(
+  store : @store.SessionStore,
+  id : @agent_session.SessionId,
+) -> @agent_subrun.ChildSession raise {
+  ChildSession(
+    root=store.root(),
+    parent=id.value(),
+    ledger=store.subagents_path(id),
+    ledger_dirs=store.durable_dirs(id),
+    first_free=() => first_free_child_ordinal(store, id.value()),
+  )
+}
+
+///|
 /// The lowest child ordinal no session `<parent>-sr-N` in the store has
 /// used yet: the floor a resumed parent hands the runner so a restarted
 /// engine process never reuses a persisted child session id.

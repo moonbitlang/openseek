@@ -2,6 +2,7 @@ import {
   "moonbitlang/openseek/resources",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_skill",
+  "moonbitlang/openseek/agent_subrun",
   "moonbitlang/core/argparse",
   "moonbitlang/async",
   "moonbitlang/openseek/deepseek",

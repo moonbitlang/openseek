@@ -104,6 +104,23 @@ async fn run_serve(
     @execution.approval_policy(matches, interactive=true),
     approval_desk,
   )
+  // A durable serve session makes its children durable siblings
+  // (`<id>-sr-N` in the same root); --no-session keeps them in-memory.
+  // Their ordinals come from the session's ledger: an ordinal is on record
+  // before it is handed out, so a restart never reuses one. This engine takes
+  // the ledger at its first allocation; a second engine process allocating
+  // for the same session is refused then, with the reason.
+  //
+  // Built and closed OUT HERE, around the task group: the ledger is given
+  // back only after every task that could still allocate — a turn, a
+  // background job — has finished unwinding.
+  let child_session = match store {
+    Some(store) => Some(@setup.child_session(store, initial_session.id()))
+    None => None
+  }
+  defer (if child_session is Some(children) {
+    @async.protect_from_cancel(() => children.close())
+  })
   @async.with_task_group(group => {
     let runtime = @agent_runtime.AgentRuntime(workspace_root~, approval?)
     let scope = @agent_runtime.AgentTaskScope(group)
@@ -121,27 +138,10 @@ async fn run_serve(
     // Tools from any configured MCP servers, connected once per engine (their
     // reader/writer tasks live on this group) and reused across turns.
     let exe = @setup.self_executable()
-    // A durable serve session makes its children durable siblings
-    // (`<id>-sr-N` in the same root); --no-session keeps them in-memory.
-    // The ordinal floor keeps a resumed session from reusing a child id an
-    // earlier engine process persisted.
-    let child_session = match store {
-      Some(store) => {
-        let parent = initial_session.id().value()
-        Some(
-          @agent_subrun.ChildSession(
-            root=store.root(),
-            parent~,
-            first_free=@setup.first_free_child_ordinal(store, parent),
-          ),
-        )
-      }
-      None => None
-    }
     // The same coordinates, in the shape an mbtx snippet needs: a workflow it
-    // runs delegates to children that must be named from the SAME ordinal
-    // counter `run_subrun` uses, or a snippet's child and a `review` child
-    // collide on one transcript file.
+    // runs delegates to children that must be named from the SAME allocator
+    // `run_subrun` uses, or a snippet's child and a `review` child collide
+    // on one transcript file.
     let mbtx_subrun = child_session.map(spec => {
       let (exe, launch_prefix) = @setup.workflow_launch(exe)
       spec.injection(

@@ -32,7 +32,7 @@ fn hosted_context(raw : String) -> @hosted.Context? raise {
 }
 
 ///|
-test "blocks are disjoint and come from the allocator" {
+async test "blocks are disjoint and come from the allocator" {
   let injection = injection(Ref(8))
   let first = injection.reserve(result_root="/run/tmp")
   let second = injection.reserve(result_root="/run/tmp")
@@ -53,7 +53,7 @@ test "blocks are disjoint and come from the allocator" {
 }
 
 ///|
-test "what this host writes is what the library reads" {
+async test "what this host writes is what the library reads" {
   // The round trip that matters: the document put in the guest environment
   // must be one `moonbitlang/workflow/hosted` accepts, with the engine's own
   // argv shape intact. A drift here would be silent — the snippet would see
@@ -102,7 +102,7 @@ test "what this host writes is what the library reads" {
 }
 
 ///|
-test "the standing goal rides the hosted extension" {
+async test "the standing goal rides the hosted extension" {
   // Read at reservation time, so the closure sees whatever goal stands when
   // the snippet actually runs; absent, nothing but the handoff is set.
   let goal : Ref[@host.AuditCriteria?] = Ref(None)
@@ -167,7 +167,7 @@ test "the standing goal rides the hosted extension" {
 /// program name (an absolute path is advised, not required, and the policy
 /// pins the module argument instead), and the module rides the argv template
 /// ahead of the verb.
-test "a runtime-launched engine still produces a handoff the library reads" {
+async test "a runtime-launched engine still produces a handoff the library reads" {
   let injection = @host.SubrunInjection(
     exe="moonrun",
     launch_prefix=["/build/wasm/openseek.wasm", "--"],
@@ -200,7 +200,7 @@ test "a runtime-launched engine still produces a handoff the library reads" {
 }
 
 ///|
-test "optional model and URL preserve the hosted argv layout" {
+async test "optional model and URL preserve the hosted argv layout" {
   for
     (model, api_url, expected) in [
       (
