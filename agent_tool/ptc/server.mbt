@@ -124,7 +124,6 @@ fn call_entry(
         summary["content_base64_chars"] = Json(content.length())
       }
       summary.remove("content")
-      summary["content_omitted"] = Json(true)
       Json::object(summary)
     }
     _ => arguments

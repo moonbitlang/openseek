@@ -50,7 +50,6 @@ async test "PTC writes a large binary artifact without retaining its Base64 payl
             {
               "arguments": {
                 "encoding": "base64",
-                "content_omitted": true,
                 "content_base64_chars": 1600000,
                 ..
               },
