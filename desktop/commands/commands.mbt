@@ -887,7 +887,7 @@ pub let github_drafts_set : Command[
 ] = Command("github.drafts_set")
 
 ///|
-/// Resolve a file click for the local window, including native PDF preview.
+/// Resolve a file click for the local window, including native browser preview.
 pub let host_open_path_preview : Command[
   @protocol.OpenPathPayload,
   @protocol.OpenPathReply,

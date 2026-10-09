@@ -5291,7 +5291,7 @@ fn update_msg(
           generation,
           cwd=Some(cwd),
           path,
-          preview_pdf=model.is_desktop,
+          preview_browser=model.is_desktop,
         ),
         model,
       )
@@ -5336,7 +5336,7 @@ fn update_msg(
         file_link_generation=generation,
       )
     }
-    OpenPdfAt(owner~, generation~, path~) => {
+    OpenBrowserAt(owner~, generation~, path~) => {
       guard model.is_desktop &&
         owner.channel is Local &&
         model.active_checkout() is Some(active) &&
@@ -17891,27 +17891,31 @@ test "resolved transcript files and directories stay in the right panel" {
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
   let desktop = { ..model, is_desktop: true, }
   let (_, pending) = update(dispatch, OpenFile("report.pdf"), desktop)
-  let pdf_msg = OpenPdfAt(owner~, generation=1, path="/work/project/report.pdf")
-  let (_, pdf) = update(dispatch, pdf_msg, pending)
-  assert_true(pdf.right_panel_open)
-  assert_true(@dock.active_browser(pdf.dock) is Some(_))
-  assert_eq(pdf.preview.pages.length(), 1)
-  let (_, reused) = update(dispatch, pdf_msg, pdf)
+  let browser_msg = OpenBrowserAt(
+    owner~,
+    generation=1,
+    path="/work/project/report.pdf",
+  )
+  let (_, browser) = update(dispatch, browser_msg, pending)
+  assert_true(browser.right_panel_open)
+  assert_true(@dock.active_browser(browser.dock) is Some(_))
+  assert_eq(browser.preview.pages.length(), 1)
+  let (_, reused) = update(dispatch, browser_msg, browser)
   assert_eq(reused.preview.pages.length(), 1)
   let (_, stale) = update(
     dispatch,
-    OpenPdfAt(owner~, generation=0, path="/tmp/stale.pdf"),
+    OpenBrowserAt(owner~, generation=0, path="/tmp/stale.pdf"),
     reused,
   )
   assert_eq(stale.preview.pages.length(), 1)
-  let (_, remote_console) = update(dispatch, pdf_msg, {
+  let (_, remote_console) = update(dispatch, browser_msg, {
     ..pending,
     is_desktop: false,
   })
   assert_eq(remote_console.preview.pages.length(), 0)
   let (_, other_owner) = update(
     dispatch,
-    OpenPdfAt(
+    OpenBrowserAt(
       owner={ channel: Local, session: "other", },
       generation=1,
       path="/tmp/other.pdf",

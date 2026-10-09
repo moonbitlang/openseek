@@ -2175,7 +2175,7 @@ pub fn OpenPathPayload::to_repr(Self) -> @debug.Repr
 pub(all) enum OpenPathReply {
   Opened
   Editor(OpenPathEditorTarget)
-  Pdf(String)
+  Browser(String)
   Directory(OpenPathDirectoryTarget)
   Refused(String)
 } derive(Eq, @debug.Debug)

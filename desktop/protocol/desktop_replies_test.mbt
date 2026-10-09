@@ -415,7 +415,7 @@ test "file reads use one absolute path and may return image bytes" {
 }
 
 ///|
-test "open-path replies distinguish system, editor, and directory targets" {
+test "open-path replies distinguish system, editor, browser, and directory targets" {
   let legacy : @protocol.OpenPathReply = @json.from_json({ "opened": true })
   @debug.assert_eq(legacy, Opened)
   let system : @protocol.OpenPathReply = Opened
@@ -430,7 +430,12 @@ test "open-path replies distinguish system, editor, and directory targets" {
     column: Some(17),
   })
   let directory : @protocol.OpenPathReply = Directory({ path: "src", })
-  let refused : @protocol.OpenPathReply = Refused(
+  let browser : @protocol.OpenPathReply = Browser("/work/index.html")
+  @debug.assert_eq(browser.to_json(), {
+    "opened": false,
+    "browser_target": { "path": "/work/index.html" },
+  })
+  let refusal : @protocol.OpenPathReply = Refused(
     "File does not exist: nope.mbt",
   )
   for
@@ -439,11 +444,30 @@ test "open-path replies distinguish system, editor, and directory targets" {
       ordinary,
       positioned,
       directory,
-      Pdf("/tmp/中文 #100%.pdf"),
-      refused,
+      browser,
+      Browser("/tmp/中文 #100%.pdf"),
+      refusal,
     ] {
     let decoded : @protocol.OpenPathReply = @json.from_json(reply.to_json())
     @debug.assert_eq(decoded, reply)
+  }
+  let invalid_targets : Array[Json] = [
+    null,
+    {},
+    { "path": null },
+    { "path": 42 },
+    { "path": "relative.html" },
+    { "path": "//remote/index.html" },
+  ]
+  for target in invalid_targets {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.OpenPathReply = @json.from_json({
+          "opened": false,
+          "browser_target": target,
+        })
+      }),
+    )
   }
 }
 

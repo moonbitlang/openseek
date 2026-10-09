@@ -1696,8 +1696,9 @@ fn open_codex_config(
 
 ///|
 /// Ask the host to route a transcript-referenced path. Viewer-sized UTF-8 text
-/// returns an absolute editor target, checkout-local directories
-/// return a Files-tree target, and other existing paths use the system default
+/// returns an absolute editor target, previewable documents on Desktop return
+/// a browser target, checkout-local directories return a Files-tree target,
+/// and other existing paths use the system default
 /// app. A relative path is taken against the conversation's working directory.
 /// Missing paths surface as errors; external text uses the same editor route.
 fn open_file(
@@ -1707,7 +1708,7 @@ fn open_file(
   generation : Int,
   cwd~ : @common.Uri?,
   path : String,
-  preview_pdf~ : Bool,
+  preview_browser~ : Bool,
 ) -> @cmd.Cmd {
   match cwd {
     Some(resource) if !@resource.belongs_to(resource, channel) =>
@@ -1716,7 +1717,7 @@ fn open_file(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let command = if preview_pdf && channel is Local {
+      let command = if preview_browser && channel is Local {
         @commands.host_open_path_preview
       } else {
         @commands.host_open_path
@@ -1740,9 +1741,11 @@ fn open_file(
         }
       }
       match reply {
-        Pdf(path) =>
+        Browser(path) =>
           scheduler.add(
-            dispatch(OpenPdfAt(owner={ channel, session, }, generation~, path~)),
+            dispatch(
+              OpenBrowserAt(owner={ channel, session, }, generation~, path~),
+            ),
           )
         Editor(target) =>
           scheduler.add(

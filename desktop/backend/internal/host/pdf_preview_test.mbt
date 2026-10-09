@@ -13,7 +13,7 @@ async test "local PDF preview returns an absolute path and preserves refusals" {
     absolute.to_uri_path() is Some(path) else {
     fail("expected absolute temp path")
   }
-  assert_true(reply is Pdf(actual) && actual == path)
+  assert_true(reply is Browser(actual) && actual == path)
   @fs.remove(file)
   assert_true(
     @host.open_path_preview({ session: "pdf-test", cwd: None, path: file, })

@@ -49,7 +49,7 @@ async fn resolve_host_reference(
 /// "op ext:openseek/host.open_path failed" and hides the reason.
 async fn open_path_op(
   payload : OpenPathPayload,
-  preview_pdf? : Bool = false,
+  preview_browser? : Bool = false,
 ) -> OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
@@ -67,12 +67,12 @@ async fn open_path_op(
     return Editor({ path: resource, line, column, })
   }
   let system_path = match resolution {
-    BrowserPath(path) if preview_pdf => {
+    BrowserPath(path) if preview_browser => {
       guard @pathx.Path(path).to_absolute() is Some(absolute) &&
         absolute.to_uri_path() is Some(resource) else {
         return refusal("Invalid absolute file path: \{path}")
       }
-      return Pdf(resource)
+      return Browser(resource)
     }
     BrowserPath(path) | SystemPath(path) => path
     _ => return refusal("Could not resolve path")
@@ -397,10 +397,10 @@ pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
 }
 
 ///|
-/// Route a local desktop file click, including PDFs in the native browser.
+/// Route a local desktop file click, including targets for the native browser.
 /// Bound only on the window so a remote path cannot become a local file URL.
 pub async fn open_path_preview(
   payload : @protocol.OpenPathPayload,
 ) -> @protocol.OpenPathReply {
-  open_path_op(payload, preview_pdf=true)
+  open_path_op(payload, preview_browser=true)
 }

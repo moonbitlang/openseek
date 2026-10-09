@@ -939,7 +939,7 @@ pub(all) struct OpenPathDirectoryTarget {
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
-/// Reply to `open_path`. Text targets carry absolute URI paths; directory
+/// Reply to `open_path`. Text and browser targets carry absolute URI paths; directory
 /// targets remain relative to the conversation checkout for its Files tree.
 pub(all) enum OpenPathReply {
   // The host handed a non-text path (or any path outside the checkout's
@@ -947,8 +947,8 @@ pub(all) enum OpenPathReply {
   Opened
   // A viewer-sized UTF-8 file, with optional position.
   Editor(OpenPathEditorTarget)
-  // Absolute URI path of a PDF on the local desktop.
-  Pdf(String)
+  // Absolute URI path of a local document to open in the browser.
+  Browser(String)
   // A literal directory inside the conversation checkout, for the built-in
   // Files tree.
   Directory(OpenPathDirectoryTarget)
@@ -961,7 +961,7 @@ pub(all) enum OpenPathReply {
 pub impl ToJson for OpenPathReply with fn to_json(self) {
   match self {
     Opened => { "opened": true }
-    Pdf(path) => { "opened": false, "pdf_target": { "path": path } }
+    Browser(path) => { "opened": false, "browser_target": { "path": path } }
     Editor(target) =>
       { "opened": false, "editor_target": ToJson::to_json(target) }
     Directory(target) =>
@@ -971,7 +971,7 @@ pub impl ToJson for OpenPathReply with fn to_json(self) {
 }
 
 ///|
-/// Decode prefers a PDF target, then an editor target, then a directory
+/// Decode prefers a browser target, then an editor target, then a directory
 /// target, then a refusal, then the
 /// legacy bare `{opened: true}`. A reply that names no route at all is
 /// rejected rather than decoded to an invented outcome.
@@ -979,16 +979,19 @@ pub impl FromJson for OpenPathReply with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected an open_path reply"))
   }
-  if fields.get("pdf_target") is Some(target) {
+  if fields.get("browser_target") is Some(target) {
     guard target is Object(target_fields) &&
       target_fields.get("path") is Some(String(file)) &&
       file is ['/', ..] &&
       !(file is ['/', '/', ..]) else {
       raise JsonDecodeError(
-        (path.add_key("pdf_target"), "expected an absolute PDF URI path"),
+        (
+          path.add_key("browser_target"),
+          "expected an absolute browser target URI path",
+        ),
       )
     }
-    Pdf(file)
+    Browser(file)
   } else if fields.get("editor_target") is Some(target) && target is Object(_) {
     Editor(@json.from_json(target))
   } else if fields.get("directory_target") is Some(target) &&

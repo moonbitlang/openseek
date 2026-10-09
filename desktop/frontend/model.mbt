@@ -2087,8 +2087,8 @@ priv enum Msg {
     line~ : Int?,
     column~ : Int?
   )
-  // A local PDF resolved by the window, fenced like the text-file reply.
-  OpenPdfAt(
+  // A local browser target resolved by the window, fenced like the text-file reply.
+  OpenBrowserAt(
     owner~ : @interop.ConversationKey,
     generation~ : Int,
     path~ : String
