@@ -2759,7 +2759,7 @@ fn review_navigation_view(
       attrs=@html.Attrs::build()
         .data_set("action", "previous-diff-change")
         .aria_label(ui(locale, PreviousChange))
-        .aria_keyshortcuts("p"),
+        .aria_keyshortcuts("p Shift+F7"),
       @icons.icon(@icons.icon_arrow_up),
     ),
   )
@@ -2773,7 +2773,7 @@ fn review_navigation_view(
       attrs=@html.Attrs::build()
         .data_set("action", "next-diff-change")
         .aria_label(ui(locale, NextChange))
-        .aria_keyshortcuts("n"),
+        .aria_keyshortcuts("n F7"),
       @icons.icon(@icons.icon_arrow_down),
     ),
   )

@@ -71,8 +71,8 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     const position = navigation.locator('.review-hunk-position');
     const mark = page.locator('.review-navigation-controls .review-progress');
     await expect(position).toHaveText('Change 1 of 3');
-    await expect(next).toHaveAttribute('aria-keyshortcuts', 'n');
-    await expect(previous).toHaveAttribute('aria-keyshortcuts', 'p');
+    await expect(next).toHaveAttribute('aria-keyshortcuts', 'n F7');
+    await expect(previous).toHaveAttribute('aria-keyshortcuts', 'p Shift+F7');
     await expect(mark).toHaveAttribute('aria-keyshortcuts', 'm');
     await next.focus();
     await page.keyboard.press('n');
