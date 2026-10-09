@@ -56,7 +56,7 @@ fn valid_target(target : String) -> Bool {
 
 ///|
 /// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
-/// is required; both means save and run a workspace script. `source` is a string
+/// is required; both means save and run a writable script. `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
 /// then the program including its own `main`). `target` is an optional backend
 /// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
@@ -79,12 +79,12 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         (Some(String(source)), Some(String(filename))) => {
           guard !filename.is_blank() else {
             fail(
-              "arguments.filename to be a nonblank workspace path when saving source",
+              "arguments.filename to be a nonblank filesystem path when saving source",
             )
           }
           guard !filename.has_prefix("@") else {
             fail(
-              "a workspace filename when source is supplied. Namespaced scripts are read-only: call {\"filename\":\"@builtin/check.mbtx\"} without source, or save your custom source as {\"source\":\"...\",\"filename\":\"check.mbtx\"}",
+              "a filesystem path when source is supplied. Namespaced scripts are read-only: call {\"filename\":\"@builtin/check.mbtx\"} without source, or save your custom source as {\"source\":\"...\",\"filename\":\"check.mbtx\"}",
             )
           }
           Save(source, filename)

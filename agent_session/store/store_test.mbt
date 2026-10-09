@@ -1089,3 +1089,24 @@ async test "image-only conversations have a nonempty listing preview" {
   store.create(session)
   assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }
+
+///|
+async test "system prompt update rejects a stale session snapshot" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let initial = @agent_session.Session(
+    SessionId("prompt-update"),
+    system_prompt="original",
+  )
+  store.create(initial)
+  let current = store.append(
+    initial,
+    User(UserMessage(Content([Text("new event")]))),
+  )
+  try store.update_system_prompt(initial, "replacement") catch {
+    _ => ()
+  } noraise {
+    _ => fail("stale prompt update was accepted")
+  }
+  assert_eq(store.load(initial.id()), current)
+}

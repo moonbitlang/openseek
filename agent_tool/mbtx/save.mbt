@@ -8,6 +8,7 @@ async fn save_script(
   read_only~ : Bool,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
+  scratch_dir? : String,
 ) -> Unit {
   guard !read_only else {
     fail(
@@ -19,8 +20,17 @@ async fn save_script(
     Ok(scope) => scope
     Err(reason) => fail(reason)
   }
+  let scratch_scope = match scratch_dir {
+    Some(root) =>
+      match @write_scope.WriteScope::create(root~) {
+        Ok(scope) => Some(scope)
+        Err(reason) => fail(reason)
+      }
+    None => None
+  }
   async fn check_scope() {
-    if scope.deny_reason(path) is Some(reason) {
+    if scope.deny_reason(path) is Some(reason) &&
+      !(scratch_scope is Some(scratch) && scratch.deny_reason(path) is None) {
       fail("save blocked: \{reason}")
     }
     if write_scope is Some(worker) && worker.deny_reason(path) is Some(reason) {

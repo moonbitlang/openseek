@@ -65,6 +65,14 @@ async fn run_serve(
         session => Some(@agent_session.SessionId("\{session}"))
       }
   }
+  let ephemeral_scratch = if session_id is None {
+    Some(@fs.tmpdir(prefix="openseek-session-"))
+  } else {
+    None
+  }
+  defer (if ephemeral_scratch is Some(dir) {
+    @async.protect_from_cancel(() => @fs.rmdir(dir, recursive=true))
+  })
   let (store, initial_session) = match session_id {
     Some(id) => {
       let store = @store.SessionStore(
@@ -86,6 +94,7 @@ async fn run_serve(
             matches,
             model,
             workspace_root~,
+            session_scratch_dir?=ephemeral_scratch,
           ),
         ),
       )
@@ -188,6 +197,10 @@ async fn run_serve(
       runtime,
       scope,
       job_log_dir?,
+      session_scratch_dir?=match store {
+        Some(store) => Some(store.scratch_dir(initial_session.id()))
+        None => ephemeral_scratch
+      },
       on_background_wake=() => {
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },

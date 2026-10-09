@@ -79,6 +79,7 @@ async test "load_or_new_session defers first durable write until append" {
     let grounded_prompt = @setup.configured_system_prompt(
       parsed,
       Deepseek(V4Pro),
+      session_scratch_dir=store.scratch_dir(id),
     )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(created.system_prompt(), grounded_prompt)
@@ -240,6 +241,7 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     let grounded_prompt = @setup.configured_system_prompt(
       parsed,
       Deepseek(V4Pro),
+      session_scratch_dir=store.scratch_dir(id),
     )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(session.system_prompt(), grounded_prompt)
@@ -249,5 +251,62 @@ async test "load_or_new_session recovers empty interrupted session directory" {
       User(UserMessage(Content([Text("hello")]))),
     )
     assert_eq(with_event.events().length(), 1)
+  })
+}
+
+///|
+async test "scratch context upgrades old sessions without rebuilding prompts or losing events" {
+  @vfs.with_tmpdir(root => {
+    let store = @store.SessionStore("\{root}/old")
+    let id = @agent_session.SessionId("old-session")
+    let old = @agent_session.Session(id, system_prompt="original custom prompt").append(
+      User(UserMessage(Content([Text("keep history")]))),
+    )
+    store.create(old)
+    let parsed = @testkit.run_matches(
+      argv=["--system-prompt-file", "missing-prompt.md", "write", "MoonBit"],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    let upgraded = @setup.load_or_new_session(
+      store,
+      id,
+      parsed,
+      Deepseek(V4Pro),
+    )
+    assert_true(
+      upgraded
+      .system_prompt()
+      .has_prefix("original custom prompt\n\n## Environment\n"),
+    )
+    assert_true(
+      upgraded
+      .system_prompt()
+      .contains(store.scratch_dir(id).to_json().stringify()),
+    )
+    assert_eq(upgraded.events(), old.events())
+    assert_eq(store.load(id), upgraded)
+    assert_eq(
+      @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro)),
+      upgraded,
+    )
+    @fs.rename("\{root}/old", "\{root}/moved")
+    let moved = @store.SessionStore("\{root}/moved")
+    let resumed = @setup.load_or_new_session(moved, id, parsed, Deepseek(V4Pro))
+    assert_true(
+      resumed
+      .system_prompt()
+      .contains(moved.scratch_dir(id).to_json().stringify()),
+    )
+    assert_false(
+      resumed
+      .system_prompt()
+      .contains(store.scratch_dir(id).to_json().stringify()),
+    )
+    assert_eq(resumed.events(), old.events())
+    let next = moved.append(
+      resumed,
+      User(UserMessage(Content([Text("continue")]))),
+    )
+    assert_eq(next.last_sequence(), 2)
   })
 }

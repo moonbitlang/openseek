@@ -100,3 +100,37 @@ async test "registered remove uses approval without holding the shared file gate
     })
   })
 }
+
+///|
+async test "registered mbtx receives the session scratch write permission" {
+  @vfs.with_tmpdir(root => {
+    let workspace = "\{root}/project"
+    let scratch = "\{root}/session/scratch"
+    @fs.mkdir(workspace)
+    @async.with_task_group(group => {
+      let tools = @agent.build_tools(
+        AgentRuntime(workspace_root=workspace),
+        AgentTaskScope(group),
+        session_scratch_dir=scratch,
+      )
+      let result = @agent_tool.execute_tool_call(
+        @agent_tool.AgentToolCall::from_arguments("mbtx", {
+          "description": "Write a session scratch file",
+          "source": (
+            #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
+            #|async fn main { @fs.write_file(@env.args()[1], "retained") }
+          ),
+          "filename": "\{scratch}/helper.mbtx",
+          "args": ["\{scratch}/value.txt"],
+          "ptc": false,
+        }),
+        tools,
+      )
+      guard result is Respond(out) else { fail("expected mbtx response") }
+      assert_false(out.is_error, msg=out.content)
+    })
+    // Agent task cleanup removes its temporary jobs, not session scratch.
+    assert_eq(@fs.read_file("\{scratch}/value.txt").text(), "retained")
+    assert_true(@fs.exists("\{scratch}/helper.mbtx"))
+  })
+}

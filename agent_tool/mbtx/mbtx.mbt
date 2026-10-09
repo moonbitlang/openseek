@@ -331,6 +331,15 @@ async fn execute(
   subrun? : @host.SubrunInjection,
   program? : @ptc.Program,
 ) -> @agent_tool.ToolAction {
+  if scratch_dir is Some(dir) {
+    @fs.mkdir(dir, recursive=true, permission=0o700) catch {
+      @os_error.OSError(_) as error if error.is_EEXIST() => ()
+      error => raise error
+    }
+    guard @fs.kind(dir, follow_symlink=false) is Directory else {
+      fail("scratch directory must not be a symlink")
+    }
+  }
   // Read once, before validation/approval, then compile this same snapshot.
   // A saved script has the same isolation and execution path as inline code.
   let (source, source_name, script_path) = match input.program {
@@ -350,6 +359,7 @@ async fn execute(
           read_only~,
           file_state~,
           write_scope?,
+          scratch_dir?,
         )
       }) catch {
         error =>
@@ -391,7 +401,7 @@ async fn execute(
         let source = read_script_snapshot(file_state, path) catch {
           error =>
             return @agent_tool.respond(
-              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new workspace script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
+              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
               is_error=true,
             )
         }
@@ -1664,7 +1674,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace or configured scratch directory, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
             },
           ),
           (
@@ -1835,7 +1845,7 @@ fn description(
     #|
     #|Every call requires a short description and at least one of source or
     #|filename. There are three valid ways to supply the program:
-    #|- source + filename: save the source to that workspace filename and run it.
+    #|- source + filename: save the source to that writable filename and run it.
     #|  Use both together when creating a script you want to inspect or run again.
     #|- source without filename: run a one-off inline program without saving it.
     #|- filename without source: run a script that already exists.
@@ -1847,7 +1857,7 @@ fn description(
     #|A filename-only call cannot create a script. Missing parent directories are
     #|created. Identical existing content is reused; different content is never
     #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace and is unavailable in read-only mode.
+    #|to the writable workspace or configured scratch directory and is unavailable in read-only mode.
     #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
     #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
@@ -1905,7 +1915,10 @@ fn description(
     #|- A snippet's imports resolve against the REGISTRY, not your uncommitted edits.
     #|  To exercise working-tree code, add a `*_test.mbt` to that package and run
     #|  `moon test` as an admitted child process.
-    #|- A snippet READS anywhere and WRITES only its own `@fs.tmpdir()`. Changing a
+    #|- Direct filesystem IO READS anywhere and WRITES only its own `@fs.tmpdir()`
+    #|  and the configured session scratch directory shown in Environment. Use the
+    #|  actual scratch path for cross-call files, binary data, and command output.
+    #|  Temporary files must be consumed before the execution ends. Changing a
     #|  workspace file is the file tools' job, or a command's — `moon fmt`, `git
     #|  checkout` and friends are child processes and run normally. A write refusal
     #|  is that rule firing, not a filesystem fault to debug or route around.

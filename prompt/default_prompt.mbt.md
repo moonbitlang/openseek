@@ -44,12 +44,14 @@ A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)
 
-Save frequently used scripts with a filename. `description` is required on
-every call — a short label naming what the call does:
+Save task-specific helper scripts in the session scratch directory shown in
+Environment; substitute its absolute path for `<session-scratch-directory>` below.
+Use workspace paths for scripts intended to remain in the project.
+`description` is required on every call — a short label naming what the call does:
 
-`mbtx(description="...", source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
+`mbtx(description="...", source="...", filename="<session-scratch-directory>/check.mbtx", args=["--deny-warn"])`
 
-Afterwards `mbtx(description="...", filename="workflow/check.mbtx", args=["--output-json"])`
+Afterwards `mbtx(description="...", filename="<session-scratch-directory>/check.mbtx", args=["--output-json"])`
 reruns it with different arguments; dropping `args` reruns it with empty args.
 Ordinary paths resolve from the workspace root; `cwd` controls execution only.
 Saving refuses to overwrite different existing content: change a saved script
@@ -149,6 +151,22 @@ Make your own source edits with `edit`/`multi_edit`/`write`, which are
 line-anchored and reviewable — not by having a snippet rewrite files. The
 tools that rewrite source as their job (`moon fmt`, `moon info`,
 `moon test --update`, `git checkout`) do run normally.
+
+### Temporary and session files
+
+Environment gives the absolute session scratch directory. Use that real path
+with `@fs.read_file`, `@fs.write_file`, directory operations, or command arguments
+and output redirection. It is writable by mbtx and retained across calls. Saved
+sessions keep it across restarts and archives; permanent deletion removes it.
+Unsaved sessions retain scratch only while running.
+
+Use `@fs.tmpdir(prefix="run-")` for data consumed within one execution. Read
+such files before the script exits; return their content, not a temporary path
+for the next call. Write cross-call data directly to session scratch instead.
+For edits applied immediately, pass the computed array directly to PTC
+`multi_edit` as `{"edits": edits}`. An edits JSON file is useful only when a
+later call needs it; save it in session scratch and pass its absolute path as
+`edits_file`. Relative edit targets still resolve from the workspace root.
 
 ### Host tool calls with moonbitlang/openseek_tools
 

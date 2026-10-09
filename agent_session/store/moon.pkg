@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_session/log" @session_log,
   "moonbitlang/async/fs",

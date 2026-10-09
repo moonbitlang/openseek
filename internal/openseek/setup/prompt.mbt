@@ -5,6 +5,7 @@ pub async fn configured_system_prompt(
   matches : @argparse.Matches,
   model : @deepseek.Model,
   workspace_root? : String = ".",
+  session_scratch_dir? : String,
 ) -> String {
   let (base_path, addendum_path, global_skills_dir) = match matches {
     {
@@ -82,7 +83,10 @@ pub async fn configured_system_prompt(
   if skills_section is Some(section) {
     prompt <+ "\n\n\{section}"
   }
-  prompt.to_string()
+  match session_scratch_dir {
+    Some(dir) => with_session_scratch(prompt.to_string(), dir)
+    None => prompt.to_string()
+  }
 }
 
 ///|
@@ -166,4 +170,22 @@ async fn skills_prompt_section_for_cwd(
       ),
     ),
   )
+}
+
+///|
+/// Refresh only the host-owned scratch entry, preserving the recorded prompt.
+fn with_session_scratch(prompt : String, dir : String) -> String {
+  let prefix = "Session scratch directory: "
+  let entry = "\{prefix}\{dir.to_json().stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
+  let lines = prompt.split("\n").map(line => line.to_owned()).collect()
+  if lines.any(line => line.has_prefix(prefix)) {
+    lines
+    .map(line => if line.has_prefix(prefix) { entry } else { line })
+    .join("\n")
+  } else {
+    match prompt.split_once("## Environment\n") {
+      Some((before, after)) => "\{before}## Environment\n\{entry}\n\{after}"
+      None => "\{prompt}\n\n## Environment\n\{entry}"
+    }
+  }
 }
