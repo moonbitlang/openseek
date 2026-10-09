@@ -20,6 +20,7 @@ fn reference_location(
   end_column : Int,
 ) -> @language.Location {
   {
+    is_test: None,
     uri: try! @base_common.Uri::parse(uri),
     range: Range(start_line, start_column, end_line, end_column),
   }

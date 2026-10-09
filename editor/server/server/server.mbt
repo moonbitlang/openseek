@@ -491,6 +491,7 @@ async fn RemoteServer::enrich_reference(
       // `location.range` is already 1-based line/column, so the display fields
       // read straight off it; only `line_text` needs a 0-based line index.
       {
+        is_test: location.is_test,
         uri: location.uri,
         range: location.range,
         line: location.range.start_line_number,
@@ -499,6 +500,7 @@ async fn RemoteServer::enrich_reference(
       }
     None =>
       {
+        is_test: location.is_test,
         uri: location.uri,
         range: location.range,
         line: 0,

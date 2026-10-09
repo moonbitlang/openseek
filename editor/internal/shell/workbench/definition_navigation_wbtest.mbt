@@ -131,8 +131,8 @@ async test "remote definition provider preserves ordered locations and cancellat
             uri: request.uri,
             revision: request.document_revision,
             locations: [
-              { uri: first_uri, range: Range(3, 2, 3, 8), },
-              { uri: second_uri, range: Range(9, 1, 9, 5), },
+              { is_test: None, uri: first_uri, range: Range(3, 2, 3, 8), },
+              { is_test: None, uri: second_uri, range: Range(9, 1, 9, 5), },
             ],
           }),
         )
@@ -181,7 +181,7 @@ async test "remote definition provider preserves ordered locations and cancellat
       id: cancelled_request_id.val,
       uri: source_uri,
       revision: "rev-source",
-      locations: [{ uri: first_uri, range: Range(1, 1, 1, 2), }],
+      locations: [{ is_test: None, uri: first_uri, range: Range(1, 1, 1, 2), }],
     }),
   )
   assert_true(late_response_consumed)
@@ -243,7 +243,7 @@ async test "remote definition provider preserves ordered locations and cancellat
   let opener = workbench_location_opener()
   let open_request : @navigation_api.OpenLocationRequest = {
     source_viewer_id: "definition-test-viewer",
-    location: { uri: first_uri, range: Range(3, 2, 3, 8), },
+    location: { is_test: None, uri: first_uri, range: Range(3, 2, 3, 8), },
     mode: Current,
   }
   assert_true(opener.open(open_request))
@@ -349,6 +349,7 @@ async test "remote references provider preserves locations and cancellation" {
             revision: request.document_revision,
             references: [
               {
+                is_test: None,
                 uri: first_uri,
                 range: Range(3, 2, 3, 8),
                 line: 3,
@@ -356,6 +357,7 @@ async test "remote references provider preserves locations and cancellation" {
                 line_text: "let first = target",
               },
               {
+                is_test: Some(true),
                 uri: second_uri,
                 range: Range(9, 1, 9, 5),
                 line: 9,
@@ -380,6 +382,7 @@ async test "remote references provider preserves locations and cancellation" {
   assert_eq(observed_revision.val, "rev-references")
   assert_eq(observed_offset.val, source_model.get_offset_at(Position(1, 14)))
   assert_eq(locations.length(), 2)
+  assert_eq(locations[1].is_test, Some(true))
   assert_eq(locations[0].uri.to_string(), first_uri.to_string())
   assert_eq(locations[0].range, Range(3, 2, 3, 8))
   assert_eq(locations[1].uri.to_string(), second_uri.to_string())

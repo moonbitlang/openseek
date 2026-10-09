@@ -404,14 +404,22 @@ fn ReferencesController::install_locations(
     }
     return
   }
-  guard result_model.nearest_reference(anchor.model().uri, anchor.position())
+  guard result_model.nearest_reference(
+      anchor.model().uri,
+      anchor.position(),
+      prefer_non_test=self.mode is Some(References),
+    )
     is Some(selected) else {
     return
   }
   self.selected_index = selected.flat_index
   widget.set_results(result_model, Some(selected))
   widget.show_preview_loading()
-  self.load_preview(generation, selected.flat_index)
+  self.load_preview(
+    generation,
+    selected.flat_index,
+    reveal_selection=selected.is_test != Some(true),
+  )
 }
 
 ///|
@@ -636,6 +644,7 @@ fn ReferencesController::load_preview(
   self : ReferencesController,
   generation : Int,
   index : Int,
+  reveal_selection? : Bool = true,
 ) -> Unit {
   guard self.session_is_current(generation) &&
     self.model is Some(result_model) &&
@@ -656,7 +665,9 @@ fn ReferencesController::load_preview(
     return
   }
   self.selected_index = index
-  widget.set_selected(item)
+  if reveal_selection {
+    widget.set_selected(item)
+  }
   guard self.preview_selection_is_current(
     generation, result_model, index, item, widget,
   ) else {

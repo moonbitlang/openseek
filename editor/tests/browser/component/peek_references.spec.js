@@ -233,3 +233,41 @@ test('Enter uses Current and Ctrl+Enter uses Side before closing Peek', async ({
     reporter.dispose();
   }
 });
+
+
+test('test references are last and collapsed, with keyboard reveal and navigation', async ({ page }, testInfo) => {
+  const reporter = await mountPeekReferencesFixture(page, testInfo);
+  try {
+    await control(page, 'show_mixed_tests');
+    const tree = treeIn(page);
+    const tests = tree.locator('[data-reference-row-kind="tests"]');
+    await expect(tests).toHaveText('▶Tests2');
+    await expect(tests).toHaveAttribute('aria-expanded', 'false');
+    await expect(reference(tree, 0)).toBeVisible();
+    await expect(reference(tree, 2)).toBeHidden();
+    await expect(tree).toHaveAttribute('aria-label', 'Found 3 results in 2 files');
+    await page.locator(codePeek).screenshot({ path: testInfo.outputPath('test-references-collapsed.png') });
+    await tests.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(tests).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('ArrowRight');
+    await expect(group(tree, 1)).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(reference(tree, 1)).toBeVisible();
+    await page.keyboard.press('ArrowRight');
+    await expect(reference(tree, 1)).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator(codePeek)).toHaveCount(0);
+    await expect.poll(async () => (await state(page)).openLines.at(-1)).toBe(1);
+    await control(page, 'show_only_tests');
+    await expect(tests).toHaveAttribute('aria-expanded', 'false');
+    await expect(reference(tree, 0)).toBeHidden();
+    await tests.click();
+    await expect(reference(tree, 0)).toBeVisible();
+    await reference(tree, 0).dblclick();
+    await expect(page.locator(codePeek)).toHaveCount(0);
+    await expect.poll(async () => (await state(page)).position).toEqual([3, 1]);
+  } finally {
+    await reporter.dispose();
+  }
+});

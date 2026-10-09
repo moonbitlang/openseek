@@ -49,8 +49,8 @@ async test "definition presence and query aggregate provider and location order"
   let result_tokens : Array[@language.CancellationToken] = []
   let result = languages.register_definition_provider(LanguageId("moonbit"), RecordingDefinitionProvider::{
     locations: [
-      { uri: model.uri, range: Range(1, 4, 1, 8), },
-      { uri: target, range: Range(7, 2, 7, 6), },
+      { is_test: None, uri: model.uri, range: Range(1, 4, 1, 8), },
+      { is_test: None, uri: target, range: Range(7, 2, 7, 6), },
     ],
     calls: result_calls,
     observed_tokens: result_tokens,
@@ -61,7 +61,7 @@ async test "definition presence and query aggregate provider and location order"
   let later_calls = Ref(0)
   let later_tokens : Array[@language.CancellationToken] = []
   let later = languages.register_definition_provider(LanguageId("moonbit"), RecordingDefinitionProvider::{
-    locations: [{ uri: later_target, range: Range(4, 3, 4, 7), }],
+    locations: [{ is_test: None, uri: later_target, range: Range(4, 3, 4, 7), }],
     calls: later_calls,
     observed_tokens: later_tokens,
   })

@@ -103,6 +103,7 @@ pub fn LanguageSelector::to_repr(Self) -> @debug.Repr
 pub(all) struct Location {
   uri : @common.Uri
   range : @common.Range
+  is_test : Bool?
 } derive(@debug.Debug)
 pub fn Location::to_repr(Self) -> @debug.Repr
 

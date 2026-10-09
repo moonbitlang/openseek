@@ -17,12 +17,13 @@ pub(all) struct ReferenceItem {
   uri : @base_common.Uri
   uri_string : String
   range : @base_common.Range
+  is_test : Bool?
 } derive(Eq, Debug)
 
 ///|
 /// Reconstructs the host-neutral location used by open callbacks.
 pub fn ReferenceItem::location(self : ReferenceItem) -> @language.Location {
-  { uri: self.uri, range: self.range, }
+  { uri: self.uri, range: self.range, is_test: self.is_test, }
 }
 
 ///|
@@ -32,12 +33,13 @@ pub fn ReferenceItem::fallback_label(self : ReferenceItem) -> String {
 }
 
 ///|
-/// One canonical-URI group in deterministic resource order.
+/// One canonical-URI group within the ordinary or test partition.
 pub(all) struct ReferenceGroup {
   group_index : Int
   uri : @base_common.Uri
   uri_string : String
   references : Array[ReferenceItem]
+  is_test : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -116,19 +118,25 @@ fn normalize_reference_locations(
 }
 
 ///|
-/// Constructs the immutable grouped and flat result model from a caller-owned
-/// location array. The input array is never sorted or retained.
+/// Constructs the immutable grouped and flat result model, ordinary references
+/// first and test references last, from a caller-owned location array. The input
+/// array is never sorted or retained.
 pub fn ReferencesModel::ReferencesModel(
   locations : Array[@language.Location],
 ) -> ReferencesModel {
   let groups : Array[ReferenceGroup] = []
   let references : Array[ReferenceItem] = []
-  let normalized = normalize_reference_locations(locations)
+  let unique = normalize_reference_locations(locations)
+  // Partition after deduplication so metadata never changes location identity.
+  let normalized = unique.filter(location => location.is_test != Some(true))
+  normalized.append(unique.filter(location => location.is_test == Some(true)))
   for location in normalized {
     let uri_string = location.uri.to_string()
     let needs_group = match groups.last() {
       None => true
-      Some(group) => group.uri_string != uri_string
+      Some(group) =>
+        group.uri_string != uri_string ||
+        group.is_test != (location.is_test == Some(true))
     }
     if needs_group {
       groups.push({
@@ -136,6 +144,7 @@ pub fn ReferencesModel::ReferencesModel(
         uri: location.uri,
         uri_string,
         references: [],
+        is_test: location.is_test == Some(true),
       })
     }
     let group_index = groups.length() - 1
@@ -147,6 +156,7 @@ pub fn ReferencesModel::ReferencesModel(
       uri: location.uri,
       uri_string,
       range: location.range,
+      is_test: location.is_test,
     }
     group.references.push(item)
     references.push(item)
@@ -174,17 +184,24 @@ fn common_uri_prefix_length(left : String, right : String) -> Int {
 ///|
 /// Selects the reference nearest to the source resource and anchor. Longer
 /// URI-string prefix wins, then the pinned line/column distance, then the
-/// existing stable sorted order.
+/// existing stable sorted order. Peek may prefer non-test results for its
+/// initial selection while leaving an all-test result set navigable.
 pub fn ReferencesModel::nearest_reference(
   self : ReferencesModel,
   source_resource : @base_common.Uri,
   anchor : @base_common.Position,
+  prefer_non_test? : Bool = false,
 ) -> ReferenceItem? {
   let source = source_resource.to_string()
   let mut best : ReferenceItem? = None
   let mut best_prefix = -1
   let mut best_distance = 0
+  let skip_tests = prefer_non_test &&
+    self.references.any(reference => reference.is_test != Some(true))
   for reference in self.references {
+    if skip_tests && reference.is_test == Some(true) {
+      continue
+    }
     let prefix = common_uri_prefix_length(reference.uri_string, source)
     let distance = (reference.range.start_line_number - anchor.line_number).abs() *
       100 +

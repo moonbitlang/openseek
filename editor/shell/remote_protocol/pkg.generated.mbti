@@ -175,6 +175,7 @@ pub(all) struct ReferenceItem {
   line : Int
   column : Int
   line_text : String
+  is_test : Bool?
 } derive(@debug.Debug)
 pub fn ReferenceItem::to_repr(Self) -> @debug.Repr
 

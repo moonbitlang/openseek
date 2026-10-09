@@ -214,7 +214,7 @@ test "parses ordered moon definition results and rejects unsafe entries" {
   let raw =
     #|[
     #|  {"path":"/workspace/demo/src/first.mbt","range":"2:3-2:9"},
-    #|  {"path":"src/second.mbt","range":"8:1-9:4"},
+    #|  {"path":"src/second.mbt","range":"8:1-9:4","is_test":true},
     #|  {"path":"/workspace/other/outside.mbt","range":"1:1-1:2"},
     #|  {"path":"/workspace/demo/../outside.mbt","range":"1:1-1:2"},
     #|  {"path":"/workspace/demo/src/zero.mbt","range":"0:1-1:2"},
@@ -234,6 +234,7 @@ test "parses ordered moon definition results and rejects unsafe entries" {
     "readonly-remote://workspace/src/second.mbt",
   )
   assert_true(locations[1].range == Range(8, 1, 9, 4))
+  assert_eq(locations[1].is_test, Some(true))
   assert_eq(
     @host.parse_moon_definition_output(
       "/workspace/demo", "{\"path\":\"src/main.mbt\",\"range\":\"1:1-1:2\"}",

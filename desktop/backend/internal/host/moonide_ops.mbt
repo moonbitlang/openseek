@@ -187,8 +187,21 @@ fn parse_moonide_output(
       is Some((start_line, start_column, end_line, end_column)) else {
       continue
     }
+    let is_test = match fields.get("is_test") {
+      None => None
+      Some(True) => Some(true)
+      Some(False) => Some(false)
+      _ => continue
+    }
     let path = moonide_result_path(physical_workspace, path)
-    locations.push({ path, start_line, start_column, end_line, end_column, })
+    locations.push({
+      path,
+      start_line,
+      start_column,
+      end_line,
+      end_column,
+      is_test,
+    })
   }
   { locations, }
 }
@@ -206,7 +219,13 @@ fn parse_moonide_codelens_location(json : Json) -> MoonIdeLocation? {
     return None
   }
   let path = absolute.normalize().to_string()
-  Some({ path, start_line, start_column, end_line, end_column, })
+  let is_test = match json {
+    { "is_test": True, .. } => Some(true)
+    { "is_test": False, .. } => Some(false)
+    Object(fields) if !fields.contains("is_test") => None
+    _ => return None
+  }
+  Some({ path, start_line, start_column, end_line, end_column, is_test, })
 }
 
 ///|
@@ -329,6 +348,7 @@ async fn canonical_moonide_locations(
       start_column: location.start_column,
       end_line: location.end_line,
       end_column: location.end_column,
+      is_test: location.is_test,
     })
   }
   { locations, }
@@ -545,12 +565,13 @@ test "Moon IDE parser expands ranges before physical security filtering" {
   let reply = parse_moonide_output(
     (
       #|[
-      #|  {"path":"/workspace/src/a.mbt","range":"2:3-4:5"},
-      #|  {"path":"src/b.mbt","range":"7:8-7:12"},
+      #|  {"path":"/workspace/src/a.mbt","range":"2:3-4:5","is_test":true},
+      #|  {"path":"src/b.mbt","range":"7:8-7:12","is_test":false},
       #|  {"path":"/other/c.mbt","range":"1:1-1:2"},
       #|  {"path":"../escape.mbt","range":"1:1-1:2"},
       #|  {"path":"/workspace/bad.mbt","range":"0:1-1:2"},
       #|  {"path":"/workspace/reversed.mbt","range":"3:4-2:1"},
+      #|  {"path":"/workspace/invalid-test.mbt","range":"1:1-1:2","is_test":"true"},
       #|  {"path":"/workspace/missing-range.mbt"}
       #|]
     ),
@@ -560,6 +581,7 @@ test "Moon IDE parser expands ranges before physical security filtering" {
     "locations": [
       {
         "path": "/workspace/src/a.mbt",
+        "is_test": true,
         "start_line": 2,
         "start_column": 3,
         "end_line": 4,
@@ -567,6 +589,7 @@ test "Moon IDE parser expands ranges before physical security filtering" {
       },
       {
         "path": "/workspace/src/b.mbt",
+        "is_test": false,
         "start_line": 7,
         "start_column": 8,
         "end_line": 7,
@@ -618,7 +641,7 @@ test "Moon IDE CodeLens parser keeps reference actions and converts compact rang
       #|  {
       #|    "range":"2:3-2:8",
       #|    "command":{"title":"Local: 2 references","command":"moonbit.action.goToLocations","arguments":["/workspace/src/main.mbt","2:5-2:5",[
-      #|      {"path":"/workspace/src/main.mbt","range":"3:4-3:9"},
+      #|      {"path":"/workspace/src/main.mbt","range":"3:4-3:9","is_test":true},
       #|      {"path":"/workspace/src/a%20 b.mbt","range":"1:1-1:2"},
       #|      {"path":"https://example.invalid/leak.mbt","range":"1:1-1:2"},
       #|      {"path":"file:///workspace/old.mbt","range":"1:1-1:2"},
@@ -655,6 +678,7 @@ test "Moon IDE CodeLens parser keeps reference actions and converts compact rang
           "locations": [
             {
               "path": "/workspace/src/main.mbt",
+              "is_test": true,
               "start_line": 3,
               "start_column": 4,
               "end_line": 3,
@@ -766,6 +790,7 @@ async test "Moon IDE CodeLens canonicalization drops symlink targets outside the
         title: "Local: 3 references",
         action: Local(position={ line: 0, character: 3, }, locations=[
           {
+            is_test: None,
             path: "\{root}/src/inside.mbt",
             start_line: 1,
             start_column: 1,
@@ -773,6 +798,7 @@ async test "Moon IDE CodeLens canonicalization drops symlink targets outside the
             end_column: 3,
           },
           {
+            is_test: None,
             path: "\{root}/src/link.mbt",
             start_line: 1,
             start_column: 1,
@@ -780,6 +806,7 @@ async test "Moon IDE CodeLens canonicalization drops symlink targets outside the
             end_column: 3,
           },
           {
+            is_test: None,
             path: "\{root}/src/missing.mbt",
             start_line: 1,
             start_column: 1,

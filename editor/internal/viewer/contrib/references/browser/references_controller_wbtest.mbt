@@ -244,8 +244,8 @@ async test "controller toggles one surface session and replaces previews in plac
   )
   let anchor = references_controller_test_anchor(model, surface_generation.val)
   let locations : Array[@language.Location] = [
-    { uri: model.uri, range: Range(1, 14, 1, 20), },
-    { uri: model.uri, range: Range(2, 14, 2, 20), },
+    { is_test: None, uri: model.uri, range: Range(1, 14, 1, 20), },
+    { is_test: None, uri: model.uri, range: Range(2, 14, 2, 20), },
   ]
 
   assert_true(controller.toggle_locations(anchor, Definitions, locations))
@@ -296,6 +296,7 @@ async test "widget dismissal outlives its anchor but cannot close a replacement 
   )
   defer controller.dispose()
   let location : @language.Location = {
+    is_test: None,
     uri: model.uri,
     range: Range(1, 14, 1, 20),
   }
@@ -361,6 +362,7 @@ async test "source replacement during preview disposal suppresses stale focus re
   )
   defer controller.dispose()
   let location : @language.Location = {
+    is_test: None,
     uri: model.uri,
     range: Range(1, 14, 1, 20),
   }
@@ -409,6 +411,7 @@ async test "separate controllers keep Code and Markdown-like sessions isolated" 
     task => tasks.schedule(task),
   )
   let location : @language.Location = {
+    is_test: None,
     uri: model.uri,
     range: Range(1, 14, 1, 20),
   }
@@ -458,6 +461,7 @@ async test "dispose marks the controller stale before resource callbacks can reo
   )
   let anchor = references_controller_test_anchor(model, surface_generation.val)
   let location : @language.Location = {
+    is_test: None,
     uri: model.uri,
     range: Range(1, 14, 1, 20),
   }
@@ -514,8 +518,8 @@ async test "resolver leases transfer on preview replacement and release on close
     task => tasks.schedule(task),
   )
   let locations : Array[@language.Location] = [
-    { uri: target_a.uri, range: Range(1, 5, 1, 11), },
-    { uri: target_b.uri, range: Range(2, 5, 2, 11), },
+    { is_test: None, uri: target_a.uri, range: Range(1, 5, 1, 11), },
+    { is_test: None, uri: target_b.uri, range: Range(2, 5, 2, 11), },
   ]
   assert_true(
     controller.toggle_locations(
@@ -587,6 +591,7 @@ async test "stale and invalid resolver results are released without preview inst
     task => tasks.schedule(task),
   )
   let location : @language.Location = {
+    is_test: None,
     uri: requested.uri,
     range: Range(1, 5, 1, 11),
   }

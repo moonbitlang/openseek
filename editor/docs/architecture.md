@@ -182,7 +182,11 @@ common -> foundations
 - `languages` and `markers`: runtime provider registration and
   diagnostics-to-decoration flow. Definition and References providers share
   selector scoring, newer-first ties, ordered aggregation, failure isolation,
-  and cancellation. Their opaque `LanguageHandle`,
+  and cancellation. Location results may carry an optional `is_test` annotation.
+  References Peek partitions classified test references after ordinary results
+  under a Tests section that starts collapsed; providers without classification
+  retain the ordinary file tree. Both partitions retain file grouping and share
+  flat reference navigation. Their opaque `LanguageHandle`,
   `MarkerServiceHandle`, and `MarkerDecorationsHandle` expose only the reviewed
   Viewer capability floor while hosts retain the concrete registries/stores.
   The marker-decoration handle can resolve the live, exact-model occurrences

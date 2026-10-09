@@ -134,6 +134,7 @@ pub(all) struct ReferenceItem {
   line : Int
   column : Int
   line_text : String
+  is_test : Bool?
 } derive(Debug)
 
 ///|
@@ -969,13 +970,17 @@ fn references_result_json(payload : ReferencesResultPayload) -> Json {
 
 ///|
 fn reference_item_json(item : ReferenceItem) -> Json {
-  {
+  let fields : Map[String, Json] = {
     "uri": item.uri.to_string().to_json(),
     "range": range_json(item.range),
     "line": item.line.to_json(),
     "column": item.column.to_json(),
     "lineText": item.line_text.to_json(),
   }
+  if item.is_test is Some(value) {
+    fields["is_test"] = value.to_json()
+  }
+  fields.to_json()
 }
 
 ///|
@@ -1060,10 +1065,14 @@ fn hover_content_json(content : @language.HoverContent) -> Json {
 
 ///|
 fn location_json(location : @language.Location) -> Json {
-  {
+  let fields : Map[String, Json] = {
     "uri": location.uri.to_string().to_json(),
     "range": range_json(location.range),
   }
+  if location.is_test is Some(value) {
+    fields["is_test"] = value.to_json()
+  }
+  fields.to_json()
 }
 
 ///|
@@ -1227,7 +1236,15 @@ fn parse_location(value : Json) -> @language.Location? {
       match (json_string_field(value, "uri"), json_field(value, "range")) {
         (Some(raw_uri), Some(range_json)) =>
           match (try_parse_uri(raw_uri), parse_range(range_json)) {
-            (Some(uri), Some(range)) => Some({ uri, range, })
+            (Some(uri), Some(range)) => {
+              let is_test = match json_field(value, "is_test") {
+                None => None
+                Some(True) => Some(true)
+                Some(False) => Some(false)
+                _ => return None
+              }
+              Some({ is_test, uri, range, })
+            }
             _ => None
           }
         _ => None
@@ -1238,25 +1255,14 @@ fn parse_location(value : Json) -> @language.Location? {
 
 ///|
 fn parse_reference_item(value : Json) -> ReferenceItem? {
-  match value {
-    Object(_) =>
-      match (json_string_field(value, "uri"), json_field(value, "range")) {
-        (Some(raw_uri), Some(range_json)) =>
-          match (try_parse_uri(raw_uri), parse_range(range_json)) {
-            (Some(uri), Some(range)) =>
-              Some({
-                uri,
-                range,
-                line: json_int_field(value, "line").unwrap_or(0),
-                column: json_int_field(value, "column").unwrap_or(0),
-                line_text: json_string_field(value, "lineText").unwrap_or(""),
-              })
-            _ => None
-          }
-        _ => None
-      }
-    _ => None
-  }
+  parse_location(value).map(location => {
+    uri: location.uri,
+    range: location.range,
+    is_test: location.is_test,
+    line: json_int_field(value, "line").unwrap_or(0),
+    column: json_int_field(value, "column").unwrap_or(0),
+    line_text: json_string_field(value, "lineText").unwrap_or(""),
+  })
 }
 
 ///|

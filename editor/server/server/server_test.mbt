@@ -543,10 +543,12 @@ impl @language.DefinitionProvider for FakeLanguageProvider with fn provide_defin
   let end_pos = model.get_position_at(offset + 4)
   [
     {
+      is_test: None,
       uri: model.uri,
       range: @base_common.Range::from_positions(position, end_pos),
     },
     {
+      is_test: None,
       uri: model.uri,
       range: @base_common.Range::from_positions(end_pos, end_pos),
     },
@@ -564,10 +566,12 @@ impl @language.ReferencesProvider for FakeLanguageProvider with fn provide_refer
   let end_pos = model.get_position_at(offset + 4)
   [
     {
+      is_test: None,
       uri: model.uri,
       range: @base_common.Range::from_positions(position, end_pos),
     },
     {
+      is_test: None,
       uri: model.uri,
       range: @base_common.Range::from_positions(
         model.get_position_at(0),

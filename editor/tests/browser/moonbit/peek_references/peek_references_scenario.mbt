@@ -22,7 +22,7 @@ fn peek_references_location(
   start_column : Int,
   end_column : Int,
 ) -> @language.Location {
-  { uri, range: Range(line, start_column, line, end_column), }
+  { is_test: None, uri, range: Range(line, start_column, line, end_column), }
 }
 
 ///|
@@ -75,6 +75,10 @@ fn peek_references_state_json(
     "openLines": state.open_lines.to_json(),
     "openColumns": state.open_columns.to_json(),
     "codeHasTextFocus": code_viewer.has_text_focus().to_json(),
+    "position": match code_viewer.get_position() {
+      Some(position) => [position.line_number, position.column].to_json()
+      None => Json::null()
+    },
   }).stringify()
 }
 
@@ -218,6 +222,30 @@ pub fn run_peek_references_browser_test() -> Unit {
       code_viewer.show_references(Position(4, 1), code_locations)
     },
     () => {
+      code_viewer.show_references(Position(4, 1), [
+        {
+          ..peek_references_location(source_uri, 1, 1, 7),
+          is_test: Some(false),
+        },
+        {
+          ..peek_references_location(source_uri, 3, 1, 7),
+          is_test: Some(true),
+        },
+        {
+          ..peek_references_location(remote_uri, 1, 8, 14),
+          is_test: Some(true),
+        },
+      ])
+    },
+    () => {
+      code_viewer.show_references(Position(4, 1), [
+        {
+          ..peek_references_location(source_uri, 3, 1, 7),
+          is_test: Some(true),
+        },
+      ])
+    },
+    () => {
       state.open_modes.clear()
       state.open_uris.clear()
       state.open_lines.clear()
@@ -261,12 +289,16 @@ fn wait_for_peek_references_fixture(
 extern "js" fn install_peek_references_controls(
   state_json : () -> String,
   show_code : () -> Unit,
+  show_mixed_tests : () -> Unit,
+  show_only_tests : () -> Unit,
   clear_opens : () -> Unit,
 ) -> Unit =
-  #| (stateJson, showCode, clearOpens) => {
+  #| (stateJson, showCode, showMixedTests, showOnlyTests, clearOpens) => {
   #|   globalThis.__peekReferencesControls = {
   #|     state: () => JSON.parse(stateJson()),
   #|     show_code: showCode,
+  #|     show_mixed_tests: showMixedTests,
+  #|     show_only_tests: showOnlyTests,
   #|     clear_opens: clearOpens,
   #|   };
   #| }
