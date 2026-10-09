@@ -1165,7 +1165,8 @@ pub(all) enum Msg {
   // `remove_editor_feedback`. `resource` is the viewer model URI the comment
   // was filed under — only the key for that removal; `file` is the file as
   // the conversation names it (workspace-relative, recorded when the panel
-  // opened the file). `quote` is the selected source; `feedback_id`
+  // opened the file). `quote` is the selected text (rendered text for Markdown);
+  // the range locates its source independently. `feedback_id`
   // addresses the bubble to clear.
   EditorCommentAdded(
     resource~ : ModelUri,

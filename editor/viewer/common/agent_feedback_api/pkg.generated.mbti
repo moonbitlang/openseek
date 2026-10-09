@@ -16,6 +16,7 @@ pub(all) struct AgentFeedback {
   text : String
   resource : @common.Uri
   range : @common.Range
+  selected_text : String?
   kind : AgentFeedbackKind
   replies : Array[String]
   state : AgentFeedbackState
@@ -35,9 +36,9 @@ pub(all) struct AgentFeedbackChangeEvent {
 pub fn AgentFeedbackChangeEvent::to_repr(Self) -> @debug.Repr
 
 type AgentFeedbackHandle
-pub fn AgentFeedbackHandle::AgentFeedbackHandle(on_did_change_feedback~ : ((AgentFeedbackChangeEvent) -> Unit) -> @common.Disposable, on_did_change_navigation~ : ((@common.Uri) -> Unit) -> @common.Disposable, is_feedback_enabled~ : (@common.Uri) -> Bool, get_feedback~ : (@common.Uri) -> Array[AgentFeedback], get_navigation_bearing~ : (@common.Uri, Array[String]) -> AgentFeedbackNavigationBearing, add_feedback~ : (@common.Uri, @common.Range, String, AgentFeedbackKind?, AgentFeedbackState?) -> AgentFeedback, mark_feedback_submitted~ : (@common.Uri) -> Unit, remove_feedback~ : (@common.Uri, String) -> Unit, accept_feedback~ : (@common.Uri, String) -> Unit, set_navigation_anchor~ : (@common.Uri, String?) -> Unit, update_feedback~ : (@common.Uri, String, String) -> Unit, add_reply~ : (@common.Uri, String, String) -> Unit) -> Self
+pub fn AgentFeedbackHandle::AgentFeedbackHandle(on_did_change_feedback~ : ((AgentFeedbackChangeEvent) -> Unit) -> @common.Disposable, on_did_change_navigation~ : ((@common.Uri) -> Unit) -> @common.Disposable, is_feedback_enabled~ : (@common.Uri) -> Bool, get_feedback~ : (@common.Uri) -> Array[AgentFeedback], get_navigation_bearing~ : (@common.Uri, Array[String]) -> AgentFeedbackNavigationBearing, add_feedback~ : (@common.Uri, @common.Range, String, AgentFeedbackKind?, AgentFeedbackState?, String?) -> AgentFeedback, mark_feedback_submitted~ : (@common.Uri) -> Unit, remove_feedback~ : (@common.Uri, String) -> Unit, accept_feedback~ : (@common.Uri, String) -> Unit, set_navigation_anchor~ : (@common.Uri, String?) -> Unit, update_feedback~ : (@common.Uri, String, String) -> Unit, add_reply~ : (@common.Uri, String, String) -> Unit) -> Self
 pub fn AgentFeedbackHandle::accept_feedback(Self, @common.Uri, String) -> Unit
-pub fn AgentFeedbackHandle::add_feedback(Self, @common.Uri, @common.Range, String, kind? : AgentFeedbackKind, state? : AgentFeedbackState) -> AgentFeedback
+pub fn AgentFeedbackHandle::add_feedback(Self, @common.Uri, @common.Range, String, kind? : AgentFeedbackKind, state? : AgentFeedbackState, selected_text? : String) -> AgentFeedback
 pub fn AgentFeedbackHandle::add_reply(Self, @common.Uri, String, String) -> Unit
 pub fn AgentFeedbackHandle::get_feedback(Self, @common.Uri) -> Array[AgentFeedback]
 pub fn AgentFeedbackHandle::get_navigation_bearing(Self, @common.Uri, Array[String]) -> AgentFeedbackNavigationBearing

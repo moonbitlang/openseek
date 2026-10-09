@@ -1,4 +1,27 @@
 ///|
+test "source attributes preserve zero and reject incomplete or invalid ranges" {
+  let cases : Array[(String?, String?, @base_common.OffsetRange?)] = [
+    (Some("0"), Some("4"), Some(OffsetRange(0, 4))),
+    (Some("4"), Some("4"), Some(@base_common.OffsetRange::empty_at(4))),
+    (None, Some("4"), None),
+    (Some("0"), None, None),
+    (Some(""), Some("4"), None),
+    (Some("-1"), Some("4"), None),
+    (Some("0"), Some("2.5"), None),
+    (Some("0"), Some(" 4"), None),
+    (Some("3"), Some("2"), None),
+    (Some("0"), Some("5"), None),
+    (Some("9999999999"), Some("9999999999"), None),
+  ]
+  for (start, end_exclusive, expected) in cases {
+    assert_eq(
+      markdown_source_range_from_attributes(start, end_exclusive, 4),
+      expected,
+    )
+  }
+}
+
+///|
 priv struct StatefulMarkdownFenceTokenizer {}
 
 ///|
@@ -165,17 +188,17 @@ test "semantic line wrapping preserves escaped delimiter text and every blank li
     Some("moonbit"),
     MoonBitMarkdown,
   )
-  // cmark drops the final blank immediately before the closing fence; every
-  // retained leading/middle/last projected line still receives one element.
-  assert_eq(block.code_lines.length(), 4)
+  // Every source line, including the blank before the closing fence, receives
+  // one element without adding a synthetic trailing line.
+  assert_eq(block.code_lines.length(), 5)
   assert_eq(
     block.code_lines.filter(line => line.displayed_text == "").length(),
-    2,
+    3,
   )
   for line_index in 0..<block.code_lines.length() {
     assert_true(html.contains("data-markdown-code-line=\"\{line_index}\""))
   }
-  assert_false(html.contains("data-markdown-code-line=\"4\""))
+  assert_false(html.contains("data-markdown-code-line=\"5\""))
   assert_true(html.contains("&lt;br/&gt;"))
   assert_false(html.contains(">\"<br/>\"<"))
 }

@@ -24,6 +24,94 @@ fn semantic_boundaries(line : MarkdownCodeLine) -> Array[Int?] {
 }
 
 ///|
+fn html_source_ranges_for_tag(
+  html : String,
+  tag : String,
+) -> Array[@common.OffsetRange] raise {
+  let ranges = []
+  for index, part in html.split("<\{tag} ") {
+    guard index > 0 else { continue }
+    guard part.split_once(">") is Some((attributes, _)) else {
+      fail("missing end of \{tag} element")
+    }
+    let offsets = []
+    for name in [MarkdownSourceStartAttribute, MarkdownSourceEndAttribute] {
+      guard attributes.split_once("\{name}=\"") is Some((_, rest)) &&
+        rest.split_once("\"") is Some((raw, _)) else {
+        fail("missing \{name} on \{tag}")
+      }
+      let mut offset = 0
+      for unit in raw {
+        assert_true(unit >= '0' && unit <= '9')
+        offset = offset * 10 + unit.to_int() - '0'.to_int()
+      }
+      offsets.push(offset)
+    }
+    ranges.push(@common.OffsetRange(offsets[0], offsets[1]))
+  }
+  ranges
+}
+
+///|
+test "tight list item source ranges exclude their unselected siblings" {
+  for
+    source in [
+      "- first **target**\n- second target", "3. first **target**\n4. second target",
+      "- parent\n  - first **target**\n  - second target",
+    ] {
+    let rendered = render_markdown(source, source_mapping=true)
+    let item_sources : Array[String] = []
+    for range in html_source_ranges_for_tag(rendered.html, "li") {
+      item_sources.push(source[range.start:range.end_exclusive].to_owned())
+    }
+    item_sources.sort()
+    let expected = if source.has_prefix("3.") {
+      ["3. first **target**", "4. second target"]
+    } else if source.has_prefix("- parent") {
+      ["- first **target**", "- parent", "- second target"]
+    } else {
+      ["- first **target**", "- second target"]
+    }
+    expected.sort()
+    assert_eq(item_sources, expected)
+  }
+}
+
+///|
+test "table cell HTML ranges retain markup and UTF-16 source boundaries" {
+  let source =
+    #|| Name | 中文 |
+    #||:---|---:|
+    #|| **one** | 😀 *two* |
+    #|| three | four |
+  let rendered = render_markdown(source, source_mapping=true)
+  let cell_sources : Array[String] = []
+  let row_sources : Array[String] = []
+  for tag in ["th", "td"] {
+    for range in html_source_ranges_for_tag(rendered.html, tag) {
+      cell_sources.push(
+        source[range.start:range.end_exclusive].trim().to_owned(),
+      )
+    }
+  }
+  for range in html_source_ranges_for_tag(rendered.html, "tr") {
+    row_sources.push(source[range.start:range.end_exclusive].to_owned())
+  }
+  cell_sources.sort()
+  row_sources.sort()
+  let expected_cells = [
+    "**one**", "Name", "four", "three", "中文", "😀 *two*",
+  ]
+  let expected_rows = [
+    "| **one** | 😀 *two* |", "| Name | 中文 |", "| three | four |",
+  ]
+  expected_cells.sort()
+  expected_rows.sort()
+  assert_eq(cell_sources, expected_cells)
+  assert_eq(row_sources, expected_rows)
+}
+
+///|
 test "projection keeps zero and identical code blocks distinct with full fence info" {
   assert_eq(render_markdown("plain").projection.code_blocks.length(), 0)
   let source =
@@ -61,7 +149,7 @@ test "projection keeps zero and identical code blocks distinct with full fence i
 }
 
 ///|
-test "root-element ordinals ignore omitted blocks and nested anchors" {
+test "root source ranges ignore omitted blocks and preserve nested anchors" {
   let source =
     #|first
     #|
@@ -76,30 +164,32 @@ test "root-element ordinals ignore omitted blocks and nested anchors" {
     #|```mbt
     #|x
     #|```
-  let rendered = render_markdown(source)
+  let rendered = render_markdown(source, source_mapping=true)
   assert_true(rendered.html.contains("CommonMark HTML block omitted"))
-  let ordinals : Array[Int] = []
-  let mut nested_anchor_count = 0
-  for anchor in rendered.projection.block_anchors {
-    match anchor.rendered_element_index {
-      Some(index) => ordinals.push(index)
-      None => nested_anchor_count += 1
-    }
+  let roots = rendered.projection.block_anchors.filter(anchor => {
+    anchor.is_root_element
+  })
+  assert_eq(roots.length(), 4)
+  for root in roots {
+    assert_true(
+      rendered.html.contains(markdown_source_attributes(root.source_range)),
+    )
   }
-  assert_eq(ordinals, [0, 1, 2, 3])
-  assert_true(nested_anchor_count >= 2)
-  let code_block = rendered.projection.code_blocks[0]
-  let code_element_index = for
-    anchor in rendered.projection.block_anchors
-    code_element_index = (None : Int?) {
-    if anchor.source_range.equals(code_block.block_source_range) {
-      continue anchor.rendered_element_index
-    }
-    continue code_element_index
-  } nobreak {
-    code_element_index
-  }
-  assert_eq(code_element_index, Some(3))
+  let nested = rendered.projection.block_anchors.filter(anchor => {
+    !anchor.is_root_element
+  })
+  assert_eq(nested.length(), 2)
+  assert_eq(
+    source[nested[1].source_range.start:nested[1].source_range.end_exclusive],
+    "quoted",
+  )
+  assert_true(
+    rendered.html.contains(markdown_source_attributes(nested[1].source_range)),
+  )
+  assert_eq(
+    roots[3].source_range,
+    rendered.projection.code_blocks[0].block_source_range,
+  )
 }
 
 ///|
@@ -185,12 +275,18 @@ test "blank code lines empty blocks and unclosed fences retain source facts" {
       #|x
       #|
       #|
+      #|
     ),
   )
-  assert_eq(blank_block.code_lines.length(), 3)
+  assert_eq(blank_block.code_lines.length(), 4)
   assert_eq(blank_block.code_lines[0].displayed_text, "")
   assert_eq(blank_block.code_lines[1].displayed_text, "x")
   assert_eq(blank_block.code_lines[2].displayed_text, "")
+  assert_eq(blank_block.code_lines[3].displayed_text, "")
+  assert_eq(
+    blank_block.code_lines[3].source_offset_at_displayed_boundary(0),
+    Some(blank_source.length() - "\n```".length()),
+  )
   assert_eq(
     blank_block.code_lines[0].source_offset_at_displayed_boundary(0),
     Some(
@@ -423,9 +519,20 @@ test "TextSnapshot normalization gives CRLF lone-CR and LF one projection space"
   let mixed = "before\r\n```mbt check\rone\r\ntwo\r```"
   let normalized = @model.TextSnapshot(mixed).get_value()
   assert_eq(normalized, lf)
-  assert_eq(
-    render_markdown(normalized).projection,
-    render_markdown(lf).projection,
-  )
+  let normalized_projection = render_markdown(normalized).projection
+  let lf_projection = render_markdown(lf).projection
+  assert_eq(normalized_projection.code_blocks, lf_projection.code_blocks)
+  let anchor_facts = fn(projection : MarkdownDocumentProjection) {
+    projection.block_anchors.map(anchor => {
+      (
+        anchor.index,
+        anchor.source_range,
+        anchor.is_root_element,
+        anchor.heading_level,
+        anchor.heading_text,
+      )
+    })
+  }
+  assert_eq(anchor_facts(normalized_projection), anchor_facts(lf_projection))
   assert_false(normalized.contains("\r"))
 }

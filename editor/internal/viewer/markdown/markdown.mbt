@@ -4,6 +4,8 @@
 /// parsed by cmark; an unlabelled or indented block has no language id.
 pub struct MarkdownCodeBlock {
   block_index : Int
+  /// Present only for a parse rendered with source mapping enabled.
+  node_id : Int?
   priv code : String
   language_id : String?
   priv full_info_string : String?
@@ -23,9 +25,11 @@ pub fn MarkdownCodeBlock::MarkdownCodeBlock(
   info_remainder : String?,
   block_source_range : @common.OffsetRange,
   code_lines : Array[MarkdownCodeLine],
+  node_id? : Int,
 ) -> MarkdownCodeBlock {
   {
     block_index,
+    node_id,
     code,
     language_id,
     full_info_string,
@@ -49,9 +53,15 @@ pub struct MarkdownRenderFact {
 /// synchronous and receives both the MoonBit-owned block value and the active
 /// language id supplied by the caller. Conversion failures never expose raw
 /// input as HTML: they produce one escaped plaintext paragraph.
+/// `source_mapping` writes original-snapshot source ranges on block elements.
+/// Parse-local IDs stay inside parsing and renderer dispatch. A custom renderer
+/// may set `code_block_renderer_owns_source_root=true` only when it writes the
+/// block's source attributes onto its own root; other HTML receives a wrapper.
 pub fn render_markdown(
   markdown : String,
   language_id? : String,
+  source_mapping? : Bool = false,
+  code_block_renderer_owns_source_root? : Bool = false,
   code_block_renderer? : (MarkdownCodeBlock, String?) -> String,
 ) -> MarkdownRenderFact {
   let saw_code_block = Ref(false)
@@ -62,8 +72,25 @@ pub fn render_markdown(
     layout=true,
     locs=true,
   )
-  let (projection, code_blocks_by_id) = markdown_document_projection(doc)
-  let code_override = @cmark_renderer.Renderer::new(block=fn(ctx, block) {
+  let (projection, code_blocks_by_id) = markdown_document_projection(
+    doc,
+    source_mapping~,
+  )
+  let node_attributes : @cmark_html.NodeAttributesFn? = if source_mapping {
+    Some(fn(meta, _) {
+      match markdown_offset_range(meta.loc) {
+        Some(range) => markdown_source_attribute_pairs(range)
+        None => []
+      }
+    })
+  } else {
+    None
+  }
+  let renderer = @cmark_html.renderer(safe=true, node_attributes?)
+  let block_override = @cmark_renderer.Renderer::new(block=fn(
+    ctx,
+    block,
+  ) raise {
     match block {
       CodeBlock(node) => {
         saw_code_block.val = true
@@ -74,17 +101,35 @@ pub fn render_markdown(
           ctx.string(html)
           true
         } else if code_block_renderer is Some(render) {
-          ctx.string(render(code_block, language_id))
+          markdown_write_code_override(
+            ctx,
+            code_block.block_source_range,
+            render(code_block, language_id),
+            source_mapping=source_mapping &&
+              !code_block_renderer_owns_source_root,
+          )
           true
         } else {
           false
         }
       }
+      ExtMathBlock(node) => {
+        guard source_mapping &&
+          markdown_offset_range(node.meta.loc) is Some(source_range) else {
+          return false
+        }
+        ctx.string(
+          "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_source_attributes(source_range)}>",
+        )
+        let _ = (renderer.block)(ctx, block)
+        ctx.string("</div>")
+        true
+      }
       _ => false
     }
   })
   markdown_conversion_result(markdown, saw_code_block, projection, () => {
-    @cmark_html.renderer(safe=true).compose(code_override).doc_to_string(doc)
+    renderer.compose(block_override).doc_to_string(doc)
   })
 }
 

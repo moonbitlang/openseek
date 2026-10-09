@@ -18,6 +18,12 @@ flowchart LR
 
 An `AgentFeedback` item is identified by a `String` id within a resource, and
 carries the range it annotates, its `kind`, its `state`, and its replies.
+`selected_text` is an optional snapshot of the user's visible selection,
+independent of the source range. Rendered Markdown selections provide it even
+when their source mapping covers a whole block. Image-only Markdown selections
+capture their mapped source because the browser supplies no visible text.
+`None` means no snapshot was supplied. A host may also quote mapped source
+when a supplied snapshot has no visible text.
 
 ```mbt check
 ///|
@@ -27,6 +33,7 @@ test "a feedback item is an id, a place, a kind, a state, and replies" {
     text: "This branch is unreachable.",
     resource: @base_common.Uri::parse("file:///src/main.mbt"),
     range: Range(12, 3, 12, 20),
+    selected_text: None,
     kind: AgentReview,
     replies: ["Agreed.", "Fixed in the next commit."],
     state: Accepted,
@@ -114,12 +121,13 @@ fn in_memory_handle(
       active_idx: 0,
       total_count: ids.length(),
     },
-    add_feedback=(uri, range, text, kind, state) => {
+    add_feedback=(uri, range, text, kind, state, selected_text) => {
       let item : @agent_feedback_api.AgentFeedback = {
         id: "fb-\{items.length() + 1}",
         text,
         resource: uri,
         range,
+        selected_text,
         kind: kind.unwrap_or(UserReview),
         replies: [],
         state: state.unwrap_or(Created),

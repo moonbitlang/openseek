@@ -74,6 +74,7 @@
     pre,
     table,
     img,
+    .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
     .moonbit-viewer-markdown-diagram
   ) {
@@ -94,6 +95,7 @@
     hr,
     table,
     details,
+    .moonbit-viewer-markdown-source-block,
     .moonbit-viewer-markdown-code-block,
     .moonbit-viewer-markdown-diagram
   ) {
@@ -106,6 +108,14 @@
 .moonbit-viewer-markdown-document-article
   > .moonbit-viewer-markdown-code-block
   > .moonbit-viewer-markdown-diagram {
+  margin-bottom: 0;
+}
+
+.moonbit-viewer-markdown-source-block > :first-child {
+  margin-top: 0;
+}
+
+.moonbit-viewer-markdown-source-block > :last-child {
   margin-bottom: 0;
 }
 
@@ -315,9 +325,8 @@
   outline-offset: 2px;
 }
 
-/* Pinned table-of-contents panel. A sibling of the viewport, never an article
-   child: article child indexes are projection ordinals the folding and
-   source-anchor machinery depends on. */
+/* Pinned table-of-contents panel. A sibling of the viewport, outside the
+   source-bearing article content. */
 /* Overlaid, not in flow: the panel must never move the viewport. The hover
    overlay and caret math assume the viewport starts at the root's top, and a
    panel in normal flow would also clip the 100%-height viewport at the bottom

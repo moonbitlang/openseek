@@ -5,6 +5,7 @@ struct MarkdownViewerServices {
   localization : @localization.Localization
   languages : @languages.LanguageHandle
   marker_decorations : @markers.MarkerDecorationsHandle
+  agent_feedback : @agent_feedback_api.AgentFeedbackHandle?
   location_opener : @navigation_api.LocationOpenerHandle?
   text_model_resolver : @navigation_api.TextModelResolverHandle?
   resource_path_label : (@base_common.Uri) -> String?
@@ -18,11 +19,13 @@ struct MarkdownViewerServices {
 
 ///|
 /// Builds a Markdown-only service bundle. Supplied handles remain caller-owned;
-/// omitted marker services are created and released by this bundle.
+/// omitted marker services are created and released by this bundle. Feedback
+/// requires a supplied handle with the resource enabled by the host.
 pub fn MarkdownViewerServices::MarkdownViewerServices(
   localization? : @localization.Localization = Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
+  agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
@@ -59,6 +62,7 @@ pub fn MarkdownViewerServices::MarkdownViewerServices(
     localization,
     languages,
     marker_decorations,
+    agent_feedback,
     location_opener,
     text_model_resolver,
     resource_path_label,

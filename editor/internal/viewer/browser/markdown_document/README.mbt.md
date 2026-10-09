@@ -22,6 +22,14 @@ flowchart TB
 The package owns no model, provider, marker store, or request policy. Root and
 the hover browser package own those higher-level contracts.
 
+Feedback selection captures two independent values: the enclosing source
+range read directly from marked HTML ancestors, and the exact rendered text
+returned by the browser's native Selection. The text is captured before
+feedback input takes focus and remains attached to that selection. An image-only
+selection has no visible text, so its quote captures the mapped Markdown source instead.
+Tight list items and table cells resolve to their own source spans; selections
+across owners retain one continuous span between their source boundaries.
+
 ```mbt nocheck
 // MarkdownViewer installs this as its rich-document presentation.
 let document_view = MarkdownDocumentView::new(host, model_source)
@@ -38,7 +46,14 @@ article. Synchronous D2/Diago and UML SVGs, plus asynchronously committed
 Mermaid SVGs, receive pan, zoom, fit, and resize controls; replacement and
 disposal release that lifetime before the renderer mutates or removes the
 article DOM.
-The single post-render pass stamps source anchors and leaves stable
+The single post-render pass retains each source owner and its validated range
+from HTML. Equal or overlapping ranges stay attached to distinct elements;
+article children are recorded explicitly as folding roots. This registry is
+retired before each replacement or disposal. Selection walks only the native
+range's common ancestor subtree and reads the nearest marked ancestor's source
+range. The `data-markdown-source-owner` marker keeps feedback at block, list-item,
+or cell granularity even when semantic code rows also expose coordinates.
+The pass leaves stable
 `data-markdown-code-block="<block_index>"` wrappers for source-aware browser
 features. Compiler-recognized `mbt check` fences additionally expose one
 source-bearing DOM row per projected code line. Each row retains the exact
@@ -73,7 +88,7 @@ moon test --target js internal/viewer/browser/markdown_document
 
 The view owns two fold mechanics and no fold policy:
 
-- `set_hidden_root_elements` marks a run of article root elements with
+- `set_hidden_root_elements` matches source ranges against article root elements and marks them with
   `data-markdown-section-hidden`, which the stylesheet maps to `display:none`.
   Pure visibility over retained nodes -- never a re-render, never a projection
   rebuild, never a `projection_generation` change -- so the `.mbt.md` semantic
@@ -87,9 +102,9 @@ The view owns two fold mechanics and no fold policy:
   `set_section_fold_toggle_handler`.
 - `set_toc_entries` exposes outlines of at least three sections through a
   compact, overlaid navigation panel. The collapsed summary stays outside
-  article flow and projection ordinals; activating a row collapses the panel,
+  article flow and source-bearing block roots; activating a row collapses the panel,
   restores focus to its toggle without scrolling, and hands the source offset
   to the root Viewer for expansion and reveal.
 
 Which sections exist, what starts collapsed, and how state survives a source or
-theme replacement belong to the root Viewer (`viewer/markdown_folding.mbt`).
+theme replacement belong to the root Viewer (`internal/viewer/markdown_viewer/markdown_viewer_folding.mbt`).

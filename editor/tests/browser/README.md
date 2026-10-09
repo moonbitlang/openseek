@@ -71,6 +71,19 @@ the `smoke/` and `component/` directories.
   invalidation, attachment counts, viewport behavior, and diagram rendering
   are covered by the five retained real-browser contracts. The browser fixture
   exposes only the source/theme/size/input controls those contracts need.
+- The `markdown-feedback` scenario mounts a public `MarkdownViewer` with the
+  host-owned feedback service. Native DOM selections inside emphasis, across
+  paragraphs, and in lists/tables/code/images are checked against persisted
+  source ranges and exact selected rendered text, including native cross-block
+  whitespace and image-only empty text. Source text is read independently to
+  verify the block mapping. Real mouse release opens the composer
+  directly without taking focus; keyboard shortcuts, draft retargeting,
+  dismissal, selection-direction positioning, and first-display sizing follow
+  the code feedback contract. It also verifies Add/Apply routing, keeps drafts
+  anchored to their original selected text while scrolling or reselecting, and
+  discards drafts after content changes or same-URI model replacement. Controls
+  only change fixture models and read host
+  feedback; tests do not provide mappings.
 - `smoke/viewer.spec.js` opens `README.md` and `src/literate.mbt.md` from the
   deterministic workspace fixture through the sidebar and native protocol.
   The host supplies unchanged URI-backed models; the Viewer alone selects
