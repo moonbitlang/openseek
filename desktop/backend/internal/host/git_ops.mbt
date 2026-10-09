@@ -1702,7 +1702,7 @@ async fn git_original_file_at(
   // its current file and Git baseline as different kinds of content.
   match @filekind.classify(content.binary()) {
     Utf8Text(text) => OriginalContent(text)
-    RasterImage(_) | Binary => BinaryOriginal
+    Pdf | Image(_) | UnknownBinary => BinaryOriginal
   }
 }
 

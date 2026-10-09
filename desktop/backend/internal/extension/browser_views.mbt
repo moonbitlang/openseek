@@ -121,13 +121,14 @@ impl Show for BrowserViewError with fn output(self, logger) {
   match self {
     WindowNotReady => logger.write_string("The desktop window is not ready")
     UnknownView(id) => logger.write_string("Unknown browser view \{id}")
-    BlockedURL(url) => logger.write_string("Blocked non-web page URL: \{url}")
+    BlockedURL(url) =>
+      logger.write_string("Blocked unsupported page URL: \{url}")
   }
 }
 
 ///|
-/// Browser views navigate to web pages only — never local files or the
-/// app's own scheme. Schemes are case-insensitive (RFC 3986), and the
+/// Browser views load web pages and file URLs. Schemes are
+/// case-insensitive (RFC 3986), and the
 /// frontend passes URLs as typed, so the check lowercases before matching.
 fn allowed_page_url(url : String) -> Bool {
   let lower = url.to_lower()
@@ -136,7 +137,7 @@ fn allowed_page_url(url : String) -> Bool {
   } else if lower.strip_prefix("http://") is Some(rest) {
     !rest.is_empty()
   } else {
-    false
+    @uri.is_file_url(url)
   }
 }
 
@@ -505,13 +506,16 @@ test "browser page theme bridge uses only opted-in theme conventions" {
 }
 
 ///|
-test "browser page urls are web-only" {
+test "browser page urls support web and local files" {
   assert_true(allowed_page_url("http://127.0.0.1:5173/"))
   assert_true(allowed_page_url("https://github.com/"))
   assert_true(allowed_page_url("HTTPS://Example.COM/x"))
   assert_true(allowed_page_url("HTTP://LOCALHOST:5173/"))
   assert_false(allowed_page_url("proton://app/"))
-  assert_false(allowed_page_url("file:///etc/passwd"))
+  assert_true(allowed_page_url("file:///tmp/index.html"))
+  assert_true(allowed_page_url("FILE:///tmp/report.pdf"))
+  assert_true(allowed_page_url("file:///tmp/image.png"))
+  assert_false(allowed_page_url("file://"))
   assert_false(allowed_page_url("javascript:alert(1)"))
   assert_false(allowed_page_url("about:blank"))
 }

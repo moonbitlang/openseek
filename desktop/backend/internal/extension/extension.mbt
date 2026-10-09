@@ -368,6 +368,9 @@ pub fn openseek_capability(
     WindowEndpoint(@commands.app_language_set, (_, payload) => {
       @host.write_ui_language(runtime_dir, payload)
     }),
+    WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
+      @host.open_path_preview(payload)
+    }),
     WindowEndpoint(@commands.host_connect, (context, _) => {
       // A reloaded page allocates browser ids from scratch; the previous
       // page's native views must not survive its attachment.
@@ -375,7 +378,7 @@ pub fn openseek_capability(
       bridge.connect(context)
     }),
     WindowEndpoint(@commands.shell_open_external, (_, payload) => {
-      open_external(payload)
+      open_external(payload, allow_file=true)
     }),
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)

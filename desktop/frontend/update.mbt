@@ -964,82 +964,6 @@ fn Model::active_relative_path(self : Model, path : String) -> @pathx.Relative? 
 }
 
 ///|
-/// Open (or refocus) the editor side-panel on `path`, revealing `range` when
-/// given — the shared tail of a composer chip's and a transcript chip's jump.
-/// Absolute links already name their document; relative chips are resolved
-/// against the current checkout before entering the dock and document table.
-fn open_editor_at(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  path : String,
-  range : @common.Range?,
-  file_link_generation? : Int,
-  annotation? : String,
-) -> (@cmd.Cmd, Model) {
-  // A transcript host reply already carries the token its click spent. Every
-  // direct mention, Quick Open, or location jump is a newer competing action.
-  let model = if file_link_generation is Some(_) {
-    model
-  } else {
-    model.begin_editor_navigation()
-  }
-  let ctx = file_ctx(model)
-  // Chip/transcript jumps call the file-editor package directly rather than
-  // passing through its guarded message dispatcher. Keep them parked too: the
-  // dock must not grow a loading tab, nor may a host read start, while checkout
-  // placement is unresolved or missing.
-  guard ctx.placement is Some(placement) && placement.is_ready() else {
-    return (@cmd.none, model)
-  }
-  let owner = ctx.owner
-  let femit = dispatch.map(msg => FileEditor(msg))
-  // Park/restore the strip for a conversation switch up front, and re-root
-  // the file subsystem when its cached tree belongs to another conversation;
-  // otherwise `sync_file_panel`'s post-dispatch pass would see a session
-  // mismatch and wipe the freshly opened tab below. A re-rooted document
-  // table is seeded from the restored strip (identities only), exactly like
-  // `@fileeditor.sync`'s own re-root.
-  let dock = @dock.sync(model.dock, owner)
-  let panel = model.file_panel.prepare_owner(owner, @dock.file_paths(dock))
-  let resource = match @resource.of_path(ctx.owner.channel, path) {
-    Some(resource) => Some(resource)
-    None =>
-      model
-      .active_relative_path(path)
-      .bind(relative => model.workspace_resource(relative))
-  }
-  guard resource is Some(resource) else { return (@cmd.none, model) }
-  let had_active = @dock.active_file(dock) is Some(_)
-  // An explicit open while the picker is the active tab fulfills it, the
-  // same as a pick from its tree.
-  let dock = if dock.active is Some(FilePicker) {
-    @dock.resolve_pick(dock, resource)
-  } else {
-    @dock.open_file(dock, resource)
-  }
-  let model = {
-    ..model,
-    dock,
-    file_panel: panel,
-    right_panel_open: true,
-    right_panel_menu_open: false,
-  }
-  // Owner preparation can advance the request epoch; read with the new one.
-  let ctx = file_ctx(model)
-  let (cmd, panel) = @fileeditor.open_file(
-    femit,
-    panel,
-    ctx,
-    resource,
-    file_link_generation?,
-    range~,
-    annotation?,
-    had_active~,
-  )
-  (cmd, { ..model, file_panel: panel, })
-}
-
-///|
 /// Run an accepted slash command against the active conversation and close the
 /// completion menu. The command text is cleared from the composer; an unknown
 /// id just dismisses the menu.
@@ -1979,7 +1903,7 @@ fn update(
   // here, no matter which semantic action opened or closed the panel.
   let panel_visibility_changed = model.right_panel_open !=
     previous.right_panel_open
-  // These messages call `open_editor_at` before this reconciliation. A valid
+  // Resolved replies call `show_editor_at` before this reconciliation. A valid
   // open already mounts the Viewer and either shows the cached document or
   // starts its generation-tagged read, including when the same TabLoading
   // document existed before the message. Activating it again here would start
@@ -2127,18 +2051,10 @@ fn update(
 }
 
 ///|
-/// Whether this root message calls `open_editor_at` synchronously. `OpenFile`
-/// is deliberately absent: it only begins a host lookup. `OpenFileAt` opens
-/// the panel later, after the host has classified the target as editable text.
+/// Only the resolved editor reply opens a document during this transition.
+/// Every file selection first asks the host to classify the path.
 fn Msg::opens_file_before_panel_reconciliation(self : Msg) -> Bool {
-  self
-  is (ComposerAction(@composer.MentionOpened(..))
-  | CodexComposerAction(@composer.MentionOpened(..))
-  | JumpToMention(_)
-  | JumpToLocation(..)
-  | QuickOpen(@quick_open.Pick(_))
-  | OpenFileAt(..)
-  | FileEditor(@fileeditor.SearchMatchSelected(..)))
+  self is OpenPathResolved(_, Editor(_))
 }
 
 ///|
@@ -2418,7 +2334,7 @@ fn update_msg(
           } else {
             target.range
           }
-          open_editor_at(
+          request_open_path(
             dispatch,
             model,
             target.file,
@@ -2773,12 +2689,13 @@ fn update_msg(
             } else {
               target.range
             }
-            open_editor_at(
+            request_open_path(
               dispatch,
               selected,
               target.file,
               range,
               annotation?=target.annotation,
+              return_to?=model.active_checkout().map(active => active.owner),
             )
           }
           (
@@ -2910,7 +2827,7 @@ fn update_msg(
       } else {
         target.range
       }
-      open_editor_at(
+      request_open_path(
         dispatch,
         model,
         target.file,
@@ -2919,7 +2836,7 @@ fn update_msg(
       )
     }
     JumpToLocation(path~, range~, annotation~) =>
-      open_editor_at(dispatch, model, path, range, annotation?)
+      request_open_path(dispatch, model, path, range, annotation?)
     TranscriptReviewChangesOpened(slot~, selection~) => {
       guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
         return (@cmd.none, model)
@@ -3130,7 +3047,7 @@ fn update_msg(
     // mention, and Quick Open navigation. An active picker is fulfilled in
     // place; an already-open file is activated.
     FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
-      open_editor_at(dispatch, model, path, Some(range))
+      request_open_path(dispatch, model, path, Some(range))
     SemanticSelectionMaterialized(owner~, submission_id~, artifact~) => {
       guard model.find_conversation(owner.channel, owner.session) is Some(conv) &&
         conv.pending_semantic_submission is Some(pending) &&
@@ -3251,40 +3168,9 @@ fn update_msg(
         }),
       )
     }
-    // Intercepted like the comment above: which dock tab a tree click opens
-    // is the strip's business. The dock opens (or re-activates) the tab,
-    // then the file subsystem loads and shows the document against the
-    // fresh projection.
-    FileEditor(FileSelected(path~, name~)) => {
-      let placement = file_ctx(model).placement
-      guard placement is Some(value) && value.is_ready() else {
-        return (@cmd.none, model)
-      }
-      guard model.workspace_resource(path) is Some(resource) else {
-        return (@cmd.none, model)
-      }
-      let model = model.begin_editor_navigation()
-      let had_active = @dock.active_file(model.dock) is Some(_)
-      // A pick made from the active FilePicker tab fulfills it: the picker
-      // is replaced in place (or the already-open tab activates and the
-      // picker closes). Any other tree click opens tabs as before.
-      let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, resource)
-      } else {
-        @dock.open_file(model.dock, resource)
-      }
-      let model = { ..model, dock, }
-      let (cmd, panel) = @fileeditor.open_document(
-        dispatch.map(msg => FileEditor(msg)),
-        model.file_panel,
-        file_ctx(model),
-        resource,
-        name~,
-        range=None,
-        had_active~,
-      )
-      (cmd, { ..model, file_panel: panel, })
-    }
+    // The host classifies tree selections before the dock opens their viewer.
+    FileEditor(FileSelected(path~, ..)) =>
+      request_open_path(dispatch, model, path.0, None)
     // A Changes row is the review action: open/activate the same ordinary file
     // tab, then let the file subsystem pair its working-tree document with the
     // row's HEAD path. Deleted rows have no working file but still use the
@@ -3301,7 +3187,7 @@ fn update_msg(
       let model = model.begin_editor_navigation()
       let had_active = @dock.active_file(model.dock) is Some(_)
       let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, resource)
+        @dock.resolve_pick(model.dock, File(path=resource))
       } else {
         @dock.open_file(model.dock, resource)
       }
@@ -3342,35 +3228,15 @@ fn update_msg(
       )
       (cmd, { ..model, file_panel: panel, })
     }
-    // Intercepted for the same reason: a navigation jump (go-to-definition,
-    // a reference pick) opens a dock tab before the document loads. The
-    // owner stamp rejects a reply that outlived a conversation switch.
+    // Definition/reference jumps share file routing. Their original owner
+    // stamp rejects a language reply that outlived a conversation switch.
     FileEditor(OpenNavigationLocation(owner~, path~, range~)) => {
       guard model.file_panel.owner is Some(panel_owner) &&
         panel_owner == owner &&
         file_ctx(model).owner == owner else {
         return (@cmd.none, model)
       }
-      let placement = file_ctx(model).placement
-      guard placement is Some(value) && value.is_ready() else {
-        return (@cmd.none, model)
-      }
-      guard model.workspace_resource(path) is Some(resource) else {
-        return (@cmd.none, model)
-      }
-      let model = model.begin_editor_navigation()
-      let had_active = @dock.active_file(model.dock) is Some(_)
-      let dock = @dock.open_file(model.dock, resource)
-      let model = { ..model, dock, }
-      let (cmd, panel) = @fileeditor.open_file(
-        dispatch.map(msg => FileEditor(msg)),
-        model.file_panel,
-        file_ctx(model),
-        resource,
-        range=Some(range),
-        had_active~,
-      )
-      (cmd, { ..model, file_panel: panel, })
+      request_open_path(dispatch, model, path.0, Some(range))
     }
     // Definition/References providers live inside the imperative Viewer, but
     // their host failures belong on the app's ordinary toast rail. Fence the
@@ -5253,35 +5119,7 @@ fn update_msg(
         )
       }
     }
-    OpenFile(path) => {
-      // A relative path is taken against the active conversation's projected
-      // checkout root. The reply names text files by absolute resource path;
-      // non-text paths may still use the system opener.
-      guard model.active_checkout() is Some(active) &&
-        active.placement is Some(placement) &&
-        placement.checkout_root() is Some(cwd) else {
-        return (@cmd.none, model)
-      }
-      // Spend the token before starting host work. This synchronously makes
-      // every older host reply and positioned read stale, even if this click
-      // ultimately opens a non-text path through the system instead.
-      let generation = model.file_panel.file_link_generation + 1
-      let model = {
-        ..model,
-        file_panel: { ..model.file_panel, file_link_generation: generation, },
-      }
-      (
-        open_file(
-          dispatch,
-          active.owner.channel,
-          active.owner.session,
-          generation,
-          cwd=Some(cwd),
-          path,
-        ),
-        model,
-      )
-    }
+    OpenFile(path) => request_open_path(dispatch, model, path, None)
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
@@ -5301,35 +5139,8 @@ fn update_msg(
         model,
       )
     }
-    OpenFileAt(owner~, generation~, path~, line~, column~) => {
-      guard model.active_checkout() is Some(active) &&
-        owner == active.owner &&
-        generation == model.file_panel.file_link_generation else {
-        return (@cmd.none, model)
-      }
-      let range = match line {
-        Some(line) => {
-          let column = column.unwrap_or(1)
-          Some(@common.Range(line, column, line, column))
-        }
-        None => None
-      }
-      open_editor_at(
-        dispatch,
-        model,
-        path,
-        range,
-        file_link_generation=generation,
-      )
-    }
-    OpenDirectoryAt(owner~, generation~, path~) => {
-      guard model.active_checkout() is Some(active) &&
-        owner == active.owner &&
-        generation == model.file_panel.file_link_generation else {
-        return (@cmd.none, model)
-      }
-      reveal_local_directory(dispatch, model, Relative(path))
-    }
+    OpenPathResolved(context, reply) =>
+      finish_open_path(dispatch, model, context, reply)
     ToggleGitDetails => {
       let opening = !model.git_details_open
       let model = { ..model, git_details_open: opening, }
@@ -6169,14 +5980,6 @@ fn update_msg(
       )
       (cmd, { ..model, export_dialog, })
     }
-    OpenFileFailed(owner~, generation~, message~) =>
-      if model.active_checkout() is Some(active) &&
-        owner == active.owner &&
-        generation == model.file_panel.file_link_generation {
-        model.notify_error(dispatch, message)
-      } else {
-        (@cmd.none, model)
-      }
     ExternalLinkClicked(url) =>
       // Web links open in the dock's Browser tabs by default — the
       // toolbar's open-external button hands the page to the system
@@ -12127,13 +11930,16 @@ test "a file-link host failure is visible only for the latest navigation" {
   let newer = model.begin_editor_navigation()
   let (_, stale) = update(
     dispatch,
-    OpenFileFailed(owner~, generation=0, message="old path failed"),
+    OpenPathResolved(FileOpenContext::new(owner, 0), Refused("old path failed")),
     newer,
   )
   inspect(stale.notifications.length(), content="0")
   let (_, current) = update(
     dispatch,
-    OpenFileFailed(owner~, generation=1, message="current path failed"),
+    OpenPathResolved(
+      FileOpenContext::new(owner, 1),
+      Refused("current path failed"),
+    ),
     newer,
   )
   inspect(current.notifications.length(), content="1")
@@ -12162,18 +11968,16 @@ test "a Codex file-link failure is fenced by the selected Codex task" {
   }
   let (_, hidden) = update(
     dispatch,
-    OpenFileFailed(
-      owner=hidden_openseek,
-      generation=1,
-      message="hidden OpenSeek failure",
+    OpenPathResolved(
+      FileOpenContext::new(hidden_openseek, 1),
+      Refused("hidden OpenSeek failure"),
     ),
     model,
   )
   inspect(hidden.notifications.length(), content="0")
-  let message = OpenFileFailed(
-    owner=codex_owner,
-    generation=1,
-    message="Codex path failed",
+  let message = OpenPathResolved(
+    FileOpenContext::new(codex_owner, 1),
+    Refused("Codex path failed"),
   )
   let (_, first) = update(dispatch, message, model)
   let (_, second) = update(dispatch, message, model)
@@ -17756,8 +17560,8 @@ test "only synchronous file-open messages suppress panel reactivation" {
     session: "desktop-test",
   }
   let identity : ComposerActionIdentity = { owner, archive_generation: 0, }
-  assert_true(JumpToMention(0).opens_file_before_panel_reconciliation())
-  assert_true(
+  assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
+  assert_false(
     ComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
@@ -17765,7 +17569,7 @@ test "only synchronous file-open messages suppress panel reactivation" {
       }),
     ).opens_file_before_panel_reconciliation(),
   )
-  assert_true(
+  assert_false(
     CodexComposerAction(
       @composer.MentionOpened(identity~, mention={
         ref_: File(path="a.mbt"),
@@ -17773,16 +17577,19 @@ test "only synchronous file-open messages suppress panel reactivation" {
       }),
     ).opens_file_before_panel_reconciliation(),
   )
-  assert_true(
+  assert_false(
     JumpToLocation(path="a.mbt", range=None, annotation=None).opens_file_before_panel_reconciliation(),
   )
-  assert_true(
+  assert_false(
     QuickOpen(@quick_open.Pick(0)).opens_file_before_panel_reconciliation(),
   )
   assert_true(
-    OpenFileAt(owner~, generation=1, path="a.mbt", line=Some(1), column=None).opens_file_before_panel_reconciliation(),
+    OpenPathResolved(
+      FileOpenContext::new(owner, 1),
+      Editor({ path: "a.mbt", line: Some(1), column: None, }),
+    ).opens_file_before_panel_reconciliation(),
   )
-  // This only starts the asynchronous host lookup. The later OpenFileAt is
+  // This only starts the asynchronous host lookup. The later OpenPathResolved is
   // the message that actually opens the document.
   assert_false(OpenFile("a.mbt").opens_file_before_panel_reconciliation())
   assert_false(ToggleRightPanel.opens_file_before_panel_reconciliation())
@@ -17800,11 +17607,45 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
     mentions: [mention],
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
+  assert_false(next.right_panel_open)
+  assert_true(next.dock.tabs.is_empty())
+  let next = next.test_resolve_editor("src/main.mbt")
   assert_true(next.right_panel_open)
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_eq(next.file_panel.file_link_generation, 1)
   // The document table follows the strip: the jumped-to file has an entry.
   assert_true(next.file_panel.docs.contains(model.test_file("src/main.mbt")))
+  let resource = model.test_file("pkg.generated.mbti")
+  let path = resource.path
+  for
+    (range, annotation) in [
+      (Some(@common.Range(5, 2, 8, 12)), None),
+      (None, Some("review note")),
+    ] {
+    let modes = Map([(resource, @fileeditor.MbtiDiagram)])
+    let base = {
+      ..next,
+      file_panel: { ..next.file_panel, mbti_view_modes: modes, },
+    }
+    let (_, pending) = update(
+      dispatch,
+      JumpToLocation(path~, range~, annotation~),
+      base,
+    )
+    let response = OpenPathResolved(
+      FileOpenContext::new(
+        file_ctx(pending).owner,
+        pending.file_panel.file_link_generation,
+        range?,
+        annotation?,
+      ),
+      Editor({ path, line: None, column: None, }),
+    )
+    let (_, opened) = update(dispatch, response, pending)
+    assert_true(
+      opened.file_panel.mbti_view_modes.get(resource) is Some(MbtiSource),
+    )
+  }
 }
 
 ///|
@@ -17818,12 +17659,9 @@ test "resolved transcript files and directories stay in the right panel" {
   let (_, file_pending) = update(dispatch, OpenFile("src/main.mbt"), model)
   let (_, file) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=1,
-      path="src/main.mbt",
-      line=None,
-      column=None,
+    OpenPathResolved(
+      FileOpenContext::new(owner, 1),
+      Editor({ path: "src/main.mbt", line: None, column: None, }),
     ),
     file_pending,
   )
@@ -17831,7 +17669,10 @@ test "resolved transcript files and directories stay in the right panel" {
   assert_true(file.active_workspace_file() is Some(Relative("src/main.mbt")))
 
   let (_, directory_pending) = update(dispatch, OpenFile("src"), model)
-  let directory_msg = OpenDirectoryAt(owner~, generation=1, path="src")
+  let directory_msg = OpenPathResolved(
+    FileOpenContext::new(owner, 1),
+    Directory({ path: "src", }),
+  )
   let (_, directory) = update(dispatch, directory_msg, directory_pending)
   assert_true(directory.right_panel_open)
   assert_true(directory.dock.active is Some(FilePicker))
@@ -17841,6 +17682,105 @@ test "resolved transcript files and directories stay in the right panel" {
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
+  let desktop = { ..model, is_desktop: true, }
+  let (_, pending) = update(dispatch, OpenFile("report.pdf"), desktop)
+  let browser_msg = OpenPathResolved(
+    FileOpenContext::new(owner, 1),
+    Browser("/work/project/report.pdf"),
+  )
+  let (_, browser) = update(dispatch, browser_msg, pending)
+  assert_true(browser.right_panel_open)
+  assert_true(@dock.active_browser(browser.dock) is Some(_))
+  assert_eq(browser.preview.pages.length(), 1)
+  let (_, reused) = update(dispatch, browser_msg, browser)
+  assert_eq(reused.preview.pages.length(), 1)
+  let (_, stale) = update(
+    dispatch,
+    OpenPathResolved(FileOpenContext::new(owner, 0), Browser("/tmp/stale.pdf")),
+    reused,
+  )
+  assert_eq(stale.preview.pages.length(), 1)
+  let (_, remote_console) = update(dispatch, browser_msg, {
+    ..pending,
+    is_desktop: false,
+  })
+  assert_eq(remote_console.preview.pages.length(), 0)
+  let (_, other_owner) = update(
+    dispatch,
+    OpenPathResolved(
+      FileOpenContext::new({ channel: Local, session: "other", }, 1),
+      Browser("/tmp/other.pdf"),
+    ),
+    pending,
+  )
+  assert_eq(other_owner.preview.pages.length(), 0)
+  // Tree picks are classified even without a PDF suffix, and fulfill the picker.
+  let (_, picker) = update(dispatch, ExplorerRequested(ExplorerFiles), desktop)
+  for name in ["report", "report.pdf", "report.txt"] {
+    let pick = FileEditor(FileSelected(path=Relative(name), name~))
+    let (_, pending) = update(dispatch, pick, picker)
+    let (_, repeated) = update(dispatch, pick, picker)
+    assert_eq(
+      pending.file_panel.file_link_generation,
+      repeated.file_panel.file_link_generation,
+    )
+    assert_true(pending.dock == picker.dock)
+    let response = OpenPathResolved(
+      FileOpenContext::new(owner, pending.file_panel.file_link_generation),
+      Browser("/work/project/" + name),
+    )
+    let (_, opened) = update(dispatch, response, pending)
+    let (_, replayed) = update(dispatch, response, pending)
+    assert_true(opened.dock == replayed.dock)
+    assert_false(opened.dock.tabs.contains(@dock.DockTab::FilePicker))
+    assert_eq(opened.dock.tabs.length(), 1)
+    assert_true(@dock.active_browser(opened.dock) is Some(_))
+  }
+  // A mention from another conversation parks its result under that owner.
+  let target_owner : @interop.ConversationKey = {
+    channel: Local,
+    session: "background",
+  }
+  let background = desktop.replace_conversation({
+    ..test_conversation(),
+    session_id: target_owner.session,
+  })
+  let mention_msg = ComposerAction(
+    @composer.MentionOpened(
+      identity={ owner: target_owner, archive_generation: 0, },
+      mention={ ref_: File(path="report"), range: None, },
+    ),
+  )
+  let (_, pending) = update(dispatch, mention_msg, background)
+  assert_eq(pending.active_session, background.active_session)
+  assert_eq(
+    pending.file_panel.file_link_generation,
+    background.file_panel.file_link_generation + 1,
+  )
+  let response = OpenPathResolved(
+    FileOpenContext::new(
+      target_owner,
+      pending.file_panel.file_link_generation,
+      return_to=owner,
+    ),
+    Browser("/work/project/report"),
+  )
+  let (_, parked) = update(dispatch, response, pending)
+  let (_, replayed) = update(dispatch, response, pending)
+  assert_eq(parked.active_session, background.active_session)
+  assert_true(parked.dock == replayed.dock)
+  assert_eq(parked.dock.owner, Some(owner))
+  assert_true(parked.dock.active is None)
+  assert_true(
+    parked.dock.remembered.get(target_owner)
+    is Some({ active: Some(Browser(..)), .. }),
+  )
+  let (_, obsolete) = update(
+    dispatch,
+    response,
+    pending.begin_editor_navigation(),
+  )
+  assert_eq(obsolete.preview.pages.length(), 0)
 }
 
 ///|
@@ -17908,12 +17848,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
   assert_eq(panel_closed.file_panel.file_link_generation, 3)
   let (_, after_closed_reply) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=2,
-      path="src/main.mbt",
-      line=Some(2738),
-      column=Some(17),
+    OpenPathResolved(
+      FileOpenContext::new(owner, 2),
+      Editor({ path: "src/main.mbt", line: Some(2738), column: Some(17), }),
     ),
     panel_closed,
   )
@@ -17934,12 +17871,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   let (_, after_opened_reply) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=2,
-      path="src/main.mbt",
-      line=Some(2738),
-      column=Some(17),
+    OpenPathResolved(
+      FileOpenContext::new(owner, 2),
+      Editor({ path: "src/main.mbt", line: Some(2738), column: Some(17), }),
     ),
     panel_opened,
   )
@@ -17952,22 +17886,16 @@ test "update is pure: a resolved transcript position opens its owning file" {
   // The first host reply is stale as soon as the second click happens.
   let (_, old_host_reply) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=1,
-      path="src/main.mbt",
-      line=Some(1),
-      column=None,
+    OpenPathResolved(
+      FileOpenContext::new(owner, 1),
+      Editor({ path: "src/main.mbt", line: Some(1), column: None, }),
     ),
     latest_pending,
   )
   assert_true(old_host_reply.dock.active is None)
-  let msg = OpenFileAt(
-    owner~,
-    generation=2,
-    path="src/main.mbt",
-    line=Some(2738),
-    column=Some(17),
+  let msg = OpenPathResolved(
+    FileOpenContext::new(owner, 2),
+    Editor({ path: "src/main.mbt", line: Some(2738), column: Some(17), }),
   )
   let (_, first) = update(dispatch, msg, latest_pending)
   let (_, second) = update(dispatch, msg, latest_pending)
@@ -17990,6 +17918,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     ),
     first,
   )
+  let ordinary_pending = ordinary_pending.test_resolve_editor("src/main.mbt")
   assert_eq(ordinary_pending.file_panel.file_link_generation, 3)
   let (_, ordinary_failed) = update(
     dispatch,
@@ -18123,6 +18052,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(FileSelected(path=Relative("README.md"), name="README.md")),
     current_file_reply,
   )
+  let other_file = other_file.test_resolve_editor("README.md")
   assert_true(other_file.active_workspace_file() is Some(Relative("README.md")))
   let (_, inactive_pending) = update(
     dispatch,
@@ -18144,12 +18074,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
   )
   let (_, after_inactive_reply) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=pending_generation,
-      path="src/main.mbt",
-      line=Some(40),
-      column=None,
+    OpenPathResolved(
+      FileOpenContext::new(owner, pending_generation),
+      Editor({ path: "src/main.mbt", line: Some(40), column: None, }),
     ),
     inactive_closed,
   )
@@ -18163,15 +18090,13 @@ test "update is pure: a resolved transcript position opens its owning file" {
     FileEditor(FileSelected(path=Relative("README.md"), name="README.md")),
     latest_pending,
   )
+  let tree_opened = tree_opened.test_resolve_editor("README.md")
   assert_eq(tree_opened.file_panel.file_link_generation, 3)
   let (_, delayed_transcript_reply) = update(
     dispatch,
-    OpenFileAt(
-      owner~,
-      generation=2,
-      path="src/main.mbt",
-      line=Some(2738),
-      column=Some(17),
+    OpenPathResolved(
+      FileOpenContext::new(owner, 2),
+      Editor({ path: "src/main.mbt", line: Some(2738), column: Some(17), }),
     ),
     tree_opened,
   )
@@ -18183,12 +18108,13 @@ test "update is pure: a resolved transcript position opens its owning file" {
   // A delayed reply from another conversation cannot open a tab here.
   let (_, stale) = update(
     dispatch,
-    OpenFileAt(
-      owner={ ..owner, session: "another-session", },
-      generation=2,
-      path="/work/project/src/main.mbt",
-      line=Some(1),
-      column=None,
+    OpenPathResolved(
+      FileOpenContext::new({ ..owner, session: "another-session", }, 2),
+      Editor({
+        path: "/work/project/src/main.mbt",
+        line: Some(1),
+        column: None,
+      }),
     ),
     latest_pending,
   )
@@ -18569,6 +18495,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
+  let next = next.test_resolve_editor("/work/project/src/main.mbt")
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   assert_false(next.file_panel.tree_open)
   assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
@@ -18598,6 +18525,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
+  let next = next.test_resolve_editor("/work/project/src/main.mbt")
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
   // Outside files share the same dock and document table, with no workspace
   // membership and no error.
@@ -18610,6 +18538,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ),
     model,
   )
+  let outside = outside.test_resolve_editor("/elsewhere/note.md")
   let external = @interop.ChannelId::Local.test_resource("/elsewhere/note.md")
   assert_true(@dock.active_file(outside.dock) == Some(external))
   assert_true(outside.file_panel.docs.contains(external))
@@ -20399,6 +20328,7 @@ test "a tree pick fulfills the active picker in place" {
     FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
     model,
   )
+  let model = model.test_resolve_editor("src/main.mbt")
   assert_true(
     model.dock.tabs ==
     [@dock.DockTab::File(path=model.test_file("src/main.mbt"))],
@@ -20948,6 +20878,7 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     edited,
   )
+  let selected = selected.test_resolve_editor(path.0)
   assert_true(selected.dock.tabs == [@dock.DockTab::File(path=file)])
   assert_true(@dock.active_file(selected.dock) == Some(file))
   assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
@@ -20973,6 +20904,7 @@ test "a Search result fulfills the picker while preserving Search beside the fil
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     picker,
   )
+  let reused = reused.test_resolve_editor(path.0)
   assert_true(reused.dock.tabs == [@dock.DockTab::File(path=file)])
   assert_true(@dock.active_file(reused.dock) == Some(file))
   assert_true(reused.file_panel.explorer_mode is ExplorerSearch)
@@ -20999,6 +20931,7 @@ test "narrow Search drill-down hides and restores the retained Explorer" {
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     edited,
   )
+  let drilled = drilled.test_resolve_editor(path.0)
   assert_true(drilled.file_panel.explorer_mode is ExplorerSearch)
   assert_false(drilled.file_panel.tree_open)
   let (_, restored) = update(
@@ -21025,6 +20958,7 @@ test "Search requests survive hidden Explorer Browser and panel states" {
     FileEditor(SearchMatchSelected(path=path.0, range~)),
     opened,
   )
+  let file = file.test_resolve_editor(path.0)
   let (_, edited) = update(
     dispatch,
     FileEditor(Search(@grep_search.QueryChanged("moon"))),
@@ -21682,4 +21616,18 @@ fn open_loaded_review_context(
       file_panel: opened.file_panel.with_review_context_reveal(selection),
     },
   )
+}
+
+///|
+fn Model::test_resolve_editor(self : Model, path : String) -> Model {
+  let owner = file_ctx(self).owner
+  let (_, model) = update(
+    test_dispatch(),
+    OpenPathResolved(
+      FileOpenContext::new(owner, self.file_panel.file_link_generation),
+      Editor({ path, line: None, column: None, }),
+    ),
+    self,
+  )
+  model
 }

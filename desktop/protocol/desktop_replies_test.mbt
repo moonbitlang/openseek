@@ -415,7 +415,7 @@ test "file reads use one absolute path and may return image bytes" {
 }
 
 ///|
-test "open-path replies distinguish system, editor, and directory targets" {
+test "open-path replies distinguish system, editor, browser, and directory targets" {
   let legacy : @protocol.OpenPathReply = @json.from_json({ "opened": true })
   @debug.assert_eq(legacy, Opened)
   let system : @protocol.OpenPathReply = Opened
@@ -430,12 +430,44 @@ test "open-path replies distinguish system, editor, and directory targets" {
     column: Some(17),
   })
   let directory : @protocol.OpenPathReply = Directory({ path: "src", })
-  let refused : @protocol.OpenPathReply = Refused(
+  let browser : @protocol.OpenPathReply = Browser("/work/index.html")
+  @debug.assert_eq(browser.to_json(), {
+    "opened": false,
+    "browser_target": { "path": "/work/index.html" },
+  })
+  let refusal : @protocol.OpenPathReply = Refused(
     "File does not exist: nope.mbt",
   )
-  for reply in [system, ordinary, positioned, directory, refused] {
+  for
+    reply in [
+      system,
+      ordinary,
+      positioned,
+      directory,
+      browser,
+      Browser("/tmp/中文 #100%.pdf"),
+      refusal,
+    ] {
     let decoded : @protocol.OpenPathReply = @json.from_json(reply.to_json())
     @debug.assert_eq(decoded, reply)
+  }
+  let invalid_targets : Array[Json] = [
+    null,
+    {},
+    { "path": null },
+    { "path": 42 },
+    { "path": "relative.html" },
+    { "path": "//remote/index.html" },
+  ]
+  for target in invalid_targets {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.OpenPathReply = @json.from_json({
+          "opened": false,
+          "browser_target": target,
+        })
+      }),
+    )
   }
 }
 
@@ -1868,6 +1900,46 @@ test "detached worktree replies omit branch and reject malformed branch values" 
           "path": "/repo/.worktrees/wt-1",
           "present": true,
         })
+      }),
+    )
+  }
+}
+
+///|
+test "browser payload requires typed fields and ignores unknown fields" {
+  for
+    url in [
+      "https://example.com/", "file:///tmp/index.html", "file:///tmp/a.pdf",
+    ] {
+    let payload : @protocol.BrowserOpenPayload = { id: 4, url, dark: false, }
+    let decoded : @protocol.BrowserOpenPayload = @json.from_json(
+      payload.to_json(),
+    )
+    assert_eq(decoded, payload)
+    let extra : @protocol.BrowserOpenPayload = @json.from_json({
+      "id": 4,
+      "url": url,
+      "dark": false,
+      "unknown": null,
+    })
+    assert_eq(extra, payload)
+  }
+  let invalid : Array[Json] = [
+    null,
+    { "id": 4, "dark": false },
+    { "id": 4, "url": null, "dark": false },
+    { "id": 4, "url": 42, "dark": false },
+    { "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": "4", "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": null, "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": 4, "url": "file:///tmp/a.pdf" },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": null },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": "false" },
+  ]
+  for json in invalid {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.BrowserOpenPayload = @json.from_json(json)
       }),
     )
   }

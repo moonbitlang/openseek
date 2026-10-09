@@ -193,6 +193,8 @@ pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let host_open_path : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
 
+pub let host_open_path_preview : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
+
 pub let host_reveal_path : Command[@protocol.OpenPathPayload, @protocol.RevealPathReply]
 
 pub let jobs_list : Command[@protocol.JobsListPayload, @protocol.JobsListReply]

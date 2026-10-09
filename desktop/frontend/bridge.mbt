@@ -1696,75 +1696,36 @@ fn open_codex_config(
 
 ///|
 /// Ask the host to route a transcript-referenced path. Viewer-sized UTF-8 text
-/// returns an absolute editor target, checkout-local directories
-/// return a Files-tree target, and other existing paths use the system default
+/// returns an absolute editor target, previewable documents on Desktop return
+/// a browser target, checkout-local directories return a Files-tree target,
+/// and other existing paths use the system default
 /// app. A relative path is taken against the conversation's working directory.
 /// Missing paths surface as errors; external text uses the same editor route.
 fn open_file(
   dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  session : String,
-  generation : Int,
-  cwd~ : @common.Uri?,
+  context : FileOpenContext,
+  cwd : @common.Uri,
   path : String,
+  preview_browser~ : Bool,
 ) -> @cmd.Cmd {
-  match cwd {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
-  }
+  let channel = context.owner.channel
+  guard @resource.belongs_to(cwd, channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.host_open_path, {
-        session,
-        cwd: cwd.map(resource => resource.path),
+      let command = if preview_browser && channel is Local {
+        @commands.host_open_path_preview
+      } else {
+        @commands.host_open_path
+      }
+      let reply = @interop.bridge_request(channel, command, {
+        session: context.owner.session,
+        cwd: Some(cwd.path),
         path,
       }) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              OpenFileFailed(
-                owner={ channel, session, },
-                generation~,
-                message=@interop.bridge_error_text(error),
-              ),
-            ),
-          )
-          return
-        }
+        error =>
+          @protocol.OpenPathReply::Refused(@interop.bridge_error_text(error))
       }
-      match reply {
-        Editor(target) =>
-          scheduler.add(
-            dispatch(
-              OpenFileAt(
-                owner={ channel, session, },
-                generation~,
-                path=target.path,
-                line=target.line,
-                column=target.column,
-              ),
-            ),
-          )
-        Directory(target) =>
-          scheduler.add(
-            dispatch(
-              OpenDirectoryAt(
-                owner={ channel, session, },
-                generation~,
-                path=target.path,
-              ),
-            ),
-          )
-        Refused(message) =>
-          scheduler.add(
-            dispatch(
-              OpenFileFailed(owner={ channel, session, }, generation~, message~),
-            ),
-          )
-        // The host already handed the path to the system opener.
-        Opened => ()
-      }
+      scheduler.add(dispatch(OpenPathResolved(context, reply)))
     })
     |> ignore
   })

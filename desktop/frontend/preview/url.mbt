@@ -54,11 +54,8 @@ pub fn host_of(url : String) -> String? {
 }
 
 ///|
-/// Whether the URL is a web page — the only thing a Browser tab's native
-/// view can host. Anything else (mailto:, file:, vscode:, …) belongs to the
-/// system's own handler. A bare scheme (`http://`) is not a page: the host
-/// rejects hostless URLs, and rejecting them here keeps the page state from
-/// committing a URL no view will ever load.
+/// Whether the URL is an HTTP(S) page with a host. Used to route web links
+/// into the dock; file clicks have their own editor/browser routing.
 pub fn is_web_url(url : String) -> Bool {
   host_of(url) is Some(host) && !host.is_empty()
 }
@@ -139,16 +136,16 @@ fn head_of(text : StringView) -> String {
 }
 
 ///|
-/// What the address bar's draft navigates to: an explicit http(s) URL as
-/// typed; a bare host (with an optional `:port` and path) gets a scheme
-/// prefixed — `http://` for loopback hosts, `https://` otherwise. Anything
-/// else (other schemes, spaces, empty, a hostless URL) is not navigable —
-/// the result must pass `is_web_url`, so a committed draft is always one
-/// the host will accept.
+/// Accept explicit HTTP(S) and file URLs. A bare host gets a scheme prefix:
+/// HTTP for loopback hosts, HTTPS otherwise. File URLs retain spaces and
+/// escaped characters for the native browser to parse.
 pub fn normalize_url(input : String) -> String? {
   let trimmed = input.trim().to_owned()
   if trimmed.is_empty() {
     return None
+  }
+  if @uri.is_file_url(trimmed) {
+    return Some(trimmed)
   }
   if trimmed.contains_any(chars=" \t") {
     return None

@@ -237,12 +237,14 @@ pub(all) struct BrowserOpenPayload {
   id : Int
   url : String
   dark : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserOpenPayload::equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserOpenPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::to_json(Self) -> Json
 pub fn BrowserOpenPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserOpenPayload
+pub impl @json.FromJson for BrowserOpenPayload
 
 pub(all) struct BrowserThemePayload {
   id : Int
@@ -2173,6 +2175,7 @@ pub fn OpenPathPayload::to_repr(Self) -> @debug.Repr
 pub(all) enum OpenPathReply {
   Opened
   Editor(OpenPathEditorTarget)
+  Browser(String)
   Directory(OpenPathDirectoryTarget)
   Refused(String)
 } derive(Eq, @debug.Debug)

@@ -108,7 +108,14 @@ pub fn toolbar_view(
     ),
     @html.button(
       class="browser-nav-button",
-      title=ui(locale, OpenBrowser),
+      title=ui(
+        locale,
+        if page.url is Some(url) && @uri.is_file_url(url) {
+          OpenApplication
+        } else {
+          OpenBrowser
+        },
+      ),
       on_click=actions.open_external,
       icon(icon_link_external),
     ),

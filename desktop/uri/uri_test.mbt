@@ -72,3 +72,25 @@ test "pure component encoding and decoding round trip Unicode and ASCII" {
     assert_eq(@uri.decode_component(@uri.encode_component(text)), text)
   }
 }
+
+///|
+test "local file URLs preserve path separators and escape filename syntax" {
+  assert_eq(
+    @uri.file_url("/tmp/中文 #?%.pdf"),
+    "file:///tmp/%E4%B8%AD%E6%96%87%20%23%3F%25.pdf",
+  )
+  assert_eq(
+    @uri.file_url("/C:/Users/Test/document.pdf"),
+    "file:///C:/Users/Test/document.pdf",
+  )
+}
+
+///|
+test "file URL recognition is independent of file type" {
+  assert_true(@uri.is_file_url("file:///tmp/index.html"))
+  assert_true(@uri.is_file_url("FILE:///tmp/report.pdf"))
+  assert_true(@uri.is_file_url("file://server/share/image.png"))
+  assert_false(@uri.is_file_url("file://"))
+  assert_false(@uri.is_file_url("file:relative.html"))
+  assert_false(@uri.is_file_url("https://example.com/file://index.html"))
+}

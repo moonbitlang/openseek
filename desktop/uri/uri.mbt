@@ -35,3 +35,22 @@ pub fn decode_component(text : StringView) -> String {
 pub fn decode(text : StringView) -> String {
   @percent.decode_lossy(text)
 }
+
+///|
+/// Encode an absolute URI path as a local file URL. Encode each segment so
+/// spaces, Unicode, percent signs and fragment/query characters stay in the filename.
+pub fn file_url(path : String) -> String {
+  "file://" +
+  path
+  .split("/")
+  .map(segment => encode_component(segment).replace(old="%3A", new=":"))
+  .collect()
+  .join("/")
+}
+
+///|
+/// Recognize an explicit, nonempty file URL without imposing a file-type
+/// policy. The browser or system opener performs the full URL parsing.
+pub fn is_file_url(url : String) -> Bool {
+  url.to_lower().strip_prefix("file://") is Some(rest) && !rest.is_empty()
+}

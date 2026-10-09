@@ -99,21 +99,20 @@ pub fn open_workflows(state : State) -> State {
 
 ///|
 /// A file was picked while the picker tab is in the strip: the picker is
-/// replaced in place by that file's tab — unless the file is already open,
+/// replaced in place by the selected tab — unless the tab is already open,
 /// in which case its existing tab activates and the picker closes. Without
-/// a picker this is a plain `open_file`.
-pub fn resolve_pick(state : State, path : @common.Uri) -> State {
+/// a picker this is a plain tab open.
+pub fn resolve_pick(state : State, tab : DockTab) -> State {
   guard tab_index(state, FilePicker) is Some(picker_index) else {
-    return open_file(state, path)
+    return open_tab(state, tab)
   }
-  let file = DockTab::File(path~)
-  if tab_index(state, file) is Some(_) {
+  if tab_index(state, tab) is Some(_) {
     let tabs = state.tabs.filter(entry => !(entry is FilePicker))
-    { ..state, tabs, active: Some(file), }
+    { ..state, tabs, active: Some(tab), }
   } else {
     let tabs = state.tabs.copy()
-    tabs[picker_index] = file
-    { ..state, tabs, active: Some(file), }
+    tabs[picker_index] = tab
+    { ..state, tabs, active: Some(tab), }
   }
 }
 

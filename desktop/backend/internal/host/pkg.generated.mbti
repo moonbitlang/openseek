@@ -25,6 +25,8 @@ pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, 
 
 pub async fn open_codex_config(@pathx.Path?) -> Unit
 
+pub async fn open_path_preview(@protocol.OpenPathPayload) -> @protocol.OpenPathReply
+
 pub async fn prepared_runtime_dir(String) -> @pathx.Path?
 
 pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts

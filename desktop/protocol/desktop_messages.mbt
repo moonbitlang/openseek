@@ -965,7 +965,24 @@ pub(all) struct BrowserOpenPayload {
   id : Int
   url : String
   dark : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for BrowserOpenPayload with fn to_json(self) {
+  { "id": self.id, "url": self.url, "dark": self.dark }
+}
+
+///|
+pub impl FromJson for BrowserOpenPayload with fn from_json(json, path) {
+  guard json is { "id": id, "url": url, "dark": dark, .. } else {
+    raise JsonDecodeError((path, "expected browser id, URL and theme"))
+  }
+  {
+    id: @json.from_json(id, path=path.add_key("id")),
+    url: @json.from_json(url, path=path.add_key("url")),
+    dark: @json.from_json(dark, path=path.add_key("dark")),
+  }
+}
 
 ///|
 pub(all) struct BrowserIdPayload {

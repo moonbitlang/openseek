@@ -1,5 +1,5 @@
-// Opening a transcript-referenced path: viewer-sized UTF-8 files on the
-// filesystem go to the built-in editor, checkout-local directories
+// Opening a file reference: viewer-sized text goes to the editor, PDFs and
+// raster images can use the native browser, and checkout-local directories
 // go to its Files tree, and other existing paths go to the platform opener.
 // Position suffixes apply only to built-in text files.
 
@@ -47,7 +47,10 @@ async fn resolve_host_reference(
 /// Refusals travel inside the reply as `Refused(message)` rather than as a
 /// raised error: the local bridge flattens a raise to the generic
 /// "op ext:openseek/host.open_path failed" and hides the reason.
-async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
+async fn open_path_op(
+  payload : OpenPathPayload,
+  preview_browser? : Bool = false,
+) -> OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
     Err(message) => return refusal(message)
@@ -63,8 +66,16 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     }
     return Editor({ path: resource, line, column, })
   }
-  guard resolution is SystemPath(system_path) else {
-    return refusal("Could not resolve path")
+  let system_path = match resolution {
+    BrowserPath(path) if preview_browser => {
+      guard @pathx.Path(path).to_absolute() is Some(absolute) &&
+        absolute.to_uri_path() is Some(resource) else {
+        return refusal("Invalid absolute file path: \{path}")
+      }
+      return Browser(resource)
+    }
+    BrowserPath(path) | SystemPath(path) => path
+    _ => return refusal("Could not resolve path")
   }
   // A literal directory inside this conversation belongs to the built-in Files
   // tree, except for macOS application bundles, which belong to LaunchServices.
@@ -111,7 +122,7 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
   }
   let path = match reference.resolution {
     EditorPath(path~, ..) => path
-    SystemPath(path) => path
+    BrowserPath(path) | SystemPath(path) => path
     MissingPath(path) => return RevealRefused("File does not exist: \{path}")
   }
   let code = @platform.reveal_path(path) catch {
@@ -250,6 +261,40 @@ async test "open_path returns workspace editor positions without a system open" 
     path: "src",
   })
   assert_eq(directory_reply, Directory({ path: "src", }))
+  // All UI entry points share the same content-based routing response.
+  let pdf = "\{dir}/report"
+  @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "report", },
+      preview_browser=true,
+    ),
+    Browser("\{cwd}/report"),
+  )
+  @fs.write_file(
+    "\{dir}/notes.pdf",
+    "ordinary text",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "notes.pdf", },
+      preview_browser=true,
+    ),
+    Editor({ path: "\{cwd}/notes.pdf", line: None, column: None, }),
+  )
+  @fs.write_file(
+    "\{dir}/picture",
+    b"\x89PNG\x0d\x0a\x1a\x0a",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "picture", },
+      preview_browser=true,
+    ),
+    Browser("\{cwd}/picture"),
+  )
 }
 
 ///|
@@ -383,4 +428,13 @@ pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
     error => raise HostError("Could not open \{config}: \{error}")
   }
   guard code == 0 else { raise HostError("Could not open \{config}") }
+}
+
+///|
+/// Route a local desktop file click, including targets for the native browser.
+/// Bound only on the window so a remote path cannot become a local file URL.
+pub async fn open_path_preview(
+  payload : @protocol.OpenPathPayload,
+) -> @protocol.OpenPathReply {
+  open_path_op(payload, preview_browser=true)
 }

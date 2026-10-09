@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/uri",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/icons",
