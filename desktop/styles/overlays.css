@@ -87,6 +87,14 @@
 }
 .selection-actions > .action-menu-item {
   width: auto;
+  justify-content: center;
+  padding: 5px 12px;
+}
+.selection-actions-separator {
+  align-self: center;
+  width: 1px;
+  height: 16px;
+  background: var(--color-border);
 }
 .selection-actions.replying {
   flex-direction: column;
@@ -777,4 +785,3 @@ dialog.workspace-settings-dialog {
 .quick-open-kind.codicon-symbol-misc::before {
   content: "\eb63";
 }
-
