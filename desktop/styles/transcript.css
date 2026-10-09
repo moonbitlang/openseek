@@ -1657,7 +1657,8 @@
 
 /* Minimal mode: neutral activity descriptions, with native disclosures for
    keyboard access and browser-owned expansion state. Tool bodies contain only
-   captions; parameters and output never enter this subtree. */
+   captions, edit previews and collapsible images; parameters and text output
+   never enter this subtree. */
 /* The outer grid already separates each message group from the next user. */
 .minimal-messages + .msg.user {
   margin-top: 0;
@@ -1803,7 +1804,22 @@
   grid-column: 1 / -1;
   min-width: 0;
 }
+.minimal-call > .minimal-image-call {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.minimal-image-body {
+  margin-top: var(--minimal-row-gap);
+  padding-left: 22px;
+}
+.minimal-image-body > .user-images {
+  margin-top: 0;
+}
+.minimal-image-body > .user-images + .user-images {
+  margin-top: 8px;
+}
 .minimal-call.failed,
+.minimal-call.failed .minimal-activity-summary,
 .minimal-note.transcript-error-message {
   color: var(--color-danger);
 }
@@ -1828,6 +1844,7 @@
 }
 .minimal-tools[open] > .minimal-activity-summary > .minimal-chevron,
 .minimal-process[open] > .minimal-activity-summary > .minimal-chevron,
+.minimal-image-call[open] > .minimal-activity-summary > .minimal-chevron,
 .minimal-context-summary[open] > .minimal-activity-summary > .minimal-chevron {
   transform: rotate(0deg);
 }

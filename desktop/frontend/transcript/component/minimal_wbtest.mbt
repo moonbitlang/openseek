@@ -224,6 +224,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
   let read : MinimalCall = {
     tool_name: "read",
     changes: None,
+    image_urls: [],
     category: Some("Read files"),
     caption: "Read project files",
     status: Pending,
@@ -231,6 +232,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
   let script : MinimalCall = {
     tool_name: "mbtx",
     changes: None,
+    image_urls: [],
     category: Some("Execute mbtx scripts"),
     caption: "Check project details",
     status: Pending,
@@ -277,6 +279,7 @@ test "completed turn summaries show the first three captions and track failure s
   let pending : MinimalCall = {
     tool_name: "read",
     changes: None,
+    image_urls: [],
     category: Some("Read files"),
     caption: "Read project files",
     status: Pending,
@@ -347,6 +350,7 @@ test "background notices do not count as failed tools or replace pending descrip
   let call : MinimalCall = {
     tool_name: "job_wait",
     changes: None,
+    image_urls: [],
     category: None,
     caption: "Inspect the background task output",
     status: Pending,

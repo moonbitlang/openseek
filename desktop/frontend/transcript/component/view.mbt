@@ -865,13 +865,18 @@ fn shell_command_view(
 }
 
 ///|
+fn supported_image_content_url(url : String) -> Bool {
+  url.has_prefix("data:image/png;base64,") ||
+  url.has_prefix("data:image/jpeg;base64,") ||
+  url.has_prefix("data:image/webp;base64,") ||
+  url.has_prefix("data:image/gif;base64,") ||
+  url.has_prefix("https://") ||
+  url.has_prefix("http://")
+}
+
+///|
 fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
-  if url.has_prefix("data:image/png;base64,") ||
-    url.has_prefix("data:image/jpeg;base64,") ||
-    url.has_prefix("data:image/webp;base64,") ||
-    url.has_prefix("data:image/gif;base64,") ||
-    url.has_prefix("https://") ||
-    url.has_prefix("http://") {
+  if supported_image_content_url(url) {
     @html.div(class="user-images", [
       @html.img(
         src=url,

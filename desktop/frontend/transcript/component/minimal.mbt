@@ -1,12 +1,14 @@
 ///|
-/// A minimal call retains presentation text and derived edit previews, never
-/// raw parameters or output. Categories describe the operation, not its success.
+/// A minimal call retains presentation text, image URLs and derived edit
+/// previews, never raw parameters or text output. Categories describe the
+/// operation, not its success.
 priv struct MinimalCall {
   tool_name : String
   category : String?
   caption : String
   status : ToolStatus
   changes : EditChanges?
+  image_urls : Array[String]
 } derive(Eq)
 
 ///|
@@ -26,7 +28,7 @@ fn MinimalCall::from_tool(
     "mbtx" => Some(ui(locale, ExecuteMbtx))
     "shell" => Some(ui(locale, ExecuteCommands))
     "web_search" | "webSearch" => Some(ui(locale, SearchWeb))
-    "imageView" => Some(ui(locale, ViewImages))
+    "read_image" | "imageView" => Some(ui(locale, ViewImages))
     "imageGeneration" => Some(ui(locale, GenerateImages))
     "enteredReviewMode" | "exitedReviewMode" => Some(ui(locale, ReviewCode))
     "review" | "spawn_agent" => Some(ui(locale, CreateSubagents))
@@ -90,7 +92,15 @@ fn MinimalCall::from_tool(
   } else {
     None
   }
-  { tool_name: call.name, category, caption, status, changes, }
+  let image_urls : Array[String] = []
+  if call.outcome is Done(content~, ..) {
+    for part in content.0 {
+      if part is ImageUrl(url~) && supported_image_content_url(url) {
+        image_urls.push(url)
+      }
+    }
+  }
+  { tool_name: call.name, category, caption, status, changes, image_urls, }
 }
 
 ///|
@@ -106,7 +116,7 @@ fn MinimalCall::icon(self : MinimalCall) -> @html.Html {
     "mbtx" => @icons.icon_terminal()
     "shell" => @icons.icon_terminal()
     "web_search" | "webSearch" => @icons.icon_search()
-    "imageView" => @icons.icon_file_media()
+    "read_image" | "imageView" => @icons.icon_file_media()
     "imageGeneration" => @icons.icon_sparkle()
     "enteredReviewMode" | "exitedReviewMode" | "submit_review" =>
       @icons.icon_search()
@@ -620,7 +630,40 @@ fn MinimalActivity::render(
           @html.span(class="minimal-note-text", text),
         ],
       )
-    Call(call) =>
+    Call(call) => {
+      let heading : Array[@html.Html] = [
+        @html.span(
+          class="minimal-tool-icon",
+          attrs=@html.Attrs::build().aria_hidden("true").title(call.tool_name),
+          call.icon(),
+        ),
+        @html.span(
+          class=if call.image_urls.is_empty() {
+            "minimal-call-caption"
+          } else {
+            "minimal-call-caption minimal-summary-text"
+          },
+          title=call.caption,
+          call.caption,
+        ),
+        if call.image_urls.is_empty() {
+          @html.nothing
+        } else {
+          @html.span(
+            class="minimal-chevron",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            @icons.icon(@icons.icon_chevron_down),
+          )
+        },
+        if single {
+          MinimalToolStatus::from_activities([self]).view(locale~)
+        } else if call.status is (Succeeded | Snapshot) {
+          // Expanded calls follow the same quiet-success rule as summaries.
+          @html.nothing
+        } else {
+          call.status.view(locale~)
+        },
+      ]
       @html.div(
         class=if single {
           if call.status is Failed {
@@ -634,23 +677,18 @@ fn MinimalActivity::render(
           "minimal-call"
         },
         [
-          @html.span(
-            class="minimal-tool-icon",
-            attrs=@html.Attrs::build().aria_hidden("true").title(call.tool_name),
-            call.icon(),
-          ),
-          @html.span(
-            class="minimal-call-caption",
-            title=call.caption,
-            call.caption,
-          ),
-          if single {
-            MinimalToolStatus::from_activities([self]).view(locale~)
-          } else if call.status is (Succeeded | Snapshot) {
-            // Expanded calls follow the same quiet-success rule as summaries.
-            @html.nothing
+          ..if call.image_urls.is_empty() {
+            heading
           } else {
-            call.status.view(locale~)
+            [
+              @html.details(class="minimal-image-call", open=true, [
+                @html.summary(class="minimal-activity-summary", heading),
+                @html.div(
+                  class="minimal-image-body",
+                  call.image_urls.map(url => image_content_view(locale~, url)),
+                ),
+              ]),
+            ]
           },
           if call.changes is Some(changes) {
             @html.div(
@@ -665,6 +703,7 @@ fn MinimalActivity::render(
           },
         ],
       )
+    }
   }
 }
 
