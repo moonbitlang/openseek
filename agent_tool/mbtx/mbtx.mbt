@@ -119,7 +119,6 @@ pub fn definition(
   workspace_root~ : String,
   read_only? : Bool = false,
   file_state? : @agent_tool.FileStateMap = FileStateMap(),
-  write_scope? : @write_scope.WriteScope,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -159,7 +158,6 @@ pub fn definition(
       ),
     ),
     execute=Async(arguments => {
-      let saved : Ref[String?] = Ref(None)
       let input = @decode.decode(arguments) catch {
         error =>
           return @agent_tool.respond(
@@ -179,8 +177,6 @@ pub fn definition(
           input,
           read_only~,
           file_state~,
-          write_scope?,
-          saved~,
           bg_runtime?,
           job_dir?,
           scratch_dir?,
@@ -224,24 +220,6 @@ pub fn definition(
         }
       } else {
         run(None)
-      }
-      let action = match (saved.val, action) {
-        (Some(filename), Respond(output)) => {
-          // The hint carries `ptc` whenever PTC ran or was explicitly declined,
-          // so the re-run lands in the same mode; a defaulted-off run omits it.
-          let retry : Map[String, Json] = { "filename": filename.to_json() }
-          if enabled || input.ptc is Some(false) {
-            retry["ptc"] = enabled.to_json()
-          }
-          @agent_tool.respond(
-            "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",
-            images=output.images,
-            is_error=output.is_error,
-            brief?=output.brief,
-            data?=output.data,
-          )
-        }
-        _ => action
       }
       described(action, input.description)
     }),
@@ -314,8 +292,6 @@ async fn execute(
   input : @decode.MbtxInput,
   read_only~ : Bool,
   file_state~ : @agent_tool.FileStateMap,
-  write_scope? : @write_scope.WriteScope,
-  saved~ : Ref[String?],
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
@@ -344,40 +320,6 @@ async fn execute(
   // A saved script has the same isolation and execution path as inline code.
   let (source, source_name, script_path) = match input.program {
     Source(source) => (source, "source", None)
-    Save(source, filename) => {
-      if worker_sandbox is Some(_) && write_scope is None {
-        return @agent_tool.respond(
-          "error: mbtx cannot save without the worker write scope; use the write tool first",
-          is_error=true,
-        )
-      }
-      file_state.with_access(() => {
-        save_script(
-          workspace_root,
-          filename,
-          source,
-          read_only~,
-          file_state~,
-          write_scope?,
-          scratch_dir?,
-        )
-      }) catch {
-        error =>
-          return @agent_tool.respond(
-            "error: mbtx could not save \{filename}: \{@tool_error.failure_message("\{error}")}",
-            is_error=true,
-          )
-      }
-      saved.val = Some(filename)
-      // The same resolution `save_script` used; a script that could be saved
-      // resolves, so a failure here only costs the cache its dedicated dir.
-      let path = try resolve_filename(workspace_root, filename) catch {
-        _ => None
-      } noraise {
-        path => Some(path)
-      }
-      (source, filename, path)
-    }
     File(filename) => {
       let bundled = bundled_source(filename) catch {
         error =>
@@ -401,7 +343,7 @@ async fn execute(
         let source = read_script_snapshot(file_state, path) catch {
           error =>
             return @agent_tool.respond(
-              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. To save a new script, pass source and filename together; or run inline with source only. Paths resolve from the workspace, independently of cwd.",
+              "error: mbtx could not read filename \{filename}: \{error} filename alone must name an existing readable script. Create the script with the write tool first, or run inline with source only. Paths resolve from the workspace, independently of cwd.",
               is_error=true,
             )
         }
@@ -1666,7 +1608,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             "source",
             Json({
               "type": "string",
-              "description": "Complete .mbtx program. Alone: run inline. With a workspace filename: save and run, then reuse filename-only calls. Cannot accompany a namespaced filename. Different existing content is never overwritten.",
+              "description": "Complete .mbtx program to run inline without saving. Mutually exclusive with filename.",
             }),
           ),
           (
@@ -1674,7 +1616,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
             {
               "type": "string",
               "minLength": 1,
-              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Alone: read and run. With source: save and run inside the workspace or configured scratch directory, refusing to overwrite different content. Namespaced scripts are read-only; omit source for them. cwd controls execution only.",
+              "description": "Script path. Ordinary paths resolve from the workspace root; @builtin/check.mbtx runs the workflow built into OpenSeek (source readable under <bundled-resources>/workflow/). Read and run an existing script. Mutually exclusive with source. Create or modify reusable scripts with write or edit first. cwd controls execution only.",
             },
           ),
           (
@@ -1683,7 +1625,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
               "type": "array",
               "items": { "type": "string" },
               "default": [],
-              "description": "Script arguments, defaulting to []. Passed verbatim after the runner's -- separator. Import moonbitlang/core/env and read @env.args()[1:] to skip the executable name. Works with source, filename, or both.",
+              "description": "Script arguments, defaulting to []. Passed verbatim after the runner's -- separator. Import moonbitlang/core/env and read @env.args()[1:] to skip the executable name. Works with either source or filename.",
             },
           ),
           (
@@ -1843,21 +1785,13 @@ fn description(
     #|scripting surface: there is no shell tool, so commands, IO, and computation
     #|happen inside the submitted MoonBit program.
     #|
-    #|Every call requires a short description and at least one of source or
-    #|filename. There are three valid ways to supply the program:
-    #|- source + filename: save the source to that writable filename and run it.
-    #|  Use both together when creating a script you want to inspect or run again.
-    #|- source without filename: run a one-off inline program without saving it.
-    #|- filename without source: run a script that already exists.
-    #|Omit unused fields entirely; do not send null.
-    #|
-    #|For example, create and run a reusable script with
-    #|`{"description":"Save and run a greeting","source":"fn main { println(42) }","filename":"scripts/greet.mbtx"}`.
-    #|Run it again with `{"description":"Run the saved greeting","filename":"scripts/greet.mbtx"}`.
-    #|A filename-only call cannot create a script. Missing parent directories are
-    #|created. Identical existing content is reused; different content is never
-    #|overwritten. Use the edit tool to change a saved script. Saving is limited
-    #|to the writable workspace or configured scratch directory and is unavailable in read-only mode.
+    #|Every call requires a short description and exactly one of source or filename:
+    #|- source: run a one-shot inline program without saving it.
+    #|- filename: read and run an existing script.
+    #|The fields are mutually exclusive. Omit unused fields entirely; do not send null.
+    #|For reusable scripts, create them with write and modify them with edit in
+    #|session scratch or the workspace, then call mbtx with filename.
+    #|For example: `{"description":"Run checks","filename":"scripts/check.mbtx"}`.
     #|Pass `args` (an array of strings, default `[]`) to parameterize any script:
     #|`{"description":"Run saved checks","filename":"scripts/check.mbtx","args":["--deny-warn"]}`.
     #|The script runs on wasm. Import "moonbitlang/core/env" and read

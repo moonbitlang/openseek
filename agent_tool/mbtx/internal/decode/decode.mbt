@@ -1,9 +1,8 @@
 ///|
-/// Inline code, an existing script, or code to save before running.
+/// Inline code or an existing script.
 pub enum Program {
   Source(String)
   File(String)
-  Save(String, String)
 } derive(Debug)
 
 ///|
@@ -55,8 +54,8 @@ fn valid_target(target : String) -> Bool {
 }
 
 ///|
-/// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
-/// is required; both means save and run a writable script. `source` is a string
+/// Decode `mbtx` tool-call arguments. Exactly one of `source` and `filename`
+/// is required; they are mutually exclusive. `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
 /// then the program including its own `main`). `target` is an optional backend
 /// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
@@ -76,22 +75,9 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
   match arguments {
     Object(fields) => {
       let program = match (fields.get("source"), fields.get("filename")) {
-        (Some(String(source)), Some(String(filename))) => {
-          guard !filename.is_blank() else {
-            fail(
-              "arguments.filename to be a nonblank filesystem path when saving source",
-            )
-          }
-          guard !filename.has_prefix("@") else {
-            fail(
-              "a filesystem path when source is supplied. Namespaced scripts are read-only: call {\"filename\":\"@builtin/check.mbtx\"} without source, or save your custom source as {\"source\":\"...\",\"filename\":\"check.mbtx\"}",
-            )
-          }
-          Save(source, filename)
-        }
         (Some(_), Some(_)) =>
           fail(
-            "source and filename to both be strings for save-and-run. Omit unused fields entirely instead of sending null",
+            "exactly one of source or filename; they are mutually exclusive. Use write or edit to prepare a reusable script, then pass filename only",
           )
         (Some(String(source)), None) => Source(source)
         (None, Some(String(filename))) => {
@@ -104,7 +90,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         }
         (None, None) =>
           fail(
-            "source or filename. Use {\"source\":\"fn main { println(42) }\"} for inline code, {\"filename\":\"./check.mbtx\"} for an existing script, or both strings to save and run. Omit unused fields entirely; do not send null",
+            "source or filename. Use {\"source\":\"fn main { println(42) }\"} for inline code, {\"filename\":\"./check.mbtx\"} for an existing script, but not both. Omit unused fields entirely; do not send null",
           )
         (Some(_), None) =>
           fail(

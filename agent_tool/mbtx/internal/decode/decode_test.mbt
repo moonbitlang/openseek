@@ -91,27 +91,21 @@ test "decode rejects malformed arguments" {
 }
 
 ///|
-test "decode rejects saving to a namespace with retry guidance" {
-  try
-    @decode.decode({ "source": "fn main {}", "filename": "@builtin/check.mbtx" })
-  catch {
-    error => {
-      let message = error.to_string()
-      assert_true(message.contains("Namespaced scripts are read-only"))
-      assert_true(message.contains("without source"))
-      assert_true(message.contains("@builtin/check.mbtx"))
+test "decode rejects both program fields with retry guidance" {
+  for filename in ["check.mbtx", "@builtin/check.mbtx"] {
+    try @decode.decode({ "source": "fn main {}", "filename": filename }) catch {
+      error => {
+        assert_true(error.to_string().contains("mutually exclusive"))
+        assert_true(error.to_string().contains("write or edit"))
+      }
+    } noraise {
+      _ => fail("both program fields must be rejected")
     }
-  } noraise {
-    _ => fail("expected namespace write to be rejected")
   }
 }
 
 ///|
 test "decode accepts filename with unchanged execution options" {
-  assert_true(
-    @decode.decode({ "source": "fn main {}", "filename": "check.mbtx" }).program
-    is Save("fn main {}", "check.mbtx"),
-  )
   let input = @decode.decode({
     "filename": "scripts/check.mbtx",
     "cwd": "sub",

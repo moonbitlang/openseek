@@ -6,7 +6,6 @@ test "script args default to empty and preserve string values" {
     program in [
       Json({ "source": "fn main {}" }),
       Json({ "filename": "check.mbtx" }),
-      Json({ "source": "fn main {}", "filename": "check.mbtx" }),
     ] {
     guard program is Object(fields) else { fail("expected object") }
     fields["args"] = ["--flag", "two words", "", "你好", "$(echo nope)"]

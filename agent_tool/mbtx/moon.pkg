@@ -2,7 +2,6 @@ import {
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",
-  "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/agent_runtime",
@@ -60,6 +59,7 @@ import {
   "moonbitlang/openseek_protocol/emit",
   "moonbitlang/openseek/agent_tool/write",
   "moonbitlang/openseek/agent_tool/remove",
+  "moonbitlang/openseek/agent_tool/write_scope",
 } for "test"
 
 import {

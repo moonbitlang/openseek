@@ -34,9 +34,8 @@ when needed. The bundled copies are installation resources and should not be
 edited. `@builtin/` runs the copy embedded in the OpenSeek binary at build
 time; these files are its source and a readable reference. Ordinary names such as `check.mbtx` resolve from the workspace.
 Missing bundled names do not fall back to workspace files. Other `@namespace/`
-prefixes are reserved and currently rejected. To customize a script, save the
-modified source with an ordinary workspace filename; never send source with
-`@builtin/`.
+prefixes are reserved and currently rejected. To customize a script, use `write` or `edit` to prepare a workspace copy,
+then run it with `filename`. Never supply both `source` and `filename`.
 
 ## Reading files
 

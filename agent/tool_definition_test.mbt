@@ -120,7 +120,6 @@ async test "registered mbtx receives the session scratch write permission" {
             #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
             #|async fn main { @fs.write_file(@env.args()[1], "retained") }
           ),
-          "filename": "\{scratch}/helper.mbtx",
           "args": ["\{scratch}/value.txt"],
           "ptc": false,
         }),
@@ -131,6 +130,51 @@ async test "registered mbtx receives the session scratch write permission" {
     })
     // Agent task cleanup removes its temporary jobs, not session scratch.
     assert_eq(@fs.read_file("\{scratch}/value.txt").text(), "retained")
-    assert_true(@fs.exists("\{scratch}/helper.mbtx"))
+  })
+}
+
+///|
+async test "file tools prepare reusable scripts for mbtx in scratch and workspace" {
+  @vfs.with_tmpdir(root => {
+    let workspace = "\{root}/project"
+    let scratch = "\{root}/session/scratch"
+    @fs.mkdir(workspace)
+    @async.with_task_group(group => {
+      let tools = @agent.build_tools(
+        AgentRuntime(workspace_root=workspace),
+        AgentTaskScope(group),
+        session_scratch_dir=scratch,
+      )
+      async fn call(name : String, args : Json) -> @agent_tool.ToolOutput {
+        let action = @agent_tool.execute_tool_call(
+          @agent_tool.AgentToolCall::from_arguments(name, args),
+          tools,
+        )
+        guard action is Respond(out) else { fail("expected tool response") }
+        assert_false(out.is_error, msg=out.content)
+        out
+      }
+      for path in ["\{scratch}/check.mbtx", "scripts/check.mbtx"] {
+        call("write", { "path": path, "content": "fn main { println(41) }" })
+        |> ignore
+        let first = call("mbtx", {
+          "description": "Run reusable script",
+          "filename": path,
+        })
+        assert_true(first.content.contains("41"))
+        call("edit", {
+          "path": path,
+          "old_string": "41",
+          "new_string": "42",
+          "start_line": 1,
+        })
+        |> ignore
+        let second = call("mbtx", {
+          "description": "Run edited script",
+          "filename": path,
+        })
+        assert_true(second.content.contains("42"))
+      }
+    })
   })
 }

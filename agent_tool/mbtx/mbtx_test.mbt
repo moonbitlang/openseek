@@ -77,8 +77,9 @@ async test "default prompt reusable check script forwards arguments" {
       "pub fn answer() -> Int { 42 }",
       create_mode=CreateOrTruncate,
     )
+    @fs.mkdir("\{ws}/scripts")
+    @fs.write_file("\{ws}/scripts/check.mbtx", source)
     let saved = run_in(ws, {
-      "source": source,
       "filename": "scripts/check.mbtx",
       "args": ["--deny-warn"],
     })
@@ -98,8 +99,9 @@ async test "default prompt reusable check script forwards arguments" {
 async test "cli_greet example reads process arguments implicitly" {
   let source = unlinked_example("cli_greet.mbtx")
   @vfs.with_tmpdir(ws => {
+    @fs.mkdir("\{ws}/scripts")
+    @fs.write_file("\{ws}/scripts/greet.mbtx", source)
     let saved = run_in(ws, {
-      "source": source,
       "filename": "scripts/greet.mbtx",
       "args": ["--name", "Ada Lovelace"],
     })
@@ -131,8 +133,8 @@ async test "script arguments reach inline and reused scripts verbatim on both ru
       let inline = run_in(ws, { "source": source, "target": target })
       assert_false(inline.is_error, msg=inline.content)
       assert_eq(inline.content, "[]\n")
+      @fs.write_file("\{ws}/\{filename}", source)
       let saved = run_in(ws, {
-        "source": source,
         "filename": filename,
         "target": target,
         "args": values,
@@ -151,87 +153,17 @@ async test "script arguments reach inline and reused scripts verbatim on both ru
 }
 
 ///|
-async test "save and run creates parents, suggests reuse, and preserves existing content" {
+async test "both program fields are rejected without writing or executing" {
   @vfs.with_tmpdir(ws => {
-    let state = @agent_tool.FileStateMap()
-    let tool = @mbtx.definition(workspace_root=ws, file_state=state)
     let source = "fn main { println(42) }"
-    let args : Json = { "source": source, "filename": "scripts/check.mbtx" }
-    let out = dispatch(tool, args)
-    assert_false(out.is_error, msg=out.content)
-    assert_true(out.content.contains("42"))
-    assert_true(out.content.contains("{\"filename\":\"scripts/check.mbtx\"}"))
-    assert_true(out.content.contains("omit source"))
-    let path = "\{ws}/scripts/check.mbtx"
-    assert_eq(@fs.read_file(path).text(), source)
-    assert_true(
-      state.created_and_unchanged(path, @agent_tool.content_digest(source)),
-    )
-    assert_false(dispatch(tool, args).is_error)
-    assert_false(dispatch(tool, { "filename": "scripts/check.mbtx" }).is_error)
-    let out = dispatch(tool, {
-      "source": "fn main { println(99) }",
-      "filename": "scripts/check.mbtx",
-    })
-    assert_true(out.is_error)
-    assert_true(out.content.contains("different content"))
-    assert_eq(@fs.read_file(path).text(), source)
-    assert_false(
-      dispatch(tool, { "source": source, "filename": "check.mbtx" }).is_error,
-    )
-    assert_false(dispatch(tool, { "filename": "check.mbtx" }).is_error)
-  })
-}
-
-///|
-async test "saving rejects read-only, outside-workspace, namespace, and worker scope violations" {
-  @vfs.with_tmpdir(ws => {
-    @vfs.with_tmpdir(outside => {
-      let source = "fn main {}"
-      let read_only_tool = @mbtx.definition(workspace_root=ws, read_only=true)
-      assert_true(
-        dispatch(read_only_tool, { "source": source, "filename": "check.mbtx" }).is_error,
-      )
-      assert_false(@fs.exists("\{ws}/check.mbtx"))
-      let out = run_in(ws, {
-        "source": source,
-        "filename": "\{outside}/check.mbtx",
-      })
+    for filename in ["new/script.mbtx", "existing.mbtx"] {
+      @fs.write_file("\{ws}/existing.mbtx", "original")
+      let out = run_in(ws, { "source": source, "filename": filename })
       assert_true(out.is_error)
-      assert_false(@fs.exists("\{outside}/check.mbtx"))
-      assert_true(
-        run_in(ws, { "source": source, "filename": "@builtin/check.mbtx" }).is_error,
-      )
-      let scope = match
-        @write_scope.WriteScope::create(root=ws, allowed_paths=["allowed"]) {
-        Ok(scope) => scope
-        Err(reason) => fail(reason)
-      }
-      let worker = @mbtx.definition(workspace_root=ws, write_scope=scope)
-      assert_true(
-        dispatch(worker, { "source": source, "filename": "denied/check.mbtx" }).is_error,
-      )
-      assert_false(@fs.exists("\{ws}/denied"))
-      assert_false(
-        dispatch(worker, { "source": source, "filename": "allowed/check.mbtx" }).is_error,
-      )
-    })
-  })
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "saving refuses symlinks escaping the workspace" {
-  @vfs.with_tmpdir(ws => {
-    @vfs.with_tmpdir(outside => {
-      @fs.symlink(target=outside, "\{ws}/link")
-      let out = run_in(ws, {
-        "source": "fn main {}",
-        "filename": "link/check.mbtx",
-      })
-      assert_true(out.is_error)
-      assert_false(@fs.exists("\{outside}/check.mbtx"))
-    })
+      assert_true(out.content.contains("mutually exclusive"))
+      assert_false(@fs.exists("\{ws}/new"))
+      assert_eq(@fs.read_file("\{ws}/existing.mbtx").text(), "original")
+    }
   })
 }
 
@@ -1059,7 +991,7 @@ test "the description advertises the Proton CLI command surface" {
 
 ///|
 /// The schema is the model-facing argument contract, so pin its shape: the
-/// arguments the tool decodes are all present, including save-and-run inputs.
+/// arguments the tool decodes are all present, including both alternative program inputs.
 test "the schema advertises every decoded argument" {
   let JsonSchema(schema) = @mbtx.definition(workspace_root=".").schema
   guard schema is { "properties": Object(properties), .. } else {

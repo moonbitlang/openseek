@@ -1,5 +1,5 @@
 ///|
-async test "session scratch permits raw file IO and script saving outside the workspace" {
+async test "session scratch permits cross-call raw file IO outside the workspace" {
   @vfs.with_tmpdir(root => {
     let workspace = "\{root}/project"
     let scratch = "\{root}/session/scratch"
@@ -26,7 +26,6 @@ async test "session scratch permits raw file IO and script saving outside the wo
       #|}
     let saved = dispatch(tool, {
       "source": source,
-      "filename": "\{scratch}/helper.mbtx",
       "args": [scratch, "\{workspace}/project.txt"],
       "ptc": false,
     })
@@ -53,17 +52,6 @@ async test "session scratch permits raw file IO and script saving outside the wo
     })
     assert_false(read.is_error, msg=read.content)
     assert_false(@fs.exists("\{scratch}/data"))
-    let outside = dispatch(reopened, {
-      "source": "fn main {}",
-      "filename": "\{root}/outside.mbtx",
-    })
-    assert_true(outside.is_error)
-    let changed = dispatch(reopened, {
-      "source": "fn main {}",
-      "filename": "\{scratch}/helper.mbtx",
-    })
-    assert_true(changed.is_error)
-    assert_eq(@fs.read_file("\{scratch}/helper.mbtx").text(), source)
   })
 }
 
@@ -79,11 +67,6 @@ async test "session scratch cannot grant writes through an escaping symlink" {
     }
     @fs.symlink(target=outside, "\{scratch}/link")
     let tool = @mbtx.definition(workspace_root=workspace, scratch_dir=scratch)
-    let saved = dispatch(tool, {
-      "source": "fn main {}",
-      "filename": "\{scratch}/link/escaped.mbtx",
-    })
-    assert_true(saved.is_error)
     let raw = dispatch(tool, {
       "source": (
         #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
@@ -93,40 +76,6 @@ async test "session scratch cannot grant writes through an escaping symlink" {
       "ptc": false,
     })
     assert_true(raw.is_error)
-    assert_false(@fs.exists("\{outside}/escaped.mbtx"))
     assert_false(@fs.exists("\{outside}/escaped.txt"))
-  })
-}
-
-///|
-async test "scratch script saving preserves read-only and worker restrictions" {
-  @vfs.with_tmpdir(root => {
-    let workspace = "\{root}/project"
-    let scratch = "\{root}/scratch"
-    @fs.mkdir(workspace)
-    let worker = match @write_scope.WriteScope::create(root=workspace) {
-      Ok(scope) => scope
-      Err(reason) => fail(reason)
-    }
-    for
-      tool in [
-        @mbtx.definition(
-          workspace_root=workspace,
-          scratch_dir=scratch,
-          read_only=true,
-        ),
-        @mbtx.definition(
-          workspace_root=workspace,
-          scratch_dir=scratch,
-          write_scope=worker,
-        ),
-      ] {
-      let out = dispatch(tool, {
-        "source": "fn main {}",
-        "filename": "\{scratch}/blocked.mbtx",
-      })
-      assert_true(out.is_error)
-      assert_false(@fs.exists("\{scratch}/blocked.mbtx"))
-    }
   })
 }

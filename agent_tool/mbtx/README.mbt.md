@@ -102,20 +102,14 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   the executable. Other namespaces are reserved for future use and currently
   rejected. Use `./@builtin/check.mbtx` for a literal workspace path;
   absolute paths remain absolute. There is no fallback between locations.
-  Supply at least one of these two fields. `cwd` does not change resolution. A filename-only call
+  Supply exactly one of these two fields. `cwd` does not change resolution. A filename-only call
   reads the current file once and compiles that snapshot through the same
   isolated execution path as inline source; diagnostics cite the filename.
-  With both source and filename, the tool saves the script inside the writable
-  workspace and runs the submitted snapshot. Missing parents are created;
-  identical existing content is reused, while different content is rejected
-  without overwriting or running. Use edit to change a saved file. Subsequent
-  calls can use `{"filename":"scripts/check.mbtx"}` without source. Saving is
-  unavailable in read-only mode and obeys worker write scopes. Namespaced
-  filenames cannot accompany source: bundled scripts are read-only.
-  Use `source` alone for one-off snippets.
+  The fields are mutually exclusive; supplying both is an error. The tool does
+  not save scripts. Use `write` to create reusable scripts in session scratch or
+  the workspace, and `edit` to modify them. Use `source` for one-shot snippets.
 - `args` (array of strings, optional, default `[]`): script arguments passed
-  verbatim, without shell expansion or splitting. Works with inline, saved,
-  and save-and-run scripts. Import `moonbitlang/core/env` and read
+  verbatim, without shell expansion or splitting. Works with inline and existing scripts. Import `moonbitlang/core/env` and read
   `@env.args()[1:]` on wasm (excluding the executable name). For reuse, call
   `{"filename":"scripts/check.mbtx","args":["--deny-warn"]}` and vary
   `args` on subsequent runs. Explicit `null` and non-string elements are rejected.

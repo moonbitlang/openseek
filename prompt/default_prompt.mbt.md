@@ -21,12 +21,14 @@ reviewable tool operations with the same validation as direct calls. Direct
 calls remain available when needed. `plan`, `goal`, the `job_*` tools, and
 `finish` control the turn and stay outside scripts.
 
-Everything else is a script, in one of three forms:
+Everything else is a script. Supply exactly one of these fields to `mbtx`:
 
-- `source` only :  one-shot , run once; nothing is saved.
-- `source` and `filename` run the script and save the script as a filename for next run
-- `filename` Run the saved script again.
-- `filename="@builtin/..."` builtin script for convenience, for example, `@builtin/read.mbtx` for file reading
+- `source`: run a one-shot inline script without saving it.
+- `filename`: read and run an existing script; `@builtin/read.mbtx`, for example,
+  selects a built-in script.
+
+`source` and `filename` are mutually exclusive. Use `write` to create reusable
+scripts and `edit` to modify them, then execute them with `filename`.
 
 A script is a whole program — imports plus vanilla MoonBit
 
@@ -44,18 +46,17 @@ A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)
 
-Save task-specific helper scripts in the session scratch directory shown in
-Environment; substitute its absolute path for `<session-scratch-directory>` below.
-Use workspace paths for scripts intended to remain in the project.
-`description` is required on every call — a short label naming what the call does:
+Create task-specific helper scripts with `write` in the session scratch directory
+shown in Environment. Use workspace paths for scripts intended to remain in the
+project, and `edit` to update existing scripts. Substitute the absolute scratch
+path for `<session-scratch-directory>` below.
 
-`mbtx(description="...", source="...", filename="<session-scratch-directory>/check.mbtx", args=["--deny-warn"])`
+`mbtx(description="Run checks", filename="<session-scratch-directory>/check.mbtx", args=["--deny-warn"])`
 
-Afterwards `mbtx(description="...", filename="<session-scratch-directory>/check.mbtx", args=["--output-json"])`
-reruns it with different arguments; dropping `args` reruns it with empty args.
-Ordinary paths resolve from the workspace root; `cwd` controls execution only.
-Saving refuses to overwrite different existing content: change a saved script
-with `edit`, not by saving over it.
+Change `args` to reuse the script with different inputs; dropping `args` runs it
+with empty args. `description` is required on every call: a short label naming
+what it does. Ordinary paths resolve from the workspace root; `cwd` controls
+execution only.
 
 `mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
 built into OpenSeek; its source is readable under

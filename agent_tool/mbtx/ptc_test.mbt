@@ -113,7 +113,7 @@ async test "PTC real script preserves imports and structured results" {
 }
 
 ///|
-async test "PTC without a job runtime stays foreground and saves reusable original source" {
+async test "PTC without a job runtime stays foreground for inline and existing scripts" {
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {
       let service = @ptc.Service::start(group, Tools([]))
@@ -132,9 +132,10 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         #|  if !denied.is_error { fail("recursive call allowed") }
         #|  println("foreground done")
         #|}
+      @fs.write_file("\{ws}/saved.mbtx", source)
       for
         args in [
-          ({ "ptc": true, "source": source, "filename": "saved.mbtx" } : Json),
+          ({ "ptc": true, "source": source } : Json),
           { "ptc": true, "filename": "saved.mbtx" },
         ] {
         let output = dispatch(definition, args)
@@ -208,9 +209,10 @@ async test "PTC leaves the script namespace and source unchanged" {
         #|let tools = "user-owned name"
         #|fn main { println(tools) }
       let service = @ptc.Service::start(group, Tools([]))
+      @fs.write_file("\{ws}/unchanged.mbtx", source)
       let output = dispatch(
         @mbtx.definition(workspace_root=ws, program_service=service),
-        { "ptc": true, "source": source, "filename": "unchanged.mbtx" },
+        { "ptc": true, "filename": "unchanged.mbtx" },
       )
       assert_false(output.is_error, msg=output.content)
       assert_true(output.content.contains("user-owned name"))

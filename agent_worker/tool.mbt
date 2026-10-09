@@ -160,7 +160,6 @@ pub async fn run_child(
           workspace_root=input.worker_root,
           worker_sandbox~,
           file_state~,
-          write_scope~,
         ),
         @edit.definition(
           workspace_root=input.worker_root,
