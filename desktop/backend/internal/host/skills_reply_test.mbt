@@ -9,7 +9,9 @@ async test "skill op returns its error through a normal endpoint reply" {
   )
   for endpoint in endpoints {
     if endpoint.name() == "skills.installed_content" {
-      let reply = endpoint.invoke({ "id": "../invalid" })
+      let reply = endpoint.invoke({
+        "skill": { "kind": "user", "id": "../invalid" },
+      })
       assert_eq(reply, { "error": "invalid skill id: ../invalid" })
       let decoded : @protocol.SkillContentReply = @json.from_json(reply)
       assert_true(decoded is SkillContentError("invalid skill id: ../invalid"))
