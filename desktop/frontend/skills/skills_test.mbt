@@ -210,7 +210,7 @@ test "a result from another device settles without a local outcome" {
 test "uninstall is keyed by the library id and deduplicated" {
   let installed : Array[@skills.InstalledItem] = [
     {
-      id: "acme-widget",
+      skill: User("acme-widget"),
       name: "widget",
       description: "",
       source: "acme/widget@1.0.0",
@@ -286,19 +286,19 @@ test "installed skill replies decode, with name falling back to id" {
   let items = @skills.installed_from_reply(
     InstalledSkills([
       {
-        id: "acme-widget",
+        skill: User("acme-widget"),
         name: "widget",
         description: "Build widgets fast.",
         source: "acme/widget@1.0.0",
       },
-      { id: "handmade", name: "", description: "", source: "", },
-      { id: "", name: "no-id", description: "", source: "", },
+      { skill: User("handmade"), name: "", description: "", source: "", },
+      { skill: User(""), name: "no-id", description: "", source: "", },
     ]),
   )
   guard items is [widget, handmade] else {
     fail("expected two installed items")
   }
-  assert_eq(widget.id, "acme-widget")
+  assert_eq(widget.skill, User("acme-widget"))
   assert_eq(widget.name, "widget")
   assert_eq(widget.source, "acme/widget@1.0.0")
   assert_eq(handmade.name, "handmade")
@@ -308,7 +308,7 @@ test "installed skill replies decode, with name falling back to id" {
 ///|
 test "an install blocks uninstall after a library refresh until completion" {
   let skill : @skills.InstalledItem = {
-    id: "acme-widget",
+    skill: User("acme-widget"),
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",
@@ -347,7 +347,7 @@ test "an install blocks uninstall after a library refresh until completion" {
 ///|
 test "an uninstall retains its source after removal and releases only itself" {
   let skill : @skills.InstalledItem = {
-    id: "acme-widget",
+    skill: User("acme-widget"),
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",
@@ -396,7 +396,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     emit(),
     @skills.ActionDone(
       channel=@interop.ChannelId::Local,
-      action=@skills.Uninstalling(source=skill.source, id=skill.id),
+      action=@skills.Uninstalling(source=skill.source, skill=skill.skill),
       error=Some("cleanup failed"),
     ),
     input(),
@@ -413,7 +413,7 @@ test "an uninstall retains its source after removal and releases only itself" {
 ///|
 test "detail navigation preserves library errors without mutating state" {
   let skill : @skills.InstalledItem = {
-    id: "acme-widget",
+    skill: User("acme-widget"),
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",

@@ -6,7 +6,7 @@ const market = {
   version: '0.1.0', description: 'Plan uncertain work.', author: 'Yoorkin', repository: '',
 };
 const installed = {
-  id: 'yoorkin-wayfinder', name: 'wayfinder', description: market.description,
+  skill: { kind: 'user', id: 'yoorkin-wayfinder' }, name: 'wayfinder', description: market.description,
   source: 'Yoorkin/wayfinder@0.1.0',
 };
 
@@ -27,7 +27,7 @@ class SkillsHarness extends DesktopBrowserHarness {
         this.installedSkills = [structuredClone(installed)];
         return { installed };
       case 'skills.uninstall':
-        if (request.params.id !== installed.id) throw new Error('Wrong library id');
+        expect(request.params.skill).toEqual(installed.skill);
         this.installedSkills = [];
         return { removed: true };
       default: return super.replyFor(request);
@@ -67,7 +67,7 @@ test('install and uninstall from the same catalog detail page', async ({ page })
   await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
-  expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.id)).toEqual([installed.id]);
+  expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.skill)).toEqual([installed.skill]);
   expect(app.installedSkills).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -159,7 +159,7 @@ for (const targetInstalled of [false, true]) {
     const other = { ...market, name: 'widget', module_name: 'acme/widget' };
     app.catalogSkills.push(other);
     if (targetInstalled) {
-      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0' });
+      app.installedSkills.push({ ...installed, skill: { kind: 'user', id: 'acme-widget' }, name: 'widget', source: 'acme/widget@0.1.0' });
     }
     app.rpcErrors.set('skills.uninstall', 'Cannot remove wayfinder: permission denied');
     await app.openDetails();

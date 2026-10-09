@@ -140,7 +140,7 @@ pub async fn run_child(
     Ok(scope) => scope
     Err(reason) => return Err(reason)
   }
-  let worker_sandbox : @mbtx.WorkerSandbox = {
+  let worker_sandbox : @write_scope.WorkerSandbox = {
     deny_roots: input.deny_roots,
     worker_root: input.worker_root,
     worker_admin_dir: input.worker_admin_dir,

@@ -6,7 +6,7 @@ for (const marker of ['@', '$']) {
     const app = new DesktopBrowserHarness(page);
     app.searchFiles = Array.from({ length: 20 }, (_, i) => `src/file-${i}.mbt`);
     app.installedSkills = Array.from({ length: 20 }, (_, i) => ({
-      id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '',
+      skill: { kind: 'user', id: `skill-${i}` }, name: `skill-${i}`, description: `Skill ${i}`, source: '',
     }));
     await app.install();
     await app.goto();

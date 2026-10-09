@@ -109,7 +109,9 @@ test "finished_body and timeout_head are stage-aware only when staged" {
 /// order `spawnable_commands` lists them.
 fn spawn_prefixes(program : String) -> Array[Array[String]] {
   [
-    for entry in spawnable_commands if entry.0 == program => entry.1
+    for entry in @wasm_policy.spawnable_commands if entry.0 == program => {
+      entry.1
+    }
   ]
 }
 
@@ -150,7 +152,7 @@ test "the spawn policy admits Proton subcommands but not global cwd options" {
 /// The wording around the list is deliberately not asserted; that only breaks
 /// on rewrites.
 test "the rendered spawn list covers every admitted command" {
-  for entry in spawnable_commands {
+  for entry in @wasm_policy.spawnable_commands {
     let (program, args_prefix) = entry
     let bullet = spawn_bullet(program)
     match args_prefix {
@@ -179,7 +181,7 @@ fn spawn_bullet(program : String) -> String raise {
   let flattened = {
     let builder = StringBuilder()
     let mut in_space = false
-    for char in spawn_list_markdown() {
+    for char in @wasm_policy.spawn_list_markdown() {
       if char is (' ' | '\n') {
         if !in_space {
           builder.write_char(' ')
@@ -237,7 +239,7 @@ fn spawn_verbs(bullet : String) -> Array[String] {
 /// Grouping is what lets one bullet describe several two-token prefixes, and
 /// getting it wrong would silently narrow what the model believes it may run.
 test "the rendered spawn list groups multi-token prefixes under one verb" {
-  let rendered = spawn_list_markdown()
+  let rendered = @wasm_policy.spawn_list_markdown()
   assert_true(rendered.contains("`worktree list|add|prune`"))
   assert_true(rendered.contains("`submodule update|status`"))
   assert_true(rendered.contains("`stash list|show`"))
@@ -260,7 +262,7 @@ test "the mbtx description carries the rendered spawn list" {
     build_timeout_ms=20_000,
   )
   assert_true(text.contains("## Which programs a snippet may start"))
-  assert_true(text.contains(spawn_list_markdown()))
+  assert_true(text.contains(@wasm_policy.spawn_list_markdown()))
 }
 
 ///|

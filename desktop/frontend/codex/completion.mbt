@@ -79,7 +79,7 @@ fn State::installed_codex_skills(self : State) -> Array[@skills.InstalledItem] {
     // `id` retains app-server's exact SKILL.md path. The component only needs
     // name/description for completion; turn construction resolves the path
     // from this same catalog after the user submits.
-    id: skill.path,
+    skill: User(skill.path),
     name: skill.name,
     description: skill.description,
     source: "codex",

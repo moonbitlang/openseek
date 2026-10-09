@@ -96,7 +96,7 @@ fn fetch_content(
           let reply = @interop.bridge_request(
             channel,
             @commands.skills_installed_content,
-            { id: item.id, },
+            { skill: item.skill, },
           ) catch {
             error => {
               scheduler.add(
@@ -192,11 +192,11 @@ fn uninstall(
   channel : @interop.ChannelId,
   item : InstalledItem,
 ) -> @cmd.Cmd {
-  let action = Uninstalling(source=item.source, id=item.id)
+  let action = Uninstalling(source=item.source, skill=item.skill)
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.skills_uninstall, {
-        id: item.id,
+        skill: item.skill,
       }) catch {
         error => {
           scheduler.add(

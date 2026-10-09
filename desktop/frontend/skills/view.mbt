@@ -70,10 +70,17 @@ fn installed_row(
       info,
     ),
   ]
-  if skill.source.is_empty() {
+  if skill.is_builtin() || skill.source.is_empty() {
     children.push(
       @html.div(class="skill-actions", [
-        @html.span(class="skill-check ok", "✓"),
+        @html.span(
+          class="skill-check ok",
+          if skill.is_builtin() {
+            ui(locale, BuiltinSkill)
+          } else {
+            "✓"
+          },
+        ),
       ]),
     )
   } else {
@@ -318,7 +325,9 @@ fn detail_action(
       )
     }
     Installed(item) =>
-      if item.source.is_empty() {
+      if item.is_builtin() {
+        @html.span(class="skill-check ok", ui(locale, BuiltinSkill))
+      } else if item.source.is_empty() {
         @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
       } else {
         let pending = state.pending_action(item.source)
@@ -346,7 +355,7 @@ fn detail_action_target(
     Market(item) => Some(preview_target_for_market(input.installed, item))
     Installed(item) => {
       for installed in input.installed {
-        if installed.id == item.id && installed.source == item.source {
+        if installed.skill == item.skill && installed.source == item.source {
           return Some(Installed(installed))
         }
       }

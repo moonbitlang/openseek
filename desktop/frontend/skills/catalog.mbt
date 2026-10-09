@@ -32,8 +32,8 @@ pub(all) struct MarketItem {
 ///|
 /// One entry of the local skills library.
 pub(all) struct InstalledItem {
-  // The library entry — the key `skill_uninstall` takes.
-  id : String
+  // Origin is part of the identity, independent of the directory or display name.
+  skill : @protocol.SkillRef
   // Display name from SKILL.md frontmatter.
   name : String
   description : String
@@ -96,11 +96,11 @@ pub fn installed_from_reply(
   }
   let items : Array[InstalledItem] = []
   for entry in entries {
-    guard !entry.id.is_empty() else { continue }
+    guard !entry.skill.value().is_empty() else { continue }
     items.push({
-      id: entry.id,
+      skill: entry.skill,
       name: if entry.name.is_blank() {
-        entry.id
+        entry.skill.value()
       } else {
         entry.name
       },
@@ -116,3 +116,9 @@ pub extend InstalledItem with Eq::{equal, not_equal}
 
 ///|
 pub extend MarketItem with Eq::{equal, not_equal}
+
+///|
+/// Whether this entry is supplied by the application.
+pub fn InstalledItem::is_builtin(self : InstalledItem) -> Bool {
+  self.skill is Builtin(_)
+}

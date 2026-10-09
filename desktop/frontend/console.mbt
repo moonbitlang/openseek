@@ -554,7 +554,7 @@ test "a revoked page device is retired without connecting a survivor" {
     }),
     installed_skills: [
       {
-        id: "old-host",
+        skill: User("old-host"),
         name: "old",
         description: "",
         source: "old/source@1.0.0",

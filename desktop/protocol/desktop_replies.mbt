@@ -1067,11 +1067,11 @@ pub(all) struct MarketSkill {
 
 ///|
 pub(all) struct InstalledSkill {
-  id : String
+  skill : SkillRef
   name : String
   description : String
   source : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// This branch's whole line delta, measured locally: from where it left the
