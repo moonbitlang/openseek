@@ -1896,8 +1896,10 @@ fn description(
     #|Call `{"description":"Check the workspace","filename":"@builtin/check.mbtx"}` without source.
     #|@builtin/ scripts are read-only. @session/ stores reusable session scripts; skill namespaces are
     #|not implemented. Paths within the namespace cannot escape its root.
-    #|Ordinary names such as check.mbtx select workspace files. Use
-    #|./@builtin/check.mbtx for a literal workspace path. Relative paths resolve
+    #|Ordinary names such as check.mbtx select workspace files. For actual workspace
+    #|files or directories named @builtin or @session, prefix the path with ./,
+    #|e.g. ./@builtin, ./@session, ./@builtin/check.mbtx, or ./@session/check.mbtx.
+    #|These are literal workspace paths, not namespace references. Relative paths resolve
     #|from the workspace root; absolute paths stay absolute. No lookup fallback
     #|occurs. `cwd` controls execution only, not filename resolution.
     #|Existing scripts are read once; each run executes its selected snapshot

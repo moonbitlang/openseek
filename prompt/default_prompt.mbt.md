@@ -60,8 +60,10 @@ with `edit`, not by saving over it.
 built into OpenSeek; its source is readable under
 `<bundled-resources>/workflow/` when installed. `@builtin/` scripts are
 read-only: supply `filename` without `source`. `@session/` is writable session
-storage; other namespaces are unsupported. Use `./@session/file` for a literal
-workspace path whose directory is named `@session`.
+storage; other namespaces are unsupported. For actual workspace files or
+directories named `@builtin` or `@session`, prefix the path with `./`:
+`./@builtin`, `./@session`, `./@builtin/check.mbtx`, or `./@session/data.json`.
+These are ordinary workspace-relative paths, not namespace references.
 
 ### Reading files: `@builtin/read.mbtx`
 
