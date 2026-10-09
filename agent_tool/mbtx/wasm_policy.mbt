@@ -419,7 +419,7 @@ fn wasm_policy_document(
   inject~ : Map[String, String],
   spawnable~ : (String, Array[String])?,
 ) -> Json {
-  // A snippet writes NOTHING in the workspace. It does not need to: the file
+  // A snippet cannot directly write ordinary project files. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
   // (`moon fmt`, `moon info`, `git checkout`) are child processes, which no `fs`
   // rule here reaches. What granting the workspace did buy was a documented way
@@ -427,10 +427,9 @@ fn wasm_policy_document(
   // `rmdir_path` are all gated on `fs.write`, so a snippet could delete a file
   // the guarded tool exists to refuse.
   //
-  // That leaves the two places a snippet has real business writing: its own temp
-  // directory (where `@fs.tmpdir()` lands, since `TMPDIR` points here) and a
-  // read-only role's scratch lab, which is the one place those roles may build
-  // an experiment — they hold no editing tool at all.
+  // Writable roots include per-execution temp space, session-owned scratch,
+  // and a read-only role's experimental lab when supplied. Project write
+  // permissions remain the file tools' responsibility.
   //
   // Every entry must be an EXISTING path: moonrun canonicalizes each root when
   // it loads the policy and fails the whole file otherwise. Both of these are

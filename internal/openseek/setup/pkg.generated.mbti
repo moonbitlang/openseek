@@ -11,7 +11,7 @@ import {
 // Values
 pub async fn capture_goal_baseline(String) -> String
 
-pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, workspace_root? : String) -> String
+pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, workspace_root? : String, session_scratch_dir? : String) -> String
 
 pub async fn first_free_child_ordinal(@store.SessionStore, String) -> Int
 

@@ -110,7 +110,12 @@ pub async fn load_or_new_session(
   async fn fresh() -> @agent_session.Session {
     Session(
       id,
-      system_prompt=configured_system_prompt(matches, model, workspace_root~),
+      system_prompt=configured_system_prompt(
+        matches,
+        model,
+        workspace_root~,
+        session_scratch_dir=store.scratch_dir(id),
+      ),
     )
   }
 

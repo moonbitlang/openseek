@@ -228,10 +228,15 @@ async fn run_general(
   let (retry_attempts, retry_backoff_ms) = @options.retry_overrides(matches)
   match @setup.resolved_session_id(matches) {
     None => {
+      let session_scratch_dir = @fs.tmpdir(prefix="openseek-session-")
+      defer @async.protect_from_cancel(() => {
+        @fs.rmdir(session_scratch_dir, recursive=true)
+      })
       let system_prompt_text = @setup.configured_system_prompt(
         matches,
         model,
         workspace_root~,
+        session_scratch_dir~,
       )
       let session = @agent_session.Session(
         SessionId("one-shot"),
@@ -244,6 +249,7 @@ async fn run_general(
         matches,
         session,
         append_item=(session, item) => turn.record(session.append(item)),
+        session_scratch_dir~,
         api_key~,
         model~,
         task~,
@@ -300,6 +306,7 @@ async fn run_general(
         session,
         append_item=(session, item) => turn.record(store.append(session, item)),
         job_log_dir=store.job_logs_dir(id),
+        session_scratch_dir=store.scratch_dir(id),
         api_key~,
         model~,
         task~,

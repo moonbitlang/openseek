@@ -60,6 +60,7 @@ pub async fn[X] build_tools(
   scope : @agent_runtime.AgentTaskScope[X],
   on_background_wake? : () -> Unit,
   job_log_dir? : String,
+  session_scratch_dir? : String,
   extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
   mbtx_subrun? : @host.SubrunInjection,
 ) -> @agent_tool.Tools {
@@ -225,6 +226,7 @@ pub async fn[X] build_tools(
         file_state~,
         bg_runtime~,
         job_dir=scratch,
+        scratch_dir?=session_scratch_dir,
         approval?=runtime.approval_channel(),
         subrun?=mbtx_subrun,
         program_service~,

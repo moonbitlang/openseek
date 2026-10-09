@@ -859,3 +859,12 @@ pub fn SessionStore::job_logs_dir(
 ) -> String raise {
   "\{self.session_dir(id)}/jobs"
 }
+
+///|
+/// Prospective absolute scratch path; does not materialize a new session.
+pub async fn SessionStore::scratch_dir(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String {
+  @workspace_path.resolve(@fs.realpath("."), "\{self.session_dir(id)}/scratch")
+}

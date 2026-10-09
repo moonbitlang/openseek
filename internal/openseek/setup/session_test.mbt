@@ -79,6 +79,7 @@ async test "load_or_new_session defers first durable write until append" {
     let grounded_prompt = @setup.configured_system_prompt(
       parsed,
       Deepseek(V4Pro),
+      session_scratch_dir=store.scratch_dir(id),
     )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(created.system_prompt(), grounded_prompt)
@@ -240,6 +241,7 @@ async test "load_or_new_session recovers empty interrupted session directory" {
     let grounded_prompt = @setup.configured_system_prompt(
       parsed,
       Deepseek(V4Pro),
+      session_scratch_dir=store.scratch_dir(id),
     )
     assert_true(grounded_prompt.has_prefix("system\n\n## Environment"))
     assert_eq(session.system_prompt(), grounded_prompt)
@@ -249,5 +251,25 @@ async test "load_or_new_session recovers empty interrupted session directory" {
       User(UserMessage(Content([Text("hello")]))),
     )
     assert_eq(with_event.events().length(), 1)
+  })
+}
+
+///|
+async test "resuming an existing session preserves its prompt and stored file" {
+  @vfs.with_tmpdir(root => {
+    let store = @store.SessionStore(root)
+    let id = @agent_session.SessionId("old-session")
+    let old = @agent_session.Session(id, system_prompt="original custom prompt").append(
+      User(UserMessage(Content([Text("keep history")]))),
+    )
+    store.create(old)
+    let before = @fs.read_file(store.session_file(id)).binary()
+    let parsed = @testkit.run_matches(
+      argv=["--system-prompt-file", "missing-prompt.md", "write", "MoonBit"],
+      env={ "DEEPSEEK": "test-key" },
+    )
+    let resumed = @setup.load_or_new_session(store, id, parsed, Deepseek(V4Pro))
+    assert_eq(resumed, old)
+    assert_eq(@fs.read_file(store.session_file(id)).binary(), before)
   })
 }
