@@ -1682,24 +1682,25 @@ fn show_file_in_viewer(
         )
       },
     )
-    let generation = viewer_state.show_generation
-    let preparation : SourcePreparation = { lease, job: None, }
+    let preparation : SourcePreparation = {
+      lease,
+      channel: owner.channel,
+      document,
+      live,
+      generation: viewer_state.show_generation,
+      diagnostics: None,
+      job: None,
+    }
     viewer_state.source_preparation = Some(preparation)
     let job = viewer.prepare_model(lease.model, result => {
-      if generation != viewer_state.show_generation {
-        return
-      }
-      viewer_state.source_preparation = None
-      match preparation.job {
-        Some(job) => job.dispose()
-        None => ()
-      }
-      match result {
-        Ok(_) => commit()
-        Err(error) => show_source_preparation_failure(viewer, document, error)
-      }
-      lease.dispose()
-      viewer_state.source_models.trim()
+      preparation.finish(result, commit, error => {
+        show_source_preparation_failure(
+          viewer,
+          document,
+          error,
+          diff_owner?=if diff is Some(_) { Some(owner) } else { None },
+        )
+      })
     })
     if viewer_state.source_preparation is Some(pending) &&
       physical_equal(pending, preparation) {
@@ -1849,7 +1850,8 @@ fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
 ///|
 /// Draw the language server's diagnostics for the file at `absolute` onto the
 /// viewer — but only while it still shows that file, so a push that raced a
-/// file switch or a cleared panel is dropped. The diagnostics are keyed to the
+/// file switch or a cleared panel is dropped. A matching batch received during
+/// preparation waits for the model to commit. The diagnostics are keyed to the
 /// model's own URI, so the viewer's marker-decoration service renders their
 /// squiggles on the document on screen.
 fn apply_diagnostics(
@@ -1858,19 +1860,38 @@ fn apply_diagnostics(
   diagnostics : Array[@protocol.LspDiagnostic],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    if @resource.belongs_to(absolute, channel) &&
-      viewer_state.live &&
-      viewer_state.document == Some(absolute) &&
-      viewer_state.services is Some(services) {
-      let uri = model_uri_of(absolute)
-      services.markers.set_diagnostics(
-        DiagnosticsOwner,
-        uri,
-        DiagnosticsProjection(diagnostics).to_viewer(),
-      )
-      refresh_semantic_modified_diagnostics(uri)
-    }
+    apply_diagnostics_now(channel, absolute, diagnostics)
   })
+}
+
+///|
+fn apply_diagnostics_now(
+  channel : @interop.ChannelId,
+  absolute : @common.Uri,
+  diagnostics : Array[@protocol.LspDiagnostic],
+) -> Unit {
+  guard @resource.belongs_to(absolute, channel) else { return }
+  if viewer_state.source_preparation is Some(preparation) &&
+    preparation.live &&
+    preparation.channel == channel &&
+    preparation.document == absolute {
+    // A later publish replaces the loaded batch, including an explicitly empty
+    // batch that clears earlier problems. Cancellation drops this storage with
+    // its preparation rather than carrying markers into the next document.
+    preparation.diagnostics = Some(diagnostics)
+    return
+  }
+  if viewer_state.live &&
+    viewer_state.document == Some(absolute) &&
+    viewer_state.services is Some(services) {
+    let uri = model_uri_of(absolute)
+    services.markers.set_diagnostics(
+      DiagnosticsOwner,
+      uri,
+      DiagnosticsProjection(diagnostics).to_viewer(),
+    )
+    refresh_semantic_modified_diagnostics(uri)
+  }
 }
 
 ///|
@@ -1903,7 +1924,38 @@ fn language_id(name : String) -> String {
 ///|
 priv struct SourcePreparation {
   lease : SourceModelLease
+  channel : @interop.ChannelId
+  document : @common.Uri
+  live : Bool
+  generation : Int
+  mut diagnostics : Array[@protocol.LspDiagnostic]?
   mut job : @common.Disposable?
+}
+
+///|
+fn SourcePreparation::finish(
+  self : SourcePreparation,
+  result : Result[Unit, @viewer.ModelPreparationFailure],
+  commit : () -> Unit,
+  on_failure : (@viewer.ModelPreparationFailure) -> Unit,
+) -> Unit {
+  guard self.generation == viewer_state.show_generation else { return }
+  viewer_state.source_preparation = None
+  match self.job {
+    Some(job) => job.dispose()
+    None => ()
+  }
+  match result {
+    Ok(_) => {
+      commit()
+      if self.diagnostics is Some(diagnostics) {
+        apply_diagnostics_now(self.channel, self.document, diagnostics)
+      }
+    }
+    Err(error) => on_failure(error)
+  }
+  self.lease.dispose()
+  viewer_state.source_models.trim()
 }
 
 ///|
@@ -1929,6 +1981,7 @@ fn show_source_preparation_failure(
   viewer : @viewer.Viewer,
   document : @common.Uri,
   failure : @viewer.ModelPreparationFailure,
+  diff_owner? : @interop.ConversationKey,
 ) -> Unit {
   let message = source_preparation_notice(failure is TimedOut)
   let uri = @common.Uri::from(scheme="openseek-notice", path=document.path) catch {
@@ -1942,6 +1995,12 @@ fn show_source_preparation_failure(
   viewer_state.document = None
   viewer_state.live = false
   viewer_state.navigation = None
+  if diff_owner is Some(owner) {
+    // The dock's settled Diff document keeps this sibling visible. Replace its
+    // outgoing pair with an inert notice too; the hidden source notice alone
+    // would leave the previous file's comparison under the incoming tab.
+    show_diff_comparison(owner, "notice.txt", uri, document, "", message)
+  }
   viewer.layout(postpone_rendering=true)
   viewer.handle_initialized()
   viewer.render()
