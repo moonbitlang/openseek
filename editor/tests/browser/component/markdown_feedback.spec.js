@@ -6,6 +6,7 @@ const article = '.markdown-feedback-host .moonbit-viewer-markdown-document-artic
 const viewport = '.markdown-feedback-host .moonbit-viewer-markdown-document-viewport';
 const addSelection = 'button[data-markdown-feedback-add]';
 const input = 'textarea[data-agent-feedback-input]';
+const submit = '.agent-feedback-input-action';
 const firstParagraph = '这个功能支持 **自动保存**，也支持手动保存。';
 const secondParagraph = '第二段包含 *独立说明*，用于跨段选择。';
 
@@ -56,11 +57,16 @@ async function feedbackFacts(page) {
   return page.evaluate(() => globalThis.__markdownFeedbackControls.getFeedback());
 }
 
+async function queueFeedback(page) {
+  await page.getByRole('checkbox', { name: 'Batch', exact: true }).check();
+  await page.locator(submit).click();
+}
+
 test('rendered emphasis quotes only selected text while locating its complete source paragraph', async ({ page }) => {
   await openFixture(page);
   await openComposer(page, '自动保存');
   await page.locator(input).fill('说明自动保存的时机');
-  await page.locator('.agent-feedback-input-action-add').click();
+  await queueFeedback(page);
 
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
   const facts = await feedbackFacts(page);
@@ -80,7 +86,9 @@ test('cross-paragraph feedback keeps exact rendered text and a complete source s
   await openFixture(page);
   await openComposer(page, '自动保存', '独立说明');
   await page.locator(input).fill('合并这两段说明');
-  await page.locator('.agent-feedback-input-action-apply').click();
+  await expect(page.getByRole('checkbox', { name: 'Batch', exact: true })).not.toBeChecked();
+  await expect(page.locator(submit)).toHaveAccessibleName('Apply all feedback');
+  await page.locator(submit).click();
 
   await expect.poll(async () => (await feedbackFacts(page)).submitted).toBe(1);
   const facts = await feedbackFacts(page);
@@ -107,7 +115,7 @@ test('semantic code line feedback keeps the complete fence as source context', a
   await expect(line).not.toHaveAttribute('data-markdown-source-owner', 'true');
   await openComposer(page, 'semantic target');
   await page.locator(input).fill('Review the semantic fence');
-  await page.locator('.agent-feedback-input-action-add').click();
+  await queueFeedback(page);
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
   const saved = (await feedbackFacts(page)).items[0];
   expect(saved.selected_text).toBe('semantic target');
@@ -124,7 +132,7 @@ test('list items and table cells use their own source spans; images quote mapped
   for (const [index, item] of cases.entries()) {
     await openComposer(page, item.text);
     await page.locator(input).fill(`Review ${item.text}`);
-    await page.locator('.agent-feedback-input-action-add').click();
+    await queueFeedback(page);
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(index + 1);
     const saved = (await feedbackFacts(page)).items[index];
     expect(saved.selected_text).toBe(item.text);
@@ -150,7 +158,7 @@ test('list items and table cells use their own source spans; images quote mapped
   await page.locator(input).click();
   await expect(page.locator(input)).toBeFocused();
   await page.locator(input).fill('Explain this image');
-  await page.locator('.agent-feedback-input-action-add').click();
+  await queueFeedback(page);
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(4);
   const savedImage = (await feedbackFacts(page)).items[3];
   // Native image selections have no visible text, so feedback captures source.
@@ -178,7 +186,7 @@ for (const selection of [
     const selectedText = await page.evaluate(() => document.getSelection().toString());
     await page.locator(input).click();
     await page.locator(input).fill('Review both source owners');
-    await page.locator('.agent-feedback-input-action-add').click();
+    await queueFeedback(page);
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
     const saved = (await feedbackFacts(page)).items[0];
     expect(saved.source.trim()).toBe(selection.source);
@@ -217,7 +225,7 @@ for (const change of ['setSource', 'replaceSameUri']) {
     await expect(page.locator(input)).toBeVisible();
     await expect(page.locator(input)).toHaveValue('This draft uses the current document');
     await expect.poll(async () => (await page.locator(input).boundingBox())?.y).toBeCloseTo(beforeScroll.y - 24, 0);
-    await page.locator('.agent-feedback-input-action-add').click();
+    await queueFeedback(page);
     await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
     const saved = (await feedbackFacts(page)).items[0];
     expect(saved.selected_text).toBe('replacement selection');
@@ -260,20 +268,46 @@ test('mouse selection opens after release, preserves document focus, and support
 
   await page.keyboard.press('ControlOrMeta+i');
   await expect(page.locator(input)).toBeFocused();
+  const batch = page.getByRole('checkbox', { name: 'Batch', exact: true });
+  await expect(batch).not.toBeChecked();
   await page.locator(input).fill('First line');
   await page.locator(input).press('Shift+Enter');
   await expect(page.locator(input)).toHaveValue('First line\n');
   expect((await feedbackFacts(page)).items).toHaveLength(0);
   await page.locator(input).press('Enter');
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
-  expect((await feedbackFacts(page)).submitted).toBe(0);
+  expect((await feedbackFacts(page)).submitted).toBe(1);
 
   await selectRenderedText(page, '独立说明');
   await page.keyboard.press('ControlOrMeta+i');
   await expect(page.locator(input)).toBeFocused();
+  // The empty Markdown composer must survive both label clicks and keyboard
+  // focus entering Batch, while retaining its original source selection.
+  const batchLabel = page.locator('.agent-feedback-input-batch span');
+  await batchLabel.click();
+  await expect(batch).toBeChecked();
+  await expect(page.locator(input)).toBeFocused();
+  await batchLabel.click();
+  await expect(batch).not.toBeChecked();
+  await expect(page.locator(input)).toBeFocused();
+  await page.locator(input).press('Tab');
+  await expect(batch).toBeFocused();
+  await batch.press('Space');
+  await expect(batch).toBeChecked();
+  await expect(page.locator(input)).toBeFocused();
+  await page.locator(input).fill('Keep this note in the batch');
+  await page.locator(input).press('Enter');
+  await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(2);
+  expect((await feedbackFacts(page)).submitted).toBe(1);
+  expect((await feedbackFacts(page)).items[1].source.trimEnd()).toBe(secondParagraph);
+
+  await selectRenderedText(page, 'review target');
+  await page.keyboard.press('ControlOrMeta+i');
+  await expect(page.locator(input)).toBeFocused();
+  await expect(batch).toBeChecked();
   await page.locator(input).fill('Apply the batch');
   await page.locator(input).press('Alt+Enter');
-  await expect.poll(async () => (await feedbackFacts(page)).submitted).toBe(2);
+  await expect.poll(async () => (await feedbackFacts(page)).submitted).toBe(3);
   await expect(page.locator(input)).not.toBeVisible();
 });
 
@@ -292,7 +326,7 @@ test('empty drafts follow reselection, typed drafts keep source and selected tex
   await page.evaluate(() => {
     globalThis.__lastFeedbackSelection = window.getSelection().getRangeAt(0).cloneRange();
   });
-  await page.locator('.agent-feedback-input-action-add').click();
+  await queueFeedback(page);
   await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
   expect((await feedbackFacts(page)).items[0].selected_text).toBe('独立说明');
   expect((await feedbackFacts(page)).items[0].source.trimEnd()).toBe(secondParagraph);
@@ -315,7 +349,7 @@ test('empty drafts follow reselection, typed drafts keep source and selected tex
   await page.mouse.click(rootBox.x + rootBox.width - 20, rootBox.y + 100);
   await expect(page.locator(input)).not.toBeVisible();
 
-  for (const dismiss of ['Escape', 'Cancel', 'Add']) {
+  for (const dismiss of ['Escape from document', 'Escape from Batch', 'Submit']) {
     // A real new mouse gesture clears the previous dismissal, even when it
     // selects the same text. Double-click is a native word selection.
     await page.locator(`${article} strong`).first().dblclick();
@@ -323,16 +357,20 @@ test('empty drafts follow reselection, typed drafts keep source and selected tex
     await page.evaluate(() => {
       globalThis.__lastFeedbackSelection = window.getSelection().getRangeAt(0).cloneRange();
     });
-    if (dismiss === 'Escape') {
+    if (dismiss === 'Escape from document') {
       await page.keyboard.press('Escape');
-    } else if (dismiss === 'Cancel') {
-      await page.locator('.agent-feedback-input-action-cancel').click();
+    } else if (dismiss === 'Escape from Batch') {
+      await page.locator(input).click();
+      await page.locator(input).press('Tab');
+      const batch = page.getByRole('checkbox', { name: 'Batch', exact: true });
+      await expect(batch).toBeFocused();
+      await batch.press('Escape');
     } else {
       await page.locator(input).fill('Final feedback');
-      await page.locator('.agent-feedback-input-action-add').click();
+      await queueFeedback(page);
     }
     await expect(page.locator(input)).not.toBeVisible();
-    if (dismiss === 'Escape') {
+    if (dismiss === 'Escape from document') {
       const selectedText = await page.evaluate(() => window.getSelection().toString());
       await page.locator('.moonbit-viewer-markdown-toc-toggle').click();
       expect(await page.evaluate(() => window.getSelection().toString())).toBe(selectedText);
@@ -354,15 +392,13 @@ test('empty drafts follow reselection, typed drafts keep source and selected tex
 
 test('composer follows the active selection endpoint and fits a narrow document on first display', async ({ page }) => {
   await openFixture(page);
-  // Use the already-rendered code fence as the editor-font oracle: prose and
-  // the feedback widget have different DOM ancestors and must not inherit
-  // different typefaces. Check the initial textarea before any input event.
-  const editorFont = await page.locator(`${article} .moonbit-viewer-markdown-code-block .monaco-tokenized-source`)
-    .evaluate((node) => getComputedStyle(node).fontFamily);
+  // Prose must not override the shared compact composer's typography. Check
+  // the textarea before any input event can resize it.
   await selectRenderedText(page, '自动保存');
   await settleComposer(page);
-  expect(await page.locator(input).evaluate((node) => getComputedStyle(node).fontFamily)).toBe(editorFont);
-  expect((await page.locator(input).boundingBox()).height).toBe(64);
+  const composerFont = await page.locator(widget).evaluate((node) => getComputedStyle(node).fontFamily);
+  expect(await page.locator(input).evaluate((node) => getComputedStyle(node).fontFamily)).toBe(composerFont);
+  expect((await page.locator(input).boundingBox()).height).toBe(30);
   const source = Array.from({ length: 20 }, (_, index) =>
     index === 8 ? 'Start **anchor start** with some context.' :
       index === 9 ? 'The final **anchor finish** follows here.' : `Paragraph ${index}.`,
@@ -405,6 +441,6 @@ test('composer follows the active selection endpoint and fits a narrow document 
   expect(composer.x + composer.width).toBeLessThanOrEqual(root.x + root.width);
   expect(composer.y).toBeGreaterThanOrEqual(root.y);
   expect(composer.y + composer.height).toBeLessThanOrEqual(root.y + root.height);
-  expect(textarea.height).toBe(64);
+  expect(textarea.height).toBe(30);
   await expect(page.locator(input)).not.toBeFocused();
 });

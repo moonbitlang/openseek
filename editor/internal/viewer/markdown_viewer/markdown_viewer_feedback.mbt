@@ -1,6 +1,6 @@
 ///|
-/// One model attachment's selection and feedback composer. IDs are resolved by
-/// the document before opening the composer; submissions retain source ranges.
+/// One model attachment's selection and feedback composer. The document reads
+/// source ranges from rendered HTML; submissions retain those source ranges.
 priv struct MarkdownViewerWidgetFeedbackBridge {
   viewer : MarkdownViewerWidget
   view : @markdown_document.MarkdownDocumentView
@@ -10,6 +10,7 @@ priv struct MarkdownViewerWidgetFeedbackBridge {
   input : @agent_feedback_browser.AgentFeedbackInputWidget
   listeners : Array[@base_common.Disposable]
   mut target : @markdown_document.MarkdownSourceSelection?
+  mut last_document_selection : @markdown_document.MarkdownSourceSelection?
   mut dismissed_target : @markdown_document.MarkdownSourceSelection?
   mut visible : Bool
   mut mouse_down : Bool
@@ -50,6 +51,7 @@ fn MarkdownViewerWidgetFeedbackBridge::MarkdownViewerWidgetFeedbackBridge(
     input,
     listeners: [],
     target: None,
+    last_document_selection: None,
     dismissed_target: None,
     visible: false,
     mouse_down: false,
@@ -181,11 +183,16 @@ fn MarkdownViewerWidgetFeedbackBridge::selection_changed(
     is Some(_) {
     return
   }
+  // Native focus entering Batch or the textarea can replace the document's
+  // Selection. Keep its last value even while a draft pins a different target,
+  // so submitting that draft dismisses the live document selection as well.
+  let current_selection = self.view.source_selection()
+  self.last_document_selection = current_selection
   // Match the code editor: only a non-empty draft pins the source target.
   if self.visible && self.input.has_text() {
     return
   }
-  guard self.view.source_selection() is Some(target) else {
+  guard current_selection is Some(target) else {
     self.auto_hide()
     return
   }
@@ -274,7 +281,11 @@ fn MarkdownViewerWidgetFeedbackBridge::hide(
   guard self.visible else { return }
   let dismissed = match self.view.source_selection() {
     Some(current) => Some(current)
-    None => self.target
+    None =>
+      match self.last_document_selection {
+        Some(current) => Some(current)
+        None => self.target
+      }
   }
   if dismissed is Some(target) {
     // Native Selection may survive textarea focus and editor refocus. Do not
@@ -283,6 +294,7 @@ fn MarkdownViewerWidgetFeedbackBridge::hide(
     self.dismissed_target = Some(target)
   }
   self.target = None
+  self.last_document_selection = None
   self.visible = false
   self.input.hide()
   self.input.clear_input()
