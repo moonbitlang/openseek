@@ -67,14 +67,14 @@ async fn open_path_op(
     return Editor({ path: resource, line, column, })
   }
   let system_path = match resolution {
-    PdfPath(path) if preview_pdf => {
+    BrowserPath(path) if preview_pdf => {
       guard @pathx.Path(path).to_absolute() is Some(absolute) &&
         absolute.to_uri_path() is Some(resource) else {
         return refusal("Invalid absolute file path: \{path}")
       }
       return Pdf(resource)
     }
-    PdfPath(path) | SystemPath(path) => path
+    BrowserPath(path) | SystemPath(path) => path
     _ => return refusal("Could not resolve path")
   }
   // A literal directory inside this conversation belongs to the built-in Files
@@ -122,7 +122,7 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
   }
   let path = match reference.resolution {
     EditorPath(path~, ..) => path
-    PdfPath(path) | SystemPath(path) => path
+    BrowserPath(path) | SystemPath(path) => path
     MissingPath(path) => return RevealRefused("File does not exist: \{path}")
   }
   let code = @platform.reveal_path(path) catch {

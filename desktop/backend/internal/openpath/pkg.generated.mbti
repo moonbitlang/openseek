@@ -19,7 +19,7 @@ pub fn Reference::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Resolution {
   EditorPath(path~ : String, line~ : Int?, column~ : Int?)
-  PdfPath(String)
+  BrowserPath(String)
   SystemPath(String)
   MissingPath(String)
 } derive(Eq, @debug.Debug)
