@@ -64,6 +64,7 @@ fn app_shortcut_sub_loader(
 /// browser console. Apple platforms use Cmd; other platforms use Ctrl. P/T
 /// open Quick Open, N starts a chat, O adds a project, B toggles the left
 /// sidebar, Shift+B toggles the right panel, and Shift+F opens Search.
+/// Period opens Settings.
 /// Plus/equal and minus adjust the app font size, including held-key repeats.
 fn app_shortcut_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
   @sub.custom_sub(
@@ -194,6 +195,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     ("KeyT", false) => Some(QuickOpenOpen(@quick_open.Symbols))
     ("KeyN", false) => Some(NewChat)
     ("KeyO", false) => Some(AddProjectRequested)
+    ("Period", false) => Some(OpenSetup)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(ToggleRightPanel)
     ("KeyJ", false) if is_apple => Some(Terminal(@terminal.ToggleTerminal))
