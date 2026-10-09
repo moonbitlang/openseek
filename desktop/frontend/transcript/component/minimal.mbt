@@ -3,6 +3,7 @@
 /// previews, never raw parameters or text output. Categories describe the
 /// operation, not its success.
 priv struct MinimalCall {
+  call_id : String
   tool_name : String
   category : String?
   caption : String
@@ -100,7 +101,15 @@ fn MinimalCall::from_tool(
       }
     }
   }
-  { tool_name: call.name, category, caption, status, changes, image_urls, }
+  {
+    call_id: call.call_id,
+    tool_name: call.name,
+    category,
+    caption,
+    status,
+    changes,
+    image_urls,
+  }
 }
 
 ///|
@@ -178,7 +187,7 @@ priv struct MinimalPart {
 /// calls and must never increase the failed-tool count.
 priv enum MinimalActivity {
   Call(MinimalCall)
-  Notice(text~ : String, error~ : Bool)
+  Notice(identity~ : String, text~ : String, error~ : Bool)
 } derive(Eq)
 
 ///|
@@ -473,7 +482,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         builder.push_part(
           "notice\u{0}\{identity}",
           if label == "runtime notice" {
-            Activity([Notice(text~, error=is_error)])
+            Activity([Notice(identity~, text~, error=is_error)])
           } else {
             Note(text~, error=is_error)
           },
@@ -609,7 +618,7 @@ fn MinimalActivity::render(
   single? : Bool = false,
 ) -> @html.Html {
   match self {
-    Notice(text~, error~) =>
+    Notice(text~, error~, ..) =>
       @html.div(
         class=if error {
           "minimal-note minimal-runtime-note transcript-error-message"
@@ -708,6 +717,25 @@ fn MinimalActivity::render(
 }
 
 ///|
+/// Key rows by their source identities: a completed program can insert nested
+/// calls ahead of an existing image disclosure without replacing its DOM node.
+fn minimal_activity_views(
+  locale~ : @i18n.Locale,
+  entries : Array[MinimalActivity],
+  actions : Actions,
+) -> Map[String, @html.Html] {
+  let rows : Map[String, @html.Html] = Map([])
+  for entry in entries {
+    let key = match entry {
+      Call(call) => "call\u{0}\{call.call_id}"
+      Notice(identity~, ..) => "notice\u{0}\{identity}"
+    }
+    rows[key] = entry.render(locale~, actions)
+  }
+  rows
+}
+
+///|
 fn MinimalContent::render(
   locale? : @i18n.Locale = English,
   self : MinimalContent,
@@ -768,7 +796,13 @@ fn MinimalContent::render(
       if active {
         return @html.div(
           class="minimal-tools-live minimal-rows",
-          entries.map(entry => entry.render(locale~, actions)),
+          // Give the keyed list its own element when a single call becomes a
+          // group. Switching that call's unkeyed children directly to a Map
+          // makes Rabbita insert rows in Map::map's reverse traversal order.
+          @html.div(
+            class="minimal-rows",
+            minimal_activity_views(locale~, entries, actions),
+          ),
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
@@ -776,7 +810,7 @@ fn MinimalContent::render(
         self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          entries.map(entry => entry.render(locale~, actions)),
+          minimal_activity_views(locale~, entries, actions),
         ),
       ])
     }
@@ -791,7 +825,7 @@ fn MinimalContent::render(
       let body = if parts is [{ content: Activity(entries), .. }] {
         @html.div(
           class="minimal-process-body minimal-rows",
-          entries.map(entry => entry.render(locale~, actions)),
+          minimal_activity_views(locale~, entries, actions),
         )
       } else {
         let children : Map[String, @html.Html] = Map([])

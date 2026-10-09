@@ -222,6 +222,7 @@ test "other minimal tools still prefer their result brief" {
 ///|
 test "folded minimal summaries preview operations independent of their outcome" {
   let read : MinimalCall = {
+    call_id: "read",
     tool_name: "read",
     changes: None,
     image_urls: [],
@@ -230,6 +231,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
     status: Pending,
   }
   let script : MinimalCall = {
+    call_id: "script",
     tool_name: "mbtx",
     changes: None,
     image_urls: [],
@@ -277,6 +279,7 @@ test "folded minimal summaries preview operations independent of their outcome" 
 ///|
 test "completed turn summaries show the first three captions and track failure status" {
   let pending : MinimalCall = {
+    call_id: "pending",
     tool_name: "read",
     changes: None,
     image_urls: [],
@@ -341,6 +344,7 @@ test "completed turn summaries show the first three captions and track failure s
 ///|
 test "background notices do not count as failed tools or replace pending descriptions" {
   let notice : MinimalActivity = Notice(
+    identity="failed-notice",
     text="Background task failed",
     error=true,
   )
@@ -348,6 +352,7 @@ test "background notices do not count as failed tools or replace pending descrip
   let status = MinimalToolStatus::from_activities([notice])
   assert_eq((status.failed, status.pending), (0, 0))
   let call : MinimalCall = {
+    call_id: "wait",
     tool_name: "job_wait",
     changes: None,
     image_urls: [],
@@ -382,7 +387,13 @@ test "job coordination does not take up captions in a work summary" {
     }
     entries.push(Call(MinimalCall::from_tool(call)))
   }
-  entries.push(Notice(text="background job finished", error=false))
+  entries.push(
+    Notice(
+      identity="finished-notice",
+      text="background job finished",
+      error=false,
+    ),
+  )
   assert_eq(
     MinimalContent::Completed([
       { identity: "work", content: Activity(entries), },
