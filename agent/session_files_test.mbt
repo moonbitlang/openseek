@@ -27,7 +27,15 @@ async test "session scratch survives PTC execution and registry restart" {
     )
     let generated = scratch_call(tools, "mbtx", {
       "filename": "@session/scripts/prepare.mbtx",
-      "source": @fs.read_file("share/examples/session_edits.mbtx").text(),
+      "source": (
+        #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+        #|async fn main {
+        #|  let edits : Json = [{"file":"target.txt","old_string":"before","new_string":"after","start_line":1}]
+        #|  let result = @tools.call("write", {"path":"@session/edits.json","content":edits.stringify()})
+        #|  if result.is_error { fail(result.content) }
+        #|  println("saved edits")
+        #|}
+      ),
     })
     assert_false(generated.is_error, msg=generated.content)
     let edited = scratch_call(tools, "multi_edit", {
@@ -41,16 +49,6 @@ async test "session scratch survives PTC execution and registry restart" {
     })
     assert_false(read.is_error, msg=read.content)
     assert_true(read.content.contains("target.txt"))
-    let captured = scratch_call(tools, "mbtx", {
-      "source": @fs.read_file("share/examples/session_capture.mbtx").text(),
-    })
-    assert_false(captured.is_error, msg=captured.content)
-    let retained = scratch_call(tools, "mbtx", {
-      "filename": "@builtin/read.mbtx",
-      "args": ["@session/command-output.txt"],
-    })
-    assert_false(retained.is_error, msg=retained.content)
-    assert_true(retained.content.contains("moon"))
   })
   assert_true(@fs.exists("\{scratch}/edits.json"))
   @async.with_task_group(group => {

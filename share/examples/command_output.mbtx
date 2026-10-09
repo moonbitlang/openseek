@@ -20,8 +20,7 @@ async fn main {
   // For redirect with `Cmd(.., stdout=ToFile(...))` to a file under
   // `@fs.tmpdir(prefix="run-")` — the label is required, the call creates the
   // directory, and that directory is the one place a snippet may write (`/tmp`
-  // itself is refused). Read it before this execution ends; to keep its
-  // contents for later calls, PTC-write them to @session/ before returning.
+  // itself is refused)
 
   // `test` is a keyword, don't write `let test = ...`
   // Slicing clamps instead of panicking, so this is safe on shorter output.

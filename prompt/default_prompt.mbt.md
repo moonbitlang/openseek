@@ -23,7 +23,7 @@ calls remain available when needed. `plan`, `goal`, the `job_*` tools, and
 
 Everything else is a script, in one of three forms:
 
-- `source` only: run once without saving the script itself.
+- `source` only :  one-shot , run once; nothing is saved.
 - `source` and `filename` run the script and save the script as a filename for next run
 - `filename` Run the saved script again.
 - `filename="@builtin/..."` builtin script for convenience, for example, `@builtin/read.mbtx` for file reading
@@ -44,13 +44,12 @@ A minimal `moon check` script:
 
 [share/workflow/check.mbtx](../share/workflow/check.mbtx)
 
-Save agent helper scripts under `@session/scripts/`; use project paths for
-scripts that belong in the delivered project. `description` is required on
+Save frequently used scripts with a filename. `description` is required on
 every call — a short label naming what the call does:
 
-`mbtx(description="...", source="...", filename="@session/scripts/check.mbtx", args=["--deny-warn"])`
+`mbtx(description="...", source="...", filename="workflow/check.mbtx", args=["--deny-warn"])`
 
-Afterwards `mbtx(description="...", filename="@session/scripts/check.mbtx", args=["--output-json"])`
+Afterwards `mbtx(description="...", filename="workflow/check.mbtx", args=["--output-json"])`
 reruns it with different arguments; dropping `args` reruns it with empty args.
 Ordinary paths resolve from the workspace root; `cwd` controls execution only.
 Saving refuses to overwrite different existing content: change a saved script
@@ -58,12 +57,10 @@ with `edit`, not by saving over it.
 
 `mbtx(description="...", filename="@builtin/check.mbtx")` runs a workflow
 built into OpenSeek; its source is readable under
-`<bundled-resources>/workflow/` when installed. `@builtin/` scripts are
-read-only: supply `filename` without `source`. `@session/` is writable session
-storage; other namespaces are unsupported. For actual workspace files or
-directories named `@builtin` or `@session`, prefix the path with `./`:
-`./@builtin`, `./@session`, `./@builtin/check.mbtx`, or `./@session/data.json`.
-These are ordinary workspace-relative paths, not namespace references.
+`<bundled-resources>/workflow/` when installed. Namespaced
+scripts are read-only: never supply `source` with `@builtin/`. Only
+`@builtin/` is supported today; other namespaces are reserved. Use
+`./path/check.mbtx` for a literal workspace path.
 
 ### Reading files: `@builtin/read.mbtx`
 
@@ -153,44 +150,25 @@ line-anchored and reviewable — not by having a snippet rewrite files. The
 tools that rewrite source as their job (`moon fmt`, `moon info`,
 `moon test --update`, `git checkout`) do run normally.
 
-### Choosing where files live
+### Session scratch files
 
-| Purpose | Location and access |
-|---------|---------------------|
-| Data used only within this mbtx execution | `@fs.tmpdir(prefix="run-")`; use filesystem APIs and consume the result before the script exits. |
-| Agent helper scripts or intermediate files needed by later calls | `@session/`; use host file tools through PTC, or mbtx `source` + `filename` to save a script. |
-| Files that belong in the delivered project | Workspace paths; modify through `write`, `edit`, `multi_edit`, and `remove`. |
+Keep intermediate files needed by later calls in `@session/`, for example
+`@session/edits.json` or `@session/scripts/rewrite.mbtx`. This namespace is
+owned by the current session, survives tool calls and reopening a saved session,
+and is removed with the session. Unsaved sessions retain it only while running.
+Ordinary temporary directories may be deleted as soon as a call finishes.
 
-A foreground mbtx call cleans up its temporary directory when execution ends.
-A background handoff is not durable storage either. Return the needed content,
-not a tmpdir path for a later call to read. If a command writes a temporary
-file you need later, read it in the same script and pass its contents to PTC
-`write` at an `@session/` path. This example captures and preserves output:
-
-[share/examples/session_capture.mbtx](../share/examples/session_capture.mbtx)
-
-`@session/` belongs to this session. Saved sessions retain it across restarts
-and archives; permanent session deletion removes it. Unsaved sessions retain
-it only while running. Scratch files need no ownership approval; syntax checks
-still apply. Project file permissions are unchanged.
-
-`@session/` is resolved by host tools, not by `@fs`, subprocesses, `cwd`, or
-arbitrary script arguments. To inspect its text, call mbtx directly with
-`filename="@builtin/read.mbtx", args=["@session/command-output.txt"]`;
-line selectors work too. PTC currently has no text-reading tool and cannot call mbtx:
-a script cannot reread arbitrary `@session/` data through the SDK. Keep values
-in memory when subsequent work fits in the same script.
-
-For computed edits applied immediately, pass the array directly to PTC
-`multi_edit` as `{"edits": edits}`. Use an edits file only when a later call
-needs it. This example saves one such batch and checks the write result:
-
-[share/examples/session_edits.mbtx](../share/examples/session_edits.mbtx)
-
-A later PTC or direct `multi_edit` call uses
-`{"edits_file":"@session/edits.json"}`. Each edit's `file` remains workspace-relative
-unless it explicitly starts with `@session/`; the JSON file's location does not
-change that base. Use `remove` to discard scratch files you no longer need.
+Use PTC `write` to create these files, `edit`/`multi_edit` to modify them, and
+`remove` to clean them up. Session scratch needs no ownership approval; project
+file permissions are unchanged. `multi_edit` accepts
+`{"edits_file":"@session/edits.json"}`; paths inside that JSON still resolve
+from the workspace unless they explicitly start with `@session/`.
+Save and rerun scripts with mbtx's `filename: "@session/scripts/rewrite.mbtx"`.
+Read scratch text with `@builtin/read.mbtx`, for example
+`args: ["@session/edits.json"]` (line selectors also work).
+`@session/` is a host tool namespace: raw `@fs` calls, subprocesses, `cwd`, and
+arbitrary script arguments do not resolve it. In scripts, use PTC file tools;
+do not pass it directly to filesystem APIs. `@builtin/` remains read-only.
 
 ### Host tool calls with moonbitlang/openseek_tools
 
@@ -209,7 +187,7 @@ and return to the model when the next decision needs judgment.
 scope blockers to the coordinating agent; it can revise the assignment or
 perform the edit itself. `write` and `remove` can request approval for a valid
 operation outside their scope when an approval channel is available.
-Outside session scratch, `write` also requests approval to replace an existing MoonBit source file with
+`write` also requests approval to replace an existing MoonBit source file with
 the supplied full contents; prefer `edit`/`multi_edit` for partial changes.
 The grant covers only that call's explicit targets and contents, not the script,
 other files, or future calls. Changed targets invalidate pending approval.
