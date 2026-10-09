@@ -1,7 +1,7 @@
 ///|
 async test "large request allowance is specific to base64 write and all published traces omit its payload" {
   @async.with_task_group(group => {
-    let executed = Ref(0)
+    let mut executed = 0
     let tools = @agent_tool.Tools([
       AgentToolDefinition(
         name="write",
@@ -9,7 +9,7 @@ async test "large request allowance is specific to base64 write and all publishe
         schema=JsonSchema({}),
         program_callable=true,
         execute=Sync(_ => {
-          executed.val += 1
+          executed += 1
           @agent_tool.respond("ok")
         }),
       ),
@@ -49,7 +49,7 @@ async test "large request allowance is specific to base64 write and all publishe
         assert_true(result is { "is_error": true, .. })
       }
     }
-    assert_eq(executed.val, 1)
+    assert_eq(executed, 1)
     program.close()
     assert_true(publications.length() >= 2)
     for trace in publications {
