@@ -1,3 +1,5 @@
+import { posix } from 'node:path';
+
 export class DesktopBrowserHarness {
   constructor(page) {
     this.page = page;
@@ -523,6 +525,14 @@ export class DesktopBrowserHarness {
 
   replyFor(request) {
     switch (request.method) {
+      case 'host.open_path':
+      case 'host.open_path_preview':
+        // File-open flows now ask the host to choose a surface before reading
+        // content. The shared fixtures open text files in the editor.
+        return {
+          opened: false,
+          editor_target: { path: posix.resolve(request.params.cwd, request.params.path) },
+        };
       case 'session.list':
         return this.sessionGroups(this.liveSessions);
       case 'session.list_archived':
