@@ -2087,9 +2087,13 @@ priv enum Msg {
     line~ : Int?,
     column~ : Int?
   )
-  // The host proved that this literal checkout-relative path is a directory.
-  // Reveal and expand it in the Files tree. The same owner/generation fence as
-  // file links applies.
+  // A local PDF resolved by the window, fenced like the text-file reply.
+  OpenPdfAt(
+    owner~ : @interop.ConversationKey,
+    generation~ : Int,
+    path~ : String
+  )
+  // Reveal a resolved checkout directory in the Files tree.
   OpenDirectoryAt(
     owner~ : @interop.ConversationKey,
     generation~ : Int,

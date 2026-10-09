@@ -18,7 +18,9 @@ pub(all) enum Resolution {
   // Existing UTF-8 text within the built-in viewer's size limit. Position is
   // absent for an ordinary path and for a real filename ending in a suffix.
   EditorPath(path~ : String, line~ : Int?, column~ : Int?)
-  // An existing directory, binary file, or file too large for the viewer.
+  // A PDF identified by its header, independent of the text viewer size limit.
+  PdfPath(String)
+  // An existing directory, other binary file, or text too large for the viewer.
   SystemPath(String)
   // Neither the literal path nor a parsed suffix-free candidate exists.
   MissingPath(String)
@@ -68,7 +70,11 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   guard @fs.kind(self.path) is Regular else { return SystemPath(self.path) }
   let source = @fs.open(self.path, mode=ReadOnly)
   defer source.close()
-  guard source.size() <= MaxEditorFileBytes.to_int64() else {
+  let size = source.size()
+  if size >= 5 && source.read_exactly_at(5, position=0) == b"%PDF-" {
+    return PdfPath(self.path)
+  }
+  guard size <= MaxEditorFileBytes.to_int64() else {
     return SystemPath(self.path)
   }
   let data = source.read_all()

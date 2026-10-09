@@ -7,6 +7,7 @@ priv enum UiMessage {
   ReloadLabel
   EnterUrl
   OpenBrowser
+  OpenApplication
 }
 
 ///|
@@ -32,6 +33,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, EnterUrl) => "输入 URL"
     (TraditionalChinese, EnterUrl) => "輸入 URL"
     (Japanese, EnterUrl) => "URL を入力"
+    (English, OpenApplication) => "Open in default application"
+    (Spanish, OpenApplication) => "Abrir en la aplicación predeterminada"
+    (SimplifiedChinese, OpenApplication) => "在默认应用中打开"
+    (TraditionalChinese, OpenApplication) => "在預設應用程式中開啟"
+    (Japanese, OpenApplication) => "既定のアプリで開く"
     (English, OpenBrowser) => "Open in system browser"
     (Spanish, OpenBrowser) => "Abrir en el navegador del sistema"
     (SimplifiedChinese, OpenBrowser) => "在系统浏览器中打开"

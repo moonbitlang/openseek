@@ -8,6 +8,8 @@ pub fn decode_component(StringView) -> String
 
 pub fn encode_component(StringView) -> String
 
+pub fn file_url(String) -> String
+
 // Errors
 
 // Types and methods

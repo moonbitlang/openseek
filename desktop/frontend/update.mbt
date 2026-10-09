@@ -976,6 +976,14 @@ fn open_editor_at(
   file_link_generation? : Int,
   annotation? : String,
 ) -> (@cmd.Cmd, Model) {
+  // Direct file picks (Quick Open and mentions) also use PDF routing. A
+  // resolved editor reply must not loop when a .pdf file is actually text.
+  if file_link_generation is None &&
+    model.is_desktop &&
+    model.focused is Local &&
+    path.to_lower().has_suffix(".pdf") {
+    return update_msg(dispatch, OpenFile(path), model)
+  }
   // A transcript host reply already carries the token its click spent. Every
   // direct mention, Quick Open, or location jump is a newer competing action.
   let model = if file_link_generation is Some(_) {
@@ -3256,6 +3264,11 @@ fn update_msg(
     // then the file subsystem loads and shows the document against the
     // fresh projection.
     FileEditor(FileSelected(path~, name~)) => {
+      if model.is_desktop &&
+        model.focused is Local &&
+        name.to_lower().has_suffix(".pdf") {
+        return update_msg(dispatch, OpenFile(path.0), model)
+      }
       let placement = file_ctx(model).placement
       guard placement is Some(value) && value.is_ready() else {
         return (@cmd.none, model)
@@ -5278,6 +5291,7 @@ fn update_msg(
           generation,
           cwd=Some(cwd),
           path,
+          preview_pdf=model.is_desktop,
         ),
         model,
       )
@@ -5320,6 +5334,45 @@ fn update_msg(
         path,
         range,
         file_link_generation=generation,
+      )
+    }
+    OpenPdfAt(owner~, generation~, path~) => {
+      guard model.is_desktop &&
+        owner.channel is Local &&
+        model.active_checkout() is Some(active) &&
+        owner == active.owner &&
+        generation == model.file_panel.file_link_generation else {
+        return (@cmd.none, model)
+      }
+      let url = @uri.file_url(path)
+      let reuse = for tab in model.dock.tabs {
+        if tab is Browser(id~) &&
+          @preview.page(model.preview, id) is Some(page) &&
+          page.url == Some(url) {
+          break Some(id)
+        }
+      } nobreak {
+        None
+      }
+      let (preview, id) = match reuse {
+        Some(id) => (@preview.navigate(model.preview, id, url), id)
+        None => @preview.open_page(model.preview, url~)
+      }
+      (
+        browser_op(
+          dispatch,
+          @commands.browser_open_pdf,
+          { id, path, dark: model.theme.is_dark(model.system_dark), },
+          quiet=false,
+        ),
+        {
+          ..model,
+          preview,
+          dock: @dock.open_browser(model.dock, id),
+          browser_pane: { shown: None, rect: None, geo: None, },
+          right_panel_open: true,
+          right_panel_menu_open: false,
+        },
       )
     }
     OpenDirectoryAt(owner~, generation~, path~) => {
@@ -6030,6 +6083,26 @@ fn update_msg(
         @preview.page(model.preview, id) is Some(page) &&
         page.url is Some(url) else {
         return (@cmd.none, model)
+      }
+      if url.has_prefix("file://") &&
+        model.active_checkout() is Some(active) &&
+        active.owner.channel is Local {
+        let file = @common.Uri::parse(url) catch {
+          _ => return (@cmd.none, model)
+        }
+        let path = file.fs_path()
+        return (
+          open_file(
+            dispatch,
+            Local,
+            active.owner.session,
+            model.file_panel.file_link_generation,
+            cwd=None,
+            path,
+            preview_pdf=false,
+          ),
+          model,
+        )
       }
       (open_external_link(dispatch, url), model)
     }
@@ -17841,6 +17914,36 @@ test "resolved transcript files and directories stay in the right panel" {
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
+  let desktop = { ..model, is_desktop: true, }
+  let (_, pending) = update(dispatch, OpenFile("report.pdf"), desktop)
+  let pdf_msg = OpenPdfAt(owner~, generation=1, path="/work/project/report.pdf")
+  let (_, pdf) = update(dispatch, pdf_msg, pending)
+  assert_true(pdf.right_panel_open)
+  assert_true(@dock.active_browser(pdf.dock) is Some(_))
+  assert_eq(pdf.preview.pages.length(), 1)
+  let (_, reused) = update(dispatch, pdf_msg, pdf)
+  assert_eq(reused.preview.pages.length(), 1)
+  let (_, stale) = update(
+    dispatch,
+    OpenPdfAt(owner~, generation=0, path="/tmp/stale.pdf"),
+    reused,
+  )
+  assert_eq(stale.preview.pages.length(), 1)
+  let (_, remote_console) = update(dispatch, pdf_msg, {
+    ..pending,
+    is_desktop: false,
+  })
+  assert_eq(remote_console.preview.pages.length(), 0)
+  let (_, other_owner) = update(
+    dispatch,
+    OpenPdfAt(
+      owner={ channel: Local, session: "other", },
+      generation=1,
+      path="/tmp/other.pdf",
+    ),
+    pending,
+  )
+  assert_eq(other_owner.preview.pages.length(), 0)
 }
 
 ///|

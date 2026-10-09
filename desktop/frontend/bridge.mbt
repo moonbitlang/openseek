@@ -1707,6 +1707,7 @@ fn open_file(
   generation : Int,
   cwd~ : @common.Uri?,
   path : String,
+  preview_pdf~ : Bool,
 ) -> @cmd.Cmd {
   match cwd {
     Some(resource) if !@resource.belongs_to(resource, channel) =>
@@ -1715,7 +1716,12 @@ fn open_file(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.host_open_path, {
+      let command = if preview_pdf && channel is Local {
+        @commands.host_open_path_preview
+      } else {
+        @commands.host_open_path
+      }
+      let reply = @interop.bridge_request(channel, command, {
         session,
         cwd: cwd.map(resource => resource.path),
         path,
@@ -1734,6 +1740,10 @@ fn open_file(
         }
       }
       match reply {
+        Pdf(path) =>
+          scheduler.add(
+            dispatch(OpenPdfAt(owner={ channel, session, }, generation~, path~)),
+          )
         Editor(target) =>
           scheduler.add(
             dispatch(

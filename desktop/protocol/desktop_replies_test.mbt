@@ -433,7 +433,15 @@ test "open-path replies distinguish system, editor, and directory targets" {
   let refused : @protocol.OpenPathReply = Refused(
     "File does not exist: nope.mbt",
   )
-  for reply in [system, ordinary, positioned, directory, refused] {
+  for
+    reply in [
+      system,
+      ordinary,
+      positioned,
+      directory,
+      Pdf("/tmp/中文 #100%.pdf"),
+      refused,
+    ] {
     let decoded : @protocol.OpenPathReply = @json.from_json(reply.to_json())
     @debug.assert_eq(decoded, reply)
   }
@@ -1870,5 +1878,33 @@ test "detached worktree replies omit branch and reject malformed branch values" 
         })
       }),
     )
+  }
+}
+
+///|
+test "PDF browser payload rejects missing malformed and relative paths" {
+  let payload : @protocol.BrowserPdfPayload = {
+    id: 4,
+    path: "/tmp/中文 #100%.pdf",
+    dark: false,
+  }
+  let decoded : @protocol.BrowserPdfPayload = @json.from_json(payload.to_json())
+  assert_eq(decoded, payload)
+  let invalid : Array[Json] = [
+    { "id": 4, "dark": false },
+    { "id": 4, "path": null, "dark": false },
+    { "id": 4, "path": "relative.pdf", "dark": false },
+    { "id": 4, "path": "//remote/a.pdf", "dark": false },
+    { "id": "4", "path": "/tmp/a.pdf", "dark": false },
+    { "id": 4, "path": "/tmp/a.pdf" },
+  ]
+  for json in invalid {
+    let rejected = try {
+      let _ : @protocol.BrowserPdfPayload = @json.from_json(json)
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
   }
 }

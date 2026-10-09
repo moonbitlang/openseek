@@ -15,6 +15,9 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/string",
+  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/internal/openpath",
+  "openseek_desktop/uri",
   "tonyfettes/xlog",
 }
 
@@ -25,5 +28,4 @@ supported_targets = "+native"
 import {
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
-  "openseek_desktop/backend/internal/pathx",
 } for "wbtest"

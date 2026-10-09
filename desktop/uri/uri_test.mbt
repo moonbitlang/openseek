@@ -72,3 +72,15 @@ test "pure component encoding and decoding round trip Unicode and ASCII" {
     assert_eq(@uri.decode_component(@uri.encode_component(text)), text)
   }
 }
+
+///|
+test "local file URLs preserve path separators and escape filename syntax" {
+  assert_eq(
+    @uri.file_url("/tmp/中文 #?%.pdf"),
+    "file:///tmp/%E4%B8%AD%E6%96%87%20%23%3F%25.pdf",
+  )
+  assert_eq(
+    @uri.file_url("/C:/Users/Test/document.pdf"),
+    "file:///C:/Users/Test/document.pdf",
+  )
+}

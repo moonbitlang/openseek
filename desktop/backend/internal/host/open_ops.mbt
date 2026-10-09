@@ -47,7 +47,10 @@ async fn resolve_host_reference(
 /// Refusals travel inside the reply as `Refused(message)` rather than as a
 /// raised error: the local bridge flattens a raise to the generic
 /// "op ext:openseek/host.open_path failed" and hides the reason.
-async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
+async fn open_path_op(
+  payload : OpenPathPayload,
+  preview_pdf? : Bool = false,
+) -> OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
     Err(message) => return refusal(message)
@@ -63,8 +66,16 @@ async fn open_path_op(payload : OpenPathPayload) -> OpenPathReply {
     }
     return Editor({ path: resource, line, column, })
   }
-  guard resolution is SystemPath(system_path) else {
-    return refusal("Could not resolve path")
+  let system_path = match resolution {
+    PdfPath(path) if preview_pdf => {
+      guard @pathx.Path(path).to_absolute() is Some(absolute) &&
+        absolute.to_uri_path() is Some(resource) else {
+        return refusal("Invalid absolute file path: \{path}")
+      }
+      return Pdf(resource)
+    }
+    PdfPath(path) | SystemPath(path) => path
+    _ => return refusal("Could not resolve path")
   }
   // A literal directory inside this conversation belongs to the built-in Files
   // tree, except for macOS application bundles, which belong to LaunchServices.
@@ -111,7 +122,7 @@ async fn reveal_path_op(payload : OpenPathPayload) -> RevealPathReply {
   }
   let path = match reference.resolution {
     EditorPath(path~, ..) => path
-    SystemPath(path) => path
+    PdfPath(path) | SystemPath(path) => path
     MissingPath(path) => return RevealRefused("File does not exist: \{path}")
   }
   let code = @platform.reveal_path(path) catch {
@@ -383,4 +394,13 @@ pub async fn open_codex_config(home : @pathx.Path?) -> Unit {
     error => raise HostError("Could not open \{config}: \{error}")
   }
   guard code == 0 else { raise HostError("Could not open \{config}") }
+}
+
+///|
+/// Route a local desktop file click, including PDFs in the native browser.
+/// Bound only on the window so a remote path cannot become a local file URL.
+pub async fn open_path_preview(
+  payload : @protocol.OpenPathPayload,
+) -> @protocol.OpenPathReply {
+  open_path_op(payload, preview_pdf=true)
 }

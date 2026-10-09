@@ -885,3 +885,17 @@ pub let github_drafts_set : Command[
   @protocol.GithubDrafts,
   @protocol.EmptyReply,
 ] = Command("github.drafts_set")
+
+///|
+/// Resolve a file click for the local window, including native PDF preview.
+pub let host_open_path_preview : Command[
+  @protocol.OpenPathPayload,
+  @protocol.OpenPathReply,
+] = Command("host.open_path_preview")
+
+///|
+/// Open a validated local PDF in a native browser view.
+pub let browser_open_pdf : Command[
+  @protocol.BrowserPdfPayload,
+  @protocol.EmptyReply,
+] = Command("browser.open_pdf")

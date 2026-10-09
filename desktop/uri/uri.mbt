@@ -35,3 +35,15 @@ pub fn decode_component(text : StringView) -> String {
 pub fn decode(text : StringView) -> String {
   @percent.decode_lossy(text)
 }
+
+///|
+/// Encode an absolute URI path as a local file URL. Encode each segment so
+/// spaces, Unicode, percent signs and fragment/query characters stay in the filename.
+pub fn file_url(path : String) -> String {
+  "file://" +
+  path
+  .split("/")
+  .map(segment => encode_component(segment).replace(old="%3A", new=":"))
+  .collect()
+  .join("/")
+}

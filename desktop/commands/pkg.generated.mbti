@@ -65,6 +65,8 @@ pub let browser_navigate : Command[@protocol.BrowserOpenPayload, @protocol.Empty
 
 pub let browser_open : Command[@protocol.BrowserOpenPayload, @protocol.EmptyReply]
 
+pub let browser_open_pdf : Command[@protocol.BrowserPdfPayload, @protocol.EmptyReply]
+
 pub let browser_reload : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
 pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.EmptyReply]
@@ -192,6 +194,8 @@ pub let github_review_mutate : Command[@protocol.GithubReviewMutationPayload, @p
 pub let host_connect : Command[@protocol.EmptyPayload, @protocol.EmptyReply]
 
 pub let host_open_path : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
+
+pub let host_open_path_preview : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
 
 pub let host_reveal_path : Command[@protocol.OpenPathPayload, @protocol.RevealPathReply]
 

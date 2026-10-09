@@ -244,6 +244,19 @@ pub fn BrowserOpenPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::to_json(Self) -> Json
 pub fn BrowserOpenPayload::to_repr(Self) -> @debug.Repr
 
+pub(all) struct BrowserPdfPayload {
+  id : Int
+  path : String
+  dark : Bool
+} derive(Eq, @debug.Debug)
+pub fn BrowserPdfPayload::equal(Self, Self) -> Bool
+pub fn BrowserPdfPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPdfPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserPdfPayload::to_json(Self) -> Json
+pub fn BrowserPdfPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserPdfPayload
+pub impl @json.FromJson for BrowserPdfPayload
+
 pub(all) struct BrowserThemePayload {
   id : Int
   dark : Bool
@@ -2173,6 +2186,7 @@ pub fn OpenPathPayload::to_repr(Self) -> @debug.Repr
 pub(all) enum OpenPathReply {
   Opened
   Editor(OpenPathEditorTarget)
+  Pdf(String)
   Directory(OpenPathDirectoryTarget)
   Refused(String)
 } derive(Eq, @debug.Debug)

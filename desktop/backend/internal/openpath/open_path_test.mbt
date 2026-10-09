@@ -61,7 +61,7 @@ async test "existing files win before editor positions" {
   @debug.assert_eq(@openpath.Reference(binary).resolve(), SystemPath(binary))
   let pdf = "\{dir}/document.pdf"
   @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
-  @debug.assert_eq(@openpath.Reference(pdf).resolve(), SystemPath(pdf))
+  @debug.assert_eq(@openpath.Reference(pdf).resolve(), PdfPath(pdf))
   let oversized = "\{dir}/large.txt"
   let content = "x".repeat(@openpath.MaxEditorFileBytes + 1)
   @fs.write_file(oversized, content, create_mode=CreateOrTruncate)
@@ -69,4 +69,23 @@ async test "existing files win before editor positions" {
     @openpath.Reference(oversized).resolve(),
     SystemPath(oversized),
   )
+}
+
+///|
+async test "PDF content is recognized before the text size limit" {
+  let dir = @fs.tmpdir(prefix="openseek-openpath-pdf-")
+  defer @fs.rmdir(dir, recursive=true)
+  let path = "\{dir}/中文 #100%.PDF"
+  @fs.write_file(
+    path,
+    "%PDF-1.7\n" + "x".repeat(@openpath.MaxEditorFileBytes + 1),
+    create_mode=CreateOrTruncate,
+  )
+  assert_true(
+    @openpath.Reference(path).resolve() is PdfPath(actual) && actual == path,
+  )
+  @fs.write_file(path, "ordinary text", create_mode=TruncateExisting)
+  assert_true(@openpath.Reference(path).resolve() is EditorPath(..))
+  @fs.write_file(path, "", create_mode=TruncateExisting)
+  assert_true(@openpath.Reference(path).resolve() is EditorPath(..))
 }
