@@ -945,7 +945,7 @@ pub(all) enum OpenPathReply {
   // The host handed a non-text path (or any path outside the checkout's
   // built-in text/directory policy) to the system opener.
   Opened
-  // A viewer-sized UTF-8 file or supported raster image, with optional position.
+  // A viewer-sized UTF-8 file, with optional position.
   Editor(OpenPathEditorTarget)
   // Absolute URI path of a local document to open in the browser.
   Browser(String)

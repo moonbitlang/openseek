@@ -1,7 +1,7 @@
-// Resolution of file references. Viewer-sized text and raster images open
-// in the editor, PDFs in the browser, and other existing paths in the system
-// application. A trailing `:line[:column]` or `#Lline` is only treated as an
-// editor position after the literal path is known not to exist.
+// Resolution of file references. Viewer-sized text opens in the editor;
+// PDFs and supported raster images open in the browser. Other existing paths
+// go to the system application. A trailing `:line[:column]` or `#Lline` is
+// only treated as an editor position after the literal path is known not to exist.
 
 ///|
 /// Keep routing and loading on the same size boundary. Larger files cannot be
@@ -15,11 +15,11 @@ pub(all) struct Reference(String) derive(Debug, Eq)
 ///|
 /// Where the host should send a transcript file reference.
 pub(all) enum Resolution {
-  // UTF-8 text or a supported raster image within the viewer's size limit.
+  // UTF-8 text within the viewer's size limit.
   // Position is absent for an ordinary path and a real filename with a suffix.
   EditorPath(path~ : String, line~ : Int?, column~ : Int?)
-  // A document that opens in the browser. Currently selected for PDFs by
-  // their header, independent of the text viewer size limit.
+  // A PDF or supported raster image, identified by its header independently
+  // of the text viewer size limit.
   BrowserPath(String)
   // An existing directory, other binary file, or text too large for the viewer.
   SystemPath(String)
@@ -72,7 +72,11 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   let source = @fs.open(self.path, mode=ReadOnly)
   defer source.close()
   let size = source.size()
-  if size >= 5 && source.read_exactly_at(5, position=0) == b"%PDF-" {
+  // Twelve bytes cover every supported raster signature, including WebP.
+  let header_size = if size < 12 { size.to_int() } else { 12 }
+  let header = source.read_exactly_at(header_size, position=0)
+  if header is [b'%', b'P', b'D', b'F', b'-', ..] ||
+    @filekind.classify(header) is RasterImage(_) {
     return BrowserPath(self.path)
   }
   guard size <= MaxEditorFileBytes.to_int64() else {
@@ -80,8 +84,9 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   }
   let data = source.read_all()
   match @filekind.classify(data.binary()) {
-    Utf8Text(_) | RasterImage(_) =>
+    Utf8Text(_) =>
       EditorPath(path=self.path, line=self.line, column=self.column)
+    RasterImage(_) => BrowserPath(self.path)
     Binary => SystemPath(self.path)
   }
 }

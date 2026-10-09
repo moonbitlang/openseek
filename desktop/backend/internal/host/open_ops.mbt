@@ -1,5 +1,5 @@
-// Opening a file reference: viewer-sized text and raster images on the
-// filesystem go to the built-in editor, checkout-local directories
+// Opening a file reference: viewer-sized text goes to the editor, PDFs and
+// raster images can use the native browser, and checkout-local directories
 // go to its Files tree, and other existing paths go to the platform opener.
 // Position suffixes apply only to built-in text files.
 
@@ -293,7 +293,7 @@ async test "open_path returns workspace editor positions without a system open" 
       { session: "unused", cwd: Some(cwd), path: "picture", },
       preview_browser=true,
     ),
-    Editor({ path: "\{cwd}/picture", line: None, column: None, }),
+    Browser("\{cwd}/picture"),
   )
 }
 
