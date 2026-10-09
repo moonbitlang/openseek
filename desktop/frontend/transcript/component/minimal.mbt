@@ -1,12 +1,15 @@
 ///|
-/// A minimal call retains presentation text and derived edit previews, never
-/// raw parameters or output. Categories describe the operation, not its success.
+/// A minimal call retains presentation text, image URLs and derived edit
+/// previews, never raw parameters or text output. Categories describe the
+/// operation, not its success.
 priv struct MinimalCall {
+  call_id : String
   tool_name : String
   category : String?
   caption : String
   status : ToolStatus
   changes : EditChanges?
+  image_urls : Array[String]
 } derive(Eq)
 
 ///|
@@ -26,7 +29,7 @@ fn MinimalCall::from_tool(
     "mbtx" => Some(ui(locale, ExecuteMbtx))
     "shell" => Some(ui(locale, ExecuteCommands))
     "web_search" | "webSearch" => Some(ui(locale, SearchWeb))
-    "imageView" => Some(ui(locale, ViewImages))
+    "read_image" | "imageView" => Some(ui(locale, ViewImages))
     "imageGeneration" => Some(ui(locale, GenerateImages))
     "enteredReviewMode" | "exitedReviewMode" => Some(ui(locale, ReviewCode))
     "review" | "spawn_agent" => Some(ui(locale, CreateSubagents))
@@ -90,7 +93,23 @@ fn MinimalCall::from_tool(
   } else {
     None
   }
-  { tool_name: call.name, category, caption, status, changes, }
+  let image_urls : Array[String] = []
+  if call.outcome is Done(content~, ..) {
+    for part in content.0 {
+      if part is ImageUrl(url~) && supported_image_content_url(url) {
+        image_urls.push(url)
+      }
+    }
+  }
+  {
+    call_id: call.call_id,
+    tool_name: call.name,
+    category,
+    caption,
+    status,
+    changes,
+    image_urls,
+  }
 }
 
 ///|
@@ -106,7 +125,7 @@ fn MinimalCall::icon(self : MinimalCall) -> @html.Html {
     "mbtx" => @icons.icon_terminal()
     "shell" => @icons.icon_terminal()
     "web_search" | "webSearch" => @icons.icon_search()
-    "imageView" => @icons.icon_file_media()
+    "read_image" | "imageView" => @icons.icon_file_media()
     "imageGeneration" => @icons.icon_sparkle()
     "enteredReviewMode" | "exitedReviewMode" | "submit_review" =>
       @icons.icon_search()
@@ -168,7 +187,7 @@ priv struct MinimalPart {
 /// calls and must never increase the failed-tool count.
 priv enum MinimalActivity {
   Call(MinimalCall)
-  Notice(text~ : String, error~ : Bool)
+  Notice(identity~ : String, text~ : String, error~ : Bool)
 } derive(Eq)
 
 ///|
@@ -463,7 +482,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         builder.push_part(
           "notice\u{0}\{identity}",
           if label == "runtime notice" {
-            Activity([Notice(text~, error=is_error)])
+            Activity([Notice(identity~, text~, error=is_error)])
           } else {
             Note(text~, error=is_error)
           },
@@ -599,7 +618,7 @@ fn MinimalActivity::render(
   single? : Bool = false,
 ) -> @html.Html {
   match self {
-    Notice(text~, error~) =>
+    Notice(text~, error~, ..) =>
       @html.div(
         class=if error {
           "minimal-note minimal-runtime-note transcript-error-message"
@@ -620,7 +639,40 @@ fn MinimalActivity::render(
           @html.span(class="minimal-note-text", text),
         ],
       )
-    Call(call) =>
+    Call(call) => {
+      let heading : Array[@html.Html] = [
+        @html.span(
+          class="minimal-tool-icon",
+          attrs=@html.Attrs::build().aria_hidden("true").title(call.tool_name),
+          call.icon(),
+        ),
+        @html.span(
+          class=if call.image_urls.is_empty() {
+            "minimal-call-caption"
+          } else {
+            "minimal-call-caption minimal-summary-text"
+          },
+          title=call.caption,
+          call.caption,
+        ),
+        if call.image_urls.is_empty() {
+          @html.nothing
+        } else {
+          @html.span(
+            class="minimal-chevron",
+            attrs=@html.Attrs::build().aria_hidden("true"),
+            @icons.icon(@icons.icon_chevron_down),
+          )
+        },
+        if single {
+          MinimalToolStatus::from_activities([self]).view(locale~)
+        } else if call.status is (Succeeded | Snapshot) {
+          // Expanded calls follow the same quiet-success rule as summaries.
+          @html.nothing
+        } else {
+          call.status.view(locale~)
+        },
+      ]
       @html.div(
         class=if single {
           if call.status is Failed {
@@ -634,23 +686,18 @@ fn MinimalActivity::render(
           "minimal-call"
         },
         [
-          @html.span(
-            class="minimal-tool-icon",
-            attrs=@html.Attrs::build().aria_hidden("true").title(call.tool_name),
-            call.icon(),
-          ),
-          @html.span(
-            class="minimal-call-caption",
-            title=call.caption,
-            call.caption,
-          ),
-          if single {
-            MinimalToolStatus::from_activities([self]).view(locale~)
-          } else if call.status is (Succeeded | Snapshot) {
-            // Expanded calls follow the same quiet-success rule as summaries.
-            @html.nothing
+          ..if call.image_urls.is_empty() {
+            heading
           } else {
-            call.status.view(locale~)
+            [
+              @html.details(class="minimal-image-call", open=true, [
+                @html.summary(class="minimal-activity-summary", heading),
+                @html.div(
+                  class="minimal-image-body",
+                  call.image_urls.map(url => image_content_view(locale~, url)),
+                ),
+              ]),
+            ]
           },
           if call.changes is Some(changes) {
             @html.div(
@@ -665,7 +712,27 @@ fn MinimalActivity::render(
           },
         ],
       )
+    }
   }
+}
+
+///|
+/// Key rows by their source identities: a completed program can insert nested
+/// calls ahead of an existing image disclosure without replacing its DOM node.
+fn minimal_activity_views(
+  locale~ : @i18n.Locale,
+  entries : Array[MinimalActivity],
+  actions : Actions,
+) -> Map[String, @html.Html] {
+  let rows : Map[String, @html.Html] = Map([])
+  for entry in entries {
+    let key = match entry {
+      Call(call) => "call\u{0}\{call.call_id}"
+      Notice(identity~, ..) => "notice\u{0}\{identity}"
+    }
+    rows[key] = entry.render(locale~, actions)
+  }
+  rows
 }
 
 ///|
@@ -729,7 +796,13 @@ fn MinimalContent::render(
       if active {
         return @html.div(
           class="minimal-tools-live minimal-rows",
-          entries.map(entry => entry.render(locale~, actions)),
+          // Give the keyed list its own element when a single call becomes a
+          // group. Switching that call's unkeyed children directly to a Map
+          // makes Rabbita insert rows in Map::map's reverse traversal order.
+          @html.div(
+            class="minimal-rows",
+            minimal_activity_views(locale~, entries, actions),
+          ),
         )
       }
       // Earlier groups start folded once a new assistant message arrives.
@@ -737,7 +810,7 @@ fn MinimalContent::render(
         self.summary_view(locale~),
         @html.div(
           class="minimal-call-list",
-          entries.map(entry => entry.render(locale~, actions)),
+          minimal_activity_views(locale~, entries, actions),
         ),
       ])
     }
@@ -752,7 +825,7 @@ fn MinimalContent::render(
       let body = if parts is [{ content: Activity(entries), .. }] {
         @html.div(
           class="minimal-process-body minimal-rows",
-          entries.map(entry => entry.render(locale~, actions)),
+          minimal_activity_views(locale~, entries, actions),
         )
       } else {
         let children : Map[String, @html.Html] = Map([])
