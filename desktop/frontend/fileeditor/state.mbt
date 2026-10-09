@@ -181,6 +181,37 @@ pub(all) struct FileStat {
 }
 
 ///|
+/// Every open file observed by this host, regardless of its viewer. A text tab
+/// and several native previews of the same resource share one stat request.
+pub fn Ctx::observed_files(self : Ctx) -> Array[@common.Uri] {
+  let paths = self.open_files.copy()
+  for path in self.preview_files {
+    if !paths.contains(path) {
+      paths.push(path)
+    }
+  }
+  paths
+}
+
+///|
+/// Poll uncovered files with the same subscription. A failed or parked
+/// workspace watcher also falls back here; native previews remain observable
+/// even when the current conversation has no checkout or is on another host.
+pub fn State::polled_files(self : State, ctx : Ctx) -> Array[@common.Uri] {
+  ctx
+  .observed_files()
+  .filter(path => {
+    (ctx.checkout_ready() || ctx.preview_files.contains(path)) &&
+    (
+      ctx.relative(path) is None ||
+      self.watching is None ||
+      self.watch_error is Some(_) ||
+      ctx.preview_rechecks.contains(path)
+    )
+  })
+}
+
+///|
 /// One concrete filesystem event from the host watcher. Paths are relative
 /// to the watcher's explicit root. A rename keeps both names so the file tree
 /// and any open tab at either address can be reconciled.
@@ -780,6 +811,10 @@ pub(all) struct Ctx {
   // is on screen).
   panel_open : Bool
   open_files : Array[@common.Uri]
+  // Native previews participate in filesystem watching without opening text
+  // documents or starting language services for binary files.
+  preview_files : Array[@common.Uri]
+  preview_rechecks : Array[@common.Uri]
   active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
@@ -1125,7 +1160,7 @@ pub(all) enum Msg {
   // the one cheap signal that covers them. `owner` fences a background
   // conversation's finish.
   RunSettled(owner~ : @interop.ConversationKey)
-  // Files outside the checkout are not covered by its directory watcher.
+  // Files outside the checkout, or whose watcher failed, share one stat tick.
   RefreshExternalFiles
   // A `stat_files` reply: each open tab's current mtime signature, or that
   // the file is gone or could not be inspected. Owner plus request epoch

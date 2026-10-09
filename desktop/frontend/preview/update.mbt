@@ -12,18 +12,28 @@ pub(all) enum Msg {
   LoadingChanged(id~ : Int, loading~ : Bool)
   TitleUpdated(id~ : Int, title~ : String)
   LoadFailed(id~ : Int, url~ : String, text~ : String)
+  // The reload command failed before the native view could send load events.
+  ReloadFailed(id~ : Int, url~ : String, message~ : String)
 }
 
 ///|
 pub fn update(msg : Msg, state : State) -> State {
   fn patch(id : Int, apply : (PageState) -> PageState) -> State {
     guard state.pages.get(id) is Some(page) else { return state }
-    let pages = state.pages.copy()
-    pages[id] = apply(page)
-    { ..state, pages, }
+    state.with_page(id, apply(page))
   }
 
   match msg {
+    ReloadFailed(id~, url~, message~) => {
+      guard state.pages.get(id) is Some(page) && page.url == Some(url) else {
+        return state
+      }
+      let files = state.files.copy()
+      files.remove(id)
+      let pages = state.pages.copy()
+      pages[id] = { ..page, loading: false, failure: Some(message), }
+      { ..state, pages, files, }
+    }
     InputChanged(id~, value~) => patch(id, page => { ..page, input: value, })
     // The committed URL replaces the draft: the bar names what the pane
     // shows, exactly like a browser's address bar after a navigation. A

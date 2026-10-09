@@ -133,6 +133,8 @@ pub(all) struct Ctx {
   narrow : Bool
   panel_open : Bool
   open_files : Array[@common.Uri]
+  preview_files : Array[@common.Uri]
+  preview_rechecks : Array[@common.Uri]
   active_file : @common.Uri?
   open_history_diffs : Array[@dock.GitHistoryDiff]
   active_history_diff : @dock.GitHistoryDiff?
@@ -140,6 +142,7 @@ pub(all) struct Ctx {
 } derive(Eq)
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
+pub fn Ctx::observed_files(Self) -> Array[@common.Uri]
 
 pub(all) struct Doc {
   name : String
@@ -516,6 +519,7 @@ pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bo
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self

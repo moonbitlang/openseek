@@ -1469,13 +1469,24 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   guard ctx.root() is Some(root) else { return None }
   let index_live = self.index is IndexLoading(..) ||
     self.index is IndexReady(..)
+  let previews = ctx.preview_files.filter_map(file => ctx.relative(file))
   if ctx.placement is None ||
     ctx.placement is Some(@interop.MissingWorktree(..)) ||
-    (!ctx.panel_open && ctx.open_files.is_empty() && !index_live) ||
+    (
+      !ctx.panel_open &&
+      ctx.open_files.is_empty() &&
+      previews.is_empty() &&
+      !index_live
+    ) ||
     ctx.owner.session.is_empty() {
     return None
   }
   let files = ctx.open_files.filter_map(file => ctx.relative(file))
+  for path in previews {
+    if !files.contains(path) {
+      files.push(path)
+    }
+  }
   files.sort_by((left, right) => left.0.lexical_compare(right.0))
   let recursive = index_live
   let files = if recursive {
@@ -1670,8 +1681,7 @@ pub fn subscriptions(
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   @sub.batch([
-    if ctx.checkout_ready() &&
-      ctx.open_files.any(file => ctx.relative(file) is None) {
+    if !state.polled_files(ctx).is_empty() {
       @sub.every(2000, dispatch(RefreshExternalFiles))
     } else {
       @sub.none
@@ -2461,7 +2471,7 @@ fn update_inner(
   // `sync` parks the old owner while placement is unresolved or its checkout
   // is missing. Refuse file-editor actions until there is a concrete root to
   // put into their absolute filesystem or root-relative language addresses.
-  if !ctx.checkout_ready() {
+  if !ctx.checkout_ready() && !(msg is RefreshExternalFiles) {
     // The explorer selection is a local panel preference and remains useful
     // while placement is broken; only the host-backed refresh must wait.
     return match msg {
@@ -2568,7 +2578,7 @@ fn update_inner(
           dispatch,
           ctx.owner,
           ctx.request_epoch,
-          ctx.open_files.filter(file => ctx.relative(file) is None),
+          state.polled_files(ctx),
           recheck_diagnostics=false,
         ),
         state,
@@ -3872,7 +3882,7 @@ fn update_inner(
             if change.package_graph_relevant() {
               package_graph_changed = true
             }
-            for path in ctx.open_files {
+            for path in ctx.observed_files() {
               if ctx.relative(path) is Some(relative) &&
                 change.touches(relative) &&
                 !stat_paths.contains(path) {
@@ -3903,7 +3913,7 @@ fn update_inner(
           // package manifest may have changed while the old watcher was gone,
           // so a cached dependency graph cannot cross this boundary.
           package_graph_changed = true
-          for path in ctx.open_files {
+          for path in ctx.observed_files() {
             stat_paths.push(path)
           }
           if state.children.contains("") && !state.loading.contains("") {
@@ -4386,6 +4396,8 @@ fn test_ctx() -> Ctx {
     narrow: false,
     panel_open: true,
     open_files: [],
+    preview_files: [],
+    preview_rechecks: [],
     active_file: None,
     open_history_diffs: [],
     active_history_diff: None,

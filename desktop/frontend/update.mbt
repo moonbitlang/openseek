@@ -1505,6 +1505,8 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     panel_open: model.right_panel_open &&
     (model.screen is Codex || (model.screen is Chat && file_body_visible)),
     open_files: @dock.file_paths(model.dock),
+    preview_files: model.preview.local_files(),
+    preview_rechecks: model.preview.files_to_check(),
     active_file: @dock.active_file(model.dock),
     open_history_diffs: @dock.history_diffs(model.dock),
     active_history_diff: @dock.active_history_diff(model.dock),
@@ -2019,6 +2021,19 @@ fn update(
     active,
   )
   let model = { ..model, jobs, }
+  let (preview, reloads) = model.preview.take_file_reloads()
+  let model = { ..model, preview, }
+  let preview_cmd = @cmd.batch(
+    reloads.filter_map(id => {
+      @preview.page(preview, id)
+      .bind(page => page.url)
+      .map(url => {
+        browser_op(dispatch, @commands.browser_reload, { id, }, quiet=false, on_error=message => {
+          Preview(@preview.ReloadFailed(id~, url~, message~))
+        })
+      })
+    }),
+  )
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -2032,6 +2047,7 @@ fn update(
       jobs_cmd,
       github_cmd,
       browser_cmd,
+      preview_cmd,
       if msg is Dock(TabClosed(_)) {
         focus_dock_after_render()
       } else {
@@ -5352,6 +5368,19 @@ fn update_msg(
       update_msg(dispatch, Github(@github.UpdatePullRequest(review.url)), model)
     }
     FileEditor(msg) => {
+      let preview = if msg
+        is @fileeditor.StatsLoaded(owner~, epoch~, stats~, ..) &&
+        model.file_panel.owner == Some(owner) &&
+        model.file_panel.request_epoch == epoch {
+        let mut preview = model.preview
+        for stat in stats {
+          preview = preview.observe_file(stat.path, stat.signature)
+        }
+        preview
+      } else {
+        model.preview
+      }
+      let model = { ..model, preview, }
       let (cmd, panel) = @fileeditor.update(
         dispatch.map(msg => FileEditor(msg)),
         msg,

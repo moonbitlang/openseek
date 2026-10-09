@@ -94,3 +94,34 @@ test "file URL recognition is independent of file type" {
   assert_false(@uri.is_file_url("file:relative.html"))
   assert_false(@uri.is_file_url("https://example.com/file://index.html"))
 }
+
+///|
+test "local file URL paths decode once after removing query and fragment" {
+  for
+    path in [
+      "/tmp/中文 #?100%.pdf", "/tmp/a+b.pdf", "/tmp/%20.pdf", "/C:/Users/Test/report.pdf",
+    ] {
+    let url = @uri.file_url(path)
+    assert_eq(@uri.local_file_path(url), Some(path))
+    assert_eq(@uri.local_file_path(url + "?query#page=2"), Some(path))
+    assert_eq(@uri.local_file_path(url + "#page=2?query"), Some(path))
+    assert_eq(
+      @uri.local_file_path("FILE://LOCALHOST" + url[7:].to_owned()),
+      Some(path),
+    )
+  }
+  assert_eq(@uri.local_file_path("file:///tmp/a+b.pdf"), Some("/tmp/a+b.pdf"))
+}
+
+///|
+test "local file URL paths reject remote authorities and malformed paths" {
+  for
+    url in [
+      "https://example.com/report.pdf", "file://server/share/report.pdf", "file://localhost.example/report.pdf",
+      "file://user@localhost/report.pdf", "file://localhost:80/report.pdf", "file:relative.pdf",
+      "file://", "file://localhost", "file:////server/share/report.pdf", "file:///%2Fserver/report.pdf",
+      "file:///tmp/%zz.pdf", "file:///tmp/%FF.pdf", "file:///tmp/%00.pdf",
+    ] {
+    assert_eq(@uri.local_file_path(url), None)
+  }
+}
