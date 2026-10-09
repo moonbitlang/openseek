@@ -149,7 +149,7 @@ Version 1 accepts `{version: 1, name, arguments}` and returns
   omitted retained results carry an explicit truncation marker. Requests that
   cannot reserve trace space are rejected before tool execution. Base64 `write`
   content is omitted from every trace status; arguments retain
-  `content_omitted: true` and `content_base64_chars`. The tool result reports
+  `content_base64_chars` with the original encoded length. The tool result reports
   decoded byte count and SHA-256 after a successful write.
 
 The trace therefore has bounded entries and payloads. RPC errors remain separate

@@ -54,6 +54,7 @@ async test "large request allowance is specific to base64 write and all publishe
     assert_true(publications.length() >= 2)
     for trace in publications {
       assert_false(trace.stringify().contains("AP+A"))
+      assert_false(trace.stringify().contains("content_omitted"))
       assert_true(trace.stringify().length() < 2000)
     }
     assert_true(
@@ -61,11 +62,7 @@ async test "large request allowance is specific to base64 write and all publishe
       is {
         "ptc_calls": [
           {
-            "arguments": {
-              "content_omitted": true,
-              "content_base64_chars": 80000,
-              ..
-            },
+            "arguments": { "content_base64_chars": 80000, .. },
             "status": "done",
             ..
           },
