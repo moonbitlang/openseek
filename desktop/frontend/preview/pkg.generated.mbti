@@ -4,7 +4,9 @@ package "openseek_desktop/frontend/preview"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -37,12 +39,17 @@ pub fn update(Msg, State) -> State
 // Errors
 
 // Types and methods
+type FileObservation derive(Eq)
+pub fn FileObservation::equal(Self, Self) -> Bool
+pub fn FileObservation::not_equal(Self, Self) -> Bool
+
 pub(all) enum Msg {
   InputChanged(id~ : Int, value~ : String)
   Navigated(id~ : Int, url~ : String)
   LoadingChanged(id~ : Int, loading~ : Bool)
   TitleUpdated(id~ : Int, title~ : String)
   LoadFailed(id~ : Int, url~ : String, text~ : String)
+  ReloadFailed(id~ : Int, url~ : String, message~ : String)
 }
 
 pub(all) struct PageState {
@@ -67,10 +74,15 @@ pub fn Rect::not_equal(Self, Self) -> Bool
 pub(all) struct State {
   pages : Map[Int, PageState]
   next_id : Int
+  files : Map[Int, FileObservation]
 } derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::files_to_check(Self) -> Array[@common.Uri]
+pub fn State::local_files(Self) -> Array[@common.Uri]
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::observe_file(Self, @common.Uri, @protocol.FileSignature) -> Self
+pub fn State::take_file_reloads(Self) -> (Self, Array[Int])
 
 pub(all) struct ToolbarActions {
   input : @cmd.Emit[String]

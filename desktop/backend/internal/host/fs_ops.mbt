@@ -298,7 +298,7 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   }
   // The change-detection baseline, from the same open handle as the content
   // so the two cannot disagree about which version of the file was read.
-  let (seconds, nanos) = source.mtime() catch {
+  let sig = file_stamp(source.mtime(), source.ctime(), source.size()) catch {
     error => raise HostError("failed to read file: \{error}")
   }
   // Classify the bytes already read from this handle. The shared policy trusts
@@ -310,7 +310,7 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
       BinaryContent(data_base64=@base64.encode(bytes), media_type~)
     Utf8Text(content) => {
       let absolute = file.resource_path()
-      Content(content~, absolute~, sig="\{seconds}:\{nanos}")
+      Content(content~, absolute~, sig~)
     }
     Pdf | UnknownBinary => Binary
   }
@@ -355,7 +355,7 @@ async test "binary file reads expose only recognized raster signatures" {
 }
 
 ///|
-/// The mtime signatures of the open tabs' files (see `StatFilesPayload`).
+/// The filesystem signatures of the open tabs' files (see `StatFilesPayload`).
 /// Each path answers for itself: one file the host cannot inspect neither
 /// fails the whole reply nor reads as deleted — it is reported as exactly
 /// that.
@@ -369,14 +369,20 @@ async fn stat_files_op(payload : StatFilesPayload) -> StatFilesReply {
 }
 
 ///|
-/// `Present("{seconds}:{nanos}")` of the file's mtime. `Missing` is the path
+/// Include mtime, ctime and size so timestamp-preserving replacements and
+/// writes are observable to every viewer. `Missing` is the path
 /// no longer resolving to a file — deleted, or an ancestor that stopped being
 /// a directory — by far the common failure. Every other stat error is
 /// `Failed` with the OS message: the panel then re-reads the file so the
 /// read's own error (or the content) replaces the guess, and the log keeps
 /// the stat's.
 async fn file_signature(absolute : String) -> FileSignature {
-  let (seconds, nanos) = @fs.mtime(absolute) catch {
+  let sig = try {
+    // file_size uses lstat in the async library. Resolve first so all three
+    // attributes describe the same target as read_file's open handle.
+    let target = @fs.realpath(absolute)
+    file_stamp(@fs.mtime(target), @fs.ctime(target), @fs.file_size(target))
+  } catch {
     @os_error.OSError(_) as error if error.is_ENOENT() || error.is_ENOTDIR() =>
       return Missing
     error => {
@@ -385,5 +391,14 @@ async fn file_signature(absolute : String) -> FileSignature {
       return Failed("\{error}")
     }
   }
-  Present("\{seconds}:\{nanos}")
+  Present(sig)
+}
+
+///|
+fn file_stamp(
+  mtime : (Int64, Int),
+  ctime : (Int64, Int),
+  size : Int64,
+) -> String {
+  "\{mtime.0}:\{mtime.1}:\{ctime.0}:\{ctime.1}:\{size}"
 }

@@ -23,6 +23,7 @@ fn[Payload : ToJson] browser_op(
   command : @commands.Command[Payload, @protocol.EmptyReply],
   payload : Payload,
   quiet~ : Bool,
+  on_error? : (String) -> Msg,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -32,7 +33,9 @@ fn[Payload : ToJson] browser_op(
         payload,
       ) catch {
         error => {
-          if !quiet {
+          if on_error is Some(on_error) {
+            scheduler.add(dispatch(on_error(@interop.bridge_error_text(error))))
+          } else if !quiet {
             scheduler.add(
               dispatch(HostActionFailed(@interop.bridge_error_text(error))),
             )

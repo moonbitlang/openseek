@@ -1,6 +1,10 @@
 import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/uri",
+  "openseek_desktop/protocol",
+  "openseek_desktop/frontend/resource",
+  "openseek_desktop/frontend/interop",
+  "moonbitlang/editor/base/common",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "openseek_desktop/frontend/icons",

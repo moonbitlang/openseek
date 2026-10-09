@@ -12,6 +12,8 @@ pub fn file_url(String) -> String
 
 pub fn is_file_url(String) -> Bool
 
+pub fn local_file_path(String) -> String?
+
 // Errors
 
 // Types and methods

@@ -40,11 +40,12 @@ pub(all) struct PageState {
 pub(all) struct State {
   pages : Map[Int, PageState]
   next_id : Int
+  files : Map[Int, FileObservation]
 } derive(Eq)
 
 ///|
 pub fn State::empty() -> State {
-  { pages: Map([]), next_id: 1, }
+  { pages: Map([]), next_id: 1, files: Map([]), }
 }
 
 ///|
@@ -60,14 +61,16 @@ pub fn open_page(state : State, url? : String) -> (State, Int) {
     loading: url is Some(_),
     failure: None,
   }
-  ({ pages, next_id: id + 1, }, id)
+  ({ ..state, pages, next_id: id + 1, }, id)
 }
 
 ///|
 pub fn close_page(state : State, id : Int) -> State {
   let pages = state.pages.copy()
   pages.remove(id)
-  { ..state, pages, }
+  let files = state.files.copy()
+  files.remove(id)
+  { ..state, pages, files, }
 }
 
 ///|
@@ -98,9 +101,7 @@ fn PageState::commit_url(self : PageState, url : String) -> PageState {
 /// `browser.open`/`browser.navigate` to the host.
 pub fn navigate(state : State, id : Int, url : String) -> State {
   guard state.pages.get(id) is Some(previous) else { return state }
-  let pages = state.pages.copy()
-  pages[id] = { ..previous.commit_url(url), loading: true, }
-  { ..state, pages, }
+  state.with_page(id, { ..previous.commit_url(url), loading: true, })
 }
 
 ///|

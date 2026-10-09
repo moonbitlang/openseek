@@ -277,7 +277,7 @@ fn BrowserViews::reload(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
-  self.view(payload.id).reload()
+  self.view(payload.id).reload(ignore_cache=true)
   Acknowledged
 }
 

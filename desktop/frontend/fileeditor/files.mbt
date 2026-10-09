@@ -294,34 +294,55 @@ fn stat_files(
   paths : Array[@common.Uri],
   recheck_diagnostics~ : Bool,
 ) -> @cmd.Cmd {
-  guard paths.all(path => @resource.belongs_to(path, owner.channel)) else {
-    return @cmd.none
+  let batches : Map[@interop.ChannelId, Array[String]] = Map([])
+  for path in paths {
+    if @resource.channel(path) is Some(channel) {
+      let batch = batches.get_or_init(channel, () => [])
+      if !batch.contains(path.path) {
+        batch.push(path.path)
+      }
+    }
   }
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      // Stat snapshots mutate cached document/review state. Keep their host
-      // observations in issue order, while `epoch` fences a placement or
-      // conversation boundary that an already-issued request outlives.
-      let reply = @interop.bridge_request_in_order(
-        owner.channel,
-        @commands.fs_stat_files,
-        { paths: paths.map(path => path.path), },
-      ) catch {
-        _ => return
+  guard !batches.is_empty() else { return @cmd.none }
+  @cmd.batch(
+    [
+      for channel, paths in batches => {
+        @cmd.custom_cmd(scheduler => {
+          @js.Promise::from_async(() => {
+            // Keep observations ordered within each host. Independent host
+            // batches must not let an unavailable remote block local previews.
+            // The owner/epoch still fence the requesting frontend context.
+            let reply = @interop.bridge_request_in_order(
+              channel,
+              @commands.fs_stat_files,
+              { paths, },
+            ) catch {
+              _ => return
+            }
+            let stats : Array[FileStat] = []
+            for stat in reply.stats {
+              guard @resource.of_path(channel, stat.path) is Some(path) else {
+                continue
+              }
+              stats.push({ path, signature: stat.signature, })
+            }
+            scheduler.add(
+              dispatch(
+                StatsLoaded(
+                  owner~,
+                  epoch~,
+                  stats~,
+                  recheck_diagnostics=recheck_diagnostics &&
+                    channel == owner.channel,
+                ),
+              ),
+            )
+          })
+          |> ignore
+        })
       }
-      let stats : Array[FileStat] = []
-      for stat in reply.stats {
-        guard @resource.of_path(owner.channel, stat.path) is Some(path) else {
-          continue
-        }
-        stats.push({ path, signature: stat.signature, })
-      }
-      scheduler.add(
-        dispatch(StatsLoaded(owner~, epoch~, stats~, recheck_diagnostics~)),
-      )
-    })
-    |> ignore
-  })
+    ],
+  )
 }
 
 ///|
