@@ -19,13 +19,12 @@ pub struct MarkdownProjectedCodeRange {
 ///|
 /// One source-bearing Markdown block in document order. Container and child
 /// anchors may overlap; the stable index distinguishes equal-looking blocks.
-/// Node IDs belong to this parse only; source-mapped HTML retains them.
+/// Parse-local IDs are used only while collecting and rendering the blocks.
 /// A container and its only child may share an ID and the same source range.
 /// Root elements are retained separately for section folding.
 pub struct MarkdownBlockAnchor {
   index : Int
   source_range : @common.OffsetRange
-  node_id : Int
   is_root_element : Bool
   /// The ATX or setext heading level for a heading anchor, otherwise `None`.
   /// Retained during the one parse that produces the HTML and this projection,
@@ -44,7 +43,6 @@ pub struct MarkdownBlockAnchor {
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
-  priv source_ranges_by_id : Map[Int, @common.OffsetRange]
 } derive(Eq, Debug)
 
 ///|
@@ -121,7 +119,7 @@ pub fn MarkdownCodeBlock::project_source_range(
 
 ///|
 fn empty_markdown_document_projection() -> MarkdownDocumentProjection {
-  { block_anchors: [], code_blocks: [], source_ranges_by_id: Map([]), }
+  { block_anchors: [], code_blocks: [], }
 }
 
 ///|
@@ -129,17 +127,6 @@ priv struct MarkdownProjectionBuilder {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
   code_blocks_by_id : Map[Int, MarkdownCodeBlock]
-  source_ranges_by_id : Map[Int, @common.OffsetRange]
-}
-
-///|
-fn MarkdownProjectionBuilder::add_source_node(
-  self : MarkdownProjectionBuilder,
-  meta : @cmark_base.Meta,
-) -> Unit {
-  if markdown_offset_range(meta.loc) is Some(source_range) {
-    self.source_ranges_by_id[meta.id] = source_range
-  }
 }
 
 ///|
@@ -153,7 +140,6 @@ fn markdown_document_projection(
     block_anchors: [],
     code_blocks: [],
     code_blocks_by_id: Map([]),
-    source_ranges_by_id: Map([]),
   }
   let root_element_ids = markdown_root_element_ids(doc, source_mapping~)
   let folder = @cmark.Folder::new(block=fn(
@@ -170,33 +156,10 @@ fn markdown_document_projection(
       builder.block_anchors.push({
         index: builder.block_anchors.length(),
         source_range,
-        node_id: block.meta().id,
         is_root_element,
         heading_level: markdown_block_heading_level(block),
         heading_text: markdown_block_heading_text(block),
       })
-      builder.add_source_node(block.meta())
-    }
-    // The block folder visits item blocks and cell inlines, but not the
-    // enclosing item/row nodes. Retain their identities from this same AST.
-    match block {
-      List(node) =>
-        for item in node.v.items {
-          builder.add_source_node(item.meta)
-        }
-      ExtTable(node) =>
-        for (row, _) in node.v.rows {
-          match row.v {
-            Header(cells) | Data(cells) => {
-              builder.add_source_node(row.meta)
-              for (cell, _) in cells {
-                builder.add_source_node(cell.meta())
-              }
-            }
-            Sep(_) => ()
-          }
-        }
-      _ => ()
     }
     if block is CodeBlock(node) &&
       markdown_code_block_from_cmark(
@@ -215,11 +178,7 @@ fn markdown_document_projection(
     _ => return (empty_markdown_document_projection(), Map([]))
   }
   (
-    {
-      block_anchors: builder.block_anchors,
-      code_blocks: builder.code_blocks,
-      source_ranges_by_id: builder.source_ranges_by_id,
-    },
+    { block_anchors: builder.block_anchors, code_blocks: builder.code_blocks, },
     builder.code_blocks_by_id,
   )
 }
@@ -243,16 +202,6 @@ fn markdown_root_element_ids(
     block => add(block)
   }
   result
-}
-
-///|
-/// Resolves an identity from this projection's rendered DOM. IDs must never be
-/// reused across parses or persisted as source locations.
-pub fn MarkdownDocumentProjection::source_range_for_node(
-  self : MarkdownDocumentProjection,
-  node_id : Int,
-) -> @common.OffsetRange? {
-  self.source_ranges_by_id.get(node_id)
 }
 
 ///|

@@ -12,19 +12,28 @@ pub struct MarkdownSemanticCodeLineDom {
 }
 
 ///|
+/// One source owner read from the installed article. Equal or overlapping
+/// ranges remain separate elements; only article children are folding roots.
+priv struct MarkdownSourceElementDom {
+  source_range : @base_common.OffsetRange
+  element : @rdom.Element
+  is_root_element : Bool
+}
+
+///|
 /// Everything attached to one installed article generation. It is retired
 /// before `RenderedMarkdown::dispose`, so callbacks cannot observe detached
 /// line nodes and a caller can never retain a registry from two parses.
 priv struct MarkdownSemanticDomLifetime {
   lines : Array[MarkdownSemanticCodeLineDom]
-  source_elements : Map[Int, @rdom.Element]
+  source_elements : Array[MarkdownSourceElementDom]
   listeners : Array[@base_common.Disposable]
   mut disposed : Bool
 }
 
 ///|
 fn MarkdownSemanticDomLifetime::empty() -> MarkdownSemanticDomLifetime {
-  { lines: [], source_elements: Map([]), listeners: [], disposed: false, }
+  { lines: [], source_elements: [], listeners: [], disposed: false, }
 }
 
 ///|
@@ -303,7 +312,8 @@ fn render_markdown_document_code_block(
     _ => tokenized
   }
   let source_attribute = match code_block.node_id {
-    Some(id) => @markdown_core.markdown_node_attribute(id)
+    Some(_) =>
+      @markdown_core.markdown_source_attributes(code_block.block_source_range)
     None => ""
   }
   let semantic_attribute = if code_block.is_moonbit_check_fence(resource_kind) {
@@ -400,35 +410,22 @@ fn MarkdownDocumentView::post_render(self : MarkdownDocumentView) -> Unit {
   let semantic_dom = MarkdownSemanticDomLifetime::empty()
   for
     element in self.article.query_selector_all(
-      "[\{@markdown_core.MarkdownNodeIdAttribute}]",
+      "[\{@markdown_core.MarkdownSourceOwnerAttribute}=\"true\"]",
     ) {
-    if markdown_element_node_id(element) is Some(id) &&
-      self.rendered.projection.source_range_for_node(id) is Some(_) &&
-      !semantic_dom.source_elements.contains(id) {
-      // A container and its only child may share an ID. Retain the outer
-      // element, matching DOM order and section folding's root ownership.
-      semantic_dom.source_elements[id] = element
+    if markdown_element_source_range(element, self.source.length())
+      is Some(source_range) {
+      semantic_dom.source_elements.push({
+        source_range,
+        element,
+        is_root_element: element
+        .get_parent_element()
+        .map_or(false, parent => {
+          parent.as_node().is_same_node(self.article.as_node())
+        }),
+      })
     }
   }
   self.semantic_dom = semantic_dom
-  for anchor in self.rendered.projection.block_anchors {
-    guard anchor.is_root_element &&
-      self.element_for_node(anchor.node_id) is Some(element) else {
-      continue
-    }
-    element.set_attribute(
-      "data-markdown-block-anchor",
-      anchor.index.to_string(),
-    )
-    element.set_attribute(
-      "data-markdown-source-start",
-      anchor.source_range.start.to_string(),
-    )
-    element.set_attribute(
-      "data-markdown-source-end",
-      anchor.source_range.end_exclusive.to_string(),
-    )
-  }
   self.root.set_attribute(
     "data-markdown-projection-generation",
     self.projection_generation.to_string(),
@@ -608,7 +605,7 @@ pub fn MarkdownDocumentView::apply_marker_unused_visibility(
 }
 
 ///|
-/// Hides the root elements identified by `hidden_node_ids` and shows every
+/// Hides the root elements covered by `hidden_source_ranges` and shows every
 /// other rendered root element.
 ///
 /// This is a pure visibility operation over already-rendered nodes: it never
@@ -627,16 +624,17 @@ pub fn MarkdownDocumentView::apply_marker_unused_visibility(
 /// The view owns no fold policy. Which sections are collapsed, and how that
 /// survives a source or theme replacement, belongs to the root Viewer; a
 /// replacement resets every element to visible and the root re-applies.
-/// IDs absent from the current render are ignored.
+/// Ranges absent from the current render are ignored; nested elements with an
+/// equal or overlapping range are never hidden independently of their roots.
 pub fn MarkdownDocumentView::set_hidden_root_elements(
   self : MarkdownDocumentView,
-  hidden_node_ids : Array[Int],
+  hidden_source_ranges : Array[@base_common.OffsetRange],
 ) -> Unit {
   guard !self.disposed else { return }
   let children = self.article.get_children()
-  let hidden : Set[Int] = Set([])
-  for node_id in hidden_node_ids {
-    hidden.add(node_id)
+  let hidden : Set[(Int, Int)] = Set([])
+  for range in hidden_source_ranges {
+    hidden.add((range.start, range.end_exclusive))
   }
   // Visibility rides on a dedicated attribute the stylesheet maps to
   // `display:none`, so the view never owns or clobbers an element's `style`
@@ -644,7 +642,10 @@ pub fn MarkdownDocumentView::set_hidden_root_elements(
   // already removes the subtree from the accessibility tree.
   for index in 0..<children.length() {
     let child = children.item(index.to_double()).unwrap()
-    if markdown_element_node_id(child).map_or(false, id => hidden.contains(id)) {
+    if markdown_element_source_range(child, self.source.length()).map_or(
+        false,
+        range => hidden.contains((range.start, range.end_exclusive)),
+      ) {
       child.set_attribute(markdown_hidden_element_attribute, "true")
     } else if child.has_attribute(markdown_hidden_element_attribute) {
       child.remove_attribute(markdown_hidden_element_attribute)
@@ -662,7 +663,7 @@ let markdown_hidden_element_attribute : String = "data-markdown-section-hidden"
 /// One heading's fold affordance: which article root element carries the
 /// control, which section it toggles, and the state the control displays.
 pub(all) struct MarkdownSectionFoldControl {
-  heading_node_id : Int
+  heading_source_range : @base_common.OffsetRange
   section_index : Int
   collapsed : Bool
 } derive(Eq, Debug)
@@ -687,14 +688,18 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
 ) -> Unit {
   guard !self.disposed else { return }
   let children = self.article.get_children()
-  let wanted : Map[Int, MarkdownSectionFoldControl] = Map([])
+  let wanted : Map[(Int, Int), MarkdownSectionFoldControl] = Map([])
   for control in controls {
-    wanted[control.heading_node_id] = control
+    let range = control.heading_source_range
+    wanted[(range.start, range.end_exclusive)] = control
   }
   for index in 0..<children.length() {
     let child = children.item(index.to_double()).unwrap()
     let existing = child.query_selector(markdown_fold_toggle_selector)
-    match markdown_element_node_id(child).bind(id => wanted.get(id)) {
+    match
+      markdown_element_source_range(child, self.source.length()).bind(range => {
+        wanted.get((range.start, range.end_exclusive))
+      }) {
       Some(control) => {
         let button = match existing {
           Some(button) => button
@@ -771,7 +776,7 @@ fn markdown_fold_toggle_section(event : @rdom.Event) -> Int? {
 }
 
 ///|
-/// Digit-only parser for DOM node identities, source offsets, and control
+/// Digit-only parser for source offsets and control
 /// indices. Malformed attributes are ignored instead of selecting index 0.
 fn markdown_parse_dom_index(raw : String) -> Int? {
   guard raw.length() > 0 && raw.length() <= 9 else { return None }
@@ -898,27 +903,21 @@ fn MarkdownDocumentView::element_for_source_offset(
       }
     }
   }
-  for anchor in self.rendered.projection.block_anchors {
-    if !(anchor.source_range.contains(source_offset) ||
-      source_offset == anchor.source_range.end_exclusive) {
-      continue
-    }
-    if self.element_for_node(anchor.node_id) is Some(element) {
-      return Some(element)
+  for owner in self.semantic_dom.source_elements {
+    if owner.source_range.contains(source_offset) ||
+      source_offset == owner.source_range.end_exclusive {
+      return Some(owner.element)
     }
   }
   let mut nearest_before : @rdom.Element? = None
   let mut first_mapped : @rdom.Element? = None
-  for anchor in self.rendered.projection.block_anchors {
-    guard anchor.is_root_element &&
-      self.element_for_node(anchor.node_id) is Some(element) else {
-      continue
-    }
+  for owner in self.semantic_dom.source_elements {
+    guard owner.is_root_element else { continue }
     if first_mapped is None {
-      first_mapped = Some(element)
+      first_mapped = Some(owner.element)
     }
-    if anchor.source_range.start <= source_offset {
-      nearest_before = Some(element)
+    if owner.source_range.start <= source_offset {
+      nearest_before = Some(owner.element)
     } else {
       break
     }
@@ -1007,14 +1006,11 @@ pub fn MarkdownDocumentView::visible_source_ranges(
   let viewport_top = viewport_rect.get_top()
   let viewport_bottom = viewport_rect.get_bottom()
   let result : Array[@base_common.OffsetRange] = []
-  for anchor in self.rendered.projection.block_anchors {
-    guard anchor.is_root_element &&
-      self.element_for_node(anchor.node_id) is Some(element) else {
-      continue
-    }
-    let rect = element.get_bounding_client_rect()
+  for owner in self.semantic_dom.source_elements {
+    guard owner.is_root_element else { continue }
+    let rect = owner.element.get_bounding_client_rect()
     if rect.get_bottom() > viewport_top && rect.get_top() < viewport_bottom {
-      result.push(anchor.source_range)
+      result.push(owner.source_range)
     }
   }
   result
@@ -1024,9 +1020,7 @@ pub fn MarkdownDocumentView::visible_source_ranges(
 pub fn MarkdownDocumentView::has_rendered_source_anchors(
   self : MarkdownDocumentView,
 ) -> Bool {
-  self.rendered.projection.block_anchors.any(anchor => {
-    self.element_for_node(anchor.node_id) is Some(_)
-  })
+  !self.semantic_dom.source_elements.is_empty()
 }
 
 ///|

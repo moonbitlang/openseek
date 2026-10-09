@@ -251,9 +251,11 @@ js-only. Concrete browser runtime packages live below the module-private
   same-parse source projection. Only compiler-recognized fenced rows receive
   semantic source boundaries; cross-line tokenization state is preserved, and
   decoded-text or row-cardinality mismatches fail closed. The package owns no
-  model, provider, marker store, or request policy. Rendered blocks carry cmark
-  node IDs from the same parse as their source projection. Native text selections
-  resolve to their nearest marked ancestors and return enclosing source ranges;
+  model, provider, marker store, or request policy. Rendered source owners carry
+  UTF-16 source ranges from the same parse as their projection; cmark node IDs
+  stay inside parsing and renderer dispatch. Native text selections read their
+  nearest marked ancestors' ranges directly, independently of semantic code-row
+  coordinates. Folding matches ranges only against article root elements;
   DOM child order is not a source identity. The Markdown widget pins a selection
   to its model attachment/version and projection generation, then forwards source
   coordinates through the existing feedback handle and shared input composer.

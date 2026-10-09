@@ -113,6 +113,13 @@ pub fn run_markdown_feedback_test() -> Unit {
       |> ignore
       previous.dispose()
     },
+    source => {
+      current_model.val.set_value(source)
+      viewer.set_model(
+        Some(MarkdownViewerModel(current_model.val, MoonBitMarkdown)),
+      )
+      |> ignore
+    },
   )
   ctx.finish()
 }
@@ -123,12 +130,14 @@ extern "js" fn install_markdown_feedback_controls(
   get_source : () -> String,
   set_source : (String) -> Unit,
   replace_same_uri : (String) -> Unit,
+  set_moonbit_source : (String) -> Unit,
 ) -> Unit =
-  #| (getFeedback, getSource, setSource, replaceSameUri) => {
+  #| (getFeedback, getSource, setSource, replaceSameUri, setMoonBitSource) => {
   #|   globalThis.__markdownFeedbackControls = {
   #|     getFeedback: () => JSON.parse(getFeedback()),
   #|     getSource,
   #|     setSource,
   #|     replaceSameUri,
+  #|     setMoonBitSource,
   #|   };
   #| }

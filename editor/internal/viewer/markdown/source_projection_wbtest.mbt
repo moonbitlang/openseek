@@ -24,7 +24,36 @@ fn semantic_boundaries(line : MarkdownCodeLine) -> Array[Int?] {
 }
 
 ///|
-test "tight list item identities exclude their unselected siblings" {
+fn html_source_ranges_for_tag(
+  html : String,
+  tag : String,
+) -> Array[@common.OffsetRange] raise {
+  let ranges = []
+  for index, part in html.split("<\{tag} ") {
+    guard index > 0 else { continue }
+    guard part.split_once(">") is Some((attributes, _)) else {
+      fail("missing end of \{tag} element")
+    }
+    let offsets = []
+    for name in [MarkdownSourceStartAttribute, MarkdownSourceEndAttribute] {
+      guard attributes.split_once("\{name}=\"") is Some((_, rest)) &&
+        rest.split_once("\"") is Some((raw, _)) else {
+        fail("missing \{name} on \{tag}")
+      }
+      let mut offset = 0
+      for unit in raw {
+        assert_true(unit >= '0' && unit <= '9')
+        offset = offset * 10 + unit.to_int() - '0'.to_int()
+      }
+      offsets.push(offset)
+    }
+    ranges.push(@common.OffsetRange(offsets[0], offsets[1]))
+  }
+  ranges
+}
+
+///|
+test "tight list item source ranges exclude their unselected siblings" {
   for
     source in [
       "- first **target**\n- second target", "3. first **target**\n4. second target",
@@ -32,14 +61,8 @@ test "tight list item identities exclude their unselected siblings" {
     ] {
     let rendered = render_markdown(source, source_mapping=true)
     let item_sources : Array[String] = []
-    for node_id, range in rendered.projection.source_ranges_by_id {
-      if rendered.html.contains("<li\{markdown_node_attribute(node_id)}>") {
-        assert_eq(
-          rendered.projection.source_range_for_node(node_id),
-          Some(range),
-        )
-        item_sources.push(source[range.start:range.end_exclusive].to_owned())
-      }
+    for range in html_source_ranges_for_tag(rendered.html, "li") {
+      item_sources.push(source[range.start:range.end_exclusive].to_owned())
     }
     item_sources.sort()
     let expected = if source.has_prefix("3.") {
@@ -55,7 +78,7 @@ test "tight list item identities exclude their unselected siblings" {
 }
 
 ///|
-test "table cell identities retain markup and UTF-16 source boundaries" {
+test "table cell HTML ranges retain markup and UTF-16 source boundaries" {
   let source =
     #|| Name | 中文 |
     #||:---|---:|
@@ -64,17 +87,15 @@ test "table cell identities retain markup and UTF-16 source boundaries" {
   let rendered = render_markdown(source, source_mapping=true)
   let cell_sources : Array[String] = []
   let row_sources : Array[String] = []
-  for node_id, range in rendered.projection.source_ranges_by_id {
-    if rendered.html.contains("<th\{markdown_node_attribute(node_id)}") ||
-      rendered.html.contains("<td\{markdown_node_attribute(node_id)}") {
-      assert_eq(rendered.projection.source_range_for_node(node_id), Some(range))
+  for tag in ["th", "td"] {
+    for range in html_source_ranges_for_tag(rendered.html, tag) {
       cell_sources.push(
         source[range.start:range.end_exclusive].trim().to_owned(),
       )
     }
-    if rendered.html.contains("<tr\{markdown_node_attribute(node_id)}>") {
-      row_sources.push(source[range.start:range.end_exclusive].to_owned())
-    }
+  }
+  for range in html_source_ranges_for_tag(rendered.html, "tr") {
+    row_sources.push(source[range.start:range.end_exclusive].to_owned())
   }
   cell_sources.sort()
   row_sources.sort()
@@ -128,7 +149,7 @@ test "projection keeps zero and identical code blocks distinct with full fence i
 }
 
 ///|
-test "root node identities ignore omitted blocks and preserve nested anchors" {
+test "root source ranges ignore omitted blocks and preserve nested anchors" {
   let source =
     #|first
     #|
@@ -150,10 +171,8 @@ test "root node identities ignore omitted blocks and preserve nested anchors" {
   })
   assert_eq(roots.length(), 4)
   for root in roots {
-    assert_true(rendered.html.contains(markdown_node_attribute(root.node_id)))
-    assert_eq(
-      rendered.projection.source_range_for_node(root.node_id),
-      Some(root.source_range),
+    assert_true(
+      rendered.html.contains(markdown_source_attributes(root.source_range)),
     )
   }
   let nested = rendered.projection.block_anchors.filter(anchor => {
@@ -165,7 +184,7 @@ test "root node identities ignore omitted blocks and preserve nested anchors" {
     "quoted",
   )
   assert_true(
-    rendered.html.contains(markdown_node_attribute(nested[1].node_id)),
+    rendered.html.contains(markdown_source_attributes(nested[1].source_range)),
   )
   assert_eq(
     roots[3].source_range,

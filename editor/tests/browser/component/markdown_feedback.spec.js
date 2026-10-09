@@ -94,6 +94,26 @@ test('cross-paragraph feedback keeps exact rendered text and a complete source s
   expect(facts.items[0].source.trimEnd()).toBe(`${firstParagraph}\n\n${secondParagraph}`);
 });
 
+test('semantic code line feedback keeps the complete fence as source context', async ({ page }) => {
+  await openFixture(page);
+  const fence = '```mbt check\nlet first = 1\nlet value = "semantic target"\n```';
+  await page.evaluate((source) => globalThis.__markdownFeedbackControls.setMoonBitSource(source),
+    `Before\n\n${fence}\n\nAfter`);
+  const line = page.locator(`${article} [data-markdown-code-line="1"]`);
+  await expect(line).toContainText('semantic target');
+  await expect(line).toHaveAttribute('data-markdown-source-start', /\d+/);
+  // Line coordinates serve semantic hit testing. Feedback uses the marked
+  // block owner, retaining the opening and closing fence as source context.
+  await expect(line).not.toHaveAttribute('data-markdown-source-owner', 'true');
+  await openComposer(page, 'semantic target');
+  await page.locator(input).fill('Review the semantic fence');
+  await page.locator('.agent-feedback-input-action-add').click();
+  await expect.poll(async () => (await feedbackFacts(page)).items.length).toBe(1);
+  const saved = (await feedbackFacts(page)).items[0];
+  expect(saved.selected_text).toBe('semantic target');
+  expect(saved.source).toBe(fence);
+});
+
 test('list items and table cells use their own source spans; images quote mapped Markdown', async ({ page }) => {
   await openFixture(page);
   const cases = [

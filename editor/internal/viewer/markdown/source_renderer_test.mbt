@@ -1,20 +1,30 @@
 ///|
-fn markdown_html_without_node_ids(html : String) -> String {
-  let buffer = StringBuilder()
-  for index, part in html.split(" data-markdown-node-id=\"") {
-    if index == 0 {
-      buffer.write_view(part)
-    } else {
-      match part.split_once("\"") {
-        Some((_, rest)) => buffer.write_view(rest)
-        None => {
-          buffer.write_string(" data-markdown-node-id=\"")
-          buffer.write_view(part)
+fn markdown_html_without_source_attributes(html : String) -> String {
+  let mut result = html
+  for
+    name in [
+      @markdown.MarkdownSourceStartAttribute,
+      @markdown.MarkdownSourceEndAttribute,
+      @markdown.MarkdownSourceOwnerAttribute,
+    ] {
+    let buffer = StringBuilder()
+    let prefix = " \{name}=\""
+    for index, part in result.split(prefix) {
+      if index == 0 {
+        buffer.write_view(part)
+      } else {
+        match part.split_once("\"") {
+          Some((_, rest)) => buffer.write_view(rest)
+          None => {
+            buffer.write_string(prefix)
+            buffer.write_view(part)
+          }
         }
       }
     }
+    result = buffer.to_string()
   }
-  buffer.to_string()
+  result
 }
 
 ///|
@@ -56,7 +66,8 @@ test "source block rendering preserves cmark content and safe rendering" {
     #|[^one]: body
   let ordinary = @markdown.render_markdown(source)
   let mapped = @markdown.render_markdown(source, source_mapping=true)
-  assert_eq(markdown_html_without_node_ids(mapped.html), ordinary.html)
+  assert_eq(markdown_html_without_source_attributes(mapped.html), ordinary.html)
+  assert_false(mapped.html.contains("data-markdown-node-id"))
   assert_false(mapped.html.contains("<script>"))
   assert_false(mapped.html.contains("javascript:"))
 }
@@ -73,30 +84,26 @@ test "cancelled tasks close strikethrough before the following task" {
       source_mapping=true,
     )
     assert_eq(
-      markdown_html_without_node_ids(rendered.html),
+      markdown_html_without_source_attributes(rendered.html),
       "<ul>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><del>\{cancelled}</del></div></li>\n<li><div class=\"task\"><input type=\"checkbox\" disabled><div>\{pending}</div></div></li>\n</ul>\n",
     )
   }
 }
 
 ///|
-test "identical rendered paragraphs retain distinct source identities" {
+test "identical rendered paragraphs carry distinct original source ranges" {
   let source = "same\n\n<div>omitted</div>\n\nsame"
   let rendered = @markdown.render_markdown(source, source_mapping=true)
   let roots = rendered.projection.block_anchors.filter(anchor => {
     anchor.is_root_element
   })
   assert_eq(roots.length(), 2)
-  assert_true(roots[0].node_id != roots[1].node_id)
+  assert_true(roots[0].source_range != roots[1].source_range)
   for root in roots {
     assert_true(
       rendered.html.contains(
-        "<p data-markdown-node-id=\"\{root.node_id}\">same</p>",
+        "<p\{@markdown.markdown_source_attributes(root.source_range)}>same</p>",
       ),
-    )
-    assert_eq(
-      rendered.projection.source_range_for_node(root.node_id),
-      Some(root.source_range),
     )
     assert_eq(
       source[root.source_range.start:root.source_range.end_exclusive],
@@ -121,11 +128,11 @@ test "a code override keeps one source owner for empty or multiple HTML roots" {
     assert_true(anchor.is_root_element)
     assert_eq(
       rendered.html,
-      "<div class=\"moonbit-viewer-markdown-source-block\" data-markdown-node-id=\"\{anchor.node_id}\">\{html}</div>",
+      "<div class=\"moonbit-viewer-markdown-source-block\"\{@markdown.markdown_source_attributes(anchor.source_range)}>\{html}</div>",
     )
     assert_eq(
-      rendered.projection.source_range_for_node(anchor.node_id),
-      Some(rendered.projection.code_blocks[0].block_source_range),
+      anchor.source_range,
+      rendered.projection.code_blocks[0].block_source_range,
     )
   }
 }
@@ -143,28 +150,29 @@ test "math text has a source owner and participates in section folding" {
   assert_true(anchor.is_root_element)
   assert_true(
     rendered.html.contains(
-      "<div class=\"moonbit-viewer-markdown-source-block\" data-markdown-node-id=\"\{anchor.node_id}\">\{@markdown.render_markdown(math).html}</div>",
+      "<div class=\"moonbit-viewer-markdown-source-block\"\{@markdown.markdown_source_attributes(anchor.source_range)}>\{@markdown.render_markdown(math).html}</div>",
     ),
   )
   assert_eq(
-    @markdown.markdown_sections(rendered.projection)[0].body_node_ids(
+    @markdown.markdown_sections(rendered.projection)[0].body_source_ranges(
       rendered.projection,
     ),
-    [anchor.node_id],
+    [anchor.source_range],
   )
   assert_eq(anchor.source_range.start, "# Math\n\n".length())
   assert_eq(anchor.source_range.length(), math.length())
 }
 
 ///|
-test "an owned code renderer writes the source ID on its existing root" {
+test "an owned code renderer writes source boundaries on its existing root" {
   let rendered = @markdown.render_markdown(
     "```custom\ncode\n```",
     source_mapping=true,
     code_block_renderer_owns_source_root=true,
     code_block_renderer=(block, _) => {
       match block.node_id {
-        Some(id) => "<pre data-markdown-node-id=\"\{id}\">owned</pre>"
+        Some(_) =>
+          "<pre\{@markdown.markdown_source_attributes(block.block_source_range)}>owned</pre>"
         None => "<pre>missing source identity</pre>"
       }
     },
@@ -174,9 +182,9 @@ test "an owned code renderer writes the source ID on its existing root" {
   }
   assert_eq(
     rendered.html,
-    "<pre data-markdown-node-id=\"\{anchor.node_id}\">owned</pre>",
+    "<pre\{@markdown.markdown_source_attributes(anchor.source_range)}>owned</pre>",
   )
-  assert_eq(rendered.projection.code_blocks[0].node_id, Some(anchor.node_id))
+  assert_true(rendered.projection.code_blocks[0].node_id is Some(_))
 }
 
 ///|
@@ -196,11 +204,13 @@ test "built-in diagrams retain their original source-bearing root" {
       mapped.html.has_prefix("<div class=\"moonbit-viewer-markdown-diagram\""),
     )
     assert_true(mapped.html.contains("<svg"))
-    assert_eq(
-      mapped.html.replace_all(
-        old=" data-markdown-node-id=\"\{anchor.node_id}\"",
-        new="",
+    assert_true(
+      mapped.html.contains(
+        @markdown.markdown_source_attributes(anchor.source_range),
       ),
+    )
+    assert_eq(
+      markdown_html_without_source_attributes(mapped.html),
       ordinary.html,
     )
   }

@@ -100,7 +100,7 @@ fn MarkdownViewerWidgetAttachment::apply_folding(
   guard self.view is Some(view) else { return }
   let projection = view.projection()
   let sections = @markdown_core.markdown_sections(projection)
-  let hidden : Set[Int] = Set([])
+  let hidden : Array[@base_common.OffsetRange] = []
   let controls : Array[@markdown_document.MarkdownSectionFoldControl] = []
   for section_index, section in sections {
     guard section.is_foldable(projection) &&
@@ -114,16 +114,18 @@ fn MarkdownViewerWidgetAttachment::apply_folding(
     }
     let anchor = projection.block_anchors[section.heading_anchor_index]
     guard anchor.is_root_element else { continue }
-    controls.push({ heading_node_id: anchor.node_id, section_index, collapsed, })
+    controls.push({
+      heading_source_range: anchor.source_range,
+      section_index,
+      collapsed,
+    })
     if collapsed {
-      for node_id in section.body_node_ids(projection) {
-        hidden.add(node_id)
+      for range in section.body_source_ranges(projection) {
+        hidden.push(range)
       }
     }
   }
-  let hidden_sorted = hidden.to_array()
-  hidden_sorted.sort()
-  view.set_hidden_root_elements(hidden_sorted)
+  view.set_hidden_root_elements(hidden)
   view.install_section_fold_controls(controls)
 }
 

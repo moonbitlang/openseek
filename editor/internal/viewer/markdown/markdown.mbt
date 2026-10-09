@@ -53,10 +53,10 @@ pub struct MarkdownRenderFact {
 /// synchronous and receives both the MoonBit-owned block value and the active
 /// language id supplied by the caller. Conversion failures never expose raw
 /// input as HTML: they produce one escaped plaintext paragraph.
-/// `source_mapping` adds parse-local node IDs to block elements for document
-/// consumers that retain the matching projection. A custom renderer may set
-/// `code_block_renderer_owns_source_root=true` only when it writes `node_id`
-/// onto its own root element; other custom HTML receives an owned wrapper.
+/// `source_mapping` writes original-snapshot source ranges on block elements.
+/// Parse-local IDs stay inside parsing and renderer dispatch. A custom renderer
+/// may set `code_block_renderer_owns_source_root=true` only when it writes the
+/// block's source attributes onto its own root; other HTML receives a wrapper.
 pub fn render_markdown(
   markdown : String,
   language_id? : String,
@@ -77,7 +77,12 @@ pub fn render_markdown(
     source_mapping~,
   )
   let node_attributes : @cmark_html.NodeAttributesFn? = if source_mapping {
-    Some(fn(meta, _) { [(MarkdownNodeIdAttribute, "\{meta.id}")] })
+    Some(fn(meta, _) {
+      match markdown_offset_range(meta.loc) {
+        Some(range) => markdown_source_attribute_pairs(range)
+        None => []
+      }
+    })
   } else {
     None
   }
@@ -98,7 +103,7 @@ pub fn render_markdown(
         } else if code_block_renderer is Some(render) {
           markdown_write_code_override(
             ctx,
-            node.meta.id,
+            code_block.block_source_range,
             render(code_block, language_id),
             source_mapping=source_mapping &&
               !code_block_renderer_owns_source_root,
@@ -109,9 +114,12 @@ pub fn render_markdown(
         }
       }
       ExtMathBlock(node) => {
-        guard source_mapping else { return false }
+        guard source_mapping &&
+          markdown_offset_range(node.meta.loc) is Some(source_range) else {
+          return false
+        }
         ctx.string(
-          "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_node_attribute(node.meta.id)}>",
+          "<div class=\"moonbit-viewer-markdown-source-block\"\{markdown_source_attributes(source_range)}>",
         )
         let _ = (renderer.block)(ctx, block)
         ctx.string("</div>")

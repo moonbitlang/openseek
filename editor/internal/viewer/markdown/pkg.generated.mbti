@@ -7,17 +7,21 @@ import {
 }
 
 // Values
-pub const MarkdownNodeIdAttribute : String = "data-markdown-node-id"
+pub const MarkdownSourceEndAttribute : String = "data-markdown-source-end"
+
+pub const MarkdownSourceOwnerAttribute : String = "data-markdown-source-owner"
+
+pub const MarkdownSourceStartAttribute : String = "data-markdown-source-start"
 
 pub fn markdown_default_collapsed_sections(MarkdownDocumentProjection, String, min_depth? : Int, min_rendered_elements? : Int, min_body_lines? : Int) -> Array[Int]
-
-pub fn markdown_node_attribute(Int) -> String
 
 pub fn markdown_section_at_source_offset(Array[MarkdownSection], Int) -> MarkdownSection?
 
 pub fn markdown_section_keys(Array[MarkdownSection], MarkdownDocumentProjection, String) -> Array[String]
 
 pub fn markdown_sections(MarkdownDocumentProjection) -> Array[MarkdownSection]
+
+pub fn markdown_source_attributes(@common.OffsetRange) -> String
 
 pub fn markdown_table_of_contents(MarkdownDocumentProjection) -> Array[MarkdownTocEntry]
 
@@ -41,7 +45,6 @@ pub fn render_uml_diagram_svg(String) -> String?
 pub struct MarkdownBlockAnchor {
   index : Int
   source_range : @common.OffsetRange
-  node_id : Int
   is_root_element : Bool
   // private fields
 } derive(Eq, @debug.Debug)
@@ -78,11 +81,9 @@ pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 pub struct MarkdownDocumentProjection {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
-  // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownDocumentProjection::equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
-pub fn MarkdownDocumentProjection::source_range_for_node(Self, Int) -> @common.OffsetRange?
 pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownProjectedCodeRange {
@@ -116,7 +117,7 @@ pub struct MarkdownSection {
   body_source_range : @common.OffsetRange?
   // private fields
 } derive(Eq, @debug.Debug)
-pub fn MarkdownSection::body_node_ids(Self, MarkdownDocumentProjection) -> Array[Int]
+pub fn MarkdownSection::body_source_ranges(Self, MarkdownDocumentProjection) -> Array[@common.OffsetRange]
 pub fn MarkdownSection::equal(Self, Self) -> Bool
 pub fn MarkdownSection::is_foldable(Self, MarkdownDocumentProjection) -> Bool
 pub fn MarkdownSection::not_equal(Self, Self) -> Bool

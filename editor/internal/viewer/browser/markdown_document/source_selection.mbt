@@ -33,18 +33,34 @@ pub fn MarkdownSourceSelection::same_dom_range(
 }
 
 ///|
-fn markdown_element_node_id(element : @rdom.Element) -> Int? {
-  element
-  .get_attribute(@markdown_core.MarkdownNodeIdAttribute)
-  .bind(markdown_parse_dom_index)
+fn markdown_source_range_from_attributes(
+  start : String?,
+  end_exclusive : String?,
+  source_length : Int,
+) -> @base_common.OffsetRange? {
+  guard start.bind(markdown_parse_dom_index) is Some(start) &&
+    end_exclusive.bind(markdown_parse_dom_index) is Some(end_exclusive) &&
+    start <= end_exclusive &&
+    end_exclusive <= source_length else {
+    return None
+  }
+  Some(@base_common.OffsetRange::from_to(start, end_exclusive))
 }
 
 ///|
-fn MarkdownDocumentView::element_for_node(
-  self : MarkdownDocumentView,
-  node_id : Int,
-) -> @rdom.Element? {
-  self.semantic_dom.source_elements.get(node_id)
+fn markdown_element_source_range(
+  element : @rdom.Element,
+  source_length : Int,
+) -> @base_common.OffsetRange? {
+  guard element.get_attribute(@markdown_core.MarkdownSourceOwnerAttribute)
+    is Some("true") else {
+    return None
+  }
+  markdown_source_range_from_attributes(
+    element.get_attribute(@markdown_core.MarkdownSourceStartAttribute),
+    element.get_attribute(@markdown_core.MarkdownSourceEndAttribute),
+    source_length,
+  )
 }
 
 ///|
@@ -151,9 +167,9 @@ extern "js" fn markdown_selection_anchor_rect(
 fn MarkdownDocumentView::source_owner(
   self : MarkdownDocumentView,
   node : @rdom.Node,
-) -> Int? {
+) -> @base_common.OffsetRange? {
   let mut current = node.get_parent_element()
-  let mut owner : Int? = None
+  let mut owner : @base_common.OffsetRange? = None
   while current is Some(element) {
     if element.as_node().is_same_node(self.article.as_node()) {
       return owner
@@ -163,9 +179,9 @@ fn MarkdownDocumentView::source_owner(
       return None
     }
     if owner is None &&
-      markdown_element_node_id(element) is Some(id) &&
-      self.rendered.projection.source_range_for_node(id) is Some(_) {
-      owner = Some(id)
+      markdown_element_source_range(element, self.source.length())
+      is Some(range) {
+      owner = Some(range)
     }
     current = element.get_parent_element()
   }
@@ -183,17 +199,9 @@ pub fn MarkdownDocumentView::source_selection(
     markdown_selection_range(self.article).to_option() is Some(native_range) else {
     return None
   }
-  let ids : Set[Int] = Set([])
-  for node in markdown_selected_content_nodes(self.article, native_range) {
-    if self.source_owner(node) is Some(id) {
-      ids.add(id)
-    }
-  }
   let mut source_range : @base_common.OffsetRange? = None
-  for id in ids {
-    guard self.rendered.projection.source_range_for_node(id) is Some(range) else {
-      continue
-    }
+  for node in markdown_selected_content_nodes(self.article, native_range) {
+    guard self.source_owner(node) is Some(range) else { continue }
     source_range = Some(
       match source_range {
         None => range

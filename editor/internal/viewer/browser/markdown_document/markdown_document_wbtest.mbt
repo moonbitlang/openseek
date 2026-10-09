@@ -1,4 +1,27 @@
 ///|
+test "source attributes preserve zero and reject incomplete or invalid ranges" {
+  let cases : Array[(String?, String?, @base_common.OffsetRange?)] = [
+    (Some("0"), Some("4"), Some(OffsetRange(0, 4))),
+    (Some("4"), Some("4"), Some(@base_common.OffsetRange::empty_at(4))),
+    (None, Some("4"), None),
+    (Some("0"), None, None),
+    (Some(""), Some("4"), None),
+    (Some("-1"), Some("4"), None),
+    (Some("0"), Some("2.5"), None),
+    (Some("0"), Some(" 4"), None),
+    (Some("3"), Some("2"), None),
+    (Some("0"), Some("5"), None),
+    (Some("9999999999"), Some("9999999999"), None),
+  ]
+  for (start, end_exclusive, expected) in cases {
+    assert_eq(
+      markdown_source_range_from_attributes(start, end_exclusive, 4),
+      expected,
+    )
+  }
+}
+
+///|
 priv struct StatefulMarkdownFenceTokenizer {}
 
 ///|

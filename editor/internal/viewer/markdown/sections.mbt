@@ -33,27 +33,27 @@ pub fn MarkdownSection::is_foldable(
   self : MarkdownSection,
   projection : MarkdownDocumentProjection,
 ) -> Bool {
-  self.body_node_ids(projection).length() > 0
+  self.body_source_ranges(projection).length() > 0
 }
 
 ///|
-/// The rendered root node identities in this section's body, in source order.
+/// The source ranges of rendered roots in this section's body, in source order.
 ///
 /// Anchors that produced no in-place root element (blank lines, link reference
 /// definitions, omitted raw HTML, and nested anchors) contribute nothing, so
 /// hiding this run never depends on the order of DOM children. The heading's
 /// own element is deliberately excluded: collapsing hides the body and leaves
 /// the heading as the affordance.
-pub fn MarkdownSection::body_node_ids(
+pub fn MarkdownSection::body_source_ranges(
   self : MarkdownSection,
   projection : MarkdownDocumentProjection,
-) -> Array[Int] {
+) -> Array[@common.OffsetRange] {
   let result = []
   for anchor_index in self.body_anchor_indexes {
     if anchor_index >= 0 && anchor_index < projection.block_anchors.length() {
       let anchor = projection.block_anchors[anchor_index]
       if anchor.is_root_element {
-        result.push(anchor.node_id)
+        result.push(anchor.source_range)
       }
     }
   }
@@ -357,7 +357,7 @@ pub fn markdown_default_collapsed_sections(
     guard section_index < entries.length() else { continue }
     let entry = entries[section_index]
     guard entry.is_foldable && entry.depth >= min_depth else { continue }
-    let rendered = section.body_node_ids(projection).length()
+    let rendered = section.body_source_ranges(projection).length()
     let body_lines = match section.body_source_range {
       Some(body) => markdown_count_source_lines(source, body)
       None => 0

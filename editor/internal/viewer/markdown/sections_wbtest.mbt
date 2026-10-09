@@ -226,7 +226,7 @@ test "the body source range covers the body and excludes the heading" {
 }
 
 ///|
-test "the hidden run contains body node identities and excludes its heading" {
+test "the hidden run contains body source ranges and excludes its heading" {
   let source =
     #|# Title
     #|
@@ -239,17 +239,13 @@ test "the hidden run contains body node identities and excludes its heading" {
   let projection = render_markdown(source).projection
   let sections = markdown_sections(projection)
   guard sections is [first, ..] else { fail("expected a first section") }
-  let heading_id = projection.block_anchors[first.heading_anchor_index].node_id
-  let body_ids = first.body_node_ids(projection)
-  assert_eq(body_ids.length(), 2)
-  assert_false(body_ids.contains(heading_id))
+  let heading_range = projection.block_anchors[first.heading_anchor_index].source_range
+  let body_ranges = first.body_source_ranges(projection)
+  assert_eq(body_ranges.length(), 2)
+  assert_false(body_ranges.contains(heading_range))
   assert_eq(
-    body_ids.map(id => {
-      projection
-      .source_range_for_node(id)
-      .map(range => source[range.start:range.end_exclusive].to_owned())
-    }),
-    [Some("first paragraph"), Some("second paragraph")],
+    body_ranges.map(range => source[range.start:range.end_exclusive].to_owned()),
+    ["first paragraph", "second paragraph"],
   )
 }
 
@@ -509,7 +505,7 @@ test "a body of only non-rendering anchors is not foldable" {
     markdown_sections(projection).map(section => {
       (
         section.body_anchor_indexes.length(),
-        section.body_node_ids(projection).length(),
+        section.body_source_ranges(projection).length(),
         section.is_foldable(projection),
       )
     }),
