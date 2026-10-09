@@ -175,8 +175,9 @@ test "encodes and decodes server document and language packets" {
     uri,
     revision: "rev-2",
     locations: [
-      { uri, range: Range(1, 8, 1, 12), },
+      { is_test: None, uri, range: Range(1, 8, 1, 12), },
       {
+        is_test: None,
         uri: expect_uri("readonly-remote://workspace/src/lib.mbt"),
         range: Range(4, 2, 4, 7),
       },
@@ -214,6 +215,7 @@ test "encodes and decodes server document and language packets" {
     revision: "rev-2",
     references: [
       {
+        is_test: None,
         uri,
         range: Range(1, 8, 1, 12),
         line: 1,
@@ -221,6 +223,7 @@ test "encodes and decodes server document and language packets" {
         line_text: "pub fn main {}",
       },
       {
+        is_test: Some(true),
         uri,
         range: Range(2, 1, 2, 5),
         line: 2,
@@ -236,6 +239,8 @@ test "encodes and decodes server document and language packets" {
   assert_eq(references_payload.id, "refs-1")
   assert_eq(references_payload.revision, "rev-2")
   assert_eq(references_payload.references.length(), 2)
+  assert_eq(references_payload.references[0].is_test, None)
+  assert_eq(references_payload.references[1].is_test, Some(true))
   assert_eq(references_payload.references[0].line, 1)
   assert_eq(references_payload.references[0].column, 8)
   assert_eq(references_payload.references[0].line_text, "pub fn main {}")

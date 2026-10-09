@@ -18,6 +18,7 @@ pub(all) struct ReferenceGroup {
   uri : @common.Uri
   uri_string : String
   references : Array[ReferenceItem]
+  is_test : Bool
 } derive(Eq, @debug.Debug)
 pub fn ReferenceGroup::equal(Self, Self) -> Bool
 pub fn ReferenceGroup::not_equal(Self, Self) -> Bool
@@ -30,6 +31,7 @@ pub(all) struct ReferenceItem {
   uri : @common.Uri
   uri_string : String
   range : @common.Range
+  is_test : Bool?
 } derive(Eq, @debug.Debug)
 pub fn ReferenceItem::equal(Self, Self) -> Bool
 pub fn ReferenceItem::fallback_label(Self) -> String
@@ -63,7 +65,7 @@ pub(all) struct ReferencesModel {
 pub fn ReferencesModel::ReferencesModel(Array[@language.Location]) -> Self
 pub fn ReferencesModel::equal(Self, Self) -> Bool
 pub fn ReferencesModel::is_empty(Self) -> Bool
-pub fn ReferencesModel::nearest_reference(Self, @common.Uri, @common.Position) -> ReferenceItem?
+pub fn ReferencesModel::nearest_reference(Self, @common.Uri, @common.Position, prefer_non_test? : Bool) -> ReferenceItem?
 pub fn ReferencesModel::next_reference(Self, ReferenceItem) -> ReferenceItem?
 pub fn ReferencesModel::not_equal(Self, Self) -> Bool
 pub fn ReferencesModel::previous_reference(Self, ReferenceItem) -> ReferenceItem?

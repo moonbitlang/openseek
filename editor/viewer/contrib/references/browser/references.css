@@ -347,3 +347,11 @@
     right: 38%;
   }
 }
+
+.moonbit-viewer-reference-results-test-children[hidden] {
+  display: none;
+}
+
+.moonbit-viewer-reference-results-test-children {
+  padding-left: 12px;
+}

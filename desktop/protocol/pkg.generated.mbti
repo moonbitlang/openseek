@@ -1988,12 +1988,15 @@ pub(all) struct MoonIdeLocation {
   start_column : Int
   end_line : Int
   end_column : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  is_test : Bool?
+} derive(Eq, @debug.Debug)
 pub fn MoonIdeLocation::equal(Self, Self) -> Bool
 pub fn MoonIdeLocation::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MoonIdeLocation::not_equal(Self, Self) -> Bool
 pub fn MoonIdeLocation::to_json(Self) -> Json
 pub fn MoonIdeLocation::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MoonIdeLocation
+pub impl @json.FromJson for MoonIdeLocation
 
 pub(all) struct MoonIdeLocationsReply {
   locations : Array[MoonIdeLocation]

@@ -516,6 +516,7 @@ fn references_peek_test_location(
   column : Int,
 ) -> @language.Location {
   {
+    is_test: None,
     uri: @base_common.Uri::file(path),
     range: Range(line, column, line, column + 1),
   }

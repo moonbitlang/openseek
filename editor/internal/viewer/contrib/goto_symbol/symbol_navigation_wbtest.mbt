@@ -170,10 +170,12 @@ async test "shared DefinitionAction applies zero one and multi-result policy onc
   let host = symbol_navigation_test_host(model, surface_generation)
   let calls = Ref(0)
   let first : @language.Location = {
+    is_test: None,
     uri: @base_common.Uri::file("/first.mbt"),
     range: Range(3, 2, 3, 8),
   }
   let second : @language.Location = {
+    is_test: None,
     uri: @base_common.Uri::file("/second.mbt"),
     range: Range(9, 4, 9, 10),
   }
@@ -252,6 +254,7 @@ async test "forced Peek and ReferencesAction share policy but query only their p
   let definition_calls = Ref(0)
   let references_calls = Ref(0)
   let location : @language.Location = {
+    is_test: None,
     uri: model.uri,
     range: Range(1, 5, 1, 11),
   }
@@ -314,6 +317,7 @@ async test "cancellation model version and surface generation suppress stale res
   let calls = Ref(0)
   let tokens : Array[@language.CancellationToken] = []
   let target : @language.Location = {
+    is_test: None,
     uri: @base_common.Uri::file("/target.mbt"),
     range: Range(4, 2, 4, 8),
   }

@@ -258,6 +258,7 @@ fn MoonIdeProjection::to_viewer(
       continue
     }
     result.push(@language.Location::{
+      is_test: location.is_test,
       uri: model_uri_of(absolute),
       range: @common.Range(
         location.start_line,
@@ -411,6 +412,7 @@ test "moon ide locations stay one based and channel routed" {
     reply: {
       locations: [
         {
+          is_test: Some(true),
           path: "/ws/lib.mbt",
           start_line: 2,
           start_column: 3,
@@ -418,6 +420,7 @@ test "moon ide locations stay one based and channel routed" {
           end_column: 9,
         },
         {
+          is_test: None,
           path: "/ws/bad.mbt",
           start_line: 0,
           start_column: 1,
@@ -425,6 +428,7 @@ test "moon ide locations stay one based and channel routed" {
           end_column: 1,
         },
         {
+          is_test: None,
           path: "relative.mbt",
           start_line: 1,
           start_column: 1,
@@ -436,6 +440,7 @@ test "moon ide locations stay one based and channel routed" {
     channel: @interop.ChannelId::Remote("device"),
   }.to_viewer()
   assert_eq(locations.length(), 1)
+  assert_eq(locations[0].is_test, Some(true))
   assert_true(
     model_uri_channel(locations[0].uri) == Some(Remote("device")) &&
     model_uri_path(locations[0].uri) is Some(resource) &&

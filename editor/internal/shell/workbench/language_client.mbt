@@ -333,6 +333,7 @@ impl @language.ReferencesProvider for RemoteLanguageClient with fn provide_refer
     ReferencesResult(payload) =>
       payload.references.map(item => {
         let location : @language.Location = {
+          is_test: item.is_test,
           uri: item.uri,
           range: item.range,
         }

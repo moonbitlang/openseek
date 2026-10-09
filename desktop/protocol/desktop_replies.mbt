@@ -1686,7 +1686,62 @@ pub(all) struct MoonIdeLocation {
   start_column : Int
   end_line : Int
   end_column : Int
-} derive(Debug, Eq, FromJson, ToJson)
+  // Definition results and unclassified providers omit this annotation.
+  is_test : Bool?
+} derive(Debug, Eq)
+
+///|
+// Required coordinates reject missing/null/malformed values; unknown fields
+// are ignored. Classification may be absent, but a present value must be bool.
+pub impl FromJson for MoonIdeLocation with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected Moon IDE location"))
+  }
+  let is_test = match fields.get("is_test") {
+    None => None
+    Some(True) => Some(true)
+    Some(False) => Some(false)
+    _ => raise JsonDecodeError((path.add_key("is_test"), "expected boolean"))
+  }
+  {
+    path: @json.from_json(
+      fields.get("path").unwrap_or(Json::null()),
+      path=path.add_key("path"),
+    ),
+    start_line: @json.from_json(
+      fields.get("start_line").unwrap_or(Json::null()),
+      path=path.add_key("start_line"),
+    ),
+    start_column: @json.from_json(
+      fields.get("start_column").unwrap_or(Json::null()),
+      path=path.add_key("start_column"),
+    ),
+    end_line: @json.from_json(
+      fields.get("end_line").unwrap_or(Json::null()),
+      path=path.add_key("end_line"),
+    ),
+    end_column: @json.from_json(
+      fields.get("end_column").unwrap_or(Json::null()),
+      path=path.add_key("end_column"),
+    ),
+    is_test,
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeLocation with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "path": self.path.to_json(),
+    "start_line": self.start_line.to_json(),
+    "start_column": self.start_column.to_json(),
+    "end_line": self.end_line.to_json(),
+    "end_column": self.end_column.to_json(),
+  }
+  if self.is_test is Some(value) {
+    fields["is_test"] = value.to_json()
+  }
+  fields.to_json()
+}
 
 ///|
 pub(all) struct MoonIdeLocationsReply {

@@ -17,12 +17,12 @@ async test "LocationOpenerHandle forwards accepted and rejected requests" {
   })
   let current_request : OpenLocationRequest = {
     source_viewer_id: "viewer-7",
-    location: { uri: target, range: Range(3, 2, 3, 8), },
+    location: { is_test: None, uri: target, range: Range(3, 2, 3, 8), },
     mode: Current,
   }
   let side_request : OpenLocationRequest = {
     source_viewer_id: "viewer-8",
-    location: { uri: target, range: Range(5, 1, 5, 4), },
+    location: { is_test: None, uri: target, range: Range(5, 1, 5, 4), },
     mode: Side,
   }
   assert_true(accepted.open(current_request))

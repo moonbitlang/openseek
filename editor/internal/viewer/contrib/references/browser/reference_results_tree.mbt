@@ -2,6 +2,7 @@
 /// Closed row family for the feature-local result tree. Group identity is the
 /// normalized model group index; reference identity is its flat index.
 priv enum ReferenceResultsTreeRow {
+  TestSectionRow
   GroupRow(Int)
   ReferenceRow(Int)
 } derive(Eq)
@@ -27,6 +28,9 @@ priv struct ReferenceResultsTree {
   mut group_rows : Array[@rdom.Element?]
   mut group_children : Array[@rdom.Element?]
   mut reference_rows : Array[@rdom.Element?]
+  mut tests_expanded : Bool
+  mut test_row : @rdom.Element?
+  mut test_children : @rdom.Element?
   mut disposed : Bool
 }
 
@@ -58,6 +62,9 @@ fn ReferenceResultsTree::ReferenceResultsTree(
     group_rows: [],
     group_children: [],
     reference_rows: [],
+    tests_expanded: false,
+    test_row: None,
+    test_children: None,
     disposed: false,
   }
   tree.install_listeners()
@@ -79,6 +86,9 @@ fn ReferenceResultsTree::clear(self : ReferenceResultsTree) -> Unit {
   self.node.set_inner_html("")
   self.node.set_attribute("aria-label", self.localization.text(NoResults))
   self.model = None
+  self.test_row = None
+  self.test_children = None
+  self.tests_expanded = false
   self.previews = []
   self.expanded_groups = []
   self.requested_groups = []
@@ -99,6 +109,7 @@ fn ReferenceResultsTree::set_results(
     return
   }
   self.model = Some(model)
+  self.tests_expanded = false
   self.previews = [
     for group in model.groups => {
       [
@@ -131,7 +142,7 @@ fn ReferenceResultsTree::set_results(
     }
     None => self.roving = None
   }
-  if model.groups.length() == 1 {
+  if model.groups.length() == 1 && !model.groups[0].is_test {
     self.expanded_groups[0] = true
   }
   self.render()
@@ -144,7 +155,9 @@ fn ReferenceResultsTree::set_results(
     ),
   )
   match selected_item {
-    Some(item) => self.request_group(item.group_index)
+    Some(item) if item.is_test != Some(true) =>
+      self.request_group(item.group_index)
+    Some(_) => ()
     None => ()
   }
 }
@@ -193,8 +206,11 @@ fn ReferenceResultsTree::set_selected(
     return
   }
   let had_tree_focus = @base_browser.element_contains_active_element(self.node)
+  if selected.is_test == Some(true) && !self.tests_expanded {
+    self.set_tests_expanded(true)
+  }
   if self.model is Some(model) &&
-    model.groups.length() > 1 &&
+    (model.groups.length() > 1 || model.groups[0].is_test) &&
     !self.expanded_groups[selected.group_index] {
     self.set_group_expanded(selected.group_index, true)
   }
@@ -242,6 +258,8 @@ fn ReferenceResultsTree::dispose(self : ReferenceResultsTree) -> Unit {
 ///|
 fn ReferenceResultsTree::render(self : ReferenceResultsTree) -> Unit {
   self.node.set_inner_html("")
+  self.test_row = None
+  self.test_children = None
   self.group_rows = []
   self.group_children = []
   self.reference_rows = []
@@ -253,11 +271,14 @@ fn ReferenceResultsTree::render(self : ReferenceResultsTree) -> Unit {
   for _ in model.references {
     self.reference_rows.push(None)
   }
-  if model.groups.length() == 1 {
+  if model.groups.length() == 1 && !model.groups[0].is_test {
     self.group_children[0] = Some(self.node)
     self.render_group_references(0, self.node)
   } else {
     for group in model.groups {
+      if group.is_test && self.test_children is None {
+        self.render_test_section(model)
+      }
       self.render_group(group)
     }
   }
@@ -281,10 +302,21 @@ fn ReferenceResultsTree::render_group(
   )
   row.set_attribute("type", "button")
   row.set_attribute("role", "treeitem")
-  row.set_attribute("aria-level", "1")
-  row.set_attribute("aria-posinset", (group.group_index + 1).to_string())
+  row.set_attribute("aria-level", if group.is_test { "2" } else { "1" })
   guard self.model is Some(model) else { return }
-  row.set_attribute("aria-setsize", model.groups.length().to_string())
+  let ordinary_count = model.groups.filter(group => !group.is_test).length()
+  let position = if group.is_test {
+    group.group_index - ordinary_count + 1
+  } else {
+    group.group_index + 1
+  }
+  let size = if group.is_test {
+    model.groups.length() - ordinary_count
+  } else {
+    ordinary_count + (if self.has_tests() { 1 } else { 0 })
+  }
+  row.set_attribute("aria-posinset", position.to_string())
+  row.set_attribute("aria-setsize", size.to_string())
   row.set_attribute(
     "aria-expanded",
     reference_results_bool(self.expanded_groups[group.group_index]),
@@ -340,7 +372,11 @@ fn ReferenceResultsTree::render_group(
     children.set_attribute("hidden", "")
   }
   wrapper.append_child(children.as_node())
-  self.node.append_child(wrapper.as_node())
+  if group.is_test && self.test_children is Some(parent) {
+    parent.append_child(wrapper.as_node())
+  } else {
+    self.node.append_child(wrapper.as_node())
+  }
   self.group_rows[group.group_index] = Some(row)
   self.group_children[group.group_index] = Some(children)
   self.render_group_references(group.group_index, children)
@@ -365,7 +401,13 @@ fn ReferenceResultsTree::render_group_references(
     }
   }
   container.set_inner_html("")
-  let level = if model.groups.length() == 1 { 1 } else { 2 }
+  let level = if group.is_test {
+    3
+  } else if model.groups.length() == 1 {
+    1
+  } else {
+    2
+  }
   for reference in group.references {
     let row = self.render_reference_row(
       reference,
@@ -482,6 +524,11 @@ fn ReferenceResultsTree::handle_click(
   event.prevent_default()
   event.stop_propagation()
   match row {
+    TestSectionRow => {
+      self.roving = Some(row)
+      self.set_tests_expanded(!self.tests_expanded)
+      self.focus_row(row, reveal=false, notify_selection=false)
+    }
     GroupRow(group_index) => {
       self.roving = Some(row)
       self.set_group_expanded(group_index, !self.expanded_groups[group_index])
@@ -553,6 +600,20 @@ fn ReferenceResultsTree::handle_keydown(
     "ArrowRight" => {
       guard self.current_event_or_roving_row(event) is Some(row) else { return }
       match row {
+        TestSectionRow => {
+          event.prevent_default()
+          event.stop_propagation()
+          if !self.tests_expanded {
+            self.set_tests_expanded(true)
+          } else if self.model is Some(model) &&
+            model.groups.filter(group => group.is_test).get(0) is Some(first) {
+            self.focus_row(
+              GroupRow(first.group_index),
+              reveal=true,
+              notify_selection=false,
+            )
+          }
+        }
         GroupRow(group_index) => {
           event.prevent_default()
           event.stop_propagation()
@@ -574,17 +635,28 @@ fn ReferenceResultsTree::handle_keydown(
     "ArrowLeft" => {
       guard self.current_event_or_roving_row(event) is Some(row) else { return }
       match row {
+        TestSectionRow => {
+          event.prevent_default()
+          event.stop_propagation()
+          self.set_tests_expanded(false)
+          self.focus_row(row, reveal=true, notify_selection=false)
+        }
         GroupRow(group_index) =>
           if self.expanded_groups[group_index] {
             event.prevent_default()
             event.stop_propagation()
             self.set_group_expanded(group_index, false)
             self.focus_row(row, reveal=true, notify_selection=false)
+          } else if self.model is Some(model) &&
+            model.groups[group_index].is_test {
+            event.prevent_default()
+            event.stop_propagation()
+            self.focus_row(TestSectionRow, reveal=true, notify_selection=false)
           }
         ReferenceRow(flat_index) =>
           if self.reference_at(flat_index) is Some(reference) &&
             self.model is Some(model) &&
-            model.groups.length() > 1 {
+            (model.groups.length() > 1 || model.groups[0].is_test) {
             event.prevent_default()
             event.stop_propagation()
             self.focus_row(
@@ -595,7 +667,16 @@ fn ReferenceResultsTree::handle_keydown(
           }
       }
     }
-    "Enter" => {
+    "Enter" | " " => {
+      if self.current_event_or_roving_row(event) is Some(TestSectionRow) {
+        event.prevent_default()
+        event.stop_propagation()
+        self.set_tests_expanded(!self.tests_expanded)
+        return
+      }
+      if key == " " {
+        return
+      }
       guard self.current_event_or_roving_row(event)
         is Some(ReferenceRow(flat_index)) &&
         self.reference_at(flat_index) is Some(reference) else {
@@ -671,7 +752,7 @@ fn ReferenceResultsTree::focus_row(
       self.selected_flat_index = flat_index
       changed
     }
-    GroupRow(_) => false
+    TestSectionRow | GroupRow(_) => false
   }
   self.roving = Some(row)
   self.update_row_states()
@@ -696,7 +777,7 @@ fn ReferenceResultsTree::set_group_expanded(
   expanded : Bool,
 ) -> Unit {
   guard self.model is Some(model) &&
-    model.groups.length() > 1 &&
+    (model.groups.length() > 1 || model.groups[0].is_test) &&
     group_index >= 0 &&
     group_index < model.groups.length() else {
     return
@@ -770,6 +851,16 @@ fn ReferenceResultsTree::ensure_roving_visible(
 ///|
 fn ReferenceResultsTree::update_row_states(self : ReferenceResultsTree) -> Unit {
   guard self.model is Some(model) else { return }
+  if self.test_row is Some(row) {
+    row.set_attribute(
+      "tabindex",
+      reference_results_tabindex(self.roving is Some(TestSectionRow)),
+    )
+    row.set_attribute(
+      "aria-expanded",
+      reference_results_bool(self.tests_expanded),
+    )
+  }
   for group_index, row in self.group_rows {
     match row {
       Some(row) => {
@@ -813,12 +904,22 @@ fn ReferenceResultsTree::visible_rows(
 ) -> Array[ReferenceResultsTreeRow] {
   let result : Array[ReferenceResultsTreeRow] = []
   guard self.model is Some(model) else { return result }
-  if model.groups.length() == 1 {
+  if model.groups.length() == 1 && !model.groups[0].is_test {
     for reference in model.references {
       result.push(ReferenceRow(reference.flat_index))
     }
   } else {
+    let mut tests_added = false
     for group in model.groups {
+      if group.is_test {
+        if !tests_added {
+          result.push(TestSectionRow)
+          tests_added = true
+        }
+        if !self.tests_expanded {
+          continue
+        }
+      }
       result.push(GroupRow(group.group_index))
       if self.expanded_groups[group.group_index] {
         for reference in group.references {
@@ -863,7 +964,11 @@ fn ReferenceResultsTree::reference_is_visible(
 ) -> Bool {
   match self.model {
     Some(model) =>
-      model.groups.length() == 1 || self.expanded_groups[reference.group_index]
+      (reference.is_test != Some(true) || self.tests_expanded) &&
+      (
+        (model.groups.length() == 1 && !model.groups[0].is_test) ||
+        self.expanded_groups[reference.group_index]
+      )
     None => false
   }
 }
@@ -874,6 +979,7 @@ fn ReferenceResultsTree::row_node(
   row : ReferenceResultsTreeRow,
 ) -> @rdom.Element? {
   match row {
+    TestSectionRow => self.test_row
     GroupRow(index) =>
       if index >= 0 && index < self.group_rows.length() {
         self.group_rows[index]
@@ -912,7 +1018,9 @@ fn ReferenceResultsTree::row_from_event(
     row.get_attribute("data-reference-row-kind") is Some(kind) else {
     return None
   }
-  if kind == "group" {
+  if kind == "tests" {
+    Some(TestSectionRow)
+  } else if kind == "group" {
     guard row.get_attribute("data-reference-group-index") is Some(raw) else {
       return None
     }
@@ -1094,7 +1202,11 @@ fn reference_results_summary(
   resource_path_label? : (@base_common.Uri) -> String? = _ => None,
 ) -> String {
   let reference_count = model.references.length()
-  let group_count = model.groups.length()
+  let files : Set[String] = Set([])
+  for group in model.groups {
+    files.add(group.uri_string)
+  }
+  let group_count = files.length()
   if reference_count > 0 {
     match localization.language() {
       Spanish => {
@@ -1152,4 +1264,88 @@ fn reference_results_summary(
     group_count.to_string() +
     " files"
   }
+}
+
+///|
+fn ReferenceResultsTree::has_tests(self : ReferenceResultsTree) -> Bool {
+  self.model is Some(model) && model.groups.any(group => group.is_test)
+}
+
+///|
+fn ReferenceResultsTree::render_test_section(
+  self : ReferenceResultsTree,
+  model : @references.ReferencesModel,
+) -> Unit {
+  let document = @rdom.document()
+  let row = document.create_element("button")
+  row.set_attribute("type", "button")
+  row.set_attribute(
+    "class", "moonbit-viewer-reference-results-row moonbit-viewer-reference-results-tests",
+  )
+  row.set_attribute("role", "treeitem")
+  row.set_attribute("aria-level", "1")
+  let position = model.groups.filter(group => !group.is_test).length() + 1
+  row.set_attribute("aria-posinset", position.to_string())
+  row.set_attribute("aria-setsize", position.to_string())
+  row.set_attribute("data-reference-row-kind", "tests")
+  let count = model.references
+    .filter(reference => reference.is_test == Some(true))
+    .length()
+  let label = match self.localization.language() {
+    English => "Tests"
+    SimplifiedChinese => "测试"
+    TraditionalChinese => "測試"
+    Japanese => "テスト"
+    Spanish => "Pruebas"
+  }
+  row.set_attribute("aria-label", "\{label} (\{count})")
+  let twistie = document.create_element("span")
+  twistie.set_attribute("class", "moonbit-viewer-reference-results-twistie")
+  twistie.set_attribute("aria-hidden", "true")
+  twistie.append_child(document.create_text_node("▶").as_node())
+  row.append_child(twistie.as_node())
+  row.append_child(document.create_text_node(label).as_node())
+  let badge = document.create_element("span")
+  badge.set_attribute("class", "moonbit-viewer-reference-results-file-count")
+  badge.set_attribute("aria-hidden", "true")
+  badge.append_child(document.create_text_node(count.to_string()).as_node())
+  row.append_child(badge.as_node())
+  let children = document.create_element("div")
+  children.set_attribute(
+    "class", "moonbit-viewer-reference-results-test-children",
+  )
+  children.set_attribute("role", "group")
+  children.set_attribute("hidden", "")
+  self.node.append_child(row.as_node())
+  self.node.append_child(children.as_node())
+  self.test_row = Some(row)
+  self.test_children = Some(children)
+}
+
+///|
+fn ReferenceResultsTree::set_tests_expanded(
+  self : ReferenceResultsTree,
+  expanded : Bool,
+) -> Unit {
+  self.tests_expanded = expanded
+  if self.test_children is Some(children) {
+    if expanded {
+      children.remove_attribute("hidden")
+    } else {
+      children.set_attribute("hidden", "")
+    }
+  }
+  if expanded && self.model is Some(model) {
+    for group in model.groups {
+      if group.is_test && self.expanded_groups[group.group_index] {
+        self.request_group(group.group_index)
+      }
+    }
+  }
+  if !expanded {
+    self.roving = Some(TestSectionRow)
+  }
+  self.ensure_roving_visible()
+  self.update_row_states()
+  (self.layout_changed)()
 }

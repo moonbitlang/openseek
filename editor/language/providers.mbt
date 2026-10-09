@@ -57,6 +57,8 @@ pub(all) struct Diagnostic {
 pub(all) struct Location {
   uri : @base_common.Uri
   range : @base_common.Range
+  // None when the provider does not classify test references.
+  is_test : Bool?
 } derive(Debug)
 
 ///|

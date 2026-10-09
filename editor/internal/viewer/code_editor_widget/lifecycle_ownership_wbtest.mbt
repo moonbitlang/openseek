@@ -343,7 +343,7 @@ async test "navigation handles stay optional and borrowed after bundle disposal"
   services.dispose()
   let request : @navigation_api.OpenLocationRequest = {
     source_viewer_id: "viewer-navigation-owner",
-    location: { uri: target, range: Range(1, 5, 1, 15), },
+    location: { is_test: None, uri: target, range: Range(1, 5, 1, 15), },
     mode: Current,
   }
   assert_true(opener.open(request))

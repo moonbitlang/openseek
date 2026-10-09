@@ -198,12 +198,18 @@ fn parse_moon_definition_output_impl(
   let locations : Array[@language.Location] = []
   for item in items {
     if item is { "path": String(path), "range": String(raw_range), .. } {
+      let is_test = match item {
+        { "is_test": True, .. } => Some(true)
+        { "is_test": False, .. } => Some(false)
+        Object(fields) if !fields.contains("is_test") => None
+        _ => continue
+      }
       match
         (
           definition_uri_under_root(root, path),
           parse_moon_definition_range(raw_range),
         ) {
-        (Some(uri), Some(range)) => locations.push({ uri, range, })
+        (Some(uri), Some(range)) => locations.push({ is_test, uri, range, })
         _ => ()
       }
     }

@@ -1944,3 +1944,39 @@ test "browser payload requires typed fields and ignores unknown fields" {
     )
   }
 }
+
+///|
+test "Moon IDE location classification round trips and rejects malformed fields" {
+  for is_test in [None, Some(false), Some(true)] {
+    let location : @protocol.MoonIdeLocation = {
+      path: "/workspace/main.mbt",
+      start_line: 2,
+      start_column: 3,
+      end_line: 2,
+      end_column: 9,
+      is_test,
+    }
+    let decoded : @protocol.MoonIdeLocation = @json.from_json(
+      location.to_json(),
+    )
+    assert_eq(decoded, location)
+    if is_test is None {
+      assert_false(location.to_json().stringify().contains("is_test"))
+    }
+  }
+  for invalid in [Json::null(), Json("true"), Json(1)] {
+    let json : Json = {
+      "path": "/workspace/main.mbt",
+      "start_line": 2,
+      "start_column": 3,
+      "end_line": 2,
+      "end_column": 9,
+      "is_test": invalid,
+    }
+    assert_true(
+      refused(() => {
+        let _ : @protocol.MoonIdeLocation = @json.from_json(json)
+      }),
+    )
+  }
+}
