@@ -570,6 +570,6 @@ fn prompt_content(
 
 ///|
 fn RunConfig::supports_images(self : RunConfig) -> Bool {
-  self.model.has_prefix("deepseek-") &&
+  self.model is ("deepseek-flash" | "deepseek-v4-flash") &&
   self.api_url != Some("https://openrouter.ai/api/v1/chat/completions")
 }
