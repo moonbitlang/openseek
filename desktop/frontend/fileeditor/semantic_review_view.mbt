@@ -1378,71 +1378,102 @@ fn arm_semantic_review_navigation_reveal(
 }
 
 ///|
+/// Project logical changes even when a section is collapsed and has no mounted
+/// editor. Unchanged context and ignored mappings do not count as coverage.
+fn semantic_review_section_changes(
+  section : @moon_diff_provider.SemanticReviewSection,
+) -> ReviewHunk {
+  let document = match section.diff {
+    @moon_diff_provider.SemanticReviewDiff::Fragment(document) => document
+    @moon_diff_provider.SemanticReviewDiff::Line =>
+      @diff.get_line_document_diff_provider().compute_diff(
+        @model.TextSnapshot(section.original_source),
+        @model.TextSnapshot(section.modified_source),
+        { ignore_trim_whitespace: true, },
+      )
+  }
+  ReviewHunk::from_diff_hunk(
+    {
+      members: document.changes
+      .filter(change => change.kind is Visible)
+      .map(change => change.mapping),
+    },
+    semantic_feedback_line_offset(section, SemanticReviewOriginal),
+    semantic_feedback_line_offset(section, SemanticReviewModified),
+  )
+}
+
+///|
+fn semantic_review_section_navigation_index(
+  state : State,
+  change : ChangedFile?,
+  sections : Array[@moon_diff_provider.SemanticReviewSection],
+  current : Int?,
+  previous : Bool,
+) -> Int? {
+  let mut index = match current {
+    Some(index) => index + (if previous { -1 } else { 1 })
+    None => if previous { sections.length() - 1 } else { 0 }
+  }
+  while index >= 0 && index < sections.length() {
+    let hunk = semantic_review_section_changes(sections[index])
+    if !hunk.is_empty() &&
+      !(change is Some(change) &&
+      state.review_hunk_state(change, hunk) == ReviewHunkViewed) {
+      return Some(index)
+    }
+    index += if previous { -1 } else { 1 }
+  }
+  None
+}
+
+///|
 /// Move within the focused DiffEditor, then sections, then the review queue.
 fn navigate_semantic_review_change(
   dispatch : @cmd.Emit[Msg],
-  collapsed : Array[String],
+  state : State,
+  ctx : Ctx,
   direction : SemanticReviewNavigationDirection,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard !semantic_review_order.is_empty() else {
-      scheduler.add(
-        dispatch(ReviewDiffFileBoundary(direction is SemanticReviewPrevious)),
-      )
-      return
-    }
-    guard semantic_review_navigation_index(semantic_review_active_key.val)
-      is Some(index) else {
-      // With every section collapsed there is no active editor. Enter at the
-      // boundary instead of treating the first section as already visited.
-      let target_index = match direction {
-        SemanticReviewPrevious => semantic_review_order.length() - 1
-        SemanticReviewNext => 0
-      }
-      scheduler.add(
-        dispatch(
-          RevealSemanticReviewSectionChange(
-            semantic_review_order[target_index],
-            direction is SemanticReviewPrevious,
-          ),
-        ),
-      )
-      return
-    }
-    let current = semantic_review_order[index]
-    if !collapsed.contains(current) &&
-      semantic_review_editors.get(current) is Some(entry) {
-      arm_semantic_review_navigation_reveal(entry)
-      let revealed = match direction {
-        SemanticReviewPrevious =>
-          entry.editor.reveal_previous_change_without_wrap()
-        SemanticReviewNext => entry.editor.reveal_next_change_without_wrap()
-      }
-      if revealed {
+    let change = active_review_change(state, ctx)
+    let previous = direction is SemanticReviewPrevious
+    let sections = semantic_sections(state.semantic_review_plan)
+    let current_index = semantic_review_navigation_index(
+      semantic_review_active_key.val,
+    )
+    if current_index is Some(index) {
+      let current = semantic_review_order[index]
+      if !state.semantic_review_collapsed.contains(current) &&
+        semantic_review_editors.get(current) is Some(entry) &&
+        review_editor_navigation_index(
+          state,
+          change,
+          entry.editor,
+          semantic_feedback_line_offset(entry.section, SemanticReviewOriginal),
+          semantic_feedback_line_offset(entry.section, SemanticReviewModified),
+          previous,
+          edge=false,
+        )
+        is Some(hunk_index) {
         semantic_review_active_key.val = Some(current)
-        entry.editor.focus()
+        arm_semantic_review_navigation_reveal(entry)
+        reveal_review_editor_hunk(entry.editor, hunk_index)
         return
       }
-      entry.pending_navigation_reveal_generation.val = None
     }
-    let target_index = match direction {
-      SemanticReviewPrevious => index - 1
-      SemanticReviewNext => index + 1
-    }
-    guard target_index >= 0 && target_index < semantic_review_order.length() else {
-      scheduler.add(
-        dispatch(ReviewDiffFileBoundary(direction is SemanticReviewPrevious)),
+    if semantic_review_section_navigation_index(
+        state, change, sections, current_index, previous,
       )
-      return
-    }
-    scheduler.add(
-      dispatch(
-        RevealSemanticReviewSectionChange(
-          semantic_review_order[target_index],
-          direction is SemanticReviewPrevious,
+      is Some(index) {
+      scheduler.add(
+        dispatch(
+          RevealSemanticReviewSectionChange(sections[index].key, previous),
         ),
-      ),
-    )
+      )
+    } else {
+      scheduler.add(dispatch(ReviewDiffFileBoundary(previous)))
+    }
   })
 }
 
@@ -1450,24 +1481,32 @@ fn navigate_semantic_review_change(
 /// Complete a cross-item navigation after Rabbita has expanded and committed
 /// the destination section.
 fn reveal_semantic_review_section_change(
+  state : State,
+  ctx : Ctx,
   key : String,
   reveal_last : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _scheduler => {
+      let change = active_review_change(state, ctx)
       guard semantic_review_editors.get(key) is Some(entry) &&
-        @base_browser.element_is_connected(entry.host) else {
+        @base_browser.element_is_connected(entry.host) &&
+        review_editor_navigation_index(
+          state,
+          change,
+          entry.editor,
+          semantic_feedback_line_offset(entry.section, SemanticReviewOriginal),
+          semantic_feedback_line_offset(entry.section, SemanticReviewModified),
+          reveal_last,
+          edge=true,
+        )
+        is Some(index) else {
         return
       }
       semantic_review_active_key.val = Some(key)
       reveal_semantic_review_item_start(entry.host)
       arm_semantic_review_navigation_reveal(entry)
-      if reveal_last {
-        entry.editor.reveal_last_diff()
-      } else {
-        entry.editor.reveal_first_diff()
-      }
-      entry.editor.focus()
+      reveal_review_editor_hunk(entry.editor, index)
     },
     kind=@cmd.after_render,
   )

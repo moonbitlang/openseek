@@ -1799,7 +1799,7 @@ fn change_row_index(state : State, selected : ChangedFile) -> Int? {
 }
 
 ///|
-/// Adjacent reviewable row for list-keyboard navigation. Exact row equality
+/// Adjacent unreviewed row for change navigation. Exact row equality
 /// keeps staged-delete plus same-path untracked pairs independently ordered.
 fn review_neighbor(
   state : State,
@@ -1807,10 +1807,19 @@ fn review_neighbor(
   delta : Int,
 ) -> ChangedFile? {
   let changes = reviewable_changes(state)
-  guard changes.search_by(change => change == selected) is Some(index) else {
+  guard delta != 0 &&
+    changes.search_by(change => change == selected) is Some(index) else {
     return None
   }
-  changes.get(index + delta)
+  let mut next = index + delta
+  while next >= 0 && next < changes.length() {
+    let change = changes[next]
+    if !state.is_change_reviewed(change) {
+      return Some(change)
+    }
+    next += if delta < 0 { -1 } else { 1 }
+  }
+  None
 }
 
 ///|
@@ -1820,25 +1829,36 @@ fn review_edge(
   first~ : Bool,
 ) -> ChangedFile? {
   let changes = reviewable_changes(state)
-  guard !changes.is_empty() else { return None }
-  let edge = changes[if first { 0 } else { changes.length() - 1 }]
-  if edge == selected {
-    None
-  } else {
-    Some(edge)
+  for distance in 0..<changes.length() {
+    let edge = changes[if first {
+        distance
+      } else {
+        changes.length() - 1 - distance
+      }]
+    if !state.is_change_reviewed(edge) {
+      return if edge == selected { None } else { Some(edge) }
+    }
   }
+  None
+}
+
+///|
+fn active_review_change(state : State, ctx : Ctx) -> ChangedFile? {
+  guard ctx.active_history_diff is None &&
+    ctx.active_file is Some(path) &&
+    state.docs.get(path) is Some({ review: Some(review), .. }) else {
+    return None
+  }
+  Some(review.selected)
 }
 
 ///|
 fn active_review_position(state : State, ctx : Ctx) -> (ChangedFile, Int, Int)? {
-  guard ctx.active_file is Some(path) &&
-    state.docs.get(path) is Some({ review: Some(review), .. }) else {
-    return None
-  }
+  guard active_review_change(state, ctx) is Some(selected) else { return None }
   let changes = reviewable_changes(state)
   changes
-  .search_by(change => change == review.selected)
-  .map(index => (review.selected, index, changes.length()))
+  .search_by(change => change == selected)
+  .map(index => (selected, index, changes.length()))
 }
 
 ///|
@@ -2341,6 +2361,10 @@ fn line_diff_ready(state : State, ctx : Ctx) -> Bool {
 /// already nonempty change documents, so their aggregate navigation is ready
 /// once at least one semantic item exists.
 fn review_diff_navigation_enabled(state : State, ctx : Ctx) -> Bool {
+  guard ctx.active_history_diff is Some(_) ||
+    reviewable_changes(state).any(change => !state.is_change_reviewed(change)) else {
+    return false
+  }
   if active_review_position(state, ctx) is Some((_, _, total)) && total > 1 {
     return true
   }
@@ -2649,7 +2673,10 @@ fn review_navigation_controls(
   let pending = !review_navigation_complete(state, ctx)
   @html.div(
     class="review-navigation-controls",
-    attrs=@html.Attrs::build().aria_busy(pending.to_string()).inert(pending),
+    attrs=@html.Attrs::build()
+      .id("review-navigation-controls")
+      .aria_busy(pending.to_string())
+      .inert(pending),
     [
       review_navigation_view(locale~, dispatch, display),
       match display.hunk_toggle {
@@ -2732,7 +2759,7 @@ fn review_navigation_view(
       attrs=@html.Attrs::build()
         .data_set("action", "previous-diff-change")
         .aria_label(ui(locale, PreviousChange))
-        .aria_keyshortcuts("Shift+F7"),
+        .aria_keyshortcuts("p"),
       @icons.icon(@icons.icon_arrow_up),
     ),
   )
@@ -2746,7 +2773,7 @@ fn review_navigation_view(
       attrs=@html.Attrs::build()
         .data_set("action", "next-diff-change")
         .aria_label(ui(locale, NextChange))
-        .aria_keyshortcuts("F7"),
+        .aria_keyshortcuts("n"),
       @icons.icon(@icons.icon_arrow_down),
     ),
   )
@@ -2778,9 +2805,9 @@ fn review_hunk_toggle_button(
     title=if disabled {
       ui(locale, FileReviewed)
     } else if viewed {
-      ui(locale, MarkHunkUnviewed)
+      ui(locale, MarkHunkUnviewedShortcut)
     } else {
-      ui(locale, MarkHunkViewed)
+      ui(locale, MarkHunkViewedShortcut)
     },
     disabled~,
     on_click=dispatch(ToggleActiveReviewHunk),
@@ -2794,6 +2821,7 @@ fn review_hunk_toggle_button(
           ui(locale, MarkHunkViewedLabel)
         },
       )
+      .aria_keyshortcuts("m")
       .aria_pressed(
         match hunk_state {
           ReviewHunkUnviewed => "false"

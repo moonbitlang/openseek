@@ -451,6 +451,9 @@ pub(all) struct State {
   review_diff_navigation_available : Bool
   // A cross-file destination waits for both sides, fenced by exact row and generation.
   review_navigation_destination : (ChangedFile, Int, Bool)?
+  // Bound a cross-file search when semantic filters hide unreviewed lines.
+  // None means no search is in progress; zero means its one cycle is exhausted.
+  review_navigation_remaining : Int?
   // None includes all types; Some([]) deliberately includes no types.
   change_extensions : Array[String?]?
   change_path_filter : String
@@ -606,6 +609,7 @@ pub fn State::empty() -> State {
     semantic_review_collapsed: [],
     review_diff_navigation_available: false,
     review_navigation_destination: None,
+    review_navigation_remaining: None,
     change_extensions: None,
     change_path_filter: "",
     changes: ChangeListIdle,

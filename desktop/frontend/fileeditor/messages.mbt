@@ -83,6 +83,8 @@ priv enum UiMessage {
   FileReviewed
   MarkHunkUnviewed
   MarkHunkViewed
+  MarkHunkUnviewedShortcut
+  MarkHunkViewedShortcut
   HunkViewed
   UnmarkHunkViewed
   MarkHunkViewedLabel
@@ -572,23 +574,21 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, TestsIncluded) => "测试：已包含"
     (TraditionalChinese, TestsIncluded) => "測試：已包含"
     (Japanese, TestsIncluded) => "テスト：含む"
-    (English, PreviousChangeShortcut) => "Previous change (Shift+F7)"
-    (Spanish, PreviousChangeShortcut) => "Cambio anterior (Shift+F7)"
-    (SimplifiedChinese, PreviousChangeShortcut) =>
-      "上一处更改（Shift+F7）"
-    (TraditionalChinese, PreviousChangeShortcut) =>
-      "上一處更改（Shift+F7）"
-    (Japanese, PreviousChangeShortcut) => "前の変更（Shift+F7）"
+    (English, PreviousChangeShortcut) => "Previous change (p)"
+    (Spanish, PreviousChangeShortcut) => "Cambio anterior (p)"
+    (SimplifiedChinese, PreviousChangeShortcut) => "上一处更改（p）"
+    (TraditionalChinese, PreviousChangeShortcut) => "上一處更改（p）"
+    (Japanese, PreviousChangeShortcut) => "前の変更（p）"
     (English, PreviousChange) => "Previous change"
     (Spanish, PreviousChange) => "Cambio anterior"
     (SimplifiedChinese, PreviousChange) => "上一处更改"
     (TraditionalChinese, PreviousChange) => "上一處更改"
     (Japanese, PreviousChange) => "前の変更"
-    (English, NextChangeShortcut) => "Next change (F7)"
-    (Spanish, NextChangeShortcut) => "Siguiente cambio (F7)"
-    (SimplifiedChinese, NextChangeShortcut) => "下一处更改（F7）"
-    (TraditionalChinese, NextChangeShortcut) => "下一處更改（F7）"
-    (Japanese, NextChangeShortcut) => "次の変更（F7）"
+    (English, NextChangeShortcut) => "Next change (n)"
+    (Spanish, NextChangeShortcut) => "Siguiente cambio (n)"
+    (SimplifiedChinese, NextChangeShortcut) => "下一处更改（n）"
+    (TraditionalChinese, NextChangeShortcut) => "下一處更改（n）"
+    (Japanese, NextChangeShortcut) => "次の変更（n）"
     (English, NextChange) => "Next change"
     (Spanish, NextChange) => "Siguiente cambio"
     (SimplifiedChinese, NextChange) => "下一处更改"
@@ -616,6 +616,23 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, MarkHunkViewed) => "將此差異塊標為已檢視"
     (Japanese, MarkHunkViewed) =>
       "この差分ブロックを確認済みにする"
+    (English, MarkHunkUnviewedShortcut) => "Mark this hunk unviewed (m)"
+    (Spanish, MarkHunkUnviewedShortcut) =>
+      "Marcar este bloque como no visto (m)"
+    (SimplifiedChinese, MarkHunkUnviewedShortcut) =>
+      "将此差异块标为未查看（m）"
+    (TraditionalChinese, MarkHunkUnviewedShortcut) =>
+      "將此差異塊標為未檢視（m）"
+    (Japanese, MarkHunkUnviewedShortcut) =>
+      "この差分ブロックを未確認にする（m）"
+    (English, MarkHunkViewedShortcut) => "Mark this hunk viewed (m)"
+    (Spanish, MarkHunkViewedShortcut) => "Marcar este bloque como visto (m)"
+    (SimplifiedChinese, MarkHunkViewedShortcut) =>
+      "将此差异块标为已查看（m）"
+    (TraditionalChinese, MarkHunkViewedShortcut) =>
+      "將此差異塊標為已檢視（m）"
+    (Japanese, MarkHunkViewedShortcut) =>
+      "この差分ブロックを確認済みにする（m）"
     (English, HunkViewed) => "Hunk viewed"
     (Spanish, HunkViewed) => "Bloque visto"
     (SimplifiedChinese, HunkViewed) => "差异块已查看"

@@ -16,6 +16,71 @@ fn review_navigation_neighbor(
 }
 
 ///|
+/// The current hunk remains visible after marking; subsequent navigation only
+/// visits hunks with outstanding changed lines, including partial coverage.
+fn review_hunk_navigation_index(
+  state : State,
+  change : ChangedFile?,
+  hunks : Array[ReviewHunk],
+  current : Int?,
+  previous : Bool,
+) -> Int? {
+  let mut index = match current {
+    Some(index) => index + (if previous { -1 } else { 1 })
+    None => if previous { hunks.length() - 1 } else { 0 }
+  }
+  while index >= 0 && index < hunks.length() {
+    let hunk = hunks[index]
+    if !hunk.is_empty() &&
+      !(change is Some(change) &&
+      state.review_hunk_state(change, hunk) == ReviewHunkViewed) {
+      return Some(index)
+    }
+    index += if previous { -1 } else { 1 }
+  }
+  None
+}
+
+///|
+fn review_editor_navigation_index(
+  state : State,
+  change : ChangedFile?,
+  editor : @viewer.DiffEditor,
+  old_offset : Int?,
+  new_offset : Int?,
+  previous : Bool,
+  edge~ : Bool,
+) -> Int? {
+  guard editor.is_diff_up_to_date() else { return None }
+  review_hunk_navigation_index(
+    state,
+    change,
+    editor
+    .get_hunks()
+    .map(hunk => ReviewHunk::from_diff_hunk(hunk, old_offset, new_offset)),
+    if edge {
+      None
+    } else {
+      editor.get_active_hunk_index()
+    },
+    previous,
+  )
+}
+
+///|
+/// Select the predecessor without scrolling, then use the public reveal API
+/// to reach the chosen hunk with a single scroll and reveal event.
+fn reveal_review_editor_hunk(editor : @viewer.DiffEditor, index : Int) -> Unit {
+  if index == 0 {
+    editor.reveal_first_diff()
+  } else {
+    editor.select_hunk(index - 1)
+    ignore(editor.reveal_next_change_without_wrap())
+  }
+  editor.focus()
+}
+
+///|
 /// Arm only after opening the destination, so cached and newly loaded reviews
 /// use the actual generation that owns the incoming content.
 pub fn State::with_review_navigation_destination(
@@ -39,11 +104,22 @@ pub fn State::with_review_navigation_destination(
 fn reveal_semantic_review_edge(
   dispatch : @cmd.Emit[Msg],
   state : State,
+  ctx : Ctx,
   last : Bool,
 ) -> (@cmd.Cmd, State) {
   let sections = semantic_sections(state.semantic_review_plan)
-  guard !sections.is_empty() else { return (@cmd.none, state) }
-  let key = sections[if last { sections.length() - 1 } else { 0 }].key
+  let change = active_review_change(state, ctx)
+  guard semantic_review_section_navigation_index(
+      state,
+      change,
+      sections,
+      None,
+      last,
+    )
+    is Some(index) else {
+    return (@cmd.none, state)
+  }
+  let key = sections[index].key
   (dispatch(RevealSemanticReviewSectionChange(key, last)), state)
 }
 
@@ -59,6 +135,7 @@ fn sync_review_navigation_destination(
     return (@cmd.none, state)
   }
   let cleared = { ..state, review_navigation_destination: None, }
+  let cancelled = { ..cleared, review_navigation_remaining: None, }
   guard ctx.active_history_diff is None &&
     ctx.active_file.bind(file => ctx.relative(file)) == Some(change.path) &&
     ctx.resource(change.path).bind(file => state.docs.get(file)) is Some(doc) &&
@@ -66,16 +143,43 @@ fn sync_review_navigation_destination(
     review.selected == change &&
     review.generation == generation &&
     review.view_mode is ReviewDiff else {
-    return (@cmd.none, cleared)
+    return (@cmd.none, cancelled)
   }
   if doc.state is TabLoading || review.baseline is ReviewLoading {
     return (@cmd.none, state)
   }
-  guard full_diff_ready(state, ctx) else { return (@cmd.none, cleared) }
+  guard full_diff_ready(state, ctx) else { return (@cmd.none, cancelled) }
+  if !state.review_navigation_ready(ctx) {
+    return (@cmd.none, state)
+  }
   if line_diff_ready(state, ctx) {
-    (reveal_line_review_edge(last), cleared)
+    guard mounted_diff_editor() is Some(editor) &&
+      editor.is_diff_up_to_date() &&
+      editor.get_diff() is Some(_) else {
+      return (@cmd.none, state)
+    }
+    // Logical changes are ready before the next render commits hunk geometry.
+    // Leave hunk selection to the after-render reveal command.
+    if projected_review_file_changes(editor) is Some(file_changes) &&
+      state.review_hunk_state(change, file_changes) != ReviewHunkViewed {
+      (reveal_line_review_edge(state, ctx, last), cancelled)
+    } else {
+      (dispatch(ReviewDiffFileBoundary(last)), cleared)
+    }
   } else {
-    reveal_semantic_review_edge(dispatch, cleared, last)
+    let sections = semantic_sections(state.semantic_review_plan)
+    if semantic_review_section_navigation_index(
+        state,
+        Some(change),
+        sections,
+        None,
+        last,
+      )
+      is Some(_) {
+      reveal_semantic_review_edge(dispatch, cancelled, ctx, last)
+    } else {
+      (dispatch(ReviewDiffFileBoundary(last)), cleared)
+    }
   }
 }
 
@@ -95,37 +199,41 @@ fn review_diff_navigation_sub_loader(
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.to_keyboard_event() is Some(keyboard) &&
-          keyboard.key() == "F7" &&
-          [SemanticReviewHostId, DiffEditorHostId, "review-change-navigation"].any(id => {
-              @dom.document().get_element_by_id(id).to_option() is Some(host) &&
-              @base_browser.event_target_has_matching_ancestor(
-                event,
-                host,
-                if id == SemanticReviewHostId {
-                  ".semantic-diff-entry"
-                } else if id == DiffEditorHostId {
-                  ".moonbit-diff-editor"
-                } else {
-                  ".review-diff-navigation"
-                },
-              )
-            },
-          ) else {
+          review_diff_shortcut_message(keyboard) is Some(message) &&
+          [
+            SemanticReviewHostId,
+            DiffEditorHostId,
+            "review-navigation-controls",
+            "review-change-navigation",
+          ].any(id => {
+            guard @dom.document().get_element_by_id(id).to_option()
+              is Some(host) else {
+              return false
+            }
+            @base_browser.event_target_has_matching_ancestor(
+              event,
+              host,
+              if id == SemanticReviewHostId {
+                ".semantic-diff-entry"
+              } else if id == DiffEditorHostId {
+                ".moonbit-diff-editor"
+              } else if id == "review-navigation-controls" {
+                ".review-navigation-controls"
+              } else {
+                ".review-diff-navigation"
+              },
+            ) &&
+            !@base_browser.event_target_has_matching_ancestor(
+              event, host, "input, textarea, select, [contenteditable]:not([contenteditable=\"false\"]), [role=\"textbox\"]",
+            )
+          }) else {
           return
         }
         // Include collapsed section headers and capture before the child
-        // DiffEditor, so buttons and F7 share the host's file boundaries.
+        // DiffEditor, so keys and buttons share the host's review policy.
         event.prevent_default()
         event.stop_propagation()
-        scheduler.add(
-          dispatch(
-            if keyboard.shift_key() {
-              RevealPreviousReviewDiffChange
-            } else {
-              RevealNextReviewDiffChange
-            },
-          ),
-        )
+        scheduler.add(dispatch(message))
       }
       target.add_event_listener_with_options("keydown", listener, capture=true)
       Some({
@@ -149,12 +257,48 @@ fn review_diff_navigation_sub_loader(
 }
 
 ///|
+fn review_diff_shortcut_message(keyboard : @dom.KeyboardEvent) -> Msg? {
+  guard !keyboard.ctrl_key() &&
+    !keyboard.meta_key() &&
+    !keyboard.alt_key() &&
+    !keyboard.is_composing() &&
+    !keyboard.repeat() else {
+    return None
+  }
+  if keyboard.key() == "F7" {
+    return Some(
+      if keyboard.shift_key() {
+        RevealPreviousReviewDiffChange
+      } else {
+        RevealNextReviewDiffChange
+      },
+    )
+  }
+  guard !keyboard.shift_key() else { return None }
+  match keyboard.key() {
+    "n" => Some(RevealNextReviewDiffChange)
+    "p" => Some(RevealPreviousReviewDiffChange)
+    "m" => Some(ToggleActiveReviewHunk)
+    _ => None
+  }
+}
+
+///|
 fn review_diff_navigation_subscription(
   state : State,
   ctx : Ctx,
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  guard review_diff_navigation_enabled(state, ctx) else { return @sub.none }
+  // Keep marking available after the final outstanding change is reviewed.
+  guard review_diff_navigation_enabled(state, ctx) ||
+    (
+      ctx.active_history_diff is None &&
+      ctx.active_file.bind(path => state.docs.get(path))
+      is Some({ review: Some({ view_mode: ReviewDiff, .. }), .. }) &&
+      active_review_change(state, ctx) is Some(_)
+    ) else {
+    return @sub.none
+  }
   @sub.custom_sub(
     "fileeditor-review-diff-navigation",
     @sub.Local,

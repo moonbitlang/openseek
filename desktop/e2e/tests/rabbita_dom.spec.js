@@ -442,7 +442,10 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
     .toHaveAttribute('aria-pressed', 'true');
   await navigation.getByRole('button', { name: 'Next change' }).click();
-  await expect(position).toHaveText('Change 2 of 2');
+  await expect(changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }))
+    .toHaveAttribute('aria-current', 'page');
+  await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await expect(position).toHaveText('Change 1 of 2');
   await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
     .toHaveAttribute('aria-pressed', 'true');
 
@@ -457,9 +460,10 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
     .toHaveAttribute('aria-pressed', 'true');
   await navigation.getByRole('button', { name: 'Next change' }).click();
-  await expect(position).toHaveText('Change 2 of 2');
-  await expect(page.getByRole('button', { name: 'Unmark hunk viewed' }))
-    .toHaveAttribute('aria-pressed', 'true');
+  await expect(changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }))
+    .toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: 'Mark hunk viewed' }))
+    .toHaveAttribute('aria-pressed', 'false');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -2813,11 +2817,18 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     await page.mouse.wheel(0, -10000);
     await expect(position).toHaveText('Change 1 of 2');
     await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
-    await page.getByRole('button', { name: 'Next change', exact: true }).click();
+    await visibleEditor.hover();
+    await page.mouse.wheel(0, 10000);
     await expect(position).toHaveText('Change 2 of 2');
     await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await page.locator('.moonbit-diff-hunk-action:visible .review-hunk-marker').last().click();
     await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await visibleEditor.hover();
+    await page.mouse.wheel(0, -10000);
+    await expect(position).toHaveText('Change 1 of 2');
+    await page.getByRole('button', { name: 'Next change', exact: true }).click();
+    await expect(position).toHaveText('Change 2 of 2');
+    await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
     expect(app.pageErrors).toEqual([]);
   });
 }

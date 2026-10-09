@@ -462,6 +462,7 @@ pub(all) struct State {
   semantic_review_collapsed : Array[String]
   review_diff_navigation_available : Bool
   review_navigation_destination : (ChangedFile, Int, Bool)?
+  review_navigation_remaining : Int?
   change_extensions : Array[String?]?
   change_path_filter : String
   changes : ChangeList
