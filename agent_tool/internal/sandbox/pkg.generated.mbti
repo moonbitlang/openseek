@@ -1,7 +1,13 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "moonbitlang/openseek/agent_tool/internal/sandbox"
 
+import {
+  "moonbitlang/openseek/agent_tool/write_scope",
+}
+
 // Values
+pub async fn confine(Command, workspace_root~ : String, read_only~ : Bool, worker_sandbox? : @write_scope.WorkerSandbox, profile_path~ : String, writable_subtree~ : String) -> SandboxedCommand?
+
 pub fn output_reports_policy_refusal(String) -> Bool
 
 pub let policy_refusal_feedback : String

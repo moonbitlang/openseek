@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub async fn builtin_skills(resources_dir? : String) -> Array[BuiltinSkill]
+
+pub fn builtin_skills_prompt_section(Array[BuiltinSkill]) -> String?
+
 pub async fn discover_skills(String) -> Array[Skill]
 
 pub fn merge_skills(ArrayView[Skill], overrides~ : ArrayView[Skill]) -> Array[Skill]
@@ -15,6 +19,17 @@ pub fn skills_prompt_section(Array[Skill]) -> String?
 // Errors
 
 // Types and methods
+pub struct BuiltinSkill {
+  id : String
+  name : String
+  description : String
+  version : String
+  root : String
+  instructions : String
+  wasm : String
+}
+pub fn BuiltinSkill::prompt_name(Self) -> String
+
 type Skill derive(@debug.Debug)
 pub fn Skill::description(Self) -> String
 pub fn Skill::name(Self) -> String

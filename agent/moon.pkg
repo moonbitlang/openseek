@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek/agent_skill",
+  "moonbitlang/openseek/agent_tool/builtin_skill",
   "moonbitlang/openseek/agent_tool/read_image",
   "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/async/os_error",
