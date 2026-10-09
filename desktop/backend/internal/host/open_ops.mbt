@@ -1,4 +1,4 @@
-// Opening a transcript-referenced path: viewer-sized UTF-8 files on the
+// Opening a file reference: viewer-sized text and raster images on the
 // filesystem go to the built-in editor, checkout-local directories
 // go to its Files tree, and other existing paths go to the platform opener.
 // Position suffixes apply only to built-in text files.
@@ -261,6 +261,40 @@ async test "open_path returns workspace editor positions without a system open" 
     path: "src",
   })
   assert_eq(directory_reply, Directory({ path: "src", }))
+  // All UI entry points share the same content-based routing response.
+  let pdf = "\{dir}/report"
+  @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "report", },
+      preview_browser=true,
+    ),
+    Browser("\{cwd}/report"),
+  )
+  @fs.write_file(
+    "\{dir}/notes.pdf",
+    "ordinary text",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "notes.pdf", },
+      preview_browser=true,
+    ),
+    Editor({ path: "\{cwd}/notes.pdf", line: None, column: None, }),
+  )
+  @fs.write_file(
+    "\{dir}/picture",
+    b"\x89PNG\x0d\x0a\x1a\x0a",
+    create_mode=CreateOrTruncate,
+  )
+  assert_eq(
+    open_path_op(
+      { session: "unused", cwd: Some(cwd), path: "picture", },
+      preview_browser=true,
+    ),
+    Editor({ path: "\{cwd}/picture", line: None, column: None, }),
+  )
 }
 
 ///|

@@ -58,7 +58,10 @@ async test "existing files win before editor positions" {
   // Content routing follows the built-in viewer's UTF-8 and size policy.
   let binary = "\{dir}/image.bin"
   @fs.write_file(binary, b"\xff\xd8\xff\x00", create_mode=CreateOrTruncate)
-  @debug.assert_eq(@openpath.Reference(binary).resolve(), SystemPath(binary))
+  @debug.assert_eq(
+    @openpath.Reference(binary).resolve(),
+    EditorPath(path=binary, line=None, column=None),
+  )
   let pdf = "\{dir}/document.pdf"
   @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
   @debug.assert_eq(@openpath.Reference(pdf).resolve(), BrowserPath(pdf))
@@ -75,7 +78,7 @@ async test "existing files win before editor positions" {
 async test "PDF content is recognized before the text size limit" {
   let dir = @fs.tmpdir(prefix="openseek-openpath-pdf-")
   defer @fs.rmdir(dir, recursive=true)
-  let path = "\{dir}/中文 #100%.PDF"
+  let path = "\{dir}/中文 #100%"
   @fs.write_file(
     path,
     "%PDF-1.7\n" + "x".repeat(@openpath.MaxEditorFileBytes + 1),

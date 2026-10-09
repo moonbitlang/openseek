@@ -195,9 +195,17 @@ test "resolve_pick replaces the picker in place with a fresh file" {
   let state = @dock.State::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
-  let state = @dock.resolve_pick(state, work_file("b.mbt"))
+  let state = @dock.resolve_pick(state, file_tab("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
+  let picker = @dock.open_picker(state)
+  let browser = @dock.resolve_pick(picker, Browser(id=7))
+  assert_true(
+    browser.tabs ==
+    [file_tab("a.mbt"), file_tab("b.mbt"), @dock.DockTab::Browser(id=7)],
+  )
+  let reused = @dock.resolve_pick(@dock.open_picker(browser), Browser(id=7))
+  assert_true(browser == reused)
 }
 
 ///|
@@ -206,7 +214,7 @@ test "resolve_pick activates an already-open file and closes the picker" {
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_picker
-  let state = @dock.resolve_pick(state, work_file("a.mbt"))
+  let state = @dock.resolve_pick(state, file_tab("a.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("a.mbt")))
 }
@@ -214,7 +222,7 @@ test "resolve_pick activates an already-open file and closes the picker" {
 ///|
 test "resolve_pick without a picker is a plain open" {
   let state = @dock.State::empty() |> @dock.open_file(work_file("a.mbt"))
-  let state = @dock.resolve_pick(state, work_file("b.mbt"))
+  let state = @dock.resolve_pick(state, file_tab("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
 }

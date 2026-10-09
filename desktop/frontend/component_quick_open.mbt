@@ -46,10 +46,8 @@ fn open_quick_open(
 }
 
 ///|
-/// Route one palette message and, when it accepted a row, open that row in the
-/// same root transition. Keeping both halves in one message is what lets panel
-/// reconciliation see a single `opens_file_before_panel_reconciliation` pass
-/// rather than a close followed by an open.
+/// Route one palette message and ask the host to classify an accepted row.
+/// The palette closes now; the resolved reply opens the appropriate viewer.
 fn update_quick_open(
   dispatch : @cmd.Emit[Msg],
   model : Model,
@@ -73,7 +71,7 @@ fn update_quick_open(
   // Codex keeps its owning surface so the editor resolves the accepted row
   // against that task's checkout instead of the hidden OpenSeek conversation.
   let screen = if model.screen is Codex { Screen::Codex } else { Chat }
-  let (open_cmd, model) = open_editor_at(
+  let (open_cmd, model) = request_open_path(
     dispatch,
     { ..model, screen, },
     target.path,

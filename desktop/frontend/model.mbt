@@ -1791,7 +1791,7 @@ priv enum Msg {
   // so it carries the location itself rather than a draft index. The path is
   // the envelope's raw text: workspace-relative for chips minted since the
   // panel started recording relative names, possibly absolute in a legacy
-  // envelope — `open_editor_at` classifies and relativizes. `range` is the
+  // envelope — the host classifies and resolves it. `range` is the
   // chip's line span (the envelope stores no columns); an annotation chip
   // also carries its comment text, re-shown as an editor bubble over that
   // range.
@@ -1984,14 +1984,6 @@ priv enum Msg {
   // not be opened. The saved path remains useful in the transient toast.
   OpenExport(@protocol.SessionExportPayload)
   ExportDialog(@export_dialog.Msg)
-  // A transcript file link's host lookup failed. Unlike other host actions,
-  // this carries the click identity so a slower older failure cannot surface
-  // after a newer editor navigation has already taken precedence.
-  OpenFileFailed(
-    owner~ : @interop.ConversationKey,
-    generation~ : Int,
-    message~ : String
-  )
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
   // editor hover's foreign DOM; browser pages keep native new-tab behavior.
@@ -2077,28 +2069,8 @@ priv enum Msg {
   // exposes this only for a local checkout; resolution still stays host-side
   // so relative paths and editor-position suffixes match `OpenFile` exactly.
   RevealFile(String)
-  // The host resolved this text file and optional position inside the
-  // checkout. Owner and generation fence replies that arrive after a
-  // conversation change or a newer transcript file-link click.
-  OpenFileAt(
-    owner~ : @interop.ConversationKey,
-    generation~ : Int,
-    path~ : String,
-    line~ : Int?,
-    column~ : Int?
-  )
-  // A local browser target resolved by the window, fenced like the text-file reply.
-  OpenBrowserAt(
-    owner~ : @interop.ConversationKey,
-    generation~ : Int,
-    path~ : String
-  )
-  // Reveal a resolved checkout directory in the Files tree.
-  OpenDirectoryAt(
-    owner~ : @interop.ConversationKey,
-    generation~ : Int,
-    path~ : String
-  )
+  // The host chooses the viewer; the frontend retains the navigation context.
+  OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
   // Open or close the composer git chip's details popover.
   ToggleGitDetails
   // Clicks away from a transient menu, one per menu. Each is separate from

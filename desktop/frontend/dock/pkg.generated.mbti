@@ -39,7 +39,7 @@ pub fn open_picker(State) -> State
 
 pub fn open_workflows(State) -> State
 
-pub fn resolve_pick(State, @common.Uri) -> State
+pub fn resolve_pick(State, DockTab) -> State
 
 pub fn sync(State, @interop.ConversationKey) -> State
 

@@ -1703,18 +1703,13 @@ fn open_codex_config(
 /// Missing paths surface as errors; external text uses the same editor route.
 fn open_file(
   dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  session : String,
-  generation : Int,
-  cwd~ : @common.Uri?,
+  context : FileOpenContext,
+  cwd : @common.Uri,
   path : String,
   preview_browser~ : Bool,
 ) -> @cmd.Cmd {
-  match cwd {
-    Some(resource) if !@resource.belongs_to(resource, channel) =>
-      return @cmd.none
-    _ => ()
-  }
+  let channel = context.owner.channel
+  guard @resource.belongs_to(cwd, channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let command = if preview_browser && channel is Local {
@@ -1723,61 +1718,14 @@ fn open_file(
         @commands.host_open_path
       }
       let reply = @interop.bridge_request(channel, command, {
-        session,
-        cwd: cwd.map(resource => resource.path),
+        session: context.owner.session,
+        cwd: Some(cwd.path),
         path,
       }) catch {
-        error => {
-          scheduler.add(
-            dispatch(
-              OpenFileFailed(
-                owner={ channel, session, },
-                generation~,
-                message=@interop.bridge_error_text(error),
-              ),
-            ),
-          )
-          return
-        }
+        error =>
+          @protocol.OpenPathReply::Refused(@interop.bridge_error_text(error))
       }
-      match reply {
-        Browser(path) =>
-          scheduler.add(
-            dispatch(
-              OpenBrowserAt(owner={ channel, session, }, generation~, path~),
-            ),
-          )
-        Editor(target) =>
-          scheduler.add(
-            dispatch(
-              OpenFileAt(
-                owner={ channel, session, },
-                generation~,
-                path=target.path,
-                line=target.line,
-                column=target.column,
-              ),
-            ),
-          )
-        Directory(target) =>
-          scheduler.add(
-            dispatch(
-              OpenDirectoryAt(
-                owner={ channel, session, },
-                generation~,
-                path=target.path,
-              ),
-            ),
-          )
-        Refused(message) =>
-          scheduler.add(
-            dispatch(
-              OpenFileFailed(owner={ channel, session, }, generation~, message~),
-            ),
-          )
-        // The host already handed the path to the system opener.
-        Opened => ()
-      }
+      scheduler.add(dispatch(OpenPathResolved(context, reply)))
     })
     |> ignore
   })

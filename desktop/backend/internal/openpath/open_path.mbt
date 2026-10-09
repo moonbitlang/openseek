@@ -1,6 +1,6 @@
-// Resolution of transcript file references. UTF-8 text that the built-in
-// viewer can load becomes an editor target; other existing paths go to the
-// system opener. A trailing `:line[:column]` or `#Lline` is only treated as an
+// Resolution of file references. Viewer-sized text and raster images open
+// in the editor, PDFs in the browser, and other existing paths in the system
+// application. A trailing `:line[:column]` or `#Lline` is only treated as an
 // editor position after the literal path is known not to exist.
 
 ///|
@@ -15,8 +15,8 @@ pub(all) struct Reference(String) derive(Debug, Eq)
 ///|
 /// Where the host should send a transcript file reference.
 pub(all) enum Resolution {
-  // Existing UTF-8 text within the built-in viewer's size limit. Position is
-  // absent for an ordinary path and for a real filename ending in a suffix.
+  // UTF-8 text or a supported raster image within the viewer's size limit.
+  // Position is absent for an ordinary path and a real filename with a suffix.
   EditorPath(path~ : String, line~ : Int?, column~ : Int?)
   // A document that opens in the browser. Currently selected for PDFs by
   // their header, independent of the text viewer size limit.
@@ -80,9 +80,9 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   }
   let data = source.read_all()
   match @filekind.classify(data.binary()) {
-    Utf8Text(_) =>
+    Utf8Text(_) | RasterImage(_) =>
       EditorPath(path=self.path, line=self.line, column=self.column)
-    RasterImage(_) | Binary => SystemPath(self.path)
+    Binary => SystemPath(self.path)
   }
 }
 
