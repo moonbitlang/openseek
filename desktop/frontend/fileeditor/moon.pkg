@@ -18,6 +18,7 @@ import {
   "moonbitlang/editor/viewer",
   "moonbitlang/editor/viewer/browser/diagram_viewport",
   "moonbitlang/editor/viewer/common/agent_feedback_api",
+  "moonbitlang/editor/viewer/common/diff",
   "moonbitlang/editor/viewer/common/languages",
   "moonbitlang/editor/viewer/common/markers",
   "moonbitlang/editor/viewer/common/model",

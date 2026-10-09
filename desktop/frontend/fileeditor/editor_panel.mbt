@@ -575,9 +575,11 @@ fn request_viewer_mount(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
 }
 
 ///|
-/// Keep the cursor-relative behavior inside a file; the host owns file boundaries.
+/// Skip reviewed hunks inside a file; the host owns file boundaries.
 fn navigate_line_review_change(
   dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
   previous : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -585,28 +587,41 @@ fn navigate_line_review_change(
       editor.is_diff_up_to_date() else {
       return
     }
-    let revealed = if previous {
-      editor.reveal_previous_change_without_wrap()
+    let change = active_review_change(state, ctx)
+    if review_editor_navigation_index(
+        state,
+        change,
+        editor,
+        Some(0),
+        Some(0),
+        previous,
+        edge=false,
+      )
+      is Some(index) {
+      reveal_review_editor_hunk(editor, index)
     } else {
-      editor.reveal_next_change_without_wrap()
-    }
-    if !revealed {
       scheduler.add(dispatch(ReviewDiffFileBoundary(previous)))
     }
   })
 }
 
 ///|
-fn reveal_line_review_edge(last : Bool) -> @cmd.Cmd {
+fn reveal_line_review_edge(state : State, ctx : Ctx, last : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _scheduler => {
-      if viewer_state.diff_editor is Some(editor) {
-        if last {
-          editor.reveal_last_diff()
-        } else {
-          editor.reveal_first_diff()
-        }
-        editor.focus()
+      let change = active_review_change(state, ctx)
+      if viewer_state.diff_editor is Some(editor) &&
+        review_editor_navigation_index(
+          state,
+          change,
+          editor,
+          Some(0),
+          Some(0),
+          last,
+          edge=true,
+        )
+        is Some(index) {
+        reveal_review_editor_hunk(editor, index)
       }
     },
     kind=@cmd.after_render,

@@ -2776,14 +2776,16 @@ fn update_inner(
         return (@cmd.none, state)
       }
       let previous = msg is RevealPreviousReviewDiffChange
+      let state = { ..state, review_navigation_remaining: None, }
       let cmd = if !full_diff_ready(state, ctx) {
         dispatch(ReviewDiffFileBoundary(previous))
       } else if line_diff_ready(state, ctx) {
-        navigate_line_review_change(dispatch, previous)
+        navigate_line_review_change(dispatch, state, ctx, previous)
       } else {
         navigate_semantic_review_change(
           dispatch,
-          state.semantic_review_collapsed,
+          state,
+          ctx,
           if previous {
             SemanticReviewPrevious
           } else {
@@ -2794,15 +2796,25 @@ fn update_inner(
       (cmd, state)
     }
     ReviewDiffFileBoundary(previous) => {
+      let stopped = { ..state, review_navigation_remaining: None, }
+      if state.review_navigation_remaining == Some(0) {
+        return (@cmd.none, stopped)
+      }
       guard review_diff_navigation_enabled(state, ctx) else {
-        return (@cmd.none, state)
+        return (@cmd.none, stopped)
       }
       if review_navigation_neighbor(state, ctx, previous) is Some(change) {
-        (dispatch(ChangedFileNavigated(change, previous)), state)
+        let remaining = state.review_navigation_remaining.unwrap_or(
+          reviewable_changes(state).length(),
+        )
+        (
+          dispatch(ChangedFileNavigated(change, previous)),
+          { ..state, review_navigation_remaining: Some(remaining - 1), },
+        )
       } else if line_diff_ready(state, ctx) {
-        (reveal_line_review_edge(previous), state)
+        (reveal_line_review_edge(stopped, ctx, previous), stopped)
       } else {
-        reveal_semantic_review_edge(dispatch, state, previous)
+        reveal_semantic_review_edge(dispatch, stopped, ctx, previous)
       }
     }
     RevealSemanticReviewSectionChange(key, reveal_last) => {
@@ -2816,7 +2828,7 @@ fn update_inner(
         collapsed != key
       })
       (
-        reveal_semantic_review_section_change(key, reveal_last),
+        reveal_semantic_review_section_change(state, ctx, key, reveal_last),
         { ..state, semantic_review_collapsed, },
       )
     }

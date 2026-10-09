@@ -53,6 +53,108 @@ test "review navigation distinguishes duplicate same-path Git rows" {
   }
   assert_true(review_neighbor(state, deleted, 1) == Some(untracked))
   assert_true(review_neighbor(state, untracked, -1) == Some(deleted))
+  let marked = state.set_review_file_progress(deleted, Some(ReviewFileComplete))
+  assert_true(review_neighbor(marked, deleted, 1) == Some(untracked))
+  assert_true(review_neighbor(marked, untracked, -1) is None)
+}
+
+///|
+test "review navigation skips reviewed files while retaining visible row positions" {
+  let first = test_modified_change(@pathx.Relative("first.mbt"))
+  let middle = test_modified_change(@pathx.Relative("middle.mbt"))
+  let last = test_modified_change(@pathx.Relative("last.mbt"))
+  let docs = owned_state().docs.copy()
+  docs[test_file(first.path.0)] = reviewed_doc(first.path, first)
+  let ctx = { ..test_ctx(), active_file: Some(test_file(first.path.0)), }
+  let state = {
+    ..owned_state(),
+    docs,
+    changes: ChangeListReady(
+      repository=true,
+      files=[first, middle, last],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }.set_review_file_progress(middle, Some(ReviewFileComplete))
+  assert_true(review_neighbor(state, first, 1) == Some(last))
+  assert_true(review_neighbor(state, last, -1) == Some(first))
+  assert_true(review_navigation_neighbor(state, ctx, true) == Some(last))
+  assert_eq(change_row_index(state, middle), Some(1))
+  assert_true(active_review_position(state, ctx) is Some((_, 0, 3)))
+  let filtered = { ..state, change_path_filter: "middle", }
+  assert_true(active_review_position(filtered, ctx) is None)
+  assert_true(active_review_change(filtered, ctx) == Some(first))
+  let only_first = state.set_review_file_progress(
+    last,
+    Some(ReviewFileComplete),
+  )
+  assert_true(review_navigation_neighbor(only_first, ctx, false) is None)
+  let complete = only_first.set_review_file_progress(
+    first,
+    Some(ReviewFileComplete),
+  )
+  assert_false(review_diff_navigation_enabled(complete, ctx))
+  let reopened = complete.set_review_file_progress(middle, None)
+  assert_true(review_navigation_neighbor(reopened, ctx, false) == Some(middle))
+}
+
+///|
+test "hunk navigation skips viewed coverage in both directions and retains partial hunks" {
+  let (state, _, change) = review_progress_state()
+  let hunks = [
+    review_test_hunk(1, 2, 1, 2),
+    review_test_hunk(10, 12, 10, 12),
+    review_test_hunk(20, 21, 20, 21),
+  ]
+  let marked = state.set_review_file_progress(
+    change,
+    Some(ReviewFileInProgress(hunks[1])),
+  )
+  assert_eq(
+    review_hunk_navigation_index(marked, Some(change), hunks, Some(0), false),
+    Some(2),
+  )
+  assert_eq(
+    review_hunk_navigation_index(marked, Some(change), hunks, Some(2), true),
+    Some(0),
+  )
+  assert_eq(
+    review_hunk_navigation_index(marked, Some(change), hunks, None, false),
+    Some(0),
+  )
+  assert_eq(
+    review_hunk_navigation_index(marked, Some(change), hunks, None, true),
+    Some(2),
+  )
+  let partial = state.set_review_file_progress(
+    change,
+    Some(ReviewFileInProgress(review_test_hunk(10, 11, 10, 11))),
+  )
+  assert_eq(
+    review_hunk_navigation_index(partial, Some(change), hunks, Some(0), false),
+    Some(1),
+  )
+  assert_eq(
+    review_hunk_navigation_index(partial, Some(change), hunks, Some(2), true),
+    Some(1),
+  )
+  let complete = state.set_review_file_progress(
+    change,
+    Some(ReviewFileComplete),
+  )
+  assert_eq(
+    review_hunk_navigation_index(complete, Some(change), hunks, None, false),
+    None,
+  )
+  assert_eq(
+    review_hunk_navigation_index(complete, Some(change), hunks, None, true),
+    None,
+  )
+  // Historical comparisons have no working-tree review identity or coverage.
+  assert_eq(
+    review_hunk_navigation_index(complete, None, hunks, Some(0), false),
+    Some(1),
+  )
 }
 
 ///|
@@ -87,6 +189,66 @@ test "continuous review navigation wraps the selectable queue even with an empty
 }
 
 ///|
+test "cross-file navigation stops after one cycle when filters hide all outstanding changes" {
+  let (initial, first_ctx, first) = review_progress_state()
+  let last = test_modified_change(@pathx.Relative("src/last.mbt"))
+  let docs = initial.docs.copy()
+  docs[test_file(last.path.0)] = reviewed_doc(last.path, last)
+  let state = {
+    ..initial,
+    docs,
+    changes: ChangeListReady(
+      repository=true,
+      files=[first, last],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }
+  let last_ctx = { ..first_ctx, active_file: Some(test_file(last.path.0)), }
+  for previous in [false, true] {
+    let messages : Array[Msg] = []
+    let emit = @cmd.Emit(message => {
+      messages.push(message)
+      @cmd.none
+    })
+    let (_, first_step) = update(
+      emit,
+      ReviewDiffFileBoundary(previous),
+      state,
+      first_ctx,
+    )
+    assert_true(
+      messages is [ChangedFileNavigated(change, direction)] &&
+      change == last &&
+      direction == previous,
+    )
+    assert_eq(first_step.review_navigation_remaining, Some(1))
+    messages.clear()
+    let (_, last_step) = update(
+      emit,
+      ReviewDiffFileBoundary(previous),
+      first_step,
+      last_ctx,
+    )
+    assert_true(
+      messages is [ChangedFileNavigated(change, direction)] &&
+      change == first &&
+      direction == previous,
+    )
+    assert_eq(last_step.review_navigation_remaining, Some(0))
+    messages.clear()
+    let (_, stopped) = update(
+      emit,
+      ReviewDiffFileBoundary(previous),
+      last_step,
+      first_ctx,
+    )
+    assert_true(messages.is_empty())
+    assert_true(stopped == state)
+  }
+}
+
+///|
 test "cross-file reveal waits for content and cancels when its review is superseded" {
   let path = @pathx.Relative("last.mbt")
   let file = test_file(path.0)
@@ -98,9 +260,16 @@ test "cross-file reveal waits for content and cancels when its review is superse
     review: doc.review.map(review => { ..review, baseline: ReviewLoading, }),
   }
   let ctx = { ..test_ctx(), active_file: Some(file), }
-  let state = { ..owned_state(), docs, }.with_review_navigation_destination(
-    ctx, change, true,
-  )
+  let state = {
+    ..owned_state(),
+    docs,
+    changes: ChangeListReady(
+      repository=true,
+      files=[change],
+      refreshing=false,
+      refresh_again=false,
+    ),
+  }.with_review_navigation_destination(ctx, change, true)
   let (_, waiting) = sync_review_navigation_destination(test_emit(), state, ctx)
   assert_true(waiting.review_navigation_destination is Some((_, 1, true)))
   let (_, cancelled) = sync_review_navigation_destination(
@@ -122,9 +291,20 @@ test "cross-file reveal waits for content and cancels when its review is superse
   assert_true(replaced.review_navigation_destination is None)
   let ready_docs = docs.copy()
   ready_docs[file] = doc
-  let (_, completed) = sync_review_navigation_destination(
+  let (_, awaiting_diff) = sync_review_navigation_destination(
     test_emit(),
     { ..waiting, docs: ready_docs, },
+    ctx,
+  )
+  assert_true(awaiting_diff.review_navigation_destination is Some(_))
+  let (_, completed) = sync_review_navigation_destination(
+    test_emit(),
+    {
+      ..awaiting_diff,
+      review_hunk_ready: Some(
+        (change, 1, awaiting_diff.review_hunk_surface_generation),
+      ),
+    },
     ctx,
   )
   assert_true(completed.review_navigation_destination is None)

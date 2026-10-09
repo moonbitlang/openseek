@@ -22,6 +22,139 @@ fn semantic_test_section(
 }
 
 ///|
+test "collapsed semantic navigation skips changed-line coverage without counting context" {
+  let (state, _, change) = review_progress_state()
+  let first = semantic_test_section(
+    "first",
+    Some(1),
+    @moon_diff_provider.SemanticReviewSectionKind::Matched,
+    "same\nold\nsame",
+    "same\nnew\nsame",
+  )
+  let last = {
+    ..first,
+    key: "last",
+    old_range: Some({ start_line_number: 20, line_count: 3, }),
+    new_range: Some({ start_line_number: 40, line_count: 3, }),
+  }
+  let first_changes = semantic_review_section_changes(first)
+  assert_true(first_changes == review_test_hunk(11, 12, 31, 32))
+  let marked = state.set_review_file_progress(
+    change,
+    Some(ReviewFileInProgress(first_changes)),
+  )
+  let sections = [first, last]
+  assert_eq(
+    semantic_review_section_navigation_index(
+      marked,
+      Some(change),
+      sections,
+      None,
+      false,
+    ),
+    Some(1),
+  )
+  assert_eq(
+    semantic_review_section_navigation_index(
+      marked,
+      Some(change),
+      sections,
+      Some(1),
+      true,
+    ),
+    None,
+  )
+  let last_changes = semantic_review_section_changes(last)
+  let both = marked.set_review_file_progress(
+    change,
+    Some(ReviewFileInProgress(first_changes.union(last_changes))),
+  )
+  assert_eq(
+    semantic_review_section_navigation_index(
+      both,
+      Some(change),
+      sections,
+      None,
+      false,
+    ),
+    None,
+  )
+  assert_eq(
+    semantic_review_section_navigation_index(
+      both,
+      Some(change),
+      sections,
+      None,
+      true,
+    ),
+    None,
+  )
+  let reopened = state.set_review_file_progress(
+    change,
+    Some(ReviewFileInProgress(last_changes)),
+  )
+  assert_eq(
+    semantic_review_section_navigation_index(
+      reopened,
+      Some(change),
+      sections,
+      None,
+      true,
+    ),
+    Some(0),
+  )
+}
+
+///|
+test "semantic navigation coverage excludes ignored mappings and absent-side anchors" {
+  let section = semantic_test_section(
+    "inserted",
+    None,
+    @moon_diff_provider.SemanticReviewSectionKind::Inserted,
+    "",
+    "same\ninserted",
+  )
+  let document : @diff.DocumentDiff = {
+    changes: [
+      @diff.DocumentDiffChange(
+        @diff.DetailedLineRangeMapping(
+          @common.LineRange(1, 2),
+          @common.LineRange(1, 2),
+          None,
+        ),
+        kind=Ignored,
+      ),
+      @diff.DocumentDiffChange(
+        @diff.DetailedLineRangeMapping(
+          @common.LineRange(1, 2),
+          @common.LineRange(2, 3),
+          None,
+        ),
+      ),
+    ],
+  }
+  let inserted = {
+    ..section,
+    old_range: None,
+    diff: @moon_diff_provider.SemanticReviewDiff::Fragment(document),
+  }
+  assert_true(
+    semantic_review_section_changes(inserted) == review_test_hunk(0, 0, 31, 32),
+  )
+  let deleted = {
+    ..section,
+    kind: @moon_diff_provider.SemanticReviewSectionKind::Deleted,
+    new_range: None,
+    diff: @moon_diff_provider.SemanticReviewDiff::Fragment({
+      changes: [document.changes[1]],
+    }),
+  }
+  assert_true(
+    semantic_review_section_changes(deleted) == review_test_hunk(10, 11, 0, 0),
+  )
+}
+
+///|
 test "semantic input follows active MoonBit review and ignores layout" {
   let path = @pathx.Relative("src/main.mbt")
   let file = test_file(path.0)
