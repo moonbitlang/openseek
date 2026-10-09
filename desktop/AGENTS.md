@@ -29,6 +29,8 @@
   description showing the affected UI from the changed build. Include
   before-and-after comparisons when useful, and a short recording when the
   change is best demonstrated through interaction.
+- Upload UI screenshots and recordings as PR attachments; do not commit them
+  to Git. Keep local captures outside the repository or in an ignored directory.
 - Prefer demo data when capturing screenshots or recordings. Before uploading,
   remove or redact personal information, real conversations, private project
   names and paths, credentials, and other sensitive content, including content
