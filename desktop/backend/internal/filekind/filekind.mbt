@@ -1,7 +1,7 @@
 // File-content classification shared by the built-in viewer and host replies.
 // This is deliberately not general MIME detection: it recognizes only the
-// raster formats the transcript can render, then applies the viewer's UTF-8
-// text policy to everything else.
+// supported raster formats and PDFs, then applies the viewer's UTF-8 text
+// policy to everything else.
 
 ///|
 /// What the desktop can do with one bounded file payload. `Utf8Text` includes
@@ -9,8 +9,9 @@
 /// in separate passes.
 pub enum Classification {
   Utf8Text(String)
-  RasterImage(media_type~ : String)
-  Binary
+  Image(media_type~ : String)
+  Pdf
+  UnknownBinary
 } derive(Debug, Eq)
 
 ///|
@@ -21,17 +22,16 @@ pub enum Classification {
 pub fn classify(bytes : BytesView) -> Classification {
   match bytes {
     [b'\x89', b'P', b'N', b'G', b'\r', b'\n', b'\x1a', b'\n', ..] =>
-      RasterImage(media_type="image/png")
-    [b'\xff', b'\xd8', b'\xff', ..] => RasterImage(media_type="image/jpeg")
+      Image(media_type="image/png")
+    [b'\xff', b'\xd8', b'\xff', ..] => Image(media_type="image/jpeg")
     [b'G', b'I', b'F', b'8', b'7', b'a', ..]
-    | [b'G', b'I', b'F', b'8', b'9', b'a', ..] =>
-      RasterImage(media_type="image/gif")
+    | [b'G', b'I', b'F', b'8', b'9', b'a', ..] => Image(media_type="image/gif")
     [b'R', b'I', b'F', b'F', _, _, _, _, b'W', b'E', b'B', b'P', ..] =>
-      RasterImage(media_type="image/webp")
-    [b'%', b'P', b'D', b'F', b'-', ..] => Binary
-    _ if bytes.find(b"\x00") is Some(_) => Binary
+      Image(media_type="image/webp")
+    [b'%', b'P', b'D', b'F', b'-', ..] => Pdf
+    _ if bytes.find(b"\x00") is Some(_) => UnknownBinary
     _ => {
-      let text = @utf8.decode(bytes) catch { _ => return Binary }
+      let text = @utf8.decode(bytes) catch { _ => return UnknownBinary }
       Utf8Text(text)
     }
   }

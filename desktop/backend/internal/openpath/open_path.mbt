@@ -75,8 +75,7 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   // Twelve bytes cover every supported raster signature, including WebP.
   let header_size = if size < 12 { size.to_int() } else { 12 }
   let header = source.read_exactly_at(header_size, position=0)
-  if header is [b'%', b'P', b'D', b'F', b'-', ..] ||
-    @filekind.classify(header) is RasterImage(_) {
+  if @filekind.classify(header) is (Pdf | Image(_)) {
     return BrowserPath(self.path)
   }
   guard size <= MaxEditorFileBytes.to_int64() else {
@@ -86,8 +85,8 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   match @filekind.classify(data.binary()) {
     Utf8Text(_) =>
       EditorPath(path=self.path, line=self.line, column=self.column)
-    RasterImage(_) => BrowserPath(self.path)
-    Binary => SystemPath(self.path)
+    Pdf | Image(_) => BrowserPath(self.path)
+    UnknownBinary => SystemPath(self.path)
   }
 }
 

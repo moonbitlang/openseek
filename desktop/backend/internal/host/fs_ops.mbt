@@ -306,13 +306,13 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   // making callers perform a second UTF-8 pass.
   let bytes = data.binary()
   match @filekind.classify(bytes) {
-    RasterImage(media_type~) =>
+    Image(media_type~) =>
       BinaryContent(data_base64=@base64.encode(bytes), media_type~)
     Utf8Text(content) => {
       let absolute = file.resource_path()
       Content(content~, absolute~, sig="\{seconds}:\{nanos}")
     }
-    Binary => Binary
+    Pdf | UnknownBinary => Binary
   }
 }
 
