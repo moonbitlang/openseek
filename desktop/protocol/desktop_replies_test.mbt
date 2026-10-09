@@ -1882,29 +1882,41 @@ test "detached worktree replies omit branch and reject malformed branch values" 
 }
 
 ///|
-test "PDF browser payload rejects missing malformed and relative paths" {
-  let payload : @protocol.BrowserPdfPayload = {
-    id: 4,
-    path: "/tmp/中文 #100%.pdf",
-    dark: false,
+test "browser payload requires typed fields and ignores unknown fields" {
+  for
+    url in [
+      "https://example.com/", "file:///tmp/index.html", "file:///tmp/a.pdf",
+    ] {
+    let payload : @protocol.BrowserOpenPayload = { id: 4, url, dark: false, }
+    let decoded : @protocol.BrowserOpenPayload = @json.from_json(
+      payload.to_json(),
+    )
+    assert_eq(decoded, payload)
+    let extra : @protocol.BrowserOpenPayload = @json.from_json({
+      "id": 4,
+      "url": url,
+      "dark": false,
+      "unknown": null,
+    })
+    assert_eq(extra, payload)
   }
-  let decoded : @protocol.BrowserPdfPayload = @json.from_json(payload.to_json())
-  assert_eq(decoded, payload)
   let invalid : Array[Json] = [
+    null,
     { "id": 4, "dark": false },
-    { "id": 4, "path": null, "dark": false },
-    { "id": 4, "path": "relative.pdf", "dark": false },
-    { "id": 4, "path": "//remote/a.pdf", "dark": false },
-    { "id": "4", "path": "/tmp/a.pdf", "dark": false },
-    { "id": 4, "path": "/tmp/a.pdf" },
+    { "id": 4, "url": null, "dark": false },
+    { "id": 4, "url": 42, "dark": false },
+    { "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": "4", "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": null, "url": "file:///tmp/a.pdf", "dark": false },
+    { "id": 4, "url": "file:///tmp/a.pdf" },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": null },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": "false" },
   ]
   for json in invalid {
-    let rejected = try {
-      let _ : @protocol.BrowserPdfPayload = @json.from_json(json)
-      false
-    } catch {
-      _ => true
-    }
-    assert_true(rejected)
+    assert_true(
+      refused(() => {
+        let _ : @protocol.BrowserOpenPayload = @json.from_json(json)
+      }),
+    )
   }
 }

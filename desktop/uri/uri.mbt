@@ -47,3 +47,10 @@ pub fn file_url(path : String) -> String {
   .collect()
   .join("/")
 }
+
+///|
+/// Recognize an explicit, nonempty file URL without imposing a file-type
+/// policy. The browser or system opener performs the full URL parsing.
+pub fn is_file_url(url : String) -> Bool {
+  url.to_lower().strip_prefix("file://") is Some(rest) && !rest.is_empty()
+}

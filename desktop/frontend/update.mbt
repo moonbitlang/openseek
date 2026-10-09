@@ -5359,12 +5359,7 @@ fn update_msg(
         None => @preview.open_page(model.preview, url~)
       }
       (
-        browser_op(
-          dispatch,
-          @commands.browser_open_pdf,
-          { id, path, dark: model.theme.is_dark(model.system_dark), },
-          quiet=false,
-        ),
+        browser_open(dispatch, id, url, model.theme.is_dark(model.system_dark)),
         {
           ..model,
           preview,
@@ -6083,26 +6078,6 @@ fn update_msg(
         @preview.page(model.preview, id) is Some(page) &&
         page.url is Some(url) else {
         return (@cmd.none, model)
-      }
-      if url.has_prefix("file://") &&
-        model.active_checkout() is Some(active) &&
-        active.owner.channel is Local {
-        let file = @common.Uri::parse(url) catch {
-          _ => return (@cmd.none, model)
-        }
-        let path = file.fs_path()
-        return (
-          open_file(
-            dispatch,
-            Local,
-            active.owner.session,
-            model.file_panel.file_link_generation,
-            cwd=None,
-            path,
-            preview_pdf=false,
-          ),
-          model,
-        )
       }
       (open_external_link(dispatch, url), model)
     }

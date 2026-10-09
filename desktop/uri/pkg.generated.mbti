@@ -10,6 +10,8 @@ pub fn encode_component(StringView) -> String
 
 pub fn file_url(String) -> String
 
+pub fn is_file_url(String) -> Bool
+
 // Errors
 
 // Types and methods

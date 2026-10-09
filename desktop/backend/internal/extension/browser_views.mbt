@@ -121,13 +121,14 @@ impl Show for BrowserViewError with fn output(self, logger) {
   match self {
     WindowNotReady => logger.write_string("The desktop window is not ready")
     UnknownView(id) => logger.write_string("Unknown browser view \{id}")
-    BlockedURL(url) => logger.write_string("Blocked non-web page URL: \{url}")
+    BlockedURL(url) =>
+      logger.write_string("Blocked unsupported page URL: \{url}")
   }
 }
 
 ///|
-/// Browser views navigate to web pages only — never local files or the
-/// app's own scheme. Schemes are case-insensitive (RFC 3986), and the
+/// Browser views load web pages and file URLs. Schemes are
+/// case-insensitive (RFC 3986), and the
 /// frontend passes URLs as typed, so the check lowercases before matching.
 fn allowed_page_url(url : String) -> Bool {
   let lower = url.to_lower()
@@ -136,7 +137,7 @@ fn allowed_page_url(url : String) -> Bool {
   } else if lower.strip_prefix("http://") is Some(rest) {
     !rest.is_empty()
   } else {
-    false
+    @uri.is_file_url(url)
   }
 }
 
@@ -231,14 +232,6 @@ fn BrowserViews::open(
   payload : @protocol.BrowserOpenPayload,
 ) -> @protocol.EmptyReply raise {
   guard allowed_page_url(payload.url) else { raise BlockedURL(payload.url) }
-  self.open_url(payload)
-}
-
-///|
-fn BrowserViews::open_url(
-  self : BrowserViews,
-  payload : @protocol.BrowserOpenPayload,
-) -> @protocol.EmptyReply raise {
   let window = self.attached_window()
   let view = match window.view(view_name(payload.id)) {
     Some(view) => {
@@ -414,9 +407,6 @@ fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
     WindowEndpoint(@commands.app_focused_browser, (_, _) => {
       views.focused_browser()
     }),
-    WindowEndpoint(@commands.browser_open_pdf, (_, payload) => {
-      views.open_pdf(payload)
-    }),
     WindowEndpoint(@commands.browser_open, (_, payload) => views.open(payload)),
     WindowEndpoint(@commands.browser_navigate, (_, payload) => {
       views.open(payload)
@@ -516,32 +506,16 @@ test "browser page theme bridge uses only opted-in theme conventions" {
 }
 
 ///|
-test "browser page urls are web-only" {
+test "browser page urls support web and local files" {
   assert_true(allowed_page_url("http://127.0.0.1:5173/"))
   assert_true(allowed_page_url("https://github.com/"))
   assert_true(allowed_page_url("HTTPS://Example.COM/x"))
   assert_true(allowed_page_url("HTTP://LOCALHOST:5173/"))
   assert_false(allowed_page_url("proton://app/"))
-  assert_false(allowed_page_url("file:///etc/passwd"))
+  assert_true(allowed_page_url("file:///tmp/index.html"))
+  assert_true(allowed_page_url("FILE:///tmp/report.pdf"))
+  assert_true(allowed_page_url("file:///tmp/image.png"))
+  assert_false(allowed_page_url("file://"))
   assert_false(allowed_page_url("javascript:alert(1)"))
   assert_false(allowed_page_url("about:blank"))
-}
-
-///|
-async fn BrowserViews::open_pdf(
-  self : BrowserViews,
-  payload : @protocol.BrowserPdfPayload,
-) -> @protocol.EmptyReply {
-  guard @pathx.Absolute::from_uri_path(payload.path) is Some(path) else {
-    raise BlockedURL(payload.path)
-  }
-  // Recheck when loading: a file can disappear or change since the click was resolved.
-  guard @openpath.Reference(path.to_string()).resolve() is PdfPath(_) else {
-    raise BlockedURL(payload.path)
-  }
-  self.open_url({
-    id: payload.id,
-    url: @uri.file_url(payload.path),
-    dark: payload.dark,
-  })
 }

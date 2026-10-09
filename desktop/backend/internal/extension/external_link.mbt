@@ -25,13 +25,14 @@ fn allowed_external_url(url : String) -> Bool {
 }
 
 ///|
-/// Hand a browser URL to the system opener. Both the renderer command and
-/// Proton's native new-window policy use this boundary so they cannot drift on
-/// which schemes are allowed.
+/// Hand a URL to the system opener. The trusted toolbar command can also
+/// open file URLs; native webpage popups retain the web-only default.
 pub async fn open_external(
   payload : @protocol.ExternalLinkPayload,
+  allow_file? : Bool = false,
 ) -> @protocol.OpenExternalReply {
-  guard allowed_external_url(payload.url) else {
+  guard allowed_external_url(payload.url) ||
+    (allow_file && @uri.is_file_url(payload.url)) else {
     raise OpenExternalError("Blocked unsupported external link")
   }
   let code = @platform.open_url(payload.url) catch {

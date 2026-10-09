@@ -260,3 +260,18 @@ test "normalize_url prefixes bare hosts and rejects foreign schemes" {
   assert_true(@preview.normalize_url("http://") is None)
   assert_true(@preview.normalize_url("/docs") is None)
 }
+
+///|
+test "address bar accepts file URLs for arbitrary browser documents" {
+  for
+    url in [
+      "file:///tmp/index.html", "file:///tmp/report.pdf#page=2", "file:///tmp/image.png",
+      "file:///tmp/中文 demo/index.html?mode=preview#title", "FILE:///C:/Users/demo/index.html",
+      "file://localhost/tmp/index.html", "file://server/share/index.html", "file:///tmp/a%23b%25.pdf",
+    ] {
+    assert_eq(@preview.normalize_url("  " + url + "  "), Some(url))
+  }
+  assert_true(@preview.normalize_url("file://") is None)
+  assert_true(@preview.normalize_url("file:") is None)
+  assert_true(@preview.normalize_url("proton://app/") is None)
+}

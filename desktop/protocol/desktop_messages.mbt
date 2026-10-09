@@ -965,7 +965,24 @@ pub(all) struct BrowserOpenPayload {
   id : Int
   url : String
   dark : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for BrowserOpenPayload with fn to_json(self) {
+  { "id": self.id, "url": self.url, "dark": self.dark }
+}
+
+///|
+pub impl FromJson for BrowserOpenPayload with fn from_json(json, path) {
+  guard json is { "id": id, "url": url, "dark": dark, .. } else {
+    raise JsonDecodeError((path, "expected browser id, URL and theme"))
+  }
+  {
+    id: @json.from_json(id, path=path.add_key("id")),
+    url: @json.from_json(url, path=path.add_key("url")),
+    dark: @json.from_json(dark, path=path.add_key("dark")),
+  }
+}
 
 ///|
 pub(all) struct BrowserIdPayload {
@@ -2621,46 +2638,3 @@ pub extend SemanticSearchProgressPayload with Eq::{equal, not_equal}
 #deprecated("Use `ToJson::to_json` via the trait instead", skip_current_package=true)
 #doc(hidden)
 pub extend SemanticSearchProgressPayload with ToJson::{to_json}
-
-///|
-pub(all) struct BrowserPdfPayload {
-  id : Int
-  // Absolute URI path, not a URL or a remote filesystem path.
-  path : String
-  dark : Bool
-} derive(Debug, Eq)
-
-///|
-pub impl ToJson for BrowserPdfPayload with fn to_json(self) {
-  { "id": self.id, "path": self.path, "dark": self.dark }
-}
-
-///|
-pub impl FromJson for BrowserPdfPayload with fn from_json(json, path) {
-  guard json is { "id": id, "path": file, "dark": dark, .. } else {
-    raise JsonDecodeError((path, "expected PDF browser id, path and theme"))
-  }
-  let file : String = @json.from_json(file, path=path.add_key("path"))
-  guard file is ['/', ..] && !(file is ['/', '/', ..]) else {
-    raise JsonDecodeError(
-      (path.add_key("path"), "expected an absolute URI path"),
-    )
-  }
-  {
-    id: @json.from_json(id, path=path.add_key("id")),
-    path: file,
-    dark: @json.from_json(dark, path=path.add_key("dark")),
-  }
-}
-
-///|
-pub extend BrowserPdfPayload with Debug::{to_repr}
-
-///|
-pub extend BrowserPdfPayload with Eq::{equal, not_equal}
-
-///|
-pub extend BrowserPdfPayload with ToJson::{to_json}
-
-///|
-pub extend BrowserPdfPayload with FromJson::{from_json}

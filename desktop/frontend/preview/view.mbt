@@ -110,7 +110,7 @@ pub fn toolbar_view(
       class="browser-nav-button",
       title=ui(
         locale,
-        if page.url is Some(url) && url.has_prefix("file://") {
+        if page.url is Some(url) && @uri.is_file_url(url) {
           OpenApplication
         } else {
           OpenBrowser

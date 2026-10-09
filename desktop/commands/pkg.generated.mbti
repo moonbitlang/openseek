@@ -65,8 +65,6 @@ pub let browser_navigate : Command[@protocol.BrowserOpenPayload, @protocol.Empty
 
 pub let browser_open : Command[@protocol.BrowserOpenPayload, @protocol.EmptyReply]
 
-pub let browser_open_pdf : Command[@protocol.BrowserPdfPayload, @protocol.EmptyReply]
-
 pub let browser_reload : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
 pub let browser_set_bounds : Command[@protocol.BrowserBoundsPayload, @protocol.EmptyReply]

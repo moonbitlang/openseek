@@ -15,8 +15,6 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/core/string",
-  "openseek_desktop/backend/internal/pathx",
-  "openseek_desktop/backend/internal/openpath",
   "openseek_desktop/uri",
   "tonyfettes/xlog",
 }
@@ -26,6 +24,7 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 import {
+  "openseek_desktop/backend/internal/pathx",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
 } for "wbtest"

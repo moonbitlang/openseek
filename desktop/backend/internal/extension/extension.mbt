@@ -378,7 +378,7 @@ pub fn openseek_capability(
       bridge.connect(context)
     }),
     WindowEndpoint(@commands.shell_open_external, (_, payload) => {
-      open_external(payload)
+      open_external(payload, allow_file=true)
     }),
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)

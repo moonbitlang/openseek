@@ -84,3 +84,13 @@ test "local file URLs preserve path separators and escape filename syntax" {
     "file:///C:/Users/Test/document.pdf",
   )
 }
+
+///|
+test "file URL recognition is independent of file type" {
+  assert_true(@uri.is_file_url("file:///tmp/index.html"))
+  assert_true(@uri.is_file_url("FILE:///tmp/report.pdf"))
+  assert_true(@uri.is_file_url("file://server/share/image.png"))
+  assert_false(@uri.is_file_url("file://"))
+  assert_false(@uri.is_file_url("file:relative.html"))
+  assert_false(@uri.is_file_url("https://example.com/file://index.html"))
+}
