@@ -1,6 +1,51 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
+  test(`returning to Diff restores its loading notice while ${pendingMethod} is pending`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    const { promise: pending, resolve: release } = Promise.withResolvers();
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = async (request) => {
+      if (request.method === pendingMethod && request.params?.path?.endsWith('/main.mbt')) {
+        await pending;
+      }
+      return replyFor(request);
+    };
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openReview();
+    // Control the 800 ms timer so the first notification expires in Content.
+    await page.clock.install({ time: new Date('2026-10-08T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-10-08T00:00:01Z'));
+    const view = page.getByRole('group', { name: 'File view' });
+    const notice = page.locator('.viewer-notice');
+    try {
+      await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+      await expect.poll(() => app.requests.some(request =>
+        request.method === pendingMethod && request.params?.path?.endsWith('/main.mbt')))
+        .toBe(true);
+      await page.clock.runFor(50);
+      await view.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.clock.runFor(1000);
+      await expect(notice).not.toContainText('Loading diff');
+      await view.getByRole('button', { name: 'Diff', exact: true }).click();
+      await page.clock.runFor(50);
+      await expect(notice).not.toContainText('Loading diff');
+      await page.clock.runFor(1000);
+      await expect(notice).toHaveText('Loading diff for main.mbt…');
+    } finally {
+      release();
+      await page.clock.resume();
+    }
+    await expect(notice).not.toContainText('Loading diff');
+    await expect(page.getByRole('button', { name: 'Line diff', exact: true })).toBeEnabled();
+    await expect(view.getByRole('button', { name: 'Diff', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('reopening a deleted review keeps Diff without reading the missing file', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];
@@ -42,16 +87,21 @@ test('one file tab retains its identity across File, diff modes, and repeated op
 
   await app.openReview();
   await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-  const view = page.getByRole('toolbar', { name: 'Review mode' });
-  await expect(view.getByRole('button')).toHaveText(['File', 'Line', 'Token', 'Tree']);
+  const view = page.getByRole('group', { name: 'File view' });
+  const algorithm = page.getByRole('toolbar', { name: 'Comparison algorithm' });
+  await expect(view.getByRole('button')).toHaveText(['Content', 'Diff']);
   await expect(tabs).toHaveCount(1);
-  await expect(view.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(algorithm.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   const baselineReads = app.requests.filter(request => request.method === 'git.original_file').length;
 
-  for (const name of ['File view', 'Line diff', 'File view', 'Tree diff', 'File view', 'Token diff', 'File view']) {
-    await view.getByRole('button', { name }).click();
-    await expect(view.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
+  for (const name of ['Content', 'Line diff', 'Content', 'Tree diff', 'Content', 'Token diff', 'Content']) {
+    if (name !== 'Content') {
+      await view.getByRole('button', { name: 'Diff' }).click();
+    }
+    const control = name === 'Content' ? view : algorithm;
+    await control.getByRole('button', { name }).click();
+    await expect(control.getByRole('button', { name })).toHaveAttribute('aria-pressed', 'true');
     await expect(tabs).toHaveCount(1);
     expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
   }
@@ -60,18 +110,20 @@ test('one file tab retains its identity across File, diff modes, and repeated op
   // Opening another review must not replace the first file's chosen surface.
   await page.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
   await expect(tabs).toHaveCount(2);
-  await expect(view.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(algorithm.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
   await main.click();
-  await expect(view.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(view.getByRole('button', { name: 'Content' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText(/fn\s+main/);
 
-  await view.getByRole('button', { name: 'Token diff' }).click();
+  await view.getByRole('button', { name: 'Diff' }).click();
+  await algorithm.getByRole('button', { name: 'Token diff' }).click();
   await app.openQuickOpen();
   await page.getByRole('option', { name: /main\.mbt/ }).click();
   await expect(tabs).toHaveCount(2);
-  await expect(view.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
-  await view.getByRole('button', { name: 'Token diff' }).click();
+  await expect(view.getByRole('button', { name: 'Content' })).toHaveAttribute('aria-pressed', 'true');
+  await view.getByRole('button', { name: 'Diff' }).click();
+  await algorithm.getByRole('button', { name: 'Token diff' }).click();
   await expect(page.locator('.semantic-review[data-mode="token"]')).toBeVisible();
   expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
   expect(app.pageErrors).toEqual([]);
@@ -104,9 +156,130 @@ test('Search read failures retain the same file comparison and can retry', async
   await result.click();
   await expect(page.getByText('Working unavailable · baseline', { exact: true })).toBeHidden();
   await expect(page.locator('#viewer-host')).toContainText('working tree');
-  await expect(page.getByRole('button', { name: 'File view' })).toHaveAttribute('aria-pressed', 'true');
-  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Content' })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Diff', exact: true }).click();
   await expect(page.locator('#diff-editor-host')).toBeVisible();
   await expect(page.locator('.editor-tab')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('moon.mod chip preserves its graph across Diff, tab switches, and graph failure retries', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const path = 'moon.mod';
+  app.gitChanges.push({ path, index_status: ' ', worktree_status: 'M', kind: 'modified' });
+  app.workingFiles[path] = 'name = "example/app"\nversion = "0.2.0"\n';
+  app.gitFilesByRevision[app.gitBaseline][path] = 'name = "example/app"\nversion = "0.1.0"\n';
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('treeitem', { name: /View diff: moon\.mod/ }).click();
+  const chip = page.getByRole('group', { name: 'File view' });
+  const graph = page.locator('#package-diagram-host');
+  const source = page.locator('#viewer-host');
+  const diff = page.locator('#diff-editor-host');
+  await expect(chip.getByRole('button')).toHaveText(['Dependency graph', 'Source', 'Diff']);
+  await expect(diff).toContainText('0.1.0');
+  await expect(diff).toContainText('0.2.0');
+  const tab = page.locator('.editor-tab').filter({ hasText: 'moon.mod' });
+  const originalTab = await tab.elementHandle();
+  const originalSource = await source.elementHandle();
+  app.rpcErrors.set('moon.package_graph', 'fixture graph failed');
+  await chip.getByRole('button', { name: 'Dependency graph' }).click();
+  await expect(graph).toContainText('fixture graph failed');
+  app.rpcErrors.delete('moon.package_graph');
+  app.rpcDelays.set('moon.package_graph', 700);
+  // The already-selected graph action retries. Its late reply must not replace Diff.
+  await chip.getByRole('button', { name: 'Dependency graph' }).click();
+  await chip.getByRole('button', { name: 'Diff', exact: true }).click();
+  await expect(diff).toBeVisible();
+  await expect(chip.locator('[aria-pressed="true"]')).toHaveText('Diff');
+  await chip.getByRole('button', { name: 'Dependency graph' }).click();
+  await expect(graph.locator('svg')).toContainText('main');
+  await expect(source).toBeHidden();
+  await expect(diff).toBeHidden();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await tab.click();
+  await expect(graph.locator('svg')).toBeVisible();
+  for (const label of ['Source', 'Diff', 'Dependency graph', 'Diff', 'Source']) {
+    await chip.getByRole('button', { name: label, exact: true }).click();
+    await expect(chip.locator('[aria-pressed="true"]')).toHaveText(label);
+    await expect(label === 'Source' ? source : label === 'Diff' ? diff : graph).toBeVisible();
+  }
+  await expect(source).toContainText('0.2.0');
+  expect(await originalTab.evaluate(node => node.isConnected)).toBe(true);
+  expect(await originalSource.evaluate(node => node.isConnected)).toBe(true);
+  expect(app.requests.filter(request => request.method === 'moon.package_graph')).toHaveLength(2);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('Content retains selection and shows deletion after the working file disappears', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  // Keep marker text visible even when the editor folds multiline functions.
+  app.workingFiles['src/main.mbt'] = 'fn main { println("working tree") }\n';
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = 'fn main { println("baseline") }\n';
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  const chip = page.getByRole('group', { name: 'File view' });
+  await page.getByRole('button', { name: 'Line diff', exact: true }).click();
+  await chip.getByRole('button', { name: 'Content', exact: true }).click();
+  await expect(page.locator('#viewer-host')).toContainText('working tree');
+  app.gitChanges = [{ path: 'src/main.mbt', index_status: ' ', worktree_status: 'D', kind: 'deleted' }];
+  delete app.workingFiles['src/main.mbt'];
+  await expect.poll(() => app.requests.filter(request => request.method === 'fs.watch').length).toBeGreaterThan(0);
+  const watch = app.requests.filter(request => request.method === 'fs.watch').at(-1);
+  const previousReads = app.requests.filter(request => request.method === 'git.changes').length;
+  app.notify('fs.changed', { root: '/workspace', generation: watch.params.generation, baseline: false,
+    events: [{ kind: 'remove', path: 'src/main.mbt' }] });
+  await expect.poll(() => app.requests.filter(request => request.method === 'git.changes').length).toBeGreaterThan(previousReads);
+  await expect(chip.getByRole('button', { name: 'Content', exact: true })).toBeEnabled();
+  await expect(chip.locator('[aria-pressed="true"]')).toHaveText('Content');
+  await expect(page.locator('.viewer-notice')).toHaveText('main.mbt was deleted on disk.');
+  await expect(page.locator('#viewer-host')).not.toContainText('working tree');
+  await chip.getByRole('button', { name: 'Diff', exact: true }).click();
+  await expect(page.locator('#diff-editor-host')).toBeVisible();
+  await expect(page.locator('#diff-editor-host')).toContainText('baseline');
+  await expect(page.locator('.viewer-notice')).toBeHidden();
+  await chip.getByRole('button', { name: 'Content', exact: true }).click();
+  await expect(page.locator('.viewer-notice')).toHaveText('main.mbt was deleted on disk.');
+  await expect(page.locator('#viewer-host')).not.toContainText('baseline');
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const side of ['baseline', 'working']) {
+  for (const failure of ['binary', 'oversized', 'failed']) {
+    test(`Diff shows ${side} ${failure} instead of falling back to Content`, async ({ page }) => {
+      const app = new DesktopBrowserHarness(page);
+      app.workingFiles['src/main.mbt'] = 'fn main { println("working tree") }\n';
+      const method = side === 'baseline' ? 'git.original_file' : 'fs.read_file';
+      if (failure === 'failed') app.rpcErrors.set(method, `${side} denied`);
+      else if (side === 'baseline') app.gitOriginalFile = () => ({ kind: failure });
+      else app.readWorkingFile = () => ({ kind: failure });
+      await app.install();
+      await app.goto();
+      await app.openSession();
+      await app.openReview();
+      await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+      const chip = page.getByRole('group', { name: 'File view' });
+      const notice = page.locator('.viewer-notice');
+      await expect(chip.locator('[aria-pressed="true"]')).toHaveText('Diff');
+      await expect(notice).toBeVisible();
+      await expect(notice).toContainText('Diff unavailable');
+      await expect(notice).toContainText(failure === 'binary' ? 'binary' : failure === 'oversized' ? 'too large' : `${side} denied`);
+      await expect(page.locator('#viewer-host')).toBeHidden();
+      await chip.getByRole('button', { name: 'Content', exact: true }).click();
+      await expect(chip.locator('[aria-pressed="true"]')).toHaveText('Content');
+      if (side === 'baseline') {
+        await expect(notice).toBeHidden();
+        await expect(page.locator('#viewer-host')).toContainText('working tree');
+      }
+      await chip.getByRole('button', { name: 'Diff', exact: true }).click();
+      await expect(notice).toContainText('Diff unavailable');
+      await expect(page.locator('#viewer-host')).toBeHidden();
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}

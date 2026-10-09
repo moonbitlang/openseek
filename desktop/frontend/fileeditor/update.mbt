@@ -79,11 +79,6 @@ fn Doc::visible_diff(self : Doc) -> (String, String)? {
 }
 
 ///|
-fn Doc::shows_diff(self : Doc) -> Bool {
-  self.visible_diff() is Some(_)
-}
-
-///|
 /// VS Code enables workspace-search model decorations only while its Search
 /// view is active. OpenSeek uses the Explorer inventory selection as the same
 /// logical boundary; narrow drill-down deliberately retains Search mode so the
@@ -99,7 +94,7 @@ fn State::editor_search_highlights(
 
 ///|
 /// Whether a requested full diff is still waiting for one textual side. Keep
-/// this distinct from `shows_diff`: the comparison has no model yet,
+/// this distinct from `visible_diff`: the comparison has no model yet,
 /// but revealing the source Viewer while either read settles produces a
 /// source-to-diff flash.
 fn Doc::diff_is_pending(self : Doc) -> Bool {
@@ -116,9 +111,9 @@ fn Doc::diff_is_pending(self : Doc) -> Bool {
 ///|
 /// The surface selected for the current render. A full comparison owns the
 /// diff host from the moment it is requested, including its loading interval;
-/// a settled unavailable comparison falls back to the ordinary file surface.
+/// an unavailable comparison keeps this surface and displays its failure notice.
 fn Doc::uses_diff_surface(self : Doc) -> Bool {
-  self.shows_diff() || self.diff_is_pending()
+  self.review is Some({ view_mode: ReviewDiff, .. })
 }
 
 ///|
@@ -246,6 +241,8 @@ fn show_tab_impl(
     // A deleted change, or a transiently unreadable working file, can still
     // have a useful textual HEAD side. Show that baseline under explicit
     // review chrome; other unavailable cases use the panel notice overlay.
+    TabDeleted if doc.review is None ||
+      doc.review is Some({ view_mode: ReviewSource, .. }) => clear_document()
     TabDeleted | TabReadFailed(_) =>
       match doc.review {
         Some({ baseline: ReviewContent(content), .. }) =>
@@ -1870,7 +1867,7 @@ fn refresh_changes(
 }
 
 ///|
-/// Keep the active ordinary `moon.mod` paired with one Host-produced package
+/// Keep the active working `moon.mod` paired with one Host-produced package
 /// graph. The post-dispatch sync is the common path for fresh opens, restored
 /// tabs, view-mode changes, invalidations, and replies, so the request remains
 /// idempotent without duplicating lifecycle logic in each transition.
@@ -1885,7 +1882,11 @@ fn sync_package_graph(
     ctx.active_file is Some(path) &&
     ctx.relative(path) is Some(_) &&
     state.docs.get(path) is Some(doc) &&
-    doc.review is None &&
+    !file_diff_selected(state, ctx) &&
+    (match doc.review {
+      Some(review) => review.selected.has_working_tree_file()
+      None => true
+    }) &&
     uses_moon_mod_presentation(doc.name) &&
     doc.state is (TabLoading | TabLoaded(..)) else {
     return (state, @cmd.none)
@@ -2380,8 +2381,7 @@ fn select_review_view_mode(
 ) -> (@cmd.Cmd, State) {
   guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
-    doc.review is Some(review) &&
-    doc.diff_content() is Some(_) else {
+    doc.review is Some(review) else {
     return (@cmd.none, state)
   }
   let docs = state.docs.copy()
@@ -2399,7 +2399,11 @@ fn select_review_view_mode(
     // Viewer's 5px minimum while the diff is visible. Measure again only after
     // File mode has restored the source host's real box.
     ReviewSource => @cmd.batch([show, request_viewer_remeasure()])
-    ReviewDiff => show
+    ReviewDiff =>
+      @cmd.batch([
+        show,
+        delayed_diff_loading(dispatch, ctx.owner, path, next_doc),
+      ])
   }
   (command, { ..state, docs, }.invalidate_review_hunk_surface())
 }
@@ -2580,50 +2584,46 @@ fn update_inner(
       (request_viewer_remeasure(), { ..state, tree_open: opening, })
     }
     MbtiViewModeSelected(mode) => {
-      guard ctx.active_history_diff is None &&
-        ctx.active_file is Some(path) &&
-        state.docs.get(path)
-        is Some({ name, state: TabLoaded(..), review: None, .. }) &&
-        uses_mbti_presentation(name) else {
+      guard mbti_view_available(state, ctx) && ctx.active_file is Some(path) else {
         return (@cmd.none, state)
       }
-      if state.mbti_view_mode(path) == mode {
+      if state.mbti_view_mode(path) == mode && !file_diff_selected(state, ctx) {
         return (@cmd.none, state)
       }
       let mbti_view_modes = state.mbti_view_modes.copy()
       mbti_view_modes[path] = mode
-      (
-        // A Viewer measured while hidden reports its minimum box. Switching
-        // back to Source must remeasure after the host becomes visible;
-        // Diagram is static SVG, so the same no-op-safe command is sufficient.
-        request_viewer_remeasure(),
+      let (show, selected) = select_review_view_mode(
+        dispatch,
         { ..state, mbti_view_modes, },
+        ctx,
+        ReviewSource,
       )
+      (@cmd.batch([show, request_viewer_remeasure()]), selected)
     }
     MoonModViewModeSelected(mode) => {
-      guard ctx.active_history_diff is None &&
-        ctx.active_file is Some(path) &&
-        state.docs.get(path)
-        is Some({ name, state: TabLoaded(..), review: None, .. }) &&
-        uses_moon_mod_presentation(name) else {
+      guard moon_mod_view_available(state, ctx) && ctx.active_file is Some(path) else {
         return (@cmd.none, state)
       }
       let retry_failed = mode is MoonModDependencies &&
         state.package_graphs.get(path) is Some(PackageGraphFailed(_, _))
-      if state.moon_mod_view_mode(path) == mode && !retry_failed {
+      if state.moon_mod_view_mode(path) == mode &&
+        !retry_failed &&
+        !file_diff_selected(state, ctx) {
         return (@cmd.none, state)
       }
       let moon_mod_view_modes = state.moon_mod_view_modes.copy()
       moon_mod_view_modes[path] = mode
       let package_graphs = state.package_graphs.copy()
-      if mode is MoonModDependencies &&
-        package_graphs.get(path) is Some(PackageGraphFailed(_, _)) {
+      if retry_failed {
         package_graphs.remove(path)
       }
-      (
-        request_viewer_remeasure(),
+      let (show, selected) = select_review_view_mode(
+        dispatch,
         { ..state, moon_mod_view_modes, package_graphs, },
+        ctx,
+        ReviewSource,
       )
+      (@cmd.batch([show, request_viewer_remeasure()]), selected)
     }
     PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~) =>
       if state.owner is Some(state_owner) &&
@@ -2669,6 +2669,15 @@ fn update_inner(
       let view_mode = match review.view_mode {
         ReviewSource => ReviewDiff
         ReviewDiff => ReviewSource
+      }
+      let state = if view_mode is ReviewSource {
+        let mbti_view_modes = state.mbti_view_modes.copy()
+        let moon_mod_view_modes = state.moon_mod_view_modes.copy()
+        mbti_view_modes[path] = MbtiSource
+        moon_mod_view_modes[path] = MoonModSource
+        { ..state, mbti_view_modes, moon_mod_view_modes, }
+      } else {
+        state
       }
       select_review_view_mode(dispatch, state, ctx, view_mode)
     }
@@ -5287,7 +5296,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   )
 
   // Ordinary and positioned reopens keep deletion reviews, even while HEAD
-  // is pending or after the user explicitly selected the baseline File view.
+  // is pending or after the user explicitly selected the deletion Content view.
   for prior in [loading, preview, source] {
     for range in [None, Some(@common.Range(1, 1, 1, 4))] {
       let (_, reopened) = open_document(
