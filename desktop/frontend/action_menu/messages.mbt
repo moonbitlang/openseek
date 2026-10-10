@@ -19,13 +19,17 @@ priv enum UiMessage {
   CopyFilePath
   CopyLabel
   CopySelected
+  CopySuccess
+  CopyFailure
   ReplyLabel
+  ReplyHint
   ReplyDialog
   BatchLabel
   BatchHint
   SendReply
   AddReply
   ReplyDeclined
+  SelectionActions
   ContextMenu
 }
 
@@ -121,11 +125,27 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, CopySelected) => "复制选中文本"
     (TraditionalChinese, CopySelected) => "複製選中文字"
     (Japanese, CopySelected) => "選択したテキストをコピー"
+    (English, CopySuccess) => "Copied"
+    (Spanish, CopySuccess) => "Copiado"
+    (SimplifiedChinese, CopySuccess) => "已复制"
+    (TraditionalChinese, CopySuccess) => "已複製"
+    (Japanese, CopySuccess) => "コピーしました"
+    (English, CopyFailure) => "Copy failed. Try again."
+    (Spanish, CopyFailure) => "No se pudo copiar. Inténtalo de nuevo."
+    (SimplifiedChinese, CopyFailure) => "复制失败，请重试。"
+    (TraditionalChinese, CopyFailure) => "複製失敗，請重試。"
+    (Japanese, CopyFailure) =>
+      "コピーに失敗しました。再試行してください。"
     (English, ReplyLabel) => "Reply"
     (Spanish, ReplyLabel) => "Responder"
     (SimplifiedChinese, ReplyLabel) => "回复"
     (TraditionalChinese, ReplyLabel) => "回覆"
     (Japanese, ReplyLabel) => "返信"
+    (English, ReplyHint) => "Quote the selected text and reply to it"
+    (Spanish, ReplyHint) => "Citar el texto seleccionado y responder"
+    (SimplifiedChinese, ReplyHint) => "引用选中文本并回复"
+    (TraditionalChinese, ReplyHint) => "引用選中文字並回覆"
+    (Japanese, ReplyHint) => "選択したテキストを引用して返信"
     (English, ReplyDialog) => "Reply to selection"
     (Spanish, ReplyDialog) => "Responder a la selección"
     (SimplifiedChinese, ReplyDialog) => "回复选中内容"
@@ -164,6 +184,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "輸入框目前無法接收回覆。"
     (Japanese, ReplyDeclined) =>
       "メッセージ欄は現在返信を受け取れません。"
+    (English, SelectionActions) => "Selection actions"
+    (Spanish, SelectionActions) => "Acciones de selección"
+    (SimplifiedChinese, SelectionActions) => "选区操作"
+    (TraditionalChinese, SelectionActions) => "選取範圍操作"
+    (Japanese, SelectionActions) => "選択範囲の操作"
     (English, ContextMenu) => "Context menu"
     (Spanish, ContextMenu) => "Menú contextual"
     (SimplifiedChinese, ContextMenu) => "上下文菜单"
