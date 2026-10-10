@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/backend/internal/cdp",
   "moonbit-community/proton",
   "moonbit-community/proton/extension" @proton_extension,
   "moonbit-community/proton_contract",
@@ -13,6 +14,9 @@ import {
   "openseek_desktop/backend/internal/platform",
   "openseek_desktop/protocol",
   "moonbitlang/async",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "openseek_desktop/backend/internal/uuid",
   "moonbitlang/async/fs",
   "moonbitlang/core/string",
   "openseek_desktop/uri",
@@ -26,5 +30,6 @@ supported_targets = "+native"
 import {
   "openseek_desktop/backend/internal/pathx",
   "moonbitlang/async/http",
-  "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/json",
 } for "wbtest"

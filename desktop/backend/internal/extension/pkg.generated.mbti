@@ -4,6 +4,7 @@ package "openseek_desktop/backend/internal/extension"
 import {
   "moonbit-community/proton",
   "openseek_desktop/backend/internal/api",
+  "openseek_desktop/backend/internal/cdp",
   "openseek_desktop/protocol",
 }
 
@@ -22,9 +23,10 @@ pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
 
 // Types and methods
 type BrowserViews
-pub fn BrowserViews::BrowserViews() -> Self
+pub async fn BrowserViews::BrowserViews() -> Self
 pub fn BrowserViews::window_closed(Self) -> Unit
 pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
+pub async fn[T] BrowserViews::with_cdp(Self, Int, async (@cdp.Connection) -> T) -> T
 
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState) -> Self
