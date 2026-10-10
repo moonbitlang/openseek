@@ -1,4 +1,32 @@
 ///|
+test "recorded edits retain their path and copy text independently of source coordinates" {
+  for
+    (name, arguments, line, copied) in [
+      (
+        "edit", "{\"path\":\"src/main.mbt\",\"start_line\":140,\"old_string\":\"140\",\"new_string\":\"999\"}",
+        140, "- 140\n+ 999",
+      ),
+      (
+        "multi_edit", "{\"edits\":[{\"file\":\"src/main.mbt\",\"start_line\":1,\"old_string\":\"140\",\"new_string\":\"999\"}]}",
+        1, "- 140\n+ 999",
+      ),
+      (
+        "edit", "{\"path\":\"src/main.mbt\",\"start_line\":999999,\"old_string\":\"\",\"new_string\":\"fn appended() -> Int { 999 }\"}",
+        999999, "+ fn appended() -> Int { 999 }",
+      ),
+    ] {
+    guard EditChanges::from_arguments(name, arguments) is Some(changes) else {
+      fail("expected a recorded edit")
+    }
+    assert_eq(changes.edits.length(), 1)
+    let edit = changes.edits[0]
+    assert_eq(edit.path, Some("src/main.mbt"))
+    assert_eq(edit.start_line, Some(line))
+    assert_eq(edit.diff, copied)
+  }
+}
+
+///|
 test "an edit decodes to its anchors and the change it describes" {
   let arguments =
     #|{"path":"lib/parser.mbt","start_line":12,"old_string":"args.length()","new_string":"args.len()"}

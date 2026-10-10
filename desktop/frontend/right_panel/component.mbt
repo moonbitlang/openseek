@@ -5,6 +5,7 @@ struct Input {
   dock : @dock.State
   file_panel : @fileeditor.State
   preview : @preview.State
+  annotation : @preview.Annotation
   file_ctx : @fileeditor.Ctx
   is_desktop : Bool
   menu_open : Bool
@@ -23,6 +24,7 @@ pub fn Input::Input(
   dock~ : @dock.State,
   file_panel~ : @fileeditor.State,
   preview~ : @preview.State,
+  annotation~ : @preview.Annotation,
   file_ctx~ : @fileeditor.Ctx,
   is_desktop~ : Bool,
   menu_open~ : Bool,
@@ -36,6 +38,7 @@ pub fn Input::Input(
     dock,
     file_panel,
     preview,
+    annotation,
     file_ctx,
     is_desktop,
     menu_open,
@@ -66,6 +69,7 @@ pub(all) struct Actions {
   // Open one subagent's transcript: the child's session id, as its row
   // carries it.
   open_child : (String) -> @cmd.Cmd
+  browser_annotation : @cmd.Emit[@preview.AnnotationMsg]
   browser_input : @cmd.Emit[String]
   browser_submit : @cmd.Cmd
   browser_back : @cmd.Cmd

@@ -1644,6 +1644,8 @@ priv struct Model {
   // view is visible, at which bounds, and the geometry signature the last
   // measurement was requested for (see `sync_browser_view`).
   browser_pane : BrowserPane
+  browser_annotation : BrowserAnnotationSession?
+  browser_annotation_generation : Int
   // Transient error toasts, oldest first, and the id the next toast will
   // take. Ids only ever grow, so a toast's auto-dismiss timer can never
   // collide with a later toast.
@@ -2114,6 +2116,7 @@ priv enum Msg {
   // The dock launcher's rows: open a blank Browser tab, or open the shared
   // Explorer picker on Files, Changes, or Search. Every row closes the `+`
   // menu; all inventories share this one shell transition.
+  BrowserAnnotation(@preview.AnnotationMsg)
   BrowserTabRequested
   ExplorerRequested(@fileeditor.ExplorerMode)
   // Open the Workflows tab in the right panel.
@@ -2773,6 +2776,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     pending_review_context: None,
     preview: @preview.State::empty(),
     browser_pane: { shown: None, rect: None, geo: None, },
+    browser_annotation: None,
+    browser_annotation_generation: 0,
     notifications: [],
     notification_seq: 0,
     notification_corner: BottomRight,

@@ -224,6 +224,22 @@ pub fn BrowserBoundsPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::to_json(Self) -> Json
 pub fn BrowserBoundsPayload::to_repr(Self) -> @debug.Repr
 
+pub(all) struct BrowserElement {
+  url : String
+  title : String
+  tag : String
+  selector : String?
+  text : String
+  html : String
+} derive(Eq, @debug.Debug)
+pub fn BrowserElement::equal(Self, Self) -> Bool
+pub fn BrowserElement::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserElement::not_equal(Self, Self) -> Bool
+pub fn BrowserElement::to_json(Self) -> Json
+pub fn BrowserElement::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserElement
+pub impl @json.FromJson for BrowserElement
+
 pub(all) struct BrowserIdPayload {
   id : Int
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
@@ -245,6 +261,30 @@ pub fn BrowserOpenPayload::to_json(Self) -> Json
 pub fn BrowserOpenPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for BrowserOpenPayload
 pub impl @json.FromJson for BrowserOpenPayload
+
+pub(all) struct BrowserPickPayload {
+  id : Int
+  request : String
+} derive(Eq, @debug.Debug)
+pub fn BrowserPickPayload::equal(Self, Self) -> Bool
+pub fn BrowserPickPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPickPayload::not_equal(Self, Self) -> Bool
+pub fn BrowserPickPayload::to_json(Self) -> Json
+pub fn BrowserPickPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserPickPayload
+pub impl @json.FromJson for BrowserPickPayload
+
+pub(all) enum BrowserPickReply {
+  Selected(BrowserElement)
+  Cancelled
+} derive(Eq, @debug.Debug)
+pub fn BrowserPickReply::equal(Self, Self) -> Bool
+pub fn BrowserPickReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn BrowserPickReply::not_equal(Self, Self) -> Bool
+pub fn BrowserPickReply::to_json(Self) -> Json
+pub fn BrowserPickReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserPickReply
+pub impl @json.FromJson for BrowserPickReply
 
 pub(all) struct BrowserThemePayload {
   id : Int

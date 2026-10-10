@@ -771,6 +771,8 @@ fn user_text_nodes(
         let target = @mention_context.target(mention)
         let title = if mention is Annotation(comment~, ..) {
           comment
+        } else if mention is @mention_context.BrowserAnnotation(element~) {
+          element.url + "\n" + element.selector.unwrap_or(element.tag)
         } else if target is Some(target) {
           if target.range is Some(range) {
             dynamic_text(

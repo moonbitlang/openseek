@@ -892,3 +892,15 @@ pub let host_open_path_preview : Command[
   @protocol.OpenPathPayload,
   @protocol.OpenPathReply,
 ] = Command("host.open_path_preview")
+
+///|
+pub let browser_pick_element : Command[
+  @protocol.BrowserPickPayload,
+  @protocol.BrowserPickReply,
+] = Command("browser.pick_element")
+
+///|
+pub let browser_cancel_pick : Command[
+  @protocol.BrowserPickPayload,
+  @protocol.EmptyReply,
+] = Command("browser.cancel_pick")

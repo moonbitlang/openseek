@@ -755,6 +755,7 @@ fn State::mention_input(self : State, mention : @composer.Mention) -> Json? {
     @mention_context.Symbol(..)
     | @mention_context.SemanticSearch(_)
     | @mention_context.Annotation(..)
+    | @mention_context.BrowserAnnotation(..)
     | @mention_context.ReviewChanges(_) =>
       Some({
         "type": "text",
@@ -1025,4 +1026,32 @@ fn State::respond(
     @commands.codex_server_request_respond,
     { request_id: request.request_id, result, },
   )
+}
+
+///|
+test "browser annotations reach Codex as text context and retain their snapshot" {
+  let state = State()
+  let element : @protocol.BrowserElement = {
+    url: "https://example.test",
+    title: "Demo",
+    tag: "button",
+    selector: None,
+    text: "Buy",
+    html: "<button>Buy</button>",
+  }
+  let mention : @composer.Mention = {
+    ref_: BrowserAnnotation(element~),
+    range: None,
+  }
+  let attached = state.with_browser_annotation(mention)
+  assert_true(state.mentions.is_empty())
+  assert_eq(attached.mentions, [mention])
+  guard attached.mention_input(mention) is Some(Object(fields)) &&
+    fields.get("text") is Some(String(text)) else {
+    fail("annotation is missing from Codex input")
+  }
+  guard @mention_context.parse(text) is Some(parsed) else {
+    fail("Codex context lost its mention envelope")
+  }
+  assert_eq(parsed.mentions, [mention.ref_])
 }

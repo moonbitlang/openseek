@@ -57,6 +57,8 @@ pub let auth_status : Command[@protocol.EmptyPayload, @protocol.AuthStatusPayloa
 
 pub let browser_back : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
+pub let browser_cancel_pick : Command[@protocol.BrowserPickPayload, @protocol.EmptyReply]
+
 pub let browser_close : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 
 pub let browser_forward : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
@@ -64,6 +66,8 @@ pub let browser_forward : Command[@protocol.BrowserIdPayload, @protocol.EmptyRep
 pub let browser_navigate : Command[@protocol.BrowserOpenPayload, @protocol.EmptyReply]
 
 pub let browser_open : Command[@protocol.BrowserOpenPayload, @protocol.EmptyReply]
+
+pub let browser_pick_element : Command[@protocol.BrowserPickPayload, @protocol.BrowserPickReply]
 
 pub let browser_reload : Command[@protocol.BrowserIdPayload, @protocol.EmptyReply]
 

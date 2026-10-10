@@ -27,35 +27,6 @@ test('Japanese selection covers pages and persists at a narrow viewport', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Japanese system language preserves IME composition and live editor state', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openQuickOpen();
-  const input = page.locator('#quick-open-input');
-  await input.fill('main');
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['fr', 'ja-JP', 'en'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.getByRole('dialog', { name: 'ワークスペースのファイルを検索' })).toBeVisible();
-  await expect(input).toHaveValue('main');
-  await expect(input).toBeFocused();
-  await input.dispatchEvent('compositionstart', { data: '日本語' });
-  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
-  await expect(input).toBeVisible();
-  await input.dispatchEvent('compositionend', { data: '日本語' });
-  await input.fill('存在しないファイル');
-  await expect(page.getByRole('status').filter({ hasText: 'ファイルが見つかりません' })).toBeVisible();
-  await input.fill('main');
-  await expect(page.getByRole('option', { name: /main\.mbt/ })).toHaveAttribute('aria-selected', 'true');
-  await input.press('Enter');
-  await expect(page.getByLabel('読み取り専用コードビューアー', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '送信', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -109,44 +80,6 @@ test('language selection updates Settings and sidebar and persists across reload
   await page.getByRole('option', { name: 'English', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('system language updates an open palette without losing query, focus or selection', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openQuickOpen();
-  const input = page.locator('#quick-open-input');
-  await input.fill('main');
-  const result = page.getByRole('option', { name: /main\.mbt/ });
-  await expect(result).toHaveAttribute('aria-selected', 'true');
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN', 'en'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.getByRole('dialog', { name: '搜索工作区文件' })).toBeVisible();
-  await expect(input).toHaveValue('main');
-  await expect(input).toBeFocused();
-  await expect(result).toHaveAttribute('aria-selected', 'true');
-  await input.dispatchEvent('compositionstart', { data: '中' });
-  await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true, bubbles: true });
-  await expect(input).toBeVisible();
-  await input.dispatchEvent('compositionend', { data: '中' });
-  await input.fill('不存在的文件');
-  await expect(page.getByRole('status').filter({ hasText: '未找到文件' })).toBeVisible();
-  await input.fill('main');
-  await expect(result).toBeVisible();
-  await input.press('Enter');
-  await expect(input).toBeHidden();
-  await expect.poll(() => app.requests.some(request => request.method === 'fs.read_file' && request.params?.path === '/workspace/src/main.mbt')).toBe(true);
-  await expect(page.getByLabel('只读代码查看器', { exact: true })).toBeVisible();
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -204,7 +137,10 @@ test('Traditional Chinese selection updates Settings and persists across reload'
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Traditional Chinese system preferences preserve palette IME and editor contents', async ({ page }) => {
+// Locale matching is covered by i18n/locale_test.mbt. One mounted flow covers
+// IME, focus, selection and editor preservation; selection tests above/below
+// still check the individual languages' visible labels.
+test('system language switching preserves palette IME, focus and editor contents', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -289,36 +225,5 @@ test('Spanish selection persists and covers feature pages at a narrow viewport',
   await page.getByRole('button', { name: 'Nueva programación', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Guardar programación', exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('spanish-schedule.png') });
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Spanish system preferences preserve the palette and mounted editor contents', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openQuickOpen();
-  const input = page.locator('#quick-open-input');
-  await input.fill('main');
-  const result = page.getByRole('option', { name: /main\.mbt/ });
-  await expect(result).toHaveAttribute('aria-selected', 'true');
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['fr', 'es-MX', 'en'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.getByRole('dialog', { name: 'Buscar archivos del espacio de trabajo' })).toBeVisible();
-  await expect(input).toHaveValue('main');
-  await expect(input).toBeFocused();
-  await expect(result).toHaveAttribute('aria-selected', 'true');
-  await input.press('Enter');
-  await expect(page.getByLabel('Visor de código de solo lectura', { exact: true })).toBeVisible();
-  const source = await page.locator('.view-lines').first().innerText();
-  await expect(page.getByRole('button', { name: 'Enviar', exact: true })).toBeVisible();
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en', 'es-MX'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.getByLabel('Readonly code viewer', { exact: true })).toBeVisible();
-  expect(await page.locator('.view-lines').first().innerText()).toBe(source);
   expect(app.pageErrors).toEqual([]);
 });

@@ -7,6 +7,9 @@ fn Model::right_panel_input(self : Model) -> @right_panel.Input {
     github=self.github,
     file_panel=self.file_panel,
     preview=self.preview,
+    annotation=self.browser_annotation.map_or(@preview.Idle, session => {
+      session.state
+    }),
     file_ctx=file_ctx(self),
     is_desktop=self.is_desktop,
     menu_open=self.right_panel_menu_open,

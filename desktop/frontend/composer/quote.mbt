@@ -113,16 +113,14 @@ fn Model::quote_replied(
   } else {
     (model, @cmd.none)
   }
-  (
-    model,
-    @cmd.batch([
-      changed,
-      submitted,
-      reply.accepted,
-      @cmd.custom_cmd(
-        _ => reveal_message_end(MessageInputId),
-        kind=@cmd.after_render,
-      ),
-    ]),
+  (model, @cmd.batch([changed, submitted, reply.accepted, focus_message_end()]))
+}
+
+///|
+/// Focus the message composer after its draft has rendered, preserving text.
+pub fn focus_message_end() -> @cmd.Cmd {
+  @cmd.custom_cmd(
+    _ => reveal_message_end(MessageInputId),
+    kind=@cmd.after_render,
   )
 }

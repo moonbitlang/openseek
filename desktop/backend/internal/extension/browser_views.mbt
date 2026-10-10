@@ -10,11 +10,16 @@
 /// holds no view map of its own — `WindowHandle::find_view` is the truth.
 struct BrowserViews {
   mut window : @proton.WindowHandle?
+  debug_port : Int
+  mut pick : BrowserPick?
 }
 
 ///|
-pub fn BrowserViews::BrowserViews() -> BrowserViews {
-  { window: None, }
+/// Configure remote debugging before CEF starts, then attach the native window
+/// through window_ready when Proton creates it.
+pub async fn BrowserViews::BrowserViews() -> BrowserViews {
+  let debug_port = prepare_debugging()
+  { window: None, debug_port, pick: None, }
 }
 
 ///|
@@ -27,6 +32,7 @@ pub fn BrowserViews::window_ready(
 
 ///|
 pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
+  self.cancel_pick()
   self.window = None
 }
 
@@ -34,6 +40,7 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 /// Drop every browser view. A reloaded page allocates ids from scratch, so
 /// views of the previous page must not survive its `host.connect`.
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
+  self.cancel_pick()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -231,6 +238,9 @@ fn BrowserViews::open(
   self : BrowserViews,
   payload : @protocol.BrowserOpenPayload,
 ) -> @protocol.EmptyReply raise {
+  if self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   guard allowed_page_url(payload.url) else { raise BlockedURL(payload.url) }
   let window = self.attached_window()
   let view = match window.view(view_name(payload.id)) {
@@ -259,6 +269,9 @@ fn BrowserViews::back(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
+  if self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   self.view(payload.id).back()
   Acknowledged
 }
@@ -268,6 +281,9 @@ fn BrowserViews::forward(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
+  if self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   self.view(payload.id).forward()
   Acknowledged
 }
@@ -277,6 +293,9 @@ fn BrowserViews::reload(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
+  if self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   self.view(payload.id).reload(ignore_cache=true)
   Acknowledged
 }
@@ -348,6 +367,9 @@ fn BrowserViews::set_visible(
   self : BrowserViews,
   payload : @protocol.BrowserVisiblePayload,
 ) -> @protocol.EmptyReply raise {
+  if !payload.visible && self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   self.view(payload.id).set_visible(payload.visible)
   Acknowledged
 }
@@ -357,6 +379,9 @@ fn BrowserViews::close(
   self : BrowserViews,
   payload : @protocol.BrowserIdPayload,
 ) -> @protocol.EmptyReply raise {
+  if self.pick is Some(pick) && pick.id == payload.id {
+    self.cancel_pick()
+  }
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }
@@ -389,6 +414,17 @@ fn BrowserViews::focused_browser(
 /// the same create-if-missing handler as `browser.open`.
 fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
   [
+    WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
+      views.pick_element(payload)
+    }),
+    WindowEndpoint(@commands.browser_cancel_pick, (_, payload) => {
+      if views.pick is Some(pick) &&
+        pick.id == payload.id &&
+        pick.request == payload.request {
+        views.cancel_pick()
+      }
+      Acknowledged
+    }),
     WindowEndpoint(@commands.app_language_apply, (_, payload) => {
       if !(@async.platform is Windows) {
         views
@@ -441,7 +477,7 @@ fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
 }
 
 ///|
-test "native window ops are absent from the relay method catalog" {
+async test "native window ops are absent from the relay method catalog" {
   let state = @api.ApiState(engine="unused")
   let connection = @host.HostConnection()
   let catalog = @api.endpoints(state, connection)
@@ -463,7 +499,7 @@ test "native window ops are absent from the relay method catalog" {
 }
 
 ///|
-test "browser ops refuse to run without a window; close tolerates it" {
+async test "browser ops refuse to run without a window; close tolerates it" {
   // The ops refuse to run without a window, which is the earliest failure
   // a headless test can observe.
   fn raises(run : () -> @protocol.EmptyReply raise) -> Bool {

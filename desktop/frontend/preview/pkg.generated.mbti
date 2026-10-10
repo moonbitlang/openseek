@@ -12,6 +12,10 @@ import {
 // Values
 pub const AddressInputId : String = "browser-address-input"
 
+pub fn annotation_button(locale~ : @i18n.Locale, Annotation, @cmd.Emit[AnnotationMsg]) -> @html.Html
+
+pub fn annotation_view(locale~ : @i18n.Locale, Annotation, @cmd.Emit[AnnotationMsg]) -> @html.Html
+
 pub fn close_page(State, Int) -> State
 
 pub fn failure_view(PageState) -> @html.Html
@@ -39,6 +43,20 @@ pub fn update(Msg, State) -> State
 // Errors
 
 // Types and methods
+pub(all) enum Annotation {
+  Idle
+  Selecting
+  Failed(String)
+} derive(Eq)
+pub fn Annotation::equal(Self, Self) -> Bool
+pub fn Annotation::not_equal(Self, Self) -> Bool
+
+pub(all) enum AnnotationMsg {
+  Start
+  Cancel
+  Picked(request~ : String, Result[@protocol.BrowserPickReply, String])
+}
+
 type FileObservation derive(Eq)
 pub fn FileObservation::equal(Self, Self) -> Bool
 pub fn FileObservation::not_equal(Self, Self) -> Bool
@@ -91,6 +109,7 @@ pub(all) struct ToolbarActions {
   forward : @cmd.Cmd
   reload : @cmd.Cmd
   open_external : @cmd.Cmd
+  annotate : @html.Html
 }
 
 // Type aliases

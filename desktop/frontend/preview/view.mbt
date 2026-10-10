@@ -57,6 +57,7 @@ pub(all) struct ToolbarActions {
   forward : @cmd.Cmd
   reload : @cmd.Cmd
   open_external : @cmd.Cmd
+  annotate : @html.Html
 }
 
 ///|
@@ -120,6 +121,7 @@ pub fn toolbar_view(
       icon(icon_link_external),
     ),
   ]
+  children.push(actions.annotate)
   @html.div(class="browser-toolbar", children)
 }
 

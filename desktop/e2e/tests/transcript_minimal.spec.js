@@ -1295,21 +1295,19 @@ test('minimal Codex activities render recorded patches without classifying forei
 });
 
 
-for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
+// Keep both tool payload shapes. Git inventory variants cannot affect this
+// path-only action; each case asserts that no Git original is requested.
+// Append/copy payload variants are covered by edit_diff_wbtest.mbt.
+for (const scenario of ['partial', 'search-bound']) test(`minimal diff title opens the file without a position check: ${scenario}`, async ({ page, context }) => {
   const app = new MinimalTranscriptHarness(page);
   const source = Array.from({ length: 180 }, (_, i) => `fn line_${i + 1}() -> Int { ${i + 1} }`).join('\n');
   app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = source;
   // Later edits do not block opening the file. The requested fragment no
   // longer matches, and the first current hunk is far from the old request.
-  app.workingFiles['src/main.mbt'] = scenario === 'clean' ? source : source.replace('Int { 2 }', 'Int { 998 }').replace('Int { 140 }', 'Int { 1000 }');
-  if (scenario === 'clean') app.gitChanges = [];
-  if (scenario === 'recreated') app.gitChanges = [
-    { path: 'src/main.mbt', index_status: 'D', worktree_status: ' ', kind: 'deleted' },
-    { path: 'src/main.mbt', index_status: '?', worktree_status: '?', kind: 'untracked' },
-  ];
-  const old = scenario === 'append' ? '' : '140';
-  const modified = scenario === 'append' ? 'fn appended() -> Int { 999 }' : '999';
-  const start = scenario === 'append' ? 999999 : scenario === 'search-bound' ? 1 : 140;
+  app.workingFiles['src/main.mbt'] = source.replace('Int { 2 }', 'Int { 998 }').replace('Int { 140 }', 'Int { 1000 }');
+  const old = '140';
+  const modified = '999';
+  const start = scenario === 'search-bound' ? 1 : 140;
   app.rpcDelays.set('git.original_file', 150);
   app.rpcDelays.set('fs.read_file', 75);
   app.sessionEvents = [
@@ -1327,12 +1325,12 @@ for (const scenario of ['partial', 'search-bound', 'append', 'clean', 'recreated
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await block.hover();
   await block.getByRole('button', { name: 'Copy diff', exact: true }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(old ? `- ${old}\n+ ${modified}` : `+ ${modified}`);
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`- ${old}\n+ ${modified}`);
   const title = block.getByRole('button', { name: 'src/main.mbt', exact: true });
   await title.click();
   await expect(page.locator('#viewer-host')).toBeVisible();
   await expect(page.locator('#viewer-host')).toContainText('line_1()');
-  await expect(page.locator('#viewer-host')).toContainText(scenario === 'clean' ? 'Int { 2 }' : 'Int { 998 }');
+  await expect(page.locator('#viewer-host')).toContainText('Int { 998 }');
   await expect(page.locator('#diff-editor-host')).toBeHidden();
   await expect(page.locator('.semantic-review')).toBeHidden();
   await title.click();

@@ -21,35 +21,17 @@ test('browser diagnostics do not replace the application', async ({ page }) => {
   expect(warnings).toContain('ResizeObserver loop completed with undelivered notifications.');
 });
 
-for (const [kind, expected] of [
-  ['string', 'rejected <tag>'],
-  ['object', '{\n  "message": "rejected object"\n}'],
-  ['circular', '[object Object]'],
-  ['undefined', 'Unknown JavaScript error'],
-  ['empty', 'Unknown JavaScript error'],
-  ['error-without-stack', 'TypeError: missing stack'],
-]) {
-  test(`unhandled rejection formats ${kind}`, async ({ page }) => {
-    await page.evaluate(kind => {
-      let reason;
-      if (kind === 'string') reason = 'rejected <tag>';
-      if (kind === 'object') reason = { message: 'rejected object' };
-      if (kind === 'circular') {
-        reason = {};
-        reason.self = reason;
-      }
-      if (kind === 'empty') reason = '';
-      if (kind === 'error-without-stack') {
-        reason = new TypeError('missing stack');
-        reason.stack = '';
-      }
-      window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', {
-        promise: Promise.resolve(), reason,
-      }));
-    }, kind);
-    await expect(page.locator('#frontend-crash-detail')).toHaveText(expected);
-  });
-}
+// Formatting branches run in crash_page's JS unit test; keep the browser
+// event wiring and literal-text rendering covered here.
+test('unhandled rejection shows a crash page without interpreting HTML', async ({ page }) => {
+  await page.evaluate(() => window.dispatchEvent(new PromiseRejectionEvent('unhandledrejection', {
+    promise: Promise.resolve(), reason: 'rejected <tag>',
+  })));
+  await expect(page.getByRole('heading', { name: 'SeekMoon stopped unexpectedly' })).toBeVisible();
+  const detail = page.locator('#frontend-crash-detail');
+  await expect(detail).toHaveText('rejected <tag>');
+  await expect(detail.locator('tag')).toHaveCount(0);
+});
 
 test('fallback presentation remains readable without the application stylesheet', async ({ page }) => {
   await page.evaluate(() => {

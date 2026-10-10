@@ -56,9 +56,8 @@ html.is-resizing .sidebar-resize-handle {
   border-bottom: 1px solid var(--color-separator);
 }
 
-/* A two-segment switch between the Chats list and the Projects list. It
-   shares the shell toggle's row: centered on the native titlebar when that is
-   shorter than the app header. */
+/* A two-segment switch between the Chats list and the Projects list,
+   centered in the effective app header alongside the shell toggle. */
 .sidebar-mode {
   display: flex;
   gap: 2px;
@@ -66,7 +65,7 @@ html.is-resizing .sidebar-resize-handle {
   height: var(--sidebar-mode-size);
   margin-top: max(
     0px,
-    calc((var(--native-titlebar-height, var(--topbar-height)) - var(--sidebar-mode-size)) / 2)
+    calc((var(--topbar-height) - var(--sidebar-mode-size)) / 2)
   );
   padding: 2px;
   border-radius: var(--radius-md);

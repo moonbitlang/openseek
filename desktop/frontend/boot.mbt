@@ -585,6 +585,7 @@ fn main {
         open_link: url => emit(ExternalLinkClicked(url)),
         job_events: emit.map(msg => Jobs(msg)),
         open_child: child => emit(OpenSessionHere(child)),
+        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
         browser_input: emit.map(value => BrowserAddressEdited(value)),
         browser_submit: emit(BrowserNavigateSubmitted),
         browser_back: emit(BrowserBack),

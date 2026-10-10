@@ -27,7 +27,7 @@ export default defineConfig({
   use: {
     baseURL,
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
+    trace: 'on-first-retry',
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
