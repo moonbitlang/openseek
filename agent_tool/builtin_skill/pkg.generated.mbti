@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/builtin_skill"
+
+import {
+  "moonbitlang/openseek/agent_skill",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_tool/write_scope",
+}
+
+// Values
+pub fn definition(Array[@agent_skill.BuiltinSkill], workspace_root~ : String, read_only? : Bool, scratch_dir? : String, worker_sandbox? : @write_scope.WorkerSandbox, bg_runtime? : @bgjobs.BgJobRuntime, auto_background_after_ms? : Int, foreground_timeout_ms? : Int) -> @agent_tool.AgentToolDefinition
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

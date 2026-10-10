@@ -123,7 +123,7 @@ pub fn definition(
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
-  worker_sandbox? : WorkerSandbox,
+  worker_sandbox? : @write_scope.WorkerSandbox,
   auto_background_after_ms? : Int = AutoBackgroundAfterMs,
   foreground_timeout_ms? : Int = ForegroundTimeoutMs,
   build_timeout_ms? : Int = BuildTimeoutMs,
@@ -319,7 +319,7 @@ async fn execute(
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
-  worker_sandbox? : WorkerSandbox,
+  worker_sandbox? : @write_scope.WorkerSandbox,
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; a wasm target's
   // synchronous build phase is cancelled at the third.
@@ -728,7 +728,7 @@ async fn execute(
       injected[key] = value
     }
   }
-  let policy = wasm_policy_document(
+  let policy = @wasm_policy.wasm_policy_document(
     tmp_dir=snippet_tmp,
     extra_roots=[
       ..scratch_dir.map(l => [l]).unwrap_or([]),
@@ -768,54 +768,14 @@ async fn execute(
     program : String,
     command_argv : Array[String],
   ) -> @sandbox.SandboxedCommand? {
-    match worker_sandbox {
-      // Worker mode replaces the workspace source-write profile rather than
-      // adding to it: a worker is supposed to write source, just only its own,
-      // so the kernel denies its siblings' trees and the shared git dir instead
-      // of denying source writes as such.
-      Some(scope) =>
-        @sandbox.SandboxedCommand::create_worker_if_available(
-          Exec(program, command_argv),
-          deny_roots=scope.deny_roots,
-          worker_root=scope.worker_root,
-          worker_admin_dir=scope.worker_admin_dir,
-        )
-      // The read-only roles (explore/review/audit) hold no editing tool, so
-      // "may not write source" is the guarantee that defines them and it stays
-      // kernel-enforced. The profile suits them for a second reason — it is
-      // `(allow default)` minus source, so `moon check` can still write its
-      // target dir inside the workspace, which a boundary profile denying the
-      // workspace would take away.
-      //
-      // Read-only is its own parameter rather than being read off
-      // `scratch_dir`: a caller that forgets the lab should lose the lab, not
-      // the sandbox.
-      None if read_only =>
-        @sandbox.SandboxedCommand::create_if_available(
-          workspace_root,
-          Exec(program, command_argv),
-          // Per-call storage outlives both compilation and any background run.
-          // Never put the repository-sized SBPL profile in the spawn argv.
-          profile_path="\{build_dir}/source-write.sb",
-          writable_subtree~,
-        )
-      // The main agent runs with no kernel profile at all. Forbidding source
-      // writes here would break the very commands it needs — `moon fmt`,
-      // `moon info`, `git checkout` all rewrite source by definition — and the
-      // other shape, denying writes globally and re-allowing an enumerated
-      // set, was tried and withdrawn: every root it missed (`/dev` for git's
-      // `/dev/null`, `/tmp` for `@fs.tmpdir`, the toolchain root, gh's cache)
-      // surfaced as a bare EPERM in a live turn rather than in a test, and the
-      // list only ever protected macOS.
-      //
-      // What is left bounding a child is the allowlist, which works
-      // everywhere: it admits no shell, no interpreter and no ad-hoc rewriter,
-      // and it refuses the git options that would point a command at another
-      // repository. That is a bound on which commands exist, not on where they
-      // may write — the file tools are not path-confined for this role either,
-      // so a profile here would have been the only such rule in the tool set.
-      None => None
-    }
+    @sandbox.confine(
+      Exec(program, command_argv),
+      workspace_root~,
+      read_only~,
+      worker_sandbox?,
+      profile_path="\{build_dir}/source-write.sb",
+      writable_subtree~,
+    )
   }
 
   // The wasm target runs in TWO phases. The BUILD runs first, synchronously,
@@ -1905,7 +1865,7 @@ fn description(
     $|
     $|These, and nothing else:
     $|
-    $|\{spawn_list_markdown()}
+    $|\{@wasm_policy.spawn_list_markdown()}
   let base_tail =
     #|## Isolation and limits
     #|

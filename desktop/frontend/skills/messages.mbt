@@ -18,6 +18,7 @@ priv enum UiMessage {
   Loading
   InstallSkill
   HandWrittenSkill
+  BuiltinSkill
   Library
   Description
   Search
@@ -110,6 +111,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, InstallSkill) => "安装技能"
     (TraditionalChinese, InstallSkill) => "安裝技能"
     (Japanese, InstallSkill) => "スキルをインストール"
+    (English, BuiltinSkill) => "Built in"
+    (Spanish, BuiltinSkill) => "Integrada"
+    (SimplifiedChinese, BuiltinSkill) => "内置"
+    (TraditionalChinese, BuiltinSkill) => "內建"
+    (Japanese, BuiltinSkill) => "組み込み"
     (English, HandWrittenSkill) => "hand-written skill"
     (Spanish, HandWrittenSkill) => "habilidad escrita a mano"
     (SimplifiedChinese, HandWrittenSkill) => "手动编写的技能"

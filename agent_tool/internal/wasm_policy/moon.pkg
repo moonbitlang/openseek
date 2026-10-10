@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_subrun/host",
+} for "wbtest"
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

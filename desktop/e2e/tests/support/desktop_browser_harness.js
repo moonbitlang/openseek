@@ -51,7 +51,7 @@ export class DesktopBrowserHarness {
     };
     this.installedSkills = [
       {
-        id: 'moonbit',
+        skill: { kind: 'user', id: 'moonbit' },
         name: 'MoonBit',
         description: 'Authoritative MoonBit guidance',
         source: '',
@@ -614,19 +614,19 @@ export class DesktopBrowserHarness {
         };
       case 'skills.install': {
         const installed = {
-          id: 'rabbita',
+          skill: { kind: 'user', id: 'rabbita' },
           name: 'Rabbita',
           description: 'Elm-style browser UI',
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
         };
-        if (!this.installedSkills.some(skill => skill.id === installed.id)) {
+        if (!this.installedSkills.some(skill => skill.skill.kind === installed.skill.kind && skill.skill.id === installed.skill.id)) {
           this.installedSkills.push(installed);
         }
         return { installed };
       }
       case 'skills.uninstall':
         this.installedSkills = this.installedSkills.filter(
-          skill => skill.id !== request.params?.id,
+          skill => skill.skill.kind !== request.params.skill.kind || skill.skill.id !== request.params.skill.id,
         );
         return { removed: true };
       case 'agent.start':

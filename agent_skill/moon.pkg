@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek/resources",
+  "moonbitlang/core/json",
   "moonbitlang/async/fs",
 }
 

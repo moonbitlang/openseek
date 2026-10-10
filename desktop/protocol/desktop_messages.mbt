@@ -326,8 +326,8 @@ pub(all) struct InstallSkillPayload {
 
 ///|
 pub(all) struct UninstallSkillPayload {
-  id : String
-} derive(Debug, Eq, FromJson, ToJson)
+  skill : SkillRef
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct OpenPathPayload {

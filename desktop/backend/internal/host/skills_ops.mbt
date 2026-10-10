@@ -46,7 +46,18 @@ async fn skills_content_op(
 async fn installed_skill_content_op(
   payload : UninstallSkillPayload,
 ) -> @protocol.SkillContentReply {
-  let content = @skillmarket.read_skill_content(payload.id) catch {
+  let content = try {
+    match payload.skill {
+      Builtin(id) => {
+        let skills = builtin_skills()
+        guard skills.iter().find_first(skill => skill.id == id) is Some(skill) else {
+          fail("unknown builtin skill: \{id}")
+        }
+        @fs.read_file(skill.instructions).text()
+      }
+      User(id) => @skillmarket.read_skill_content(id)
+    }
+  } catch {
     @skillmarket.SkillMarketError(message) => return SkillContentError(message)
     error => return SkillContentError("\{error}")
   }
@@ -68,7 +79,7 @@ async fn install_skill_op(
     error => return SkillInstallError("\{error}")
   }
   SkillInstalled({
-    id: installed.id,
+    skill: User(installed.id),
     name: installed.name,
     description: installed.description,
     source: installed.source,
@@ -77,6 +88,9 @@ async fn install_skill_op(
 
 ///|
 async fn installed_skills_op() -> InstalledSkillsReply {
+  let builtin = builtin_skills() catch {
+    error => return InstalledSkillsError("\{error}")
+  }
   let skills = @skillmarket.installed_skills() catch {
     @skillmarket.SkillMarketError(message) =>
       return InstalledSkillsError(message)
@@ -84,14 +98,24 @@ async fn installed_skills_op() -> InstalledSkillsReply {
   }
   InstalledSkills(
     [
-      for skill in skills => {
-        {
-          id: skill.id,
-          name: skill.name,
-          description: skill.description,
-          source: skill.source,
-        }
-      }
+      ..builtin.map(skill => {
+        (
+          {
+            skill: Builtin(skill.id),
+            name: skill.prompt_name(),
+            description: skill.description,
+            source: "OpenSeek builtin · v\{skill.version}",
+          } : @protocol.InstalledSkill)
+      }),
+      ..skills.map(skill => {
+        (
+          {
+            skill: User(skill.id),
+            name: skill.name,
+            description: skill.description,
+            source: skill.source,
+          } : @protocol.InstalledSkill)
+      }),
     ],
   )
 }
@@ -101,10 +125,27 @@ async fn uninstall_skill_op(
   payload : UninstallSkillPayload,
   on_committed : () -> Unit,
 ) -> UninstallSkillReply {
-  @skillmarket.uninstall_skill(payload.id, on_committed~) catch {
+  try {
+    match payload.skill {
+      Builtin(_) =>
+        return SkillUninstallError(
+          "Builtin skills are updated with OpenSeek and cannot be uninstalled",
+        )
+      User(id) => @skillmarket.uninstall_skill(id, on_committed~)
+    }
+  } catch {
     @skillmarket.SkillMarketError(message) =>
       return SkillUninstallError(message)
     error => return SkillUninstallError("\{error}")
   }
   SkillUninstalled
+}
+
+///|
+/// Read the same installation resources as the packaged engine.
+async fn builtin_skills() -> Array[@agent_skill.BuiltinSkill] {
+  let root : @pathx.Path = @proton.resource_dir()
+  @agent_skill.builtin_skills(
+    resources_dir=root.join("seekmoon/share").to_string(),
+  )
 }

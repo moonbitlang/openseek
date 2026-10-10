@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_tool/write_scope",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/x/path",

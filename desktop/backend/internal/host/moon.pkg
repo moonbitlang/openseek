@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/agent_skill",
   "openseek_desktop/commands",
   "openseek_desktop/backend/internal/engine",
   "openseek_desktop/backend/internal/development",

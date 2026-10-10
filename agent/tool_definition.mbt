@@ -206,9 +206,21 @@ pub async fn[X] build_tools(
   })
   let program_trace : Ref[Json?] = Ref(None)
   let program_output : Ref[@bgjobs.ImageOutput?] = Ref(None)
+  let builtin_skills = @agent_skill.builtin_skills()
   Tools(
     [
       ..file_tools,
+      ..if builtin_skills.is_empty() {
+        []
+      } else {
+        [
+          @builtin_skill.definition(
+            builtin_skills,
+            workspace_root~,
+            bg_runtime~,
+          ),
+        ]
+      },
       @plan.definition(),
       @goal.definition(),
       // The escalation argument exists for this registry only when the runtime

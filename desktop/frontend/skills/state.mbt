@@ -24,7 +24,7 @@ struct State {
   busy : Array[PendingSkillAction]
   notices : Array[Notice]
   preview : Preview
-  preview_cache : Map[String, String]
+  preview_cache : Map[PreviewCacheKey, String]
   list_scroll_top : Double
 } derive(Eq)
 
@@ -47,7 +47,7 @@ fn Notice::belongs_to(self : Notice, source : String) -> Bool {
 /// replaces the action or removes the installed entry first.
 pub(all) enum PendingSkillAction {
   Installing(source~ : String)
-  Uninstalling(source~ : String, id~ : String)
+  Uninstalling(source~ : String, skill~ : @protocol.SkillRef)
 } derive(Eq)
 
 ///|
@@ -294,7 +294,7 @@ pub fn State::handle(
         (@cmd.none, self, None)
       } else {
         let busy = self.busy.copy()
-        busy.push(Uninstalling(source=item.source, id=item.id))
+        busy.push(Uninstalling(source=item.source, skill=item.skill))
         (
           uninstall(emit, input.channel, item),
           {
@@ -342,10 +342,16 @@ fn preview_request_id(preview : Preview) -> Int {
 }
 
 ///|
-fn preview_cache_key(target : PreviewTarget) -> String {
+priv enum PreviewCacheKey {
+  MarketPreview(String)
+  InstalledPreview(@protocol.SkillRef)
+} derive(Eq, Hash)
+
+///|
+fn preview_cache_key(target : PreviewTarget) -> PreviewCacheKey {
   match target {
-    Market(item) => "market:\{source_label(item)}"
-    Installed(item) => "installed:\{item.id}"
+    Market(item) => MarketPreview(source_label(item))
+    Installed(item) => InstalledPreview(item.skill)
   }
 }
 

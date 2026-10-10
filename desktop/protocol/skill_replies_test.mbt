@@ -47,7 +47,7 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
 ///|
 test "InstallSkillReply owns its success and error wire shapes" {
   let success : @protocol.InstallSkillReply = SkillInstalled({
-    id: "test",
+    skill: User("test"),
     name: "test",
     description: "test",
     source: "acme/test@1.0.0",

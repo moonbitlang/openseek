@@ -33,12 +33,13 @@ pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) struct InstalledItem {
-  id : String
+  skill : @protocol.SkillRef
   name : String
   description : String
   source : String
 } derive(Eq)
 pub fn InstalledItem::equal(Self, Self) -> Bool
+pub fn InstalledItem::is_builtin(Self) -> Bool
 pub fn InstalledItem::not_equal(Self, Self) -> Bool
 
 pub(all) struct MarketItem {
@@ -77,7 +78,7 @@ pub fn Outcome::not_equal(Self, Self) -> Bool
 
 pub(all) enum PendingSkillAction {
   Installing(source~ : String)
-  Uninstalling(source~ : String, id~ : String)
+  Uninstalling(source~ : String, skill~ : @protocol.SkillRef)
 } derive(Eq)
 pub fn PendingSkillAction::equal(Self, Self) -> Bool
 pub fn PendingSkillAction::not_equal(Self, Self) -> Bool

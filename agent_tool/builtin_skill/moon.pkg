@@ -1,0 +1,18 @@
+import {
+  "moonbitlang/core/json",
+  "moonbitlang/openseek/agent_tool/internal/uuid",
+  "moonbitlang/openseek/agent_tool/write_scope",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_skill",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_tool/internal/sandbox",
+  "moonbitlang/openseek/agent_tool/internal/wasm_policy",
+  "moonbitlang/openseek/internal/workspace_path",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

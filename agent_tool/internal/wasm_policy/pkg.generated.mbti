@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/internal/wasm_policy"
+
+// Values
+pub fn spawn_list_markdown() -> String
+
+pub let spawnable_commands : Array[(String, Array[String])]
+
+pub fn wasm_policy_document(tmp_dir~ : String, extra_roots~ : Array[String], inject~ : Map[String, String], spawnable~ : (String, Array[String])?) -> Json
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
