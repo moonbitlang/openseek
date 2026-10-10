@@ -238,11 +238,7 @@ pub fn component(
         },
         on_click=actions.open_schedules,
         [
-          @html.span(
-            class="sidebar-icon",
-            attrs=@html.Attrs::build().aria_hidden("true"),
-            "◷",
-          ),
+          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_clockface)),
           @html.span(
             class="sidebar-label",
             @messages.text(input.locale, Scheduled),
