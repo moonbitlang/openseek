@@ -187,6 +187,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
   match keyboard.key() {
     "+" | "=" => return Some(FontSizeAdjusted(1))
     "-" if !keyboard.shift_key() => return Some(FontSizeAdjusted(-1))
+    "." if !keyboard.repeat() => return Some(OpenSetup)
     _ => ()
   }
   guard !keyboard.repeat() else { return None }
@@ -195,7 +196,6 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
     ("KeyT", false) => Some(QuickOpenOpen(@quick_open.Symbols))
     ("KeyN", false) => Some(NewChat)
     ("KeyO", false) => Some(AddProjectRequested)
-    ("Period", false) => Some(OpenSetup)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(ToggleRightPanel)
     ("KeyJ", false) if is_apple => Some(Terminal(@terminal.ToggleTerminal))
