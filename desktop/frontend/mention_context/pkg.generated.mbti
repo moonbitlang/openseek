@@ -67,6 +67,7 @@ pub fn MentionMessage::display_text(Self) -> String
 pub fn MentionMessage::to_repr(Self) -> @debug.Repr
 
 pub(all) enum MentionRef {
+  BrowserAnnotation(element~ : @protocol.BrowserElement)
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)

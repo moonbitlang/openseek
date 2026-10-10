@@ -109,6 +109,7 @@ pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(locale? : @i18n.Locale, Self) -> Array[@transcript.TranscriptItem]
+pub fn State::with_browser_annotation(Self, @composer.Mention) -> Self
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn State::with_git_details_closed(Self) -> Self
 pub fn State::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self

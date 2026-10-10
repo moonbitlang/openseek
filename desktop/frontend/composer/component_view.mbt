@@ -49,6 +49,8 @@ fn Entry::mention_chips(
         label: @mention_context.label(mention.ref_),
         title: if mention.ref_ is @mention_context.Annotation(comment~, ..) {
           comment
+        } else if mention.ref_ is @mention_context.BrowserAnnotation(element~) {
+          element.url + "\n" + element.selector.unwrap_or(element.tag)
         } else if mention.ref_ is @mention_context.SemanticSearch(reference) {
           "Open semantic search with \{reference.matches.length()} matches"
         } else if target is Some(target) {

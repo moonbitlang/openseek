@@ -2034,6 +2034,7 @@ fn update(
       })
     }),
   )
+  let (annotation_cmd, model) = reconcile_browser_annotation(dispatch, model)
   let (model, browser_cmd) = sync_browser_view(dispatch, model)
   (
     @cmd.batch([
@@ -2048,6 +2049,7 @@ fn update(
       github_cmd,
       browser_cmd,
       preview_cmd,
+      annotation_cmd,
       if msg is Dock(TabClosed(_)) {
         focus_dock_after_render()
       } else {
@@ -5671,8 +5673,24 @@ fn update_msg(
           }
         _ => @cmd.none
       }
-      (theme_cmd, { ..model, preview: @preview.update(msg, model.preview), })
+      let navigating = match msg {
+        @preview.Msg::Navigated(id~, ..) => Some(id)
+        @preview.Msg::LoadingChanged(id~, loading=true) => Some(id)
+        _ => None
+      }
+      let (cancel_cmd, model) = if model.browser_annotation is Some(session) &&
+        session.state is Selecting &&
+        navigating == Some(session.id) {
+        update_browser_annotation(dispatch, Cancel, model)
+      } else {
+        (@cmd.none, model)
+      }
+      (
+        @cmd.batch([theme_cmd, cancel_cmd]),
+        { ..model, preview: @preview.update(msg, model.preview), },
+      )
     }
+    BrowserAnnotation(msg) => update_browser_annotation(dispatch, msg, model)
     BrowserTabRequested => {
       let model = model.begin_editor_navigation()
       let (preview, id) = @preview.open_page(model.preview)
