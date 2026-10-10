@@ -41,11 +41,17 @@ for (const minimal of [false, true]) for (const gesture of ['drag', 'double clic
       await page.keyboard.press('ControlOrMeta+c');
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
     } else if (action === 'toolbar copy') {
+      const toolbarBox = await toolbar.boundingBox();
       await toolbar.getByRole('button', { name: 'Copy', exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
       expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
       await expect(toolbar).toHaveCount(0);
-      await expect(page.getByRole('status', { name: 'Copied', exact: true })).toBeVisible();
+      const copied = page.getByRole('status', { name: 'Copied', exact: true });
+      await expect(copied).toBeVisible();
+      const copiedBox = await copied.boundingBox();
+      const iconBox = await copied.locator('svg').boundingBox();
+      expect(copiedBox.height).toBeCloseTo(toolbarBox.height, 0);
+      expect(iconBox.y + iconBox.height / 2).toBeCloseTo(copiedBox.y + copiedBox.height / 2, 0);
       await expect(page.locator('[data-selection-actions]')).toHaveCount(0);
       expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
       await paragraph.dblclick({ position: { x: 8, y: 8 } });

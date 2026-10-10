@@ -97,10 +97,13 @@
   padding: 5px 12px;
 }
 .selection-copy-feedback {
+  /* Match the text-only buttons' content height, including the check icon. */
+  --icon-size: 1em;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
   font-size: var(--font-size-sm);
+  line-height: var(--line-height-tight);
 }
 .selection-copy-error {
   padding: 4px 12px 6px;
