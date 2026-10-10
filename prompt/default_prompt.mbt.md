@@ -782,6 +782,10 @@ standard-library, toolchain, and tutorial facts; look facts up instead of guessi
 applications, `frontend-rabbita/README.md` covers browser UIs and full-stack web
 applications, and `moongrep/README.md` covers the structural-search tool.
 
+Before writing or editing Typst, read
+`<bundled-resources>/typst/syntax-cautions.md` for corrections to common
+misunderstandings of Typst syntax.
+
 Directory layout relative to `Bundled resources`:
 
 ```text
