@@ -121,6 +121,8 @@ async fn run_case(
   let mut active_snapshot_seen = false
   let snapshot_ready = @cond_var.Cond()
   let mut requests = 0
+  let mut shutdown_ready = false
+  let mut prediction_finished = false
   let events : Array[Json] = []
   // `run` prints text for a person, not the JSONL event stream `serve` writes:
   // the answer on stdout, its progress on stderr.
@@ -357,15 +359,8 @@ async fn run_case(
             "request_id": "active-snapshot",
           })
         }
-        if has_event(event, "agent_finished") {
-          if controls {
-            send(writer, {
-              "command": "jobs_snapshot",
-              "request_id": "idle-snapshot",
-            })
-          } else {
-            writer.close()
-          }
+        if !controls && has_event(event, "agent_finished") {
+          shutdown_ready = true
         } else if controls && has_event(event, "jobs_snapshot") {
           let jobs = array_field(event, "jobs")
           assert_eq(jobs.length(), 1)
@@ -389,7 +384,7 @@ async fn run_case(
                 "kind": "stopped",
                 "reason": "user",
               })
-              writer.close()
+              shutdown_ready = true
             }
             _ => fail("Unexpected snapshot: \{event.stringify()}")
           }
@@ -421,6 +416,22 @@ async fn run_case(
             }
             _ => fail("Unexpected stop result: \{event.stringify()}")
           }
+        }
+        if has_event(event, "prediction_result") {
+          assert_true(field(event, "outcome") is { "kind": "completed", .. })
+          prediction_finished = true
+          if controls {
+            // Stopping the job changes context and also cancels prediction.
+            send(writer, {
+              "command": "jobs_snapshot",
+              "request_id": "idle-snapshot",
+            })
+          }
+        }
+        // EOF cancels prediction, potentially halfway through uploading its
+        // request. Let the strict mock server finish before shutting serve down.
+        if shutdown_ready && prediction_finished {
+          writer.close()
         }
       }
       let code = process.wait()
