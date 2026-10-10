@@ -18619,10 +18619,10 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   )
   let next = next.test_resolve_editor("/work/project/src/main.mbt")
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
-  assert_false(next.file_panel.tree_open)
-  assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerChanges)
-  // The eager re-root retains 7. The jump keeps the explorer hidden while the
-  // file is active, so Changes waits until the pane is shown before refreshing.
+  assert_true(next.file_panel.tree_open)
+  assert_true(next.file_panel.explorer_mode is @fileeditor.ExplorerFiles)
+  // The new conversation gets its default Files explorer, rather than the
+  // previous owner's hidden Changes panel. Request generations still survive.
   assert_true(next.file_panel.changes_generation == 7)
   // The fresh watch spends the next page-lifetime identity; resetting the
   // eager panel to zero would let an older generation 1 push collide here.

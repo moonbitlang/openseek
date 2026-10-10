@@ -121,6 +121,10 @@ pub(all) struct ChangedFileReview {
 pub fn ChangedFileReview::equal(Self, Self) -> Bool
 pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
 
+type ConversationUiState derive(Eq)
+pub fn ConversationUiState::equal(Self, Self) -> Bool
+pub fn ConversationUiState::not_equal(Self, Self) -> Bool
+
 pub(all) struct Ctx {
   model : String
   thinking : @protocol.OpenSeekThinking?
@@ -450,6 +454,8 @@ pub(all) struct SemanticReviewLiveDocument {
 } derive(Eq, @debug.Debug)
 
 pub(all) struct State {
+  remembered_ui : Map[@interop.ConversationKey, ConversationUiState]
+  pending_directory_restores : Array[@pathx.Relative]
   owner : @interop.ConversationKey?
   placement : ReconciledPlacement
   tree_open : Bool
