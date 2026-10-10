@@ -38,10 +38,10 @@ main {
 
 .sidebar-toggle {
   position: fixed;
-  /* Native controls can sit above the center of the taller app header. */
+  /* Center in the effective app header alongside the sidebar mode switch. */
   inset-block-start: max(
     0px,
-    calc((var(--native-titlebar-height, var(--topbar-height)) - var(--sidebar-toggle-size)) / 2)
+    calc((var(--topbar-height) - var(--sidebar-toggle-size)) / 2)
   );
   inset-inline-start: var(--sidebar-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
