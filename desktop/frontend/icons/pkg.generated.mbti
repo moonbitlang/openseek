@@ -30,6 +30,8 @@ pub fn icon_chevron_down() -> @html.Html
 
 pub fn icon_circle() -> @html.Html
 
+pub fn icon_clockface() -> @html.Html
+
 pub fn icon_close() -> @html.Html
 
 pub fn icon_close_all() -> @html.Html
