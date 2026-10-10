@@ -65,26 +65,27 @@ test('new-tab popup shares select surface and supports keyboard dismissal', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const viewport of [{ width: 900, height: 600 }, { width: 420, height: 320 }]) {
-  test('new-tab popup fits viewport ' + viewport.width, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    // Open the fixture before narrowing; the phone layout hides navigation.
-    await page.setViewportSize(viewport);
-    await page.getByTitle('New tab', { exact: true }).click();
-    const menu = page.getByRole('menu', { name: 'New tab' });
-    await expect(menu).toBeVisible();
-    const bounds = await menu.boundingBox();
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.y).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
-    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
-    expect(await menu.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-    await menu.getByRole('menuitem', { name: 'Jobs', exact: true }).click();
-    await expect(page.locator('.jobs-panel')).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+// Ordinary and expanded panels are covered by dock_tab_actions.spec.js.
+// Keep the short viewport here to exercise vertical overflow.
+test('new-tab popup fits a short narrow viewport', async ({ page }) => {
+  const viewport = { width: 420, height: 320 };
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await app.openReview();
+  // Open the fixture before narrowing; the phone layout hides navigation.
+  await page.setViewportSize(viewport);
+  await page.getByTitle('New tab', { exact: true }).click();
+  const menu = page.getByRole('menu', { name: 'New tab' });
+  await expect(menu).toBeVisible();
+  const bounds = await menu.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+  expect(await menu.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await menu.getByRole('menuitem', { name: 'Jobs', exact: true }).click();
+  await expect(page.locator('.jobs-panel')).toBeVisible();
+  expect(app.pageErrors).toEqual([]);
+});
