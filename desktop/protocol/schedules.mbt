@@ -6,6 +6,8 @@
 pub(all) enum ScheduleTiming {
   Once(Int64)
   Every(Int)
+  Daily(hour~ : Int, minute~ : Int)
+  Weekly(weekday~ : Int, hour~ : Int, minute~ : Int)
 } derive(Eq, Debug)
 
 ///|
@@ -13,6 +15,9 @@ pub impl ToJson for ScheduleTiming with fn to_json(self) {
   match self {
     Once(at) => { "kind": "once", "at": at.to_double() }
     Every(minutes) => { "kind": "every", "minutes": minutes }
+    Daily(hour~, minute~) => { "kind": "daily", "hour": hour, "minute": minute }
+    Weekly(weekday~, hour~, minute~) =>
+      { "kind": "weekly", "weekday": weekday, "hour": hour, "minute": minute }
   }
 }
 
@@ -30,6 +35,34 @@ pub impl FromJson for ScheduleTiming with fn from_json(json, path) {
         raise JsonDecodeError((path, "interval must be 1–525600 minutes"))
       }
       Every(minutes.to_int())
+    }
+    "daily" | "weekly" as kind => {
+      let hour = jobs_uint(obj.required_json("hour"), path.add_key("hour"))
+      let minute = jobs_uint(
+        obj.required_json("minute"),
+        path.add_key("minute"),
+      )
+      guard hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 else {
+        raise JsonDecodeError((path, "invalid schedule time"))
+      }
+      if kind == "daily" {
+        Daily(hour=hour.to_int(), minute=minute.to_int())
+      } else {
+        let weekday = jobs_uint(
+          obj.required_json("weekday"),
+          path.add_key("weekday"),
+        )
+        guard weekday >= 1 && weekday <= 7 else {
+          raise JsonDecodeError(
+            (path, "weekday must be 1 (Monday) to 7 (Sunday)"),
+          )
+        }
+        Weekly(
+          weekday=weekday.to_int(),
+          hour=hour.to_int(),
+          minute=minute.to_int(),
+        )
+      }
     }
     _ => raise JsonDecodeError((path, "unknown schedule timing"))
   }

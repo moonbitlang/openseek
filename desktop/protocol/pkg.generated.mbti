@@ -2482,6 +2482,8 @@ pub impl @json.FromJson for ScheduleSpec
 pub(all) enum ScheduleTiming {
   Once(Int64)
   Every(Int)
+  Daily(hour~ : Int, minute~ : Int)
+  Weekly(weekday~ : Int, hour~ : Int, minute~ : Int)
 } derive(Eq, @debug.Debug)
 pub fn ScheduleTiming::equal(Self, Self) -> Bool
 pub fn ScheduleTiming::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
