@@ -92,6 +92,7 @@ priv struct Entry {
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
   history_back : Int?
+  prediction : PredictionState
 } derive(Eq)
 
 ///|
@@ -119,6 +120,7 @@ fn Entry::Entry(input : Input) -> Entry {
     image_error: None,
     pending_submission: None,
     history_back: None,
+    prediction: Unrequested,
   }
 }
 
@@ -288,6 +290,8 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 priv struct Model {
   entries : Array[Entry]
   applied_retirements : Int
+  prediction_client : String?
+  prediction_serial : Int
   // The clock the running row's elapsed span is measured against, advanced by
   // `ClockTicked` and only while a turn is open. Component state rather than
   // the application's: a value that changes every second belongs to the one
@@ -301,6 +305,8 @@ fn Model::Model(input : Input) -> Model {
   {
     entries: [Entry(input)],
     applied_retirements: input.retirements.length(),
+    prediction_client: None,
+    prediction_serial: 0,
     clock_ms: @interop.now_ms(),
   }
 }
@@ -352,6 +358,15 @@ fn Model::with_entry(self : Model, entry : Entry) -> Model {
 
 ///|
 priv enum Msg {
+  PredictionClientReady(String)
+  PredictionPump
+  PredictionSettled(
+    Identity,
+    String,
+    Int,
+    Result[@protocol.PredictionReply, String]
+  )
+  PredictionAccepted
   TextChanged(String)
   CompletionMove(Int)
   CompletionAccept
@@ -613,7 +628,7 @@ fn Model::commit_entry_change(
 }
 
 ///|
-fn Model::update(
+fn Model::update_inner(
   self : Model,
   input : Input,
   msg : Msg,
@@ -624,6 +639,33 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
+    PredictionClientReady(id) =>
+      ({ ..self, prediction_client: Some(id), }, @cmd.none)
+    PredictionPump => (self, @cmd.none)
+    PredictionSettled(identity, id, sequence, result) => {
+      guard entry.identity() == identity &&
+        entry.prediction is Predicting(current_id, current_sequence) &&
+        id == current_id &&
+        sequence == current_sequence &&
+        entry.prediction_eligible(input) == Some(sequence) else {
+        return (self, @cmd.none)
+      }
+      let text = match result {
+        Ok({ outcome: Completed(text~, ..), }) => text
+        _ => None
+      }
+      (
+        self.with_entry({ ..entry, prediction: Predicted(sequence, text), }),
+        @cmd.none,
+      )
+    }
+    PredictionAccepted => {
+      guard entry.prediction_text(input) is Some(text) else {
+        return (self, @cmd.none)
+      }
+      let (next, command) = entry.edited(input, text, action_emit)
+      self.commit_entry_change(entry, next, command, action_emit)
+    }
     ImageRead(identity, event) => {
       // A read belongs to the draft that selected it. Navigation may retain
       // that draft in the cache, but cannot redirect its bytes into another.
@@ -1045,6 +1087,9 @@ fn Model::subscriptions(
   // model equal to itself, so it costs a comparison and no render.
   @sub.batch([
     @sub.every(1000, emit(ClockTicked)),
+    // Detect root-only completion/navigation changes without waiting a full
+    // second. Idle pumps keep the model equal and never repeat a request.
+    @sub.every(150, emit(PredictionPump)),
     self.editing_subscriptions(input, emit),
     changes_dismiss_subscription(self.active(input), emit),
   ])
@@ -1119,7 +1164,12 @@ pub fn component(
 ) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply]) {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
-    init=(_, input) => (Model(input), @cmd.none),
+    init=(emit, input) => {
+      (
+        Model(input),
+        @prediction.initialize(emit.map(id => PredictionClientReady(id))),
+      )
+    },
     update=(state, input, msg, emit) => {
       state.update(input, msg, emit, action_emit)
     },

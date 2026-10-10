@@ -732,6 +732,7 @@ fn apply_session_snapshot(
   goal_markers : Array[(Int, @transcript.GoalMarker)],
   generation : Int,
   activate_on_success : Bool,
+  prediction : @wire.PredictionRecord?,
 ) -> (@cmd.Cmd, Model) {
   guard model.find_conversation(channel, session) is Some(conv) &&
     conv.sync is Reloading(generation=current, reload_after_current~, ..) &&
@@ -755,6 +756,7 @@ fn apply_session_snapshot(
     goal~,
     goal_markers~,
   )
+  let conv = { ..conv, prediction, }
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session, }
@@ -7693,11 +7695,12 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
+      prediction~,
       generation~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, true,
+        generation, true, prediction,
       )
     SessionRefreshed(
       session~,
@@ -7705,11 +7708,12 @@ fn update_device_msg(
       watermark~,
       goal~,
       goal_markers~,
+      prediction~,
       generation~
     ) =>
       apply_session_snapshot(
         dispatch, channel, model, session, items, watermark, goal, goal_markers,
-        generation, false,
+        generation, false, prediction,
       )
     SessionLoadFailed(session~, message~, generation~) =>
       retry_session_snapshot(
@@ -9495,6 +9499,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=1,
@@ -9507,6 +9512,7 @@ fn second_run_started_before_first_response() -> (Model, String)? {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=1,
@@ -9556,6 +9562,7 @@ fn second_run_started_before_first_steer_receipt() -> Model? {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=1,
@@ -10205,6 +10212,7 @@ test "finished run reloads the named durable session for an old host" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -10263,6 +10271,7 @@ test "Finished queues one follow-up behind an older in-flight snapshot" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=0,
@@ -11467,6 +11476,7 @@ test "open session tracks the latest load and ignores stale replies" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-a",
       items=a_items,
       watermark=0,
@@ -11491,6 +11501,7 @@ test "open session tracks the latest load and ignores stale replies" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-b",
       items=b_items,
       watermark=0,
@@ -11540,6 +11551,7 @@ test "a restored session keeps the placement its listing named" {
       watermark=0,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation=1,
     ),
     loading,
@@ -11617,6 +11629,7 @@ test "same-id session loads are fenced by channel owner" {
       SessionLoaded(
         goal=None,
         goal_markers=[],
+        prediction=None,
         session="shared",
         items=[
           {
@@ -11691,6 +11704,7 @@ test "reselecting a synced active session reloads idle external writes" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -11775,6 +11789,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-pruned",
       items=[
         {
@@ -11804,6 +11819,7 @@ test "pruning and reopening cannot reuse a transcript request token" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-pruned",
       items=[
         {
@@ -11859,6 +11875,7 @@ test "archive removal and reopening cannot reuse a transcript request token" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-archived",
       items=[
         {
@@ -12180,6 +12197,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-stored",
       items~,
       watermark=0,
@@ -12192,6 +12210,7 @@ test "session loaded swaps the active conversation onto the stored session" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-stored",
       items~,
       watermark=0,
@@ -12230,6 +12249,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-stored",
       items~,
       watermark=0,
@@ -12265,6 +12285,7 @@ test "session loaded adopts the store transcript and keeps live run state" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items~,
       watermark=0,
@@ -12754,6 +12775,7 @@ test "an accepted start response opens the run without Started" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -13337,6 +13359,7 @@ test "a failed response after durable Finished cannot resurrect its prompt" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=0,
@@ -13595,6 +13618,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       generation=1,
       goal=None,
       goal_markers=[],
+      prediction=None,
     ),
     buffered,
   )
@@ -13649,6 +13673,7 @@ test "a snapshot never settles a local steer by text" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -13879,6 +13904,7 @@ test "a foreign background run schedules one causal read after Started" {
       watermark=1,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation=1,
     ),
     buffered_user,
@@ -13913,6 +13939,7 @@ test "a foreign background run schedules one causal read after Started" {
       watermark=4,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation=2,
     ),
     after_old_cut,
@@ -13984,6 +14011,7 @@ test "buffered commits are delivery, not applied chronology" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[],
       watermark=1,
@@ -16072,6 +16100,7 @@ test "switching same-id archived stores fences the first transcript load" {
       watermark=1,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation=1,
     ),
     loading_second,
@@ -16098,6 +16127,7 @@ test "switching same-id archived stores fences the first transcript load" {
       watermark=1,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation=2,
     ),
     stale_first,
@@ -16149,6 +16179,7 @@ test "an archived snapshot stays open across archived-list reconciliation" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session=item.id,
       items=[
         {
@@ -16227,6 +16258,7 @@ test "unarchiving an open transcript fences its archived snapshot" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session=item.id,
       items=[
         {
@@ -16591,6 +16623,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       watermark=0,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation~,
     ),
     committed,
@@ -17078,6 +17111,7 @@ test "BridgeReady replaces archive overrides with fresh-list truth" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session=item.id,
       items=[
         {
@@ -19475,6 +19509,7 @@ test "a snapshot drains buffered commits in sequence order" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19527,6 +19562,7 @@ test "a snapshot already containing the buffered commits drops them" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19571,6 +19607,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19655,6 +19692,7 @@ test "background retries preserve buffered commits until a later success" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19715,6 +19753,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
     SessionLoaded(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19770,6 +19809,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -19794,6 +19834,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
     SessionRefreshed(
       goal=None,
       goal_markers=[],
+      prediction=None,
       session="desktop-test",
       items=[
         {
@@ -21301,6 +21342,7 @@ test "a sub-run's progress refreshes the child transcript on screen" {
       watermark=5,
       goal=None,
       goal_markers=[],
+      prediction=None,
       generation~,
     ),
     next,

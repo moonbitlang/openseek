@@ -15,9 +15,13 @@ pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalRe
 
 pub let agent_cancel : Command[@protocol.CancelPayload, @protocol.CancelReply]
 
+pub let agent_cancel_prediction : Command[@protocol.PredictionPayload, Bool]
+
 pub let agent_compact : Command[@protocol.CompactPayload, @protocol.CompactReply]
 
 pub let agent_goal : Command[@protocol.GoalPayload, @protocol.GoalReply]
+
+pub let agent_predict : Command[@protocol.PredictionPayload, @protocol.PredictionReply]
 
 pub let agent_queue : Command[@protocol.QueuePayload, @protocol.QueueReply]
 

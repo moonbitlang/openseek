@@ -1099,6 +1099,7 @@ fn CompletionView::render(
 /// Enter follows the ordinary submit rule below.
 priv struct KeyboardActions {
   menu_open : Bool
+  prediction : @cmd.Cmd?
   navigate : (Int) -> @cmd.Cmd
   // Present while the arrow keys may recall an earlier prompt.
   history : ((Int) -> @cmd.Cmd)?
@@ -1138,6 +1139,15 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
         }
         _ => @cmd.none
       }
+    } else if event.key() == "Tab" &&
+      !(event.shift_key() ||
+      event.alt_key() ||
+      event.ctrl_key() ||
+      event.meta_key() ||
+      event.is_composing()) &&
+      self.prediction is Some(accept) {
+      event.prevent_default()
+      accept
     } else if event.key() == "Escape" && self.cancel is Some(cancel) {
       event.prevent_default()
       cancel

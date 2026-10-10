@@ -891,6 +891,7 @@ priv struct Conversation {
   // are already applied, `watermark + 1` applies next, and anything later is
   // a gap — this client missed a broadcast — answered by a reload.
   watermark : Int
+  prediction : @wire.PredictionRecord?
   // Where the durable transcript stands relative to the store; see
   // `TranscriptSync`.
   sync : TranscriptSync
@@ -2282,6 +2283,7 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    prediction~ : @wire.PredictionRecord?,
     generation~ : Int
   )
   // A foreground stored-session read failed. Generation guards stale replies;
@@ -2296,6 +2298,7 @@ priv enum DeviceMsg {
     watermark~ : Int,
     goal~ : @transcript.GoalStanding?,
     goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    prediction~ : @wire.PredictionRecord?,
     generation~ : Int
   )
   // A background re-read failed. The generation identifies the exact read,
@@ -2623,6 +2626,7 @@ fn empty_conversation(
     pending_semantic_submission: None,
     messages: [],
     watermark: 0,
+    prediction: None,
     sync: Synced,
     goal: None,
     goal_edit: None,

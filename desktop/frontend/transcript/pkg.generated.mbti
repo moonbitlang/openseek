@@ -105,6 +105,7 @@ pub fn SessionListItem::equal(Self, Self) -> Bool
 pub fn SessionListItem::not_equal(Self, Self) -> Bool
 
 pub struct SessionLoadView {
+  prediction : @openseek_protocol.PredictionRecord?
   items : Array[TranscriptItem]
   watermark : Int
   goal : GoalStanding?

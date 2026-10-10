@@ -18,6 +18,8 @@ fn Input::fixture(task : String) -> Input {
     context_generation: 0,
     submission_sequence: 0,
     retirements: [],
+    prediction_source: None,
+    prediction: None,
     file_candidates: [],
     open_files: [],
     active_file: None,

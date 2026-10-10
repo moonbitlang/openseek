@@ -710,6 +710,7 @@ pub async fn load_session(
     return {
       session: document,
       watermark: Some(session_max_sequence(document)),
+      prediction: load_prediction(root, session, session_max_sequence(document)),
     }
   }
   // A record that moved to an archived twin is a different answer than one
@@ -727,7 +728,11 @@ pub async fn load_session(
     @session_record.Absent(_) => return empty_session_reply(session)
     error => raise EngineError("session load failed: \{error}")
   }
-  { session: document, watermark: Some(session_max_sequence(document)), }
+  {
+    session: document,
+    watermark: Some(session_max_sequence(document)),
+    prediction: load_prediction(root, session, session_max_sequence(document)),
+  }
 }
 
 ///|
@@ -742,6 +747,7 @@ fn empty_session_reply(session : String) -> LoadSessionReply {
       events: Some([]),
     },
     watermark: Some(0),
+    prediction: None,
   }
 }
 
@@ -791,7 +797,11 @@ pub async fn load_archived_session(
   let document = @session_record.read_document(root, session) catch {
     error => raise EngineError("archived session load failed: \{error}")
   }
-  { session: document, watermark: Some(session_max_sequence(document)), }
+  {
+    session: document,
+    watermark: Some(session_max_sequence(document)),
+    prediction: load_prediction(root, session, session_max_sequence(document)),
+  }
 }
 
 ///|

@@ -1841,12 +1841,15 @@ pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  prediction : @openseek_protocol.PredictionRecord?
+} derive(Eq, @debug.Debug)
 pub fn LoadSessionReply::equal(Self, Self) -> Bool
 pub fn LoadSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionReply::not_equal(Self, Self) -> Bool
 pub fn LoadSessionReply::to_json(Self) -> Json
 pub fn LoadSessionReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for LoadSessionReply
+pub impl @json.FromJson for LoadSessionReply
 
 pub(all) struct LspDiagnostic {
   range : LspRange
@@ -2302,6 +2305,30 @@ pub fn PendingApprovalPayload::to_json(Self) -> Json
 pub fn PendingApprovalPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PendingApprovalPayload
 pub impl @json.FromJson for PendingApprovalPayload
+
+pub(all) struct PredictionPayload {
+  session : String
+  request_id : String
+  source_sequence : Int
+} derive(Eq, @debug.Debug)
+pub fn PredictionPayload::equal(Self, Self) -> Bool
+pub fn PredictionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionPayload::not_equal(Self, Self) -> Bool
+pub fn PredictionPayload::to_json(Self) -> Json
+pub fn PredictionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionPayload
+pub impl @json.FromJson for PredictionPayload
+
+pub(all) struct PredictionReply {
+  outcome : @openseek_protocol.PredictionOutcome
+} derive(Eq, @debug.Debug)
+pub fn PredictionReply::equal(Self, Self) -> Bool
+pub fn PredictionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionReply::not_equal(Self, Self) -> Bool
+pub fn PredictionReply::to_json(Self) -> Json
+pub fn PredictionReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionReply
+pub impl @json.FromJson for PredictionReply
 
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])

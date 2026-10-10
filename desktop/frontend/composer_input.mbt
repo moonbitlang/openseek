@@ -218,6 +218,28 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     },
     submission_sequence: self.submission_sequence,
     retirements: self.composer_entry_retirements,
+    prediction: conv.prediction,
+    prediction_source: if self.screen is Chat &&
+      root_ready &&
+      conv.run is NoRun(ended~) &&
+      (
+        ended is Some(RunFinished(Completed)) ||
+        (
+          conv.prediction is Some(record) &&
+          record.source_sequence == conv.watermark
+        )
+      ) &&
+      conv.compaction is NotCompacting &&
+      conv.queued_inputs.is_empty() &&
+      conv.pending_steers.is_empty() &&
+      conv.shell_commands.is_empty() &&
+      conv.goal_edit is None &&
+      conv.queue_edit_id is None &&
+      conv.watermark > 0 {
+      Some(conv.watermark)
+    } else {
+      None
+    },
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
@@ -333,6 +355,8 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     turn_id: None,
     submission_sequence: self.submission_sequence,
     retirements: self.composer_entry_retirements,
+    prediction_source: None,
+    prediction: None,
     file_candidates: [],
     open_files: [],
     active_file: None,

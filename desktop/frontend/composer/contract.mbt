@@ -229,6 +229,9 @@ pub(all) struct Input {
   run : RunHeartbeat?
   // Canonical turn identity, including transitions while this entry is hidden.
   turn_id : String?
+  // Eligible finished OpenSeek snapshot; absent for hidden or other-engine composers.
+  prediction_source : Int?
+  prediction : @wire.PredictionRecord?
   slash_commands : Array[SlashCommand]
   // Whether a draft beginning with `!` is a shell command (see
   // `Input::shell_command`). Only an OpenSeek conversation runs one.

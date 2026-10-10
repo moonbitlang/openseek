@@ -446,6 +446,12 @@ pub fn endpoints(
     Endpoint(@commands.agent_compact, payload => {
       @engine.compact_run(state.manager, payload)
     }),
+    Endpoint(@commands.agent_predict, payload => {
+      @engine.predict(state.manager, payload)
+    }),
+    @endpoint.Endpoint::sync(@commands.agent_cancel_prediction, payload => {
+      @engine.cancel_prediction(state.manager, payload)
+    }),
     Endpoint(@commands.jobs_list, payload => {
       @engine.list_jobs(state.manager, payload)
     }),

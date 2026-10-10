@@ -376,6 +376,8 @@ pub fn State::composer_input(
     turn_id: active_turn,
     submission_sequence: self.submission_sequence,
     retirements: [],
+    prediction_source: None,
+    prediction: None,
     file_candidates: context.file_candidates,
     open_files: context.open_files,
     active_file: context.active_file,

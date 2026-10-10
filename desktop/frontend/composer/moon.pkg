@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek_protocol" @wire,
+  "openseek_desktop/frontend/prediction",
   "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/image_input",
