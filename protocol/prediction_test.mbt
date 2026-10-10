@@ -26,13 +26,23 @@ test "prediction commands and outcomes round trip without text sentinels" {
     )
     assert_eq(@openseek_protocol.parse(event.to_json()), Some(event))
   }
-  assert_true(
+  for sequence in [0.0, -1.0, 1.5, 2147483648.0, 4294967297.0] {
+    assert_true(
+      @openseek_protocol.Command::parse({
+        "command": "predict",
+        "request_id": "p",
+        "source_sequence": sequence,
+      })
+      is Err(_),
+    )
+  }
+  assert_eq(
     @openseek_protocol.Command::parse({
       "command": "predict",
       "request_id": "p",
-      "source_sequence": 1.5,
-    })
-    is Err(_),
+      "source_sequence": 2147483647,
+    }),
+    Ok(Predict(request_id="p", source_sequence=2147483647)),
   )
   assert_true(
     @openseek_protocol.Command::parse({

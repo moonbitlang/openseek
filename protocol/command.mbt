@@ -175,17 +175,11 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
       Ok(Prompt(content~, submission_id~))
     }
     { "command": "steer", .. } => parse_steer(line)
-    {
-      "command": "predict",
-      "request_id": String(request_id),
-      "source_sequence": Number(n, ..),
-      ..
-    } if !request_id.is_empty() &&
+    { "command": "predict", "request_id": String(request_id), .. } if !request_id.is_empty() &&
       request_id.length() <= 128 &&
-      n > 0 &&
-      n <= 2147483647.0 &&
-      n.to_int().to_double() == n =>
-      Ok(Predict(request_id~, source_sequence=n.to_int()))
+      line is Object(fields) &&
+      int(fields, "source_sequence") is Some(source_sequence) &&
+      source_sequence > 0 => Ok(Predict(request_id~, source_sequence~))
     { "command": "cancel_prediction", "request_id": String(request_id), .. } if !request_id.is_empty() &&
       request_id.length() <= 128 => Ok(CancelPrediction(request_id~))
     { "command": "predict" | "cancel_prediction", .. } =>

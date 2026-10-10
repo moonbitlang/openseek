@@ -96,20 +96,19 @@ pub impl FromJson for PredictionRecord with fn from_json(json, path) {
   guard json
     is {
       "version": 1,
-      "source_sequence": Number(n, ..),
       "request_id": String(request_id),
       "outcome": outcome,
       ..
     } &&
-    n > 0 &&
-    n <= 2147483647.0 &&
-    n.to_int().to_double() == n &&
+    json is Object(fields) &&
+    int(fields, "source_sequence") is Some(source_sequence) &&
+    source_sequence > 0 &&
     !request_id.is_empty() &&
     request_id.length() <= 128 else {
     raise JsonDecodeError((path, "invalid prediction record"))
   }
   {
-    source_sequence: n.to_int(),
+    source_sequence,
     request_id,
     outcome: @json.from_json(outcome, path=path.add_key("outcome")),
   }
