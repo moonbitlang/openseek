@@ -1,0 +1,14 @@
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+  "moonbitlang/core/json",
+  "moonbitlang/async",
+}
+
+supported_targets = "+wasm+native"
+
+import {
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+} for "test"

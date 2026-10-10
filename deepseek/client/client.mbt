@@ -284,7 +284,8 @@ async fn[T] Client::with_retries(
 /// `response_format=JsonObject` only when the assistant content itself should
 /// be constrained to a JSON object. Pass `stream=StreamHandler(...)` to send
 /// the request in SSE streaming mode while still receiving the accumulated
-/// response as the return value.
+/// response as the return value. `max_tokens` optionally caps generated tokens
+/// for auxiliary requests; omitted requests retain the provider default.
 /// Streaming failures include request progress in the Failure message after
 /// retries stop. Cancellation propagates unchanged.
 pub async fn Client::chat(
@@ -292,8 +293,12 @@ pub async fn Client::chat(
   messages : Array[@deepseek.ChatMessage],
   tools? : Array[@deepseek.ToolDefinition] = [],
   response_format? : @deepseek.ResponseFormat,
+  max_tokens? : Int,
   stream? : StreamHandler,
 ) -> @deepseek.ChatResponse {
+  if max_tokens is Some(limit) && limit <= 0 {
+    fail("max_tokens must be positive")
+  }
   let is_streaming = stream is Some(_)
   let body = encode_chat_request_for_endpoint(
     api_url=self.api_url,
@@ -303,6 +308,9 @@ pub async fn Client::chat(
     stream=is_streaming,
     response_format?,
   ) <| messages
+  if max_tokens is Some(limit) && body is Object(fields) {
+    fields["max_tokens"] = Json(limit)
+  }
   try {
     match stream {
       None => self.with_retries(() => self.chat_attempt(body), _ => false)

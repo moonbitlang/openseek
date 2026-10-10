@@ -222,6 +222,24 @@ async fn run_serve(
     }
     let pending : Array[PendingWork] = []
     let mut active_work : ActiveWork? = None
+    let mut prediction : (Int, @async.Task[Unit])? = None
+    // Preserve model and thinking mode: disabling thinking changes DeepSeek's
+    // cached prefix even when the message array and tool schemas are identical.
+    let prediction_client = @client.Client(
+      api_key~,
+      model~,
+      api_url?,
+      thinking~,
+      retry_attempts=1,
+    )
+    fn cancel_prediction() {
+      if prediction is Some((_, task)) {
+        prediction = None
+        task.cancel()
+      }
+    }
+    defer cancel_prediction()
+
     let mut shutting_down = false
     // Auto-continue bookkeeping. A set with "auto": true records a PENDING
     // intent (text + the last_sequence baseline at command receipt); the
@@ -522,6 +540,39 @@ async fn run_serve(
     serve~: for ;; {
       let step = steps.get() catch { _ => break serve~ }
       match step {
+        Wire(Prompt(_, ..) | Steer(_) | Compact | Cancel | Goal(_))
+        | BackgroundNotice
+        | Shutdown => cancel_prediction()
+        _ => ()
+      }
+      match step {
+        PredictionDone(source_sequence, outcome) =>
+          if prediction is Some((sequence, _)) && sequence == source_sequence {
+            prediction = None
+            // Only completed results for the unchanged snapshot are published.
+            // New commands retire the task before changing the conversation.
+            if session.last_sequence() == source_sequence &&
+              outcome is Completed(..) {
+              let record : @protocol.PredictionRecord = {
+                source_sequence,
+                outcome,
+              }
+              try {
+                if store is Some(store) {
+                  store.save_prediction(session, record)
+                }
+                @emit.emit(PredictionResult(source_sequence~, outcome~))
+              } catch {
+                error =>
+                  @emit.emit(
+                    PredictionResult(
+                      source_sequence~,
+                      outcome=Failed("prediction storage: \{error}"),
+                    ),
+                  )
+              }
+            }
+          }
         Wire(Prompt(content, submission_id~)) =>
           match active_work {
             // One turn at a time: extra prompts wait their wire-order turn.
@@ -747,6 +798,42 @@ async fn run_serve(
           }
           if active_work is None && pending.length() == 0 && shutting_down {
             break serve~
+          }
+          // A successful, idle turn owns its one auxiliary completion. Queued
+          // turns and goal continuation take priority; no frontend initiates it.
+          if finished &&
+            active_work is None &&
+            pending.is_empty() &&
+            !shutting_down &&
+            session.events().peek() is Some(event) &&
+            event.item() is Terminal(Finished(_)) {
+            let snapshot = session
+            let source_sequence = snapshot.last_sequence()
+            let task = group.spawn(no_wait=true, () => {
+              let outcome : @protocol.PredictionOutcome = try
+                @prediction.generate(
+                  prediction_client,
+                  snapshot,
+                  tools=tools.function_tools(),
+                )
+              catch {
+                error => Failed("\{error}")
+              } noraise {
+                Skipped => Skipped
+                Completed(text~, usage~) =>
+                  Completed(
+                    text~,
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.completion_tokens,
+                  )
+              }
+              ignore(
+                steps.try_put(PredictionDone(source_sequence, outcome)) catch {
+                  _ => false
+                },
+              )
+            })
+            prediction = Some((source_sequence, task))
           }
         }
         CompactDone(next) => {

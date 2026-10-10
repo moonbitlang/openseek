@@ -138,6 +138,7 @@ priv enum ActiveWork {
 /// command handling race-free against turn lifecycle.
 priv enum ServeStep {
   Wire(ServeCommand)
+  PredictionDone(Int, @protocol.PredictionOutcome)
   TurnDone(finished~ : Bool)
   CompactDone(@agent_session.Session)
   // A background job finished; wake the loop to drain and surface its notice
