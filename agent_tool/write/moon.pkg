@@ -9,6 +9,10 @@ import {
   "moonbitlang/openseek/agent_tool/write/internal/decode",
   "moonbitlang/openseek/internal/workspace_path",
   "moonbitlang/async/fs",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/codec/base64",
+  "moonbitlang/x/crypto",
+  "moonbitlang/openseek/agent_tool/internal/manifest_path",
 }
 
 import {

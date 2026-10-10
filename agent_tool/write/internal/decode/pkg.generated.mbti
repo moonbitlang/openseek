@@ -11,9 +11,15 @@ pub fn decode(Json) -> WriteInput raise
 // Errors
 
 // Types and methods
+pub enum Encoding {
+  Text
+  Base64
+} derive(@debug.Debug)
+
 pub struct WriteInput {
   path : String
   content : String
+  encoding : Encoding
   revert_on_parse_errors : Bool
 } derive(@debug.Debug)
 

@@ -128,8 +128,10 @@ Version 1 accepts `{version: 1, name, arguments}` and returns
 
 - 1024 tool requests and four active calls per script; 16 connections per session
   and at most 64 active script registrations.
-- 8 KiB aggregate request line and headers, 64 KiB decoded request body,
-  and 128 KiB total HTTP framing, read within five seconds of acceptance.
+- 8 KiB aggregate request line and headers, 64 KiB request body (24 MiB for
+  `write` with `encoding: "base64"`, supporting up to 16 MiB decoded artifacts),
+  at most 64 KiB of chunk framing, and a total wire cap of 24 MiB + 64 KiB,
+  read within five seconds of acceptance.
   Each connection carries one HTTP/1.1 POST, using Content-Length or plain
   chunked encoding; duplicate headers, ambiguous framing, chunk extensions,
   trailers, and connection reuse are unsupported.
@@ -145,7 +147,10 @@ Version 1 accepts `{version: 1, name, arguments}` and returns
   error saying execution occurred; the host does not retry it.
 - 512 KiB retained trace plus JSON framing. Full results still reach the client;
   omitted retained results carry an explicit truncation marker. Requests that
-  cannot reserve trace space are rejected before tool execution.
+  cannot reserve trace space are rejected before tool execution. Base64 `write`
+  content is omitted from every trace status; arguments retain
+  `content_base64_chars` with the original encoded length. The tool result reports
+  decoded byte count and SHA-256 after a successful write.
 
 The trace therefore has bounded entries and payloads. RPC errors remain separate
 from script failures. The SDK import pins an immutable version; the host explicitly checks wire protocol version 1.
