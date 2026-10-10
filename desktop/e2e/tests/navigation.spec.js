@@ -48,6 +48,78 @@ test('direct management entry has no invented predecessor and refresh keeps its 
   expect(app.pageErrors).toEqual([]);
 });
 
+test('MoonBit history restores the existing v1 browser entries after refresh', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem('history-fixture-seeded')) return;
+    sessionStorage.setItem('history-fixture-seeded', 'yes');
+    const initial = '/device/device-a/chat/new';
+    const settings = '/device/device-a/settings';
+    const marker = key => ({ seekmoonNavigation: { group: 'legacy-group', key }, foreignState: 'keep' });
+    history.replaceState(marker('initial'), '', initial);
+    history.pushState(marker('settings'), '', settings);
+    sessionStorage.setItem('seekmoon.history.v1.legacy-group', JSON.stringify({ entries: [
+      { key: 'initial', path: initial, original: initial },
+      { key: 'settings', path: settings, original: settings },
+    ] }));
+  });
+  await page.goto(path('settings'));
+  await expect(heading(page)).toHaveText('Settings');
+  await expect(back(page)).toBeEnabled();
+  expect(await page.evaluate(() => history.state)).toEqual({
+    seekmoonNavigation: { group: 'legacy-group', key: 'settings' }, foreignState: 'keep',
+  });
+  await page.reload();
+  await expect(heading(page)).toHaveText('Settings');
+  await back(page).click();
+  await expect(page).toHaveURL(new RegExp(path('chat/new') + '$'));
+  await expect(back(page)).toBeDisabled();
+  await expect(forward(page)).toBeEnabled();
+  await forward(page).click();
+  await expect(heading(page)).toHaveText('Settings');
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const storage of ['malformed', 'unavailable']) {
+  test(`history remains usable when persisted storage is ${storage}`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    await app.install();
+    if (storage === 'unavailable') {
+      await page.addInitScript(() => {
+        for (const name of ['getItem', 'setItem']) {
+          const original = Storage.prototype[name];
+          Storage.prototype[name] = function (key, ...args) {
+            if (key.startsWith('seekmoon.history.v1.')) throw new DOMException('Storage denied', 'SecurityError');
+            return original.call(this, key, ...args);
+          };
+        }
+      });
+    }
+    await page.goto(path('settings'));
+    await expect(heading(page)).toHaveText('Settings');
+    await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+    await expect(heading(page)).toHaveText('Scheduled tasks');
+    await back(page).click();
+    await expect(heading(page)).toHaveText('Settings');
+    await expect(forward(page)).toBeEnabled();
+    if (storage === 'malformed') {
+      await page.evaluate(() => {
+        sessionStorage.setItem('seekmoon.history.v1.' + history.state.seekmoonNavigation.group, '{broken');
+      });
+    }
+    await page.reload();
+    await expect(heading(page)).toHaveText('Settings');
+    await expect(back(page)).toBeDisabled();
+    await expect(forward(page)).toBeDisabled();
+    await page.getByRole('button', { name: 'Scheduled', exact: true }).click();
+    await expect(heading(page)).toHaveText('Scheduled tasks');
+    await back(page).click();
+    await expect(heading(page)).toHaveText('Settings');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('session deep links wait for catalogs and distinguish missing from failed loading', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.rpcDelays.set('session.list', 500);

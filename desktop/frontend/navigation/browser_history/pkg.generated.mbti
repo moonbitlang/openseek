@@ -1,0 +1,28 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/navigation/browser_history"
+
+// Values
+pub fn storage_group(Json) -> String?
+
+// Errors
+
+// Types and methods
+type History derive(Eq)
+pub fn History::History(String, group~ : String, key~ : String) -> Self
+pub fn History::can_back(Self) -> Bool
+pub fn History::can_forward(Self) -> Bool
+pub fn History::equal(Self, Self) -> Bool
+pub fn History::marker(Self) -> Json
+pub fn History::not_equal(Self, Self) -> Bool
+pub fn History::owns(Self, String) -> Bool
+pub fn History::path(Self) -> String
+pub fn History::promote(Self, String, String) -> Self?
+pub fn History::restore(String, String, Json, Json) -> Self?
+pub fn History::select(Self, String, Json) -> Self?
+pub fn History::storage_group(Self) -> String
+pub fn History::stored(Self) -> Json
+pub fn History::visit(Self, String, replace~ : Bool, key~ : String) -> Self?
+
+// Type aliases
+
+// Traits
