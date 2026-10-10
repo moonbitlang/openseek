@@ -2,14 +2,13 @@
 package "openseek_desktop/frontend/page_shell"
 
 import {
-  "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
 }
 
 // Values
 pub fn body(Array[@html.Html], class~ : String, attrs? : @html.Attrs) -> @html.Html
 
-pub fn header(String, String, @cmd.Cmd) -> Array[@html.Html]
+pub fn header(String) -> Array[@html.Html]
 
 // Errors
 

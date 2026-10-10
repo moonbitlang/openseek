@@ -5,10 +5,15 @@
 fn rotate_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
+  revision : Int,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(
-      dispatch(SessionRotated({ channel, session: generated_session_id(), })),
+      dispatch(
+        Navigation(
+          SessionReady({ channel, session: generated_session_id(), }, revision~),
+        ),
+      ),
     )
   })
 }
@@ -20,6 +25,7 @@ fn rotate_session(
 /// and keeps `update` deterministic.
 priv struct CodexDraftRotation {
   cwd : String
+  revision : Int
 }
 
 ///|
@@ -29,7 +35,15 @@ fn CodexDraftRotation::rotate(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     scheduler.add(
-      dispatch(CodexDraftRotated(cwd=self.cwd, id=generated_session_id())),
+      dispatch(
+        Navigation(
+          CodexDraftReady(
+            cwd=self.cwd,
+            id=generated_session_id(),
+            revision=self.revision,
+          ),
+        ),
+      ),
     )
   })
 }
@@ -51,7 +65,9 @@ fn new_codex_chat(
     .bind(project => @resource.path_for(project, model.focused))
     .unwrap_or(model.codex.new_thread_cwd())
   (
-    CodexDraftRotation::{ cwd, }.rotate(dispatch),
+    CodexDraftRotation::{ cwd, revision: model.navigation.revision, }.rotate(
+      dispatch,
+    ),
     {
       ..model,
       screen: Codex,

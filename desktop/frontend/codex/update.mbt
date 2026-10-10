@@ -11,6 +11,57 @@ pub fn update(
   channel : @interop.ChannelId,
   open_external : (String) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, State) {
+  let state = if msg is (StartDraft(..) | OpenThread(_)) {
+    state.retain_navigation_draft()
+  } else {
+    state
+  }
+  let (command, next) = update_message(
+    locale, dispatch, msg, state, channel, open_external,
+  )
+  let next = if next.active_draft() is Some(task) &&
+    state.active_id() == Some(task.id) &&
+    (
+      next.draft != state.draft ||
+      next.mentions != state.mentions ||
+      next.images != state.images
+    ) &&
+    (
+      !next.draft.is_empty() ||
+      !next.mentions.is_empty() ||
+      !next.images.is_empty() ||
+      !state.draft.is_empty() ||
+      !state.mentions.is_empty() ||
+      !state.images.is_empty()
+    ) {
+    { ..next, draft_addressed: true, }
+  } else {
+    next
+  }
+  let next = if state.active_draft() is Some(draft) &&
+    (
+      msg is AbandonDraft ||
+      (next.selection is CodexStoredTask(_) && !(msg is OpenThread(_)))
+    ) {
+    {
+      ..next,
+      saved_drafts: next.saved_drafts.filter(entry => entry.task.id != draft.id),
+    }
+  } else {
+    next
+  }
+  (command, next)
+}
+
+///|
+fn update_message(
+  locale : @i18n.Locale,
+  dispatch : @cmd.Emit[Msg],
+  msg : Msg,
+  state : State,
+  channel : @interop.ChannelId,
+  open_external : (String) -> @cmd.Cmd,
+) -> (@cmd.Cmd, State) {
   match msg {
     Refresh => {
       let (command, next) = state.refresh(dispatch, channel)
@@ -118,19 +169,8 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    StartDraft(id~, cwd~) => {
-      let previous = state.active_draft().map(draft => draft.id)
-      let mut next = state.select_draft(id, cwd)
-      let commands : Array[@cmd.Cmd] = []
-      if !cwd.trim().is_empty() {
-        commands.push(next.open_draft(dispatch, channel, id, cwd))
-        next = next.begin_foreground(CodexDraftOpenReply(id))
-      }
-      if previous is Some(previous) && previous != id {
-        commands.push(state.close_draft(channel, previous))
-      }
-      (@cmd.batch(commands), next)
-    }
+    StartDraft(id~, cwd~) =>
+      state.select_draft(id, cwd).activate_draft_context(dispatch, channel)
     AbandonDraft => {
       guard state.active_draft() is Some(draft) else {
         return (@cmd.none, state)
@@ -176,9 +216,6 @@ pub fn update(
           dispatch, channel, thread_id,
         )
         let commands : Array[@cmd.Cmd] = [read]
-        if state.active_draft() is Some(draft) {
-          commands.push(state.close_draft(channel, draft.id))
-        }
         (
           @cmd.batch(commands),
           {

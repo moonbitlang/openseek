@@ -9,6 +9,7 @@ import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/navigation",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/sidebar/conversation",
   "openseek_desktop/frontend/sidebar/section",
@@ -96,16 +97,19 @@ pub fn State::is_busy(Self) -> Bool
 pub fn State::loose_entries(locale? : @i18n.Locale, Self, SidebarContext) -> Array[@section.Entry]
 pub fn State::mark_visible_read(Self) -> Self
 pub fn State::model_listing(locale? : @i18n.Locale, Self) -> CodexModelListing
+pub fn State::navigation_target(Self) -> @navigation.Target
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::page(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], PageActions) -> Array[@html.Html]
 pub fn State::pending_auth_url(Self) -> String?
+pub fn State::prepare_new_navigation(Self) -> Self
 pub fn State::project_activation(Self, SidebarContext, String) -> String?
 pub fn State::project_conversations(locale? : @i18n.Locale, Self, SidebarContext, String) -> Array[CodexProjectRow]
 pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String, include_selected? : Bool) -> @conversation.Input?
 pub fn State::reasoning_effort_chip(locale? : @i18n.Locale, Self, Bool) -> @composer.ReasoningSelect?
 pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
+pub fn State::restore_navigation_draft(Self, @cmd.Emit[Msg], @interop.ChannelId, String) -> (@cmd.Cmd, Self)?
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(locale? : @i18n.Locale, Self) -> Array[@transcript.TranscriptItem]

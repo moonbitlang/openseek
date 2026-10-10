@@ -446,6 +446,8 @@ fn State::apply_composer_action(
       }
       next.submit_composer(dispatch, channel)
     }
+    @composer.DraftPresenceChanged(present=true, ..) =>
+      (@cmd.none, { ..self, draft_addressed: true, })
     @composer.DraftPresenceChanged(
       present=false,
       cleared_source=Some(source),

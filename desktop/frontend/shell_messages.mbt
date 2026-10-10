@@ -2,8 +2,13 @@
 
 ///|
 priv enum ShellMessage {
+  NavigateBack
+  NavigateForward
+  NavigationLoading
+  NavigationMissing
+  NavigationInvalid
+  NavigationRetry
   NewChatLabel
-  ReturnToWorkLabel
   ArchiveHint
   RestoreHint
   DeleteArchivedHint
@@ -81,11 +86,43 @@ priv enum ShellMessage {
 ///|
 fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
   match (locale, message) {
-    (English, ReturnToWorkLabel) => "Back to conversation"
-    (Spanish, ReturnToWorkLabel) => "Volver a la conversación"
-    (SimplifiedChinese, ReturnToWorkLabel) => "返回对话"
-    (TraditionalChinese, ReturnToWorkLabel) => "返回對話"
-    (Japanese, ReturnToWorkLabel) => "会話に戻る"
+    (English, NavigateBack) => "Back"
+    (Spanish, NavigateBack) => "Atrás"
+    (SimplifiedChinese, NavigateBack) => "后退"
+    (TraditionalChinese, NavigateBack) => "返回"
+    (Japanese, NavigateBack) => "戻る"
+    (English, NavigateForward) => "Forward"
+    (Spanish, NavigateForward) => "Adelante"
+    (SimplifiedChinese, NavigateForward) => "前进"
+    (TraditionalChinese, NavigateForward) => "前進"
+    (Japanese, NavigateForward) => "進む"
+    (English, NavigationLoading) => "Loading destination…"
+    (Spanish, NavigationLoading) => "Cargando destino…"
+    (SimplifiedChinese, NavigationLoading) => "正在加载目标…"
+    (TraditionalChinese, NavigationLoading) => "正在載入目標…"
+    (Japanese, NavigationLoading) => "移動先を読み込み中…"
+    (English, NavigationMissing) =>
+      "This destination no longer exists or is no longer attached."
+    (Spanish, NavigationMissing) =>
+      "Este destino ya no existe o no está conectado."
+    (SimplifiedChinese, NavigationMissing) =>
+      "此目标已不存在，或其工作区已移除。"
+    (TraditionalChinese, NavigationMissing) =>
+      "此目標已不存在，或其工作區已移除。"
+    (Japanese, NavigationMissing) =>
+      "移動先が存在しないか、ワークスペースが解除されています。"
+    (English, NavigationInvalid) => "This page address is invalid."
+    (Spanish, NavigationInvalid) =>
+      "La dirección de esta página no es válida."
+    (SimplifiedChinese, NavigationInvalid) => "页面地址无效。"
+    (TraditionalChinese, NavigationInvalid) => "頁面位址無效。"
+    (Japanese, NavigationInvalid) =>
+      "ページのアドレスが無効です。"
+    (English, NavigationRetry) => "Retry"
+    (Spanish, NavigationRetry) => "Reintentar"
+    (SimplifiedChinese, NavigationRetry) => "重试"
+    (TraditionalChinese, NavigationRetry) => "重試"
+    (Japanese, NavigationRetry) => "再試行"
     (English, NewChatLabel) => "New chat"
     (Spanish, NewChatLabel) => "Nueva conversación"
     (SimplifiedChinese, NewChatLabel) => "新建对话"

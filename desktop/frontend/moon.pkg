@@ -1,4 +1,7 @@
 import {
+  "openseek_desktop/frontend/navigation",
+  "openseek_desktop/frontend/navigation/browser" @navigation_browser,
+  "moonbit-community/rabbita/nav",
   "openseek_desktop/frontend/page_shell",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",

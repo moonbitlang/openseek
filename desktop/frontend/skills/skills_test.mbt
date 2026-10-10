@@ -52,6 +52,33 @@ fn market_item(
 }
 
 ///|
+test "market detail failure is stable until explicit retry" {
+  let detail = @skills.MarketRef("acme/widget@1.0.0")
+  let (_, loading, resolution) = @skills.State::empty().open_detail(
+    emit(),
+    input(),
+    detail,
+  )
+  assert_true(resolution is @skills.Waiting)
+  let (_, failed, _) = loading.handle(
+    emit(),
+    @skills.CatalogFailed(
+      channel=@interop.ChannelId::Local,
+      message="unavailable",
+    ),
+    input(),
+  )
+  let (_, unchanged, resolution) = failed.open_detail(emit(), input(), detail)
+  let (_, repeated, again) = failed.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Failed("unavailable"))
+  assert_true(again is @skills.Failed("unavailable"))
+  assert_true(unchanged == failed && repeated == failed)
+  let (_, retrying, _) = failed.handle(emit(), @skills.RefreshCatalog, input())
+  let (_, _, resolution) = retrying.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Waiting)
+}
+
+///|
 test "a duplicate refresh while loading is a no-op" {
   let (_, opened) = @skills.State::empty().opening(emit(), input())
   let (_, ready, _) = opened.handle(

@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/navigation"
+
+// Values
+pub fn parse(String) -> Result[Location, RouteError]
+
+// Errors
+
+// Types and methods
+type History derive(Eq)
+pub fn History::back(Self) -> Self
+pub fn History::can_back(Self) -> Bool
+pub fn History::can_forward(Self) -> Bool
+pub fn History::current(Self) -> Location?
+pub fn History::empty() -> Self
+pub fn History::equal(Self, Self) -> Bool
+pub fn History::forward(Self) -> Self
+pub fn History::not_equal(Self, Self) -> Bool
+pub fn History::promote(Self, Location, Location) -> Self
+pub fn History::visit(Self, Location, replace~ : Bool) -> Self
+
+pub(all) struct Location {
+  device : String
+  target : Target
+} derive(Eq)
+pub fn Location::equal(Self, Self) -> Bool
+pub fn Location::not_equal(Self, Self) -> Bool
+pub fn Location::path(Self) -> String
+
+pub(all) enum RouteError {
+  OutsideApplication
+  InvalidRoute
+} derive(Eq)
+pub fn RouteError::equal(Self, Self) -> Bool
+pub fn RouteError::not_equal(Self, Self) -> Bool
+
+pub(all) enum Target {
+  Chat
+  ChatNew
+  Session(String)
+  ChatDraft(String)
+  Codex
+  CodexNew
+  Thread(String)
+  CodexDraft(String)
+  Settings
+  Skills
+  InstalledSkill(String)
+  MarketSkill(String)
+  Schedules
+} derive(Eq)
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits
