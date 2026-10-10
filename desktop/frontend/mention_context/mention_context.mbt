@@ -52,6 +52,7 @@ pub(all) enum AnnotationSide {
 
 ///|
 pub(all) enum MentionRef {
+  BrowserAnnotation(element~ : @protocol.BrowserElement)
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
@@ -200,6 +201,7 @@ pub struct Target {
 /// The short marker displayed before a mention's label.
 pub fn glyph(mention : MentionRef) -> String {
   match mention {
+    BrowserAnnotation(_) => "◎"
     ReviewChanges(_) => "⑂"
     Skill(_) => "$"
     File(_) => "@"
@@ -213,6 +215,7 @@ pub fn glyph(mention : MentionRef) -> String {
 /// Human-readable text for one mention chip.
 pub fn label(mention : MentionRef) -> String {
   match mention {
+    BrowserAnnotation(element~) => browser_element_label(element)
     ReviewChanges(changes) => "Changes · \{changes.source.file}"
     Skill(name~) => name
     File(path~) => path
@@ -235,7 +238,7 @@ pub fn label(mention : MentionRef) -> String {
 /// Resolve a mention into the working-file location its chip may open.
 pub fn target(mention : MentionRef) -> Target? {
   match mention {
-    ReviewChanges(_) | Skill(_) => None
+    BrowserAnnotation(_) | ReviewChanges(_) | Skill(_) => None
     File(path~) => Some({ file: path, range: None, annotation: None, })
     Symbol(file~, line~, ..) =>
       if file.is_empty() {
@@ -326,6 +329,7 @@ pub fn encode(mentions : Array[MentionRef], task : String) -> String {
 ///|
 fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
   match mention {
+    BrowserAnnotation(element~) => write_browser_annotation(parts, element)
     ReviewChanges(changes) => write_review_file(parts, changes)
     Skill(name~) => {
       let name = MentionAttribute::encode(name).wire
@@ -483,6 +487,16 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
   let mut index = 0
   while index < lines.length() {
     let line = lines[index]
+    if line == "<browser_annotation>" {
+      guard index + 2 < lines.length() &&
+        lines[index + 2] == "</browser_annotation>" &&
+        parse_browser_annotation(lines[index + 1]) is Some(mention) else {
+        return None
+      }
+      mentions.push(mention)
+      index += 3
+      continue
+    }
     if review_changes_pattern.execute(line) is Some(_) {
       guard parse_review_changes(lines[index:]) is Some((changes, consumed)) else {
         return None

@@ -3416,3 +3416,17 @@ fn CodexItem::user_content(self : CodexItem) -> @deepseek.Content {
   flush_text()
   @deepseek.Content(content)
 }
+
+///|
+/// Attach the shared browser context to the current Codex composer draft.
+pub fn State::with_browser_annotation(
+  self : State,
+  mention : @composer.Mention,
+) -> State {
+  let draft : @composer.Draft = {
+    task: self.draft,
+    mentions: self.mentions,
+    images: self.images,
+  }
+  { ..self, mentions: draft.with_mention(mention).mentions, }
+}

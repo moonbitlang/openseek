@@ -20,6 +20,8 @@ import {
 // Values
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply])
 
+pub fn focus_message_end() -> @cmd.Cmd
+
 // Errors
 
 // Types and methods

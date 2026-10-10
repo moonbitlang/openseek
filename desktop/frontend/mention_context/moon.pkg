@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/json",
   "moonbitlang/core/string",
   "moonbitlang/editor/base/common",
   "openseek_desktop/protocol",

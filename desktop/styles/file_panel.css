@@ -575,6 +575,16 @@ html:is(
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
+.browser-nav-button.browser-annotate:not(.active):hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+}
+.browser-nav-button.browser-annotate.active,
+.browser-nav-button.browser-annotate.active:hover {
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+
 .browser-nav-button.loading .icon svg {
   animation: browser-reload-spin 1s linear infinite;
 }
@@ -3537,3 +3547,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 .github-review-delete-confirm .danger { color: #cf222e; }
 .github-review-file-count { display: inline-flex; align-items: center; gap: 3px; color: var(--color-text-muted); font-size: 11px; padding-left: 4px; }
 .github-review-file-count svg { width: 13px; height: 13px; }
+
+.browser-annotation { flex: 0 0 auto; padding: 12px; border-bottom: 1px solid var(--color-separator); display: flex; flex-direction: column; gap: 10px; font-size: 13px; }
+.browser-annotation.hidden { display: none; }
+.browser-annotation button { padding: 5px 10px; border: 1px solid var(--color-separator); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }

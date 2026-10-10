@@ -114,6 +114,11 @@ fn panel_view(
     forward: actions.browser_forward,
     reload: actions.browser_reload,
     open_external: actions.browser_open_external,
+    annotate: @preview.annotation_button(
+      locale~,
+      input.annotation,
+      actions.browser_annotation,
+    ),
   }
   @html.div(
     class=@fileeditor.editor_classes(input.file_panel, input.file_ctx) +
@@ -153,15 +158,35 @@ fn panel_view(
         input.file_ctx,
         semantic_review~,
       ),
-      @html.div(class="browser-chrome", [
-        @preview.toolbar_view(locale~, active_page, toolbar),
-        @preview.failure_view(active_page),
-        // A native page overlays this measured rectangle after navigation.
-        @html.div(
-          attrs=@html.Attrs::build().id("browser-pane").class("browser-pane"),
-          ([] : Array[@html.Html]),
-        ),
-      ]),
+      @html.div(
+        attrs=@html.Attrs::build()
+          .class("browser-chrome")
+          .on_keydown(event => {
+            if event.key() == "Escape" &&
+              !event.is_composing() &&
+              !(input.annotation is Idle) {
+              event.prevent_default()
+              event.stop_propagation()
+              (actions.browser_annotation)(Cancel)
+            } else {
+              @cmd.none
+            }
+          }),
+        [
+          @preview.toolbar_view(locale~, active_page, toolbar),
+          @preview.failure_view(active_page),
+          @preview.annotation_view(
+            locale~,
+            input.annotation,
+            actions.browser_annotation,
+          ),
+          // A native page overlays this measured rectangle after navigation.
+          @html.div(
+            attrs=@html.Attrs::build().id("browser-pane").class("browser-pane"),
+            ([] : Array[@html.Html]),
+          ),
+        ],
+      ),
       @jobs.panel(locale~, input.jobs, actions.job_events),
       @workflow.panel(locale~, input.workflows, {
         open_child: actions.open_child,
