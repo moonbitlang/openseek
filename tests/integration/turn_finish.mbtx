@@ -141,6 +141,20 @@ async fn run_case(
           (request, body, conn) => {
             assert_eq(request.path, "/chat/completions")
             let request = @json.parse(body.read_all().text())
+            // Serve may predict after finishing; count only the main agent's
+            // streaming requests in this lifecycle regression.
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
             requests += 1
             let step = requests
             let messages = field(request, "messages").stringify()
