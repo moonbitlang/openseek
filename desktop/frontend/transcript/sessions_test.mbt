@@ -168,7 +168,7 @@ fn session_reply(
   let prefix =
     #|{"session":{"version":1,"id":"desktop-x","system_prompt":"system","events":[
   let suffix =
-    #|]}}
+    #|]},"prediction":null}
   @json.from_json(@json.parse(prefix + events_json + suffix))
 }
 

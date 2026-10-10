@@ -183,6 +183,13 @@ fn device_msg(
     AgentError(payload) => error_msg(payload)
     AgentFinished(payload) => finished_msg(payload)
     SessionEvent(payload) => session_event_msg(channel, payload)
+    AgentPrediction(payload) =>
+      Some(
+        PredictionReceived(
+          session=payload.session,
+          prediction=payload.prediction,
+        ),
+      )
     SubrunProgress(payload) =>
       Some(
         SubrunProgressed(
@@ -1070,6 +1077,7 @@ fn open_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          prediction=view.prediction,
           generation~,
         ),
       )
@@ -1116,6 +1124,7 @@ fn refresh_session(
           watermark=view.watermark,
           goal=view.goal,
           goal_markers=view.goal_markers,
+          prediction=view.prediction,
           generation~,
         ),
       )

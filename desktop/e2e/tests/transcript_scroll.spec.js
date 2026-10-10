@@ -100,6 +100,7 @@ test('returning to a conversation restores where the reader left it', async ({ p
       const events = id === 'session-2' ? second : first;
       return {
         session: { version: 1, id, events },
+        prediction: null,
         watermark: events.at(-1).sequence,
       };
     }

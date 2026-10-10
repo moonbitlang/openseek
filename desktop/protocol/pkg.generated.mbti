@@ -1841,12 +1841,15 @@ pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+  prediction : @openseek_protocol.PredictionRecord?
+} derive(Eq, @debug.Debug)
 pub fn LoadSessionReply::equal(Self, Self) -> Bool
 pub fn LoadSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionReply::not_equal(Self, Self) -> Bool
 pub fn LoadSessionReply::to_json(Self) -> Json
 pub fn LoadSessionReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for LoadSessionReply
+pub impl @json.FromJson for LoadSessionReply
 
 pub(all) struct LspDiagnostic {
   range : LspRange
@@ -2105,6 +2108,7 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
+  AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
@@ -2142,6 +2146,7 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
+  AgentPrediction
   SessionEvent
   SubrunProgress
   WorkflowEntry
@@ -2302,6 +2307,18 @@ pub fn PendingApprovalPayload::to_json(Self) -> Json
 pub fn PendingApprovalPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PendingApprovalPayload
 pub impl @json.FromJson for PendingApprovalPayload
+
+pub(all) struct PredictionReadyPayload {
+  session : String
+  prediction : @openseek_protocol.PredictionRecord
+} derive(Eq, @debug.Debug)
+pub fn PredictionReadyPayload::equal(Self, Self) -> Bool
+pub fn PredictionReadyPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionReadyPayload::not_equal(Self, Self) -> Bool
+pub fn PredictionReadyPayload::to_json(Self) -> Json
+pub fn PredictionReadyPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionReadyPayload
+pub impl @json.FromJson for PredictionReadyPayload
 
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])

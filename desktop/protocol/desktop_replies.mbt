@@ -732,7 +732,52 @@ pub(all) struct SessionDocument {
 pub(all) struct LoadSessionReply {
   session : SessionDocument
   watermark : Int?
-} derive(Debug, Eq, FromJson, ToJson)
+  prediction : @wire.PredictionRecord?
+} derive(Debug, Eq)
+
+///|
+/// Prediction is required and explicitly null when this snapshot has no cache.
+pub impl FromJson for LoadSessionReply with fn from_json(json, path) {
+  let obj = JsonObject::decode(json, path, "session load reply")
+  {
+    session: @json.from_json(
+      obj.required_json("session"),
+      path=path.add_key("session"),
+    ),
+    watermark: if obj.optional_json("watermark") is Some(value) {
+      Some(@json.from_json(value, path=path.add_key("watermark")))
+    } else {
+      None
+    },
+    prediction: if obj.required_json("prediction") is Null {
+      None
+    } else {
+      Some(
+        @json.from_json(
+          obj.required_json("prediction"),
+          path=path.add_key("prediction"),
+        ),
+      )
+    },
+  }
+}
+
+///|
+pub impl ToJson for LoadSessionReply with fn to_json(self) {
+  {
+    "session": self.session.to_json(),
+    "watermark": if self.watermark is Some(value) {
+      value.to_json()
+    } else {
+      Json::null()
+    },
+    "prediction": if self.prediction is Some(value) {
+      value.to_json()
+    } else {
+      Json::null()
+    },
+  }
+}
 
 ///|
 /// The destination selected by the native save dialog. `None` means the user

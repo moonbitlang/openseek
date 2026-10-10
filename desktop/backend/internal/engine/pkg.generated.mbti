@@ -91,6 +91,7 @@ pub(all) enum EngineEvent {
   Error(@protocol.AgentErrorPayload)
   Finished(@protocol.FinishedPayload)
   SessionCommit(@protocol.SessionCommitPayload)
+  PredictionReady(@protocol.PredictionReadyPayload)
   SubrunProgress(@protocol.SubrunProgressPayload)
   WorkflowEntry(@protocol.WorkflowEntryPayload)
 }

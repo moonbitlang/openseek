@@ -11,6 +11,7 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
+  AgentPrediction
   SessionEvent
   SubrunProgress
   WorkflowEntry
@@ -44,6 +45,7 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     AgentEvent => "agent.event"
     AgentError => "agent.error"
     AgentFinished => "agent.finished"
+    AgentPrediction => "agent.prediction"
     SessionEvent => "session.event"
     SubrunProgress => "subrun.progress"
     WorkflowEntry => "workflow.entry"
@@ -78,6 +80,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     AgentEvent,
     AgentError,
     AgentFinished,
+    AgentPrediction,
     SessionEvent,
     SubrunProgress,
     WorkflowEntry,
@@ -113,6 +116,7 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
+  AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
@@ -155,6 +159,8 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       Some(AgentEvent(@json.from_json(params) catch { _ => return None }))
     "agent.error" =>
       Some(AgentError(@json.from_json(params) catch { _ => return None }))
+    "agent.prediction" =>
+      Some(AgentPrediction(@json.from_json(params) catch { _ => return None }))
     "agent.finished" =>
       Some(AgentFinished(@json.from_json(params) catch { _ => return None }))
     "session.event" =>
@@ -230,6 +236,7 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     AgentEvent(_) => AgentEvent
     AgentError(_) => AgentError
     AgentFinished(_) => AgentFinished
+    AgentPrediction(_) => AgentPrediction
     SessionEvent(_) => SessionEvent
     SubrunProgress(_) => SubrunProgress
     WorkflowEntry(_) => WorkflowEntry
@@ -270,6 +277,7 @@ pub fn Notification::params(self : Notification) -> Json {
     AgentEvent(payload) => ToJson::to_json(payload)
     AgentError(payload) => ToJson::to_json(payload)
     AgentFinished(payload) => ToJson::to_json(payload)
+    AgentPrediction(payload) => ToJson::to_json(payload)
     SessionEvent(payload) => ToJson::to_json(payload)
     SubrunProgress(payload) => ToJson::to_json(payload)
     WorkflowEntry(payload) => ToJson::to_json(payload)

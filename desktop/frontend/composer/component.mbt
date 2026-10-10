@@ -352,6 +352,7 @@ fn Model::with_entry(self : Model, entry : Entry) -> Model {
 
 ///|
 priv enum Msg {
+  PredictionAccepted
   TextChanged(String)
   CompletionMove(Int)
   CompletionAccept
@@ -422,7 +423,7 @@ fn Entry::can_send(self : Entry, input : Input) -> Bool {
 ///|
 fn Entry::holds_draft(self : Entry) -> Bool {
   self.image_reads > 0 ||
-  !self.draft.is_empty() ||
+  !self.draft.is_blank() ||
   (self.goal_draft is Some(goal) && !goal.is_blank())
 }
 
@@ -624,6 +625,13 @@ fn Model::update(
   let entry = self.active(input)
   let self = self.with_entry(entry)
   match msg {
+    PredictionAccepted => {
+      guard entry.prediction_text(input) is Some(text) else {
+        return (self, @cmd.none)
+      }
+      let (next, command) = entry.edited(input, text, action_emit)
+      self.commit_entry_change(entry, next, command, action_emit)
+    }
     ImageRead(identity, event) => {
       // A read belongs to the draft that selected it. Navigation may retain
       // that draft in the cache, but cannot redirect its bytes into another.
@@ -894,12 +902,12 @@ fn Model::update(
             GoalSubmitted(
               identity=entry.identity(),
               draft=text,
-              prompt_present=!entry.draft.is_empty(),
+              prompt_present=!entry.draft.is_blank(),
             ),
           ),
         )
       } else {
-        guard !entry.draft.is_empty() && entry.image_reads == 0 else {
+        guard !entry.draft.is_blank() && entry.image_reads == 0 else {
           return (self.with_entry(entry), @cmd.none)
         }
         (

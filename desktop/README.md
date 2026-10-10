@@ -101,6 +101,14 @@ response's usage, a tool result, or the next step). It leaves the
 current model step and all durable rows untouched; the retry notice is live
 state and is not written to `session.jsonl`.
 
+After a successful OpenSeek turn leaves the engine idle, it generates and saves
+one next-message prediction. The host broadcasts the completed result as
+`agent.prediction` to all local and relay clients. Frontends do not request or
+cancel predictions: an empty composer displays the matching suggestion, Tab
+copies it into the draft without sending, and typing hides it only locally.
+Clearing the draft restores it; reopening the conversation loads the saved
+result. These auxiliary results never enter the transcript.
+
 While a turn runs, the composer exposes a **Steer now / Queue next** selector
 beside Send. It starts from Settings → Interface → Follow-up messages, applies
 only to this message, and resets to that default after submission. Enter and

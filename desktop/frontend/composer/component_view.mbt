@@ -209,7 +209,7 @@ fn Entry::action_buttons(
           title: ui(locale, SendLabel),
           disabled: !available ||
           self.image_reads > 0 ||
-          self.draft.is_empty() ||
+          self.draft.is_blank() ||
           (
             input.shell_command(self.draft) is Some(command) &&
             command.is_blank()
@@ -230,7 +230,7 @@ fn Entry::action_buttons(
           content: @icons.icon(@icons.icon_debug_stop),
         },
       ]
-      if steer_available && !self.draft.is_empty() {
+      if steer_available && !self.draft.is_blank() {
         actions.push({
           id: "send",
           class_name: "icon-button send-button",
@@ -323,7 +323,9 @@ fn Entry::view(
       self.draft.task
     },
     shell: shell_command is Some(_),
-    placeholder: if !goal_mode && self.submission_choice(input) is Some(choice) {
+    placeholder: if self.prediction_text(input) is Some(text) {
+      text
+    } else if !goal_mode && self.submission_choice(input) is Some(choice) {
       match choice {
         SteerNow => ui(locale, SteerPlaceholder)
         QueueNext => ui(locale, QueuePlaceholder)
@@ -340,6 +342,7 @@ fn Entry::view(
     },
     keyboard: {
       menu_open: !goal_mode && self.completion is Some(_),
+      prediction: self.prediction_text(input).map(_ => emit(PredictionAccepted)),
       history: if !goal_mode && self.can_recall_history(input) {
         Some(delta => emit(HistoryMoved(delta)))
       } else {

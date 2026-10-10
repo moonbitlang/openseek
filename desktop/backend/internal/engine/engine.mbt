@@ -1735,6 +1735,18 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
+          Some(PredictionResult(source_sequence~, outcome~)) => {
+            if outcome is Completed(..) {
+              emit(
+                sink,
+                PredictionReady({
+                  session: engine.session_key,
+                  prediction: { source_sequence, outcome, },
+                }),
+              )
+            }
+            continue
+          }
           Some(JobsSnapshot(request_id~, ..) as event)
           | Some(JobStopResult(request_id~, ..) as event) => {
             if self.job_requests.get(request_id) is Some(reply) {

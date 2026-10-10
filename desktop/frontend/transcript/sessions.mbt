@@ -236,6 +236,7 @@ fn compare_subrun_path(left : Array[Int], right : Array[Int]) -> Int {
 /// from older hosts derive it from the maximum stored event sequence instead.
 /// An empty record therefore remains at 0 in either shape.
 pub struct SessionLoadView {
+  prediction : @protocol.PredictionRecord?
   items : Array[TranscriptItem]
   watermark : Int
   // The standing goal the snapshot's `[goal]` markers reduce to — the seed
@@ -294,6 +295,7 @@ pub fn session_from_reply(
   {
     items,
     watermark: reply.watermark.unwrap_or(derived_watermark),
+    prediction: reply.prediction,
     goal,
     goal_markers,
   }

@@ -545,6 +545,7 @@ export class DesktopBrowserHarness {
             id: 'session-1',
             events: this.sessionEvents,
           },
+          prediction: null,
           watermark: this.sessionEvents.at(-1)?.sequence || 0,
         };
       case 'agent.runs':

@@ -25,7 +25,7 @@ fn Entry::recalled_back(self : Entry, input : Input) -> Int? {
 fn Entry::can_recall_history(self : Entry, input : Input) -> Bool {
   input.goal.draft is None &&
   !input.history.is_empty() &&
-  (self.recalled_back(input) is Some(_) || self.draft.is_empty())
+  (self.recalled_back(input) is Some(_) || self.draft.is_blank())
 }
 
 ///|

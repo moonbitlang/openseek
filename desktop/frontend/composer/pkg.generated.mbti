@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
@@ -100,6 +101,7 @@ pub(all) struct Draft {
   images : Array[Image]
 } derive(Eq, @debug.Debug)
 pub fn Draft::equal(Self, Self) -> Bool
+pub fn Draft::is_blank(Self) -> Bool
 pub fn Draft::is_empty(Self) -> Bool
 pub fn Draft::not_equal(Self, Self) -> Bool
 pub fn Draft::prompt(Self) -> String
@@ -196,6 +198,8 @@ pub(all) struct Input {
   goal : GoalInput
   run : RunHeartbeat?
   turn_id : String?
+  prediction_source : Int?
+  prediction : @openseek_protocol.PredictionRecord?
   slash_commands : Array[SlashCommand]
   shell_available : Bool
   history : Array[String]
