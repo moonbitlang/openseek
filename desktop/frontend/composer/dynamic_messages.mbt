@@ -15,6 +15,7 @@ priv enum DynamicMessage {
   DArchiveQuestion(String)
   DWorkingStep(String)
   DRetry(String, String, String)
+  DTokens(String)
   DFailedChecks(String)
   DPendingChecks(String)
   DPassedChecks(String)
@@ -139,6 +140,11 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (TraditionalChinese, DRetry(p0, p1, p2)) =>
       "正在重試 · 第 \{p0}/\{p1} 次 · \{p2}"
     (Japanese, DRetry(p0, p1, p2)) => "再試行中 · \{p0}/\{p1} 回 · \{p2}"
+    (English, DTokens(p0)) => "\{p0} tokens"
+    (Spanish, DTokens(p0)) => "\{p0} tokens"
+    (SimplifiedChinese, DTokens(p0)) => "\{p0} 个词元"
+    (TraditionalChinese, DTokens(p0)) => "\{p0} 個詞元"
+    (Japanese, DTokens(p0)) => "\{p0} トークン"
     (English, DFailedChecks(p0)) => "\{p0} failed"
     (Spanish, DFailedChecks(p0)) =>
       if p0 == "1" {
