@@ -61,6 +61,17 @@ pub fn parse(line : Json) -> Event? {
       }
       Some(JobChanged(kind~, job~))
     }
+    "prediction_result" => {
+      guard text(fields, "request_id") is Some(request_id) &&
+        int(fields, "source_sequence") is Some(source_sequence) &&
+        fields.get("outcome") is Some(value) else {
+        return None
+      }
+      let outcome : PredictionOutcome = @json.from_json(value) catch {
+        _ => return None
+      }
+      Some(PredictionResult(request_id~, source_sequence~, outcome~))
+    }
     "jobs_snapshot" => {
       guard text(fields, "request_id") is Some(request_id) else { return None }
       let jobs : Array[JobRecord] = match fields.get("jobs") {

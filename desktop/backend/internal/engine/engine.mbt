@@ -238,7 +238,9 @@ fn ends_with_turn(command : @wire.Command) -> Bool {
     | GoalSet(..)
     | GoalClear
     | JobsSnapshot(..)
-    | JobStop(..) => false
+    | JobStop(..)
+    | Predict(..)
+    | CancelPrediction(..) => false
   }
 }
 

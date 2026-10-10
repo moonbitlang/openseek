@@ -222,6 +222,29 @@ async fn run_serve(
     }
     let pending : Array[PendingWork] = []
     let mut active_work : ActiveWork? = None
+    let mut prediction : (String, Int, @async.Task[Unit])? = None
+    let mut prediction_record : @protocol.PredictionRecord? = None
+    let mut prediction_attempt : Int? = None
+    // Preserve model and thinking mode: disabling thinking changes DeepSeek's
+    // cached prefix even when the message array and tool schemas are identical.
+    let prediction_client = @client.Client(
+      api_key~,
+      model~,
+      api_url?,
+      thinking~,
+      retry_attempts=1,
+    )
+    fn cancel_prediction() {
+      if prediction is Some((request_id, source_sequence, task)) {
+        prediction = None
+        task.cancel()
+        @emit.emit(
+          PredictionResult(request_id~, source_sequence~, outcome=Cancelled),
+        )
+      }
+    }
+    defer cancel_prediction()
+
     let mut shutting_down = false
     // Auto-continue bookkeeping. A set with "auto": true records a PENDING
     // intent (text + the last_sequence baseline at command receipt); the
@@ -522,6 +545,126 @@ async fn run_serve(
     serve~: for ;; {
       let step = steps.get() catch { _ => break serve~ }
       match step {
+        Wire(Prompt(_, ..) | Steer(_) | Compact | Cancel | Goal(_))
+        | BackgroundNotice
+        | Shutdown => cancel_prediction()
+        _ => ()
+      }
+      match step {
+        Wire(CancelPrediction(request_id~)) =>
+          if prediction is Some((id, _, _)) && id == request_id {
+            cancel_prediction()
+          }
+        Wire(Predict(request_id~, source_sequence~)) => {
+          if active_work is Some(_) ||
+            !pending.is_empty() ||
+            shutting_down ||
+            session.last_sequence() != source_sequence ||
+            !(session.events().peek() is Some(event) &&
+            event.item() is Terminal(Finished(_))) {
+            @emit.emit(
+              PredictionResult(request_id~, source_sequence~, outcome=Skipped),
+            )
+            continue serve~
+          }
+          let cached = try {
+            if prediction_record is Some(record) &&
+              record.source_sequence == source_sequence {
+              Some(record)
+            } else if store is Some(store) {
+              store.prediction(session.id())
+            } else {
+              None
+            }
+          } catch {
+            error => {
+              @emit.emit(
+                PredictionResult(
+                  request_id~,
+                  source_sequence~,
+                  outcome=Failed("prediction storage: \{error}"),
+                ),
+              )
+              continue serve~
+            }
+          }
+          if cached is Some(record) && record.source_sequence == source_sequence {
+            @emit.emit(
+              PredictionResult(
+                request_id~,
+                source_sequence~,
+                outcome=record.outcome,
+              ),
+            )
+            continue serve~
+          }
+          if prediction_attempt == Some(source_sequence) {
+            @emit.emit(
+              PredictionResult(request_id~, source_sequence~, outcome=Skipped),
+            )
+            continue serve~
+          }
+          cancel_prediction()
+          prediction_attempt = Some(source_sequence)
+          let snapshot = session
+          let task = group.spawn(no_wait=true, () => {
+            let outcome : @protocol.PredictionOutcome = try
+              @prediction.generate(
+                prediction_client,
+                snapshot,
+                tools=tools.function_tools(),
+              )
+            catch {
+              error => Failed("\{error}")
+            } noraise {
+              Skipped => Skipped
+              Completed(text~, usage~) =>
+                Completed(
+                  text~,
+                  input_tokens=usage.prompt_tokens,
+                  output_tokens=usage.completion_tokens,
+                )
+            }
+            ignore(
+              steps.try_put(
+                PredictionDone(request_id, source_sequence, outcome),
+              ) catch {
+                _ => false
+              },
+            )
+          })
+          prediction = Some((request_id, source_sequence, task))
+        }
+        PredictionDone(request_id, source_sequence, outcome) =>
+          if prediction is Some((id, sequence, _)) &&
+            id == request_id &&
+            sequence == source_sequence {
+            prediction = None
+            let outcome = if session.last_sequence() == source_sequence {
+              outcome
+            } else {
+              Cancelled
+            }
+            let outcome = try {
+              if outcome is Completed(..) {
+                let record : @protocol.PredictionRecord = {
+                  source_sequence,
+                  request_id,
+                  outcome,
+                }
+                if store is Some(store) {
+                  store.save_prediction(session, record)
+                }
+                prediction_record = Some(record)
+              }
+              outcome
+            } catch {
+              error => Failed("prediction storage: \{error}")
+            }
+            @emit.emit(
+              PredictionResult(request_id~, source_sequence~, outcome~),
+            )
+          }
         Wire(Prompt(content, submission_id~)) =>
           match active_work {
             // One turn at a time: extra prompts wait their wire-order turn.

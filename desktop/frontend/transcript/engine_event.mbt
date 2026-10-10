@@ -105,7 +105,10 @@ pub(all) enum EngineEvent {
 /// means a known event that intentionally has no desktop presentation.
 pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
   match event {
-    JobChanged(..) | JobsSnapshot(..) | JobStopResult(..) => None
+    PredictionResult(..)
+    | JobChanged(..)
+    | JobsSnapshot(..)
+    | JobStopResult(..) => None
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
       Some(StreamRetry(attempt~, max_attempts~, reason~))

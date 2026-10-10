@@ -1,0 +1,23 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_session/prediction"
+
+import {
+  "moonbitlang/openseek/agent_session",
+  "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek/deepseek/client",
+}
+
+// Values
+pub async fn generate(@client.Client, @agent_session.Session, tools~ : Array[@deepseek.ToolDefinition]) -> GenerationResult
+
+// Errors
+
+// Types and methods
+pub enum GenerationResult {
+  Skipped
+  Completed(text~ : String?, usage~ : @deepseek.Usage)
+}
+
+// Type aliases
+
+// Traits

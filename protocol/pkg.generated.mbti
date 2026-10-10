@@ -59,6 +59,8 @@ pub(all) enum Command {
   Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
   Compact
   Cancel
+  Predict(request_id~ : String, source_sequence~ : Int)
+  CancelPrediction(request_id~ : String)
   JobsSnapshot(request_id~ : String)
   JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   GoalSet(text~ : String, auto~ : Bool)
@@ -116,6 +118,7 @@ pub(all) enum Event {
   SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
+  PredictionResult(request_id~ : String, source_sequence~ : Int, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
   GoalUpdated(goal~ : String?)
@@ -246,6 +249,33 @@ pub fn JobStopOutcome::to_json(Self) -> Json
 pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
 pub impl ToJson for JobStopOutcome
 pub impl @json.FromJson for JobStopOutcome
+
+pub(all) enum PredictionOutcome {
+  Completed(text~ : String?, input_tokens~ : Int, output_tokens~ : Int)
+  Skipped
+  Cancelled
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn PredictionOutcome::equal(Self, Self) -> Bool
+pub fn PredictionOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionOutcome::not_equal(Self, Self) -> Bool
+pub fn PredictionOutcome::to_json(Self) -> Json
+pub fn PredictionOutcome::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionOutcome
+pub impl @json.FromJson for PredictionOutcome
+
+pub(all) struct PredictionRecord {
+  source_sequence : Int
+  request_id : String
+  outcome : PredictionOutcome
+} derive(Eq, @debug.Debug)
+pub fn PredictionRecord::equal(Self, Self) -> Bool
+pub fn PredictionRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionRecord::not_equal(Self, Self) -> Bool
+pub fn PredictionRecord::to_json(Self) -> Json
+pub fn PredictionRecord::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionRecord
+pub impl @json.FromJson for PredictionRecord
 
 pub(all) struct RunRequest {
   request_id : String?

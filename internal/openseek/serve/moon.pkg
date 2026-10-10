@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek/agent_session/prediction",
+  "moonbitlang/openseek/deepseek/client",
   "moonbitlang/openseek/agent",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_session",
