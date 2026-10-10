@@ -1,0 +1,165 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/cdp"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/core/json",
+}
+
+// Values
+pub fn devtools_highlight() -> HighlightConfig
+
+pub async fn list_targets(Int) -> Array[Target]
+
+// Errors
+pub suberror CDPError {
+  Protocol(String)
+  CommandFailed(code~ : Int, message~ : String, data~ : Json?)
+  JavaScriptException(String)
+  MissingValue
+  ConcurrentRead
+} derive(@debug.Debug)
+pub fn CDPError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+pub struct BackendNodeId(Int) derive(Eq, @debug.Debug)
+pub fn BackendNodeId::equal(Self, Self) -> Bool
+pub fn BackendNodeId::not_equal(Self, Self) -> Bool
+pub fn BackendNodeId::to_repr(Self) -> @debug.Repr
+
+pub(all) struct BoxStyle {
+  hatch_color : Color
+  fill_color : Color?
+}
+
+pub(all) struct CallFunction {
+  object_id : RemoteObjectId
+  declaration : String
+}
+
+pub(all) struct Color {
+  r : Int
+  g : Int
+  b : Int
+  a : Double
+}
+
+type Connection
+pub async fn Connection::add_binding(Self, String) -> Unit
+pub async fn Connection::call_function_on(Self, CallFunction) -> Evaluation
+pub fn Connection::close(Self) -> Unit
+pub async fn Connection::enable_dom(Self) -> Unit
+pub async fn Connection::enable_overlay(Self) -> Unit
+pub async fn Connection::evaluate(Self, String) -> Evaluation
+pub async fn Connection::hide_highlight(Self) -> Unit
+pub async fn Connection::next_event(Self) -> Event
+pub async fn Connection::release_object(Self, RemoteObjectId) -> Unit
+pub async fn Connection::resolve_node(Self, BackendNodeId) -> RemoteObject
+pub async fn Connection::set_inspect_mode(Self, InspectMode) -> Unit
+
+pub(all) enum ContrastAlgorithm {
+  Aa
+  Aaa
+  Apca
+}
+
+pub struct Evaluation {
+  result : RemoteObject
+  exception : String?
+} derive(Eq, @debug.Debug)
+pub fn[T : @json.FromJson] Evaluation::decode_value(Self) -> T raise
+pub fn Evaluation::equal(Self, Self) -> Bool
+pub fn Evaluation::not_equal(Self, Self) -> Bool
+pub fn Evaluation::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Event {
+  InspectNodeRequested(BackendNodeId)
+  InspectModeCanceled
+  BindingCalled(name~ : String, payload~ : String, execution_context_id~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn Event::equal(Self, Self) -> Bool
+pub fn Event::not_equal(Self, Self) -> Bool
+pub fn Event::to_repr(Self) -> @debug.Repr
+
+pub(all) struct FlexContainerHighlightConfig {
+  container_border : LineStyle
+  item_separator : LineStyle
+  line_separator : LineStyle
+  main_distributed_space : BoxStyle
+  cross_distributed_space : BoxStyle
+  row_gap_space : BoxStyle
+  column_gap_space : BoxStyle
+}
+
+pub(all) struct FlexItemHighlightConfig {
+  base_size_box : BoxStyle
+  base_size_border : LineStyle
+  flexibility_arrow : LineStyle
+}
+
+pub(all) struct GridHighlightConfig {
+  row_gap_color : Color
+  row_hatch_color : Color
+  column_gap_color : Color
+  column_hatch_color : Color
+  row_line_color : Color
+  column_line_color : Color
+  row_line_dash : Bool
+  column_line_dash : Bool
+}
+
+pub(all) struct HighlightConfig {
+  show_info : Bool
+  show_styles : Bool
+  show_accessibility_info : Bool
+  contrast_algorithm : ContrastAlgorithm
+  content_color : Color
+  padding_color : Color
+  border_color : Color
+  margin_color : Color
+  event_target_color : Color
+  shape_color : Color
+  shape_margin_color : Color
+  grid : GridHighlightConfig
+  flex_container : FlexContainerHighlightConfig
+  flex_item : FlexItemHighlightConfig
+}
+
+pub(all) enum InspectMode {
+  Disabled
+  SearchForNode(HighlightConfig)
+}
+
+pub(all) enum LinePattern {
+  Solid
+  Dashed
+  Dotted
+}
+
+pub(all) struct LineStyle {
+  color : Color
+  pattern : LinePattern?
+}
+
+pub struct RemoteObject {
+  object_id : RemoteObjectId?
+  value : Json?
+} derive(Eq, @debug.Debug)
+pub fn RemoteObject::equal(Self, Self) -> Bool
+pub fn RemoteObject::not_equal(Self, Self) -> Bool
+pub fn RemoteObject::to_repr(Self) -> @debug.Repr
+
+pub struct RemoteObjectId(String) derive(Eq, @debug.Debug)
+pub fn RemoteObjectId::equal(Self, Self) -> Bool
+pub fn RemoteObjectId::not_equal(Self, Self) -> Bool
+pub fn RemoteObjectId::to_repr(Self) -> @debug.Repr
+
+pub struct Target {
+  kind : String
+  // private fields
+}
+pub async fn Target::connect(Self) -> Connection
+
+// Type aliases
+
+// Traits
