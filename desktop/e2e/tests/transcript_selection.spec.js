@@ -44,6 +44,11 @@ for (const minimal of [false, true]) for (const gesture of ['drag', 'double clic
       await toolbar.getByRole('button', { name: 'Copy', exact: true }).click();
       await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('Selectable');
       expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
+      await expect(toolbar).toHaveCount(0);
+      await expect(page.getByRole('status', { name: 'Copied', exact: true })).toBeVisible();
+      await expect(page.locator('[data-selection-actions]')).toHaveCount(0);
+      expect(await page.evaluate(() => document.getSelection().toString())).toBe('Selectable');
+      await paragraph.dblclick({ position: { x: 8, y: 8 } });
       await toolbar.getByRole('button', { name: 'Reply', exact: true }).click();
       const reply = page.getByRole('dialog', { name: 'Reply to selection' });
       await expect(reply.locator('blockquote')).toHaveText('Selectable');

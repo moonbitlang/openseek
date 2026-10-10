@@ -85,10 +85,32 @@
 .selection-actions.below {
   transform: translate(-50%, 0);
 }
-.selection-actions > .action-menu-item {
+.selection-actions-buttons {
+  display: flex;
+}
+.selection-actions:has(.selection-actions-buttons) {
+  flex-direction: column;
+}
+.selection-actions-buttons > .action-menu-item {
   width: auto;
   justify-content: center;
   padding: 5px 12px;
+}
+.selection-copy-feedback {
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: var(--font-size-sm);
+}
+.selection-copy-feedback svg {
+  display: block;
+  width: var(--icon-size);
+  height: var(--icon-size);
+}
+.selection-copy-error {
+  padding: 4px 12px 6px;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
 }
 .selection-actions-separator {
   align-self: center;
