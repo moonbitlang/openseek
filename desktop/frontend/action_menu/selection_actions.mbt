@@ -537,13 +537,7 @@ pub fn[T : Eq] selection_component(
           class="selection-actions selection-copy-feedback\{placement}",
           style~,
           attrs=selection_surface_attrs(open.stage, ui(locale, CopySuccess)),
-          [
-            @html.span(
-              attrs=@html.Attrs::build().aria_hidden("true"),
-              @icons.icon(@icons.icon_check),
-            ),
-            @html.span(ui(locale, CopySuccess)),
-          ],
+          [@icons.icon(@icons.icon_check), @html.span(ui(locale, CopySuccess))],
         )
       Replying(comment~, declined~) => {
         let sendable = state.batched || !comment.is_blank()

@@ -102,11 +102,6 @@
   padding: 8px 12px;
   font-size: var(--font-size-sm);
 }
-.selection-copy-feedback svg {
-  display: block;
-  width: var(--icon-size);
-  height: var(--icon-size);
-}
 .selection-copy-error {
   padding: 4px 12px 6px;
   color: var(--color-danger);
