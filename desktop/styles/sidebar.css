@@ -1221,3 +1221,14 @@ button.row-twisty:hover {
     }
   }
 }
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+:is(
+  .sidebar-button, .sidebar-mode-option, .conversation-open, .row-archive,
+  .section-disclosure, .section-primary-action, .workspace-disclosure,
+  .project-show-more, .composer-worktree, .picker-close,
+  .picker-path-editor-cancel, .picker-new-folder
+):focus-visible {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}

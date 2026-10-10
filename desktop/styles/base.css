@@ -462,3 +462,12 @@ html.native-titlebar-overlay .app
 .content.panel-expanded .editor-tabsbar {
   padding-inline-start: var(--main-titlebar-leading-inset);
 }
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+.menu-option:focus-visible,
+[data-focus-owner]:focus-visible,
+[data-focus-owner]:has([data-focus-target]:focus-visible),
+.tool-call-tab-input:focus-visible + .tool-call-tab-label {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}

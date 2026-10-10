@@ -189,3 +189,9 @@ main {
 main > .conversation-load-state {
   grid-row: 2 / -1;
 }
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+.sidebar-toggle:focus-visible {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}

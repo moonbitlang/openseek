@@ -94,3 +94,9 @@
 .github-html-body :is(.pl-v, .pl-smw) { color: light-dark(#953800, #ffa657); }
 .github-html-body :is(.pl-ent, .pl-gi) { color: light-dark(#116329, #7ee787); }
 .github-html-body .pl-gd { color: light-dark(#82071e, #ffa198); }
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+:is(.github-detail .markdown, .github-review-markdown) summary:focus-visible {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}

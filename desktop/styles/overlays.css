@@ -769,3 +769,9 @@ dialog.workspace-settings-dialog {
   content: "\eb63";
 }
 
+/* Keyboard focus uses a surface highlight without adding a frame. */
+.export-dialog-close:focus-visible,
+.workspace-settings-close:focus-visible {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}

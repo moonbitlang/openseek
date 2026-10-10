@@ -863,7 +863,7 @@
   font-size: var(--font-size-sm);
 }
 
-.composer-picker .custom-select-option.selected:not(:hover) {
+.composer-picker .custom-select-option.selected:not(:hover, :focus-visible) {
   background: transparent;
 }
 
@@ -1269,4 +1269,13 @@
 
 .shell-command-state {
   color: var(--color-text-muted);
+}
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+.composer :is(button, a, summary):focus-visible,
+.queued-input-action:focus-visible,
+.icon-button:focus-visible,
+.composer-attach:has(:focus-visible) {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
 }

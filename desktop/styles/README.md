@@ -107,8 +107,11 @@ as text grows.
 ## Focus appearance
 
 Focus does not add a border, outline, or text underline. `base.css` suppresses
-native focus outlines; controls keep their ordinary borders, hover surfaces,
-and selected states. Embedded Viewer controls receive a transparent
+native focus outlines. Keyboard focus uses `:focus-visible` surface highlights
+so the current target remains visible without changing ordinary borders.
+Pointer focus on buttons does not add a keyboard highlight; text-entry controls
+follow the browser's `:focus-visible` heuristic. Hover and selected states remain
+component-owned. Embedded Viewer controls receive a transparent
 `--vscode-focusBorder` through the host theme.
 
 Keep focus handling and keyboard navigation intact. `data-focus-owner` and

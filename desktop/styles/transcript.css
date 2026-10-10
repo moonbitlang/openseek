@@ -1964,3 +1964,12 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
+
+/* Keyboard focus uses a surface highlight without adding a frame. */
+:is(
+  .empty-project-trigger, .empty-project-option, .empty-project-new,
+  .message-copy, .minimal-activity-summary
+):focus-visible {
+  background-color: var(--color-accent-soft);
+  color: var(--color-text-primary);
+}
