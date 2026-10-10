@@ -107,7 +107,7 @@ samp,
    a composite field puts the owner on its bordered wrapper and marks the
    nested text control as the target. Explicit data attributes keep this rule
    out of the embedded Viewer even though it shares the document. */
-[data-focus-owner]:focus,
+[data-focus-owner]:not(button):focus,
 [data-focus-owner]:has([data-focus-target]:focus) {
   border-color: var(--color-focus-ring);
   outline: none;

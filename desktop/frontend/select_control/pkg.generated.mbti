@@ -37,7 +37,7 @@ pub(all) struct Option {
 }
 
 pub(all) enum Presentation {
-  Composer(String, Bool)
+  Composer(String?, Bool)
   Setting
 }
 

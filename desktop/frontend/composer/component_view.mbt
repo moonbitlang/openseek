@@ -277,9 +277,15 @@ fn Entry::view(
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None
-  let status = input.presentation.status.map(component => {
-    component.render(locale~, self.identity(), action_emit)
-  })
+  let status : Array[@html.Html] = []
+  let model_controls : Array[@html.Html] = []
+  for component in input.presentation.status {
+    let control = component.render(locale~, self.identity(), action_emit)
+    match component {
+      ModelStatus(_) | ReasoningStatus(_) => model_controls.push(control)
+      _ => status.push(control)
+    }
+  }
   if can_attach {
     status.push(
       @html.button(
@@ -356,6 +362,7 @@ fn Entry::view(
       },
     },
     status,
+    model_controls,
     actions,
     // A command is not a follow-up: it never steers or queues behind the turn.
     followup_menu: if shell_command is Some(_) {
@@ -434,7 +441,7 @@ fn Entry::followup_menu(
       change: emit.map(value => FollowupSelected(value)),
       title: ui(locale, FollowupHint),
       aria_label: ui(locale, FollowupAction),
-      presentation: Composer("↳", true),
+      presentation: Composer(Some("↳"), true),
     }.render(),
   )
 }

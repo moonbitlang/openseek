@@ -19,7 +19,7 @@ pub(all) struct Group {
 /// behavior, focus restoration, and accessibility; only their trigger geometry
 /// and popup sizing differ.
 pub(all) enum Presentation {
-  Composer(String, Bool)
+  Composer(String?, Bool)
   Setting
 }
 
@@ -79,9 +79,10 @@ fn Presentation::trigger_contents(
   match self {
     Composer(glyph, _) =>
       [
-        @html.span(class="composer-model-glyph", glyph),
+        ..if glyph is Some(glyph) {
+          [@html.span(class="composer-model-glyph", glyph)]
+        },
         @html.span(class="composer-model-label", selected_label),
-        @html.span(class="composer-model-chevron", ""),
       ]
     Setting =>
       [
