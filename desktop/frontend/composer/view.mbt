@@ -79,7 +79,7 @@ fn ModelSelect::render(
   @select_control.Control::{
     id: self.id,
     groups: self.groups.map(group => group.select_group()),
-    selected: self.selected,
+    selected: Some(self.selected),
     disabled: self.disabled,
     open: self.open,
     toggle: action_emit(ModelMenuToggled(identity~)),
@@ -123,7 +123,7 @@ fn ReasoningSelect::render(
         }),
       },
     ],
-    selected: self.selected,
+    selected: Some(self.selected),
     disabled: self.disabled,
     open: self.open,
     toggle: action_emit(ReasoningMenuToggled(identity~)),

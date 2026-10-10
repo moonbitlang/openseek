@@ -15,11 +15,15 @@ pub(all) struct Group {
 }
 
 ///|
-/// The two visual forms used by the desktop. Both share menu rows, keyboard
+/// The visual forms used by the desktop. All share menu rows, keyboard
 /// behavior, focus restoration, and accessibility; only their trigger geometry
 /// and popup sizing differ.
 pub(all) enum Presentation {
   Composer(String, Bool)
+  // A composer picker whose trigger is a glyph icon instead of a value label:
+  // the caller supplies the rendered icon, so the trigger draws neither a
+  // selected label nor a chevron.
+  ComposerIcon(@html.Html)
   Setting
 }
 
@@ -30,7 +34,8 @@ pub(all) enum Presentation {
 pub(all) struct Control {
   id : String
   groups : Array[Group]
-  selected : String
+  // None leaves all rows unselected, allowing each row to act on every click.
+  selected : String?
   disabled : Bool
   open : Bool
   toggle : @cmd.Cmd
@@ -50,6 +55,7 @@ fn Presentation::root_class(self : Presentation) -> String {
       } else {
         "custom-select composer-picker"
       }
+    ComposerIcon(_) => "custom-select composer-picker"
     Setting => "custom-select setting-select"
   }
 }
@@ -59,6 +65,7 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
   let state = if open { " open" } else { "" }
   match self {
     Composer(_, _) => "custom-select-button composer-model" + state
+    ComposerIcon(_) => "custom-select-button composer-icon" + state
     Setting => "custom-select-button setting-select-button" + state
   }
 }
@@ -66,7 +73,8 @@ fn Presentation::button_class(self : Presentation, open : Bool) -> String {
 ///|
 fn Presentation::menu_class(self : Presentation) -> String {
   match self {
-    Composer(_, _) => "menu-surface custom-select-menu composer-picker-menu"
+    Composer(_, _) | ComposerIcon(_) =>
+      "menu-surface custom-select-menu composer-picker-menu"
     Setting => "menu-surface custom-select-menu setting-select-menu"
   }
 }
@@ -83,6 +91,7 @@ fn Presentation::trigger_contents(
         @html.span(class="composer-model-label", selected_label),
         @html.span(class="composer-model-chevron", ""),
       ]
+    ComposerIcon(icon) => [icon]
     Setting =>
       [
         @html.span(class="setting-select-label", selected_label),
@@ -252,12 +261,12 @@ fn Control::option_attrs(
 
 ///|
 pub fn Control::render(self : Control) -> @html.Html {
-  let mut selected_label = self.selected
+  let mut selected_label = self.selected.unwrap_or(self.aria_label)
   let mut selected_index = 0
   let mut option_count = 0
   for group in self.groups {
     for option in group.options {
-      if option.value == self.selected {
+      if self.selected == Some(option.value) {
         selected_label = option.label
         selected_index = option_count
       }
@@ -282,7 +291,7 @@ pub fn Control::render(self : Control) -> @html.Html {
     for group in self.groups {
       let rows : Array[@html.Html] = []
       for option in group.options {
-        let selected = option.value == self.selected
+        let selected = self.selected == Some(option.value)
         // Clicking a row completes the single-choice interaction even when it
         // is already selected. Close in both cases, but only a new value may
         // reach caller update logic as a change.

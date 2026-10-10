@@ -24,6 +24,7 @@ priv enum UiMessage {
   SaveQueued
   AttachHint
   AttachImages
+  AddLabel
   ReadingImages
   SteerPlaceholder
   QueuePlaceholder
@@ -239,6 +240,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AttachImages) => "添加图片"
     (TraditionalChinese, AttachImages) => "新增圖片"
     (Japanese, AttachImages) => "画像を追加"
+    (English, AddLabel) => "Add"
+    (Spanish, AddLabel) => "Añadir"
+    (SimplifiedChinese, AddLabel) => "添加"
+    (TraditionalChinese, AddLabel) => "新增"
+    (Japanese, AddLabel) => "追加"
     (English, ReadingImages) => "Reading images…"
     (Spanish, ReadingImages) => "Leyendo imágenes…"
     (SimplifiedChinese, ReadingImages) => "正在读取图片…"

@@ -122,7 +122,7 @@ fn setting_select(
   @select_control.Control::{
     id,
     groups: [{ label: aria_label, options, }],
-    selected,
+    selected: Some(selected),
     disabled: input.settings is Unloaded,
     open: state.menu is Some(current) &&
     current == menu &&

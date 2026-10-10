@@ -277,20 +277,21 @@ fn Entry::view(
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None
-  let status = input.presentation.status.map(component => {
-    component.render(locale~, self.identity(), action_emit)
-  })
-  if can_attach {
-    status.push(
-      @html.button(
-        class="composer-attach",
-        type_="button",
-        title=ui(locale, AttachHint),
-        on_click=@image_input.pick(locale~, image_emit),
-        attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
-        ui(locale, AttachImages),
-      ),
-    )
+  // The `+` holds the first slot of the toolbar's left group, and keeps it even
+  // when this conversation cannot attach images: a permanent slot is what keeps
+  // the model and git chips after it from shifting as it appears and leaves.
+  let status : Array[@html.Html] = [
+    @html.div(
+      class="composer-add",
+      if can_attach {
+        [self.add_menu(locale~, emit, image_emit)]
+      } else {
+        ([] : Array[@html.Html])
+      },
+    ),
+  ]
+  for component in input.presentation.status {
+    status.push(component.render(locale~, self.identity(), action_emit))
   }
   if self.image_reads > 0 {
     context.push(
@@ -424,8 +425,8 @@ fn Entry::followup_menu(
         },
       ],
       selected: match choice {
-        SteerNow => "steer"
-        QueueNext => "queue"
+        SteerNow => Some("steer")
+        QueueNext => Some("queue")
       },
       disabled: !steer_available || self.image_reads > 0,
       open: self.followup_menu_open,
@@ -437,4 +438,41 @@ fn Entry::followup_menu(
       presentation: Composer("↳", true),
     }.render(),
   )
+}
+
+///|
+/// The composer's add control: one `+` trigger whose menu starts with
+/// attaching images. A menu instead of another chip keeps the toolbar's width
+/// stable as more attachment kinds arrive — each becomes a row here rather
+/// than a control beside the input.
+fn Entry::add_menu(
+  locale? : @i18n.Locale = English,
+  self : Entry,
+  emit : @cmd.Emit[Msg],
+  image_emit : @cmd.Emit[@image_input.Event],
+) -> @html.Html {
+  @select_control.Control::{
+    id: "composer-add",
+    groups: [
+      {
+        label: ui(locale, AddLabel),
+        options: [{ value: "images", label: ui(locale, AttachImages), }],
+      },
+    ],
+    // With no selected value, each action can be triggered repeatedly.
+    selected: None,
+    disabled: false,
+    open: self.add_menu_open,
+    toggle: emit(AddMenuToggled),
+    dismiss: emit(AddMenuDismissed),
+    change: @cmd.Emit(_ => {
+      @cmd.batch([
+        emit(AddMenuDismissed),
+        @image_input.pick(locale~, image_emit),
+      ])
+    }),
+    title: ui(locale, AttachHint),
+    aria_label: ui(locale, AddLabel),
+    presentation: ComposerIcon(@icons.icon(@icons.icon_add)),
+  }.render()
 }

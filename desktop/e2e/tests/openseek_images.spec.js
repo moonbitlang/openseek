@@ -12,13 +12,16 @@ async function open(page) {
   await app.install();
   await app.goto();
   await app.openSession();
-  await expect(page.getByRole('button', { name: 'Attach images', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add', exact: true })).toBeVisible();
   return app;
 }
 
 async function select(page) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach images', exact: true }).click();
+  // Images are one row of the composer's "+" add menu, so the picker opens
+  // from two clicks: the trigger that reveals the menu, then the row itself.
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
+  await page.getByRole('option', { name: 'Attach images', exact: true }).click();
   await (await chooser).setFiles(image);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
 }

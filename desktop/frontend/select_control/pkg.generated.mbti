@@ -14,7 +14,7 @@ import {
 pub(all) struct Control {
   id : String
   groups : Array[Group]
-  selected : String
+  selected : String?
   disabled : Bool
   open : Bool
   toggle : @cmd.Cmd
@@ -38,6 +38,7 @@ pub(all) struct Option {
 
 pub(all) enum Presentation {
   Composer(String, Bool)
+  ComposerIcon(@html.Html)
   Setting
 }
 

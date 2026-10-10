@@ -934,28 +934,40 @@
   height: 14px;
 }
 
-.composer-attach {
+/* The `+` add control holds a permanent first slot in the toolbar's status
+   group, so it sits at the row's left edge and its coming and going never
+   shifts the chips after it. */
+.composer-add {
+  display: inline-flex;
+  flex: none;
+}
+.composer-add:empty {
+  display: none;
+}
+/* Its trigger is an icon button, not a value pill: the icon centers in the
+   same 30px box the send button uses. */
+.composer-icon {
+  display: inline-grid;
+  place-items: center;
   box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
   height: 30px;
-  border: 0;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  cursor: pointer;
+  color: var(--color-text-secondary);
 }
-.composer-attach:hover {
+.composer-icon:hover:not(:disabled),
+.composer-icon.open {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.composer-attach:focus-within {
-  outline: 2px solid var(--color-text-primary);
-  outline-offset: 3px;
-  border-radius: 3px;
+/* The menu grows rightward from the left-edge trigger, and flips inline too so
+   a composer against a window edge still shows it whole. */
+#composer-add-menu {
+  position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
 }
 .composer-image-notice {
   font-size: var(--font-size-sm);
