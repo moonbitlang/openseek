@@ -1,9 +1,0 @@
-import {
-  "moonbit-community/rabbita/cmd",
-  "openseek_desktop/frontend/internal/uuid/browser" @uuid,
-  "openseek_desktop/frontend/interop",
-  "openseek_desktop/protocol",
-  "openseek_desktop/commands",
-}
-
-supported_targets = "js"

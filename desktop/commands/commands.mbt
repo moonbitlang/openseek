@@ -904,14 +904,3 @@ pub let browser_cancel_pick : Command[
   @protocol.BrowserPickPayload,
   @protocol.EmptyReply,
 ] = Command("browser.cancel_pick")
-
-///|
-pub let agent_predict : Command[
-  @protocol.PredictionPayload,
-  @protocol.PredictionReply,
-] = Command("agent.predict")
-
-///|
-pub let agent_cancel_prediction : Command[@protocol.PredictionPayload, Bool] = Command(
-  "agent.cancel_prediction",
-)

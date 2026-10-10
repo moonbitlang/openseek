@@ -2108,6 +2108,7 @@ pub(all) enum Notification {
   AgentEvent(AgentEventPayload)
   AgentError(AgentErrorPayload)
   AgentFinished(FinishedPayload)
+  AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
@@ -2145,6 +2146,7 @@ pub(all) enum NotificationKind {
   AgentEvent
   AgentError
   AgentFinished
+  AgentPrediction
   SessionEvent
   SubrunProgress
   WorkflowEntry
@@ -2306,29 +2308,17 @@ pub fn PendingApprovalPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PendingApprovalPayload
 pub impl @json.FromJson for PendingApprovalPayload
 
-pub(all) struct PredictionPayload {
+pub(all) struct PredictionReadyPayload {
   session : String
-  request_id : String
-  source_sequence : Int
+  prediction : @openseek_protocol.PredictionRecord
 } derive(Eq, @debug.Debug)
-pub fn PredictionPayload::equal(Self, Self) -> Bool
-pub fn PredictionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn PredictionPayload::not_equal(Self, Self) -> Bool
-pub fn PredictionPayload::to_json(Self) -> Json
-pub fn PredictionPayload::to_repr(Self) -> @debug.Repr
-pub impl ToJson for PredictionPayload
-pub impl @json.FromJson for PredictionPayload
-
-pub(all) struct PredictionReply {
-  outcome : @openseek_protocol.PredictionOutcome
-} derive(Eq, @debug.Debug)
-pub fn PredictionReply::equal(Self, Self) -> Bool
-pub fn PredictionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn PredictionReply::not_equal(Self, Self) -> Bool
-pub fn PredictionReply::to_json(Self) -> Json
-pub fn PredictionReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for PredictionReply
-pub impl @json.FromJson for PredictionReply
+pub fn PredictionReadyPayload::equal(Self, Self) -> Bool
+pub fn PredictionReadyPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PredictionReadyPayload::not_equal(Self, Self) -> Bool
+pub fn PredictionReadyPayload::to_json(Self) -> Json
+pub fn PredictionReadyPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PredictionReadyPayload
+pub impl @json.FromJson for PredictionReadyPayload
 
 pub(all) enum QueueAction {
   QueueAdd(id~ : String, text~ : String, images~ : Array[String])

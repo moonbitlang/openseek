@@ -2307,6 +2307,7 @@ priv enum DeviceMsg {
   // The host's `session.event` broadcast: one durably committed store event.
   // Together with `session.load` snapshots these are the transcript's only
   // durable sources; the live `agent.event` stream is lifecycle/stream state.
+  PredictionReceived(session~ : String, prediction~ : @wire.PredictionRecord)
   SessionCommitted(
     session~ : String,
     sequence~ : Int,

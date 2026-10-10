@@ -65,7 +65,6 @@ priv struct ServeEngine {
   mut condemned : Bool
   steer_runs : SteerRunTracker
   job_requests : Map[String, @async.Queue[@wire.Event]]
-  prediction_requests : Map[String, @async.Queue[@wire.Event]]
   queued_runs : Array[QueuedRun]
 }
 
@@ -254,10 +253,6 @@ fn ServeEngine::condemn(self : ServeEngine) -> Unit {
     reply.close()
   }
   self.job_requests.clear()
-  for _, reply in self.prediction_requests {
-    reply.close()
-  }
-  self.prediction_requests.clear()
   self.condemned = true
   self.commands.close()
 }
@@ -1566,7 +1561,6 @@ async fn[G] start_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
-    prediction_requests: Map([]),
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -1741,9 +1735,15 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
-          Some(PredictionResult(request_id~, ..) as event) => {
-            if self.prediction_requests.get(request_id) is Some(reply) {
-              ignore(reply.try_put(event) catch { _ => false })
+          Some(PredictionResult(source_sequence~, outcome~)) => {
+            if outcome is Completed(..) {
+              emit(
+                sink,
+                PredictionReady({
+                  session: engine.session_key,
+                  prediction: { source_sequence, outcome, },
+                }),
+              )
             }
             continue
           }
@@ -2248,7 +2248,6 @@ fn test_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
-    prediction_requests: Map([]),
   }
 }
 

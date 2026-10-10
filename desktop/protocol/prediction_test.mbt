@@ -1,76 +1,38 @@
 ///|
-test "prediction payloads require an exact version and explicit optional text" {
-  let payload : @protocol.PredictionPayload = {
-    session: "session",
-    request_id: "request",
-    source_sequence: 7,
+test "completed prediction broadcasts round trip and reject incomplete results" {
+  let payload : @protocol.PredictionReadyPayload = {
+    session: "s",
+    prediction: {
+      source_sequence: 2,
+      outcome: Completed(text=Some("Commit"), input_tokens=1, output_tokens=2),
+    },
   }
+  let notification = @protocol.Notification::AgentPrediction(payload)
+  assert_eq(
+    @protocol.Notification::from_wire(
+      notification.wire_name(),
+      notification.params(),
+    ),
+    Some(notification),
+  )
   assert_eq(@json.from_json(payload.to_json()), payload)
   for
     value in (
       [
-        { "session": "session", "request_id": "request" },
+        { "session": "s" },
+        { "session": "s", "prediction": null },
         {
-          "session": "session",
-          "request_id": "request",
-          "source_sequence": null,
-        },
-        {
-          "session": "session",
-          "request_id": "request",
-          "source_sequence": 1.5,
-        },
-        { "session": "session", "request_id": "request", "source_sequence": 0 },
-        { "session": "session", "request_id": "", "source_sequence": 7 },
-      ] : Array[Json]) {
-    let rejected = try
-      (@json.from_json(value) : @protocol.PredictionPayload)
-    catch {
-      _ => true
-    } noraise {
-      _ => false
-    }
-    assert_true(rejected)
-  }
-  let reply : @protocol.PredictionReply = {
-    outcome: Completed(text=None, input_tokens=5, output_tokens=2),
-  }
-  assert_eq(@json.from_json(reply.to_json()), reply)
-  for
-    value in (
-      [
-        {
-          "outcome": {
-            "kind": "completed",
-            "input_tokens": 5,
-            "output_tokens": 2,
-          },
-        },
-        {
-          "outcome": {
-            "kind": "completed",
-            "text": "",
-            "input_tokens": 5,
-            "output_tokens": 2,
-          },
-        },
-        {
-          "outcome": {
-            "kind": "completed",
-            "text": null,
-            "input_tokens": -1,
-            "output_tokens": 2,
+          "session": "s",
+          "prediction": {
+            "version": 1,
+            "source_sequence": 2,
+            "outcome": { "kind": "skipped" },
           },
         },
       ] : Array[Json]) {
-    let rejected = try
-      (@json.from_json(value) : @protocol.PredictionReply)
-    catch {
-      _ => true
-    } noraise {
-      _ => false
-    }
-    assert_true(rejected)
+    assert_true(
+      @protocol.Notification::from_wire("agent.prediction", value) is None,
+    )
   }
 }
 
@@ -86,7 +48,6 @@ test "session load carries a plain nullable prediction record" {
     watermark: Some(2),
     prediction: Some({
       source_sequence: 2,
-      request_id: "r",
       outcome: Completed(text=Some("continue"), input_tokens=1, output_tokens=2),
     }),
   }

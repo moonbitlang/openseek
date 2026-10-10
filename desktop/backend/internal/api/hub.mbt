@@ -269,6 +269,7 @@ fn Hub::sink(
       // settles transient stream and lifecycle state in commit-aware clients
       // (docs/remote-protocol.md).
       SessionCommit(payload) => self.publish(SessionEvent(payload))
+      PredictionReady(payload) => self.publish(AgentPrediction(payload))
       // Liveness for a sub-run in flight. Nothing downstream persists it:
       // a client that arrives late simply learns nothing about a child's
       // progress until its next advance.

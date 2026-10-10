@@ -1,6 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
+const prediction = (text = 'Commit the fix') => ({
+  version: 1, source_sequence: 2,
+  outcome: { kind: 'completed', text, input_tokens: 40, output_tokens: 8 },
+});
+
 class PredictionHarness extends DesktopBrowserHarness {
   constructor(page) {
     super(page);
@@ -14,12 +19,6 @@ class PredictionHarness extends DesktopBrowserHarness {
     if (request.method === 'session.load') {
       return { ...super.replyFor(request), prediction: this.predictionRecord };
     }
-    if (request.method === 'agent.predict') {
-      const outcome = { kind: 'completed', text: 'Commit the fix', input_tokens: 40, output_tokens: 8 };
-      this.predictionRecord = { version: 1, source_sequence: request.params.source_sequence, request_id: request.params.request_id, outcome };
-      return { outcome };
-    }
-    if (request.method === 'agent.cancel_prediction') return true;
     return super.replyFor(request);
   }
   async finish() {
@@ -27,14 +26,28 @@ class PredictionHarness extends DesktopBrowserHarness {
     await expect(this.page.locator('#stop')).toBeVisible();
     this.notify('agent.finished', { run_id: 'prediction-run', status: 'finished', answer: 'The fix is ready and tests pass.', exit_code: 0 });
   }
+  publish(record = prediction()) {
+    this.predictionRecord = record;
+    this.notify('agent.prediction', { session: 'session-1', prediction: record });
+  }
+  assertNoPredictionRequests() {
+    expect(this.requests.filter(r => ['agent.predict', 'agent.cancel_prediction'].includes(r.method))).toEqual([]);
+    expect(this.pageErrors).toEqual([]);
+  }
 }
 
-test('accepting and clearing restores the suggestion without another request', async ({ page }) => {
+async function open(page) {
   const app = new PredictionHarness(page);
   await app.install();
   await app.goto();
   await app.openSession();
+  return app;
+}
+
+test('accepting and clearing restores the broadcast suggestion without requests', async ({ page }) => {
+  const app = await open(page);
   await app.finish();
+  app.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(input).toHaveValue('');
@@ -46,85 +59,65 @@ test('accepting and clearing restores the suggestion without another request', a
   await input.press('Tab');
   await expect(input).toHaveValue('Commit the fix');
   await expect(input).toBeFocused();
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
   await input.fill('');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await input.fill('My own request');
-  await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  await input.fill('');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await input.press('Tab');
-  await expect(input).toHaveValue('Commit the fix');
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(1);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
+  app.assertNoPredictionRequests();
 });
 
-test('typing and clearing cancels an in-flight suggestion and ignores its late response', async ({ page }) => {
-  const app = new PredictionHarness(page);
-  app.rpcDelays.set('agent.predict', 1200);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.finish();
-  await expect.poll(() => app.requests.filter(r => r.method === 'agent.predict').length).toBe(1);
-  const input = page.locator('#task');
-  await input.fill('My own request');
-  await input.fill('');
-  await expect.poll(() => app.requests.filter(r => r.method === 'agent.cancel_prediction').length).toBe(1);
-  await page.waitForTimeout(1500);
-  await expect(input).toHaveValue('');
-  await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
+test('two clients receive the same broadcast and editing only hides one suggestion', async ({ page, context }) => {
+  const otherPage = await context.newPage();
+  try {
+    const first = await open(page);
+    const second = await open(otherPage);
+    await first.finish();
+    await second.finish();
+    await page.locator('#task').fill('My own request');
+    const record = prediction();
+    first.publish(record);
+    second.publish(record);
+    await expect(page.locator('#task')).toHaveValue('My own request');
+    await expect(page.locator('#task')).not.toHaveAttribute('placeholder', 'Commit the fix');
+    await expect(otherPage.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
+    await page.locator('#task').fill('');
+    await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
+    first.assertNoPredictionRequests();
+    second.assertNoPredictionRequests();
+  } finally { await otherPage.close(); }
 });
 
-test('Escape leaves the suggestion available for Tab acceptance', async ({ page }) => {
-  const app = new PredictionHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
+test('Escape leaves the broadcast suggestion available without a Tab badge', async ({ page }) => {
+  const app = await open(page);
   await app.finish();
+  app.publish();
   const input = page.locator('#task');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await input.press('Escape');
-  await expect(input).toHaveValue('');
   await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(page.locator('.composer-prediction-hint')).toHaveCount(0);
   await input.press('Tab');
   await expect(input).toHaveValue('Commit the fix');
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(1);
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
+  app.assertNoPredictionRequests();
 });
 
-
-test('reopening the page restores the persisted suggestion without another model request', async ({ page }) => {
-  const app = new PredictionHarness(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
+test('reopening restores the persisted broadcast without a prediction request', async ({ page }) => {
+  const app = await open(page);
   await app.finish();
+  app.publish();
   await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(1);
   await page.reload();
   await app.openSession();
   await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(page.locator('#task')).toHaveValue('');
-  await page.waitForTimeout(500);
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(1);
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
+  app.assertNoPredictionRequests();
 });
 
-test('a persisted empty suggestion does not retry when reopened', async ({ page }) => {
+test('a persisted empty suggestion stays empty without requests', async ({ page }) => {
   const app = new PredictionHarness(page);
-  app.predictionRecord = { version: 1, source_sequence: 2, request_id: 'empty', outcome: { kind: 'completed', text: null, input_tokens: 40, output_tokens: 8 } };
+  app.predictionRecord = prediction(null);
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.waitForTimeout(500);
   await expect(page.locator('#task')).not.toHaveAttribute('placeholder', 'Commit the fix');
-  expect(app.requests.filter(r => r.method === 'agent.predict')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
+  app.assertNoPredictionRequests();
 });

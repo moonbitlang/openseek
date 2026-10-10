@@ -166,3 +166,24 @@ test "questions from two engines are kept and retired independently" {
   assert_eq(survivor.session, "s2")
   assert_eq(survivor.body, Some("// s2"))
 }
+
+///|
+test "engine prediction is broadcast to both local and relay subscribers" {
+  let hub = Hub::Hub()
+  let desktop_client = hub.subscribe()
+  let remote = hub.subscribe()
+  let payload : @protocol.PredictionReadyPayload = {
+    session: "s",
+    prediction: {
+      source_sequence: 2,
+      outcome: Completed(text=Some("Commit"), input_tokens=1, output_tokens=2),
+    },
+  }
+  let sink = hub.sink()
+  sink(PredictionReady(payload))
+  let expected = Some(@protocol.Notification::AgentPrediction(payload))
+  assert_eq(desktop_client.try_next(), expected)
+  assert_eq(remote.try_next(), expected)
+  assert_eq(desktop_client.try_next(), None)
+  assert_eq(remote.try_next(), None)
+}

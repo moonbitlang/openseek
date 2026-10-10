@@ -756,7 +756,7 @@ fn apply_session_snapshot(
     goal~,
     goal_markers~,
   )
-  let conv = { ..conv, prediction, }
+  let conv = conv.with_prediction(prediction)
   let mut next = model.replace_conversation(conv)
   let commands : Array[@cmd.Cmd] = []
   let owner : @interop.ConversationKey = { channel, session, }
@@ -7729,6 +7729,15 @@ fn update_device_msg(
         false,
         "failed to refresh session \{session}",
       )
+    PredictionReceived(session~, prediction~) =>
+      if model.find_conversation(channel, session) is Some(conv) {
+        (
+          @cmd.none,
+          model.replace_conversation(conv.with_prediction(Some(prediction))),
+        )
+      } else {
+        (@cmd.none, model)
+      }
     SessionCommitted(session~, sequence~, ts~, item~, session_root~) => {
       // The commit names its own store — the exact durable identity rather
       // than a guess. Commits do not precede `agent.connected` (readiness
