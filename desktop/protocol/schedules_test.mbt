@@ -5,6 +5,13 @@ test "schedule codecs reject malformed timing and preserve optional absence" {
     { "kind": "every", "minutes": 1.5 },
     { "kind": "once", "at": -1 },
     { "kind": "cron" },
+    { "kind": "daily", "hour": 24, "minute": 0 },
+    { "kind": "daily", "hour": 9, "minute": -1 },
+    { "kind": "daily", "hour": 9.5, "minute": 0 },
+    { "kind": "daily", "hour": 9 },
+    { "kind": "weekly", "weekday": 0, "hour": 9, "minute": 0 },
+    { "kind": "weekly", "weekday": 8, "hour": 9, "minute": 0 },
+    { "kind": "weekly", "weekday": null, "hour": 9, "minute": 0 },
   ]
   for timing in invalid_timings {
     let rejected = try {
@@ -117,5 +124,17 @@ test "automatic schedule workspace and immediate save have explicit codecs" {
       _ => true
     }
     assert_true(rejected)
+  }
+}
+
+///|
+test "calendar schedules roundtrip their wall time and weekday" {
+  let timings : Array[@protocol.ScheduleTiming] = [
+    Daily(hour=9, minute=30),
+    Weekly(weekday=7, hour=23, minute=59),
+  ]
+  for timing in timings {
+    let decoded : @protocol.ScheduleTiming = @json.from_json(timing.to_json())
+    assert_eq(decoded, timing)
   }
 }

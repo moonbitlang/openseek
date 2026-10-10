@@ -8,7 +8,13 @@ proposal for scheduled continuation of existing conversations.
 
 - Create or edit a named task with an automatically created working directory (default)
   or an attached project, with a one-time delay
-  or a fixed interval in minutes. An optional model overrides the host default.
+  or a fixed interval in minutes, or a daily/weekly wall-clock time. An optional
+  model overrides the host default.
+- Daily and weekly schedules use the execution host's local timezone, not the
+  connected browser's timezone. A nonexistent daylight-saving time is skipped;
+  an ambiguous time runs at its earlier occurrence only. Calendar dates are
+  advanced independently of elapsed hours. The UI labels these as host-local
+  times and includes the client's timezone in displayed execution timestamps.
 - The primary host runs the timer for its application lifetime. Closing or
   refreshing a client page does not stop it. Exiting the host stops scheduling.
 - Different plans can run concurrently, up to four CLI processes. The same
@@ -88,8 +94,8 @@ Saved plans outlive the page, and UI state does not drive the timer.
 
 ## Deliberate limits
 
-No continuation of existing sessions, automatic worktrees, daily timezone
-rules, catch-up queue, automatic task retries, standalone daemon, cloud
+No continuation of existing sessions, automatic worktrees, arbitrary timezone
+selection, catch-up queue, automatic task retries, standalone daemon, cloud
 execution, or scheduling of Codex backend tasks. Each scheduled run uses the
 OpenSeek CLI. The application must be running and the selected project must
 remain attached and accessible. History and logs persist until manually

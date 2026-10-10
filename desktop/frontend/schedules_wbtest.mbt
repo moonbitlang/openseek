@@ -90,3 +90,28 @@ test "reopening schedules and switching hosts preserve a pending save acknowledg
   assert_false(saved.schedules.busy)
   assert_true(saved.schedules.form is None)
 }
+
+///|
+test "calendar form validates only its active timing fields" {
+  let form = {
+    ..ScheduleForm::empty(),
+    name: "Daily check",
+    task: "Inspect changes",
+    timing: "daily",
+    time: "09:30",
+    minutes: "",
+  }
+  guard schedule_form_spec(form) is Ok(spec) else { fail("valid daily form") }
+  assert_eq(spec.timing, @protocol.Daily(hour=9, minute=30))
+  guard schedule_form_spec({ ..form, timing: "weekly", weekday: "7", })
+    is Ok(spec) else {
+    fail("valid weekly form")
+  }
+  assert_eq(spec.timing, @protocol.Weekly(weekday=7, hour=9, minute=30))
+  assert_true(schedule_form_spec({ ..form, time: "24:00", }) is Err(_))
+  assert_true(schedule_form_spec({ ..form, time: "", }) is Err(_))
+  assert_true(
+    schedule_form_spec({ ..form, timing: "weekly", weekday: "0", }) is Err(_),
+  )
+  assert_true(schedule_form_spec({ ..form, timing: "every", }) is Err(_))
+}

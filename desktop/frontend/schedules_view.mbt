@@ -118,17 +118,54 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
             @html.select(
               attrs=@html.Attrs::build()
                 .aria_label(ui(locale, ScheduleLabel))
-                .value_prop(if form.once { "once" } else { "every" }),
+                .value_prop(form.timing),
               on_change=emit.map(value => Field("timing", value)),
               [
                 @html.option(value="every", ui(locale, EveryLabel)),
                 @html.option(value="once", ui(locale, OnceIn)),
+                @html.option(value="daily", ui(locale, DailyLabel)),
+                @html.option(value="weekly", ui(locale, WeeklyLabel)),
               ],
             ),
           ]),
-          field(ui(locale, MinutesLabel), "minutes", form.minutes),
+          if form.timing == "daily" || form.timing == "weekly" {
+            @html.label(class="schedule-field", [
+              @html.span(ui(locale, TimeLabel)),
+              @html.input(
+                input_type=@html.InputType::Time,
+                value=form.time,
+                on_input=emit.map(value => Field("time", value)),
+              ),
+            ])
+          } else {
+            field(ui(locale, MinutesLabel), "minutes", form.minutes)
+          },
+          if form.timing == "weekly" {
+            @html.label(class="schedule-field", [
+              @html.span(ui(locale, WeekdayLabel)),
+              @html.select(
+                attrs=@html.Attrs::build().value_prop(form.weekday),
+                on_change=emit.map(value => Field("weekday", value)),
+                [
+                  for day in 1..<=7 => {
+                    @html.option(
+                      value=day.to_string(),
+                      schedule_weekday_label(locale, day),
+                    )
+                  }
+                ],
+              ),
+            ])
+          } else {
+            @html.fragment([])
+          },
           field(ui(locale, TimeoutMinutes), "timeout", form.timeout),
         ]),
+        if form.timing == "daily" || form.timing == "weekly" {
+          @html.p(class="settings-subtitle", ui(locale, HostTimezone))
+        } else {
+          @html.fragment([])
+        },
         field(ui(locale, ModelDefault), "model", form.model),
         @html.p(class="settings-subtitle", ui(locale, SchedulePermissions)),
         @html.p(class="settings-subtitle", ui(locale, RunNowDescription)),
@@ -171,6 +208,20 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
           Spanish => "Cada \{n} min"
         }
       Once(at) => ui(locale, OnceLabel) + schedule_time(locale~, at)
+      Daily(hour~, minute~) =>
+        ui(locale, DailyLabel) +
+        " · " +
+        schedule_clock_text(hour, minute) +
+        " · " +
+        ui(locale, HostTimeLabel)
+      Weekly(weekday~, hour~, minute~) =>
+        ui(locale, WeeklyLabel) +
+        " · " +
+        schedule_weekday_label(locale, weekday) +
+        " " +
+        schedule_clock_text(hour, minute) +
+        " · " +
+        ui(locale, HostTimeLabel)
     }
     let next = match entry.next_at {
       Some(at) => ui(locale, NextLabel) + schedule_time(locale~, at)

@@ -35,10 +35,16 @@ fn schedule_now() -> Int64 {
 }
 
 ///|
-fn schedule_next(timing : @protocol.ScheduleTiming, now : Int64) -> Int64? {
+fn schedule_next(
+  timing : @protocol.ScheduleTiming,
+  now : Int64,
+) -> Int64? raise {
   match timing {
     Once(at) => if at > now { Some(at) } else { None }
     Every(minutes) => Some(now + minutes.to_int64() * 60000)
+    Daily(hour~, minute~) => Some(schedule_calendar_next(now, hour~, minute~))
+    Weekly(weekday~, hour~, minute~) =>
+      Some(schedule_calendar_next(now, hour~, minute~, weekday~))
   }
 }
 
@@ -46,7 +52,7 @@ fn schedule_next(timing : @protocol.ScheduleTiming, now : Int64) -> Int64? {
 fn recover_schedules(
   state : @protocol.SchedulesReply,
   now : Int64,
-) -> @protocol.SchedulesReply {
+) -> @protocol.SchedulesReply raise {
   {
     entries: state.entries.map(entry => {
       if entry.enabled {
