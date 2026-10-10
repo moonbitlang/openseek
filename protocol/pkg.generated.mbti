@@ -59,8 +59,6 @@ pub(all) enum Command {
   Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
   Compact
   Cancel
-  Predict(request_id~ : String, source_sequence~ : Int)
-  CancelPrediction(request_id~ : String)
   JobsSnapshot(request_id~ : String)
   JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   GoalSet(text~ : String, auto~ : Bool)
@@ -118,7 +116,7 @@ pub(all) enum Event {
   SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  PredictionResult(request_id~ : String, source_sequence~ : Int, outcome~ : PredictionOutcome)
+  PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
   GoalUpdated(goal~ : String?)
@@ -266,7 +264,6 @@ pub impl @json.FromJson for PredictionOutcome
 
 pub(all) struct PredictionRecord {
   source_sequence : Int
-  request_id : String
   outcome : PredictionOutcome
 } derive(Eq, @debug.Debug)
 pub fn PredictionRecord::equal(Self, Self) -> Bool

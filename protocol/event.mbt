@@ -87,11 +87,7 @@ pub(all) enum Event {
 
   // Background execution events are session-scoped and may arrive between turns.
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  PredictionResult(
-    request_id~ : String,
-    source_sequence~ : Int,
-    outcome~ : PredictionOutcome
-  )
+  PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(
     request_id~ : String,

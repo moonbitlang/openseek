@@ -77,7 +77,6 @@ pub impl FromJson for PredictionOutcome with fn from_json(json, path) {
 /// Durable auxiliary result, saved only after a prediction completes.
 pub(all) struct PredictionRecord {
   source_sequence : Int
-  request_id : String
   outcome : PredictionOutcome
 } derive(Eq, Debug)
 
@@ -86,30 +85,20 @@ pub impl ToJson for PredictionRecord with fn to_json(self) {
   {
     "version": 1,
     "source_sequence": self.source_sequence,
-    "request_id": self.request_id,
     "outcome": self.outcome.to_json(),
   }
 }
 
 ///|
 pub impl FromJson for PredictionRecord with fn from_json(json, path) {
-  guard json
-    is {
-      "version": 1,
-      "request_id": String(request_id),
-      "outcome": outcome,
-      ..
-    } &&
+  guard json is { "version": 1, "outcome": outcome, .. } &&
     json is Object(fields) &&
     int(fields, "source_sequence") is Some(source_sequence) &&
-    source_sequence > 0 &&
-    !request_id.is_empty() &&
-    request_id.length() <= 128 else {
+    source_sequence > 0 else {
     raise JsonDecodeError((path, "invalid prediction record"))
   }
   {
     source_sequence,
-    request_id,
     outcome: @json.from_json(outcome, path=path.add_key("outcome")),
   }
 }

@@ -6,8 +6,6 @@ priv enum ServeCommand {
   Steer(@agent_runtime.SteerInput)
   Compact
   Cancel
-  Predict(request_id~ : String, source_sequence~ : Int)
-  CancelPrediction(request_id~ : String)
   JobsSnapshot(request_id~ : String)
   JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   Goal(GoalAction)
@@ -140,7 +138,7 @@ priv enum ActiveWork {
 /// command handling race-free against turn lifecycle.
 priv enum ServeStep {
   Wire(ServeCommand)
-  PredictionDone(String, Int, @protocol.PredictionOutcome)
+  PredictionDone(Int, @protocol.PredictionOutcome)
   TurnDone(finished~ : Bool)
   CompactDone(@agent_session.Session)
   // A background job finished; wake the loop to drain and surface its notice
@@ -197,9 +195,6 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
         ),
       )
     }
-    Predict(request_id~, source_sequence~) =>
-      Ok(Predict(request_id~, source_sequence~))
-    CancelPrediction(request_id~) => Ok(CancelPrediction(request_id~))
     JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
     JobStop(request_id~, generation~, job_id~) =>
       Ok(JobStop(request_id~, generation~, job_id~))

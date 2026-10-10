@@ -28,10 +28,9 @@ pub fn Event::to_json(self : Event) -> Json {
   match self {
     JobChanged(kind~, job~) =>
       { "event": "job_changed", "kind": kind.to_json(), "job": job.to_json() }
-    PredictionResult(request_id~, source_sequence~, outcome~) =>
+    PredictionResult(source_sequence~, outcome~) =>
       {
         "event": "prediction_result",
-        "request_id": request_id,
         "source_sequence": source_sequence,
         "outcome": outcome.to_json(),
       }

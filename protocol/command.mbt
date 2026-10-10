@@ -38,8 +38,6 @@ pub(all) enum Command {
   Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
   Compact
   Cancel
-  Predict(request_id~ : String, source_sequence~ : Int)
-  CancelPrediction(request_id~ : String)
   JobsSnapshot(request_id~ : String)
   JobStop(request_id~ : String, generation~ : String, job_id~ : String)
   /// `auto` arms autonomous continuation toward the goal. No in-repo client
@@ -84,14 +82,6 @@ pub fn Command::to_json(self : Command) -> Json {
       }
       Json(fields)
     }
-    Predict(request_id~, source_sequence~) =>
-      {
-        "command": "predict",
-        "request_id": request_id,
-        "source_sequence": source_sequence,
-      }
-    CancelPrediction(request_id~) =>
-      { "command": "cancel_prediction", "request_id": request_id }
     JobsSnapshot(request_id~) =>
       { "command": "jobs_snapshot", "request_id": request_id }
     JobStop(request_id~, generation~, job_id~) =>
@@ -175,15 +165,6 @@ pub fn Command::parse(line : Json) -> Result[Command, String] {
       Ok(Prompt(content~, submission_id~))
     }
     { "command": "steer", .. } => parse_steer(line)
-    { "command": "predict", "request_id": String(request_id), .. } if !request_id.is_empty() &&
-      request_id.length() <= 128 &&
-      line is Object(fields) &&
-      int(fields, "source_sequence") is Some(source_sequence) &&
-      source_sequence > 0 => Ok(Predict(request_id~, source_sequence~))
-    { "command": "cancel_prediction", "request_id": String(request_id), .. } if !request_id.is_empty() &&
-      request_id.length() <= 128 => Ok(CancelPrediction(request_id~))
-    { "command": "predict" | "cancel_prediction", .. } =>
-      Err("invalid prediction command")
     { "command": "jobs_snapshot", "request_id": String(request_id), .. } if !request_id.is_empty() =>
       Ok(JobsSnapshot(request_id~))
     {

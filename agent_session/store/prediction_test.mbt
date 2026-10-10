@@ -11,7 +11,6 @@ async test "completed predictions survive reopening without changing the transcr
   assert_true(@store.SessionStore(store.root()).prediction(id) is None)
   let record : @protocol.PredictionRecord = {
     source_sequence: 2,
-    request_id: "first",
     outcome: Completed(text=Some("commit it"), input_tokens=8, output_tokens=4),
   }
   store.save_prediction(session, record)
@@ -27,7 +26,6 @@ async test "completed predictions survive reopening without changing the transcr
   let next = reopened.append(running, Terminal(Finished("done")))
   let latest : @protocol.PredictionRecord = {
     source_sequence: 4,
-    request_id: "next",
     outcome: Completed(text=None, input_tokens=8, output_tokens=4),
   }
   reopened.save_prediction(next, latest)
@@ -67,7 +65,6 @@ async test "legacy attempts and failures do not block a completed result" {
   }
   let record : @protocol.PredictionRecord = {
     source_sequence: 2,
-    request_id: "retry",
     outcome: Completed(text=Some("commit it"), input_tokens=8, output_tokens=4),
   }
   store.save_prediction(session, record)
