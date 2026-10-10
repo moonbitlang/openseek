@@ -103,18 +103,9 @@ samp,
   font-weight: 400;
 }
 
-/* A form field has exactly one focus-border owner. A plain input owns itself;
-   a composite field puts the owner on its bordered wrapper and marks the
-   nested text control as the target. Explicit data attributes keep this rule
-   out of the embedded Viewer even though it shares the document. */
-[data-focus-owner]:focus,
-[data-focus-owner]:has([data-focus-target]:focus) {
-  border-color: var(--color-focus-ring);
-  outline: none;
-}
-
-/* Composite targets leave all focus drawing to their owner. */
-[data-focus-target]:focus {
+/* Focus changes interaction state without drawing an extra control frame.
+   Normal borders, hover surfaces, and selected states remain component-owned. */
+:focus {
   outline: none;
 }
 
@@ -208,11 +199,6 @@ samp,
   background: var(--color-bg-subtle);
 }
 
-.menu-option:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: -1px;
-}
-
 .custom-select-option-label {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -223,14 +209,6 @@ samp,
   font-size: var(--font-size-md);
   line-height: 1;
   text-align: center;
-}
-
-/* The transcript's tab radios are visually clipped, so their visible labels
-   carry the keyboard focus indicator. Form-control focus remains centralized
-   here even though the labels' geometry belongs to transcript.css. */
-.tool-call-tab-input:focus-visible + .tool-call-tab-label {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: -1px;
 }
 
 ::selection {

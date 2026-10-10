@@ -104,39 +104,23 @@ Verify changed typography at the minimum and maximum font settings, after
 reload, and in both light and dark themes; let content wrap or reduce columns
 as text grows.
 
-## Form-field focus ownership
+## Focus appearance
 
-Every form field has exactly one element that draws its focus border:
+Focus does not add a border, outline, or text underline. `base.css` suppresses
+native focus outlines; controls keep their ordinary borders, hover surfaces,
+and selected states. Embedded Viewer controls receive a transparent
+`--vscode-focusBorder` through the host theme.
 
-- A plain `input`, `textarea`, or `select` carries `data-focus-owner`. The
-  shared rule recolors its existing border when it has one and always removes
-  the browser's native outline.
-- A composite field puts `data-focus-owner` on its bordered wrapper and
-  `data-focus-target` on the nested text control. The nested control has no
-  visible border of its own.
-- The shared rules in `base.css` change the owner's existing one-pixel border
-  to `--color-focus-ring` and suppress the target's browser outline.
-- Component styles define geometry, normal border, background, and content.
-  They must not add form-field `:focus`, `:focus-within`, or focus outlines.
-
-A structural separator is not a focus border. For example, Quick Open keeps
-its full-width bottom separator neutral and puts `data-focus-owner` on the
-borderless input itself; focusing the input must not recolor the dialog divider.
-
-These attributes are intentionally opt-in. The embedded Viewer shares the
-document and application stylesheet, but its controls do not carry the
-attributes, so Desktop focus rules cannot restyle them.
-
-Buttons, links, and other discrete actions are not form fields. They may use a
-component-appropriate `:focus-visible` indicator because they often have no
-persistent border to recolor.
+Keep focus handling and keyboard navigation intact. `data-focus-owner` and
+`data-focus-target` still identify application controls for interaction logic,
+but do not recolor their borders. Component styles must not add focus frames.
 
 ## Button ownership
 
 A button's geometry belongs to a recognized component base, while short intent
 classes only choose that component's appearance:
 
-- `.button` owns the padding, type size, focus ring, and responsive target size
+- `.button` owns the padding, type size, and responsive target size
   of ordinary labeled actions.
 - Specialized controls such as `.sidebar-button`, `.icon-button`, and
   `.queued-input-action` own their own geometry.

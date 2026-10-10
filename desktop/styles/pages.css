@@ -21,11 +21,6 @@
   line-height: var(--line-height-normal);
   cursor: pointer;
 
-  &:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
-  }
-
   &:not(:disabled):hover {
     border-color: var(--button-hover-border-color);
     background: var(--button-hover-background);
@@ -127,11 +122,6 @@ a:where(.setting-link) {
 .management-page-return {
   flex: none;
   border: 0;
-}
-
-.management-page-return:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
 }
 
 .page-eyebrow {

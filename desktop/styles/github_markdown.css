@@ -14,10 +14,6 @@
   display: list-item;
   cursor: pointer;
 }
-:is(.github-detail .markdown, .github-review-markdown) summary:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
 :is(.github-detail .markdown, .github-review-markdown) details[open] > summary { margin-bottom: .5em; }
 :is(.github-detail .markdown, .github-review-markdown) dt { font-weight: 600; }
 :is(.github-detail .markdown, .github-review-markdown) dd { margin: .25em 0 .75em 2em; }

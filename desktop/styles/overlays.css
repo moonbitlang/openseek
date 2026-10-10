@@ -31,7 +31,6 @@
 }
 .action-menu-item:hover,
 .action-menu-item:focus-visible {
-  outline: none;
   background: var(--color-accent-soft);
   color: var(--color-accent-strong);
 }
@@ -193,10 +192,6 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 .export-dialog-close:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
-}
-.export-dialog-close:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
 }
 .export-status { margin-top: 12px; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .export-status:empty { margin-top: 0; }
@@ -383,10 +378,6 @@ dialog.workspace-settings-dialog {
 }
 .workspace-settings-close:hover {
   background: var(--color-hover-subtle);
-}
-.workspace-settings-close:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
 }
 .workspace-settings-identity {
   margin: 0.5em 0 1.5em;

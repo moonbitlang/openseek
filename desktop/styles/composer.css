@@ -86,11 +86,6 @@
   box-shadow: var(--shadow-surface);
 }
 
-.composer :is(button, a, summary):focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
 .composer-input {
   display: flex;
   flex-direction: column;
@@ -553,10 +548,6 @@
 .queued-input-action.active {
   color: var(--color-accent-strong);
 }
-.queued-input-action:focus-visible {
-  outline: 1px solid var(--color-focus-ring);
-  outline-offset: 1px;
-}
 
 .composer textarea {
   /* Grow with wrapped or explicit lines; once the cap is reached, keep the
@@ -591,16 +582,29 @@
   min-width: 0;
 }
 
-/* The toolbar's left status group: the model chip, then the one git chip
-   (which lives here, not in the topbar). The row shares its width with the
-   send button and a resizable side panel, so both chips shrink and clip their
-   own label. Clipping is theirs and never this group's: `overflow` here would
-   also cut off the popover the git chip anchors. */
+/* Workspace controls stay on the left; model and effort sit beside the
+   primary action on the right. Each control owns its label clipping. */
 .composer-status {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
+}
+
+.composer-toolbar-end,
+.composer-model-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.composer-toolbar-end {
+  margin-left: auto;
+}
+
+.composer-model-controls > .composer-picker + .composer-picker {
+  flex-shrink: 0;
 }
 
 .composer-actions {
@@ -779,11 +783,12 @@
   color: var(--color-danger);
 }
 
-/* Model and reasoning use the same custom picker. The wrapper keeps the popup
-   outside the clipped pill, while the button retains the old 30px geometry. */
+/* Model and reasoning use compact text triggers, with a surface only while
+   hovered or open. Their menus share keyboard and focus behavior. */
 .composer-picker {
   display: inline-flex;
   flex: 0 1 auto;
+  max-width: 100%;
 }
 .composer-model {
   display: inline-flex;
@@ -797,8 +802,8 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   margin: 0;
-  padding: 0 9px;
-  background: var(--color-control-surface);
+  padding: 0 6px;
+  background: transparent;
   color: var(--color-text-secondary);
   font: inherit;
   font-size: var(--font-size-sm);
@@ -812,7 +817,6 @@
   color: var(--color-text-primary);
 }
 .composer-model-glyph,
-.composer-model-chevron,
 .codex-permission-chevron {
   flex: none;
   color: var(--color-text-muted);
@@ -829,7 +833,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.composer-model-chevron,
 .codex-permission-chevron {
   width: 5px;
   height: 5px;
@@ -840,23 +843,28 @@
   transform: rotate(45deg);
 }
 
-/* Container units keep the top-layer menu sized to a chat column narrowed by
-   the editor panel. Shared anchor positioning prefers below and flips when
-   needed. */
+/* Prefer above the composer, falling below only when there is more room.
+   Container units also keep long model catalogs inside a narrow chat pane. */
 .composer-picker-menu {
+  position-area: block-start span-inline-end;
+  margin: 0 0 6px;
   width: max-content;
-  min-width: min(170px, calc(100cqi - 20px));
+  min-width: min(150px, calc(100cqi - 20px));
   max-width: min(340px, calc(100cqi - 20px));
 }
 
-/* The reasoning chip follows the model chip. Right anchoring makes its short
-   menu grow back toward the composer's safe left edge on narrow layouts. */
+/* Both text triggers align their menu's right edge with the button. */
 .composer-picker-right .composer-picker-menu {
-  position-area: block-end span-inline-start;
+  position-area: block-start span-inline-start;
 }
 
 .composer-picker .custom-select-option {
+  padding: 4px 7px;
   font-size: var(--font-size-sm);
+}
+
+.composer-picker .custom-select-option.selected:not(:hover) {
+  background: transparent;
 }
 
 .icon-button {
@@ -951,11 +959,6 @@
 .composer-attach:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
-}
-.composer-attach:focus-within {
-  outline: 2px solid var(--color-text-primary);
-  outline-offset: 3px;
-  border-radius: 3px;
 }
 .composer-image-notice {
   font-size: var(--font-size-sm);
