@@ -21,6 +21,11 @@
   line-height: var(--line-height-normal);
   cursor: pointer;
 
+  &:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+
   &:not(:disabled):hover {
     border-color: var(--button-hover-border-color);
     background: var(--button-hover-background);
@@ -122,6 +127,11 @@ a:where(.setting-link) {
 .management-page-return {
   flex: none;
   border: 0;
+}
+
+.management-page-return:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .page-eyebrow {
@@ -769,11 +779,3 @@ h2 {
 @media (max-width: 640px) { .schedule-form-grid { grid-template-columns: 1fr; gap: 0; } }
 
 .schedule-log-content { max-height: 360px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--font-size-sm) var(--font-mono); }
-
-/* Keyboard focus uses a surface highlight without adding a frame. */
-.button:focus-visible,
-.management-page-return:focus-visible,
-.setting-select-button:focus-visible {
-  background-color: var(--color-accent-soft);
-  color: var(--color-text-primary);
-}

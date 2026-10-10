@@ -10,6 +10,7 @@ async function appearance(control) {
       borderStyle: style.borderStyle,
       borderColor: style.borderColor,
       outline: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
       decoration: style.textDecorationLine,
       keyboardFocus: element.matches(':focus-visible'),
     };
@@ -24,23 +25,17 @@ async function tabTo(page, control) {
   await expect(control).toBeFocused();
 }
 
-async function expectHighlight(control, resting) {
+async function expectFocusFrame(control) {
   await expect(control).toBeFocused();
   const focused = await appearance(control);
   expect(focused.keyboardFocus).toBe(true);
-  expect(focused.background).not.toBe(resting.background);
-  expect(focused.background).not.toBe('rgba(0, 0, 0, 0)');
-  expect(focused.borderWidth).toBe(resting.borderWidth);
-  expect(focused.borderStyle).toBe(resting.borderStyle);
-  if (resting.borderStyle !== 'none' && resting.borderWidth !== '0px') {
-    expect(focused.borderColor).toBe(resting.borderColor);
-  }
-  expect(focused.outline).toBe('none');
+  expect(focused.outline).not.toBe('none');
+  expect(parseFloat(focused.outlineWidth)).toBeGreaterThan(0);
   expect(focused.decoration).not.toContain('underline');
 }
 
 for (const theme of ['light', 'dark']) {
-  test(`keyboard focus remains visible without frames in ${theme} theme`, async ({ page }, testInfo) => {
+  test(`keyboard focus uses a single visible frame in ${theme} theme`, async ({ page }, testInfo) => {
     const app = new DesktopBrowserHarness(page);
     app.hostSettings.theme = theme;
     await page.emulateMedia({ colorScheme: theme });
@@ -50,24 +45,30 @@ for (const theme of ['light', 'dark']) {
     const model = page.getByRole('button', { name: 'Model', exact: true });
     const settings = page.getByRole('button', { name: 'Settings', exact: true });
     const restingModel = await appearance(model);
-    const restingSettings = await appearance(settings);
 
     await page.locator('#task').click();
     await page.mouse.move(999, 0);
     await tabTo(page, model);
-    await expectHighlight(model, restingModel);
+    await expectFocusFrame(model);
+    const focusedModel = await appearance(model);
+    expect(focusedModel.keyboardFocus).toBe(true);
+    expect(focusedModel.borderStyle).toBe('solid');
+    expect(parseFloat(focusedModel.borderWidth)).toBeGreaterThan(0);
+    expect(focusedModel.borderColor).toBe(restingModel.borderColor);
+    expect(focusedModel.outline).toBe('solid');
+    expect(focusedModel.outlineWidth).toBe('2px');
+    expect(focusedModel.background).toBe(restingModel.background);
+    expect(focusedModel.decoration).not.toContain('underline');
     await page.screenshot({ path: testInfo.outputPath(`composer-focus-${theme}.png`) });
     await model.press('ArrowDown');
     const menu = page.getByRole('listbox', { name: 'Model', exact: true });
     const selected = menu.getByRole('option', { selected: true });
     await expect(selected).toBeFocused();
-    const selectedFocused = await appearance(selected);
-    expect(selectedFocused.background).not.toBe('rgba(0, 0, 0, 0)');
-    expect(selectedFocused.outline).toBe('none');
+    await expectFocusFrame(selected);
     await page.keyboard.press('ArrowDown');
     expect((await appearance(selected)).background).toBe('rgba(0, 0, 0, 0)');
     const next = menu.locator(':focus');
-    expect((await appearance(next)).background).not.toBe('rgba(0, 0, 0, 0)');
+    await expectFocusFrame(next);
     await page.screenshot({ path: testInfo.outputPath(`model-menu-focus-${theme}.png`) });
     await page.keyboard.press('Escape');
 
@@ -79,7 +80,7 @@ for (const theme of ['light', 'dark']) {
     expect(await appearance(model)).toEqual(restingModel);
 
     await tabTo(page, settings);
-    await expectHighlight(settings, restingSettings);
+    await expectFocusFrame(settings);
     await page.keyboard.press('Enter');
     const fontSize = page.getByRole('slider', { name: 'Font size' });
     await expect(fontSize).toBeVisible();
@@ -88,9 +89,8 @@ for (const theme of ['light', 'dark']) {
     const close = dialog.getByRole('button', { name: 'Close project picker' });
     await expect(dialog).toBeVisible();
     await page.mouse.move(999, 0);
-    const restingClose = await appearance(close);
     await tabTo(page, close);
-    await expectHighlight(close, restingClose);
+    await expectFocusFrame(close);
     await page.keyboard.press('Enter');
     await expect(dialog).toBeHidden();
     expect(app.pageErrors).toEqual([]);

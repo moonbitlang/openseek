@@ -313,6 +313,10 @@
 .empty-project-trigger.open {
   color: var(--color-accent-strong);
 }
+.empty-project-trigger:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 /* The floating frame itself is `.menu-surface` in base.css, shared with the
    app's select menus; this block only places and sizes the picker. */
 .empty-project-menu {
@@ -398,6 +402,11 @@
 .empty-project-option:hover,
 .empty-project-option.selected {
   background: var(--color-bg-subtle);
+}
+.empty-project-option:focus-visible,
+.empty-project-new:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: -1px;
 }
 .empty-project-option-icon {
   display: grid;
@@ -543,6 +552,10 @@
 .message-copy:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
+}
+.message-copy:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
 }
 
 .msg-content {
@@ -755,7 +768,7 @@
   --vscode-editorWidget-border: var(--color-border);
   --vscode-editor-background: var(--color-bg-surface);
   --vscode-editorHoverWidget-background: var(--color-bg-subtle);
-  --vscode-focusBorder: transparent;
+  --vscode-focusBorder: var(--color-focus-ring);
   --vscode-icon-foreground: var(--color-text-secondary);
   --vscode-toolbar-hoverBackground: var(--color-accent-soft);
   --vscode-toolbar-activeBackground: var(--color-accent-soft);
@@ -1698,6 +1711,11 @@
 .minimal-activity-summary:hover {
   color: var(--color-text-primary);
 }
+.minimal-activity-summary:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
 .minimal-call-list,
 .minimal-process-body {
   /* Titles and their first content row use the same internal separation. */
@@ -1963,13 +1981,4 @@
 .user-shell-note {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-}
-
-/* Keyboard focus uses a surface highlight without adding a frame. */
-:is(
-  .empty-project-trigger, .empty-project-option, .empty-project-new,
-  .message-copy, .minimal-activity-summary
-):focus-visible {
-  background-color: var(--color-accent-soft);
-  color: var(--color-text-primary);
 }

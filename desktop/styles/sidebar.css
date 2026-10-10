@@ -92,6 +92,10 @@ html.is-resizing .sidebar-resize-handle {
   color: var(--color-text-primary);
   box-shadow: 0 0 0 1px var(--color-separator);
 }
+.sidebar-mode-option:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 
 .sidebar-main {
   display: grid;
@@ -205,6 +209,11 @@ html.is-resizing .sidebar-resize-handle {
   font: inherit;
   text-align: start;
   cursor: pointer;
+}
+.conversation-open:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
 }
 /* The title edited in place: the field takes the title's own box and type,
    so the text does not move when editing starts. */
@@ -425,6 +434,11 @@ html.is-resizing .sidebar-resize-handle {
 .section-disclosure:hover {
   color: var(--color-text-primary);
 }
+.section-disclosure:focus-visible,
+.section-primary-action:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
 .section-primary-action:disabled {
   cursor: default;
   opacity: 0.5;
@@ -473,6 +487,12 @@ html.is-resizing .sidebar-resize-handle {
 .workspace-disclosure > .sidebar-icon {
   flex: none;
   color: var(--color-text-secondary);
+}
+.workspace-disclosure:focus-visible,
+.project-show-more:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
 }
 .workspace-row:hover {
   background: var(--color-bg-subtle);
@@ -752,6 +772,10 @@ button.row-twisty:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
+.picker-close:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
 .picker-location-bar {
   display: flex;
   align-items: center;
@@ -823,6 +847,10 @@ button.row-twisty:hover {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
+.picker-path-editor-cancel:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
 .picker-crumb {
   flex: none;
   padding: 3px 6px;
@@ -872,6 +900,10 @@ button.row-twisty:hover {
 .picker-new-folder:not(:disabled):hover {
   background: var(--color-bg-canvas);
   color: var(--color-text-primary);
+}
+.picker-new-folder:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
 }
 .picker-browser {
   display: flex;
@@ -943,8 +975,7 @@ button.row-twisty:hover {
 .picker-row:not(:disabled):focus-visible {
   background: var(--color-accent-soft);
   color: var(--color-text-primary);
-}
-.picker-row.selected:not(:disabled) {
+  outline: none;
   box-shadow: inset 0 0 0 1px var(--color-accent-border);
 }
 .picker-row-icon {
@@ -1220,15 +1251,4 @@ button.row-twisty:hover {
       color: var(--color-on-accent-strong);
     }
   }
-}
-
-/* Keyboard focus uses a surface highlight without adding a frame. */
-:is(
-  .sidebar-button, .sidebar-mode-option, .conversation-open, .row-archive,
-  .section-disclosure, .section-primary-action, .workspace-disclosure,
-  .project-show-more, .composer-worktree, .picker-close,
-  .picker-path-editor-cancel, .picker-new-folder
-):focus-visible {
-  background-color: var(--color-accent-soft);
-  color: var(--color-text-primary);
 }

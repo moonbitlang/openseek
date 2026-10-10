@@ -86,6 +86,11 @@
   box-shadow: var(--shadow-surface);
 }
 
+.composer :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
 .composer-input {
   display: flex;
   flex-direction: column;
@@ -548,6 +553,10 @@
 .queued-input-action.active {
   color: var(--color-accent-strong);
 }
+.queued-input-action:focus-visible {
+  outline: 1px solid var(--color-focus-ring);
+  outline-offset: 1px;
+}
 
 .composer textarea {
   /* Grow with wrapped or explicit lines; once the cap is reached, keep the
@@ -863,7 +872,7 @@
   font-size: var(--font-size-sm);
 }
 
-.composer-picker .custom-select-option.selected:not(:hover, :focus-visible) {
+.composer-picker .custom-select-option.selected:not(:hover) {
   background: transparent;
 }
 
@@ -959,6 +968,11 @@
 .composer-attach:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
+}
+.composer-attach:focus-within {
+  outline: 2px solid var(--color-text-primary);
+  outline-offset: 3px;
+  border-radius: 3px;
 }
 .composer-image-notice {
   font-size: var(--font-size-sm);
@@ -1269,13 +1283,4 @@
 
 .shell-command-state {
   color: var(--color-text-muted);
-}
-
-/* Keyboard focus uses a surface highlight without adding a frame. */
-.composer :is(button, a, summary):focus-visible,
-.queued-input-action:focus-visible,
-.icon-button:focus-visible,
-.composer-attach:has(:focus-visible) {
-  background-color: var(--color-accent-soft);
-  color: var(--color-text-primary);
 }

@@ -29,7 +29,7 @@
   --vscode-foreground: var(--color-text-primary);
   --vscode-icon-foreground: var(--color-text-secondary);
   --vscode-descriptionForeground: var(--color-text-secondary);
-  --vscode-focusBorder: transparent;
+  --vscode-focusBorder: var(--color-focus-ring);
   --vscode-widget-border: var(--color-border);
   /* Floating widgets and menu items round like the app's own controls. */
   --vscode-cornerRadius-medium: var(--radius-sm);
