@@ -26,26 +26,33 @@ async test "a vanished candidate does not prevent finding the next target" {
     @async.with_task_group(group => {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer server.close()
+      let mut vanished = false
       group.spawn_bg(() => {
         serve_target_list(server, ["closed", "valid"])
-        for expected in ["/devtools/page/closed", "/devtools/page/valid"] {
+        for _ in 0..<2 {
           let (conn, _) = server.accept()
-          defer conn.close()
-          let request = conn.read_request()
-          assert_eq(request.path, expected)
-          if expected == "/devtools/page/closed" {
-            conn..send_response(404, "Not Found").end_response()
-          } else {
-            let ws = @websocket.from_http_server(request, conn)
-            defer ws.close()
-            ignore(ws.recv().read_all())
-            ws.send_text(
-              (
-                #|{"id":1,"result":{"result":{"type":"boolean","value":true}}}
-              ),
-            )
-            assert_true(conn.read_some() is None)
-          }
+          group.spawn_bg(() => {
+            defer conn.close()
+            let request = conn.read_request()
+            if request.path == "/devtools/page/closed" {
+              conn..send_response(404, "Not Found").end_response()
+              vanished = true
+            } else {
+              assert_eq(request.path, "/devtools/page/valid")
+              let ws = @websocket.from_http_server(request, conn)
+              defer ws.close()
+              ignore(ws.recv().read_all())
+              while !vanished {
+                @async.sleep(1)
+              }
+              ws.send_text(
+                (
+                  #|{"id":1,"result":{"result":{"type":"boolean","value":true}}}
+                ),
+              )
+              assert_true(conn.read_some() is None)
+            }
+          })
         }
       })
       let selected = with_cdp_targets(server.addr.port(), "\"marker\"", _ => {
@@ -53,6 +60,151 @@ async test "a vanished candidate does not prevent finding the next target" {
       })
       assert_true(selected)
     })
+  })
+}
+
+///|
+async test "the first matching target wins past rejected and hung probes and closes every connection" {
+  @async.with_timeout(5000, () => {
+    let mut rejected = false
+    let mut hung = 0
+    let mut closed = 0
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      group.spawn_bg(() => {
+        serve_target_list(server, ["wrong", "hung-a", "hung-b", "valid"])
+        for _ in 0..<4 {
+          let (conn, _) = server.accept()
+          group.spawn_bg(() => {
+            defer conn.close()
+            let request = conn.read_request()
+            let ws = @websocket.from_http_server(request, conn)
+            defer ws.close()
+            ignore(ws.recv().read_all())
+            match request.path {
+              "/devtools/page/wrong" => {
+                ws.send_text(
+                  "{\"id\":1,\"result\":{\"result\":{\"type\":\"boolean\",\"value\":false}}}",
+                )
+                assert_true(conn.read_some() is None)
+                rejected = true
+              }
+              "/devtools/page/hung-a" | "/devtools/page/hung-b" => {
+                hung += 1
+                assert_true(conn.read_some() is None)
+              }
+              "/devtools/page/valid" => {
+                // Make rejection finish first, with both slow probes still
+                // waiting. Serial discovery cannot reach this handshake.
+                while !rejected || hung != 2 {
+                  @async.sleep(1)
+                }
+                ws.send_text(
+                  "{\"id\":1,\"result\":{\"result\":{\"type\":\"boolean\",\"value\":true}}}",
+                )
+                let command = @json.parse(ws.recv().read_all().text())
+                assert_eq(
+                  command,
+                  ({ "id": 2, "method": "DOM.enable", "params": {} } : Json),
+                )
+                ws.send_text("{\"id\":2,\"result\":{}}")
+                assert_true(conn.read_some() is None)
+              }
+              _ => fail("unexpected candidate")
+            }
+            closed += 1
+          })
+        }
+      })
+      let result = with_cdp_targets(server.addr.port(), "\"marker\"", connection => {
+        // The winner must remain usable after the racing group tears down.
+        connection.enable_dom()
+        42
+      })
+      assert_eq(result, 42)
+    })
+    assert_eq(closed, 4)
+  })
+}
+
+///|
+async test "empty discovery and unmatched probes retry until the marker appears" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      group.spawn_bg(() => {
+        serve_target_list(server, [])
+        for matched in [false, true] {
+          serve_target_list(server, ["page"])
+          let (conn, _) = server.accept()
+          defer conn.close()
+          let ws = @websocket.from_http_server(conn.read_request(), conn)
+          defer ws.close()
+          ignore(ws.recv().read_all())
+          ws.send_text(
+            (
+              {
+                "id": 1,
+                "result": {
+                  "result": { "type": "boolean", "value": matched.to_json() },
+                },
+              } : Json).stringify(),
+          )
+          assert_true(conn.read_some() is None)
+        }
+      })
+      assert_true(with_cdp_targets(server.addr.port(), "\"marker\"", _ => true))
+    })
+  })
+}
+
+///|
+async test "cancelling discovery closes all concurrent candidate readers" {
+  @async.with_timeout(5000, () => {
+    let mut evaluating = 0
+    let mut closed = 0
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      group.spawn_bg(() => {
+        serve_target_list(server, ["one", "two", "three"])
+        for _ in 0..<3 {
+          let (conn, _) = server.accept()
+          group.spawn_bg(() => {
+            defer conn.close()
+            let ws = @websocket.from_http_server(conn.read_request(), conn)
+            defer ws.close()
+            ignore(ws.recv().read_all())
+            evaluating += 1
+            assert_true(conn.read_some() is None)
+            closed += 1
+          })
+        }
+      })
+      let task = group.spawn(
+        () => {
+          with_cdp_targets(server.addr.port(), "\"marker\"", _ => {
+            fail("a pending probe must not win")
+          })
+        },
+        allow_failure=true,
+      )
+      while evaluating != 3 {
+        @async.sleep(1)
+      }
+      task.cancel()
+      let cancelled = try {
+        task.wait()
+        false
+      } catch {
+        @async.WaitedTaskAlreadyCancelled => true
+        error => raise error
+      }
+      assert_true(cancelled)
+    })
+    assert_eq(closed, 3)
   })
 }
 

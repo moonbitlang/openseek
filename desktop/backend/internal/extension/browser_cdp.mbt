@@ -80,12 +80,29 @@ async fn[T] with_cdp_targets(
   let connection = @async.with_timeout(10000, () => {
     // Native eval is asynchronous; retry while the view processes the marker.
     for _ in 0..<20 {
-      for target in @cdp.list_targets(port) {
-        guard target.kind == "page" else { continue }
-        if connect_target(target, key_json) is Some(connection) {
-          owned = Some(connection)
-          return connection
+      let targets = @cdp.list_targets(port)
+      let matched : @cdp.Connection? = @async.with_task_group(group => {
+        let probes = [
+          for target in targets if target.kind == "page" => {
+            group.spawn(() => {
+              if connect_target(target, key_json) is Some(connection) {
+                // Adopt before cancelling the losing probes: group teardown
+                // can suspend, and an outer cancellation must close the winner.
+                owned = Some(connection)
+                group.return_immediately(Some(connection))
+              }
+            })
+          }
+        ]
+        // A rejection completes only its probe. Keep the group body alive
+        // until a match wins or every candidate has finished without one.
+        for probe in probes {
+          probe.wait()
         }
+        None
+      })
+      if matched is Some(connection) {
+        return connection
       }
       @async.sleep(50)
     }
