@@ -8,6 +8,10 @@ test "desktop selects Markdown presentation and resource kind explicitly" {
   assert_eq(language_id("tour.mbt.md"), "moonbit")
   assert_true(markdown_resource_kind("README.md") is @viewer.OrdinaryMarkdown)
   assert_true(markdown_resource_kind("tour.MBT.MD") is @viewer.MoonBitMarkdown)
+  assert_eq(diff_language_id("README.md"), "markdown")
+  assert_eq(diff_language_id("tour.mbt.md"), "markdown")
+  assert_eq(diff_language_id("main.mbt"), "moonbit")
+  assert_eq(diff_language_id("moon.pkg"), "moonbit-config")
 }
 
 ///|
