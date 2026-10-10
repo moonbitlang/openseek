@@ -15,6 +15,8 @@ an environment override or a working-directory fallback. The prompt's
   and full-stack web applications with Rabbita, read on demand.
 - `moongrep/`: OpenSeek-maintained reference for the structural search and
   lint tool, moved out of the system prompt and read on demand.
+- `typst/`: cautions correcting common misunderstandings of Typst syntax,
+  read before writing or editing Typst.
 - `workflow/`: OpenSeek-maintained scripts, packaged for future agent integration.
 
 The documentation comes from https://github.com/moonbitlang/moonbit-docs.
