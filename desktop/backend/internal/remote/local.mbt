@@ -11,12 +11,11 @@
 // The session cookie is the capability boundary: the launch token minted at
 // bind time rides the entry URL (`/?device=host&token=…`), the document
 // response to that URL sets the cookie, and every account route and the
-// WebSocket require it. The URL stays complete in the address bar rather
-// than redirecting the token away, so it can be reopened, reloaded, or
-// pasted into another browser for as long as this launch lasts. The session
-// is that launch, not an account: the page's sign-out returns it to the
-// gate and its sign-in returns it to the console, and neither moves the
-// token, which only ever appears in the entry URL. A present `Origin`
+// WebSocket require it. The entry URL can be reused in another browser
+// for as long as this launch lasts. Client navigation changes the address
+// to a stable device path and subsequent requests use the cookie. The
+// session is that launch, not an account: sign-out returns to the gate
+// and sign-in restores the requested page without revealing the token. A present `Origin`
 // header must be our own origin, which keeps foreign web pages (whose
 // browsers always send one) out even though they can reach loopback.
 // Release builds never open this port.
@@ -142,6 +141,7 @@ priv enum Route {
   Logout
   // The protocol WebSocket for device `host`.
   DeviceSocket
+  ApplicationPage
   Static(String)
   Unknown
   MethodNotAllowed
@@ -152,6 +152,7 @@ fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
   let (route, query) = split_path_query(path)
   match (meth, route) {
     (Get, "/") if query_param(query, "token") is Some(token) => Entry(token)
+    (Get, path) if path.has_prefix("/device/") => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
     (Get, "/v1/devices") => Devices
     (Get, "/v1/auth/login") => Login
@@ -229,9 +230,24 @@ async fn LocalConsole::handle(
     // token-bearing entry URL would hand the token to any local client that
     // asked, so it returns to the page as it is: the cookie, still present,
     // signs it back in.
-    Login => respond_redirect(conn, "/?device=\{LocalConsoleDevice}")
+    Login => {
+      let (_, query) = split_path_query(request.path)
+      let destination = query_param(query, "return_to").map(value => {
+        @uri.decode_component(value)
+      })
+      let target = if destination is Some(path) &&
+        path.has_prefix("/device/\{LocalConsoleDevice}/") &&
+        !path.contains("\\") &&
+        !path.iter().any(ch => ch.is_control()) {
+        path
+      } else {
+        "/device/\{LocalConsoleDevice}/chat"
+      }
+      respond_redirect(conn, target)
+    }
     Logout => respond_status(conn, 204, "No Content")
     Static(relative) => serve_static(root, relative, conn)
+    ApplicationPage => serve_static(root, entry, conn, application=true)
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }
@@ -309,6 +325,7 @@ async fn serve_static(
   relative : String,
   conn : @http.ServerConnection,
   cookie? : @http.Cookie,
+  application? : Bool = false,
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
@@ -327,6 +344,13 @@ async fn serve_static(
       respond_status(conn, 500, "Internal Server Error")
       return
     }
+  }
+  let body = if application {
+    @utf8.encode(
+      @utf8.decode(body).replace(old="<head>", new="<head><base href=\"/\">"),
+    )
+  } else {
+    body
   }
   conn.send_response(
     200,
@@ -572,4 +596,19 @@ test "content types cover the bundled asset set" {
   assert_eq(content_type("viewer.css"), "text/css; charset=utf-8")
   assert_eq(content_type("codicon.ttf"), "font/ttf")
   assert_eq(content_type("unknown.bin"), "application/octet-stream")
+}
+
+///|
+test "stable device paths serve the application document" {
+  assert_true(
+    route(Get, "/device/host/chat/session/s1", entry="index.html")
+    is ApplicationPage,
+  )
+  assert_true(
+    route(Get, "/device/host/skills/market/a%2Fb%401", entry="index.html")
+    is ApplicationPage,
+  )
+  assert_true(
+    route(Get, "/frontend.js", entry="index.html") is Static("frontend.js"),
+  )
 }

@@ -592,6 +592,7 @@ struct State {
   // newer catalog after reconnect, archive, or device focus changes.
   live_catalog_generation : Int
   archived_catalog_generation : Int
+  saved_drafts : Array[NavigationDraft]
   selection : CodexSelection
   // The last sidebar selection awaiting a history snapshot. A reply carries
   // the same id, so an older request can never replace a newer selection.
@@ -603,6 +604,7 @@ struct State {
   git_request_generation : Int
   git_details_open : Bool
   draft : String
+  draft_addressed : Bool
   mentions : Array[@composer.Mention]
   images : Array[@composer.Image]
   // The first submitted input remains visible while thread/worktree startup
@@ -652,12 +654,14 @@ pub fn State::State(loading? : Bool = false) -> State {
     activity: CodexActivityLedger::empty(),
     live_catalog_generation: 0,
     archived_catalog_generation: 0,
+    saved_drafts: [],
     selection: CodexNoTask,
     requested_thread: None,
     git_status: None,
     git_request_generation: 0,
     git_details_open: false,
     draft: "",
+    draft_addressed: false,
     mentions: [],
     images: [],
     submitted_first_prompt: None,
@@ -1206,6 +1210,7 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
     git_status: None,
     git_details_open: false,
     draft: "",
+    draft_addressed: false,
     mentions: [],
     images: [],
     submitted_first_prompt: None,

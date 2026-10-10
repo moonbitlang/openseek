@@ -52,7 +52,9 @@ class CodexImagesHarness extends DesktopBrowserHarness {
 test('selected image-only input reaches Codex and remains visible in history', async ({ page }, testInfo) => {
   const app = new CodexImagesHarness(page);
   await app.openCodex();
+  await expect(page).toHaveURL(/\/codex\/new$/);
   await app.select(image);
+  await expect(page).toHaveURL(/\/codex\/draft\//);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', `data:image/png;base64,${png}`);
   await expect(page.locator('#send')).toBeEnabled();
   await page.locator('#send').click();

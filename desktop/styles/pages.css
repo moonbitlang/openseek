@@ -124,16 +124,6 @@ a:where(.setting-link) {
   margin: 0 auto;
 }
 
-.management-page-return {
-  flex: none;
-  border: 0;
-}
-
-.management-page-return:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
-}
-
 .page-eyebrow {
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);

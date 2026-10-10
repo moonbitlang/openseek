@@ -37,12 +37,9 @@ main {
 }
 
 .sidebar-toggle {
+  --icon-size: 14px;
   position: fixed;
-  /* Native controls can sit above the center of the taller app header. */
-  inset-block-start: max(
-    0px,
-    calc((var(--native-titlebar-height, var(--topbar-height)) - var(--sidebar-toggle-size)) / 2)
-  );
+  inset-block-start: calc((var(--topbar-height) - var(--sidebar-toggle-size)) / 2);
   inset-inline-start: var(--sidebar-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
   -webkit-app-region: no-drag;
@@ -189,3 +186,28 @@ main {
 main > .conversation-load-state {
   grid-row: 2 / -1;
 }
+
+/* Compact history arrows follow the sidebar toggle on the header's centerline. */
+.navigation-controls {
+  --icon-size: 14px;
+  position: fixed;
+  inset-block-start: calc((var(--topbar-height) - var(--sidebar-toggle-size)) / 2);
+  inset-inline-start: var(--navigation-inline-inset);
+  z-index: var(--z-titlebar-control);
+  display: flex;
+  gap: 0;
+  -webkit-app-region: no-drag;
+}
+.navigation-controls .icon-button {
+  inline-size: var(--sidebar-toggle-size);
+  min-inline-size: var(--sidebar-toggle-size);
+  block-size: var(--sidebar-toggle-size);
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+.navigation-controls svg { stroke-width: 1.1; }
+.navigation-controls button:disabled { opacity: 0.5; cursor: default; }
+.navigation-notice { padding: 24px; color: var(--color-text-muted); }
+
+.navigation-forward svg { transform: rotate(180deg); }

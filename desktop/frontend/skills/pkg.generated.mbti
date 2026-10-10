@@ -25,6 +25,20 @@ pub(all) suberror SkillReplyError {
 }
 
 // Types and methods
+pub(all) enum Detail {
+  InstalledRef(String)
+  MarketRef(String)
+} derive(Eq)
+pub fn Detail::equal(Self, Self) -> Bool
+pub fn Detail::not_equal(Self, Self) -> Bool
+
+pub enum DetailResolution {
+  Waiting
+  Opened
+  Missing
+  Failed(String)
+}
+
 pub(all) struct Input {
   channel : @interop.ChannelId
   installed : Array[InstalledItem]
@@ -91,10 +105,12 @@ pub fn PreviewTarget::equal(Self, Self) -> Bool
 pub fn PreviewTarget::not_equal(Self, Self) -> Bool
 
 type State derive(Eq)
+pub fn State::detail(Self) -> Detail?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::open_detail(Self, @cmd.Emit[Msg], Input, Detail) -> (@cmd.Cmd, Self, DetailResolution)
 pub fn State::opening(Self, @cmd.Emit[Msg], Input) -> (@cmd.Cmd, Self)
 pub fn State::with_library_error(Self, String) -> Self
 

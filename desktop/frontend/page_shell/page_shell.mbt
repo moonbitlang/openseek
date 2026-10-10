@@ -1,21 +1,8 @@
 ///|
-/// Header contents for the persistent main topbar. The return arrow precedes
-/// the page title, independent of page-local navigation.
-pub fn header(
-  title : String,
-  return_label : String,
-  return_action : @cmd.Cmd,
-) -> Array[@html.Html] {
-  [
-    @html.button(
-      class="icon-button management-page-return",
-      title=return_label,
-      attrs=@html.Attrs::build().aria_label(return_label),
-      on_click=return_action,
-      @icons.icon(@icons.icon_arrow_left),
-    ),
-    @html.h1(class="topbar-title", title),
-  ]
+/// Header contents for the persistent main topbar. Global navigation lives
+/// beside the sidebar toggle, outside this page shell.
+pub fn header(title : String) -> Array[@html.Html] {
+  [@html.h1(class="topbar-title", title)]
 }
 
 ///|
