@@ -7,7 +7,14 @@ pub(all) struct Image {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// No text (including whitespace), mentions, or images.
 pub fn Draft::is_empty(self : Draft) -> Bool {
+  self.task.is_empty() && self.mentions.is_empty() && self.images.is_empty()
+}
+
+///|
+/// No non-whitespace text, mentions, or images to submit.
+pub fn Draft::is_blank(self : Draft) -> Bool {
   self.task.is_blank() && self.mentions.is_empty() && self.images.is_empty()
 }
 

@@ -100,6 +100,28 @@ test('Escape leaves the broadcast suggestion available without a Tab badge', asy
   app.assertNoPredictionRequests();
 });
 
+test('whitespace preserves the draft and lets Tab move focus', async ({ page }) => {
+  const app = await open(page);
+  await app.finish();
+  app.publish();
+  const input = page.locator('#task');
+  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
+  for (const text of ['   ', '\n', '\t', '\u3000']) {
+    await input.fill(text);
+    await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
+    await input.press('Tab');
+    await expect(input).toHaveValue(text);
+    await expect(input).not.toBeFocused();
+    await expect(input).not.toHaveAttribute('placeholder', 'Commit the fix');
+    if (text !== '\u3000') await expect(page.locator('#send')).toBeDisabled();
+  }
+  await input.fill('');
+  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
+  await input.press('Tab');
+  await expect(input).toHaveValue('Commit the fix');
+  app.assertNoPredictionRequests();
+});
+
 test('reopening restores the persisted broadcast without a prediction request', async ({ page }) => {
   const app = await open(page);
   await app.finish();

@@ -15,6 +15,40 @@ fn prediction_fixture() -> Input {
 }
 
 ///|
+test "blank drafts cannot submit or accept an invisible prediction" {
+  let input = prediction_fixture()
+  let empty = Model(input)
+  assert_true(empty.active(input).draft.is_empty())
+  assert_true(empty.active(input).draft.is_blank())
+  for text in [" ", "\n", "\t"] {
+    let (model, _) = empty.update(
+      input,
+      TextChanged(text),
+      Msg::test_emit(),
+      Action::test_emit(),
+    )
+    let entry = model.active(input)
+    assert_true(!entry.draft.is_empty())
+    assert_true(entry.draft.is_blank())
+    assert_eq(entry.prediction_text(input), None)
+    let (submitted, _) = model.update(
+      input,
+      SubmitRequested,
+      Msg::test_emit(),
+      Action::test_emit(),
+    )
+    assert_true(submitted == model)
+    let (accepted, _) = model.update(
+      input,
+      PredictionAccepted,
+      Msg::test_emit(),
+      Action::test_emit(),
+    )
+    assert_true(accepted == model)
+  }
+}
+
+///|
 test "broadcast suggestions react to input without a composer message" {
   let input = prediction_fixture()
   let before = { ..input, prediction: None, }
