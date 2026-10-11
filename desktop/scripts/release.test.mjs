@@ -138,13 +138,19 @@ test("stamp keeps all Desktop module versions aligned", async t => {
   release.desktop = await fs.mkdtemp(join(tmpdir(), "openseek-release-stamp-"));
   release.dist = join(release.desktop, "dist");
   t.after(() => fs.rm(release.desktop, { recursive: true, force: true }));
-  await fs.mkdir(join(release.desktop, "backend"));
-  await fs.mkdir(join(release.desktop, "frontend"));
+  // Each member with the sibling modules its manifest pins.
+  const members = {
+    backend: ["openseek_desktop"],
+    app: ["openseek_desktop", "openseek_desktop/backend"],
+    frontend: ["openseek_desktop"],
+  };
   await fs.writeFile(join(release.desktop, "moon.mod"), 'name = "openseek_desktop"\nversion = "0.1.5"\n');
-  for (const member of ["backend", "frontend"]) {
+  for (const [member, pins] of Object.entries(members)) {
+    await fs.mkdir(join(release.desktop, member));
+    const imports = pins.map(pin => `"${pin}@0.1.5"`).join(", ");
     await fs.writeFile(
       join(release.desktop, member, "moon.mod"),
-      `name = "openseek_desktop/${member}"\nversion = "0.1.5"\nimport { "openseek_desktop@0.1.5" }\n`,
+      `name = "openseek_desktop/${member}"\nversion = "0.1.5"\nimport { ${imports} }\n`,
     );
   }
   await fs.writeFile(
@@ -153,10 +159,11 @@ test("stamp keeps all Desktop module versions aligned", async t => {
   );
   await release.stamp("0.2.0");
   assert.equal(await release.moduleVersion(), "0.2.0");
-  for (const member of ["backend", "frontend"]) {
+  for (const [member, pins] of Object.entries(members)) {
     const module = await fs.readFile(join(release.desktop, member, "moon.mod"), "utf8");
     assert.match(module, /^version = "0\.2\.0"$/m);
-    assert.match(module, /"openseek_desktop@0\.2\.0"/);
+    for (const pin of pins) assert.ok(module.includes(`"${pin}@0.2.0"`), `${member} pins ${pin}`);
+    assert.ok(!module.includes("@0.1.5"), `${member} keeps no stale pin`);
   }
   const config = JSON.parse(await fs.readFile(join(release.desktop, "proton.project.json"), "utf8"));
   assert.equal(config.package.version, "0.2.0");

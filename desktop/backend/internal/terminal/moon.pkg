@@ -5,7 +5,7 @@ import {
   "moonbitlang/async/cond_var",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/env",
-  "openseek_desktop/backend/internal/uuid",
+  "openseek_desktop/backend/uuid",
   "tonyfettes/xlog",
 }
 

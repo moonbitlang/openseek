@@ -44,7 +44,7 @@ const EsbuildVersion = "0.28.1";
 // any disagreement. So a development build is stamped here instead, from a
 // generated copy of the project config. The suffix is what the host looks for
 // when deciding whether to take part in single instance, so it is spelled in
-// `desktop/backend/main.mbt` too.
+// `desktop/app/main.mbt` too.
 const DevelopmentSuffix = ".dev";
 const DevelopmentConfig = "proton.project.dev.json";
 const DevelopmentProduct = "SeekMoonDev";
@@ -90,7 +90,7 @@ class Build {
     this.command = command;
     this.argv = argv;
     this.desktop = fileURLToPath(new URL("../", import.meta.url));
-    this.backend = join(this.desktop, "backend");
+    this.app = join(this.desktop, "app");
     this.repo = resolve(this.desktop, "..");
     this.host = Hosts[process.platform];
   }
@@ -148,9 +148,9 @@ class Build {
   }
 
   async proton(args, env = {}) {
-    const manifest = await readFile(join(this.backend, "moon.mod"), "utf8");
+    const manifest = await readFile(join(this.app, "moon.mod"), "utf8");
     const version = manifest.match(/"moonbit-community\/proton@([^\"]+)"/)?.[1];
-    if (!version) throw new Error("desktop/backend/moon.mod does not pin proton");
+    if (!version) throw new Error("desktop/app/moon.mod does not pin proton");
     await this.commandRun("moonx", [`moonbit-community/proton_cli@${version}`, ...args], { env });
   }
 
@@ -292,16 +292,16 @@ class Build {
     const env = this.command === "macos" ? { MACOSX_DEPLOYMENT_TARGET: "12.0" } : {};
     await this.proton(["cef", "setup"], env);
     if (this.command === "macos") {
-      await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.backend, env });
+      await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.app, env });
       await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", "desktop/target/moonbuild/macos-12.0", ...release], { cwd: this.repo, env });
-      const host = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/openseek_desktop/backend/backend.exe`);
-      const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/backend/backend.exe`);
+      const host = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/openseek_desktop/app/app.exe`);
+      const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/app/app.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
       return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
     }
     const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
-    await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.backend });
+    await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.app });
     await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.repo });
     return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
   }

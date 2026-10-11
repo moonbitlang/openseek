@@ -2,7 +2,7 @@ import {
   "openseek_desktop/backend/internal/env",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/internal/fsx",
-  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/pathx",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async",
 }

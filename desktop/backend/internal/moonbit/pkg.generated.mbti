@@ -2,7 +2,7 @@
 package "openseek_desktop/backend/internal/moonbit"
 
 import {
-  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/pathx",
 }
 
 // Values

@@ -1,0 +1,75 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/host"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/backend/resources",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn app_bundle_path(String) -> String?
+
+pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
+
+pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
+
+pub async fn ensure_codex_config(@pathx.Path?) -> String
+
+pub async fn frontend_entry_path(@resources.Resources) -> String
+
+pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String, resources? : @resources.Resources) -> HostState
+
+pub async fn open_codex_config(@pathx.Path?) -> Unit
+
+pub async fn open_path_preview(@protocol.OpenPathPayload) -> @protocol.OpenPathReply
+
+pub async fn prepared_runtime_dir(String) -> @pathx.Path?
+
+pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
+
+pub async fn read_ui_language(String?) -> @protocol.UiLanguagePreference
+
+pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
+
+pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
+
+pub async fn write_ui_language(String?, @protocol.UiLanguagePreference) -> @protocol.EmptyReply
+
+// Errors
+pub(all) suberror HostError {
+  HostError(String)
+} derive(@debug.Debug)
+pub fn HostError::to_repr(Self) -> @debug.Repr
+
+pub(all) suberror PayloadError {
+  PayloadError(String)
+} derive(@debug.Debug)
+pub fn PayloadError::to_repr(Self) -> @debug.Repr
+
+// Types and methods
+type HostConnection
+pub fn HostConnection::HostConnection() -> Self
+pub fn HostConnection::close_terminals(Self) -> Unit
+pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, async (@protocol.Notification) -> Unit) -> Unit
+
+type HostState
+pub async fn HostState::viz_assets(Self) -> VizAssets
+
+type PackagedTools
+pub fn PackagedTools::apply_to_process_env(Self) -> Unit
+pub async fn PackagedTools::resolve(@resources.Resources?) -> Self?
+
+pub struct VizAssets {
+  shell : String
+  bundle : String
+}
+pub async fn VizAssets::read(Self) -> (String, String)
+
+// Type aliases
+
+// Traits

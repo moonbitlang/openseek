@@ -45,7 +45,7 @@ missing translations at compile time.
    `fileeditor/localization.mbt`. Share a source through `ViewerServices` to
    update mounted editor controls without rebuilding document models.
 5. Extend the native host's accepted preference values and native menu labels
-   under `desktop/backend/internal/{host,extension}`. Browser preferences use
+   under `desktop/{backend/host,app/internal/extension}`. Browser preferences use
    localStorage; native preferences use the runtime directory's
    `ui-language.json`, independent of temporary browser profiles.
 6. Verify live switching, IME input, date formatting, narrow layouts,

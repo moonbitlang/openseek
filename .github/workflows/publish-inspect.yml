@@ -39,7 +39,7 @@ jobs:
       - name: resolve pinned Proton version
         id: proton
         run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/backend/moon.mod)"
+          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/app/moon.mod)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 

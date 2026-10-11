@@ -40,6 +40,15 @@ const Artifacts = [
 ];
 const Browser = Artifacts.find(artifact => artifact.platform === "browser");
 
+// The Desktop modules released under one version, relative to `desktop/`,
+// each with the sibling modules its manifest pins.
+const StampedModules = [
+  { path: "moon.mod", pins: [] },
+  { path: "backend/moon.mod", pins: ["openseek_desktop"] },
+  { path: "app/moon.mod", pins: ["openseek_desktop", "openseek_desktop/backend"] },
+  { path: "frontend/moon.mod", pins: ["openseek_desktop"] },
+];
+
 const OssPrefixes = {
   "https://openseek-api.moonbitlang.cn": "openseek/desktop/releases",
   "https://openseek-api-staging.moonbitlang.cn": "openseek/staging/desktop/releases",
@@ -176,18 +185,17 @@ export class Release {
     if (!/^\d+\.\d+\.\d+$/.test(version)) {
       throw new Error(`release version must be three dot-separated numbers: ${version}`);
     }
-    // The root contracts and both consumers are released together. Keep their
-    // module versions and the two workspace dependency pins on the same value.
-    for (const relative of ["moon.mod", "backend/moon.mod", "frontend/moon.mod"]) {
-      const modulePath = join(this.desktop, relative);
+    // The Desktop modules are released together. Keep their versions and the
+    // workspace dependency pins between them on the same value.
+    for (const { path, pins } of StampedModules) {
+      const modulePath = join(this.desktop, path);
       let module = await readFile(modulePath, "utf8");
-      if (!/^version = "[^"]+"$/m.test(module)) throw new Error(`${relative} has no version line`);
+      if (!/^version = "[^"]+"$/m.test(module)) throw new Error(`${path} has no version line`);
       module = module.replace(/^version = "[^"]+"$/m, `version = "${version}"`);
-      if (relative !== "moon.mod") {
-        if (!/"openseek_desktop@[^"]+"/.test(module)) {
-          throw new Error(`${relative} has no openseek_desktop dependency`);
-        }
-        module = module.replace(/"openseek_desktop@[^"]+"/, `"openseek_desktop@${version}"`);
+      for (const pin of pins) {
+        const pinned = new RegExp(`"${pin}@[^"]+"`);
+        if (!pinned.test(module)) throw new Error(`${path} has no ${pin} dependency`);
+        module = module.replace(pinned, `"${pin}@${version}"`);
       }
       await writeFile(modulePath, module);
     }
@@ -195,13 +203,15 @@ export class Release {
     const config = JSON.parse(await readFile(configPath, "utf8"));
     config.package.version = version;
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
-    for (const relative of ["moon.mod", "backend/moon.mod", "frontend/moon.mod"]) {
-      const module = await readFile(join(this.desktop, relative), "utf8");
+    for (const { path, pins } of StampedModules) {
+      const module = await readFile(join(this.desktop, path), "utf8");
       if (!module.includes(`version = "${version}"`)) {
-        throw new Error(`${relative} did not take the version`);
+        throw new Error(`${path} did not take the version`);
       }
-      if (relative !== "moon.mod" && !module.includes(`"openseek_desktop@${version}"`)) {
-        throw new Error(`${relative} did not take the openseek_desktop dependency`);
+      for (const pin of pins) {
+        if (!module.includes(`"${pin}@${version}"`)) {
+          throw new Error(`${path} did not take the ${pin} dependency`);
+        }
       }
     }
     if (JSON.parse(await readFile(configPath, "utf8")).package.version !== version) {

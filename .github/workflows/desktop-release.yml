@@ -141,14 +141,14 @@ jobs:
           node-version: 22
 
       # Proton 0.2 installs its immutable runtime and versioned helper in the
-      # shared user-level store selected by the dependency in desktop/backend/moon.mod.
+      # shared user-level store selected by the dependency in desktop/app/moon.mod.
       - name: Cache Proton runtime
         uses: actions/cache@v4
         with:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/app/moon.mod') }}
 
       # The packager stages the seed toolchain pinned by
       # `desktop/.moonbit-version` from archives downloaded into this directory.
@@ -336,7 +336,7 @@ jobs:
           path: |
             ~/.proton/store
             ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/backend/moon.mod') }}
+          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/app/moon.mod') }}
 
       - name: Cache MoonBit toolchain seed
         uses: actions/cache@v4
@@ -347,13 +347,13 @@ jobs:
       - name: Assemble Proton CEF runtime
         working-directory: desktop
         run: |
-          $manifest = Get-Content backend/moon.mod -Raw
+          $manifest = Get-Content app/moon.mod -Raw
           if ($manifest -notmatch '"moonbit-community/proton@([^"]+)"') {
-            throw 'desktop/backend/moon.mod does not pin Proton'
+            throw 'desktop/app/moon.mod does not pin Proton'
           }
           moonx "moonbit-community/proton_cli@$($Matches[1])" cef setup
 
-      # After the cache steps: stamping edits backend/moon.mod, whose hash keys
+      # After the cache steps: stamping edits app/moon.mod, whose hash keys
       # the Proton runtime cache.
       - name: Stamp release version
         shell: bash

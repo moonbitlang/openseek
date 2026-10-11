@@ -9,12 +9,12 @@ struct Layout {
 
 ///|
 /// Recognize
-/// `_build/native/<profile>/build/openseek_desktop/backend/<executable>` and
+/// `_build/native/<profile>/build/openseek_desktop/app/<executable>` and
 /// return the checkout and profile build roots it identifies. Installed
 /// executables deliberately do not match this layout.
 pub fn Layout::detect(executable : String) -> Layout? {
   let command_dir = @path.Path(executable).dirname().resolve()
-  guard command_dir.basename() == "backend" else { return None }
+  guard command_dir.basename() == "app" else { return None }
   let module_dir = command_dir.dirname()
   guard module_dir.basename() == "openseek_desktop" else { return None }
   let build_root = module_dir.dirname()

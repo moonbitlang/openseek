@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/endpoint"
+
+import {
+  "moonbitlang/core/json",
+  "openseek_desktop/commands",
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Endpoint
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::Endpoint(@commands.Command[Payload, Reply], async (Payload) -> Reply) -> Self
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], async (Payload) -> Reply) -> Self
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::codex_sync(@commands.Command[Payload, @protocol.CodexCommandReply[Reply]], (Payload) -> Reply raise) -> Self
+pub async fn Endpoint::invoke(Self, Json) -> Json
+pub fn Endpoint::name(Self) -> String
+pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::sync(@commands.Command[Payload, Reply], (Payload) -> Reply raise) -> Self
+
+// Type aliases
+
+// Traits

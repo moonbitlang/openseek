@@ -9,16 +9,25 @@ in [`DESIGN.md`](DESIGN.md).
 For reproducing and assessing UX issues with real components, follow
 [`UX_REVIEW_WORKFLOW.md`](UX_REVIEW_WORKFLOW.md).
 
-- `backend/main.mbt` — native entry point: wires the window manifest, IPC
+The native side is two modules. `backend` is a library and `app` is the
+executable that hosts it:
+
+- `backend/` — the backend itself, with no window toolkit: the engine host,
+  the host operations, and the remote transports. Packages the window host
+  imports sit at its top level; the rest stay under `backend/internal/`.
+- `app/main.mbt` — the Proton window host: wires the window manifest, IPC
   extensions, per-user runtime directory, and launch log.
-- `backend/internal/engine/` — the native process owner: manages persistent
+
+Inside them:
+
+- `backend/engine/` — the native process owner: manages persistent
   engines, streaming, conversation storage, and workspace directories.
-- `backend/internal/extension/` — IPC command registration and bundled frontend asset lookup.
+- `app/internal/extension/` — IPC command registration and bundled frontend asset lookup.
 - `backend/internal/skillmarket/` — the mooncakes.io skill registry client and local skills-library manager.
 - `backend/internal/env/` — process-environment reads (blank means unset).
 - `backend/internal/home/` — the user's home directory and `~` expansion.
 - `backend/internal/userdirs/` — platform-specific Documents directory lookup.
-- `backend/internal/broadcast/` — native event fan-out to connected windows.
+- `backend/broadcast/` — native event fan-out to connected windows.
 - `frontend/` — the standalone JS (Rabbita) UI module: the Elm-style model/update/view. It is itself the executable, shipped as `frontend.js` both inside the app and as the console bundle openseek-api serves.
 - `protocol/`, `commands/`, `uri/`, and `file_search_*` — target-neutral
   packages owned directly by the root `desktop` module.

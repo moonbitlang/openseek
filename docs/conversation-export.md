@@ -47,7 +47,7 @@ There is no destination path or server URL in the frontend request.
 ## Verification
 
 The automated checks are the `frontend/export_dialog` JS tests,
-`backend/internal/shares` native HTTP tests, `protocol/session_share_test.mbt`,
+`app/internal/shares` native HTTP tests, `protocol/session_share_test.mbt`,
 and `desktop/e2e/tests/export_conversation.spec.js` after building the browser
 package. Browser tests substitute the native transport, not the product UI.
 

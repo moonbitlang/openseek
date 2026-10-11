@@ -1,7 +1,7 @@
 import {
   "moonbitlang/async/os_error",
   "moonbitlang/async/fs",
-  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/pathx",
   "moonbitlang/async",
 }
 

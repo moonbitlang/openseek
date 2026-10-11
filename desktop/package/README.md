@@ -78,7 +78,7 @@ Run source checks:
 
 ```sh
 just desktop-build-scripts-check
-moon -C desktop/backend test internal/host --target native
+moon -C desktop/backend test host --target native
 just check
 just test
 just build

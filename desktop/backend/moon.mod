@@ -9,8 +9,6 @@ import {
   "moonbit-community/flate@0.8.4",
   "moonbitlang/x@0.5.5",
   "moonbitlang/async@0.22.4",
-  "moonbit-community/proton@0.3.4",
-  "moonbit-community/proton_ext@0.3.4",
   "tonyfettes/xlog@0.4.2",
   "moonbit-community/proton_contract@0.3.4",
   "moonbitlang/openseek@0.6.1",
@@ -19,7 +17,7 @@ import {
 
 license = "Apache-2.0"
 
-description = "SeekMoon native desktop backend."
+description = "SeekMoon desktop backend: the engine host, the host operations, and the remote transports, with no window toolkit."
 
 warnings = "+implicit_impl_as_method+test_unqualified_package"
 

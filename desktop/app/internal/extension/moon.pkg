@@ -1,0 +1,36 @@
+import {
+  "openseek_desktop/app/internal/cdp",
+  "moonbit-community/proton",
+  "moonbit-community/proton/extension" @proton_extension,
+  "moonbit-community/proton_contract",
+  "openseek_desktop/backend/api",
+  "openseek_desktop/backend/auth",
+  "openseek_desktop/app/internal/shares",
+  "openseek_desktop/backend/broadcast",
+  "openseek_desktop/commands",
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/host",
+  "openseek_desktop/backend/platform",
+  "openseek_desktop/protocol",
+  "moonbitlang/async",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "openseek_desktop/backend/uuid",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+  "moonbitlang/core/string",
+  "openseek_desktop/uri",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"
+
+import {
+  "openseek_desktop/backend/pathx",
+  "moonbitlang/async/http",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/json",
+} for "wbtest"

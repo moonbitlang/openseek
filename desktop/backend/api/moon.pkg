@@ -1,0 +1,28 @@
+import {
+  "moonbitlang/core/debug",
+  "openseek_desktop/backend/resources",
+  "openseek_desktop/backend/auth",
+  "openseek_desktop/backend/broadcast",
+  "openseek_desktop/commands",
+  "openseek_desktop/backend/codex",
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/host",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/internal/work_dir",
+  "openseek_desktop/backend/internal/workspaces",
+  "openseek_desktop/backend/internal/worktree",
+  "openseek_desktop/backend/internal/worktree",
+  "moonbitlang/async",
+  "moonbitlang/core/json",
+  "tonyfettes/xlog",
+}
+
+import {
+  "moonbitlang/openseek_protocol" @wire,
+} for "wbtest"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

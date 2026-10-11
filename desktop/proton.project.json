@@ -1,7 +1,7 @@
 {
   "identifier": "community.moonbit.proton.openseek-desktop",
   "backend": {
-    "path": "backend",
+    "path": "app",
     "package": "."
   },
   "package": {

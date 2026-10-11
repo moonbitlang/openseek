@@ -9,6 +9,22 @@
   for compatibility with a pre-change host unless the user explicitly asks for
   it.
 
+## Module Boundary
+
+- `desktop/backend` is a library and must never depend on Proton, directly or
+  through another module, so that it can be hosted by a process with no window
+  toolkit. Code that needs Proton belongs in `desktop/app`; when shared code
+  needs a fact only Proton knows, the window host passes it in as a value
+  (`@resources.Resources`).
+- `desktop/app` is a thin host of the backend. What any host of the backend
+  must do belongs in `desktop/backend` (`ApiState::spawn_services`), not in
+  the window host's entry point.
+- Packages the window host imports sit at the top of `desktop/backend`; the
+  rest stay under `desktop/backend/internal`. Moon allows an `internal` import
+  only inside one module, so moving a package out of `internal` is what
+  exposes it to another module — do that deliberately, not to reach one
+  helper.
+
 ## Development Builds
 
 - The supported development build is the packaged `.dev` application

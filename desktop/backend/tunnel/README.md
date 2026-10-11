@@ -6,7 +6,7 @@ connection. It contains no HTTP server, authentication, socket ownership, or
 retry loop.
 
 The server implementation lives in the `openseek-api` repository. The desktop
-side is implemented in `desktop/backend/internal/remote`.
+side is implemented in `desktop/backend/remote`.
 
 ## Connection flow
 
@@ -27,7 +27,7 @@ WebSocket is paired, it carries the normal JSON-RPC client protocol unchanged;
 
 - `frame.mbt` owns the JSON shape and strict decoder for `register`,
   `registered`, `open`, and `fail`.
-- `desktop/backend/internal/remote/connect.mbt` owns the desktop's WebSockets,
+- `desktop/backend/remote/connect.mbt` owns the desktop's WebSockets,
   reconnect behavior, registration state, and one data task per browser.
 - `openseek-api` owns the public service, authentication, device ownership,
   stream pairing, and browser-facing endpoints.

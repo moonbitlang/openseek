@@ -3,7 +3,7 @@ package "openseek_desktop/backend/internal/gitx"
 
 import {
   "moonbitlang/core/debug",
-  "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/pathx",
 }
 
 // Values

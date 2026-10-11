@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/resources"
+
+import {
+  "openseek_desktop/backend/pathx",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Resources {
+  dir : @pathx.Path
+  packaged : Bool
+}
+
+// Type aliases
+
+// Traits
