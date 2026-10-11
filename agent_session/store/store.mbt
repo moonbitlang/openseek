@@ -528,11 +528,15 @@ pub fn SessionStore::session_file(
 /// `fork` must not exist, in the sense `exists` and `list` give the word: no
 /// directory for the id, with or without a session file in it. A directory
 /// left by an interrupted creation may hold a title, scratch files, or job
-/// logs, and a fork written into it would silently adopt them. Two callers
-/// naming the same new id can both pass that check, so the session file is
-/// checked again under the fork's exclusive lock and only one of them
-/// writes. The call raises for a source that does not load, for the reasons
-/// `Session::fork` raises, on invalid ids, and on filesystem or lock failures.
+/// logs, and a fork written into it would silently adopt them. Creating the
+/// directory is what claims the id: of two callers naming the same new id
+/// one creates it and the other is refused, whatever the first then does.
+/// The session file is still checked under the fork's exclusive lock, for a
+/// writer that adopts an existing directory — a session started under this
+/// id — and got there first. The call raises for a source that does not
+/// load, for the reasons `Session::fork` raises, on invalid ids, and on
+/// filesystem or lock failures.
+///
 /// The session file is the last thing written, so a fork that raises midway
 /// never leaves a loadable session behind; the directory it leaves holds the
 /// id, and a retry needs another one.
@@ -545,10 +549,11 @@ pub async fn SessionStore::fork(
 ) -> @agent_session.Session {
   let copy = self.load(source).fork(fork, system_prompt~, through?)
   let title = self.title(source)
-  guard !self.exists(fork) else {
-    fail("session \{fork.value()} already exists")
+  @fs.mkdir(self.session_dir(fork), recursive=true) catch {
+    @os_error.OSError(_) as error if error.is_EEXIST() =>
+      fail("session \{fork.value()} already exists")
+    error => raise error
   }
-  ensure_session_dir(self, fork)
   with_session_lock(self, fork, Exclusive, () => {
     let path = self.session_file_path(fork)
     guard !@fs.exists(path) else {
