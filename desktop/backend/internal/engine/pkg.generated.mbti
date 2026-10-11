@@ -6,6 +6,7 @@ import {
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/pathx",
+  "openseek_desktop/backend/internal/resources",
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/protocol",
 }
@@ -27,7 +28,7 @@ pub async fn delete_archived_session(EngineManager, String, String, (String, Str
 
 pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
-pub async fn engine_command() -> String
+pub async fn engine_command(@resources.Resources) -> String
 
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 

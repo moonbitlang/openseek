@@ -18,6 +18,7 @@ import {
   "moonbitlang/core/env",
   "openseek_desktop/backend/internal/uuid",
   "moonbitlang/async/fs",
+  "moonbitlang/core/json",
   "moonbitlang/core/string",
   "openseek_desktop/uri",
   "tonyfettes/xlog",

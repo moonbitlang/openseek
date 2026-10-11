@@ -270,6 +270,7 @@ pub fn ApiState::ApiState(
   auth? : @auth.AuthStore,
   app_version? : String = "development",
   console_url? : String,
+  resources? : @resources.Resources,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
@@ -280,7 +281,13 @@ pub fn ApiState::ApiState(
     engine: engine_actor,
     manager: engine_actor.manager(),
     schedules: Schedules(engine_actor.manager(), runtime_dir),
-    host: @host.new_host_state(engine, runtime_dir?, executable?, app_version~),
+    host: @host.new_host_state(
+      engine,
+      runtime_dir?,
+      executable?,
+      app_version~,
+      resources?,
+    ),
     hub: Hub(),
     auth: match auth {
       Some(store) => store
@@ -290,19 +297,6 @@ pub fn ApiState::ApiState(
     console_url,
     on_finished,
   }
-}
-
-///|
-/// The app-lifetime owner of the Codex app-server child process.
-pub fn ApiState::codex_actor(self : ApiState) -> @codex.Actor {
-  self.codex
-}
-
-///|
-/// The app-lifetime engine actor. Its `run` task owns all serve processes and
-/// per-session follower children.
-pub fn ApiState::engine_actor(self : ApiState) -> @engine.EngineActor {
-  self.engine
 }
 
 ///|
@@ -1258,7 +1252,7 @@ fn publish_worktree_changed(
 }
 
 ///|
-pub async fn ApiState::run_schedules(self : ApiState) -> Unit {
+async fn ApiState::run_schedules(self : ApiState) -> Unit {
   let chat_root = Some(@host.chat_workspace_root())
   self.schedules.run(
     sink=self.sink(),

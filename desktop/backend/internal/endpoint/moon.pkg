@@ -1,5 +1,4 @@
 import {
-  "moonbit-community/proton",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
   "moonbitlang/core/json",

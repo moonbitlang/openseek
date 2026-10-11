@@ -22,7 +22,7 @@ import {
   "openseek_desktop/backend/internal/uuid",
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/backend/internal/workspaces",
-  "moonbit-community/proton",
+  "openseek_desktop/backend/internal/resources",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/process",

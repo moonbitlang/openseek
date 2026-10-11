@@ -20,7 +20,7 @@ import {
   "openseek_desktop/backend/internal/skillmarket",
   "openseek_desktop/backend/internal/terminal",
   "openseek_desktop/backend/internal/update",
-  "moonbit-community/proton",
+  "openseek_desktop/backend/internal/resources",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",

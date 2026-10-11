@@ -21,7 +21,7 @@ async fn SessionShare::publish(
     }
   }
   try {
-    let (shell, bundle) = @host.viz_assets().read()
+    let (shell, bundle) = self.state.host_state().viz_assets().read()
     let files = @engine.ConversationExport::capture(
       self.state.manager(),
       self.payload,

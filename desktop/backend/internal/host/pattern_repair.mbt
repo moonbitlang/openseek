@@ -244,7 +244,7 @@ async fn request_pattern_repair_candidate(
 ) -> PatternRepairCandidateOutcome {
   // The Agent receives only a closed validator configuration. It cannot
   // select another executable or alter the dump arguments.
-  if moongrep_command() is Some(command) {
+  if moongrep_command(state.resources) is Some(command) {
     agent_env[PatternRepairValidatorEnvironment] = pattern_repair_validator_config(
       command,
     ).stringify()
@@ -383,7 +383,7 @@ async fn pattern_repair_op(
     Failed(error, trace) =>
       return pattern_repair_failure(payload, Failed, None, error, trace)
   }
-  match validate_pattern_repair_candidate(root, candidate) {
+  match validate_pattern_repair_candidate(state.resources, root, candidate) {
     PatternRepairValid =>
       {
         root: payload.root,

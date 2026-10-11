@@ -43,6 +43,9 @@ struct HostState {
   runtime_dir : @pathx.Path?
   moon : MoonCliState
   updates : SelfUpdate
+  /// The host's bundled files; `None` when it was started with none, and
+  /// every tool then comes from PATH.
+  resources : @resources.Resources?
 }
 
 ///|
@@ -73,19 +76,21 @@ pub fn HostConnection::HostConnection() -> HostConnection {
 /// bundled `moon` next to it); `executable` is the host's own binary, which
 /// only self-update needs, because replacing the running application is the
 /// one job whose meaning depends on this exact process. Absent paths retain
-/// development fallbacks but disable installed-only work. Proton owns
-/// resource-directory resolution directly in the operations that need it.
+/// development fallbacks but disable installed-only work. `resources` is the
+/// resource directory the operations that need bundled files resolve from.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
   executable? : String,
   app_version? : String = "development",
+  resources? : @resources.Resources,
 ) -> HostState {
   {
     engine,
     runtime_dir,
     moon: MoonCliState(engine, runtime_dir?),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
+    resources,
   }
 }
 
@@ -216,13 +221,13 @@ pub fn endpoints(
       cancel_search_files_op(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(connection.text_search, payload)
+      search_text_op(state.resources, connection.text_search, payload)
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
       cancel_search_text_op(connection.text_search, payload)
     }),
     Endpoint(@commands.fs_search_semantic, payload => {
-      search_semantic_op(connection.semantic_search, payload)
+      search_semantic_op(state.resources, connection.semantic_search, payload)
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
       cancel_search_semantic_op(connection.semantic_search, payload)

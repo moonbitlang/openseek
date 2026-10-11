@@ -41,23 +41,25 @@ pub struct VizAssets {
 ///|
 /// Locate the visualizer assets belonging to this exact host build.
 ///
-/// Both branches read Proton's resource directory, exactly like
+/// Both branches read the host's resource directory, exactly like
 /// `frontend_entry_path`: an installed application resolves the canonical
 /// `seekmoon/` tree, while the development launcher declares `desktop/` and
 /// the checkout above it holds the shell and the bundle. Resolving both
 /// entries the same way keeps them from disagreeing about which layout is
 /// running. A missing asset fails instead of silently embedding an unrelated
 /// artifact.
-pub async fn viz_assets() -> VizAssets {
-  let resource_dir : @pathx.Path = @proton.resource_dir()
-  let assets : VizAssets = if @proton.is_packaged() {
-    let viz = resource_dir.join(PackagedVizDir)
+pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
+  guard self.resources is Some(resources) else {
+    raise HostError("this host has no bundled session visualizer")
+  }
+  let assets : VizAssets = if resources.packaged {
+    let viz = resources.dir.join(PackagedVizDir)
     {
       shell: viz.join("index.html").normalize().to_string(),
       bundle: viz.join("viz_app.js").normalize().to_string(),
     }
   } else {
-    let checkout = resource_dir.dirname()
+    let checkout = resources.dir.dirname()
     {
       shell: checkout.join(DevelopmentVizShellPath).normalize().to_string(),
       bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
@@ -99,14 +101,15 @@ struct PackagedTools {
 }
 
 ///|
-/// Resolve the packaged tools from Proton's platform-independent resource
+/// Resolve the packaged tools from the platform-independent resource
 /// directory. Development deliberately uses PATH even if a previous package
-/// build left generated `seekmoon/` files in the checkout.
-pub async fn PackagedTools::resolve() -> PackagedTools? {
-  if !@proton.is_packaged() {
-    return None
-  }
-  PackagedTools::resolve_from_resource_dir(@proton.resource_dir())
+/// build left generated `seekmoon/` files in the checkout, and so does a host
+/// that was told of no resource directory at all.
+pub async fn PackagedTools::resolve(
+  resources : @resources.Resources?,
+) -> PackagedTools? {
+  guard resources is Some(resources) && resources.packaged else { return None }
+  PackagedTools::resolve_from_resource_dir(resources.dir.to_string())
 }
 
 ///|
@@ -145,12 +148,12 @@ fn PackagedTools::path_with_precedence(
 }
 
 ///|
-/// Locate the frontend from Proton's resource directory. The supported
+/// Locate the frontend from the resource directory. The supported
 /// development launcher exposes `desktop/` as that directory, while every
 /// installed app exposes the package root containing canonical `seekmoon/`.
-pub async fn frontend_entry_path() -> String {
-  if !@proton.is_packaged() {
-    let path = @pathx.Path(@proton.resource_dir())
+pub async fn frontend_entry_path(resources : @resources.Resources) -> String {
+  if !resources.packaged {
+    let path = resources.dir
       .dirname()
       .join("desktop-dev.html")
       .normalize()
@@ -160,7 +163,7 @@ pub async fn frontend_entry_path() -> String {
     }
     return path
   }
-  let path = @pathx.Path(@proton.resource_dir())
+  let path = resources.dir
     .join(PackagedFrontendEntryPath)
     .normalize()
     .to_string()
@@ -176,14 +179,14 @@ pub async fn frontend_entry_path() -> String {
 const MoongrepPackageCoordinate : String = "moonbit-community/moongrep@0.3.5"
 
 ///|
-/// Locate ripgrep in the canonical Proton resource tree. An installed bundle
+/// Locate ripgrep in the canonical resource tree. An installed bundle
 /// with a missing asset fails closed instead of silently
 /// running a machine-global ripgrep of an unknown version.
-async fn ripgrep_command() -> String? {
-  if PackagedTools::resolve() is Some(tools) {
+async fn ripgrep_command(resources : @resources.Resources?) -> String? {
+  if PackagedTools::resolve(resources) is Some(tools) {
     return Some(tools.ripgrep)
   }
-  if @proton.is_packaged() {
+  if resources is Some(resources) && resources.packaged {
     None
   } else {
     Some("rg")
@@ -203,11 +206,11 @@ async fn ripgrep_command() -> String? {
 /// moongrep binary (or a bundled `moongrep.wasm` run through the packaged
 /// moonrun). The pinned coordinate keeps the version deterministic instead of
 /// silently running an arbitrary machine binary.
-async fn moongrep_command() -> String? {
-  if !@proton.is_packaged() {
+async fn moongrep_command(resources : @resources.Resources?) -> String? {
+  guard resources is Some(resources) && resources.packaged else {
     return Some("moonx")
   }
-  let path = @pathx.Path(@proton.resource_dir())
+  let path = resources.dir
     .join(PackagedMoongrepPath + PackagedExecutableSuffix)
     .normalize()
     .to_string()
@@ -247,34 +250,32 @@ async test "packaged tools use only the canonical resource directory" {
 
 ///|
 async test "unpackaged search commands use documented development providers" {
-  if !@proton.is_packaged() {
-    assert_eq(ripgrep_command(), Some("rg"))
-    assert_eq(moongrep_command(), Some("moonx"))
-  }
+  let development : @resources.Resources = { dir: "desktop", packaged: false, }
+  assert_eq(ripgrep_command(Some(development)), Some("rg"))
+  assert_eq(moongrep_command(Some(development)), Some("moonx"))
+  // A host told of no resource directory resolves its tools the same way.
+  assert_eq(ripgrep_command(None), Some("rg"))
+  assert_eq(moongrep_command(None), Some("moonx"))
 }
 
 ///|
-async test "development frontend comes from Proton's declared resource root" {
+async test "development frontend comes from the declared resource root" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-frontend-")
   defer @fs.rmdir(root.to_string(), recursive=true)
   let development = root.join("desktop-dev.html").to_string()
   @fs.write_file(development, "development", create_mode=CreateOrTruncate)
   let resources = root.join("desktop")
   @fs.mkdir(resources.to_string(), recursive=true)
-  let resource_dir = resources.to_string()
-  let previous_resource_dir = @sys.get_env_var("PROTON_RESOURCE_DIR")
-  defer (match previous_resource_dir {
-    Some(value) => @sys.set_env_var("PROTON_RESOURCE_DIR", value)
-    None => @sys.unset_env_var("PROTON_RESOURCE_DIR")
-  })
-  @sys.set_env_var("PROTON_RESOURCE_DIR", resource_dir)
   let packaged = resources.join(PackagedFrontendEntryPath)
   @fs.mkdir(packaged.dirname().to_string(), recursive=true)
   @fs.write_file(packaged.to_string(), "packaged", create_mode=CreateOrTruncate)
   // Development must never consume generated package inputs left in the
   // checkout; the launcher's declared resource root identifies the source
   // checkout without threading the host executable through this API.
-  assert_eq(frontend_entry_path(), development)
+  assert_eq(
+    frontend_entry_path({ dir: resources, packaged: false, }),
+    development,
+  )
 }
 
 ///|

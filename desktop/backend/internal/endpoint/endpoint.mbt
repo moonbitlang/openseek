@@ -1,25 +1,24 @@
 // Type erasure happens here, after a concrete Command[Payload, Reply] has
 // been paired with a handler of exactly Payload -> Reply. The retained
-// closures let Proton and remote JSON-RPC consume the same endpoint list; a
-// window endpoint has only the Proton half. A payload that does not decode
+// closure speaks JSON, so every transport — the desktop window's Proton
+// bridge, remote JSON-RPC, the loopback console — consumes the same endpoint
+// list, and this package names no transport. A payload that does not decode
 // raises the decoder's own error, which the JSON-RPC transport maps to its
 // invalid-params code.
 
 ///|
-/// A native command after its payload and reply types have been safely
-/// paired. The generic types remain captured inside `bind` and `invoke`;
-/// users of the registry only need the stable name.
+/// A command after its payload and reply types have been safely paired. The
+/// generic types remain captured inside `invoke`; users of the registry only
+/// need the stable name.
 priv enum Invoker {
   Async(async (Json) -> Json)
   Sync((Json) -> Json raise)
 }
 
 ///|
-/// A command every client may issue: bound for the desktop window and
-/// invoked by name over remote JSON-RPC.
+/// A command every client may issue, invoked by name with a JSON payload.
 struct Endpoint {
   name : String
-  bind : (@proton.CommandRegistrar) -> Unit raise
   invoke : Invoker
 }
 
@@ -31,9 +30,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::Endpoint(
 ) -> Endpoint {
   {
     name: command.name(),
-    bind: registrar => {
-      registrar.bind(command.descriptor(), (_, payload) => handler(payload))
-    },
     invoke: Async(params => {
       let payload : Payload = @json.from_json(params)
       handler(payload).to_json()
@@ -49,9 +45,6 @@ pub fn[Payload : @json.FromJson, Reply : ToJson] Endpoint::sync(
 ) -> Endpoint {
   {
     name: command.name(),
-    bind: registrar => {
-      registrar.bind(command.descriptor(), (_, payload) => handler(payload))
-    },
     invoke: Sync(params => {
       let payload : Payload = @json.from_json(params)
       handler(payload).to_json()
@@ -97,51 +90,9 @@ pub fn Endpoint::name(self : Endpoint) -> String {
 }
 
 ///|
-pub fn Endpoint::bind(
-  self : Endpoint,
-  registrar : @proton.CommandRegistrar,
-) -> Unit raise {
-  (self.bind)(registrar)
-}
-
-///|
 pub async fn Endpoint::invoke(self : Endpoint, params : Json) -> Json {
   match self.invoke {
     Async(invoke) => invoke(params)
     Sync(invoke) => invoke(params)
   }
-}
-
-///|
-/// A command only the desktop window can issue: its handler needs Proton's
-/// page context, so it is bound for the window and has no remote half. The
-/// type keeps it out of every remote catalog, which is built from
-/// `Endpoint` alone.
-struct WindowEndpoint {
-  name : String
-  bind : (@proton.CommandRegistrar) -> Unit raise
-}
-
-///|
-pub fn[Payload : @json.FromJson, Reply : ToJson] WindowEndpoint::WindowEndpoint(
-  command : @commands.Command[Payload, Reply],
-  handler : async (@proton.CommandContext, Payload) -> Reply,
-) -> WindowEndpoint {
-  {
-    name: command.name(),
-    bind: registrar => registrar.bind(command.descriptor(), handler),
-  }
-}
-
-///|
-pub fn WindowEndpoint::name(self : WindowEndpoint) -> String {
-  self.name
-}
-
-///|
-pub fn WindowEndpoint::bind(
-  self : WindowEndpoint,
-  registrar : @proton.CommandRegistrar,
-) -> Unit raise {
-  (self.bind)(registrar)
 }

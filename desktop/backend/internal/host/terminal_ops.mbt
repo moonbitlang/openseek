@@ -83,7 +83,7 @@ async fn terminal_open_op(
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
   let path_entries = [toolchain.bin_dir.to_string()]
-  if PackagedTools::resolve() is Some(tools) {
+  if PackagedTools::resolve(state.resources) is Some(tools) {
     path_entries.push(tools.bin_dir)
   }
   // A `!` command is the session's only process: no login shell starts, so

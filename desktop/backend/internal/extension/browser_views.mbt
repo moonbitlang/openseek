@@ -412,7 +412,7 @@ fn BrowserViews::focused_browser(
 /// handlers they use. A relay browser owns neither, so none of these commands
 /// enters the shared remote catalog. `browser.navigate` deliberately binds
 /// the same create-if-missing handler as `browser.open`.
-fn window_endpoints(views : BrowserViews) -> Array[@endpoint.WindowEndpoint] {
+fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
   [
     WindowEndpoint(@commands.browser_pick_element, (_, payload) => {
       views.pick_element(payload)

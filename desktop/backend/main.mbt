@@ -35,11 +35,16 @@ async fn main {
   // The user's login shell supplies the base environment, then installed
   // tools take precedence. Both the OpenSeek engine and Codex app-server are
   // created below and therefore pass this packaged `rg` to agent tool calls.
-  if @host.PackagedTools::resolve() is Some(tools) {
+  // Proton knows where this host's files are; everything below is told.
+  let resources : @resources.Resources = {
+    dir: @proton.resource_dir(),
+    packaged: @proton.is_packaged(),
+  }
+  if @host.PackagedTools::resolve(Some(resources)) is Some(tools) {
     tools.apply_to_process_env()
   }
-  let frontend_entry = @host.frontend_entry_path()
-  let engine = @engine.engine_command()
+  let frontend_entry = @host.frontend_entry_path(resources)
+  let engine = @engine.engine_command(resources)
   let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
   let app_version = app.version() catch { _ => "development" }
   @xlog.info() <? { "message": "host process start" }
@@ -96,6 +101,7 @@ async fn main {
     auth~,
     app_version~,
     console_url?=console.map(console => console.entry_url()),
+    resources~,
   )
   let bridge = @extension.DesktopBridgeActor(state)
   // The dock's browser tabs: native web contents views, owned by the
@@ -258,36 +264,9 @@ async fn main {
     let app = app.app_lifecycle(
       on_start=_ => {
         is_primary = true
-        prepare_workspaces()
+        @api.prepare_workspaces()
         group.spawn_bg(allow_failure=true, () => bridge.run())
-        group.spawn_bg(allow_failure=true, () => {
-          state
-          .codex_actor()
-          .run((method_, params) => {
-            if @protocol.Notification::from_wire(method_, params)
-              is Some(notification) {
-              state.publish(notification)
-            }
-          })
-        })
-        group.spawn_bg(allow_failure=true, () => {
-          state
-          .engine_actor()
-          .run(state.sink(), message => {
-            state.publish(
-              AgentError({
-                run_id: None,
-                message: Some(message),
-                exit_code: None,
-                diagnostics: None,
-              }),
-            )
-          })
-        })
-        group.spawn_bg(allow_failure=true, () => state.run_schedules())
-        @host.spawn_host_pumps(group, state.host_state(), notification => {
-          state.publish(notification)
-        })
+        state.spawn_services(group)
         // The relay actor registers this host whenever a sign-in (or the
         // environment override) says so, and idles otherwise.
         group.spawn_bg(allow_failure=true, () => relay.run())
@@ -455,53 +434,6 @@ fn single_instance_wanted(
   development~ : Bool,
 ) -> Bool {
   matches.flags.get("single-instance") is Some(true) && !development
-}
-
-///|
-/// First-launch and migration work on the workspace registry. The primary
-/// runs this before it serves any client, so the first `workspace.list` a
-/// page sees already reflects it.
-async fn prepare_workspaces() -> Unit {
-  // A fresh install has no workspaces at all. Attach the default one before
-  // anything can serve a workspace list, so the first page to connect
-  // already has somewhere to work. This runs exactly once per registry: a
-  // user who later detaches it does not get it back.
-  let default_workspace = @workspaces.initialize() catch {
-    error => {
-      // An unwritable Documents folder must not stop the app — the user can
-      // still attach a project by hand.
-      @xlog.error() <?
-        {
-          "message": "default workspace setup failed",
-          "error": @debug.render(Repr(error)),
-        }
-      None
-    }
-  }
-  if default_workspace is Some(dir) {
-    @xlog.info() <?
-      { "message": "default workspace attached", "path": dir.to_string() }
-  }
-  // Conversations the desktop used to keep in the global store predate
-  // workspaces owning every record. Move them into the default workspace so
-  // they stay listed; a failure leaves them where they are for a later launch.
-  let migrated = @engine.migrate_global_store() catch {
-    error => {
-      @xlog.error() <?
-        {
-          "message": "global store migration failed",
-          "error": @debug.render(Repr(error)),
-        }
-      0
-    }
-  }
-  if migrated > 0 {
-    @xlog.info() <?
-      {
-        "message": "migrated conversations from the global store",
-        "count": migrated,
-      }
-  }
 }
 
 ///|
