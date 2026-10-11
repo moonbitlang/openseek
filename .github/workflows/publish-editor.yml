@@ -17,7 +17,7 @@ jobs:
       contents: read
     defaults:
       run:
-        # The editor's scoped moon.work keeps Proton setup out of this job,
+        # The editor's scoped moon.work keeps this job to the editor alone,
         # mirroring the editor CI gate.
         working-directory: editor
     steps:

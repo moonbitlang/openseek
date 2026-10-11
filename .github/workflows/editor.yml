@@ -24,7 +24,7 @@ concurrency:
 jobs:
   # Root CI checks the integrated native/JS workspace on Linux. This job keeps
   # the editor's own all-target and cross-platform contract, using its scoped
-  # editor/moon.work so Proton setup is not part of an editor-only gate.
+  # editor/moon.work so the gate covers the editor alone.
   moon-gates:
     name: moon (${{ matrix.channel }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
