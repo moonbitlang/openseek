@@ -533,6 +533,9 @@ pub fn SessionStore::session_file(
 /// checked again under the fork's exclusive lock and only one of them
 /// writes. The call raises for a source that does not load, for the reasons
 /// `Session::fork` raises, on invalid ids, and on filesystem or lock failures.
+/// The session file is the last thing written, so a fork that raises midway
+/// never leaves a loadable session behind; the directory it leaves holds the
+/// id, and a retry needs another one.
 pub async fn SessionStore::fork(
   self : SessionStore,
   source : @agent_session.SessionId,
@@ -552,11 +555,14 @@ pub async fn SessionStore::fork(
       fail("session \{fork.value()} already exists")
     }
     let dirs = self.session_dir_chain(fork)
-    write_text_atomic(path, session_file_text(copy), dirs~)
-    record_mark(self, copy)
+    // The session file goes last: it is what makes the id a session, so a
+    // write that fails before it leaves a directory nothing loads rather
+    // than a fork that exists without its title.
     if title is Some(title) {
       write_text_atomic(self.title_path(fork), title, dirs~)
     }
+    write_text_atomic(path, session_file_text(copy), dirs~)
+    record_mark(self, copy)
   })
   copy
 }
