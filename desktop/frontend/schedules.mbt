@@ -5,7 +5,9 @@ priv struct ScheduleForm {
   workspace : String?
   task : String
   model : String
-  once : Bool
+  timing : String
+  time : String
+  weekday : String
   once_at : Int64?
   minutes : String
   timeout : String
@@ -19,7 +21,9 @@ fn ScheduleForm::empty() -> ScheduleForm {
     workspace: None,
     task: "",
     model: "",
-    once: false,
+    timing: "every",
+    time: "09:00",
+    weekday: "1",
     once_at: None,
     minutes: "30",
     timeout: "30",
@@ -170,7 +174,12 @@ fn schedule_client_now() -> Int64 {
 fn schedule_time(locale? : @i18n.Locale = English, at : Int64) -> String {
   let ctor : @js.Value = @js.globalThis.get_with_string("Date")
   let date : @js.Value = ctor.new([@js.Value::cast_from(at.to_double())])
-  date.apply_with_string("toLocaleString", [@js.Value::cast_from(locale.tag())])
+  let options = @js.Object::new()
+  options["timeZoneName"] = "short"
+  date.apply_with_string("toLocaleString", [
+    @js.Value::cast_from(locale.tag()),
+    options.to_value(),
+  ])
 }
 
 ///|
@@ -178,17 +187,60 @@ fn schedule_form_spec(
   locale? : @i18n.Locale = English,
   form : ScheduleForm,
 ) -> Result[@protocol.ScheduleSpec, String] {
-  let minutes = @string.parse_int(form.minutes) catch {
-    _ => return Err(ui(locale, MinutesInteger))
-  }
   let timeout = @string.parse_int(form.timeout) catch {
     _ => return Err(ui(locale, TimeoutInteger))
   }
-  guard minutes >= 1 && minutes <= 525600 && timeout >= 1 && timeout <= 1440 else {
+  guard timeout >= 1 && timeout <= 1440 else {
     return Err(ui(locale, ScheduleRange))
   }
   guard !form.name.trim().is_empty() && !form.task.trim().is_empty() else {
     return Err(ui(locale, ScheduleRequired))
+  }
+  let timing : @protocol.ScheduleTiming = match form.timing {
+    "once" | "every" as kind => {
+      let minutes = @string.parse_int(form.minutes) catch {
+        _ => return Err(ui(locale, MinutesInteger))
+      }
+      guard minutes >= 1 && minutes <= 525600 else {
+        return Err(ui(locale, ScheduleRange))
+      }
+      if kind == "once" {
+        Once(
+          form.once_at.unwrap_or_else(() => {
+            schedule_client_now() + minutes.to_int64() * 60000
+          }),
+        )
+      } else {
+        Every(minutes)
+      }
+    }
+    "daily" | "weekly" => {
+      let parts = form.time.split(":").to_array()
+      guard parts.length() == 2 else {
+        return Err(ui(locale, InvalidScheduleTime))
+      }
+      let hour = @string.parse_int(parts[0]) catch {
+        _ => return Err(ui(locale, InvalidScheduleTime))
+      }
+      let minute = @string.parse_int(parts[1]) catch {
+        _ => return Err(ui(locale, InvalidScheduleTime))
+      }
+      guard hour >= 0 && hour < 24 && minute >= 0 && minute < 60 else {
+        return Err(ui(locale, InvalidScheduleTime))
+      }
+      if form.timing == "daily" {
+        Daily(hour~, minute~)
+      } else {
+        let weekday = @string.parse_int(form.weekday) catch {
+          _ => return Err(ui(locale, InvalidScheduleTime))
+        }
+        guard weekday >= 1 && weekday <= 7 else {
+          return Err(ui(locale, InvalidScheduleTime))
+        }
+        Weekly(weekday~, hour~, minute~)
+      }
+    }
+    _ => return Err(ui(locale, InvalidScheduleTime))
   }
   Ok({
     name: form.name.trim().to_owned(),
@@ -199,15 +251,7 @@ fn schedule_form_spec(
     } else {
       Some(form.model.trim().to_owned())
     },
-    timing: if form.once {
-      Once(
-        form.once_at.unwrap_or_else(() => {
-          schedule_client_now() + minutes.to_int64() * 60000
-        }),
-      )
-    } else {
-      Every(minutes)
-    },
+    timing,
     timeout_minutes: timeout,
   })
 }
@@ -318,15 +362,30 @@ fn update_schedules(
         workspace: entry.spec.workspace,
         task: entry.spec.task,
         model: entry.spec.model.unwrap_or(""),
-        once: entry.spec.timing is Once(_),
+        timing: match entry.spec.timing {
+          Once(_) => "once"
+          Every(_) => "every"
+          Daily(..) => "daily"
+          Weekly(..) => "weekly"
+        },
+        time: match entry.spec.timing {
+          Daily(hour~, minute~) | Weekly(hour~, minute~, ..) =>
+            schedule_clock_text(hour, minute)
+          _ => "09:00"
+        },
+        weekday: match entry.spec.timing {
+          Weekly(weekday~, ..) => weekday.to_string()
+          _ => "1"
+        },
         once_at: match entry.spec.timing {
           Once(at) => Some(at)
-          Every(_) => None
+          _ => None
         },
         minutes: match entry.spec.timing {
           Every(n) => n.to_string()
           Once(at) =>
             @cmp.maximum(1L, (at - schedule_client_now() + 59999) / 60000).to_string()
+          _ => "30"
         },
         timeout: entry.spec.timeout_minutes.to_string(),
       }
@@ -352,7 +411,9 @@ fn update_schedules(
           }
         "task" => { ..form, task: value, }
         "model" => { ..form, model: value, }
-        "timing" => { ..form, once: value == "once", once_at: None, }
+        "timing" => { ..form, timing: value, once_at: None, }
+        "time" => { ..form, time: value, }
+        "weekday" => { ..form, weekday: value, }
         "minutes" => { ..form, minutes: value, once_at: None, }
         "timeout" => { ..form, timeout: value, }
         _ => form
@@ -511,4 +572,32 @@ fn Model::wants_schedule_updates(self : Model) -> Bool {
     self.active_conversation() is Some(conv) &&
     self.scheduled_session_read_only(conv)
   )
+}
+
+///|
+fn schedule_clock_text(hour : Int, minute : Int) -> String {
+  fn pad(n : Int) -> String {
+    if n < 10 {
+      "0\{n}"
+    } else {
+      n.to_string()
+    }
+  }
+  pad(hour) + ":" + pad(minute)
+}
+
+///|
+fn schedule_weekday_label(locale : @i18n.Locale, day : Int) -> String {
+  // 2024-01-01 was a Monday. UTC keeps the label independent of the client zone.
+  let ctor : @js.Value = @js.globalThis.get_with_string("Date")
+  let date : @js.Value = ctor.new([
+    @js.Value::cast_from(1704067200000.0 + (day - 1).to_double() * 86400000.0),
+  ])
+  let options = @js.Object::new()
+  options["weekday"] = "long"
+  options["timeZone"] = "UTC"
+  date.apply_with_string("toLocaleDateString", [
+    @js.Value::cast_from(locale.tag()),
+    options.to_value(),
+  ])
 }

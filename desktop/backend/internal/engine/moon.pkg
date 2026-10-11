@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/x/time",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/x/uuid" @x_uuid,
   "moonbitlang/core/encoding/utf8",
@@ -41,3 +42,7 @@ import {
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
 supported_targets = "+native"
+
+options(
+  "native-stub": [ "schedule_time_native.c" ],
+)

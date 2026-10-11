@@ -2,6 +2,13 @@
 
 ///|
 priv enum UiMessage {
+  DailyLabel
+  WeeklyLabel
+  TimeLabel
+  WeekdayLabel
+  InvalidScheduleTime
+  HostTimeLabel
+  HostTimezone
   MinutesInteger
   TimeoutInteger
   ScheduleRange
@@ -63,6 +70,49 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, DailyLabel) => "Daily"
+    (Spanish, DailyLabel) => "Diariamente"
+    (SimplifiedChinese, DailyLabel) => "每天"
+    (TraditionalChinese, DailyLabel) => "每天"
+    (Japanese, DailyLabel) => "毎日"
+    (English, WeeklyLabel) => "Weekly"
+    (Spanish, WeeklyLabel) => "Semanalmente"
+    (SimplifiedChinese, WeeklyLabel) => "每周"
+    (TraditionalChinese, WeeklyLabel) => "每週"
+    (Japanese, WeeklyLabel) => "毎週"
+    (English, TimeLabel) => "Time"
+    (Spanish, TimeLabel) => "Hora"
+    (SimplifiedChinese, TimeLabel) => "时间"
+    (TraditionalChinese, TimeLabel) => "時間"
+    (Japanese, TimeLabel) => "時刻"
+    (English, WeekdayLabel) => "Day of week"
+    (Spanish, WeekdayLabel) => "Día de la semana"
+    (SimplifiedChinese, WeekdayLabel) => "星期"
+    (TraditionalChinese, WeekdayLabel) => "星期"
+    (Japanese, WeekdayLabel) => "曜日"
+    (English, InvalidScheduleTime) => "Enter a valid time and weekday"
+    (Spanish, InvalidScheduleTime) => "Introduce una hora y un día válidos"
+    (SimplifiedChinese, InvalidScheduleTime) =>
+      "请输入有效的时间和星期"
+    (TraditionalChinese, InvalidScheduleTime) =>
+      "請輸入有效的時間和星期"
+    (Japanese, InvalidScheduleTime) =>
+      "有効な時刻と曜日を入力してください"
+    (English, HostTimeLabel) => "Host local time"
+    (Spanish, HostTimeLabel) => "Hora local del host"
+    (SimplifiedChinese, HostTimeLabel) => "主机本地时间"
+    (TraditionalChinese, HostTimeLabel) => "主機本地時間"
+    (Japanese, HostTimeLabel) => "ホストの現地時刻"
+    (English, HostTimezone) =>
+      "Uses the execution host’s local time zone. Missing daylight-saving times are skipped; repeated times run once."
+    (Spanish, HostTimezone) =>
+      "Usa la zona horaria local del host. Se omiten las horas inexistentes por el cambio de horario; las horas repetidas se ejecutan una vez."
+    (SimplifiedChinese, HostTimezone) =>
+      "按执行主机的本地时区运行。夏令时跳过的时刻不执行，重复的时刻只执行一次。"
+    (TraditionalChinese, HostTimezone) =>
+      "按執行主機的本地時區執行。日光節約時間跳過的時刻不執行，重複的時刻只執行一次。"
+    (Japanese, HostTimezone) =>
+      "実行ホストの現地タイムゾーンを使用します。夏時間で存在しない時刻はスキップし、重複する時刻は一度だけ実行します。"
     (English, MinutesInteger) => "Enter a whole number of minutes"
     (Spanish, MinutesInteger) => "Introduce un número entero de minutos"
     (SimplifiedChinese, MinutesInteger) => "请输入整数分钟数"
