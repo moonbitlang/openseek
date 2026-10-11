@@ -1,5 +1,5 @@
 ///|
-/// `openseek sessions <list|show|compact>` — durable-session management. Prints
+/// `openseek sessions <list|show|compact|fork>` — durable-session management. Prints
 /// for humans directly on stdout, so it never opens the event sink; an event a
 /// compaction reports is dropped.
 pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
@@ -7,7 +7,8 @@ pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
     Some(("list", m)) => sessions_list(m)
     Some(("show", m)) => sessions_show(m)
     Some(("compact", m)) => sessions_compact(m)
-    _ => fail("usage: openseek sessions <list|show|compact>")
+    Some(("fork", m)) => sessions_fork(m)
+    _ => fail("usage: openseek sessions <list|show|compact|fork>")
   }
 }
 
@@ -75,6 +76,36 @@ async fn sessions_compact(matches : @argparse.Matches) -> Unit {
   println(
     "compacted session \{id.value()} events \{from_sequence}..\{to_sequence}; last_sequence=\{compacted.last_sequence()}",
   )
+}
+
+///|
+/// `openseek sessions fork <id> [--as <new-id>] [--through <n>]`: start a new
+/// session from another one's history, opening it with a notice of the
+/// environment it works in — this command's `--dir` and the fork's own
+/// scratch directory. The new id is the one thing a caller needs back, to
+/// resume it with `--session`, so it is the whole of stdout.
+async fn sessions_fork(matches : @argparse.Matches) -> Unit {
+  let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
+  let store = @store.SessionStore(@setup.session_root(matches, workspace_root~))
+  let source = sessions_target_id(matches)
+  let fork = match matches {
+    { values: { "as": [id, ..], .. }, .. } => {
+      guard !id.is_blank() else { fail("--as needs a session id") }
+      @agent_session.SessionId(id.trim().to_owned())
+    }
+    _ => @setup.generated_session_id()
+  }
+  let through = match matches {
+    { values: { "through": [input, ..], .. }, .. } =>
+      Some(@cli.parse_positive_int(input.trim().to_owned(), "--through"))
+    _ => None
+  }
+  let notice = @setup.fork_notice(
+    source,
+    workspace_root~,
+    session_scratch_dir=store.scratch_dir(fork),
+  )
+  println(store.fork(source, fork, through?, notice~).id().value())
 }
 
 ///|

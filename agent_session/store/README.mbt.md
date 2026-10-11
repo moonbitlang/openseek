@@ -2,7 +2,7 @@
 
 `moonbitlang/openseek/agent_session/store` is the native filesystem persistence
 layer for typed OpenSeek sessions. It wraps `agent_session.Session` with the
-filesystem rules needed to save, resume, list, and compact durable
+filesystem rules needed to save, resume, list, compact, and fork durable
 conversations.
 
 The package is native-only because it uses `moonbitlang/async/fs` for files,
@@ -51,6 +51,11 @@ let session = store.compact(
   content="summary text",
   from_sequence=1,
   to_sequence=20,
+)
+let fork = store.fork(
+  session.id(),
+  @agent_session.SessionId("another-way"),
+  notice="[session forked]\n...",
 )
 ```
 
@@ -269,6 +274,59 @@ async test "compact appends a durable summary" {
         #|]
       ),
     )
+  })
+}
+```
+
+## Fork
+
+`fork` copies a session into a new session that continues on its own. The copy
+is `Session::fork` of the durable log: every turn that has ended, plus what was
+recorded between turns since, and never a turn still in flight — so forking a
+session another process is running is safe. `through` stops the copy at the
+end of an earlier turn instead. The source's display title is copied; its
+prediction, job logs, and scratch files are not.
+
+The system prompt is copied verbatim, which keeps the copied history a
+cache-hittable prefix but leaves the prompt describing the source's
+environment — its scratch directory is a different directory for the fork.
+`notice` is appended as the fork's first event of its own, a runtime notice:
+it is where the caller tells the model that this is a fork and states the
+environment the fork works in.
+
+The new id must not exist. The check and the write happen under the new
+session's exclusive lock, so a fork never replaces a session.
+
+```mbt check
+///|
+async test "fork continues from the last finished turn" {
+  @vfs.with_tmpdir(prefix="openseek-store-readme-fork-", root => {
+    let store = @store.SessionStore(root)
+    let session = @agent_session.Session(
+        SessionId("demo"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("fix the parser")]))))
+      .append(Terminal(Finished("fixed")))
+      .append(User(UserMessage(Content([Text("now the lexer")]))))
+    store.create(session)
+
+    let fork = store.fork(
+      SessionId("demo"),
+      SessionId("another-way"),
+      notice="[session forked]\nScratch directory: /tmp/another-way",
+    )
+    debug_inspect(
+      (fork.id().value(), fork.last_sequence(), fork.events()[2].item()),
+      content=(
+        #|(
+        #|  "another-way",
+        #|  3,
+        #|  Runtime({ content: "[session forked]\nScratch directory: /tmp/another-way" }),
+        #|)
+      ),
+    )
+    debug_inspect(store.load(SessionId("demo")).last_sequence(), content="3")
   })
 }
 ```

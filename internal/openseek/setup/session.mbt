@@ -42,15 +42,18 @@ pub async fn resolved_session_id(
       fail("--no-session contradicts --session; pick one behavior")
     (Some(id), false) => Some(id)
     (None, true) => None
-    (None, false) =>
-      Some(
-        @agent_session.SessionId::generated(
-          prefix="cli",
-          now_ms=@env.now().reinterpret_as_int64(),
-          salt=random_salt(),
-        ),
-      )
+    (None, false) => Some(generated_session_id())
   }
+}
+
+///|
+/// A fresh `cli-<stamp>-<salt>` id for a session the caller did not name.
+pub async fn generated_session_id() -> @agent_session.SessionId {
+  @agent_session.SessionId::generated(
+    prefix="cli",
+    now_ms=@env.now().reinterpret_as_int64(),
+    salt=random_salt(),
+  )
 }
 
 ///|

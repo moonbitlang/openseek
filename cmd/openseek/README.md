@@ -95,6 +95,7 @@ moon run . -- sessions list --session-root .openseek
 moon run . -- sessions list --format=json --session-root .openseek
 moon run . -- sessions show parser-fix --session-root .openseek
 moon run . -- sessions compact parser-fix --file summary.txt --from 1 --to 120
+moon run . -- sessions fork parser-fix --as parser-fix-retry
 ```
 
 `sessions list --format=json` is the machine-readable form of the listing,
@@ -108,6 +109,20 @@ human-readable listing).
 event. It does not delete raw events from the session file;
 `agent_session.Session::chat_messages` uses the summary to compact model context
 on replay.
+
+`sessions fork <id> [--as <new-id>] [--through <n>]` copies a session into a new
+one and prints the new id, so the conversation can be continued another way
+with `--session <new-id>` while the original stays as it is. The copy carries
+every finished turn and whatever was recorded between turns since; a turn still
+in flight is left out, so forking a session that is running is safe. The
+system prompt is copied verbatim, so the fork opens with a runtime notice that
+says it is a fork and states its own environment: the working directory given
+by this command's `--dir` and the fork's own scratch directory.
+`--through <n>` stops at the turn whose terminal event has sequence `n`
+(`sessions show` lists the sequences). Without `--as` the new session gets a
+generated `cli-…` id; an id that already exists is refused. The fork lives in
+the same `--session-root`; resume it with the same `--dir` to keep working on
+the same files.
 
 ## `openseek serve`
 

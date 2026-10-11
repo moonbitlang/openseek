@@ -188,6 +188,24 @@ pub fn root_command() -> @argparse.Command {
             ],
             positionals=[PositionArg("id", about="Session id.")],
           ),
+          Command(
+            "fork",
+            about="Copy <id> into a new session that continues from its last finished turn.",
+            options=[
+              dir_option(),
+              OptionArg(
+                "as",
+                long="as",
+                about="Id of the new session; generated when omitted.",
+              ),
+              OptionArg(
+                "through",
+                long="through",
+                about="Copy only up to the turn that ended at this event sequence.",
+              ),
+            ],
+            positionals=[PositionArg("id", about="Session id.")],
+          ),
         ],
       ),
     ],

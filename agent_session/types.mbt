@@ -720,6 +720,62 @@ pub fn Session::compact(
 }
 
 ///|
+/// Start a new conversation `id` from a state this one really stood in.
+///
+/// At the moment each turn ended, the log was exactly its events up to that
+/// turn's `Terminal`, so such a prefix resumes like the original did then.
+/// `through` names one by that terminal's sequence. Without it the fork
+/// carries everything short of a turn still in flight: the turns that ended,
+/// plus whatever was recorded between turns since — a goal marker, a
+/// compaction summary. A turn opens with a `User` item, so the first one
+/// after the last terminal is where an unfinished turn begins.
+///
+/// Events keep their sequences and timestamps; only the id changes. Raises
+/// when `through` is not the sequence of a `Terminal`, and when nothing
+/// precedes the unfinished turn.
+pub fn Session::fork(
+  self : Session,
+  id : SessionId,
+  through? : Int,
+) -> Session raise {
+  let copied : Array[SessionEvent] = []
+  let mut settled = 0
+  let mut in_turn = false
+  for event in self.events {
+    copied.push(event)
+    match event.item {
+      User(_) => in_turn = true
+      Terminal(_) => {
+        if through == Some(event.sequence) {
+          return Session(
+            id,
+            system_prompt=self.system_prompt,
+            events=@vector.from_array(copied),
+          )
+        }
+        in_turn = false
+        settled = copied.length()
+      }
+      Assistant(_) | Tool(_) | Runtime(_) | Summary(_) =>
+        if !in_turn {
+          settled = copied.length()
+        }
+    }
+  }
+  if through is Some(sequence) {
+    fail("no turn of session \{self.id.value()} ends at sequence \{sequence}")
+  }
+  guard settled > 0 else {
+    fail("session \{self.id.value()} has no finished turn to fork from")
+  }
+  Session(
+    id,
+    system_prompt=self.system_prompt,
+    events=@vector.from_array(copied[:settled].to_owned()),
+  )
+}
+
+///|
 #doc(hidden)
 #deprecated
 pub extend AssistantMessage with Debug::{to_repr}

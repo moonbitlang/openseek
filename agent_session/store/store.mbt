@@ -508,6 +508,57 @@ pub fn SessionStore::session_file(
 }
 
 ///|
+/// Copy the session `source` into the new session `fork` and return it.
+///
+/// The copy is `Session::fork` of the source as it is durably recorded now —
+/// read under the source's shared lock, so it is one consistent log even
+/// while another process appends to it — and carries the source's display
+/// title. Nothing else in the source's directory is copied: a prediction is
+/// about the source's own tail, and job logs and scratch files are its
+/// working state.
+///
+/// `notice` becomes the fork's first event of its own, a runtime notice
+/// after the copied history. The system prompt is copied verbatim, so it
+/// still describes the source's environment — its scratch directory above
+/// all, which is a different directory for the fork; the notice is where the
+/// caller tells the model that this is a fork and what its environment is.
+///
+/// `fork` must not exist: the existence check and the write happen under the
+/// fork's exclusive lock, so two callers naming the same id cannot both
+/// succeed. The call raises for a source that does not load, for the reasons
+/// `Session::fork` raises, on invalid ids, and on filesystem or lock failures.
+pub async fn SessionStore::fork(
+  self : SessionStore,
+  source : @agent_session.SessionId,
+  fork : @agent_session.SessionId,
+  through? : Int,
+  notice~ : String,
+) -> @agent_session.Session {
+  let copy = self
+    .load(source)
+    .fork(fork, through?)
+    .append(
+      Runtime(RuntimeNotice(notice)),
+      unix_ms=@env.now().reinterpret_as_int64(),
+    )
+  let title = self.title(source)
+  ensure_session_dir(self, fork)
+  with_session_lock(self, fork, Exclusive, () => {
+    let path = self.session_file_path(fork)
+    guard !@fs.exists(path) else {
+      fail("session \{fork.value()} already exists")
+    }
+    let dirs = self.session_dir_chain(fork)
+    write_text_atomic(path, session_file_text(copy), dirs~)
+    record_mark(self, copy)
+    if title is Some(title) {
+      write_text_atomic(self.title_path(fork), title, dirs~)
+    }
+  })
+  copy
+}
+
+///|
 /// Human-facing metadata for one session directory.
 ///
 /// A listing row is intentionally lighter than a loaded session. It can be

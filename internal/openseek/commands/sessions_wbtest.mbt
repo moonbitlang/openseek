@@ -233,3 +233,54 @@ async test "session compaction rejects missing summary file" {
   }
   fail("partial session compaction accepted")
 }
+
+///|
+async test "session fork command copies a session offline under the given id" {
+  @vfs.with_tmpdir(prefix="openseek-cli-session-fork-", root => {
+    let store = @store.SessionStore(root)
+    let origin = @agent_session.Session(
+        SessionId("origin"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("first")]))))
+      .append(Terminal(Finished("one")))
+      .append(User(UserMessage(Content([Text("second")]))))
+      .append(Terminal(Finished("two")))
+    store.create(origin)
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=["origin", "--as", "whole", "--session-root", root],
+        env=Map([]),
+      ),
+    )
+    // Both turns, then the notice that opens the fork: it names the fork's
+    // own scratch directory, which the copied system prompt cannot.
+    let whole = store.load(SessionId("whole"))
+    assert_eq(whole.last_sequence(), 5)
+    let scratch = store.scratch_dir(SessionId("whole")).to_json().stringify()
+    assert_true(
+      whole.events()[4].item() is Runtime(notice) &&
+      notice.content().contains(scratch),
+    )
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=[
+          "origin", "--as", "first-turn", "--through", "2", "--session-root", root,
+        ],
+        env=Map([]),
+      ),
+    )
+    assert_eq(store.load(SessionId("first-turn")).last_sequence(), 3)
+    // Without --as the new session gets a generated id of its own.
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=["origin", "--session-root", root],
+        env=Map([]),
+      ),
+    )
+    assert_eq(store.list().length(), 4)
+  })
+}
