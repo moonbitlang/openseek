@@ -12,18 +12,23 @@
 ## Module Boundary
 
 - `desktop/backend` is a library and must never depend on Proton, directly or
-  through another module, so that it can be hosted by a process with no window
-  toolkit. Code that needs Proton belongs in `desktop/app`; when shared code
-  needs a fact only Proton knows, the window host passes it in as a value
-  (`@resources.Resources`).
-- `desktop/app` is a thin host of the backend. What any host of the backend
-  must do belongs in `desktop/backend` (`ApiState::start_services`), not in
-  the window host's entry point.
-- Packages the window host imports sit at the top of `desktop/backend`; the
-  rest stay under `desktop/backend/internal`. Moon allows an `internal` import
-  only inside one module, so moving a package out of `internal` is what
-  exposes it to another module — do that deliberately, not to reach one
-  helper.
+  through another module; neither may `desktop/server`. Moon runs the
+  prebuild of every module a workspace resolves, and Proton's needs `node` and
+  the CEF runtime, so one Proton dependency there would stop the headless
+  server from building on a machine with no window toolkit. Code that needs
+  Proton belongs in `desktop/app`; when shared code needs a fact only Proton
+  knows, the window host passes it in as a value (`@resources.Resources`).
+- `desktop/app` and `desktop/server` are thin hosts of the same backend.
+  What both must do belongs in `desktop/backend`
+  (`ApiState::start_services`), not written once in each.
+- Packages an executable imports sit at the top of `desktop/backend`; the rest
+  stay under `desktop/backend/internal`. Moon allows an `internal` import only
+  inside one module, so moving a package out of `internal` is what exposes it
+  to the executables — do that deliberately, not to reach one helper.
+- `desktop/server/moon.work` is a second workspace, the one Moon finds when
+  it runs from that directory. It lists only what the headless server needs
+  and must never gain `desktop/app`. A member added to the root `moon.work`
+  that the server needs must be added there too.
 
 ## Development Builds
 

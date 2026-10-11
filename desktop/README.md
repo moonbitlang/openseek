@@ -9,14 +9,16 @@ in [`DESIGN.md`](DESIGN.md).
 For reproducing and assessing UX issues with real components, follow
 [`UX_REVIEW_WORKFLOW.md`](UX_REVIEW_WORKFLOW.md).
 
-The native side is two modules. `backend` is a library and `app` is the
-executable that hosts it:
+The native side is three modules. `backend` is a library; `app` and
+`server` are the two executables that host it:
 
 - `backend/` — the backend itself, with no window toolkit: the engine host,
-  the host operations, and the remote transports. Packages the window host
+  the host operations, and the remote transports. Packages either executable
   imports sit at its top level; the rest stay under `backend/internal/`.
 - `app/main.mbt` — the Proton window host: wires the window manifest, IPC
   extensions, per-user runtime directory, and launch log.
+- `server/main.mbt` — the same backend with no window, for a machine with
+  no display; see [`BUILD.md`](BUILD.md).
 
 Inside them:
 

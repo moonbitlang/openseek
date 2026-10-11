@@ -37,6 +37,28 @@ moon run ./desktop/package/browser
 just desktop-build-scripts-check
 ```
 
+### Headless server
+
+`desktop/server` is the backend with no window. From the repository root it
+builds like any other package (`moon build --target native desktop/server`),
+but that workspace also holds the Proton window host, and Moon runs the
+prebuild of every module a workspace resolves; Proton's needs `node` and the
+CEF runtime. A machine with neither — a container, a virtual machine — builds
+from the module's own directory instead:
+
+```sh
+moon -C desktop/server build . --target native --release
+```
+
+`desktop/server/moon.work` is a second workspace that lists only the modules
+the server needs, and Moon picks the nearest one, so nothing of Proton is
+resolved there. The executable lands in
+`desktop/server/_build/native/release/build/openseek_desktop/server/`. It
+needs a C compiler to build and nothing but the system libraries to run.
+`--resource-dir` names the directory its bundled files live under. The console
+listens on loopback only, so reaching it from another machine takes a
+forwarded port (`ssh -L`).
+
 The platform commands remain compatible:
 
 ```sh

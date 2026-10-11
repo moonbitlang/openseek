@@ -142,6 +142,7 @@ test("stamp keeps all Desktop module versions aligned", async t => {
   const members = {
     backend: ["openseek_desktop"],
     app: ["openseek_desktop", "openseek_desktop/backend"],
+    server: ["openseek_desktop/backend"],
     frontend: ["openseek_desktop"],
   };
   await fs.writeFile(join(release.desktop, "moon.mod"), 'name = "openseek_desktop"\nversion = "0.1.5"\n');

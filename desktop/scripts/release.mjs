@@ -46,6 +46,7 @@ const StampedModules = [
   { path: "moon.mod", pins: [] },
   { path: "backend/moon.mod", pins: ["openseek_desktop"] },
   { path: "app/moon.mod", pins: ["openseek_desktop", "openseek_desktop/backend"] },
+  { path: "server/moon.mod", pins: ["openseek_desktop/backend"] },
   { path: "frontend/moon.mod", pins: ["openseek_desktop"] },
 ];
 

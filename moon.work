@@ -8,6 +8,7 @@ members = [
   "./editor/server",
   "./desktop",
   "./desktop/backend",
+  "./desktop/server",
   "./desktop/app",
   "./desktop/frontend",
 ]
