@@ -1,15 +1,13 @@
 ///|
 /// Model-visible input supplied while a turn is already in progress.
 ///
-/// Prompt steering is ordinary user redirection. Command steering is contextual
-/// output collected by the controller, such as an explicit TUI `!` shell
-/// command. Notice steering is a system notification pushed by a tool, such as a
-/// background job announcing it has finished. All variants are delivered to the
-/// model as user-role content, but consumers may render/acknowledge them
-/// differently.
+/// Prompt steering is ordinary user redirection — a `!` shell command's output
+/// included, which its client formats and sends like any other message. Notice
+/// steering is a system notification pushed by a tool, such as a background job
+/// announcing it has finished. Both are delivered to the model as user-role
+/// content, but consumers may render/acknowledge them differently.
 pub(all) enum SteerInput {
   Prompt(@agent_session.Content, submission_id~ : String?)
-  Command(String, submission_id~ : String?)
   Notice(String)
 }
 
@@ -244,6 +242,6 @@ async test "task scope exposes structured task group" {
 pub fn SteerInput::has_content(self : SteerInput) -> Bool {
   match self {
     Prompt(content, ..) => !content.is_text_only() || !content.text().is_blank()
-    Command(text, ..) | Notice(text) => !text.is_blank()
+    Notice(text) => !text.is_blank()
   }
 }

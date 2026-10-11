@@ -50,7 +50,7 @@ test "serve commands decode and reject with actionable errors" {
   )
   assert_true(
     decode_serve_command({ "command": "steer", "text": "left" })
-    is Ok(Steer(Prompt(Content([Text("left")]), submission_id=None))),
+    is Ok(Steer(Content([Text("left")]), submission_id=None)),
   )
   assert_true(
     decode_serve_command({
@@ -59,9 +59,7 @@ test "serve commands decode and reject with actionable errors" {
       "text": "right",
       "submission_id": "steer-right",
     })
-    is Ok(
-      Steer(Prompt(Content([Text("right")]), submission_id=Some("steer-right")))
-    ),
+    is Ok(Steer(Content([Text("right")]), submission_id=Some("steer-right"))),
   )
   assert_true(
     decode_serve_command({
@@ -69,7 +67,7 @@ test "serve commands decode and reject with actionable errors" {
       "kind": "command",
       "text": "<user_shell_command>",
     })
-    is Ok(Steer(Command("<user_shell_command>", submission_id=None))),
+    is Err("unknown steer kind: command"),
   )
   assert_true(decode_serve_command({ "command": "compact" }) is Ok(Compact))
   assert_true(decode_serve_command({ "command": "cancel" }) is Ok(Cancel))
@@ -300,22 +298,12 @@ test "serve forwards ordered prompt and steer content without splitting images" 
     actual == content,
   )
   let steer = @protocol.Command::Steer(
-    kind=Prompt,
     content~,
     submission_id=Some("mixed-steer"),
   )
   assert_true(
     decode_serve_command(steer.to_json())
-    is Ok(Steer(Prompt(actual, submission_id=Some("mixed-steer")))) &&
+    is Ok(Steer(actual, submission_id=Some("mixed-steer"))) &&
     actual == content,
-  )
-  let shell = @protocol.Command::Steer(
-    kind=Command,
-    content~,
-    submission_id=None,
-  )
-  assert_true(
-    decode_serve_command(shell.to_json())
-    is Err("command steering does not accept images"),
   )
 }

@@ -202,7 +202,7 @@ async test "inject racing the final call keeps the turn alive" {
         group,
         runtime,
         "local TCP bind unavailable; skipping inject test",
-        Command(context, submission_id=Some("command-context")),
+        Prompt(Content([Text(context)]), submission_id=Some("command-context")),
         expected=["<user_shell_command>", "<command>", "exit=0", "_build"],
         final_answer="contextual answer",
       )

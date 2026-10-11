@@ -12,13 +12,15 @@ async test "user input wait retains messages and ignores notices and blanks" {
       runtime.queue_steer(Prompt(Content([Text(" ")]), submission_id=None))
       @async.pause()
       assert_false(woke)
-      runtime.queue_steer(Command("user command result", submission_id=None))
+      runtime.queue_steer(
+        Prompt(Content([Text("user message")]), submission_id=None),
+      )
       task.wait()
       assert_true(woke)
       let inputs = runtime.drain_steers()
       assert_eq(inputs.length(), 3)
       assert_true(
-        inputs[2] is Command("user command result", submission_id=None),
+        inputs[2] is Prompt(Content([Text("user message")]), submission_id=None),
       )
       // Input queued before waiting is just as observable.
       runtime.queue_steer(

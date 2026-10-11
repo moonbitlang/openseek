@@ -29,8 +29,7 @@
 ///              background-job exits ───── BackgroundNotice
 ///   pump: for ;; match step
 ///     ├─ Wire(Prompt)          ── active? queue pending : start turn
-///     ├─ Wire(Steer(Prompt))   ── turn running │ prompt queued? queue steer : reject
-///     ├─ Wire(Steer(Command│Notice)) ── queue losslessly; idle ⇒ drain to log
+///     ├─ Wire(Steer)           ── turn running │ prompt queued? queue steer : reject
 ///     ├─ Wire(Cancel)          ── cancel active work; disarm auto-continue
 ///     ├─ Wire(Compact)         ── idle? start compact : queue
 ///     ├─ Wire(Goal)            ── durable marker; auto=true arms auto-continue
@@ -315,21 +314,6 @@ async fn run_serve(
       true
     }
 
-    async fn append_command_context(
-      text : String,
-      kind : String,
-      submission_id : String?,
-    ) -> Unit {
-      if append_idle_item(
-          User(UserMessage(Content([Text(text)]), submission_id?)),
-          "command context",
-        ) {
-        @emit.emit(
-          SteerApplied(kind~, content=Content([Text(text)]), submission_id~),
-        )
-      }
-    }
-
     // Report a durably appended goal marker to the controller. Called only
     // after the append succeeded — never at queue time, when the marker could
     // still be lost with a dying turn — so the TUI can only learn a goal that
@@ -383,18 +367,17 @@ async fn run_serve(
     }
 
     // Steers still queued when work ends: prompt steering must not leak into a
-    // later turn, but command context is durable local output, so persist it at
-    // the session's current boundary. Called whenever the loop returns to idle
-    // (turn or compaction done), so a `!` delivered mid-work is never left
-    // orphaned in the steer queue to be lost or applied to an unrelated prompt.
+    // later turn, so it is handed back to its controller, while a notice is the
+    // engine's own and is persisted at the session's current boundary. Called
+    // whenever the loop returns to idle (turn or compaction done), so nothing
+    // delivered mid-work is left orphaned in the steer queue to be applied to
+    // an unrelated prompt.
     async fn apply_idle_context_input(
       input : @agent_runtime.SteerInput,
     ) -> Unit {
       match input {
         Prompt(content, submission_id~) =>
           @emit.emit(SteerDropped(content~, submission_id~))
-        Command(text, submission_id~) =>
-          append_command_context(text, "command", submission_id)
         Notice(text) =>
           if @agent_session.parse_goal_baseline(text) is Some(_) {
             // The steer-path baseline landing at idle (its turn ended
@@ -421,13 +404,13 @@ async fn run_serve(
       }
     }
 
-    async fn drain_command_context() -> Unit {
+    async fn drain_idle_steers() -> Unit {
       for input in runtime.drain_steers() {
         apply_idle_context_input(input)
       }
     }
 
-    // Snapshot the command context PRECEDING a goal at its ARRIVAL:
+    // Snapshot the queued notices PRECEDING a goal at its ARRIVAL:
     // everything from the first Prompt onward belongs to a pending prompt
     // turn and is re-queued in order, never dropped. The snapshot rides the
     // PendingGoal entry so the eventual drain replays true wire order.
@@ -513,11 +496,8 @@ async fn run_serve(
           PendingCompact =>
             active_work = Some(ActiveCompact(start_compaction(session)))
           // Instant work: append the goal at its ordered position and keep
-          // draining the queue. A command context produced BEFORE the goal
-          // was queued lands first — the goal may depend on that output,
-          // and durable order must match arrival order.
-          // Fenced context: apply at its ordered position and keep draining.
-          PendingContext(input) => apply_idle_context_input(input)
+          // draining the queue. A notice queued BEFORE the goal lands first:
+          // durable order must match arrival order.
           PendingGoal(marker, context, is_auto, serial, baseline) => {
             for input in context {
               apply_idle_context_input(input)
@@ -580,48 +560,18 @@ async fn run_serve(
             None =>
               active_work = Some(ActiveTurn(start_turn(content, submission_id)))
           }
-        Wire(Steer(input)) =>
-          match input {
-            Prompt(content, submission_id~) =>
-              match active_work {
-                // A turn is running, or a prompt is queued ahead of this steer:
-                // the lossless steering queue delivers it at that turn's next
-                // step boundary (or its first, if it has not started yet).
-                Some(ActiveTurn(_)) => runtime.queue_steer(input)
-                Some(ActiveCompact(_)) | None =>
-                  if has_pending_prompt(pending) {
-                    runtime.queue_steer(input)
-                  } else {
-                    // An idle (or merely compacting) engine never converts
-                    // prompt steering into a prompt: the only way it arrives
-                    // here is racing a turn's terminal event through the pipes.
-                    // Reject it so the controller can ask for a resubmit.
-                    @emit.emit(SteerDropped(content~, submission_id~))
-                  }
-              }
-            Command(text, submission_id~) =>
-              // Defer to the steering queue whenever any work is active (a turn
-              // or a compaction) or a prompt is queued, so the context is
-              // appended at the next turn's drain — never written straight into
-              // a session a running compaction is about to replace. Only a fully
-              // idle engine appends it immediately.
-              if has_pending_goal(pending) {
-                // Fenced behind the queued goal: wire order must stay
-                // goal-then-context for context sent after the goal.
-                pending.push(PendingContext(Command(text, submission_id~)))
-              } else if active_work is Some(_) || has_pending_prompt(pending) {
-                runtime.queue_steer(Command(text, submission_id~))
-              } else {
-                append_command_context(text, "command", submission_id)
-              }
-            // A notice is engine-internal and never actually arrives over the
-            // wire; queue it losslessly for completeness.
-            Notice(text) =>
-              if has_pending_goal(pending) {
-                pending.push(PendingContext(Notice(text)))
-              } else {
-                runtime.queue_steer(Notice(text))
-              }
+        Wire(Steer(content, submission_id~)) =>
+          // A turn is running, or a prompt is queued ahead of this steer: the
+          // lossless steering queue delivers it at that turn's next step
+          // boundary (or its first, if it has not started yet).
+          if active_work is Some(ActiveTurn(_)) || has_pending_prompt(pending) {
+            runtime.queue_steer(Prompt(content, submission_id~))
+          } else {
+            // An idle (or merely compacting) engine never converts steering
+            // into a prompt: the only way it arrives here is racing a turn's
+            // terminal event through the pipes. Reject it so the controller
+            // can ask for a resubmit.
+            @emit.emit(SteerDropped(content~, submission_id~))
           }
         Wire(JobsSnapshot(request_id~)) => {
           let jobs = match tools.background_job_runtime() {
@@ -758,10 +708,10 @@ async fn run_serve(
         // A background job finished. If a turn is active, its next step boundary
         // drains and applies the queued notice live; only drain here when idle,
         // so an idle engine still surfaces the completion.
-        BackgroundNotice => if active_work is None { drain_command_context() }
+        BackgroundNotice => if active_work is None { drain_idle_steers() }
         TurnDone(finished~) => {
           goal_promoted_this_boundary = false
-          drain_command_context()
+          drain_idle_steers()
           active_work = None
           start_next_pending()
           // Promotion here covers the steer path: a goal set applied inside
@@ -840,15 +790,14 @@ async fn run_serve(
           session = next
           active_work = None
           start_next_pending()
-          // Only drain if compaction left the engine idle: a command context
-          // deferred during compaction then has no turn to drain it, so persist
-          // it onto the compacted session now. If a pending prompt started
-          // instead, leave the queue for its first step — that turn drains both
-          // the command context and the prompt steers aimed at it, which
-          // (unlike the raced-turn-end leftovers at TurnDone) must not be
-          // dropped.
+          // Only drain if compaction left the engine idle: a notice deferred
+          // during compaction then has no turn to drain it, so persist it onto
+          // the compacted session now. If a pending prompt started instead,
+          // leave the queue for its first step — that turn drains both the
+          // notices and the prompt steers aimed at it, which (unlike the
+          // raced-turn-end leftovers at TurnDone) must not be dropped.
           if active_work is None {
-            drain_command_context()
+            drain_idle_steers()
           }
           if active_work is None && pending.length() == 0 && shutting_down {
             break serve~

@@ -1,7 +1,7 @@
 # job_wait
 
 `job_wait({"job_ids":["AZTjwSNFeryN7wEjRWeJqw","AZTjwSNGeryN7_7cuph2VA"]})` waits for any selected job to
-finish, or for user steering/command context. It has no timeout and does not
+finish, or for user steering. It has no timeout and does not
 read logs. Read results with `job_output` after waiting. Call it alone in a tool
 batch; unknown/blank ids and an empty selection are errors. Repeated ids are
 deduplicated.

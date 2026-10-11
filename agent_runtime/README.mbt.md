@@ -149,7 +149,7 @@ test "steering drains losslessly and raw" {
     runtime.emit_event(ReadmeFloodEvent(index))
   }
   runtime.queue_steer(Prompt(Content([Text("")]), submission_id=None))
-  runtime.queue_steer(Command(" turn right ", submission_id=None))
+  runtime.queue_steer(Notice(" turn right "))
 
   let drained = runtime.drain_steers()
   assert_eq(drained.length(), 3)
@@ -157,7 +157,7 @@ test "steering drains losslessly and raw" {
     drained[0] is Prompt(Content([Text("turn left")]), submission_id=None),
   )
   assert_true(drained[1] is Prompt(Content([Text("")]), submission_id=None))
-  assert_true(drained[2] is Command(" turn right ", submission_id=None))
+  assert_true(drained[2] is Notice(" turn right "))
   assert_eq(runtime.drain_steers().length(), 0)
 }
 ```

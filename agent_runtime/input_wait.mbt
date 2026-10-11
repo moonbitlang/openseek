@@ -1,5 +1,5 @@
 ///|
-/// Await nonblank user steering or command context without consuming it.
+/// Await nonblank user steering without consuming it.
 /// The loop remains the sole consumer of the lossless input queue. Notices
 /// cannot win this wait: a job waiter separately selects its target jobs.
 pub async fn AgentRuntime::wait_for_user_input(self : AgentRuntime) -> Unit {

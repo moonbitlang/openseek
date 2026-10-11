@@ -3,7 +3,7 @@
 /// stdin.
 priv enum ServeCommand {
   Prompt(@agent_session.Content, submission_id~ : String?)
-  Steer(@agent_runtime.SteerInput)
+  Steer(@agent_session.Content, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -108,8 +108,8 @@ priv enum PendingWork {
   // A goal marker holding its wire-order position behind a compaction: a
   // pending compaction must not cover a goal that arrived after the compact
   // command.
-  // The marker plus the command context that PRECEDED it at arrival: the
-  // drain replays true wire order — context arriving later stays in the
+  // The marker plus the notices queued AHEAD of it at arrival: the drain
+  // replays true arrival order — a notice arriving later stays in the
   // runtime queue and lands after the goal.
   // marker, arrival-context snapshot, whether THIS command carried auto
   // (promotion fires only on the auto entry's own durable append), the
@@ -117,10 +117,6 @@ priv enum PendingWork {
   // appended immediately before the marker at drain, preserving the
   // adjacency contract Session::current_goal_baseline pairs by.
   PendingGoal(String, Array[@agent_runtime.SteerInput], Bool, Int, String?)
-  // Context that arrived AFTER a queued goal: fenced into the ordered
-  // queue so it cannot overtake the goal via the runtime steer queue (an
-  // earlier pending prompt would otherwise drain it first).
-  PendingContext(@agent_runtime.SteerInput)
 }
 
 ///|
@@ -151,12 +147,10 @@ priv enum ServeStep {
 /// Decode one JSONL command line from the controller.
 /// `jobs_snapshot` and `job_stop` are correlated controls handled outside turns.
 ///
-/// `prompt` starts a turn, `steer` supplies typed step-boundary input, `compact`
-/// summarizes the current conversation once no work is active, and `cancel`
-/// interrupts the active or next queued prompt. A `steer` with missing `kind` is
-/// prompt steering for compatibility; `kind="command"` is user-shell context
-/// that may be appended while idle without starting a model turn. Anything else
-/// is an `Err` whose text is emitted as a `command_error` event — a controller
+/// `prompt` starts a turn, `steer` supplies user text at the open turn's next
+/// step boundary, `compact` summarizes the current conversation once no work is
+/// active, and `cancel` interrupts the active or next queued prompt. Anything
+/// else is an `Err` whose text is emitted as a `command_error` event — a controller
 /// bug must be visible on the wire, not silently swallowed, but it must not kill
 /// the session either.
 /// Map one controller line onto the loop's own command type.
@@ -182,19 +176,7 @@ fn decode_serve_command(json : Json) -> Result[ServeCommand, String] {
   }
   match command {
     Prompt(content~, submission_id~) => Ok(Prompt(content, submission_id~))
-    Steer(kind~, content~, submission_id~) => {
-      if kind is Command && !content.is_text_only() {
-        return Err("command steering does not accept images")
-      }
-      Ok(
-        Steer(
-          match kind {
-            Prompt => Prompt(content, submission_id~)
-            Command => Command(content.text(), submission_id~)
-          },
-        ),
-      )
-    }
+    Steer(content~, submission_id~) => Ok(Steer(content, submission_id~))
     JobsSnapshot(request_id~) => Ok(JobsSnapshot(request_id~))
     JobStop(request_id~, generation~, job_id~) =>
       Ok(JobStop(request_id~, generation~, job_id~))
@@ -221,9 +203,4 @@ fn remove_next_pending_prompt(pending : Array[PendingWork]) -> Unit {
 ///|
 fn has_pending_prompt(pending : Array[PendingWork]) -> Bool {
   pending.any(work => work is PendingPrompt(_, ..))
-}
-
-///|
-fn has_pending_goal(pending : Array[PendingWork]) -> Bool {
-  pending.any(work => work is PendingGoal(_, _, _, _, _))
 }

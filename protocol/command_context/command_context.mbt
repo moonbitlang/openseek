@@ -1,9 +1,10 @@
 // The `<user_shell_command>` envelope: the text form that carries a `!` shell
 // command and its captured result into a conversation as a user message.
-// `encode` builds the envelope a client hands the engine — the terminal UI as
-// command context that starts no turn, the desktop app as an ordinary message
-// — and the engine stores it as a durable user item; `parse` recovers it when
-// a transcript renders that item (live or resumed). The two are a matched
+// `encode` builds the envelope a client hands the engine as an ordinary
+// message — a prompt while the conversation is idle, a steer into an open
+// turn — and the engine stores it as a durable user item like any other;
+// `parse` recovers it when a transcript renders that item (live or resumed).
+// Nothing about its delivery is special to `!`. The two are a matched
 // pair shared by every client that offers `!` commands, so the format lives
 // in one place and neither end can drift from the other. Rendering (titles,
 // markers, truncation notes) stays with the caller — this package only owns

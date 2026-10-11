@@ -18,16 +18,7 @@ fn all_commands() -> Array[@openseek_protocol.Command] {
       content=Content([Text("do it exactly once")]),
       submission_id=Some("page-1-submission-2"),
     ),
-    Steer(
-      kind=Prompt,
-      content=Content([Text("also fix docs")]),
-      submission_id=None,
-    ),
-    Steer(
-      kind=Command,
-      content=Content([Text("<user_shell_command>")]),
-      submission_id=None,
-    ),
+    Steer(content=Content([Text("also fix docs")]), submission_id=None),
     JobsSnapshot(request_id="jobs-1"),
     JobStop(request_id="stop-1", generation="runtime-1", job_id="bg-1"),
     Compact,
@@ -81,24 +72,38 @@ test "every command round-trips through to_json and parse" {
 }
 
 ///|
-/// The desktop has always sent `steer` with no `kind`, and works because this
-/// falls back to `Prompt`. The rule lived in the engine's decoder and nowhere
-/// the desktop could see it; it is now the protocol's, and tested.
-test "a steer without a kind is a prompt steer" {
-  debug_inspect(
+/// `kind` has one value left, so a line with it and a line without it are the
+/// same steer. The retired `"command"` kind is refused by name rather than
+/// read as user text: it carried a `!` shell result, and a controller still
+/// sending it must learn that the result is now an ordinary message.
+test "a steer reads with or without its kind, and refuses the retired one" {
+  let expected : Result[@openseek_protocol.Command, String] = Ok(
+    Steer(content=Content([Text("go left")]), submission_id=None),
+  )
+  @debug.assert_eq(
     cmd(
       (
         #|{"command":"steer","text":"go left"}
       ),
     ),
+    expected,
+  )
+  @debug.assert_eq(
+    cmd(
+      (
+        #|{"command":"steer","kind":"prompt","text":"go left"}
+      ),
+    ),
+    expected,
+  )
+  debug_inspect(
+    cmd(
+      (
+        #|{"command":"steer","kind":"command","text":"<user_shell_command>"}
+      ),
+    ),
     content=(
-      #|Ok(
-      #|  Steer(
-      #|    kind=Prompt,
-      #|    content=Content([Text("go left")]),
-      #|    submission_id=None,
-      #|  ),
-      #|)
+      #|Err("unknown steer kind: command")
     ),
   )
 }
@@ -231,15 +236,11 @@ test "a rejected command explains itself in the engine's own words" {
 
 ///|
 test "steer preserves an optional submission id and refuses malformed ids" {
-  let kinds : Array[@openseek_protocol.SteerKind] = [Prompt, Command]
-  for kind in kinds {
-    let command : @openseek_protocol.Command = Steer(
-      kind~,
-      content=Content([Text("same text")]),
-      submission_id=Some("steer-2"),
-    )
-    assert_eq(@openseek_protocol.Command::parse(command.to_json()), Ok(command))
-  }
+  let command : @openseek_protocol.Command = Steer(
+    content=Content([Text("same text")]),
+    submission_id=Some("steer-2"),
+  )
+  assert_eq(@openseek_protocol.Command::parse(command.to_json()), Ok(command))
   assert_true(
     cmd(
       (
@@ -247,11 +248,7 @@ test "steer preserves an optional submission id and refuses malformed ids" {
       ),
     )
     is Ok(
-      Steer(
-        kind=Prompt,
-        content=Content([Text("same text")]),
-        submission_id=Some("steer-2")
-      )
+      Steer(content=Content([Text("same text")]), submission_id=Some("steer-2"))
     ),
   )
   for bad in [Json::null(), Json(7), Json(false)] {
@@ -265,13 +262,11 @@ test "steer preserves an optional submission id and refuses malformed ids" {
     )
   }
   let untagged : @openseek_protocol.Command = Steer(
-    kind=Prompt,
     content=Content([Text("same text")]),
     submission_id=None,
   )
   @debug.assert_eq(untagged.to_json(), {
     "command": "steer",
-    "kind": "prompt",
     "content": "same text",
   })
 }
@@ -290,7 +285,7 @@ test "message commands preserve ordered content on the wire" {
   for
     command in [
       @openseek_protocol.Command::Prompt(content~, submission_id=Some("mixed")),
-      Steer(kind=Prompt, content~, submission_id=Some("mixed-steer")),
+      Steer(content~, submission_id=Some("mixed-steer")),
     ] {
     let json = command.to_json()
     assert_true(

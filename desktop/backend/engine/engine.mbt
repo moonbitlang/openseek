@@ -503,7 +503,7 @@ fn SteerRunTracker::route_event(
       self.settling_steers.clear()
       latest_run
     }
-    // Command/notice steer_applied events and unrelated background events may
+    // Notice steer_applied events and unrelated background events may
     // be interleaved between prompt receipts while serve drains its old input
     // queue. They neither consume nor clear prompt correlation state.
     _ => latest_run
@@ -2854,13 +2854,6 @@ test "only prompt steer_applied consumes a desktop steer" {
       submission_id=Some("submission-prompt"),
     ),
   )
-  let command : @wire.Event? = Some(
-    SteerApplied(
-      kind="command",
-      content=Content([Text("same")]),
-      submission_id=None,
-    ),
-  )
   let notice : @wire.Event? = Some(
     SteerApplied(
       kind="notice",
@@ -2868,7 +2861,6 @@ test "only prompt steer_applied consumes a desktop steer" {
       submission_id=None,
     ),
   )
-  assert_eq(tracker.route_event(event?=command, latest_run="r1"), Some("r1"))
   assert_eq(tracker.route_event(event?=notice, latest_run="r1"), Some("r1"))
   assert_eq(tracker.open_steers, ["submission-prompt"])
   assert_eq(tracker.route_event(event?=prompt, latest_run="r1"), Some("r1"))

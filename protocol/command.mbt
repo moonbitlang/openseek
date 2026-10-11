@@ -1,17 +1,4 @@
 ///|
-/// How a mid-turn steer reaches the model.
-///
-/// The wire spells these `"prompt"` and `"command"`. `Notice` is deliberately
-/// absent: the engine synthesizes notices for itself (a background job
-/// finishing), and reports them back as `steer_applied` with `kind: "notice"`,
-/// but no controller may send one — `decode` has always rejected an unknown
-/// kind, and a notice is not a thing a client has to say.
-pub(all) enum SteerKind {
-  Prompt
-  Command
-} derive(Eq, Debug)
-
-///|
 /// One command a controller writes to `openseek serve`'s stdin.
 ///
 /// The other half of the serve protocol: `Event` is what the engine reports,
@@ -20,7 +7,7 @@ pub(all) enum SteerKind {
 /// decoder and two encoders that had already drifted apart:
 ///
 /// - the TUI sent `steer` with a `kind`; the desktop sent it without one, and
-///   worked only because `parse` falls back to `Prompt`. Neither end wrote that
+///   worked only because `parse` read that as user text. Neither end wrote that
 ///   rule down.
 /// - the desktop had no `goal` at all, so the same protocol meant different
 ///   things to its two clients, and nothing said whether that was a decision.
@@ -33,9 +20,10 @@ pub(all) enum Command {
   /// later be reconciled by exact id rather than by matching text. Controllers
   /// that do not reconcile deliveries (the TUI) send none.
   Prompt(content~ : Content, submission_id~ : String?)
+  /// User text for the turn in progress, folded in at its next step boundary.
   /// The tag follows steering through the runtime queue, durable User item,
   /// and applied/dropped receipt. Untagged controllers send none.
-  Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
+  Steer(content~ : Content, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -68,20 +56,12 @@ pub fn Command::to_json(self : Command) -> Json {
       } else {
         { "command": "prompt", "content": content }
       }
-    Steer(kind~, content~, submission_id~) => {
-      let fields : Map[String, Json] = {
-        "command": "steer",
-        "kind": match kind {
-          Prompt => "prompt"
-          Command => "command"
-        },
-        "content": content,
-      }
+    Steer(content~, submission_id~) =>
       if submission_id is Some(id) {
-        fields["submission_id"] = Json(id)
+        { "command": "steer", "content": content, "submission_id": id }
+      } else {
+        { "command": "steer", "content": content }
       }
-      Json(fields)
-    }
     JobsSnapshot(request_id~) =>
       { "command": "jobs_snapshot", "request_id": request_id }
     JobStop(request_id~, generation~, job_id~) =>
@@ -132,15 +112,13 @@ pub fn Command::to_json(self : Command) -> Json {
 /// one field each, verified against `git log -S` for the field versus its
 /// command's introducing commit:
 ///
-/// 1. **Added after its command existed.** `steer`'s `kind` arrived in
-///    9b2f6c43; `steer` itself in 17562cc1. An engine from between them is sent
-///    a `kind` it ignores, and a controller older than the field sends none —
-///    so absent means `Prompt`, which is what every controller meant before
-///    there was a choice. The desktop was still sending exactly that.
-///    `prompt`'s `submission_id` is the same case: it arrived long after
-///    `prompt` itself, an engine older than the field ignores the key, and a
-///    controller that does not tag its submissions sends none — absent means
-///    untagged, which is what every prompt was before there was a tag.
+/// 1. **Added after its command existed.** `prompt`'s `submission_id` arrived
+///    long after `prompt` itself: an engine older than the field ignores the
+///    key, and a controller that does not tag its submissions sends none — so
+///    absent means untagged, which is what every prompt was before there was a
+///    tag. `steer`'s `kind` was the same case while it had two values (it
+///    arrived in 9b2f6c43, `steer` itself in 17562cc1); with one left, absent
+///    and `"prompt"` both read as the only steer there is.
 /// 2. **Optional since the command shipped.** `goal`'s `auto` arrived *with*
 ///    `goal` (c8cc6ad7), so case (1) does not cover it — but the engine has
 ///    read `auto` as absent-means-false from the first line it ever decoded.
@@ -232,13 +210,17 @@ fn parse_steer(line : Json) -> Result[Command, String] {
     Ok(content) => content
     Err(error) => return Err(error)
   }
+  // `kind` once chose between user text and `"command"`, a `!` shell result
+  // the engine stored without answering. That second kind is gone — a shell
+  // result is an ordinary message its client formats — so the field has one
+  // value left and `to_json` no longer writes it. It is still read: a
+  // controller that sends the retired kind must be told, not have its shell
+  // output steered as if the user had typed it.
   match line {
-    { "kind": "prompt", .. } => Ok(Steer(kind=Prompt, content~, submission_id~))
-    { "kind": "command", .. } =>
-      Ok(Steer(kind=Command, content~, submission_id~))
+    { "kind": "prompt", .. } => Ok(Steer(content~, submission_id~))
     { "kind": String(other), .. } => Err("unknown steer kind: \{other}")
     { "kind": _, .. } => Err("expected a string \"kind\" field")
-    _ => Ok(Steer(kind=Prompt, content~, submission_id~))
+    _ => Ok(Steer(content~, submission_id~))
   }
 }
 
@@ -280,9 +262,3 @@ pub extend Command with Debug::{to_repr}
 
 ///|
 pub extend Command with Eq::{equal, not_equal}
-
-///|
-pub extend SteerKind with Debug::{to_repr}
-
-///|
-pub extend SteerKind with Eq::{equal, not_equal}

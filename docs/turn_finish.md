@@ -142,8 +142,7 @@ registry 中已有的 ID；先前 turn 留下的服务不触发本 turn 的提�
 4. 恢复时先完成本次工具结果的记录，再按现有路径记录和应用排队输入，
    最后才发起下一次模型请求，保持工具调用与结果配对。
 
-用户输入包括发给当前 turn 的 prompt steering，以及应由当前 turn 处理的
-command context。用户设置或清除 goal 时，Notice 保持原有持久化格式，但
+用户输入即发给当前 turn 的 prompt steering。用户设置或清除 goal 时，Notice 保持原有持久化格式，但
 入队时显式标记为可唤醒输入；普通 job Notice 不唤醒等待。
 若 goal 排在其他 prompt 或 compaction 之后，则仍遵循既有 wire 顺序，
 不会提前应用或用它唤醒当前 turn。

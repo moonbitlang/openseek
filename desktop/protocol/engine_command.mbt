@@ -2,8 +2,8 @@
 // `@wire.Command` — the same type `openseek serve` decodes and the TUI encodes
 // — so the three ends of this wire cannot spell a command differently. They
 // did: this package used to model the commands itself, and its `steer` omitted
-// the `kind` field the TUI sends, working only because the engine's decoder
-// happened to default it. Nothing on this side said so.
+// the `kind` field the TUI then sent, working only because the engine's
+// decoder happened to default it. Nothing on this side said so.
 //
 // The constructors remain because they are the host's vocabulary: `ops.mbt`
 // asks for a prompt, not for a variant. They are now one line each.
@@ -20,11 +20,8 @@ pub fn prompt(
 
 ///|
 /// Steer the open turn with user text.
-///
-/// `Prompt` is what the host has always meant here — it has no other kind —
-/// and it now says so on the wire instead of relying on the engine's default.
 pub fn steer(content : @wire.Content, submission_id? : String) -> @wire.Command {
-  Steer(kind=Prompt, content~, submission_id~)
+  Steer(content~, submission_id~)
 }
 
 ///|
@@ -86,7 +83,7 @@ test "the host's commands are the protocol's" {
   )
   assert_true(
     steer(Content([Text("go left")])).to_json()
-    is { "command": "steer", "kind": "prompt", "content": "go left", .. },
+    is { "command": "steer", "content": "go left", .. },
   )
   assert_true(compact().to_json() is { "command": "compact", .. })
   assert_true(cancel().to_json() is { "command": "cancel", .. })

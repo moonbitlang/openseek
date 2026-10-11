@@ -56,7 +56,7 @@ pub fn RunResultError::to_repr(Self) -> @debug.Repr
 // Types and methods
 pub(all) enum Command {
   Prompt(content~ : Content, submission_id~ : String?)
-  Steer(kind~ : SteerKind, content~ : Content, submission_id~ : String?)
+  Steer(content~ : Content, submission_id~ : String?)
   Compact
   Cancel
   JobsSnapshot(request_id~ : String)
@@ -312,14 +312,6 @@ pub(all) enum RunStatus {
 pub fn RunStatus::equal(Self, Self) -> Bool
 pub fn RunStatus::not_equal(Self, Self) -> Bool
 pub fn RunStatus::to_repr(Self) -> @debug.Repr
-
-pub(all) enum SteerKind {
-  Prompt
-  Command
-} derive(Eq, @debug.Debug)
-pub fn SteerKind::equal(Self, Self) -> Bool
-pub fn SteerKind::not_equal(Self, Self) -> Bool
-pub fn SteerKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Usage {
   prompt_tokens : Int

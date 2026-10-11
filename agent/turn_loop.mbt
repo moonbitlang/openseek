@@ -398,7 +398,7 @@ priv struct SteerMessage {
 
 ///|
 /// Fold steering input into the conversation: each becomes a durable session
-/// item and a model-visible chat message. Prompt/command steering persists as a
+/// item and a model-visible chat message. Prompt steering persists as a
 /// user message; a background notice persists as a `RuntimeNotice` (so on resume
 /// it renders as a system notice, not user input). All emit `steer_applied`; the
 /// `kind` field distinguishes them.
@@ -415,13 +415,6 @@ async fn AgentLoop::apply_steer_inputs(
           content,
           submission_id,
           item: User(UserMessage(content, submission_id?)),
-        }
-      Command(text, submission_id~) =>
-        {
-          kind: "command",
-          content: Content([Text(text)]),
-          submission_id,
-          item: User(UserMessage(Content([Text(text)]), submission_id?)),
         }
       Notice(text) =>
         {
