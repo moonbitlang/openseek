@@ -287,7 +287,8 @@ pub impl FromJson for WorktreeCreatePayload with fn from_json(json, path) {
   let session = object.optional_string("session")
   let codex_thread = object.optional_string("codex_thread")
   // Unknown fields remain forward-compatible, but ownership is deliberately
-  // closed: a worktree belongs to one OpenSeek session or one Codex thread.
+  // closed: a worktree is created for one OpenSeek session or one Codex
+  // thread.
   if (session is Some(_)) == (codex_thread is Some(_)) {
     raise JsonDecodeError(
       (path, "expected exactly one of session or codex_thread"),

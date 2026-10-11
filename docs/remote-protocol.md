@@ -332,9 +332,9 @@ Notifications:
 | `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
 | `session.list_archived` | `{}` | the archived index |
 | `session.rename` | `{session, workspace, title}` — all fields are required; `workspace` must name the registered store that owns the live record, and `title` must be non-blank | `{}` — atomically writes display metadata beside the append-only transcript, so a running conversation can be renamed without rewriting its history |
-| `session.archive` | `{session, force?}` | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
+| `session.archive` | `{session, force?}` | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). A checkout another bound conversation still works in is left untouched — no dirty check, no broadcast — and goes with the last conversation holding it; the archived conversation keeps its placement there. "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
 | `session.unarchive` | `{session}` | outcome — restores the conversation and every archived subagent descendant record together. A retained worktree placement whose checkout was removed returns as missing, so clients offer Repair before any agent, terminal, or file operation can continue |
-| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the exact host-listed project store and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast, but project files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
+| `session.delete_archived` | `{session, workspace}` | permanently deletes the archived conversation record from the exact host-listed project store and every archived subagent descendant record in that store, then returns the archived index. Its retained worktree placement is removed and broadcast — the registry row itself only with its last bound conversation — but project files and the Git branch remain. The operation refuses unknown stores, live records, and running/compacting family members |
 
 Notifications:
 
@@ -493,16 +493,16 @@ client retains the hint and therefore gets the intended rejection.
 
 Worktrees of a registered workspace: isolated checkouts at
 `<workspace>/.worktrees/<name>` on a fresh branch
-`openseek/<name>` — a conversation's execution environment, bound 1:1: one
-worktree belongs to exactly one conversation (and a conversation runs in at
-most one worktree), while its durable history stays in the workspace's own
-store.
+`openseek/<name>` — a conversation's execution environment. A worktree is
+created for one conversation and a conversation runs in at most one worktree;
+further conversations can be bound to the same worktree and then work in the
+same checkout. Durable history stays in the workspace's own store.
 
 | method | params | result |
 |---|---|---|
-| `worktree.list` | `{workspace}` | `{worktrees: [{name, branch, base, session?, path, present}]}` — read-only; `session` is the bound conversation, recorded at creation; a checkout deleted outside the app reports `present: false` |
+| `worktree.list` | `{workspace}` | `{worktrees: [{name, branch?, base, sessions, codex_thread?, path, present}]}` — read-only; `sessions` lists every bound OpenSeek conversation (always present, empty for a worktree owned by a Codex thread, which names `codex_thread` instead); a checkout deleted outside the app reports `present: false` |
 | `worktree.create` | `{workspace, session}` | `{name, worktrees: […]}` — creation IS the binding: the worktree belongs to `session` from birth, and the session doubles as the idempotency key, so retrying a lost reply returns the existing binding instead of a second checkout. The session must be genuinely NEW — durable history in any store, a binding in any workspace's registry, or an in-flight first turn all refuse. The workspace must be the repository's toplevel — a repository-subdirectory workspace refuses worktrees. The host generates the name (`wt-N`, the smallest free across the registry, the `.worktrees` directory, and `openseek/*` branches); clients never name worktrees. Serialized with workspace detachment |
-| `worktree.remove` | `{workspace, name, force?}` | the updated list — refused while the bound conversation's operation or run is active, and on uncommitted changes unless `force`; the branch always survives. A registry entry whose checkout is already gone is pruned. The bundled UI never calls this — archiving the conversation is how a worktree ends — but the op remains for protocol clients and orphan cleanup |
+| `worktree.remove` | `{workspace, name, force?}` | the updated list — refused while any bound conversation's operation or run is active, and on uncommitted changes unless `force`; the branch always survives. A registry entry whose checkout is already gone is pruned. The bundled UI never calls this — archiving the conversation is how a worktree ends — but the op remains for protocol clients and orphan cleanup |
 
 Notifications:
 

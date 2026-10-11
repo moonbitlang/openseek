@@ -51,7 +51,7 @@ pub(all) struct WorktreeHost {
 
 type WorktreeOwner derive(Eq, @debug.Debug)
 pub async fn WorktreeOwner::archive_check(Self) -> @protocol.ArchiveNeedsForceReply?
-pub async fn WorktreeOwner::archive_checkout(Self, Bool, on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
+pub async fn WorktreeOwner::archive_checkout(Self, WorktreeHost, Bool, on_committed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveNeedsForceReply?
 pub fn WorktreeOwner::codex(String) -> Self
 pub fn WorktreeOwner::equal(Self, Self) -> Bool
 pub fn WorktreeOwner::not_equal(Self, Self) -> Bool

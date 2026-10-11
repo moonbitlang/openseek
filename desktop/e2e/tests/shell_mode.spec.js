@@ -198,7 +198,7 @@ test('a first ! command in a fresh worktree-mode chat creates its worktree first
     if (request.method !== 'worktree.create') return replyFor(request);
     const worktrees = [{
       name: 'shell-e2e', branch: 'test', base: 'main', path: '/workspace/worktrees/shell-e2e', present: true,
-      session: request.params.session,
+      sessions: [request.params.session],
     }];
     // The registry row reaches the page as its own broadcast, after the
     // reply: the command waits for it to learn the checkout it runs in.

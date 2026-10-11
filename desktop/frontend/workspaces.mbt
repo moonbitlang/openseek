@@ -600,7 +600,7 @@ test "opening a stored session joins its project and loaded worktree" {
       [
         {
           name: "feature",
-          session: Some("desktop-w"),
+          sessions: ["desktop-w"],
           codex_thread: None,
           path: None,
           present: true,

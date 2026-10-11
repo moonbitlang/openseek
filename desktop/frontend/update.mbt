@@ -7561,9 +7561,7 @@ fn update_device_msg(
         Some(confirm) if confirm.channel == channel &&
           next.find_conversation(channel, confirm.session) is Some(conv) &&
           conv.project() == workspace &&
-          !rows.any(row => {
-            row.session is Some(session) && session == confirm.session
-          }) => None
+          !rows.any(row => row.sessions.contains(confirm.session)) => None
         other => other
       }
       let next = { ..next, conversations, archive_confirm, }
@@ -18500,7 +18498,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
           rows: [
             {
               name: "wt-4",
-              session: Some("desktop-test"),
+              sessions: ["desktop-test"],
               codex_thread: None,
               path: Some(worktree),
               present: true,
@@ -21127,7 +21125,7 @@ test "file rows and location jumps cannot open while checkout placement is missi
           rows: [
             {
               name: "wt",
-              session: Some("desktop-test"),
+              sessions: ["desktop-test"],
               path: None,
               codex_thread: None,
               present: false,

@@ -434,12 +434,15 @@ async fn archive_session_commit(
 ) -> ArchiveNeedsForceReply? {
   let family = manager.claim_session_family_move(session, archived=false)
   defer family.release()
+  manager.archive_commit_lock.acquire()
+  defer manager.archive_commit_lock.release()
   // The checkout goes with the conversation. A dirty refusal
   // lands here — after the idle engine already closed, which is harmless
   // (the next prompt respawns) — so nothing irreversible has happened yet;
   // a removal that succeeds while the record move below then fails leaves a
   // live conversation safely blocked on its retained missing placement.
   let refusal = @worktree.WorktreeOwner::openseek(session).archive_checkout(
+    manager.worktree_host(),
     force,
     on_committed?=on_worktree_changed,
   )
@@ -450,6 +453,11 @@ async fn archive_session_commit(
   // across this finite section; before pending cancellation can propagate,
   // every client has already learned every family identity that moved.
   move_session_family(family, to_archive=true, on_committed)
+  // This conversation has left: say so before the next archive decides, or
+  // one sharing the checkout would still count it as a holder. An archive
+  // that did not get this far keeps its claims past the lock, and is rightly
+  // still counted.
+  family.release()
   None
 }
 

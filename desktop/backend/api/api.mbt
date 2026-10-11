@@ -1149,6 +1149,7 @@ async fn ApiState::codex_request(
   // the small interval, retain the checkout and report the partial result.
   if archive is Some(request) {
     let refusal = @worktree.WorktreeOwner::codex(request.thread_id).archive_checkout(
+      self.manager.worktree_host(),
       request.force,
       on_committed=(workspace, worktrees) => {
         publish_worktree_changed(self, workspace, worktrees)

@@ -3816,7 +3816,7 @@ pub(all) struct WorktreeInfo {
   name : String
   branch : String?
   base : String
-  session : String?
+  sessions : Array[String]
   codex_thread : String?
   path : String
   present : Bool

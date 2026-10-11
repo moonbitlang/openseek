@@ -733,6 +733,12 @@ struct EngineManager {
   // `archived/deleting`. A foreground delete and startup/list recovery may
   // discover the same pending directory; only one may advance or erase it.
   archive_cleanup_lock : @async.Mutex
+  // Serializes an archive from its decision about the worktree checkout to
+  // the release of its claims. Conversations sharing a checkout each ask
+  // whether another still holds it, and the answer is only true of one
+  // archive at a time: two that overlapped would each see the other still
+  // there, and both would leave the checkout behind.
+  archive_commit_lock : @async.Mutex
   // Host-owned endpoint settings are a read-modify-write store shared by
   // every client. The lock covers reads too: on Windows the atomic-save
   // fallback briefly removes the target before renaming the complete temp
@@ -1071,6 +1077,7 @@ fn new_engine_manager(
     mcp_error: None,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
+    archive_commit_lock: Mutex(),
     settings_lock: Mutex(),
     settings_revision: 0,
     commands: Queue(kind=Blocking(EngineActorQueueSize)),

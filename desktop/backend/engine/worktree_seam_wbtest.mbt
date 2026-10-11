@@ -50,7 +50,7 @@ async fn stage_worktree_placements(
       "base": Json(base),
     }
     if session is Some(session) {
-      entry["session"] = Json(session)
+      entry["sessions"] = Json([session])
     }
     if codex_thread is Some(thread) {
       entry["codex_thread"] = Json(thread)
@@ -320,7 +320,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
     guard @worktree.list(ws.to_string()).worktrees is [info] else {
       fail("expected the worktree to stay registered")
     }
-    assert_eq(info.session, Some("s-wt-run"))
+    assert_eq(info.sessions, ["s-wt-run"])
     group.return_immediately(())
   })
 }
@@ -387,7 +387,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
     fail("the registry row must survive an external deletion")
   }
   assert_false(gone.present)
-  assert_eq(gone.session, Some("s-vanish"))
+  assert_eq(gone.sessions, ["s-vanish"])
   // Every session-scoped surface refuses rather than silently moving into the
   // main checkout: file/terminal resolution returns no root, and a run names
   // the missing worktree.
@@ -486,7 +486,7 @@ async test "a deleted checkout refuses runs and repairs to the last OpenSeek sav
     fail("repair replay did not publish its worktree list")
   }
   assert_eq(replayed_info.name, repaired.name)
-  assert_eq(replayed_info.session, Some("s-vanish"))
+  assert_eq(replayed_info.sessions, ["s-vanish"])
   assert_true(replayed_info.present)
 }
 
@@ -556,7 +556,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   guard rows is [archived_worktree] else {
     fail("archive must retain one missing worktree placement")
   }
-  assert_eq(archived_worktree.session, Some("s-arc"))
+  assert_eq(archived_worktree.sessions, ["s-arc"])
   assert_false(archived_worktree.present)
   assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
   assert_eq(archived_worktree.branch, None)
@@ -576,7 +576,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   guard @worktree.list(repo.to_string()).worktrees is [retained] else {
     fail("archived worktree placement was not retained")
   }
-  assert_eq(retained.session, Some("s-arc"))
+  assert_eq(retained.sessions, ["s-arc"])
   assert_false(retained.present)
   // Unarchive restores only the durable conversation. The retained placement
   // keeps every workspace surface blocked until the user explicitly repairs.
@@ -618,7 +618,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
   }
   assert_true(first.present)
   assert_false(second.present)
-  assert_eq(second.session, Some("s-arc2"))
+  assert_eq(second.sessions, ["s-arc2"])
   // Codex archive uses the same dirty-check and retained-placement methods;
   // app-server fencing happens in the API immediately before this call.
   let codex_owner = @worktree.WorktreeOwner::codex("thread-archive")
@@ -637,7 +637,7 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     fail("Codex archive should require confirmation for a dirty checkout")
   }
   assert_eq(codex_refusal.worktree, codex.name)
-  ignore(codex_owner.archive_checkout(true))
+  ignore(codex_owner.archive_checkout(manager.worktree_host(), true))
   guard @worktree.list(repo.to_string()).worktrees
     .iter()
     .find_first(info => info.codex_thread == Some("thread-archive"))
@@ -645,6 +645,84 @@ async test "archive keeps worktree placement for explicit repair after unarchive
     fail("Codex archive must retain its registry placement")
   }
   assert_false(codex_archived.present)
+}
+
+///|
+/// Bind `session` to the row `name` beside the conversation already there, by
+/// rewriting the registry file the way a second member is recorded.
+#cfg(not(platform="windows"))
+async fn join_worktree_row(
+  workspace : @pathx.Absolute,
+  name : String,
+  session : String,
+) -> Unit {
+  let path = @workspaces.store_root(workspace).join("worktrees.json").to_path()
+  let registry = @json.parse(@fs.read_file(path.to_string()).text())
+  guard registry is Object({ "worktrees": Array(rows), .. }) else {
+    fail("the worktree registry has no rows")
+  }
+  for row in rows {
+    if row
+      is Object(
+        { "name": String(row_name), "sessions": Array(members), .. } as fields
+      ) &&
+      row_name == name {
+      fields["sessions"] = Json([..members, Json(session)])
+    }
+  }
+  @fsx.write_text(path, registry.stringify(indent=2))
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "conversations archived together take their shared checkout with them" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  let root = worktree_test_root("openseek-worktree-shared-archive-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  defer restore_home_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let created = @worktree.create(
+    manager.worktree_host(),
+    repo.to_string(),
+    @worktree.WorktreeOwner::openseek("s-one"),
+    _ => (),
+  )
+  join_worktree_row(repo, created.name, "s-two")
+  let sessions = @workspaces.store_root(repo).join("sessions")
+  for session in ["s-one", "s-two"] {
+    @fsx.ensure_dir(sessions.join(session).to_path())
+  }
+  let checkout = repo.join(".worktrees").join(created.name)
+  assert_eq(@worktree.run_dir(repo, "s-two").to_string(), checkout.to_string())
+  // Each archive asks whether the other conversation still holds the
+  // checkout. Whichever goes second must find the first one gone.
+  @async.with_task_group(group => {
+    for session in ["s-one", "s-two"] {
+      group.spawn_bg(() => {
+        guard archive_session(manager, session, (_, _) => ()) is Archived(_) else {
+          fail("archiving \{session} did not commit")
+        }
+      })
+    }
+  })
+  assert_false(@fsx.exists(checkout.to_path()))
+  for session in ["s-one", "s-two"] {
+    assert_false(@fsx.exists(sessions.join(session).to_path()))
+  }
+  // Both keep their placement, so either returns to the same worktree.
+  guard @worktree.list(repo.to_string()).worktrees is [row] else {
+    fail("the shared row must survive its members' archive")
+  }
+  assert_eq(row.sessions, ["s-one", "s-two"])
+  assert_false(row.present)
 }
 
 ///|
@@ -695,10 +773,10 @@ async test "permanent archived deletion drops placement but keeps files and bran
   )
   let entries = @worktree.list(workspace.to_string()).worktrees
   assert_eq(entries.length(), 1)
-  assert_eq(entries[0].session, Some("other"))
+  assert_eq(entries[0].sessions, ["other"])
   assert_true(worktree_changed)
   assert_eq(committed_infos.length(), 1)
-  assert_eq(committed_infos[0].session, Some("other"))
+  assert_eq(committed_infos[0].sessions, ["other"])
   assert_true(@fsx.exists(workspace.join("project-note.txt").to_path()))
   assert_true(
     @gitx.run(workspace, ["branch", "--list", "openseek/chat"]).contains(

@@ -211,7 +211,7 @@ for (const worktree of [false, true]) {
       if (request.method === method) return { path, match_count: 101, file_count: 1 };
       if (request.method === 'worktree.create') return { name: 'semantic-e2e', worktrees: [{
         name: 'semantic-e2e', branch: 'test', base: 'main', path: root, present: true,
-        codex_thread: 'codex-thread-e2e',
+        sessions: [], codex_thread: 'codex-thread-e2e',
       }] };
       if (request.method === 'codex.thread.resume') return { thread: { id: 'codex-thread-e2e', cwd: root, turns: [] } };
       if (request.method === 'codex.turn.steer') return { turnId: 'codex-turn-e2e' };

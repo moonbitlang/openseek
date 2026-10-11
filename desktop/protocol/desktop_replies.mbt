@@ -861,17 +861,18 @@ pub impl FromJson for WorkspacesReply with fn from_json(json, path) {
 
 ///|
 /// One worktree as ops report it: the registry entry plus its derived checkout
-/// path and whether that directory still exists on disk. Exactly one of
-/// `session` and `codex_thread` identifies the conversation that owns it;
-/// ownerless rows are tolerated only for backward-compatible hand-edited
-/// registries and are never claimed by either conversation source.
+/// path and whether that directory still exists on disk. `sessions` are the
+/// OpenSeek conversations bound to it; a Codex-owned worktree names its one
+/// `codex_thread` instead and has no members. A row with neither is tolerated
+/// only for hand-edited registries and is never claimed by either
+/// conversation source.
 pub(all) struct WorktreeInfo {
   name : String
   // Legacy placement branch; detached placements omit it. Live HEAD is read
   // through git.branch, including branches the user creates after placement.
   branch : String?
   base : String
-  session : String?
+  sessions : Array[String]
   codex_thread : String?
   path : String
   present : Bool
@@ -889,17 +890,17 @@ pub impl FromJson for WorktreeInfo with fn from_json(json, path) {
     raise JsonDecodeError((path, "worktree branch must not be empty"))
   }
   let base = object.required_string("base")
-  let session = object.optional_string("session")
+  let sessions = object.required_string_array("sessions")
   let codex_thread = object.optional_string("codex_thread")
-  if session is Some(_) && codex_thread is Some(_) {
+  if !sessions.is_empty() && codex_thread is Some(_) {
     raise JsonDecodeError(
-      (path, "worktree cannot belong to both session and codex_thread"),
+      (path, "worktree cannot belong to both sessions and codex_thread"),
     )
   }
   let object = JsonObject::of(fields, path)
   let checkout_path = object.required_string("path")
   let present = object.required_bool("present")
-  { name, branch, base, session, codex_thread, path: checkout_path, present, }
+  { name, branch, base, sessions, codex_thread, path: checkout_path, present, }
 }
 
 ///|
@@ -907,14 +908,12 @@ pub impl ToJson for WorktreeInfo with fn to_json(self) {
   let fields : Map[String, Json] = {
     "name": Json(self.name),
     "base": Json(self.base),
+    "sessions": Json(self.sessions),
     "path": Json(self.path),
     "present": Json(self.present),
   }
   if self.branch is Some(branch) {
     fields["branch"] = Json(branch)
-  }
-  if self.session is Some(session) {
-    fields["session"] = Json(session)
   }
   if self.codex_thread is Some(thread_id) {
     fields["codex_thread"] = Json(thread_id)

@@ -1,12 +1,12 @@
 // Worktrees of a registered workspace: isolated checkouts under
-// `<workspace>/.worktrees/<name>` where ONE conversation works on its own
-// detached HEAD — a worktree is an execution environment, bound 1:1 to the
-// conversation that chose it — while the durable record stays in the main
-// repository's store. A worktree is never itself a workspace; this
-// registry — `<workspace>/.openseek/worktrees.json`,
-// desktop-owned — remembers each worktree's recovery ref, base commit, and bound
-// session. The worktree's path is always derived from its name, never
-// stored.
+// `<workspace>/.worktrees/<name>` where conversations work on a detached
+// HEAD of their own — a worktree is an execution environment, created for
+// the conversation that chose it and held by every conversation bound to it
+// — while the durable record stays in the main repository's store. A
+// worktree is never itself a workspace; this registry —
+// `<workspace>/.openseek/worktrees.json`, desktop-owned — remembers each
+// worktree's recovery ref, base commit, and bound conversations. The
+// worktree's path is always derived from its name, never stored.
 
 ///|
 /// Debug is what the host boundary logs: proton renders a failed handler's
@@ -74,11 +74,12 @@ priv struct WorktreeEntry {
   name : String
   checkout : WorktreeCheckout
   base : String
-  // Old registries and OpenSeek conversations use `session`; Codex-owned
-  // worktrees use `codex_thread`. A valid app-created row has exactly one.
-  // Both absent is tolerated for a registry edited outside the app; such a
-  // row serves nobody and is cleaned up only by explicit removal.
-  session : String?
+  // OpenSeek conversations are the members of `sessions`; a Codex-owned
+  // worktree names its one `codex_thread` instead. A valid app-created row
+  // has members or a thread, never both. Neither is tolerated for a registry
+  // edited outside the app; such a row serves nobody and is cleaned up only
+  // by explicit removal.
+  sessions : Array[String]
   codex_thread : String?
 }
 
@@ -95,8 +96,8 @@ impl ToJson for WorktreeEntry with fn to_json(self) {
     Branch(branch) => fields["branch"] = Json(branch)
     Detached(recovery_ref) => fields["recovery_ref"] = Json(recovery_ref)
   }
-  if self.session is Some(session) {
-    fields["session"] = Json(session)
+  if !self.sessions.is_empty() {
+    fields["sessions"] = Json(self.sessions)
   }
   if self.codex_thread is Some(thread_id) {
     fields["codex_thread"] = Json(thread_id)
@@ -132,10 +133,11 @@ fn WorktreeOwner::id(self : WorktreeOwner) -> String {
 }
 
 ///|
-fn WorktreeOwner::session(self : WorktreeOwner) -> String? {
+/// The members a row created for this owner starts with.
+fn WorktreeOwner::sessions(self : WorktreeOwner) -> Array[String] {
   match self {
-    OpenSeekSession(id) => Some(id)
-    CodexThread(_) => None
+    OpenSeekSession(id) => [id]
+    CodexThread(_) => []
   }
 }
 
@@ -153,7 +155,7 @@ fn WorktreeEntry::belongs_to(
   owner : WorktreeOwner,
 ) -> Bool {
   match owner {
-    OpenSeekSession(id) => self.session is Some(matched) && matched == id
+    OpenSeekSession(id) => self.sessions.contains(id)
     CodexThread(id) => self.codex_thread is Some(matched) && matched == id
   }
 }
@@ -163,7 +165,7 @@ fn WorktreeEntry::belongs_to(
 /// The two products store that id in distinct registry fields, but checkout
 /// resolution must recognize either field without merging their lifecycles.
 fn WorktreeEntry::serves_id(self : WorktreeEntry, id : String) -> Bool {
-  (self.session is Some(session) && session == id) ||
+  self.sessions.contains(id) ||
   (self.codex_thread is Some(codex_thread) && codex_thread == id)
 }
 
@@ -234,6 +236,27 @@ fn owner_field(fields : Map[String, Json], key : String) -> String? {
 }
 
 ///|
+/// A registry row's OpenSeek members. Rows written before a worktree could
+/// hold more than one conversation name their single member as `session`;
+/// that spelling stays readable and is rewritten as `sessions` by the next
+/// registry commit. Blank and repeated ids name no further conversation.
+fn session_members(fields : Map[String, Json]) -> Array[String] {
+  guard fields.get("sessions") is Some(Array(items)) else {
+    return match owner_field(fields, "session") {
+      Some(id) => [id]
+      None => []
+    }
+  }
+  let members : Array[String] = []
+  for item in items {
+    if item is String(id) && !id.is_empty() && !members.contains(id) {
+      members.push(id)
+    }
+  }
+  members
+}
+
+///|
 /// The registered worktrees of `workspace`, dropping anything malformed: an
 /// entry without a valid name, checkout reference, and base string is dropped
 /// rather than poisoning every later operation. A missing or unreadable
@@ -266,12 +289,12 @@ async fn read_worktrees_unlocked(
       _ => continue
     }
     guard fields.get("base") is Some(String(base)) else { continue }
-    let session = owner_field(fields, "session")
+    let sessions = session_members(fields)
     let codex_thread = owner_field(fields, "codex_thread")
     // A row cannot be owned by both products. Drop a malformed ambiguous row
     // instead of letting whichever lookup happens first claim its checkout.
-    guard session is None || codex_thread is None else { continue }
-    entries.push({ name, checkout, base, session, codex_thread, })
+    guard sessions.is_empty() || codex_thread is None else { continue }
+    entries.push({ name, checkout, base, sessions, codex_thread, })
   }
   entries
 }
@@ -324,7 +347,7 @@ async fn worktree_infos(
       name: entry.name,
       branch: entry.checkout.branch(),
       base: entry.base,
-      session: entry.session,
+      sessions: entry.sessions,
       codex_thread: entry.codex_thread,
       path: resource_path(path),
       present,
@@ -468,20 +491,47 @@ pub async fn WorktreeOwner::archive_check(
 }
 
 ///|
+/// Whether a conversation other than `leaving` still works in this row's
+/// checkout: it has a slot in the running pump or a live durable record. An
+/// archived member keeps its placement but not the directory, and a member
+/// that was bound and never started holds nothing either.
+async fn WorktreeEntry::held_by_another(
+  self : WorktreeEntry,
+  host : WorktreeHost,
+  leaving : WorktreeOwner,
+) -> Bool {
+  for bound in self.sessions {
+    guard leaving != OpenSeekSession(bound) else { continue }
+    if (host.session_is_live)(bound) {
+      return true
+    }
+    if @session_store.workspace_of(bound) is Some(_) {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Remove the checkout bound to this owner while retaining its registry row.
 /// Archiving frees the directory, but the placement and a Git reference keep
 /// committed work available for an explicit rebuild. Without `force` a dirty
 /// checkout refuses; detached HEAD is pinned before its directory is removed.
+/// A checkout another conversation still works in stays exactly as it is —
+/// this owner keeps its placement there, so unarchiving returns to it — and
+/// goes only with the last conversation that holds it.
 /// The caller must first fence its own backend writer (OpenSeek's slot claim or a
 /// successful Codex `thread/archive`). An owner without a worktree is a no-op.
 pub async fn WorktreeOwner::archive_checkout(
   self : WorktreeOwner,
+  host : WorktreeHost,
   force : Bool,
   on_committed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
+  guard !entry.held_by_another(host, self) else { return None }
   let entries = read_worktrees_unlocked(workspace)
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
@@ -513,15 +563,17 @@ pub async fn WorktreeOwner::archive_checkout(
 }
 
 ///|
-/// Drop the placement rows bound to `sessions` from one project's registry and
-/// report the remaining rows, or `None` when the registry already held none of
-/// them. The registry write is atomic, so a failure leaves every row in place
-/// for the caller to roll its own work back against.
+/// Drop the placements of `sessions` from one project's registry and report
+/// the remaining rows, or `None` when the registry already held none of them.
+/// A row goes with its last member; a row other conversations are still
+/// bound to only loses the departing ones. The registry write is atomic, so
+/// a failure leaves every row in place for the caller to roll its own work
+/// back against.
 ///
 /// This is what permanent deletion of an archived conversation needs: the
-/// checkout itself went away when the conversation was archived. Removing
-/// its placement row leaves the recovery reference intact, preserving commits
-/// without an unusable ghost placement.
+/// checkout itself went away when its last conversation was archived.
+/// Removing the placement row leaves the recovery reference intact,
+/// preserving commits without an unusable ghost placement.
 pub async fn drop_placements(
   workspace : @pathx.Absolute,
   sessions : Array[String],
@@ -531,10 +583,20 @@ pub async fn drop_placements(
   let shared = lock_worktrees_file(workspace)
   defer shared.release()
   let entries = read_worktrees_unlocked(workspace)
-  let remaining = entries.filter(entry => {
-    !(entry.session is Some(bound) && sessions.contains(bound))
-  })
-  guard remaining.length() < entries.length() else { return None }
+  let remaining : Array[WorktreeEntry] = []
+  let mut changed = false
+  for entry in entries {
+    let staying = entry.sessions.filter(bound => !sessions.contains(bound))
+    if staying.length() == entry.sessions.length() {
+      remaining.push(entry)
+      continue
+    }
+    changed = true
+    if !staying.is_empty() {
+      remaining.push({ ..entry, sessions: staying, })
+    }
+  }
+  guard changed else { return None }
   write_worktrees(workspace, remaining)
   Some(worktree_infos(workspace, remaining))
 }
@@ -887,7 +949,7 @@ pub async fn create(
     name,
     checkout: Detached(recovery_ref),
     base,
-    session: owner.session(),
+    sessions: owner.sessions(),
     codex_thread: owner.codex_thread(),
   }
   let lock_reason = "\{entry.lock_prefix()}\{salt}"
@@ -1037,8 +1099,8 @@ async fn delete_worktree_checkout(
 /// Remove a worktree's checkout and registry entry. Its recovery reference
 /// (or legacy branch) survives, retaining committed work. Uncommitted changes
 /// are discarded only behind `force`.
-/// The bound conversation is drained first (an idle serve process still
-/// has its cwd inside the directory being deleted); it then becomes a
+/// Every bound conversation is drained first (an idle serve process still
+/// has its cwd inside the directory being deleted); each then becomes a
 /// plain workspace conversation with its history intact. If its directory was
 /// deleted outside the app, only this worktree's Git registration is removed.
 pub async fn remove(
@@ -1080,9 +1142,7 @@ pub async fn remove(
       "this worktree belongs to a Codex task; archive that task before removing its checkout",
     )
   }
-  if entry.session is Some(bound) {
-    (host.drain_sessions)([bound])
-  }
+  (host.drain_sessions)(entry.sessions)
   // Serialize saving and removal with archive and repair.
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
@@ -1109,7 +1169,7 @@ pub async fn remove(
     // The checkout is already gone; retain its last OpenSeek save point.
     remove_missing_checkout(dir, name)
   }
-  // Re-read after draining the owning session; keep unrelated placements.
+  // Re-read after draining the bound sessions; keep unrelated placements.
   let remaining = read_worktrees_unlocked(dir).filter(entry => {
     entry.name != name
   })
@@ -1239,14 +1299,14 @@ async test "worktree registry decode drops malformed entries" {
   assert_eq(entries[0].name, "ok")
   assert_eq(entries[0].checkout, Branch("openseek/ok"))
   assert_eq(entries[0].base, "abc")
-  assert_eq(entries[0].session, Some("s1"))
+  assert_eq(entries[0].sessions, ["s1"])
   assert_eq(entries[0].codex_thread, None)
   assert_eq(entries[1].name, "codex")
-  assert_eq(entries[1].session, None)
+  assert_eq(entries[1].sessions, [])
   assert_eq(entries[1].codex_thread, Some("thread-1"))
   // A blank session self-heals to unbound rather than a phantom id.
   assert_eq(entries[2].name, "blank")
-  assert_true(entries[2].session is None)
+  assert_eq(entries[2].sessions, [])
   assert_true(entries[2].codex_thread is None)
   assert_eq(
     entries[3].checkout,
@@ -1264,7 +1324,7 @@ async test "failed worktree registry staging preserves every live row" {
     name: "retained",
     checkout: Branch("openseek/retained"),
     base: "abc",
-    session: Some("other-session"),
+    sessions: ["other-session"],
     codex_thread: None,
   }
   write_worktrees(root, [retained])
@@ -1288,7 +1348,7 @@ async test "failed worktree registry staging preserves every live row" {
   assert_eq(after.name, retained.name)
   assert_eq(after.checkout, retained.checkout)
   assert_eq(after.base, retained.base)
-  assert_eq(after.session, retained.session)
+  assert_eq(after.sessions, retained.sessions)
 }
 
 ///|
@@ -1381,7 +1441,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   )
   assert_eq(info.base, @gitx.run(repo, ["rev-parse", "HEAD"]))
   // Creation IS the binding: the entry carries its conversation from birth.
-  assert_eq(info.session, Some("s-fix-auth"))
+  assert_eq(info.sessions, ["s-fix-auth"])
   assert_eq(tree_base(repo, "s-fix-auth"), Some(info.base))
   assert_eq(tree_base(repo, "workspace-root"), None)
   assert_eq(info.path, repo.join(".worktrees/fix-auth").to_string())
@@ -1502,7 +1562,7 @@ async test "worktree names are host-generated and skip surviving references" {
     is Some(codex_info) else {
     fail("expected Codex-owned worktree row")
   }
-  assert_eq(codex_info.session, None)
+  assert_eq(codex_info.sessions, [])
   assert_eq(codex_info.codex_thread, Some("thread-1"))
 }
 

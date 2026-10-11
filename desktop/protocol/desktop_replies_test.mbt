@@ -1245,22 +1245,23 @@ test "Moon package-graph codecs keep routing and outcome explicit" {
 }
 
 ///|
-test "worktree replies omit absent owners and reject ambiguous ownership" {
+test "worktree replies name every member and reject ambiguous ownership" {
   let openseek : @protocol.WorktreeInfo = @json.from_json({
     "name": "wt-1",
     "branch": "openseek/wt-1",
     "base": "abc",
-    "session": "session-1",
+    "sessions": ["session-1", "session-2"],
     "codex_thread": null,
     "path": "/work/project/.worktrees/wt-1",
     "present": true,
     "future_metadata": true,
   })
+  assert_eq(openseek.sessions, ["session-1", "session-2"])
   @debug.assert_eq(openseek.to_json(), {
     "name": "wt-1",
     "branch": "openseek/wt-1",
     "base": "abc",
-    "session": "session-1",
+    "sessions": ["session-1", "session-2"],
     "path": "/work/project/.worktrees/wt-1",
     "present": true,
   })
@@ -1268,6 +1269,7 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
     "name": "wt-2",
     "branch": "openseek/wt-2",
     "base": "def",
+    "sessions": [],
     "codex_thread": "thread-1",
     "path": "/work/project/.worktrees/wt-2",
     "present": false,
@@ -1276,6 +1278,7 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
     "name": "wt-2",
     "branch": "openseek/wt-2",
     "base": "def",
+    "sessions": [],
     "codex_thread": "thread-1",
     "path": "/work/project/.worktrees/wt-2",
     "present": false,
@@ -1284,30 +1287,54 @@ test "worktree replies omit absent owners and reject ambiguous ownership" {
     "name": "legacy",
     "branch": "openseek/legacy",
     "base": "ghi",
-    "session": null,
+    "sessions": [],
     "codex_thread": null,
     "path": "/work/project/.worktrees/legacy",
     "present": false,
   })
-  assert_eq(ownerless.session, None)
+  assert_eq(ownerless.sessions, [])
   assert_eq(ownerless.codex_thread, None)
   let ambiguous = refused(() => {
     let _ : @protocol.WorktreeInfo = @json.from_json({
       "name": "ambiguous",
       "branch": "openseek/ambiguous",
       "base": "jkl",
-      "session": "session-1",
+      "sessions": ["session-1"],
       "codex_thread": "thread-1",
       "path": "/work/project/.worktrees/ambiguous",
       "present": true,
     })
   })
   assert_true(ambiguous)
+  // The member list is part of every row; a reply without it is not one
+  // this client can place conversations from.
+  let missing_members = refused(() => {
+    let _ : @protocol.WorktreeInfo = @json.from_json({
+      "name": "wt-3",
+      "branch": "openseek/wt-3",
+      "base": "mno",
+      "path": "/work/project/.worktrees/wt-3",
+      "present": true,
+    })
+  })
+  assert_true(missing_members)
+  let malformed_member = refused(() => {
+    let _ : @protocol.WorktreeInfo = @json.from_json({
+      "name": "wt-3",
+      "branch": "openseek/wt-3",
+      "base": "mno",
+      "sessions": [42],
+      "path": "/work/project/.worktrees/wt-3",
+      "present": true,
+    })
+  })
+  assert_true(malformed_member)
   let malformed_present = refused(() => {
     let _ : @protocol.WorktreeInfo = @json.from_json({
       "name": "wt-3",
       "branch": "openseek/wt-3",
       "base": "mno",
+      "sessions": [],
       "path": "/work/project/.worktrees/wt-3",
       "present": "yes",
     })
@@ -1874,7 +1901,7 @@ test "detached worktree replies omit branch and reject malformed branch values" 
   let json : Json = {
     "name": "wt-1",
     "base": "abc",
-    "session": "s1",
+    "sessions": ["s1"],
     "path": "/repo/.worktrees/wt-1",
     "present": true,
   }
@@ -1885,7 +1912,7 @@ test "detached worktree replies omit branch and reject malformed branch values" 
     "name": "wt-1",
     "branch": null,
     "base": "abc",
-    "session": "s1",
+    "sessions": ["s1"],
     "path": "/repo/.worktrees/wt-1",
     "present": true,
   })
@@ -1898,6 +1925,7 @@ test "detached worktree replies omit branch and reject malformed branch values" 
           "name": "wt-1",
           "branch": branch,
           "base": "abc",
+          "sessions": [],
           "path": "/repo/.worktrees/wt-1",
           "present": true,
         })

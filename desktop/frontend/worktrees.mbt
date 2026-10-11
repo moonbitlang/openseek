@@ -9,11 +9,11 @@
 ///|
 /// One registry row of `worktree.list` / `worktree.changed`, reduced to
 /// what the sidebar and file root projection read: the name (the glyph's
-/// tooltip), the distinct OpenSeek/Codex owner ids, its concrete checkout
-/// path, and whether that checkout still exists on disk.
+/// tooltip), the OpenSeek conversations bound to it or its Codex owner, its
+/// concrete checkout path, and whether that checkout still exists on disk.
 priv struct WorktreeRow {
   name : String
-  session : String?
+  sessions : Array[String]
   codex_thread : String?
   // The host's concrete checkout root, already bound to its device channel.
   path : @common.Uri?
@@ -562,7 +562,7 @@ fn worktree_rows(
     guard !info.name.is_empty() else { continue }
     rows.push({
       name: info.name,
-      session: info.session.filter(id => !id.is_empty()),
+      sessions: info.sessions.filter(id => !id.is_empty()),
       path: @resource.of_path(channel, info.path),
       codex_thread: info.codex_thread.filter(id => !id.is_empty()),
       present: info.present,
@@ -594,7 +594,7 @@ fn DeviceState::worktree_row(
   for group in self.worktrees {
     guard group.project == project else { continue }
     for row in group.rows {
-      if row.session is Some(bound) && bound == session {
+      if row.sessions.contains(session) {
         return Some(row)
       }
     }
@@ -616,7 +616,7 @@ fn DeviceState::conversation_workspace(
   for group in self.worktrees {
     guard group.project == project else { continue }
     for row in group.rows {
-      if row.session is Some(row_session) && row_session == session {
+      if row.sessions.contains(session) {
         return Worktree(project~, name=row.name)
       }
     }
@@ -793,7 +793,7 @@ fn test_worktree_rows() -> Array[WorktreeRow] {
   [
     {
       name: "wt",
-      session: Some("desktop-wt"),
+      sessions: ["desktop-wt"],
       codex_thread: None,
       path: None,
       present: true,
@@ -815,7 +815,7 @@ test "worktree commit decoder carries the workspace and its rows" {
   let row : Json = {
     "name": "wt",
     "base": "main",
-    "session": "s1",
+    "sessions": ["s1"],
     "path": "/proj/.worktrees/wt",
     "present": true,
   }
@@ -833,7 +833,7 @@ test "worktree commit decoder carries the workspace and its rows" {
   assert_eq(workspace.path, "/proj")
   inspect(rows.length(), content="1")
   inspect(rows[0].name, content="wt")
-  assert_eq(rows[0].session, Some("s1"))
+  assert_eq(rows[0].sessions, ["s1"])
   assert_true(rows[0].path is Some({ path: "/proj/.worktrees/wt", .. }))
   assert_true(rows[0].present)
   // A broadcast without its workspace is structurally unusable.
@@ -1018,7 +1018,7 @@ test "a worktree the registry says is bound closes the choice" {
             rows: [
               {
                 name: "wt-1",
-                session: Some("desktop-test"),
+                sessions: ["desktop-test"],
                 path: None,
                 codex_thread: None,
                 present: true,
@@ -1091,7 +1091,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
           rows: [
             {
               name: "wt",
-              session: Some("desktop-test"),
+              sessions: ["desktop-test"],
               path: Some(worktree_root),
               codex_thread: None,
               present: true,
@@ -1165,7 +1165,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       [
         {
           name: "wt",
-          session: Some("desktop-test"),
+          sessions: ["desktop-test"],
           path: None,
           codex_thread: None,
           present: false,
@@ -1201,7 +1201,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
       [
         {
           name: "wt",
-          session: Some("desktop-test"),
+          sessions: ["desktop-test"],
           codex_thread: None,
           path: Some(worktree_root),
           present: true,
@@ -1443,7 +1443,7 @@ test "a broadcast for one workspace never fences a sibling's reply" {
       [
         {
           name: "wt-a",
-          session: Some("s-a"),
+          sessions: ["s-a"],
           codex_thread: None,
           path: None,
           present: true,
@@ -1459,7 +1459,7 @@ test "a broadcast for one workspace never fences a sibling's reply" {
       [
         {
           name: "wt-b",
-          session: Some("s-b"),
+          sessions: ["s-b"],
           codex_thread: None,
           path: None,
           present: true,
@@ -1647,6 +1647,45 @@ test "a remote removal closes this client's discard dialog" {
 }
 
 ///|
+test "every conversation bound to a shared worktree is placed in it" {
+  let dispatch = test_dispatch()
+  let workspace = @interop.ChannelId::Local.test_resource("/proj")
+  let shared : WorktreeRow = {
+    name: "wt",
+    sessions: ["desktop-test", "desktop-else"],
+    codex_thread: None,
+    path: None,
+    present: true,
+  }
+  let model = test_model()
+    .replace_conversation({
+      ..test_conversation(),
+      workspace: Worktree(project=workspace, name="wt"),
+    })
+    .with_dev(dev => {
+      ..dev,
+      projects: [workspace],
+      worktrees: [{ project: workspace, rows: [shared], generation: 1, }],
+    })
+  assert_true(
+    worktree_name_for(model.dev(), workspace, "desktop-test") is Some("wt"),
+  )
+  assert_true(
+    worktree_name_for(model.dev(), workspace, "desktop-else") is Some("wt"),
+  )
+  // A member leaving the row unbinds that conversation alone.
+  let (_, left) = update_dev(
+    dispatch,
+    WorktreesChanged([{ ..shared, sessions: ["desktop-else"], }], workspace~),
+    model,
+  )
+  assert_true(left.active().workspace is Project(_))
+  assert_true(
+    worktree_name_for(left.dev(), workspace, "desktop-else") is Some("wt"),
+  )
+}
+
+///|
 test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   let dispatch = test_dispatch()
   let workspace = @interop.ChannelId::Local.test_resource("/work/project")
@@ -1665,7 +1704,7 @@ test "worktree broadcasts and reconnect snapshots update an open Codex task" {
   let rows = [
     {
       name: "wt-1",
-      session: None,
+      sessions: [],
       codex_thread: Some("codex-thread-1"),
       path: Some(worktree),
       present: true,
