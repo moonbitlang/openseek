@@ -58,7 +58,7 @@ fn ModelGroup::select_group(self : ModelGroup) -> @select_control.Group {
 }
 
 ///|
-/// A compact model pill backed by the composer's custom popup.
+/// A compact text button backed by the composer's custom popup.
 pub(all) struct ModelSelect {
   id : String
   groups : Array[ModelGroup]
@@ -87,7 +87,7 @@ fn ModelSelect::render(
     change: action_emit.map(value => ModelSelected(identity~, value~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
-    presentation: Composer("✦", false),
+    presentation: Composer(None, true),
   }.render()
 }
 
@@ -131,7 +131,7 @@ fn ReasoningSelect::render(
     change: action_emit.map(value => ReasoningSelected(identity~, value~)),
     title: self.title,
     aria_label: ui(locale, ReasoningEffort),
-    presentation: Composer("◐", true),
+    presentation: Composer(None, true),
   }.render()
 }
 
@@ -817,6 +817,7 @@ priv struct View {
   // The position caption shown while a recalled prompt is in the draft.
   history : String?
   status : Array[@html.Html]
+  model_controls : Array[@html.Html]
   actions : Array[ActionButton]
   followup_menu : @html.Html?
   overlay : @html.Html?
@@ -894,7 +895,10 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
     @html.div(class="composer-toolbar", [
       @html.div(class="composer-controls", [
         @html.div(class="composer-status", self.status),
-        @html.div(class="composer-actions", actions),
+        @html.div(class="composer-toolbar-end", [
+          @html.div(class="composer-model-controls", self.model_controls),
+          @html.div(class="composer-actions", actions),
+        ]),
       ]),
     ]),
   ]

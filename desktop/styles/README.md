@@ -129,7 +129,9 @@ attributes, so Desktop focus rules cannot restyle them.
 
 Buttons, links, and other discrete actions are not form fields. They may use a
 component-appropriate `:focus-visible` indicator because they often have no
-persistent border to recolor.
+persistent border to recolor. Custom-select buttons keep their normal border
+and use the action outline; the shared form-field rule excludes buttons even
+when they carry `data-focus-owner`, so focus is drawn only once.
 
 ## Button ownership
 
