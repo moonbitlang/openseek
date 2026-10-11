@@ -114,19 +114,22 @@ on replay.
 one and prints the new id, so the conversation can be continued another way
 with `--session <new-id>` while the original stays as it is. The copy carries
 every finished turn and whatever was recorded between turns since; a turn still
-in flight is left out, so forking a session that is running is safe. The
-system prompt is copied verbatim, so the fork opens with a runtime notice that
-says it is a fork and states its own environment: the working directory given
-by this command's `--dir` and the fork's own scratch directory.
+in flight is left out, so forking a session that is running is safe. Sub-run
+sessions are not copied, and the fork does not record which session it came
+from: a viewer's link from a copied `review` result to its `sr-N` transcript is
+dead in the fork, and leads to the fork's own `sr-N` once it has run one.
 `--through <n>` stops at the turn whose terminal event has sequence `n`
 (`sessions show` lists the sequences). Without `--as` the new session gets a
 generated `cli-…` id; an id that already exists is refused.
 
-A fork continues in the directory its source works in: run `sessions fork`
-with the source's `--dir`, and resume the fork with it too. The copied system
-prompt still carries that directory's `AGENTS.md` and skills as the source
-recorded them, and the notice restates only the working and scratch
-directories, so forking a session into a different project is not supported.
+The fork's system prompt is not the source's: it is the prompt a new session
+started by this command line would get — from `--dir`, `--model`,
+`--system-prompt-file`, `--system-prompt-addendum-file`, and
+`--global-skills-dir`, with the fork's own scratch directory. A session does
+not record which of these it was created with, so pass the ones the source was
+started with, and the ones the fork will be resumed with. The fork's first
+request does not reuse the source's cached prefix past the point where the two
+prompts differ.
 
 ## `openseek serve`
 

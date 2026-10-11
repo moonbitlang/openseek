@@ -80,10 +80,11 @@ async fn sessions_compact(matches : @argparse.Matches) -> Unit {
 
 ///|
 /// `openseek sessions fork <id> [--as <new-id>] [--through <n>]`: start a new
-/// session from another one's history, opening it with a notice of the
-/// environment it works in — this command's `--dir` and the fork's own
-/// scratch directory. The new id is the one thing a caller needs back, to
-/// resume it with `--session`, so it is the whole of stdout.
+/// session from another one's history. The fork's system prompt is the one a
+/// new session started with this command's `--dir`, `--model`, and prompt
+/// options would get, with the fork's own scratch directory. The new id is
+/// the one thing a caller needs back, to resume it with `--session`, so it is
+/// the whole of stdout.
 async fn sessions_fork(matches : @argparse.Matches) -> Unit {
   let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
   let store = @store.SessionStore(@setup.session_root(matches, workspace_root~))
@@ -100,12 +101,14 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
       Some(@cli.parse_positive_int(input.trim().to_owned(), "--through"))
     _ => None
   }
-  let notice = @setup.fork_notice(
-    source,
+  let (model, _, _) = @options.agent_settings(matches)
+  let system_prompt = @setup.configured_system_prompt(
+    matches,
+    model,
     workspace_root~,
     session_scratch_dir=store.scratch_dir(fork),
   )
-  println(store.fork(source, fork, through?, notice~).id().value())
+  println(store.fork(source, fork, through?, system_prompt~).id().value())
 }
 
 ///|

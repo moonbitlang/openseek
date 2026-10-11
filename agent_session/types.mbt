@@ -730,12 +730,16 @@ pub fn Session::compact(
 /// compaction summary. A turn opens with a `User` item, so the first one
 /// after the last terminal is where an unfinished turn begins.
 ///
-/// Events keep their sequences and timestamps; only the id changes. Raises
-/// when `through` is not the sequence of a `Terminal`, and when nothing
-/// precedes the unfinished turn.
+/// Events keep their sequences and timestamps. The id and the system prompt
+/// are the fork's own: a prompt records the environment a session works in —
+/// its scratch directory at the least — and the fork's is a different one, so
+/// the caller states it instead of inheriting the source's. Raises when
+/// `through` is not the sequence of a `Terminal`, and when nothing precedes
+/// the unfinished turn.
 pub fn Session::fork(
   self : Session,
   id : SessionId,
+  system_prompt~ : String,
   through? : Int,
 ) -> Session raise {
   let copied : Array[SessionEvent] = []
@@ -747,11 +751,7 @@ pub fn Session::fork(
       User(_) => in_turn = true
       Terminal(_) => {
         if through == Some(event.sequence) {
-          return Session(
-            id,
-            system_prompt=self.system_prompt,
-            events=@vector.from_array(copied),
-          )
+          return Session(id, system_prompt~, events=@vector.from_array(copied))
         }
         in_turn = false
         settled = copied.length()
@@ -770,7 +770,7 @@ pub fn Session::fork(
   }
   Session(
     id,
-    system_prompt=self.system_prompt,
+    system_prompt~,
     events=@vector.from_array(copied[:settled].to_owned()),
   )
 }

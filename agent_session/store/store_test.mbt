@@ -207,20 +207,18 @@ async test "fork copies a session's finished turns and title into a new session"
   let fork = store.fork(
     SessionId("origin"),
     SessionId("fork"),
-    notice="forked; scratch moved",
+    system_prompt="fork system",
   )
   assert_eq(fork.id().value(), "fork")
-  // The turn still in flight stays with the original. What follows the
-  // copied turn is the fork's own first event: the notice of its environment,
-  // which the verbatim system prompt cannot give.
-  assert_eq(fork.last_sequence(), 3)
+  // The turn still in flight stays with the original: the fork is the
+  // finished turn and nothing else.
+  assert_eq(fork.last_sequence(), 2)
   let loaded = store.load(SessionId("fork"))
-  assert_eq(loaded.system_prompt(), "system")
-  assert_eq(loaded.last_sequence(), 3)
-  assert_true(
-    loaded.events()[2].item() is Runtime(notice) &&
-    notice.content() == "forked; scratch moved",
-  )
+  // The prompt on disk is the fork's own, never the source's.
+  assert_eq(loaded.system_prompt(), "fork system")
+  assert_eq(store.load(SessionId("origin")).system_prompt(), "system")
+  assert_eq(loaded.last_sequence(), 2)
+  assert_true(loaded.events()[1].item() is Terminal(Finished("one")))
   assert_eq(store.title(SessionId("fork")), Some("Parser fix"))
   assert_eq(store.load(SessionId("origin")).last_sequence(), 3)
   // The fork is an ordinary session: it grows without touching the original.
@@ -228,7 +226,7 @@ async test "fork copies a session's finished turns and title into a new session"
     loaded,
     User(UserMessage(Content([Text("another way")]))),
   )
-  assert_eq(grown.last_sequence(), 4)
+  assert_eq(grown.last_sequence(), 3)
   assert_eq(store.load(SessionId("origin")).last_sequence(), 3)
   assert_true(
     store.load(SessionId("origin")).events()[2].item() is User(message) &&
@@ -244,7 +242,12 @@ async fn fork_refused(
   through? : Int,
 ) -> Bool {
   try
-    store.fork(SessionId(source), SessionId(fork), through?, notice="forked")
+    store.fork(
+      SessionId(source),
+      SessionId(fork),
+      through?,
+      system_prompt="fork system",
+    )
   catch {
     _ => true
   } noraise {

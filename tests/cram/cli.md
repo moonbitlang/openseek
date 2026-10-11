@@ -301,11 +301,10 @@ compacted session demo events 1..2; last_sequence=3
 `sessions fork <id>` copies a session into a new one and prints the new id,
 which `--session` then resumes. The copy ends where the last finished turn
 ended: the prompt that opened a turn still in flight stays with the original.
-The fork then opens with a runtime notice of its own, telling the model that
-it is a fork and what its working and scratch directories are — the system
-prompt is copied verbatim and still names the original's. `--through` stops at
-the end of an earlier turn and must name a turn's terminal event; an id that
-already exists is never replaced.
+The fork's system prompt is built for the fork: it names the fork's own
+scratch directory, where the original's prompt named the original's.
+`--through` stops at the end of an earlier turn and must name a turn's
+terminal event; an id that already exists is never replaced.
 
 ```mooncram
 $ sh <<'EOF'
@@ -319,7 +318,7 @@ $ sh <<'EOF'
 > JSONL
 > env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp"
 > env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o '"item":{"kind":"[a-z_]*"' | cut -d'"' -f6
-> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -c "sessions/retry/scratch"
+> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o 'sessions/[a-z]*/scratch'
 > env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp" 2>&1 || echo exit-non-zero
 > env -u DEEPSEEK openseek.exe sessions fork demo --as early --through 1 --session-root "$tmp" 2>&1 || echo exit-non-zero
 > env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1 | sort
@@ -328,8 +327,7 @@ $ sh <<'EOF'
 retry
 user
 terminal
-runtime_notice
-1
+sessions/retry/scratch
 error: session retry already exists
 exit-non-zero
 error: no turn of session demo ends at sequence 1

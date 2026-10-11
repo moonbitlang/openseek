@@ -515,13 +515,15 @@ pub fn SessionStore::session_file(
 /// while another process appends to it — and carries the source's display
 /// title. Nothing else in the source's directory is copied: a prediction is
 /// about the source's own tail, and job logs and scratch files are its
-/// working state.
+/// working state. Sub-run sessions are not copied either, and nothing
+/// records which session the fork came from: a sub-run the copied history
+/// names as `sr-N` is looked up under the fork's id by every reader, where it
+/// is missing — or, once the fork has run its own `sr-N`, a different run.
 ///
-/// `notice` becomes the fork's first event of its own, a runtime notice
-/// after the copied history. The system prompt is copied verbatim, so it
-/// still describes the source's environment — its scratch directory above
-/// all, which is a different directory for the fork; the notice is where the
-/// caller tells the model that this is a fork and what its environment is.
+/// `system_prompt` is the fork's own. A prompt names the session's scratch
+/// directory, which is a different directory for the fork, so the source's
+/// prompt is never inherited: the caller builds the one a new session in the
+/// fork's environment would get.
 ///
 /// `fork` must not exist, in the sense `exists` and `list` give the word: no
 /// directory for the id, with or without a session file in it. A directory
@@ -536,15 +538,9 @@ pub async fn SessionStore::fork(
   source : @agent_session.SessionId,
   fork : @agent_session.SessionId,
   through? : Int,
-  notice~ : String,
+  system_prompt~ : String,
 ) -> @agent_session.Session {
-  let copy = self
-    .load(source)
-    .fork(fork, through?)
-    .append(
-      Runtime(RuntimeNotice(notice)),
-      unix_ms=@env.now().reinterpret_as_int64(),
-    )
+  let copy = self.load(source).fork(fork, system_prompt~, through?)
   let title = self.title(source)
   guard !self.exists(fork) else {
     fail("session \{fork.value()} already exists")

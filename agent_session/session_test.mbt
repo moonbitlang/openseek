@@ -565,7 +565,9 @@ fn fork_sequences(session : @agent_session.Session) -> Array[Int] {
 
 ///|
 fn fork_refused(session : @agent_session.Session, through? : Int) -> Bool {
-  try session.fork(SessionId("fork"), through?) catch {
+  try
+    session.fork(SessionId("fork"), system_prompt="fork system", through?)
+  catch {
     _ => true
   } noraise {
     _ => false
@@ -575,9 +577,11 @@ fn fork_refused(session : @agent_session.Session, through? : Int) -> Bool {
 ///|
 test "a fork carries everything short of the turn still in flight" {
   let origin = fork_sample()
-  let fork = origin.fork(SessionId("fork"))
+  let fork = origin.fork(SessionId("fork"), system_prompt="fork system")
   assert_eq(fork.id().value(), "fork")
-  assert_eq(fork.system_prompt(), "system")
+  // The prompt is the fork's own; the original keeps the one it was made with.
+  assert_eq(fork.system_prompt(), "fork system")
+  assert_eq(origin.system_prompt(), "system")
   // The summary recorded after the last finished turn belongs to the fork;
   // the prompt that opened the unfinished turn, and what followed, do not.
   assert_eq(fork_sequences(fork), [1, 2, 3, 4, 5, 6, 7])
@@ -592,10 +596,18 @@ test "a fork carries everything short of the turn still in flight" {
 ///|
 test "a fork can stop at the end of any finished turn" {
   let origin = fork_sample()
-  assert_eq(fork_sequences(origin.fork(SessionId("fork"), through=3)), [1, 2, 3])
-  assert_eq(fork_sequences(origin.fork(SessionId("fork"), through=6)), [
-    1, 2, 3, 4, 5, 6,
-  ])
+  fn through(sequence : Int) -> Array[Int] raise {
+    fork_sequences(
+      origin.fork(
+        SessionId("fork"),
+        system_prompt="fork system",
+        through=sequence,
+      ),
+    )
+  }
+
+  assert_eq(through(3), [1, 2, 3])
+  assert_eq(through(6), [1, 2, 3, 4, 5, 6])
   // A sequence inside a turn, between turns, or past the log ends no turn.
   for sequence in [2, 4, 7, 42] {
     assert_true(fork_refused(origin, through=sequence))
@@ -613,5 +625,10 @@ test "a fork needs something that precedes the unfinished turn" {
   assert_true(fork_refused(first_turn))
   // A goal set before the first prompt is already a state worth copying.
   let goal_only = empty.append(Runtime(RuntimeNotice("[goal]\nship it")))
-  assert_eq(fork_sequences(goal_only.fork(SessionId("fork"))), [1])
+  assert_eq(
+    fork_sequences(
+      goal_only.fork(SessionId("fork"), system_prompt="fork system"),
+    ),
+    [1],
+  )
 }

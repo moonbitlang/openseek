@@ -51,10 +51,23 @@ pub async fn configured_system_prompt(
   // The resource directory is resolved from the running executable.
   // Documentation layout and usage instructions live in the static default
   // prompt, keeping the installation-dependent path in this tail.
-  let cwd = working_directory(workspace_root)
-  prompt <+ "\n\n\{environment_block(cwd)}"
+  let target = if workspace_root == "" { "." } else { workspace_root }
+  let cwd = @fs.realpath(target) catch { _ => target }
+  let outline = dir_outline(cwd).unwrap_or(
+    "(empty directory): use `moon new` to create a new project here",
+  )
+  let environment_block =
+    $|## Environment
+    $|
+    $|Working directory: \{cwd}
+    $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
+    $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
+    $|Project layout (directories; hidden, build, and vendored dirs omitted):
+    $|\{outline}
+  prompt <+ "\n\n\{environment_block}"
   if session_scratch_dir is Some(dir) {
-    prompt <+ "\n\n\{scratch_directory_line(dir)}"
+    prompt <+
+      "\n\nSession scratch directory: \{dir.to_json().stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
   }
   if @resources.directory() is Some(dir) {
     prompt <+ "\n\nBundled resources: \{dir}"
@@ -75,68 +88,6 @@ pub async fn configured_system_prompt(
     prompt <+ "\n\n\{section}"
   }
   prompt.to_string()
-}
-
-///|
-/// The physical directory a session started with `workspace_root` works in.
-async fn working_directory(workspace_root : String) -> String {
-  let target = if workspace_root == "" { "." } else { workspace_root }
-  @fs.realpath(target) catch {
-    _ => target
-  }
-}
-
-///|
-/// Where the process works and what is there. A system prompt records it at
-/// a session's creation, and a fork's opening notice states it again for the
-/// fork.
-async fn environment_block(cwd : String) -> String {
-  let outline = dir_outline(cwd).unwrap_or(
-    "(empty directory): use `moon new` to create a new project here",
-  )
-  let block =
-    $|## Environment
-    $|
-    $|Working directory: \{cwd}
-    $|Relative paths resolve against it; treat it as the workspace root and stay inside it.
-    $|Parent and sibling directories belong to other projects. Never pass a cwd you have not verified exists.
-    $|Project layout (directories; hidden, build, and vendored dirs omitted):
-    $|\{outline}
-  block
-}
-
-///|
-fn scratch_directory_line(dir : String) -> String {
-  "Session scratch directory: \{dir.to_json().stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
-}
-
-///|
-/// The runtime notice that opens a fork of `source`.
-///
-/// A fork's system prompt is its source's, copied verbatim so the copied
-/// history stays a cache-hittable prefix — which also means it names the
-/// source's scratch directory and the directory the source started in. This
-/// notice is the fork's own event after that history: it says the
-/// conversation is a fork, and states the environment the fork works in.
-///
-/// It restates the working and scratch directories only. The project
-/// instructions and skills in the copied prompt are the source directory's,
-/// which is right for a fork that continues in that directory and is why a
-/// fork into a different project is not supported.
-pub async fn fork_notice(
-  source : @agent_session.SessionId,
-  workspace_root? : String = ".",
-  session_scratch_dir~ : String,
-) -> String {
-  let environment = environment_block(working_directory(workspace_root))
-  let notice =
-    $|[session forked]
-    $|This conversation was forked from session \{source.value().to_json().stringify()} and continues here on its own. The original keeps its scratch directory; this session's environment is stated below and replaces the one in the system prompt.
-    $|
-    $|\{environment}
-    $|
-    $|\{scratch_directory_line(session_scratch_dir)}
-  notice
 }
 
 ///|
