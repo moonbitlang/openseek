@@ -264,9 +264,10 @@ async fn main {
     let app = app.app_lifecycle(
       on_start=_ => {
         is_primary = true
-        @api.prepare_workspaces()
+        // Before the bridge: it prepares the workspace registry first, and
+        // no page may attach to a host that has not.
+        state.start_services(group)
         group.spawn_bg(allow_failure=true, () => bridge.run())
-        state.spawn_services(group)
         // The relay actor registers this host whenever a sign-in (or the
         // environment override) says so, and idles otherwise.
         group.spawn_bg(allow_failure=true, () => relay.run())

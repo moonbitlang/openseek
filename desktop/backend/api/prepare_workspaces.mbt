@@ -1,8 +1,9 @@
 ///|
-/// First-launch and migration work on the workspace registry. A host
-/// runs this before it serves any client, so the first `workspace.list` a
-/// page sees already reflects it.
-pub async fn prepare_workspaces() -> Unit {
+/// First-launch and migration work on the workspace registry.
+/// `ApiState::start_services` runs this before it starts anything that can
+/// serve a client, so the first `workspace.list` a page sees already reflects
+/// it.
+async fn prepare_workspaces() -> Unit {
   // A fresh install has no workspaces at all. Attach the default one before
   // anything can serve a workspace list, so the first page to connect
   // already has somewhere to work. This runs exactly once per registry: a

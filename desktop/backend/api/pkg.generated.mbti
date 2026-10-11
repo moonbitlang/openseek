@@ -17,8 +17,6 @@ import {
 // Values
 pub fn endpoints(ApiState, @host.HostConnection) -> Array[@endpoint.Endpoint]
 
-pub async fn prepare_workspaces() -> Unit
-
 // Errors
 
 // Types and methods
@@ -29,7 +27,7 @@ pub fn ApiState::host_state(Self) -> @host.HostState
 pub fn ApiState::manager(Self) -> @engine.EngineManager
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit
 pub fn ApiState::sink(Self) -> @engine.EventSink
-pub fn[G] ApiState::spawn_services(Self, @async.TaskGroup[G]) -> Unit
+pub async fn[G] ApiState::start_services(Self, @async.TaskGroup[G]) -> Unit
 pub fn ApiState::subscribe(Self) -> @broadcast.Subscription[@protocol.Notification]
 
 // Type aliases

@@ -17,7 +17,7 @@
   needs a fact only Proton knows, the window host passes it in as a value
   (`@resources.Resources`).
 - `desktop/app` is a thin host of the backend. What any host of the backend
-  must do belongs in `desktop/backend` (`ApiState::spawn_services`), not in
+  must do belongs in `desktop/backend` (`ApiState::start_services`), not in
   the window host's entry point.
 - Packages the window host imports sit at the top of `desktop/backend`; the
   rest stay under `desktop/backend/internal`. Moon allows an `internal` import
