@@ -523,9 +523,13 @@ pub fn SessionStore::session_file(
 /// all, which is a different directory for the fork; the notice is where the
 /// caller tells the model that this is a fork and what its environment is.
 ///
-/// `fork` must not exist: the existence check and the write happen under the
-/// fork's exclusive lock, so two callers naming the same id cannot both
-/// succeed. The call raises for a source that does not load, for the reasons
+/// `fork` must not exist, in the sense `exists` and `list` give the word: no
+/// directory for the id, with or without a session file in it. A directory
+/// left by an interrupted creation may hold a title, scratch files, or job
+/// logs, and a fork written into it would silently adopt them. Two callers
+/// naming the same new id can both pass that check, so the session file is
+/// checked again under the fork's exclusive lock and only one of them
+/// writes. The call raises for a source that does not load, for the reasons
 /// `Session::fork` raises, on invalid ids, and on filesystem or lock failures.
 pub async fn SessionStore::fork(
   self : SessionStore,
@@ -542,6 +546,9 @@ pub async fn SessionStore::fork(
       unix_ms=@env.now().reinterpret_as_int64(),
     )
   let title = self.title(source)
+  guard !self.exists(fork) else {
+    fail("session \{fork.value()} already exists")
+  }
   ensure_session_dir(self, fork)
   with_session_lock(self, fork, Exclusive, () => {
     let path = self.session_file_path(fork)

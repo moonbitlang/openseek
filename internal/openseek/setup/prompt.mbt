@@ -118,6 +118,11 @@ fn scratch_directory_line(dir : String) -> String {
 /// source's scratch directory and the directory the source started in. This
 /// notice is the fork's own event after that history: it says the
 /// conversation is a fork, and states the environment the fork works in.
+///
+/// It restates the working and scratch directories only. The project
+/// instructions and skills in the copied prompt are the source directory's,
+/// which is right for a fork that continues in that directory and is why a
+/// fork into a different project is not supported.
 pub async fn fork_notice(
   source : @agent_session.SessionId,
   workspace_root? : String = ".",

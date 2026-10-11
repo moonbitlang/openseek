@@ -120,9 +120,13 @@ says it is a fork and states its own environment: the working directory given
 by this command's `--dir` and the fork's own scratch directory.
 `--through <n>` stops at the turn whose terminal event has sequence `n`
 (`sessions show` lists the sequences). Without `--as` the new session gets a
-generated `cli-…` id; an id that already exists is refused. The fork lives in
-the same `--session-root`; resume it with the same `--dir` to keep working on
-the same files.
+generated `cli-…` id; an id that already exists is refused.
+
+A fork continues in the directory its source works in: run `sessions fork`
+with the source's `--dir`, and resume the fork with it too. The copied system
+prompt still carries that directory's `AGENTS.md` and skills as the source
+recorded them, and the notice restates only the working and scratch
+directories, so forking a session into a different project is not supported.
 
 ## `openseek serve`
 

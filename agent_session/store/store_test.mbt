@@ -270,6 +270,16 @@ async test "fork never replaces a session that already exists" {
   }
   assert_eq(store.load(SessionId("other")).system_prompt(), "other")
   assert_eq(store.load(SessionId("origin")).last_sequence(), 2)
+  // A directory without a session file still holds the id: its leftover
+  // title must not become the fork's.
+  @fs.mkdir("\{store.root()}/sessions/husk", recursive=true)
+  @fs.write_file(
+    "\{store.root()}/sessions/husk/session-title",
+    "Somebody else's",
+    create_mode=CreateOrTruncate,
+  )
+  assert_true(fork_refused(store, "origin", "husk"))
+  assert_false(@fs.exists(session_file(store, "husk")))
   // A source that cannot be forked leaves no directory behind for the id.
   assert_true(fork_refused(store, "missing", "fork"))
   assert_true(fork_refused(store, "origin", "fork", through=1))

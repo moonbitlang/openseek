@@ -294,8 +294,14 @@ environment — its scratch directory is a different directory for the fork.
 it is where the caller tells the model that this is a fork and states the
 environment the fork works in.
 
-The new id must not exist. The check and the write happen under the new
-session's exclusive lock, so a fork never replaces a session.
+The new id must not exist — not even as a directory without a session file,
+which could hold another session's leftover title or scratch files. The write
+happens under the new session's exclusive lock, so a fork never replaces a
+session and two forks to one new id cannot both succeed.
+
+A fork continues where its source works. The copied system prompt carries the
+source directory's `AGENTS.md` and skills as they were recorded, and the notice
+is not a way to move the conversation to another project.
 
 ```mbt check
 ///|
