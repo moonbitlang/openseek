@@ -373,7 +373,7 @@ fn failure(
     "error editing \{path}: \{message}",
     is_error=true,
     brief~,
-    data={ "outcome": outcome.to_json(), "path": path.to_json() },
+    data={ "outcome": Json(outcome), "path": Json(path) },
   )
 }
 
@@ -580,10 +580,10 @@ async fn preview_replace_all(
   for site in sites {
     guard site.emit else { continue }
     let entry : Json = {
-      "file": input.path.to_json(),
-      "old_string": site.old_string.to_json(),
-      "new_string": site.new_string.to_json(),
-      "start_line": site.first_line.to_json(),
+      "file": Json(input.path),
+      "old_string": Json(site.old_string),
+      "new_string": Json(site.new_string),
+      "start_line": Json(site.first_line),
     }
     let text = entry.stringify()
     if entries_chars + text.length() > PreviewEntriesBudgetChars {
@@ -614,10 +614,10 @@ async fn preview_replace_all(
     brief="edit preview \{@agent_tool.brief_basename(path)} (\{sites.length()} site(s))",
     data={
       "outcome": "preview",
-      "path": path.to_json(),
-      "matches": total_matches.to_json(),
-      "sites": sites.length().to_json(),
-      "more": more.to_json(),
+      "path": Json(path),
+      "matches": Json(total_matches),
+      "sites": Json(sites.length()),
+      "more": Json(more),
     },
   )
 }
@@ -783,7 +783,7 @@ async fn commit_edit(
       "not applied: a diagnostic guard was requested, but moon check could not verify the tree (\{reason}); \{path} was NOT modified",
       is_error=true,
       brief=fail_brief,
-      data=edit_data("unverified", path, lines, { "reason": reason.to_json() }),
+      data=edit_data("unverified", path, lines, { "reason": Json(reason) }),
     )
   }
 
@@ -948,7 +948,7 @@ async fn commit_edit(
         is_error=true,
         brief="\{fail_brief} (unverified)",
         data=edit_data("unverified", path, lines, {
-          "reason": reason.to_json(),
+          "reason": Json(reason),
           "restore_failed": false,
         }),
       )
@@ -1143,18 +1143,18 @@ async fn guarded_outcome(
   let common : Map[String, Json] = {
     "check": after.summary_json(),
     "baseline": {
-      "error_count": before.error_count.to_json(),
-      "warning_count": before.warning_count.to_json(),
+      "error_count": Json(before.error_count),
+      "warning_count": Json(before.warning_count),
     },
     "introduced_count": {
-      "errors": delta.errors.length().to_json(),
-      "warnings": delta.warnings.length().to_json(),
+      "errors": Json(delta.errors.length()),
+      "warnings": Json(delta.warnings.length()),
     },
     "removed_count": {
-      "errors": removed.errors.length().to_json(),
-      "warnings": removed.warnings.length().to_json(),
+      "errors": Json(removed.errors.length()),
+      "warnings": Json(removed.warnings.length()),
     },
-    "reach_caveat": reach_caveat.to_json(),
+    "reach_caveat": Json(reach_caveat),
   }
   let caveat = if reach_caveat {
     "\nnote: the baseline already had \{before.error_count} error(s); errors can change which packages moon check reaches. Fixes may expose existing diagnostics, and new errors may hide them; a lower count does not prove no new problems."
@@ -1217,9 +1217,9 @@ async fn guarded_outcome(
   common["introduced"] = {
     "errors": Json::array([ for site in shown_errors => site.to_json() ]),
     "warnings": Json::array([ for site in shown_warnings => site.to_json() ]),
-    "complete": delta.complete.to_json(),
-    "errors_omitted": (delta.errors.length() - shown_errors.length()).to_json(),
-    "warnings_omitted": (delta.warnings.length() - shown_warnings.length()).to_json(),
+    "complete": Json(delta.complete),
+    "errors_omitted": Json(delta.errors.length() - shown_errors.length()),
+    "warnings_omitted": Json(delta.warnings.length() - shown_warnings.length()),
   }
   revert_edit(
     path,
@@ -1263,7 +1263,7 @@ async fn revert_edit(
     Some(error) =>
       "reverted: \{head}, but \{path} could NOT be restored (\{error}); inspect it manually.\{detail}"
   }
-  extra["restore_failed"] = (restore_failure is Some(_)).to_json()
+  extra["restore_failed"] = Json(restore_failure is Some(_))
   @agent_tool.respond(
     content,
     is_error=true,
@@ -1331,9 +1331,9 @@ fn edit_data(
 ) -> Json {
   let (start, end) = lines
   let fields : Map[String, Json] = {
-    "outcome": outcome.to_json(),
-    "path": path.to_json(),
-    "lines": { "start": start.to_json(), "end": end.to_json() },
+    "outcome": Json(outcome),
+    "path": Json(path),
+    "lines": { "start": Json(start), "end": Json(end) },
   }
   for key, value in extra {
     fields[key] = value
@@ -1438,15 +1438,12 @@ async fn parse_gate_rejection(
         brief="edit rejected (\{bound}\{introduced} parse error(s))",
         data={
           "outcome": "rejected",
-          "path": path.to_json(),
-          "introduced": introduced.to_json(),
+          "path": Json(path),
+          "introduced": Json(introduced),
           "parse_errors": Json::array(
             [
               for error in gate.errors[:shown] => {
-                {
-                  "loc": error.loc.to_json(),
-                  "message": error.message.to_json(),
-                }
+                { "loc": Json(error.loc), "message": Json(error.message) }
               }
             ],
           ),

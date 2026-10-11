@@ -67,8 +67,8 @@ async fn BrowserViews::inspect_element(
   connection : @cdp.Connection,
 ) -> @protocol.BrowserPickReply {
   let binding = "__seekmoon_cancel_" + pick.token
-  let binding_json = binding.to_json().stringify()
-  let listener_json = (binding + "_listener").to_json().stringify()
+  let binding_json = Json(binding).stringify()
+  let listener_json = Json(binding + "_listener").stringify()
   defer (self
     .view(pick.id)
     .eval(

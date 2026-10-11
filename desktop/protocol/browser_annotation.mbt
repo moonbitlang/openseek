@@ -25,16 +25,16 @@ pub impl @json.FromJson for BrowserElement with fn from_json(json, path) {
 ///|
 pub impl ToJson for BrowserElement with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "url": self.url.to_json(),
-    "title": self.title.to_json(),
-    "tag": self.tag.to_json(),
-    "text": self.text.to_json(),
-    "html": self.html.to_json(),
+    "url": Json(self.url),
+    "title": Json(self.title),
+    "tag": Json(self.tag),
+    "text": Json(self.text),
+    "html": Json(self.html),
   }
   if self.selector is Some(selector) {
-    fields["selector"] = selector.to_json()
+    fields["selector"] = Json(selector)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -51,7 +51,7 @@ pub impl @json.FromJson for BrowserPickPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for BrowserPickPayload with fn to_json(self) {
-  { "id": self.id.to_json(), "request": self.request.to_json() }
+  { "id": Json(self.id), "request": Json(self.request) }
 }
 
 ///|

@@ -98,9 +98,9 @@ fn call_entry(
   result? : Json,
 ) -> Json {
   let fields : Map[String, Json] = {
-    "name": name.to_json(),
+    "name": Json(name),
     "arguments": arguments,
-    "status": status.to_json(),
+    "status": Json(status),
   }
   if result is Some(result) {
     fields["result"] = result
@@ -338,7 +338,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
               tool.name,
             )
             is Some(definition) &&
-            definition.can_request_approval() => tool.name.to_json()
+            definition.can_request_approval() => Json(tool.name)
           ],
         ),
       } : Json).stringify(),
@@ -348,7 +348,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
 ///|
 /// Immutable bounded trace, without credentials or transport details.
 pub fn Program::trace(self : Program) -> Json {
-  let fields : Map[String, Json] = { "ptc_calls": self.calls.to_json() }
+  let fields : Map[String, Json] = { "ptc_calls": Json(self.calls) }
   let images : Array[ImageSnapshot] = []
   for index in 0..<self.calls.length() {
     if self.image_results.get(index) is Some(result) {
@@ -356,13 +356,13 @@ pub fn Program::trace(self : Program) -> Json {
     }
   }
   if !images.is_empty() {
-    fields["ptc_images"] = images.to_json()
+    fields["ptc_images"] = Json(images)
   }
   if self.job_id is Some(id) {
-    fields["ptc_job_id"] = id.to_json()
+    fields["ptc_job_id"] = Json(id)
   }
   if self.trace_error is Some(error) {
-    fields["ptc_trace_error"] = error.to_json()
+    fields["ptc_trace_error"] = Json(error)
   }
   Json::object(fields)
 }
@@ -644,14 +644,14 @@ fn error_result(message : String) -> Json {
 fn output_json(output : @agent_tool.ToolOutput) -> Json {
   let fields : Map[String, Json] = {
     "version": 1,
-    "content": output.content.to_json(),
-    "is_error": output.is_error.to_json(),
+    "content": Json(output.content),
+    "is_error": Json(output.is_error),
   }
   if output.data is Some(data) {
     fields["data"] = data
   }
   if output.brief is Some(brief) {
-    fields["brief"] = brief.to_json()
+    fields["brief"] = Json(brief)
   }
   Json::object(fields)
 }

@@ -193,8 +193,8 @@ fn definition_state_json(
   let position = match viewer.get_position() {
     Some(position) =>
       Json({
-        "line": position.line_number.to_json(),
-        "column": position.column.to_json(),
+        "line": Json(position.line_number),
+        "column": Json(position.column),
       })
     None => Json::null()
   }
@@ -203,10 +203,10 @@ fn definition_state_json(
       let anchor = selection.get_selection_start()
       let active = selection.get_position()
       Json({
-        "anchorLine": anchor.line_number.to_json(),
-        "anchorColumn": anchor.column.to_json(),
-        "activeLine": active.line_number.to_json(),
-        "activeColumn": active.column.to_json(),
+        "anchorLine": Json(anchor.line_number),
+        "anchorColumn": Json(anchor.column),
+        "activeLine": Json(active.line_number),
+        "activeColumn": Json(active.column),
       })
     }
     None => Json::null()
@@ -214,16 +214,16 @@ fn definition_state_json(
   Json({
     "position": position,
     "selection": selection,
-    "providerCalls": provider_calls.val.to_json(),
-    "markdownProviderCalls": markdown_provider_calls.val.to_json(),
-    "referencesProviderCalls": references_provider_calls.val.to_json(),
-    "markdownProviderPending": markdown_provider_pending.val.to_json(),
-    "resolverCalls": fixture.resolver_calls.to_json(),
-    "openedUris": fixture.opened_uris.to_json(),
-    "openedModes": fixture.opened_modes.to_json(),
-    "scrollTop": viewer.get_scroll_top().to_json(),
-    "scrollHeight": viewer.get_scroll_height().to_json(),
-    "hasTextFocus": viewer.has_text_focus().to_json(),
+    "providerCalls": Json(provider_calls.val),
+    "markdownProviderCalls": Json(markdown_provider_calls.val),
+    "referencesProviderCalls": Json(references_provider_calls.val),
+    "markdownProviderPending": Json(markdown_provider_pending.val),
+    "resolverCalls": Json(fixture.resolver_calls),
+    "openedUris": Json(fixture.opened_uris),
+    "openedModes": Json(fixture.opened_modes),
+    "scrollTop": Json(viewer.get_scroll_top()),
+    "scrollHeight": Json(viewer.get_scroll_height()),
+    "hasTextFocus": Json(viewer.has_text_focus()),
   }).stringify()
 }
 

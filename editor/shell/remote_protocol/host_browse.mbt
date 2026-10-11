@@ -49,7 +49,7 @@ pub(all) struct WorkspaceSwitchedPayload {
 ///|
 fn host_path_request_json(kind : String, request : HostPathRequest) -> Json {
   let fields = packet_fields(kind, request.id)
-  fields["path"] = request.path.to_json()
+  fields["path"] = Json(request.path)
   Json(fields)
 }
 
@@ -77,9 +77,9 @@ fn decode_host_path_client(
 /// parent" from an empty string.
 fn host_directory_listed_json(payload : HostDirectoryListedPayload) -> Json {
   let fields = packet_fields("HostDirectoryListed", payload.id)
-  fields["path"] = payload.listing.path.to_json()
+  fields["path"] = Json(payload.listing.path)
   if payload.listing.parent is Some(parent) {
-    fields["parent"] = parent.to_json()
+    fields["parent"] = Json(parent)
   }
   fields["entries"] = Json(
     payload.listing.entries.map(host_directory_entry_json),
@@ -90,9 +90,9 @@ fn host_directory_listed_json(payload : HostDirectoryListedPayload) -> Json {
 ///|
 fn host_directory_entry_json(entry : HostDirectoryEntry) -> Json {
   {
-    "name": entry.name.to_json(),
-    "path": entry.path.to_json(),
-    "isWorkspace": entry.is_workspace.to_json(),
+    "name": Json(entry.name),
+    "path": Json(entry.path),
+    "isWorkspace": Json(entry.is_workspace),
   }
 }
 
@@ -147,8 +147,8 @@ fn parse_host_directory_entry(value : Json) -> HostDirectoryEntry? {
 ///|
 fn workspace_switched_json(payload : WorkspaceSwitchedPayload) -> Json {
   let fields = packet_fields("WorkspaceSwitched", payload.id)
-  fields["root"] = payload.root.to_json()
-  fields["name"] = payload.name.to_json()
+  fields["root"] = Json(payload.root)
+  fields["name"] = Json(payload.name)
   Json(fields)
 }
 

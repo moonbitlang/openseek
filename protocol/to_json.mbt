@@ -35,11 +35,7 @@ pub fn Event::to_json(self : Event) -> Json {
         "outcome": outcome.to_json(),
       }
     JobsSnapshot(request_id~, jobs~) =>
-      {
-        "event": "jobs_snapshot",
-        "request_id": request_id,
-        "jobs": jobs.to_json(),
-      }
+      { "event": "jobs_snapshot", "request_id": request_id, "jobs": Json(jobs) }
     JobStopResult(request_id~, generation~, job_id~, outcome~) =>
       {
         "event": "job_stop_result",
@@ -227,7 +223,7 @@ pub fn Event::to_json(self : Event) -> Json {
         "event": "mcp_tools_registered",
         "servers": servers,
         "tools": tools,
-        "names": names.to_json(),
+        "names": Json(names),
       }
     McpToolDuplicate(server~, tool~) =>
       { "event": "mcp_tool_duplicate", "server": server, "tool": tool }

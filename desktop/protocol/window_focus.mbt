@@ -14,7 +14,7 @@ pub impl FromJson for AppFocusedBrowserReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for AppFocusedBrowserReply with fn to_json(self) {
   match self.id {
-    Some(id) => { "id": id.to_json() }
+    Some(id) => { "id": Json(id) }
     None => Json::empty_object()
   }
 }

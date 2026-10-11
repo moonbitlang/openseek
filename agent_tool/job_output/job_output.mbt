@@ -156,7 +156,7 @@ async fn execute(
   }
   let paging = page.map_or("", offset => " window_offset=\{offset}")
   let file_hint = snapshot.output_file.map_or("", path => {
-    " output_file=\{path.to_json().stringify()} output_persistent=\{snapshot.output_persistent}"
+    " output_file=\{Json(path).stringify()} output_persistent=\{snapshot.output_persistent}"
   })
   let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}\{file_hint}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground

@@ -174,12 +174,12 @@ pub fn run_view_zones_test() -> Unit {
     () => {
       let layout = viewer.get_layout_info()
       Json({
-        "primaryId": primary_id.to_json(),
-        "suppressId": suppress_id.to_json(),
-        "omittedId": omitted_id.to_json(),
-        "mouseEvents": public_mouse_events.to_json(),
-        "mouseTargetId": public_mouse_target_id.to_json(),
-        "mouseTargetKind": public_mouse_target_kind.to_json(),
+        "primaryId": Json(primary_id),
+        "suppressId": Json(suppress_id),
+        "omittedId": Json(omitted_id),
+        "mouseEvents": Json(public_mouse_events),
+        "mouseTargetId": Json(public_mouse_target_id),
+        "mouseTargetKind": Json(public_mouse_target_kind),
         "primaryLastTop": Json::number(primary_last_top),
         "offscreenLastTop": Json::number(offscreen_last_top),
         "scrollTop": Json::number(viewer.get_scroll_top()),

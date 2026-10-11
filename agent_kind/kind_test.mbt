@@ -83,7 +83,7 @@ fn sse_tool_calls(
   ]
   (
     {
-      "choices": [{ "delta": { "tool_calls": entries.to_json() } }],
+      "choices": [{ "delta": { "tool_calls": Json(entries) } }],
       "usage": usage_json(total_tokens),
     } : Json).stringify()
 }

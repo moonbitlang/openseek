@@ -393,7 +393,7 @@ async fn multi_edit_files(
         "not applied: a diagnostic guard is active, but moon check could not verify the tree (\{reason}); no files were changed",
         is_error=true,
         brief~,
-        data=batch_data("unverified", writes, { "reason": reason.to_json() }),
+        data=batch_data("unverified", writes, { "reason": Json(reason) }),
       )
     }
 
@@ -444,8 +444,8 @@ async fn multi_edit_files(
         // Only a complete restore is a rollback: with a file the restore
         // could not put back, the tree is partially modified and says so.
         data=batch_data("error", writes, {
-          "partial": (!restore_failures.is_empty()).to_json(),
-          "rolled_back": restore_failures.is_empty().to_json(),
+          "partial": Json(!restore_failures.is_empty()),
+          "rolled_back": Json(restore_failures.is_empty()),
           "restore_failures": string_array(restore_failures),
         }),
       )
@@ -610,23 +610,20 @@ async fn parse_gate_batch_rejection(
       is_error=true,
       brief="multi_edit rejected (\{bound}\{total} parse error(s))",
       data=batch_data("rejected", writes, {
-        "introduced": total.to_json(),
+        "introduced": Json(total),
         "parse_errors": Json::array(
           [
             for rejection in rejections => {
               {
-                "path": rejection.path.to_json(),
-                "introduced": rejection.introduced.to_json(),
+                "path": Json(rejection.path),
+                "introduced": Json(rejection.introduced),
                 "errors": Json::array(
                   [
                     for
                       error in rejection.errors[:rejection.errors
                       .length()
                       .min(IntroducedDisplayLimit)] => {
-                      {
-                        "loc": error.loc.to_json(),
-                        "message": error.message.to_json(),
-                      }
+                      { "loc": Json(error.loc), "message": Json(error.message) }
                     }
                   ],
                 ),
@@ -750,8 +747,8 @@ async fn revert_guarded_response(
   }
   let extra : Map[String, Json] = {
     "check": measured.first.to_json(),
-    "threshold": threshold.to_json(),
-    "error_delta": error_delta.to_json(),
+    "threshold": Json(threshold),
+    "error_delta": Json(error_delta),
     "baseline": baseline_json(before.first),
   }
   for key, value in counts {
@@ -932,8 +929,8 @@ fn reverted_by_errors(
   let extra : Map[String, Json] = {
     "reason": "error_delta",
     "check": after.to_json(),
-    "introduced_errors": introduced.to_json(),
-    "threshold": threshold.to_json(),
+    "introduced_errors": Json(introduced),
+    "threshold": Json(threshold),
     "restore_failures": string_array(restore_failures),
   }
   for key, value in counts {
@@ -1001,7 +998,7 @@ fn reverted_by_warnings(
       "baseline_all": baseline_json(before),
       "introduced_count": counts["introduced_count"],
       "removed_count": counts["removed_count"],
-      "reach_caveat": reach_caveat.to_json(),
+      "reach_caveat": Json(reach_caveat),
       "introduced": {
         "errors": [],
         "warnings": Json::array([ for site in shown => site.to_json() ]),
@@ -1021,12 +1018,12 @@ fn delta_json(
 ) -> Map[String, Json] {
   {
     "introduced_count": {
-      "errors": introduced.errors.length().to_json(),
-      "warnings": introduced.warnings.length().to_json(),
+      "errors": Json(introduced.errors.length()),
+      "warnings": Json(introduced.warnings.length()),
     },
     "removed_count": {
-      "errors": removed.errors.length().to_json(),
-      "warnings": removed.warnings.length().to_json(),
+      "errors": Json(removed.errors.length()),
+      "warnings": Json(removed.warnings.length()),
     },
   }
 }
@@ -1049,15 +1046,15 @@ fn batch_data(
   extra : Map[String, Json],
 ) -> Json {
   let fields : Map[String, Json] = {
-    "outcome": outcome.to_json(),
+    "outcome": Json(outcome),
     "files": Json::array(
       [
         for write in writes => {
-          { "path": write.path.to_json(), "edits": write.edit_count.to_json() }
+          { "path": Json(write.path), "edits": Json(write.edit_count) }
         }
       ],
     ),
-    "edit_count": total_edit_count(writes).to_json(),
+    "edit_count": Json(total_edit_count(writes)),
   }
   for key, value in extra {
     fields[key] = value
@@ -1074,15 +1071,15 @@ fn failures_data(failures : Array[EditFailure]) -> Json {
     "failures": Json::array(
       [
         for failure in failures => {
-          let fields : Map[String, Json] = { "file": failure.file.to_json() }
+          let fields : Map[String, Json] = { "file": Json(failure.file) }
           if failure.index is Some(index) {
-            fields["index"] = index.to_json()
+            fields["index"] = Json(index)
           }
           // A file-level problem (unreadable, write-guarded) has no range.
           if failure.range != "" {
-            fields["range"] = failure.range.to_json()
+            fields["range"] = Json(failure.range)
           }
-          fields["message"] = failure.message.to_json()
+          fields["message"] = Json(failure.message)
           Json::object(fields)
         }
       ],
@@ -1092,14 +1089,14 @@ fn failures_data(failures : Array[EditFailure]) -> Json {
 
 ///|
 fn string_array(items : Array[String]) -> Json {
-  Json::array([ for item in items => item.to_json() ])
+  Json::array([ for item in items => Json(item) ])
 }
 
 ///|
 fn baseline_json(before : @auto_check.CheckErrors) -> Json {
   {
-    "error_count": before.error_count.to_json(),
-    "warning_count": before.warning_count.to_json(),
+    "error_count": Json(before.error_count),
+    "warning_count": Json(before.warning_count),
   }
 }
 

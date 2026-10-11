@@ -188,11 +188,11 @@ fn DocumentSnapshot::offset_at_position_impl(
 /// JSON shape emitted to browser harnesses and remote protocol adapters.
 pub impl ToJson for DocumentSnapshot with fn to_json(self) {
   {
-    "uri": self.uri.to_string().to_json(),
-    "displayName": self.display_name.to_json(),
-    "languageId": self.language_id.to_json(),
-    "revision": self.revision.to_json(),
-    "text": self.text.to_json(),
+    "uri": Json(self.uri.to_string()),
+    "displayName": Json(self.display_name),
+    "languageId": Json(self.language_id),
+    "revision": Json(self.revision),
+    "text": Json(self.text),
   }
 }
 
@@ -200,13 +200,13 @@ pub impl ToJson for DocumentSnapshot with fn to_json(self) {
 /// JSON shape for document errors.
 pub impl ToJson for DocumentError with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "code": self.code.to_string().to_json(),
-    "message": self.message.to_json(),
-    "status": self.status().to_json(),
+    "code": Json(self.code.to_string()),
+    "message": Json(self.message),
+    "status": Json(self.status()),
   }
   if self.uri is Some(uri) {
-    fields["uri"] = uri.to_string().to_json()
-    fields["displayName"] = @base_common.basename_or_authority(uri).to_json()
+    fields["uri"] = Json(uri.to_string())
+    fields["displayName"] = Json(@base_common.basename_or_authority(uri))
   }
   Json(fields)
 }

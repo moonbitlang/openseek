@@ -20,9 +20,9 @@ pub impl FromJson for GithubCommentableFile with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubCommentableFile with fn to_json(self) {
   {
-    "path": self.path.to_json(),
-    "left_lines": self.left_lines.to_json(),
-    "right_lines": self.right_lines.to_json(),
+    "path": Json(self.path),
+    "left_lines": Json(self.left_lines),
+    "right_lines": Json(self.right_lines),
   }
 }
 

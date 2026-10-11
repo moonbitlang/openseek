@@ -848,8 +848,8 @@ fn semantic_estimated_height(
   section : @moon_diff_provider.SemanticReviewSection,
   layout : ReviewDiffLayout,
 ) -> Double {
-  let old_lines = section.original_source.split("\n").length()
-  let new_lines = section.modified_source.split("\n").length()
+  let old_lines = section.original_source.split("\n").count()
+  let new_lines = section.modified_source.split("\n").count()
   let lines = match layout {
     ReviewSideBySide => old_lines.max(new_lines)
     ReviewInline => old_lines + new_lines

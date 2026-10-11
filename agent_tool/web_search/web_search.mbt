@@ -215,15 +215,15 @@ async fn perform_search(
   query : String,
 ) -> SearchOutcome {
   let body : Json = {
-    "model": model.to_json(),
-    "max_tokens": max_tokens.to_json(),
+    "model": Json(model),
+    "max_tokens": Json(max_tokens),
     "messages": [
       {
         "role": "user",
         "content": [
           {
             "type": "text",
-            "text": "Perform a web search for the query: \{query}".to_json(),
+            "text": Json("Perform a web search for the query: \{query}"),
           },
         ],
       },
@@ -232,7 +232,7 @@ async fn perform_search(
       {
         "type": "web_search_20250305",
         "name": "web_search",
-        "max_uses": max_uses.to_json(),
+        "max_uses": Json(max_uses),
       },
     ],
   }

@@ -11,7 +11,7 @@ struct TokenizerState {
 ///|
 /// Creates the canonical normal tokenizer state.
 pub fn TokenizerState::TokenizerState() -> TokenizerState {
-  { modes: @list.new(), }
+  { modes: List([]), }
 }
 
 ///|

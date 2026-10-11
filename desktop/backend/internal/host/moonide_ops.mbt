@@ -716,12 +716,12 @@ test "Moon IDE CodeLens compact ranges reject invalid coordinates and non-point 
       "", "1:2", "0:1-1:2", "1:0-1:2", "2:1-1:2", "1:3-1:2", "1:1-2147483648:1",
       "1:1-1:2147483648",
     ] {
-    assert_true(parse_moonide_codelens_range(raw.to_json()) is None)
-    assert_true(parse_moonide_codelens_position(raw.to_json()) is None)
+    assert_true(parse_moonide_codelens_range(Json(raw)) is None)
+    assert_true(parse_moonide_codelens_position(Json(raw)) is None)
     assert_true(
       parse_moonide_codelens_location({
         "path": "/workspace/main.mbt",
-        "range": raw.to_json(),
+        "range": Json(raw),
       })
       is None,
     )

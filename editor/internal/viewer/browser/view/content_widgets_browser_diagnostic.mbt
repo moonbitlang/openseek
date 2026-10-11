@@ -149,7 +149,7 @@ fn BrowserContentWidgetsDiagnostic::capture(
 ) -> Json {
   let rect = widget.node.get_bounding_client_rect()
   Json({
-    "position": widget.after_position.to_json(),
+    "position": Json(widget.after_position),
     "top": Json::number(widget.after_top),
     "left": Json::number(widget.after_left),
     "rectLeft": Json::number(rect.get_left()),

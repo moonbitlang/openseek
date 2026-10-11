@@ -52,7 +52,7 @@ fn markdown_folding_facts_json(
   let current = source()
   let offset_of = needle => {
     match current.find(needle) {
-      Some(offset) => offset.to_json()
+      Some(offset) => Json(offset)
       None => Json::null()
     }
   }
@@ -60,10 +60,7 @@ fn markdown_folding_facts_json(
     "alpha": offset_of("## Alpha"),
     "beta": offset_of("## Beta"),
     "deep": offset_of("### Deep"),
-    "collapsed": viewer
-    .collapsed_sections()
-    .map(offset => offset.to_json())
-    .to_json(),
+    "collapsed": Json(viewer.collapsed_sections().map(offset => Json(offset))),
   }).stringify()
 }
 

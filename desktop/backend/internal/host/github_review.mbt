@@ -182,7 +182,7 @@ async fn github_review_thread(
     cursor = next
   }
   let normalized = fields.copy()
-  normalized["comments"] = comments.to_json()
+  normalized["comments"] = Json(comments)
   let thread : @protocol.GithubReviewThread = @json.from_json(Json(normalized))
   guard thread.side == "LEFT" || thread.side == "RIGHT" else {
     raise HostError("GitHub returned an unknown diff side.")
@@ -493,7 +493,7 @@ async fn github_review_mutate_op(
             { "thread": { "id": String(id), "isResolved": confirmed, .. }, .. }
           ) &&
           id == thread &&
-          confirmed == resolved.to_json() else {
+          confirmed == Json(resolved) else {
           raise HostError(
             "GitHub did not confirm the conversation update. Refresh before retrying.",
           )

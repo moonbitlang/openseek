@@ -23,7 +23,7 @@ test "feedback persistence preserves absent empty and verbatim selection snapsho
     }
     assert_eq(
       fields.get("selected_text"),
-      selected_text.map(text => text.to_json()),
+      selected_text.map(text => Json(text)),
     )
     guard feedback_item_from_json(resource, encoded) is Some(restored) else {
       fail("expected valid persisted feedback to be restored")

@@ -14552,10 +14552,10 @@ fn encoded_conversation_models(
   entries : Array[StoredConversationModel],
 ) -> String {
   let rows : Array[Json] = entries.map(entry => {
-    "key": entry.key.to_json(),
-    "model": entry.model.wire().to_json(),
+    "key": Json(entry.key),
+    "model": Json(entry.model.wire()),
   })
-  rows.to_json().stringify()
+  Json(rows).stringify()
 }
 
 ///|

@@ -229,9 +229,9 @@ pub fn definition(
         (Some(filename), Respond(output)) => {
           // The hint carries `ptc` whenever PTC ran or was explicitly declined,
           // so the re-run lands in the same mode; a defaulted-off run omits it.
-          let retry : Map[String, Json] = { "filename": filename.to_json() }
+          let retry : Map[String, Json] = { "filename": Json(filename) }
           if enabled || input.ptc is Some(false) {
-            retry["ptc"] = enabled.to_json()
+            retry["ptc"] = Json(enabled)
           }
           @agent_tool.respond(
             "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",

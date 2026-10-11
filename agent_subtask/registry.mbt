@@ -198,7 +198,7 @@ fn with_default_conflict_paths(json : Json) -> Json {
       // original handle is returned rather than re-wrapped (Json's
       // constructors are read-only outside core).
       if !map.contains("conflict_paths") {
-        map["conflict_paths"] = ([] : Array[String]).to_json()
+        map["conflict_paths"] = Json(([] : Array[String]))
       }
       json
     }

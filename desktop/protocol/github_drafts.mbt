@@ -80,7 +80,7 @@ pub(all) struct GithubDrafts {
 
 ///|
 pub impl ToJson for GithubDrafts with fn to_json(self) {
-  { "url": self.url, "drafts": self.drafts.to_json() }
+  { "url": self.url, "drafts": Json(self.drafts) }
 }
 
 ///|

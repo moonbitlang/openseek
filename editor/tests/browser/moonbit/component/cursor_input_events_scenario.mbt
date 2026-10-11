@@ -116,20 +116,19 @@ pub fn run_cursor_input_events_test() -> Unit {
   |> ignore
   viewer.on_did_change_cursor_position(event => {
     let (committed_line, committed_column) = match viewer.get_position() {
-      Some(committed) =>
-        (committed.line_number.to_json(), committed.column.to_json())
+      Some(committed) => (Json(committed.line_number), Json(committed.column))
       None => (Json::null(), Json::null())
     }
     record_cursor_event(
       Json({
-        "type": "position".to_json(),
-        "line": event.position.line_number.to_json(),
-        "column": event.position.column.to_json(),
+        "type": Json("position"),
+        "line": Json(event.position.line_number),
+        "column": Json(event.position.column),
         "committedLine": committed_line,
         "committedColumn": committed_column,
-        "secondaryCount": event.secondary_positions.length().to_json(),
-        "source": event.source.to_json(),
-        "reason": cursor_reason_name(event.reason).to_json(),
+        "secondaryCount": Json(event.secondary_positions.length()),
+        "source": Json(event.source),
+        "reason": Json(cursor_reason_name(event.reason)),
       }).stringify(),
     )
   })
@@ -138,7 +137,7 @@ pub fn run_cursor_input_events_test() -> Unit {
     let anchor = event.selection.get_selection_start()
     let active = event.selection.get_position()
     let old_selection_count = match event.old_selections {
-      Some(selections) => selections.length().to_json()
+      Some(selections) => Json(selections.length())
       None => Json::null()
     }
     let (old_anchor_line, old_anchor_column, old_active_line, old_active_column) = match
@@ -147,10 +146,10 @@ pub fn run_cursor_input_events_test() -> Unit {
         let old_anchor = old.get_selection_start()
         let old_active = old.get_position()
         (
-          old_anchor.line_number.to_json(),
-          old_anchor.column.to_json(),
-          old_active.line_number.to_json(),
-          old_active.column.to_json(),
+          Json(old_anchor.line_number),
+          Json(old_anchor.column),
+          Json(old_active.line_number),
+          Json(old_active.column),
         )
       }
       _ => (Json::null(), Json::null(), Json::null(), Json::null())
@@ -165,22 +164,22 @@ pub fn run_cursor_input_events_test() -> Unit {
         let committed_anchor = committed.get_selection_start()
         let committed_active = committed.get_position()
         (
-          committed_anchor.line_number.to_json(),
-          committed_anchor.column.to_json(),
-          committed_active.line_number.to_json(),
-          committed_active.column.to_json(),
+          Json(committed_anchor.line_number),
+          Json(committed_anchor.column),
+          Json(committed_active.line_number),
+          Json(committed_active.column),
         )
       }
       None => (Json::null(), Json::null(), Json::null(), Json::null())
     }
     record_cursor_event(
       Json({
-        "type": "selection".to_json(),
-        "anchorLine": anchor.line_number.to_json(),
-        "anchorColumn": anchor.column.to_json(),
-        "activeLine": active.line_number.to_json(),
-        "activeColumn": active.column.to_json(),
-        "secondaryCount": event.secondary_selections.length().to_json(),
+        "type": Json("selection"),
+        "anchorLine": Json(anchor.line_number),
+        "anchorColumn": Json(anchor.column),
+        "activeLine": Json(active.line_number),
+        "activeColumn": Json(active.column),
+        "secondaryCount": Json(event.secondary_selections.length()),
         "oldSelectionCount": old_selection_count,
         "oldAnchorLine": old_anchor_line,
         "oldAnchorColumn": old_anchor_column,
@@ -190,10 +189,10 @@ pub fn run_cursor_input_events_test() -> Unit {
         "committedAnchorColumn": committed_anchor_column,
         "committedActiveLine": committed_active_line,
         "committedActiveColumn": committed_active_column,
-        "oldModelVersionId": event.old_model_version_id.to_json(),
-        "modelVersionId": event.model_version_id.to_json(),
-        "source": event.source.to_json(),
-        "reason": cursor_reason_name(event.reason).to_json(),
+        "oldModelVersionId": Json(event.old_model_version_id),
+        "modelVersionId": Json(event.model_version_id),
+        "source": Json(event.source),
+        "reason": Json(cursor_reason_name(event.reason)),
       }).stringify(),
     )
   })

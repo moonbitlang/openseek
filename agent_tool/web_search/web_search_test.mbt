@@ -145,7 +145,7 @@ async test "web_search rejects blank and oversized queries locally" {
   assert_true(blank.is_error)
   assert_true(blank.content.contains("non-empty string `query`"))
   // One past the tool's documented 2000-char query cap.
-  guard execute({ "query": "q".repeat(2001).to_json() }) is Respond(oversized) else {
+  guard execute({ "query": Json("q".repeat(2001)) }) is Respond(oversized) else {
     fail("expected Respond")
   }
   assert_true(oversized.is_error)

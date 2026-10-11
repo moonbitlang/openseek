@@ -48,27 +48,29 @@ async fn materialize_semantic_selection_op(
   }
   let header : Json = {
     "version": Json(1),
-    "kind": "semantic-search-selection".to_json(),
-    "root": payload.root.to_json(),
-    "patterns": payload.patterns.to_json(),
-    "include": payload.include_glob.to_json(),
-    "exclude": payload.exclude_glob.to_json(),
-    "selected_matches": payload.matches.length().to_json(),
-    "selected_files": files.length().to_json(),
-    "instructions": "This is an immutable semantic-search selection snapshot. Filter its JSONL match records before reading broadly; the working-tree files are the current source of truth.".to_json(),
+    "kind": Json("semantic-search-selection"),
+    "root": Json(payload.root),
+    "patterns": Json(payload.patterns),
+    "include": Json(payload.include_glob),
+    "exclude": Json(payload.exclude_glob),
+    "selected_matches": Json(payload.matches.length()),
+    "selected_files": Json(files.length()),
+    "instructions": Json(
+      "This is an immutable semantic-search selection snapshot. Filter its JSONL match records before reading broadly; the working-tree files are the current source of truth.",
+    ),
   }
   let lines : Array[String] = [header.stringify()]
   for match_ in payload.matches {
     let record : Json = {
-      "kind": "match".to_json(),
-      "rule_id": match_.rule_id.to_json(),
-      "description": match_.description.to_json(),
-      "file": match_.file.to_json(),
-      "start_line": match_.start_line.to_json(),
-      "start_column": match_.start_column.to_json(),
-      "end_line": match_.end_line.to_json(),
-      "end_column": match_.end_column.to_json(),
-      "matched_source": match_.matched_source.to_json(),
+      "kind": Json("match"),
+      "rule_id": Json(match_.rule_id),
+      "description": Json(match_.description),
+      "file": Json(match_.file),
+      "start_line": Json(match_.start_line),
+      "start_column": Json(match_.start_column),
+      "end_line": Json(match_.end_line),
+      "end_column": Json(match_.end_column),
+      "matched_source": Json(match_.matched_source),
     }
     lines.push(record.stringify())
   }

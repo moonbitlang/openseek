@@ -165,14 +165,14 @@ pub fn run_code_lens_test() -> Unit {
   install_code_lens_controls(
     () => {
       Json({
-        "providerCalls": provider_calls.val.to_json(),
-        "executions": Json(executions.map(title => title.to_json())),
+        "providerCalls": Json(provider_calls.val),
+        "executions": Json(executions.map(title => Json(title))),
         "scrollTop": Json::number(main_viewer.get_scroll_top()),
         "scrollHeight": Json::number(main_viewer.get_scroll_height()),
         "top40": Json::number(
           main_viewer.get_top_for_line_number(40, include_view_zones=true),
         ),
-        "expanded": (mode.val == 1).to_json(),
+        "expanded": Json(mode.val == 1),
       }).stringify()
     },
     () => {

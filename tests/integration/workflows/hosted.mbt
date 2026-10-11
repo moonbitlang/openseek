@@ -117,7 +117,7 @@ async fn review_child(
       assert_true(
         input is { "sha": String(actual_sha), "dirty": actual_dirty, .. } &&
         actual_sha == sha &&
-        actual_dirty == dirty.to_json(),
+        actual_dirty == Json(dirty),
         msg=input.stringify(),
       )
     None => assert_false(input is { "sha": _, .. }, msg=input.stringify())

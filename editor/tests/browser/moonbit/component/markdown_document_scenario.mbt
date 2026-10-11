@@ -12,18 +12,18 @@ priv struct MarkdownDocumentHoverCall {
 ///|
 fn MarkdownDocumentHoverCall::to_json(self : MarkdownDocumentHoverCall) -> Json {
   Json({
-    "id": self.id.to_json(),
-    "modelIdentity": self.model.identity().to_json(),
-    "uri": self.model.uri.to_string().to_json(),
-    "revision": self.model.revision.to_json(),
-    "hostVersion": self.model.version.to_json(),
-    "internalVersion": self.model.get_version_id().to_json(),
-    "lineNumber": self.position.line_number.to_json(),
-    "column": self.position.column.to_json(),
-    "offset": self.offset.to_json(),
-    "cancelled": self.token.is_cancellation_requested().to_json(),
+    "id": Json(self.id),
+    "modelIdentity": Json(self.model.identity()),
+    "uri": Json(self.model.uri.to_string()),
+    "revision": Json(self.model.revision),
+    "hostVersion": Json(self.model.version),
+    "internalVersion": Json(self.model.get_version_id()),
+    "lineNumber": Json(self.position.line_number),
+    "column": Json(self.position.column),
+    "offset": Json(self.offset),
+    "cancelled": Json(self.token.is_cancellation_requested()),
     "outcome": match self.outcome {
-      Some(outcome) => outcome.to_json()
+      Some(outcome) => Json(outcome)
       None => Json::null()
     },
   })

@@ -2046,7 +2046,7 @@ async fn ServeEngine::retire(
       "pid": engine.process.pid,
       // Absent when the process handle yielded no status (a forced
       // retirement whose wait failed) — never a fabricated sentinel.
-      "exit_code": code.map_or(Json::null(), c => c.to_json()),
+      "exit_code": code.map_or(Json::null(), c => Json(c)),
       "run_id": engine.phase.latest_run().unwrap_or(""),
     }
   engine.discard_commands("the engine exited")

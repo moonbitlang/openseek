@@ -235,22 +235,22 @@ pub impl FromJson for SettingsSetPayload with fn from_json(json, path) {
 pub impl ToJson for SettingsSetPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   if self.provider is Some(value) {
-    fields["provider"] = value.to_json()
+    fields["provider"] = Json(value)
   }
   if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = value.to_json()
+    fields["custom_api_url"] = Json(value)
   }
   if self.deepseek_api_key is Some(value) {
-    fields["deepseek_api_key"] = value.to_json()
+    fields["deepseek_api_key"] = Json(value)
   }
   if self.glm_api_key is Some(value) {
-    fields["glm_api_key"] = value.to_json()
+    fields["glm_api_key"] = Json(value)
   }
   if self.followup_behavior is Some(value) {
-    fields["followup_behavior"] = value.to_json()
+    fields["followup_behavior"] = Json(value)
   }
   if self.custom_api_key is Some(value) {
-    fields["custom_api_key"] = value.to_json()
+    fields["custom_api_key"] = Json(value)
   }
   Json(fields)
 }
@@ -676,15 +676,15 @@ pub impl FromJson for TerminalOpenPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for TerminalOpenPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "session": self.session.to_json(),
-    "cols": self.cols.to_json(),
-    "rows": self.rows.to_json(),
+    "session": Json(self.session),
+    "cols": Json(self.cols),
+    "rows": Json(self.rows),
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   if self.command is Some(command) {
-    fields["command"] = command.to_json()
+    fields["command"] = Json(command)
   }
   Json(fields)
 }
@@ -715,12 +715,12 @@ pub impl FromJson for TerminalInputPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for TerminalInputPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "id": self.id.to_json() }
+  let fields : Map[String, Json] = { "id": Json(self.id) }
   if self.data is Some(data) {
-    fields["data"] = data.to_json()
+    fields["data"] = Json(data)
   }
   if self.data_base64 is Some(data_base64) {
-    fields["data_base64"] = data_base64.to_json()
+    fields["data_base64"] = Json(data_base64)
   }
   Json::object(fields)
 }
@@ -1276,11 +1276,11 @@ pub(all) struct WorkspacesChangedPayload {
 
 ///|
 pub impl ToJson for WorkspacesChangedPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "workspaces": self.workspaces.to_json() }
+  let fields : Map[String, Json] = { "workspaces": Json(self.workspaces) }
   if self.chat_root is Some(root) {
     fields["chat_root"] = root.to_json()
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -1368,15 +1368,15 @@ pub impl FromJson for SettingsStatusPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "revision": self.revision.to_json(),
-    "provider": self.provider.to_json(),
-    "has_deepseek_key": self.has_deepseek_key.to_json(),
-    "has_glm_key": self.has_glm_key.to_json(),
-    "has_custom_key": self.has_custom_key.to_json(),
-    "followup_behavior": self.followup_behavior.to_json(),
+    "revision": Json(self.revision),
+    "provider": Json(self.provider),
+    "has_deepseek_key": Json(self.has_deepseek_key),
+    "has_glm_key": Json(self.has_glm_key),
+    "has_custom_key": Json(self.has_custom_key),
+    "followup_behavior": Json(self.followup_behavior),
   }
   if self.custom_api_url is Some(value) {
-    fields["custom_api_url"] = value.to_json()
+    fields["custom_api_url"] = Json(value)
   }
   Json(fields)
 }
@@ -1405,9 +1405,9 @@ pub impl FromJson for AppInfoReply with fn from_json(json, path) {
 ///|
 /// A release build omits `console_url` rather than sending null.
 pub impl ToJson for AppInfoReply with fn to_json(self) {
-  let object : Map[String, Json] = { "version": self.version.to_json() }
+  let object : Map[String, Json] = { "version": Json(self.version) }
   if self.console_url is Some(url) {
-    object["console_url"] = url.to_json()
+    object["console_url"] = Json(url)
   }
   Json::object(object)
 }

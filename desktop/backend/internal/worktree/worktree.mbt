@@ -273,7 +273,7 @@ async fn write_worktrees(
   @fsx.ensure_dir(store.to_path()) catch {
     error => raise WorktreeError("could not create \{store}: \{error}")
   }
-  let registry : Json = { "worktrees": entries.to_json() }
+  let registry : Json = { "worktrees": Json(entries) }
   let target = worktrees_file(workspace)
   let temp = store.join(WorktreesFile + ".tmp")
   // A registry update may remove only one conversation's placement while

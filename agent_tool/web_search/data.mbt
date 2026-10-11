@@ -3,19 +3,19 @@
 /// fields are omitted, never replaced with empty-string sentinels.
 fn SearchOutcome::to_data(self : SearchOutcome) -> Json {
   let sources : Array[Json] = self.sources.map(source => {
-    let fields : Map[String, Json] = { "url": source.url.to_json() }
+    let fields : Map[String, Json] = { "url": Json(source.url) }
     if source.title is Some(value) {
-      fields["title"] = value.to_json()
+      fields["title"] = Json(value)
     }
     if source.snippet is Some(value) {
-      fields["snippet"] = value.to_json()
+      fields["snippet"] = Json(value)
     }
     if source.published_at is Some(value) {
-      fields["published_at"] = value.to_json()
+      fields["published_at"] = Json(value)
     }
     Json::object(fields)
   })
-  { "sources": sources.to_json(), "truncated": self.truncated.to_json() }
+  { "sources": Json(sources), "truncated": Json(self.truncated) }
 }
 
 ///|

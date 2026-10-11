@@ -236,7 +236,7 @@ test "exact MoonBit phrase markers gain divider presentation only in semantic fe
   // The source glyphs remain in the semantic row for post-render validation
   // and exact source-coordinate mapping; presentation hides them in CSS.
   assert_true(semantic.contains(">///|</span>"))
-  assert_eq(semantic.split("data-markdown-phrase-divider=\"true\"").length(), 2)
+  assert_eq(semantic.split("data-markdown-phrase-divider=\"true\"").count(), 2)
 
   let ordinary = render_markdown_document_code_block(
     block,

@@ -46,12 +46,12 @@ pub impl FromJson for GithubComment with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubComment with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "body_html": self.body_html.to_json(),
-    "url": self.url.to_json(),
-    "created_at": self.created_at.to_json(),
+    "body_html": Json(self.body_html),
+    "url": Json(self.url),
+    "created_at": Json(self.created_at),
   }
   if self.author is Some(author) {
-    fields["author"] = author.to_json()
+    fields["author"] = Json(author)
   }
   Json(fields)
 }
@@ -78,14 +78,14 @@ pub impl FromJson for GithubCheck with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubCheck with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "name": self.name.to_json(),
-    "state": self.state.to_json(),
+    "name": Json(self.name),
+    "state": Json(self.state),
   }
   if self.url is Some(url) {
-    fields["url"] = url.to_json()
+    fields["url"] = Json(url)
   }
   if self.workflow is Some(workflow) {
-    fields["workflow"] = workflow.to_json()
+    fields["workflow"] = Json(workflow)
   }
   Json(fields)
 }
@@ -168,15 +168,15 @@ pub impl ToJson for GithubPullRequestDetail with fn to_json(self) {
     "additions": self.additions,
     "deletions": self.deletions,
     "changed_files": self.changed_files,
-    "comments": self.comments.to_json(),
-    "checks": self.checks.to_json(),
-    "created_at": self.created_at.to_json(),
-    "reviewers": self.reviewers.to_json(),
-    "assignees": self.assignees.to_json(),
-    "labels": self.labels.to_json(),
+    "comments": Json(self.comments),
+    "checks": Json(self.checks),
+    "created_at": Json(self.created_at),
+    "reviewers": Json(self.reviewers),
+    "assignees": Json(self.assignees),
+    "labels": Json(self.labels),
   }
   if self.milestone is Some(milestone) {
-    fields["milestone"] = milestone.to_json()
+    fields["milestone"] = Json(milestone)
   }
   Json(fields)
 }

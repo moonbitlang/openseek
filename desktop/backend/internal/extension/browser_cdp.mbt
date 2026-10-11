@@ -55,7 +55,7 @@ pub async fn[T] BrowserViews::with_cdp(
 ) -> T {
   let view = self.view(id)
   let marker = @uuid.mint()
-  let key_json = ("__seekmoon_cdp_" + marker).to_json().stringify()
+  let key_json = Json("__seekmoon_cdp_" + marker).stringify()
   view.eval(
     "Object.defineProperty(globalThis, \{key_json}, {value:true, configurable:true});",
   )

@@ -61,12 +61,12 @@ pub(all) suberror RunResultError {
 
 ///|
 pub impl ToJson for RunResult with fn to_json(self) {
-  let fields : Map[String, Json] = { "version": RunResultVersion.to_json() }
+  let fields : Map[String, Json] = { "version": Json(RunResultVersion) }
   if self.request_id is Some(id) {
-    fields["request_id"] = id.to_json()
+    fields["request_id"] = Json(id)
   }
   if self.kind is Some(kind) {
-    fields["kind"] = kind.to_json()
+    fields["kind"] = Json(kind)
   }
   match self.status {
     Completed(output~) => {
@@ -75,31 +75,31 @@ pub impl ToJson for RunResult with fn to_json(self) {
     }
     ContextYield(reason~) => {
       fields["status"] = "context_yield"
-      fields["reason"] = reason.to_json()
+      fields["reason"] = Json(reason)
     }
     NoReport => fields["status"] = "no_report"
     MaxStepsExhausted => fields["status"] = "max_steps_exhausted"
     Aborted(reason~) => {
       fields["status"] = "aborted"
-      fields["reason"] = reason.to_json()
+      fields["reason"] = Json(reason)
     }
     Interrupted(reason~) => {
       fields["status"] = "interrupted"
-      fields["reason"] = reason.to_json()
+      fields["reason"] = Json(reason)
     }
     Failed(reason~) => {
       fields["status"] = "failed"
-      fields["reason"] = reason.to_json()
+      fields["reason"] = Json(reason)
     }
   }
   if self.session is Some(session) {
-    fields["session"] = session.to_json()
+    fields["session"] = Json(session)
   }
   if self.usage is Some(usage) {
     fields["usage"] = usage.to_json()
   }
   if self.steps is Some(steps) {
-    fields["steps"] = steps.to_json()
+    fields["steps"] = Json(steps)
   }
   Json::object(fields)
 }

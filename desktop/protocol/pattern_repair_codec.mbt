@@ -58,11 +58,11 @@ pub extend PatternRepairPayload with FromJson::{from_json}
 ///|
 pub impl ToJson for PatternRepairPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "model": self.model.to_json(),
-    "root": self.root.to_json(),
-    "pattern": self.pattern.to_json(),
-    "instruction": self.instruction.to_json(),
-    "generation": self.generation.to_json(),
+    "model": Json(self.model),
+    "root": Json(self.root),
+    "pattern": Json(self.pattern),
+    "instruction": Json(self.instruction),
+    "generation": Json(self.generation),
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
@@ -100,7 +100,7 @@ pub impl ToJson for PatternRepairReply with fn to_json(self) {
     "generation": self.generation,
     "validation_status": self.validation_status.wire(),
     "message": self.message,
-    "trace": self.trace.to_json(),
+    "trace": Json(self.trace),
   }
   if self.candidate_pattern is Some(candidate) {
     fields["candidate_pattern"] = Json(candidate)

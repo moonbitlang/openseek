@@ -767,7 +767,7 @@ pub impl ToJson for LoadSessionReply with fn to_json(self) {
   {
     "session": self.session.to_json(),
     "watermark": if self.watermark is Some(value) {
-      value.to_json()
+      Json(value)
     } else {
       Json::null()
     },
@@ -826,11 +826,11 @@ pub(all) enum WorkspacesReply {
 pub impl ToJson for WorkspacesReply with fn to_json(self) {
   match self {
     Workspaces(workspaces, chat_root~) => {
-      let fields : Map[String, Json] = { "workspaces": workspaces.to_json() }
+      let fields : Map[String, Json] = { "workspaces": Json(workspaces) }
       if chat_root is Some(root) {
         fields["chat_root"] = root.to_json()
       }
-      fields.to_json()
+      Json(fields)
     }
     WorkspaceError(message) => { "error": message }
   }
@@ -1659,15 +1659,15 @@ pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
   match self {
     Listing(path~, parent~, entries~) => {
       let fields : Map[String, Json] = {
-        "path": path.to_json(),
-        "entries": entries.to_json(),
+        "path": Json(path),
+        "entries": Json(entries),
       }
       if parent is Some(parent) {
-        fields["parent"] = parent.to_json()
+        fields["parent"] = Json(parent)
       }
       Json(fields)
     }
-    Drives(entries~) => { "drives": entries.to_json() }
+    Drives(entries~) => { "drives": Json(entries) }
     BrowseError(message) => { "error": message }
   }
 }
@@ -1776,16 +1776,16 @@ pub impl FromJson for MoonIdeLocation with fn from_json(json, path) {
 ///|
 pub impl ToJson for MoonIdeLocation with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "path": self.path.to_json(),
-    "start_line": self.start_line.to_json(),
-    "start_column": self.start_column.to_json(),
-    "end_line": self.end_line.to_json(),
-    "end_column": self.end_column.to_json(),
+    "path": Json(self.path),
+    "start_line": Json(self.start_line),
+    "start_column": Json(self.start_column),
+    "end_line": Json(self.end_line),
+    "end_column": Json(self.end_column),
   }
   if self.is_test is Some(value) {
-    fields["is_test"] = value.to_json()
+    fields["is_test"] = Json(value)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -3243,12 +3243,12 @@ pub extend RevealPathReply with ToJson::{to_json}
 pub impl ToJson for OpenPathEditorTarget with fn to_json(self) {
   let fields : Map[String, Json] = { "path": self.path }
   if self.line is Some(line) {
-    fields["line"] = line.to_json()
+    fields["line"] = Json(line)
   }
   if self.column is Some(column) {
-    fields["column"] = column.to_json()
+    fields["column"] = Json(column)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|

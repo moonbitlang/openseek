@@ -656,7 +656,7 @@ async fn session_envelope_reply(path : String, known_bytes? : Int64) -> Reply {
 
 ///|
 async fn session_list_reply(catalog : SessionCatalog) -> Reply {
-  json_reply(catalog.rows().map(row => row.to_json()).to_json())
+  json_reply(Json(catalog.rows().map(row => row.to_json())))
 }
 
 ///|

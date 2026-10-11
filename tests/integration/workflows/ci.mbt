@@ -8,7 +8,7 @@ async fn ci_child(dir : String) -> Unit {
   if !previous.is_empty() {
     assert_eq(args[3], "https://github.com/example/repo/pull/42")
   }
-  append(calls, args.to_json().stringify())
+  append(calls, Json(args).stringify())
   guard @json.parse(@fs.read_file(dir + "/fixture.json").text())
     is Array(sequence) &&
     !sequence.is_empty() else {
@@ -136,7 +136,7 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
       "STALE",
     ] {
     cases.push(
-      (state, [snapshot([check(state.to_json())])], false, "CI FAILED", false),
+      (state, [snapshot([check(Json(state))])], false, "CI FAILED", false),
     )
   }
   cases.append([
@@ -167,7 +167,7 @@ async fn verify_ci(root : String, temp : String, exe : String) -> Unit {
         { "snapshot": value }
       }
     })
-    write(dir + "/fixture.json", fixture.to_json().stringify())
+    write(dir + "/fixture.json", Json(fixture).stringify())
     let env = clean_env()
     env["PATH"] = bin + ":" + path
     env["OPENSEEK_CI_FIXTURE"] = dir

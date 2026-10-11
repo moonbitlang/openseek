@@ -46,12 +46,12 @@ pub impl FromJson for JobsScope with fn from_json(json, path) {
 ///|
 pub impl ToJson for JobsScope with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["session"] = self.session.to_json()
+  fields["session"] = Json(self.session)
   if self.workspace is Some(value) {
-    fields["workspace"] = value.to_json()
+    fields["workspace"] = Json(value)
   }
-  fields["archived"] = self.archived.to_json()
-  fields.to_json()
+  fields["archived"] = Json(self.archived)
+  Json(fields)
 }
 
 ///|
@@ -103,11 +103,11 @@ pub impl FromJson for JobsListPayload with fn from_json(json, path) {
 pub impl ToJson for JobsListPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["scope"] = self.scope.to_json()
-  fields["offset"] = self.offset.to_json()
+  fields["offset"] = Json(self.offset)
   if self.selected is Some(value) {
     fields["selected"] = value.to_json()
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -155,9 +155,9 @@ pub impl FromJson for JobTarget with fn from_json(json, path) {
 pub impl ToJson for JobTarget with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["scope"] = self.scope.to_json()
-  fields["generation"] = self.generation.to_json()
-  fields["job_id"] = self.job_id.to_json()
-  fields.to_json()
+  fields["generation"] = Json(self.generation)
+  fields["job_id"] = Json(self.job_id)
+  Json(fields)
 }
 
 ///|
@@ -208,10 +208,10 @@ pub impl ToJson for JobReadPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["target"] = self.target.to_json()
   if self.offset is Some(value) {
-    fields["offset"] = value.to_double().to_json()
+    fields["offset"] = Json(value.to_double())
   }
-  fields["limit"] = self.limit.to_json()
-  fields.to_json()
+  fields["limit"] = Json(self.limit)
+  Json(fields)
 }
 
 ///|
@@ -262,13 +262,13 @@ pub impl ToJson for JobView with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["job"] = self.job.to_json()
   if self.output_path is Some(value) {
-    fields["output_path"] = value.to_json()
+    fields["output_path"] = Json(value)
   }
-  fields["controllable"] = self.controllable.to_json()
+  fields["controllable"] = Json(self.controllable)
   if self.error is Some(value) {
-    fields["error"] = value.to_json()
+    fields["error"] = Json(value)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -325,15 +325,15 @@ pub impl FromJson for JobsListReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for JobsListReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["jobs"] = self.jobs.to_json()
+  fields["jobs"] = Json(self.jobs)
   if self.next_offset is Some(value) {
-    fields["next_offset"] = value.to_json()
+    fields["next_offset"] = Json(value)
   }
-  fields["errors"] = self.errors.to_json()
+  fields["errors"] = Json(self.errors)
   if self.selected is Some(value) {
     fields["selected"] = value.to_json()
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -388,13 +388,13 @@ pub impl FromJson for JobReadReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for JobReadReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["text"] = self.text.to_json()
-  fields["start_offset"] = self.start_offset.to_double().to_json()
-  fields["next_offset"] = self.next_offset.to_double().to_json()
-  fields["size"] = self.size.to_double().to_json()
-  fields["more"] = self.more.to_json()
-  fields["output_path"] = self.output_path.to_json()
-  fields.to_json()
+  fields["text"] = Json(self.text)
+  fields["start_offset"] = Json(self.start_offset.to_double())
+  fields["next_offset"] = Json(self.next_offset.to_double())
+  fields["size"] = Json(self.size.to_double())
+  fields["more"] = Json(self.more)
+  fields["output_path"] = Json(self.output_path)
+  Json(fields)
 }
 
 ///|
@@ -428,7 +428,7 @@ pub impl FromJson for JobStopReply with fn from_json(json, path) {
 pub impl ToJson for JobStopReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["outcome"] = self.outcome.to_json()
-  fields.to_json()
+  Json(fields)
 }
 
 ///|

@@ -208,7 +208,7 @@ async fn[G] Engine::spawn(group : @async.TaskGroup[G]) -> Engine {
 
 ///|
 async fn Engine::prompt(self : Engine, text : String) -> Unit {
-  let command : Json = { "command": "prompt", "text": text.to_json() }
+  let command : Json = { "command": "prompt", "text": Json(text) }
   self.writer.write("\{command.stringify()}\n")
 }
 

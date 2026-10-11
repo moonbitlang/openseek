@@ -66,17 +66,17 @@ fn peek_references_state_json(
   state : PeekReferencesFixtureState,
 ) -> String {
   Json({
-    "resolverCalls": state.resolver_calls.to_json(),
-    "resolverAcquires": state.resolver_acquires.to_json(),
-    "resolverReleases": state.resolver_releases.to_json(),
-    "resolvedUris": state.resolved_uris.to_json(),
-    "openModes": state.open_modes.to_json(),
-    "openUris": state.open_uris.to_json(),
-    "openLines": state.open_lines.to_json(),
-    "openColumns": state.open_columns.to_json(),
-    "codeHasTextFocus": code_viewer.has_text_focus().to_json(),
+    "resolverCalls": Json(state.resolver_calls),
+    "resolverAcquires": Json(state.resolver_acquires),
+    "resolverReleases": Json(state.resolver_releases),
+    "resolvedUris": Json(state.resolved_uris),
+    "openModes": Json(state.open_modes),
+    "openUris": Json(state.open_uris),
+    "openLines": Json(state.open_lines),
+    "openColumns": Json(state.open_columns),
+    "codeHasTextFocus": Json(code_viewer.has_text_focus()),
     "position": match code_viewer.get_position() {
-      Some(position) => [position.line_number, position.column].to_json()
+      Some(position) => Json([position.line_number, position.column])
       None => Json::null()
     },
   }).stringify()

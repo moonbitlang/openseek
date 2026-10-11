@@ -94,15 +94,15 @@ pub fn ErrorSite::identity(self : ErrorSite) -> String {
 pub fn ErrorSite::to_json(self : ErrorSite) -> Json {
   let fields : Map[String, Json] = Map([])
   if self.path is Some(path) {
-    fields["path"] = path.to_json()
+    fields["path"] = Json(path)
   }
   if self.loc != "" {
-    fields["loc"] = self.loc.to_json()
+    fields["loc"] = Json(self.loc)
   }
   if self.code is Some(code) {
-    fields["code"] = code.to_json()
+    fields["code"] = Json(code)
   }
-  fields["message"] = self.message.to_json()
+  fields["message"] = Json(self.message)
   Json::object(fields)
 }
 
@@ -161,14 +161,17 @@ pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
   }
 
   {
-    "error_count": self.error_count.to_json(),
-    "warning_count": self.warning_count.to_json(),
-    "truncated": self.truncated.to_json(),
+    "error_count": Json(self.error_count),
+    "warning_count": Json(self.warning_count),
+    "truncated": Json(self.truncated),
     "errors": sites(self.errors),
-    "errors_truncated": (self.truncated || self.errors.length() > JsonSiteLimit).to_json(),
+    "errors_truncated": Json(
+      self.truncated || self.errors.length() > JsonSiteLimit,
+    ),
     "warnings": sites(self.warnings),
-    "warnings_truncated": (self.truncated ||
-    self.warnings.length() > JsonSiteLimit).to_json(),
+    "warnings_truncated": Json(
+      self.truncated || self.warnings.length() > JsonSiteLimit,
+    ),
   }
 }
 
@@ -181,9 +184,9 @@ pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
 pub fn CheckErrors::summary_json(self : CheckErrors) -> Json {
   let shown = self.errors.length().min(RevertErrorDisplayLimit)
   {
-    "error_count": self.error_count.to_json(),
-    "warning_count": self.warning_count.to_json(),
-    "truncated": self.truncated.to_json(),
+    "error_count": Json(self.error_count),
+    "warning_count": Json(self.warning_count),
+    "truncated": Json(self.truncated),
     "errors": Json::array([ for site in self.errors[:shown] => site.to_json() ]),
   }
 }

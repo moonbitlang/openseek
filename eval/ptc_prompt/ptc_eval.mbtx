@@ -153,9 +153,9 @@ fn sha256_hex(data : Bytes) -> String {
 async fn engine_hashes(engines : Map[String, String]) -> Json {
   let hashes : Map[String, Json] = Map([])
   for variant, binary in engines {
-    hashes[variant] = sha256_hex(@fs.read_file(binary).binary()).to_json()
+    hashes[variant] = Json(sha256_hex(@fs.read_file(binary).binary()))
   }
-  hashes.to_json()
+  Json(hashes)
 }
 
 ///|
@@ -189,13 +189,13 @@ async fn same_bytes(path : String, expected : String) -> Bool {
 ///|
 fn seconds_since(started : Int64) -> Json {
   let centiseconds = ((@async.now() - started).to_double() / 10.0).round()
-  (centiseconds / 100.0).to_json()
+  Json(centiseconds / 100.0)
 }
 
 ///|
 fn opt_int(value : Int?) -> Json {
   match value {
-    Some(value) => value.to_json()
+    Some(value) => Json(value)
     None => Json::null()
   }
 }
@@ -277,22 +277,19 @@ fn Session::new(items : Array[Json]) -> Session {
 
 ///|
 fn Session::metrics(self : Session, into : Map[String, Json]) -> Unit {
-  into["steps"] = self.assistants.length().to_json()
-  into["outer_calls"] = self.assistants
+  into["steps"] = Json(self.assistants.length())
+  into["outer_calls"] = Json(self.assistants
     .fold(init=0, (total, assistant) => {
       match assistant {
         { "tool_calls": Array(calls), .. } => total + calls.length()
         _ => total
       }
-    })
-    .to_json()
-  into["nested_calls"] = self.nested.length().to_json()
-  into["tool_errors"] = self.results
-    .count_if(r => r is { "is_error": True, .. })
-    .to_json()
-  into["nested_errors"] = self.nested
-    .count_if(c => c is { "result": { "is_error": True, .. }, .. })
-    .to_json()
+    }))
+  into["nested_calls"] = Json(self.nested.length())
+  into["tool_errors"] = Json(self.results
+    .count_if(r => r is { "is_error": True, .. }))
+  into["nested_errors"] = Json(self.nested
+    .count_if(c => c is { "result": { "is_error": True, .. }, .. }))
 }
 
 ///|
@@ -348,7 +345,7 @@ fn usage_of(items : Array[Json], log : String) -> Json {
     }
   }
   match totals {
-    Some(sums) => sums.to_json()
+    Some(sums) => Json(sums)
     None => Json::null()
   }
 }
@@ -648,21 +645,19 @@ async fn analyze(
     }
   }
   let result : Map[String, Json] = {
-    "passed": failures.is_empty().to_json(),
-    "failures": failures.to_json(),
+    "passed": Json(failures.is_empty()),
+    "failures": Json(failures),
   }
   session.metrics(result)
-  result["interrupted_calls"] = session.nested
-    .count_if(c => !(c is { "status": "done", .. }))
-    .to_json()
-  result["model_tool_output_chars"] = session.results
+  result["interrupted_calls"] = Json(session.nested
+    .count_if(c => !(c is { "status": "done", .. })))
+  result["model_tool_output_chars"] = Json(session.results
     .fold(init=0, (total, r) => {
       match r {
         { "content": String(content), .. } => total + content.char_length()
         _ => total
       }
-    })
-    .to_json()
+    }))
   result["final"] = final_message
   result
 }
@@ -707,10 +702,10 @@ async fn trial(
     timeout_s * 1000,
   )
   let result : Map[String, Json] = {
-    "name": name.to_json(),
-    "variant": variant.to_json(),
-    "case": case.to_json(),
-    "repeat": repeat.to_json(),
+    "name": Json(name),
+    "variant": Json(variant),
+    "case": Json(case),
+    "repeat": Json(repeat),
     "seconds": seconds_since(started),
     "exit_code": opt_int(exit_code),
   }
@@ -728,12 +723,12 @@ async fn trial(
     }
   } catch {
     error => {
-      result["passed"] = false.to_json()
-      result["failures"] = [error_message(error)].to_json()
+      result["passed"] = Json(false)
+      result["failures"] = Json([error_message(error)])
     }
   }
   result["usage"] = usage(workspace, name, log)
-  let result = result.to_json()
+  let result = Json(result)
   write_json("\{out}/\{name}.json", result)
   println(result.stringify())
   result
@@ -770,10 +765,10 @@ async fn reanalyze(out : String) -> Unit {
       result[key] = value
     }
     result["usage"] = usage(workspace, name, "\{out}/\{name}.log")
-    write_json("\{out}/\{file}", result.to_json())
-    results.push(result.to_json())
+    write_json("\{out}/\{file}", Json(result))
+    results.push(Json(result))
   }
-  write_json("\{out}/results.json", results.to_json())
+  write_json("\{out}/results.json", Json(results))
 }
 
 ///|
@@ -892,7 +887,7 @@ async fn main_run(args : @argparse.Matches) -> Unit {
   let prompt_hashes : Map[String, Json] = Map([])
   for variant, prompt in variants {
     @fs.write_file("\{out}/\{variant}.md", prompt)
-    prompt_hashes[variant] = sha256_hex(@utf8.encode(prompt[:])).to_json()
+    prompt_hashes[variant] = Json(sha256_hex(@utf8.encode(prompt[:])))
   }
   let engine = @fs.realpath(engine)
   let engines = {
@@ -914,8 +909,8 @@ async fn main_run(args : @argparse.Matches) -> Unit {
     "concurrency": concurrency,
     "timeout": timeout,
     "require_ptc": require_ptc,
-    "cases": cases.to_json(),
-    "prompt_sha256": prompt_hashes.to_json(),
+    "cases": Json(cases),
+    "prompt_sha256": Json(prompt_hashes),
     "engine_sha256": engine_hashes(engines),
     "commit": head_commit(),
   }
@@ -938,7 +933,7 @@ async fn main_run(args : @argparse.Matches) -> Unit {
       }
     }
   }
-  write_json("\{out}/results.json", run_pool(concurrency, jobs).to_json())
+  write_json("\{out}/results.json", Json(run_pool(concurrency, jobs)))
 }
 
 // ---------------------------------------------------------------------------
@@ -1164,7 +1159,7 @@ fn python_json(value : Json) -> String {
     }
     Array(items) => "[\{items.map(python_json).join(", ")}]"
     Object(fields) =>
-      "{\{fields.iter().map(field => "\{python_json(field.0.to_json())}: \{python_json(field.1)}").collect().join(", ")}}"
+      "{\{fields.iter().map(field => "\{python_json(Json(field.0))}: \{python_json(field.1)}").collect().join(", ")}}"
   }
 }
 
@@ -1178,13 +1173,13 @@ fn yaml_tests(
   for case in cases {
     let (name, source, expected) = case
     blocks.push(
-      "///|\ntest \"\{prefix}:\{name}\" {\n  assert_eq(@yaml_parser.parse(\{python_json(source.to_json())}), (\{python_json(expected)} : Json))\n}\n",
+      "///|\ntest \"\{prefix}:\{name}\" {\n  assert_eq(@yaml_parser.parse(\{python_json(Json(source))}), (\{python_json(expected)} : Json))\n}\n",
     )
   }
   for case in invalid {
     let (name, source) = case
     blocks.push(
-      "///|\ntest \"\{prefix}:\{name}\" {\n  let rejected = try { ignore(@yaml_parser.parse(\{python_json(source.to_json())})); false } catch { _ => true }\n  assert_true(rejected)\n}\n",
+      "///|\ntest \"\{prefix}:\{name}\" {\n  let rejected = try { ignore(@yaml_parser.parse(\{python_json(Json(source))})); false } catch { _ => true }\n  assert_true(rejected)\n}\n",
     )
   }
   blocks.join("\n")
@@ -1410,24 +1405,24 @@ async fn score(
   }
   let valid = yaml_cases.map(c => (c.0, c.1))
   {
-    "oracle_passed": passed.unwrap_or(0).to_json(),
-    "oracle_total": (yaml_cases.length() + yaml_invalid.length()).to_json(),
+    "oracle_passed": Json(passed.unwrap_or(0)),
+    "oracle_total": Json(yaml_cases.length() + yaml_invalid.length()),
     "oracle_exit_code": opt_int(code),
-    "oracle_failures": failures.to_json(),
-    "valid_passed": (if passed is Some(_) {
+    "oracle_failures": Json(failures),
+    "valid_passed": Json(if passed is Some(_) {
       yaml_cases.length() - failed_among(valid)
     } else {
       0
-    }).to_json(),
-    "invalid_passed": (if passed is Some(_) {
+    }),
+    "invalid_passed": Json(if passed is Some(_) {
       yaml_invalid.length() - failed_among(yaml_invalid)
     } else {
       0
-    }).to_json(),
-    "compile_or_harness_error": (passed is None).to_json(),
+    }),
+    "compile_or_harness_error": Json(passed is None),
     // Byte-exact: a candidate that only rewrote line endings changed protected bytes.
-    "preserved_fixture": (same_bytes("\{workspace}/moon.mod", YAML_MODULE) &&
-    same_bytes("\{workspace}/visible_test.mbt", visible_tests())).to_json(),
+    "preserved_fixture": Json(same_bytes("\{workspace}/moon.mod", YAML_MODULE) &&
+    same_bytes("\{workspace}/visible_test.mbt", visible_tests())),
   }
 }
 
@@ -1495,9 +1490,9 @@ async fn recovered_execution(
       "name", "variant", "repeat", "exit_code", "seconds", "exit_code_unrecorded",
       "seconds_source",
     ]
-    return (Map <| [
+    return Json(Map <| [
       for key, value in fields if kept.contains(key) => (key, value)
-    ]).to_json()
+    ])
   }
   // Recovery for the original reader's child-session ambiguity. Keep OS exit
   // status unavailable and label reconstructed timing.
@@ -1514,7 +1509,7 @@ async fn recovered_execution(
   }
   let (seconds, source) : (Json, String) = if born >= 0L {
     (
-      (modified - born).to_double().to_json(),
+      Json((modified - born).to_double()),
       "log creation to last write; excludes silent waits",
     )
   } else {
@@ -1568,13 +1563,13 @@ async fn yaml_analyze_trial(
       }
     }
   }
-  result["child_sessions"] = children.length().to_json()
-  result["child_steps"] = child_steps.to_json()
-  result["usage_scope"] = (if children.is_empty() {
+  result["child_sessions"] = Json(children.length())
+  result["child_steps"] = Json(child_steps)
+  result["usage_scope"] = Json(if children.is_empty() {
     "parent (no children)"
   } else {
     "parent only; child token usage unavailable"
-  }).to_json()
+  })
   let mut grading = "\{out}/\{name}-grading"
   let mut suffix = 1
   while @fs.exists(grading) {
@@ -1584,12 +1579,12 @@ async fn yaml_analyze_trial(
   for key, value in score(workspace, grading, "\{grading}.log") {
     result[key] = value
   }
-  result["passed"] = (result.get("oracle_passed") == result.get("oracle_total") &&
+  result["passed"] = Json(result.get("oracle_passed") == result.get("oracle_total") &&
   result.get("preserved_fixture") == Some(true) &&
   result.get("oracle_exit_code") == Some(0) &&
   result.get("exit_code") == Some(0) &&
-  session.finished()).to_json()
-  let result = result.to_json()
+  session.finished())
+  let result = Json(result)
   write_json("\{out}/\{name}.json", result)
   result
 }
@@ -1640,7 +1635,7 @@ async fn main_yaml(args : @argparse.Matches) -> Unit {
         )
       }
     }
-    write_json("\{out}/results.json", results.to_json())
+    write_json("\{out}/results.json", Json(results))
     return
   }
   guard value(args, "engine") is Some(engine) &&
@@ -1689,7 +1684,7 @@ async fn main_yaml(args : @argparse.Matches) -> Unit {
       })
     }
   }
-  write_json("\{out}/results.json", run_pool(concurrency, jobs).to_json())
+  write_json("\{out}/results.json", Json(run_pool(concurrency, jobs)))
 }
 
 // ---------------------------------------------------------------------------
@@ -1773,7 +1768,7 @@ async fn write_session(
   })
   items.push({
     "kind": "terminal",
-    "payload": { "kind": "finished", "message": answer.to_json() },
+    "payload": { "kind": "finished", "message": Json(answer) },
   })
   @fs.write_file(
     "\{workspace}/openseek_session-test.jsonl",

@@ -97,22 +97,22 @@ fn markdown_comments_state_json(viewer : @viewer.Viewer) -> String {
       let anchor = value.get_selection_start()
       let active = value.get_position()
       Json({
-        "anchorLine": anchor.line_number.to_json(),
-        "anchorColumn": anchor.column.to_json(),
-        "activeLine": active.line_number.to_json(),
-        "activeColumn": active.column.to_json(),
+        "anchorLine": Json(anchor.line_number),
+        "anchorColumn": Json(anchor.column),
+        "activeLine": Json(active.line_number),
+        "activeColumn": Json(active.column),
       })
     }
     None => Json::null()
   }
   Json({
     "selection": selection,
-    "softWrap": viewer.get_options().soft_wrap().to_json(),
-    "scrollLeft": viewer.get_scroll_left().to_json(),
-    "scrollWidth": viewer.get_scroll_width().to_json(),
-    "contentWidth": viewer.get_content_width().to_json(),
-    "scrollTop": viewer.get_scroll_top().to_json(),
-    "scrollHeight": viewer.get_scroll_height().to_json(),
+    "softWrap": Json(viewer.get_options().soft_wrap()),
+    "scrollLeft": Json(viewer.get_scroll_left()),
+    "scrollWidth": Json(viewer.get_scroll_width()),
+    "contentWidth": Json(viewer.get_content_width()),
+    "scrollTop": Json(viewer.get_scroll_top()),
+    "scrollHeight": Json(viewer.get_scroll_height()),
   }).stringify()
 }
 

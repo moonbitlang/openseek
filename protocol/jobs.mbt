@@ -172,15 +172,15 @@ pub impl ToJson for JobRecord with fn to_json(self) {
   let fields : Map[String, Json] = {
     "schema_version": 1,
     "cleanup_error": job_optional_json(self.cleanup_error),
-    "generation": self.generation.to_json(),
-    "id": self.id.to_json(),
-    "revision": self.revision.to_json(),
-    "command": self.command.to_json(),
+    "generation": Json(self.generation),
+    "id": Json(self.id),
+    "revision": Json(self.revision),
+    "command": Json(self.command),
     "description": job_optional_json(self.description),
     "cwd": job_optional_json(self.cwd),
     "state": self.state.to_json(),
-    "started_at_ms": self.started_at_ms.to_double().to_json(),
-    "backgrounded_at_ms": self.backgrounded_at_ms.to_double().to_json(),
+    "started_at_ms": Json(self.started_at_ms.to_double()),
+    "backgrounded_at_ms": Json(self.backgrounded_at_ms.to_double()),
     "finished_at_ms": job_optional_json(
       self.finished_at_ms.map(value => value.to_double()),
     ),
@@ -188,11 +188,11 @@ pub impl ToJson for JobRecord with fn to_json(self) {
       self.last_output_at_ms.map(value => value.to_double()),
     ),
     "output_file": job_optional_json(self.output_file),
-    "output_persistent": self.output_persistent.to_json(),
-    "output_bytes": self.output_bytes.to_double().to_json(),
-    "output_chars": self.output_chars.to_json(),
-    "output_truncated": self.output_truncated.to_json(),
-    "invalid_utf8": self.invalid_utf8.to_json(),
+    "output_persistent": Json(self.output_persistent),
+    "output_bytes": Json(self.output_bytes.to_double()),
+    "output_chars": Json(self.output_chars),
+    "output_truncated": Json(self.output_truncated),
+    "invalid_utf8": Json(self.invalid_utf8),
     "output_error": job_optional_json(self.output_error),
     "persistence_error": job_optional_json(self.persistence_error),
   }
@@ -295,10 +295,10 @@ pub extend JobStopOutcome with Debug::{to_repr}
 ///|
 pub impl ToJson for JobEventKind with fn to_json(self) {
   match self {
-    Started => "started".to_json()
-    Updated => "updated".to_json()
-    Finished => "finished".to_json()
-    Failed => "failed".to_json()
+    Started => Json("started")
+    Updated => Json("updated")
+    Finished => Json("finished")
+    Failed => Json("failed")
   }
 }
 
@@ -316,10 +316,10 @@ pub impl FromJson for JobEventKind with fn from_json(json, path) {
 ///|
 pub impl ToJson for JobStopOutcome with fn to_json(self) {
   match self {
-    Stopped => "stopped".to_json()
-    AlreadyTerminal => "already_terminal".to_json()
-    NotFound => "not_found".to_json()
-    WrongRuntime => "wrong_runtime".to_json()
+    Stopped => Json("stopped")
+    AlreadyTerminal => Json("already_terminal")
+    NotFound => Json("not_found")
+    WrongRuntime => Json("wrong_runtime")
   }
 }
 

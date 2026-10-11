@@ -224,7 +224,7 @@ pub impl ToJson for DocumentReadResult with fn to_json(self) {
     DocumentLoaded(document) =>
       { "ok": true, "document": ToJson::to_json(document) }
     DocumentNotFound(uri) =>
-      { "ok": false, "notFound": true, "uri": uri.to_string().to_json() }
+      { "ok": false, "notFound": true, "uri": Json(uri.to_string()) }
     DocumentReadFailed(error) =>
       { "ok": false, "error": ToJson::to_json(error) }
   }
@@ -235,13 +235,13 @@ pub impl ToJson for DocumentReadResult with fn to_json(self) {
 /// reference server.
 pub impl ToJson for FileSystemProviderError with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "code": self.code.to_string().to_json(),
-    "message": self.message.to_json(),
-    "status": self.status().to_json(),
+    "code": Json(self.code.to_string()),
+    "message": Json(self.message),
+    "status": Json(self.status()),
   }
   if self.uri is Some(uri) {
-    fields["uri"] = uri.to_string().to_json()
-    fields["displayName"] = @base_common.basename_or_authority(uri).to_json()
+    fields["uri"] = Json(uri.to_string())
+    fields["displayName"] = Json(@base_common.basename_or_authority(uri))
   }
   Json(fields)
 }
@@ -250,8 +250,8 @@ pub impl ToJson for FileSystemProviderError with fn to_json(self) {
 /// JSON shape for watch events.
 pub impl ToJson for FileChange with fn to_json(self) {
   {
-    "uri": self.uri.to_string().to_json(),
-    "type": self.change_type.to_string().to_json(),
+    "uri": Json(self.uri.to_string()),
+    "type": Json(self.change_type.to_string()),
   }
 }
 

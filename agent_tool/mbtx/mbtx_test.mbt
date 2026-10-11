@@ -138,7 +138,7 @@ async test "script arguments reach inline and reused scripts verbatim on both ru
         "args": values,
       })
       assert_false(saved.is_error, msg=saved.content)
-      assert_true(saved.content.contains(values.to_json().stringify()))
+      assert_true(saved.content.contains(Json(values).stringify()))
       let reused = run_in(ws, {
         "filename": filename,
         "target": target,

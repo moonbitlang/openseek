@@ -128,17 +128,17 @@ pub impl FromJson for ScheduleSpec with fn from_json(json, path) {
 ///|
 pub impl ToJson for ScheduleSpec with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["name"] = self.name.to_json()
+  fields["name"] = Json(self.name)
   if self.workspace is Some(value) {
-    fields["workspace"] = value.to_json()
+    fields["workspace"] = Json(value)
   }
-  fields["task"] = self.task.to_json()
+  fields["task"] = Json(self.task)
   if self.model is Some(value) {
-    fields["model"] = value.to_json()
+    fields["model"] = Json(value)
   }
   fields["timing"] = self.timing.to_json()
-  fields["timeout_minutes"] = self.timeout_minutes.to_json()
-  fields.to_json()
+  fields["timeout_minutes"] = Json(self.timeout_minutes)
+  Json(fields)
 }
 
 ///|
@@ -184,17 +184,17 @@ pub impl FromJson for ScheduleEntry with fn from_json(json, path) {
 ///|
 pub impl ToJson for ScheduleEntry with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["id"] = self.id.to_json()
+  fields["id"] = Json(self.id)
   fields["spec"] = self.spec.to_json()
-  fields["enabled"] = self.enabled.to_json()
-  fields["run_requested"] = self.run_requested.to_json()
+  fields["enabled"] = Json(self.enabled)
+  fields["run_requested"] = Json(self.run_requested)
   if self.notice is Some(value) {
-    fields["notice"] = value.to_json()
+    fields["notice"] = Json(value)
   }
   if self.next_at is Some(value) {
-    fields["next_at"] = value.to_double().to_json()
+    fields["next_at"] = Json(value.to_double())
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -265,18 +265,18 @@ pub impl FromJson for ScheduleRun with fn from_json(json, path) {
 ///|
 pub impl ToJson for ScheduleRun with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["id"] = self.id.to_json()
-  fields["schedule_id"] = self.schedule_id.to_json()
-  fields["name"] = self.name.to_json()
-  fields["workspace"] = self.workspace.to_json()
-  fields["session"] = self.session.to_json()
-  fields["started_at"] = self.started_at.to_double().to_json()
+  fields["id"] = Json(self.id)
+  fields["schedule_id"] = Json(self.schedule_id)
+  fields["name"] = Json(self.name)
+  fields["workspace"] = Json(self.workspace)
+  fields["session"] = Json(self.session)
+  fields["started_at"] = Json(self.started_at.to_double())
   if self.finished_at is Some(value) {
-    fields["finished_at"] = value.to_double().to_json()
+    fields["finished_at"] = Json(value.to_double())
   }
   fields["status"] = self.status.to_json()
-  fields["log_path"] = self.log_path.to_json()
-  fields.to_json()
+  fields["log_path"] = Json(self.log_path)
+  Json(fields)
 }
 
 ///|
@@ -302,9 +302,9 @@ pub impl FromJson for SchedulesReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for SchedulesReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["entries"] = self.entries.to_json()
-  fields["runs"] = self.runs.to_json()
-  fields.to_json()
+  fields["entries"] = Json(self.entries)
+  fields["runs"] = Json(self.runs)
+  Json(fields)
 }
 
 ///|
@@ -336,11 +336,11 @@ pub impl FromJson for ScheduleSavePayload with fn from_json(json, path) {
 pub impl ToJson for ScheduleSavePayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   if self.id is Some(value) {
-    fields["id"] = value.to_json()
+    fields["id"] = Json(value)
   }
   fields["spec"] = self.spec.to_json()
-  fields["run_now"] = self.run_now.to_json()
-  fields.to_json()
+  fields["run_now"] = Json(self.run_now)
+  Json(fields)
 }
 
 ///|
@@ -369,9 +369,9 @@ pub impl FromJson for ScheduleActionPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for ScheduleActionPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
-  fields["id"] = self.id.to_json()
-  fields["action"] = self.action.to_json()
-  fields.to_json()
+  fields["id"] = Json(self.id)
+  fields["action"] = Json(self.action)
+  Json(fields)
 }
 
 ///|

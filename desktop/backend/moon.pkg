@@ -15,7 +15,6 @@ import {
   "openseek_desktop/backend/internal/shellenv",
   "openseek_desktop/backend/internal/update",
   "openseek_desktop/backend/internal/workspaces",
-  "moonbitlang/async",
   "moonbitlang/async/process",
   "moonbitlang/core/argparse",
   "moonbitlang/core/debug",

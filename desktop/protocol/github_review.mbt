@@ -148,17 +148,17 @@ pub impl FromJson for GithubReviewComment with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubReviewComment with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "id": self.id.to_json(),
-    "body_html": self.body_html.to_json(),
-    "url": self.url.to_json(),
-    "created_at": self.created_at.to_json(),
-    "can_delete": self.can_delete.to_json(),
+    "id": Json(self.id),
+    "body_html": Json(self.body_html),
+    "url": Json(self.url),
+    "created_at": Json(self.created_at),
+    "can_delete": Json(self.can_delete),
   }
   if self.author is Some(value) {
-    fields["author"] = value.to_json()
+    fields["author"] = Json(value)
   }
   if self.avatar_url is Some(value) {
-    fields["avatar_url"] = value.to_json()
+    fields["avatar_url"] = Json(value)
   }
   Json(fields)
 }
@@ -205,21 +205,21 @@ pub impl FromJson for GithubReviewThread with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubReviewThread with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "id": self.id.to_json(),
-    "path": self.path.to_json(),
-    "side": self.side.to_json(),
-    "resolved": self.resolved.to_json(),
-    "outdated": self.outdated.to_json(),
-    "can_reply": self.can_reply.to_json(),
-    "can_resolve": self.can_resolve.to_json(),
-    "can_unresolve": self.can_unresolve.to_json(),
-    "comments": self.comments.to_json(),
+    "id": Json(self.id),
+    "path": Json(self.path),
+    "side": Json(self.side),
+    "resolved": Json(self.resolved),
+    "outdated": Json(self.outdated),
+    "can_reply": Json(self.can_reply),
+    "can_resolve": Json(self.can_resolve),
+    "can_unresolve": Json(self.can_unresolve),
+    "comments": Json(self.comments),
   }
   if self.line is Some(value) {
-    fields["line"] = value.to_json()
+    fields["line"] = Json(value)
   }
   if self.original_line is Some(value) {
-    fields["original_line"] = value.to_json()
+    fields["original_line"] = Json(value)
   }
   Json(fields)
 }
@@ -249,12 +249,12 @@ pub impl FromJson for GithubReviewFile with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for GithubReviewFile with fn to_json(self) {
-  let fields : Map[String, Json] = { "path": self.path.to_json() }
+  let fields : Map[String, Json] = { "path": Json(self.path) }
   if self.original is Some(text) {
-    fields["original"] = text.to_json()
+    fields["original"] = Json(text)
   }
   if self.modified is Some(text) {
-    fields["modified"] = text.to_json()
+    fields["modified"] = Json(text)
   }
   Json(fields)
 }
@@ -365,11 +365,11 @@ pub impl FromJson for GithubReview with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubReview with fn to_json(self) {
   {
-    "url": self.url.to_json(),
-    "head": self.head.to_json(),
-    "base": self.base.to_json(),
-    "threads": self.threads.to_json(),
-    "commentable": self.commentable.to_json(),
+    "url": Json(self.url),
+    "head": Json(self.head),
+    "base": Json(self.base),
+    "threads": Json(self.threads),
+    "commentable": Json(self.commentable),
   }
 }
 
@@ -399,8 +399,8 @@ pub impl FromJson for GithubReviewMutationPayload with fn from_json(json, path) 
 ///|
 pub impl ToJson for GithubReviewMutationPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "cwd": self.cwd.to_json(),
-    "url": self.url.to_json(),
+    "cwd": Json(self.cwd),
+    "url": Json(self.url),
     "action": self.action.to_json(),
   }
   Json(fields)

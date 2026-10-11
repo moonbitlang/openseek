@@ -265,10 +265,10 @@ fn BrowserGeometryFixture::state_json(
     None => Json::null()
   }
   Json({
-    "name": self.name.to_json(),
-    "softWrap": self.viewer.get_options().soft_wrap().to_json(),
-    "modelLines": self.model.get_line_count().to_json(),
-    "viewLines": self.view_line_count.val.to_json(),
+    "name": Json(self.name),
+    "softWrap": Json(self.viewer.get_options().soft_wrap()),
+    "modelLines": Json(self.model.get_line_count()),
+    "viewLines": Json(self.view_line_count.val),
     "contentWidth": Json::number(self.viewer.get_content_width()),
     "scrollWidth": Json::number(self.viewer.get_scroll_width()),
     "scrollLeft": Json::number(self.viewer.get_scroll_left()),

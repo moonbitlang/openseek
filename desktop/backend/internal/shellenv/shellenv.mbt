@@ -26,7 +26,7 @@ const ProbeTimeoutMs : Int = 10_000
 /// Target of the hidden `--print-env-json <mark>` flag: print this process's
 /// environment as `<mark>{json}<mark>` for the probing parent to extract.
 pub fn print_env_json(mark : String) -> Unit {
-  println(mark + @sys.get_env_vars().to_json().stringify() + mark)
+  println(mark + Json(@sys.get_env_vars()).stringify() + mark)
 }
 
 ///|

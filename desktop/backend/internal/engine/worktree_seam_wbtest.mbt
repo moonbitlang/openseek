@@ -45,21 +45,21 @@ async fn stage_worktree_placements(
   for row in rows {
     let (name, branch, session, codex_thread) = row
     let entry : Map[String, Json] = {
-      "name": name.to_json(),
-      "branch": branch.to_json(),
-      "base": base.to_json(),
+      "name": Json(name),
+      "branch": Json(branch),
+      "base": Json(base),
     }
     if session is Some(session) {
-      entry["session"] = session.to_json()
+      entry["session"] = Json(session)
     }
     if codex_thread is Some(thread) {
-      entry["codex_thread"] = thread.to_json()
+      entry["codex_thread"] = Json(thread)
     }
-    entries.push(entry.to_json())
+    entries.push(Json(entry))
   }
   @fsx.write_text(
     store.join("worktrees.json").to_path(),
-    ({ "worktrees": entries.to_json() } : Json).stringify(indent=2),
+    ({ "worktrees": Json(entries) } : Json).stringify(indent=2),
   )
 }
 

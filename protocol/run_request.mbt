@@ -35,17 +35,17 @@ pub(all) suberror RunRequestError {
 ///|
 pub impl ToJson for RunRequest with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "version": RunRequestVersion.to_json(),
+    "version": Json(RunRequestVersion),
     "input": self.input,
   }
   if self.request_id is Some(id) {
-    fields["request_id"] = id.to_json()
+    fields["request_id"] = Json(id)
   }
   if self.kind is Some(kind) {
-    fields["kind"] = kind.to_json()
+    fields["kind"] = Json(kind)
   }
   if self.max_steps is Some(steps) {
-    fields["limits"] = { "max_steps": steps.to_json() }
+    fields["limits"] = { "max_steps": Json(steps) }
   }
   Json::object(fields)
 }
