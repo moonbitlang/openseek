@@ -108,7 +108,7 @@ fn setting_select(
   state : Model,
   emit : @cmd.Emit[Msg],
   id~ : String,
-  options~ : Array[@select_control.Option],
+  options~ : Array[@select_control.ViewOption],
   selected~ : String,
   aria_label~ : String,
   change~ : (@interop.ChannelId, @common.Uri, String) -> @cmd.Cmd,

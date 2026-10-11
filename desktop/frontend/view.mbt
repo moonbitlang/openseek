@@ -17,7 +17,7 @@ fn SelectMenu::setting_control(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   id~ : String,
-  options~ : Array[@select_control.Option],
+  options~ : Array[@select_control.ViewOption],
   selected~ : String,
   aria_label~ : String,
   change~ : @cmd.Emit[String],

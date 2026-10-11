@@ -1,7 +1,7 @@
 ///|
 /// One selectable value. Labels are deliberately separate from wire values so
 /// compact triggers and readable menu rows never have to expose protocol text.
-pub(all) struct Option {
+pub(all) struct ViewOption {
   value : String
   label : String
 }
@@ -11,7 +11,7 @@ pub(all) struct Option {
 /// without a heading; several groups retain their boundaries in the popup.
 pub(all) struct Group {
   label : String
-  options : Array[Option]
+  options : Array[ViewOption]
 }
 
 ///|

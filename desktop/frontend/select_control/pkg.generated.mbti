@@ -28,17 +28,17 @@ pub fn Control::render(Self) -> @html.Html
 
 pub(all) struct Group {
   label : String
-  options : Array[Option]
-}
-
-pub(all) struct Option {
-  value : String
-  label : String
+  options : Array[ViewOption]
 }
 
 pub(all) enum Presentation {
   Composer(String, Bool)
   Setting
+}
+
+pub(all) struct ViewOption {
+  value : String
+  label : String
 }
 
 // Type aliases
