@@ -61,6 +61,12 @@ You can browse and install extra skills here:
   under `editor/`, also run `just editor-test` for its all-target suite; for
   browser behavior, run `just editor-test-browser` as well.
 
+- The Proton window host, `desktop/app`, is not a member of the root workspace:
+  it has a workspace of its own so that nothing else needs a window toolkit to
+  build. `just check` still type-checks it; for changes under `desktop/app`,
+  also run `just desktop-app-test`, which needs the CEF runtime. See
+  `desktop/AGENTS.md`.
+
 - OpenSeek's desktop file editor is the primary downstream, user-facing editor
   host. Use `editor/internal/shell` as the fast build-and-preview loop for
   editor UI work. Existing Viewer UI improvements should flow into OpenSeek

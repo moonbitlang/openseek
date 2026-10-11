@@ -13,6 +13,7 @@ check:
     moon check --target native --deny-warn
     moon check --target js --deny-warn
     moon fmt --check
+    just --justfile desktop/justfile app-check
 
 # Check standalone bundled scripts against their declared dependencies without running them.
 check-workflows:
@@ -91,6 +92,14 @@ desktop-package:
 # Build and launch the unbundled Desktop host.
 desktop-dev:
     just --justfile desktop/justfile dev
+
+# Run the Proton window host's tests in its own workspace; needs the CEF runtime.
+desktop-app-test:
+    just --justfile desktop/justfile app-test
+
+# Build the Proton window host in its own workspace; needs the CEF runtime.
+desktop-app-build:
+    just --justfile desktop/justfile app-build
 
 # Run the session viewer's Rabbita views in Chromium.
 viz-test-browser:

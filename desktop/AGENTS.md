@@ -12,23 +12,36 @@
 ## Module Boundary
 
 - `desktop/backend` is a library and must never depend on Proton, directly or
-  through another module; neither may `desktop/server`. Moon runs the
-  prebuild of every module a workspace resolves, and Proton's needs `node` and
-  the CEF runtime, so one Proton dependency there would stop the headless
-  server from building on a machine with no window toolkit. Code that needs
-  Proton belongs in `desktop/app`; when shared code needs a fact only Proton
-  knows, the window host passes it in as a value (`@resources.Resources`).
-- `desktop/app` and `desktop/server` are thin hosts of the same backend.
-  What both must do belongs in `desktop/backend`
-  (`ApiState::start_services`), not written once in each.
+  through another module; neither may `desktop/server`. Code that needs Proton
+  belongs in `desktop/app`; when shared code needs a fact only Proton knows,
+  the window host passes it in as a value (`@resources.Resources`).
+- `desktop/app` and `desktop/server` are thin hosts of the same backend. What
+  both must do belongs in `desktop/backend` (`ApiState::start_services`), not
+  written once in each.
 - Packages an executable imports sit at the top of `desktop/backend`; the rest
   stay under `desktop/backend/internal`. Moon allows an `internal` import only
   inside one module, so moving a package out of `internal` is what exposes it
   to the executables — do that deliberately, not to reach one helper.
-- `desktop/server/moon.work` is a second workspace, the one Moon finds when
-  it runs from that directory. It lists only what the headless server needs
-  and must never gain `desktop/app`. A member added to the root `moon.work`
-  that the server needs must be added there too.
+
+## The Window Host's Workspace
+
+- `desktop/app` is not a member of the root `moon.work`; it has a workspace of
+  its own, `desktop/app/moon.work`, which Moon finds when it runs from that
+  directory. Moon runs the prebuild of every module a workspace resolves, and
+  Proton's needs Node, GTK, and the CEF runtime, so keeping the window host
+  out is what lets everything else — the headless server included — build and
+  test on a machine with no window toolkit. Never add `desktop/app`, or
+  anything that depends on Proton, to the root workspace.
+- The root gates do not reach the window host. `just check` type-checks and
+  format-checks it through `just --justfile desktop/justfile app-check`, which
+  needs no CEF runtime. For changes under `desktop/app`, also run
+  `just desktop-app-test`, and refresh its generated interfaces with
+  `just --justfile desktop/justfile app-info` rather than the root
+  `moon info && moon fmt`.
+- A new package under `desktop/app` must be added to `app_packages` in
+  `desktop/justfile` and to the `desktop app` job in
+  `.github/workflows/ci.yml`; a local module the host comes to depend on must
+  be added to `desktop/app/moon.work`.
 
 ## Development Builds
 

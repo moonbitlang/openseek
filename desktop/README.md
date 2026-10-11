@@ -16,7 +16,9 @@ The native side is three modules. `backend` is a library; `app` and
   the host operations, and the remote transports. Packages either executable
   imports sit at its top level; the rest stay under `backend/internal/`.
 - `app/main.mbt` — the Proton window host: wires the window manifest, IPC
-  extensions, per-user runtime directory, and launch log.
+  extensions, per-user runtime directory, and launch log. It is a workspace of
+  its own (`app/moon.work`), so that nothing else needs a window toolkit to
+  build; see [`BUILD.md`](BUILD.md).
 - `server/main.mbt` — the same backend with no window, for a machine with
   no display; see [`BUILD.md`](BUILD.md).
 

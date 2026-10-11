@@ -9,6 +9,5 @@ members = [
   "./desktop",
   "./desktop/backend",
   "./desktop/server",
-  "./desktop/app",
   "./desktop/frontend",
 ]

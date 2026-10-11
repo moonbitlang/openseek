@@ -19,6 +19,30 @@ package:
 dev:
     moon run package/dev --target native
 
+# The Proton window host is a workspace of its own (`app/moon.work`), so that
+# nothing in the root workspace needs Proton. The root gates therefore do not
+# reach it; these recipes do, naming its packages because that workspace also
+# holds everything the host depends on.
+app_packages := ". internal/cdp internal/extension internal/shares"
+
+# Type-check and format-check the window host. Needs no CEF runtime.
+app-check:
+    moon -C app check --target native --deny-warn {{ app_packages }}
+    moon -C app fmt --check {{ app_packages }}
+
+# Run the window host's tests. Linking them needs the CEF runtime.
+app-test:
+    moon -C app test --target native {{ app_packages }}
+
+# Build the window host. Needs the CEF runtime.
+app-build:
+    moon -C app build . --target native
+
+# Refresh the window host's generated interfaces and formatting.
+app-info:
+    moon -C app info {{ app_packages }}
+    moon -C app fmt {{ app_packages }}
+
 # Build the Desktop browser application and run Playwright.
 test-browser:
     moon run package/browser --target native

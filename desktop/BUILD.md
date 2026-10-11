@@ -39,25 +39,27 @@ just desktop-build-scripts-check
 
 ### Headless server
 
-`desktop/server` is the backend with no window. From the repository root it
-builds like any other package (`moon build --target native desktop/server`),
-but that workspace also holds the Proton window host, and Moon runs the
-prebuild of every module a workspace resolves; Proton's needs `node` and the
-CEF runtime. A machine with neither — a container, a virtual machine — builds
-from the module's own directory instead:
+`desktop/server` is the backend with no window. It builds from the repository
+root like any other package, and needs no window toolkit: a C compiler to
+build, and nothing but the system libraries to run.
 
 ```sh
-moon -C desktop/server build . --target native --release
+moon build --target native --release desktop/server
 ```
 
-`desktop/server/moon.work` is a second workspace that lists only the modules
-the server needs, and Moon picks the nearest one, so nothing of Proton is
-resolved there. The executable lands in
-`desktop/server/_build/native/release/build/openseek_desktop/server/`. It
-needs a C compiler to build and nothing but the system libraries to run.
-`--resource-dir` names the directory its bundled files live under. The console
-listens on loopback only, so reaching it from another machine takes a
-forwarded port (`ssh -L`).
+The executable lands in
+`_build/native/release/build/openseek_desktop/server/`. `--resource-dir` names
+the directory its bundled files live under. The console listens on loopback
+only, so reaching it from another machine takes a forwarded port (`ssh -L`).
+
+### The window host's workspace
+
+`desktop/app` is the one module that depends on Proton, and Moon runs the
+prebuild of every module a workspace resolves, so it is kept out of the root
+workspace and has `desktop/app/moon.work` instead. Moon picks the nearest
+workspace: run from `desktop/app`, it builds the window host into
+`desktop/app/_build`. The build program does exactly that, and nothing else in
+the repository needs Node, GTK, or the CEF runtime to build.
 
 The platform commands remain compatible:
 

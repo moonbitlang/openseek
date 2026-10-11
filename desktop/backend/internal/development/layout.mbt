@@ -4,14 +4,17 @@
 /// layout instead of reconstructing parent-directory counts independently.
 struct Layout {
   checkout_root : @path.Path
-  build_root : @path.Path
+  /// `debug` or `release`: the profile the host was built in, which the
+  /// outputs beside it in the checkout's own `_build` share.
+  profile : String
 }
 
 ///|
 /// Recognize
-/// `_build/native/<profile>/build/openseek_desktop/app/<executable>` and
-/// return the checkout and profile build roots it identifies. Installed
-/// executables deliberately do not match this layout.
+/// `desktop/app/_build/native/<profile>/build/openseek_desktop/app/<executable>`
+/// and return the checkout it sits in. The window host is a workspace of its
+/// own, so Moon builds it under `desktop/app`, not at the checkout root.
+/// Installed executables deliberately do not match this layout.
 pub fn Layout::detect(executable : String) -> Layout? {
   let command_dir = @path.Path(executable).dirname().resolve()
   guard command_dir.basename() == "app" else { return None }
@@ -27,7 +30,12 @@ pub fn Layout::detect(executable : String) -> Layout? {
   guard native.basename() == "native" else { return None }
   let moon_build = native.dirname()
   guard moon_build.basename() == "_build" else { return None }
-  { checkout_root: moon_build.dirname(), build_root, } |> Some
+  let workspace = moon_build.dirname()
+  guard workspace.basename() == "app" else { return None }
+  let desktop = workspace.dirname()
+  guard desktop.basename() == "desktop" else { return None }
+  { checkout_root: desktop.dirname(), profile: profile.basename().to_owned(), }
+  |> Some
 }
 
 ///|
@@ -45,11 +53,10 @@ pub fn Layout::viz_shell(self : Layout) -> String {
 ///|
 /// Return the visualizer bundle built in the JS profile matching this host.
 pub fn Layout::viz_bundle(self : Layout) -> String {
-  let profile = self.build_root.dirname().basename()
   self.checkout_root
   .join("_build")
   .join("js")
-  .join(Path(profile.to_owned()))
+  .join(Path(self.profile))
   .join("build/moonbitlang/openseek-viz-app/openseek-viz-app.js")
   .normalize()
   .to_string()
@@ -57,8 +64,16 @@ pub fn Layout::viz_bundle(self : Layout) -> String {
 
 ///|
 /// Return the engine output directory in the same native profile as the host.
+/// The engine belongs to the root workspace, so it is built at the checkout
+/// root rather than beside the host.
 pub fn Layout::engine_dir(self : Layout) -> String {
-  self.build_root.join("moonbitlang/openseek").normalize().to_string()
+  self.checkout_root
+  .join("_build")
+  .join("native")
+  .join(Path(self.profile))
+  .join("build/moonbitlang/openseek")
+  .normalize()
+  .to_string()
 }
 
 ///|
