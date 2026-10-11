@@ -702,6 +702,10 @@ priv enum PumpState {
 struct EngineManager {
   engine : String
   runtime_dir : @pathx.Path?
+  // The host's own MCP server, when this launch offers host tools to its
+  // engines. Every engine spawned while it is set starts with a config that
+  // names it (see `engine_mcp_config`).
+  mcp : @mcp.Server?
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1042,10 +1046,12 @@ async fn EngineManager::close_engines_for_sessions(
 fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
+  mcp? : @mcp.Server,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
+    mcp,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     settings_lock: Mutex(),
@@ -1061,8 +1067,9 @@ fn new_engine_manager(
 pub fn new_engine_actor(
   engine : String,
   runtime_dir? : @pathx.Path,
+  mcp? : @mcp.Server,
 ) -> EngineActor {
-  { manager: new_engine_manager(engine, runtime_dir?), }
+  { manager: new_engine_manager(engine, runtime_dir?, mcp?), }
 }
 
 ///|
@@ -1426,7 +1433,10 @@ async fn engine_process_env(
 }
 
 ///|
-fn engine_process_args(config : RunConfig) -> Array[String] {
+fn engine_process_args(
+  config : RunConfig,
+  mcp_config? : @pathx.Path,
+) -> Array[String] {
   // Desktop engines always run in durable-session mode. Passing placement
   // explicitly keeps it out of the ambient environment inherited by tools.
   // Attach values so a leading `-` remains part of the value.
@@ -1434,8 +1444,48 @@ fn engine_process_args(config : RunConfig) -> Array[String] {
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
+  if mcp_config is Some(path) {
+    args.push("--mcp-config=\{path.to_string()}")
+  }
   args.append(["--dir", ".", "--approval", "ask"])
   args
+}
+
+///|
+/// The variable an engine takes its MCP config path from when no
+/// `--mcp-config` names one: the user's own, inherited from their shell.
+const McpConfigEnv = "OPENSEEK_MCP_CONFIG"
+
+///|
+/// The MCP config this conversation's engine starts with when the host
+/// offers tools of its own: the config the engine would have inherited
+/// through `env`, with the host's server added. `None` without a host server
+/// leaves the engine on whatever it inherits.
+async fn engine_mcp_config(
+  manager : EngineManager,
+  config : RunConfig,
+  env : Map[String, String],
+) -> @pathx.Path? {
+  guard manager.mcp is Some(server) else { return None }
+  // The engine refuses such an id as well; refusing it first keeps it from
+  // naming a file outside the config directory.
+  guard @session_store.safe_session_id(config.session) else {
+    raise EngineError("session id must be a single path component")
+  }
+  // An empty value is the engine's spelling of "no config".
+  let inherited : @pathx.Path? = if env.get(McpConfigEnv) is Some(value) &&
+    !value.is_empty() {
+    let path = @pathx.Path(value)
+    // The engine would have resolved a relative path against its own
+    // working directory.
+    match config.cwd {
+      Some(cwd) if !path.is_host_absolute() => Some(cwd.join(Relative(value)))
+      _ => Some(path)
+    }
+  } else {
+    None
+  }
+  Some(server.engine_config(session=config.session, inherited?))
 }
 
 ///|
@@ -1492,7 +1542,10 @@ async fn[G] start_serve_engine(
   // a controller with a person behind it from a script reading its stdout.
   // Saying so here is what makes the escalation argument exist for this
   // session's model at all.
-  let args = engine_process_args(config)
+  let args = engine_process_args(
+    config,
+    mcp_config?=engine_mcp_config(manager, config, env),
+  )
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {

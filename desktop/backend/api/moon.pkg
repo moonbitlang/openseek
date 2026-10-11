@@ -8,6 +8,7 @@ import {
   "openseek_desktop/backend/engine",
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/host",
+  "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",
   "openseek_desktop/backend/internal/work_dir",

@@ -1,0 +1,46 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/mcp"
+
+import {
+  "openseek_desktop/backend/pathx",
+}
+
+// Values
+
+// Errors
+pub suberror ServerError {
+  ServerError(String)
+}
+pub fn ServerError::output(Self, &Logger) -> Unit
+pub fn ServerError::to_string(Self) -> String
+pub impl Show for ServerError
+
+pub(all) suberror ToolError {
+  ToolError(String)
+}
+pub fn ToolError::output(Self, &Logger) -> Unit
+pub fn ToolError::to_string(Self) -> String
+pub impl Show for ToolError
+
+// Types and methods
+type Server
+pub async fn Server::bind(Array[Tool], version~ : String, config_dir~ : @pathx.Path) -> Self
+pub async fn Server::engine_config(Self, session~ : String, inherited? : @pathx.Path) -> @pathx.Path
+pub async fn Server::run(Self) -> Unit
+pub fn Server::url(Self) -> String
+
+pub(all) struct Tool {
+  name : String
+  description : String
+  input_schema : Json
+  call : async (ToolCall) -> String
+}
+
+pub(all) struct ToolCall {
+  session : String
+  arguments : Json
+}
+
+// Type aliases
+
+// Traits

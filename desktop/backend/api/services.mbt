@@ -2,12 +2,12 @@
 /// Bring the backend up on the caller's task group. The first-launch and
 /// migration work on the workspace registry finishes first, before anything
 /// here can serve a client; then the app-lifetime owners start: the Codex
-/// app-server and engine supervisors, the schedule runner, and the host
-/// pumps. Every host of the backend starts through this one call, so none can
-/// serve a workspace list it has not prepared, and a client finds the same
-/// backend behind any of them. The owners feed every page and client rather
-/// than borrowing one request's task as their owner, and stop when `group`
-/// ends.
+/// app-server and engine supervisors, the schedule runner, the host pumps,
+/// and the host's MCP server when it has one. Every host of the backend
+/// starts through this one call, so none can serve a workspace list it has
+/// not prepared, and a client finds the same backend behind any of them. The
+/// owners feed every page and client rather than borrowing one request's
+/// task as their owner, and stop when `group` ends.
 pub async fn[G] ApiState::start_services(
   self : ApiState,
   group : @async.TaskGroup[G],
@@ -37,4 +37,10 @@ pub async fn[G] ApiState::start_services(
   @host.spawn_host_pumps(group, self.host, notification => {
     self.publish(notification)
   })
+  // Engines are pointed at this server from their first spawn, so it serves
+  // from the same moment they can exist.
+  if self.mcp is Some(server) {
+    @xlog.info() <? { "event": "desktop_mcp_serving", "url": server.url() }
+    group.spawn_bg(allow_failure=true, () => server.run())
+  }
 }

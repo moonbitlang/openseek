@@ -34,6 +34,10 @@ struct ApiState {
   // A development build's console entry URL (`internal/remote` serves the
   // frontend on loopback for the system browser); a release build has none.
   console_url : String?
+  // The MCP server through which this backend's engines call tools their
+  // host contributes; none when the host offers no tools. The engine actor
+  // names it in every engine's config, and `start_services` serves it.
+  mcp : @mcp.Server?
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -271,9 +275,10 @@ pub fn ApiState::ApiState(
   app_version? : String = "development",
   console_url? : String,
   resources? : @resources.Resources,
+  mcp? : @mcp.Server,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
-  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
+  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?, mcp?)
   {
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
@@ -295,6 +300,7 @@ pub fn ApiState::ApiState(
     },
     app_version,
     console_url,
+    mcp,
     on_finished,
   }
 }
