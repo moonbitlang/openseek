@@ -78,6 +78,7 @@ pub fn AgentFeedbackInputWidget::hide(Self) -> Unit
 pub fn AgentFeedbackInputWidget::measured_height(Self) -> Double
 pub fn AgentFeedbackInputWidget::measured_width(Self) -> Double
 pub fn AgentFeedbackInputWidget::refresh_labels(Self) -> Unit
+pub fn AgentFeedbackInputWidget::resize(Self) -> Unit
 pub fn AgentFeedbackInputWidget::set_placeholder(Self, String) -> Unit
 pub fn AgentFeedbackInputWidget::set_position(Self, Double, Double) -> Unit
 pub fn AgentFeedbackInputWidget::show(Self) -> Unit

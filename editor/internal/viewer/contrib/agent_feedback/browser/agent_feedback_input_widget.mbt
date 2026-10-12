@@ -424,3 +424,11 @@ extern "js" fn input_event_targets(
 
 ///|
 extern "js" fn input_checkbox_checked(element : @rdom.Element) -> Bool = "(el) => el.checked"
+
+///|
+/// Recompute intrinsic size when a non-editor host viewport changes.
+pub fn AgentFeedbackInputWidget::resize(
+  self : AgentFeedbackInputWidget,
+) -> Unit {
+  self.auto_size()
+}

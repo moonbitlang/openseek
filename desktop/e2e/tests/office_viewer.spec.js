@@ -3,6 +3,15 @@ import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
 
+async function annotateSelection(preview) {
+  await expect(preview.locator('textarea')).toBeVisible();
+  await expect(preview).not.toHaveAttribute('title', '');
+  const source = await preview.getAttribute('title');
+  await preview.locator('textarea').fill(source.slice(source.indexOf('\n') + 1).trim() || 'Inspect selected cells');
+  await preview.getByRole('checkbox').check();
+  await preview.locator('textarea').press('Enter');
+}
+
 async function applicationStyles(page) {
   return page.evaluate(() => {
     let probe = document.getElementById('xlsx-style-probe');
@@ -69,10 +78,10 @@ test('the sales demonstration workbook opens both sheets and quotes calculated c
   await summary.locator('td[data-cell="C5"]').click();
   const preview = page.locator('.office-selection-preview');
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-source')).toContainText('季度汇总!C5');
-  await expect(preview.locator('.office-selection-excerpt')).toContainText('¥53,820.00');
+  await expect.poll(() => preview.getAttribute('title')).toContain('季度汇总!C5');
+  await expect.poll(() => preview.getAttribute('title')).toContain('¥53,820.00');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toContainText('季度汇总!C5');
   await page.getByRole('tab', { name: '销售明细', exact: true }).click();
   await expect(detail).toBeVisible();
@@ -169,28 +178,28 @@ test('Word selections preview, cancel and accumulate only after confirmation', a
   await expect(preview).toBeHidden();
   await wordText.dispatchEvent('pointerup', { button: 0, isPrimary: true });
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-source')).toContainText('report.docx');
-  await expect(preview.locator('.office-selection-excerpt')).toContainText('Walking on imported air');
+  await expect.poll(() => preview.getAttribute('title')).toContain('report.docx');
+  await expect.poll(() => preview.getAttribute('title')).toContain('Walking on imported air');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await preview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await preview.locator('textarea').press('Escape');
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await selectWord();
   await expect(preview).toBeVisible();
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toContainText('report.docx');
   await expect(page.locator('.mention-chip')).toContainText('Walking on imported air');
   await expect(page.locator('.mention-chip .mention-body')).toHaveAttribute('title', /Walking on imported air/);
   await selectWord(7);
-  await expect(preview.locator('.office-selection-excerpt')).toHaveText('Walking');
+  await expect.poll(() => preview.getAttribute('title')).toContain('Walking');
   await expect(page.locator('.mention-chip')).toHaveCount(1);
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(2);
   // Reaccepting the same passage keeps a single copy of that quotation.
   await selectWord(7);
   await expect(preview).toBeVisible();
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(2);
 
   await page.locator('#task').fill('Explain the selected Office text');
@@ -234,22 +243,22 @@ test('Excel ranges preview cell contents and retain separately confirmed context
   const preview = page.locator('.office-selection-preview');
   await selectRange();
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-source')).toContainText('A1:B1');
-  await expect(preview.locator('.office-selection-excerpt')).toContainText(await cells.first().innerText());
+  await expect.poll(() => preview.getAttribute('title')).toContain('A1:B1');
+  await expect.poll(() => preview.getAttribute('title')).toContain(await cells.first().innerText());
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await preview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await preview.locator('textarea').press('Escape');
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await selectRange();
   await expect(preview).toBeVisible();
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toContainText('book1.xlsx');
   await expect(page.locator('.mention-chip')).toContainText('A1:B1');
   await cells.first().click();
-  await expect(preview.locator('.office-selection-source')).toContainText('!A1');
+  await expect.poll(() => preview.getAttribute('title')).toContain('!A1');
   await expect(page.locator('.mention-chip')).toHaveCount(1);
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(2);
 
   await page.locator('#task').fill('Inspect the selected cells');
@@ -259,8 +268,9 @@ test('Excel ranges preview cell contents and retain separately confirmed context
   const task = app.requests.find(request => request.method === 'agent.start').params.task;
   expect(task).toContain('office.selection.materialized.v1');
   expect(task).toContain('/workspace/docs/book1.xlsx');
-  expect(task).toContain('"kind": "excel"');
-  expect(task).toContain('"range": "A1:B1"');
+  const selectedCells = JSON.parse(task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
+  expect(selectedCells.selection.kind).toBe('excel');
+  expect(selectedCells.selection.range).toBe('A1:B1');
   expect(task).toContain('Inspect the selected cells');
   expect([...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)]).toHaveLength(2);
   expect(app.pageErrors).toEqual([]);
@@ -312,12 +322,12 @@ test('Word comments stay beside their source paragraphs and quote only after con
   await cards.first().getByRole('button', { name: 'Quote comment', exact: true }).click();
   const preview = page.locator('.office-selection-preview');
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-excerpt')).toContainText('建议保留明确的');
+  await expect.poll(() => preview.getAttribute('title')).toContain('建议保留明确的');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await preview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await preview.locator('textarea').press('Escape');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await cards.first().getByRole('button', { name: 'Quote comment', exact: true }).click();
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(1);
   await expect(page.locator('.mention-chip')).toContainText('建议保留明确的');
 

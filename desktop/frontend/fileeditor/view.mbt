@@ -452,7 +452,7 @@ pub fn body_view(
       semantic_review_host,
       viewer_notice(locale~, state, ctx),
       github_review_line_layer(locale~, dispatch, state, ctx),
-      office_selection_preview_view(locale, dispatch, state, ctx),
+      office_selection_preview_view(state, ctx),
     ]),
     tree_pane(locale~, dispatch, state, ctx),
   ])
