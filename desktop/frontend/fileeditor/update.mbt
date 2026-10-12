@@ -2539,7 +2539,7 @@ fn update_inner(
     // the file-editor reducer total for embedders that delegate every message.
     OfficeFeedbackChanged(candidate, text) =>
       if state.pending_office_selection(ctx) == Some(candidate) {
-        (@cmd.none, { ..state, office_selection_comment: text, })
+        (@cmd.none, { ..state, office_selection_comment: Some(text), })
       } else {
         (@cmd.none, state)
       }

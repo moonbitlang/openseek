@@ -3236,7 +3236,7 @@ fn update_msg(
       confirm_office_selection(
         model,
         preview,
-        comment=model.file_panel.office_selection_comment,
+        comment?=model.file_panel.office_selection_comment,
       )
     FileEditor(
       @fileeditor.PdfSelectionChanged(

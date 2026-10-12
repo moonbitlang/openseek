@@ -513,7 +513,7 @@ pub(all) struct State {
   office_query : String
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?
-  office_selection_comment : String
+  office_selection_comment : String?
   pdf_generation : Int
   explorer_mode : ExplorerMode
   search : @grep_search.State

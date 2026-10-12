@@ -88,7 +88,8 @@ pub fn State::offer_office_selection(
   }
   // A typed draft pins its original source until submission or cancellation.
   if self.pending_office_selection(ctx) is Some(_) &&
-    !self.office_selection_comment.trim().is_empty() {
+    self.office_selection_comment is Some(comment) &&
+    !comment.trim().is_empty() {
     return Ok(self)
   }
   let (sig, pdf_generation) = match self.docs.get(path) {
@@ -108,7 +109,7 @@ pub fn State::offer_office_selection(
   }
   Ok({
     ..self,
-    office_selection_comment: "",
+    office_selection_comment: Some(""),
     office_selection: Some({
       owner: ctx.owner,
       epoch: self.request_epoch,
@@ -136,7 +137,7 @@ pub fn State::dismiss_office_selection(
       hide_office_feedback(),
       @office_viewer.clear_selection_command(OfficeSurfaceId),
     ]),
-    { ..self, office_selection: None, office_selection_comment: "", },
+    { ..self, office_selection: None, office_selection_comment: None, },
   )
 }
 
@@ -144,7 +145,7 @@ pub fn State::dismiss_office_selection(
 fn State::sync_office_selection(self : State, ctx : Ctx) -> State {
   if self.office_selection is Some(_) &&
     self.pending_office_selection(ctx) is None {
-    { ..self, office_selection: None, office_selection_comment: "", }
+    { ..self, office_selection: None, office_selection_comment: None, }
   } else {
     self
   }
