@@ -178,10 +178,7 @@ fn FeedbackComposerWidget::layout(self : FeedbackComposerWidget) -> Unit {
     self.widget.hide()
     return
   }
-  self.widget.resize()
   let root = self.container.get_bounding_client_rect()
-  let width = self.widget.measured_width()
-  let height = self.widget.measured_height()
   if anchor.get_bottom() < root.get_top() ||
     anchor.get_top() > root.get_bottom() ||
     anchor.get_right() < root.get_left() ||
@@ -190,6 +187,11 @@ fn FeedbackComposerWidget::layout(self : FeedbackComposerWidget) -> Unit {
     return
   }
   self.widget.show()
+  // Hidden textareas have no scrollHeight. Restore visibility before sizing
+  // so both the draft height and the popup position use rendered geometry.
+  self.widget.resize()
+  let width = self.widget.measured_width()
+  let height = self.widget.measured_height()
   let left = (anchor.get_left() - root.get_left())
     .max(0.0)
     .min((root.get_width() - width).max(0.0))
