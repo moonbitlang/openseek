@@ -30,6 +30,12 @@ const WorkspacesFile = "workspaces.json"
 /// lock. Remote requests run in independent tasks; without this serialization
 /// two concurrent add/remove operations can both read the same old list and
 /// let the later write silently erase the earlier one.
+///
+/// It orders this process only. The registry is shared with every other host
+/// process under the same session root — a second window host, a headless
+/// server — so each mutation also holds `lock_registry_file` across its read
+/// and its write. Reads take neither across processes: the save is atomic, so
+/// a reader sees one complete version or the other.
 let workspace_registry_lock : @async.Mutex = Mutex()
 
 ///|
@@ -38,6 +44,23 @@ let workspace_registry_lock : @async.Mutex = Mutex()
 /// store of the workspace this file registers.
 fn workspaces_file() -> @pathx.Absolute? {
   global_store_root().map(root => root.join(WorkspacesFile))
+}
+
+///|
+/// The cross-process half of a registry mutation, taken after
+/// `workspace_registry_lock` and before the registry is read: a list read
+/// before another process released this lock is exactly the stale snapshot
+/// whose write-back would erase that process's entry. Unlike a read, which
+/// degrades to "no workspaces", a mutation with nowhere to persist has to say
+/// so rather than succeed against nothing.
+async fn lock_registry_file() -> @fsx.FileLock {
+  guard workspaces_file() is Some(file) else {
+    raise WorkspaceError("cannot determine a session root: HOME is unavailable")
+  }
+  @fsx.FileLock::acquire(file.to_path()) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise WorkspaceError("could not lock the workspace list: \{error}")
+  }
 }
 
 ///|
@@ -109,6 +132,9 @@ pub async fn registered() -> Array[@pathx.Absolute] {
 }
 
 ///|
+/// Save the registry. Atomic, so the readers that take no lock — another host
+/// process, the next launch after a crash — never observe a truncated list
+/// and read it as "no workspaces attached".
 async fn write_registry(registry : Registry) -> Unit {
   guard global_store_root() is Some(root) else {
     raise WorkspaceError("cannot determine a session root: HOME is unavailable")
@@ -120,7 +146,11 @@ async fn write_registry(registry : Registry) -> Unit {
     "workspaces": registry.workspaces.map(path => path.0).to_json(),
     "initialized": registry.initialized.to_json(),
   }
-  @fsx.write_text(root.join(WorkspacesFile).to_path(), json.stringify(indent=2)) catch {
+  @fsx.write_text_atomic(
+    root.join(WorkspacesFile).to_path(),
+    json.stringify(indent=2),
+  ) catch {
+    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not save the workspace list: \{error}")
   }
 }
@@ -173,6 +203,8 @@ pub async fn default_workspace() -> @pathx.Absolute? {
 pub async fn initialize() -> @pathx.Absolute? {
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  let shared = lock_registry_file()
+  defer shared.release()
   let registry = read_registry_unlocked()
   guard !registry.initialized else { return None }
   guard default_workspace_dir() is Some(dir) && dir.to_absolute() is Some(dir) else {
@@ -235,6 +267,8 @@ pub async fn add(
   exclude_from_git(dir, ".openseek")
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  let shared = lock_registry_file()
+  defer shared.release()
   let registry = read_registry_unlocked()
   let paths = registry.workspaces
   // The write and broadcast callback are one finite, cancellation-shielded
@@ -262,6 +296,8 @@ pub async fn remove(
   let target = canonical_path(expanded_path(path))
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  let shared = lock_registry_file()
+  defer shared.release()
   let registry = read_registry_unlocked()
   let paths = registry.workspaces.filter(p => p != target)
   @async.protect_from_cancel(() => {
@@ -402,6 +438,8 @@ pub async fn register_task_directory(
   let canonical = canonical_path(dir)
   workspace_registry_lock.acquire()
   defer workspace_registry_lock.release()
+  let shared = lock_registry_file()
+  defer shared.release()
   let registry = read_registry_unlocked()
   let paths = registry.workspaces.copy()
   @async.protect_from_cancel(() => {

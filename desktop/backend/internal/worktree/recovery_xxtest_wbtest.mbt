@@ -198,12 +198,12 @@ async test "failed registry publication rolls back only its own locked checkout"
     rollback_worktree_checkout(repo, "other", "our invocation")
     assert_true(@fsx.is_dir(other.to_path()))
     assert_eq(worktree_lock_reason(repo, "other"), Some("other tool"))
-    @fsx.ensure_dir(@workspaces.store_root(repo).to_path())
-    @fs.mkdir(
-      @workspaces.store_root(repo).join(WorktreesFile + ".tmp").to_string(),
-    )
+    // A directory where the registry file belongs reads as an empty registry
+    // and refuses the rename that publishes a new one, so the create fails
+    // at publication, after its checkout exists.
+    @fsx.ensure_dir(worktrees_file(repo).to_path())
     let refused = create_refusal(host, resource_path(repo), "failed", "failed")
-    assert_true(refused.contains("could not stage the worktree list"))
+    assert_true(refused.contains("could not save the worktree list"))
     assert_false(@fsx.exists(worktree_dir(repo, "failed").to_path()))
     assert_eq(
       @gitx.run(repo, [
