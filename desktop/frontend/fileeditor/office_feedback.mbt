@@ -28,26 +28,26 @@ pub fn show_office_feedback(
       surface.get_parent_element() is Some(viewport) else {
       return
     }
-    let mounted = if office_feedback_mount.val is Some(mounted) &&
+    if office_feedback_mount.val is Some(mounted) &&
       @base_browser.element_contains(host, mounted.host) {
-      Some(mounted)
-    } else {
-      None
-    }
-    if mounted is Some(mounted) && mounted.target.val == Some(preview) {
+      if mounted.target.val != Some(preview) {
+        guard office_feedback_anchor(surface, preview)
+          is Some((anchor, selection_rects, prefer_below)) else {
+          // Never associate a new target with an old visible anchor.
+          mounted.target.val = None
+          mounted.input.hide()
+          scheduler.add(emit(OfficeSelectionDismissed(preview)))
+          return
+        }
+        mounted.target.val = Some(preview)
+        mounted.input.show(anchor, selection_rects~, prefer_below~)
+      }
       return
     }
     guard office_feedback_anchor(surface, preview)
       is Some((anchor, selection_rects, prefer_below)) else {
-      // Never associate a new target with an old visible anchor. Sources
-      // without a recoverable resolver must be selected again.
       dispose_office_feedback()
       scheduler.add(emit(OfficeSelectionDismissed(preview)))
-      return
-    }
-    if mounted is Some(mounted) {
-      mounted.target.val = Some(preview)
-      mounted.input.show(anchor, selection_rects~, prefer_below~)
       return
     }
     guard viewer_state.services is Some(services) else { return }
