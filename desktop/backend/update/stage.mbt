@@ -167,6 +167,16 @@ async fn run_tool(command : String, args : Array[String]) -> Unit {
 }
 
 ///|
+/// Whether the bundle at `bundle_path` can take part in self-update at all:
+/// whether `stage_update` would agree to download a replacement for it. A
+/// development build is signed ad hoc and never does. The staging directory
+/// and whatever else an update leaves in the shared work directory belong to
+/// the bundles that can, and a host that cannot must leave them alone.
+pub async fn can_stage_updates(bundle_path~ : String) -> Bool {
+  team_identifier(bundle_path) is Some(_)
+}
+
+///|
 /// The bundle's signing team, from `codesign -dv`; None for unsigned or
 /// ad-hoc ("not set") signatures.
 async fn team_identifier(app_path : String) -> String? {

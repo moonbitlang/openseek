@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit
 
+pub async fn can_stage_updates(bundle_path~ : String) -> Bool
+
 pub async fn check_for_update(current~ : String) -> UpdateInfo?
 
 pub async fn cleanup_leftovers(work_dir~ : String, bundle_path~ : String) -> Unit
