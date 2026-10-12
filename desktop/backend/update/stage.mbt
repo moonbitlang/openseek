@@ -172,32 +172,73 @@ async fn run_tool(command : String, args : Array[String]) -> Unit {
 /// development build is signed ad hoc and never does. The staging directory
 /// and whatever else an update leaves in the shared work directory belong to
 /// the bundles that can, and a host that cannot must leave them alone.
+///
+/// Raises when the signature could not be read. That is not an answer: a
+/// caller that took it for "no" would treat a signed bundle as one with
+/// nothing of its own to clean up.
 pub async fn can_stage_updates(bundle_path~ : String) -> Bool {
-  team_identifier(bundle_path) is Some(_)
+  match signing_team(bundle_path) {
+    Team(_) => true
+    NoTeam => false
+    Unreadable(reason) =>
+      raise UpdateError(
+        "cannot tell whether \{bundle_path} is signed for self-update: \{reason}",
+      )
+  }
 }
 
 ///|
-/// The bundle's signing team, from `codesign -dv`; None for unsigned or
-/// ad-hoc ("not set") signatures.
-async fn team_identifier(app_path : String) -> String? {
+/// What `codesign -dv` says about who signed a bundle.
+priv enum SigningTeam {
+  Team(String)
+  // Positively none: the bundle is unsigned, or signed ad hoc.
+  NoTeam
+  // The probe gave no answer; the text says why.
+  Unreadable(String)
+}
+
+///|
+/// Ask `codesign` who signed `app_path`. An unsigned code object is the one
+/// refusal that is itself an answer; any other failure — the tool missing,
+/// the path gone, a bundle it cannot parse — leaves the question open.
+async fn signing_team(app_path : String) -> SigningTeam {
   let (code, output) = @process.collect_output_merged(
     "codesign",
     ["-dv", app_path],
     inherit_env=true,
   ) catch {
-    _ => return None
+    error if @async.is_being_cancelled() => raise error
+    error => return Unreadable("codesign could not run: \{error}")
   }
-  guard code == 0 else { return None }
-  for line in output.text().split("\n") {
-    if line.trim().strip_prefix("TeamIdentifier=") is Some(team) {
-      let team = team.trim().to_owned()
-      if team.is_empty() || team == "not set" {
-        return None
-      }
-      return Some(team)
+  let text = output.text()
+  guard code == 0 else {
+    return if text.contains("code object is not signed at all") {
+      NoTeam
+    } else {
+      Unreadable(text.trim().to_owned())
     }
   }
-  None
+  for line in text.split("\n") {
+    if line.trim().strip_prefix("TeamIdentifier=") is Some(team) {
+      let team = team.trim().to_owned()
+      return if team.is_empty() || team == "not set" {
+        NoTeam
+      } else {
+        Team(team)
+      }
+    }
+  }
+  NoTeam
+}
+
+///|
+/// The bundle's signing team; None for unsigned or ad-hoc ("not set")
+/// signatures, and for a signature that could not be read.
+async fn team_identifier(app_path : String) -> String? {
+  match signing_team(app_path) {
+    Team(team) => Some(team)
+    NoTeam | Unreadable(_) => None
+  }
 }
 
 ///|
