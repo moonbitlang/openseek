@@ -103,7 +103,7 @@ fn office_feedback_anchor(
     ([] : FixedArray[@js.Value]),
   )
   if selection.to_option() is Some(selection) {
-    let count : Int = selection.get_with_string("rangeCount")
+    let count : Int32 = selection.get_with_string("rangeCount")
     let collapsed : Bool = selection.get_with_string("isCollapsed")
     if count == 1 && !collapsed {
       let range : @js.Value = selection.apply_with_string("getRangeAt", [0])
@@ -111,8 +111,8 @@ fn office_feedback_anchor(
       let end : @dom.Node = range.get_with_string("endContainer")
       if surface.contains(start) && surface.contains(end) {
         let focus : @dom.Node = selection.get_with_string("focusNode")
-        let offset : Int = selection.get_with_string("focusOffset")
-        let end_offset : Int = range.get_with_string("endOffset")
+        let offset : Int32 = selection.get_with_string("focusOffset")
+        let end_offset : Int32 = range.get_with_string("endOffset")
         let prefer_below = focus.is_same_node(end) && offset == end_offset
         if preview.pdf_generation is Some(_) &&
           pdf_feedback_range(surface, preview.materialized)
@@ -262,7 +262,7 @@ fn pdf_feedback_range(
 fn pdf_feedback_endpoint(
   surface : @dom.Element,
   endpoint : Json,
-) -> (@dom.Node, Int)? {
+) -> (@dom.Node, Int32)? {
   guard endpoint
     is {
       "page": Number(page, ..),
@@ -312,7 +312,7 @@ fn feedback_range_rects(range : @js.Value) -> Array[@dom.DOMRect] {
   let rects : Array[@dom.DOMRect] = []
   let mut current = Some(root)
   while current is Some(node) {
-    let kind : Int = @js.Value::cast_from(node).get_with_string("nodeType")
+    let kind : Int32 = @js.Value::cast_from(node).get_with_string("nodeType")
     let intersects : Bool = range.apply_with_string("intersectsNode", [node])
     if kind == 3 && intersects {
       let contents : @js.Value = document.apply_with_string(
@@ -326,11 +326,11 @@ fn feedback_range_rects(range : @js.Value) -> Array[@dom.DOMRect] {
         "cloneRange",
         ([] : FixedArray[@js.Value]),
       )
-      let starts_before : Int = selected.apply_with_string(
+      let starts_before : Int32 = selected.apply_with_string(
         "compareBoundaryPoints",
         [@js.Value::cast_from(0), contents],
       )
-      let ends_after : Int = selected.apply_with_string(
+      let ends_after : Int32 = selected.apply_with_string(
         "compareBoundaryPoints",
         [@js.Value::cast_from(2), contents],
       )

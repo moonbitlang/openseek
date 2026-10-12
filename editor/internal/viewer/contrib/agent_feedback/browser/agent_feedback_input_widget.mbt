@@ -59,7 +59,7 @@ struct AgentFeedbackInputWidget {
 pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   localization~ : @localization.Localization = Localization(),
   host : AgentFeedbackInputWidgetHost,
-  on_change? : (String) -> Unit = _ => (),
+  on_change~ : (String) -> Unit = _ => (),
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
   let root = document.create_element("div")
