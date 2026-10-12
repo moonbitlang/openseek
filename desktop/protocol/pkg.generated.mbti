@@ -30,12 +30,13 @@ pub(all) struct AgentErrorPayload {
   message : String?
   exit_code : Int?
   diagnostics : String?
-} derive(Eq, ToJson, @debug.Debug)
+} derive(Eq, @debug.Debug)
 pub fn AgentErrorPayload::equal(Self, Self) -> Bool
 pub fn AgentErrorPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AgentErrorPayload::not_equal(Self, Self) -> Bool
 pub fn AgentErrorPayload::to_json(Self) -> Json
 pub fn AgentErrorPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AgentErrorPayload
 pub impl @json.FromJson for AgentErrorPayload
 
 pub(all) struct AgentEventPayload {
@@ -87,7 +88,9 @@ pub impl @json.FromJson for AppSystemAppearanceReply
 
 pub(all) struct AppTitlebarThemePayload {
   dark : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
+pub impl ToJson for AppTitlebarThemePayload
+pub impl @json.FromJson for AppTitlebarThemePayload
 
 pub(all) struct ApplyUpdateReply {
   applied : Bool
@@ -148,12 +151,14 @@ pub impl @json.FromJson for ArchiveReply
 pub(all) struct ArchivedSessionPayload {
   session : String
   workspace : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ArchivedSessionPayload::equal(Self, Self) -> Bool
 pub fn ArchivedSessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ArchivedSessionPayload::not_equal(Self, Self) -> Bool
 pub fn ArchivedSessionPayload::to_json(Self) -> Json
 pub fn ArchivedSessionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ArchivedSessionPayload
+pub impl @json.FromJson for ArchivedSessionPayload
 
 pub(all) enum AttachmentSource {
   AttachmentPath(String)
@@ -171,12 +176,14 @@ pub(all) struct AuthDevicePayload {
   id : String
   name : String
   url : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn AuthDevicePayload::equal(Self, Self) -> Bool
 pub fn AuthDevicePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthDevicePayload::not_equal(Self, Self) -> Bool
 pub fn AuthDevicePayload::to_json(Self) -> Json
 pub fn AuthDevicePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AuthDevicePayload
+pub impl @json.FromJson for AuthDevicePayload
 
 pub(all) struct AuthStatusPayload {
   connected : Bool
@@ -184,31 +191,37 @@ pub(all) struct AuthStatusPayload {
   managed_by_env : Bool?
   user : AuthUserPayload?
   device : AuthDevicePayload?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn AuthStatusPayload::equal(Self, Self) -> Bool
 pub fn AuthStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthStatusPayload::not_equal(Self, Self) -> Bool
 pub fn AuthStatusPayload::to_json(Self) -> Json
 pub fn AuthStatusPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AuthStatusPayload
+pub impl @json.FromJson for AuthStatusPayload
 
 pub(all) struct AuthUserPayload {
   login : String
   avatar_url : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn AuthUserPayload::equal(Self, Self) -> Bool
 pub fn AuthUserPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn AuthUserPayload::not_equal(Self, Self) -> Bool
 pub fn AuthUserPayload::to_json(Self) -> Json
 pub fn AuthUserPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AuthUserPayload
+pub impl @json.FromJson for AuthUserPayload
 
 pub(all) struct BrowseDirectoryPayload {
   path : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowseDirectoryPayload::equal(Self, Self) -> Bool
 pub fn BrowseDirectoryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowseDirectoryPayload::not_equal(Self, Self) -> Bool
 pub fn BrowseDirectoryPayload::to_json(Self) -> Json
 pub fn BrowseDirectoryPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowseDirectoryPayload
+pub impl @json.FromJson for BrowseDirectoryPayload
 
 pub(all) enum BrowseDirectoryReply {
   Listing(path~ : String, parent~ : String?, entries~ : Array[String])
@@ -229,12 +242,14 @@ pub(all) struct BrowserBoundsPayload {
   y : Int
   width : Int
   height : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserBoundsPayload::equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserBoundsPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::to_json(Self) -> Json
 pub fn BrowserBoundsPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserBoundsPayload
+pub impl @json.FromJson for BrowserBoundsPayload
 
 pub(all) struct BrowserElement {
   url : String
@@ -254,12 +269,14 @@ pub impl @json.FromJson for BrowserElement
 
 pub(all) struct BrowserIdPayload {
   id : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserIdPayload::equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserIdPayload::not_equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::to_json(Self) -> Json
 pub fn BrowserIdPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserIdPayload
+pub impl @json.FromJson for BrowserIdPayload
 
 pub(all) struct BrowserOpenPayload {
   id : Int
@@ -301,31 +318,37 @@ pub impl @json.FromJson for BrowserPickReply
 pub(all) struct BrowserThemePayload {
   id : Int
   dark : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserThemePayload::equal(Self, Self) -> Bool
 pub fn BrowserThemePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserThemePayload::not_equal(Self, Self) -> Bool
 pub fn BrowserThemePayload::to_json(Self) -> Json
 pub fn BrowserThemePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserThemePayload
+pub impl @json.FromJson for BrowserThemePayload
 
 pub(all) struct BrowserVisiblePayload {
   id : Int
   visible : Bool
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn BrowserVisiblePayload::equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn BrowserVisiblePayload::not_equal(Self, Self) -> Bool
 pub fn BrowserVisiblePayload::to_json(Self) -> Json
 pub fn BrowserVisiblePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for BrowserVisiblePayload
+pub impl @json.FromJson for BrowserVisiblePayload
 
 pub(all) struct CancelPayload {
   run_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn CancelPayload::equal(Self, Self) -> Bool
 pub fn CancelPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelPayload::not_equal(Self, Self) -> Bool
 pub fn CancelPayload::to_json(Self) -> Json
 pub fn CancelPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CancelPayload
+pub impl @json.FromJson for CancelPayload
 
 pub(all) struct CancelReply {
   run_id : String?
@@ -341,12 +364,14 @@ pub impl @json.FromJson for CancelReply
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
   generation : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn CancelSearchFilesPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn CancelSearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::to_json(Self) -> Json
 pub fn CancelSearchFilesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CancelSearchFilesPayload
+pub impl @json.FromJson for CancelSearchFilesPayload
 
 pub(all) struct CancelSearchSemanticPayload {
   session_key : String
@@ -401,12 +426,14 @@ pub impl @json.FromJson for CheckUpdateReply
 
 pub(all) struct ClearFileSearchCachePayload {
   cache_key : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ClearFileSearchCachePayload::equal(Self, Self) -> Bool
 pub fn ClearFileSearchCachePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ClearFileSearchCachePayload::not_equal(Self, Self) -> Bool
 pub fn ClearFileSearchCachePayload::to_json(Self) -> Json
 pub fn ClearFileSearchCachePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ClearFileSearchCachePayload
+pub impl @json.FromJson for ClearFileSearchCachePayload
 
 pub(all) struct CodexAccountLoginCancelPayload {
   login_id : String
@@ -863,12 +890,14 @@ pub(all) struct DiagnosticsPayload {
   root : String
   path : String
   diagnostics : Array[LspDiagnostic]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn DiagnosticsPayload::equal(Self, Self) -> Bool
 pub fn DiagnosticsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn DiagnosticsPayload::not_equal(Self, Self) -> Bool
 pub fn DiagnosticsPayload::to_json(Self) -> Json
 pub fn DiagnosticsPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for DiagnosticsPayload
+pub impl @json.FromJson for DiagnosticsPayload
 
 pub(all) struct DirEntry {
   name : String
@@ -913,12 +942,14 @@ pub impl @json.FromJson for EmptyReply
 
 pub(all) struct ExternalLinkPayload {
   url : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ExternalLinkPayload::equal(Self, Self) -> Bool
 pub fn ExternalLinkPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ExternalLinkPayload::not_equal(Self, Self) -> Bool
 pub fn ExternalLinkPayload::to_json(Self) -> Json
 pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ExternalLinkPayload
+pub impl @json.FromJson for ExternalLinkPayload
 
 pub(all) enum FileSignature {
   Missing
@@ -964,12 +995,14 @@ pub(all) struct FsChangedPayload {
   baseline : Bool
   events : Array[FsEventPayload]
   generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn FsChangedPayload::equal(Self, Self) -> Bool
 pub fn FsChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsChangedPayload::not_equal(Self, Self) -> Bool
 pub fn FsChangedPayload::to_json(Self) -> Json
 pub fn FsChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FsChangedPayload
+pub impl @json.FromJson for FsChangedPayload
 
 pub(all) struct FsEventPayload {
   kind_ : String
@@ -986,23 +1019,27 @@ pub(all) struct FsWatchFailedPayload {
   root : String
   message : String
   generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn FsWatchFailedPayload::equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn FsWatchFailedPayload::not_equal(Self, Self) -> Bool
 pub fn FsWatchFailedPayload::to_json(Self) -> Json
 pub fn FsWatchFailedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FsWatchFailedPayload
+pub impl @json.FromJson for FsWatchFailedPayload
 
 pub(all) struct GitBranchPayload {
   session : String
   cwd : String?
   base_hint : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn GitBranchPayload::equal(Self, Self) -> Bool
 pub fn GitBranchPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitBranchPayload::not_equal(Self, Self) -> Bool
 pub fn GitBranchPayload::to_json(Self) -> Json
 pub fn GitBranchPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GitBranchPayload
+pub impl @json.FromJson for GitBranchPayload
 
 pub(all) struct GitBranchReply {
   branch : String?
@@ -1030,12 +1067,14 @@ pub fn GitChange::to_repr(Self) -> @debug.Repr
 pub(all) struct GitChangesPayload {
   session : String
   workspace : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn GitChangesPayload::equal(Self, Self) -> Bool
 pub fn GitChangesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitChangesPayload::not_equal(Self, Self) -> Bool
 pub fn GitChangesPayload::to_json(Self) -> Json
 pub fn GitChangesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GitChangesPayload
+pub impl @json.FromJson for GitChangesPayload
 
 pub(all) struct GitChangesReply {
   repository : Bool
@@ -1189,12 +1228,14 @@ pub(all) struct GitOriginalFilePayload {
   workspace : String?
   path : String
   revision : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn GitOriginalFilePayload::equal(Self, Self) -> Bool
 pub fn GitOriginalFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GitOriginalFilePayload::not_equal(Self, Self) -> Bool
 pub fn GitOriginalFilePayload::to_json(Self) -> Json
 pub fn GitOriginalFilePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GitOriginalFilePayload
+pub impl @json.FromJson for GitOriginalFilePayload
 
 pub(all) enum GitOriginalFileReply {
   Missing
@@ -1690,12 +1731,14 @@ pub(all) struct InstallSkillPayload {
   module_name : String
   version : String
   package_path : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn InstallSkillPayload::equal(Self, Self) -> Bool
 pub fn InstallSkillPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn InstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn InstallSkillPayload::to_json(Self) -> Json
 pub fn InstallSkillPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for InstallSkillPayload
+pub impl @json.FromJson for InstallSkillPayload
 
 pub(all) enum InstallSkillReply {
   SkillInstalled(InstalledSkill)
@@ -1844,22 +1887,26 @@ pub(all) struct KnownRunPayload {
   session : String
   run_id : String?
   submission_id : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn KnownRunPayload::equal(Self, Self) -> Bool
 pub fn KnownRunPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn KnownRunPayload::not_equal(Self, Self) -> Bool
 pub fn KnownRunPayload::to_json(Self) -> Json
 pub fn KnownRunPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for KnownRunPayload
+pub impl @json.FromJson for KnownRunPayload
 
 pub(all) struct LoadSessionPayload {
   session : String
   workspace : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn LoadSessionPayload::equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn LoadSessionPayload::not_equal(Self, Self) -> Bool
 pub fn LoadSessionPayload::to_json(Self) -> Json
 pub fn LoadSessionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for LoadSessionPayload
+pub impl @json.FromJson for LoadSessionPayload
 
 pub(all) struct LoadSessionReply {
   session : SessionDocument
@@ -1981,12 +2028,14 @@ pub(all) struct MaterializeSemanticSelectionPayload {
   include_glob : String
   exclude_glob : String
   matches : Array[SemanticSelectionMatch]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn MaterializeSemanticSelectionPayload::equal(Self, Self) -> Bool
 pub fn MaterializeSemanticSelectionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn MaterializeSemanticSelectionPayload::not_equal(Self, Self) -> Bool
 pub fn MaterializeSemanticSelectionPayload::to_json(Self) -> Json
 pub fn MaterializeSemanticSelectionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for MaterializeSemanticSelectionPayload
+pub impl @json.FromJson for MaterializeSemanticSelectionPayload
 
 pub(all) struct MaterializeSemanticSelectionReply {
   path : String
@@ -2236,12 +2285,14 @@ pub(all) struct OpenPathPayload {
   session : String
   cwd : String?
   path : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn OpenPathPayload::equal(Self, Self) -> Bool
 pub fn OpenPathPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn OpenPathPayload::not_equal(Self, Self) -> Bool
 pub fn OpenPathPayload::to_json(Self) -> Json
 pub fn OpenPathPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for OpenPathPayload
+pub impl @json.FromJson for OpenPathPayload
 
 pub(all) enum OpenPathReply {
   Opened
@@ -2415,12 +2466,14 @@ pub impl @json.FromJson for QueueReply
 
 pub(all) struct ReadDirPayload {
   path : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ReadDirPayload::equal(Self, Self) -> Bool
 pub fn ReadDirPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadDirPayload::not_equal(Self, Self) -> Bool
 pub fn ReadDirPayload::to_json(Self) -> Json
 pub fn ReadDirPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ReadDirPayload
+pub impl @json.FromJson for ReadDirPayload
 
 pub(all) struct ReadDirReply {
   entries : Array[DirEntry]
@@ -2434,12 +2487,14 @@ pub fn ReadDirReply::to_repr(Self) -> @debug.Repr
 pub(all) struct ReadFilePayload {
   path : String
   root : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn ReadFilePayload::equal(Self, Self) -> Bool
 pub fn ReadFilePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ReadFilePayload::not_equal(Self, Self) -> Bool
 pub fn ReadFilePayload::to_json(Self) -> Json
 pub fn ReadFilePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ReadFilePayload
+pub impl @json.FromJson for ReadFilePayload
 
 pub(all) enum ReadFileReply {
   Binary
@@ -2484,12 +2539,14 @@ pub impl @json.FromJson for RunSettlementPayload
 
 pub(all) struct RunsPayload {
   known : Array[KnownRunPayload]?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn RunsPayload::equal(Self, Self) -> Bool
 pub fn RunsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn RunsPayload::not_equal(Self, Self) -> Bool
 pub fn RunsPayload::to_json(Self) -> Json
 pub fn RunsPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RunsPayload
+pub impl @json.FromJson for RunsPayload
 
 pub(all) struct RunsReply {
   runs : Array[StartedPayload]
@@ -2626,12 +2683,14 @@ pub(all) struct SearchFilesPayload {
   query : String
   max_results : Int
   generation : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SearchFilesPayload::equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SearchFilesPayload::not_equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::to_json(Self) -> Json
 pub fn SearchFilesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SearchFilesPayload
+pub impl @json.FromJson for SearchFilesPayload
 
 pub(all) struct SearchFilesReply {
   files : Array[String]
@@ -2783,12 +2842,14 @@ pub(all) struct SemanticSelectionMatch {
   end_line : Int
   end_column : Int
   matched_source : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SemanticSelectionMatch::equal(Self, Self) -> Bool
 pub fn SemanticSelectionMatch::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SemanticSelectionMatch::not_equal(Self, Self) -> Bool
 pub fn SemanticSelectionMatch::to_json(Self) -> Json
 pub fn SemanticSelectionMatch::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SemanticSelectionMatch
+pub impl @json.FromJson for SemanticSelectionMatch
 
 pub(all) struct SessionAssistantMessage {
   content : String
@@ -2808,24 +2869,28 @@ pub(all) struct SessionChangedPayload {
   change : String
   session : String
   workspace : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SessionChangedPayload::equal(Self, Self) -> Bool
 pub fn SessionChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionChangedPayload::not_equal(Self, Self) -> Bool
 pub fn SessionChangedPayload::to_json(Self) -> Json
 pub fn SessionChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionChangedPayload
+pub impl @json.FromJson for SessionChangedPayload
 
 pub(all) struct SessionCommitPayload {
   session : String
   sequence : Int
   event : SessionEvent
   session_root : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SessionCommitPayload::equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionCommitPayload::not_equal(Self, Self) -> Bool
 pub fn SessionCommitPayload::to_json(Self) -> Json
 pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionCommitPayload
+pub impl @json.FromJson for SessionCommitPayload
 
 pub(all) struct SessionDocument {
   version : Int?
@@ -2924,12 +2989,14 @@ pub impl @json.FromJson for SessionListEntry
 pub(all) struct SessionPayload {
   session : String
   force : Bool?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SessionPayload::equal(Self, Self) -> Bool
 pub fn SessionPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SessionPayload::not_equal(Self, Self) -> Bool
 pub fn SessionPayload::to_json(Self) -> Json
 pub fn SessionPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPayload
+pub impl @json.FromJson for SessionPayload
 
 pub(all) struct SessionRenamePayload {
   session : String
@@ -3151,21 +3218,25 @@ pub(all) struct StartedPayload {
   max_steps : Int?
   session : String
   session_root : String?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn StartedPayload::equal(Self, Self) -> Bool
 pub fn StartedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StartedPayload::not_equal(Self, Self) -> Bool
 pub fn StartedPayload::to_json(Self) -> Json
 pub fn StartedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for StartedPayload
+pub impl @json.FromJson for StartedPayload
 
 pub(all) struct StatFilesPayload {
   paths : Array[String]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn StatFilesPayload::equal(Self, Self) -> Bool
 pub fn StatFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn StatFilesPayload::not_equal(Self, Self) -> Bool
 pub fn StatFilesPayload::to_json(Self) -> Json
 pub fn StatFilesPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for StatFilesPayload
+pub impl @json.FromJson for StatFilesPayload
 
 pub(all) struct StatFilesReply {
   stats : Array[FileStat]
@@ -3207,12 +3278,14 @@ pub(all) struct SubrunProgressPayload {
   session : String
   steps : Int
   activity : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn SubrunProgressPayload::equal(Self, Self) -> Bool
 pub fn SubrunProgressPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn SubrunProgressPayload::not_equal(Self, Self) -> Bool
 pub fn SubrunProgressPayload::to_json(Self) -> Json
 pub fn SubrunProgressPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubrunProgressPayload
+pub impl @json.FromJson for SubrunProgressPayload
 
 pub(all) struct SymbolItem {
   name : String
@@ -3395,12 +3468,14 @@ pub impl @json.FromJson for UiLanguagePreference
 
 pub(all) struct UninstallSkillPayload {
   id : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn UninstallSkillPayload::equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UninstallSkillPayload::not_equal(Self, Self) -> Bool
 pub fn UninstallSkillPayload::to_json(Self) -> Json
 pub fn UninstallSkillPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UninstallSkillPayload
+pub impl @json.FromJson for UninstallSkillPayload
 
 pub(all) enum UninstallSkillReply {
   SkillUninstalled
@@ -3416,31 +3491,37 @@ pub impl @json.FromJson for UninstallSkillReply
 
 pub(all) struct UpdateDownloadFailedPayload {
   message : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn UpdateDownloadFailedPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadFailedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadFailedPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadFailedPayload::to_json(Self) -> Json
 pub fn UpdateDownloadFailedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UpdateDownloadFailedPayload
+pub impl @json.FromJson for UpdateDownloadFailedPayload
 
 pub(all) struct UpdateDownloadProgressPayload {
   downloaded_bytes : Int
   total_bytes : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn UpdateDownloadProgressPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadProgressPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadProgressPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadProgressPayload::to_json(Self) -> Json
 pub fn UpdateDownloadProgressPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UpdateDownloadProgressPayload
+pub impl @json.FromJson for UpdateDownloadProgressPayload
 
 pub(all) struct UpdateDownloadedPayload {
   version : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn UpdateDownloadedPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn UpdateDownloadedPayload::not_equal(Self, Self) -> Bool
 pub fn UpdateDownloadedPayload::to_json(Self) -> Json
 pub fn UpdateDownloadedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UpdateDownloadedPayload
+pub impl @json.FromJson for UpdateDownloadedPayload
 
 pub(all) struct WatchWorkspacePayload {
   path : String
@@ -3448,12 +3529,14 @@ pub(all) struct WatchWorkspacePayload {
   directories : Array[String]
   recursive : Bool?
   generation : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WatchWorkspacePayload::equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WatchWorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WatchWorkspacePayload::to_json(Self) -> Json
 pub fn WatchWorkspacePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WatchWorkspacePayload
+pub impl @json.FromJson for WatchWorkspacePayload
 
 pub(all) struct WorkflowEntryPayload {
   workflow : String
@@ -3470,54 +3553,64 @@ pub(all) struct WorkflowEntryPayload {
   unaccounted : String?
   started_at : Double?
   finished_at : Double?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorkflowEntryPayload::equal(Self, Self) -> Bool
 pub fn WorkflowEntryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkflowEntryPayload::not_equal(Self, Self) -> Bool
 pub fn WorkflowEntryPayload::to_json(Self) -> Json
 pub fn WorkflowEntryPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkflowEntryPayload
+pub impl @json.FromJson for WorkflowEntryPayload
 
 pub(all) struct WorkspacePayload {
   path : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorkspacePayload::equal(Self, Self) -> Bool
 pub fn WorkspacePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspacePayload::not_equal(Self, Self) -> Bool
 pub fn WorkspacePayload::to_json(Self) -> Json
 pub fn WorkspacePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspacePayload
+pub impl @json.FromJson for WorkspacePayload
 
 pub(all) struct WorkspaceSettingsGetPayload {
   workspace : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorkspaceSettingsGetPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsGetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsGetPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsGetPayload::to_json(Self) -> Json
 pub fn WorkspaceSettingsGetPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspaceSettingsGetPayload
+pub impl @json.FromJson for WorkspaceSettingsGetPayload
 
 pub(all) struct WorkspaceSettingsPayload {
   workspace : String
   worktree_mode : Bool
   checkout_submodules : Bool
   submodule_checkout_timeout_seconds : Int
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorkspaceSettingsPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsPayload::to_json(Self) -> Json
 pub fn WorkspaceSettingsPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspaceSettingsPayload
+pub impl @json.FromJson for WorkspaceSettingsPayload
 
 pub(all) struct WorkspaceSettingsSetPayload {
   workspace : String
   worktree_mode : Bool?
   checkout_submodules : Bool?
   submodule_checkout_timeout_seconds : Int?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorkspaceSettingsSetPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorkspaceSettingsSetPayload::not_equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsSetPayload::to_json(Self) -> Json
 pub fn WorkspaceSettingsSetPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorkspaceSettingsSetPayload
+pub impl @json.FromJson for WorkspaceSettingsSetPayload
 
 pub(all) struct WorkspaceSymbolsPayload {
   session : String
@@ -3568,12 +3661,14 @@ pub impl @json.FromJson for WorkspacesReply
 pub(all) struct WorktreeChangedPayload {
   workspace : String
   worktrees : Array[WorktreeInfo]
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorktreeChangedPayload::equal(Self, Self) -> Bool
 pub fn WorktreeChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeChangedPayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeChangedPayload::to_json(Self) -> Json
 pub fn WorktreeChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorktreeChangedPayload
+pub impl @json.FromJson for WorktreeChangedPayload
 
 pub(all) struct WorktreeCreatePayload {
   workspace : String
@@ -3629,23 +3724,27 @@ pub impl @json.FromJson for WorktreeInfo
 
 pub(all) struct WorktreeListPayload {
   workspace : String
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorktreeListPayload::equal(Self, Self) -> Bool
 pub fn WorktreeListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeListPayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeListPayload::to_json(Self) -> Json
 pub fn WorktreeListPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorktreeListPayload
+pub impl @json.FromJson for WorktreeListPayload
 
 pub(all) struct WorktreeRemovePayload {
   workspace : String
   name : String
   force : Bool?
-} derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+} derive(Eq, @debug.Debug)
 pub fn WorktreeRemovePayload::equal(Self, Self) -> Bool
 pub fn WorktreeRemovePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn WorktreeRemovePayload::not_equal(Self, Self) -> Bool
 pub fn WorktreeRemovePayload::to_json(Self) -> Json
 pub fn WorktreeRemovePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorktreeRemovePayload
+pub impl @json.FromJson for WorktreeRemovePayload
 
 pub(all) struct WorktreesReply {
   worktrees : Array[WorktreeInfo]
