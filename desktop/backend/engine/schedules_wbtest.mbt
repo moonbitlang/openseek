@@ -24,8 +24,16 @@ fn schedule_fixture(
 ///|
 /// End a host's hold on the store, the way the operating system does when
 /// the process exits.
+///
+/// Closing the file is not enough here. The lock belongs to the open file,
+/// not to this descriptor, and tests running beside this one start child
+/// processes: a child being started holds a copy of every descriptor until
+/// its exec closes them, and the lock with it. A real owner's exit can leave
+/// the lock held for those few milliseconds too, which is why a host asks
+/// again on its next call; a test asks once, so it releases the lock itself.
 fn exit_host(service : Schedules) -> Unit {
   if service.ownership is Some(file) {
+    file.unlock()
     file.close()
     service.ownership = None
   }
