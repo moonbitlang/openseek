@@ -108,6 +108,7 @@ pub fn State::handle(Self, Msg, Input) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::park(Self) -> Self
 pub fn State::reset_checkout(Self) -> Self
+pub fn State::restore_query(Self, Self) -> Self
 pub fn State::selected_semantic_reference(Self, String) -> @mention_context.SemanticSearchReference?
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 

@@ -57,6 +57,41 @@ pub fn State::reset_checkout(self : State) -> State {
 }
 
 ///|
+/// Restore query choices with a new request identity. Results may have changed
+/// while this conversation was parked, so re-run instead of reviving old work.
+pub fn State::restore_query(self : State, saved : State) -> State {
+  let generation = Int::max(self.generation, saved.generation) + 1
+  let page = saved.page
+  let has_query = match page.mode {
+    Text => !page.text.query.is_empty()
+    Semantic =>
+      page.semantic.patterns.any(pattern => !pattern.trim().is_empty())
+  }
+  {
+    generation,
+    page: {
+      ..page,
+      generation,
+      text: { ..page.text, matches: [], },
+      semantic: { ..page.semantic, hits: [], partial: false, },
+      selected: Set([]),
+      match_count: 0,
+      file_count: 0,
+      phase: if has_query {
+        Debouncing
+      } else {
+        Idle
+      },
+      pattern_repair_phase: PatternRepairIdle,
+      pattern_repair_candidate: None,
+      pattern_repair_message: None,
+      pattern_repair_trace: [],
+      limit_hit: false,
+    },
+  }
+}
+
+///|
 fn Input::root_text(self : Input) -> String {
   self.root.map(root => root.path).unwrap_or("")
 }
@@ -1205,4 +1240,47 @@ test "invalid regex replies retain their actionable Host error" {
   }
   assert_eq(code, "invalid_regex")
   assert_eq(message, "regex parse error")
+}
+
+///|
+test "restored conversation search reruns choices and rejects an earlier incarnation" {
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "one",
+  }
+  let root = @common.Uri::parse("file:///work")
+  let input : Input = {
+    model: "deepseek-v4-flash",
+    thinking: None,
+    owner,
+    root: Some(root),
+  }
+  let first = State::empty()
+    .handle(QueryChanged("needle"), input)
+    .handle(ToggleRegex, input)
+    .handle(IncludeChanged("*.mbt"), input)
+    .handle(Submit, input)
+  let second = first.restore_query(State::empty())
+  assert_eq(second.page.text.query, "")
+  assert_true(second.page.phase is Idle)
+  let restored = second.restore_query(first)
+  assert_eq(restored.page.text.query, "needle")
+  assert_true(restored.page.text.regex)
+  assert_eq(restored.page.include_glob, "*.mbt")
+  assert_true(restored.page.phase is Debouncing)
+  assert_true(restored.generation > second.generation)
+  assert_eq(restored.page.generation, restored.generation)
+  assert_true(restored.page.text.matches.is_empty())
+  assert_eq(restored.page.match_count, 0)
+  assert_eq(restored.page.file_count, 0)
+  let stale = Msg::RequestFailed(
+    owner~,
+    root=root.path,
+    generation=first.generation,
+    code="stale",
+    message="late failure",
+  )
+  assert_true(restored.handle(stale, input) == restored)
+  assert_true(second.restore_query(first) == restored)
+  assert_true(first.page.phase is Loading)
 }

@@ -438,6 +438,9 @@ pub fn ReconciledPlacement::reconcile(
 /// parked per-conversation strips all live in the dock package — the open
 /// file list arrives through `Ctx`.
 pub(all) struct State {
+  remembered_ui : Map[@interop.ConversationKey, ConversationUiState]
+  // One-shot reads for expanded directories after owner/checkout restoration.
+  pending_directory_restores : Array[@pathx.Relative]
   owner : @interop.ConversationKey?
   // The placement incarnation last reconciled for `owner`, including whether
   // it is currently parked. A conversation can move from its project root into
@@ -446,11 +449,10 @@ pub(all) struct State {
   // storing independently drifting roots.
   placement : ReconciledPlacement
   // Whether the file-tree pane (the toggleable column right of the viewer)
-  // is shown. A panel preference, not per-conversation state, so it
-  // survives conversation switches.
+  // is shown. Restored with this conversation's other explorer choices.
   tree_open : Bool
   // The explorer's Files/Changes/Search selection. The selection survives a
-  // conversation switch; checkout-derived inventories do not (see `sync`).
+  // return to this conversation; checkout-derived inventories do not (see `sync`).
   explorer_mode : ExplorerMode
   // Workspace text search is a child inventory of this file subsystem. Its
   // reducer/request/view remain in grep_search, while this State supplies the
@@ -623,6 +625,8 @@ pub(all) struct State {
 ///|
 pub fn State::empty() -> State {
   {
+    remembered_ui: Map([]),
+    pending_directory_restores: [],
     owner: None,
     placement: PlacementUnknown,
     tree_open: true,
@@ -721,6 +725,7 @@ pub fn State::prepare_owner(
   open_files : Array[@common.Uri],
 ) -> State {
   guard self.owner != Some(owner) else { return self }
+  let self = self.restore_ui(owner)
   let docs : Map[@common.Uri, Doc] = Map([])
   for path in open_files {
     docs[path] = {
@@ -733,9 +738,8 @@ pub fn State::prepare_owner(
   {
     ..State::empty(),
     owner: Some(owner),
-    tree_open: self.tree_open,
-    explorer_mode: self.explorer_mode,
-    search: self.search.reset_checkout(),
+    remembered_ui: self.remembered_ui,
+    pending_directory_restores: self.expanded,
     github_review: self.github_review,
     review_diff_layout: self.review_diff_layout,
     review_diff_mode: self.review_diff_mode,
@@ -751,7 +755,7 @@ pub fn State::prepare_owner(
     // or replace it against the newly resolved checkout placement.
     watching: self.watching,
     docs,
-  }
+  }.with_sidebar(self.sidebar_state())
 }
 
 ///|

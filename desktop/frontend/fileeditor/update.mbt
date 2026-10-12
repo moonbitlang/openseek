@@ -1191,15 +1191,17 @@ pub fn close_document(
     let cmd = if was_active && next is None {
       @cmd.batch([
         clear_document(),
-        forget_view_state(path),
+        forget_view_state(ctx.owner, path),
         request_viewer_remeasure(),
       ])
     } else {
-      forget_view_state(path)
+      forget_view_state(ctx.owner, path)
     }
     return (cmd, state)
   }
-  guard was_active else { return (forget_view_state(path), { ..state, docs, }) }
+  guard was_active else {
+    return (forget_view_state(ctx.owner, path), { ..state, docs, })
+  }
   match next {
     Some(next_path) =>
       if docs.get(next_path) is Some(doc) {
@@ -1213,11 +1215,11 @@ pub fn close_document(
         )
         docs[next_path] = doc
         (
-          @cmd.batch([show, forget_view_state(path)]),
+          @cmd.batch([show, forget_view_state(ctx.owner, path)]),
           { ..state, docs, review_generation, },
         )
       } else {
-        (forget_view_state(path), { ..state, docs, })
+        (forget_view_state(ctx.owner, path), { ..state, docs, })
       }
     // The last tab: fall back to the placeholder and force the tree open so
     // the panel is never a dead pane. Losing the active tab also hides the
@@ -1226,7 +1228,7 @@ pub fn close_document(
       (
         @cmd.batch([
           clear_document(),
-          forget_view_state(path),
+          forget_view_state(ctx.owner, path),
           request_viewer_remeasure(),
         ]),
         { ..state, docs, tree_open: true, },
@@ -1949,6 +1951,7 @@ pub fn sync(
   review_context? : Array[@mention_context.ReviewChanges] = [],
 ) -> (State, @cmd.Cmd) {
   let checkout_ready = ctx.checkout_ready()
+  let state = state.restore_ui(ctx.owner)
   let owner_changed = state.owner != Some(ctx.owner)
   // The first owner claim has no previous conversation request to fence and
   // may happen after that owner's initial transcript click. Every later owner
@@ -2074,20 +2077,17 @@ pub fn sync(
     (
       {
         ..State::empty(),
+        remembered_ui: state.remembered_ui,
+        pending_directory_restores: state.expanded,
         github_review: state.github_review,
         owner: Some(ctx.owner),
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
         placement: PlacementUnknown.reconcile(ctx.placement),
-        tree_open: state.tree_open,
-        explorer_mode: state.explorer_mode,
-        search: state.search.reset_checkout(),
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
         review_diff_ignore_comments: state.review_diff_ignore_comments,
         review_diff_ignore_tests: state.review_diff_ignore_tests,
-        changes_collapsed: state.changes_collapsed,
-        git_graph_collapsed: state.git_graph_collapsed,
         // Request tokens must outlive the per-conversation cache. Resetting
         // here would let a late A reply collide after switching A→B→A.
         changes_generation: if placement_identity_changed {
@@ -2126,7 +2126,7 @@ pub fn sync(
           state.watching
         },
         docs,
-      },
+      }.with_sidebar(state.sidebar_state()),
       @cmd.batch(cmds),
     )
   }
@@ -2163,6 +2163,7 @@ pub fn sync(
       ..state,
       docs,
       children: Map([]),
+      pending_directory_restores: state.expanded,
       loading: [],
       index: IndexEmpty,
       error: None,
@@ -2353,29 +2354,30 @@ pub fn sync(
   guard checkout_ready && ctx.root() is Some(_) && ctx.panel_open else {
     return with_watch(dispatch, state, ctx, pending_cmd)
   }
-  // Load as soon as the conversation has a concrete root: registered
-  // projects and known worktrees can both load before a run.
-  if ctx.owner.session.is_empty() ||
-    state.children.contains("") ||
-    state.loading.contains("") {
+  if ctx.owner.session.is_empty() {
     return with_watch(dispatch, state, ctx, pending_cmd)
   }
   let loading = state.loading.copy()
-  loading.push("")
+  let reads = [pending_cmd]
+  for directory in [@pathx.Relative::root()] + state.pending_directory_restores {
+    if !state.children.contains(directory) && !loading.contains(directory) {
+      loading.push(directory)
+      reads.push(
+        read_directory(
+          dispatch,
+          ctx.owner,
+          ctx.request_epoch,
+          directory,
+          root=ctx.root(),
+        ),
+      )
+    }
+  }
   with_watch(
     dispatch,
-    { ..state, loading, },
+    { ..state, loading, pending_directory_restores: [], },
     ctx,
-    @cmd.batch([
-      pending_cmd,
-      read_directory(
-        dispatch,
-        ctx.owner,
-        ctx.request_epoch,
-        @pathx.Relative::root(),
-        root=ctx.root(),
-      ),
-    ]),
+    @cmd.batch(reads),
   )
 }
 
@@ -5658,8 +5660,8 @@ test "sync re-roots the document table from the dock's projection" {
   assert_true(
     rerooted.docs.get(test_file("b.mbt")) is Some({ state: TabLoading, .. }),
   )
-  // The pane-visibility preference follows the panel, not the conversation.
-  assert_false(rerooted.tree_open)
+  // A new conversation starts with its own default explorer visibility.
+  assert_true(rerooted.tree_open)
 }
 
 ///|
@@ -6495,7 +6497,7 @@ test "an unresolved placement parks files and refuses editor actions" {
 }
 
 ///|
-test "Search Explorer selection survives a conversation owner switch" {
+test "Search Explorer selection restores only for its conversation" {
   let state = { ..owned_state(), explorer_mode: ExplorerSearch, }
   let next_ctx = {
     ..test_ctx(),
@@ -6505,7 +6507,9 @@ test "Search Explorer selection survives a conversation owner switch" {
   }
   let (switched, _) = sync(test_emit(), state, next_ctx)
   assert_true(switched.owner == Some(next_ctx.owner))
-  assert_true(switched.explorer_mode is ExplorerSearch)
+  assert_true(switched.explorer_mode is ExplorerFiles)
+  let (restored, _) = sync(test_emit(), switched, test_ctx())
+  assert_true(restored.explorer_mode is ExplorerSearch)
 }
 
 ///|
@@ -8256,8 +8260,15 @@ test "conversation re-roots retain the change request generation" {
   }
   let (rerooted, _) = sync(test_emit(), state, test_ctx())
   assert_true(rerooted.owner == Some(test_ctx().owner))
-  assert_true(rerooted.changes is ChangeListLoading(refresh_again=false))
-  assert_true(rerooted.changes_generation == 8)
+  assert_true(rerooted.changes is ChangeListIdle)
+  assert_eq(rerooted.changes_generation, 7)
+  let (review, _) = sync(
+    test_emit(),
+    { ..rerooted, explorer_mode: ExplorerChanges, },
+    test_ctx(),
+  )
+  assert_true(review.changes is ChangeListLoading(refresh_again=false))
+  assert_eq(review.changes_generation, 8)
 }
 
 ///|

@@ -63,10 +63,17 @@ const DefaultEditorFontFamily = "ui-monospace, SFMono-Regular, Menlo, Monaco, Co
 const DefaultEditorFontSize : Double = 13.0
 
 ///|
+/// A tab's viewport belongs to its conversation, even if another
+/// tab displays the same working-tree resource.
+priv struct DocumentViewKey {
+  owner : @interop.ConversationKey
+  document : String
+} derive(Eq, Hash)
+
+///|
 /// The viewer's imperative state — the attached widget, its services, and the
 /// document it currently shows. None of this may live in the Rabbita model
-/// (the virtual DOM must not own imperative DOM state), so it is collected
-/// into this one module-level instance instead of loose globals.
+/// (the virtual DOM must not own imperative DOM state).
 priv struct ViewerHost {
   // The code-only source Viewer. `None` until the first
   // `request_viewer_mount` finds the host element in the DOM — the Viewer API constructs attached
@@ -146,12 +153,13 @@ priv struct ViewerHost {
   // Desired size has the same pre-mount lifetime as the family. The Viewer
   // consumes pixels as a Double and re-measures whenever this value changes.
   mut font_size : Double
-  // Each open tab's last scroll position, keyed by absolute resource URI,
+  // Each open tab's last scroll position, keyed by conversation and resource,
   // saved as the viewer switches away and restored when the tab returns.
   // Scroll is DOM state, so it lives here beside the viewer rather than in
   // the Rabbita model.
-  view_states : Map[String, @viewer.ViewerViewState]
-  markdown_view_states : Map[String, @viewer.MarkdownViewerViewState]
+  mut view_key : DocumentViewKey?
+  view_states : Map[DocumentViewKey, @viewer.ViewerViewState]
+  markdown_view_states : Map[DocumentViewKey, @viewer.MarkdownViewerViewState]
 }
 
 ///|
@@ -188,6 +196,7 @@ let viewer_state : ViewerHost = {
   theme: "light",
   font_family: DefaultEditorFontFamily,
   font_size: DefaultEditorFontSize,
+  view_key: None,
   view_states: Map([]),
   markdown_view_states: Map([]),
 }
@@ -918,6 +927,8 @@ fn show_history_diff_in_viewer(
       viewer_state.services is Some(services) else {
       return
     }
+    park_document_view_state()
+    viewer_state.view_key = None
     viewer_state.review_diff_inputs = None
     let original_revision = diff.parent.unwrap_or("empty-tree")
     let original_path = diff.original_path.unwrap_or(diff.path)
@@ -974,6 +985,7 @@ fn show_history_diff_in_viewer(
     diff_editor.reveal_first_diff()
     services.feedback.set_feedback_enabled(original_uri, false)
     services.feedback.set_feedback_enabled(modified_uri, false)
+    viewer_state.view_key = None
     viewer_state.document = None
     viewer_state.live = false
     viewer_state.navigation = None
@@ -1306,8 +1318,7 @@ fn after_render_effect(action : () -> Unit) -> @cmd.Cmd {
 /// present (an annotation chip's jump), is re-shown as a comment bubble over
 /// `range` — the bubble the chip replaced when the comment was filed.
 ///
-/// The outgoing document's scroll position is always saved under its
-/// absolute resource URI; `restore_scroll` (a tab switch or an in-place reload)
+/// The outgoing document's viewport is saved under its conversation and resource URI; `restore_scroll` (a tab switch or an in-place reload)
 /// brings the incoming document back to its saved position instead of the
 /// top — the Monaco save/restore-view-state contract around `set_model`.
 /// `review_original`, when present, is the Git HEAD baseline used by the
@@ -1340,6 +1351,8 @@ fn show_file_in_viewer(
       viewer_state.markdown_viewer is Some(markdown_viewer) else {
       return
     }
+    let key : DocumentViewKey = { owner, document: document.to_string(), }
+    let same_view = viewer_state.view_key == Some(key)
     let show_markdown = uses_markdown_presentation(name)
     // The URI is the file's absolute path and host identity. The hover
     // provider pairs it with the active navigation root. A notice document
@@ -1370,26 +1383,27 @@ fn show_file_in_viewer(
     // jump's reveal and annotation still apply below, over the kept document.
     let code_model = viewer.get_model()
     let markdown_model = markdown_viewer.get_model()
-    let same_code_resource = !show_markdown &&
+    let same_code_resource = same_view &&
+      !show_markdown &&
       code_model is Some(current) &&
       current.uri.to_string() == uri.to_string()
-    let same_document = if show_markdown {
-      markdown_model is Some(current) &&
-      current.model.uri.to_string() == uri.to_string() &&
-      current.model.get_value() == content &&
-      current.resource_kind == markdown_resource_kind(name)
-    } else {
-      code_model is Some(current) &&
-      current.uri.to_string() == uri.to_string() &&
-      current.get_value() == content
-    }
+    let same_document = same_view &&
+      (if show_markdown {
+        markdown_model is Some(current) &&
+        current.model.uri.to_string() == uri.to_string() &&
+        current.model.get_value() == content &&
+        current.resource_kind == markdown_resource_kind(name)
+      } else {
+        code_model is Some(current) &&
+        current.uri.to_string() == uri.to_string() &&
+        current.get_value() == content
+      })
     let previous_uri = match code_model {
       Some(model) => Some(model.uri)
       None => markdown_model.map(model => model.model.uri)
     }
-    let restore_view_state = should_restore_view_state(
-      restore_scroll, previous_uri, uri,
-    )
+    let restore_view_state = !same_view ||
+      should_restore_view_state(restore_scroll, previous_uri, uri)
     // Decorations live on the current text model. Remove the previous
     // persistent point highlight before a possible model swap. Symbol jumps
     // use fresh transient collections that retire themselves after 350ms.
@@ -1408,16 +1422,7 @@ fn show_file_in_viewer(
       viewer.set_value(content)
       viewer.restore_view_state(current_view_state)
     } else if !same_document {
-      // Park the outgoing document's view state for its tab's return.
-      if viewer_state.document is Some(prev) {
-        if code_model is Some(_) && viewer.save_view_state() is Some(view_state) {
-          viewer_state.view_states[prev.to_string()] = view_state
-        }
-        if markdown_model is Some(_) &&
-          markdown_viewer.save_view_state() is Some(view_state) {
-          viewer_state.markdown_view_states[prev.to_string()] = view_state
-        }
-      }
+      park_document_view_state()
       viewer_state.version += 1
       let version = viewer_state.version
       let text_model = @model.TextModel(
@@ -1446,8 +1451,7 @@ fn show_file_in_viewer(
           None => ()
         }
         if restore_view_state &&
-          viewer_state.markdown_view_states.get(document.to_string())
-          is Some(saved) {
+          viewer_state.markdown_view_states.get(key) is Some(saved) {
           markdown_viewer.restore_view_state(Some(saved))
         }
       } else {
@@ -1461,7 +1465,7 @@ fn show_file_in_viewer(
         viewer.set_model(Some(text_model))
         dispose_source_model(code_model)
         let restored_code_view_state = if restore_view_state &&
-          viewer_state.view_states.get(document.to_string()) is Some(saved) {
+          viewer_state.view_states.get(key) is Some(saved) {
           viewer.restore_view_state(Some(saved))
           true
         } else {
@@ -1487,6 +1491,7 @@ fn show_file_in_viewer(
     }
     // Gate incoming diagnostics and navigation to the file now on screen; a
     // deleted preview or a notice document takes neither.
+    viewer_state.view_key = Some(key)
     viewer_state.document = Some(document)
     viewer_state.live = live
     viewer_state.navigation = navigation_context_for_file(owner, root, document)
@@ -1624,15 +1629,14 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 
 ///|
 /// Drop the viewer's current document so it falls back to the placeholder.
-/// Used when the active conversation changes (which also invalidates every
-/// parked scroll position — they belong to the previous workspace's tabs)
+/// Used when the active conversation changes (parking its scoped viewport
+/// for a later return)
 /// and when the last tab closes: the viewer is imperative state outside the
 /// model, so it would otherwise keep showing the previous document. A no-op
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    viewer_state.view_states.clear()
-    viewer_state.markdown_view_states.clear()
+    park_document_view_state()
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1654,6 +1658,7 @@ fn clear_viewer() -> @cmd.Cmd {
         None => ()
       }
     }
+    viewer_state.view_key = None
     viewer_state.document = None
     viewer_state.live = false
     viewer_state.navigation = None
@@ -1672,6 +1677,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
+    park_document_view_state()
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1693,6 +1699,7 @@ fn clear_document() -> @cmd.Cmd {
         None => ()
       }
     }
+    viewer_state.view_key = None
     viewer_state.document = None
     viewer_state.live = false
     viewer_state.navigation = None
@@ -1705,11 +1712,33 @@ fn clear_document() -> @cmd.Cmd {
 /// Forget a closed tab's parked scroll position. Batched after the
 /// neighbor's `show_file_in_viewer` (which re-parks the outgoing document,
 /// closed tab included), so the closed tab's entry does not linger.
-fn forget_view_state(path : @common.Uri) -> @cmd.Cmd {
+fn forget_view_state(
+  owner : @interop.ConversationKey,
+  path : @common.Uri,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
-    viewer_state.view_states.remove(path.to_string())
-    viewer_state.markdown_view_states.remove(path.to_string())
+    let key : DocumentViewKey = { owner, document: path.to_string(), }
+    viewer_state.view_states.remove(key)
+    viewer_state.markdown_view_states.remove(key)
+    if viewer_state.view_key == Some(key) {
+      viewer_state.view_key = None
+    }
   })
+}
+
+///|
+fn park_document_view_state() -> Unit {
+  guard viewer_state.view_key is Some(key) else { return }
+  if viewer_state.viewer is Some(viewer) &&
+    viewer.get_model() is Some(_) &&
+    viewer.save_view_state() is Some(saved) {
+    viewer_state.view_states[key] = saved
+  }
+  if viewer_state.markdown_viewer is Some(viewer) &&
+    viewer.get_model() is Some(_) &&
+    viewer.save_view_state() is Some(saved) {
+    viewer_state.markdown_view_states[key] = saved
+  }
 }
 
 ///|
