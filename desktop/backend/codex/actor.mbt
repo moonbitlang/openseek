@@ -107,7 +107,7 @@ priv enum ConnectionState {
 ///|
 priv enum ActorInput {
   Call(String, Json, @async.Queue[Result[Json, CodexError]])
-  Respond(Json, Json, @async.Queue[Result[Json, CodexError]])
+  Respond(Json, String, Json, @async.Queue[Result[Json, CodexError]])
   ListRequests(@async.Queue[Result[Json, CodexError]])
 }
 
@@ -125,11 +125,9 @@ priv enum ActorStep {
 }
 
 ///|
-/// The actor is the sole owner of reverse-request membership and its monotonic
-/// generation. Both attach snapshots and live events read this same counter,
-/// so the frontend can reject an older snapshot without inferring timing.
+/// The actor owns membership and the monotonic snapshot/live-event generation.
 priv struct ReverseRequestRegistry {
-  mut requests : Map[String, @jsonrpc.PeerRequest]
+  mut requests : Map[String, OwnedReverseRequest]
   mut generation : Int
 }
 
@@ -157,20 +155,26 @@ fn ReverseRequestRegistry::insert(
   self : ReverseRequestRegistry,
   key : String,
   request : @jsonrpc.PeerRequest,
-) -> Unit {
-  self.requests[key] = request
+) -> String raise {
+  let response_token = @uuid.mint()
+  self.requests[key] = { request, response_token, }
   self.generation += 1
+  response_token
 }
 
 ///|
 fn ReverseRequestRegistry::take(
   self : ReverseRequestRegistry,
   key : String,
+  response_token : String,
 ) -> @jsonrpc.PeerRequest? {
-  guard self.requests.get(key) is Some(request) else { return None }
+  guard self.requests.get(key) is Some(owned) &&
+    owned.response_token == response_token else {
+    return None
+  }
   self.requests.remove(key)
   self.generation += 1
-  Some(request)
+  Some(owned.request)
 }
 
 ///|
@@ -178,14 +182,19 @@ fn ReverseRequestRegistry::remove(
   self : ReverseRequestRegistry,
   key : String,
 ) -> Unit {
-  ignore(self.take(key))
+  if self.requests.get(key) is Some(_) {
+    self.requests.remove(key)
+    self.generation += 1
+  }
 }
 
 ///|
 fn ReverseRequestRegistry::snapshot(self : ReverseRequestRegistry) -> Json {
   let data : Array[Json] = []
-  for _, request in self.requests {
+  for _, owned in self.requests {
+    let request = owned.request
     data.push({
+      "response_token": owned.response_token,
       "request_id": request.id(),
       "method": Json(request.method_name()),
       "params": request.params(),
@@ -270,15 +279,17 @@ pub async fn Actor::call(
 
 ///|
 /// Answer an app-server reverse request using the exact opaque id delivered in
-/// `codex.server_request`. `result` must match that request method's documented
+/// `codex.server_request`, with its matching one-use response token. `result`
+/// must match that request method's documented
 /// response shape.
 pub async fn Actor::respond(
   self : Actor,
   request_id~ : Json,
+  response_token~ : String,
   result~ : Json,
 ) -> Json {
   let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
-  self.inputs.put(Respond(request_id, result, reply))
+  self.inputs.put(Respond(request_id, response_token, result, reply))
   self.signal()
   match reply.get() {
     Ok(value) => value
@@ -432,8 +443,9 @@ async fn[G] Actor::run_connection(
             )
           })
         } else {
-          self.reverse_requests.insert(key, request)
+          let response_token = self.reverse_requests.insert(key, request)
           emit("codex.server_request", {
+            "response_token": response_token,
             "request_id": request_id,
             "method": Json(request.method_name()),
             "params": request.params(),
@@ -472,7 +484,7 @@ async fn Actor::next_step(
 ///|
 fn ActorInput::reject(self : ActorInput, error : CodexError) -> Unit {
   match self {
-    Call(_, _, reply) | Respond(_, _, reply) | ListRequests(reply) =>
+    Call(_, _, reply) | Respond(_, _, _, reply) | ListRequests(reply) =>
       (reply.try_put(Err(error)) catch { _ => false }) |> ignore
   }
 }
@@ -527,9 +539,9 @@ fn[G] Connection::dispatch_input(
         }
         (reply.try_put(outcome) catch { _ => false }) |> ignore
       })
-    Respond(request_id, result, reply) => {
+    Respond(request_id, response_token, result, reply) => {
       let key = request_id.stringify()
-      guard reverse_requests.take(key) is Some(request) else {
+      guard reverse_requests.take(key, response_token) is Some(request) else {
         let error = RequestFailed(
           method_="serverRequest/respond",
           detail="Unknown or resolved Codex request",
@@ -608,3 +620,11 @@ pub extend CodexError with Debug::{to_repr}
 
 ///|
 pub extend CodexError with Show::{output, to_string}
+
+///|
+/// The token names one question, including across host/actor restarts that
+/// reuse JSON-RPC ids and reset the snapshot generation.
+priv struct OwnedReverseRequest {
+  request : @jsonrpc.PeerRequest
+  response_token : String
+}

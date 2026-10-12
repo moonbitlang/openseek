@@ -126,6 +126,7 @@ fn notification_msg(
       }
     CodexServerRequest(payload) =>
       if payload is Object(fields) &&
+        @jsonx.json_text(fields, "response_token") is Some(response_token) &&
         fields.get("request_id") is Some(request_id) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
         fields.get("params") is Some(params) &&
@@ -133,7 +134,9 @@ fn notification_msg(
         Some(
           Codex(
             channel~,
-            @codex.Msg::server_request(request_id, method_, params, generation),
+            @codex.Msg::server_request(
+              response_token, request_id, method_, params, generation,
+            ),
           ),
         )
       } else {

@@ -252,6 +252,7 @@ priv struct CodexQuestion {
 
 ///|
 priv struct CodexPendingRequest {
+  response_token : String
   request_id : Json
   // Every supported app-server reverse request names its owning thread.
   // Keeping that identity here prevents one task from rendering or answering
@@ -419,6 +420,7 @@ enum Msg {
   StatusChanged(Json)
   Notification(method_~ : String, params~ : Json, generation~ : Int)
   ServerRequest(
+    response_token~ : String,
     request_id~ : Json,
     method_~ : String,
     params~ : Json,
@@ -561,12 +563,13 @@ pub fn Msg::notification(
 ///|
 /// Decode-free boundary for an app-server request forwarded by the host.
 pub fn Msg::server_request(
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
   generation : Int,
 ) -> Msg {
-  ServerRequest(request_id~, method_~, params~, generation~)
+  ServerRequest(response_token~, request_id~, method_~, params~, generation~)
 }
 
 ///|
@@ -1688,18 +1691,20 @@ fn State::with_requests(self : State, value : Json) -> State {
   let pending_requests : Array[CodexPendingRequest] = []
   for value in values {
     guard value is Object(request) &&
+      @jsonx.json_text(request, "response_token") is Some(response_token) &&
       request.get("request_id") is Some(request_id) &&
       @jsonx.json_text(request, "method") is Some(method_) &&
       request.get("params") is Some(params) &&
-      CodexPendingRequest::decode(request_id, method_, params) is Some(decoded) else {
+      CodexPendingRequest::decode(response_token, request_id, method_, params)
+      is Some(decoded) else {
       continue
     }
     // Preserve edits for a request already shown while replacing the list
     // with the actor's exact live ownership snapshot.
-    let key = request_id.stringify()
+    let key = response_token
     let answers = self.pending_requests
       .iter()
-      .find_first(existing => existing.request_id.stringify() == key)
+      .find_first(existing => existing.response_token == key)
       .map(existing => existing.answers)
       .unwrap_or(Map([]))
     pending_requests.push({ ..decoded, answers, })
@@ -2329,6 +2334,7 @@ fn State::with_notification(
 ///|
 fn State::with_pending_request(
   self : State,
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
@@ -2337,30 +2343,43 @@ fn State::with_pending_request(
   if generation <= self.request_generation {
     return self
   }
-  guard CodexPendingRequest::decode(request_id, method_, params)
+  guard CodexPendingRequest::decode(response_token, request_id, method_, params)
     is Some(request) else {
     return { ..self, request_generation: generation, }
   }
   let key = request_id.stringify()
-  if self.pending_requests.any(request => request.request_id.stringify() == key) {
+  if self.pending_requests.any(request => {
+      request.response_token == response_token
+    }) {
     return { ..self, request_generation: generation, }
   }
-  let pending_requests = self.pending_requests.copy()
+  let pending_requests = self.pending_requests.filter(previous => {
+    previous.request_id.stringify() != key
+  })
   pending_requests.push(request)
   { ..self, pending_requests, request_generation: generation, }
 }
 
 ///|
 fn CodexPendingRequest::decode(
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
 ) -> CodexPendingRequest? {
-  guard params is Object(fields) &&
+  guard !response_token.is_blank() &&
+    params is Object(fields) &&
     @jsonx.json_text(fields, "threadId") is Some(thread_id) else {
     return None
   }
-  Some({ request_id, thread_id, method_, params, answers: Map([]), })
+  Some({
+    response_token,
+    request_id,
+    thread_id,
+    method_,
+    params,
+    answers: Map([]),
+  })
 }
 
 ///|
@@ -2373,7 +2392,7 @@ fn State::with_request_answer(
   {
     ..self,
     pending_requests: self.pending_requests.map(request => {
-      if request.request_id.stringify() == request_key &&
+      if request.response_token == request_key &&
         self.active_thread() is Some(active) &&
         request.thread_id == active.id {
         let answers = request.answers.copy()
@@ -2967,6 +2986,7 @@ test "Codex running turn supplies the interrupt target" {
 ///|
 test "Codex request replies preserve structured values" {
   let request : CodexPendingRequest = {
+    response_token: "token-1",
     request_id: Json(7),
     thread_id: "thread-1",
     method_: "item/tool/requestUserInput",
@@ -2987,6 +3007,7 @@ test "Codex request replies preserve structured values" {
     Some({ "answers": { "scope": { "answers": ["Small"] } } }),
   )
   let command : CodexPendingRequest = {
+    response_token: "token-1",
     request_id: Json(8),
     thread_id: "thread-1",
     method_: "item/commandExecution/requestApproval",
@@ -3444,4 +3465,82 @@ pub fn State::with_browser_annotation(
     images: self.images,
   }
   { ..self, mentions: draft.with_mention(mention).mentions, }
+}
+
+///|
+test "Codex same-id replacement does not inherit draft answers or old card actions" {
+  let initial = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let params : Json = {
+    "threadId": "thread-1",
+    "questions": [{ "id": "scope" }],
+  }
+  let old = initial
+    .with_pending_request(
+      "old-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      1,
+    )
+    .with_request_answer("old-token", "scope", "old answer")
+  assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
+  let snapshot = old.with_requests({
+    "generation": 1,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "old-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(
+    snapshot.pending_requests[0].answers.get("scope"),
+    Some("old answer"),
+  )
+  let fresh = snapshot
+    .with_pending_request(
+      "new-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      3,
+    )
+    .with_request_answer("old-token", "scope", "late edit")
+  assert_eq(fresh.pending_requests.length(), 1)
+  assert_eq(fresh.pending_requests[0].response_token, "new-token")
+  assert_true(fresh.pending_requests[0].answers.is_empty())
+  let recovered = old.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(recovered.pending_requests[0].response_token, "new-token")
+  assert_true(recovered.pending_requests[0].answers.is_empty())
+  let resolved = recovered.with_notification(
+    "serverRequest/resolved",
+    { "requestId": 7 },
+    4,
+  )
+  let stale = resolved.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_true(stale.pending_requests.is_empty())
 }
