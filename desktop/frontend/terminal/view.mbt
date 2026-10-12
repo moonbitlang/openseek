@@ -93,7 +93,12 @@ fn panel_view(
         items.push(@html.span(class="terminal-status terminal-error", message))
       TabExited(code~) =>
         items.push(@html.span(class="terminal-status", "exit \{code}"))
-      TabRunning => ()
+      TabRunning =>
+        if tab.input.failure is Some(message) {
+          items.push(
+            @html.span(class="terminal-status terminal-error", message),
+          )
+        }
     }
   } else if ctx.placement is None {
     items.push(

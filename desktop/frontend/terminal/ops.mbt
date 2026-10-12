@@ -1,7 +1,7 @@
 // The terminal panel's bridge calls, routed by the channel that owns each tab.
 // `terminal.open` folds its
-// reply back into the update loop; the steady-state ops are fire-and-forget
-// — input failures surface as `InputFailed` (an error toast),
+// reply back into the update loop; input writes settle one bounded per-tab
+// queue through InputSettled. Input failures pause that queue with a toast;
 // resize/close failures are dropped (their loss only degrades, and a dead
 // session reports itself through `terminal_exit`). Flow-control acks are sent
 // once after xterm renders their output sequence.
@@ -50,33 +50,34 @@ fn open_session(
 fn send_input(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
+  key : String,
   id : String,
-  data : String,
-  binary : Bool,
+  batch : InputBatch,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      ignore(
-        @interop.bridge_request(channel, @commands.terminal_input, {
-          id,
-          data: if binary {
-            None
-          } else {
-            Some(data)
-          },
-          data_base64: if binary {
-            Some(data)
-          } else {
-            None
-          },
-        }) catch {
-          error => {
-            scheduler.add(
-              dispatch(InputFailed(message=@interop.bridge_error_text(error))),
-            )
-            return
-          }
-        },
+      let result : Result[Unit, String] = try {
+        ignore(
+          @interop.bridge_request(channel, @commands.terminal_input, {
+            id,
+            data: if batch.chunk.binary {
+              None
+            } else {
+              Some(batch.chunk.data)
+            },
+            data_base64: if batch.chunk.binary {
+              Some(batch.chunk.data)
+            } else {
+              None
+            },
+          }),
+        )
+        Ok(())
+      } catch {
+        error => Err(@interop.bridge_error_text(error))
+      }
+      scheduler.add(
+        dispatch(InputSettled(key~, id~, token=batch.token, result~)),
       )
     })
     |> ignore
