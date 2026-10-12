@@ -3209,8 +3209,35 @@ fn update_msg(
       }
       offer_office_selection(dispatch, model, owner, selection)
     }
+    FileEditor(@fileeditor.OfficeFeedbackSubmitted(preview, text, apply~)) => {
+      guard model.file_panel.pending_office_selection(file_ctx(model)) ==
+        Some(preview) &&
+        owns_office_selection(model, preview.owner) &&
+        !text.trim().is_empty() else {
+        return (@cmd.none, model)
+      }
+      let (command, model) = confirm_office_selection(
+        model,
+        preview,
+        comment=text,
+      )
+      if apply {
+        let (send, model) = update_msg(
+          dispatch,
+          FileEditor(@fileeditor.ApplyAllFeedback),
+          model,
+        )
+        (@cmd.batch([command, send]), model)
+      } else {
+        (command, model)
+      }
+    }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
-      confirm_office_selection(model, preview)
+      confirm_office_selection(
+        model,
+        preview,
+        comment=model.file_panel.office_selection_comment,
+      )
     FileEditor(
       @fileeditor.PdfSelectionChanged(
         owner~,

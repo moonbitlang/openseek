@@ -234,3 +234,64 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   await expectPdf(page);
   expect(app.pageErrors).toEqual([]);
 });
+
+
+test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
+  const select = async (end) => text.evaluate((element, end) => {
+    const range = document.createRange();
+    range.setStart(element.firstChild, 0);
+    range.setEnd(element.firstChild, end);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  }, end);
+  const preview = page.locator('.office-selection-preview');
+  const input = preview.locator('textarea[data-agent-feedback-input]');
+  await select(8);
+  await expect(input).toBeVisible();
+  await expect(input).not.toBeFocused();
+  await input.fill('Explain this');
+  await input.press('Shift+Enter');
+  await input.press('End');
+  await input.press('x');
+  await expect(input).toHaveValue('Explain this\nx');
+  await select(12);
+  await expect(preview.locator('.office-selection-excerpt')).toHaveText('OpenSeek');
+  await expect(input).toHaveValue('Explain this\nx');
+  await preview.getByRole('checkbox').check();
+  await input.press('Enter');
+  await expect(preview).toBeHidden();
+  await expect(page.locator('.mention-chip')).toContainText('Explain this');
+  expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(0);
+  await select(12);
+  await expect(input).toBeVisible();
+  await expect(preview.getByRole('checkbox')).toBeChecked();
+  await input.fill('Second annotation');
+  await input.press('Escape');
+  await expect(preview).toBeHidden();
+  await expect(page.locator('.mention-chip')).toHaveCount(1);
+  await select(12);
+  await input.fill('Apply both');
+  await page.screenshot({ path: testInfo.outputPath('pdf-annotation.png'), animations: 'disabled' });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(input).toHaveAttribute('placeholder', '添加反馈');
+  await expect(input).toHaveValue('Apply both');
+  await input.press('Alt+Enter');
+  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<office_selection>');
+  const task = app.requests.find(request => request.method === 'agent.start').params.task;
+  const selections = [...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
+  expect(selections).toHaveLength(2);
+  expect(selections[0].comment).toBe('Explain this\nx');
+  expect(selections[0].selection.text).toBe('OpenSeek');
+  expect(selections[0].source.reference.start.page).toBe(1);
+  expect(selections[1].comment).toBe('Apply both');
+  expect(app.pageErrors).toEqual([]);
+});

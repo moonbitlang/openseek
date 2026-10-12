@@ -220,3 +220,75 @@ test "cancel and stale Office confirmation leave the composer unchanged" {
   )
   assert_true(rejected == hidden)
 }
+
+///|
+test "Office feedback pins its source and retains the annotation on both conversation backends" {
+  for codex in [false, true] {
+    let (model, ctx, path) = office_selection_model(codex~)
+    let (_, pending) = update(
+      test_dispatch(),
+      root_office_selection(ctx, path, "Original passage"),
+      model,
+    )
+    let preview = pending.file_panel
+      .pending_office_selection(file_ctx(pending))
+      .unwrap()
+    let changed = FileEditor(
+      @fileeditor.OfficeFeedbackChanged(preview, "Explain this claim"),
+    )
+    let (_, drafting) = update(test_dispatch(), changed, pending)
+    let (_, repeated) = update(test_dispatch(), changed, pending)
+    assert_true(drafting == repeated)
+    let (_, pinned) = update(
+      test_dispatch(),
+      root_office_selection(ctx, path, "Different passage"),
+      drafting,
+    )
+    assert_true(
+      pinned.file_panel.pending_office_selection(file_ctx(pinned)).unwrap() ==
+      preview,
+    )
+    let submit = FileEditor(
+      @fileeditor.OfficeFeedbackSubmitted(
+        preview,
+        "Explain this claim",
+        apply=false,
+      ),
+    )
+    let (_, accepted) = update(test_dispatch(), submit, pinned)
+    assert_true(accepted.file_panel.office_selection is None)
+    assert_eq(accepted.file_panel.office_selection_comment, "")
+    let mentions = if codex {
+      accepted.codex_composer_input().draft.mentions
+    } else {
+      accepted.active_conversation().unwrap().mentions
+    }
+    assert_eq(mentions.length(), 1)
+    assert_true(
+      @mention_context.label(mentions[0].ref_).contains("Explain this claim"),
+    )
+    guard mentions[0].ref_ is @mention_context.OfficeSelection(materialized~) else {
+      fail("expected document selection")
+    }
+    let value = @json.parse(materialized)
+    assert_true(
+      value
+      is {
+        "comment": String("Explain this claim"),
+        "selection": { "text": String("Original passage"), .. },
+        "source": _,
+        ..
+      },
+    )
+    let (_, duplicate) = update(test_dispatch(), submit, accepted)
+    assert_true(duplicate == accepted)
+    let (_, stale_apply) = update(
+      test_dispatch(),
+      FileEditor(
+        @fileeditor.OfficeFeedbackSubmitted(preview, "Stale", apply=true),
+      ),
+      accepted,
+    )
+    assert_true(stale_apply == accepted)
+  }
+}

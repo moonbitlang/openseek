@@ -2537,6 +2537,13 @@ fn update_inner(
     UpdatePullRequest => (@cmd.none, state)
     // The root owns the pending selection and confirmed composer mention. Keep
     // the file-editor reducer total for embedders that delegate every message.
+    OfficeFeedbackChanged(candidate, text) =>
+      if state.pending_office_selection(ctx) == Some(candidate) {
+        (@cmd.none, { ..state, office_selection_comment: text, })
+      } else {
+        (@cmd.none, state)
+      }
+    OfficeFeedbackSubmitted(_, _, ..) => (@cmd.none, state)
     OfficeSelectionChanged(..)
     | PdfSelectionChanged(..)
     | OfficeSelectionConfirmed(_) => (@cmd.none, state)

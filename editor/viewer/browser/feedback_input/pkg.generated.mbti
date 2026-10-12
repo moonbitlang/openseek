@@ -1,0 +1,22 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/editor/viewer/browser/feedback_input"
+
+import {
+  "moonbit-community/rabbita/dom",
+  "moonbitlang/editor/viewer/common/localization",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type FeedbackInput
+pub fn FeedbackInput::FeedbackInput(@dom.Element, localization~ : @localization.Localization, on_submit~ : (String, Bool) -> Unit, on_change~ : (String) -> Unit, on_cancel~ : () -> Unit) -> Self
+pub fn FeedbackInput::dispose(Self) -> Unit
+pub fn FeedbackInput::hide(Self) -> Unit
+pub fn FeedbackInput::show(Self) -> Unit
+
+// Type aliases
+
+// Traits

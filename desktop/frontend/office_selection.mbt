@@ -25,7 +25,17 @@ fn offer_office_selection(
 ) -> (@cmd.Cmd, Model) {
   guard owns_office_selection(model, owner) else { return (@cmd.none, model) }
   match model.file_panel.offer_office_selection(file_ctx(model), selection) {
-    Ok(file_panel) => (@cmd.none, { ..model, file_panel, })
+    Ok(file_panel) => {
+      let command = match file_panel.pending_office_selection(file_ctx(model)) {
+        Some(preview) =>
+          @fileeditor.show_office_feedback(
+            dispatch.map(message => FileEditor(message)),
+            preview,
+          )
+        None => @cmd.none
+      }
+      (command, { ..model, file_panel, })
+    }
     Err(message) => model.notify_error(dispatch, message)
   }
 }
@@ -36,6 +46,7 @@ fn offer_office_selection(
 fn confirm_office_selection(
   model : Model,
   candidate : @fileeditor.OfficeSelectionPreview,
+  comment? : String,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   guard model.file_panel.pending_office_selection(ctx) is Some(preview) &&
@@ -43,7 +54,16 @@ fn confirm_office_selection(
     owns_office_selection(model, preview.owner) else {
     return (@cmd.none, model)
   }
-  let materialized = preview.materialized
+  let materialized = if comment is Some(text) && !text.trim().is_empty() {
+    let value = @json.parse(preview.materialized) catch {
+      _ => return (@cmd.none, model)
+    }
+    guard value is Object(fields) else { return (@cmd.none, model) }
+    fields.set("comment", Json::string(text.trim().to_owned()))
+    Json::object(fields).stringify()
+  } else {
+    preview.materialized
+  }
   let (clear, file_panel) = model.file_panel.dismiss_office_selection(
     ctx, preview,
   )

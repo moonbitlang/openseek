@@ -59,6 +59,7 @@ struct AgentFeedbackInputWidget {
 pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   localization~ : @localization.Localization = Localization(),
   host : AgentFeedbackInputWidgetHost,
+  on_change? : (String) -> Unit = _ => (),
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
   let root = document.create_element("div")
@@ -103,6 +104,7 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   widget.refresh_labels()
   widget.update_actions_enabled()
   widget.hook_events()
+  textarea.add_event_listener("input", _ => on_change(widget.value()))
   widget
 }
 

@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/editor/base/common" @base_common,
+  "moonbitlang/editor/internal/viewer/contrib/agent_feedback/browser" @feedback,
+  "moonbitlang/editor/viewer/common/localization",
+  "moonbitlang/editor/base/browser" @base_browser,
+  "moonbit-community/rabbita/dom" @rdom,
+}
+
+supported_targets = "js"

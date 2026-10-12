@@ -467,6 +467,7 @@ pub(all) struct State {
   office_prefer_system_fonts : Bool
   // Browser selection is provisional until the user accepts its preview.
   office_selection : OfficeSelectionPreview?
+  office_selection_comment : String
   // Monotonic across document reloads and owner changes, so late PDF runtime
   // callbacks cannot settle a later load of the same path and signature.
   pdf_generation : Int32
@@ -651,6 +652,7 @@ pub fn State::empty() -> State {
     office_query: "",
     office_prefer_system_fonts: false,
     office_selection: None,
+    office_selection_comment: "",
     pdf_generation: 0,
     explorer_mode: ExplorerFiles,
     search: @grep_search.State::empty(),
@@ -930,6 +932,8 @@ pub(all) enum Msg {
     selection~ : String
   )
   OfficeSelectionConfirmed(OfficeSelectionPreview)
+  OfficeFeedbackChanged(OfficeSelectionPreview, String)
+  OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
   OfficeSelectionDismissed(OfficeSelectionPreview)
   // Office surface controls are kept in the file panel so standalone viewer
   // behavior remains reusable while embedded hosts own their chrome.

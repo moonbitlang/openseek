@@ -71,6 +71,6 @@ fn office_selection_preview_view(
           @cmd.none
         }
       }),
-    content,
+    [@html.div(id=OfficeFeedbackHostId, ([] : Array[@html.Html])), ..content],
   )
 }

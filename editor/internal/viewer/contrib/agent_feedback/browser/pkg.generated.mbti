@@ -69,7 +69,7 @@ pub(all) struct AgentFeedbackEditorWidgetHost {
 }
 
 type AgentFeedbackInputWidget
-pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(localization? : @localization.Localization, AgentFeedbackInputWidgetHost) -> Self
+pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(localization? : @localization.Localization, AgentFeedbackInputWidgetHost, on_change? : (String) -> Unit) -> Self
 pub fn AgentFeedbackInputWidget::clear_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::focus_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::get_dom_node(Self) -> @dom.Element
