@@ -32,7 +32,7 @@ pub async fn write_bytes(@pathx.Path, Bytes) -> Unit
 
 pub async fn write_text(@pathx.Path, String) -> Unit
 
-pub async fn write_text_atomic(@pathx.Path, String) -> Unit
+pub async fn write_text_atomic(@pathx.Path, String, permission? : Int) -> Unit
 
 // Errors
 

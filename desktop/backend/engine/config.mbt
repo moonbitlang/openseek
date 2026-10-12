@@ -413,7 +413,7 @@ async test "run config ignores OPENSEEK_API_URL in favor of the settings" {
   defer @fs.rmdir(root.to_string(), recursive=true)
   set_test_home(root.join("home").to_string())
   let workspace = attach_run_workspace(root)
-  let manager = new_engine_manager("openseek", runtime_dir=root)
+  let manager = new_engine_manager("openseek", settings_dir=root)
   // The BYOK configuration: the official provider with its key.
   let _ = update_settings(manager, {
     provider: Some("deepseek"),

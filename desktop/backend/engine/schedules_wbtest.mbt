@@ -208,7 +208,11 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let manager = new_engine_manager(engine.to_string(), runtime_dir=runtime)
+  let manager = new_engine_manager(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   configure_custom_provider(manager)
   let service = Schedules(manager, Some(runtime))
   ignore(service.list())
@@ -311,7 +315,11 @@ async test "scheduled run Stop and timeout reap CLI processes" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let manager = new_engine_manager(engine.to_string(), runtime_dir=runtime)
+  let manager = new_engine_manager(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   configure_custom_provider(manager)
   let service = Schedules(manager, Some(runtime))
   ignore(service.list())

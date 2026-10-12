@@ -1,8 +1,11 @@
 // The host-owned engine endpoint settings: which provider runs use and its
-// credentials. They live in the host's runtime dir
-// (`engine-settings.json`) — never in a client — so a browser page cannot
-// leak one host's key to another, and the desktop window and every remote
-// page see the same configuration. Clients edit them through the
+// credentials. They live in the user's session root
+// (`~/.openseek/engine-settings.json`) — never in a client — so a browser
+// page cannot leak one host's key to another, and the desktop window and
+// every remote page see the same configuration. The session root, not a
+// host's runtime directory: the provider and its key belong to the user, and
+// every host process of that user — a release build, a development build, a
+// headless server — reads the same file. Clients edit them through the
 // `settings.get`/`settings.set` methods and learn about others' edits from
 // the `settings.changed` broadcast; runs read them at config time, so a
 // change respawns the conversation's engine on its next start (the
@@ -17,6 +20,11 @@
 // - A file written by a newer version (version above ours) is read
 //   best-effort but refused for writing.
 // - Saves are atomic: temp file + rename, 0600.
+// - A save holds the file's cross-process lock across its read and its
+//   write, so two hosts saving at once cannot erase each other's fields.
+//   Reads take no lock across processes and never see a partial file. A
+//   host learns of another host's save the next time it reads: runs read at
+//   config time, but an open settings page is not notified.
 
 ///|
 const EngineSettingsVersion = 2
@@ -86,17 +94,17 @@ priv struct EngineSettings {
 }
 
 ///|
-fn settings_file(runtime_dir : @pathx.Path) -> @pathx.Path {
-  runtime_dir.join(EngineSettingsFileName)
+fn settings_file(settings_dir : @pathx.Path) -> @pathx.Path {
+  settings_dir.join(EngineSettingsFileName)
 }
 
 ///|
 /// Read the settings, tolerating absence and corruption as defaults — a
 /// broken file only costs the stored values, never the app; it is not
 /// overwritten until the next explicit save.
-async fn load_engine_settings(runtime_dir : @pathx.Path?) -> EngineSettings {
+async fn load_engine_settings(settings_dir : @pathx.Path?) -> EngineSettings {
   let fields : Map[String, Json] = Map([])
-  if runtime_dir is Some(dir) &&
+  if settings_dir is Some(dir) &&
     (@fsx.try_read_text(settings_file(dir)) catch { _ => None }) is Some(text) &&
     (@json.parse(text) catch { _ => Json::null() }) is Object(parsed) {
     for key, value in parsed {
@@ -181,7 +189,7 @@ async fn EngineManager::settings_snapshot(
 ) -> (EngineSettings, Int) {
   self.settings_lock.acquire()
   defer self.settings_lock.release()
-  (load_engine_settings(self.runtime_dir), self.settings_revision)
+  (load_engine_settings(self.settings_dir), self.settings_revision)
 }
 
 ///|
@@ -205,10 +213,15 @@ pub async fn update_settings(
 ) -> @protocol.SettingsStatusPayload {
   manager.settings_lock.acquire()
   defer manager.settings_lock.release()
-  guard manager.runtime_dir is Some(dir) else {
-    raise EngineError("engine settings cannot persist: no runtime directory")
+  guard manager.settings_dir is Some(dir) else {
+    raise EngineError("engine settings cannot persist: no session root")
   }
-  let current = load_engine_settings(manager.runtime_dir)
+  // Another host process saves to the same file. The read below has to
+  // follow this lock: a snapshot taken before that host released it is the
+  // stale one whose write-back would erase the field it just saved.
+  let shared = lock_settings_file(dir)
+  defer shared.release()
+  let current = load_engine_settings(manager.settings_dir)
   guard current.version <= EngineSettingsVersion else {
     raise EngineError(
       "engine settings were written by a newer SeekMoon; update the app to change them",
@@ -269,33 +282,51 @@ fn apply_text_patch(
 }
 
 ///|
-/// Atomic save: write a 0600 temp file, then rename over the target. The
-/// file holds a credential, so a crash mid-write must never leave a
-/// truncated store — the temp file keeps the full content until the rename
-/// lands. Windows may refuse to rename over an existing file; removing the
-/// target first narrows atomicity to that one platform's small window.
-async fn write_settings_file(runtime_dir : @pathx.Path, text : String) -> Unit {
-  let target = settings_file(runtime_dir)
-  let temp = runtime_dir.join(EngineSettingsFileName + ".tmp")
-  @fs.write_file(
-    temp.to_string(),
-    text,
-    create_mode=CreateOrTruncate,
-    permission=0o600,
-  ) catch {
-    error => raise EngineError("could not write engine settings: \{error}")
+/// The cross-process half of a settings save, taken after `settings_lock`.
+async fn lock_settings_file(settings_dir : @pathx.Path) -> @fsx.FileLock {
+  @fsx.FileLock::acquire(settings_file(settings_dir)) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise EngineError("could not lock engine settings: \{error}")
   }
-  @fs.rename(temp.to_string(), target.to_string()) catch {
-    _ => {
-      @fsx.remove_if_exists(target) catch {
-        error =>
-          raise EngineError("could not replace engine settings: \{error}")
-      }
-      @fs.rename(temp.to_string(), target.to_string()) catch {
-        error => raise EngineError("could not save engine settings: \{error}")
-      }
-    }
+}
+
+///|
+/// Atomic save: a 0600 file beside the target, renamed over it. The file
+/// holds a credential, so a crash mid-write must never leave a truncated
+/// store, and a host process reading without the lock must never see one.
+async fn write_settings_file(settings_dir : @pathx.Path, text : String) -> Unit {
+  @fsx.write_text_atomic(settings_file(settings_dir), text, permission=0o600) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => raise EngineError("could not save engine settings: \{error}")
   }
+}
+
+///|
+/// Bring the settings a host used to keep in its own runtime directory to
+/// the session root, once: when the shared file does not exist yet and this
+/// host's old one does. Returns whether it did.
+///
+/// A copy, not a move. A build from before this change still reads the old
+/// file, and a user running one beside a newer build must not find its key
+/// gone. The two files then drift apart, which is what such a build would
+/// see of any newer build's settings anyway.
+pub async fn adopt_runtime_settings(manager : EngineManager) -> Bool {
+  guard manager.settings_dir is Some(shared_dir) &&
+    manager.runtime_dir is Some(runtime_dir) else {
+    return false
+  }
+  manager.settings_lock.acquire()
+  defer manager.settings_lock.release()
+  let shared = lock_settings_file(shared_dir)
+  defer shared.release()
+  // Under the lock: another host starting at the same moment may have just
+  // adopted its own, and whichever came first is the one that stands.
+  guard !@fsx.exists(settings_file(shared_dir)) else { return false }
+  guard @fsx.try_read_text(settings_file(runtime_dir)) is Some(text) else {
+    return false
+  }
+  write_settings_file(shared_dir, text)
+  true
 }
 
 ///|
@@ -429,13 +460,13 @@ async fn with_settings_dir(
   defer (if previous_key is Some(value) { @sys.set_env_var("DEEPSEEK", value) })
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-settings-"))
   defer (@fs.rmdir(dir.to_string(), recursive=true) catch { _ => () })
-  body(dir, new_engine_manager("openseek", runtime_dir=dir))
+  body(dir, new_engine_manager("openseek", settings_dir=dir))
 }
 
 ///|
 async test "missing settings read as the BYOK defaults" {
   with_settings_dir((_dir, manager) => {
-    let settings = load_engine_settings(manager.runtime_dir)
+    let settings = load_engine_settings(manager.settings_dir)
     assert_true(settings.provider is Deepseek)
     assert_true(settings.deepseek_api_key is None)
     json_inspect(settings_status(manager), content={
@@ -489,7 +520,7 @@ async test "a saved key round-trips as presence, never as text" {
     assert_false(status.to_json().stringify().contains("sk-secret"))
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"sk-secret\""))
-    let reloaded = load_engine_settings(manager.runtime_dir)
+    let reloaded = load_engine_settings(manager.settings_dir)
     assert_true(reloaded.deepseek_api_key is Some("sk-secret"))
     assert_true(reloaded.provider is Deepseek)
   })
@@ -502,7 +533,7 @@ async test "retired hosted providers converge on the DeepSeek default" {
     // as the BYOK default, which needs a key and therefore routes to
     // Settings.
     @fsx.write_text(settings_file(dir), "{\"provider\": \"openseek\"}")
-    assert_true(load_engine_settings(manager.runtime_dir).provider is Deepseek)
+    assert_true(load_engine_settings(manager.settings_dir).provider is Deepseek)
     // A write carrying a retired name (e.g. from an older client) is
     // accepted and persisted as the default it means now.
     let status = update_settings(manager, {
@@ -650,6 +681,113 @@ async test "concurrent disjoint settings patches merge and publish in revision o
 }
 
 ///|
+/// The settings belong to the user, so two hosts — a release build beside a
+/// development build, a window beside a headless server — are two managers
+/// over one file. Neither caches it.
+async test "a second host reads what the first one saved" {
+  with_settings_dir((dir, first) => {
+    let second = new_engine_manager("openseek", settings_dir=dir)
+    let _ = update_settings(first, {
+      provider: Some("glm"),
+      custom_api_url: None,
+      deepseek_api_key: None,
+      glm_api_key: Some("sk-glm"),
+      custom_api_key: None,
+    })
+    let status = settings_status(second)
+    assert_eq(status.provider, "glm")
+    assert_true(status.has_glm_key)
+  })
+}
+
+///|
+/// `settings_lock` orders one host's own clients. A save must also wait for
+/// another host process's save and read the file only afterwards, or its
+/// write-back erases the field that host just stored. The file lock belongs
+/// to the open file description, so holding it here stands in for that host.
+async test "a save waits for another host's save and keeps its field" {
+  with_settings_dir((dir, manager) => {
+    let held = @fsx.FileLock::acquire(settings_file(dir))
+    @async.with_task_group(group => {
+      group.spawn_bg(() => {
+        let _ = update_settings(manager, {
+          provider: Some("glm"),
+          custom_api_url: None,
+          deepseek_api_key: None,
+          glm_api_key: None,
+          custom_api_key: None,
+        })
+      })
+      // Long enough for the save to reach the lock and block on it.
+      @async.sleep(100)
+      @fsx.write_text_atomic(
+        settings_file(dir),
+        "{\"version\": 2, \"deepseek_api_key\": \"sk-theirs\"}",
+      )
+      held.release()
+    })
+    let settings = load_engine_settings(manager.settings_dir)
+    assert_true(settings.provider is Glm)
+    assert_eq(settings.deepseek_api_key, Some("sk-theirs"))
+  })
+}
+
+///|
+/// A host that kept its settings in its runtime directory brings them along
+/// once. The old file stays for a build that still reads it there.
+async test "the runtime directory's settings are adopted once, by copy" {
+  with_settings_dir((dir, _) => {
+    let runtime = dir.join("runtime")
+    let shared = dir.join("session-root")
+    @fsx.ensure_dir(runtime)
+    let old = "{\"version\": 2, \"deepseek_api_key\": \"sk-old\"}"
+    @fsx.write_text(settings_file(runtime), old)
+    let manager = new_engine_manager(
+      "openseek",
+      runtime_dir=runtime,
+      settings_dir=shared,
+    )
+    assert_true(adopt_runtime_settings(manager))
+    assert_eq(
+      load_engine_settings(manager.settings_dir).deepseek_api_key,
+      Some("sk-old"),
+    )
+    assert_eq(@fsx.read_text(settings_file(runtime)), old)
+    // Later launches leave the shared file alone, whatever the old one says.
+    let _ = update_settings(manager, {
+      provider: None,
+      custom_api_url: None,
+      deepseek_api_key: Some("sk-new"),
+      glm_api_key: None,
+      custom_api_key: None,
+    })
+    assert_false(adopt_runtime_settings(manager))
+    assert_eq(
+      load_engine_settings(manager.settings_dir).deepseek_api_key,
+      Some("sk-new"),
+    )
+  })
+}
+
+///|
+/// Nothing to adopt is not a failure, and must not create an empty shared
+/// file that would read as "already adopted" on the launch that has one.
+async test "a host with no old settings adopts nothing" {
+  with_settings_dir((dir, _) => {
+    let runtime = dir.join("runtime")
+    let shared = dir.join("session-root")
+    @fsx.ensure_dir(runtime)
+    let manager = new_engine_manager(
+      "openseek",
+      runtime_dir=runtime,
+      settings_dir=shared,
+    )
+    assert_false(adopt_runtime_settings(manager))
+    assert_false(@fsx.exists(settings_file(shared)))
+  })
+}
+
+///|
 async test "saves preserve fields a newer build added" {
   with_settings_dir((dir, manager) => {
     @fsx.write_text(
@@ -667,7 +805,7 @@ async test "saves preserve fields a newer build added" {
     assert_true(text.contains("\"future_field\""))
     assert_true(text.contains("\"kept\""))
     // The untouched provider survives the patch too.
-    let reloaded = load_engine_settings(manager.runtime_dir)
+    let reloaded = load_engine_settings(manager.settings_dir)
     assert_true(reloaded.provider is Deepseek)
     assert_true(reloaded.deepseek_api_key is Some("sk-new"))
   })
@@ -681,7 +819,7 @@ async test "a newer-version file is read best-effort but never rewritten" {
       "{\"version\": 99, \"provider\": \"deepseek\", \"deepseek_api_key\": \"sk-kept\"}",
     )
     // Reads still surface what this build understands.
-    let settings = load_engine_settings(manager.runtime_dir)
+    let settings = load_engine_settings(manager.settings_dir)
     assert_true(settings.provider is Deepseek)
     assert_true(settings.deepseek_api_key is Some("sk-kept"))
     // Writes are refused so a downgrade cannot eat the newer schema.
@@ -725,7 +863,7 @@ async test "an unknown provider is refused on write, defaulted on read" {
     assert_true(refused.contains("unknown API provider"))
     // A corrupted store degrades to the BYOK default.
     @fsx.write_text(settings_file(dir), "{\"provider\": \"acme\"}")
-    assert_true(load_engine_settings(manager.runtime_dir).provider is Deepseek)
+    assert_true(load_engine_settings(manager.settings_dir).provider is Deepseek)
   })
 }
 
@@ -733,7 +871,7 @@ async test "an unknown provider is refused on write, defaulted on read" {
 async test "a corrupt file reads as defaults and survives until a save" {
   with_settings_dir((dir, manager) => {
     @fsx.write_text(settings_file(dir), "{ not json")
-    let settings = load_engine_settings(manager.runtime_dir)
+    let settings = load_engine_settings(manager.settings_dir)
     assert_true(settings.provider is Deepseek)
     // Nothing rewrote the broken file behind the user's back.
     assert_eq(@fsx.read_text(settings_file(dir)), "{ not json")
@@ -850,7 +988,7 @@ async test "the GLM provider stores its own key and reports presence" {
     // The status never carries the key; the store carries it trimmed, in its
     // own slot rather than DeepSeek's.
     assert_false(status.to_json().stringify().contains("glm-secret"))
-    let reloaded = load_engine_settings(manager.runtime_dir)
+    let reloaded = load_engine_settings(manager.settings_dir)
     assert_true(reloaded.provider is Glm)
     assert_true(reloaded.glm_api_key is Some("glm-secret"))
     assert_true(reloaded.deepseek_api_key is None)

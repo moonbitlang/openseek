@@ -1,9 +1,27 @@
 ///|
-/// First-launch and migration work on the workspace registry.
-/// `ApiState::start_services` runs this before it starts anything that can
-/// serve a client, so the first `workspace.list` a page sees already reflects
-/// it.
-async fn prepare_workspaces() -> Unit {
+/// First-launch and migration work on the workspace registry and the shared
+/// settings. `ApiState::start_services` runs this before it starts anything
+/// that can serve a client, so the first `workspace.list` and `settings.get`
+/// a page sees already reflect it.
+async fn prepare_workspaces(manager : @engine.EngineManager) -> Unit {
+  // The endpoint settings used to live in each host's runtime directory. A
+  // failure leaves them there for a later launch; until then this host reads
+  // the shared file as it is, which on a first launch is the defaults.
+  let adopted = @engine.adopt_runtime_settings(manager) catch {
+    error if @async.is_being_cancelled() => raise error
+    error => {
+      @xlog.error() <?
+        {
+          "message": "settings adoption failed",
+          "error": @debug.render(Repr(error)),
+        }
+      false
+    }
+  }
+  if adopted {
+    @xlog.info() <?
+      { "message": "adopted engine settings from the runtime directory" }
+  }
   // A fresh install has no workspaces at all. Attach the default one before
   // anything can serve a workspace list, so the first page to connect
   // already has somewhere to work. This runs exactly once per registry: a

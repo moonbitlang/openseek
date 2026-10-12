@@ -1040,7 +1040,11 @@ async test "start echoes the client submission id in Started" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
@@ -1108,7 +1112,11 @@ async test "a goal is delivered only once its command is on the wire" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let session = "s-" + mint_run_id()
@@ -1221,7 +1229,11 @@ async test "setup failure retires the writer before an immediate next start" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
@@ -1330,7 +1342,11 @@ async test "a prompt bigger than the pipe still settles exactly once" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
@@ -1412,7 +1428,11 @@ async test "named session retries after its first prompt creates no record" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
@@ -1624,7 +1644,11 @@ async test "workspace detach refuses a running conversation without hiding it" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let sink = EventSink(_ => ())
@@ -1697,7 +1721,11 @@ async test "workspace detach drains an idle writer and its follower first" {
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    settings_dir=runtime,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let events : Array[EngineEvent] = []

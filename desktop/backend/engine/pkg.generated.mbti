@@ -12,6 +12,8 @@ import {
 }
 
 // Values
+pub async fn adopt_runtime_settings(EngineManager) -> Bool
+
 pub fn approve_run(EngineManager, @protocol.ApprovalPayload) -> @protocol.ApprovalReply
 
 pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
@@ -44,7 +46,7 @@ pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @proto
 
 pub async fn migrate_global_store() -> Int
 
-pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, settings_dir? : @pathx.Path) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 

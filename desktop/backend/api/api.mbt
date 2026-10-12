@@ -273,7 +273,13 @@ pub fn ApiState::ApiState(
   resources? : @resources.Resources,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
-  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?)
+  // The endpoint settings are the user's, not this host's: they live in the
+  // session root every host process shares, beside the workspace registry.
+  let engine_actor = @engine.new_engine_actor(
+    engine,
+    runtime_dir?,
+    settings_dir?=@workspaces.global_store_root().map(root => root.to_path()),
+  )
   {
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),

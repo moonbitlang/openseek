@@ -104,7 +104,11 @@ pub fn FileLock::release(self : FileLock) -> Unit {
 /// rename it over the target. A reader therefore sees either the old contents
 /// or the new ones and never a truncated prefix, whether or not it takes the
 /// lock, and a crash mid-write leaves the previous file intact.
-pub async fn write_text_atomic(path : @pathx.Path, content : String) -> Unit {
+pub async fn write_text_atomic(
+  path : @pathx.Path,
+  content : String,
+  permission? : Int = 0o644,
+) -> Unit {
   let target = path.to_string()
   // The directory is not always ours. A workspace is whatever repository the
   // user attached, and a repository can carry a symlink at a guessable
@@ -124,7 +128,7 @@ pub async fn write_text_atomic(path : @pathx.Path, content : String) -> Unit {
   // attempt, holding whatever the caller was saving. Cancellation is among
   // those failures, hence the shield around the removal.
   errdefer @async.protect_from_cancel(() => discard_temp_file(temp))
-  @fs.write_file(temp.to_string(), content, create_mode=CreateNew)
+  @fs.write_file(temp.to_string(), content, create_mode=CreateNew, permission~)
   commit_temp_file(temp, target)
 }
 

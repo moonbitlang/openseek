@@ -12,7 +12,7 @@ pub async fn[G] ApiState::start_services(
   self : ApiState,
   group : @async.TaskGroup[G],
 ) -> Unit {
-  prepare_workspaces()
+  prepare_workspaces(self.manager)
   group.spawn_bg(allow_failure=true, () => {
     self.codex.run((method_, params) => {
       if @protocol.Notification::from_wire(method_, params)

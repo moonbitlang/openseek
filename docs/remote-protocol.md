@@ -414,7 +414,7 @@ has opened the same run.
 ### settings.* — the host-owned engine endpoint settings
 
 The server selection and its credentials live on the **host**
-(`engine-settings.json` in its runtime dir, versioned, 0600) — never in a
+(`~/.openseek/engine-settings.json`, versioned, 0600) — never in a
 client. Clients edit them here and consume them as status; key
 material never travels down the wire, only presence. Runs read the store
 at config time, so a change replaces the conversation's engine process on

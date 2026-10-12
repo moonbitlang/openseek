@@ -282,6 +282,7 @@ async test "worktree remove refuses a running conversation without unmapping it"
   let actor = new_engine_actor(
     engine.to_string(),
     runtime_dir=runtime.to_path(),
+    settings_dir=runtime.to_path(),
   )
   let manager = actor.manager()
   configure_custom_provider(manager)

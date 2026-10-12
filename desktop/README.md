@@ -175,9 +175,9 @@ both endpoints. **Custom URL**
 accepts any other OpenAI-compatible chat-completions endpoint, with the key
 optional — whether one is needed is the endpoint's business. The provider
 choice, the custom URL, and the keys live in the host's settings store
-(`engine-settings.json` in the runtime dir), shared by the desktop window
-and every remote page; a key is never echoed back to a client, only its
-presence. While no usable endpoint is configured, an API-setup modal opens
+(`~/.openseek/engine-settings.json`), shared by the desktop window, every
+remote page, and every other SeekMoon host of the same user; a key is never
+echoed back to a client, only its presence. While no usable endpoint is configured, an API-setup modal opens
 over the chat (the Settings page's API section lifted out of the page) and
 the composer keeps Send disabled, with a notice saying why. The host passes
 a custom endpoint to the engine as `OPENSEEK_API_URL`, substituting a

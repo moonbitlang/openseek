@@ -55,7 +55,7 @@ flowchart LR
 | `archive.mbt` | Moving a conversation's record between the live and archived stores, and sweeping condemned records under `archived/deleting`. |
 | `config.mbt` | Turning a `start` payload into the validated `RunConfig` a serve process is spawned with. |
 | `command.mbt` | Locating the engine executable across packaged and development layouts. |
-| `settings.mbt` | Host-owned endpoint settings (`engine-settings.json`): provider, credentials, versioned atomic saves. |
+| `settings.mbt` | Host-owned endpoint settings (`~/.openseek/engine-settings.json`): provider, credentials, versioned atomic saves. |
 | `migrate_global_store.mbt` | One-time relocation of legacy global-store conversations into the default workspace's store. |
 
 ## Process model
@@ -276,10 +276,12 @@ the next sweep.
 
 ## Settings
 
-Endpoint settings (provider, credentials, custom endpoint) live in the host's
-runtime dir as `engine-settings.json` — never in a client — so a browser page
-cannot leak one host's key to another, and every window sees the same
-configuration. Clients edit them through `settings.get`/`settings.set` and
+Endpoint settings (provider, credentials, custom endpoint) live in the user's
+session root as `~/.openseek/engine-settings.json` — never in a client — so a
+browser page cannot leak one host's key to another, and every window sees the
+same configuration. Every host process of one user reads that file; a save
+holds its cross-process lock, and a host that kept settings in its runtime
+directory copies them over once. Clients edit them through `settings.get`/`settings.set` and
 learn about others' edits from the `settings.changed` broadcast. Runs read
 them at config time, so a change respawns the conversation's engine on its
 next start (the spec fingerprint covers the resolved values).

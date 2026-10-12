@@ -702,6 +702,10 @@ priv enum PumpState {
 struct EngineManager {
   engine : String
   runtime_dir : @pathx.Path?
+  // Where the endpoint settings live: the session root every host process of
+  // this user shares, not this host's own runtime directory. `None` reads as
+  // the defaults and cannot save.
+  settings_dir : @pathx.Path?
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -717,7 +721,8 @@ struct EngineManager {
   // every client. The lock covers reads too: on Windows the atomic-save
   // fallback briefly removes the target before renaming the complete temp
   // file into place, and a concurrent run configuration must not mistake
-  // that internal window for an empty settings store.
+  // that internal window for an empty settings store. It orders this process
+  // only; a save also holds the file's cross-process lock.
   settings_lock : @async.Mutex
   // Connection-visible ordering for successful settings mutations. This is
   // deliberately process-local: BridgeReady starts a fresh revision epoch
@@ -1042,10 +1047,12 @@ async fn EngineManager::close_engines_for_sessions(
 fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
+  settings_dir? : @pathx.Path,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
+    settings_dir,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     settings_lock: Mutex(),
@@ -1061,8 +1068,9 @@ fn new_engine_manager(
 pub fn new_engine_actor(
   engine : String,
   runtime_dir? : @pathx.Path,
+  settings_dir? : @pathx.Path,
 ) -> EngineActor {
-  { manager: new_engine_manager(engine, runtime_dir?), }
+  { manager: new_engine_manager(engine, runtime_dir?, settings_dir?), }
 }
 
 ///|
