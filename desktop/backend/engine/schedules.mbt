@@ -1,5 +1,14 @@
 // Lightweight, host-owned schedules. Every execution is an independent CLI
 // session. The UI polls snapshots; no renderer owns a timer or child process.
+//
+// Host processes of one user share a runtime directory, and so this store: a
+// release build beside a development build, two windows of one build. Each
+// keeps the state in memory, times the entries itself, and saves the whole
+// state back, so two of them would start every due entry twice and erase each
+// other's saves. The store therefore has one owner at a time — the first host
+// to reach it, for as long as that process lives. Only the owner runs
+// entries and writes the file. Every other host reads what the owner last
+// saved and refuses changes, and takes over when the owner is gone.
 
 ///|
 const ScheduleConcurrency = 4
@@ -9,6 +18,13 @@ pub struct Schedules {
   manager : EngineManager
   directory : @pathx.Path?
   lock : @async.Mutex
+  // This process's hold on the store: an exclusive lock on a file inside it,
+  // kept open for the life of the process, so the operating system gives it
+  // up however the process ends. `None` while another host owns the store,
+  // or before this one has reached it.
+  mut ownership : @fs.File?
+  // The owner's view of the store. A host that does not own it caches
+  // nothing: what it would remember is another process's to change.
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
   stopped : Map[String, Unit]
@@ -23,6 +39,7 @@ pub fn Schedules::Schedules(
     manager,
     directory: runtime_dir.map(dir => dir.join("schedules")),
     lock: Mutex(),
+    ownership: None,
     state: None,
     processes: Map([]),
     stopped: Map([]),
@@ -79,15 +96,42 @@ fn Schedules::directory(self : Schedules) -> @pathx.Path raise EngineError {
 }
 
 ///|
-// Caller holds the lock. Never treat corrupt/unreadable state as an empty list.
-async fn Schedules::load(self : Schedules) -> @protocol.SchedulesReply {
-  if self.state is Some(state) {
-    return state
+/// What a client is told when it tries to change schedules through a host
+/// that does not own the store.
+const ScheduleForeignOwner = "Schedules are run by another SeekMoon open on this computer; change them there"
+
+///|
+// Caller holds the lock. Whether this process owns the store, claiming it
+// when no running host does. A host that finds it taken asks again on its
+// next call, which is how it takes over once the owner has exited.
+async fn Schedules::owns(self : Schedules) -> Bool {
+  if self.ownership is Some(_) {
+    return true
   }
   let dir = self.directory()
   @fsx.ensure_dir(dir)
-  let text = @fsx.read_text_if_exists(dir.join("schedules.json"))
-  let state : @protocol.SchedulesReply = match text {
+  let file = @fs.open(
+    dir.join("owner.lock").to_string(),
+    mode=ReadWrite,
+    create_mode=OpenOrCreate,
+  )
+  errdefer file.close()
+  guard file.try_lock(Exclusive) else {
+    file.close()
+    return false
+  }
+  self.ownership = Some(file)
+  true
+}
+
+///|
+// What the store's file says. Never treat corrupt/unreadable state as an
+// empty list. The owner replaces the file by rename, so a host reading it
+// without owning the store sees one complete save or the other.
+async fn Schedules::read(self : Schedules) -> @protocol.SchedulesReply {
+  let dir = self.directory()
+  @fsx.ensure_dir(dir)
+  match @fsx.read_text_if_exists(dir.join("schedules.json")) {
     None => { entries: [], runs: [], }
     Some(text) => {
       let json = @json.parse(text)
@@ -97,7 +141,18 @@ async fn Schedules::load(self : Schedules) -> @protocol.SchedulesReply {
       @json.from_json(value)
     }
   }
-  let recovered = recover_schedules(state, schedule_now())
+}
+
+///|
+// Caller holds the lock and owns the store. The first load after taking
+// ownership settles what the previous owner left behind: runs it was still
+// executing are over, and deadlines that passed while nobody owned the store
+// are skipped rather than replayed.
+async fn Schedules::load(self : Schedules) -> @protocol.SchedulesReply {
+  if self.state is Some(state) {
+    return state
+  }
+  let recovered = recover_schedules(self.read(), schedule_now())
   self.commit(recovered)
   recovered
 }
@@ -129,7 +184,13 @@ async fn Schedules::commit(
 pub async fn Schedules::list(self : Schedules) -> @protocol.SchedulesReply {
   self.lock.acquire()
   defer self.lock.release()
-  self.load()
+  if self.owns() {
+    self.load()
+  } else {
+    // Another host's schedules, as it last saved them. Reading must not
+    // recover or write: that would end the owner's running entries on disk.
+    self.read()
+  }
 }
 
 ///|
@@ -140,6 +201,7 @@ pub async fn Schedules::save(
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
+    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
     let state = self.load()
     // Validate typed callers too, and resolve only registered project paths.
     let spec : @protocol.ScheduleSpec = @json.from_json(payload.spec.to_json())
@@ -197,6 +259,7 @@ pub async fn Schedules::action(
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
+    guard self.owns() else { raise EngineError(ScheduleForeignOwner) }
     let state = self.load()
     guard state.entries.search_by(entry => entry.id == payload.id)
       is Some(index) else {
@@ -294,6 +357,9 @@ async fn Schedules::take_due(
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
+    // Only the owner starts entries; every other host's loop idles here
+    // until the store is free.
+    guard self.owns() else { return [] }
     let state = self.load()
     let now = at.unwrap_or_else(schedule_now)
     let entries = state.entries.copy()

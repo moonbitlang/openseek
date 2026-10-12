@@ -3,6 +3,7 @@ package "openseek_desktop/backend/engine"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/worktree",
@@ -113,6 +114,7 @@ pub struct Schedules {
   manager : EngineManager
   directory : @pathx.Path?
   lock : @async.Mutex
+  mut ownership : @fs.File?
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
   stopped : Map[String, Unit]

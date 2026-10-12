@@ -22,6 +22,16 @@ fn schedule_fixture(
 }
 
 ///|
+/// End a host's hold on the store, the way the operating system does when
+/// the process exits.
+fn exit_host(service : Schedules) -> Unit {
+  if service.ownership is Some(file) {
+    file.close()
+    service.ownership = None
+  }
+}
+
+///|
 async test "a scheduled run that left no session reports its exit code" {
   let folder = @fs.tmpdir(prefix="schedules-no-session-")
   defer @fs.rmdir(folder, recursive=true)
@@ -94,11 +104,74 @@ async test "schedule tick persists independent runs and caps concurrency without
   assert_true(state.entries.iter().all(entry => entry.next_at == Some(220000)))
   let disk = @fsx.read_text(root.join("schedules/schedules.json"))
   assert_true(disk.contains(launches[0].1.id))
+  exit_host(service)
   let restarted = Schedules(new_engine_manager("unused"), Some(root))
   let recovered = restarted.list()
   assert_eq(recovered.runs.length(), 4)
   assert_true(recovered.runs.iter().all(run => run.status is Interrupted))
   assert_eq(restarted.take_due().length(), 0)
+}
+
+///|
+/// Host processes of one user share the store. The lock that marks its owner
+/// belongs to the open file, so a second `Schedules` over the same directory
+/// meets it exactly as a second process would.
+async test "a second host reads the owner's schedules and neither runs nor changes them" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-two-hosts-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let owner = Schedules(new_engine_manager("unused"), Some(root))
+  ignore(owner.list())
+  owner.commit({
+    entries: [schedule_fixture("due", 100000, Every(1))],
+    runs: [],
+  })
+  let other = Schedules(new_engine_manager("unused"), Some(root))
+  assert_eq(other.list().entries.map(entry => entry.id), ["due"])
+  // The entry is due for both; only the owner starts it.
+  assert_eq(other.take_due(at=100000).length(), 0)
+  assert_eq(owner.take_due(at=100000).length(), 1)
+  let refused = try {
+    ignore(other.action({ id: "due", action: "pause", }))
+    false
+  } catch {
+    EngineError(_) => true
+    error => raise error
+  }
+  assert_true(refused)
+  // Looking did not end the owner's run, in the file or in the owner.
+  guard other.list().runs is [seen] else {
+    fail("the second host does not see the owner's run")
+  }
+  assert_true(seen.status is Running)
+  guard owner.list() is { entries: [entry], runs: [run], } else {
+    fail("the owner lost its schedule or its run")
+  }
+  assert_true(entry.enabled)
+  assert_true(run.status is Running)
+}
+
+///|
+async test "a host takes over the store once its owner has exited" {
+  let root : @pathx.Path = Path(@fs.tmpdir(prefix="schedules-takeover-"))
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  let owner = Schedules(new_engine_manager("unused"), Some(root))
+  ignore(owner.list())
+  owner.commit({
+    entries: [schedule_fixture("due", 100000, Every(1))],
+    runs: [],
+  })
+  let other = Schedules(new_engine_manager("unused"), Some(root))
+  assert_eq(owner.take_due(at=100000).length(), 1)
+  assert_eq(other.take_due(at=100000).length(), 0)
+  exit_host(owner)
+  // The run belonged to a process that is gone; the new owner settles it as
+  // it would after a restart, and may now change the schedule.
+  guard other.list().runs is [left] else {
+    fail("the new owner lost the previous owner's run")
+  }
+  assert_true(left.status is Interrupted)
+  let paused = other.action({ id: "due", action: "pause", })
+  assert_false(paused.entries[0].enabled)
 }
 
 ///|
@@ -139,6 +212,7 @@ async test "schedule sleep gap skips old ticks and corrupt persistence is never 
   assert_eq(service.list().entries[0].next_at, Some(260000))
   let path = root.join("schedules/schedules.json")
   @fs.write_file(path.to_string(), "broken", create_mode=CreateOrTruncate)
+  exit_host(service)
   let other = Schedules(new_engine_manager("unused"), Some(root))
   let failed = try {
     ignore(other.list())
