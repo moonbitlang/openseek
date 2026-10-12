@@ -22,6 +22,42 @@ fn pdf_in(state : State, path : @common.Uri) -> PdfDocument raise {
 }
 
 ///|
+test "opening PDF Changes closes the tree before loading and on cached review activation" {
+  let (fixture, ctx, path, _) = pdf_fixture()
+  let change : ChangedFile = {
+    path: Relative("report.pdf"),
+    original_path: None,
+    index_status: " ",
+    worktree_status: "M",
+    kind: ChangeModified,
+  }
+  let (_, loading) = open_changed_document(
+    test_emit(),
+    { ..owned_state(), tree_open: true, },
+    ctx,
+    change,
+    had_active=false,
+  )
+  assert_false(loading.tree_open)
+  assert_true(loading.docs[path].state is TabLoading)
+  // Reopening either the pending review or its loaded PDF must apply the
+  // same layout without waiting for another working-tree reply.
+  for doc_state in [TabLoading, fixture.docs[path].state] {
+    let docs = loading.docs.copy()
+    docs[path] = { ..docs[path], state: doc_state, }
+    let (_, activated) = open_changed_document(
+      test_emit(),
+      { ..loading, docs, tree_open: true, },
+      ctx,
+      change,
+      had_active=true,
+    )
+    assert_false(activated.tree_open)
+    assert_eq(activated.review_generation, loading.review_generation)
+  }
+}
+
+///|
 test "PDF callbacks belong to the active file revision and runtime" {
   let (state, ctx, path, _) = pdf_fixture()
   assert_true(state.accepts_pdf_callback(ctx, ctx.owner, 0, path, "pdf:1", 7))

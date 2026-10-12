@@ -654,7 +654,8 @@ pub fn open_changed_document(
     let docs = state.docs.copy()
     docs[path] = next_doc
     let cmds = [show, delayed_diff_loading(dispatch, ctx.owner, path, next_doc)]
-    if !had_active || (state.tree_open && ctx.narrow) {
+    let close_tree = ctx.narrow || next_doc.is_pdf_preview()
+    if !had_active || (state.tree_open && close_tree) {
       cmds.push(request_viewer_remeasure())
     }
     return (
@@ -664,7 +665,7 @@ pub fn open_changed_document(
         docs,
         review_generation,
         error: None,
-        tree_open: state.tree_open && !ctx.narrow,
+        tree_open: state.tree_open && !close_tree,
       },
     )
   }
@@ -777,7 +778,8 @@ pub fn open_changed_document(
     cmds.push(clear_document())
   }
   cmds.push(delayed_diff_loading(dispatch, ctx.owner, path, review_doc))
-  if !had_active || (state.tree_open && ctx.narrow) {
+  let close_tree = ctx.narrow || review_doc.is_pdf_preview()
+  if !had_active || (state.tree_open && close_tree) {
     cmds.push(request_viewer_remeasure())
   }
   (
@@ -787,7 +789,7 @@ pub fn open_changed_document(
       docs,
       review_generation: generation,
       error: None,
-      tree_open: state.tree_open && !ctx.narrow,
+      tree_open: state.tree_open && !close_tree,
     },
   )
 }
