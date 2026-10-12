@@ -340,3 +340,66 @@ test('Word comments stay beside their source paragraphs and quote only after con
   await expect(cards.first()).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
+
+test('Excel annotation hides outside either horizontal edge and restores its draft', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace'] = [{ name: 'docs', is_dir: true }];
+  app.directoryEntries['/workspace/docs'] = [{ name: 'book1.xlsx', is_dir: false }];
+  app.searchFiles = ['docs/book1.xlsx'];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+  await app.openReview({ waitForHistory: false });
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await app.openQuickOpen();
+  await page.locator('#quick-open-input').fill('book1.xlsx');
+  await page.getByRole('option', { name: /book1\.xlsx/ }).click();
+  const table = page.locator('.sheet-document:visible table').first();
+  await expect(table).toBeVisible();
+  // Exercise native horizontal scrolling without a large binary fixture.
+  await table.evaluate(element => { element.style.minWidth = '3000px'; });
+  const row = table.locator('tr').filter({ has: page.locator('td[data-cell]') }).first();
+  const cells = row.locator('td[data-cell]');
+  const scroll = async edge => table.evaluate((element, edge) => {
+    let viewport = element.parentElement;
+    while (viewport && !(viewport.scrollWidth > viewport.clientWidth &&
+      /auto|scroll/.test(getComputedStyle(viewport).overflowX))) {
+      viewport = viewport.parentElement;
+    }
+    if (!viewport) throw new Error('Expected a horizontally scrollable sheet');
+    viewport.scrollLeft = edge === 'right' ? viewport.scrollWidth : 0;
+  }, edge);
+  const input = page.locator('#office-feedback-input textarea');
+  for (const [cell, home, away] of [
+    [cells.first(), 'left', 'right'],
+    [cells.last(), 'right', 'left'],
+  ]) {
+    await scroll(home);
+    // Select at the visible portion of a cell wider than the viewport.
+    const point = await cell.evaluate(element => {
+      const bounds = element.getBoundingClientRect();
+      let left = bounds.left, right = bounds.right;
+      for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+        if (/auto|scroll|hidden/.test(getComputedStyle(parent).overflowX)) {
+          const clip = parent.getBoundingClientRect();
+          left = Math.max(left, clip.left);
+          right = Math.min(right, clip.right);
+        }
+      }
+      if (right <= left) throw new Error('Selected cell must intersect the viewport');
+      return { x: (left + right) / 2, y: bounds.top + bounds.height / 2 };
+    });
+    await page.mouse.click(point.x, point.y);
+    await expect(input).toBeVisible();
+    await input.fill(`Retain ${home} draft`);
+    await scroll(away);
+    await expect(input).toBeHidden();
+    await scroll(home);
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue(`Retain ${home} draft`);
+    await input.press('Escape');
+    await expect(input).toBeHidden();
+  }
+  expect(app.pageErrors).toEqual([]);
+});

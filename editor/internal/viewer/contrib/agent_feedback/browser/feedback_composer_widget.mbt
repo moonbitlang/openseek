@@ -183,7 +183,9 @@ fn FeedbackComposerWidget::layout(self : FeedbackComposerWidget) -> Unit {
   let width = self.widget.measured_width()
   let height = self.widget.measured_height()
   if anchor.get_bottom() < root.get_top() ||
-    anchor.get_top() > root.get_bottom() {
+    anchor.get_top() > root.get_bottom() ||
+    anchor.get_right() < root.get_left() ||
+    anchor.get_left() > root.get_right() {
     self.widget.hide()
     return
   }
