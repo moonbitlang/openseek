@@ -510,11 +510,12 @@ pub fn open_document(
     let state = state.record_pdf_generation(doc)
     let docs = state.docs.copy()
     docs[path] = doc
-    // Gaining the first active tab reveals the breadcrumb row, and the
-    // narrow drill-down closing the tree reveals a viewer that was last
-    // measured while hidden — both need a remeasure alongside the show.
+    let close_tree = ctx.narrow || doc.is_pdf_preview()
+    // Gaining the first active tab reveals the breadcrumb row. Closing the
+    // tree for a PDF or a narrow drill-down also changes the viewer's space;
+    // both need a remeasure alongside the show.
     let cmd = if !had_active ||
-      (state.tree_open && ctx.narrow) ||
+      (state.tree_open && close_tree) ||
       doc.review is Some(_) {
       @cmd.batch([clear_review, show, request_viewer_remeasure()])
     } else {
@@ -527,7 +528,7 @@ pub fn open_document(
         docs,
         review_generation,
         error: None,
-        tree_open: state.tree_open && !ctx.narrow,
+        tree_open: state.tree_open && !close_tree,
       },
     )
   }
@@ -573,11 +574,13 @@ pub fn open_document(
     range~,
     annotation?,
   )
+  let close_tree = ctx.narrow ||
+    docs.get(path).map_or(false, doc => doc.is_pdf_preview())
   // Gaining the first active tab reveals the breadcrumb row, and the narrow
   // drill-down closing the tree reveals a hidden-measured viewer — either
   // way the viewer must remeasure before the reply's document lands.
   let cmd = if !had_active ||
-    (state.tree_open && ctx.narrow) ||
+    (state.tree_open && close_tree) ||
     working_generation is Some(_) {
     @cmd.batch([clear_review, read, request_viewer_remeasure()])
   } else {
@@ -590,7 +593,7 @@ pub fn open_document(
       docs,
       review_generation,
       error: None,
-      tree_open: state.tree_open && !ctx.narrow,
+      tree_open: state.tree_open && !close_tree,
     },
   )
 }
@@ -1165,9 +1168,9 @@ pub fn activate(
   let state = state.record_pdf_generation(doc)
   let docs = state.docs.copy()
   docs[path] = doc
-  // The narrow drill-down closing the tree reveals a viewer that was last
-  // measured while hidden; it must remeasure with the show.
-  let cmd = if state.tree_open && ctx.narrow {
+  let close_tree = ctx.narrow || doc.is_pdf_preview()
+  // Closing the tree changes the space available to the activated viewer.
+  let cmd = if state.tree_open && close_tree {
     @cmd.batch([show, request_viewer_remeasure()])
   } else {
     show
@@ -1179,7 +1182,7 @@ pub fn activate(
       docs,
       review_generation,
       error: None,
-      tree_open: state.tree_open && !ctx.narrow,
+      tree_open: state.tree_open && !close_tree,
     },
   )
 }
@@ -1249,7 +1252,12 @@ pub fn close_document(
         docs[next_path] = doc
         (
           @cmd.batch([show, forget_view_state(path)]),
-          { ..state, docs, review_generation, },
+          {
+            ..state,
+            docs,
+            review_generation,
+            tree_open: state.tree_open && !doc.is_pdf_preview(),
+          },
         )
       } else {
         (forget_view_state(path), { ..state, docs, })
@@ -3916,6 +3924,12 @@ fn update_inner(
           {
             ..state,
             docs,
+            // Give a newly opened PDF the full viewer width. Reloading a PDF
+            // preserves a file tree the reader explicitly reopened.
+            tree_open: state.tree_open &&
+            !(ctx.active_file == Some(path) &&
+            doc_state is TabPdf(..) &&
+            !(previous is TabPdf(..))),
             pdf_generation: if doc_state is TabPdf(..) {
               state.pdf_generation + 1
             } else {
@@ -6668,7 +6682,7 @@ test "RevealDirectory opens the breadcrumb picker without moving the explorer" {
   let (_, closed) = update(
     emit,
     ToggleTree,
-    { ..owned_state(), explorer_mode: ExplorerChanges, },
+    { ..owned_state(), explorer_mode: ExplorerChanges, tree_open: true, },
     test_ctx(),
   )
   assert_false(closed.tree_open)

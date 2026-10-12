@@ -27,6 +27,17 @@ pub(all) struct PdfDocument {
 pub extend PdfDocument with Eq::{equal, not_equal}
 
 ///|
+/// Reserve the PDF layout before its bytes arrive. Once loaded, the host's
+/// content classification takes precedence over the filename.
+fn Doc::is_pdf_preview(self : Doc) -> Bool {
+  match self.state {
+    TabPdf(..) => true
+    TabLoading => self.name.to_lower().has_suffix(".pdf")
+    _ => false
+  }
+}
+
+///|
 fn decode_pdf_document(
   locale~ : @i18n.Locale = English,
   data_base64 : String,

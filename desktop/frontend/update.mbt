@@ -18190,7 +18190,11 @@ test "resolved transcript files and directories stay in the right panel" {
   let (_, directory) = update(dispatch, directory_msg, directory_pending)
   assert_true(directory.right_panel_open)
   assert_true(directory.dock.active is Some(FilePicker))
-  assert_true(directory.file_panel.tree_open)
+  assert_true(
+    @fileeditor.editor_classes(directory.file_panel, file_ctx(directory)).contains(
+      "tree-open",
+    ),
+  )
   assert_true(directory.file_panel.highlighted is Some(Relative("src")))
   assert_true(directory.file_panel.expanded.contains(Relative("src")))
   // Repeating the same link is a reveal, not the row's collapse toggle.

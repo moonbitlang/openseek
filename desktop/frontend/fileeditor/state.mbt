@@ -648,7 +648,7 @@ pub fn State::empty() -> State {
   {
     owner: None,
     placement: PlacementUnknown,
-    tree_open: true,
+    tree_open: false,
     office_zoom: 100,
     office_query: "",
     office_prefer_system_fonts: false,
