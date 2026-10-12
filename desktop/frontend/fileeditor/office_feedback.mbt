@@ -28,15 +28,26 @@ pub fn show_office_feedback(
       surface.get_parent_element() is Some(viewport) else {
       return
     }
-    if office_feedback_mount.val is Some(mounted) &&
+    let mounted = if office_feedback_mount.val is Some(mounted) &&
       @base_browser.element_contains(host, mounted.host) {
-      if mounted.target.val != Some(preview) {
-        mounted.target.val = Some(preview)
-        if office_feedback_anchor(surface, preview)
-          is Some((anchor, selection_rects, prefer_below)) {
-          mounted.input.show(anchor, selection_rects~, prefer_below~)
-        }
-      }
+      Some(mounted)
+    } else {
+      None
+    }
+    if mounted is Some(mounted) && mounted.target.val == Some(preview) {
+      return
+    }
+    guard office_feedback_anchor(surface, preview)
+      is Some((anchor, selection_rects, prefer_below)) else {
+      // Never associate a new target with an old visible anchor. Sources
+      // without a recoverable resolver must be selected again.
+      dispose_office_feedback()
+      scheduler.add(emit(OfficeSelectionDismissed(preview)))
+      return
+    }
+    if mounted is Some(mounted) {
+      mounted.target.val = Some(preview)
+      mounted.input.show(anchor, selection_rects~, prefer_below~)
       return
     }
     guard viewer_state.services is Some(services) else { return }
@@ -63,10 +74,7 @@ pub fn show_office_feedback(
       },
     )
     office_feedback_mount.val = Some({ host, input, target, })
-    if office_feedback_anchor(surface, preview)
-      is Some((anchor, selection_rects, prefer_below)) {
-      input.show(anchor, selection_rects~, prefer_below~)
-    }
+    input.show(anchor, selection_rects~, prefer_below~)
   })
 }
 
@@ -114,35 +122,10 @@ fn office_feedback_anchor(
         let offset : Int32 = selection.get_with_string("focusOffset")
         let end_offset : Int32 = range.get_with_string("endOffset")
         let prefer_below = focus.is_same_node(end) && offset == end_offset
-        if preview.pdf_generation is Some(_) &&
-          pdf_feedback_range(surface, preview.materialized)
-          is Some(measure_range) {
-          return Some(
-            (
-              () => {
-                measure_range().map(range => {
-                  let endpoint : @js.Value = range.apply_with_string(
-                    "cloneRange",
-                    ([] : FixedArray[@js.Value]),
-                  )
-                  let _ : @js.Value = endpoint.apply_with_string("collapse", [
-                    !prefer_below,
-                  ])
-                  endpoint.apply_with_string(
-                    "getBoundingClientRect",
-                    ([] : FixedArray[@js.Value]),
-                  )
-                })
-              },
-              () => {
-                match measure_range() {
-                  Some(range) => feedback_range_rects(range)
-                  None => []
-                }
-              },
-              prefer_below,
-            ),
-          )
+        if preview.pdf_generation is Some(_) {
+          return pdf_feedback_range(surface, preview.materialized).map(range => {
+            pdf_feedback_anchor(range, prefer_below)
+          })
         }
         let pinned : @js.Value = range.apply_with_string(
           "cloneRange",
@@ -202,6 +185,14 @@ fn office_feedback_anchor(
       }
     }
   }
+  // PDF source identity survives replacement of the native Selection and
+  // text layer. The resolver can remain mounted while its DOM is unavailable;
+  // the composer's mutation observer retries when the text layer returns.
+  if preview.pdf_generation is Some(_) {
+    return pdf_feedback_range(surface, preview.materialized).map(range => {
+      pdf_feedback_anchor(range, true)
+    })
+  }
   // Cell selections and imported comments have element anchors instead.
   let element = surface.query_selector(
     ".office-cell-active, .office-annotation-selected",
@@ -219,6 +210,32 @@ fn office_feedback_anchor(
       true,
     )
   })
+}
+
+///|
+fn pdf_feedback_anchor(
+  measure_range : () -> @js.Value?,
+  prefer_below : Bool,
+) -> (() -> @dom.DOMRect?, () -> Array[@dom.DOMRect], Bool) {
+  (
+    () => {
+      measure_range().map(range => {
+        let endpoint : @js.Value = range.apply_with_string(
+          "cloneRange",
+          ([] : FixedArray[@js.Value]),
+        )
+        let _ : @js.Value = endpoint.apply_with_string("collapse", [
+          !prefer_below,
+        ])
+        endpoint.apply_with_string(
+          "getBoundingClientRect",
+          ([] : FixedArray[@js.Value]),
+        )
+      })
+    },
+    () => measure_range().map(feedback_range_rects).unwrap_or([]),
+    prefer_below,
+  )
 }
 
 ///|
