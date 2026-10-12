@@ -1,8 +1,8 @@
 ///|
 /// The same floating composer used by code and Markdown. The host supplies
 /// a live selection anchor, source identity, and conversation routing.
-struct FeedbackInput {
-  widget : @feedback.AgentFeedbackInputWidget
+struct FeedbackComposerWidget {
+  widget : AgentFeedbackInputWidget
   container : @rdom.Element
   mut anchor : (() -> @rdom.DOMRect?)?
   selection_layer : @rdom.Element
@@ -12,7 +12,7 @@ struct FeedbackInput {
 }
 
 ///|
-pub fn FeedbackInput::FeedbackInput(
+pub fn FeedbackComposerWidget::FeedbackComposerWidget(
   container : @rdom.Element,
   viewport~ : @rdom.Element,
   layout_source~ : @rdom.Element,
@@ -20,15 +20,15 @@ pub fn FeedbackInput::FeedbackInput(
   on_submit~ : (String, Bool) -> Unit,
   on_change~ : (String) -> Unit,
   on_cancel~ : () -> Unit,
-) -> FeedbackInput {
-  let mut slot : FeedbackInput? = None
+) -> FeedbackComposerWidget {
+  let mut slot : FeedbackComposerWidget? = None
   let submit = apply => {
     if slot is Some(input) {
       on_submit(input.widget.value(), apply)
     }
   }
   let layout = () => if slot is Some(input) { input.layout() }
-  let widget = @feedback.AgentFeedbackInputWidget(
+  let widget = AgentFeedbackInputWidget(
     localization~,
     {
       on_add: () => submit(false),
@@ -44,7 +44,7 @@ pub fn FeedbackInput::FeedbackInput(
   selection_layer.set_attribute("class", "feedback-source-selection-layer")
   selection_layer.set_attribute("aria-hidden", "true")
   container.append_child(selection_layer.as_node())
-  let input : FeedbackInput = {
+  let input : FeedbackComposerWidget = {
     widget,
     container,
     anchor: None,
@@ -156,8 +156,8 @@ pub fn FeedbackInput::FeedbackInput(
 
 ///|
 /// Preserve Batch while attaching a fresh, live source anchor.
-pub fn FeedbackInput::show(
-  self : FeedbackInput,
+pub fn FeedbackComposerWidget::show(
+  self : FeedbackComposerWidget,
   anchor : () -> @rdom.DOMRect?,
   prefer_below~ : Bool,
   selection_rects~ : () -> Array[@rdom.DOMRect],
@@ -171,7 +171,7 @@ pub fn FeedbackInput::show(
 }
 
 ///|
-fn FeedbackInput::layout(self : FeedbackInput) -> Unit {
+fn FeedbackComposerWidget::layout(self : FeedbackComposerWidget) -> Unit {
   guard self.anchor is Some(measure) else { return }
   self.paint_selection()
   guard measure() is Some(anchor) else {
@@ -208,7 +208,7 @@ fn FeedbackInput::layout(self : FeedbackInput) -> Unit {
 }
 
 ///|
-pub fn FeedbackInput::hide(self : FeedbackInput) -> Unit {
+pub fn FeedbackComposerWidget::hide(self : FeedbackComposerWidget) -> Unit {
   self.anchor = None
   self.selection_rects = () => []
   self.selection_layer.set_inner_html("")
@@ -217,7 +217,7 @@ pub fn FeedbackInput::hide(self : FeedbackInput) -> Unit {
 }
 
 ///|
-pub fn FeedbackInput::dispose(self : FeedbackInput) -> Unit {
+pub fn FeedbackComposerWidget::dispose(self : FeedbackComposerWidget) -> Unit {
   self.anchor = None
   self.selection_rects = () => []
   self.selection_layer.set_inner_html("")
@@ -232,7 +232,9 @@ pub fn FeedbackInput::dispose(self : FeedbackInput) -> Unit {
 ///|
 /// Retain source feedback even when focusing the textarea replaces the native
 /// selection. Clip each fragment to this viewport, independently of the popup.
-fn FeedbackInput::paint_selection(self : FeedbackInput) -> Unit {
+fn FeedbackComposerWidget::paint_selection(
+  self : FeedbackComposerWidget,
+) -> Unit {
   self.selection_layer.set_inner_html("")
   let root = self.container.get_bounding_client_rect()
   for rect in (self.selection_rects)() {

@@ -93,6 +93,12 @@ pub(all) struct AgentFeedbackInputWidgetHost {
   content_width : () -> Double
 }
 
+type FeedbackComposerWidget
+pub fn FeedbackComposerWidget::FeedbackComposerWidget(@dom.Element, viewport~ : @dom.Element, layout_source~ : @dom.Element, localization~ : @localization.Localization, on_submit~ : (String, Bool) -> Unit, on_change~ : (String) -> Unit, on_cancel~ : () -> Unit) -> Self
+pub fn FeedbackComposerWidget::dispose(Self) -> Unit
+pub fn FeedbackComposerWidget::hide(Self) -> Unit
+pub fn FeedbackComposerWidget::show(Self, () -> @dom.DOMRect?, prefer_below~ : Bool, selection_rects~ : () -> Array[@dom.DOMRect]) -> Unit
+
 // Type aliases
 
 // Traits

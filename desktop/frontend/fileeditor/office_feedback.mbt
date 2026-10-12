@@ -4,7 +4,7 @@ const OfficeFeedbackHostId = "office-feedback-input"
 ///|
 priv struct OfficeFeedbackMount {
   host : @dom.Element
-  input : @feedback_input.FeedbackInput
+  input : @viewer.FeedbackComposer
   target : Ref[OfficeSelectionPreview?]
 }
 
@@ -39,13 +39,13 @@ pub fn show_office_feedback(
       }
       return
     }
+    guard viewer_state.services is Some(services) else { return }
     dispose_office_feedback()
     let target = Ref(Some(preview))
-    let input = @feedback_input.FeedbackInput(
+    let input = services.viewer_services.create_feedback_composer(
       host,
       viewport~,
       layout_source=surface,
-      localization=viewer_localization,
       on_submit=(text, apply) => {
         if target.val is Some(preview) {
           scheduler.add(emit(OfficeFeedbackSubmitted(preview, text, apply~)))
