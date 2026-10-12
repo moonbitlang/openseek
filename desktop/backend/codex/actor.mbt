@@ -373,6 +373,9 @@ async fn[G] Actor::run_connection(
   let events : @async.Queue[AppServerEvent] = Queue(
     kind=Blocking(AppServerEventCapacity),
   )
+  if self.settings.require_home && self.settings.home is None {
+    raise CodexError::Unavailable("Could not determine isolated Codex home")
+  }
   let connection = connect(
     group,
     command=self.settings.command,

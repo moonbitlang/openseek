@@ -15,7 +15,7 @@ pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_han
 
 pub fn home_dir(@pathx.Path) -> @pathx.Path
 
-pub async fn prepared_home(@pathx.Path) -> @pathx.Path?
+pub async fn prepared_home(@pathx.Path) -> @pathx.Path
 
 // Errors
 pub(all) suberror CodexError {
@@ -44,8 +44,9 @@ pub fn Actor::status(Self) -> Json
 pub struct CodexSettings {
   command : String
   home : @pathx.Path?
+  require_home : Bool
 }
-pub fn CodexSettings::CodexSettings(command~ : String, home~ : @pathx.Path?) -> Self
+pub fn CodexSettings::CodexSettings(command~ : String, home~ : @pathx.Path?, require_home? : Bool) -> Self
 pub fn CodexSettings::default() -> Self
 
 type Connection
