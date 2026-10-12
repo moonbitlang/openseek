@@ -9,7 +9,7 @@
 ///|
 /// Used only before an authoritative row exists or while an optimistic edit
 /// preserves a neighboring field. The host remains the persisted source.
-const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int = 30
+const DefaultWorkspaceSubmoduleCheckoutTimeoutSeconds : Int32 = 30
 
 ///|
 /// One project's settings mirror, keyed like `ProjectWorktrees` and fenced
@@ -19,8 +19,8 @@ priv struct ProjectSettings {
   project : @common.Uri
   worktree_mode : Bool
   checkout_submodules : Bool
-  submodule_checkout_timeout_seconds : Int
-  generation : Int
+  submodule_checkout_timeout_seconds : Int32
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -28,8 +28,8 @@ fn fetch_workspace_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -81,11 +81,11 @@ fn save_workspace_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  connection_generation~ : Int,
-  request_generation~ : Int,
+  connection_generation~ : Int32,
+  request_generation~ : Int32,
   worktree_mode? : Bool,
   checkout_submodules? : Bool,
-  submodule_checkout_timeout_seconds? : Int,
+  submodule_checkout_timeout_seconds? : Int32,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -149,9 +149,9 @@ fn DeviceState::with_workspace_settings(
   self : DeviceState,
   project : @common.Uri,
   worktree_mode : Bool,
-  generation~ : Int,
+  generation~ : Int32,
   checkout_submodules? : Bool,
-  submodule_checkout_timeout_seconds? : Int,
+  submodule_checkout_timeout_seconds? : Int32,
 ) -> DeviceState {
   let checkout_submodules = checkout_submodules.unwrap_or_else(() => {
     self
@@ -193,7 +193,7 @@ fn DeviceState::workspace_settings_row(
 fn DeviceState::workspace_settings_generation(
   self : DeviceState,
   project : @common.Uri,
-) -> Int {
+) -> Int32 {
   match self.workspace_settings_row(project) {
     Some(row) => row.generation
     None => -1
@@ -230,7 +230,7 @@ fn Model::default_worktree_mode(
 ///|
 priv struct WorkspaceSettingsDialog {
   target : @workspace_settings.Target
-  pending_save : Int?
+  pending_save : Int32?
   error : String?
 } derive(Eq)
 
@@ -239,7 +239,7 @@ fn Model::begin_workspace_settings_save(
   self : Model,
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  request_generation : Int,
+  request_generation : Int32,
 ) -> Model {
   {
     ..self,
@@ -259,7 +259,7 @@ fn Model::finish_workspace_settings_save(
   self : Model,
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  request_generation : Int,
+  request_generation : Int32,
   error : String?,
 ) -> Model {
   {

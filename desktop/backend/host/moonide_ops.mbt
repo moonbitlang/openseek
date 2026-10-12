@@ -15,8 +15,8 @@ priv struct MoonIdeRequest {
   lexical_workspace : @pathx.Absolute
   physical_workspace : @pathx.Absolute
   relative_path : String
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
 }
 
 ///|
@@ -45,8 +45,8 @@ fn MoonIdeQuery::subcommand(self : MoonIdeQuery) -> String {
 fn MoonIdeQuery::args(
   self : MoonIdeQuery,
   path : String,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
 ) -> Array[String] {
   ["ide", self.subcommand(), "--loc", "\{path}:\{line}:\{column}", "--json"]
 }
@@ -116,7 +116,7 @@ async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
 }
 
 ///|
-fn positive_position(text : StringView) -> (Int, Int)? {
+fn positive_position(text : StringView) -> (Int32, Int32)? {
   guard [..text.split(":")] is [line_text, column_text] else { return None }
   let line = @string.parse_int(line_text) catch { _ => return None }
   let column = @string.parse_int(column_text) catch { _ => return None }
@@ -130,7 +130,7 @@ fn positive_position(text : StringView) -> (Int, Int)? {
 ///|
 /// Parse Moon IDE's compact, one-based `line:column-line:column` range.
 /// Reversed and non-positive ranges are malformed rows.
-fn parse_moonide_range(text : String) -> (Int, Int, Int, Int)? {
+fn parse_moonide_range(text : String) -> (Int32, Int32, Int32, Int32)? {
   guard [..text.split("-")] is [start_text, end_text] else { return None }
   guard positive_position(start_text) is Some((start_line, start_column)) &&
     positive_position(end_text) is Some((end_line, end_column)) else {
@@ -449,7 +449,7 @@ async fn moonide_references_op(
 
 ///|
 fn moonide_codelens_failure_text(
-  code : Int,
+  code : Int32,
   stream : String,
   data : &@io.Data,
 ) -> String raise HostError {
@@ -716,12 +716,12 @@ test "Moon IDE CodeLens compact ranges reject invalid coordinates and non-point 
       "", "1:2", "0:1-1:2", "1:0-1:2", "2:1-1:2", "1:3-1:2", "1:1-2147483648:1",
       "1:1-1:2147483648",
     ] {
-    assert_true(parse_moonide_codelens_range(raw.to_json()) is None)
-    assert_true(parse_moonide_codelens_position(raw.to_json()) is None)
+    assert_true(parse_moonide_codelens_range(Json(raw)) is None)
+    assert_true(parse_moonide_codelens_position(Json(raw)) is None)
     assert_true(
       parse_moonide_codelens_location({
         "path": "/workspace/main.mbt",
-        "range": raw.to_json(),
+        "range": Json(raw),
       })
       is None,
     )

@@ -123,7 +123,7 @@ fn Doc::uses_diff_surface(self : Doc) -> Bool {
 }
 
 ///|
-fn ReviewState::diff_loading_generation(self : ReviewState) -> Int {
+fn ReviewState::diff_loading_generation(self : ReviewState) -> Int32 {
   if self.generation >= self.working_generation {
     self.generation
   } else {
@@ -132,7 +132,7 @@ fn ReviewState::diff_loading_generation(self : ReviewState) -> Int {
 }
 
 ///|
-fn Doc::diff_pending_generation(self : Doc) -> Int? {
+fn Doc::diff_pending_generation(self : Doc) -> Int32? {
   guard self.diff_is_pending() && self.review is Some(review) else {
     return None
   }
@@ -168,7 +168,7 @@ fn delayed_diff_loading(
 /// The newest working-tree request that owns an auxiliary review reload.
 /// Ordinary documents carry no token; each review reload advances this token
 /// independently of its HEAD request so out-of-order file replies are fenced.
-fn Doc::review_generation(self : Doc) -> Int? {
+fn Doc::review_generation(self : Doc) -> Int32? {
   match self.review {
     Some(review) => Some(review.working_generation)
     None => None
@@ -357,8 +357,8 @@ fn show_activated_tab(
   search_highlights : @grep_search.EditorHighlights?,
   path : @common.Uri,
   doc : Doc,
-  generation : Int,
-) -> (@cmd.Cmd, Doc, Int) {
+  generation : Int32,
+) -> (@cmd.Cmd, Doc, Int32) {
   let doc = doc.prepare_pdf_runtime(state.pdf_generation + 1)
   guard doc.stale &&
     !(doc.state is TabLoading) &&
@@ -413,7 +413,7 @@ pub fn open_document(
   ctx : Ctx,
   path : @common.Uri,
   name~ : String,
-  file_link_generation? : Int,
+  file_link_generation? : Int32,
   range~ : @common.Range?,
   annotation? : String,
   had_active~ : Bool,
@@ -892,7 +892,7 @@ fn reconcile_reviews_after_changes(
   head~ : String?,
   head_changed~ : Bool,
   restart_incomplete~ : Bool,
-) -> (Array[@cmd.Cmd], Map[@common.Uri, Doc], Int) {
+) -> (Array[@cmd.Cmd], Map[@common.Uri, Doc], Int32) {
   let docs = state.docs.copy()
   let cmds : Array[@cmd.Cmd] = []
   let restat_paths : Array[@common.Uri] = []
@@ -1120,7 +1120,7 @@ pub fn open_file(
   state : State,
   ctx : Ctx,
   path : @common.Uri,
-  file_link_generation? : Int,
+  file_link_generation? : Int32,
   range~ : @common.Range?,
   annotation? : String,
   had_active~ : Bool,
@@ -1383,7 +1383,7 @@ fn package_graph_input(path : @pathx.Relative) -> Bool {
 fn active_moonbit_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   root : @common.Uri?,
   docs : Map[@common.Uri, Doc],
   active : @common.Uri?,
@@ -1557,7 +1557,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
 ///|
 /// The opaque token echoed by host watcher notifications. The namespace keeps
 /// the counter unique across frontend reloads.
-fn Ctx::watch_identity(self : Ctx, generation : Int) -> String {
+fn Ctx::watch_identity(self : Ctx, generation : Int32) -> String {
   self.watch_namespace + ":" + generation.to_string()
 }
 
@@ -1793,11 +1793,11 @@ fn review_needs_unknown_head_refresh(
 fn refresh_unknown_head_reviews(
   dispatch : @cmd.Emit[Msg],
   docs : Map[@common.Uri, Doc],
-  review_generation : Int,
-  background_review_requests : Map[@common.Uri, Int],
+  review_generation : Int32,
+  background_review_requests : Map[@common.Uri, Int32],
   ctx : Ctx,
   files : Array[ChangedFile],
-) -> (Array[@cmd.Cmd], Map[@common.Uri, Doc], Int, Map[@common.Uri, Int]) {
+) -> (Array[@cmd.Cmd], Map[@common.Uri, Doc], Int32, Map[@common.Uri, Int32]) {
   let docs = docs.copy()
   let background_review_requests = background_review_requests.copy()
   let cmds = []
@@ -1981,7 +1981,7 @@ pub fn sync(
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
-  review_context? : Array[@mention_context.ReviewChanges] = [],
+  review_context~ : Array[@mention_context.ReviewChanges] = [],
 ) -> (State, @cmd.Cmd) {
   let checkout_ready = ctx.checkout_ready()
   let owner_changed = state.owner != Some(ctx.owner)

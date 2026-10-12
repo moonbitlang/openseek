@@ -29,9 +29,9 @@ pub struct EditorDomMouseEvent {
   left_button : Bool
   middle_button : Bool
   right_button : Bool
-  buttons : Int
+  buttons : Int32
   target : @rdom.Element?
-  mut detail : Int
+  mut detail : Int32
   posx : Double
   posy : Double
   ctrl_key : Bool

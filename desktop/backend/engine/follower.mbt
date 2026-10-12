@@ -51,7 +51,7 @@ priv enum FollowerMsg {
   // with no record file retire as an empty drain. The completed generation
   // is a drain barrier: no scan is in flight and none will start, so the
   // record can be moved.
-  Stop(final_scan~ : Bool, writer_exited~ : Bool, generation~ : Int)
+  Stop(final_scan~ : Bool, writer_exited~ : Bool, generation~ : Int32)
 }
 
 ///|
@@ -88,14 +88,14 @@ priv struct SessionFollower {
   // Stop callers poll a generation-stamped result, avoiding a consumable
   // one-shot ack (and an unbounded waiter collection). A failed final scan
   // completes the generation with an error and reactivates the actor.
-  mut stop_generation : Int
-  mut completed_stop_generation : Int
+  mut stop_generation : Int32
+  mut completed_stop_generation : Int32
   mut completed_stop_error : String?
-  mut stop_observers : Int
+  mut stop_observers : Int32
   // The highest sequence already broadcast. Commits at or below it are old
   // news; the frontier only advances, so a scan can never re-broadcast — not
   // even when the reader replays a record that was repaired under it.
-  mut watermark : Int
+  mut watermark : Int32
   // Where this follower has read to, and the transcript it read. A scan is
   // this reader moving forward; a `session.load` is what it already holds.
   tail : @session_record.Tail
@@ -104,7 +104,7 @@ priv struct SessionFollower {
 ///|
 /// The highest event sequence in a session document — what a snapshot's
 /// watermark is. 0 for a record with no events.
-fn session_max_sequence(session : @protocol.SessionDocument) -> Int {
+fn session_max_sequence(session : @protocol.SessionDocument) -> Int32 {
   let mut max = 0
   for event in session.events.unwrap_or([]) {
     if event.sequence > max {
@@ -438,7 +438,7 @@ async fn stop_follower(
   manager : EngineManager,
   session : String,
   writer_exited~ : Bool,
-  final_scan? : Bool = true,
+  final_scan~ : Bool = true,
 ) -> Unit {
   guard manager.followers.get(session) is Some(follower) else { return }
   stop_follower_instance(manager, follower, writer_exited~, final_scan~)
@@ -452,7 +452,7 @@ async fn stop_follower_instance(
   manager : EngineManager,
   follower : SessionFollower,
   writer_exited~ : Bool,
-  final_scan? : Bool = true,
+  final_scan~ : Bool = true,
 ) -> Unit {
   let session = follower.session
   guard manager.followers.get(session) is Some(current) &&
@@ -602,7 +602,7 @@ test "session_max_sequence is the snapshot's watermark" {
 ///|
 /// One durable event line, as the store writes them.
 #cfg(not(platform="windows"))
-fn session_user_event(sequence : Int, content : String) -> String {
+fn session_user_event(sequence : Int32, content : String) -> String {
   "{\"sequence\":\{sequence},\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}"
 }
 

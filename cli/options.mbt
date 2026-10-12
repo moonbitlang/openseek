@@ -16,7 +16,7 @@
 /// `global` is a parameter so the TUI main can build a standalone (non-global)
 /// command.
 pub fn agent_shared_options(
-  global? : Bool = false,
+  global~ : Bool = false,
 ) -> Array[@argparse.OptionArg] {
   [
     OptionArg(

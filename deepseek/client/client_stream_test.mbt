@@ -1,8 +1,8 @@
 ///|
 async fn stream_test_server(
   group : @async.TaskGroup[Unit],
-  finish? : Bool = true,
-  kimi_usage? : Bool = false,
+  finish~ : Bool = true,
+  kimi_usage~ : Bool = false,
 ) -> String? {
   guard bind_test_server("local TCP bind unavailable; skipping stream test")
     is Some(server) else {
@@ -130,7 +130,7 @@ async test "streaming chat retries an idle stall before any event" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -185,7 +185,7 @@ async test "streaming chat fails an idle stall after a delta without retrying" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -242,7 +242,7 @@ async test "streaming chat does not retry an idle stall after an unterminated da
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {

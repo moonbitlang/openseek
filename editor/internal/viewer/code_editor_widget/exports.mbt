@@ -4,7 +4,7 @@
 /// `renderValidationDecorations` option.
 pub fn CodeEditorWidget::get_line_decorations(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Array[@model.ModelDecoration] {
   guard self.get_model() is Some(model) else { return [] }
   model.get_line_decorations(
@@ -61,7 +61,7 @@ pub fn EditorDecorationsCollection::append(
 /// The decoration count.
 pub fn EditorDecorationsCollection::length(
   self : EditorDecorationsCollection,
-) -> Int {
+) -> Int32 {
   self.decoration_ids.length()
 }
 
@@ -70,7 +70,7 @@ pub fn EditorDecorationsCollection::length(
 /// index is out of bounds or the decoration no longer resolves.
 pub fn EditorDecorationsCollection::get_range(
   self : EditorDecorationsCollection,
-  index : Int,
+  index : Int32,
 ) -> @base_common.Range? {
   guard index >= 0 && index < self.decoration_ids.length() else { return None }
   guard self.viewer.get_model() is Some(model) else { return None }
@@ -172,8 +172,8 @@ pub fn CodeEditorWidget::has_widget_focus(self : CodeEditorWidget) -> Bool {
 pub fn CodeEditorWidget::set_selections(
   self : CodeEditorWidget,
   selections : Array[@core.Selection],
-  source? : String = "api",
-  reason? : @editor_api.CursorChangeReason = NotSet,
+  source~ : String = "api",
+  reason~ : @editor_api.CursorChangeReason = NotSet,
 ) -> Unit {
   guard selections.length() > 0 else { return }
   guard self.is_code_presentation() else { return }
@@ -191,8 +191,8 @@ pub fn CodeEditorWidget::set_selections(
 /// → `-1`.
 pub fn CodeEditorWidget::get_top_for_position(
   self : CodeEditorWidget,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Double {
   self.get_vertical_offset_for_position(
     line_number,
@@ -208,7 +208,7 @@ pub fn CodeEditorWidget::get_top_for_position(
 /// `-1`.
 pub fn CodeEditorWidget::get_bottom_for_line_number(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   self.get_vertical_offset_after_position(
     line_number,
@@ -249,7 +249,7 @@ pub fn CodeEditorWidget::get_line_height_for_position(
 pub fn CodeEditorWidget::get_visible_column_from_position(
   self : CodeEditorWidget,
   position : @base_common.Position,
-) -> Int {
+) -> Int32 {
   guard self.get_model() is Some(model) else { return position.column }
   let position = model.validate_position(position)
   let tab_size = self.configuration.snapshot().options.tab_size
@@ -278,7 +278,7 @@ pub fn CodeEditorWidget::get_selections(
 /// Reveals a 1-based model line, aligning its top into view (`Simple`).
 pub fn CodeEditorWidget::reveal_line(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   self.reveal_line_with(line_number, Simple)
 }
@@ -287,7 +287,7 @@ pub fn CodeEditorWidget::reveal_line(
 /// Reveals a 1-based model line, centering it (`Center`).
 pub fn CodeEditorWidget::reveal_line_in_center(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   self.reveal_line_with(line_number, Center)
 }
@@ -296,7 +296,7 @@ pub fn CodeEditorWidget::reveal_line_in_center(
 /// Reveals a 1-based model line near the top of the viewport (`NearTop`).
 pub fn CodeEditorWidget::reveal_line_near_top(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   self.reveal_line_with(line_number, NearTop)
 }
@@ -306,7 +306,7 @@ pub fn CodeEditorWidget::reveal_line_near_top(
 /// viewport (`CenterIfOutsideViewport`).
 pub fn CodeEditorWidget::reveal_line_in_center_if_outside_viewport(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   self.reveal_line_with(line_number, CenterIfOutsideViewport)
 }
@@ -317,8 +317,8 @@ pub fn CodeEditorWidget::reveal_line_in_center_if_outside_viewport(
 /// horizontal scroll is not adjusted.
 pub fn CodeEditorWidget::reveal_lines(
   self : CodeEditorWidget,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.reveal_lines_with(start_line_number, end_line_number, Simple)
 }
@@ -327,8 +327,8 @@ pub fn CodeEditorWidget::reveal_lines(
 /// Reveals a model line span `[start, end]` (1-based), centering it (`Center`).
 pub fn CodeEditorWidget::reveal_lines_in_center(
   self : CodeEditorWidget,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.reveal_lines_with(start_line_number, end_line_number, Center)
 }
@@ -337,8 +337,8 @@ pub fn CodeEditorWidget::reveal_lines_in_center(
 /// Reveals a model line span `[start, end]` (1-based) near the top (`NearTop`).
 pub fn CodeEditorWidget::reveal_lines_near_top(
   self : CodeEditorWidget,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.reveal_lines_with(start_line_number, end_line_number, NearTop)
 }
@@ -348,8 +348,8 @@ pub fn CodeEditorWidget::reveal_lines_near_top(
 /// currently outside the viewport (`CenterIfOutsideViewport`).
 pub fn CodeEditorWidget::reveal_lines_in_center_if_outside_viewport(
   self : CodeEditorWidget,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.reveal_lines_with(
     start_line_number,

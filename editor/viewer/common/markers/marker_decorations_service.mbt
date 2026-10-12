@@ -17,7 +17,7 @@ priv enum ModelRegistrationRemovalReason {
 priv struct ModelMarkerRegistration {
   model : @model.TextModel
   marker_decorations : MarkerDecorations
-  mut ref_count : Int
+  mut ref_count : Int32
   mut active : Bool
   mut content_subscription : @base_common.Disposable?
   mut dispose_subscription : @base_common.Disposable?
@@ -34,10 +34,10 @@ priv struct ModelMarkerRegistration {
 /// distinct live models to share one URI.
 struct MarkerDecorationsService {
   markers : MarkerServiceHandle
-  model_registrations : Map[Int, ModelMarkerRegistration]
-  model_ids_by_uri : Map[String, Array[Int]]
-  blocked_model_ids : Map[Int, Unit]
-  legacy_leases : Map[Int, @base_common.Disposable]
+  model_registrations : Map[Int32, ModelMarkerRegistration]
+  model_ids_by_uri : Map[String, Array[Int32]]
+  blocked_model_ids : Map[Int32, Unit]
+  legacy_leases : Map[Int32, @base_common.Disposable]
   suppressed_ranges : Map[String, Array[@base_common.Range]]
   did_change_marker_decorations : @base_common.Emitter[@model.TextModel]
   mut subscription : @base_common.Disposable?
@@ -145,7 +145,7 @@ fn MarkerDecorationsService::acquire_model(
       let model_ids = match self.model_ids_by_uri.get(uri_key) {
         Some(ids) => ids
         None => {
-          let ids : Array[Int] = []
+          let ids : Array[Int32] = []
           self.model_ids_by_uri.set(uri_key, ids)
           ids
         }
@@ -173,7 +173,7 @@ fn MarkerDecorationsService::acquire_model(
 ///|
 fn MarkerDecorationsService::remove_model_registration(
   self : MarkerDecorationsService,
-  model_id : Int,
+  model_id : Int32,
   reason : ModelRegistrationRemovalReason,
 ) -> Unit {
   if self.disposed && !(reason is ServiceDisposed) {
@@ -237,7 +237,7 @@ fn MarkerDecorationsService::finalize_registration(
 fn MarkerDecorationsService::remove_model_from_uri_index(
   self : MarkerDecorationsService,
   uri : @base_common.Uri,
-  model_id : Int,
+  model_id : Int32,
 ) -> Unit {
   let uri_key = uri.to_string()
   guard self.model_ids_by_uri.get(uri_key) is Some(model_ids) else { return }
@@ -296,7 +296,7 @@ fn MarkerDecorationsService::handle_marker_change(
 ///|
 fn MarkerDecorationsService::refresh_model_registration(
   self : MarkerDecorationsService,
-  model_id : Int,
+  model_id : Int32,
 ) -> Unit {
   if self.disposed {
     return
@@ -319,7 +319,7 @@ fn MarkerDecorationsService::refresh_model_registration(
 fn MarkerDecorationsService::update_decorations(
   self : MarkerDecorationsService,
   registration : ModelMarkerRegistration,
-  reset? : Bool = false,
+  reset~ : Bool = false,
 ) -> Unit {
   if self.disposed || !registration.active {
     return

@@ -7,34 +7,34 @@
 
 ///|
 /// The schema version this build emits and accepts.
-let current_schema_version : Int = 1
+let current_schema_version : Int32 = 1
 
 ///|
 /// Field and count ceilings, enforced by `validate`.
-let max_answer_chars : Int = 8_000
+let max_answer_chars : Int32 = 8_000
 
 ///|
 /// Citation-count ceiling, enforced by `validate`.
-let max_citations : Int = 20
+let max_citations : Int32 = 20
 
 ///|
 /// Per-citation file-path length ceiling.
-let max_citation_file_chars : Int = 300
+let max_citation_file_chars : Int32 = 300
 
 ///|
 /// Per-citation note length ceiling.
-let max_citation_note_chars : Int = 200
+let max_citation_note_chars : Int32 = 200
 
 ///|
 /// `unresolved` length ceiling.
-let max_unresolved_chars : Int = 1_000
+let max_unresolved_chars : Int32 = 1_000
 
 ///|
 /// One supporting reference: a workspace `file:line`, or the source/`.mbti`
 /// path `moon ide doc` reported for a stdlib or dependency claim.
 struct Citation {
   file : String
-  line : Int?
+  line : Int32?
   note : String?
 } derive(Debug, Eq, ToJson, FromJson)
 
@@ -42,7 +42,7 @@ struct Citation {
 /// The child's full answer. `unresolved` names what it could NOT determine —
 /// stated ignorance beats a fabricated claim.
 pub struct ExploreReport {
-  priv schema_version : Int
+  priv schema_version : Int32
   answer : String
   citations : Array[Citation]
   priv unresolved : String?

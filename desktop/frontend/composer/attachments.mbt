@@ -7,7 +7,7 @@ priv enum AttachmentPhase {
 
 ///|
 priv struct AttachmentRequest {
-  id : Int
+  id : Int32
   source : @protocol.AttachmentSource
   root : @common.Uri
   phase : AttachmentPhase
@@ -177,7 +177,7 @@ fn Entry::prepare_attachments(
 }
 
 ///|
-fn Entry::without_attachment(self : Entry, id : Int) -> Entry {
+fn Entry::without_attachment(self : Entry, id : Int32) -> Entry {
   {
     ..self,
     attachment_requests: self.attachment_requests.filter(request => {
@@ -189,7 +189,7 @@ fn Entry::without_attachment(self : Entry, id : Int) -> Entry {
 ///|
 fn Entry::with_attachment_phase(
   self : Entry,
-  id : Int,
+  id : Int32,
   phase : AttachmentPhase,
 ) -> Entry {
   {

@@ -5,7 +5,7 @@
 /// Creates a moon-command language provider over a shared workspace root.
 pub fn MoonWorkspaceLanguageProvider::MoonWorkspaceLanguageProvider(
   root : Ref[String],
-  moon_command? : String = "moon",
+  moon_command~ : String = "moon",
 ) -> MoonWorkspaceLanguageProvider {
   new_moon_workspace_language_provider(root, moon_command~)
 }
@@ -75,7 +75,7 @@ pub fn parse_moon_definition_output(
 pub fn MoonCheckDiagnostics::MoonCheckDiagnostics(
   root : Ref[String],
   publish : (@base_common.Uri, String, Array[@language.Diagnostic]) -> Unit,
-  moon_command? : String = "moon",
+  moon_command~ : String = "moon",
 ) -> MoonCheckDiagnostics {
   new_native_moon_check_diagnostics(root, publish, moon_command~)
 }
@@ -116,7 +116,7 @@ pub fn NativeServerHost::NativeServerHost() -> NativeServerHost {
 
 ///|
 pub fn NativeServerHost::with_poll_interval(
-  poll_interval_ms : Int,
+  poll_interval_ms : Int32,
 ) -> NativeServerHost {
   native_server_host_with_poll_interval(poll_interval_ms)
 }

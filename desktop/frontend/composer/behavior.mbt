@@ -78,7 +78,7 @@ pub fn Trigger::matches(self : Trigger, fields : Array[String]) -> Bool {
 /// and the exact draft prefix restored when a row is accepted.
 struct Menu[T] {
   items : Array[T]
-  selected : Int
+  selected : Int32
   loading : Bool
   draft_without_token : String
 } derive(Eq)
@@ -93,7 +93,7 @@ pub fn[T] Menu::Menu(
 }
 
 ///|
-pub fn[T] Menu::selected(self : Menu[T]) -> Int {
+pub fn[T] Menu::selected(self : Menu[T]) -> Int32 {
   self.selected
 }
 
@@ -108,19 +108,19 @@ fn[T] Menu::draft_without_token(self : Menu[T]) -> String {
 }
 
 ///|
-fn[T] Menu::get(self : Menu[T], index : Int) -> T? {
+fn[T] Menu::get(self : Menu[T], index : Int32) -> T? {
   self.items.get(index)
 }
 
 ///|
-fn[T] Menu::iter2(self : Menu[T]) -> Iter2[Int, T] {
+fn[T] Menu::iter2(self : Menu[T]) -> Iter2[Int32, T] {
   self.items.iter2()
 }
 
 ///|
 /// Move the highlighted row by `delta`, wrapping at both ends. An empty menu
 /// is left unchanged so keyboard navigation remains safe while loading.
-pub fn[T] Menu::shifted(self : Menu[T], delta : Int) -> Menu[T] {
+pub fn[T] Menu::shifted(self : Menu[T], delta : Int32) -> Menu[T] {
   let count = self.items.length()
   if count == 0 {
     return self

@@ -31,8 +31,8 @@
 /// - `Respond(ToolOutput("error: write requires ...", is_error=true))` for
 ///   invalid arguments.
 pub fn definition(
-  workspace_root? : String = ".",
-  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  workspace_root~ : String = ".",
+  file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {
@@ -257,7 +257,7 @@ async fn write_file(
 /// cascade, so several of them usually mean the content is malformed wholesale
 /// (truncated generation, stray markdown fences, non-MoonBit text), and a
 /// smaller skeleton that parses is the reliable way back.
-const SmallerPartsHintThreshold : Int = 3
+const SmallerPartsHintThreshold : Int32 = 3
 
 ///|
 /// The rejected-write report: nothing was written, the first parse errors with

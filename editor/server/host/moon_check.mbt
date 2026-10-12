@@ -10,7 +10,7 @@ struct MoonCheckDiagnostics {
   collect_check : async () -> String?
   running : Ref[Bool]
   dirty : Ref[Bool]
-  sync_generation : Ref[Int]
+  sync_generation : Ref[Int32]
   /// Exact synced model state per workspace URI.
   documents : Map[String, SyncedDocumentStamp]
   /// Last accepted set per workspace URI, including its producing state.
@@ -35,7 +35,7 @@ priv struct PublishedDiagnosticSet {
 fn new_native_moon_check_diagnostics(
   root : Ref[String],
   publish : (@base_common.Uri, String, Array[@language.Diagnostic]) -> Unit,
-  moon_command? : String = "moon",
+  moon_command~ : String = "moon",
 ) -> MoonCheckDiagnostics {
   new_moon_check_diagnostics(root, publish, () => {
     // `moon check` exits nonzero whenever errors exist, so the exit code is

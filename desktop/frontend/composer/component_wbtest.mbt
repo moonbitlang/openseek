@@ -46,7 +46,7 @@ fn Action::test_emit() -> @cmd.Emit[Action] {
 }
 
 ///|
-fn[T] Menu::length(self : Menu[T]) -> Int {
+fn[T] Menu::length(self : Menu[T]) -> Int32 {
   self.items.length()
 }
 

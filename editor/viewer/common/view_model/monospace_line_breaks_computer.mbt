@@ -25,16 +25,16 @@ pub(all) enum WordBreak {
 ///|
 /// Monaco `CharacterClass` (`monospaceLineBreaksComputer.ts`), as the small
 /// integers the shared `CharacterClassifier` stores.
-const CHARACTER_CLASS_NONE : Int = 0
+const CHARACTER_CLASS_NONE : Int32 = 0
 
 ///|
-const CHARACTER_CLASS_BREAK_BEFORE : Int = 1
+const CHARACTER_CLASS_BREAK_BEFORE : Int32 = 1
 
 ///|
-const CHARACTER_CLASS_BREAK_AFTER : Int = 2
+const CHARACTER_CLASS_BREAK_AFTER : Int32 = 2
 
 ///|
-const CHARACTER_CLASS_BREAK_IDEOGRAPHIC : Int = 3
+const CHARACTER_CLASS_BREAK_IDEOGRAPHIC : Int32 = 3
 
 ///|
 /// The defaults of Monaco's `wordWrapBreakAfterCharacters` editor option —
@@ -72,8 +72,8 @@ fn WrappingCharacterClassifier::WrappingCharacterClassifier(
 ///|
 fn WrappingCharacterClassifier::get(
   self : WrappingCharacterClassifier,
-  char_code : Int,
-) -> Int {
+  char_code : Int32,
+) -> Int32 {
   if char_code >= 0 && char_code < 256 {
     self.classifier.get(char_code)
   } else if (char_code >= 0x3040 && char_code <= 0x30ff) ||
@@ -121,7 +121,7 @@ pub let monospace_line_breaks_computer_factory : MonospaceLineBreaksComputerFact
 /// One batched line-break request: the model line's text plus its injected
 /// text (Monaco reads both back through `ILineBreaksComputerContext`).
 priv struct LineBreaksRequest {
-  model_line_number : Int
+  model_line_number : Int32
   line_text : String
   injected_text : Array[InjectedText]
 }
@@ -132,8 +132,8 @@ priv struct LineBreaksRequest {
 struct LineBreaksComputer {
   classifier : WrappingCharacterClassifier
   font_info : @config.FontInfo
-  tab_size : Int
-  wrapping_column : Int
+  tab_size : Int32
+  wrapping_column : Int32
   wrapping_indent : @editor_api.WrappingIndent
   word_break : WordBreak
   requests : Array[LineBreaksRequest]
@@ -145,10 +145,10 @@ struct LineBreaksComputer {
 pub fn MonospaceLineBreaksComputerFactory::create_line_breaks_computer(
   self : MonospaceLineBreaksComputerFactory,
   font_info~ : @config.FontInfo,
-  tab_size~ : Int,
-  wrapping_column~ : Int,
+  tab_size~ : Int32,
+  wrapping_column~ : Int32,
   wrapping_indent~ : @editor_api.WrappingIndent,
-  word_break? : WordBreak = Normal,
+  word_break~ : WordBreak = Normal,
 ) -> LineBreaksComputer {
   {
     classifier: self.classifier,
@@ -164,7 +164,7 @@ pub fn MonospaceLineBreaksComputerFactory::create_line_breaks_computer(
 ///|
 pub fn LineBreaksComputer::add_request(
   self : LineBreaksComputer,
-  model_line_number : Int,
+  model_line_number : Int32,
   line_text : String,
   injected_text : Array[InjectedText],
 ) -> Unit {
@@ -217,11 +217,11 @@ pub fn LineBreaksComputer::finalize(
 /// `columns_for_full_width_char`).
 fn create_line_breaks(
   classifier : WrappingCharacterClassifier,
-  model_line_number : Int,
+  model_line_number : Int32,
   projected_line : ProjectedTextLine,
   has_injections : Bool,
-  tab_size : Int,
-  first_line_break_column : Int,
+  tab_size : Int32,
+  first_line_break_column : Int32,
   columns_for_full_width_char : Double,
   wrapping_indent : @editor_api.WrappingIndent,
   is_keep_all : Bool,
@@ -249,7 +249,7 @@ fn create_line_breaks(
   )
   let wrapped_line_break_column = first_line_break_column.to_double() -
     wrapped_text_indent_length.to_double()
-  let breaking_offsets : Array[Int] = []
+  let breaking_offsets : Array[Int32] = []
   let breaking_offsets_visible_column : Array[Double] = []
   let mut break_offset = 0
   let mut break_offset_visible_column = 0.0
@@ -334,11 +334,11 @@ fn create_line_breaks(
 /// continuation indent applies to every segment but the first
 /// (`getMinOutputOffset`).
 fn materialize_projection_data(
-  model_line_number : Int,
+  model_line_number : Int32,
   projected_line : ProjectedTextLine,
-  breaking_offsets : Array[Int],
+  breaking_offsets : Array[Int32],
   breaking_offsets_visible_column : Array[Double],
-  wrapped_text_indent_length : Int,
+  wrapped_text_indent_length : Int32,
 ) -> ModelLineProjectionData {
   let segments : Array[ModelLineProjectionSegment] = []
   for k in 0..<breaking_offsets.length() {
@@ -379,9 +379,9 @@ fn materialize_projection_data(
 /// `renderControlCharacters` substitutions are often wide) advance by
 /// `columns_for_full_width_char`.
 fn compute_char_width(
-  char_code : Int,
+  char_code : Int32,
   visible_column : Double,
-  tab_size : Int,
+  tab_size : Int32,
   columns_for_full_width_char : Double,
 ) -> Double {
   if char_code == 9 {
@@ -399,7 +399,7 @@ fn compute_char_width(
 }
 
 ///|
-fn tab_character_width(visible_column : Int, tab_size : Int) -> Int {
+fn tab_character_width(visible_column : Int32, tab_size : Int32) -> Int32 {
   tab_size - visible_column % tab_size
 }
 
@@ -409,10 +409,10 @@ fn tab_character_width(visible_column : Int, tab_size : Int) -> Int {
 /// a period). `is_keep_all` (`wordBreak: 'keepAll'`) disables the
 /// ideographic break points.
 fn can_break(
-  _prev_char_code : Int,
-  prev_char_code_class : Int,
-  char_code : Int,
-  char_code_class : Int,
+  _prev_char_code : Int32,
+  prev_char_code_class : Int32,
+  char_code : Int32,
+  char_code_class : Int32,
   is_keep_all : Bool,
 ) -> Bool {
   char_code != 32 &&
@@ -445,11 +445,11 @@ fn can_break(
 /// indentation.
 fn compute_wrapped_text_indent_length(
   line_text : String,
-  tab_size : Int,
-  first_line_break_column : Int,
+  tab_size : Int32,
+  first_line_break_column : Int32,
   columns_for_full_width_char : Double,
   wrapping_indent : @editor_api.WrappingIndent,
-) -> Int {
+) -> Int32 {
   let mut wrapped_text_indent_length = 0
   if wrapping_indent != None {
     let first_non_whitespace_index = @base_common.first_non_whitespace_index(

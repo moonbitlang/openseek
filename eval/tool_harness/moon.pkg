@@ -20,9 +20,7 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+native"
+// Each harness run builds an mbtx snippet; serialize the test and doc cases
+// so they do not compete with one another for the compiler's build budget.
 
-options(
-  // Each harness run builds an mbtx snippet; serialize the test and doc cases
-  // so they do not compete with one another for the compiler's build budget.
-  "max-concurrent-tests": 1,
-)
+max_concurrent_tests = 1

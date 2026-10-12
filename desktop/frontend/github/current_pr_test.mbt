@@ -12,7 +12,7 @@ fn reconcile_current(
   state : @github.State,
   checkout : @github.CheckoutScope?,
   active : Bool,
-  busy? : Bool = false,
+  busy~ : Bool = false,
 ) -> @github.State {
   @github.reconcile(
     emit(),

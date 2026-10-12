@@ -38,7 +38,7 @@ fn open_new_tab(
   state : State,
   ctx : Ctx,
   command? : TabCommand,
-  on_screen? : Bool = true,
+  on_screen~ : Bool = true,
 ) -> (@cmd.Cmd, State) {
   guard workspace_key(ctx) is Some(group) else { return (@cmd.none, state) }
   let key = @uuid.mint()
@@ -534,7 +534,7 @@ fn disconnect(
 /// code for a child that did not exit by itself (killed with the session, or
 /// by a signal the platform does not translate), which is not a code the
 /// command chose.
-fn exit_code_of(code : Int) -> Int? {
+fn exit_code_of(code : Int32) -> Int32? {
   if code < 0 {
     None
   } else {

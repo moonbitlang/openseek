@@ -80,7 +80,7 @@ pub fn BgJobRuntime::records(self : BgJobRuntime) -> Array[@protocol.JobRecord] 
 /// stall every other job's publication behind the lock. The one terminal write
 /// is exempt. It happens once per job, nothing retries it later, and a restart
 /// reads it to learn that the job is over; late beats lost.
-fn persistence_deadline_ms(kind : @protocol.JobEventKind) -> Int? {
+fn persistence_deadline_ms(kind : @protocol.JobEventKind) -> Int32? {
   match kind {
     Finished | Failed => None
     Started | Updated => Some(5000)
@@ -119,7 +119,7 @@ async fn BgJobRuntime::publish_record(
   self : BgJobRuntime,
   id : String,
   kind : @protocol.JobEventKind,
-  persistence_timeout_ms : Int?,
+  persistence_timeout_ms : Int32?,
   persist : async (@protocol.JobRecord) -> Unit,
 ) -> Unit {
   self.publish_lock.acquire()

@@ -13,7 +13,7 @@ priv struct ActionButton {
 
 ///|
 fn ActionButton::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ActionButton,
 ) -> @html.Html {
   ignore(locale)
@@ -70,7 +70,7 @@ pub(all) struct ModelSelect {
 
 ///|
 fn ModelSelect::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ModelSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -106,7 +106,7 @@ pub(all) struct ReasoningSelect {
 
 ///|
 fn ReasoningSelect::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ReasoningSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -170,7 +170,7 @@ pub(all) struct WorktreeControl {
 /// keeps the selected mode visible while its first operation is in flight,
 /// but turns it into a statement so a click cannot disagree with that work.
 fn WorktreeControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -217,7 +217,7 @@ pub(all) struct MissingWorktreeNotice {
 
 ///|
 fn MissingWorktreeNotice::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MissingWorktreeNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -254,7 +254,7 @@ fn MissingWorktreeNotice::render(
 /// identity-scoped decision, so arbitrary HTML and commands never cross the
 /// composer boundary.
 fn ApprovalNotice::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ApprovalNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -318,7 +318,7 @@ fn ApprovalNotice::render(
 /// stable context column. It is public so callers and tests can render the
 /// typed component without reaching through the stateful composer shell.
 pub fn ContextComponent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ContextComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -513,7 +513,7 @@ pub fn ContextComponent::render(
 
 ///|
 fn @protocol.CodexPermissionMode::short_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -525,7 +525,7 @@ fn @protocol.CodexPermissionMode::short_label(
 
 ///|
 fn @protocol.CodexPermissionMode::title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -537,7 +537,7 @@ fn @protocol.CodexPermissionMode::title(
 
 ///|
 fn @protocol.CodexPermissionMode::description(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -560,7 +560,7 @@ fn @protocol.CodexPermissionMode::glyph(
 
 ///|
 fn @protocol.CodexPermissionMode::render_option(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
   selected : @protocol.CodexPermissionMode,
   identity : Identity,
@@ -599,7 +599,7 @@ fn @protocol.CodexPermissionMode::render_option(
 
 ///|
 fn PermissionControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : PermissionControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -671,7 +671,7 @@ fn PermissionControl::render(
 
 ///|
 fn StatusComponent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : StatusComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -704,7 +704,7 @@ pub(all) struct WorktreeArchiveDialog {
 
 ///|
 pub fn WorktreeArchiveDialog::message(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeArchiveDialog,
 ) -> String {
   let refusal = self.refusal
@@ -723,7 +723,7 @@ pub fn WorktreeArchiveDialog::message(
 
 ///|
 pub fn WorktreeArchiveDialog::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
@@ -766,7 +766,7 @@ priv struct MentionChip {
 
 ///|
 fn MentionChip::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MentionChip,
 ) -> @html.Html {
   ignore(locale)
@@ -824,7 +824,7 @@ priv struct View {
 }
 
 ///|
-fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
+fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   ignore(locale)
   let actions : Array[@html.Html] = []
   for action in self.actions {
@@ -941,7 +941,7 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
 /// column is diffed by position, so a row that came and went would shift the
 /// goal row below it on every run start and end.
 fn running_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   run : RunHeartbeat?,
   clock_ms~ : Double,
 ) -> @html.Html {
@@ -961,7 +961,7 @@ fn running_row(
 /// turn before its first usage report has no count — so both absent leaves
 /// the bare stage, which is still the one thing worth saying.
 fn RunHeartbeat::label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : RunHeartbeat,
   clock_ms~ : Double,
 ) -> String {
@@ -1055,7 +1055,7 @@ priv struct CompletionRow {
 /// empty/loading state such as "Searching..." or ui(locale, NoFiles).
 priv struct CompletionView {
   rows : Array[CompletionRow]
-  selected : Int
+  selected : Int32
   hint : String
   empty : String
 }
@@ -1064,9 +1064,9 @@ priv struct CompletionView {
 /// Render one completion popup. A row uses `mousedown` so choosing it keeps
 /// focus in the textarea while the owning source updates its draft.
 fn CompletionView::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CompletionView,
-  pick : (Int) -> @cmd.Cmd,
+  pick : (Int32) -> @cmd.Cmd,
 ) -> @html.Html {
   ignore(locale)
   let rows : Array[@html.Html] = []
@@ -1105,9 +1105,9 @@ fn CompletionView::render(
 priv struct KeyboardActions {
   menu_open : Bool
   prediction : @cmd.Cmd?
-  navigate : (Int) -> @cmd.Cmd
+  navigate : (Int32) -> @cmd.Cmd
   // Present while the arrow keys may recall an earlier prompt.
-  history : ((Int) -> @cmd.Cmd)?
+  history : ((Int32) -> @cmd.Cmd)?
   accept : @cmd.Cmd
   dismiss : @cmd.Cmd
   submit : @cmd.Cmd

@@ -1,5 +1,5 @@
 ///|
-const TranscriptReloadMaxAttempts : Int = 3
+const TranscriptReloadMaxAttempts : Int32 = 3
 
 ///|
 /// Write a large selection through the Host only after the user submits it.
@@ -85,7 +85,7 @@ fn session_snapshot_command(
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  generation : Int32,
   activate_on_success : Bool,
 ) -> @cmd.Cmd {
   let (workspace, archived) = match model.find_conversation(channel, session) {
@@ -642,7 +642,7 @@ fn retry_session_snapshot(
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  generation : Int32,
   activate_on_success : Bool,
   message : String,
 ) -> (@cmd.Cmd, Model) {
@@ -727,10 +727,10 @@ fn apply_session_snapshot(
   model : Model,
   session : String,
   items : Array[@transcript.TranscriptItem],
-  watermark : Int,
+  watermark : Int32,
   goal : @transcript.GoalStanding?,
-  goal_markers : Array[(Int, @transcript.GoalMarker)],
-  generation : Int,
+  goal_markers : Array[(Int32, @transcript.GoalMarker)],
+  generation : Int32,
   activate_on_success : Bool,
   prediction : @wire.PredictionRecord?,
 ) -> (@cmd.Cmd, Model) {
@@ -1603,7 +1603,7 @@ fn covering_overlay(model : Model) -> Bool {
 /// launcher popup, a dock tab menu, the narrow layout's sidebar drawer, a
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
-fn desired_browser_view(model : Model) -> Int? {
+fn desired_browser_view(model : Model) -> Int32? {
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -9266,7 +9266,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
 ///|
 fn sessions_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_generation~ : Int32 = 0,
 ) -> Msg {
   on_home(SessionsLoaded(items, connection_generation=0, request_generation~))
 }
@@ -9375,7 +9375,7 @@ test "the narrow drawer closes when navigation lands elsewhere" {
 ///|
 fn archived_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_generation~ : Int32 = 0,
 ) -> Msg {
   on_home(
     ArchivedLoaded(
@@ -9488,7 +9488,7 @@ test "runs resync names exact Starting Open and Idle owners" {
 fn with_pending_steers(
   conv : Conversation,
   texts : Array[String],
-  run_id? : String = "r7",
+  run_id~ : String = "r7",
 ) -> Conversation {
   let mut next = conv
   for index, text in texts {
@@ -14597,10 +14597,10 @@ fn encoded_conversation_models(
   entries : Array[StoredConversationModel],
 ) -> String {
   let rows : Array[Json] = entries.map(entry => {
-    "key": entry.key.to_json(),
-    "model": entry.model.wire().to_json(),
+    "key": Json(entry.key),
+    "model": Json(entry.model.wire()),
   })
-  rows.to_json().stringify()
+  Json(rows).stringify()
 }
 
 ///|
@@ -14681,11 +14681,11 @@ test "a conversation first met through a live run adopts its tier" {
 ///|
 fn host_settings(
   provider~ : String,
-  revision? : Int = 0,
-  has_deepseek_key? : Bool = false,
-  has_glm_key? : Bool = false,
-  has_custom_key? : Bool = false,
-  custom_api_url? : String = "",
+  revision~ : Int32 = 0,
+  has_deepseek_key~ : Bool = false,
+  has_glm_key~ : Bool = false,
+  has_custom_key~ : Bool = false,
+  custom_api_url~ : String = "",
 ) -> HostSettings {
   {
     revision,
@@ -15421,8 +15421,8 @@ test "sidebar navigation leaves the settings page" {
 /// A `git.branch` reply for the test conversation.
 fn branch_reply(
   branch : String,
-  generation? : Int = 0,
-  session? : String = "desktop-test",
+  generation~ : Int32 = 0,
+  session~ : String = "desktop-test",
   diffstat? : DiffStat,
   base_hint? : String,
 ) -> DeviceMsg {
@@ -15441,7 +15441,7 @@ fn branch_reply(
 /// moved mid-request makes them differ.
 fn pull_request_reply(
   branch : String,
-  generation~ : Int,
+  generation~ : Int32,
   queried? : String,
   pull_request? : PullRequest,
   compare_url? : String,
@@ -15716,7 +15716,7 @@ test "a checkout that returns to a branch does not accept the older lookup" {
   let (_, away) = update_dev(dispatch, branch_reply("feature/y"), first)
   let (_, back) = update_dev(dispatch, branch_reply("feature/x"), away)
   assert_eq(back.active().pull_request_generation, 3)
-  fn answered(generation : Int, number : Int) {
+  fn answered(generation : Int32, number : Int32) {
     pull_request_reply("feature/x", generation~, pull_request={
       ..test_pull_request(),
       number,
@@ -16034,7 +16034,7 @@ test "right-panel menu closes when the dock owner changes" {
 /// same durable identity.
 fn archived_item(
   id : String,
-  channel? : @interop.ChannelId = Local,
+  channel~ : @interop.ChannelId = Local,
 ) -> @transcript.SessionListItem {
   {
     id,
@@ -21670,7 +21670,7 @@ test "file context inherits the conversation model and its reasoning family" {
 ///|
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
-  navigation : Int
+  navigation : Int32
   selection : @mention_context.ReviewChanges
 } derive(Eq)
 

@@ -64,7 +64,7 @@ pub fn get_session_editor_comments(
 fn compare_session_editor_comments(
   a : SessionEditorComment,
   b : SessionEditorComment,
-) -> Int {
+) -> Int32 {
   let by_resource = a.resource.to_string().compare(b.resource.to_string())
   if by_resource != 0 {
     return by_resource
@@ -85,7 +85,7 @@ fn compare_session_editor_comments(
 /// so grouping accounts for long comments that would overlap the next
 /// widget. ~50 characters per widget line, +1 for the item header, plus the
 /// replies at the same rate.
-fn estimate_expanded_comment_lines(comment : SessionEditorComment) -> Int {
+fn estimate_expanded_comment_lines(comment : SessionEditorComment) -> Int32 {
   let chars_per_line = 50
   let text_length = comment.text.length().max(1)
   let text_lines = (text_length + chars_per_line - 1) / chars_per_line
@@ -106,7 +106,7 @@ fn estimate_expanded_comment_lines(comment : SessionEditorComment) -> Int {
 /// so a long comment pulls in items below it.
 pub fn group_nearby_session_editor_comments(
   items : Array[SessionEditorComment],
-  line_threshold? : Int = 5,
+  line_threshold~ : Int32 = 5,
 ) -> Array[Array[SessionEditorComment]] {
   if items.is_empty() {
     return []

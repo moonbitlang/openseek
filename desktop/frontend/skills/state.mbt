@@ -73,9 +73,9 @@ fn State::pending_action(self : State, source : String) -> PendingSkillAction? {
 ///|
 enum Preview {
   Closed
-  Loading(target~ : PreviewTarget, request~ : Int)
-  Ready(target~ : PreviewTarget, request~ : Int, content~ : String)
-  Failed(target~ : PreviewTarget, request~ : Int, message~ : String)
+  Loading(target~ : PreviewTarget, request~ : Int32)
+  Ready(target~ : PreviewTarget, request~ : Int32, content~ : String)
+  Failed(target~ : PreviewTarget, request~ : Int32, message~ : String)
 } derive(Eq)
 
 ///|
@@ -118,8 +118,8 @@ pub(all) enum Msg {
   )
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
-  PreviewLoaded(request~ : Int, target~ : PreviewTarget, content~ : String)
-  PreviewFailed(request~ : Int, target~ : PreviewTarget, message~ : String)
+  PreviewLoaded(request~ : Int32, target~ : PreviewTarget, content~ : String)
+  PreviewFailed(request~ : Int32, target~ : PreviewTarget, message~ : String)
   BackToList
   SkillsScrolled(Double)
 }
@@ -333,7 +333,7 @@ pub fn State::handle(
 }
 
 ///|
-fn preview_request_id(preview : Preview) -> Int {
+fn preview_request_id(preview : Preview) -> Int32 {
   match preview {
     Closed => 0
     Loading(request~, ..) | Ready(request~, ..) | Failed(request~, ..) =>

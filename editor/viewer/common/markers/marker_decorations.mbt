@@ -15,7 +15,7 @@ priv struct MarkerDecorations {
   model : @model.TextModel
   mut entries : Array[(Marker, String)]
   mut disposed : Bool
-  mut generation : Int
+  mut generation : Int32
 }
 
 ///|

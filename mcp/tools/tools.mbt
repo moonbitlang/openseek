@@ -5,40 +5,40 @@
 ///|
 /// Cap on the characters of a single tool result forwarded to the model, so a
 /// large MCP payload cannot blow up the context; the tail is dropped with a note.
-const MaxToolOutputChars : Int = 50000
+const MaxToolOutputChars : Int32 = 50000
 
 ///|
 /// The deadline for a connected server to answer `tools/list` (including
 /// pagination), so a wedged server delays engine startup instead of hanging it.
-const DefaultDiscoveryTimeoutMs : Int = 30000
+const DefaultDiscoveryTimeoutMs : Int32 = 30000
 
 ///|
 /// The deadline for one proxied `tools/call`: a wedged-but-alive server becomes
 /// a tool error instead of parking the turn forever (matching the repo rule that
 /// every hang-capable tool call is bounded, like the shell's).
-const CallTimeoutMs : Int = 120000
+const CallTimeoutMs : Int32 = 120000
 
 ///|
 /// Cap on one tool's description forwarded to the model — every request carries
 /// every description, so a misbehaving server must not inflate the context.
-const MaxDescriptionChars : Int = 1024
+const MaxDescriptionChars : Int32 = 1024
 
 ///|
 /// Cap on one tool's serialized `inputSchema`. Every request carries every
 /// schema; an oversized one is replaced by the open object schema (the server
 /// still validates arguments on its side) rather than poisoning every turn.
-const MaxSchemaChars : Int = 16384
+const MaxSchemaChars : Int32 = 16384
 
 ///|
 /// Cap on the MCP tools accepted across ALL configured servers. Providers
 /// accept at most 128 function definitions per request, and the built-ins plus
 /// headroom must fit inside that, so the MCP budget is what remains.
-const MaxTotalMcpTools : Int = 100
+const MaxTotalMcpTools : Int32 = 100
 
 ///|
 /// Provider function-name cap: DeepSeek/Kimi function names are limited to 64
 /// characters of `[A-Za-z0-9_-]`.
-const MaxFunctionNameChars : Int = 64
+const MaxFunctionNameChars : Int32 = 64
 
 ///|
 /// Replace every character outside the provider function-name alphabet with `-`.
@@ -56,7 +56,7 @@ fn sanitize_segment(segment : String) -> String {
 
 ///|
 /// Truncate `name` to at most `limit` characters (all-ASCII by construction).
-fn cap_name(name : String, limit? : Int = MaxFunctionNameChars) -> String {
+fn cap_name(name : String, limit~ : Int32 = MaxFunctionNameChars) -> String {
   name[:limit].to_owned()
 }
 
@@ -90,7 +90,7 @@ pub async fn[X] build(
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
-  discovery_timeout_ms? : Int = DefaultDiscoveryTimeoutMs,
+  discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
 ) -> Array[@agent_tool.AgentToolDefinition] {
   build_grouped(
     scope,
@@ -116,7 +116,7 @@ pub async fn[X] build_grouped(
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
-  discovery_timeout_ms? : Int = DefaultDiscoveryTimeoutMs,
+  discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
 ) -> Array[(String, Array[@agent_tool.AgentToolDefinition])] {
   let groups : Array[(String, Array[@agent_tool.AgentToolDefinition])] = []
   let mut total = 0
@@ -176,7 +176,7 @@ async fn[X] connect_server(
   client_name~ : String,
   client_version~ : String,
   workspace_root? : String,
-  discovery_timeout_ms~ : Int,
+  discovery_timeout_ms~ : Int32,
 ) -> Array[@agent_tool.AgentToolDefinition] {
   let name = server.name()
   // A connected server, normalized across transports: the initialized client;
@@ -316,7 +316,7 @@ async fn call_tool(
 ///|
 /// Truncate `text` to at most `limit` whole characters (never splitting a
 /// surrogate pair), reporting whether anything was dropped.
-fn cap_chars(text : String, limit : Int) -> (String, Bool) {
+fn cap_chars(text : String, limit : Int32) -> (String, Bool) {
   let kept = StringBuilder()
   for ch in text; count = 0 {
     if count >= limit {

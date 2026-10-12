@@ -1,6 +1,6 @@
 ///|
 priv suberror SearchRequestSub {
-  SearchRequest(@interop.ConversationKey, SearchRequest, Int, @cmd.Emit[Msg])
+  SearchRequest(@interop.ConversationKey, SearchRequest, Int32, @cmd.Emit[Msg])
 }
 
 ///|
@@ -16,7 +16,7 @@ priv enum SearchRequest {
 ///|
 struct SearchRequestIdentity {
   root : String
-  generation : Int
+  generation : Int32
   kind : String
 } derive(Eq)
 
@@ -31,7 +31,7 @@ fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {
 }
 
 ///|
-fn SearchRequest::generation(self : SearchRequest) -> Int {
+fn SearchRequest::generation(self : SearchRequest) -> Int32 {
   self.identity().generation
 }
 

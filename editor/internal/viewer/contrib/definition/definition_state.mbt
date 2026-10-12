@@ -3,9 +3,9 @@
 /// browser target is reduced to model coordinates before entering this
 /// DOM-free package. Every field is part of the freshness contract.
 struct DefinitionTargetFingerprint {
-  model_identity : Int
-  model_generation : Int
-  model_version_id : Int
+  model_identity : Int32
+  model_generation : Int32
+  model_version_id : Int32
   position : @base_common.Position
   word_range : @base_common.Range
   word : String
@@ -30,7 +30,7 @@ pub fn DefinitionTargetFingerprint::word_range(
 ///|
 pub fn DefinitionTargetFingerprint::from_model(
   model : @model.TextModel,
-  model_generation : Int,
+  model_generation : Int32,
   position : @base_common.Position,
   word : @model.WordAtPosition,
 ) -> DefinitionTargetFingerprint {
@@ -56,7 +56,7 @@ pub fn DefinitionTargetFingerprint::from_model(
 pub fn DefinitionTargetFingerprint::is_current(
   self : DefinitionTargetFingerprint,
   model : @model.TextModel,
-  model_generation : Int,
+  model_generation : Int32,
 ) -> Bool {
   self.model_identity == model.identity() &&
   self.model_generation == model_generation &&
@@ -82,7 +82,7 @@ pub fn DefinitionTargetFingerprint::same_word(
 ///|
 /// A definition request sequence plus its immutable source target.
 pub(all) struct DefinitionRequestStamp {
-  sequence : Int
+  sequence : Int32
   target : DefinitionTargetFingerprint
 } derive(Eq, Debug)
 

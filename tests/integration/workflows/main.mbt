@@ -47,7 +47,7 @@ async fn read_calls(path : String) -> Array[Json] {
 }
 
 ///|
-fn occurrences(text : String, part : String) -> Int {
+fn occurrences(text : String, part : String) -> Int32 {
   text.split(part).count() - 1
 }
 

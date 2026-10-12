@@ -6,7 +6,7 @@ priv suberror BrowserCaptureError {
 ///|
 /// Own the port configuration before CEF starts. The marker handshake below
 /// also verifies the browser instance if another process wins the bind race.
-async fn prepare_debugging() -> Int {
+async fn prepare_debugging() -> Int32 {
   let configured = @env.get_env_var("PROTON_REMOTE_DEBUGGING_PORT")
   if configured is Some(value) && value != "0" && !value.trim().is_empty() {
     let port = @string.parse_int(value.trim())
@@ -50,12 +50,12 @@ async fn connect_target(
 /// Initialize BrowserViews before starting CEF; a window must be attached here.
 pub async fn[T] BrowserViews::with_cdp(
   self : BrowserViews,
-  id : Int,
+  id : Int32,
   f : async (@cdp.Connection) -> T,
 ) -> T {
   let view = self.view(id)
   let marker = @uuid.mint()
-  let key_json = ("__seekmoon_cdp_" + marker).to_json().stringify()
+  let key_json = Json("__seekmoon_cdp_" + marker).stringify()
   view.eval(
     "Object.defineProperty(globalThis, \{key_json}, {value:true, configurable:true});",
   )
@@ -71,7 +71,7 @@ pub async fn[T] BrowserViews::with_cdp(
 /// Own discovery and callback together. Adoption happens inside the timeout so
 /// cancellation during timeout-scope teardown cannot strand a connection.
 async fn[T] with_cdp_targets(
-  port : Int,
+  port : Int32,
   key_json : String,
   f : async (@cdp.Connection) -> T,
 ) -> T {

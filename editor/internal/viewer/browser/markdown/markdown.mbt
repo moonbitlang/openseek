@@ -29,9 +29,9 @@ pub fn MarkdownRenderOptions::MarkdownRenderOptions(
   action_handler? : (String) -> Unit,
   code_block_renderer? : (@markdown_core.MarkdownCodeBlock, String?) -> String,
   on_size_changed? : () -> Unit,
-  code_block_renderer_owns_source_root? : Bool = false,
-  source_mapping? : Bool = false,
-  allow_remote_images? : Bool = false,
+  code_block_renderer_owns_source_root~ : Bool = false,
+  source_mapping~ : Bool = false,
+  allow_remote_images~ : Bool = false,
   mermaid_theme? : MermaidTheme,
 ) -> MarkdownRenderOptions {
   {
@@ -86,7 +86,7 @@ fn mermaid_theme_name(theme : MermaidTheme) -> String {
 /// children are replaced. Disposing a result never removes the target itself.
 pub fn render_markdown(
   markdown : String,
-  options? : MarkdownRenderOptions = MarkdownRenderOptions(),
+  options~ : MarkdownRenderOptions = MarkdownRenderOptions(),
   target? : @rdom.Element,
 ) -> RenderedMarkdown {
   render_markdown_with_mermaid_loader(
@@ -104,7 +104,7 @@ pub fn render_markdown(
 fn render_markdown_with_mermaid_loader(
   markdown : String,
   mermaid_module_loader : MermaidModuleLoader,
-  options? : MarkdownRenderOptions = MarkdownRenderOptions(),
+  options~ : MarkdownRenderOptions = MarkdownRenderOptions(),
   target? : @rdom.Element,
 ) -> RenderedMarkdown {
   let converted = @markdown_core.render_markdown(

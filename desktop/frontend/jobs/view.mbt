@@ -2,7 +2,7 @@
 /// A job's status text and CSS class, decided together: a cleanup failure
 /// overrides the process state in both.
 fn job_status(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   job : @wire.JobRecord,
 ) -> (String, String) {
   if job.cleanup_error is Some(_) {
@@ -28,7 +28,7 @@ fn job_status(
 ///|
 /// The host normalizes output paths: POSIX double-leading slashes collapse to
 /// one, so a normalized // prefix here denotes a Windows UNC path.
-fn tail_command(path : String, follow? : Bool = true) -> String {
+fn tail_command(path : String, follow~ : Bool = true) -> String {
   if (path.length() >= 2 && path[1] == ':') ||
     path.has_prefix("\\\\") ||
     path.has_prefix("//") {
@@ -51,7 +51,7 @@ extern "js" fn timestamp(value : Double, locale : String) -> String =
 
 ///|
 fn job_timing(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   job : @wire.JobRecord,
 ) -> String {
   if job.state.is_terminal() {
@@ -89,7 +89,7 @@ fn away_from_end() -> Bool {
 
 ///|
 pub fn panel(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {

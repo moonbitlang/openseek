@@ -303,8 +303,8 @@ fn log_event(entry : Json) -> String {
 ///|
 async fn reasoning_log_test_server(
   group : @async.TaskGroup[Unit],
-) -> (String, Ref[Int])? {
-  let hits : Ref[Int] = { val: 0, }
+) -> (String, Ref[Int32])? {
+  let hits : Ref[Int32] = { val: 0, }
   let url = serve_chat_completions(
     group,
     "local TCP bind unavailable; skipping reasoning log test",
@@ -426,7 +426,7 @@ async fn notice_test_server(
   group : @async.TaskGroup[Unit],
   runtime : @agent_runtime.AgentRuntime,
   notice : String,
-  finish_first? : Bool = false,
+  finish_first~ : Bool = false,
 ) -> String? {
   let mut requests = 0
   serve_chat_completions(

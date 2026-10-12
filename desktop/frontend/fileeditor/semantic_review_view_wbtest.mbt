@@ -1,7 +1,7 @@
 ///|
 fn semantic_test_section(
   key : String,
-  identity : Int?,
+  identity : Int32?,
   kind : @moon_diff_provider.SemanticReviewSectionKind,
   original_source : String,
   modified_source : String,

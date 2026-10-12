@@ -114,7 +114,7 @@ fn OpenSeekReasoning::parse(value : String) -> OpenSeekReasoning? {
 ///|
 fn OpenSeekReasoning::label(
   self : OpenSeekReasoning,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   match (locale, self) {
     (SimplifiedChinese, ReasoningOff) => "关闭"
@@ -141,7 +141,7 @@ fn OpenSeekReasoning::label(
 fn OpenSeekReasoning::label_for_model(
   self : OpenSeekReasoning,
   model : EngineModel,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   if model is (Glm53 | Glm53Flash) && self is ReasoningOff {
     match locale {
@@ -231,7 +231,7 @@ test "engine models round-trip their wire names" {
 ///|
 /// Viewports at most this wide (CSS pixels) get the narrow layout. Must
 /// match the `@media (max-width: …)` breakpoint in index.html.
-const NarrowBreakpoint : Int = 760
+const NarrowBreakpoint : Int32 = 760
 
 ///|
 const DefaultMaxSteps : String = "1000"
@@ -317,7 +317,7 @@ const ConversationModelsStorageKey : String = "openseek.conversation_models"
 /// and this is one localStorage value, so the list is capped; past the cap
 /// the least recently chosen conversation forgets and opens on the default,
 /// exactly like one the user never chose a tier for.
-const ConversationModelsLimit : Int = 200
+const ConversationModelsLimit : Int32 = 200
 
 ///|
 /// The app's appearance choice. System preference is tracked separately on
@@ -362,13 +362,13 @@ fn Theme::wire(self : Theme) -> String {
 /// The base text size selected in Settings. The CSS token scale derives the
 /// surrounding app sizes from this choice; the editor and terminal receive
 /// the adjacent smaller pixel value because their glyphs look larger.
-priv struct AppFontSize(Int) derive(Eq, Debug)
+priv struct AppFontSize(Int32) derive(Eq, Debug)
 
 ///|
-const AppFontSizeMinPixels : Int = 12
+const AppFontSizeMinPixels : Int32 = 12
 
 ///|
-const AppFontSizeMaxPixels : Int = 18
+const AppFontSizeMaxPixels : Int32 = 18
 
 ///|
 /// Invalid ephemeral localStorage values retain the current readable choice.
@@ -388,7 +388,7 @@ fn AppFontSize::wire(self : AppFontSize) -> String {
 }
 
 ///|
-fn AppFontSize::base_pixels(self : AppFontSize) -> Int {
+fn AppFontSize::base_pixels(self : AppFontSize) -> Int32 {
   let AppFontSize(pixels) = self
   pixels
 }
@@ -548,7 +548,7 @@ priv enum TurnStage {
   Opened
   // The engine's latest 1-based step counter (`None` from engines that do
   // not number their steps).
-  AtStep(Int?)
+  AtStep(Int32?)
   // A Stop was sent and the engine has not yet honored it.
   Cancelling
 } derive(Eq)
@@ -570,7 +570,7 @@ priv struct RecoveredRun {
   run_id : String
   session : String
   model : EngineModel
-  max_steps : Int
+  max_steps : Int32
   session_root : @common.Uri?
   submission_id : String?
 }
@@ -685,8 +685,8 @@ priv struct LiveReasoning {
 /// A provider retry the engine announced for the open step: the attempt about
 /// to be made, out of the client's budget, and why the last one failed.
 priv struct RetryNotice {
-  attempt : Int
-  max_attempts : Int
+  attempt : Int32
+  max_attempts : Int32
   reason : String
 } derive(Eq)
 
@@ -720,12 +720,12 @@ priv struct RunState {
   // Highest durable event already known when this run opened. Only reasoning
   // committed after this frontier can visually de-duplicate this run's sealed
   // preview; identical text from an earlier turn is unrelated.
-  reasoning_frontier : Int
+  reasoning_frontier : Int32
   // Sub-runs this turn has in flight, in the order they started. Live-only:
   // nothing persists a sub-run's progress, so a reload mid-turn shows the
   // tool call pending with no lane under it.
   subruns : Array[@subrun.Lane]
-  usage_tokens : Int
+  usage_tokens : Int32
 } derive(Eq)
 
 ///|
@@ -743,7 +743,7 @@ fn RunState::empty() -> RunState {
 }
 
 ///|
-fn RunState::for_run(reasoning_frontier : Int) -> RunState {
+fn RunState::for_run(reasoning_frontier : Int32) -> RunState {
   { ..RunState::empty(), reasoning_frontier, }
 }
 
@@ -838,14 +838,14 @@ priv struct Conversation {
   // The newest branch probe. Replies carry it, so one that is still counting
   // untracked files cannot land on top of a later probe's answer — a run's
   // start and its finish each issue one, and so does opening the popover.
-  branch_generation : Int
+  branch_generation : Int32
   // What GitHub says about that branch; see `PullRequestProbe`. `None` until
   // the first lookup is issued.
   pull_request : PullRequestProbe?
   // The newest pull-request lookup, counted the same way and for the same
   // reason. It sits out here rather than in the probe because clearing the
   // probe must not rewind it — see `Conversation::forget_pull_request`.
-  pull_request_generation : Int
+  pull_request_generation : Int32
   // Everything belonging to the turn in flight; see `RunState`.
   turn : RunState
   // Follow-ups submitted into an open run and not yet acknowledged. Queue
@@ -890,7 +890,7 @@ priv struct Conversation {
   // The highest durable sequence `messages` reflects: commits at or below it
   // are already applied, `watermark + 1` applies next, and anything later is
   // a gap — this client missed a broadcast — answered by a reload.
-  watermark : Int
+  watermark : Int32
   prediction : @wire.PredictionRecord?
   // Where the durable transcript stands relative to the store; see
   // `TranscriptSync`.
@@ -956,7 +956,7 @@ priv struct GoalCommand {
   // record already said this before I asked" — the two are indistinguishable
   // by state when a set re-asserts an unchanged goal, or a clear lands on an
   // already-goalless session.
-  since : Int
+  since : Int32
 } derive(Eq)
 
 ///|
@@ -998,8 +998,8 @@ priv enum GoalRequest {
 /// nothing, because there the record genuinely has not answered yet.
 fn GoalRequest::settled_by(
   self : GoalRequest,
-  since : Int,
-  markers : Array[(Int, @transcript.GoalMarker)],
+  since : Int32,
+  markers : Array[(Int32, @transcript.GoalMarker)],
 ) -> Bool {
   for entry in markers {
     let (sequence, marker) = entry
@@ -1103,20 +1103,20 @@ priv struct PendingSemanticSubmission {
 priv enum TranscriptSync {
   Synced
   Reloading(
-    generation~ : Int,
-    attempt~ : Int,
+    generation~ : Int32,
+    attempt~ : Int32,
     buffered~ : Array[BufferedCommit],
     // A durable boundary arrived after this request started. Keep the read
     // single-flight, then run one more generation so an older in-flight
     // snapshot cannot become the final view of that boundary.
     reload_after_current~ : Bool
   )
-  ReloadFailed(generation~ : Int, buffered~ : Array[BufferedCommit])
+  ReloadFailed(generation~ : Int32, buffered~ : Array[BufferedCommit])
 } derive(Eq)
 
 ///|
 priv struct BufferedCommit {
-  sequence : Int
+  sequence : Int32
   ts : Double?
   item : @protocol.SessionItem
 } derive(Eq)
@@ -1237,26 +1237,26 @@ priv struct DeviceState {
   // removed device may later return with the same relay id; delayed socket
   // callbacks and reconnect timers carry the old value and are ignored.
   // The desktop's non-WebSocket Local channel always uses 0.
-  websocket_epoch : Int
+  websocket_epoch : Int32
   // Advances when reconnect backoff expires. The terminal component observes
   // this transport input and opens exactly one socket for each attempt.
-  reconnect_attempt : Int
+  reconnect_attempt : Int32
   // Consecutive WebSocket losses since the last successful connection.
   // Drives the reconnect backoff and the BridgeLost threshold; always 0 for
   // the proton channel, whose bridge never reconnects.
-  reconnect_failures : Int
+  reconnect_failures : Int32
   // Incremented at every BridgeReady. Session-list replies carry the value
   // captured when their request was issued, so a reply from a dead connection
   // cannot overwrite the lists rebuilt after reconnect.
-  connection_generation : Int
+  connection_generation : Int32
   // Page-lifetime request tokens for the independently fetched sidebar
   // collections. Connection generation rejects dead sockets; these reject an
   // older reply from the same connection after a newer request was issued.
-  sessions_request_generation : Int
-  archived_request_generation : Int
-  projects_request_generation : Int
-  worktrees_request_generation : Int
-  workspace_settings_request_generation : Int
+  sessions_request_generation : Int32
+  archived_request_generation : Int32
+  projects_request_generation : Int32
+  worktrees_request_generation : Int32
+  workspace_settings_request_generation : Int32
   // Durable sessions known to the engine's store, newest first, refreshed
   // when the bridge connects and when a run reaches the store. A new
   // conversation appears here once its first turn has been persisted.
@@ -1398,7 +1398,7 @@ priv struct Model {
   // Last WebSocket lifecycle identity issued by this page. It deliberately
   // survives sign-out, so re-adding the same relay device cannot collide with
   // a reconnect timer queued by its retired connection.
-  websocket_epoch : Int
+  websocket_epoch : Int32
   // The device channel selected by in-app navigation — this is not DOM or
   // window focus. Settings/Skills, the composer, and the active conversation
   // all target it. The desktop window is born with `Local`; a browser console
@@ -1444,11 +1444,11 @@ priv struct Model {
   // `settings.changed` broadcasts and `settings.get` replies may predate an
   // optimistic edit, so the newest revision is deferred until the last write
   // settles instead of clobbering the form mid-edit.
-  settings_saves : Int
+  settings_saves : Int32
   // Host-local monotonic revision attached to every settings status. It
   // orders concurrent clients' broadcasts and RPC replies; -1 means this
   // bridge generation has not accepted an authoritative status yet.
-  host_settings_revision : Int
+  host_settings_revision : Int32
   deferred_host_settings : HostSettings?
   // Whether the API-setup modal is up. Every settled settings snapshot
   // decides it through `settle_api_setup` — the one place that opens it —
@@ -1551,13 +1551,13 @@ priv struct Model {
   // Last token allocated to a transcript snapshot request in this app run.
   // This lives above individual conversations so pruning, archive removal,
   // and reopening cannot reuse a token that an older host reply still carries.
-  transcript_request_generation : Int
+  transcript_request_generation : Int32
   // A page-lifetime namespace lets independent monotonic counters become
   // globally unique identities without making `update` read randomness.
   // Different windows get independent timestamp/random namespaces; replaying
   // the same model remains deterministic.
   page_namespace : String
-  submission_sequence : Int
+  submission_sequence : Int32
   // Where the reader left each transcript that has been on screen, keyed by
   // its `TranscriptSlot` key. The transcript component reports it when its
   // conversation leaves the screen and reads it back on return.
@@ -1573,8 +1573,8 @@ priv struct Model {
   project_picker : @project_picker.State?
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
-  chat_creation : (@interop.ChannelId, Int, Int)?
-  chat_creation_sequence : Int
+  chat_creation : (@interop.ChannelId, Int32, Int32)?
+  chat_creation_sequence : Int32
   screen : Screen
   // The work surface retained while visiting management pages.
   management_return : WorkScreen?
@@ -1594,7 +1594,7 @@ priv struct Model {
   // component entries use it to dismiss an old completion menu while keeping
   // each conversation's unsent draft; textarea edits never touch this field or
   // any other part of the root Model.
-  composer_context_generation : Int
+  composer_context_generation : Int32
   // Transient presentation for the visible select or project menu. It closes
   // on context changes, selection, and click-away dismissal.
   select_menu : SelectMenu?
@@ -1616,7 +1616,7 @@ priv struct Model {
   // counter living on it restarts at zero and hands the old checkout's
   // outstanding replies a number the new one accepts. Kept whole while the
   // frontend runs, it can only ever be spent.
-  git_request_generation : Int
+  git_request_generation : Int32
   // Whether the composer's git chip has its details popover open. Global UI
   // for the focused conversation like `quick_open`, not conversation state:
   // only one composer is on screen, and a popover left open across a switch
@@ -1646,12 +1646,12 @@ priv struct Model {
   // measurement was requested for (see `sync_browser_view`).
   browser_pane : BrowserPane
   browser_annotation : BrowserAnnotationSession?
-  browser_annotation_generation : Int
+  browser_annotation_generation : Int32
   // Transient error toasts, oldest first, and the id the next toast will
   // take. Ids only ever grow, so a toast's auto-dismiss timer can never
   // collide with a later toast.
   notifications : Array[Notification]
-  notification_seq : Int
+  notification_seq : Int32
   // Which window corner toasts pop up in; a Settings choice, persisted.
   notification_corner : NotificationCorner
   // Where the editor panel's file tree docks; a Settings choice, persisted.
@@ -1692,7 +1692,7 @@ priv struct RemoteAccess {
 /// signature the last pane measurement was requested under — the damping
 /// that keeps the per-dispatch sync pass from measuring forever.
 priv struct BrowserPane {
-  shown : Int?
+  shown : Int32?
   rect : @preview.Rect?
   geo : BrowserGeometry?
 } derive(Eq)
@@ -1704,7 +1704,7 @@ priv struct BrowserPane {
 /// caught by the pane element's ResizeObserver instead.
 priv struct BrowserGeometry {
   // Which view should be visible (`desired_browser_view`), or none.
-  desired : Int?
+  desired : Int32?
   sidebar_open : Bool
   narrow : Bool
   terminal_open : Bool
@@ -1745,7 +1745,7 @@ priv struct ProjectAdoption {
 /// broadcast), decoded: the host's engine endpoint settings, with key
 /// material reduced to presence.
 priv struct HostSettings {
-  revision : Int
+  revision : Int32
   provider : String
   custom_api_url : String
   has_deepseek_key : Bool
@@ -1788,7 +1788,7 @@ priv enum Msg {
   // Jump the editor side-panel to a mention chip's resolved location, by
   // index. A no-op for a chip with no `path` (a skill, or an unresolved
   // symbol).
-  JumpToMention(Int)
+  JumpToMention(Int32)
   // Jump the editor side-panel to a transcript chip's resolved location — a
   // sent message's mention, parsed back out of its `<user_mentions>` envelope,
   // so it carries the location itself rather than a draft index. The path is
@@ -1836,9 +1836,9 @@ priv enum Msg {
   // The Settings choice of where the editor's file tree docks.
   TreeLayoutChanged(String)
   // A toast's lifetime elapsed; drops it unless a click already did.
-  NotificationExpired(Int)
+  NotificationExpired(Int32)
   // A toast was clicked: dismiss it now.
-  DismissNotification(Int)
+  DismissNotification(Int32)
   // The Settings "Check for updates" button.
   CheckForUpdates
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
@@ -1872,7 +1872,7 @@ priv enum Msg {
   CancelUpdateRestart
   // The actor-owned download reports throttled byte progress independently
   // of the short request that accepted it.
-  UpdateDownloadProgress(downloaded_bytes~ : Int, total_bytes~ : Int?)
+  UpdateDownloadProgress(downloaded_bytes~ : Int32, total_bytes~ : Int32?)
   // The host's `update.downloaded` event says the bundle is staged and
   // verified. It names the version actually staged — the host re-checks
   // the manifest before downloading, so this can be newer than the one the
@@ -1922,9 +1922,9 @@ priv enum Msg {
   MinimalTranscriptChanged(Bool)
   // A Settings selection changes the shared app/editor/terminal type scale.
   FontSizeChanged(String)
-  FontSizeAdjusted(Int)
+  FontSizeAdjusted(Int32)
   // The window was resized; `width` decides the narrow (phone) layout.
-  ViewportResized(width~ : Int)
+  ViewportResized(width~ : Int32)
   // The native window gained or lost OS focus. This is deliberately distinct
   // from the selected device channel stored in `Model.focused`.
   WindowFocusChanged(Bool)
@@ -1997,7 +1997,7 @@ priv enum Msg {
   CreateChat(@interop.ChannelId)
   ChatWorkspaceCreated(
     channel~ : @interop.ChannelId,
-    generation~ : Int,
+    generation~ : Int32,
     result~ : Result[String, String]
   )
   // The Cmd/Ctrl+O chord: open the folder picker for the focused device. A
@@ -2174,7 +2174,7 @@ priv enum Msg {
     session~ : String,
     id~ : String,
     command~ : String,
-    attempt~ : Int
+    attempt~ : Int32
   )
   /// `!` command `id` never ran — its worktree or its terminal could not be
   /// set up — so it goes back to the composer with `message`.
@@ -2203,10 +2203,10 @@ priv enum DeviceMsg {
   // the loss and schedules `ReconnectDue`, making the model's device list
   // the single authority over which reconnect loops keep running. The epoch
   // rejects a callback queued by an earlier occupant of the same device id.
-  ChannelDown(websocket_epoch~ : Int)
+  ChannelDown(websocket_epoch~ : Int32)
   // A scheduled reconnect attempt came due. Dropped harmlessly when the
   // device was removed or re-added in the meantime.
-  ReconnectDue(websocket_epoch~ : Int)
+  ReconnectDue(websocket_epoch~ : Int32)
   // A file-panel-scoped host push (`fs.changed`, `fs.watch_failed`,
   // `lsp.diagnostics`),
   // stamped with its channel: the panel serves the focused conversation,
@@ -2215,11 +2215,11 @@ priv enum DeviceMsg {
   // The host's settings, from a `settings.get` reply or a peer client's
   // edit broadcast as `settings.changed`. Applied only while no local write
   // is in flight — see `Model::settings_saves`.
-  HostSettingsLoaded(HostSettings, connection_generation~ : Int?)
+  HostSettingsLoaded(HostSettings, connection_generation~ : Int32?)
   // A `settings.set` this client sent came back with the post-write state.
-  HostSettingsApplied(HostSettings, connection_generation~ : Int)
+  HostSettingsApplied(HostSettings, connection_generation~ : Int32)
   // A `settings.set` this client sent failed; the message pops as a toast.
-  HostSettingsSaveFailed(String, connection_generation~ : Int)
+  HostSettingsSaveFailed(String, connection_generation~ : Int32)
   // A `skills.installed` reply is channel-scoped just like the invalidation
   // that prompted it. Only the currently focused host may replace the
   // page's library mirror.
@@ -2265,8 +2265,8 @@ priv enum DeviceMsg {
   CancelFailed(run_id~ : String, message~ : String)
   SessionsLoaded(
     Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int
+    connection_generation~ : Int32,
+    request_generation~ : Int32
   )
   SessionsFailed(String)
   // The host's identity-bearing `session.changed` broadcast. Archive changes
@@ -2280,37 +2280,37 @@ priv enum DeviceMsg {
   SessionLoaded(
     session~ : String,
     items~ : Array[@transcript.TranscriptItem],
-    watermark~ : Int,
+    watermark~ : Int32,
     goal~ : @transcript.GoalStanding?,
-    goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    generation~ : Int
+    generation~ : Int32
   )
   // A foreground stored-session read failed. Generation guards stale replies;
   // bounded retries keep the selection pending before final failure is shown.
-  SessionLoadFailed(session~ : String, message~ : String, generation~ : Int)
+  SessionLoadFailed(session~ : String, message~ : String, generation~ : Int32)
   // A background re-read of a conversation's durable record (a commit-gap
   // resync, or a reload for a foreign run): same data as `SessionLoaded`,
   // but it never activates the conversation or steals the screen.
   SessionRefreshed(
     session~ : String,
     items~ : Array[@transcript.TranscriptItem],
-    watermark~ : Int,
+    watermark~ : Int32,
     goal~ : @transcript.GoalStanding?,
-    goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+    goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
     prediction~ : @wire.PredictionRecord?,
-    generation~ : Int
+    generation~ : Int32
   )
   // A background re-read failed. The generation identifies the exact read,
   // so an old failure cannot stop a newer one.
-  SessionRefreshFailed(session~ : String, generation~ : Int)
+  SessionRefreshFailed(session~ : String, generation~ : Int32)
   // The host's `session.event` broadcast: one durably committed store event.
   // Together with `session.load` snapshots these are the transcript's only
   // durable sources; the live `agent.event` stream is lifecycle/stream state.
   PredictionReceived(session~ : String, prediction~ : @wire.PredictionRecord)
   SessionCommitted(
     session~ : String,
-    sequence~ : Int,
+    sequence~ : Int32,
     // The commit's own store stamp, kept on the message so a turn dates
     // itself the moment it lands rather than only after the next reload.
     ts~ : Double?,
@@ -2325,7 +2325,7 @@ priv enum DeviceMsg {
   SubrunProgressed(
     id~ : String,
     session~ : String,
-    steps~ : Int,
+    steps~ : Int32,
     activity~ : String
   )
   // The host's `workflow.entry` broadcast: one resolved call of a workflow a
@@ -2338,8 +2338,8 @@ priv enum DeviceMsg {
   ProjectsLoaded(
     Array[@common.Uri],
     chat_root~ : Result[@common.Uri, String]?,
-    connection_generation~ : Int,
-    request_generation~ : Int
+    connection_generation~ : Int32,
+    request_generation~ : Int32
   )
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
@@ -2359,9 +2359,9 @@ priv enum DeviceMsg {
     workspace~ : @common.Uri,
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
-    submodule_checkout_timeout_seconds~ : Int,
-    connection_generation~ : Int,
-    request_generation~ : Int
+    submodule_checkout_timeout_seconds~ : Int32,
+    connection_generation~ : Int32,
+    request_generation~ : Int32
   )
   // The post-commit `workspace.settings_changed` broadcast for one
   // workspace: every client adopts the committed state in write order.
@@ -2369,14 +2369,14 @@ priv enum DeviceMsg {
     workspace~ : @common.Uri,
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
-    submodule_checkout_timeout_seconds~ : Int
+    submodule_checkout_timeout_seconds~ : Int32
   )
   // The result of this client's write, paired with the connection and request
   // that issued it. Settings data still arrives through the commit broadcast.
   WorkspaceSettingsSaveFinished(
     workspace~ : @common.Uri,
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    connection_generation~ : Int32,
+    request_generation~ : Int32,
     result~ : Result[Unit, String]
   )
   // One workspace's worktree registry — the reply to `worktree.list`, with
@@ -2384,16 +2384,16 @@ priv enum DeviceMsg {
   WorktreesLoaded(
     Array[WorktreeRow],
     workspace~ : @common.Uri,
-    connection_generation~ : Int,
-    request_generation~ : Int
+    connection_generation~ : Int32,
+    request_generation~ : Int32
   )
   // A failed list leaves that workspace's placement unresolved. Carry both
   // generations so a dead connection or an older request cannot surface a
   // stale error after a newer snapshot or broadcast has already arrived.
   WorktreesFailed(
     workspace~ : @common.Uri,
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    connection_generation~ : Int32,
+    request_generation~ : Int32,
     message~ : String
   )
   // The post-commit `worktree.changed` broadcast for one workspace.
@@ -2412,8 +2412,8 @@ priv enum DeviceMsg {
   // successful `archive_session`/`unarchive_session` alike.
   ArchivedLoaded(
     Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    connection_generation~ : Int32,
+    request_generation~ : Int32,
     fresh_session~ : String
   )
   // The successful delete reply names the identity it removed and a fresh
@@ -2423,8 +2423,8 @@ priv enum DeviceMsg {
     key~ : ArchiveRecordKey,
     sessions~ : Array[String],
     items~ : Array[@transcript.SessionListItem],
-    connection_generation~ : Int,
-    request_generation~ : Int,
+    connection_generation~ : Int32,
+    request_generation~ : Int32,
     fresh_session~ : String
   )
   ArchiveFailed(String)
@@ -2442,7 +2442,7 @@ priv enum DeviceMsg {
     session~ : String,
     branch~ : String?,
     diffstat~ : DiffStat?,
-    generation~ : Int,
+    generation~ : Int32,
     base_hint~ : String?
   )
   // A `git.pull_request` reply. `generation` is which request this answers,
@@ -2455,7 +2455,7 @@ priv enum DeviceMsg {
   PullRequestLoaded(
     session~ : String,
     branch~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     queried~ : String?,
     pull_request~ : PullRequest?,
     compare_url~ : String?
@@ -2466,7 +2466,7 @@ priv enum DeviceMsg {
     run_id~ : String,
     session~ : String,
     model~ : EngineModel,
-    max_steps~ : Int,
+    max_steps~ : Int32,
     session_root~ : @common.Uri?,
     submission_id~ : String?
   )
@@ -2485,7 +2485,7 @@ priv enum DeviceMsg {
     approvals~ : Array[RecoveredApproval],
     live~ : Array[String],
     frontier~ : Array[RunSnapshotFrontier],
-    connection_generation~ : Int
+    connection_generation~ : Int32
   )
   // The complete in-flight run set, from an `agent.runs` resync. Any
   // conversation still showing an open run this set lacks ended while the
@@ -2509,7 +2509,7 @@ priv enum DeviceMsg {
     submission_id~ : String,
     run_id~ : String,
     status~ : String,
-    exit_code~ : Int
+    exit_code~ : Int32
   )
   // The response path failed before host acceptance was knowable. Nothing
   // guesses on the client's behalf: the prompt in flight settles and a reload
@@ -2539,7 +2539,7 @@ priv enum DeviceMsg {
     run_id~ : String?,
     message~ : String,
     diagnostics~ : String?,
-    exit_code~ : Int?
+    exit_code~ : Int32?
   )
   // The `compact` bridge request itself was rejected (no engine, host error):
   // nothing will report compaction events, so the conversation's queued /
@@ -2593,7 +2593,7 @@ fn empty_conversation(
   channel : @interop.ChannelId,
   session_id : String,
   project : @common.Uri,
-  model? : EngineModel = DsPro,
+  model~ : EngineModel = DsPro,
 ) -> Conversation {
   {
     device: channel,
@@ -2837,7 +2837,7 @@ fn Model::replace_device(self : Model, dev : DeviceState) -> Model {
 /// The focused channel's connection generation — the fence root-scoped
 /// fetches (host settings, session snapshots) stamp on their requests. 0
 /// when the page holds no devices; no reply ever arrives to check it there.
-fn Model::focused_connection_generation(self : Model) -> Int {
+fn Model::focused_connection_generation(self : Model) -> Int32 {
   match self.focused_device() {
     Some(dev) => dev.connection_generation
     None => 0
@@ -3810,7 +3810,7 @@ fn Conversation::draft_sendable(self : Conversation) -> Bool {
 /// commit is already in hand, so a goal marker among them sits *below* what
 /// the user just asked for — and under the watermark alone it would read as
 /// above it, and confirm the new request with an older record's answer.
-fn Conversation::durable_frontier(self : Conversation) -> Int {
+fn Conversation::durable_frontier(self : Conversation) -> Int32 {
   let mut frontier = self.watermark
   // Both buffering states, not just the live one: `begin_transcript_reload`
   // carries a failed read's buffer forward, so a marker held there is just as
@@ -3944,7 +3944,7 @@ fn Conversation::enqueue_steer(
   draft : String,
   mentions : Array[Mention],
   behavior : FollowupBehavior,
-  images? : Array[@composer.Image] = [],
+  images~ : Array[@composer.Image] = [],
 ) -> Conversation {
   let pending_steers = self.pending_steers.copy()
   pending_steers.push({
@@ -4182,7 +4182,7 @@ fn Conversation::forget_steers_for_run(
 /// an existing call row without increasing the array length.
 fn Conversation::apply_commit(
   self : Conversation,
-  sequence : Int,
+  sequence : Int32,
   item : @protocol.SessionItem,
   ts? : Double,
 ) -> (Bool, Conversation) {
@@ -4228,7 +4228,7 @@ fn Conversation::apply_commit(
 fn Model::begin_transcript_reload(
   self : Model,
   conv : Conversation,
-) -> (Model, Int?) {
+) -> (Model, Int32?) {
   let buffered : Array[BufferedCommit] = match conv.sync {
     Reloading(..) => return (self.replace_conversation(conv), None)
     Synced => []
@@ -4259,7 +4259,7 @@ fn Model::begin_transcript_reload(
 fn Model::ensure_transcript_reload_after_current(
   self : Model,
   conv : Conversation,
-) -> (Model, Int?) {
+) -> (Model, Int32?) {
   match conv.sync {
     Reloading(generation~, attempt~, buffered~, reload_after_current=false) =>
       (
@@ -4315,7 +4315,7 @@ fn Conversation::buffer_commit(
 /// unresolved snapshot buffer.
 fn Conversation::has_seen_durable_sequence(
   self : Conversation,
-  sequence : Int,
+  sequence : Int32,
 ) -> Bool {
   if sequence <= self.watermark {
     return true
@@ -4336,9 +4336,9 @@ fn Conversation::has_seen_durable_sequence(
 fn Conversation::adopt_snapshot(
   self : Conversation,
   items : Array[@transcript.TranscriptItem],
-  watermark : Int,
+  watermark : Int32,
   goal~ : @transcript.GoalStanding?,
-  goal_markers~ : Array[(Int, @transcript.GoalMarker)],
+  goal_markers~ : Array[(Int32, @transcript.GoalMarker)],
 ) -> (Conversation, Bool) {
   let (generation, pending) = match self.sync {
     Reloading(generation~, buffered~, ..) => (generation, buffered.copy())
@@ -4443,7 +4443,7 @@ fn RunOutcome::parse(wire : String) -> RunOutcome {
 ///|
 fn RunOutcome::label(
   self : RunOutcome,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   match locale {
     SimplifiedChinese =>
@@ -4510,7 +4510,7 @@ priv enum Status {
   Cancelling
   // The engine's 1-based step counter; `None` for an engine build that does
   // not number its steps.
-  Step(Int?)
+  Step(Int32?)
   Failed
   Errored
   Finished(RunOutcome)
@@ -4518,7 +4518,7 @@ priv enum Status {
 }
 
 ///|
-fn Status::label(self : Status, locale? : @i18n.Locale = English) -> String {
+fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
   match locale {
     SimplifiedChinese =>
       return match self {

@@ -5,7 +5,7 @@
 
 ///|
 pub(all) suberror CodexError {
-  JsonRpc(method_~ : String, code~ : Int, message~ : String, data~ : Json?)
+  JsonRpc(method_~ : String, code~ : Int32, message~ : String, data~ : Json?)
   TransportClosed(method_~ : String)
   RequestFailed(method_~ : String, detail~ : String)
   Unavailable(String)
@@ -130,7 +130,7 @@ priv enum ActorStep {
 /// so the frontend can reject an older snapshot without inferring timing.
 priv struct ReverseRequestRegistry {
   mut requests : Map[String, @jsonrpc.PeerRequest]
-  mut generation : Int
+  mut generation : Int32
 }
 
 ///|
@@ -195,13 +195,13 @@ fn ReverseRequestRegistry::snapshot(self : ReverseRequestRegistry) -> Json {
 }
 
 ///|
-const ActorInputCapacity : Int = 256
+const ActorInputCapacity : Int32 = 256
 
 ///|
-const AppServerEventCapacity : Int = 2048
+const AppServerEventCapacity : Int32 = 2048
 
 ///|
-const ActorWakeCapacity : Int = 1
+const ActorWakeCapacity : Int32 = 1
 
 ///|
 /// One per Desktop process. `run` owns its child; `call` and `respond` are the

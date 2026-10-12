@@ -37,8 +37,8 @@ fn ExtUri::compare_impl(
   self : ExtUri,
   uri1 : Uri,
   uri2 : Uri,
-  ignore_fragment? : Bool = false,
-) -> Int {
+  ignore_fragment~ : Bool = false,
+) -> Int32 {
   if physical_equal(uri1, uri2) {
     return 0
   }
@@ -54,7 +54,7 @@ fn ExtUri::is_equal_impl(
   self : ExtUri,
   uri1 : Uri?,
   uri2 : Uri?,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> Bool {
   match (uri1, uri2) {
     (None, None) => true
@@ -72,7 +72,7 @@ fn ExtUri::is_equal_impl(
 fn ExtUri::get_comparison_key_impl(
   self : ExtUri,
   uri : Uri,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> String {
   let path : String? = if (self.ignore_path_casing_fn)(uri) {
     Some(to_lower_js(uri.path))
@@ -97,7 +97,7 @@ fn ExtUri::is_equal_or_parent_impl(
   self : ExtUri,
   base : Uri,
   parent_candidate : Uri,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> Bool {
   if base.scheme == parent_candidate.scheme {
     if base.scheme == schemas_file {

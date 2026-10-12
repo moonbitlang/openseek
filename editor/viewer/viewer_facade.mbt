@@ -22,7 +22,7 @@ struct EditorDecorationsCollection {
 fn Viewer::Viewer(
   initial_container : @rdom.Element,
   services? : ViewerServices,
-  options? : ViewerOptions = ViewerOptions::default(),
+  options~ : ViewerOptions = ViewerOptions::default(),
 ) -> Viewer {
   let code_options = options.code_options()
   let services = services.map(service => service.code_services())
@@ -39,24 +39,24 @@ fn Viewer::Viewer(
 pub fn Viewer::create(
   host : @rdom.Element,
   services? : ViewerServices,
-  options? : ViewerOptions = ViewerOptions::default(),
+  options~ : ViewerOptions = ViewerOptions::default(),
 ) -> Viewer {
   Viewer(host, services?, options~)
 }
 
 ///|
 pub fn view_zone(
-  after_line_number : Int,
+  after_line_number : Int32,
   dom_node : @rdom.Element,
-  after_column? : Int = 0,
-  after_column_affinity? : @model.PositionAffinity = None,
-  show_in_hidden_areas? : Bool = false,
-  ignore_hidden_area_source? : String = "",
-  ordinal? : Int = 0,
-  suppress_mouse_down? : Bool = false,
+  after_column~ : Int32 = 0,
+  after_column_affinity~ : @model.PositionAffinity = None,
+  show_in_hidden_areas~ : Bool = false,
+  ignore_hidden_area_source~ : String = "",
+  ordinal~ : Int32 = 0,
+  suppress_mouse_down~ : Bool = false,
   height_in_lines? : Double,
   height_in_px? : Double,
-  min_width_in_px? : Double = 0.0,
+  min_width_in_px~ : Double = 0.0,
   margin_dom_node? : @rdom.Element,
   on_dom_node_top? : (Double) -> Unit raise,
   on_dom_node_layout? : (Bool, Double) -> Unit raise,

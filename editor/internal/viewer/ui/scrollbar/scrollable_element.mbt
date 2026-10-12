@@ -20,7 +20,7 @@ struct ScrollableElementDom {
   mut horizontal_fade : Bool
   mut mouse_is_over : Bool
   mut is_dragging : Bool
-  mut hide_generation : Int
+  mut hide_generation : Int32
   mut hide_timeout : @base_common.Disposable?
   mut disposed : Bool
 }
@@ -67,8 +67,8 @@ let scrollbar_hide_timeout_ms = 500
 ///|
 pub fn ScrollableElementDom::ScrollableElementDom(
   content_class : String,
-  vertical_size? : Double = default_scrollbar_size,
-  horizontal_size? : Double = default_scrollbar_size,
+  vertical_size~ : Double = default_scrollbar_size,
+  horizontal_size~ : Double = default_scrollbar_size,
   content? : @rdom.Element,
 ) -> ScrollableElementDom {
   let document = @rdom.document()
@@ -504,8 +504,8 @@ pub fn ScrollableElementDom::native_scroll_to(
 ///|
 pub fn ScrollableElementDom::native_scroll_by(
   self : ScrollableElementDom,
-  delta_left? : Double = 0.0,
-  delta_top? : Double = 0.0,
+  delta_left~ : Double = 0.0,
+  delta_top~ : Double = 0.0,
 ) -> Unit {
   self.content.set_scroll_top(self.content.get_scroll_top() + delta_top)
   self.content.set_scroll_left(self.content.get_scroll_left() + delta_left)
@@ -538,11 +538,11 @@ let scroll_wheel_sensitivity : Double = 50.0
 /// classified physical-wheel smooth path and the trackpad immediate path.
 pub fn mouse_wheel_scroll_deltas(
   event : StandardWheelEvent,
-  alt_key? : Bool = false,
-  shift_key? : Bool = false,
-  mouse_wheel_scroll_sensitivity? : Double = 1.0,
-  fast_scroll_sensitivity? : Double = 5.0,
-  scroll_predominant_axis? : Bool = true,
+  alt_key~ : Bool = false,
+  shift_key~ : Bool = false,
+  mouse_wheel_scroll_sensitivity~ : Double = 1.0,
+  fast_scroll_sensitivity~ : Double = 5.0,
+  scroll_predominant_axis~ : Bool = true,
 ) -> (Double, Double) {
   let mut delta_y = event.delta_y * mouse_wheel_scroll_sensitivity
   let mut delta_x = event.delta_x * mouse_wheel_scroll_sensitivity

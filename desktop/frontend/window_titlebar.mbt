@@ -101,7 +101,7 @@ fn publish_titlebar_area(area : TitlebarArea?) -> Unit {
 priv struct TitlebarGeometry {
   bridge : @js.Value
   mut active : Bool
-  mut revision : Int
+  mut revision : Int32
   mut in_flight : Bool
   mut frame : Double?
 }

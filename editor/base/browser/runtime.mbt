@@ -17,7 +17,7 @@ pub extern "js" fn wall_clock_now_ms() -> Double =
 /// reentrant disposal is a no-op.
 pub fn schedule_timeout(
   callback : () -> Unit,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> @base_common.Disposable {
   let mut active = true
   let handle = set_timeout_js(
@@ -49,7 +49,10 @@ pub extern "js" fn device_pixel_ratio() -> Double =
   #| () => globalThis.devicePixelRatio || 1
 
 ///|
-extern "js" fn set_timeout_js(callback : () -> Unit, delay_ms : Int) -> Double =
+extern "js" fn set_timeout_js(
+  callback : () -> Unit,
+  delay_ms : Int32,
+) -> Double =
   #| (callback, delayMs) => globalThis.setTimeout(callback, delayMs)
 
 ///|

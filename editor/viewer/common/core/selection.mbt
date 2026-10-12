@@ -98,8 +98,8 @@ pub fn Selection::is_empty(self : Selection) -> Bool {
 /// the orientation is kept.
 pub fn Selection::set_start_position(
   self : Selection,
-  start_line_number : Int,
-  start_column : Int,
+  start_line_number : Int32,
+  start_column : Int32,
 ) -> Selection {
   let new_start : @base_common.Position = Position(
     start_line_number, start_column,
@@ -116,8 +116,8 @@ pub fn Selection::set_start_position(
 /// the orientation is kept.
 pub fn Selection::set_end_position(
   self : Selection,
-  end_line_number : Int,
-  end_column : Int,
+  end_line_number : Int32,
+  end_column : Int32,
 ) -> Selection {
   let new_end : @base_common.Position = Position(end_line_number, end_column)
   if self.direction() == LTR {

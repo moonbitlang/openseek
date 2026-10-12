@@ -40,7 +40,7 @@ test "public content listeners observe already-updated view models (two-loop ord
   let model = plain_text_model("one\ntwo")
   let vm1 = @view_model.ViewModel(model)
   let vm2 = @view_model.ViewModel(model)
-  let observed : Array[Int] = []
+  let observed : Array[Int32] = []
   let _sub = model.on_did_change_content(e => {
     observed.push(vm1.line_count())
     observed.push(vm2.line_count())

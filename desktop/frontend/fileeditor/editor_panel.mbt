@@ -136,7 +136,7 @@ priv struct ViewerHost {
   mut navigation : NavigationContext?
   // Monotonic model version; the viewer treats a new version as a new
   // document.
-  mut version : Int
+  mut version : Int32
   // Imperative canvas/Markdown renderers must receive theme changes through
   // their options API; CSS data attributes alone cannot repaint their pixels.
   mut theme : String
@@ -720,8 +720,8 @@ pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
 /// retained for the main update loop to interpret.
 fn diff_comment_message(
   file : @pathx.Relative,
-  original_line_number~ : Int?,
-  modified_line_number~ : Int?,
+  original_line_number~ : Int32?,
+  modified_line_number~ : Int32?,
   quote~ : String,
   comment~ : String,
   resource? : ModelUri,
@@ -1324,9 +1324,9 @@ fn show_file_in_viewer(
   content : String,
   document~ : @common.Uri,
   live~ : Bool,
-  range? : @common.Range? = None,
+  range~ : @common.Range? = None,
   annotation? : String,
-  restore_scroll? : Bool = false,
+  restore_scroll~ : Bool = false,
   review_original? : String,
   diff? : (String, String),
   search_highlights? : @grep_search.EditorHighlights,

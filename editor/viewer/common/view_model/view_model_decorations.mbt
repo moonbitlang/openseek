@@ -43,7 +43,7 @@ struct ViewModelDecorations {
 /// Constructor (`viewModelDecorations.ts:27-37`): the context closure hands
 /// the computer model decorations for a view range via the lines collection.
 fn ViewModelDecorations::ViewModelDecorations(
-  editor_id : Int,
+  editor_id : Int32,
   model : @model.TextModel,
   filter_validation : Bool,
   lines : ViewModelLinesFromProjectedModel,
@@ -143,7 +143,7 @@ fn view_model_lines_get_decorations_in_range(
   model : @model.TextModel,
   converter : CoordinatesConverter,
   range : @base_common.Range,
-  owner_id : Int,
+  owner_id : Int32,
   filter_out_validation : Bool,
   only_minimap_decorations : Bool,
   only_margin_decorations : Bool,

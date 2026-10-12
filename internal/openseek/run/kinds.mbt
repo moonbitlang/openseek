@@ -112,7 +112,7 @@ priv struct KindLaunch {
   thinking : @deepseek.ThinkingMode
   api_url : String?
   workspace_root : String
-  requested_max_steps : Int?
+  requested_max_steps : Int32?
   session_id : String
   append_item : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 }
@@ -122,9 +122,9 @@ priv struct KindLaunch {
 /// own default.
 fn step_ceiling(
   matches : @argparse.Matches,
-  requested : Int?,
-  default : Int,
-) -> Int raise {
+  requested : Int32?,
+  default : Int32,
+) -> Int32 raise {
   resolved_max_steps(matches, requested).unwrap_or(default)
 }
 

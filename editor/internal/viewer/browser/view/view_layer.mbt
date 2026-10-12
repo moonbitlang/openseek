@@ -6,9 +6,9 @@
 /// The mutable renderer context copied at the beginning of every render and
 /// returned with the reconciled retained-line collection.
 priv struct RendererContext[T] {
-  mut rend_line_number_start : Int
+  mut rend_line_number_start : Int32
   mut lines : Array[T]
-  mut lines_length : Int
+  mut lines_length : Int32
 }
 
 ///|
@@ -19,10 +19,17 @@ priv struct ViewLayerRenderer[T] {
   create_line : () -> T
   get_dom_node : (T) -> @rdom.Element?
   set_dom_node : (T, @rdom.Element) -> Unit
-  layout_line : (T, Int, Double, Int) -> Unit
-  render_line : (T, Int, Double, Int, @view_layout.ViewportData, StringBuilder) -> Bool
+  layout_line : (T, Int32, Double, Int32) -> Unit
+  render_line : (
+    T,
+    Int32,
+    Double,
+    Int32,
+    @view_layout.ViewportData,
+    StringBuilder,
+  ) -> Bool
   viewport_data : @view_layout.ViewportData
-  line_height_for_line_number : (Int) -> Int
+  line_height_for_line_number : (Int32) -> Int32
 }
 
 ///|
@@ -31,10 +38,17 @@ fn[T] ViewLayerRenderer::ViewLayerRenderer(
   create_line : () -> T,
   get_dom_node : (T) -> @rdom.Element?,
   set_dom_node : (T, @rdom.Element) -> Unit,
-  layout_line : (T, Int, Double, Int) -> Unit,
-  render_line : (T, Int, Double, Int, @view_layout.ViewportData, StringBuilder) -> Bool,
+  layout_line : (T, Int32, Double, Int32) -> Unit,
+  render_line : (
+    T,
+    Int32,
+    Double,
+    Int32,
+    @view_layout.ViewportData,
+    StringBuilder,
+  ) -> Bool,
   viewport_data : @view_layout.ViewportData,
-  line_height_for_line_number : (Int) -> Int,
+  line_height_for_line_number : (Int32) -> Int32,
 ) -> ViewLayerRenderer[T] {
   {
     dom_node,
@@ -54,8 +68,8 @@ fn[T] ViewLayerRenderer::ViewLayerRenderer(
 fn[T] ViewLayerRenderer::render(
   self : ViewLayerRenderer[T],
   in_context : RendererContext[T],
-  start_line_number : Int,
-  stop_line_number : Int,
+  start_line_number : Int32,
+  stop_line_number : Int32,
   delta_top : Array[Double],
 ) -> RendererContext[T] {
   let ctx : RendererContext[T] = {
@@ -124,10 +138,10 @@ fn[T] ViewLayerRenderer::render(
 fn[T] ViewLayerRenderer::render_untouched_lines(
   self : ViewLayerRenderer[T],
   ctx : RendererContext[T],
-  start_index : Int,
-  end_index : Int,
+  start_index : Int32,
+  end_index : Int32,
   delta_top : Array[Double],
-  delta_line_number : Int,
+  delta_line_number : Int32,
 ) -> Unit {
   for index in start_index..<=end_index {
     let line_number = ctx.rend_line_number_start + index
@@ -144,8 +158,8 @@ fn[T] ViewLayerRenderer::render_untouched_lines(
 fn[T] ViewLayerRenderer::insert_lines_before(
   self : ViewLayerRenderer[T],
   ctx : RendererContext[T],
-  from_line_number : Int,
-  to_line_number : Int,
+  from_line_number : Int32,
+  to_line_number : Int32,
 ) -> Unit {
   let lines : Array[T] = []
   for _line_number in from_line_number..<=to_line_number {
@@ -161,7 +175,7 @@ fn[T] ViewLayerRenderer::insert_lines_before(
 fn[T] ViewLayerRenderer::remove_lines_before(
   self : ViewLayerRenderer[T],
   ctx : RendererContext[T],
-  remove_count : Int,
+  remove_count : Int32,
 ) -> Unit {
   for index in 0..<remove_count {
     match (self.get_dom_node)(ctx.lines[index]) {
@@ -178,8 +192,8 @@ fn[T] ViewLayerRenderer::remove_lines_before(
 fn[T] ViewLayerRenderer::insert_lines_after(
   self : ViewLayerRenderer[T],
   ctx : RendererContext[T],
-  from_line_number : Int,
-  to_line_number : Int,
+  from_line_number : Int32,
+  to_line_number : Int32,
 ) -> Unit {
   for _line_number in from_line_number..<=to_line_number {
     ctx.lines.push((self.create_line)())
@@ -190,7 +204,7 @@ fn[T] ViewLayerRenderer::insert_lines_after(
 fn[T] ViewLayerRenderer::remove_lines_after(
   self : ViewLayerRenderer[T],
   ctx : RendererContext[T],
-  remove_count : Int,
+  remove_count : Int32,
 ) -> Unit {
   let remove_index = ctx.lines_length - remove_count
   for index in 0..<remove_count {

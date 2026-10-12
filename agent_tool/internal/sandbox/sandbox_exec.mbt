@@ -128,7 +128,7 @@ async fn probe_sandbox_exec_available() -> Bool {
 /// before waiting, so a child that fills the pipe buffer cannot deadlock
 /// against `wait`. The sandbox-availability probe only needs the exit status
 /// plus a follow-up `@fs.exists` check, so the collected bytes are discarded.
-async fn run_probe_exit(program : String, args : Array[String]) -> Int? {
+async fn run_probe_exit(program : String, args : Array[String]) -> Int32? {
   let (exit_code, _) = @process.collect_output_merged(program, args) catch {
     _ => return None
   }

@@ -3,7 +3,7 @@
 // `_setCurrentResult`). One case per behavior-switching branch.
 
 ///|
-fn anchor_at(start : Int, end : Int, line : Int) -> HoverAnchor {
+fn anchor_at(start : Int32, end : Int32, line : Int32) -> HoverAnchor {
   HoverRangeAnchor(
     priority=0,
     range=Range(line, start + 1, line, end + 1),

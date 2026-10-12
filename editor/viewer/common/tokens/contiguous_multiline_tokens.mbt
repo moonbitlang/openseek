@@ -10,16 +10,16 @@
 /// Each inner array contains `[endOffset, metadata]` pairs for one line.
 /// Source: `contiguousMultilineTokens.ts:17,35-46`.
 struct ContiguousMultilineTokens {
-  start_line_number_ : Int
-  tokens : Array[Array[UInt]]
+  start_line_number_ : Int32
+  tokens : Array[Array[UInt32]]
 }
 
 ///|
 /// Retains the caller's line order and encoded token arrays.
 /// Source: `contiguousMultilineTokens.ts:62-65`.
 fn ContiguousMultilineTokens::ContiguousMultilineTokens(
-  start_line_number : Int,
-  tokens : Array[Array[UInt]],
+  start_line_number : Int32,
+  tokens : Array[Array[UInt32]],
 ) -> ContiguousMultilineTokens {
   { start_line_number_: start_line_number, tokens, }
 }
@@ -29,7 +29,7 @@ fn ContiguousMultilineTokens::ContiguousMultilineTokens(
 /// Source: `contiguousMultilineTokens.ts:51-53`.
 fn ContiguousMultilineTokens::start_line_number(
   self : ContiguousMultilineTokens,
-) -> Int {
+) -> Int32 {
   self.start_line_number_
 }
 
@@ -38,7 +38,7 @@ fn ContiguousMultilineTokens::start_line_number(
 /// Source: `contiguousMultilineTokens.ts:58-60`.
 fn ContiguousMultilineTokens::end_line_number(
   self : ContiguousMultilineTokens,
-) -> Int {
+) -> Int32 {
   self.start_line_number_ + self.tokens.length() - 1
 }
 
@@ -61,8 +61,8 @@ fn ContiguousMultilineTokens::get_line_range(
 /// Source: `contiguousMultilineTokens.ts:74-76`.
 fn ContiguousMultilineTokens::get_line_tokens(
   self : ContiguousMultilineTokens,
-  line_number : Int,
-) -> Array[UInt] {
+  line_number : Int32,
+) -> Array[UInt32] {
   self.tokens[line_number - self.start_line_number_]
 }
 
@@ -71,7 +71,7 @@ fn ContiguousMultilineTokens::get_line_tokens(
 /// Source: `contiguousMultilineTokens.ts:78-80`.
 fn ContiguousMultilineTokens::append_line_tokens(
   self : ContiguousMultilineTokens,
-  line_tokens : Array[UInt],
+  line_tokens : Array[UInt32],
 ) -> Unit {
   self.tokens.push(line_tokens)
 }

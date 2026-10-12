@@ -100,8 +100,8 @@ test "class builders port cLH:210 and :226" {
 ///|
 test "view_line_span_of_model_line finds the wrapped span" {
   // View lines 1..6 map to model lines 1,2,2,2,3,3.
-  let mapping : ReadOnlyArray[Int] = [1, 2, 2, 2, 3, 3]
-  let model_line_of = (view_line : Int) => mapping[view_line - 1]
+  let mapping : ReadOnlyArray[Int32] = [1, 2, 2, 2, 3, 3]
+  let model_line_of = (view_line : Int32) => mapping[view_line - 1]
   debug_inspect(
     @view_layout.view_line_span_of_model_line(3, 6, model_line_of),
     content="(2, 4)",

@@ -196,7 +196,7 @@ fn normalized_sha256(text : String) -> String? {
   }
   let hex = text.to_lower()
   guard hex.length() == 64 else { return None }
-  guard hex.all(ch => ch is ('0'..='9' | 'a'..='f')) else { return None }
+  guard hex.all(ch => ch is ('0'..<='9' | 'a'..<='f')) else { return None }
   Some(hex)
 }
 
@@ -214,7 +214,7 @@ fn is_newer(candidate : String, than~ : String) -> Bool {
 ///|
 /// The numeric `(major, minor, patch)` of a version string, or None when it
 /// does not look like semver.
-fn parse_version(text : String) -> (Int, Int, Int)? {
+fn parse_version(text : String) -> (Int32, Int32, Int32)? {
   let mut view = text.trim()
   if view.strip_prefix("v") is Some(rest) {
     view = rest

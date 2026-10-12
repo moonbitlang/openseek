@@ -68,7 +68,7 @@ pub struct ResolvedMarkerDecoration {
 fn compare_resolved_marker_decorations(
   left : ResolvedMarkerDecoration,
   right : ResolvedMarkerDecoration,
-) -> Int {
+) -> Int32 {
   if left.options.z_index != right.options.z_index {
     return left.options.z_index - right.options.z_index
   }

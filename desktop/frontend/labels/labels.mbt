@@ -7,8 +7,8 @@
 /// A count compacted for a pill or a status line: exact under a thousand,
 /// otherwise one decimal of k/M with a whole value's ".0" dropped — 999 →
 /// "999", 12_345 → "12.3k", 10_000 → "10k", 1_230_000 → "1.2M".
-pub fn compact_count(value : Int) -> String {
-  fn scaled(tenths : Int, unit : String) -> String {
+pub fn compact_count(value : Int32) -> String {
+  fn scaled(tenths : Int32, unit : String) -> String {
     if tenths % 10 == 0 {
       "\{tenths / 10}\{unit}"
     } else {

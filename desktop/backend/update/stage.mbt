@@ -46,7 +46,7 @@ pub async fn stage_update(
   info : UpdateInfo,
   work_dir~ : String,
   bundle_path~ : String,
-  on_progress~ : async (Int, Int?) -> Unit,
+  on_progress~ : async (Int32, Int32?) -> Unit,
 ) -> StagedUpdate {
   guard info.artifact is Some(artifact) else {
     raise UpdateError("the manifest carries no package for this platform")
@@ -81,7 +81,7 @@ pub async fn stage_update(
 async fn download(
   url : String,
   destination : String,
-  on_progress : async (Int, Int?) -> Unit,
+  on_progress : async (Int32, Int32?) -> Unit,
 ) -> Unit {
   // Force an identity response so Content-Length describes the exact bytes
   // written to the archive, even if an intermediary normally compresses it.

@@ -18,7 +18,7 @@ extern "js" fn BrowserSelection::collapsed(self : BrowserSelection) -> Bool =
   #| selection => selection.isCollapsed
 
 ///|
-extern "js" fn BrowserSelection::count(self : BrowserSelection) -> Int =
+extern "js" fn BrowserSelection::count(self : BrowserSelection) -> Int32 =
   #| selection => selection.rangeCount
 
 ///|
@@ -28,7 +28,7 @@ extern "js" fn BrowserSelection::text(self : BrowserSelection) -> String =
 ///|
 extern "js" fn BrowserSelection::range(
   self : BrowserSelection,
-  index : Int,
+  index : Int32,
 ) -> BrowserRange =
   #| (selection, index) => selection.getRangeAt(index)
 

@@ -27,7 +27,7 @@ fn HostSettings::from_status(
 fn fetch_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
+  connection_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -61,7 +61,7 @@ fn push_host_settings(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   patch : @protocol.SettingsSetPayload,
-  connection_generation : Int,
+  connection_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {

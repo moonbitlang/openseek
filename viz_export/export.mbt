@@ -112,7 +112,7 @@ pub fn StandaloneExport::json(
   _self : StandaloneExport,
   sessions : Array[Session],
 ) -> String {
-  let listing = sessions.map(session => session.listing_json()).to_json()
+  let listing = Json(sessions.map(session => session.listing_json()))
   let data : Map[String, Json] = Map([])
   data["/api/sessions"] = Json(listing.stringify())
   for session in sessions {
@@ -120,7 +120,7 @@ pub fn StandaloneExport::json(
       session.envelope_json().stringify(),
     )
   }
-  data.to_json().stringify()
+  Json(data).stringify()
 }
 
 ///|
@@ -149,7 +149,7 @@ fn StandaloneExport::escape_script_close(
 fn StandaloneExport::is_script_close_tail(
   self : StandaloneExport,
   chars : Array[Char],
-  index : Int,
+  index : Int32,
 ) -> Bool {
   let _ = self
   let tail = ['/', 's', 'c', 'r', 'i', 'p', 't']

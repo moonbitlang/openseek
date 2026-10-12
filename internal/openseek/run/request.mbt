@@ -41,7 +41,7 @@ priv enum Profile {
 priv struct Invocation {
   profile : Profile
   /// The request's step ceiling; see `resolved_max_steps`.
-  requested_max_steps : Int?
+  requested_max_steps : Int32?
 }
 
 ///|
@@ -132,8 +132,8 @@ async fn read_invocation(
 /// bounded by its own default.
 fn resolved_max_steps(
   matches : @argparse.Matches,
-  requested : Int?,
-) -> Int? raise {
+  requested : Int32?,
+) -> Int32? raise {
   // Only the value that applies is parsed: a malformed environment default
   // must not refuse a request that carries its own ceiling.
   match (@options.explicitly_provided(matches, "max-steps"), requested) {

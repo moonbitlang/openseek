@@ -22,9 +22,9 @@ fn review_hunk_navigation_index(
   state : State,
   change : ChangedFile?,
   hunks : Array[ReviewHunk],
-  current : Int?,
+  current : Int32?,
   previous : Bool,
-) -> Int? {
+) -> Int32? {
   let mut index = match current {
     Some(index) => index + (if previous { -1 } else { 1 })
     None => if previous { hunks.length() - 1 } else { 0 }
@@ -46,11 +46,11 @@ fn review_editor_navigation_index(
   state : State,
   change : ChangedFile?,
   editor : @viewer.DiffEditor,
-  old_offset : Int?,
-  new_offset : Int?,
+  old_offset : Int32?,
+  new_offset : Int32?,
   previous : Bool,
   edge~ : Bool,
-) -> Int? {
+) -> Int32? {
   guard editor.is_diff_up_to_date() else { return None }
   review_hunk_navigation_index(
     state,
@@ -70,7 +70,10 @@ fn review_editor_navigation_index(
 ///|
 /// Select the predecessor without scrolling, then use the public reveal API
 /// to reach the chosen hunk with a single scroll and reveal event.
-fn reveal_review_editor_hunk(editor : @viewer.DiffEditor, index : Int) -> Unit {
+fn reveal_review_editor_hunk(
+  editor : @viewer.DiffEditor,
+  index : Int32,
+) -> Unit {
   if index == 0 {
     editor.reveal_first_diff()
   } else {
@@ -310,7 +313,7 @@ fn review_diff_navigation_subscription(
 ///|
 /// Only small presentation values are retained, never an old State or callbacks.
 pub struct ReviewNavigationDisplay {
-  priv file_position : (Int, Int)?
+  priv file_position : (Int32, Int32)?
   priv position : ReviewHunkPosition?
   priv hunk_toggle : (ReviewHunkState, Bool)?
   priv enabled : Bool

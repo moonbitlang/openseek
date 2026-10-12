@@ -478,7 +478,7 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
   guard read_worktrees_unlocked(repo) is [w1_entry] else {
     fail("missing first row")
   }
-  let committed : Ref[Int] = Ref(-1)
+  let committed : Ref[Int32] = Ref(-1)
   let forced = remove(host, repo.to_string(), "w1", true, infos => {
     committed.val = infos.length()
   })

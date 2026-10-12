@@ -1,6 +1,6 @@
 ///|
 fn office_selection_model(
-  codex? : Bool = false,
+  codex~ : Bool = false,
 ) -> (Model, @fileeditor.Ctx, @common.Uri) raise {
   let base = desktop_model()
   let model = if codex {

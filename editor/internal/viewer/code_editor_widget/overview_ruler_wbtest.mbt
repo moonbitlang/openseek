@@ -186,10 +186,14 @@ extern "js" fn overview_ruler_disposal_test_canvas() -> @rdom.Element =
   #| })
 
 ///|
-extern "js" fn overview_ruler_disposal_test_width(root : @rdom.Element) -> Int = "(root) => root.width"
+extern "js" fn overview_ruler_disposal_test_width(
+  root : @rdom.Element,
+) -> Int32 = "(root) => root.width"
 
 ///|
-extern "js" fn overview_ruler_disposal_test_height(root : @rdom.Element) -> Int = "(root) => root.height"
+extern "js" fn overview_ruler_disposal_test_height(
+  root : @rdom.Element,
+) -> Int32 = "(root) => root.height"
 
 ///|
 extern "js" fn overview_ruler_disposal_test_removed(
@@ -200,7 +204,7 @@ extern "js" fn overview_ruler_disposal_test_removed(
 fn overview_ruler_disposal_test_handle(
   editor : CodeEditorWidget,
   root : @rdom.Element,
-  listeners? : Array[@base_common.Disposable] = [],
+  listeners~ : Array[@base_common.Disposable] = [],
   resize_observer? : @base_common.Disposable,
 ) -> CodeEditorOverviewRuler {
   {

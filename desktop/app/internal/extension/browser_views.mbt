@@ -10,7 +10,7 @@
 /// holds no view map of its own — `WindowHandle::find_view` is the truth.
 struct BrowserViews {
   mut window : @proton.WindowHandle?
-  debug_port : Int
+  debug_port : Int32
   mut pick : BrowserPick?
 }
 
@@ -52,14 +52,14 @@ fn BrowserViews::close_all(self : BrowserViews) -> Unit {
 }
 
 ///|
-fn view_name(id : Int) -> String {
+fn view_name(id : Int32) -> String {
   "browser-\{id}"
 }
 
 ///|
 /// The page id a view name encodes, or `None` for views that are not
 /// browser tabs. The inverse of `view_name`.
-pub fn browser_view_id(name : String) -> Int? {
+pub fn browser_view_id(name : String) -> Int32? {
   guard name.strip_prefix("browser-") is Some(digits) && !digits.is_empty() else {
     return None
   }
@@ -71,47 +71,48 @@ pub fn browser_view_id(name : String) -> Int? {
 ///|
 /// A view event as the `browser.event` notification payload the frontend
 /// decodes. Lifecycle notifications without a frontend consumer are omitted.
-pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json? {
+pub fn view_event_json(id : Int32, event : @proton.ViewEvent) -> Json? {
   let payload : Json = match event {
     DidStartLoading | DidFinishLoad => return None
-    Navigated(url~) =>
-      { "id": id.to_json(), "kind": "navigated", "url": url.to_json() }
+    Navigated(url~) => { "id": Json(id), "kind": "navigated", "url": Json(url) }
     LoadingChanged(is_loading~) =>
-      { "id": id.to_json(), "kind": "loading", "loading": is_loading.to_json() }
+      { "id": Json(id), "kind": "loading", "loading": Json(is_loading) }
     TitleUpdated(title~) =>
-      { "id": id.to_json(), "kind": "title", "title": title.to_json() }
+      { "id": Json(id), "kind": "title", "title": Json(title) }
     LoadFailed(url~, error_code~, error_text~) =>
       {
-        "id": id.to_json(),
+        "id": Json(id),
         "kind": "load_failed",
-        "url": url.to_json(),
-        "code": error_code.to_json(),
-        "text": error_text.to_json(),
+        "url": Json(url),
+        "code": Json(error_code),
+        "text": Json(error_text),
       }
     RendererProcessTerminated(url~, status~, error_code~, detail~) =>
       // Use the tab's existing error display and reload action. Proton leaves
       // the view open after termination, so this must not become a Closed event.
       {
-        "id": id.to_json(),
+        "id": Json(id),
         "kind": "renderer_process_terminated",
-        "url": url.to_json(),
-        "code": error_code.to_json(),
-        "text": "Renderer process terminated (status \{status}): \{detail}".to_json(),
+        "url": Json(url),
+        "code": Json(error_code),
+        "text": Json(
+          "Renderer process terminated (status \{status}): \{detail}",
+        ),
       }
     FoundInPage(result~) =>
       {
-        "id": id.to_json(),
+        "id": Json(id),
         "kind": "found_in_page",
-        "request_id": result.request_id.to_json(),
-        "active_match_ordinal": result.active_match_ordinal.to_json(),
-        "matches": result.matches.to_json(),
-        "selection_x": result.selection_x.to_json(),
-        "selection_y": result.selection_y.to_json(),
-        "selection_width": result.selection_width.to_json(),
-        "selection_height": result.selection_height.to_json(),
-        "final_update": result.final_update.to_json(),
+        "request_id": Json(result.request_id),
+        "active_match_ordinal": Json(result.active_match_ordinal),
+        "matches": Json(result.matches),
+        "selection_x": Json(result.selection_x),
+        "selection_y": Json(result.selection_y),
+        "selection_width": Json(result.selection_width),
+        "selection_height": Json(result.selection_height),
+        "final_update": Json(result.final_update),
       }
-    Closed => { "id": id.to_json(), "kind": "closed" }
+    Closed => { "id": Json(id), "kind": "closed" }
   }
   Some(payload)
 }
@@ -119,7 +120,7 @@ pub fn view_event_json(id : Int, event : @proton.ViewEvent) -> Json? {
 ///|
 priv suberror BrowserViewError {
   WindowNotReady
-  UnknownView(Int)
+  UnknownView(Int32)
   BlockedURL(String)
 } derive(Debug)
 
@@ -217,7 +218,7 @@ fn BrowserViews::attached_window(
 ///|
 fn BrowserViews::view(
   self : BrowserViews,
-  id : Int,
+  id : Int32,
 ) -> @proton.ViewHandle raise BrowserViewError {
   guard self.attached_window().view(view_name(id)) is Some(view) else {
     raise UnknownView(id)

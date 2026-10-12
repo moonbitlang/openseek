@@ -1,6 +1,6 @@
 ///|
 fn code_copy_button(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   source : String,
 ) -> @html.Html {
   copy_button(
@@ -27,7 +27,7 @@ fn code_copy_button(
 ///|
 /// Copies source text and briefly acknowledges successful clipboard writes.
 pub fn copy_button(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   source : String,
   class~ : String,
   title~ : String,
@@ -103,7 +103,7 @@ fn copy_button_feedback(
   if !button.get_is_connected() {
     return
   }
-  let previous : @js.Optional[Int] = copy_feedback_timers.apply_with_string(
+  let previous : @js.Optional[Int32] = copy_feedback_timers.apply_with_string(
     "get",
     [button],
   )

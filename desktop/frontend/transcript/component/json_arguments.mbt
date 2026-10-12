@@ -66,7 +66,7 @@ fn json_arguments_content(arguments : String) -> JsonArgumentsContent {
 /// Approximate the number of elements the friendly renderer would construct,
 /// stopping as soon as the shared node limit is exceeded. Deep containers are
 /// treated as over-budget before recursing further.
-fn friendly_argument_cost(value : Json, depth : Int) -> Int {
+fn friendly_argument_cost(value : Json, depth : Int32) -> Int32 {
   match value {
     Object(fields) if !fields.is_empty() => {
       if depth >= MAX_FRIENDLY_ARGUMENT_DEPTH {

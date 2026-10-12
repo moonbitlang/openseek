@@ -2,7 +2,7 @@
 /// CodeEditorWidget-lifetime owner of the currently attached model bundle and
 /// the monotonic generation captured by swap-scoped callbacks.
 priv struct ViewerModelSlot {
-  mut generation : Int
+  mut generation : Int32
   mut current : ModelData?
 }
 
@@ -12,7 +12,7 @@ fn ViewerModelSlot::ViewerModelSlot() -> ViewerModelSlot {
 }
 
 ///|
-fn ViewerModelSlot::begin_attach_generation(self : ViewerModelSlot) -> Int {
+fn ViewerModelSlot::begin_attach_generation(self : ViewerModelSlot) -> Int32 {
   self.generation += 1
   self.generation
 }
@@ -42,7 +42,7 @@ fn ViewerModelSlot::clear_current_after_dispose(self : ViewerModelSlot) -> Unit 
 ///|
 fn ViewerModelSlot::is_current_generation(
   self : ViewerModelSlot,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   self.current is Some(_) && self.generation == generation
 }

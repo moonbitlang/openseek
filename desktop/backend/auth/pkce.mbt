@@ -32,7 +32,7 @@ fn start_url(
   server_url~ : String,
   oauth_state~ : String,
   challenge~ : String,
-  port~ : Int,
+  port~ : Int32,
   name~ : String,
 ) -> String {
   let origin = match server_url.strip_suffix("/") {

@@ -56,7 +56,7 @@ pub(all) enum MentionRef {
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
-  Symbol(name~ : String, file~ : String, line~ : Int)
+  Symbol(name~ : String, file~ : String, line~ : Int32)
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)
   // A materialized read-only Office selection. The JSON body is carried
@@ -64,8 +64,8 @@ pub(all) enum MentionRef {
   OfficeSelection(materialized~ : String)
   Annotation(
     file~ : String,
-    start_line~ : Int,
-    end_line~ : Int,
+    start_line~ : Int32,
+    end_line~ : Int32,
     quote~ : String,
     comment~ : String,
     side~ : AnnotationSide
@@ -89,10 +89,10 @@ pub(all) struct SemanticSearchReference {
 /// Small selections stay in the prompt as structured XML. Larger selections
 /// are materialized only when the user sends, so the composer never creates
 /// files merely because a search row was toggled.
-const MaxInlineSemanticReferenceMatches : Int = 100
+const MaxInlineSemanticReferenceMatches : Int32 = 100
 
 ///|
-const MaxInlineSemanticReferenceSourceUnits : Int = 24000
+const MaxInlineSemanticReferenceSourceUnits : Int32 = 24000
 
 ///|
 pub fn SemanticSearchReference::is_inlineable(
@@ -128,8 +128,8 @@ pub fn SemanticSearchReference::materialize_payload(
 /// put in the prompt itself.
 pub(all) struct SemanticSearchArtifact {
   path : String
-  pattern_count : Int
-  match_count : Int
+  pattern_count : Int32
+  match_count : Int32
 } derive(Eq, Debug)
 
 ///|

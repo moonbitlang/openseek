@@ -87,7 +87,7 @@ let auto_open_max_depth = 6
 ///|
 async fn find_first_workspace_file() -> @base_common.Uri? {
   let first_file : Ref[@base_common.Uri?] = Ref(None)
-  let budget : Ref[Int] = Ref(auto_open_max_resolves)
+  let budget : Ref[Int32] = Ref(auto_open_max_resolves)
   match
     first_moonbit_file(workspace_tree_provider.root(), budget, 0, first_file) {
     Some(uri) => Some(uri)
@@ -98,8 +98,8 @@ async fn find_first_workspace_file() -> @base_common.Uri? {
 ///|
 async fn first_moonbit_file(
   uri : @base_common.Uri,
-  budget : Ref[Int],
-  depth : Int,
+  budget : Ref[Int32],
+  depth : Int32,
   first_file : Ref[@base_common.Uri?],
 ) -> @base_common.Uri? {
   if budget.val <= 0 || depth > auto_open_max_depth {

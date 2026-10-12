@@ -14,7 +14,7 @@
 /// state and may repeat, while the no-plan nudge fires at most once per turn —
 /// a model that ignored "consider recording a plan" once gains nothing from
 /// hearing it again.
-pub let plan_reminder_after_steps : Int = 50
+pub let plan_reminder_after_steps : Int32 = 50
 
 ///|
 /// Run a one-shot OpenSeek task and discard the returned session.
@@ -42,12 +42,12 @@ pub async fn run(
   model~ : @deepseek.Model,
   task~ : String,
   system_prompt_text~ : String,
-  max_steps? : Int = unbounded_max_steps,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32 = unbounded_max_steps,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  workspace_root? : String = ".",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  workspace_root~ : String = ".",
 ) -> Unit {
   let session = @agent_session.Session(
     SessionId("one-shot"),

@@ -56,7 +56,7 @@ async test "each provider response's usage is recorded on its assistant item" {
     )
     // One usage per response, on the item that first records it: the
     // tool-call step and the final answer.
-    let recorded : Array[Int] = []
+    let recorded : Array[Int32] = []
     for event in result.events() {
       if event.item() is Assistant(message) && message.usage() is Some(usage) {
         recorded.push(usage.total_tokens)

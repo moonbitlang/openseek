@@ -42,7 +42,7 @@ priv struct StyledRange {
 /// The styled selection rectangles for one view line, Monaco's
 /// `LineVisibleRangesWithStyle`.
 priv struct LineSelectionRanges {
-  line_number : Int
+  line_number : Int32
   ranges : Array[StyledRange]
 }
 
@@ -66,7 +66,7 @@ fn new_styled_range(left : Double, width : Double) -> StyledRange {
 /// `(left,width)` pairs, preserving the geometry handoff for direct tests.
 fn prepare_selections_render_from_visible_ranges(
   viewport : @view_layout.ViewportData,
-  visible_ranges : Array[(Int, Array[(Double, Double)])],
+  visible_ranges : Array[(Int32, Array[(Double, Double)])],
   space_width : Double,
 ) -> Array[String] {
   let lines : Array[LineSelectionRanges] = []

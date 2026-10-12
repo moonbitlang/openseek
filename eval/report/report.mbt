@@ -19,7 +19,7 @@ pub fn Metric::Metric(name~ : String, value~ : String) -> Metric {
 /// non-fatal `warnings`, its `metrics` cells, and the path of its full
 /// transcript log when one was kept.
 pub struct ReportRow {
-  priv index : Int
+  priv index : Int32
   priv name : String
   success : Bool
   priv reason : String
@@ -33,14 +33,14 @@ pub struct ReportRow {
 /// Build a report row; everything beyond identity and the verdict is
 /// optional. `reason` defaults to "ok" so passing rows read uniformly.
 pub fn ReportRow::ReportRow(
-  index~ : Int,
+  index~ : Int32,
   name~ : String,
   success~ : Bool,
-  reason? : String = "ok",
-  warnings? : String = "",
-  metrics? : Array[Metric] = [],
-  details? : Array[Metric] = [],
-  log_path? : String = "",
+  reason~ : String = "ok",
+  warnings~ : String = "",
+  metrics~ : Array[Metric] = [],
+  details~ : Array[Metric] = [],
+  log_path~ : String = "",
 ) -> ReportRow {
   { index, name, success, reason, warnings, metrics, details, log_path, }
 }
@@ -61,9 +61,9 @@ pub struct Report {
 /// cells; rows supply values for those names via their `metrics`.
 pub fn Report::Report(
   title~ : String,
-  summary? : Array[Metric] = [],
-  metric_columns? : Array[String] = [],
-  rows? : Array[ReportRow] = [],
+  summary~ : Array[Metric] = [],
+  metric_columns~ : Array[String] = [],
+  rows~ : Array[ReportRow] = [],
 ) -> Report {
   { title, summary, metric_columns, rows, }
 }
@@ -207,7 +207,7 @@ pub async fn write_files(
   out_dir : String,
   markdown : String,
   json : Json,
-  html? : String = "",
+  html~ : String = "",
 ) -> Unit {
   let _ = @fs.mkdir(out_dir, recursive=true) catch { _ => () }
   @fs.write_file(

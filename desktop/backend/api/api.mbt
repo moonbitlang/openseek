@@ -264,11 +264,11 @@ async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit 
 /// announcement).
 pub fn ApiState::ApiState(
   engine~ : String,
-  codex? : @codex.CodexSettings = @codex.CodexSettings::default(),
+  codex~ : @codex.CodexSettings = @codex.CodexSettings::default(),
   runtime_dir? : @pathx.Path,
   executable? : String,
   auth? : @auth.AuthStore,
-  app_version? : String = "development",
+  app_version~ : String = "development",
   console_url? : String,
   resources? : @resources.Resources,
   on_finished? : (@protocol.FinishedPayload) -> Unit,

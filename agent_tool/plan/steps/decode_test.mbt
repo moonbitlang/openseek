@@ -129,7 +129,7 @@ test "decode rejects more than MAX_STEPS steps" {
       { "title": "step \{i}", "status": "pending" }
     }
   ]
-  assert_decode_error({ "steps": steps.to_json() }, "at most 20 steps, got 21")
+  assert_decode_error({ "steps": Json(steps) }, "at most 20 steps, got 21")
 }
 
 ///|

@@ -7,7 +7,7 @@ fn Entry::review_changes(self : Entry) -> Array[@mention_context.ReviewChanges] 
 
 ///|
 fn Entry::changes_chip(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {

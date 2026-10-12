@@ -2,8 +2,8 @@
 fn alignment_test_state(
   changes : Array[@diff.DetailedLineRangeMapping],
   ignored_mappings : Array[@diff.LineRangeMapping],
-  original_line_count : Int,
-  modified_line_count : Int,
+  original_line_count : Int32,
+  modified_line_count : Int32,
 ) -> DiffState {
   ignore(original_line_count)
   ignore(modified_line_count)
@@ -31,10 +31,10 @@ fn alignment_test_state(
 
 ///|
 fn alignment_test_change(
-  original_start : Int,
-  original_end : Int,
-  modified_start : Int,
-  modified_end : Int,
+  original_start : Int32,
+  original_end : Int32,
+  modified_start : Int32,
+  modified_end : Int32,
   inner_changes? : Array[@diff.RangeMapping],
 ) -> @diff.DetailedLineRangeMapping {
   DetailedLineRangeMapping(

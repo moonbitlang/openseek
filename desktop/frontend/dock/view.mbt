@@ -66,9 +66,9 @@ pub(all) struct LauncherActions {
 /// The launcher rows shared by the empty-strip pane and the `+` popup: the
 /// kinds of tab the dock can open.
 fn LauncherActions::rows(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : LauncherActions,
-  popup? : Bool = false,
+  popup~ : Bool = false,
 ) -> Array[@html.Html] {
   let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
   if self.browser is Some(open_browser) {
@@ -156,7 +156,7 @@ fn LauncherActions::rows(
 /// dock can open (Codex-style). Always rendered — CSS shows it only while
 /// the strip is empty — so the panel's child order stays structural.
 pub fn launcher_pane(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   actions : LauncherActions,
 ) -> @html.Html {
   @html.div(class="dock-launcher", [
@@ -171,7 +171,7 @@ pub fn launcher_pane(
 /// closes it without activating (the close click must not bubble into the
 /// tab's own handler).
 pub fn tabs_bar(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   chips : Array[TabChip],

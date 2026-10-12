@@ -166,10 +166,10 @@ extern "js" fn cycle_checkout_focus(backwards : Bool) -> Unit =
   #| }
 
 ///|
-fn focus_checkout_action(number : Int) -> @cmd.Cmd {
+fn focus_checkout_action(number : Int32) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => restore_checkout_focus(number), kind=@cmd.after_render)
 }
 
 ///|
-extern "js" fn restore_checkout_focus(number : Int) -> Unit =
+extern "js" fn restore_checkout_focus(number : Int32) -> Unit =
   #| number => [...document.querySelectorAll(`.github-review-update, .github-checkout[data-pr-number="${number}"]`)].find(element => element.getClientRects().length)?.focus()

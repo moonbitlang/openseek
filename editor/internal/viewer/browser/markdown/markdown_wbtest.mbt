@@ -155,7 +155,10 @@ extern "js" fn install_markdown_test_dom() -> Unit =
 extern "js" fn markdown_test_target() -> @rdom.Element = "() => document.createElement('div')"
 
 ///|
-extern "js" fn markdown_test_count(target : @rdom.Element, tag : String) -> Int = "(target, tag) => target.querySelectorAll(tag).length"
+extern "js" fn markdown_test_count(
+  target : @rdom.Element,
+  tag : String,
+) -> Int32 = "(target, tag) => target.querySelectorAll(tag).length"
 
 ///|
 extern "js" fn markdown_test_find_text(
@@ -169,7 +172,7 @@ extern "js" fn markdown_test_find_text(
 extern "js" fn markdown_test_at(
   target : @rdom.Element,
   tag : String,
-  index : Int,
+  index : Int32,
 ) -> @rdom.Element = "(target, tag, index) => target.querySelectorAll(tag)[index]"
 
 ///|
@@ -185,7 +188,7 @@ extern "js" fn markdown_test_text_content(element : @rdom.Element) -> String = "
 extern "js" fn markdown_test_listener_count(
   element : @rdom.Element,
   event_type : String,
-) -> Int = "(element, type) => element.listenerCount(type)"
+) -> Int32 = "(element, type) => element.listenerCount(type)"
 
 ///|
 extern "js" fn markdown_test_set_class(
@@ -203,7 +206,7 @@ extern "js" fn markdown_test_same_element(
 extern "js" fn markdown_test_dispatch_mouse(
   element : @rdom.Element,
   event_type : String,
-  button : Int,
+  button : Int32,
 ) -> Bool =
   #| (element, type, button) => {
   #|   const event = new Event(type, { cancelable: true });
@@ -230,11 +233,11 @@ extern "js" fn markdown_test_dispatch_load(element : @rdom.Element) -> Unit = "(
 ///|
 extern "js" fn markdown_test_dispatch_vertical_wheel(
   element : @rdom.Element,
-  delta_y : Int,
-  scroll_top : Int,
-  client_height : Int,
-  scroll_height : Int,
-) -> Int =
+  delta_y : Int32,
+  scroll_top : Int32,
+  client_height : Int32,
+  scroll_height : Int32,
+) -> Int32 =
   #| (element, deltaY, scrollTop, clientHeight, scrollHeight) => {
   #|   for (const [name, value] of Object.entries({
   #|     scrollLeft: 0,
@@ -371,17 +374,17 @@ extern "js" fn markdown_test_flush_mermaid_microtasks() -> Unit =
   #| }
 
 ///|
-extern "js" fn markdown_test_mermaid_load_count() -> Int = "() => globalThis.__moonbitMarkdownMermaidTestState.urls.length"
+extern "js" fn markdown_test_mermaid_load_count() -> Int32 = "() => globalThis.__moonbitMarkdownMermaidTestState.urls.length"
 
 ///|
-extern "js" fn markdown_test_mermaid_url(index : Int) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.urls[index] ?? ''"
+extern "js" fn markdown_test_mermaid_url(index : Int32) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.urls[index] ?? ''"
 
 ///|
-extern "js" fn markdown_test_mermaid_initialize_count() -> Int = "() => globalThis.__moonbitMarkdownMermaidTestState.initializations.length"
+extern "js" fn markdown_test_mermaid_initialize_count() -> Int32 = "() => globalThis.__moonbitMarkdownMermaidTestState.initializations.length"
 
 ///|
 extern "js" fn markdown_test_mermaid_config_string(
-  index : Int,
+  index : Int32,
   field : String,
 ) -> String =
   #| (index, field) => {
@@ -391,7 +394,7 @@ extern "js" fn markdown_test_mermaid_config_string(
 
 ///|
 extern "js" fn markdown_test_mermaid_config_bool(
-  index : Int,
+  index : Int32,
   field : String,
 ) -> Bool =
   #| (index, field) =>
@@ -399,7 +402,7 @@ extern "js" fn markdown_test_mermaid_config_bool(
 
 ///|
 extern "js" fn markdown_test_mermaid_config_has_secure(
-  index : Int,
+  index : Int32,
   field : String,
 ) -> Bool =
   #| (index, field) => {
@@ -408,22 +411,22 @@ extern "js" fn markdown_test_mermaid_config_has_secure(
   #| }
 
 ///|
-extern "js" fn markdown_test_mermaid_render_count() -> Int = "() => globalThis.__moonbitMarkdownMermaidTestState.renders.length"
+extern "js" fn markdown_test_mermaid_render_count() -> Int32 = "() => globalThis.__moonbitMarkdownMermaidTestState.renders.length"
 
 ///|
-extern "js" fn markdown_test_mermaid_render_id(index : Int) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.id ?? ''"
+extern "js" fn markdown_test_mermaid_render_id(index : Int32) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.id ?? ''"
 
 ///|
-extern "js" fn markdown_test_mermaid_render_source(index : Int) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.source ?? ''"
+extern "js" fn markdown_test_mermaid_render_source(index : Int32) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.source ?? ''"
 
 ///|
-extern "js" fn markdown_test_mermaid_render_theme(index : Int) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.theme ?? ''"
+extern "js" fn markdown_test_mermaid_render_theme(index : Int32) -> String = "(index) => globalThis.__moonbitMarkdownMermaidTestState.renders[index]?.theme ?? ''"
 
 ///|
-extern "js" fn markdown_test_mermaid_bind_count() -> Int = "() => globalThis.__moonbitMarkdownMermaidTestState.binds.length"
+extern "js" fn markdown_test_mermaid_bind_count() -> Int32 = "() => globalThis.__moonbitMarkdownMermaidTestState.binds.length"
 
 ///|
-extern "js" fn markdown_test_mermaid_pending_render_count() -> Int = "() => globalThis.__moonbitMarkdownMermaidTestState.pendingRenders.length"
+extern "js" fn markdown_test_mermaid_pending_render_count() -> Int32 = "() => globalThis.__moonbitMarkdownMermaidTestState.pendingRenders.length"
 
 ///|
 extern "js" fn markdown_test_install_mermaid_id_collisions() -> Unit =
@@ -461,7 +464,7 @@ extern "js" fn markdown_test_resolve_next_mermaid_render() -> Unit =
 ///|
 extern "js" fn markdown_test_count_mermaid_wrappers(
   target : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| target => target.querySelectorAll("div").filter((element) => {
   #|   const classes = (element.getAttribute("class") || "").split(/\s+/);
   #|   return classes.includes("moonbit-viewer-markdown-diagram") &&
@@ -471,7 +474,7 @@ extern "js" fn markdown_test_count_mermaid_wrappers(
 ///|
 extern "js" fn markdown_test_mermaid_wrapper_at(
   target : @rdom.Element,
-  index : Int,
+  index : Int32,
 ) -> @rdom.Element =
   #| (target, index) => target.querySelectorAll("div").filter((element) => {
   #|   const classes = (element.getAttribute("class") || "").split(/\s+/);
@@ -482,7 +485,7 @@ extern "js" fn markdown_test_mermaid_wrapper_at(
 ///|
 extern "js" fn markdown_test_count_tokenized_fallbacks(
   target : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| target => target.querySelectorAll("div").filter((element) => {
   #|   const classes = (element.getAttribute("class") || "").split(/\s+/);
   #|   return classes.includes("monaco-tokenized-source");

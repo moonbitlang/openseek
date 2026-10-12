@@ -47,8 +47,8 @@ async fn request(
   token : String,
   name : String,
   arguments : Json,
-  wait_for_approval? : Bool = false,
-  timeout_ms? : Int = 125000,
+  wait_for_approval~ : Bool = false,
+  timeout_ms~ : Int32 = 125000,
 ) -> CallResult {
   let request : Json = { "version": 1, "name": name, "arguments": arguments }
   // No retries: a lost response does not prove an edit failed to execute.

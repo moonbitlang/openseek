@@ -2,9 +2,9 @@
 /// Source coordinates stay separate from the (possibly clipped) preview.
 /// Columns use the editor's one-based UTF-16 coordinates, with exclusive ends.
 priv struct SearchPreviewLine {
-  line : Int
+  line : Int32
   text : String
-  start_column : Int
+  start_column : Int32
 }
 
 ///|
@@ -92,8 +92,8 @@ fn Page::result_items(self : Page) -> Array[SearchResultItem] {
 fn SearchPreviewLine::highlight_slices(
   self : SearchPreviewLine,
   ranges : Array[@common.Range],
-) -> Array[(Int, Int)] {
-  let slices : Array[(Int, Int)] = []
+) -> Array[(Int32, Int32)] {
+  let slices : Array[(Int32, Int32)] = []
   for range in ranges {
     if self.line < range.start_line_number || self.line > range.end_line_number {
       continue
@@ -131,7 +131,7 @@ fn coalesce_results(items : Array[SearchResultItem]) -> Array[SearchResultItem] 
   })
   let results : Array[SearchResultItem] = []
   let cluster : Array[SearchResultItem] = []
-  let mut last_line : Int? = None
+  let mut last_line : Int32? = None
   for item in sorted {
     let first = item.preview[0].line
     if last_line is Some(last) && first > last + 1 {
@@ -206,10 +206,10 @@ fn merge_result_cluster(items : Array[SearchResultItem]) -> SearchResultItem {
 /// (so a nested or subsequent hit does not always open the first occurrence).
 fn SearchResultItem::target_for_line(
   self : SearchResultItem,
-  line : Int,
+  line : Int32,
 ) -> @common.Range {
   let mut target = self.target
-  let mut distance : Int? = None
+  let mut distance : Int32? = None
   for range in self.ranges {
     let end_line = if range.end_column == 1 &&
       range.end_line_number > range.start_line_number {

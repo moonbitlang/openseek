@@ -25,7 +25,7 @@ let watch_request_uris : Map[String, String] = Map([])
 let active_document_uri : Ref[@base_common.Uri?] = Ref(None)
 
 ///|
-let active_document_generation : Ref[Int] = Ref(0)
+let active_document_generation : Ref[Int32] = Ref(0)
 
 ///|
 let active_document_watch : Ref[@base_common.Disposable?] = Ref(None)
@@ -44,7 +44,7 @@ impl @workspace.DocumentProvider for RemoteDocumentProvider with fn read(
 /// its own URI/generation freshness guard.
 async fn read_remote_document(
   uri : @base_common.Uri,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
 ) -> @workspace.DocumentReadResult {
   let response = protocol_request(
     "open",
@@ -161,7 +161,7 @@ fn is_active_document_resource(uri : @base_common.Uri) -> Bool {
 ///|
 fn read_active_document(
   uri : @base_common.Uri,
-  generation : Int,
+  generation : Int32,
   view_state : DocumentViewState,
 ) -> Unit {
   @js.Promise::from_async(() => {
@@ -179,7 +179,7 @@ fn read_active_document(
 }
 
 ///|
-fn is_active_document(uri : @base_common.Uri, generation : Int) -> Bool {
+fn is_active_document(uri : @base_common.Uri, generation : Int32) -> Bool {
   if generation != active_document_generation.val {
     return false
   }

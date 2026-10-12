@@ -65,8 +65,8 @@ fn SessionListItem::tree_key(
 fn SessionListItem::tree_fold_target(
   self : SessionListItem,
   listed : Map[SessionTreeKey, Bool],
-) -> (SessionTreeKey, Array[Int])? {
-  let path : Array[Int] = []
+) -> (SessionTreeKey, Array[Int32])? {
+  let path : Array[Int32] = []
   let mut current = self.id
   for ;; {
     guard @protocol.split_child_session_id(current) is Some((parent, ordinal)) else {
@@ -103,8 +103,8 @@ pub fn session_tree(items : Array[SessionListItem]) -> Array[SessionTreeRow] {
     listed[item.tree_key(item.id)] = true
   }
   let rows : Array[SessionTreeRow] = []
-  let row_at : Map[SessionTreeKey, Int] = Map([])
-  let folded : Array[(Array[Int], SessionTreeKey, SessionListItem)] = []
+  let row_at : Map[SessionTreeKey, Int32] = Map([])
+  let folded : Array[(Array[Int32], SessionTreeKey, SessionListItem)] = []
   for item in items {
     match item.tree_fold_target(listed) {
       None => {
@@ -215,7 +215,7 @@ pub fn subrun_child_sessions(
 /// Order two sub-run ordinal paths: by ordinal at the first position they
 /// differ, then by depth, so `sr-2` precedes `sr-10` and a child precedes
 /// its own grandchildren.
-fn compare_subrun_path(left : Array[Int], right : Array[Int]) -> Int {
+fn compare_subrun_path(left : Array[Int32], right : Array[Int32]) -> Int32 {
   let shared = left.length().min(right.length())
   for index in 0..<shared {
     if left[index] < right[index] {
@@ -238,7 +238,7 @@ fn compare_subrun_path(left : Array[Int], right : Array[Int]) -> Int {
 pub struct SessionLoadView {
   prediction : @protocol.PredictionRecord?
   items : Array[TranscriptItem]
-  watermark : Int
+  watermark : Int32
   // The standing goal the snapshot's `[goal]` markers reduce to — the seed
   // the client's live marker commits then fold on top of.
   goal : GoalStanding?
@@ -252,7 +252,7 @@ pub struct SessionLoadView {
   // another set, before the reload ever happens, and the request still
   // completed. What moved the goal on afterwards is a different question
   // from whether this one was recorded.
-  goal_markers : Array[(Int, GoalMarker)]
+  goal_markers : Array[(Int32, GoalMarker)]
 }
 
 ///|
@@ -266,7 +266,7 @@ pub fn session_from_reply(
   let items : Array[TranscriptItem] = []
   let mut derived_watermark = 0
   let mut goal : GoalStanding? = None
-  let goal_markers : Array[(Int, GoalMarker)] = []
+  let goal_markers : Array[(Int32, GoalMarker)] = []
   for event in reply.session.events.unwrap_or([]) {
     // Old desktop hosts return the store JSON verbatim without a top-level
     // watermark, but every stored event already carries its sequence. Derive
@@ -318,7 +318,7 @@ pub fn apply_session_item(
   items : Array[TranscriptItem],
   item : @desktop_protocol.SessionItem,
   ts? : Double,
-  sequence? : Int,
+  sequence? : Int32,
 ) -> Bool {
   let before = items.length()
   let mut updated_existing = false
@@ -524,7 +524,7 @@ fn SessionTerminalProjection::append_to(
   self : SessionTerminalProjection,
   items : Array[TranscriptItem],
   ts? : Double,
-  sequence? : Int,
+  sequence? : Int32,
 ) -> Bool {
   let failure = match self.0 {
     // A current no-tool final is already the last provider response. Mark

@@ -10,13 +10,13 @@
 /// Where the composer stops waiting for GitHub. A slow or unreachable API must
 /// not hold a bridge request open; the chip simply stays absent until the next
 /// refresh.
-const GithubRequestTimeoutMs : Int = 10000
+const GithubRequestTimeoutMs : Int32 = 10000
 
 ///|
 /// How many of the branch's pull requests to look at. gh lists newest first,
 /// and a branch reused after its pull request merged is ordinary — one page of
 /// candidates is enough to prefer the open one.
-const PullRequestCandidates : Int = 5
+const PullRequestCandidates : Int32 = 5
 
 ///|
 /// The gh fields one `gh pr list` has to return to fill the chip.
@@ -235,7 +235,7 @@ fn parse_pull_request(json : Json) -> GitPullRequest? {
 
 ///|
 /// JSON has one number type; every count GitHub reports here is an integer.
-fn json_count(fields : Map[String, Json], key : String) -> Int? {
+fn json_count(fields : Map[String, Json], key : String) -> Int32? {
   guard fields.get(key) is Some(Number(value, ..)) else { return None }
   Some(value.to_int())
 }

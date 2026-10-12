@@ -11,7 +11,7 @@ pub(all) struct OfficeSelectionSummary {
 pub extend OfficeSelectionSummary with Eq::{equal, not_equal}
 
 ///|
-fn selection_page(value : Json) -> Int? {
+fn selection_page(value : Json) -> Int32? {
   guard value is Number(number, ..) &&
     !number.is_nan() &&
     !number.is_inf() &&
@@ -24,7 +24,7 @@ fn selection_page(value : Json) -> Int? {
 }
 
 ///|
-fn selection_pages(first : Int, last : Int) -> String {
+fn selection_pages(first : Int32, last : Int32) -> String {
   if first == last {
     "p. \{first}"
   } else {
@@ -97,7 +97,7 @@ pub fn OfficeSelectionSummary::heading(self : OfficeSelectionSummary) -> String 
 }
 
 ///|
-fn selection_excerpt(text : String, limit : Int) -> String {
+fn selection_excerpt(text : String, limit : Int32) -> String {
   let out = StringBuilder()
   let mut count = 0
   let mut space = false

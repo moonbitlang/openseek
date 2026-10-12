@@ -176,7 +176,7 @@ fn CodeEditorWidget::show_context_menu_at(
   self : CodeEditorWidget,
   client_x : Double,
   client_y : Double,
-  auto_select_first? : Bool = false,
+  auto_select_first~ : Bool = false,
 ) -> Bool {
   guard self.context_menu_contribution() is Some(state) else { return false }
   guard state.get_or_create_widget(self) is Some(widget) else { return false }

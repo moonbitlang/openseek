@@ -21,13 +21,13 @@ pub fn focus_query_after_render() -> @cmd.Cmd {
 priv struct FileGroup {
   path : String
   matches : Array[SearchResultItem]
-  count : Int
+  count : Int32
 }
 
 ///|
 fn grouped_matches(matches : Array[SearchResultItem]) -> Array[FileGroup] {
   let groups : Array[FileGroup] = []
-  let indexes : Map[String, Int] = Map([])
+  let indexes : Map[String, Int32] = Map([])
   for result in matches {
     match indexes.get(result.path) {
       Some(index) => {
@@ -59,7 +59,7 @@ fn grouped_matches(matches : Array[SearchResultItem]) -> Array[FileGroup] {
 /// budget: Host search semantics and the 20,000-result ceiling remain intact.
 fn visible_file_groups(
   items : Array[SearchResultItem],
-  budget : Int,
+  budget : Int32,
 ) -> Array[FileGroup] {
   let visible : Array[FileGroup] = []
   let mut remaining = budget.max(0)
@@ -157,7 +157,7 @@ fn submit_search_on_enter(
 
 ///|
 fn query_key_attrs(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
 ) -> @html.Attrs {
   @html.Attrs::build()
@@ -173,7 +173,7 @@ fn query_key_attrs(
 /// matching versus structural MoonBit code patterns. Switching modes retires
 /// the armed query and its results via the generation fence.
 fn mode_control(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   mode : Mode,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -208,7 +208,7 @@ fn mode_control(
 ///|
 /// The mode-specific query options.
 fn mode_options(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -239,7 +239,7 @@ fn mode_options(
 
 ///|
 fn pattern_repair_control(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -329,7 +329,7 @@ fn pattern_repair_details(page : Page) -> @html.Html {
 
 ///|
 fn pattern_repair_notice(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
 ) -> @html.Html {
   if page.pattern_repair_phase is PatternRepairRequested {
@@ -363,7 +363,7 @@ fn pattern_repair_notice(
 ///|
 fn highlighted_preview(
   line : SearchPreviewLine,
-  slices : Array[(Int, Int)],
+  slices : Array[(Int32, Int32)],
 ) -> Array[@html.Html] {
   let children : Array[@html.Html] = []
   let mut cursor = 0
@@ -394,7 +394,7 @@ fn highlighted_preview(
 
 ///|
 fn result_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   result : SearchResultItem,
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -432,7 +432,7 @@ fn result_row(
 
 ///|
 fn file_group_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   group : FileGroup,
   emit : @cmd.Emit[Msg],
@@ -484,7 +484,7 @@ fn file_group_view(
 
 ///|
 fn search_message(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html? {
@@ -549,7 +549,7 @@ fn search_message(
 
 ///|
 fn search_body(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -670,7 +670,7 @@ fn search_body(
 
 ///|
 fn semantic_hit_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   hit : @protocol.SemanticSearchHit,
   emit : @cmd.Emit[Msg],
@@ -742,7 +742,7 @@ fn semantic_group_select_view(
 
 ///|
 fn semantic_file_group_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   pattern : String,
   group : SemanticGroup,
@@ -795,7 +795,7 @@ fn semantic_file_group_view(
 
 ///|
 fn semantic_pattern_group_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   group : SemanticGroup,
   emit : @cmd.Emit[Msg],
@@ -845,7 +845,7 @@ fn semantic_pattern_group_view(
 
 ///|
 fn page_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : Page,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
@@ -979,7 +979,7 @@ fn page_view(
 /// Search is composed into the file explorer beside its Files and Changes
 /// inventories. Fileeditor supplies the one active checkout projection.
 pub fn State::explorer_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   input : Input,
   emit : @cmd.Emit[Msg],

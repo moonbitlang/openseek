@@ -48,7 +48,7 @@ fn line_has_token_class(
 /// Toy lexer for the multi-line coverage test: a leading `let` is a keyword,
 /// `/* ... */` block comments carry across lines through the tokenizer state.
 priv struct FrameToy {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -106,10 +106,10 @@ impl @syntax.LineTokenizer for FrameToy with fn tokenize_line(
 ///|
 fn find_marker(
   line_text : StringView,
-  from : Int,
+  from : Int32,
   first : Char,
   second : Char,
-) -> Int? {
+) -> Int32? {
   for i in from..<(line_text.length() - 1) {
     if line_text[i].to_int() == first.to_int() &&
       line_text[i + 1].to_int() == second.to_int() {

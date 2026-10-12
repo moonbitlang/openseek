@@ -18,16 +18,16 @@ fn auth_file(runtime_dir : @pathx.Path) -> @pathx.Path {
 ///|
 fn session_to_json(session : AuthSession) -> Json {
   {
-    "version": AuthFileVersion.to_json(),
-    "server_url": session.server_url.to_json(),
-    "device_token": session.device_token.to_json(),
+    "version": Json(AuthFileVersion),
+    "server_url": Json(session.server_url),
+    "device_token": Json(session.device_token),
     "device": {
-      "id": session.device_id.to_json(),
-      "name": session.device_name.to_json(),
+      "id": Json(session.device_id),
+      "name": Json(session.device_name),
     },
     "user": {
-      "login": session.user_login.to_json(),
-      "avatar_url": session.user_avatar_url.to_json(),
+      "login": Json(session.user_login),
+      "avatar_url": Json(session.user_avatar_url),
     },
   }
 }

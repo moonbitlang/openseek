@@ -5,7 +5,7 @@
 ///|
 /// One Host response is deliberately bounded. Callers retain `truncated` so
 /// they do not present the snapshot as a complete workspace inventory.
-const MaxIndexedFiles : Int = 512
+const MaxIndexedFiles : Int32 = 512
 
 ///|
 /// One request bound to an authorized conversation and concrete root. Keeping
@@ -110,7 +110,7 @@ pub fn Request::run(
 /// Interactive queries share the composer's 150 ms debounce pause. The timer
 /// lives inside the subscription loader, so replacing the subscription key (a
 /// new query or index epoch) is also the debounce cancellation.
-const SearchingDebounceMs : Int = 150
+const SearchingDebounceMs : Int32 = 150
 
 ///|
 /// The extensible subscription payload. The runtime refreshes it in place on
@@ -137,7 +137,7 @@ priv suberror SearchingSub {
 pub fn Request::searching(
   self : Request,
   query : String,
-  epoch~ : Int,
+  epoch~ : Int32,
   loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd,
   failed~ : () -> @cmd.Cmd,
 ) -> @sub.Sub {

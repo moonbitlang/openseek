@@ -20,13 +20,13 @@ const ResolvingGuardVar : String = "OPENSEEK_RESOLVING_ENVIRONMENT"
 ///|
 /// Interactive shells can hang on rc files that wait for input; give up and
 /// keep the inherited environment after this long.
-const ProbeTimeoutMs : Int = 10_000
+const ProbeTimeoutMs : Int32 = 10_000
 
 ///|
 /// Target of the hidden `--print-env-json <mark>` flag: print this process's
 /// environment as `<mark>{json}<mark>` for the probing parent to extract.
 pub fn print_env_json(mark : String) -> Unit {
-  println(mark + @sys.get_env_vars().to_json().stringify() + mark)
+  println(mark + Json(@sys.get_env_vars()).stringify() + mark)
 }
 
 ///|

@@ -32,24 +32,24 @@ pub impl FromJson for StartPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for StartPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "task": self.task.to_json(),
+    "task": Json(self.task),
     "images": Json(self.images),
-    "session": self.session.to_json(),
+    "session": Json(self.session),
   }
   if self.submission_id is Some(submission_id) {
-    fields["submission_id"] = submission_id.to_json()
+    fields["submission_id"] = Json(submission_id)
   }
   if self.model is Some(model) {
-    fields["model"] = model.to_json()
+    fields["model"] = Json(model)
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
   }
   if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
+    fields["max_steps"] = Json(max_steps)
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   Json(fields)
 }
@@ -83,27 +83,27 @@ pub impl FromJson for QueuePayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for QueuePayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "run_id": self.run_id.to_json() }
+  let fields : Map[String, Json] = { "run_id": Json(self.run_id) }
   match self.action {
     QueueAdd(id~, text~, images~) => {
-      fields["action"] = "add".to_json()
-      fields["id"] = id.to_json()
-      fields["text"] = text.to_json()
+      fields["action"] = Json("add")
+      fields["id"] = Json(id)
+      fields["text"] = Json(text)
       fields["images"] = Json(images)
     }
     QueueEdit(id~, text~, images~) => {
-      fields["action"] = "edit".to_json()
-      fields["id"] = id.to_json()
-      fields["text"] = text.to_json()
+      fields["action"] = Json("edit")
+      fields["id"] = Json(id)
+      fields["text"] = Json(text)
       fields["images"] = Json(images)
     }
     QueueWithdraw(id~) => {
-      fields["action"] = "withdraw".to_json()
-      fields["id"] = id.to_json()
+      fields["action"] = Json("withdraw")
+      fields["id"] = Json(id)
     }
     QueueSteer(id~) => {
-      fields["action"] = "steer".to_json()
-      fields["id"] = id.to_json()
+      fields["action"] = Json("steer")
+      fields["id"] = Json(id)
     }
   }
   Json(fields)
@@ -123,18 +123,18 @@ pub impl FromJson for CompactPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for CompactPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": self.session.to_json() }
+  let fields : Map[String, Json] = { "session": Json(self.session) }
   if self.model is Some(model) {
-    fields["model"] = model.to_json()
+    fields["model"] = Json(model)
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
   }
   if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
+    fields["max_steps"] = Json(max_steps)
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   Json(fields)
 }
@@ -155,24 +155,24 @@ pub impl FromJson for GoalPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for GoalPayload with fn to_json(self) {
-  let fields : Map[String, Json] = { "session": self.session.to_json() }
+  let fields : Map[String, Json] = { "session": Json(self.session) }
   if self.text is Some(text) {
-    fields["text"] = text.to_json()
+    fields["text"] = Json(text)
   }
   if self.auto is Some(auto) {
-    fields["auto"] = auto.to_json()
+    fields["auto"] = Json(auto)
   }
   if self.model is Some(model) {
-    fields["model"] = model.to_json()
+    fields["model"] = Json(model)
   }
   if self.thinking is Some(thinking) {
     fields["thinking"] = thinking.to_json()
   }
   if self.max_steps is Some(max_steps) {
-    fields["max_steps"] = max_steps.to_json()
+    fields["max_steps"] = Json(max_steps)
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   Json(fields)
 }
@@ -215,11 +215,11 @@ pub impl FromJson for ApprovalPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for ApprovalPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "id": self.id.to_json(),
-    "allow": self.allow.to_json(),
+    "id": Json(self.id),
+    "allow": Json(self.allow),
   }
   if self.run_id is Some(run_id) {
-    fields["run_id"] = run_id.to_json()
+    fields["run_id"] = Json(run_id)
   }
   Json(fields)
 }
@@ -235,7 +235,7 @@ pub impl FromJson for ApprovalReply with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for ApprovalReply with fn to_json(self) {
-  { "delivered": self.delivered.to_json() }
+  { "delivered": Json(self.delivered) }
 }
 
 ///|
@@ -300,16 +300,16 @@ pub impl FromJson for PendingApprovalPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for PendingApprovalPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "id": self.id.to_json(),
-    "session": self.session.to_json(),
-    "tool_name": self.tool_name.to_json(),
-    "detail": self.detail.to_json(),
+    "id": Json(self.id),
+    "session": Json(self.session),
+    "tool_name": Json(self.tool_name),
+    "detail": Json(self.detail),
   }
   if self.run_id is Some(run_id) {
-    fields["run_id"] = run_id.to_json()
+    fields["run_id"] = Json(run_id)
   }
   if self.body is Some(body) {
-    fields["body"] = body.to_json()
+    fields["body"] = Json(body)
   }
   Json(fields)
 }

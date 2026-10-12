@@ -15,7 +15,7 @@ pub struct EvalCase {
 ///|
 /// The case trial `index` runs, cycling through `eval_cases()` so any trial
 /// count covers the suite evenly.
-pub fn case_for_trial(index : Int) -> EvalCase {
+pub fn case_for_trial(index : Int32) -> EvalCase {
   let cases = eval_cases()
   cases[index % cases.length()]
 }

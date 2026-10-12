@@ -19,7 +19,7 @@ priv struct WorkbenchModel {
   /// Whether the shell allocates a grid column to the workspace explorer.
   explorer_visible : Bool
   document : WorkbenchDocumentView?
-  line_count : Int
+  line_count : Int32
   diagnostics : Array[@language.Diagnostic]
   /// Mirrors whether the viewer holds a rendered frame; while it does not,
   /// the shell renders its own status placeholder instead of the viewer.
@@ -64,11 +64,11 @@ priv enum WorkbenchMsg {
   /// Carries the picker request generation that produced the listing so
   /// superseded responses are dropped instead of applied.
   RepoDirectoryListed(
-    Int,
+    Int32,
     Result[@remote_protocol.HostDirectoryListing, String]
   )
   ConfirmRepoPicker
-  RepoSwitchFailed(Int, String)
+  RepoSwitchFailed(Int32, String)
   WorkspaceRootSwitched(String)
 }
 
@@ -144,7 +144,7 @@ priv struct WorkbenchServices {
 let viewer_services_cell : Ref[WorkbenchServices?] = Ref(None)
 
 ///|
-let workbench_model_version : Ref[Int] = Ref(0)
+let workbench_model_version : Ref[Int32] = Ref(0)
 
 ///|
 fn workbench_services() -> WorkbenchServices {

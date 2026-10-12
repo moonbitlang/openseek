@@ -12,7 +12,7 @@
 ///|
 /// Parse `input` as a strictly positive integer; `label` names the offending
 /// option in the failure message.
-pub fn parse_positive_int(input : String, label : String) -> Int raise {
+pub fn parse_positive_int(input : String, label : String) -> Int32 raise {
   let parsed = @string.parse_int(input) catch {
     _ => fail("\{label} must be a positive integer, got: \{input}")
   }
@@ -29,7 +29,7 @@ pub fn parse_positive_int(input : String, label : String) -> Int raise {
 /// commands, not text, so anything a session log, an MCP server or a config
 /// file hands back must not be able to reach the terminal intact — and
 /// anything past `limit` characters is elided with `…`.
-pub fn terminal_safe_line(text : String, limit? : Int = 72) -> String {
+pub fn terminal_safe_line(text : String, limit~ : Int32 = 72) -> String {
   let out = StringBuilder()
   for ch in text.trim(); last_was_space = false, count = 0 {
     if count >= limit {
@@ -42,7 +42,7 @@ pub fn terminal_safe_line(text : String, limit? : Int = 72) -> String {
         continue true, count + 1
       }
       continue true, count
-    } else if ch is ('\u{00}'..='\u{1F}' | '\u{7F}'..='\u{9F}') {
+    } else if ch is ('\u{00}'..<='\u{1F}' | '\u{7F}'..<='\u{9F}') {
       continue last_was_space, count
     } else {
       out.write_char(ch)

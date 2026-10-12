@@ -176,8 +176,8 @@ priv struct CodexTurn {
   // Legacy interrupted turns can retain `startedAt` without ever receiving a
   // `completedAt`. Only app-server's explicit `inProgress` status reports a
   // live turn; it does not identify which process owns the writer.
-  started_at : Int?
-  completed_at : Int?
+  started_at : Int32?
+  completed_at : Int32?
   items : Array[CodexItem]
   // App-server's own statement of how complete `items` is: "full" is the
   // whole history, while "summary" (a `turn/completed` envelope drops the
@@ -273,7 +273,7 @@ priv struct CodexPendingRequest {
 /// canonical item is observed under the single-client FIFO rule documented in
 /// `State::with_observed_steer_item`.
 priv struct CodexSteerReceipt {
-  submission_id : Int
+  submission_id : Int32
   turn_id : String
   submitted : @composer.Draft
   known_user_item_ids : Array[String]
@@ -295,7 +295,7 @@ priv enum CodexSteerDelivery {
 /// accidentally pairing one generation with another request's frontier.
 priv struct CodexCatalogReplyContext {
   archived : Bool
-  generation : Int
+  generation : Int32
   activity_frontier : CodexActivityFrontier
 }
 
@@ -380,7 +380,7 @@ enum Msg {
   CancelFullAccess
   GitLoaded(
     thread_id~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     requested_cwd~ : String,
     reply~ : @protocol.GitPullRequestReply
   )
@@ -417,12 +417,12 @@ enum Msg {
   Reply(kind~ : CodexReplyKind, value~ : Json)
   Failed(kind~ : CodexReplyKind, message~ : String)
   StatusChanged(Json)
-  Notification(method_~ : String, params~ : Json, generation~ : Int)
+  Notification(method_~ : String, params~ : Json, generation~ : Int32)
   ServerRequest(
     request_id~ : Json,
     method_~ : String,
     params~ : Json,
-    generation~ : Int
+    generation~ : Int32
   )
 }
 
@@ -553,7 +553,7 @@ pub fn Msg::status_changed(value : Json) -> Msg {
 pub fn Msg::notification(
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> Msg {
   Notification(method_~, params~, generation~)
 }
@@ -564,7 +564,7 @@ pub fn Msg::server_request(
   request_id : Json,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> Msg {
   ServerRequest(request_id~, method_~, params~, generation~)
 }
@@ -590,8 +590,8 @@ struct State {
   // Live and archived pagination are independent requests. Each refresh
   // advances both generations so a slower older walk cannot overwrite a
   // newer catalog after reconnect, archive, or device focus changes.
-  live_catalog_generation : Int
-  archived_catalog_generation : Int
+  live_catalog_generation : Int32
+  archived_catalog_generation : Int32
   selection : CodexSelection
   // The last sidebar selection awaiting a history snapshot. A reply carries
   // the same id, so an older request can never replace a newer selection.
@@ -600,7 +600,7 @@ struct State {
   // Every live Git lookup carries the number minted here. The counter belongs
   // to the Codex page rather than a thread or checkout because either can be
   // replaced while an older request is still in flight.
-  git_request_generation : Int
+  git_request_generation : Int32
   git_details_open : Bool
   draft : String
   mentions : Array[@composer.Mention]
@@ -615,10 +615,10 @@ struct State {
   // turn items because app-server does not return the new user item id from
   // `turn/steer`.
   pending_steers : Array[CodexSteerReceipt]
-  next_steer_submission_id : Int
+  next_steer_submission_id : Int32
   // The shared component advances only after app-server accepts a submission.
   // Failed sends therefore keep the local draft.
-  submission_sequence : Int
+  submission_sequence : Int32
   // `$` remains the cwd-scoped app-server catalog. `@` and `#` are owned by
   // the shared component and use the same file/symbol subscriptions as Chat.
   skills : CodexSkillCatalog
@@ -628,14 +628,14 @@ struct State {
   // Actor-owned request generations order the attach snapshot and live
   // reverse-request events. Older snapshots/events are ignored instead of
   // erasing a request that arrived while the snapshot was in flight.
-  request_generation : Int
+  request_generation : Int32
   loading : Bool
   foreground : CodexForeground?
   notice : String
 } derive(Eq)
 
 ///|
-pub fn State::State(loading? : Bool = false) -> State {
+pub fn State::State(loading~ : Bool = false) -> State {
   {
     connection: CodexStarting,
     account: CodexAccountUnknown,
@@ -796,7 +796,7 @@ pub enum CodexModelListing {
 
 ///|
 pub fn State::model_listing(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
 ) -> CodexModelListing {
   if !self.models.is_empty() {
@@ -1237,7 +1237,7 @@ pub fn State::with_editor_comment(
   range : @common.Range,
   comment : String,
   quote : String,
-  side? : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
+  side~ : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
 ) -> State {
   let mentions = self.mentions.copy()
   let annotation : @composer.Mention = {
@@ -1884,7 +1884,7 @@ fn State::with_worktree_change(
 fn State::with_git_reply(
   self : State,
   thread_id : String,
-  generation : Int,
+  generation : Int32,
   requested_cwd : String,
   reply : @protocol.GitPullRequestReply,
 ) -> State {
@@ -2203,7 +2203,7 @@ fn State::with_notification(
   self : State,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   guard params is Object(fields) else { return self }
   if method_ == "serverRequest/resolved" &&
@@ -2332,7 +2332,7 @@ fn State::with_pending_request(
   request_id : Json,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   if generation <= self.request_generation {
     return self
@@ -2462,7 +2462,7 @@ fn CodexPendingRequest::response(
 
 ///|
 fn CodexItem::text(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> String {
   let streamed = self.streamed
@@ -2532,7 +2532,7 @@ fn CodexItem::text(
 /// OpenSeek's transcript renderer. This is the only place that knows both
 /// vocabularies; the shared view never switches on Codex JSON item names.
 fn CodexItem::transcript_item(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
@@ -2717,7 +2717,7 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
 /// The activity summary owns the count (for example "Ran 2 commands"); this
 /// brief labels the individual expandable row underneath it.
 fn CodexItem::tool_brief(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> String? {
   guard self.value is Object(fields) else { return Some(self.kind) }
@@ -2756,7 +2756,7 @@ fn CodexItem::tool_brief(
 /// view used for OpenSeek. Notices and per-turn failures become ordinary
 /// danger messages, so Codex does not need a parallel banner/message layout.
 pub fn State::transcript_items(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
 ) -> Array[@transcript.TranscriptItem] {
   let items : Array[@transcript.TranscriptItem] = []

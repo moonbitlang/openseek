@@ -70,8 +70,8 @@
 /// Mirrors the suite's `assertIndentLevel(text, expected, tabSize = 4)`.
 fn assert_indent_level(
   text : String,
-  expected : Int,
-  tab_size? : Int = 4,
+  expected : Int32,
+  tab_size~ : Int32 = 4,
 ) -> Unit raise {
   assert_eq(compute_indent_level(text, tab_size), expected)
 }

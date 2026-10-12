@@ -14,8 +14,8 @@
 #warnings("-unused_optional_argument")
 async fn dir_outline(
   root : String,
-  max_depth? : Int = 3,
-  max_dirs? : Int = 100,
+  max_depth~ : Int32 = 3,
+  max_dirs~ : Int32 = 100,
 ) -> String? {
   let out : Array[String] = []
   collect_dirs(root, 0, max_depth, max_dirs, out)
@@ -31,9 +31,9 @@ async fn dir_outline(
 /// to `max_depth` levels and `max_dirs` entries.
 async fn collect_dirs(
   dir : String,
-  depth : Int,
-  max_depth : Int,
-  max_dirs : Int,
+  depth : Int32,
+  max_depth : Int32,
+  max_dirs : Int32,
   out : Array[String],
 ) -> Unit {
   guard depth < max_depth && out.length() < max_dirs else { return }
@@ -66,7 +66,13 @@ fn sanitize_name(name : String) -> String {
       sb.write_string("…")
       break
     }
-    sb.write_char(if ch is ('\u{00}'..='\u{1F}' | '\u{7F}') { '?' } else { ch })
+    sb.write_char(
+      if ch is ('\u{00}'..<='\u{1F}' | '\u{7F}') {
+        '?'
+      } else {
+        ch
+      },
+    )
     continue count + 1
   }
   sb.to_string()

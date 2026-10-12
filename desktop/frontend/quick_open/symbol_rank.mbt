@@ -12,7 +12,7 @@ fn rank_symbols(
   items : Array[@symbols.Symbol],
 ) -> Array[@symbols.Symbol] {
   let matcher = @fuzzy_match.Query::new(query)
-  let scored : Array[(@symbols.Symbol, Int, Int, Int)] = []
+  let scored : Array[(@symbols.Symbol, Int32, Int32, Int32)] = []
   for index, item in items {
     scored.push(
       (item, matcher.score(item=item.name), item.name.char_length(), index),

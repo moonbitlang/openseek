@@ -24,8 +24,8 @@ priv struct ArchivedDeleteConfirm {
 fn fetch_archived(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -59,10 +59,10 @@ fn archive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
-  force? : Bool = false,
+  connection_generation : Int32,
+  sessions_request_generation : Int32,
+  archived_request_generation : Int32,
+  force~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -81,9 +81,9 @@ async fn archive_session_into(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  connection_generation : Int32,
+  sessions_request_generation : Int32,
+  archived_request_generation : Int32,
   force : Bool,
 ) -> Unit noraise {
   let reply = @interop.bridge_request(
@@ -123,9 +123,9 @@ fn unarchive_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  connection_generation : Int32,
+  sessions_request_generation : Int32,
+  archived_request_generation : Int32,
 ) -> @cmd.Cmd {
   archive_action(
     dispatch,
@@ -147,8 +147,8 @@ fn delete_archived_session(
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
   sessions : Array[String],
-  connection_generation : Int,
-  archived_request_generation : Int,
+  connection_generation : Int32,
+  archived_request_generation : Int32,
 ) -> @cmd.Cmd {
   guard key.workspace_payload(channel) is Some(workspace) else {
     return @cmd.none
@@ -194,7 +194,7 @@ fn delete_archived_session(
 /// copy names what disappears and what survives so the user does not have to
 /// infer filesystem or Git consequences from the word "delete".
 fn archived_delete_modal(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   confirm : ArchivedDeleteConfirm,
 ) -> @html.Html {
@@ -231,9 +231,9 @@ fn archive_action(
   channel : @interop.ChannelId,
   command : @commands.Command[@protocol.SessionPayload, @protocol.SessionsReply],
   payload : @protocol.SessionPayload,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  connection_generation : Int32,
+  sessions_request_generation : Int32,
+  archived_request_generation : Int32,
 ) -> @cmd.Cmd {
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
     FromDevice(channel, msg)
@@ -265,9 +265,9 @@ async fn apply_archive_list_reply(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   reply : @protocol.SessionsReply,
-  connection_generation : Int,
-  sessions_request_generation : Int,
-  archived_request_generation : Int,
+  connection_generation : Int32,
+  sessions_request_generation : Int32,
+  archived_request_generation : Int32,
 ) -> Unit noraise {
   scheduler.add(
     dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))(

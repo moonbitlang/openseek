@@ -3,7 +3,7 @@
 
 ///|
 fn offer_text_model_browser_diagnostic(
-  _get_attached_count : (TextModel) -> Int,
+  _get_attached_count : (TextModel) -> Int32,
 ) -> Unit {
   ()
 }

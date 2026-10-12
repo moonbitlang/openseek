@@ -38,14 +38,14 @@ type TerminalClosePayload = @protocol.TerminalClosePayload
 ///|
 priv struct TerminalOutputPayload {
   id : String
-  sequence : Int
+  sequence : Int32
   data : String
 }
 
 ///|
 priv struct TerminalExitPayload {
   id : String
-  code : Int
+  code : Int32
 }
 
 ///|

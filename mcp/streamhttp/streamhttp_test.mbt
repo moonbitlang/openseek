@@ -368,7 +368,7 @@ async test "tools/list waits for the initialized notification to complete" {
 async fn connect_or_fail(
   group : @async.TaskGroup[Unit],
   url : String,
-  headers? : Map[String, String] = Map([]),
+  headers~ : Map[String, String] = Map([]),
 ) -> @streamhttp.HttpConnection {
   @streamhttp.connect(
     group,

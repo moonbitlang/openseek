@@ -221,7 +221,7 @@ fn comment_card(
   created_at : String,
   url : String,
   body_html : String,
-  description? : Bool = false,
+  description~ : Bool = false,
   open_link : (String) -> @cmd.Cmd,
 ) -> @html.Html {
   @html.article(

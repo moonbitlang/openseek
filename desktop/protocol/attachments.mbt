@@ -167,7 +167,7 @@ pub impl FromJson for PickAttachmentReply with fn from_json(json, path) {
 pub impl ToJson for PickAttachmentReply with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   if self.path is Some(path) {
-    fields["path"] = path.to_json()
+    fields["path"] = Json(path)
   }
   Json::object(fields)
 }

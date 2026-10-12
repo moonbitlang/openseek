@@ -22,15 +22,15 @@ struct MarkdownViewerServices {
 /// omitted marker services are created and released by this bundle. Feedback
 /// requires a supplied handle with the resource enabled by the host.
 pub fn MarkdownViewerServices::MarkdownViewerServices(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
   preview_factory? : @references_browser.ReferencesPeekPreviewFactory,
-  launch_async_task? : (async () -> Unit noraise) -> Unit = task => {
+  launch_async_task~ : (async () -> Unit noraise) -> Unit = task => {
     @js.Promise::from_async(() => task()) |> ignore
   },
   log_service? : @log.LogHandle,

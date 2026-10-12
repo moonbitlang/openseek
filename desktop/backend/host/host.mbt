@@ -82,7 +82,7 @@ pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
   executable? : String,
-  app_version? : String = "development",
+  app_version~ : String = "development",
   resources? : @resources.Resources,
 ) -> HostState {
   {

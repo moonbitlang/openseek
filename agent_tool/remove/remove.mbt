@@ -3,8 +3,8 @@
 /// Other targets require one-shot approval for their location and contents.
 /// This definition owns its file-state locking; do not wrap it in `serialize`.
 pub fn definition(
-  workspace_root? : String = ".",
-  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  workspace_root~ : String = ".",
+  file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_tool.AgentToolDefinition {

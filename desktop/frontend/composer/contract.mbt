@@ -20,7 +20,7 @@ pub(all) struct Draft {
 /// identity so the root can reject a stale command after archive changes.
 pub(all) struct Identity {
   owner : @interop.ConversationKey
-  archive_generation : Int
+  archive_generation : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -28,10 +28,10 @@ pub(all) struct Identity {
 /// needs enough information to decide whether local matches are final, a full
 /// Host query is required, or the index must be started.
 pub(all) enum FileIndex {
-  FileIndexEmpty(epoch~ : Int)
-  FileIndexLoading(epoch~ : Int)
-  FileIndexReady(epoch~ : Int, truncated~ : Bool)
-  FileIndexFailed(epoch~ : Int)
+  FileIndexEmpty(epoch~ : Int32)
+  FileIndexLoading(epoch~ : Int32)
+  FileIndexReady(epoch~ : Int32, truncated~ : Bool)
+  FileIndexFailed(epoch~ : Int32)
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -193,10 +193,10 @@ pub(all) enum RunStage {
   // Open, no step reported — the engine is in a model call and silent.
   Thinking
   // The engine's latest 1-based step counter.
-  AtStep(Int)
+  AtStep(Int32)
   // The step's provider request failed and the engine is waiting out its
   // backoff before attempt `attempt` of `max_attempts`.
-  Retrying(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   // Open and stepping, from an engine that does not number its steps.
   Working
   // A Stop was sent and the engine has not honored it yet.
@@ -215,7 +215,7 @@ pub(all) enum RunStage {
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
-  tokens : Int
+  tokens : Int32
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -230,7 +230,7 @@ pub(all) struct Input {
   // Canonical turn identity, including transitions while this entry is hidden.
   turn_id : String?
   // Eligible finished OpenSeek snapshot; absent for hidden or other-engine composers.
-  prediction_source : Int?
+  prediction_source : Int32?
   prediction : @wire.PredictionRecord?
   slash_commands : Array[SlashCommand]
   // Whether a draft beginning with `!` is a shell command (see
@@ -241,8 +241,8 @@ pub(all) struct Input {
   history : Array[String]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
-  submission_sequence : Int
+  context_generation : Int32
+  submission_sequence : Int32
   retirements : Array[@interop.ConversationKey]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
@@ -281,7 +281,7 @@ pub(all) enum Action {
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
   // Show the terminal tab of the running `!` command at `index` in
   // `ShellCommandsRunning`.
-  ShellTerminalRequested(identity~ : Identity, index~ : Int)
+  ShellTerminalRequested(identity~ : Identity, index~ : Int32)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
   GoalCancelled(identity~ : Identity)

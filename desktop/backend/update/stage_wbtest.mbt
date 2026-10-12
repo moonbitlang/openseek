@@ -25,7 +25,7 @@ async test "package download streams to disk and reports byte progress" {
     let dir = @fs.tmpdir(prefix="openseek-update-download-")
     defer @fs.rmdir(dir, recursive=true)
     let destination = "\{dir}/package.zip"
-    let progress : Array[(Int, Int?)] = []
+    let progress : Array[(Int32, Int32?)] = []
     download(
       "http://127.0.0.1:\{server.addr.port()}/package.zip",
       destination,

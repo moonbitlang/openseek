@@ -27,7 +27,7 @@ let hard_context_ceiling_percent = 80
 fn AgentLoop::at_context_share(
   self : Self,
   tokens : Int64,
-  percent : Int,
+  percent : Int32,
 ) -> Bool {
   tokens * 100 >=
   self.client.model.context_window().to_int64() * percent.to_int64()
@@ -42,7 +42,7 @@ fn AgentLoop::at_context_share(
 fn AgentLoop::at_soft_context_ceiling(
   self : Self,
   usage : @deepseek.Usage,
-  extra_result_chars? : Int64 = 0,
+  extra_result_chars~ : Int64 = 0,
 ) -> Bool {
   self.at_context_share(
     usage.total_tokens.to_int64() + extra_result_chars,
@@ -70,7 +70,7 @@ fn AgentLoop::at_hard_context_ceiling(
 /// leave the summary no room to be written and strand the session via
 /// fail-open. Consumed by the running batch budget in
 /// `AgentLoop::handle_tool_calls`.
-let checkpoint_reserve_tokens : Int = 16_384
+let checkpoint_reserve_tokens : Int32 = 16_384
 
 ///|
 /// Whether the NEXT tool call in an executing batch provably fits:
@@ -187,7 +187,7 @@ async fn AgentLoop::yield_at_context_ceiling(
 async fn AgentLoop::finish_context_yield(
   self : Self,
   session : @agent_session.Session,
-  to_sequence : Int,
+  to_sequence : Int32,
   compacted~ : Bool,
 ) -> @agent_session.Session {
   // Starts with the shared prefix, as every yield notice does — and honest

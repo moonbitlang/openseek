@@ -11,7 +11,7 @@
 fn read_directory(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @pathx.Relative,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -56,7 +56,7 @@ fn read_directory(
 fn list_files(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
   @files.Request(owner.channel, owner.session, root).run(
@@ -79,11 +79,11 @@ fn list_files(
 fn read_file(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @common.Uri,
   name : String,
-  file_link_generation? : Int,
-  review_generation? : Int,
+  file_link_generation? : Int32,
+  review_generation? : Int32,
   range~ : @common.Range?,
   annotation? : String,
 ) -> @cmd.Cmd {
@@ -153,9 +153,9 @@ fn read_file(
 fn read_package_graph(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @common.Uri,
-  generation : Int,
+  generation : Int32,
   root~ : @common.Uri?,
 ) -> @cmd.Cmd {
   guard root is Some(root) &&
@@ -279,7 +279,7 @@ fn is_office_media_type(media_type : String) -> Bool {
 /// pipeline used by the standalone viewer. Parsing errors become a normal
 /// tab read failure so a malformed package cannot leave a stale surface up.
 fn render_office_document(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   path : @common.Uri,
   data_base64 : String,
@@ -329,7 +329,7 @@ async fn read_file_snapshot(
 fn stat_files(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   paths : Array[@common.Uri],
   recheck_diagnostics~ : Bool,
 ) -> @cmd.Cmd {

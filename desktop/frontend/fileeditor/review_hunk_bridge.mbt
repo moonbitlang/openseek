@@ -10,8 +10,8 @@ priv enum ReviewHunkBridgeSurface {
 /// prevents the parked Line editor from replacing a Token/Tree selection.
 priv struct ReviewHunkBridgeTarget {
   change : ChangedFile
-  review_generation : Int
-  surface_generation : Int
+  review_generation : Int32
+  surface_generation : Int32
   surface : ReviewHunkBridgeSurface
   semantic_input : SemanticReviewInput?
   active_hunk : ReviewHunk?
@@ -87,9 +87,9 @@ fn sync_review_hunk_bridge_target(
 ///|
 fn projected_review_hunk(
   hunks : Array[@viewer.DiffHunk],
-  active_index : Int?,
-  old_offset : Int?,
-  new_offset : Int?,
+  active_index : Int32?,
+  old_offset : Int32?,
+  new_offset : Int32?,
 ) -> ReviewHunk? {
   guard active_index is Some(index) else { return None }
   guard index >= 0 && index < hunks.length() else { return None }
@@ -197,7 +197,7 @@ fn publish_semantic_review_active_hunk(
   key : String,
   editor : @viewer.DiffEditor,
   section : @moon_diff_provider.SemanticReviewSection,
-  active_index : Int?,
+  active_index : Int32?,
 ) -> Unit {
   guard review_hunk_bridge_target.val is Some(target) &&
     target.surface == ReviewSemanticSurface &&
@@ -398,7 +398,7 @@ fn track_semantic_review_scroll(host : @dom.Element) -> Unit {
   }
   let offset = host.get_bounding_client_rect().get_top() +
     host.get_client_height() * 0.5
-  let mut nearest : (String, Int, Double)? = None
+  let mut nearest : (String, Int32, Double)? = None
   for key in semantic_review_order {
     guard semantic_review_editors.get(key) is Some(entry) &&
       entry.host.get_client_height() > 0.0 else {

@@ -15,11 +15,11 @@ fn uri(value : String) -> @base_common.Uri {
 fn feedback_at(
   id : String,
   resource : @base_common.Uri,
-  line : Int,
-  text? : String = "note",
-  kind? : @agent_feedback_api.AgentFeedbackKind = UserReview,
-  replies? : Array[String] = [],
-  state? : @agent_feedback_api.AgentFeedbackState = Accepted,
+  line : Int32,
+  text~ : String = "note",
+  kind~ : @agent_feedback_api.AgentFeedbackKind = UserReview,
+  replies~ : Array[String] = [],
+  state~ : @agent_feedback_api.AgentFeedbackState = Accepted,
 ) -> @agent_feedback_api.AgentFeedback {
   {
     id,

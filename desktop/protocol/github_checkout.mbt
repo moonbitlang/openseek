@@ -31,10 +31,10 @@ pub impl ToJson for GithubCheckoutReply with fn to_json(self) {
     CheckoutFailure(message, details) => {
       let fields : Map[String, Json] = {
         "status": "error",
-        "message": message.to_json(),
+        "message": Json(message),
       }
       if details is Some(details) {
-        fields["details"] = details.to_json()
+        fields["details"] = Json(details)
       }
       Json(fields)
     }
@@ -65,7 +65,7 @@ pub(all) enum GithubCheckoutChanges {
 pub(all) struct GithubCheckoutPayload {
   cwd : String
   repository_url : String
-  number : Int
+  number : Int32
   changes : GithubCheckoutChanges
   update : Bool
 } derive(Eq, Debug)
@@ -144,13 +144,13 @@ pub impl FromJson for GithubCheckoutStatus with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubCheckoutStatus with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "has_open_pull_request": self.has_open_pull_request.to_json(),
+    "has_open_pull_request": Json(self.has_open_pull_request),
   }
   if self.branch is Some(branch) {
-    fields["branch"] = branch.to_json()
+    fields["branch"] = Json(branch)
   }
   if self.pull_request_url is Some(url) {
-    fields["pull_request_url"] = url.to_json()
+    fields["pull_request_url"] = Json(url)
   }
   Json(fields)
 }

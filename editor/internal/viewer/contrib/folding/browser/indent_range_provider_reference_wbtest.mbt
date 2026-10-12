@@ -29,7 +29,7 @@ fn folding_test_model(lines : Array[String]) -> @model.TextModel {
 
 ///|
 /// ASCII lowercase fold for the case-insensitive marker variants.
-fn ascii_lower(c : Int) -> Int {
+fn ascii_lower(c : Int32) -> Int32 {
   if c >= 'A' && c <= 'Z' {
     c + 32
   } else {
@@ -38,7 +38,7 @@ fn ascii_lower(c : Int) -> Int {
 }
 
 ///|
-fn is_word_char(c : Int) -> Bool {
+fn is_word_char(c : Int32) -> Bool {
   (c >= 'a' && c <= 'z') ||
   (c >= 'A' && c <= 'Z') ||
   (c >= '0' && c <= '9') ||
@@ -49,7 +49,7 @@ fn is_word_char(c : Int) -> Bool {
 /// `/^\s*<keyword>\b/` as a predicate.
 fn region_marker(
   keyword : String,
-  ignore_case? : Bool = false,
+  ignore_case~ : Bool = false,
 ) -> (String) -> Bool {
   line => {
     let i = for i = 0; i < line.length() && (line[i] == ' ' || line[i] == '\t'); {
@@ -89,17 +89,17 @@ fn word_markers() -> @languages.FoldingMarkers {
 
 ///|
 priv struct ExpectedIndentRange {
-  start_line_number : Int
-  end_line_number : Int
-  parent_index : Int
+  start_line_number : Int32
+  end_line_number : Int32
+  parent_index : Int32
 } derive(Eq, Debug)
 
 ///|
 /// The suite's `r(start, end, parentIndex)` literal.
 fn er(
-  start_line_number : Int,
-  end_line_number : Int,
-  parent_index : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
+  parent_index : Int32,
 ) -> ExpectedIndentRange {
   { start_line_number, end_line_number, parent_index, }
 }
@@ -513,17 +513,17 @@ test "Limit by indent" {
   let r9 = (15, 16) // 0
   let model = folding_test_model(lines)
   let assert_limit = (
-    max_entries : Int,
-    expected_ranges : Array[(Int, Int)],
+    max_entries : Int32,
+    expected_ranges : Array[(Int32, Int32)],
     message : String,
   ) => {
-    let mut reported : Int? = None
+    let mut reported : Int32? = None
     let indent_ranges = compute_ranges(model, true, folding_ranges_limit={
       limit: () => max_entries,
       update: (_computed, limited) => reported = limited,
     })
     guard indent_ranges.length() <= max_entries else { fail("max \{message}") }
-    let actual : Array[(Int, Int)] = []
+    let actual : Array[(Int32, Int32)] = []
     for i in 0..<indent_ranges.length() {
       actual.push(
         (
@@ -535,7 +535,7 @@ test "Limit by indent" {
     if actual != expected_ranges {
       fail("\{message}: \{Repr(actual)} != \{Repr(expected_ranges)}")
     }
-    let expected_reported : Int? = if 9 <= max_entries {
+    let expected_reported : Int32? = if 9 <= max_entries {
       None
     } else {
       Some(max_entries)

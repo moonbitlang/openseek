@@ -5,7 +5,7 @@ let source_write_profile_cache : Map[String, CachedSourceWriteProfile] = Map([])
 priv struct WatchedSourceProfileDir {
   path : String
   mtime_s : Int64
-  mtime_ns : Int
+  mtime_ns : Int32
 }
 
 ///|

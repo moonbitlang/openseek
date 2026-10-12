@@ -4,7 +4,7 @@
 fn run_classifier_trace(
   trace : Array[Array[Double]],
   expected_physical : Bool,
-  skip_first? : Bool = false,
+  skip_first~ : Bool = false,
 ) -> Unit raise {
   let classifier = MouseWheelClassifier()
   assert_true(trace.length() > 0)

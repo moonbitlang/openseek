@@ -21,7 +21,7 @@
 /// Absent (tests, plain rendering), explicit links remain ordinary anchors.
 /// Inline code stays inert.
 pub fn markdown_nodes(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
 ) -> Array[@html.Html] {
@@ -114,7 +114,7 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 
 ///|
 fn code_block(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   block : @cmark.CodeBlock,
   open_file : ((String) -> @cmd.Cmd)?,
 ) -> @html.Html {
@@ -403,7 +403,7 @@ fn MarkdownRender::table(
 fn MarkdownRender::inline_nodes(
   self : MarkdownRender,
   inline : @cmark.Inline,
-  linkify_urls? : Bool = true,
+  linkify_urls~ : Bool = true,
 ) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
   self.push_inline(out, inline, linkify_urls~)
@@ -819,7 +819,7 @@ fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
 /// only buttons carry an `on_click` in this html layer, and opening is an app
 /// action rather than navigation.
 fn file_link_node(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   open : (String) -> @cmd.Cmd,
   path : String,
   children : Array[@html.Html],

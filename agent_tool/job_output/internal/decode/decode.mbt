@@ -3,7 +3,7 @@
 /// the recent tail; a supplied offset selects a window from the start.
 pub struct JobOutputInput {
   job_id : String
-  offset : Int?
+  offset : Int32?
 } derive(Debug)
 
 ///|
@@ -22,7 +22,7 @@ pub fn decode(arguments : Json) -> JobOutputInput raise {
 ///|
 /// Decode the optional `offset` argument: a character offset from the start of
 /// the captured output, zero or more. Absent/null means the recent tail.
-fn offset(arguments : Json) -> Int? raise {
+fn offset(arguments : Json) -> Int32? raise {
   match arguments {
     { "offset": Number(value, ..), .. } => {
       let offset = value.to_int()

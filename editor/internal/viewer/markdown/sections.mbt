@@ -15,9 +15,9 @@
 /// followed by a same-or-higher-level heading collapses to nothing, so it
 /// carries no control.
 pub struct MarkdownSection {
-  heading_anchor_index : Int
-  priv level : Int
-  priv body_anchor_indexes : Array[Int]
+  heading_anchor_index : Int32
+  priv level : Int32
+  priv body_anchor_indexes : Array[Int32]
   source_range : @common.OffsetRange
   body_source_range : @common.OffsetRange?
 } derive(Eq, Debug)
@@ -69,7 +69,7 @@ pub fn MarkdownSection::body_source_ranges(
 /// so it can neither be hidden independently nor end the enclosing section --
 /// treating it as a boundary would leave the container's following siblings
 /// stranded outside every section.
-fn markdown_anchor_section_level(anchor : MarkdownBlockAnchor) -> Int? {
+fn markdown_anchor_section_level(anchor : MarkdownBlockAnchor) -> Int32? {
   match (anchor.heading_level, anchor.is_root_element) {
     (Some(level), true) => Some(level)
     _ => None
@@ -136,7 +136,7 @@ pub fn markdown_sections(
 /// without a second scan of the document.
 pub fn markdown_section_at_source_offset(
   sections : Array[MarkdownSection],
-  source_offset : Int,
+  source_offset : Int32,
 ) -> MarkdownSection? {
   for section in sections; found = None {
     if section.source_range.contains(source_offset) {
@@ -166,7 +166,7 @@ fn MarkdownSection::stable_key(
   self : MarkdownSection,
   projection : MarkdownDocumentProjection,
   source : String,
-  occurrence : Int,
+  occurrence : Int32,
 ) -> String {
   let text = markdown_section_heading_text(self, projection, source)
   "\{self.level}\u{1f}\{text}\u{1f}\{occurrence}"
@@ -259,7 +259,7 @@ pub fn markdown_section_keys(
   projection : MarkdownDocumentProjection,
   source : String,
 ) -> Array[String] {
-  let seen : Map[String, Int] = Map([])
+  let seen : Map[String, Int32] = Map([])
   let keys = []
   for section in sections {
     let base = section.stable_key(projection, source, 0)
@@ -279,11 +279,11 @@ pub fn markdown_section_keys(
 /// or which jumps `#` to `###`, therefore indents sensibly instead of leaving a
 /// gap. `source_offset` is the heading's start, which is what a reveal takes.
 pub struct MarkdownTocEntry {
-  priv level : Int
-  depth : Int
+  priv level : Int32
+  depth : Int32
   text : String
-  source_offset : Int
-  priv section_index : Int
+  source_offset : Int32
+  priv section_index : Int32
   priv is_foldable : Bool
 } derive(Eq, Debug)
 
@@ -346,10 +346,10 @@ pub fn markdown_table_of_contents(
 pub fn markdown_default_collapsed_sections(
   projection : MarkdownDocumentProjection,
   source : String,
-  min_depth? : Int = 3,
-  min_rendered_elements? : Int = 6,
-  min_body_lines? : Int = 12,
-) -> Array[Int] {
+  min_depth~ : Int32 = 3,
+  min_rendered_elements~ : Int32 = 6,
+  min_body_lines~ : Int32 = 12,
+) -> Array[Int32] {
   let sections = markdown_sections(projection)
   let entries = markdown_table_of_contents(projection)
   let collapsed = []
@@ -375,7 +375,7 @@ pub fn markdown_default_collapsed_sections(
 fn markdown_count_source_lines(
   source : String,
   range : @common.OffsetRange,
-) -> Int {
+) -> Int32 {
   let start = range.start.max(0).min(source.length())
   let end = range.end_exclusive.max(start).min(source.length())
   guard end > start else { return 0 }

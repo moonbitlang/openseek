@@ -26,7 +26,7 @@ priv struct RunConfig {
   api_url : String?
   model : String
   thinking : @protocol.OpenSeekThinking
-  max_steps : Int
+  max_steps : Int32
   engine : String
   cwd : @pathx.Path?
   session : String
@@ -57,7 +57,7 @@ fn configured_api_key(
   stored_key? : String,
   api_url? : String,
   env_key? : String,
-  missing? : String = "an API key is required; add it in Settings",
+  missing~ : String = "an API key is required; add it in Settings",
 ) -> String raise EngineError {
   if stored_key is Some(value) {
     return value
@@ -130,7 +130,7 @@ fn key_env_for(
 }
 
 ///|
-fn configured_max_steps(value : Int?) -> Int raise EngineError {
+fn configured_max_steps(value : Int32?) -> Int32 raise EngineError {
   let parsed = if value is Some(value) {
     value
   } else if @env.get("OPENSEEK_MAX_STEPS") is Some(text) {
@@ -219,7 +219,7 @@ async fn session_command_config(
   session : String,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
-  max_steps? : Int,
+  max_steps? : Int32,
   workspace? : String,
 ) -> RunConfig {
   let session = session.trim().to_owned()
@@ -239,7 +239,7 @@ async fn serve_config(
   manager : EngineManager,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
-  max_steps? : Int,
+  max_steps? : Int32,
   session~ : String,
   workspace? : String,
 ) -> RunConfig {

@@ -42,7 +42,7 @@ pub extend Image with @debug.Debug::{to_repr}
 ///|
 /// Removing a preview edits only this draft, including while a previous model
 /// snapshot still owns the same attachment array.
-fn Draft::without_image(self : Draft, index : Int) -> Draft {
+fn Draft::without_image(self : Draft, index : Int32) -> Draft {
   guard self.images.get(index) is Some(_) else { return self }
   let images = self.images.copy()
   ignore(images.remove(index))
@@ -51,7 +51,7 @@ fn Draft::without_image(self : Draft, index : Int) -> Draft {
 
 ///|
 fn Draft::image_previews(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Draft,
   emit : @cmd.Emit[Msg],
 ) -> Array[@html.Html] {

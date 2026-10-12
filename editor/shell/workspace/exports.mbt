@@ -32,9 +32,9 @@ struct DocumentContent {
 /// Builds file content while allowing providers to omit derived metadata.
 pub fn DocumentContent::DocumentContent(
   text : String,
-  display_name? : String = "",
-  language_id? : String = "",
-  revision? : String = "",
+  display_name~ : String = "",
+  language_id~ : String = "",
+  revision~ : String = "",
 ) -> DocumentContent {
   { text, display_name, language_id, revision, }
 }
@@ -96,7 +96,7 @@ pub fn SourcePath::display_name(self : SourcePath) -> String {
 /// Text of one logical line without its line break.
 pub fn DocumentSnapshot::line_text(
   self : DocumentSnapshot,
-  line : Int,
+  line : Int32,
 ) -> String {
   let start = self.line_start_offset(line)
   let end = self.line_end_offset(line)
@@ -224,7 +224,7 @@ pub impl ToJson for DocumentReadResult with fn to_json(self) {
     DocumentLoaded(document) =>
       { "ok": true, "document": ToJson::to_json(document) }
     DocumentNotFound(uri) =>
-      { "ok": false, "notFound": true, "uri": uri.to_string().to_json() }
+      { "ok": false, "notFound": true, "uri": Json(uri.to_string()) }
     DocumentReadFailed(error) =>
       { "ok": false, "error": ToJson::to_json(error) }
   }
@@ -235,13 +235,13 @@ pub impl ToJson for DocumentReadResult with fn to_json(self) {
 /// reference server.
 pub impl ToJson for FileSystemProviderError with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "code": self.code.to_string().to_json(),
-    "message": self.message.to_json(),
-    "status": self.status().to_json(),
+    "code": Json(self.code.to_string()),
+    "message": Json(self.message),
+    "status": Json(self.status()),
   }
   if self.uri is Some(uri) {
-    fields["uri"] = uri.to_string().to_json()
-    fields["displayName"] = @base_common.basename_or_authority(uri).to_json()
+    fields["uri"] = Json(uri.to_string())
+    fields["displayName"] = Json(@base_common.basename_or_authority(uri))
   }
   Json(fields)
 }
@@ -250,8 +250,8 @@ pub impl ToJson for FileSystemProviderError with fn to_json(self) {
 /// JSON shape for watch events.
 pub impl ToJson for FileChange with fn to_json(self) {
   {
-    "uri": self.uri.to_string().to_json(),
-    "type": self.change_type.to_string().to_json(),
+    "uri": Json(self.uri.to_string()),
+    "type": Json(self.change_type.to_string()),
   }
 }
 
@@ -282,29 +282,29 @@ pub fn revision_from_text(text : String) -> String {
 
 ///|
 /// Snapshot length in the repo's JavaScript-compatible UTF-16 indexing model.
-pub fn DocumentSnapshot::length(self : DocumentSnapshot) -> Int {
+pub fn DocumentSnapshot::length(self : DocumentSnapshot) -> Int32 {
   self.length_impl()
 }
 
 ///|
 /// Number of logical lines, including a final empty line after a newline.
-pub fn DocumentSnapshot::line_count(self : DocumentSnapshot) -> Int {
+pub fn DocumentSnapshot::line_count(self : DocumentSnapshot) -> Int32 {
   self.line_count_impl()
 }
 
 ///|
 pub fn DocumentSnapshot::line_start_offset(
   self : DocumentSnapshot,
-  line : Int,
-) -> Int {
+  line : Int32,
+) -> Int32 {
   self.line_start_offset_impl(line)
 }
 
 ///|
 pub fn DocumentSnapshot::line_end_offset(
   self : DocumentSnapshot,
-  line : Int,
-) -> Int {
+  line : Int32,
+) -> Int32 {
   self.line_end_offset_impl(line)
 }
 
@@ -319,15 +319,15 @@ pub fn DocumentSnapshot::slice(
 ///|
 pub fn DocumentSnapshot::line_at_offset(
   self : DocumentSnapshot,
-  offset : Int,
-) -> Int {
+  offset : Int32,
+) -> Int32 {
   self.line_at_offset_impl(offset)
 }
 
 ///|
 pub fn DocumentSnapshot::position_at_offset(
   self : DocumentSnapshot,
-  offset : Int,
+  offset : Int32,
 ) -> @base_common.Position {
   self.position_at_offset_impl(offset)
 }
@@ -336,7 +336,7 @@ pub fn DocumentSnapshot::position_at_offset(
 pub fn DocumentSnapshot::offset_at_position(
   self : DocumentSnapshot,
   position : @base_common.Position,
-) -> Int {
+) -> Int32 {
   self.offset_at_position_impl(position)
 }
 

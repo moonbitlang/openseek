@@ -68,7 +68,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
 /// Publish a small snapshot against a server that answers every request with
 /// `code` and `body`, plus a redirect target that must never be followed.
 async fn reply_for(
-  code : Int,
+  code : Int32,
   body : String,
 ) -> (String, @protocol.SessionShareReply) {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))

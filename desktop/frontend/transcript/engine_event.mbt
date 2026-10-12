@@ -7,17 +7,17 @@ pub(all) enum EngineEvent {
   // The 1-based step counter. Optional only because the run stage that
   // carries it (`AtStep`) is: every engine that emits `agent_step` has
   // numbered it (1f761102, the commit that introduced both).
-  AgentStep(Int?)
+  AgentStep(Int32?)
   // The provider request for the current step failed and is being retried.
   // The view discards the failed attempt's transient streams and shows the
   // retry while the engine waits out its backoff.
-  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  StreamRetry(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
   BackgroundNotice(String)
-  Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
+  Usage(prompt_tokens~ : Int32, completion_tokens~ : Int32)
   ToolResult(
     tool_name~ : String,
     is_error~ : Bool,
@@ -33,8 +33,8 @@ pub(all) enum EngineEvent {
   SubrunClosed(
     id~ : String,
     status~ : String,
-    steps~ : Int,
-    tokens~ : Int,
+    steps~ : Int32,
+    tokens~ : Int32,
     unaccounted~ : String?
   )
   // A workflow's lifecycle brackets. A workflow is a run inside an `mbtx`
@@ -49,8 +49,8 @@ pub(all) enum EngineEvent {
     id~ : String,
     journal~ : String,
     events~ : String,
-    first_child~ : Int,
-    child_count~ : Int
+    first_child~ : Int32,
+    child_count~ : Int32
   )
   WorkflowClosed(id~ : String)
   AgentFinished(String)

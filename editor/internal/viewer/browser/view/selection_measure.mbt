@@ -2,7 +2,7 @@
 /// Whether a one-based view line currently has a rendered DOM node — the gate
 /// the deferred horizontal reveal waits on before measuring (the line node may
 /// not exist until a vertical scroll brings the line into the window).
-pub fn View::is_line_rendered(self : View, view_line_number : Int) -> Bool {
+pub fn View::is_line_rendered(self : View, view_line_number : Int32) -> Bool {
   self.view_lines.line_node_at(view_line_number) is Some(_)
 }
 
@@ -14,8 +14,8 @@ pub fn View::is_line_rendered(self : View, view_line_number : Int) -> Bool {
 /// the rendered window, mirroring Monaco's `visibleRangeForPosition` → `null`.
 pub fn View::offset_for_column(
   self : View,
-  view_line_number : Int,
-  view_column : Int,
+  view_line_number : Int32,
+  view_column : Int32,
 ) -> Double {
   self.view_lines
   .raw_visible_range_for_position(view_line_number, view_column)
@@ -28,8 +28,8 @@ pub fn View::offset_for_column(
 /// including generated content. Returns `-1` when the line is not rendered.
 pub fn View::line_width(
   self : View,
-  view_line_number : Int,
-  _view_max_column : Int,
+  view_line_number : Int32,
+  _view_max_column : Int32,
 ) -> Double {
   self.view_lines.get_line_width(view_line_number)
 }
@@ -45,10 +45,10 @@ pub fn View::line_width(
 /// both modes, so the source-shaped producer no longer filters on this value.
 pub fn View::measure_line_selection(
   self : View,
-  view_line_number : Int,
-  start_column : Int,
-  end_column : Int,
-  keep_empty? : Bool = false,
+  view_line_number : Int32,
+  start_column : Int32,
+  end_column : Int32,
+  keep_empty~ : Bool = false,
 ) -> Array[(Double, Double)] {
   ignore(keep_empty)
   guard self.view_lines.visible_ranges_for_line_range(
@@ -69,8 +69,8 @@ pub fn View::measure_line_selection(
 /// (the source's `null`).
 pub fn View::visible_range_for_position(
   self : View,
-  view_line_number : Int,
-  view_column : Int,
+  view_line_number : Int32,
+  view_column : Int32,
 ) -> HorizontalPosition? {
   self.view_lines
   .raw_visible_range_for_position(view_line_number, view_column)

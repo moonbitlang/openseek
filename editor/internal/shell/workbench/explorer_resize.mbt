@@ -25,7 +25,7 @@ fn install_explorer_resize_handle() -> () -> Unit {
   let window = owner_window.to_option().unwrap_or(@rdom.window())
   guard owner_document.get_body() is Some(body) else { return () => () }
   let events = window.to_event_target()
-  fn maximum_width() -> Int {
+  fn maximum_width() -> Int32 {
     let viewport = window.inner_width()
     let viewport = if viewport == 0.0 { 840.0 } else { viewport }
     let maximum = (viewport * 0.5).floor().to_int()
@@ -160,9 +160,9 @@ fn install_explorer_resize_handle() -> () -> Unit {
 
 ///|
 priv struct ExplorerDrag {
-  pointer_id : Int
+  pointer_id : Int32
   start_x : Double
-  start_width : Int
+  start_width : Int32
   cursor : String
   user_select : String
 }
@@ -170,7 +170,7 @@ priv struct ExplorerDrag {
 ///|
 fn try_pointer_capture(
   handle : @rdom.Element,
-  id : Int,
+  id : Int32,
   capture : Bool,
 ) -> Unit {
   @js.Error_::wrap(

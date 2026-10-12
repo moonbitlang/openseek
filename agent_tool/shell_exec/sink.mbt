@@ -2,13 +2,13 @@
 /// Default inline cap: output at or below this many characters is shown inline;
 /// larger output spills to a file and is rendered as a pointer plus a head
 /// preview. Callers can override this budget for their foreground output.
-let default_inline_cap : Int = 12000
+let default_inline_cap : Int32 = 12000
 
 ///|
 /// Default hard cap: the sink retains at most this many characters of full
 /// output (across memory + the spill file), bounding disk even for a runaway
 /// producer. The size watchdog is expected to kill a job well before this.
-pub let default_hard_cap : Int = 20_000_000
+pub let default_hard_cap : Int32 = 20_000_000
 
 ///|
 /// One owner for a single command's merged stdout+stderr, with a single
@@ -32,13 +32,13 @@ priv struct ShellOutputSink {
   mut failure : String?
   mut last_output_at_ms : Int64?
   head : StringBuilder
-  mut head_chars : Int
+  mut head_chars : Int32
   // Total decoded characters of full output (across memory + file), ≤ hard_cap.
-  mut total_chars : Int
+  mut total_chars : Int32
   // Trailing bytes of an incomplete UTF-8 sequence carried to the next chunk.
   mut pending : Bytes
   // Bumps whenever retained output grows, for poll change detection.
-  mut seq : Int
+  mut seq : Int32
   // Set once output was dropped at the hard cap.
   mut truncated : Bool
   // Set once any invalid (non-UTF-8 / binary) bytes were decoded lossily, so a
@@ -53,16 +53,16 @@ priv struct ShellOutputSink {
   mut file_bytes : Int64
   // Where to spill; None → never spill (memory-only, head kept, rest dropped).
   spill_path : String?
-  inline_cap : Int
-  hard_cap : Int
+  inline_cap : Int32
+  hard_cap : Int32
 }
 
 ///|
 /// Create an empty sink. Non-positive caps are clamped to 1. With `spill_path`
 /// set, output past `inline_cap` spills there; without it the sink is memory-only.
 fn ShellOutputSink::ShellOutputSink(
-  inline_cap~ : Int,
-  hard_cap? : Int = default_hard_cap,
+  inline_cap~ : Int32,
+  hard_cap~ : Int32 = default_hard_cap,
   spill_path? : String,
 ) -> ShellOutputSink {
   {
@@ -243,13 +243,13 @@ async fn ShellOutputSink::discard(self : ShellOutputSink) -> Unit {
 
 ///|
 /// Total full-output length in characters (≤ hard_cap).
-fn ShellOutputSink::size(self : ShellOutputSink) -> Int {
+fn ShellOutputSink::size(self : ShellOutputSink) -> Int32 {
   self.total_chars
 }
 
 ///|
 /// Output version, bumped whenever retained output grows.
-fn ShellOutputSink::seq(self : ShellOutputSink) -> Int {
+fn ShellOutputSink::seq(self : ShellOutputSink) -> Int32 {
   self.seq
 }
 
@@ -321,7 +321,10 @@ async fn ShellOutputSink::read_all(self : ShellOutputSink) -> String {
 /// The last `n` characters of full output — a window onto the *recent* output of
 /// a (possibly still-running) job, read from the tail of the spill file so a
 /// poller sees progress rather than the unchanging prefix. Read errors raise.
-async fn ShellOutputSink::read_tail(self : ShellOutputSink, n : Int) -> String {
+async fn ShellOutputSink::read_tail(
+  self : ShellOutputSink,
+  n : Int32,
+) -> String {
   guard n > 0 else { return "" }
   self.lock.acquire()
   defer self.lock.release()
@@ -356,7 +359,7 @@ async fn ShellOutputSink::materialize(self : ShellOutputSink) -> Unit {
 
 ///|
 /// The last `n` characters of `text` (or all of it if shorter).
-fn last_chars(text : String, n : Int) -> String {
+fn last_chars(text : String, n : Int32) -> String {
   let len = text.char_length()
   if len <= n {
     text
@@ -370,7 +373,7 @@ fn last_chars(text : String, n : Int) -> String {
 
 ///|
 /// First `n` characters of `text` (assumes `n < text.char_length()`).
-fn prefix_chars(text : String, n : Int) -> String {
+fn prefix_chars(text : String, n : Int32) -> String {
   match text.offset_of_nth_char(n) {
     Some(end) => "\{text[:end]}"
     None => text
@@ -394,7 +397,7 @@ fn split_valid_utf8(bytes : Bytes) -> (String, Bytes, Bool) {
 }
 
 ///|
-fn incomplete_suffix_len(bytes : Bytes) -> Int {
+fn incomplete_suffix_len(bytes : Bytes) -> Int32 {
   let len = bytes.length()
   let lookback = len.min(3)
   for i in 0..<lookback {
@@ -421,17 +424,17 @@ fn incomplete_suffix_len(bytes : Bytes) -> Int {
 }
 
 ///|
-fn utf8_sequence_len(b : Int) -> Int {
+fn utf8_sequence_len(b : Int32) -> Int32 {
   match b {
-    0xF0..=0xF4 => 4
-    0xE0..=0xEF => 3
-    0xC2..=0xDF => 2
+    0xF0..<=0xF4 => 4
+    0xE0..<=0xEF => 3
+    0xC2..<=0xDF => 2
     _ => 0
   }
 }
 
 ///|
-fn continuation_range(lead : Int, j : Int) -> (Int, Int) {
+fn continuation_range(lead : Int32, j : Int32) -> (Int32, Int32) {
   match (j, lead) {
     (1, 0xE0) => (0xA0, 0xBF)
     (1, 0xED) => (0x80, 0x9F)

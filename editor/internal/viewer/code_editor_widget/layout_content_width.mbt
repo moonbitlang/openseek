@@ -14,7 +14,7 @@
 fn CodeEditorWidget::sync_content_box_for_model_line_count(
   self : CodeEditorWidget,
   view_model : @view_model.ViewModel,
-  current_model_line_count : Int,
+  current_model_line_count : Int32,
 ) -> Bool {
   if !self.configuration.adjust_content_width_for_model_line_count(
       current_model_line_count,

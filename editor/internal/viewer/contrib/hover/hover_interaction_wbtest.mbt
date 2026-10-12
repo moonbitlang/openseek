@@ -6,9 +6,9 @@
 
 ///|
 fn mods(
-  ctrl? : Bool = false,
-  meta? : Bool = false,
-  alt? : Bool = false,
+  ctrl~ : Bool = false,
+  meta~ : Bool = false,
+  alt~ : Bool = false,
 ) -> EventModifiers {
   { ctrl, meta, alt, }
 }

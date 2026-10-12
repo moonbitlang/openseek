@@ -25,18 +25,18 @@
 /// (each answered by a POST) or stalling response streams cannot grow tasks and
 /// connections without bound. At the cap, a client request fails fast with a
 /// synthesized error and a server-bound reply/notification is dropped.
-const MaxInFlightExchanges : Int = 32
+const MaxInFlightExchanges : Int32 = 32
 
 ///|
 /// Deadline for one whole POST exchange, with margin over the bridge's 120s
 /// per-call timeout: when a caller has long since timed out, the exchange must
 /// not keep holding a socket and a cap slot on an endpoint that never closes
 /// its response.
-const ExchangeTimeoutMs : Int = 150000
+const ExchangeTimeoutMs : Int32 = 150000
 
 ///|
 /// Deadline for the best-effort session DELETE sent at close.
-const SessionDeleteTimeoutMs : Int = 5000
+const SessionDeleteTimeoutMs : Int32 = 5000
 
 ///|
 /// A `@jsonrpc.Transport` speaking MCP Streamable HTTP against `url`.
@@ -50,8 +50,8 @@ priv struct HttpTransport {
   // In-flight POST tasks by ticket, so `close` can cancel a connecting or
   // streaming exchange instead of leaving its socket alive on the agent scope.
   // Each task removes itself on exit, keeping the map bounded.
-  pending_posts : Map[Int, @async.Task[Unit]]
-  mut next_post : Int
+  pending_posts : Map[Int32, @async.Task[Unit]]
+  mut next_post : Int32
   // Messages parsed out of POST responses, awaiting the reader.
   inbound : @async.Queue[Json]
   // Fed exactly once, when the `notifications/initialized` POST completes.
@@ -453,17 +453,17 @@ async fn read_sse_stream(
 priv struct SseLineReader {
   client : @http.Client
   buf : Array[Byte]
-  mut start : Int
+  mut start : Int32
   // Bytes in [start, scan) are known terminator-free, so a line spanning many
   // network chunks is scanned once, not re-scanned per chunk.
-  mut scan : Int
+  mut scan : Int32
   mut eof : Bool
 }
 
 ///|
 /// Compaction threshold: once this many consumed bytes accumulate, shift the
 /// live tail down so a long-lived stream retains only the current line.
-const SseCompactAt : Int = 4096
+const SseCompactAt : Int32 = 4096
 
 ///|
 fn SseLineReader::SseLineReader(client : @http.Client) -> SseLineReader {
@@ -529,8 +529,8 @@ async fn SseLineReader::next_line(self : SseLineReader) -> String? {
 /// decoding is strict (malformed UTF-8 raises, failing the exchange).
 fn SseLineReader::take(
   self : SseLineReader,
-  until : Int,
-  consumed : Int,
+  until : Int32,
+  consumed : Int32,
 ) -> String raise {
   let bytes = Bytes::makei(until - self.start, i => self.buf[self.start + i])
   self.start = consumed

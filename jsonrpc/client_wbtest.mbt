@@ -103,7 +103,7 @@ fn reply_for(request : Json) -> Json {
 
 ///|
 /// Build a JSON-RPC error reply echoing a request's id.
-fn error_for(request : Json, code : Int, message : String) -> Json {
+fn error_for(request : Json, code : Int32, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id_of(request),

@@ -1,6 +1,6 @@
 ///|
 fn test_configuration_state(
-  options? : CodeEditorOptions = CodeEditorOptions::default(),
+  options~ : CodeEditorOptions = CodeEditorOptions::default(),
 ) -> EditorConfigurationState {
   EditorConfigurationState(
     options,

@@ -12,9 +12,9 @@ priv struct EditorConfigurationState {
   mut measured_width : Double
   mut measured_content_width : Double
   mut measured_height : Double
-  mut model_line_count : Int
-  mut view_line_count : Int
-  mut soft_wrap_column : Int
+  mut model_line_count : Int32
+  mut view_line_count : Int32
+  mut soft_wrap_column : Int32
   mut measure_requested : Bool
 }
 
@@ -28,7 +28,7 @@ priv struct EditorConfigurationSnapshot {
   width : Double
   content_width : Double
   height : Double
-  soft_wrap_column : Int
+  soft_wrap_column : Int32
 }
 
 ///|
@@ -42,7 +42,7 @@ priv struct EditorLayoutIdentity {
   content_left : Double
   content_width : Double
   height : Double
-  view_line_count : Int
+  view_line_count : Int32
 } derive(Eq)
 
 ///|
@@ -75,8 +75,8 @@ priv struct EditorConfigurationEventSnapshot {
 fn EditorConfigurationState::EditorConfigurationState(
   options : CodeEditorOptions,
   font_info : @config.FontInfo,
-  initial_width? : Double = 0.0,
-  initial_height? : Double = 0.0,
+  initial_width~ : Double = 0.0,
+  initial_height~ : Double = 0.0,
 ) -> EditorConfigurationState {
   let state : EditorConfigurationState = {
     options,
@@ -203,7 +203,7 @@ fn EditorConfigurationState::recompute_content_width_from_outer(
 ///|
 fn EditorConfigurationState::commit_soft_wrap_column(
   self : EditorConfigurationState,
-  column : Int,
+  column : Int32,
 ) -> Bool {
   if column == self.soft_wrap_column {
     false
@@ -228,8 +228,8 @@ fn EditorConfigurationState::recompute_soft_wrap_column(
 ///|
 fn EditorConfigurationState::set_line_counts(
   self : EditorConfigurationState,
-  model_line_count : Int,
-  view_line_count : Int,
+  model_line_count : Int32,
+  view_line_count : Int32,
 ) -> Unit {
   self.model_line_count = model_line_count
   self.view_line_count = view_line_count
@@ -253,7 +253,7 @@ fn EditorConfigurationState::reset_model_line_counts(
 /// ViewLayout, then commits both counts at the existing source-order point.
 fn EditorConfigurationState::adjust_content_width_for_model_line_count(
   self : EditorConfigurationState,
-  current_model_line_count : Int,
+  current_model_line_count : Int32,
 ) -> Bool {
   let configuration = self.snapshot()
   let previous_content_left = configuration.gutter_width(self.model_line_count)
@@ -308,7 +308,7 @@ fn EditorConfigurationSnapshot::word_wrap(
 /// `line_numbers_min_chars`.
 fn EditorConfigurationSnapshot::line_numbers_width(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
+  model_line_count : Int32,
 ) -> Double {
   let slots = digit_count(model_line_count).max(
     self.options.line_numbers_min_chars,
@@ -317,7 +317,7 @@ fn EditorConfigurationSnapshot::line_numbers_width(
 }
 
 ///|
-fn digit_count(value : Int) -> Int {
+fn digit_count(value : Int32) -> Int32 {
   let result = for value = value, result = 0; value > 0; {
     continue value / 10, result + 1
   } nobreak {
@@ -342,7 +342,7 @@ fn EditorConfigurationSnapshot::layout_decorations_width(
 ///|
 fn EditorConfigurationSnapshot::gutter_width(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
+  model_line_count : Int32,
 ) -> Double {
   self.line_numbers_width(model_line_count) + self.layout_decorations_width()
 }
@@ -350,8 +350,8 @@ fn EditorConfigurationSnapshot::gutter_width(
 ///|
 fn EditorConfigurationSnapshot::layout_identity(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
-  view_line_count : Int,
+  model_line_count : Int32,
+  view_line_count : Int32,
 ) -> EditorLayoutIdentity {
   let line_numbers_width = self.line_numbers_width(model_line_count)
   let decorations_width = self.layout_decorations_width()
@@ -369,7 +369,7 @@ fn EditorConfigurationSnapshot::layout_identity(
 ///|
 fn EditorConfigurationSnapshot::view_model_options(
   self : EditorConfigurationSnapshot,
-  editor_id : Int,
+  editor_id : Int32,
 ) -> @view_model.ViewModelOptions {
   self.options.view_model_options(
     self.soft_wrap_column,
@@ -404,8 +404,8 @@ fn EditorConfigurationSnapshot::view_lines_configuration(
 ///|
 fn EditorConfigurationSnapshot::view_zones_configuration(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
-) -> (Int, Double, Double) {
+  model_line_count : Int32,
+) -> (Int32, Double, Double) {
   (
     self.font_info.line_height,
     self.content_width,
@@ -416,7 +416,7 @@ fn EditorConfigurationSnapshot::view_zones_configuration(
 ///|
 fn EditorConfigurationSnapshot::content_widget_configuration(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
+  model_line_count : Int32,
 ) -> (Double, Double) {
   (self.gutter_width(model_line_count), self.content_width)
 }
@@ -424,7 +424,7 @@ fn EditorConfigurationSnapshot::content_widget_configuration(
 ///|
 fn EditorConfigurationSnapshot::current_line_configuration(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
+  model_line_count : Int32,
 ) -> (@editor_api.RenderLineHighlight, Bool, Bool, Double, Double) {
   (
     self.options.render_line_highlight,
@@ -438,7 +438,7 @@ fn EditorConfigurationSnapshot::current_line_configuration(
 ///|
 fn EditorConfigurationSnapshot::layout_info(
   self : EditorConfigurationSnapshot,
-  model_line_count : Int,
+  model_line_count : Int32,
 ) -> @config.EditorLayoutInfo {
   let content_left = self.gutter_width(model_line_count)
   let decorations_width = self.layout_decorations_width()

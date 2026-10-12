@@ -37,7 +37,7 @@ pub fn[T] capture_tool(
   schema~ : @agent_tool.JsonSchema,
   parse~ : (Json) -> Result[T, Array[String]],
   captured : Ref[T?],
-  finished_note? : (T) -> String = _value => "submitted",
+  finished_note~ : (T) -> String = _value => "submitted",
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name~,

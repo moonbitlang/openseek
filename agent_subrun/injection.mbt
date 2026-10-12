@@ -18,7 +18,7 @@
 pub fn ChildSession::injection(
   self : ChildSession,
   exe~ : String,
-  launch_prefix? : Array[String] = [],
+  launch_prefix~ : Array[String] = [],
   workspace_root~ : String,
   model? : String,
   api_url? : String,

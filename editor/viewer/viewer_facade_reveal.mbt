@@ -1,22 +1,25 @@
 ///|
-pub fn Viewer::reveal_line(self : Viewer, line_number : Int) -> Unit {
+pub fn Viewer::reveal_line(self : Viewer, line_number : Int32) -> Unit {
   self.widget.reveal_line(line_number)
 }
 
 ///|
-pub fn Viewer::reveal_line_in_center(self : Viewer, line_number : Int) -> Unit {
+pub fn Viewer::reveal_line_in_center(
+  self : Viewer,
+  line_number : Int32,
+) -> Unit {
   self.widget.reveal_line_in_center(line_number)
 }
 
 ///|
-pub fn Viewer::reveal_line_near_top(self : Viewer, line_number : Int) -> Unit {
+pub fn Viewer::reveal_line_near_top(self : Viewer, line_number : Int32) -> Unit {
   self.widget.reveal_line_near_top(line_number)
 }
 
 ///|
 pub fn Viewer::reveal_line_in_center_if_outside_viewport(
   self : Viewer,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   self.widget.reveal_line_in_center_if_outside_viewport(line_number)
 }
@@ -24,8 +27,8 @@ pub fn Viewer::reveal_line_in_center_if_outside_viewport(
 ///|
 pub fn Viewer::reveal_lines(
   self : Viewer,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.widget.reveal_lines(start_line_number, end_line_number)
 }
@@ -33,8 +36,8 @@ pub fn Viewer::reveal_lines(
 ///|
 pub fn Viewer::reveal_lines_in_center(
   self : Viewer,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.widget.reveal_lines_in_center(start_line_number, end_line_number)
 }
@@ -42,8 +45,8 @@ pub fn Viewer::reveal_lines_in_center(
 ///|
 pub fn Viewer::reveal_lines_near_top(
   self : Viewer,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.widget.reveal_lines_near_top(start_line_number, end_line_number)
 }
@@ -51,8 +54,8 @@ pub fn Viewer::reveal_lines_near_top(
 ///|
 pub fn Viewer::reveal_lines_in_center_if_outside_viewport(
   self : Viewer,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   self.widget.reveal_lines_in_center_if_outside_viewport(
     start_line_number, end_line_number,

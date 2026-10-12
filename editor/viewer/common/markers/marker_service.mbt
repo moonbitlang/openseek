@@ -379,7 +379,7 @@ pub fn MarkerService::change_all(
 ///|
 /// `_accept` (`markerService.ts:399`): no severities filter, or the marker's
 /// severity bit is present in the requested bitmask.
-fn MarkerService::accept(marker : Marker, severities : Int?) -> Bool {
+fn MarkerService::accept(marker : Marker, severities : Int32?) -> Bool {
   match severities {
     None => true
     Some(s) => (s & marker.severity.value()) == marker.severity.value()

@@ -7,24 +7,24 @@
 /// gates — the workspace matched the expected files (`validation_passed`)
 /// and the required marker text was produced (`marker_present`).
 priv struct TrialResult {
-  index : Int
+  index : Int32
   case_id : String
   prompt_label : String
   success : Bool
   reason : String
   workspace : String
   log_path : String
-  exit_code : Int
-  steps : Int
-  tool_errors : Int
-  moon_run_e_mentions : Int
-  moon_run_c_mentions : Int
-  moon_check_uses : Int
-  moon_test_uses : Int
-  moon_info_uses : Int
-  moon_fmt_uses : Int
-  edit_successes : Int
-  write_successes : Int
+  exit_code : Int32
+  steps : Int32
+  tool_errors : Int32
+  moon_run_e_mentions : Int32
+  moon_run_c_mentions : Int32
+  moon_check_uses : Int32
+  moon_test_uses : Int32
+  moon_info_uses : Int32
+  moon_fmt_uses : Int32
+  edit_successes : Int32
+  write_successes : Int32
   validation_passed : Bool
   marker_present : Bool
   warnings : String
@@ -37,18 +37,18 @@ priv struct TrialResult {
 struct EvalReport {
   model : String
   prompt_label : String
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  successes : Int
+  runs : Int32
+  concurrency : Int32
+  min_successes : Int32
+  successes : Int32
   out_dir : String
   results : Array[TrialResult]
 }
 
 ///|
 priv struct AgentLogSummary {
-  steps : Int
-  tool_errors : Int
+  steps : Int32
+  tool_errors : Int32
 }
 
 ///|
@@ -79,7 +79,7 @@ pub async fn run_suite(config : Config) -> EvalReport {
 }
 
 ///|
-async fn run_trial(config : Config, index : Int) -> TrialResult {
+async fn run_trial(config : Config, index : Int32) -> TrialResult {
   let case = @cases.case_for_trial(index)
   let workspace = "\{config.out_dir}/workspaces/\{@runner.padded_index(index + 1)}-\{case.id}"
   @fs.mkdir(workspace, recursive=true)
@@ -161,11 +161,11 @@ fn api_key_env_for_model(model : @deepseek.Model) -> String {
 ///|
 async fn evaluate_trial(
   prompt_label : String,
-  index : Int,
+  index : Int32,
   case : @cases.EvalCase,
   workspace : String,
   log_path : String,
-  exit_code : Int,
+  exit_code : Int32,
   log_text : String,
 ) -> TrialResult {
   let state_reason = check_expected_state(workspace, case)

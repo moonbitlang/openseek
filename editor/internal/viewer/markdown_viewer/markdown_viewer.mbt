@@ -53,9 +53,9 @@ struct MarkdownViewerWidgetOptions {
 
 ///|
 pub fn MarkdownViewerWidgetOptions::MarkdownViewerWidgetOptions(
-  theme? : String = "dark",
-  placeholder? : String = "",
-  show_unused? : Bool = true,
+  theme~ : String = "dark",
+  placeholder~ : String = "",
+  show_unused~ : Bool = true,
 ) -> MarkdownViewerWidgetOptions {
   { theme, placeholder, show_unused, }
 }
@@ -119,14 +119,14 @@ struct MarkdownViewerWidgetViewState {
 
 ///|
 priv struct MarkdownViewerWidgetIdCounter {
-  mut value : Int
+  mut value : Int32
 }
 
 ///|
 let markdown_viewer_id_counter : MarkdownViewerWidgetIdCounter = { value: 0, }
 
 ///|
-fn next_markdown_viewer_id() -> Int {
+fn next_markdown_viewer_id() -> Int32 {
   markdown_viewer_id_counter.value += 1
   markdown_viewer_id_counter.value
 }
@@ -166,7 +166,7 @@ fn MarkdownViewerWidgetPlaceholder::update(
 /// All resources whose lifetime is exactly one installed Markdown model.
 priv struct MarkdownViewerWidgetAttachment {
   model : MarkdownViewerWidgetModel
-  generation : Int
+  generation : Int32
   view : @markdown_document.MarkdownDocumentView?
   hover_bridge : @hover_browser.MarkdownDocumentHoverBridge?
   definition_bridge : MarkdownViewerWidgetDefinitionBridge?
@@ -183,12 +183,12 @@ priv struct MarkdownViewerWidgetAttachment {
 struct MarkdownViewerWidget {
   services : MarkdownViewerServices
   owns_services : Bool
-  id : Int
+  id : Int32
   mut options : MarkdownViewerWidgetOptions
   mut host : @rdom.Element?
   mut placeholder : MarkdownViewerWidgetPlaceholder?
   mut resize_observer : @base_common.Disposable?
-  mut generation : Int
+  mut generation : Int32
   mut current : MarkdownViewerWidgetAttachment?
   mut focused : Bool
   mut disposed : Bool
@@ -206,7 +206,7 @@ struct MarkdownViewerWidget {
 /// Package-private headless constructor used by deterministic lifecycle tests.
 fn MarkdownViewerWidget::MarkdownViewerWidget(
   services? : MarkdownViewerServices,
-  options? : MarkdownViewerWidgetOptions = MarkdownViewerWidgetOptions::default(),
+  options~ : MarkdownViewerWidgetOptions = MarkdownViewerWidgetOptions::default(),
 ) -> MarkdownViewerWidget {
   let (services, owns_services) = match services {
     Some(services) => (services, false)
@@ -239,7 +239,7 @@ fn MarkdownViewerWidget::MarkdownViewerWidget(
 pub fn MarkdownViewerWidget::create(
   host : @rdom.Element,
   services? : MarkdownViewerServices,
-  options? : MarkdownViewerWidgetOptions = MarkdownViewerWidgetOptions::default(),
+  options~ : MarkdownViewerWidgetOptions = MarkdownViewerWidgetOptions::default(),
 ) -> MarkdownViewerWidget {
   let viewer = MarkdownViewerWidget(services?, options~)
   viewer.mount(host)
@@ -268,7 +268,7 @@ fn MarkdownViewerWidget::mount(
 fn MarkdownViewerWidget::is_current_attachment(
   self : MarkdownViewerWidget,
   model : @model.TextModel,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   guard !self.disposed && self.generation == generation else { return false }
   match self.current {
@@ -402,7 +402,7 @@ fn MarkdownViewerWidget::attach_model(
 fn MarkdownViewerWidgetAttachment::replace_source(
   self : MarkdownViewerWidgetAttachment,
   source : String,
-  source_model_version : Int,
+  source_model_version : Int32,
 ) -> Unit {
   guard !self.disposed && self.view is Some(view) else { return }
   if self.feedback_bridge is Some(bridge) {
@@ -765,7 +765,7 @@ pub fn MarkdownViewerWidget::restore_view_state(
 ///|
 pub fn MarkdownViewerWidget::reveal_source_offset(
   self : MarkdownViewerWidget,
-  source_offset : Int,
+  source_offset : Int32,
 ) -> Unit {
   guard self.current is Some(current) && current.view is Some(view) else {
     return

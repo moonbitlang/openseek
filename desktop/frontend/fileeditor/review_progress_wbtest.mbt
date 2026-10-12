@@ -25,10 +25,10 @@ fn review_progress_state() -> (State, Ctx, ChangedFile) raise {
 
 ///|
 fn review_test_hunk(
-  old_start : Int,
-  old_end : Int,
-  new_start : Int,
-  new_end : Int,
+  old_start : Int32,
+  old_end : Int32,
+  new_start : Int32,
+  new_end : Int32,
 ) -> ReviewHunk {
   ReviewHunk(
     old_ranges=if old_start < old_end {
@@ -51,8 +51,8 @@ fn activate_review_hunk(
   selected : ChangedFile,
   hunk : ReviewHunk,
   file_changes : ReviewHunk,
-  index : Int,
-  total : Int,
+  index : Int32,
+  total : Int32,
 ) -> State {
   update(
     test_emit(),

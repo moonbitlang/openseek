@@ -8,13 +8,13 @@
 /// package. Browser scenarios therefore need only `@viewer.view_zone(...)`;
 /// the internal browser ViewPart package stays an implementation detail.
 pub fn view_zone(
-  after_line_number : Int,
+  after_line_number : Int32,
   dom_node : @rdom.Element,
-  after_column? : Int,
+  after_column? : Int32,
   after_column_affinity? : @model.PositionAffinity,
   show_in_hidden_areas? : Bool,
   ignore_hidden_area_source? : String,
-  ordinal? : Int,
+  ordinal? : Int32,
   suppress_mouse_down? : Bool,
   height_in_lines? : Double,
   height_in_px? : Double,

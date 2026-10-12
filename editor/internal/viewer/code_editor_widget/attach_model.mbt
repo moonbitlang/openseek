@@ -236,7 +236,7 @@ fn CodeEditorWidget::attach_model(
 /// Whether a swap-scoped callback still belongs to the installed ModelData.
 fn CodeEditorWidget::is_current_model_data_generation(
   self : CodeEditorWidget,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   self.model_slot.is_current_generation(generation)
 }
@@ -378,7 +378,7 @@ fn CodeEditorWidget::build_view_model(
     now=@base_browser.wall_clock_now_ms,
     attached_view~,
     emit_view_tokens_changed=ranges => {
-      let changed_ranges : Array[(Int, Int)] = []
+      let changed_ranges : Array[(Int32, Int32)] = []
       for range in ranges {
         changed_ranges.push((range.from_line_number, range.to_line_number))
       }
@@ -430,7 +430,7 @@ fn CodeEditorWidget::handle_model_tokens_changed(
 /// else only re-syncs the content width.
 fn CodeEditorWidget::on_configuration_changed(
   self : CodeEditorWidget,
-  previous_options? : CodeEditorOptions = self.configuration.snapshot().options,
+  previous_options~ : CodeEditorOptions = self.configuration.snapshot().options,
 ) -> Unit {
   let event_batch = self.begin_view_event_batch()
   match (self.get_view_model(), self.get_model()) {
@@ -477,9 +477,9 @@ fn CodeEditorWidget::on_line_mapping_changed(
   self : CodeEditorWidget,
   view_model : @view_model.ViewModel,
   model : @model.TextModel,
-  notify_view? : Bool = true,
-  notify_configuration? : Bool = true,
-  layout_already_applied? : Bool = false,
+  notify_view~ : Bool = true,
+  notify_configuration~ : Bool = true,
+  layout_already_applied~ : Bool = false,
   previous_view_selection? : @core.Selection,
 ) -> Unit {
   let previous_layout_identity = self.configuration.event_snapshot().layout

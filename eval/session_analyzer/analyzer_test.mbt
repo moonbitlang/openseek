@@ -283,7 +283,7 @@ test "checkpoint replay assistants do not add model steps" {
   let transcript = @session_analyzer.transcript_text(session)
   // The original completion result remains searchable; the checkpoint's
   // Assistant copy must not index the same provider output a second time.
-  assert_eq(transcript.split("first answer").length(), 3)
+  assert_eq(transcript.split("first answer").count(), 3)
 }
 
 ///|

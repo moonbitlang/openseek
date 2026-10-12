@@ -46,7 +46,7 @@ fn changes_label(
 
 ///|
 pub fn Control::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Control,
   changes : Array[@mention_context.ReviewChanges],
 ) -> @html.Html {
@@ -137,7 +137,7 @@ fn excerpt_preview(
 ) -> @html.Html {
   let rows : Array[@syntax_html.DiffLine] = []
   for (lines, removed) in [(excerpt.original, true), (excerpt.modified, false)] {
-    let mut previous : Int? = None
+    let mut previous : Int32? = None
     for line in lines {
       if previous is Some(number) && line.number != number + 1 {
         rows.push(Gap)
@@ -169,7 +169,7 @@ fn excerpt_preview(
 
 ///|
 fn Control::popup(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Control,
   changes : Array[@mention_context.ReviewChanges],
 ) -> @html.Html {

@@ -21,7 +21,7 @@ fn seed_lifecycle_marker(
 fn live_lifecycle_marker_count(
   marker_decorations : @markers.MarkerDecorationsHandle,
   model : @model.TextModel,
-) -> Int {
+) -> Int32 {
   marker_decorations.get_live_markers_for_model(model).length()
 }
 

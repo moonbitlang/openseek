@@ -34,7 +34,7 @@ priv enum GoalAction {
 /// Turns the engine will start on its own toward one standing goal before
 /// pausing for input — the same order as /loop's default fire budget. Reset
 /// whenever a goal is set with auto continuation.
-const GoalAutoContinueMaxTurns : Int = 20
+const GoalAutoContinueMaxTurns : Int32 = 20
 
 ///|
 /// The prompt that opens an auto-continuation turn. Defined with the goal
@@ -53,7 +53,7 @@ const GoalContinuePrompt : String = @agent_session.GoalContinuePrompt
 fn goal_auto_promotable(
   current : @agent_session.StandingGoal?,
   text : String,
-  baseline : Int,
+  baseline : Int32,
 ) -> Bool {
   current is Some(goal) && goal.text() == text && goal.set_sequence() > baseline
 }
@@ -90,7 +90,7 @@ fn should_auto_continue(
   idle~ : Bool,
   shutting_down~ : Bool,
   goal_standing~ : Bool,
-  turns_remaining~ : Int,
+  turns_remaining~ : Int32,
 ) -> Bool {
   auto &&
   finished &&
@@ -116,7 +116,7 @@ priv enum PendingWork {
   // command serial, and the baseline notice captured at command receipt —
   // appended immediately before the marker at drain, preserving the
   // adjacency contract Session::current_goal_baseline pairs by.
-  PendingGoal(String, Array[@agent_runtime.SteerInput], Bool, Int, String?)
+  PendingGoal(String, Array[@agent_runtime.SteerInput], Bool, Int32, String?)
   // Context that arrived AFTER a queued goal: fenced into the ordered
   // queue so it cannot overtake the goal via the runtime steer queue (an
   // earlier pending prompt would otherwise drain it first).
@@ -138,7 +138,7 @@ priv enum ActiveWork {
 /// command handling race-free against turn lifecycle.
 priv enum ServeStep {
   Wire(ServeCommand)
-  PredictionDone(Int, @protocol.PredictionOutcome)
+  PredictionDone(Int32, @protocol.PredictionOutcome)
   TurnDone(finished~ : Bool)
   CompactDone(@agent_session.Session)
   // A background job finished; wake the loop to drain and surface its notice

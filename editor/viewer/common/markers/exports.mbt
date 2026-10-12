@@ -8,13 +8,13 @@
 pub fn MarkerData::MarkerData(
   severity~ : MarkerSeverity,
   message~ : String,
-  start_line_number~ : Int,
-  start_column~ : Int,
-  end_line_number~ : Int,
-  end_column~ : Int,
+  start_line_number~ : Int32,
+  start_column~ : Int32,
+  end_line_number~ : Int32,
+  end_column~ : Int32,
   code? : String,
   source? : String,
-  model_version_id? : Int,
+  model_version_id? : Int32,
   related_information? : Array[RelatedInformation],
   tags? : Array[MarkerTag],
   origin? : String,
@@ -51,10 +51,10 @@ pub fn MarkerService::change_one(
 pub(all) struct RelatedInformation {
   resource : @base_common.Uri
   message : String
-  start_line_number : Int
-  start_column : Int
-  end_line_number : Int
-  end_column : Int
+  start_line_number : Int32
+  start_column : Int32
+  end_line_number : Int32
+  end_column : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -121,7 +121,7 @@ pub fn MarkerService::clear_resource(
 pub fn MarkerService::markers_for_resource(
   self : MarkerService,
   resource : @base_common.Uri,
-  limit? : Int = 0,
+  limit~ : Int32 = 0,
 ) -> Array[Marker] {
   self.read(MarkerReadOptions(resource~, take=limit))
 }

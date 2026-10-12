@@ -1,10 +1,10 @@
 ///|
 pub(all) struct OfficeSelectionPreview {
   owner : @interop.ConversationKey
-  epoch : Int
+  epoch : Int32
   path : @common.Uri
   sig : String
-  pdf_generation : Int?
+  pdf_generation : Int32?
   materialized : String
   summary : @mention_context.OfficeSelectionSummary
 } derive(Eq)
@@ -17,7 +17,7 @@ pub fn State::accepts_office_callback(
   self : State,
   ctx : Ctx,
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @common.Uri,
   sig : String,
 ) -> Bool {

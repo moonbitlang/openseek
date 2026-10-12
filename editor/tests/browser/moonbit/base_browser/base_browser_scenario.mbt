@@ -285,8 +285,8 @@ fn setup_pointer_lifecycle_fixture(
   let moves = Ref(0)
   let stops = Ref(0)
   let starts = Ref(0)
-  let mut active_pointer : (Int, Int)? = None
-  let start = (pointer_id : Int, buttons : Int) => {
+  let mut active_pointer : (Int32, Int32)? = None
+  let start = (pointer_id : Int32, buttons : Int32) => {
     starts.val += 1
     target.set_attribute("data-starts", starts.val.to_string())
     monitor.start_monitoring(
@@ -349,7 +349,7 @@ fn setup_pointer_lifecycle_fixture(
 extern "js" fn iframe_document(iframe : @rdom.Element) -> @rdom.Document = "(iframe) => iframe.contentDocument"
 
 ///|
-extern "js" fn pointer_event_pointer_id(event : @rdom.Event) -> Int = "(event) => event.pointerId"
+extern "js" fn pointer_event_pointer_id(event : @rdom.Event) -> Int32 = "(event) => event.pointerId"
 
 ///|
-extern "js" fn pointer_event_buttons(event : @rdom.Event) -> Int = "(event) => event.buttons"
+extern "js" fn pointer_event_buttons(event : @rdom.Event) -> Int32 = "(event) => event.buttons"

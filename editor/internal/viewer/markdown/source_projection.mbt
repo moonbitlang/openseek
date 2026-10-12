@@ -3,16 +3,16 @@
 /// snapshot. Ranges and mapped offsets are zero-based UTF-16 coordinates.
 pub struct MarkdownCodeLine {
   displayed_text : String
-  source_line_number : Int
+  source_line_number : Int32
   source_range : @common.OffsetRange
-  priv displayed_boundary_to_source_offset : Array[Int?]
+  priv displayed_boundary_to_source_offset : Array[Int32?]
 } derive(Eq, Debug)
 
 ///|
 /// One line-local displayed range produced by projecting an original source
 /// range into a Markdown code block.
 pub struct MarkdownProjectedCodeRange {
-  line_index : Int
+  line_index : Int32
   displayed_range : @common.OffsetRange
 } derive(Eq, Debug)
 
@@ -23,13 +23,13 @@ pub struct MarkdownProjectedCodeRange {
 /// A container and its only child may share an ID and the same source range.
 /// Root elements are retained separately for section folding.
 pub struct MarkdownBlockAnchor {
-  index : Int
+  index : Int32
   source_range : @common.OffsetRange
   is_root_element : Bool
   /// The ATX or setext heading level for a heading anchor, otherwise `None`.
   /// Retained during the one parse that produces the HTML and this projection,
   /// so section structure cannot describe a different parse than the document.
-  priv heading_level : Int?
+  priv heading_level : Int32?
   /// The heading's rendered plain text, taken from the parsed inline tree in
   /// that same pass. This is the identity fold-state reconciliation compares,
   /// so `# *Title*` and `# Title` are the same heading and a multi-line setext
@@ -50,8 +50,8 @@ pub struct MarkdownDocumentProjection {
 /// Synthetic cmark padding and out-of-range boundaries return `None`.
 pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(
   self : MarkdownCodeLine,
-  displayed_boundary : Int,
-) -> Int? {
+  displayed_boundary : Int32,
+) -> Int32? {
   guard displayed_boundary >= 0 &&
     displayed_boundary < self.displayed_boundary_to_source_offset.length() else {
     return None
@@ -64,8 +64,8 @@ pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(
 /// offset, including the boundary after the final source code unit.
 fn MarkdownCodeLine::displayed_boundary_at_source_offset(
   self : MarkdownCodeLine,
-  source_offset : Int,
-) -> Int? {
+  source_offset : Int32,
+) -> Int32? {
   for displayed_boundary, mapped in self.displayed_boundary_to_source_offset {
     if mapped is Some(offset) && offset == source_offset {
       return Some(displayed_boundary)
@@ -126,7 +126,7 @@ fn empty_markdown_document_projection() -> MarkdownDocumentProjection {
 priv struct MarkdownProjectionBuilder {
   block_anchors : Array[MarkdownBlockAnchor]
   code_blocks : Array[MarkdownCodeBlock]
-  code_blocks_by_id : Map[Int, MarkdownCodeBlock]
+  code_blocks_by_id : Map[Int32, MarkdownCodeBlock]
 }
 
 ///|
@@ -135,7 +135,7 @@ priv struct MarkdownProjectionBuilder {
 fn markdown_document_projection(
   doc : @cmark.Doc,
   source_mapping~ : Bool,
-) -> (MarkdownDocumentProjection, Map[Int, MarkdownCodeBlock]) {
+) -> (MarkdownDocumentProjection, Map[Int32, MarkdownCodeBlock]) {
   let builder : MarkdownProjectionBuilder = {
     block_anchors: [],
     code_blocks: [],
@@ -187,8 +187,8 @@ fn markdown_document_projection(
 fn markdown_root_element_ids(
   doc : @cmark.Doc,
   source_mapping~ : Bool,
-) -> Set[Int] {
-  let result : Set[Int] = Set([])
+) -> Set[Int32] {
+  let result : Set[Int32] = Set([])
   let add = fn(block : @cmark.Block) {
     if markdown_block_renders_one_root_element(block, source_mapping~) {
       result.add(block.meta().id)
@@ -208,7 +208,7 @@ fn markdown_root_element_ids(
 /// The heading level for a heading block, otherwise `None`. ATX and setext
 /// headings are indistinguishable here on purpose: section structure depends on
 /// the level, not on how the level was spelled.
-fn markdown_block_heading_level(block : @cmark.Block) -> Int? {
+fn markdown_block_heading_level(block : @cmark.Block) -> Int32? {
   match block {
     Heading(node) => Some(node.v.level)
     _ => None
@@ -292,8 +292,8 @@ fn markdown_offset_range(loc : @cmark_base.TextLoc) -> @common.OffsetRange? {
 fn markdown_code_block_from_cmark(
   block : @cmark.CodeBlock,
   block_loc : @cmark_base.TextLoc,
-  block_index : Int,
-  node_id~ : Int?,
+  block_index : Int32,
+  node_id~ : Int32?,
 ) -> MarkdownCodeBlock? {
   guard markdown_offset_range(block_loc) is Some(block_source_range) else {
     return None
@@ -342,13 +342,13 @@ fn markdown_code_line_from_cmark(
 ///|
 fn markdown_code_line_from_source_facts(
   displayed_text : String,
-  source_line_number : Int,
+  source_line_number : Int32,
   source_range : @common.OffsetRange,
 ) -> MarkdownCodeLine {
   let displayed_length = displayed_text.length()
   let source_length = source_range.length()
   let padding = displayed_length - source_length
-  let boundary_map : Array[Int?] = []
+  let boundary_map : Array[Int32?] = []
   let representable = if padding < 0 {
     false
   } else {

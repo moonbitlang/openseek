@@ -57,8 +57,8 @@ fn ReviewHunk::intersects(self : ReviewHunk, other : ReviewHunk) -> Bool {
 /// artificial TextModel anchor.
 fn ReviewHunk::from_diff_hunk(
   hunk : @viewer.DiffHunk,
-  old_offset : Int?,
-  new_offset : Int?,
+  old_offset : Int32?,
+  new_offset : Int32?,
 ) -> ReviewHunk {
   let old_ranges : Array[@common.LineRange] = []
   let new_ranges : Array[@common.LineRange] = []
@@ -112,8 +112,8 @@ priv enum ReviewCompletionState {
 ///|
 pub(all) struct ReviewActiveHunk {
   priv change : ChangedFile
-  priv review_generation : Int
-  priv surface_generation : Int
+  priv review_generation : Int32
+  priv surface_generation : Int32
   priv hunk : ReviewHunk
   // The complete Line diff is the file-level review universe. Semantic hunks
   // project into it, but never redefine it when filters or grouping change.
@@ -123,14 +123,14 @@ pub(all) struct ReviewActiveHunk {
 
 ///|
 pub(all) struct ReviewHunkPosition {
-  priv current : Int
-  priv total : Int
+  priv current : Int32
+  priv total : Int32
 } derive(Eq)
 
 ///|
 fn ReviewHunkPosition::from_zero_based(
-  index : Int?,
-  total : Int,
+  index : Int32?,
+  total : Int32,
 ) -> ReviewHunkPosition? {
   guard index is Some(index) && index >= 0 && index < total else { return None }
   Some({ current: index + 1, total, })
@@ -332,7 +332,7 @@ fn State::current_review_generation(
   self : State,
   change : ChangedFile,
   ctx : Ctx,
-) -> Int? {
+) -> Int32? {
   guard ctx.active_file.bind(file => ctx.relative(file)) == Some(change.path) &&
     self.changes is ChangeListReady(files~, ..) &&
     files.contains(change) &&
@@ -349,8 +349,8 @@ fn State::current_review_generation(
 fn State::accept_active_review_hunk(
   self : State,
   change : ChangedFile,
-  review_generation : Int,
-  surface_generation : Int,
+  review_generation : Int32,
+  surface_generation : Int32,
   hunk : ReviewHunk?,
   file_changes : ReviewHunk?,
   position : ReviewHunkPosition?,

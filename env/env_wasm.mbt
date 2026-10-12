@@ -12,17 +12,17 @@ fn buffer_is_null(buffer : UInt64) -> Bool = "moonbitlang/async" "c_buffer/is_nu
 
 ///|
 #unsafe_skip_stub_check
-fn os_string_decode_len(buffer : UInt64, offset : Int, len : Int) -> Int = "moonbitlang/async" "os_string/decode_len"
+fn os_string_decode_len(buffer : UInt64, offset : Int32, len : Int32) -> Int32 = "moonbitlang/async" "os_string/decode_len"
 
 ///|
 #unsafe_skip_stub_check
 #borrow(path)
 fn os_string_decode(
   buffer : UInt64,
-  offset : Int,
-  len : Int,
+  offset : Int32,
+  len : Int32,
   path : String,
-  path_len : Int,
+  path_len : Int32,
 ) -> Unit = "moonbitlang/async" "os_string/decode"
 
 ///|

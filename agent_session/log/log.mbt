@@ -1,6 +1,6 @@
 ///|
 /// The version of the session-file header record this package understands.
-let session_file_version : Int = 1
+let session_file_version : Int32 = 1
 
 ///|
 /// The header record on the first line of a session file: the session identity
@@ -33,7 +33,7 @@ pub impl ToJson for SessionFileHeader with fn to_json(
 /// header at all.
 pub enum HeaderParse {
   Header(SessionFileHeader)
-  UnsupportedVersion(Int)
+  UnsupportedVersion(Int32)
   NotHeader
 } derive(Debug)
 
@@ -64,7 +64,7 @@ pub fn classify_header(json : Json) -> HeaderParse {
 /// downstream tools can surface the offending line instead of silently
 /// dropping it or aborting the whole load.
 pub struct LineError {
-  line_number : Int
+  line_number : Int32
   content : String
   message : String
 } derive(Eq, Debug)

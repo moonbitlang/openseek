@@ -19,10 +19,10 @@ priv struct CursorMoveCommandArgs {
 
 ///|
 fn CursorMoveCommandArgs::CursorMoveCommandArgs(
-  source? : String = "",
+  source~ : String = "",
   position? : @base_common.Position,
   view_position? : @base_common.Position,
-  reveal_type? : @controller.NavigationCommandRevealType = Regular,
+  reveal_type~ : @controller.NavigationCommandRevealType = Regular,
 ) -> CursorMoveCommandArgs {
   { source, position, view_position, reveal_type, }
 }
@@ -40,7 +40,7 @@ priv struct CursorBaseCommandOptions {
 
 ///|
 fn CursorBaseCommandOptions::CursorBaseCommandOptions(
-  source? : String = "keyboard",
+  source~ : String = "keyboard",
 ) -> CursorBaseCommandOptions {
   { source, }
 }
@@ -50,13 +50,13 @@ fn CursorBaseCommandOptions::CursorBaseCommandOptions(
 /// size override consumed only by static `PAGE_SIZE_MARKER` commands.
 priv struct CursorMoveCommandOptions {
   source : String
-  page_size : Int?
+  page_size : Int32?
 }
 
 ///|
 fn CursorMoveCommandOptions::CursorMoveCommandOptions(
-  source? : String = "keyboard",
-  page_size? : Int,
+  source~ : String = "keyboard",
+  page_size? : Int32,
 ) -> CursorMoveCommandOptions {
   { source, page_size, }
 }
@@ -70,7 +70,7 @@ priv struct EndCommandOptions {
 
 ///|
 fn EndCommandOptions::EndCommandOptions(
-  source? : String = "keyboard",
+  source~ : String = "keyboard",
   sticky? : Bool,
 ) -> EndCommandOptions {
   { source, sticky, }
@@ -88,7 +88,7 @@ priv struct SetSelectionCommandOptions {
 ///|
 fn SetSelectionCommandOptions::SetSelectionCommandOptions(
   selection : @core.Selection,
-  source? : String = "",
+  source~ : String = "",
 ) -> SetSelectionCommandOptions {
   { source, selection, }
 }
@@ -102,7 +102,7 @@ priv struct CursorSetSelectionCommandArgs {
 
 ///|
 fn CursorSetSelectionCommandArgs::CursorSetSelectionCommandArgs(
-  source? : String = "",
+  source~ : String = "",
   selection? : @core.Selection,
 ) -> CursorSetSelectionCommandArgs {
   { source, selection, }
@@ -950,9 +950,9 @@ fn CodeEditorWidget::run_cursor_move(
   self : CodeEditorWidget,
   direction : @view_model.SimpleMoveDirection,
   in_selection_mode : Bool,
-  value? : Int = 1,
-  unit? : @view_model.CursorMoveUnit = None,
-  source? : String = "keyboard",
+  value~ : Int32 = 1,
+  unit~ : @view_model.CursorMoveUnit = None,
+  source~ : String = "keyboard",
 ) -> Bool {
   guard self.get_view_model() is Some(view_model) else { return false }
   let changed = view_model.move_cursor_with_arguments(
@@ -972,8 +972,8 @@ fn CodeEditorWidget::run_cursor_page(
   self : CodeEditorWidget,
   direction : @view_model.SimpleMoveDirection,
   in_selection_mode : Bool,
-  page_size? : Int = -1,
-  source? : String = "keyboard",
+  page_size~ : Int32 = -1,
+  source~ : String = "keyboard",
 ) -> Bool {
   guard self.get_view_model() is Some(view_model) else { return false }
   let changed = view_model.move_cursor_page(
@@ -991,7 +991,7 @@ fn CodeEditorWidget::run_cursor_page(
 fn CodeEditorWidget::run_cursor_home(
   self : CodeEditorWidget,
   in_selection_mode : Bool,
-  source? : String = "keyboard",
+  source~ : String = "keyboard",
 ) -> Bool {
   guard self.get_view_model() is Some(view_model) else { return false }
   let changed = view_model.move_cursor_to_line_start(
@@ -1007,8 +1007,8 @@ fn CodeEditorWidget::run_cursor_home(
 fn CodeEditorWidget::run_cursor_end(
   self : CodeEditorWidget,
   in_selection_mode : Bool,
-  sticky? : Bool = false,
-  source? : String = "keyboard",
+  sticky~ : Bool = false,
+  source~ : String = "keyboard",
 ) -> Bool {
   guard self.get_view_model() is Some(view_model) else { return false }
   let changed = view_model.move_cursor_to_line_end(

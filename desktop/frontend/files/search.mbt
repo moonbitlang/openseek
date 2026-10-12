@@ -3,7 +3,7 @@
 // Host-compatible `file_search_score` policy used by the search cache.
 
 ///|
-const DefaultMaxRows : Int = 200
+const DefaultMaxRows : Int32 = 200
 
 ///|
 /// One display-ready file match. Keeping the basename beside the path avoids
@@ -50,7 +50,7 @@ pub fn Search::Search(
 pub fn Search::rank(
   self : Search,
   query : String,
-  limit? : Int = DefaultMaxRows,
+  limit~ : Int32 = DefaultMaxRows,
 ) -> Array[Match] {
   @file_search_score.rank_paths(
     query,

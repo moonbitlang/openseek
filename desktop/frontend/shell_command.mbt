@@ -80,7 +80,7 @@ fn run_shell_command(
   session : String,
   id : String,
   command : String,
-  attempt : Int,
+  attempt : Int32,
 ) -> (@cmd.Cmd, Model) {
   // The tab belongs to the command's conversation, which need not be the one
   // on screen by now: project that conversation, as a send does.
@@ -175,7 +175,7 @@ fn shell_command_finished(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   shell : String,
-  exit_code : Int?,
+  exit_code : Int32?,
   output : String,
   truncated : Bool,
 ) -> (@cmd.Cmd, Model) {

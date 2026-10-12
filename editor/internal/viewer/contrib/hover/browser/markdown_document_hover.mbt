@@ -3,12 +3,12 @@
 /// and ranges belong to the original TextModel; the projected code block never
 /// becomes a model or provider identity.
 priv struct MarkdownDocumentHoverMetadata {
-  model_identity : Int
+  model_identity : Int32
   uri : String
   revision : String
   source_position : @base_common.Position
-  source_offset : Int
-  block_index : Int
+  source_offset : Int32
+  block_index : Int32
   returned_range : @base_common.Range?
 }
 
@@ -283,7 +283,7 @@ fn MarkdownDocumentHoverWidget::dispose(
 }
 
 ///|
-extern "js" fn markdown_node_text_length(node : @rdom.Node) -> Int = "(node) => String(node.textContent || '').length"
+extern "js" fn markdown_node_text_length(node : @rdom.Node) -> Int32 = "(node) => String(node.textContent || '').length"
 
 ///|
 /// Full request authority for one asynchronous language hover. This is
@@ -291,20 +291,20 @@ extern "js" fn markdown_node_text_length(node : @rdom.Node) -> Int = "(node) => 
 /// Markdown pointer also depends on one rendered projection generation and
 /// one semantic block identity.
 priv struct MarkdownDocumentHoverRequestStamp {
-  request_generation : Int
-  model_identity : Int
-  caller_model_version : Int
-  model_version_id : Int
+  request_generation : Int32
+  model_identity : Int32
+  caller_model_version : Int32
+  model_version_id : Int32
   model_content : String
   uri : String
   revision : String
-  attach_generation : Int
-  projection_generation : Int
-  source_model_version : Int
-  block_index : Int
+  attach_generation : Int32
+  projection_generation : Int32
+  source_model_version : Int32
+  block_index : Int32
   block_source_range : @base_common.OffsetRange
-  line_index : Int
-  source_offset : Int
+  line_index : Int32
+  source_offset : Int32
   cancellation_token : @language.CancellationToken
 }
 
@@ -314,16 +314,16 @@ struct MarkdownDocumentHoverBridge {
   model : @model.TextModel
   computer : @hover.ContentHoverComputer
   marker_decorations : @markers.MarkerDecorationsHandle
-  attach_generation : Int
+  attach_generation : Int32
   is_attach_current : () -> Bool
   launch_async_task : (async () -> Unit noraise) -> Unit
   widget : MarkdownDocumentHoverWidget
   listeners : Array[@base_common.Disposable]
   diagnostic_elements : Array[@rdom.Element]
   hover_range_elements : Array[@rdom.Element]
-  mut request_generation : Int
-  mut current_source_offset : Int?
-  mut current_block_index : Int?
+  mut request_generation : Int32
+  mut current_source_offset : Int32?
+  mut current_block_index : Int32?
   mut request_start_timer : @base_common.Disposable?
   mut loading_timer : @base_common.Disposable?
   mut request_source : @language.CancellationTokenSource?
@@ -338,7 +338,7 @@ pub fn MarkdownDocumentHoverBridge::MarkdownDocumentHoverBridge(
   model : @model.TextModel,
   computer : @hover.ContentHoverComputer,
   marker_decorations : @markers.MarkerDecorationsHandle,
-  attach_generation : Int,
+  attach_generation : Int32,
   is_attach_current : () -> Bool,
   launch_async_task : (async () -> Unit noraise) -> Unit,
 ) -> MarkdownDocumentHoverBridge {
@@ -567,7 +567,7 @@ fn markdown_sorted_hover_parts(
 ) -> Array[@hover.HoverPart] {
   let merged = sync_parts.copy()
   merged.append(async_parts)
-  let indexed : Array[(Int, @hover.HoverPart)] = [
+  let indexed : Array[(Int32, @hover.HoverPart)] = [
     for index, part in merged => (index, part)
   ]
   indexed.sort_by((left, right) => {
@@ -763,7 +763,7 @@ fn markdown_marker_severity_name(marker : @markers.Marker) -> String {
 /// Range and TextModel offsets.
 priv struct MarkdownTextBoundary {
   node : @rdom.Node
-  offset : Int
+  offset : Int32
 }
 
 ///|
@@ -772,9 +772,9 @@ priv struct MarkdownTextBoundary {
 /// that node instead of the following node.
 fn markdown_text_boundary_at_from(
   root : @rdom.Node,
-  wanted : Int,
-  consumed_before : Int,
-) -> (MarkdownTextBoundary?, Int) {
+  wanted : Int32,
+  consumed_before : Int32,
+) -> (MarkdownTextBoundary?, Int32) {
   if root.get_node_type() == 3 {
     let length = markdown_node_text_length(root)
     let consumed_after = consumed_before + length
@@ -810,7 +810,7 @@ fn markdown_text_boundary_at_from(
 ///|
 fn markdown_text_boundary_at(
   root : @rdom.Node,
-  wanted : Int,
+  wanted : Int32,
 ) -> MarkdownTextBoundary? {
   markdown_text_boundary_at_from(root, wanted, 0).0
 }
@@ -830,14 +830,14 @@ extern "js" fn markdown_native_range_create(
 extern "js" fn markdown_native_range_set_start(
   range : MarkdownNativeRange,
   node : @rdom.Node,
-  offset : Int,
+  offset : Int32,
 ) -> Unit = "(range, node, offset) => range.setStart(node, offset)"
 
 ///|
 extern "js" fn markdown_native_range_set_end(
   range : MarkdownNativeRange,
   node : @rdom.Node,
-  offset : Int,
+  offset : Int32,
 ) -> Unit = "(range, node, offset) => range.setEnd(node, offset)"
 
 ///|
@@ -861,8 +861,8 @@ extern "js" fn markdown_native_number_is_finite(value : Double) -> Bool = "(valu
 ///|
 fn markdown_native_text_range(
   line : @rdom.Element,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> MarkdownNativeRange? {
   guard markdown_text_boundary_at(line.as_node(), start) is Some(first) &&
     markdown_text_boundary_at(line.as_node(), end_exclusive) is Some(last) else {
@@ -877,8 +877,8 @@ fn markdown_native_text_range(
 ///|
 fn markdown_measure_text_range_union(
   line : @rdom.Element,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> Array[Double] {
   guard markdown_native_text_range(line, start, end_exclusive) is Some(range) else {
     return [0.0, 1.0]
@@ -894,8 +894,8 @@ fn markdown_measure_text_range_union(
 ///|
 fn markdown_measure_text_range_client_rects(
   line : @rdom.Element,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> Array[Double] {
   guard markdown_native_text_range(line, start, end_exclusive) is Some(range) else {
     return [0.0, 0.0]
@@ -1001,7 +1001,7 @@ fn markdown_projected_span(
   source_range : @base_common.OffsetRange,
   message? : String,
   severity? : String,
-  z_index? : Int,
+  z_index? : Int32,
 ) -> @rdom.Element {
   let span = @rdom.document().create_element("span")
   span.set_attribute("class", class_name)
@@ -1051,7 +1051,7 @@ fn MarkdownDocumentHoverBridge::append_projected_span(
   source_range : @base_common.OffsetRange,
   message? : String,
   severity? : String,
-  z_index? : Int,
+  z_index? : Int32,
   destination : Array[@rdom.Element],
 ) -> Unit {
   let geometry = markdown_measure_text_range_union(
@@ -1162,7 +1162,7 @@ fn MarkdownDocumentHoverBridge::refresh_diagnostics(
 ///|
 fn MarkdownDocumentHoverBridge::refresh_hover_range(
   self : MarkdownDocumentHoverBridge,
-  block_index : Int,
+  block_index : Int32,
   returned_range : @base_common.Range?,
 ) -> Unit {
   self.clear_elements(self.hover_range_elements)

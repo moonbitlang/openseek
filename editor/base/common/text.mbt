@@ -5,8 +5,8 @@
 /// line sits between column 1 and column 2). Field names use the repo's
 /// snake_case convention (`line_number`), matching `Range::start_line_number`.
 pub(all) struct Position {
-  line_number : Int
-  column : Int
+  line_number : Int32
+  column : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -16,14 +16,14 @@ pub(all) struct Position {
 /// (`end_exclusive`). The name `Range` is reserved for
 /// Monaco's line/column range (see `monaco_range.mbt`).
 pub struct OffsetRange {
-  start : Int
-  end_exclusive : Int
+  start : Int32
+  end_exclusive : Int32
 } derive(Eq, Debug)
 
 ///|
 /// Builds a position without normalization; callers decide the coordinate
 /// space before conversion through a snapshot.
-pub fn Position::Position(line_number : Int, column : Int) -> Position {
+pub fn Position::Position(line_number : Int32, column : Int32) -> Position {
   { line_number, column, }
 }
 
@@ -66,8 +66,8 @@ pub fn Position::is_before_or_equal(self : Position, other : Position) -> Bool {
 /// (`start <= end_exclusive`) the swap is a no-op, so every other method keeps
 /// Monaco's behavior.
 pub fn OffsetRange::OffsetRange(
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> OffsetRange {
   if start <= end_exclusive {
     { start, end_exclusive, }
@@ -78,19 +78,22 @@ pub fn OffsetRange::OffsetRange(
 
 ///|
 /// `[start, end_exclusive)`. Mirrors Monaco's static `OffsetRange.fromTo`.
-pub fn OffsetRange::from_to(start : Int, end_exclusive : Int) -> OffsetRange {
+pub fn OffsetRange::from_to(
+  start : Int32,
+  end_exclusive : Int32,
+) -> OffsetRange {
   OffsetRange(start, end_exclusive)
 }
 
 ///|
 /// `[0, length)`. Mirrors Monaco's static `OffsetRange.ofLength`.
-pub fn OffsetRange::of_length(length : Int) -> OffsetRange {
+pub fn OffsetRange::of_length(length : Int32) -> OffsetRange {
   OffsetRange(0, length)
 }
 
 ///|
 /// The empty range `[offset, offset)`. Mirrors Monaco's `OffsetRange.emptyAt`.
-pub fn OffsetRange::empty_at(offset : Int) -> OffsetRange {
+pub fn OffsetRange::empty_at(offset : Int32) -> OffsetRange {
   OffsetRange(offset, offset)
 }
 
@@ -102,7 +105,7 @@ pub fn OffsetRange::is_empty(self : OffsetRange) -> Bool {
 
 ///|
 /// The number of offsets in the range. Mirrors Monaco's `length` getter.
-pub fn OffsetRange::length(self : OffsetRange) -> Int {
+pub fn OffsetRange::length(self : OffsetRange) -> Int32 {
   self.end_exclusive - self.start
 }
 
@@ -115,7 +118,7 @@ pub fn OffsetRange::equals(self : OffsetRange, other : OffsetRange) -> Bool {
 ///|
 /// Whether `offset` falls inside the half-open range. Mirrors Monaco's
 /// `contains`.
-pub fn OffsetRange::contains(self : OffsetRange, offset : Int) -> Bool {
+pub fn OffsetRange::contains(self : OffsetRange, offset : Int32) -> Bool {
   self.start <= offset && offset < self.end_exclusive
 }
 

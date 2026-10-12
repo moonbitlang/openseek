@@ -116,9 +116,9 @@ pub(all) enum MoonModViewMode {
 /// carries the request generation so closing/reopening or invalidating a graph
 /// cannot accept a late Host reply from its predecessor.
 pub(all) enum PackageGraphState {
-  PackageGraphLoading(Int)
-  PackageGraphReady(Int, String)
-  PackageGraphFailed(Int, String)
+  PackageGraphLoading(Int32)
+  PackageGraphReady(Int32, String)
+  PackageGraphFailed(Int32, String)
 } derive(Eq)
 
 ///|
@@ -148,11 +148,11 @@ pub(all) enum ReviewDiffMode {
 pub(all) struct ReviewState {
   // The HEAD-side request token. It remains stable while newer working-tree
   // reads are started for the same review.
-  generation : Int
+  generation : Int32
   // The newest working-tree read token. Keeping this separate from the HEAD
   // token lets watcher-driven reloads reject replies that complete out of
   // order without invalidating an in-flight baseline.
-  working_generation : Int
+  working_generation : Int32
   baseline : ReviewBaseline
   // Presentation belongs to this file; switching another tab cannot change it.
   view_mode : ReviewViewMode
@@ -376,7 +376,7 @@ pub(all) enum HistoryDiffSide {
 ///|
 pub(all) struct HistoryDiffDoc {
   diff : @dock.GitHistoryDiff
-  generation : Int
+  generation : Int32
   original : HistoryBlob
   modified : HistoryBlob
 } derive(Eq)
@@ -462,14 +462,14 @@ pub(all) struct State {
   // Office surface preferences are panel-level settings. They apply to both
   // DOCX and XLSX tabs and survive switching conversations, just like the
   // file-tree preference.
-  office_zoom : Int
+  office_zoom : Int32
   office_query : String
   office_prefer_system_fonts : Bool
   // Browser selection is provisional until the user accepts its preview.
   office_selection : OfficeSelectionPreview?
   // Monotonic across document reloads and owner changes, so late PDF runtime
   // callbacks cannot settle a later load of the same path and signature.
-  pdf_generation : Int
+  pdf_generation : Int32
   // The explorer's Files/Changes/Search selection. The selection survives a
   // conversation switch; checkout-derived inventories do not (see `sync`).
   explorer_mode : ExplorerMode
@@ -502,10 +502,10 @@ pub(all) struct State {
   // at least one completed change for cyclic previous/next navigation.
   review_diff_navigation_available : Bool
   // A cross-file destination waits for both sides, fenced by exact row and generation.
-  review_navigation_destination : (ChangedFile, Int, Bool)?
+  review_navigation_destination : (ChangedFile, Int32, Bool)?
   // Bound a cross-file search when semantic filters hide unreviewed lines.
   // None means no search is in progress; zero means its one cycle is exhausted.
-  review_navigation_remaining : Int?
+  review_navigation_remaining : Int32?
   // None includes all types; Some([]) deliberately includes no types.
   change_extensions : Array[String?]?
   change_path_filter : String
@@ -517,10 +517,10 @@ pub(all) struct State {
   // refreshed only at meaningful repository boundaries rather than on the
   // three-second working-tree poll.
   git_graph : GitGraphState
-  git_graph_generation : Int
+  git_graph_generation : Int32
   git_graph_selected : String?
   git_commit_files : GitCommitFiles
-  git_commit_files_generation : Int
+  git_commit_files_generation : Int32
   git_actual_head : String?
   git_actual_head_known : Bool
   // Section presentation is a page-lifetime preference and survives owner
@@ -531,7 +531,7 @@ pub(all) struct State {
   // Historical content is not a filesystem document and never joins the
   // watcher/LSP projections. Keys combine commit and current path.
   history_docs : Map[String, HistoryDiffDoc]
-  history_generation : Int
+  history_generation : Int32
   // Exact changed rows and their shared Line/Token/Tree review coverage.
   // Complete may come from the file control or full hunk coverage.
   review_context_reveal : @mention_context.ReviewChanges?
@@ -540,27 +540,27 @@ pub(all) struct State {
   // Monotonic identity of the visible hunk surface. Mode, filter, collapse,
   // source/diff, and document transitions advance it so a callback queued by
   // an older surface cannot restore its active hunk after the transition.
-  review_hunk_surface_generation : Int
+  review_hunk_surface_generation : Int32
   // Only the currently focused or navigated hunk is retained for the toolbar.
   // Its exact row, diff generation, and surface generation fence callbacks
   // from older inputs.
   review_active_hunk : ReviewActiveHunk?
   // A completed empty comparison has no active hunk. Track completion with
   // the same identity fences so navigation can appear atomically in both cases.
-  review_hunk_ready : (ChangedFile, Int, Int)?
+  review_hunk_ready : (ChangedFile, Int32, Int32)?
   review_navigation_display : ReviewNavigationDisplay?
   // Monotonic request token retained across conversation re-roots and advanced
   // across same-owner placement changes. Owner plus this generation rejects an
   // old A→B→A reply or one from an earlier checkout incarnation.
-  changes_generation : Int
+  changes_generation : Int32
   // Placement/conversation epoch carried by filesystem request replies.
   // Advancing this value on either boundary rejects reads, listings, and
   // stats that outlived the checkout they addressed.
-  request_epoch : Int
+  request_epoch : Int32
   // Page-lifetime navigation token. Transcript file-link clicks capture it;
   // every competing editor navigation advances it, so a slower older click
   // cannot move the viewer after a newer user action has taken precedence.
-  file_link_generation : Int
+  file_link_generation : Int32
   // Last settled Git comparison identity (task/branch base, or HEAD fallback).
   // The legacy field name stays internal; `changes_head_known` distinguishes
   // a first/unborn snapshot from no snapshot yet so a comparison transition
@@ -570,11 +570,11 @@ pub(all) struct State {
   // Monotonic token shared by changed-file baseline and working-tree reads.
   // Each side records its current token in `ReviewState`; it outlives
   // conversation re-roots for the same A→B→A reason as `changes_generation`.
-  review_generation : Int
+  review_generation : Int32
   // The pending comparison whose loading notice has survived the reveal
   // delay. A newer review generation does not inherit this value, so rapid
   // file changes cannot flash an older timer's notice.
-  diff_loading_generation : Int?
+  diff_loading_generation : Int32?
   // A missing checkout can discard either half of an in-flight review. Mark
   // that boundary explicitly so the first authoritative snapshot after
   // recovery restarts only incomplete requests once; ordinary polling must
@@ -584,7 +584,7 @@ pub(all) struct State {
   // compatibility refreshes keep a settled baseline visible while one new
   // HEAD read is in flight; recording that request by path prevents a slow
   // read from being superseded by every Changes poll.
-  background_review_requests : Map[@common.Uri, Int]
+  background_review_requests : Map[@common.Uri, Int32]
   // Whether the explorer pane was visible on the preceding sync pass. This is
   // stricter than the enclosing dock being open: with a file active the tree
   // toggle (and narrow drill-down) can hide the explorer while the dock stays
@@ -599,7 +599,7 @@ pub(all) struct State {
   // Monotonic counter of the most recently requested watcher configuration.
   // Combined with `Ctx.watch_namespace`, it advances on every replacement or
   // park independently of root and filesystem request epochs.
-  watch_generation : Int
+  watch_generation : Int32
   // `fs.watch` can reject activation, and an active watcher can later stop.
   // Keep either failure separate from directory/file requests so a later
   // successful listing does not hide the loss of live updates. The root app
@@ -629,7 +629,7 @@ pub(all) struct State {
   // one request. The generation is page-lifetime state used to fence replies.
   moon_mod_view_modes : Map[@common.Uri, MoonModViewMode]
   package_graphs : Map[@common.Uri, PackageGraphState]
-  package_graph_generation : Int
+  package_graph_generation : Int32
   // The directory whose immediate children are open in the breadcrumb's
   // VS Code-style picker. The legacy field and message names remain so this
   // presentation change does not grow the package's public API.
@@ -825,7 +825,7 @@ pub(all) struct Ctx {
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationKey
   // The current placement incarnation for filesystem request/reply fencing.
-  request_epoch : Int
+  request_epoch : Int32
   // Page-unique prefix for watcher identities. The native watcher outlives a
   // page reload, so the counter alone is not enough to prevent reuse.
   watch_namespace : String
@@ -924,7 +924,7 @@ pub(all) enum Msg {
   // only a subsequent confirmation attaches it to the composer.
   OfficeSelectionChanged(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,
     selection~ : String
@@ -938,18 +938,18 @@ pub(all) enum Msg {
   OfficeSystemFontsToggled
   PdfStateChanged(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     event~ : String
   )
   PdfSelectionChanged(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     selection~ : String
   )
   PdfPageChanged(String)
@@ -973,13 +973,13 @@ pub(all) enum Msg {
   // reply that lost a conversation switch can be dropped.
   DirLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @pathx.Relative,
     entries~ : Array[FileEntry]
   )
   DirFailed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @pathx.Relative,
     message~ : String
   )
@@ -987,27 +987,27 @@ pub(all) enum Msg {
   // outlived a conversation or concrete-root transition.
   FilesIndexed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     files~ : Array[@pathx.Relative],
     truncated~ : Bool
   )
   // A request failed or was cancelled. A failed background refresh keeps the
   // previously ready snapshot; only an initial fetch becomes IndexFailed.
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int)
+  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int32)
   // A `git.changes` reply. `head` carries the immutable comparison when the
   // host can identify one: a task or branch baseline when present, otherwise
   // resolved HEAD. `None` means no commit exists or a legacy host omitted the
   // identity. The owner fence rejects late responses.
   ChangesLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     repository~ : Bool,
     head~ : String?,
     files~ : Array[ChangedFile]
   )
   ChangesFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     message~ : String
   )
   // A low-frequency fallback while Changes is visible. The selective file
@@ -1024,25 +1024,25 @@ pub(all) enum Msg {
   GitHistoryLoadMoreRequested
   GitHistoryLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     append~ : Bool,
     reply~ : @protocol.GitHistoryReply
   )
   GitHistoryFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     append~ : Bool,
     message~ : String
   )
   GitCommitSelected(String)
   GitCommitChangesLoaded(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     reply~ : @protocol.GitCommitChangesReply
   )
   GitCommitChangesFailed(
     owner~ : @interop.ConversationKey,
-    generation~ : Int,
+    generation~ : Int32,
     commit~ : String,
     message~ : String
   )
@@ -1066,7 +1066,7 @@ pub(all) enum Msg {
   DiffLoadingDue(
     owner~ : @interop.ConversationKey,
     path~ : @common.Uri,
-    generation~ : Int
+    generation~ : Int32
   )
   // Switch the active changed-file review between its selected source
   // presentation and the full comparison. Unavailable/loading reviews ignore
@@ -1104,16 +1104,16 @@ pub(all) enum Msg {
   // owner/epoch/path/generation tuple fences checkout and close/reopen races.
   PackageGraphRequestLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
-    generation~ : Int,
+    generation~ : Int32,
     source~ : String
   )
   PackageGraphRequestFailed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
-    generation~ : Int,
+    generation~ : Int32,
     message~ : String
   )
   // The visible DiffEditor publishes only its current projected hunk. The
@@ -1121,8 +1121,8 @@ pub(all) enum Msg {
   ReviewActiveHunkChanged(
     ready~ : Bool,
     change~ : ChangedFile,
-    review_generation~ : Int,
-    surface_generation~ : Int,
+    review_generation~ : Int32,
+    surface_generation~ : Int32,
     hunk~ : ReviewHunk?,
     file_changes~ : ReviewHunk?,
     position~ : ReviewHunkPosition?
@@ -1130,8 +1130,8 @@ pub(all) enum Msg {
   ToggleActiveReviewHunk
   ToggleReviewHunk(
     change~ : ChangedFile,
-    review_generation~ : Int,
-    surface_generation~ : Int,
+    review_generation~ : Int32,
+    surface_generation~ : Int32,
     hunk~ : ReviewHunk,
     file_changes~ : ReviewHunk?,
     position~ : ReviewHunkPosition?
@@ -1142,28 +1142,28 @@ pub(all) enum Msg {
   GitOriginalLoaded(
     owner~ : @interop.ConversationKey,
     path~ : @common.Uri,
-    generation~ : Int,
+    generation~ : Int32,
     background~ : Bool,
     original~ : @protocol.GitOriginalFileReply
   )
   GitOriginalFailed(
     owner~ : @interop.ConversationKey,
     path~ : @common.Uri,
-    generation~ : Int,
+    generation~ : Int32,
     background~ : Bool,
     message~ : String
   )
   HistoryBlobLoaded(
     owner~ : @interop.ConversationKey,
     key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     side~ : HistoryDiffSide,
     blob~ : @protocol.GitOriginalFileReply
   )
   HistoryBlobFailed(
     owner~ : @interop.ConversationKey,
     key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     side~ : HistoryDiffSide,
     message~ : String
   )
@@ -1192,12 +1192,12 @@ pub(all) enum Msg {
   // changed-row open.
   FileLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
     name~ : String,
     file~ : FileContent,
-    file_link_generation~ : Int?,
-    review_generation~ : Int?,
+    file_link_generation~ : Int32?,
+    review_generation~ : Int32?,
     range~ : @common.Range?,
     annotation~ : String?
   )
@@ -1207,10 +1207,10 @@ pub(all) enum Msg {
   // reads leave both generation fields `None`.
   FileFailed(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     path~ : @common.Uri,
-    file_link_generation~ : Int?,
-    review_generation~ : Int?,
+    file_link_generation~ : Int32?,
+    review_generation~ : Int32?,
     message~ : String
   )
   // An `fs.watch` request rejection or an asynchronous watcher failure. The
@@ -1244,7 +1244,7 @@ pub(all) enum Msg {
   // invalidate diagnostics without changing the active document itself.
   StatsLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     stats~ : Array[FileStat],
     recheck_diagnostics~ : Bool
   )
@@ -1252,7 +1252,7 @@ pub(all) enum Msg {
   // fences a reply that lost a device/session switch while the request ran.
   DiagnosticsLoaded(
     owner~ : @interop.ConversationKey,
-    epoch~ : Int,
+    epoch~ : Int32,
     absolute~ : @common.Uri,
     diagnostics~ : Array[@protocol.LspDiagnostic]
   )
@@ -1299,8 +1299,8 @@ pub(all) enum Msg {
   // turns it into a deduplicated annotation chip.
   DiffCommentAdded(
     file~ : @pathx.Relative,
-    original_line_number~ : Int?,
-    modified_line_number~ : Int?,
+    original_line_number~ : Int32?,
+    modified_line_number~ : Int32?,
     quote~ : String,
     comment~ : String,
     // Present when the comment came from the original-side code kernel.

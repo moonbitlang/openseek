@@ -123,7 +123,7 @@ pub async fn write_text(root : String, path : String, content : String) -> Unit 
 /// when `body` fails an assertion.
 pub async fn[T] with_tmpdir(
   body : async (String) -> T,
-  prefix? : String = "openseek-test-",
+  prefix~ : String = "openseek-test-",
 ) -> T {
   let dir = @fs.tmpdir(prefix~)
   defer (@fs.rmdir(dir, recursive=true) catch {

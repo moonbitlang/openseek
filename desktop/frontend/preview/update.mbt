@@ -6,19 +6,19 @@
 ///|
 pub(all) enum Msg {
   // The address bar's draft changed.
-  InputChanged(id~ : Int, value~ : String)
+  InputChanged(id~ : Int32, value~ : String)
   // Host view events, decoded from `browser.event` notifications.
-  Navigated(id~ : Int, url~ : String)
-  LoadingChanged(id~ : Int, loading~ : Bool)
-  TitleUpdated(id~ : Int, title~ : String)
-  LoadFailed(id~ : Int, url~ : String, text~ : String)
+  Navigated(id~ : Int32, url~ : String)
+  LoadingChanged(id~ : Int32, loading~ : Bool)
+  TitleUpdated(id~ : Int32, title~ : String)
+  LoadFailed(id~ : Int32, url~ : String, text~ : String)
   // The reload command failed before the native view could send load events.
-  ReloadFailed(id~ : Int, url~ : String, message~ : String)
+  ReloadFailed(id~ : Int32, url~ : String, message~ : String)
 }
 
 ///|
 pub fn update(msg : Msg, state : State) -> State {
-  fn patch(id : Int, apply : (PageState) -> PageState) -> State {
+  fn patch(id : Int32, apply : (PageState) -> PageState) -> State {
     guard state.pages.get(id) is Some(page) else { return state }
     state.with_page(id, apply(page))
   }

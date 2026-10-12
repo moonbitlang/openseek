@@ -4,7 +4,7 @@
 
 ///|
 pub fn update(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
   state : State,

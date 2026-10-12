@@ -32,8 +32,8 @@ pub struct View {
 
 ///|
 pub fn View::View(
-  localization? : @localization.Localization = Localization(),
-  view_zones_configuration_reader? : () -> (Int, Double, Double) = () => {
+  localization~ : @localization.Localization = Localization(),
+  view_zones_configuration_reader~ : () -> (Int32, Double, Double) = () => {
     (0, 0.0, 0.0)
   },
 ) -> View {
@@ -163,7 +163,7 @@ pub fn View::install_view_zones_context(
   self : View,
   view_model : @view_model.ViewModel,
   log_service : @log.LogHandle,
-  read_configuration : () -> (Int, Double, Double),
+  read_configuration : () -> (Int32, Double, Double),
   emit_view_zones_changed : () -> Unit,
 ) -> Unit {
   self.view_zones.install_context(
@@ -188,7 +188,7 @@ pub fn View::change_view_zones(
 /// mutable ViewZone registration and ViewLayout remain encapsulated here.
 pub fn View::view_zone_layout_infos(
   self : View,
-) -> Array[(String, Int, Double)] {
+) -> Array[(String, Int32, Double)] {
   self.view_zones.layout_infos()
 }
 
@@ -285,12 +285,12 @@ pub fn View::emit_view_zones_changed_then(
 /// editor root has DOM focus.
 fn get_editor_class_name(
   source_state : String,
-  focused? : Bool = false,
-  show_unused? : Bool = true,
-  show_deprecated? : Bool = true,
-  is_safari? : Bool = editor_browser_kind() == 1,
-  is_webkit_webview? : Bool = editor_browser_kind() == 2,
-  is_macos? : Bool = @base_common.is_macintosh,
+  focused~ : Bool = false,
+  show_unused~ : Bool = true,
+  show_deprecated~ : Bool = true,
+  is_safari~ : Bool = editor_browser_kind() == 1,
+  is_webkit_webview~ : Bool = editor_browser_kind() == 2,
+  is_macos~ : Bool = @base_common.is_macintosh,
 ) -> String {
   "monaco-editor moonbit-viewer readonly-editor \{extra_editor_class_name(is_safari, is_webkit_webview, is_macos)}\{(if show_unused { " showUnused" } else { "" })}\{(if show_deprecated { " showDeprecated" } else { "" })} \{source_state}\{(if focused { " focused" } else { "" })}"
 }
@@ -315,7 +315,7 @@ fn extra_editor_class_name(
 
 ///|
 /// Preserve the VS Code Safari and native WebKit WebView UA predicates.
-fn editor_browser_kind() -> Int {
+fn editor_browser_kind() -> Int32 {
   let navigator : @js.Nullable[@js.Value] = @js.globalThis.get_with_string(
     "navigator",
   )
@@ -338,8 +338,8 @@ fn editor_browser_kind() -> Int {
 /// The empty-state root classes for the Viewer-owned no-model placeholder
 /// element (the `View` itself only exists while a model is attached).
 pub fn empty_editor_class_name(
-  show_unused? : Bool = true,
-  show_deprecated? : Bool = true,
+  show_unused~ : Bool = true,
+  show_deprecated~ : Bool = true,
 ) -> String {
   get_editor_class_name("source-empty", show_unused~, show_deprecated~)
 }

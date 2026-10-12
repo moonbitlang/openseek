@@ -35,7 +35,7 @@ fn semantic_file_key(pattern : String, path : String) -> String {
 priv struct SemanticGroup {
   key : String
   hits : Array[@protocol.SemanticSearchHit]
-  count : Int
+  count : Int32
 }
 
 ///|
@@ -62,7 +62,7 @@ fn semantic_groups(
 /// rendering.
 fn visible_semantic_pattern_groups(
   hits : Array[@protocol.SemanticSearchHit],
-  visible_lines : Int,
+  visible_lines : Int32,
 ) -> Array[SemanticGroup] {
   let visible : Array[SemanticGroup] = []
   let mut remaining = visible_lines.max(0)

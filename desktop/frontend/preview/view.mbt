@@ -64,7 +64,7 @@ pub(all) struct ToolbarActions {
 /// The active page's toolbar. Always rendered (the panel's child order is
 /// structural); CSS hides it while the active tab is not a Browser tab.
 pub fn toolbar_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   page : PageState,
   actions : ToolbarActions,
 ) -> @html.Html {

@@ -18,19 +18,19 @@ let projection_reference_text : Array[String] = [
 ///|
 priv struct ProjectionExpectedLine {
   content : String
-  min_column : Int
-  max_column : Int
-  token_ends : Array[Int]
-  inline_ranges : Array[(Int, Int)]
+  min_column : Int32
+  max_column : Int32
+  token_ends : Array[Int32]
+  inline_ranges : Array[(Int32, Int32)]
 }
 
 ///|
 fn projection_expected_line(
   content : String,
-  min_column : Int,
-  max_column : Int,
-  token_ends : Array[Int],
-  inline_ranges? : Array[(Int, Int)] = [],
+  min_column : Int32,
+  max_column : Int32,
+  token_ends : Array[Int32],
+  inline_ranges~ : Array[(Int32, Int32)] = [],
 ) -> ProjectionExpectedLine {
   { content, min_column, max_column, token_ends, inline_ranges, }
 }
@@ -54,7 +54,7 @@ fn projection_reference_model(language_id : String) -> @model.TextModel {
 ///|
 fn projection_assert_token_ends(
   data : ViewLineData,
-  expected : Array[Int],
+  expected : Array[Int32],
 ) -> Unit raise {
   assert_true(data.tokens.get_count() > 0)
   let mut token_text = ""
@@ -90,8 +90,8 @@ fn projection_assert_line(
 fn projection_assert_batch(
   lines : ViewModelLinesFromProjectedModel,
   expected : Array[ProjectionExpectedLine],
-  start_line : Int,
-  end_line : Int,
+  start_line : Int32,
+  end_line : Int32,
   needed : Array[Bool],
 ) -> Unit raise {
   let actual = lines.get_view_lines_data(start_line, end_line, needed)
@@ -152,7 +152,7 @@ fn projection_assert_masks(
 ///|
 test "projected injection decorations complete before token read with exact callback values" {
   let callback_order : Array[String] = []
-  let callback_model_lines : Array[Int] = []
+  let callback_model_lines : Array[Int32] = []
   let model_injection_options : Array[@model.InjectedTextOptions] = [
     InjectedTextOptions("ABCDE", inline_class_name="ctx-class"),
   ]

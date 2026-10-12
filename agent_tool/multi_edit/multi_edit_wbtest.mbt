@@ -18,7 +18,7 @@ fn clean_tree_evidence() -> @diagnostic_guard.Comparability {
 }
 
 ///|
-fn sample_write(path : String, edits : Int) -> PreparedWrite {
+fn sample_write(path : String, edits : Int32) -> PreparedWrite {
   { path, new_content: "new", original_content: "old", edit_count: edits, }
 }
 

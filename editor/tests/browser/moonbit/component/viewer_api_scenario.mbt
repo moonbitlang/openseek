@@ -206,12 +206,12 @@ fn mount_host() -> @rdom.Element? {
 ///|
 fn poll_rendered(
   ctx : @support.BrowserTestContext,
-  rendered_count : Ref[Int],
-  rendered_lines : Ref[Int],
-  view_lines : Ref[Int],
-  model_lines : Int,
+  rendered_count : Ref[Int32],
+  rendered_lines : Ref[Int32],
+  view_lines : Ref[Int32],
+  model_lines : Int32,
   done : Ref[Bool],
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if done.val {
     return
@@ -291,6 +291,6 @@ fn component_source_text() -> String {
 }
 
 ///|
-fn component_model_line_count() -> Int {
+fn component_model_line_count() -> Int32 {
   @model.TextSnapshot(component_source_text()).line_count()
 }

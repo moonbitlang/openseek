@@ -57,7 +57,7 @@ struct AgentFeedbackInputWidget {
 
 ///|
 pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   host : AgentFeedbackInputWidgetHost,
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()

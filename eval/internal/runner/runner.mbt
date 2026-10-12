@@ -5,9 +5,9 @@
 /// Run `run(index)` for every index in `0..<count`, at most `concurrency` at
 /// a time, returning the results in index order.
 pub async fn[X] run_indexed_with_concurrency(
-  count : Int,
-  concurrency : Int,
-  run : async (Int) -> X,
+  count : Int32,
+  concurrency : Int32,
+  run : async (Int32) -> X,
 ) -> Array[X] {
   let limit = @async.Semaphore(concurrency)
   @async.all(
@@ -36,6 +36,6 @@ pub async fn prepare_output_dir(out_dir : String) -> Unit {
 
 ///|
 /// Two-digit zero-padded trial index, for stable artifact file names.
-pub fn padded_index(value : Int) -> String {
+pub fn padded_index(value : Int32) -> String {
   value.to_string().pad_start(2, '0')
 }

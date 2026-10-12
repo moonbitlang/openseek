@@ -3,7 +3,7 @@
 /// package deliberately knows a viewer only by its stable public id and
 /// callback surface, keeping the dependency direction toward root one-way.
 priv struct ViewerTestingEntry {
-  registration_id : Int
+  registration_id : Int32
   set_hidden_areas : (Array[@base_common.Range], String?, Bool) -> Unit
   did_build_view_model : @base_common.Emitter[ViewModelBuiltObservation]
   did_render_model : @base_common.Emitter[ModelRenderedObservation]
@@ -14,7 +14,7 @@ priv struct ViewerTestingEntry {
 let viewer_entries : Map[String, ViewerTestingEntry] = Map([])
 
 ///|
-let next_registration_id : Ref[Int] = Ref(0)
+let next_registration_id : Ref[Int32] = Ref(0)
 
 ///|
 fn ViewerTestingEntry::dispose(self : ViewerTestingEntry) -> Unit {
@@ -24,7 +24,7 @@ fn ViewerTestingEntry::dispose(self : ViewerTestingEntry) -> Unit {
 }
 
 ///|
-fn unregister_if_current(viewer_id : String, registration_id : Int) -> Unit {
+fn unregister_if_current(viewer_id : String, registration_id : Int32) -> Unit {
   match viewer_entries.get(viewer_id) {
     Some(entry) if entry.registration_id == registration_id => {
       viewer_entries.remove(viewer_id)
@@ -79,7 +79,7 @@ fn set_hidden_areas(
   viewer_id : String,
   ranges : Array[@base_common.Range],
   source? : String,
-  force_update? : Bool = false,
+  force_update~ : Bool = false,
 ) -> Bool {
   match viewer_entries.get(viewer_id) {
     Some(entry) => {
@@ -96,8 +96,8 @@ fn set_hidden_areas(
 /// in the generation-aware registry, so disposed and reused ids remain safe.
 fn set_hidden_lines_for_browser_diagnostic(
   viewer_id : String,
-  start_line : Int,
-  end_line : Int,
+  start_line : Int32,
+  end_line : Int32,
   source : String,
   hidden : Bool,
 ) -> Bool {
@@ -113,7 +113,7 @@ fn set_hidden_lines_for_browser_diagnostic(
 /// Product hosts do not install the optional probe, leaving the private
 /// control absent from their JavaScript surface as well as MoonBit's API.
 extern "js" fn offer_browser_hidden_lines_diagnostic(
-  set_hidden_lines : (String, Int, Int, String, Bool) -> Bool,
+  set_hidden_lines : (String, Int32, Int32, String, Bool) -> Bool,
 ) -> Unit =
   #| (setHiddenLines) => globalThis.__viewerPrivateTestProbe?.acceptSetHiddenLines?.(setHiddenLines)
 

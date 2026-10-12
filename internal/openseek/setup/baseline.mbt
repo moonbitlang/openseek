@@ -3,7 +3,7 @@
 /// `status` (large or cold-cache repos) cannot discard an already-obtained
 /// sha — on status timeout the baseline keeps the sha and reports
 /// dirty=true, the conservative direction for an audit anchor.
-const BaselineProbeBudgetMs : Int = 2_000
+const BaselineProbeBudgetMs : Int32 = 2_000
 
 ///|
 /// The record appended when a goal is set but the baseline could not be

@@ -57,7 +57,7 @@ pub impl FromJson for EmptyReply with fn from_json(json, path) {
 pub(all) struct StartReply {
   run_id : String
   status : String
-  exit_code : Int
+  exit_code : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -155,7 +155,7 @@ pub(all) struct RunSettlementPayload {
   session : String
   submission_id : String?
   status : String
-  exit_code : Int?
+  exit_code : Int32?
 } derive(Debug, Eq)
 
 ///|
@@ -299,7 +299,7 @@ pub(all) struct SessionsReply {
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String
   dirty_paths : Array[String]
-  dirty_path_count : Int
+  dirty_path_count : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -577,8 +577,8 @@ pub impl FromJson for SessionRuntimeNotice with fn from_json(json, path) {
 ///|
 pub(all) struct SessionSummary {
   content : String
-  from_sequence : Int
-  to_sequence : Int
+  from_sequence : Int32
+  to_sequence : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -712,7 +712,7 @@ pub impl FromJson for SessionItem with fn from_json(json, path) {
 /// One append-only durable event. `ts` is optional for compatibility with old
 /// stores and test fixtures written before timestamps were added.
 pub(all) struct SessionEvent {
-  sequence : Int
+  sequence : Int32
   ts : Double?
   item : SessionItem
 } derive(Debug, Eq, FromJson, ToJson)
@@ -722,7 +722,7 @@ pub(all) struct SessionEvent {
 /// engines stays optional; Desktop's transcript is defined by `events`, whose
 /// unknown items remain available for forward-compatible round trips.
 pub(all) struct SessionDocument {
-  version : Int?
+  version : Int32?
   id : String?
   system_prompt : String?
   events : Array[SessionEvent]?
@@ -731,7 +731,7 @@ pub(all) struct SessionDocument {
 ///|
 pub(all) struct LoadSessionReply {
   session : SessionDocument
-  watermark : Int?
+  watermark : Int32?
   prediction : @wire.PredictionRecord?
 } derive(Debug, Eq)
 
@@ -767,7 +767,7 @@ pub impl ToJson for LoadSessionReply with fn to_json(self) {
   {
     "session": self.session.to_json(),
     "watermark": if self.watermark is Some(value) {
-      value.to_json()
+      Json(value)
     } else {
       Json::null()
     },
@@ -826,11 +826,11 @@ pub(all) enum WorkspacesReply {
 pub impl ToJson for WorkspacesReply with fn to_json(self) {
   match self {
     Workspaces(workspaces, chat_root~) => {
-      let fields : Map[String, Json] = { "workspaces": workspaces.to_json() }
+      let fields : Map[String, Json] = { "workspaces": Json(workspaces) }
       if chat_root is Some(root) {
         fields["chat_root"] = root.to_json()
       }
-      fields.to_json()
+      Json(fields)
     }
     WorkspaceError(message) => { "error": message }
   }
@@ -973,8 +973,8 @@ pub(all) struct OpenPathEditorTarget {
   path : String
   // Absent for an ordinary file reference; present for a parsed
   // `:line[:column]` or `#Lline` suffix.
-  line : Int?
-  column : Int?
+  line : Int32?
+  column : Int32?
 } derive(Debug, Eq)
 
 ///|
@@ -1127,9 +1127,9 @@ pub(all) struct InstalledSkill {
 /// marks a count that stopped short of every untracked file, so the composer
 /// can say the number is a floor rather than quietly under-reporting.
 pub(all) struct GitDiffStat {
-  added : Int
-  removed : Int
-  files : Int
+  added : Int32
+  removed : Int32
+  files : Int32
   base : String?
   partial : Bool
 } derive(Debug, Eq, FromJson, ToJson)
@@ -1149,9 +1149,9 @@ pub(all) struct GitBranchReply {
 /// states a chip can show. Skipped, neutral, and cancelled checks count as
 /// passed: they are finished and not something to act on.
 pub(all) struct GitChecks {
-  passed : Int
-  failed : Int
-  pending : Int
+  passed : Int32
+  failed : Int32
+  pending : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -1166,15 +1166,15 @@ pub(all) struct GitChecks {
 /// from, and a base that is another feature branch (a stacked pull request)
 /// is not something any local rule would guess.
 pub(all) struct GitPullRequest {
-  number : Int
+  number : Int32
   title : String
   state : String
   draft : Bool
   url : String
   base : String
-  additions : Int
-  deletions : Int
-  changed_files : Int
+  additions : Int32
+  deletions : Int32
+  changed_files : Int32
   checks : GitChecks?
 } derive(Debug, Eq, FromJson, ToJson)
 
@@ -1356,8 +1356,8 @@ pub(all) struct SearchFilesReply {
 /// code-unit offsets and the end is exclusive, matching the editor Viewer
 /// contract.
 pub(all) struct TextSearchRange {
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -1365,9 +1365,9 @@ pub(all) struct TextSearchRange {
 /// `preview_start_column` maps a clipped preview back onto the source line.
 pub(all) struct TextSearchMatch {
   path : String
-  line_number : Int
+  line_number : Int32
   preview : String
-  preview_start_column : Int
+  preview_start_column : Int32
   ranges : Array[TextSearchRange]
 } derive(Debug, Eq)
 
@@ -1387,10 +1387,10 @@ pub(all) struct TextSearchError {
 /// bridge methods. Success omits both optional error fields on the wire.
 pub(all) struct SearchTextReply {
   root : String
-  generation : Int
+  generation : Int32
   matches : Array[TextSearchMatch]
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
   cancelled : Bool
   error : TextSearchError?
@@ -1401,7 +1401,7 @@ pub(all) struct SearchTextReply {
 /// `line`/`is_match` mirror moongrep's `source_context` entries; `text` has a
 /// single trailing `\r` stripped so Windows CRLF files render cleanly.
 pub(all) struct SemanticContextLine {
-  line : Int
+  line : Int32
   text : String
   is_match : Bool
 } derive(Debug, Eq)
@@ -1417,10 +1417,10 @@ pub(all) struct SemanticSearchHit {
   path : String
   rule_id : String
   description : String?
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   matched_source : String
   source_context : Array[SemanticContextLine]
 } derive(Debug, Eq)
@@ -1439,10 +1439,10 @@ pub(all) struct SemanticSearchError {
 /// optional error fields on the wire.
 pub(all) struct SearchSemanticReply {
   root : String
-  generation : Int
+  generation : Int32
   matches : Array[SemanticSearchHit]
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
   cancelled : Bool
   partial : Bool
@@ -1461,8 +1461,8 @@ pub(all) enum ReadFileReply {
 /// The workspace-relative file created for a large semantic-search selection.
 pub(all) struct MaterializeSemanticSelectionReply {
   path : String
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -1509,7 +1509,7 @@ pub extend PatternRepairStatus with Eq::{equal, not_equal}
 /// candidate immediately and starts a new semantic search.
 pub(all) struct PatternRepairReply {
   root : String
-  generation : Int
+  generation : Int32
   /// Present only when the Agent submitted a candidate. Failure replies do
   /// not use the original pattern as a sentinel value.
   candidate_pattern : String?
@@ -1661,15 +1661,15 @@ pub impl ToJson for BrowseDirectoryReply with fn to_json(self) {
   match self {
     Listing(path~, parent~, entries~) => {
       let fields : Map[String, Json] = {
-        "path": path.to_json(),
-        "entries": entries.to_json(),
+        "path": Json(path),
+        "entries": Json(entries),
       }
       if parent is Some(parent) {
-        fields["parent"] = parent.to_json()
+        fields["parent"] = Json(parent)
       }
       Json(fields)
     }
-    Drives(entries~) => { "drives": entries.to_json() }
+    Drives(entries~) => { "drives": Json(entries) }
     BrowseError(message) => { "error": message }
   }
 }
@@ -1729,10 +1729,10 @@ pub impl ToJson for TerminalOpenReply with fn to_json(self) {
 ///|
 pub(all) struct MoonIdeLocation {
   path : String
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   // Definition results and unclassified providers omit this annotation.
   is_test : Bool?
 } derive(Debug, Eq)
@@ -1778,16 +1778,16 @@ pub impl FromJson for MoonIdeLocation with fn from_json(json, path) {
 ///|
 pub impl ToJson for MoonIdeLocation with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "path": self.path.to_json(),
-    "start_line": self.start_line.to_json(),
-    "start_column": self.start_column.to_json(),
-    "end_line": self.end_line.to_json(),
-    "end_column": self.end_column.to_json(),
+    "path": Json(self.path),
+    "start_line": Json(self.start_line),
+    "start_column": Json(self.start_column),
+    "end_line": Json(self.end_line),
+    "end_column": Json(self.end_column),
   }
   if self.is_test is Some(value) {
-    fields["is_test"] = value.to_json()
+    fields["is_test"] = Json(value)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -1844,8 +1844,8 @@ pub impl FromJson for MoonPackageGraphReply with fn from_json(json, path) {
 
 ///|
 pub(all) struct LspPosition {
-  line : Int
-  character : Int
+  line : Int32
+  character : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -1951,8 +1951,8 @@ pub impl ToJson for MoonIdeCodeLensReply with fn to_json(self) {
 pub(all) struct LspDiagnostic {
   range : LspRange
   message : String
-  severity : Int?
-  tags : Array[Int]?
+  severity : Int32?
+  tags : Array[Int32]?
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -1982,16 +1982,16 @@ pub(all) struct LspHoverReply {
   value : String
   markdown : Bool
   has_range : Bool
-  start_line : Int
-  start_character : Int
-  end_line : Int
-  end_character : Int
+  start_line : Int32
+  start_character : Int32
+  end_line : Int32
+  end_character : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
 pub(all) struct SymbolPosition {
-  line : Int
-  col : Int
+  line : Int32
+  col : Int32
 } derive(Debug, Eq, FromJson, ToJson)
 
 ///|
@@ -2003,7 +2003,7 @@ pub(all) struct SymbolRange {
 ///|
 pub(all) struct SymbolItem {
   name : String
-  kind : Int?
+  kind : Int32?
   container : String?
   path : String
   range : SymbolRange
@@ -3245,12 +3245,12 @@ pub extend RevealPathReply with ToJson::{to_json}
 pub impl ToJson for OpenPathEditorTarget with fn to_json(self) {
   let fields : Map[String, Json] = { "path": self.path }
   if self.line is Some(line) {
-    fields["line"] = line.to_json()
+    fields["line"] = Json(line)
   }
   if self.column is Some(column) {
-    fields["column"] = column.to_json()
+    fields["column"] = Json(column)
   }
-  fields.to_json()
+  Json(fields)
 }
 
 ///|
@@ -3267,12 +3267,12 @@ pub impl FromJson for OpenPathEditorTarget with fn from_json(json, path) {
       (path.add_key("path"), "expected an absolute URI path"),
     )
   }
-  let line : Int? = match fields.get("line") {
+  let line : Int32? = match fields.get("line") {
     Some(Null) => None
     Some(value) => Some(@json.from_json(value, path=path.add_key("line")))
     None => None
   }
-  let column : Int? = match fields.get("column") {
+  let column : Int32? = match fields.get("column") {
     Some(Null) => None
     Some(value) => Some(@json.from_json(value, path=path.add_key("column")))
     None => None

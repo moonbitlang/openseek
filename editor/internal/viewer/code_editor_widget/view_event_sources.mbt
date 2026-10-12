@@ -42,7 +42,7 @@ fn end_view_event_batch(view : @view.View?) -> Unit {
 /// event's source payload intentionally carries only the line ranges consumed
 /// by ViewLines and ViewCursors.
 fn view_tokens_changed_event(
-  changed_ranges : Array[(Int, Int)],
+  changed_ranges : Array[(Int32, Int32)],
 ) -> @view.ViewTokensChangedEvent {
   let ranges : Array[@view.ViewTokenChangeRange] = []
   for range in changed_ranges {

@@ -192,7 +192,7 @@ pub async fn resume_running(
 pub async fn git_require(
   args : Array[String],
   cwd~ : String,
-  timeout_ms? : Int = 30_000,
+  timeout_ms~ : Int32 = 30_000,
 ) -> Result[String, String] {
   let outcome = git_run(args, cwd~, timeout_ms~)
   if outcome.exit_code == 0 {

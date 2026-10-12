@@ -9,14 +9,14 @@ pub(all) struct PackageGraph {
   dirs : Array[String?]
   // `(from, to)`: package `from` imports package `to`, in any import kind
   // (source, blackbox-test, whitebox-test) — a test import can break too.
-  edges : Array[(Int, Int)]
+  edges : Array[(Int32, Int32)]
 } derive(Debug)
 
 ///|
 /// Output budget for the graph JSON. This repository's workspace graph is
 /// ~300 KB (700 packages, 3 300 edges); a 4 MB budget leaves an order of
 /// magnitude for larger workspaces before the result is dropped.
-const PackageGraphMaxOutputChars : Int = 4000000
+const PackageGraphMaxOutputChars : Int32 = 4000000
 
 ///|
 /// The project directory `count_errors` would check `path` from — the nearest
@@ -65,7 +65,7 @@ pub async fn package_graph(cwd : String) -> PackageGraph? {
 /// each local node's `(module root, rel)`, `None` for a registry package.
 priv struct RawPackageGraph {
   nodes : Array[(String, String)?]
-  edges : Array[(Int, Int)]
+  edges : Array[(Int32, Int32)]
 }
 
 ///|
@@ -96,7 +96,7 @@ fn decode_package_graph(text : String) -> RawPackageGraph? {
       _ => return None
     }
   }
-  let pairs : Array[(Int, Int)] = []
+  let pairs : Array[(Int32, Int32)] = []
   for edge in edges {
     guard edge is { "from": Number(from, ..), "to": Number(to, ..), .. } else {
       return None
@@ -227,8 +227,8 @@ fn parse_module_source(text : String, json~ : Bool) -> String {
 /// The package holding an absolute path: the local node whose directory is
 /// the longest one that contains it. `None` when no local package does — the
 /// path lies outside every package moon knows about from this cwd.
-pub fn PackageGraph::package_of(self : PackageGraph, path : String) -> Int? {
-  let mut best : (Int, Int)? = None
+pub fn PackageGraph::package_of(self : PackageGraph, path : String) -> Int32? {
+  let mut best : (Int32, Int32)? = None
   for index, dir in self.dirs {
     guard dir is Some(dir) else { continue }
     if path == dir || path.has_prefix("\{dir}/") {
@@ -247,14 +247,14 @@ pub fn PackageGraph::package_of(self : PackageGraph, path : String) -> Int? {
 /// list; the graph is small enough that no adjacency index is built.
 pub fn PackageGraph::depends_on(
   self : PackageGraph,
-  from : Int,
-  targets : Array[Int],
+  from : Int32,
+  targets : Array[Int32],
 ) -> Bool {
   if targets.contains(from) {
     return true
   }
-  let seen : Set[Int] = Set([from])
-  let queue : Array[Int] = [from]
+  let seen : Set[Int32] = Set([from])
+  let queue : Array[Int32] = [from]
   while queue.pop() is Some(current) {
     for edge in self.edges {
       let (source, target) = edge

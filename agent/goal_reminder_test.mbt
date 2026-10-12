@@ -7,7 +7,7 @@
 async fn goal_test_server(
   group : @async.TaskGroup[Unit],
   bodies : Array[String],
-  probe_calls~ : Int,
+  probe_calls~ : Int32,
 ) -> String? {
   serve_chat_completions(
     group,
@@ -36,7 +36,7 @@ async fn goal_test_server(
 /// A no-op probe tool answering `result`: the filler call scripted turns use
 /// to keep a batch or a turn alive.
 fn probe_definition(
-  result? : String = "probe-result",
+  result~ : String = "probe-result",
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="probe",
@@ -57,7 +57,7 @@ fn goal_set_marker(text : String) -> @agent_session.SessionItem {
 }
 
 ///|
-fn count_reminders(body : String) -> Int {
+fn count_reminders(body : String) -> Int32 {
   body.split("[goal reminder]").count() - 1
 }
 

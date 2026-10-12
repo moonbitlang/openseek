@@ -16,15 +16,15 @@
 priv enum SyntacticLineTokens {
   Missing
   Empty
-  Words(Array[UInt])
+  Words(Array[UInt32])
 }
 
 ///|
 /// Inclusive changed-line interval produced by one contiguous batch.
 /// Source: `contiguousTokensStore.ts:213-244`.
 pub struct ContiguousTokensStoreChange {
-  from_line_number : Int
-  to_line_number : Int
+  from_line_number : Int32
+  to_line_number : Int32
 }
 
 ///|
@@ -39,7 +39,7 @@ pub struct ContiguousTokensStoreUpdate {
 /// Source: `contiguousTokensStore.ts:19-22`.
 struct ContiguousTokensStore {
   line_tokens : Array[SyntacticLineTokens]
-  mut len : Int
+  mut len : Int32
   language_id_codec : @services.LanguageIdCodec
 }
 
@@ -75,7 +75,7 @@ fn ContiguousTokensStore::has_tokens(self : ContiguousTokensStore) -> Bool {
 pub fn ContiguousTokensStore::get_tokens(
   self : ContiguousTokensStore,
   top_level_language_id : String,
-  line_index : Int,
+  line_index : Int32,
   line_text : String,
 ) -> LineTokens {
   let raw_line_tokens = if line_index < self.len {
@@ -86,7 +86,7 @@ pub fn ContiguousTokensStore::get_tokens(
   match raw_line_tokens {
     Words(tokens) => LineTokens(tokens, line_text, self.language_id_codec)
     Missing | Empty => {
-      let line_tokens : Array[UInt] = [
+      let line_tokens : Array[UInt32] = [
         line_text.length().reinterpret_as_uint(),
         self.default_metadata(top_level_language_id),
       ]
@@ -102,7 +102,7 @@ pub fn ContiguousTokensStore::get_tokens(
 fn ContiguousTokensStore::default_metadata(
   self : ContiguousTokensStore,
   top_level_language_id : String,
-) -> UInt {
+) -> UInt32 {
   let language_id = self.language_id_codec.encode_language_id(
     top_level_language_id,
   )
@@ -121,8 +121,8 @@ fn ContiguousTokensStore::default_metadata(
 fn ContiguousTokensStore::massage_tokens(
   self : ContiguousTokensStore,
   top_level_language_id : String,
-  line_text_length : Int,
-  tokens : Array[UInt]?,
+  line_text_length : Int32,
+  tokens : Array[UInt32]?,
 ) -> SyntacticLineTokens {
   let encoded_language_id = self.language_id_codec.encode_language_id(
     top_level_language_id,
@@ -153,7 +153,7 @@ fn ContiguousTokensStore::massage_tokens(
 /// Source: `contiguousTokensStore.ts:87-92`.
 fn ContiguousTokensStore::ensure_line(
   self : ContiguousTokensStore,
-  line_index : Int,
+  line_index : Int32,
 ) -> Unit {
   while line_index >= self.len {
     self.line_tokens.push(Missing)
@@ -168,9 +168,9 @@ fn ContiguousTokensStore::ensure_line(
 fn ContiguousTokensStore::set_tokens(
   self : ContiguousTokensStore,
   top_level_language_id : String,
-  line_index : Int,
-  line_text_length : Int,
-  tokens : Array[UInt]?,
+  line_index : Int32,
+  line_text_length : Int32,
+  tokens : Array[UInt32]?,
   check_equality : Bool,
 ) -> Bool {
   let new_tokens = self.massage_tokens(
@@ -210,7 +210,7 @@ pub fn ContiguousTokensStore::set_multiline_tokens(
   self : ContiguousTokensStore,
   tokens : Array[ContiguousMultilineTokens],
   top_level_language_id : String,
-  get_line_length : (Int) -> Int,
+  get_line_length : (Int32) -> Int32,
 ) -> ContiguousTokensStoreUpdate {
   if tokens.length() == 0 {
     return { changes: [], }

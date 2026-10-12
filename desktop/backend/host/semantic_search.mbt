@@ -5,23 +5,23 @@
 // Search panel's generation/cancel contract.
 
 ///|
-const MaxSemanticSearchResults : Int = 20000
+const MaxSemanticSearchResults : Int32 = 20000
 
 ///|
-const MaxSemanticSearchCancellationFrontiers : Int = 128
+const MaxSemanticSearchCancellationFrontiers : Int32 = 128
 
 ///|
-const MaxSemanticSearchStderrBytes : Int = 1000000
+const MaxSemanticSearchStderrBytes : Int32 = 1000000
 
 ///|
-const MaxSemanticSearchErrorMessageUnits : Int = 1000
+const MaxSemanticSearchErrorMessageUnits : Int32 = 1000
 
 ///|
 /// Emit a progress notification on the first hit and then every
 /// `SemanticSearchProgressBatch` accumulated hits, so a long scan paints
 /// results before the final reply arrives. The reply stays authoritative;
 /// progress is best-effort.
-const SemanticSearchProgressBatch : Int = 50
+const SemanticSearchProgressBatch : Int32 = 50
 
 ///|
 const MoongrepErrorJsonParseEnabled : Bool = true
@@ -33,7 +33,7 @@ const MoongrepErrorJsonParseEnabled : Bool = true
 /// search deterministic instead of silently running whatever the local
 /// registry index knows as "latest".
 priv struct ParsedSemanticContextLine {
-  line : Int
+  line : Int32
   text : String
   is_match : Bool
 }
@@ -43,10 +43,10 @@ priv struct ParsedSemanticMatch {
   path : String
   rule_id : String
   description : String?
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   matched_source : String
   source_context : Array[ParsedSemanticContextLine]
 }
@@ -59,7 +59,7 @@ priv enum SemanticSearchOutcome {
 
 ///|
 priv struct RunningSemanticSearch {
-  generation : Int
+  generation : Int32
   root : String
   reply : @async.Queue[SearchSemanticReply]
   task : @async.Task[Unit]
@@ -67,7 +67,7 @@ priv struct RunningSemanticSearch {
 
 ///|
 priv struct SemanticSearchCancellationFrontiers {
-  values : Map[String, Int]
+  values : Map[String, Int32]
   order : Array[String]
 }
 
@@ -80,7 +80,7 @@ fn SemanticSearchCancellationFrontiers::SemanticSearchCancellationFrontiers() ->
 fn SemanticSearchCancellationFrontiers::get(
   self : SemanticSearchCancellationFrontiers,
   session_key : String,
-) -> Int {
+) -> Int32 {
   self.values.get(session_key).unwrap_or(-1)
 }
 
@@ -88,7 +88,7 @@ fn SemanticSearchCancellationFrontiers::get(
 fn SemanticSearchCancellationFrontiers::record(
   self : SemanticSearchCancellationFrontiers,
   session_key : String,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   self.values[session_key] = self.get(session_key).max(generation)
   self.order.retain(key => key != session_key)
@@ -107,10 +107,14 @@ priv enum SemanticSearchRequest {
     payload~ : SearchSemanticPayload,
     reply~ : @async.Queue[SearchSemanticReply]
   )
-  Cancel(session_key~ : String, generation~ : Int, reply~ : @async.Queue[Unit])
+  Cancel(
+    session_key~ : String,
+    generation~ : Int32,
+    reply~ : @async.Queue[Unit]
+  )
   Finished(
     session_key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     outcome~ : SemanticSearchOutcome
   )
 }
@@ -128,9 +132,9 @@ fn SemanticSearchService::SemanticSearchService() -> SemanticSearchService {
 ///|
 fn empty_semantic_search_reply(
   root : String,
-  generation : Int,
-  cancelled? : Bool = false,
-  partial? : Bool = false,
+  generation : Int32,
+  cancelled~ : Bool = false,
+  partial~ : Bool = false,
   error? : SemanticSearchError,
 ) -> SearchSemanticReply {
   {
@@ -162,7 +166,7 @@ async fn SemanticSearchService::search(
 async fn SemanticSearchService::cancel(
   self : SemanticSearchService,
   session_key : String,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.requests.put(Cancel(session_key~, generation~, reply~))
@@ -328,8 +332,8 @@ fn semantic_glob_matches(pattern : String, path : String) -> Bool {
   fn matches(
     pattern : Array[Char],
     path : Array[Char],
-    pi : Int,
-    si : Int,
+    pi : Int32,
+    si : Int32,
   ) -> Bool {
     if pi == pattern.length() {
       return si == path.length()
@@ -395,7 +399,7 @@ fn nested_semantic_object(
 }
 
 ///|
-fn semantic_number(fields : Map[String, Json], key : String) -> Int? {
+fn semantic_number(fields : Map[String, Json], key : String) -> Int32? {
   match fields.get(key) {
     Some(Number(value, ..)) => Some(value.to_int())
     _ => None
@@ -518,7 +522,7 @@ fn project_semantic_match(parsed : ParsedSemanticMatch) -> SemanticSearchHit {
 /// pattern/rules validation and immediate crashes happen before any hit row.
 /// Once hits were streamed, the exit is treated as a recoverable tail crash
 /// and the accumulated rows are kept, mirroring ripgrep's partial results.
-fn semantic_search_exit_is_fatal(exit_code : Int, got_results : Bool) -> Bool {
+fn semantic_search_exit_is_fatal(exit_code : Int32, got_results : Bool) -> Bool {
   exit_code != 0 && !got_results
 }
 
@@ -587,10 +591,10 @@ async fn publish_semantic_progress(
   emit : async (@protocol.Notification) -> Unit,
   root : String,
   session_key : String,
-  generation : Int,
+  generation : Int32,
   matches : Array[SemanticSearchHit],
-  match_count : Int,
-  file_count : Int,
+  match_count : Int32,
+  file_count : Int32,
 ) -> Unit {
   emit(
     SemanticSearchProgress({

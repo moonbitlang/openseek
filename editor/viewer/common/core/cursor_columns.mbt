@@ -15,12 +15,12 @@
 // which covers the conformance corpus.
 
 ///|
-fn compute_code_point(high : Int, low : Int) -> Int {
+fn compute_code_point(high : Int32, low : Int32) -> Int32 {
   (high - 0xD800) * 0x400 + (low - 0xDC00) + 0x10000
 }
 
 ///|
-fn get_next_code_point(str : String, len : Int, offset : Int) -> Int {
+fn get_next_code_point(str : String, len : Int32, offset : Int32) -> Int32 {
   let char_code = str[offset].to_int()
   if @base_common.is_high_surrogate(char_code) && offset + 1 < len {
     let next_char_code = str[offset + 1].to_int()
@@ -32,7 +32,7 @@ fn get_next_code_point(str : String, len : Int, offset : Int) -> Int {
 }
 
 ///|
-fn code_point_utf16_length(code_point : Int) -> Int {
+fn code_point_utf16_length(code_point : Int32) -> Int32 {
   if code_point >= 0x10000 {
     2
   } else {
@@ -41,7 +41,7 @@ fn code_point_utf16_length(code_point : Int) -> Int {
 }
 
 ///|
-fn is_emoji_imprecise(x : Int) -> Bool {
+fn is_emoji_imprecise(x : Int32) -> Bool {
   (x >= 0x1F1E6 && x <= 0x1F1FF) ||
   x == 8986 ||
   x == 8987 ||
@@ -59,10 +59,10 @@ fn is_emoji_imprecise(x : Int) -> Bool {
 
 ///|
 fn next_visible_column(
-  code_point : Int,
-  visible_column : Int,
-  tab_size : Int,
-) -> Int {
+  code_point : Int32,
+  visible_column : Int32,
+  tab_size : Int32,
+) -> Int32 {
   if code_point == 9 {
     return next_render_tab_stop(visible_column, tab_size)
   }
@@ -77,9 +77,9 @@ fn next_visible_column(
 /// Returns a visible column from a (1-based) column.
 pub fn visible_column_from_column(
   line_content : String,
-  column : Int,
-  tab_size : Int,
-) -> Int {
+  column : Int32,
+  tab_size : Int32,
+) -> Int32 {
   let text_len = (column - 1).min(line_content.length())
   for offset = 0, result = 0; offset < text_len; {
     let code_point = get_next_code_point(line_content, text_len, offset)
@@ -95,9 +95,9 @@ pub fn visible_column_from_column(
 /// points, tabs snap to tab stops).
 pub fn to_statusbar_column(
   line_content : String,
-  column : Int,
-  tab_size : Int,
-) -> Int {
+  column : Int32,
+  tab_size : Int32,
+) -> Int32 {
   let text_len = (column - 1).min(line_content.length())
   let result = for offset = 0, result = 0; offset < text_len; {
     let code_point = get_next_code_point(line_content, text_len, offset)
@@ -117,9 +117,9 @@ pub fn to_statusbar_column(
 /// Returns a (1-based) column from a visible column.
 pub fn column_from_visible_column(
   line_content : String,
-  visible_column : Int,
-  tab_size : Int,
-) -> Int {
+  visible_column : Int32,
+  tab_size : Int32,
+) -> Int32 {
   if visible_column <= 0 {
     return 1
   }
@@ -152,6 +152,6 @@ pub fn column_from_visible_column(
 ///|
 /// ATTENTION: this works with 0-based columns (as opposed to the regular
 /// 1-based columns).
-fn next_render_tab_stop(visible_column : Int, tab_size : Int) -> Int {
+fn next_render_tab_stop(visible_column : Int32, tab_size : Int32) -> Int32 {
   visible_column + tab_size - visible_column % tab_size
 }

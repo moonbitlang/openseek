@@ -9,8 +9,8 @@
 priv struct RpcSession {
   socket : @js.Value
   // id → the promise/resolve/reject record of the awaiting request.
-  pending : Map[Int, @js.Value]
-  mut next_id : Int
+  pending : Map[Int32, @js.Value]
+  mut next_id : Int32
   mut open_ : Bool
 }
 
@@ -189,7 +189,7 @@ fn ws_reply_failure(error : Error) -> Error {
 ///|
 fn remove_pending_if_same(
   session : RpcSession,
-  id : Int,
+  id : Int32,
   deferred : @js.Value,
 ) -> Unit {
   if session.pending.get(id) is Some(current) &&
@@ -229,7 +229,7 @@ fn handle_message(
     return
   }
   guard js_prop(envelope, "id") is Some(id_value) &&
-    (@js.Cast::into(id_value) : Int?) is Some(id) else {
+    (@js.Cast::into(id_value) : Int32?) is Some(id) else {
     return
   }
   // A reply for a request this session no longer tracks (settled twice, or

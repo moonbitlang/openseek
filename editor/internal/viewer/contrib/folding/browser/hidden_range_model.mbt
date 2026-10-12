@@ -107,7 +107,10 @@ pub fn HiddenRangeModel::has_ranges(self : HiddenRangeModel) -> Bool {
 
 ///|
 /// `isHidden` (`hiddenRangeModel.ts:92`).
-pub fn HiddenRangeModel::is_hidden(self : HiddenRangeModel, line : Int) -> Bool {
+pub fn HiddenRangeModel::is_hidden(
+  self : HiddenRangeModel,
+  line : Int32,
+) -> Bool {
   find_hidden_range(self.hidden_ranges, line) is Some(_)
 }
 
@@ -122,7 +125,7 @@ pub fn HiddenRangeModel::adjust_selections(
   let mut has_changes = false
   let editor_model = self.folding_model.text_model()
   let mut last_range : @base_common.Range? = None
-  let adjust_line = (line : Int) => {
+  let adjust_line = (line : Int32) => {
     if !(last_range is Some(range) && is_inside_hidden_range(line, range)) {
       last_range = find_hidden_range(self.hidden_ranges, line)
     }
@@ -176,7 +179,7 @@ fn HiddenRangeModel::dispose(self : HiddenRangeModel) -> Unit {
 
 ///|
 /// `isInside` (`hiddenRangeModel.ts:141`).
-fn is_inside_hidden_range(line : Int, range : @base_common.Range) -> Bool {
+fn is_inside_hidden_range(line : Int32, range : @base_common.Range) -> Bool {
   line >= range.start_line_number && line <= range.end_line_number
 }
 
@@ -185,7 +188,7 @@ fn is_inside_hidden_range(line : Int, range : @base_common.Range) -> Bool {
 /// `line`, by binary search (`findFirstIdxMonotonousOrArrLen`).
 fn find_hidden_range(
   ranges : Array[@base_common.Range],
-  line : Int,
+  line : Int32,
 ) -> @base_common.Range? {
   // first index whose range starts after `line`
   let (low, _high) = for low = 0, high = ranges.length(); low < high; {

@@ -26,8 +26,8 @@ pub(all) enum TerminalPush {
   /// `sequence` identifies this output chunk within one session. The webview
   /// echoes the latest rendered value in `terminal_ack`; acknowledging a
   /// sequence also acknowledges every earlier outstanding chunk.
-  Output(id~ : String, sequence~ : Int, data~ : Bytes)
-  Exited(id~ : String, code~ : Int)
+  Output(id~ : String, sequence~ : Int32, data~ : Bytes)
+  Exited(id~ : String, code~ : Int32)
 }
 
 ///|
@@ -42,11 +42,11 @@ const HighWatermark = 262144
 /// host. An unknown future sequence remains a no-op instead of releasing data
 /// the client has not demonstrated it received.
 priv struct TerminalOutputWindow {
-  mut unacked : Int
+  mut unacked : Int32
   // Byte counts in sequence order. The first outstanding sequence is
   // `next_sequence - chunks.length()`, so no sequence-to-size map is needed.
-  chunks : @deque.Deque[Int]
-  mut next_sequence : Int
+  chunks : @deque.Deque[Int32]
+  mut next_sequence : Int32
 }
 
 ///|
@@ -54,8 +54,8 @@ priv struct TerminalOutputWindow {
 /// return its monotonically increasing sequence.
 fn TerminalOutputWindow::record(
   self : TerminalOutputWindow,
-  bytes : Int,
-) -> Int {
+  bytes : Int32,
+) -> Int32 {
   let sequence = self.next_sequence
   self.next_sequence += 1
   self.chunks.push_back(bytes)
@@ -68,7 +68,7 @@ fn TerminalOutputWindow::record(
 /// the blocked reader whether the bounded window has capacity again.
 fn TerminalOutputWindow::acknowledge_through(
   self : TerminalOutputWindow,
-  sequence : Int,
+  sequence : Int32,
 ) -> Bool {
   let first_sequence = self.next_sequence - self.chunks.length()
   let acknowledged_chunks = sequence - first_sequence + 1
@@ -127,12 +127,12 @@ priv struct OpenRequest {
   id : String
   /// The page connection that submitted this request. A later connect
   /// handshake invalidates it even if the pump has already dequeued it.
-  connection_generation : Int
+  connection_generation : Int32
   argv : Array[String]
   /// The directory passed directly to the PTY process spawn.
   cwd : String
-  cols : Int
-  rows : Int
+  cols : Int32
+  rows : Int32
   /// Spawn outcome for the waiting `open_terminal` call.
   reply : @async.Queue[Result[Unit, String]]
 }
@@ -148,7 +148,7 @@ struct TerminalState {
   mut closed : Bool
   /// Incremented by the connect handshake so opens from an older page cannot
   /// publish a session after that page has gone away.
-  mut connection_generation : Int
+  mut connection_generation : Int32
 }
 
 ///|
@@ -171,8 +171,8 @@ pub fn new_terminal_state() -> TerminalState {
 pub async fn open_terminal(
   state : TerminalState,
   cwd~ : String,
-  cols~ : Int,
-  rows~ : Int,
+  cols~ : Int32,
+  rows~ : Int32,
   command? : Array[String],
 ) -> String {
   guard !state.closed else { raise TerminalError("terminal service is closed") }
@@ -217,8 +217,8 @@ pub async fn write_terminal(
 pub fn resize_terminal(
   state : TerminalState,
   id~ : String,
-  cols~ : Int,
-  rows~ : Int,
+  cols~ : Int32,
+  rows~ : Int32,
 ) -> Unit raise {
   guard state.sessions.get(id) is Some(session) else {
     raise TerminalError("terminal \{id} is not open")
@@ -235,7 +235,7 @@ pub fn resize_terminal(
 pub fn ack_terminal(
   state : TerminalState,
   id~ : String,
-  sequence~ : Int,
+  sequence~ : Int32,
 ) -> Unit {
   guard state.sessions.get(id) is Some(session) else { return }
   if session.output.acknowledge_through(sequence) {

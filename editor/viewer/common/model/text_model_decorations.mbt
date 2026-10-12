@@ -63,10 +63,10 @@ let _test_only_member_anchor : Unit = ignore(DidChangeDecorationsEmitter::fire)
 /// is both the stable MoonBit model identity and the decoration-id namespace.
 /// This intentionally differs from Monaco's wrapped single-letter hash because
 /// marker lookup exposes decoration ids across multiple same-URI models.
-let model_identity_counter : Ref[Int] = Ref(0)
+let model_identity_counter : Ref[Int32] = Ref(0)
 
 ///|
-fn next_model_identity() -> (Int, String) {
+fn next_model_identity() -> (Int32, String) {
   model_identity_counter.val += 1
   let identity = model_identity_counter.val
   // Monaco's single-letter hash is only a compact decoration namespace; it
@@ -85,7 +85,7 @@ fn next_model_identity() -> (Int, String) {
 /// out-of-scope features (see file header).
 struct DidChangeDecorationsEmitter {
   actual : @base_common.Emitter[ModelDecorationsChangedEvent]
-  mut deferred_cnt : Int
+  mut deferred_cnt : Int32
   mut should_fire_deferred : Bool
   mut affects_minimap : Bool
   mut affects_overview_ruler : Bool
@@ -288,9 +288,9 @@ fn DecorationsTrees::ensure_nodes_have_ranges(
 fn DecorationsTrees::get_all_in_interval(
   self : DecorationsTrees,
   host : TextModel,
-  start : Int,
-  end : Int,
-  filter_owner_id : Int,
+  start : Int32,
+  end : Int32,
+  filter_owner_id : Int32,
   filter_out_validation : Bool,
   filter_font_decorations : Bool,
   only_margin_decorations : Bool,
@@ -307,12 +307,12 @@ fn DecorationsTrees::get_all_in_interval(
 /// `_intervalSearch` (`textModel.ts:2240-2245`).
 fn DecorationsTrees::interval_search(
   self : DecorationsTrees,
-  start : Int,
-  end : Int,
-  filter_owner_id : Int,
+  start : Int32,
+  end : Int32,
+  filter_owner_id : Int32,
   filter_out_validation : Bool,
   filter_font_decorations : Bool,
-  cached_version_id : Int,
+  cached_version_id : Int32,
   only_margin_decorations : Bool,
 ) -> Array[IntervalNode] {
   let r0 = self.decorations_tree_0.interval_search(
@@ -335,7 +335,7 @@ fn DecorationsTrees::interval_search(
 fn DecorationsTrees::get_all_injected_text(
   self : DecorationsTrees,
   host : TextModel,
-  filter_owner_id : Int,
+  filter_owner_id : Int32,
 ) -> Array[ModelDecoration] {
   let version_id = host.get_version_id()
   let result = self.injected_text_decorations_tree.search(
@@ -350,7 +350,7 @@ fn DecorationsTrees::get_all_injected_text(
 /// `collectNodesFromOwner` (`textModel.ts:2328-2333`).
 fn DecorationsTrees::collect_nodes_from_owner(
   self : DecorationsTrees,
-  owner_id : Int,
+  owner_id : Int32,
 ) -> Array[IntervalNode] {
   let r0 = self.decorations_tree_0.collect_nodes_from_owner(owner_id)
   let r1 = self.decorations_tree_1.collect_nodes_from_owner(owner_id)
@@ -414,7 +414,7 @@ fn DecorationsTrees::get_node_range(
 fn DecorationsTrees::resolve_node(
   self : DecorationsTrees,
   node : IntervalNode,
-  cached_version_id : Int,
+  cached_version_id : Int32,
 ) -> Unit {
   if is_node_injected_text(node) {
     self.injected_text_decorations_tree.resolve_node(node, cached_version_id)
@@ -445,8 +445,8 @@ pub fn TextModel::on_did_change_decorations(
 /// range via the snapshot.
 fn TextModel::get_range_at(
   self : TextModel,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> @base_common.Range {
   self.snapshot.range_of(OffsetRange(start, end))
 }
@@ -471,7 +471,7 @@ pub struct ModelDecorationsChangeAccessor {
 pub fn[T] TextModel::change_decorations(
   self : TextModel,
   callback : (ModelDecorationsChangeAccessor) -> T,
-  owner_id? : Int = 0,
+  owner_id~ : Int32 = 0,
 ) -> T {
   // _assertNotDisposed: N-A (readonly model)
   self.on_did_change_decorations.begin_deferred_emit()
@@ -484,7 +484,7 @@ pub fn[T] TextModel::change_decorations(
 /// `_changeDecorations` (`textModel.ts:1680-1715`).
 fn[T] TextModel::change_decorations_impl(
   self : TextModel,
-  owner_id : Int,
+  owner_id : Int32,
   callback : (ModelDecorationsChangeAccessor) -> T,
 ) -> T {
   let accessor : ModelDecorationsChangeAccessor = {
@@ -530,7 +530,7 @@ pub fn TextModel::delta_decorations(
   self : TextModel,
   old_decorations : Array[String],
   new_decorations : Array[ModelDeltaDecoration],
-  owner_id? : Int = 0,
+  owner_id~ : Int32 = 0,
 ) -> Array[String] {
   // _assertNotDisposed: N-A (readonly model)
   if old_decorations.length() == 0 && new_decorations.length() == 0 {
@@ -559,7 +559,7 @@ pub fn TextModel::delta_decorations(
 /// source, this fires no change event.
 pub fn TextModel::remove_all_decorations_with_owner_id(
   self : TextModel,
-  owner_id : Int,
+  owner_id : Int32,
 ) -> Unit {
   // _isDisposed guard: N-A (readonly model)
   let nodes = self.decorations_tree.collect_nodes_from_owner(owner_id)
@@ -585,10 +585,10 @@ pub fn TextModel::get_decoration_range(
 /// `getLineDecorations` (`textModel.ts:1806-1812`).
 pub fn TextModel::get_line_decorations(
   self : TextModel,
-  line_number : Int,
-  owner_id? : Int = 0,
-  filter_out_validation? : Bool = false,
-  filter_font_decorations? : Bool = false,
+  line_number : Int32,
+  owner_id~ : Int32 = 0,
+  filter_out_validation~ : Bool = false,
+  filter_font_decorations~ : Bool = false,
 ) -> Array[ModelDecoration] {
   if line_number < 1 || line_number > self.snapshot.line_count() {
     return []
@@ -607,12 +607,12 @@ pub fn TextModel::get_line_decorations(
 /// provider merges are N-A (providers out of scope) — tree results only.
 fn TextModel::get_lines_decorations(
   self : TextModel,
-  start_line_number : Int,
-  end_line_number : Int,
-  owner_id? : Int = 0,
-  filter_out_validation? : Bool = false,
-  filter_font_decorations? : Bool = false,
-  only_margin_decorations? : Bool = false,
+  start_line_number : Int32,
+  end_line_number : Int32,
+  owner_id~ : Int32 = 0,
+  filter_out_validation~ : Bool = false,
+  filter_font_decorations~ : Bool = false,
+  only_margin_decorations~ : Bool = false,
 ) -> Array[ModelDecoration] {
   let line_count = self.snapshot.line_count()
   let start_line_number = start_line_number.clamp(min=1, max=line_count)
@@ -633,10 +633,10 @@ fn TextModel::get_lines_decorations(
 pub fn TextModel::get_decorations_in_range(
   self : TextModel,
   range : @base_common.Range,
-  owner_id? : Int = 0,
-  filter_out_validation? : Bool = false,
-  filter_font_decorations? : Bool = false,
-  only_margin_decorations? : Bool = false,
+  owner_id~ : Int32 = 0,
+  filter_out_validation~ : Bool = false,
+  filter_font_decorations~ : Bool = false,
+  only_margin_decorations~ : Bool = false,
 ) -> Array[ModelDecoration] {
   let validated_range = self.validate_range(range)
   self.get_decorations_in_range_impl(
@@ -650,7 +650,7 @@ pub fn TextModel::get_decorations_in_range(
 /// owners (the tree's filter semantics).
 pub fn TextModel::get_injected_text_decorations(
   self : TextModel,
-  owner_id? : Int = 0,
+  owner_id~ : Int32 = 0,
 ) -> Array[ModelDecoration] {
   self.decorations_tree.get_all_injected_text(self, owner_id)
 }
@@ -660,7 +660,7 @@ pub fn TextModel::get_injected_text_decorations(
 fn TextModel::get_decorations_in_range_impl(
   self : TextModel,
   filter_range : @base_common.Range,
-  filter_owner_id : Int,
+  filter_owner_id : Int32,
   filter_out_validation : Bool,
   filter_font_decorations : Bool,
   only_margin_decorations : Bool,
@@ -685,7 +685,7 @@ fn TextModel::get_decorations_in_range_impl(
 /// is consumed only by those arms in the source, hence unused here.
 fn TextModel::change_decoration_impl(
   self : TextModel,
-  _owner_id : Int,
+  _owner_id : Int32,
   decoration_id : String,
   range : @base_common.Range,
 ) -> Unit {
@@ -712,7 +712,7 @@ fn TextModel::change_decoration_impl(
 /// overview-ruler tree migration remains.
 fn TextModel::change_decoration_options_impl(
   self : TextModel,
-  _owner_id : Int,
+  _owner_id : Int32,
   decoration_id : String,
   options : ModelDecorationOptions,
 ) -> Unit {
@@ -738,10 +738,10 @@ fn TextModel::change_decoration_options_impl(
 /// dropped with their features.
 fn TextModel::delta_decorations_impl(
   self : TextModel,
-  owner_id : Int,
+  owner_id : Int32,
   old_decorations_ids : Array[String],
   new_decorations : Array[ModelDeltaDecoration],
-  suppress_events? : Bool = false,
+  suppress_events~ : Bool = false,
 ) -> Array[String] {
   let version_id = self.get_version_id()
   let old_decorations_len = old_decorations_ids.length()

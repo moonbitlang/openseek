@@ -19,7 +19,7 @@ priv struct MarkdownViewerWidgetDefinitionBridge {
   viewer : MarkdownViewerWidget
   view : @markdown_document.MarkdownDocumentView
   model : @model.TextModel
-  attach_generation : Int
+  attach_generation : Int32
   listeners : Array[@base_common.Disposable]
   navigation_action : @goto_symbol.SymbolNavigationAction
   definition_action : @goto_symbol.DefinitionAction
@@ -32,7 +32,7 @@ priv struct MarkdownViewerWidgetDefinitionBridge {
   mut mouse_down_target : MarkdownViewerWidgetDefinitionTarget?
   mut last_client_x : Double
   mut last_client_y : Double
-  mut surface_generation : Int
+  mut surface_generation : Int32
   mut active : Bool
   mut disposed : Bool
 }
@@ -51,7 +51,7 @@ fn MarkdownViewerWidgetDefinitionBridge::MarkdownViewerWidgetDefinitionBridge(
   viewer : MarkdownViewerWidget,
   view : @markdown_document.MarkdownDocumentView,
   model : @model.TextModel,
-  attach_generation : Int,
+  attach_generation : Int32,
 ) -> MarkdownViewerWidgetDefinitionBridge {
   let mut bridge_slot : MarkdownViewerWidgetDefinitionBridge? = None
   let anchor_is_current = anchor => {
@@ -450,7 +450,7 @@ fn MarkdownViewerWidgetDefinitionBridge::show_context_menu(
   target : MarkdownViewerWidgetDefinitionTarget,
   client_x : Double,
   client_y : Double,
-  auto_select_first? : Bool = false,
+  auto_select_first~ : Bool = false,
 ) -> Bool {
   guard self.target_is_current(target) else { return false }
   let entries = self.context_menu_entries()

@@ -1,25 +1,25 @@
 ///|
-fn projection_block(source : String, index : Int) -> MarkdownCodeBlock {
+fn projection_block(source : String, index : Int32) -> MarkdownCodeBlock {
   render_markdown(source).projection.code_blocks[index]
 }
 
 ///|
-fn projection_source_offset(source : String, needle : String) -> Int {
+fn projection_source_offset(source : String, needle : String) -> Int32 {
   source.find(needle).unwrap()
 }
 
 ///|
 fn assert_projection_range(
   actual : @common.OffsetRange,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> Unit raise {
   assert_eq(actual.start, start)
   assert_eq(actual.end_exclusive, end_exclusive)
 }
 
 ///|
-fn semantic_boundaries(line : MarkdownCodeLine) -> Array[Int?] {
+fn semantic_boundaries(line : MarkdownCodeLine) -> Array[Int32?] {
   line.displayed_boundary_to_source_offset
 }
 
@@ -228,7 +228,7 @@ test "UTF-16 boundaries round trip through astral code units before and inside a
 ///|
 test "isolated high and low surrogate units keep exact source boundary offsets" {
   for code_unit in [0xD800, 0xDFFF] {
-    let lone = Int::unsafe_to_char(code_unit).to_string()
+    let lone = Int32::unsafe_to_char(code_unit).to_string()
     let source =
       $|\{lone}
       $|```mbt check

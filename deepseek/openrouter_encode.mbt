@@ -3,8 +3,8 @@
 pub fn openrouter_encode_chat_request(
   model~ : DsVariant,
   thinking~ : ThinkingMode,
-  tools? : Array[ToolDefinition] = [],
-  stream? : Bool = false,
+  tools~ : Array[ToolDefinition] = [],
+  stream~ : Bool = false,
   response_format? : ResponseFormat,
   messages : Array[ChatMessage],
 ) -> Json raise ChatMessageError {

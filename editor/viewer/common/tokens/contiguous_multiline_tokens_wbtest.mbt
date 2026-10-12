@@ -6,7 +6,7 @@
 /// Oracle: checked-in reference tree.
 
 ///|
-fn assert_words(actual : Array[UInt], expected : Array[UInt]) -> Unit raise {
+fn assert_words(actual : Array[UInt32], expected : Array[UInt32]) -> Unit raise {
   assert_eq(actual.length(), expected.length())
   for index in 0..<expected.length() {
     assert_eq(actual[index], expected[index])
@@ -16,8 +16,8 @@ fn assert_words(actual : Array[UInt], expected : Array[UInt]) -> Unit raise {
 ///|
 fn assert_line_range(
   actual : @base_common.LineRange,
-  start_line_number : Int,
-  end_line_number_exclusive : Int,
+  start_line_number : Int32,
+  end_line_number_exclusive : Int32,
 ) -> Unit raise {
   assert_eq(actual.start_line_number, start_line_number)
   assert_eq(actual.end_line_number_exclusive, end_line_number_exclusive)

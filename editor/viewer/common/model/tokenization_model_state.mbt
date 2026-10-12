@@ -7,7 +7,7 @@
 priv struct TokenizationModelState {
   snapshot : Ref[TextSnapshot]
   language_id : String
-  attached_count : Ref[Int]
+  attached_count : Ref[Int32]
   too_large : Bool
   disposing : Ref[Bool]
   scheduler : Ref[TokenizationScheduler?]
@@ -20,7 +20,7 @@ priv struct TokenizationModelState {
 fn TokenizationModelState::TokenizationModelState(
   snapshot~ : Ref[TextSnapshot],
   language_id~ : String,
-  attached_count~ : Ref[Int],
+  attached_count~ : Ref[Int32],
   too_large~ : Bool,
   disposing~ : Ref[Bool],
   scheduler~ : Ref[TokenizationScheduler?],

@@ -215,9 +215,9 @@ async fn run_general(
   matches : @argparse.Matches,
   turn : TurnRecord,
   task~ : String,
-  max_steps~ : Int?,
+  max_steps~ : Int32?,
   workspace_root~ : String,
-  review_deadline_ms~ : Int?,
+  review_deadline_ms~ : Int32?,
   approval_policy~ : @execution.ApprovalPolicy,
   delegate~ : Bool,
 ) -> Unit {
@@ -339,7 +339,7 @@ async fn run_preset(
   kind~ : Kind,
   name~ : String,
   input~ : Json,
-  requested_max_steps~ : Int?,
+  requested_max_steps~ : Int32?,
   workspace_root~ : String,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)

@@ -9,8 +9,8 @@
 pub struct ViewModelLinesFromProjectedModel {
   model : @model.TextModel
   mut font_info : @config.FontInfo
-  mut tab_size : Int
-  mut wrapping_column : Int
+  mut tab_size : Int32
+  mut wrapping_column : Int32
   mut wrapping_indent : @editor_api.WrappingIndent
   mut model_line_projections : Array[ModelLineProjection]
   /// Monaco's `projectedModelLineLineCounts` (a
@@ -18,14 +18,14 @@ pub struct ViewModelLinesFromProjectedModel {
   /// viewer reconstructs wholesale instead of editing incrementally, so it
   /// stores the prefix sums directly: entry `i` is the number of view lines
   /// before one-based model line `i + 1`, and the last entry is the total.
-  mut projected_model_line_line_counts : Array[Int]
+  mut projected_model_line_line_counts : Array[Int32]
   /// Monaco's `hiddenAreasDecorationIds`: the hidden (folded) model ranges
   /// live as empty-options model decorations so edits keep them anchored.
   mut hidden_areas_decoration_ids : Array[String]
   // Package-private conformance counters. They make the source batch/read
   // ownership observable to white-box tests without widening the public API.
-  priv mut batch_call_count : Int
-  priv mut passive_token_read_count : Int
+  priv mut batch_call_count : Int32
+  priv mut passive_token_read_count : Int32
 }
 
 ///|
@@ -33,7 +33,7 @@ pub struct ViewModelLinesFromProjectedModel {
 /// tests without leaking either field through `pkg.generated.mbti`.
 fn ViewModelLinesFromProjectedModel::token_demand_counters(
   self : ViewModelLinesFromProjectedModel,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   (self.batch_call_count, self.passive_token_read_count)
 }
 
@@ -46,8 +46,8 @@ let _test_only_token_demand_counters_anchor : Unit = ignore(
 /// A view line as (model line, wrapped-line index) — Monaco's `ViewLineInfo`
 /// (`viewModelLines.ts:1054`).
 priv struct ViewLineInfo {
-  model_line_number : Int
-  model_line_wrapped_line_idx : Int
+  model_line_number : Int32
+  model_line_wrapped_line_idx : Int32
 }
 
 ///|
@@ -58,8 +58,8 @@ priv struct ViewLineInfo {
 pub fn ViewModelLinesFromProjectedModel::ViewModelLinesFromProjectedModel(
   model : @model.TextModel,
   font_info~ : @config.FontInfo,
-  tab_size~ : Int,
-  wrapping_column~ : Int,
+  tab_size~ : Int32,
+  wrapping_column~ : Int32,
   wrapping_indent~ : @editor_api.WrappingIndent,
 ) -> ViewModelLinesFromProjectedModel {
   let lines = {
@@ -114,7 +114,7 @@ fn ViewModelLinesFromProjectedModel::construct_lines(
   reset_hidden_areas~ : Bool,
 ) -> Unit {
   let model_line_projections : Array[ModelLineProjection] = []
-  let prefix_sums : Array[Int] = [0]
+  let prefix_sums : Array[Int32] = [0]
   if reset_hidden_areas {
     self.hidden_areas_decoration_ids = self.model.delta_decorations(
       self.hidden_areas_decoration_ids,
@@ -201,7 +201,7 @@ fn ViewModelLinesFromProjectedModel::ensure_at_least_one_visible_line(
 fn ViewModelLinesFromProjectedModel::rebuild_prefix_sums(
   self : ViewModelLinesFromProjectedModel,
 ) -> Unit {
-  let prefix_sums : Array[Int] = [0]
+  let prefix_sums : Array[Int32] = [0]
   for i, projection in self.model_line_projections {
     prefix_sums.push(prefix_sums[i] + projection.get_view_line_count())
   }
@@ -297,7 +297,7 @@ pub fn ViewModelLinesFromProjectedModel::set_hidden_areas(
 /// `modelPositionIsVisible` (`viewModelLines.ts:250`).
 pub fn ViewModelLinesFromProjectedModel::model_position_is_visible(
   self : ViewModelLinesFromProjectedModel,
-  model_line_number : Int,
+  model_line_number : Int32,
 ) -> Bool {
   if model_line_number < 1 ||
     model_line_number > self.model_line_projections.length() {
@@ -346,7 +346,7 @@ fn normalize_line_ranges(
 pub fn ViewModelLinesFromProjectedModel::set_wrapping_settings(
   self : ViewModelLinesFromProjectedModel,
   font_info : @config.FontInfo,
-  wrapping_column : Int,
+  wrapping_column : Int32,
   wrapping_indent : @editor_api.WrappingIndent,
 ) -> Bool {
   if self.font_info == font_info &&
@@ -366,7 +366,7 @@ pub fn ViewModelLinesFromProjectedModel::set_wrapping_settings(
 /// (`viewModelLines.ts:266`). Returns whether the view-line mapping changed.
 pub fn ViewModelLinesFromProjectedModel::set_tab_size(
   self : ViewModelLinesFromProjectedModel,
-  new_tab_size : Int,
+  new_tab_size : Int32,
 ) -> Bool {
   if self.tab_size == new_tab_size {
     return false
@@ -406,7 +406,7 @@ pub fn ViewModelLinesFromProjectedModel::on_injected_text_changed(
 /// Total number of view lines — `getViewLineCount`.
 pub fn ViewModelLinesFromProjectedModel::get_view_line_count(
   self : ViewModelLinesFromProjectedModel,
-) -> Int {
+) -> Int32 {
   let prefix_sums = self.projected_model_line_line_counts
   prefix_sums[prefix_sums.length() - 1]
 }
@@ -415,8 +415,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_count(
 /// Clamps a view line number into the document — `_toValidViewLineNumber`.
 fn ViewModelLinesFromProjectedModel::to_valid_view_line_number(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   view_line_number.clamp(min=1, max=self.get_view_line_count())
 }
 
@@ -426,7 +426,7 @@ fn ViewModelLinesFromProjectedModel::to_valid_view_line_number(
 /// as a binary search over the stored sums.
 fn ViewModelLinesFromProjectedModel::get_view_line_info(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
+  view_line_number : Int32,
 ) -> ViewLineInfo {
   let view_index = self.to_valid_view_line_number(view_line_number) - 1
   let prefix_sums = self.projected_model_line_line_counts
@@ -453,7 +453,7 @@ fn ViewModelLinesFromProjectedModel::get_view_line_info(
 /// Returns text for a one-based view line — `getViewLineContent`.
 pub fn ViewModelLinesFromProjectedModel::get_view_line_content(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
+  view_line_number : Int32,
 ) -> String {
   let info = self.get_view_line_info(view_line_number)
   self.model_line_projections[info.model_line_number - 1].get_view_line_content(
@@ -467,8 +467,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_content(
 /// Minimum one-based column for a view line — `getViewLineMinColumn`.
 pub fn ViewModelLinesFromProjectedModel::get_view_line_min_column(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   let info = self.get_view_line_info(view_line_number)
   self.model_line_projections[info.model_line_number - 1].get_view_line_min_column(
     info.model_line_wrapped_line_idx,
@@ -479,8 +479,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_min_column(
 /// Maximum one-based column for a view line — `getViewLineMaxColumn`.
 pub fn ViewModelLinesFromProjectedModel::get_view_line_max_column(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   let info = self.get_view_line_info(view_line_number)
   self.model_line_projections[info.model_line_number - 1].get_view_line_max_column(
     self.model,
@@ -495,8 +495,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_max_column(
 /// consumers that only need the line.
 pub fn ViewModelLinesFromProjectedModel::model_line_number_of_view_line(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   self.get_view_line_info(view_line_number).model_line_number
 }
 
@@ -504,7 +504,7 @@ pub fn ViewModelLinesFromProjectedModel::model_line_number_of_view_line(
 /// The view-line data of a one-based view line — `getViewLineData`.
 pub fn ViewModelLinesFromProjectedModel::get_view_line_data(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
+  view_line_number : Int32,
 ) -> ViewLineData {
   let info = self.get_view_line_info(view_line_number)
   let base_view_line_number = self.projected_model_line_line_counts[info.model_line_number -
@@ -524,8 +524,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_line_data(
 /// each participating projected model line shares one passive token read.
 pub fn ViewModelLinesFromProjectedModel::get_view_lines_data(
   self : ViewModelLinesFromProjectedModel,
-  view_start_line_number : Int,
-  view_end_line_number : Int,
+  view_start_line_number : Int32,
+  view_end_line_number : Int32,
   needed : Array[Bool],
 ) -> Array[ViewLineData?] {
   self.batch_call_count += 1
@@ -590,8 +590,8 @@ pub fn ViewModelLinesFromProjectedModel::get_view_lines_data(
 /// `ViewModel.getViewLineRenderingData`).
 pub fn ViewModelLinesFromProjectedModel::view_line_rendering_data(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
+  view_line_number : Int32,
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
 ) -> @view_layout.ViewLineRenderingData {
   view_line_rendering_data_from_view_line_data(
     self.get_view_line_data(view_line_number),
@@ -606,9 +606,9 @@ pub fn ViewModelLinesFromProjectedModel::view_line_rendering_data(
 /// `getInjectedTextAt` (`viewModelLines.ts:991`).
 pub fn ViewModelLinesFromProjectedModel::injected_text_index_at(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-  column : Int,
-) -> Int {
+  view_line_number : Int32,
+  column : Int32,
+) -> Int32 {
   let info = self.get_view_line_info(view_line_number)
   self.model_line_projections[info.model_line_number - 1].injected_text_index_at(
     info.model_line_wrapped_line_idx,
@@ -637,8 +637,8 @@ pub fn ViewModelLinesFromProjectedModel::normalize_position(
 /// `convertViewPositionToModelPosition` (`viewModelLines.ts:834`).
 pub fn ViewModelLinesFromProjectedModel::convert_view_position_to_model_position(
   self : ViewModelLinesFromProjectedModel,
-  view_line_number : Int,
-  view_column : Int,
+  view_line_number : Int32,
+  view_column : Int32,
 ) -> @base_common.Position {
   let info = self.get_view_line_info(view_line_number)
   let input_column = self.model_line_projections[info.model_line_number - 1].get_model_column_of_view_position(
@@ -675,11 +675,11 @@ pub fn ViewModelLinesFromProjectedModel::convert_view_range_to_model_range(
 /// absent it behaves as Monaco's default `None`.
 pub fn ViewModelLinesFromProjectedModel::convert_model_position_to_view_position(
   self : ViewModelLinesFromProjectedModel,
-  model_line_number : Int,
-  model_column : Int,
+  model_line_number : Int32,
+  model_column : Int32,
   affinity? : @model.PositionAffinity,
-  allow_zero_line_number? : Bool = false,
-  below_hidden_ranges? : Bool = false,
+  allow_zero_line_number~ : Bool = false,
+  below_hidden_ranges~ : Bool = false,
 ) -> @base_common.Position {
   let valid_position = self.model.validate_position(
     Position(model_line_number, model_column),
@@ -789,7 +789,7 @@ fn line_injected_text_from_decorations(
   for _ in 0..<snapshot.line_count() {
     buckets.push([])
   }
-  let entries : Array[(Int, Int, Int, @model.InjectedTextOptions)] = []
+  let entries : Array[(Int32, Int32, Int32, @model.InjectedTextOptions)] = []
   for decoration in model.get_injected_text_decorations() {
     if decoration.options.before is Some(before) &&
       before.content().length() > 0 {
@@ -847,7 +847,7 @@ fn line_injected_text_from_decorations(
 /// filtered to the line and sorted by column then before/after order).
 fn injected_text_for_model_line(
   model : @model.TextModel,
-  model_line_number : Int,
+  model_line_number : Int32,
 ) -> Array[InjectedText] {
   let snapshot = model.snapshot
   if snapshot.line_count() == 0 {
@@ -857,7 +857,7 @@ fn injected_text_for_model_line(
     min=0,
     max=snapshot.line_count() - 1,
   )
-  let entries : Array[(Int, Int, @model.InjectedTextOptions)] = []
+  let entries : Array[(Int32, Int32, @model.InjectedTextOptions)] = []
   for decoration in model.get_injected_text_decorations() {
     if decoration.options.before is Some(before) &&
       before.content().length() > 0 &&

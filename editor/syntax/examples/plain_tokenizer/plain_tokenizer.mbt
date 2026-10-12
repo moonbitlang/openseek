@@ -77,7 +77,7 @@ pub impl @syntax.LineTokenizer for PlainTokenizer with fn tokenize_line(
 }
 
 ///|
-fn consume_string(text : StringView, offset : Int) -> Int {
+fn consume_string(text : StringView, offset : Int32) -> Int32 {
   for at = offset + 1, escaped = false; at < text.length(); {
     let unit = text[at].to_int()
     if escaped {
@@ -94,7 +94,11 @@ fn consume_string(text : StringView, offset : Int) -> Int {
 }
 
 ///|
-fn consume_while(text : StringView, offset : Int, pred : (Int) -> Bool) -> Int {
+fn consume_while(
+  text : StringView,
+  offset : Int32,
+  pred : (Int32) -> Bool,
+) -> Int32 {
   for at = offset; at < text.length() && pred(text[at].to_int()); {
     continue at + 1
   } nobreak {
@@ -103,22 +107,22 @@ fn consume_while(text : StringView, offset : Int, pred : (Int) -> Bool) -> Int {
 }
 
 ///|
-fn is_space(unit : Int) -> Bool {
+fn is_space(unit : Int32) -> Bool {
   unit is ('\t' | '\n' | '\r' | ' ')
 }
 
 ///|
-fn is_digit(unit : Int) -> Bool {
-  unit is ('0'..='9')
+fn is_digit(unit : Int32) -> Bool {
+  unit is ('0'..<='9')
 }
 
 ///|
-fn is_ident_start(unit : Int) -> Bool {
-  unit is ('A'..='Z' | 'a'..='z' | '_')
+fn is_ident_start(unit : Int32) -> Bool {
+  unit is ('A'..<='Z' | 'a'..<='z' | '_')
 }
 
 ///|
-fn is_ident_continue(unit : Int) -> Bool {
+fn is_ident_continue(unit : Int32) -> Bool {
   is_ident_start(unit) || is_digit(unit)
 }
 

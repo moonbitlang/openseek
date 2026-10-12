@@ -44,7 +44,7 @@ fn projection_model(text : String) -> @model.TextModel raise {
 ///|
 fn projection(
   text : String,
-  wrapping_column~ : Int,
+  wrapping_column~ : Int32,
 ) -> @view_model.ViewModelLinesFromProjectedModel raise {
   ViewModelLinesFromProjectedModel(
     projection_model(text),

@@ -1,6 +1,6 @@
 ///|
 fn Completion::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Completion,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -33,7 +33,7 @@ fn Completion::view(
 /// Render the permanent mention tray. Keeping it mounted when empty preserves
 /// the textarea's positional DOM identity.
 fn Entry::mention_chips(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
 ) -> Array[@html.Html] {
@@ -92,7 +92,7 @@ fn GoalInput::first_line(_self : GoalInput, text : String) -> String {
 /// Render the stable standing-goal row. All user operations leave the package
 /// as owner-bound actions instead of dispatching root messages directly.
 fn GoalInput::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -184,7 +184,7 @@ fn GoalInput::view(
 
 ///|
 fn Entry::action_buttons(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -255,7 +255,7 @@ fn Entry::action_buttons(
 
 ///|
 fn Entry::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -414,7 +414,7 @@ fn Entry::submission_choice(self : Entry, input : Input) -> FollowupChoice? {
 
 ///|
 fn Entry::followup_menu(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   input : Input,
   emit : @cmd.Emit[Msg],

@@ -14,7 +14,7 @@ priv struct MinimalCall {
 
 ///|
 fn MinimalCall::from_tool(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   call : @transcript.ToolCall,
   wait_label? : String,
 ) -> MinimalCall {
@@ -194,8 +194,8 @@ priv enum MinimalActivity {
 /// Count pending and failed calls represented by a group, including waits.
 /// Notices are not tool rows, and successful calls need no minimal status.
 priv struct MinimalToolStatus {
-  failed : Int
-  pending : Int
+  failed : Int32
+  pending : Int32
 }
 
 ///|
@@ -222,7 +222,7 @@ fn MinimalToolStatus::from_activities(
 /// A failure is carried by that icon alone: a summary never counts failed
 /// calls. Successful groups stay quiet in minimal mode, without an empty slot.
 fn MinimalToolStatus::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalToolStatus,
 ) -> @html.Html {
   if self.pending == 0 && self.failed == 0 {
@@ -334,7 +334,7 @@ fn MinimalStream::push_block(self : MinimalStream, part : MinimalPart) -> Unit {
 /// split disclosures without ending a turn. A stop, failure, or empty success
 /// flushes the same process unfolded, fencing it off from the next turn.
 fn MinimalStream::finish(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalStream,
   collapse~ : Bool,
 ) -> Unit {
@@ -568,7 +568,7 @@ fn MinimalContent::activities(self : MinimalContent) -> Array[MinimalActivity] {
 
 ///|
 fn MinimalContent::summary(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalContent,
 ) -> String {
   if self is ContextSummary(_) {
@@ -612,10 +612,10 @@ fn MinimalContent::summary(
 /// a completed process with only one group. This preserves statuses and edits
 /// when the redundant inner disclosure is omitted.
 fn MinimalActivity::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalActivity,
   actions : Actions,
-  single? : Bool = false,
+  single~ : Bool = false,
 ) -> @html.Html {
   match self {
     Notice(text~, error~, ..) =>
@@ -737,10 +737,10 @@ fn minimal_activity_views(
 
 ///|
 fn MinimalContent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalContent,
   actions : Actions,
-  active? : Bool = false,
+  active~ : Bool = false,
 ) -> @html.Html {
   match self {
     Messages(parts, active_group~) => {
@@ -843,7 +843,7 @@ fn MinimalContent::render(
 /// Keep native disclosure semantics while drawing the same chevron used by
 /// application controls. The icon is decorative; the text names the toggle.
 fn MinimalContent::summary_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MinimalContent,
 ) -> @html.Html {
   let text = self.summary(locale~)

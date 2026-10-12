@@ -14,7 +14,7 @@ fn diff_editor_lifecycle_model(
 }
 
 ///|
-fn diff_editor_lifecycle_numbered_lines(start : Int, end : Int) -> String {
+fn diff_editor_lifecycle_numbered_lines(start : Int32, end : Int32) -> String {
   let lines : Array[String] = []
   for line in start..<end {
     lines.push("stable line \{line}")
@@ -334,7 +334,7 @@ pub fn run_diff_editor_lifecycle_test() -> Unit {
 ///|
 extern "js" fn install_diff_editor_lifecycle_controls(
   set_fixture : (String) -> Unit,
-  set_digit_line_count : (Int) -> Unit,
+  set_digit_line_count : (Int32) -> Unit,
   set_options : (String, Bool, Double) -> Unit,
   set_provider : (String) -> Unit,
   set_model_attached : (Bool) -> Unit,

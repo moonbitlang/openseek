@@ -30,7 +30,7 @@ struct DesktopFeedbackService {
   items_by_resource : Map[String, Array[@agent_feedback_api.AgentFeedback]]
   navigation_anchor_by_resource : Map[String, String]
   enabled_resources : Map[String, Bool]
-  mut next_feedback_handle : Int
+  mut next_feedback_handle : Int32
 }
 
 ///|
@@ -197,8 +197,8 @@ pub fn DesktopFeedbackService::add_feedback(
   resource : @common.Uri,
   range : @common.Range,
   text : String,
-  kind? : @agent_feedback_api.AgentFeedbackKind = UserReview,
-  state? : @agent_feedback_api.AgentFeedbackState = Accepted,
+  kind~ : @agent_feedback_api.AgentFeedbackKind = UserReview,
+  state~ : @agent_feedback_api.AgentFeedbackState = Accepted,
   selected_text? : String,
 ) -> @agent_feedback_api.AgentFeedback {
   let feedback : @agent_feedback_api.AgentFeedback = {

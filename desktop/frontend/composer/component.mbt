@@ -4,8 +4,8 @@
 
 ///|
 priv enum PendingSubmission {
-  PromptSubmission(sequence_before~ : Int, Draft)
-  GoalSubmission(sequence_before~ : Int, String)
+  PromptSubmission(sequence_before~ : Int32, Draft)
+  GoalSubmission(sequence_before~ : Int32, String)
 } derive(Eq)
 
 ///|
@@ -14,13 +14,13 @@ priv enum PendingSubmission {
 /// match. There is no pending variant: while a remote lookup is wanted, the
 /// declared `Request::searching` subscription IS the in-flight state.
 priv enum FileCompletion {
-  Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int)
+  Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int32)
   RemoteSettled(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
     files~ : Array[@files.Match],
-    epoch~ : Int
+    epoch~ : Int32
   )
 } derive(Eq)
 
@@ -45,7 +45,7 @@ fn FileCompletion::matches(
   owner : @interop.ConversationKey,
   root : @common.Uri?,
   query : String?,
-  epoch : Int,
+  epoch : Int32,
 ) -> Bool {
   match self {
     RemoteSettled(
@@ -70,7 +70,7 @@ fn FileCompletion::matches(
 /// lifetime, so navigation never mirrors keystrokes into the root Model.
 priv struct Entry {
   owner : @interop.ConversationKey
-  action_generation : Int
+  action_generation : Int32
   source : Draft
   draft : Draft
   source_goal : String?
@@ -80,21 +80,21 @@ priv struct Entry {
   file_completion : FileCompletion
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
+  context_generation : Int32
   turn_id : String?
   followup_choice : FollowupChoice?
   changes_open : Bool
   changes_collapsed : Array[String]
   followup_menu_open : Bool
-  image_reads : Int
+  image_reads : Int32
   image_error : String?
   attachment_requests : Array[AttachmentRequest]
-  attachment_sequence : Int
+  attachment_sequence : Int32
   images_enabled : Bool
   pending_submission : PendingSubmission?
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
-  history_back : Int?
+  history_back : Int32?
 } derive(Eq)
 
 ///|
@@ -315,7 +315,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 ///|
 priv struct Model {
   entries : Array[Entry]
-  applied_retirements : Int
+  applied_retirements : Int32
   // The clock the running row's elapsed span is measured against, advanced by
   // `ClockTicked` and only while a turn is open. Component state rather than
   // the application's: a value that changes every second belongs to the one
@@ -382,9 +382,9 @@ fn Model::with_entry(self : Model, entry : Entry) -> Model {
 priv enum Msg {
   PredictionAccepted
   TextChanged(String)
-  CompletionMove(Int)
+  CompletionMove(Int32)
   CompletionAccept
-  CompletionPick(Int)
+  CompletionPick(Int32)
   CompletionDismiss
   EntriesRetired
   CompletionPump
@@ -392,25 +392,25 @@ priv enum Msg {
   // the clock, and the message exists only to advance the span on screen.
   ClockTicked
   // Up (-1) or Down (+1) through the conversation's earlier prompts.
-  HistoryMoved(Int)
+  HistoryMoved(Int32)
   ChangesToggled
   ChangesDismissed(restore_focus~ : Bool)
   ChangesFileToggled(String)
   ChangesRemoved(Array[@mention_context.ReviewChanges])
   ChangesOpened(@mention_context.ReviewChanges)
-  MentionRemoved(Int)
-  ImageRemoved(Int)
+  MentionRemoved(Int32)
+  ImageRemoved(Int32)
   ImageRead(Identity, @common.Uri?, @image_input.Event)
   AttachmentPrepared(
     Identity,
     @common.Uri,
-    Int,
+    Int32,
     Result[@protocol.PrepareAttachmentReply, String]
   )
-  AttachmentConfirmed(Identity, @common.Uri, Int)
-  AttachmentCancelled(Identity, @common.Uri, Int)
-  AttachmentImported(Identity, @common.Uri, Int, Result[String, String])
-  MentionJumped(Int)
+  AttachmentConfirmed(Identity, @common.Uri, Int32)
+  AttachmentCancelled(Identity, @common.Uri, Int32)
+  AttachmentImported(Identity, @common.Uri, Int32, Result[String, String])
+  MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
   QuoteReplied(QuoteReply)
@@ -432,14 +432,14 @@ priv enum Msg {
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int,
+    epoch~ : Int32,
     files~ : Array[@pathx.Relative]
   )
   FilesFailed(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int
+    epoch~ : Int32
   )
 }
 
@@ -592,7 +592,7 @@ fn Entry::settled_file_completion(
   owner : @interop.ConversationKey,
   root : @common.Uri,
   query : String,
-  epoch : Int,
+  epoch : Int32,
   remote_files : Array[@pathx.Relative]?,
 ) -> Entry? {
   guard owner == self.owner &&

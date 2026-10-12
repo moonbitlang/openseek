@@ -5,7 +5,7 @@
 
 ///|
 fn tab_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   tab : Tab,
   active : Bool,
@@ -44,7 +44,7 @@ fn tab_view(
 
 ///|
 fn panel_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,

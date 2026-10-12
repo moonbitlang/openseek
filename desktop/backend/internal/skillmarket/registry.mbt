@@ -14,7 +14,7 @@ const DefaultSourceRegistry = "https://assets.mooncakes.io"
 ///|
 /// Keep preview parsing bounded so a malformed or unexpectedly large registry
 /// document cannot stall the frontend renderer.
-const MaxPreviewBytes : Int = 512 * 1024
+const MaxPreviewBytes : Int32 = 512 * 1024
 
 ///|
 /// Decompression floor and ratio for one downloaded archive. How large a
@@ -24,17 +24,17 @@ const MaxPreviewBytes : Int = 512 * 1024
 /// in memory, so a small hostile package must not expand without limit. A
 /// generous multiple of the packaged bytes never brakes a legitimately large
 /// skill, while the floor keeps small archives clear of the edge.
-const ArchiveExpansionFloorBytes : Int = 256 * 1024 * 1024
+const ArchiveExpansionFloorBytes : Int32 = 256 * 1024 * 1024
 
 ///|
-const ArchiveExpansionRatio : Int = 64
+const ArchiveExpansionRatio : Int32 = 64
 
 ///|
-const MaxArchiveEntries : Int = 65536
+const MaxArchiveEntries : Int32 = 65536
 
 ///|
 /// Decompression ceilings for an archive of `package_bytes` packaged size.
-fn archive_limits(package_bytes : Int) -> @zip.ReadLimits {
+fn archive_limits(package_bytes : Int32) -> @zip.ReadLimits {
   let saturation = 0x7fff_ffff / ArchiveExpansionRatio
   let scaled = if package_bytes >= saturation {
     0x7fff_ffff
@@ -86,7 +86,7 @@ const MaxRedirects = 5
 /// http is always refused: metadata and preview content take their whole
 /// trust from the channel, and even the digest-checked archive download
 /// has no reason to leave TLS.
-async fn fetch_response(url : String) -> (Int, &@io.Data) {
+async fn fetch_response(url : String) -> (Int32, &@io.Data) {
   let mut current = url
   for _ in 0..<MaxRedirects {
     let (response, data) = @http.get(current) catch {
@@ -140,7 +140,7 @@ fn redirect_target(
 /// The registry's skill catalog: every published skill at its latest module
 /// version, installable entries only.
 pub async fn fetch_catalog(
-  registry? : String = DefaultRegistry,
+  registry~ : String = DefaultRegistry,
 ) -> Array[MarketSkill] {
   let url = "\{registry}/api/v0/skills"
   let (code, data) = fetch_response(url)
@@ -339,7 +339,7 @@ pub async fn fetch_skill_content(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
-  registry? : String = DefaultSourceRegistry,
+  registry~ : String = DefaultSourceRegistry,
 ) -> String {
   let entry = entry_path(module_name, version, package_path)
   let url = "\{registry}/source/\{entry}/SKILL.md"

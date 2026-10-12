@@ -44,7 +44,7 @@
 /// approved fixed-LF expectation.
 
 ///|
-fn pos(line : Int, column : Int) -> @base_common.Position {
+fn pos(line : Int32, column : Int32) -> @base_common.Position {
   Position(line, column)
 }
 
@@ -52,8 +52,8 @@ fn pos(line : Int, column : Int) -> @base_common.Position {
 /// Field-wise position compare (avoids `Show`-based `assert_eq` on structs).
 fn assert_pos(
   actual : @base_common.Position,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
 ) -> Unit raise {
   assert_eq(actual.line_number, line)
   assert_eq(actual.column, column)
@@ -62,10 +62,10 @@ fn assert_pos(
 ///|
 fn assert_range(
   actual : @base_common.Range,
-  sl : Int,
-  sc : Int,
-  el : Int,
-  ec : Int,
+  sl : Int32,
+  sc : Int32,
+  el : Int32,
+  ec : Int32,
 ) -> Unit raise {
   assert_eq(actual.start_line_number, sl)
   assert_eq(actual.start_column, sc)

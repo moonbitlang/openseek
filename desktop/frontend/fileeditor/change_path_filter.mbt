@@ -133,7 +133,7 @@ fn change_extension(path : @pathx.Relative) -> String? {
 
 ///|
 fn extension_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   extension : String?,
 ) -> String {
   match extension {
@@ -150,8 +150,8 @@ fn extension_label(
 }
 
 ///|
-fn change_extension_options(state : State) -> Array[(String?, Int)] {
-  let counts : Map[String?, Int] = Map([])
+fn change_extension_options(state : State) -> Array[(String?, Int32)] {
+  let counts : Map[String?, Int32] = Map([])
   if review_filter_inventory(state) is Some(files) {
     for change in files {
       let extension = change_extension(change.path)

@@ -98,7 +98,7 @@ never swap places between renders.
 ```mbt check
 ///|
 fn feedback_at(
-  line : Int,
+  line : Int32,
   text : String,
 ) -> @agent_feedback_api.AgentFeedback raise {
   {

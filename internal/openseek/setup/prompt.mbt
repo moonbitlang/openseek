@@ -4,7 +4,7 @@
 pub async fn configured_system_prompt(
   matches : @argparse.Matches,
   model : @deepseek.Model,
-  workspace_root? : String = ".",
+  workspace_root~ : String = ".",
   session_scratch_dir? : String,
 ) -> String {
   let (base_path, addendum_path, global_skills_dir) = match matches {
@@ -67,7 +67,7 @@ pub async fn configured_system_prompt(
   prompt <+ "\n\n\{environment_block}"
   if session_scratch_dir is Some(dir) {
     prompt <+
-      "\n\nSession scratch directory: \{dir.to_json().stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
+      "\n\nSession scratch directory: \{Json(dir).stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
   }
   if @resources.directory() is Some(dir) {
     prompt <+ "\n\nBundled resources: \{dir}"

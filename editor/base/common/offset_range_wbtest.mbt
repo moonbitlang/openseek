@@ -9,7 +9,7 @@
 /// Constructor shorthand: a bare `OffsetRange(...)` only resolves when the
 /// expected type is known, so build through a helper whose return type supplies
 /// it.
-fn or_(start : Int, end_exclusive : Int) -> OffsetRange {
+fn or_(start : Int32, end_exclusive : Int32) -> OffsetRange {
   OffsetRange(start, end_exclusive)
 }
 

@@ -24,7 +24,7 @@
 pub fn compute_changes(
   original_lines : Array[String],
   modified_lines : Array[String],
-  ignore_trim_whitespace? : Bool = false,
+  ignore_trim_whitespace~ : Bool = false,
 ) -> Array[@diff.DetailedLineRangeMapping] {
   @diff.LineDocumentDiffProvider().compute_diff(
     TextSnapshot(original_lines.join("\n")),

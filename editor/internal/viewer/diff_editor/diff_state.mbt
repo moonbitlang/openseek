@@ -47,8 +47,8 @@ fn DiffState::alignments(self : DiffState) -> Array[DiffAlignment] {
 
 ///|
 priv struct DiffNavigationTarget {
-  change_index : Int
-  change_count : Int
+  change_index : Int32
+  change_count : Int32
   change : @diff.DetailedLineRangeMapping
 }
 
@@ -111,8 +111,8 @@ fn DiffState::navigation_changes(
 // navigation; renderer mappings remain canonical and ungrouped.
 fn DiffState::next_change_from_modified_line(
   self : DiffState,
-  current_line_number : Int,
-  modified_line_count : Int,
+  current_line_number : Int32,
+  modified_line_count : Int32,
 ) -> DiffNavigationTarget? {
   let changes = self.navigation_changes()
   let count = changes.length()
@@ -138,7 +138,7 @@ fn DiffState::next_change_from_modified_line(
 /// advances to the next comparison.
 fn DiffState::next_change_from_modified_line_without_wrap(
   self : DiffState,
-  current_line_number : Int,
+  current_line_number : Int32,
 ) -> DiffNavigationTarget? {
   let changes = self.navigation_changes()
   let count = changes.length()
@@ -154,7 +154,7 @@ fn DiffState::next_change_from_modified_line_without_wrap(
 ///|
 fn DiffState::previous_change_from_modified_line(
   self : DiffState,
-  current_line_number : Int,
+  current_line_number : Int32,
 ) -> DiffNavigationTarget? {
   let changes = self.navigation_changes()
   let count = changes.length()
@@ -176,7 +176,7 @@ fn DiffState::previous_change_from_modified_line(
 /// Resolve the previous navigation group without wrapping to the final group.
 fn DiffState::previous_change_from_modified_line_without_wrap(
   self : DiffState,
-  current_line_number : Int,
+  current_line_number : Int32,
 ) -> DiffNavigationTarget? {
   let changes = self.navigation_changes()
   let count = changes.length()

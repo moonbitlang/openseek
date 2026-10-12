@@ -40,7 +40,7 @@ fn StreamAccumulator::StreamAccumulator() -> StreamAccumulator {
 ///|
 fn StreamAccumulator::ensure_tool_call(
   self : StreamAccumulator,
-  index : Int,
+  index : Int32,
 ) -> StreamToolCall {
   while self.tool_calls.length() <= index {
     self.tool_calls.push(StreamToolCall())
@@ -88,7 +88,7 @@ fn StreamAccumulator::response(
 fn apply_tool_call_delta(
   acc : StreamAccumulator,
   json : Json,
-  fallback_index : Int,
+  fallback_index : Int32,
 ) -> Unit {
   guard json is Object(_) else { return }
   let index = match json {
@@ -208,7 +208,7 @@ async fn flush_sse_event(
 /// buffered event before raising. `read`'s own errors propagate unchanged; a
 /// non-positive budget disables the bound.
 async fn[T] with_idle_timeout(
-  idle_timeout_ms : Int,
+  idle_timeout_ms : Int32,
   what : String,
   read : async () -> T,
 ) -> T {
@@ -230,7 +230,7 @@ async fn[T] with_idle_timeout(
 /// the bound.
 async fn read_stream_line(
   reader : @http.Client,
-  idle_timeout_ms : Int,
+  idle_timeout_ms : Int32,
 ) -> String?? {
   try {
     if idle_timeout_ms <= 0 {
@@ -252,7 +252,7 @@ async fn read_stream_line(
 async fn read_chat_stream(
   reader : @http.Client,
   progress : RequestProgress,
-  idle_timeout_ms~ : Int,
+  idle_timeout_ms~ : Int32,
   on_content_delta~ : async (String) -> Unit,
   on_reasoning_delta~ : async (String) -> Unit,
 ) -> @deepseek.ChatResponse {

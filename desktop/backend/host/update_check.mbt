@@ -32,7 +32,7 @@ priv struct SelfUpdate {
 fn SelfUpdate::SelfUpdate(
   runtime_dir : @pathx.Path?,
   executable : String?,
-  app_version? : String = "development",
+  app_version~ : String = "development",
 ) -> SelfUpdate {
   {
     app_version,

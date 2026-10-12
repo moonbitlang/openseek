@@ -29,7 +29,7 @@ priv struct WorktreeRow {
 priv struct ProjectWorktrees {
   project : @common.Uri
   rows : Array[WorktreeRow]
-  generation : Int
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -48,8 +48,8 @@ fn fetch_worktrees(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : @common.Uri,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
@@ -99,7 +99,7 @@ fn fetch_worktrees(
 /// settles through the ordinary start-rejection path and restores the
 /// draft.
 fn start_in_new_worktree(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   task : String,
@@ -109,7 +109,7 @@ fn start_in_new_worktree(
   max_steps : String,
   session : String,
   workspace : @common.Uri,
-  images? : Array[String] = [],
+  images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
@@ -271,7 +271,7 @@ fn Conversation::goal_creates_worktree(self : Conversation) -> @common.Uri? {
 /// discarded. A goal is not a turn, but it is the first thing that pins the
 /// session's placement, so it has to establish the environment too.
 fn set_goal_in_new_worktree(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -421,7 +421,7 @@ fn set_goal_in_new_worktree(
 /// `wants_fresh_worktree` false, quietly discarding the launch mode the user
 /// chose. A failed setup runs nothing and hands the command back.
 fn run_shell_in_new_worktree(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -492,7 +492,7 @@ fn run_shell_in_new_worktree(
 /// conversation's real environment; the canonical rows arrive as
 /// `worktree.changed` from the commit seam.
 fn repair_worktree_cmd(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   workspace : String,
@@ -691,7 +691,7 @@ fn DeviceState::with_worktrees(
   self : DeviceState,
   project : @common.Uri,
   rows : Array[WorktreeRow],
-  generation~ : Int,
+  generation~ : Int32,
 ) -> DeviceState {
   let groups = self.worktrees.filter(group => group.project != project)
   groups.push({ project, rows, generation, })
@@ -704,7 +704,7 @@ fn DeviceState::with_worktrees(
 fn DeviceState::worktree_generation(
   self : DeviceState,
   project : @common.Uri,
-) -> Int {
+) -> Int32 {
   self.worktrees
   .iter()
   .find_first(group => group.project == project)
@@ -803,9 +803,9 @@ fn test_worktree_rows() -> Array[WorktreeRow] {
 
 ///|
 fn test_archive_refusal(
-  worktree? : String = "wt-1",
-  dirty_paths? : Array[String] = ["desktop/lepus"],
-  dirty_path_count? : Int = 1,
+  worktree~ : String = "wt-1",
+  dirty_paths~ : Array[String] = ["desktop/lepus"],
+  dirty_path_count~ : Int32 = 1,
 ) -> @protocol.ArchiveNeedsForceReply {
   { worktree, dirty_paths, dirty_path_count, }
 }

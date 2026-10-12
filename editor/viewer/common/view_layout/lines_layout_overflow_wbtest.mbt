@@ -1,7 +1,7 @@
 ///|
 fn insert_max_height_whitespaces(
   layout : LinesLayout,
-  after_line_number : Int,
+  after_line_number : Int32,
 ) -> Unit {
   layout.change_whitespace(accessor => {
     accessor.insert_whitespace(after_line_number, 0, 2147483647.0, 0.0)

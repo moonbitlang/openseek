@@ -9,9 +9,9 @@ priv struct UploadServer {
 ///|
 async fn UploadServer::start(
   group : @async.TaskGroup[Unit],
-  status? : Int = 200,
+  status~ : Int32 = 200,
   response~ : String,
-  delay_ms? : Int = 0,
+  delay_ms~ : Int32 = 0,
 ) -> UploadServer {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   group.add_defer(() => server.close())

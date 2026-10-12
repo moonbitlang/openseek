@@ -258,11 +258,8 @@ async test "session fork command copies a session offline under the given id" {
     // fork: it names the fork's scratch directory and not the original's.
     let whole = store.load(SessionId("whole"))
     assert_eq(whole.last_sequence(), 4)
-    let scratch = store.scratch_dir(SessionId("whole")).to_json().stringify()
-    let origin_scratch = store
-      .scratch_dir(SessionId("origin"))
-      .to_json()
-      .stringify()
+    let scratch = Json::Json(store.scratch_dir(SessionId("whole"))).stringify()
+    let origin_scratch = Json::Json(store.scratch_dir(SessionId("origin"))).stringify()
     assert_true(whole.system_prompt().contains(scratch))
     assert_false(whole.system_prompt().contains(origin_scratch))
     assert_eq(store.load(SessionId("origin")).system_prompt(), "system")

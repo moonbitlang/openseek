@@ -405,12 +405,12 @@ extern "js" fn diagram_viewport_test_flush_frame(
 ///|
 extern "js" fn diagram_viewport_test_pending_frames(
   harness : DiagramViewportTestHarness,
-) -> Int = "harness => harness.frames.length"
+) -> Int32 = "harness => harness.frames.length"
 
 ///|
 extern "js" fn diagram_viewport_test_observer_count(
   harness : DiagramViewportTestHarness,
-) -> Int = "harness => harness.observers.length"
+) -> Int32 = "harness => harness.observers.length"
 
 ///|
 extern "js" fn diagram_viewport_test_reset_child_reads(
@@ -420,7 +420,7 @@ extern "js" fn diagram_viewport_test_reset_child_reads(
 ///|
 extern "js" fn diagram_viewport_test_child_reads(
   harness : DiagramViewportTestHarness,
-) -> Int = "harness => harness.childReads"
+) -> Int32 = "harness => harness.childReads"
 
 ///|
 extern "js" fn diagram_viewport_test_fail_next_observe(
@@ -458,7 +458,7 @@ extern "js" fn diagram_viewport_test_all_svg_measurements_untransformed(
 ///|
 extern "js" fn diagram_viewport_test_trigger_observer(
   harness : DiagramViewportTestHarness,
-  index : Int,
+  index : Int32,
 ) -> Unit =
   #| (harness, index) => {
   #|   const observer = harness.observers[index];
@@ -469,15 +469,15 @@ extern "js" fn diagram_viewport_test_trigger_observer(
 ///|
 extern "js" fn diagram_viewport_test_disconnect_count(
   harness : DiagramViewportTestHarness,
-  index : Int,
-) -> Int =
+  index : Int32,
+) -> Int32 =
   #| (harness, index) => harness.observers[index]?.disconnectCount ?? 0
 
 ///|
 extern "js" fn diagram_viewport_test_window_listener_count(
   harness : DiagramViewportTestHarness,
   event_type : String,
-) -> Int = "(harness, type) => harness.window.listenerCount(type)"
+) -> Int32 = "(harness, type) => harness.window.listenerCount(type)"
 
 ///|
 extern "js" fn diagram_viewport_test_set_window_inner_height(
@@ -488,14 +488,14 @@ extern "js" fn diagram_viewport_test_set_window_inner_height(
 ///|
 fn diagram_viewport_test_controller_count(
   lifetime : MarkdownDiagramViewportLifetime,
-) -> Int {
+) -> Int32 {
   lifetime.controllers.length()
 }
 
 ///|
 fn diagram_viewport_test_scale(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Double {
   lifetime.controllers[index].scale
 }
@@ -503,7 +503,7 @@ fn diagram_viewport_test_scale(
 ///|
 fn diagram_viewport_test_translate_x(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Double {
   lifetime.controllers[index].translate_x
 }
@@ -511,7 +511,7 @@ fn diagram_viewport_test_translate_x(
 ///|
 fn diagram_viewport_test_translate_y(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Double {
   lifetime.controllers[index].translate_y
 }
@@ -519,7 +519,7 @@ fn diagram_viewport_test_translate_y(
 ///|
 fn diagram_viewport_test_interacted(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Bool {
   lifetime.controllers[index].has_interacted
 }
@@ -527,7 +527,7 @@ fn diagram_viewport_test_interacted(
 ///|
 fn diagram_viewport_test_dragged(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Bool {
   lifetime.controllers[index].has_dragged
 }
@@ -535,7 +535,7 @@ fn diagram_viewport_test_dragged(
 ///|
 fn diagram_viewport_test_is_panning(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Bool {
   lifetime.controllers[index].is_panning
 }
@@ -543,7 +543,7 @@ fn diagram_viewport_test_is_panning(
 ///|
 fn diagram_viewport_test_is_resizing(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Bool {
   lifetime.controllers[index].is_resizing
 }
@@ -551,7 +551,7 @@ fn diagram_viewport_test_is_resizing(
 ///|
 fn diagram_viewport_test_custom_height(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Double {
   lifetime.controllers[index].custom_height.unwrap_or(0.0)
 }
@@ -559,7 +559,7 @@ fn diagram_viewport_test_custom_height(
 ///|
 fn diagram_viewport_test_node(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   node_name : String,
 ) -> @rdom.Element {
   let controller = lifetime.controllers[index]
@@ -580,7 +580,7 @@ fn diagram_viewport_test_node(
 ///|
 fn diagram_viewport_test_attribute(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   node_name : String,
   attribute : String,
 ) -> String {
@@ -593,7 +593,7 @@ fn diagram_viewport_test_attribute(
 ///|
 fn diagram_viewport_test_class_contains(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   node_name : String,
   class_name : String,
 ) -> Bool {
@@ -606,7 +606,7 @@ fn diagram_viewport_test_class_contains(
 ///|
 fn diagram_viewport_test_icon_class(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   node_name : String,
 ) -> String {
   let button = diagram_viewport_test_node(lifetime, index, node_name)
@@ -627,7 +627,7 @@ extern "js" fn diagram_viewport_test_child_classes_raw(
 ///|
 fn diagram_viewport_test_child_classes(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> String {
   diagram_viewport_test_child_classes_raw(lifetime.controllers[index].wrapper)
 }
@@ -635,7 +635,7 @@ fn diagram_viewport_test_child_classes(
 ///|
 fn diagram_viewport_test_transform(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> String {
   @base_browser.element_style_value(
     lifetime.controllers[index].content,
@@ -646,7 +646,7 @@ fn diagram_viewport_test_transform(
 ///|
 fn diagram_viewport_test_wrapper_height(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> String {
   @base_browser.element_style_value(
     lifetime.controllers[index].wrapper,
@@ -657,7 +657,7 @@ fn diagram_viewport_test_wrapper_height(
 ///|
 fn diagram_viewport_test_svg_height_attribute(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> String {
   element_attribute_or_empty(lifetime.controllers[index].svg, "height")
 }
@@ -681,7 +681,7 @@ extern "js" fn diagram_viewport_test_set_geometry_raw(
 ///|
 fn diagram_viewport_test_set_geometry(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   viewport_width : Double,
   viewport_height : Double,
   svg_width : Double,
@@ -713,7 +713,7 @@ extern "js" fn diagram_viewport_test_set_invalid_geometry_raw(
 ///|
 fn diagram_viewport_test_set_invalid_geometry(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   kind : String,
 ) -> Unit {
   let controller = lifetime.controllers[index]
@@ -728,9 +728,9 @@ fn diagram_viewport_test_set_invalid_geometry(
 extern "js" fn diagram_viewport_test_dispatch_event(
   target : @rdom.EventTarget,
   event_type : String,
-  button : Int,
-  buttons : Int,
-  pointer_id : Int,
+  button : Int32,
+  buttons : Int32,
+  pointer_id : Int32,
   client_x : Double,
   client_y : Double,
   alt_key : Bool,
@@ -785,7 +785,7 @@ extern "js" fn diagram_viewport_test_retain_wrapper(
 fn diagram_viewport_test_set_original_wrapper_style(
   harness : DiagramViewportTestHarness,
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   // The saved styles were captured before mount. This helper only exists
   // to make retained-node assertions readable.
@@ -815,19 +815,19 @@ extern "js" fn diagram_viewport_test_retained_wrapper_state(
 ///|
 fn diagram_viewport_event(
   lifetime : MarkdownDiagramViewportLifetime,
-  index : Int,
+  index : Int32,
   node_name : String,
   event_type : String,
-  button? : Int = 0,
-  buttons? : Int = 0,
-  pointer_id? : Int = 1,
-  client_x? : Double = 0.0,
-  client_y? : Double = 0.0,
-  alt_key? : Bool = false,
-  shift_key? : Bool = false,
-  ctrl_key? : Bool = false,
-  delta_y? : Double = 0.0,
-  key? : String = "",
+  button~ : Int32 = 0,
+  buttons~ : Int32 = 0,
+  pointer_id~ : Int32 = 1,
+  client_x~ : Double = 0.0,
+  client_y~ : Double = 0.0,
+  alt_key~ : Bool = false,
+  shift_key~ : Bool = false,
+  ctrl_key~ : Bool = false,
+  delta_y~ : Double = 0.0,
+  key~ : String = "",
 ) -> String {
   let controller = lifetime.controllers[index]
   let target = if node_name == "ownerWindow" {

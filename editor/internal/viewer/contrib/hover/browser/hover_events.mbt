@@ -52,7 +52,7 @@ pub fn hover_on_event(
   controller : @hover.HoverController,
   event : EditorEvent,
   ctx : EditorContext,
-  sticky_mouse_getting_closer? : Bool = false,
+  sticky_mouse_getting_closer~ : Bool = false,
 ) -> (@hover.HoverEffect, @hover.HoverController) {
   match event {
     MouseMoved(target) =>
@@ -245,7 +245,7 @@ fn finish_anchor_candidates(
 fn sort_hover_anchor_candidates_stably(
   candidates : Array[@hover.HoverAnchor],
 ) -> Array[@hover.HoverAnchor] {
-  let indexed : Array[(Int, @hover.HoverAnchor)] = []
+  let indexed : Array[(Int32, @hover.HoverAnchor)] = []
   for index, anchor in candidates {
     indexed.push((index, anchor))
   }

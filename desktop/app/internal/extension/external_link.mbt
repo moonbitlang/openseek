@@ -29,7 +29,7 @@ fn allowed_external_url(url : String) -> Bool {
 /// open file URLs; native webpage popups retain the web-only default.
 pub async fn open_external(
   payload : @protocol.ExternalLinkPayload,
-  allow_file? : Bool = false,
+  allow_file~ : Bool = false,
 ) -> @protocol.OpenExternalReply {
   guard allowed_external_url(payload.url) ||
     (allow_file && @uri.is_file_url(payload.url)) else {

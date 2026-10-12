@@ -9,18 +9,18 @@
 /// seam (see the port's file header).
 
 ///|
-const TEST_FONT_STYLE_ITALIC : Int = 1
+const TEST_FONT_STYLE_ITALIC : Int32 = 1
 
 ///|
-const TEST_FONT_STYLE_BOLD : Int = 2
+const TEST_FONT_STYLE_BOLD : Int32 = 2
 
 ///|
-const TEST_FONT_STYLE_UNDERLINE : Int = 4
+const TEST_FONT_STYLE_UNDERLINE : Int32 = 4
 
 ///|
 /// Builds a metadata word from a foreground color id and a font-style mask, as
 /// the suite does with `<<` against `MetadataConsts.*_OFFSET`.
-fn make_meta(foreground : Int, font_style : Int) -> UInt {
+fn make_meta(foreground : Int32, font_style : Int32) -> UInt32 {
   ((foreground << @tokens.METADATA_FOREGROUND_OFFSET) |
   (font_style << @tokens.METADATA_FONT_STYLE_OFFSET)).reinterpret_as_uint()
 }
@@ -28,15 +28,15 @@ fn make_meta(foreground : Int, font_style : Int) -> UInt {
 ///|
 /// Inflated `ViewLineTokens` over `text` with explicit end-offset/metadata
 /// tokens (mirrors the suite's `TestLineTokens`).
-fn view_tokens(text : String, tokens : Array[UInt]) -> @tokens.ViewLineTokens {
+fn view_tokens(text : String, tokens : Array[UInt32]) -> @tokens.ViewLineTokens {
   @tokens.LineTokens(tokens, text, @services.language_id_codec).inflate()
 }
 
 ///|
 /// The suite's `Mode.tokenizeEncoded`: `.` → foreground 7, else 9; emits raw
 /// start-offset token pairs.
-fn tth_mode(line : String) -> Array[UInt] {
-  let arr : Array[UInt] = []
+fn tth_mode(line : String) -> Array[UInt32] {
+  let arr : Array[UInt32] = []
   let mut prev = -1
   for i in 0..<line.length() {
     let color = if line[i].to_int() == 46 { 7 } else { 9 } // '.' == 46
@@ -76,7 +76,7 @@ test "TextToHtmlTokenizer 2" {
 ///|
 test "tokenizeLineToHTML" {
   let text = "Ciao hello world!"
-  let tokens : Array[UInt] = [
+  let tokens : Array[UInt32] = [
     4U,
     make_meta(3, TEST_FONT_STYLE_BOLD | TEST_FONT_STYLE_ITALIC),
     5U,
@@ -131,7 +131,7 @@ test "tokenizeLineToHTML" {
 ///|
 test "tokenizeLineToHTML handle spaces #35954" {
   let text = "  Ciao   hello world!"
-  let tokens : Array[UInt] = [
+  let tokens : Array[UInt32] = [
     2U,
     make_meta(1, @tokens.FONT_STYLE_NONE),
     6U,
@@ -170,7 +170,7 @@ test "tokenizeLineToHTML handle spaces #35954" {
 ///|
 test "tokenizeLineToHTML with tabs and non-zero startOffset #263387" {
   let text = "\ta\tb"
-  let tokens : Array[UInt] = [
+  let tokens : Array[UInt32] = [
     1U,
     make_meta(1, @tokens.FONT_STYLE_NONE),
     2U,

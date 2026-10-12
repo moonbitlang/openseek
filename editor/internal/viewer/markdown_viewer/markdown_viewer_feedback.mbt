@@ -5,7 +5,7 @@ priv struct MarkdownViewerWidgetFeedbackBridge {
   viewer : MarkdownViewerWidget
   view : @markdown_document.MarkdownDocumentView
   model : @model.TextModel
-  attach_generation : Int
+  attach_generation : Int32
   service : @agent_feedback_api.AgentFeedbackHandle
   input : @agent_feedback_browser.AgentFeedbackInputWidget
   listeners : Array[@base_common.Disposable]
@@ -22,7 +22,7 @@ fn MarkdownViewerWidgetFeedbackBridge::MarkdownViewerWidgetFeedbackBridge(
   viewer : MarkdownViewerWidget,
   view : @markdown_document.MarkdownDocumentView,
   model : @model.TextModel,
-  attach_generation : Int,
+  attach_generation : Int32,
   service : @agent_feedback_api.AgentFeedbackHandle,
 ) -> MarkdownViewerWidgetFeedbackBridge {
   let mut slot : MarkdownViewerWidgetFeedbackBridge? = None

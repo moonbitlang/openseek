@@ -106,13 +106,13 @@ priv struct MarkdownDiagramViewport {
   mut pan_mode_enabled : Bool
   mut is_panning : Bool
   mut has_dragged : Bool
-  mut pan_pointer_id : Int?
+  mut pan_pointer_id : Int32?
   mut start_x : Double
   mut start_y : Double
   mut previous_move_x : Double
   mut previous_move_y : Double
   mut is_resizing : Bool
-  mut resize_pointer_id : Int?
+  mut resize_pointer_id : Int32?
   mut resize_start_y : Double
   mut resize_start_height : Double
 }
@@ -177,7 +177,7 @@ struct DiagramViewports {
 pub fn DiagramViewports::DiagramViewports(
   target : @rdom.Element,
   on_size_changed : () -> Unit,
-  fill_container? : Bool = false,
+  fill_container~ : Bool = false,
 ) -> DiagramViewports {
   let schedule_frame = (callback : () -> Unit) => {
     let registration = @base_browser.schedule_at_next_animation_frame(callback)
@@ -774,7 +774,7 @@ fn MarkdownDiagramViewport::listen(
   target : @rdom.EventTarget,
   event_type : String,
   listener : @rdom.Listener,
-  passive_false? : Bool = false,
+  passive_false~ : Bool = false,
 ) -> Unit {
   if passive_false {
     add_non_passive_event_listener(target, event_type, listener)

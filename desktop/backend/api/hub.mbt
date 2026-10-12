@@ -58,7 +58,7 @@ priv struct RunSettlement {
   mut session : String
   mut submission_id : String?
   status : String
-  mut exit_code : Int?
+  mut exit_code : Int32?
 }
 
 ///|

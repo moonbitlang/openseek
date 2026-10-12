@@ -20,11 +20,11 @@ priv struct ChangeTreeNode {
 ///|
 priv struct ChangeTreeRow {
   node : ChangeTreeNode
-  depth : Int
+  depth : Int32
   parent : ChangeTreeItem?
   expanded : Bool
-  position : Int
-  siblings : Int
+  position : Int32
+  siblings : Int32
 }
 
 ///|
@@ -91,7 +91,7 @@ fn change_tree_rows(state : State) -> Array[ChangeTreeRow] {
   let rows : Array[ChangeTreeRow] = []
   fn visit(
     nodes : Array[ChangeTreeNode],
-    depth : Int,
+    depth : Int32,
     parent : ChangeTreeItem?,
   ) {
     for position, node in nodes {
@@ -181,7 +181,7 @@ fn change_tree_key(
   dispatch : @cmd.Emit[Msg],
   state : State,
   rows : Array[ChangeTreeRow],
-  index : Int,
+  index : Int32,
   key : String,
 ) -> @cmd.Cmd {
   let row = rows[index]

@@ -56,9 +56,9 @@ priv struct DurableMark {
 priv struct FileFingerprint {
   size : Int64
   mtime_seconds : Int64
-  mtime_nanoseconds : Int
+  mtime_nanoseconds : Int32
   ctime_seconds : Int64
-  ctime_nanoseconds : Int
+  ctime_nanoseconds : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -427,7 +427,7 @@ async fn sync_dir_best_effort(dir : String) -> Unit {
 }
 
 ///|
-async fn ensure_dir_exists(dir : String, attempts? : Int = 4) -> Unit {
+async fn ensure_dir_exists(dir : String, attempts~ : Int32 = 4) -> Unit {
   if @fs.exists(dir) {
     return
   }
@@ -544,7 +544,7 @@ pub async fn SessionStore::fork(
   self : SessionStore,
   source : @agent_session.SessionId,
   fork : @agent_session.SessionId,
-  through? : Int,
+  through? : Int32,
   system_prompt~ : String,
 ) -> @agent_session.Session {
   let copy = self.load(source).fork(fork, system_prompt~, through?)
@@ -671,7 +671,7 @@ pub async fn SessionStore::set_title(
 /// user prompt, not counting the header line. The agent appends the user turn
 /// as a session's first event, so this is normally one line; the cap keeps a
 /// pathological log from turning a listing into a full read.
-let first_prompt_scan_limit : Int = 50
+let first_prompt_scan_limit : Int32 = 50
 
 ///|
 /// The first user prompt recorded in the session file at `path`, or `""` when
@@ -709,7 +709,10 @@ async fn first_prompt_in_log(path : String) -> String {
 ///|
 /// Order stamped rows newest-first by `(seconds, nanoseconds)`, ignoring the
 /// row payload in tuple position 0.
-fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
+fn[T] stamped_newest_first(
+  a : (T, Int64, Int32),
+  b : (T, Int64, Int32),
+) -> Int32 {
   let (_, a_seconds, a_nanoseconds) = a
   let (_, b_seconds, b_nanoseconds) = b
   // Compared field by field rather than as a tuple: this is a `sort_by`
@@ -733,7 +736,7 @@ fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
 pub async fn SessionStore::listings(
   self : SessionStore,
 ) -> Array[SessionListing] {
-  let stamped : Array[(SessionListing, Int64, Int)] = []
+  let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
     let path = self.session_file_path(id) catch { _ => continue }
@@ -780,7 +783,7 @@ pub async fn SessionStore::listings(
 pub async fn SessionStore::latest(
   self : SessionStore,
 ) -> @agent_session.SessionId? {
-  let stamped : Array[(@agent_session.SessionId, Int64, Int)] = []
+  let stamped : Array[(@agent_session.SessionId, Int64, Int32)] = []
   for id in self.list() {
     let stamp = @fs.mtime(self.session_file_path(id)) catch { _ => continue }
     let (seconds, nanoseconds) = stamp
@@ -888,8 +891,8 @@ pub async fn SessionStore::compact(
   self : SessionStore,
   session : @agent_session.Session,
   content~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {

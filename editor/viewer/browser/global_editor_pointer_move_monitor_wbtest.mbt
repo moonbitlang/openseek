@@ -55,26 +55,26 @@ extern "js" fn editor_pointer_monitor_test_element() -> @rdom.Element =
 ///|
 extern "js" fn editor_pointer_monitor_test_document_listener_count(
   event_type : String,
-) -> Int =
+) -> Int32 =
   #| (type) => document.listenerCount(type)
 
 ///|
 extern "js" fn editor_pointer_monitor_test_element_listener_count(
   element : @rdom.Element,
   event_type : String,
-) -> Int =
+) -> Int32 =
   #| (element, type) => element.listenerCount(type)
 
 ///|
 extern "js" fn editor_pointer_monitor_test_capture_calls(
   element : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| (element) => element.captureCalls
 
 ///|
 extern "js" fn editor_pointer_monitor_test_release_calls(
   element : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| (element) => element.releaseCalls
 
 ///|

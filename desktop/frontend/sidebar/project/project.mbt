@@ -80,14 +80,14 @@ priv enum Fold {
 ///|
 priv struct State {
   fold : Fold
-  preview_limit : Int
+  preview_limit : Int32
 } derive(Eq)
 
 ///|
-const PreviewLimit : Int = 5
+const PreviewLimit : Int32 = 5
 
 ///|
-const PreviewStep : Int = 7
+const PreviewStep : Int32 = 7
 
 ///|
 fn State::update(self : State, input : Input, msg : Msg) -> State {
@@ -128,7 +128,7 @@ fn stays_visible(row : @conversation.Input) -> Bool {
 ///|
 fn State::conversation_visible(
   self : State,
-  index : Int,
+  index : Int32,
   stays_visible : Bool,
 ) -> Bool {
   index < self.preview_limit || stays_visible
@@ -138,7 +138,7 @@ fn State::conversation_visible(
 /// Advance past seven conversations that are actually hidden. A row may
 /// already be visible beyond the compact prefix (`stays_visible`); skipping
 /// it here means one click still reveals seven new rows rather than six.
-fn State::next_preview_limit(self : State, input : Input) -> Int {
+fn State::next_preview_limit(self : State, input : Input) -> Int32 {
   let mut limit = self.preview_limit
   let mut revealed = 0
   while limit < input.conversations.length() && revealed < PreviewStep {
@@ -166,7 +166,7 @@ fn State::has_hidden_conversation(self : State, input : Input) -> Bool {
 pub fn Input::menu_entries(
   self : Input,
   actions : Actions,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> Array[@action_menu.Entry] {
   [
     Action({

@@ -99,14 +99,14 @@ pub fn ViewScrollChangedEvent::ViewScrollChangedEvent(
 ///|
 /// Inclusive line range carried by `ViewTokensChangedEvent`.
 struct ViewTokenChangeRange {
-  from_line_number : Int
-  to_line_number : Int
+  from_line_number : Int32
+  to_line_number : Int32
 }
 
 ///|
 pub fn ViewTokenChangeRange::ViewTokenChangeRange(
-  from_line_number : Int,
-  to_line_number : Int,
+  from_line_number : Int32,
+  to_line_number : Int32,
 ) -> ViewTokenChangeRange {
   { from_line_number, to_line_number, }
 }

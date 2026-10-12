@@ -2,7 +2,7 @@
 /// A `moon check --json` document over these diagnostic objects (one per
 /// line of `text`), with the summary counts moon would report — plus
 /// `hidden_errors` the list does not carry, as `--diagnostic-limit` leaves.
-fn document(text : String, hidden_errors~ : Int) -> String {
+fn document(text : String, hidden_errors~ : Int32) -> String {
   let lines = [ for line in text.split("\n") if line != "" => line ]
   let errors = lines
     .filter(line => line.contains("\"level\":\"error\""))
@@ -19,7 +19,7 @@ fn document(text : String, hidden_errors~ : Int) -> String {
 }
 
 ///|
-fn tally_of(text : String, hidden_errors? : Int = 0) -> CheckErrors {
+fn tally_of(text : String, hidden_errors~ : Int32 = 0) -> CheckErrors {
   match parse_check_document(document(text, hidden_errors~)) {
     Some(parsed) => parsed.tally
     None => abort("the test document did not parse")
@@ -32,7 +32,7 @@ test "introduced compares identities, not positions" {
     level : String,
     path : String,
     loc : String,
-    code : Int,
+    code : Int32,
     message : String,
   ) -> String {
     "{\"$message_type\":\"diagnostic\",\"level\":\"\{level}\",\"error_code\":\{code},\"path\":\"\{path}\",\"loc\":\"\{loc}\",\"message\":\"\{message}\"}"

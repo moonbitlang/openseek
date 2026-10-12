@@ -16,7 +16,7 @@ impl @language.DefinitionProvider for DefinitionNavigationTestProvider with fn p
 ///|
 priv struct SequencedDefinitionProvider {
   responses : Array[Array[@language.Location]]
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -65,7 +65,7 @@ async fn ManualDefinitionTasks::run_next(
 ///|
 fn definition_navigation_test_model(
   resource : String,
-  text? : String = "let source = target\n",
+  text~ : String = "let source = target\n",
 ) -> @model.TextModel {
   TextModel(
     try! @base_common.Uri::parse(resource),

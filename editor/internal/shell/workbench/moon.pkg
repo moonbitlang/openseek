@@ -38,6 +38,4 @@ import {
   "moonbitlang/async",
 } for "wbtest"
 
-options(
-  "max-concurrent-tests": 1,
-)
+max_concurrent_tests = 1

@@ -13,7 +13,7 @@
 pub(all) enum Event {
   // ── agent loop ─────────────────────────────────────────────────────────
   AgentSetupFailed(error~ : String)
-  AgentStep(step~ : Int)
+  AgentStep(step~ : Int32)
   /// The current step's provider request failed and attempt `attempt` (of
   /// `max_attempts`) is about to be made, after the client's backoff. It is
   /// emitted when the retry is decided, so a controller can discard the failed
@@ -21,7 +21,7 @@ pub(all) enum Event {
   /// transient controller state: it is emitted on the live JSONL stream, never
   /// represented by `agent_session.SessionItem`, and therefore never appended
   /// to `session.jsonl`.
-  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  StreamRetry(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted
@@ -87,7 +87,7 @@ pub(all) enum Event {
 
   // Background execution events are session-scoped and may arrive between turns.
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
+  PredictionResult(source_sequence~ : Int32, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(
     request_id~ : String,
@@ -102,30 +102,30 @@ pub(all) enum Event {
   GoalUnblocked
   GoalCheck(content~ : String)
   GoalReminder(content~ : String)
-  GoalContinue(remaining~ : Int)
-  GoalBudgetExhausted(turns~ : Int)
+  GoalContinue(remaining~ : Int32)
+  GoalBudgetExhausted(turns~ : Int32)
 
   // ── plan ───────────────────────────────────────────────────────────────
   PlanReminder(content~ : String)
 
   // ── compaction ─────────────────────────────────────────────────────────
-  CompactionStarted(from_sequence~ : Int, to_sequence~ : Int)
+  CompactionStarted(from_sequence~ : Int32, to_sequence~ : Int32)
   CompactionFinished(
-    from_sequence~ : Int,
-    to_sequence~ : Int,
+    from_sequence~ : Int32,
+    to_sequence~ : Int32,
     summary~ : String
   )
   /// Also reported when the cause was cancellation; how loudly to show it is
   /// the client's call, made from the variant.
   CompactionFailed(error~ : String)
-  AutoCompactionStarted(from_sequence~ : Int, to_sequence~ : Int)
+  AutoCompactionStarted(from_sequence~ : Int32, to_sequence~ : Int32)
   AutoCompactionFinished(
-    from_sequence~ : Int,
-    to_sequence~ : Int,
+    from_sequence~ : Int32,
+    to_sequence~ : Int32,
     summary~ : String
   )
   AutoCompactionFailed(error~ : String)
-  ContextYield(to_sequence~ : Int, answer~ : String)
+  ContextYield(to_sequence~ : Int32, answer~ : String)
 
   // ── subrun ─────────────────────────────────────────────────────────────
   /// A nested sub-run (a review, an explore) began inside this run. `id` is
@@ -149,9 +149,9 @@ pub(all) enum Event {
   SubrunFinished(
     id~ : String,
     status~ : String,
-    steps~ : Int,
-    prompt_tokens~ : Int,
-    completion_tokens~ : Int,
+    steps~ : Int32,
+    prompt_tokens~ : Int32,
+    completion_tokens~ : Int32,
     unaccounted~ : String?
   )
 
@@ -180,8 +180,8 @@ pub(all) enum Event {
     id~ : String,
     journal~ : String,
     events~ : String,
-    first_child~ : Int,
-    child_count~ : Int
+    first_child~ : Int32,
+    child_count~ : Int32
   )
   /// The paired completion, emitted on every exit of the snippet that owns
   /// the run — success, failure, and cancellation — so a reader never shows
@@ -205,10 +205,10 @@ pub(all) enum Event {
   McpConfigIgnored(reason~ : String)
   McpConfigUnreadable(path~ : String, error~ : String)
   McpConfigInvalid(path~ : String, error~ : String)
-  McpToolsRegistered(servers~ : Int, tools~ : Int, names~ : Array[String])
+  McpToolsRegistered(servers~ : Int32, tools~ : Int32, names~ : Array[String])
   McpToolDuplicate(server~ : String, tool~ : String)
   McpToolRenamed(from~ : String, to~ : String)
-  McpToolsCapped(server~ : String, kept~ : Int)
+  McpToolsCapped(server~ : String, kept~ : Int32)
   McpServerSkippedOverCap(server~ : String)
   /// `error` is the connect failure's text: the spawn or transport error, a
   /// handshake error, or the handshake timeout.
