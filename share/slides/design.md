@@ -1,4 +1,4 @@
-# General Presentation Guidelines
+# Presentation Design Guidelines
 
 **General principle**: Skip any step below if the model does not support it. Any specification from the user—template, brand guidelines, color scheme, fonts, reference styles, attachments, and so on—takes precedence over this guide and any design system document.
 
