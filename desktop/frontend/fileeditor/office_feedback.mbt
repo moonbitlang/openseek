@@ -28,6 +28,12 @@ pub fn show_office_feedback(
       surface.get_parent_element() is Some(viewport) else {
       return
     }
+    // Excel prevents the pointer default while selecting cells. Give the
+    // document focus so its scoped shortcuts receive the next key event.
+    if surface.query_selector(".office-cell-active") is Some(_) {
+      surface.set_attribute("tabindex", "-1")
+      @base_browser.focus_prevent_scroll(surface)
+    }
     if office_feedback_mount.val is Some(mounted) &&
       @base_browser.element_contains(host, mounted.host) {
       if mounted.target.val != Some(preview) {
