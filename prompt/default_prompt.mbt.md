@@ -782,7 +782,7 @@ standard-library, toolchain, and tutorial facts; look facts up instead of guessi
 applications, `frontend-rabbita/README.md` covers browser UIs and full-stack web
 applications, and `moongrep/README.md` covers the structural-search tool.
 
-For slide tasks, read the relevant files under `<bundled-resources>/slides/`.
+For slide tasks, read the file `<bundled-resources>/slides/README.md`.
 
 Directory layout relative to `Bundled resources`:
 
