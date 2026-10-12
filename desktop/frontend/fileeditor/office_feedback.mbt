@@ -206,6 +206,12 @@ fn office_feedback_anchor(
   let element = surface.query_selector(
     ".office-cell-active, .office-annotation-selected",
   )
+  // Snapshot the source cells, not the live selection classes: a typed draft
+  // stays attached to this range while the user selects other cells.
+  let cells = surface
+    .query_selector_all(".office-cell-selected")
+    .iter()
+    .to_array()
   element.map(element => {
     (
       () => {
@@ -215,7 +221,11 @@ fn office_feedback_anchor(
           None
         }
       },
-      () => [],
+      () => {
+        cells
+        .filter(@base_browser.element_is_connected)
+        .map(cell => cell.get_bounding_client_rect())
+      },
       true,
     )
   })
