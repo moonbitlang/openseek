@@ -55,7 +55,19 @@ pub async fn fork_session(
   // The renderer uses the same label as the sidebar, including titles derived
   // from the first prompt before any explicit rename has been saved.
   let title = payload.source_title
-  store.set_title(id, title)
+  // The CLI has already committed the new session. A best-effort title write
+  // must not turn that success into a retry that creates another fork.
+  @async.protect_from_cancel(() => {
+    store.set_title(id, title) catch {
+      error =>
+        @xlog.warn() <?
+          {
+            "event": "desktop_fork_title_save_failed",
+            "session": session,
+            "error": error.to_string(),
+          }
+    }
+  })
   { session, title, }
 }
 
