@@ -1,0 +1,79 @@
+name: Desktop MoonBit toolchain update
+
+on:
+  # GitHub cron is UTC: run daily at 10:17 Asia/Shanghai.
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: desktop-moonbit-toolchain-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up MoonBit (nightly)
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- nightly
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Checkout main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: Update pinned compiler version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$(moonc -v 2>&1)"
+          if [[ ! "$output" =~ ^v([^[:space:]]+) ]]; then
+            echo "Unexpected moonc -v output: $output" >&2
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          current="$(<desktop/.moonbit-version)"
+          if [[ "$version" == "$current" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s\n' "$version" > desktop/.moonbit-version
+          printf 'changed=true\nversion=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      # This branch belongs only to this workflow, so replacing it keeps one
+      # current commit and one current PR when nightly advances again.
+      - name: Commit update and open pull request
+        if: steps.version.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MOONBIT_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          branch="automation/update-desktop-moonbit-toolchain"
+          title="chore(desktop): bump MoonBit toolchain to $MOONBIT_VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add -- desktop/.moonbit-version
+          git commit -m "$title"
+          git push --force origin "$branch"
+
+          pr_number="$(
+            gh pr list --base main --head "$branch" --state open \
+              --json number --jq '.[0].number // empty'
+          )"
+          if [[ -z "$pr_number" ]]; then
+            gh pr create --base main --head "$branch" \
+              --title "$title" \
+              --body "Automated daily update of the MoonBit toolchain seed bundled with Desktop."
+          else
+            gh pr edit "$pr_number" --title "$title"
+          fi
