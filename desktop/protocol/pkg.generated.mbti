@@ -633,6 +633,7 @@ pub impl ToJson for CodexReviewTarget
 pub impl @json.FromJson for CodexReviewTarget
 
 pub(all) struct CodexServerRequestRespondPayload {
+  response_token : String
   request_id : Json
   result : Json
 } derive(Eq, @debug.Debug)

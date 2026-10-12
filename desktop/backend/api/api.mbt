@@ -388,6 +388,7 @@ pub fn endpoints(
       ignore(
         state.codex.respond(
           request_id=payload.request_id,
+          response_token=payload.response_token,
           result=payload.result,
         ),
       )

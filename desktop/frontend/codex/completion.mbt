@@ -277,7 +277,7 @@ pub fn State::composer_input(
     for request in self.pending_requests {
       if request.thread_id == active.id {
         requests.push({
-          request_key: request.request_id.stringify(),
+          request_key: request.response_token,
           method_: request.method_,
           params: request.params,
           answers: request.answers,

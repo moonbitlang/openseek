@@ -1020,7 +1020,7 @@ fn State::respond(
 ) -> @cmd.Cmd {
   let mut selected : CodexPendingRequest? = None
   for request in self.pending_requests {
-    if request.request_id.stringify() == request_key &&
+    if request.response_token == request_key &&
       self.active_thread() is Some(active) &&
       request.thread_id == active.id {
       selected = Some(request)
@@ -1034,7 +1034,11 @@ fn State::respond(
     dispatch,
     channel,
     @commands.codex_server_request_respond,
-    { request_id: request.request_id, result, },
+    {
+      request_id: request.request_id,
+      response_token: request.response_token,
+      result,
+    },
   )
 }
 
