@@ -194,7 +194,9 @@ jobs:
         working-directory: desktop
         # The Moon entrypoint remains a compatibility CLI. CI can call the same
         # build program directly because the job already prepared Proton.
-        run: node package/build.mjs browser
+        # Each isolated test page loads this bundle, so use the smaller
+        # production build instead of repeatedly transferring debug output.
+        run: node package/build.mjs browser --release
 
       - name: Run Desktop E2E tests
         working-directory: desktop/e2e
