@@ -31,6 +31,8 @@ pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) ->
 
 pub async fn engine_command(@resources.Resources) -> String
 
+pub async fn fork_session(EngineManager, @protocol.SessionForkPayload) -> @protocol.SessionForkReply
+
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply

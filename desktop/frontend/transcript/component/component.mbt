@@ -73,6 +73,11 @@ struct Input {
   source : Source
   focused : @interop.ChannelId
   active_session : String
+  can_fork : Bool
+  // Disable every conversation while a request is pending; only its source
+  // answer receives the spinner's terminal sequence below.
+  fork_busy : Bool
+  forking : Int32?
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
   // The registered project that owns this conversation, kept separate from
@@ -112,6 +117,9 @@ pub fn Input::Input(
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
+  can_fork~ : Bool = false,
+  fork_busy~ : Bool = false,
+  forking? : Int32,
   scroll~ : ScrollPosition = Pinned,
   project_label? : String,
   current_project~ : @common.Uri?,
@@ -133,6 +141,9 @@ pub fn Input::Input(
     source,
     focused,
     active_session,
+    can_fork,
+    fork_busy,
+    forking,
     scroll,
     project_label,
     current_project,
@@ -159,6 +170,7 @@ pub(all) struct Actions {
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
+  fork : @cmd.Emit[Int32]
   /// Start a fresh draft in another registered project.
   choose_project : @cmd.Emit[@common.Uri]
   /// Open the shell-owned folder picker to register another project.

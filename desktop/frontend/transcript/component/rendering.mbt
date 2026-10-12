@@ -415,7 +415,8 @@ priv enum BlockContent {
     step_label~ : String?,
     assistant_name~ : String,
     subrun_parent~ : String?,
-    wait_labels~ : Map[Int32, String]
+    wait_labels~ : Map[Int32, String],
+    fork~ : ForkAction?
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -496,6 +497,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       key: TranscriptRenderKey::row(row.identity),
       content: Item(
         item~,
+        fork=input.fork_action(item),
         anchor~,
         step_label~,
         assistant_name~,
@@ -549,13 +551,15 @@ fn Block::render(
       step_label~,
       assistant_name~,
       subrun_parent~,
-      wait_labels~
+      wait_labels~,
+      fork~
     ) =>
       transcript_item_view(
         locale~,
         item,
         on_open,
         wait_labels~,
+        fork?=fork.map(value => value.render(locale~, actions.fork)),
         anchor?,
         changes?,
         on_jump=target => (actions.jump)(target),

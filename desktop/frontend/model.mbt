@@ -1537,6 +1537,8 @@ priv struct Model {
   archived_delete_confirm : ArchivedDeleteConfirm?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
+  conversation_fork : ConversationFork?
+  fork_focus : ConversationSelection?
   // Immediate sidebar intent. The loaded `active_session` remains separate so
   // an older async snapshot cannot steal highlight or expose stale content.
   selected_conversation : ConversationSelection?
@@ -1970,6 +1972,8 @@ priv enum Msg {
   // belongs to the same device as the transcript that names it — and the
   // component is built once, before any model exists to read a channel from.
   OpenSessionHere(String)
+  ForkRequested(slot~ : String, through~ : Int32)
+  ForkCompleted(ConversationFork, Result[@protocol.SessionForkReply, String])
   // Open a row from the archived index. Its workspace is part of the row's
   // durable placement and selects the archived twin without restoring it.
   OpenArchivedSession(
@@ -2769,6 +2773,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     archive_confirm: None,
     archived_delete_confirm: None,
     conversation_rename: None,
+    conversation_fork: None,
+    fork_focus: None,
     selected_conversation: None,
     conversation_load_failure: None,
     screen: Chat,

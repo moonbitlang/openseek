@@ -375,6 +375,7 @@ pub fn apply_session_item(
             calls~,
             replay=is_replay,
             finished=false,
+            end_sequence=None,
           ),
           ts,
           sequence,
@@ -390,7 +391,14 @@ pub fn apply_session_item(
       while index > 0 {
         index -= 1
         guard items[index].kind
-          is Assistant(reasoning~, prose~, calls~, replay~, finished~) else {
+          is Assistant(
+            reasoning~,
+            prose~,
+            calls~,
+            replay~,
+            finished~,
+            end_sequence~
+          ) else {
           continue
         }
         guard calls.search_by(call => {
@@ -419,7 +427,14 @@ pub fn apply_session_item(
         }
         items[index] = {
           ..items[index],
-          kind: Assistant(reasoning~, prose~, calls=filled, replay~, finished~),
+          kind: Assistant(
+            reasoning~,
+            prose~,
+            calls=filled,
+            replay~,
+            finished~,
+            end_sequence~,
+          ),
         }
         updated_existing = true
         break
@@ -540,7 +555,8 @@ fn SessionTerminalProjection::append_to(
           prose=Some(prose),
           calls=[],
           replay=false,
-          finished=false
+          finished=false,
+          end_sequence=_
         ) &&
         prose == message {
         items[items.length() - 1] = {
@@ -551,6 +567,7 @@ fn SessionTerminalProjection::append_to(
             calls=[],
             replay=false,
             finished=true,
+            end_sequence=sequence,
           ),
         }
         return true

@@ -34,6 +34,7 @@ fn assistant_view(
   live~ : Bool = false,
   reasoning_complete~ : Bool = true,
   subrun? : SubrunLink,
+  fork? : @html.Html,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
   // numeral column, then the instant in a second fixed column: the run reads
@@ -126,6 +127,7 @@ fn assistant_view(
         is_danger=false,
         completed_at?=if finished { ts } else { None },
         show_actions=finished,
+        fork?,
         streaming=live,
       ),
     )
@@ -1066,6 +1068,7 @@ fn transcript_item_view(
   assistant_name~ : String = "OpenSeek",
   step_label? : String,
   subrun? : SubrunLink,
+  fork? : @html.Html,
 ) -> @html.Html {
   match item.kind {
     User(content~) =>
@@ -1077,7 +1080,7 @@ fn transcript_item_view(
         on_jump?,
         changes?,
       )
-    Assistant(reasoning~, prose~, calls~, replay=_, finished~) =>
+    Assistant(reasoning~, prose~, calls~, replay=_, finished~, end_sequence=_) =>
       assistant_view(
         locale~,
         on_open,
@@ -1090,6 +1093,7 @@ fn transcript_item_view(
         step_label?,
         assistant_name~,
         finished~,
+        fork?,
         subrun?,
       )
     Answer(text) =>
@@ -1101,6 +1105,7 @@ fn transcript_item_view(
         is_danger=false,
         completed_at?=item.ts,
         show_actions=true,
+        fork?,
       )
     Failure(text) =>
       assistant_message_view(
@@ -1138,6 +1143,7 @@ fn assistant_message_view(
   is_danger~ : Bool,
   completed_at? : Double,
   show_actions~ : Bool = false,
+  fork? : @html.Html,
   streaming~ : Bool = false,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
@@ -1172,6 +1178,9 @@ fn assistant_message_view(
         label=ui(locale, CopyAssistantMarkdown),
       ),
     ]
+    if fork is Some(button) {
+      actions.push(button)
+    }
     // The durable row is committed only after its complete message becomes
     // available. Its store timestamp is therefore the completion instant; old
     // or client-local rows without a usable stamp simply omit the label.

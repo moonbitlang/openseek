@@ -623,6 +623,7 @@ fn main {
             )
           }),
           open_session: emit.map(session => OpenSessionHere(session)),
+          fork: emit.map(through => ForkRequested(slot~, through~)),
           open_review_changes: emit.map(selection => {
             TranscriptReviewChangesOpened(slot~, selection~)
           }),

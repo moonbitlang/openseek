@@ -16,7 +16,14 @@ fn response(
   prose? : String,
   calls~ : Array[@transcript.ToolCall] = [],
 ) -> @transcript.ItemKind {
-  Assistant(reasoning~, prose~, calls~, replay=false, finished=false)
+  Assistant(
+    reasoning~,
+    prose~,
+    calls~,
+    replay=false,
+    finished=false,
+    end_sequence=None,
+  )
 }
 
 ///|

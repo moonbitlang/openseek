@@ -188,6 +188,11 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
 fn Model::transcript_input(self : Model) -> @transcript_component.Input {
   let content = self.transcript_content()
   let can_choose_project = self.can_choose_new_chat_project()
+  let conversation = if self.screen is Chat {
+    self.active_conversation()
+  } else {
+    None
+  }
   @transcript_component.Input(
     locale=self.locale,
     dark_mode=self.theme.is_dark(self.system_dark),
@@ -207,6 +212,21 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     project_query=self.project_menu_query,
     root=content.root,
     items=content.items,
+    can_fork=conversation
+      .map(conversation => conversation.can_fork())
+      .unwrap_or(false),
+    fork_busy=self.conversation_fork is Some(_),
+    forking?=conversation.bind(conversation => {
+      self.conversation_fork.bind(pending => {
+        if pending.source.channel == conversation.device &&
+          pending.source.session == conversation.session_id &&
+          pending.source.workspace == conversation.project() {
+          Some(pending.through)
+        } else {
+          None
+        }
+      })
+    }),
     streaming_response=content.streaming_response,
     streaming_reasoning?=content.streaming_reasoning,
     reasoning_complete=content.reasoning_complete,

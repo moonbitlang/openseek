@@ -928,3 +928,9 @@ pub let browser_cancel_pick : Command[
   @protocol.BrowserPickPayload,
   @protocol.EmptyReply,
 ] = Command("browser.cancel_pick")
+
+///|
+pub let session_fork : Command[
+  @protocol.SessionForkPayload,
+  @protocol.SessionForkReply,
+] = Command("session.fork")

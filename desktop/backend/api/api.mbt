@@ -492,6 +492,16 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_fork, payload => {
+      let reply = @engine.fork_session(state.manager, payload)
+      publish_session_changed(
+        state,
+        "created",
+        reply.session,
+        payload.workspace,
+      )
+      reply
+    }),
     Endpoint(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)
       publish_session_changed(

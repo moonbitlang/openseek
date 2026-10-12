@@ -2672,6 +2672,7 @@ fn CodexItem::transcript_item(
       calls~,
       replay=false,
       finished=false,
+      end_sequence=None,
     )
   }
   let kind = match self.kind {
@@ -2924,6 +2925,7 @@ pub fn State::transcript_items(
               calls~,
               replay~,
               finished=true,
+              end_sequence=None,
             ),
           }
         } else {

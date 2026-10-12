@@ -2048,3 +2048,10 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
+
+.message-fork:disabled { cursor: default; opacity: 0.5; }
+.message-fork-spinner { display: inline-flex; animation: message-fork-spin 1s linear infinite; }
+@keyframes message-fork-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .message-fork-spinner { animation: none; }
+}

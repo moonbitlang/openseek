@@ -250,7 +250,8 @@ priv enum MinimalContent {
     // completion stamp is. `None` for prose still inside the process, for a
     // context-ceiling answer an older store left unstamped, and for the live
     // streaming bubble.
-    completed_at~ : Double?
+    completed_at~ : Double?,
+    fork~ : ForkAction?
   )
   Activity(Array[MinimalActivity])
   Note(text~ : String, error~ : Bool)
@@ -347,6 +348,7 @@ fn MinimalStream::finish(
           stream: self.stream,
           key: { value: "minimal-user\u{0}\{row.identity}", },
           content: Item(
+            fork=None,
             item=row.item,
             anchor=Some(anchor),
             step_label=None,
@@ -405,6 +407,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               finished=true,
               live=false,
               completed_at=row.item.ts,
+              fork=self.fork_action(row.item),
             ),
           })
         } else if prose is Some(text) && !text.is_blank() {
@@ -416,6 +419,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               finished=false,
               live=false,
               completed_at=None,
+              fork=None,
             ),
           )
         }
@@ -461,6 +465,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
               finished=true,
               live=false,
               completed_at=row.item.ts,
+              fork=self.fork_action(row.item),
             ),
           })
         }
@@ -525,6 +530,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         finished=false,
         live=true,
         completed_at=None,
+        fork=None,
       ),
     })
   }
@@ -779,7 +785,7 @@ fn MinimalContent::render(
           }),
         ),
       ])
-    Prose(text~, assistant~, finished~, live~, completed_at~) =>
+    Prose(text~, assistant~, finished~, live~, completed_at~, fork~) =>
       assistant_message_view(
         locale~,
         text,
@@ -788,6 +794,7 @@ fn MinimalContent::render(
         is_danger=false,
         completed_at?,
         show_actions=finished,
+        fork?=fork.map(value => value.render(locale~, actions.fork)),
         streaming=live,
       )
     Note(text~, error~) =>

@@ -26,7 +26,10 @@ pub(all) enum ItemKind {
     prose~ : String?,
     calls~ : Array[ToolCall],
     replay~ : Bool,
-    finished~ : Bool
+    finished~ : Bool,
+    // The confirming Terminal event; the Assistant keeps its own identity.
+    // Codex and legacy rows have no OpenSeek terminal sequence.
+    end_sequence~ : Int32?
   )
   // A turn's final answer carried by a Finished terminal whose text is not
   // the preceding response's prose: a completion-tool answer, or the
@@ -138,3 +141,13 @@ pub extend SessionListItem with Eq::{equal, not_equal}
 
 ///|
 pub extend TranscriptItem with Eq::{equal, not_equal}
+
+///|
+/// Only durable successful turn boundaries can back a Fork action.
+pub fn TranscriptItem::fork_through(self : TranscriptItem) -> Int32? {
+  match self.kind {
+    Assistant(finished=true, end_sequence~, ..) => end_sequence
+    Answer(_) => self.sequence
+    _ => None
+  }
+}

@@ -44,6 +44,7 @@ test "waiting labels reuse recorded job descriptions and keep unknown IDs" {
   }
   let item : @transcript.TranscriptItem = {
     kind: Assistant(
+      end_sequence=None,
       reasoning=None,
       prose=None,
       calls=[start, wait],
@@ -126,6 +127,7 @@ test "waiting labels distinguish duplicate call IDs by position" {
   }
   let item : @transcript.TranscriptItem = {
     kind: Assistant(
+      end_sequence=None,
       reasoning=None,
       prose=None,
       calls=[first, { ..first, arguments: Some("{\"job_ids\":[\"bg-2\"]}"), }],

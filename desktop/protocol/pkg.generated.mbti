@@ -2998,6 +2998,33 @@ pub fn SessionExportReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionExportReply
 pub impl @json.FromJson for SessionExportReply
 
+pub(all) struct SessionForkPayload {
+  session : String
+  workspace : String
+  through : Int
+  model : String
+  source_title : String
+} derive(Eq, @debug.Debug)
+pub fn SessionForkPayload::equal(Self, Self) -> Bool
+pub fn SessionForkPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionForkPayload::not_equal(Self, Self) -> Bool
+pub fn SessionForkPayload::to_json(Self) -> Json
+pub fn SessionForkPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionForkPayload
+pub impl @json.FromJson for SessionForkPayload
+
+pub(all) struct SessionForkReply {
+  session : String
+  title : String
+} derive(Eq, @debug.Debug)
+pub fn SessionForkReply::equal(Self, Self) -> Bool
+pub fn SessionForkReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionForkReply::not_equal(Self, Self) -> Bool
+pub fn SessionForkReply::to_json(Self) -> Json
+pub fn SessionForkReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionForkReply
+pub impl @json.FromJson for SessionForkReply
+
 pub(all) struct SessionGroup {
   workspace : String
   name : String
