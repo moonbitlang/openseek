@@ -125,37 +125,15 @@ pub async fn write_text_atomic(path : @pathx.Path, content : String) -> Unit {
   // those failures, hence the shield around the removal.
   errdefer @async.protect_from_cancel(() => discard_temp_file(temp))
   @fs.write_file(temp.to_string(), content, create_mode=CreateNew)
-  commit_temp_file(temp, target)
-}
-
-///|
-/// Move a finished temp file onto `target`. Windows may refuse to rename over
-/// an existing file; removing the target first narrows the window where
-/// neither name holds the new content to that one platform.
-async fn commit_temp_file(temp : @pathx.Path, target : String) -> Unit {
-  @fs.rename(temp.to_string(), target) catch {
-    error if @async.is_being_cancelled() => raise error
-    rename_failure => {
-      // The retry exists only for that Windows refusal, which is a regular
-      // file standing in the way. Anything else at the target is a different
-      // failure and must surface as one: a directory there means the path is
-      // wrong, and removing it would recursively destroy whatever it holds
-      // rather than report that.
-      let replaceable = (@fs.kind(target) is Regular) catch {
-        error if @async.is_being_cancelled() => raise error
-        _ => false
-      }
-      guard replaceable else { raise rename_failure }
-      // Between the remove and the rename neither name holds the content.
-      // Cancellation there would leave the target absent and let the caller's
-      // cleanup take the temp file too, destroying the file this call was
-      // supposed to update — so the pair commits as one.
-      @async.protect_from_cancel(() => {
-        @fs.remove(target)
-        @fs.rename(temp.to_string(), target)
-      })
-    }
-  }
+  // `rename` replaces a present target as one step on every platform. A
+  // failure here is therefore a real one — the target is a directory, the
+  // volume is read-only — and leaves the target as it was: removing it to
+  // retry would trade the committed file for a rename that may fail again.
+  //
+  // Cancellation cannot interrupt this short step, so the caller learns
+  // whether the old contents or the new ones are in place: a rename that
+  // landed is never reported as a failure.
+  @async.protect_from_cancel(() => @fs.rename(temp.to_string(), target))
 }
 
 ///|

@@ -91,8 +91,8 @@ async test "an exclusive lock makes the next holder wait for the release" {
 }
 
 ///|
-/// The Windows retry must not turn "something else already occupies this
-/// path" into a recursive delete of whatever that something holds.
+/// A save that cannot land must leave what occupies the path alone, and not
+/// take that for a stale target to clear out of the way.
 async test "an atomic save refuses a target that is not a regular file" {
   let root : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-fsx-kind-"))
   defer @fs.rmdir(root.to_string(), recursive=true)

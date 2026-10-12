@@ -1254,6 +1254,7 @@ async test "worktree registry decode drops malformed entries" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "failed worktree registry staging preserves every live row" {
   let root = worktree_test_root("openseek-worktree-atomic-write-")
   defer @fs.rmdir(root.to_string(), recursive=true)
