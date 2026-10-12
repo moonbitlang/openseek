@@ -58,7 +58,7 @@ pub(all) struct StartReply {
   run_id : String
   status : String
   exit_code : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The run the cancellation reached, absent when no turn was open. Absence is
@@ -102,7 +102,7 @@ pub impl FromJson for CancelReply with fn from_json(json, path) {
 pub(all) struct SteerReply {
   steered : Bool
   run_id : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct QueueReply {
@@ -132,14 +132,14 @@ pub(all) struct ApprovalReply {
 ///|
 pub(all) struct CompactReply {
   compacting : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct GoalReply {
   // Whether the goal command reached a live engine for this conversation;
   // the durable `[goal]` marker commit is the real confirmation.
   delivered : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One reconnect-safe completion returned by `agent.runs`. It answers "how
@@ -237,7 +237,7 @@ pub(all) struct SessionListEntry {
   id : String
   title : String?
   updated_at_ms : Double?
-} derive(Debug, Eq, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub impl FromJson for SessionListEntry with fn from_json(json, path) {
@@ -284,12 +284,12 @@ pub(all) struct SessionGroup {
   session_root : String
   sessions : Array[SessionListEntry]
   error : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SessionsReply {
   groups : Array[SessionGroup]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The expected, recoverable refusal from `session.archive`: the bound
@@ -300,7 +300,7 @@ pub(all) struct ArchiveNeedsForceReply {
   worktree : String
   dirty_paths : Array[String]
   dirty_path_count : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// `session.archive` keeps the legacy `SessionsReply` JSON shape on success so
@@ -357,7 +357,7 @@ pub(all) struct SessionToolCall {
   id : String
   name : String
   arguments : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// A durable user prompt as the store recorded it.
@@ -579,7 +579,7 @@ pub(all) struct SessionSummary {
   content : String
   from_sequence : Int
   to_sequence : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// Mirrors the engine's `TurnTerminal` storage kinds. Logs written before
@@ -715,7 +715,7 @@ pub(all) struct SessionEvent {
   sequence : Int
   ts : Double?
   item : SessionItem
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The session document returned by the engine. Metadata added by newer
@@ -726,7 +726,7 @@ pub(all) struct SessionDocument {
   id : String?
   system_prompt : String?
   events : Array[SessionEvent]?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct LoadSessionReply {
@@ -925,7 +925,7 @@ pub impl ToJson for WorktreeInfo with fn to_json(self) {
 ///|
 pub(all) struct WorktreesReply {
   worktrees : Array[WorktreeInfo]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// A create's reply names the worktree it made — the client sends no name
@@ -933,7 +933,7 @@ pub(all) struct WorktreesReply {
 pub(all) struct WorktreeCreateReply {
   name : String
   worktrees : Array[WorktreeInfo]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// A worktree creation either returns the existing success object or a safe
@@ -981,7 +981,7 @@ pub(all) struct OpenPathEditorTarget {
 pub(all) struct OpenPathDirectoryTarget {
   // Slash-separated path relative to the conversation's resolved checkout.
   path : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// Reply to `open_path`. Text and browser targets carry absolute URI paths; directory
@@ -1097,7 +1097,7 @@ pub impl FromJson for RevealPathReply with fn from_json(json, path) {
 ///|
 pub(all) struct ApplyUpdateReply {
   applied : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct MarketSkill {
@@ -1108,7 +1108,7 @@ pub(all) struct MarketSkill {
   description : String
   author : String
   repository : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct InstalledSkill {
@@ -1116,7 +1116,7 @@ pub(all) struct InstalledSkill {
   name : String
   description : String
   source : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// This branch's whole line delta, measured locally: from where it left the
@@ -1132,7 +1132,7 @@ pub(all) struct GitDiffStat {
   files : Int
   base : String?
   partial : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// `diffstat` is absent for the same reasons `branch` is (no repository, no
@@ -1142,7 +1142,7 @@ pub(all) struct GitDiffStat {
 pub(all) struct GitBranchReply {
   branch : String?
   diffstat : GitDiffStat?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The CI rollup for a pull request's head commit, bucketed into the three
@@ -1152,7 +1152,7 @@ pub(all) struct GitChecks {
   passed : Int
   failed : Int
   pending : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One pull request as GitHub reports it. `state` is `open`, `merged`, or
@@ -1176,7 +1176,7 @@ pub(all) struct GitPullRequest {
   deletions : Int
   changed_files : Int
   checks : GitChecks?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// Reply to `git.pull_request`. `pull_request` and `compare_url` both absent
@@ -1194,7 +1194,7 @@ pub(all) struct GitPullRequestReply {
   pull_request : GitPullRequest?
   compare_url : String?
   branch : String?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One current-path row from the active review comparison. HEAD-based
@@ -1212,7 +1212,7 @@ pub(all) struct GitChange {
   index_status : String
   worktree_status : String
   kind : String
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The active checkout's change inventory plus its immutable comparison
@@ -1233,7 +1233,7 @@ pub(all) struct GitChangesReply {
   // host that omitted the field.
   baseline : String?
   changes : Array[GitChange]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One named ref selected for the Review graph. `kind` is `current`,
@@ -1336,12 +1336,12 @@ pub impl FromJson for GitOriginalFileReply with fn from_json(json, path) {
 pub(all) struct DirEntry {
   name : String
   is_dir : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct ReadDirReply {
   entries : Array[DirEntry]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SearchFilesReply {
@@ -1349,7 +1349,7 @@ pub(all) struct SearchFilesReply {
   from_cache : Bool
   limit_hit : Bool
   cancelled : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// One match range within the source line. Columns are one-based UTF-16
@@ -1463,7 +1463,7 @@ pub(all) struct MaterializeSemanticSelectionReply {
   path : String
   match_count : Int
   file_count : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub impl ToJson for ReadFileReply with fn to_json(self) {
@@ -1793,7 +1793,7 @@ pub impl ToJson for MoonIdeLocation with fn to_json(self) {
 ///|
 pub(all) struct MoonIdeLocationsReply {
   locations : Array[MoonIdeLocation]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The result of asking the Host to run `moon tree --package --json` for an
@@ -1846,13 +1846,13 @@ pub impl FromJson for MoonPackageGraphReply with fn from_json(json, path) {
 pub(all) struct LspPosition {
   line : Int
   character : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct LspRange {
   start : LspPosition
   end : LspPosition
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// The two reference actions emitted by the supported Moon IDE CodeLens
@@ -1953,7 +1953,7 @@ pub(all) struct LspDiagnostic {
   message : String
   severity : Int?
   tags : Array[Int]?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 /// Decode the LSP's open-ended diagnostics array at the LSP adapter. Unknown
@@ -1975,7 +1975,7 @@ pub fn LspDiagnostic::array_from_wire(json : Json) -> Array[LspDiagnostic] {
 /// array's "no problems", which clears them.
 pub(all) struct LspDiagnosticsReply {
   diagnostics : Array[LspDiagnostic]?
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct LspHoverReply {
@@ -1986,19 +1986,19 @@ pub(all) struct LspHoverReply {
   start_character : Int
   end_line : Int
   end_character : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SymbolPosition {
   line : Int
   col : Int
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SymbolRange {
   start : SymbolPosition
   end : SymbolPosition
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct SymbolItem {
@@ -2007,12 +2007,12 @@ pub(all) struct SymbolItem {
   container : String?
   path : String
   range : SymbolRange
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct WorkspaceSymbolsReply {
   symbols : Array[SymbolItem]
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) enum CheckUpdateReply {
@@ -2100,12 +2100,12 @@ pub impl FromJson for CheckUpdateReply with fn from_json(json, path) {
 ///|
 pub(all) struct DownloadUpdateAcceptedReply {
   accepted : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub(all) struct OpenExternalReply {
   opened : Bool
-} derive(Debug, Eq, FromJson, ToJson)
+} derive(Debug, Eq)
 
 ///|
 pub extend ApplyUpdateReply with Debug::{to_repr}
@@ -3278,4 +3278,1152 @@ pub impl FromJson for OpenPathEditorTarget with fn from_json(json, path) {
     None => None
   }
   { path: file, line, column, }
+}
+
+///|
+pub impl FromJson for StartReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "StartReply")
+  {
+    run_id: @json.from_json(
+      object.required_json("run_id"),
+      path=path.add_key("run_id"),
+    ),
+    status: @json.from_json(
+      object.required_json("status"),
+      path=path.add_key("status"),
+    ),
+    exit_code: @json.from_json(
+      object.required_json("exit_code"),
+      path=path.add_key("exit_code"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for StartReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["run_id"] = self.run_id.to_json()
+  fields["status"] = self.status.to_json()
+  fields["exit_code"] = self.exit_code.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SteerReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SteerReply")
+  {
+    steered: @json.from_json(
+      object.required_json("steered"),
+      path=path.add_key("steered"),
+    ),
+    run_id: match object.optional_json("run_id") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("run_id")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for SteerReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["steered"] = self.steered.to_json()
+  if self.run_id is Some(value) {
+    fields["run_id"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for CompactReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "CompactReply")
+  {
+    compacting: @json.from_json(
+      object.required_json("compacting"),
+      path=path.add_key("compacting"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for CompactReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["compacting"] = self.compacting.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GoalReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GoalReply")
+  {
+    delivered: @json.from_json(
+      object.required_json("delivered"),
+      path=path.add_key("delivered"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for GoalReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["delivered"] = self.delivered.to_json()
+  Json(fields)
+}
+
+///|
+pub impl ToJson for SessionListEntry with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["id"] = self.id.to_json()
+  if self.title is Some(value) {
+    fields["title"] = value.to_json()
+  }
+  if self.updated_at_ms is Some(value) {
+    fields["updated_at_ms"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionGroup with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionGroup")
+  {
+    workspace: @json.from_json(
+      object.required_json("workspace"),
+      path=path.add_key("workspace"),
+    ),
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    session_root: @json.from_json(
+      object.required_json("session_root"),
+      path=path.add_key("session_root"),
+    ),
+    sessions: @json.from_json(
+      object.required_json("sessions"),
+      path=path.add_key("sessions"),
+    ),
+    error: @json.from_json(
+      object.required_json("error"),
+      path=path.add_key("error"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionGroup with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["workspace"] = self.workspace.to_json()
+  fields["name"] = self.name.to_json()
+  fields["session_root"] = self.session_root.to_json()
+  fields["sessions"] = self.sessions.to_json()
+  fields["error"] = self.error.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionsReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionsReply")
+  {
+    groups: @json.from_json(
+      object.required_json("groups"),
+      path=path.add_key("groups"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionsReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["groups"] = self.groups.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for ArchiveNeedsForceReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "ArchiveNeedsForceReply")
+  {
+    worktree: @json.from_json(
+      object.required_json("worktree"),
+      path=path.add_key("worktree"),
+    ),
+    dirty_paths: @json.from_json(
+      object.required_json("dirty_paths"),
+      path=path.add_key("dirty_paths"),
+    ),
+    dirty_path_count: @json.from_json(
+      object.required_json("dirty_path_count"),
+      path=path.add_key("dirty_path_count"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for ArchiveNeedsForceReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["worktree"] = self.worktree.to_json()
+  fields["dirty_paths"] = self.dirty_paths.to_json()
+  fields["dirty_path_count"] = self.dirty_path_count.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionToolCall with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionToolCall")
+  {
+    id: @json.from_json(object.required_json("id"), path=path.add_key("id")),
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    arguments: @json.from_json(
+      object.required_json("arguments"),
+      path=path.add_key("arguments"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionToolCall with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["id"] = self.id.to_json()
+  fields["name"] = self.name.to_json()
+  fields["arguments"] = self.arguments.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionSummary with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionSummary")
+  {
+    content: @json.from_json(
+      object.required_json("content"),
+      path=path.add_key("content"),
+    ),
+    from_sequence: @json.from_json(
+      object.required_json("from_sequence"),
+      path=path.add_key("from_sequence"),
+    ),
+    to_sequence: @json.from_json(
+      object.required_json("to_sequence"),
+      path=path.add_key("to_sequence"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionSummary with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["content"] = self.content.to_json()
+  fields["from_sequence"] = self.from_sequence.to_json()
+  fields["to_sequence"] = self.to_sequence.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionEvent with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionEvent")
+  {
+    sequence: @json.from_json(
+      object.required_json("sequence"),
+      path=path.add_key("sequence"),
+    ),
+    ts: match object.optional_json("ts") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("ts")))
+    },
+    item: @json.from_json(
+      object.required_json("item"),
+      path=path.add_key("item"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionEvent with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["sequence"] = self.sequence.to_json()
+  if self.ts is Some(value) {
+    fields["ts"] = value.to_json()
+  }
+  fields["item"] = self.item.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionDocument with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionDocument")
+  {
+    version: match object.optional_json("version") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("version")))
+    },
+    id: match object.optional_json("id") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("id")))
+    },
+    system_prompt: match object.optional_json("system_prompt") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("system_prompt")))
+    },
+    events: match object.optional_json("events") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("events")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for SessionDocument with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.version is Some(value) {
+    fields["version"] = value.to_json()
+  }
+  if self.id is Some(value) {
+    fields["id"] = value.to_json()
+  }
+  if self.system_prompt is Some(value) {
+    fields["system_prompt"] = value.to_json()
+  }
+  if self.events is Some(value) {
+    fields["events"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for WorktreesReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "WorktreesReply")
+  {
+    worktrees: @json.from_json(
+      object.required_json("worktrees"),
+      path=path.add_key("worktrees"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for WorktreesReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["worktrees"] = self.worktrees.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for WorktreeCreateReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "WorktreeCreateReply")
+  {
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    worktrees: @json.from_json(
+      object.required_json("worktrees"),
+      path=path.add_key("worktrees"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for WorktreeCreateReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["name"] = self.name.to_json()
+  fields["worktrees"] = self.worktrees.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for OpenPathDirectoryTarget with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "OpenPathDirectoryTarget")
+  {
+    path: @json.from_json(
+      object.required_json("path"),
+      path=path.add_key("path"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for OpenPathDirectoryTarget with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["path"] = self.path.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for ApplyUpdateReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "ApplyUpdateReply")
+  {
+    applied: @json.from_json(
+      object.required_json("applied"),
+      path=path.add_key("applied"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for ApplyUpdateReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["applied"] = self.applied.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for MarketSkill with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "MarketSkill")
+  {
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    module_name: @json.from_json(
+      object.required_json("module_name"),
+      path=path.add_key("module_name"),
+    ),
+    package_path: @json.from_json(
+      object.required_json("package_path"),
+      path=path.add_key("package_path"),
+    ),
+    version: @json.from_json(
+      object.required_json("version"),
+      path=path.add_key("version"),
+    ),
+    description: @json.from_json(
+      object.required_json("description"),
+      path=path.add_key("description"),
+    ),
+    author: @json.from_json(
+      object.required_json("author"),
+      path=path.add_key("author"),
+    ),
+    repository: @json.from_json(
+      object.required_json("repository"),
+      path=path.add_key("repository"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MarketSkill with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["name"] = self.name.to_json()
+  fields["module_name"] = self.module_name.to_json()
+  fields["package_path"] = self.package_path.to_json()
+  fields["version"] = self.version.to_json()
+  fields["description"] = self.description.to_json()
+  fields["author"] = self.author.to_json()
+  fields["repository"] = self.repository.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for InstalledSkill with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "InstalledSkill")
+  {
+    id: @json.from_json(object.required_json("id"), path=path.add_key("id")),
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    description: @json.from_json(
+      object.required_json("description"),
+      path=path.add_key("description"),
+    ),
+    source: @json.from_json(
+      object.required_json("source"),
+      path=path.add_key("source"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for InstalledSkill with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["id"] = self.id.to_json()
+  fields["name"] = self.name.to_json()
+  fields["description"] = self.description.to_json()
+  fields["source"] = self.source.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitDiffStat with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitDiffStat")
+  {
+    added: @json.from_json(
+      object.required_json("added"),
+      path=path.add_key("added"),
+    ),
+    removed: @json.from_json(
+      object.required_json("removed"),
+      path=path.add_key("removed"),
+    ),
+    files: @json.from_json(
+      object.required_json("files"),
+      path=path.add_key("files"),
+    ),
+    base: match object.optional_json("base") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("base")))
+    },
+    partial: @json.from_json(
+      object.required_json("partial"),
+      path=path.add_key("partial"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for GitDiffStat with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["added"] = self.added.to_json()
+  fields["removed"] = self.removed.to_json()
+  fields["files"] = self.files.to_json()
+  if self.base is Some(value) {
+    fields["base"] = value.to_json()
+  }
+  fields["partial"] = self.partial.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitBranchReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitBranchReply")
+  {
+    branch: match object.optional_json("branch") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("branch")))
+    },
+    diffstat: match object.optional_json("diffstat") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("diffstat")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for GitBranchReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.branch is Some(value) {
+    fields["branch"] = value.to_json()
+  }
+  if self.diffstat is Some(value) {
+    fields["diffstat"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitChecks with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitChecks")
+  {
+    passed: @json.from_json(
+      object.required_json("passed"),
+      path=path.add_key("passed"),
+    ),
+    failed: @json.from_json(
+      object.required_json("failed"),
+      path=path.add_key("failed"),
+    ),
+    pending: @json.from_json(
+      object.required_json("pending"),
+      path=path.add_key("pending"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for GitChecks with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["passed"] = self.passed.to_json()
+  fields["failed"] = self.failed.to_json()
+  fields["pending"] = self.pending.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitPullRequest with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitPullRequest")
+  {
+    number: @json.from_json(
+      object.required_json("number"),
+      path=path.add_key("number"),
+    ),
+    title: @json.from_json(
+      object.required_json("title"),
+      path=path.add_key("title"),
+    ),
+    state: @json.from_json(
+      object.required_json("state"),
+      path=path.add_key("state"),
+    ),
+    draft: @json.from_json(
+      object.required_json("draft"),
+      path=path.add_key("draft"),
+    ),
+    url: @json.from_json(object.required_json("url"), path=path.add_key("url")),
+    base: @json.from_json(
+      object.required_json("base"),
+      path=path.add_key("base"),
+    ),
+    additions: @json.from_json(
+      object.required_json("additions"),
+      path=path.add_key("additions"),
+    ),
+    deletions: @json.from_json(
+      object.required_json("deletions"),
+      path=path.add_key("deletions"),
+    ),
+    changed_files: @json.from_json(
+      object.required_json("changed_files"),
+      path=path.add_key("changed_files"),
+    ),
+    checks: match object.optional_json("checks") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("checks")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for GitPullRequest with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["number"] = self.number.to_json()
+  fields["title"] = self.title.to_json()
+  fields["state"] = self.state.to_json()
+  fields["draft"] = self.draft.to_json()
+  fields["url"] = self.url.to_json()
+  fields["base"] = self.base.to_json()
+  fields["additions"] = self.additions.to_json()
+  fields["deletions"] = self.deletions.to_json()
+  fields["changed_files"] = self.changed_files.to_json()
+  if self.checks is Some(value) {
+    fields["checks"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitPullRequestReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitPullRequestReply")
+  {
+    pull_request: match object.optional_json("pull_request") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("pull_request")))
+    },
+    compare_url: match object.optional_json("compare_url") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("compare_url")))
+    },
+    branch: match object.optional_json("branch") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("branch")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for GitPullRequestReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.pull_request is Some(value) {
+    fields["pull_request"] = value.to_json()
+  }
+  if self.compare_url is Some(value) {
+    fields["compare_url"] = value.to_json()
+  }
+  if self.branch is Some(value) {
+    fields["branch"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitChange with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitChange")
+  {
+    path: @json.from_json(
+      object.required_json("path"),
+      path=path.add_key("path"),
+    ),
+    original_path: match object.optional_json("original_path") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("original_path")))
+    },
+    index_status: @json.from_json(
+      object.required_json("index_status"),
+      path=path.add_key("index_status"),
+    ),
+    worktree_status: @json.from_json(
+      object.required_json("worktree_status"),
+      path=path.add_key("worktree_status"),
+    ),
+    kind: @json.from_json(
+      object.required_json("kind"),
+      path=path.add_key("kind"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for GitChange with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["path"] = self.path.to_json()
+  if self.original_path is Some(value) {
+    fields["original_path"] = value.to_json()
+  }
+  fields["index_status"] = self.index_status.to_json()
+  fields["worktree_status"] = self.worktree_status.to_json()
+  fields["kind"] = self.kind.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for GitChangesReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "GitChangesReply")
+  {
+    repository: @json.from_json(
+      object.required_json("repository"),
+      path=path.add_key("repository"),
+    ),
+    head: match object.optional_json("head") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("head")))
+    },
+    baseline: match object.optional_json("baseline") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("baseline")))
+    },
+    changes: @json.from_json(
+      object.required_json("changes"),
+      path=path.add_key("changes"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for GitChangesReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["repository"] = self.repository.to_json()
+  if self.head is Some(value) {
+    fields["head"] = value.to_json()
+  }
+  if self.baseline is Some(value) {
+    fields["baseline"] = value.to_json()
+  }
+  fields["changes"] = self.changes.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for DirEntry with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "DirEntry")
+  {
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    is_dir: @json.from_json(
+      object.required_json("is_dir"),
+      path=path.add_key("is_dir"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for DirEntry with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["name"] = self.name.to_json()
+  fields["is_dir"] = self.is_dir.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for ReadDirReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "ReadDirReply")
+  {
+    entries: @json.from_json(
+      object.required_json("entries"),
+      path=path.add_key("entries"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for ReadDirReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["entries"] = self.entries.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SearchFilesReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SearchFilesReply")
+  {
+    files: @json.from_json(
+      object.required_json("files"),
+      path=path.add_key("files"),
+    ),
+    from_cache: @json.from_json(
+      object.required_json("from_cache"),
+      path=path.add_key("from_cache"),
+    ),
+    limit_hit: @json.from_json(
+      object.required_json("limit_hit"),
+      path=path.add_key("limit_hit"),
+    ),
+    cancelled: @json.from_json(
+      object.required_json("cancelled"),
+      path=path.add_key("cancelled"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SearchFilesReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["files"] = self.files.to_json()
+  fields["from_cache"] = self.from_cache.to_json()
+  fields["limit_hit"] = self.limit_hit.to_json()
+  fields["cancelled"] = self.cancelled.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for MaterializeSemanticSelectionReply with fn from_json(
+  json,
+  path,
+) {
+  let object = JsonObject::decode(
+    json, path, "MaterializeSemanticSelectionReply",
+  )
+  {
+    path: @json.from_json(
+      object.required_json("path"),
+      path=path.add_key("path"),
+    ),
+    match_count: @json.from_json(
+      object.required_json("match_count"),
+      path=path.add_key("match_count"),
+    ),
+    file_count: @json.from_json(
+      object.required_json("file_count"),
+      path=path.add_key("file_count"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MaterializeSemanticSelectionReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["path"] = self.path.to_json()
+  fields["match_count"] = self.match_count.to_json()
+  fields["file_count"] = self.file_count.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for MoonIdeLocationsReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "MoonIdeLocationsReply")
+  {
+    locations: @json.from_json(
+      object.required_json("locations"),
+      path=path.add_key("locations"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for MoonIdeLocationsReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["locations"] = self.locations.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for LspPosition with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "LspPosition")
+  {
+    line: @json.from_json(
+      object.required_json("line"),
+      path=path.add_key("line"),
+    ),
+    character: @json.from_json(
+      object.required_json("character"),
+      path=path.add_key("character"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for LspPosition with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["line"] = self.line.to_json()
+  fields["character"] = self.character.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for LspRange with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "LspRange")
+  {
+    start: @json.from_json(
+      object.required_json("start"),
+      path=path.add_key("start"),
+    ),
+    end: @json.from_json(object.required_json("end"), path=path.add_key("end")),
+  }
+}
+
+///|
+pub impl ToJson for LspRange with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["start"] = self.start.to_json()
+  fields["end"] = self.end.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for LspDiagnostic with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "LspDiagnostic")
+  {
+    range: @json.from_json(
+      object.required_json("range"),
+      path=path.add_key("range"),
+    ),
+    message: @json.from_json(
+      object.required_json("message"),
+      path=path.add_key("message"),
+    ),
+    severity: match object.optional_json("severity") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("severity")))
+    },
+    tags: match object.optional_json("tags") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("tags")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for LspDiagnostic with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["range"] = self.range.to_json()
+  fields["message"] = self.message.to_json()
+  if self.severity is Some(value) {
+    fields["severity"] = value.to_json()
+  }
+  if self.tags is Some(value) {
+    fields["tags"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for LspDiagnosticsReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "LspDiagnosticsReply")
+  {
+    diagnostics: match object.optional_json("diagnostics") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("diagnostics")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for LspDiagnosticsReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.diagnostics is Some(value) {
+    fields["diagnostics"] = value.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for LspHoverReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "LspHoverReply")
+  {
+    value: @json.from_json(
+      object.required_json("value"),
+      path=path.add_key("value"),
+    ),
+    markdown: @json.from_json(
+      object.required_json("markdown"),
+      path=path.add_key("markdown"),
+    ),
+    has_range: @json.from_json(
+      object.required_json("has_range"),
+      path=path.add_key("has_range"),
+    ),
+    start_line: @json.from_json(
+      object.required_json("start_line"),
+      path=path.add_key("start_line"),
+    ),
+    start_character: @json.from_json(
+      object.required_json("start_character"),
+      path=path.add_key("start_character"),
+    ),
+    end_line: @json.from_json(
+      object.required_json("end_line"),
+      path=path.add_key("end_line"),
+    ),
+    end_character: @json.from_json(
+      object.required_json("end_character"),
+      path=path.add_key("end_character"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for LspHoverReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["value"] = self.value.to_json()
+  fields["markdown"] = self.markdown.to_json()
+  fields["has_range"] = self.has_range.to_json()
+  fields["start_line"] = self.start_line.to_json()
+  fields["start_character"] = self.start_character.to_json()
+  fields["end_line"] = self.end_line.to_json()
+  fields["end_character"] = self.end_character.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SymbolPosition with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SymbolPosition")
+  {
+    line: @json.from_json(
+      object.required_json("line"),
+      path=path.add_key("line"),
+    ),
+    col: @json.from_json(object.required_json("col"), path=path.add_key("col")),
+  }
+}
+
+///|
+pub impl ToJson for SymbolPosition with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["line"] = self.line.to_json()
+  fields["col"] = self.col.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SymbolRange with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SymbolRange")
+  {
+    start: @json.from_json(
+      object.required_json("start"),
+      path=path.add_key("start"),
+    ),
+    end: @json.from_json(object.required_json("end"), path=path.add_key("end")),
+  }
+}
+
+///|
+pub impl ToJson for SymbolRange with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["start"] = self.start.to_json()
+  fields["end"] = self.end.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SymbolItem with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SymbolItem")
+  {
+    name: @json.from_json(
+      object.required_json("name"),
+      path=path.add_key("name"),
+    ),
+    kind: match object.optional_json("kind") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("kind")))
+    },
+    container: match object.optional_json("container") {
+      None => None
+      Some(value) =>
+        Some(@json.from_json(value, path=path.add_key("container")))
+    },
+    path: @json.from_json(
+      object.required_json("path"),
+      path=path.add_key("path"),
+    ),
+    range: @json.from_json(
+      object.required_json("range"),
+      path=path.add_key("range"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SymbolItem with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["name"] = self.name.to_json()
+  if self.kind is Some(value) {
+    fields["kind"] = value.to_json()
+  }
+  if self.container is Some(value) {
+    fields["container"] = value.to_json()
+  }
+  fields["path"] = self.path.to_json()
+  fields["range"] = self.range.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for WorkspaceSymbolsReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "WorkspaceSymbolsReply")
+  {
+    symbols: @json.from_json(
+      object.required_json("symbols"),
+      path=path.add_key("symbols"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for WorkspaceSymbolsReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["symbols"] = self.symbols.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for DownloadUpdateAcceptedReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "DownloadUpdateAcceptedReply")
+  {
+    accepted: @json.from_json(
+      object.required_json("accepted"),
+      path=path.add_key("accepted"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for DownloadUpdateAcceptedReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["accepted"] = self.accepted.to_json()
+  Json(fields)
+}
+
+///|
+pub impl FromJson for OpenExternalReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "OpenExternalReply")
+  {
+    opened: @json.from_json(
+      object.required_json("opened"),
+      path=path.add_key("opened"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for OpenExternalReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["opened"] = self.opened.to_json()
+  Json(fields)
 }
