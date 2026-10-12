@@ -263,7 +263,7 @@ async test "HTTP admission rejects oversized headers and ambiguous framing witho
         "X-Long: \{"x".repeat(8192)}\r\n",
         "Content-Length: 0\r\nTransfer-Encoding: chunked\r\n",
         "Content-Length: 0\r\ncontent-length: 0\r\n",
-        "Content-Length: 65537\r\n",
+        "Content-Length: 25165825\r\n",
       ] {
       let client = @socket.Tcp::connect(service.server.addr)
       defer client.close()
@@ -577,7 +577,7 @@ async test "HTTP rejects malformed chunks and excessive framing before reservati
         "0\r\n\r\n"
       for
         chunks in [
-          "-1\r\n", "10001\r\n", "1;extension\r\n", "1\r\nx!\n", "0\r\nTrailer: x\r\n\r\n",
+          "-1\r\n", "1800001\r\n", "1;extension\r\n", "1\r\nx!\n", "0\r\nTrailer: x\r\n\r\n",
           framed,
         ] {
         let client = @socket.Tcp::connect(service.server.addr)

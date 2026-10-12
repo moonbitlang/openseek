@@ -1,4 +1,23 @@
 ///|
+test "encoding defaults to text and accepts only explicit supported strings" {
+  assert_true(@decode.decode({ "path": "a", "content": "" }).encoding is Text)
+  assert_true(
+    @decode.decode({ "path": "a", "content": "", "encoding": "text" }).encoding
+    is Text,
+  )
+  assert_true(
+    @decode.decode({ "path": "a", "content": "", "encoding": "base64" }).encoding
+    is Base64,
+  )
+  for encoding in [Json::null(), Json(1), Json("hex"), Json("BASE64")] {
+    assert_decode_error(
+      { "path": "a", "content": "", "encoding": encoding },
+      "arguments.encoding",
+    )
+  }
+}
+
+///|
 test "decode valid write input" {
   debug_inspect(
     @decode.decode({ "path": "/tmp/file.txt", "content": "hello" }),
@@ -6,6 +25,7 @@ test "decode valid write input" {
       #|{
       #|  path: "/tmp/file.txt",
       #|  content: "hello",
+      #|  encoding: Text,
       #|  revert_on_parse_errors: true,
       #|}
     ),
@@ -17,7 +37,12 @@ test "decode accepts empty content" {
   debug_inspect(
     @decode.decode({ "path": "/tmp/file.txt", "content": "" }),
     content=(
-      #|{ path: "/tmp/file.txt", content: "", revert_on_parse_errors: true }
+      #|{
+      #|  path: "/tmp/file.txt",
+      #|  content: "",
+      #|  encoding: Text,
+      #|  revert_on_parse_errors: true,
+      #|}
     ),
   )
 }
@@ -34,6 +59,7 @@ test "decode reads revert_on_parse_errors" {
       #|{
       #|  path: "/tmp/fixture.mbt",
       #|  content: "broken(",
+      #|  encoding: Text,
       #|  revert_on_parse_errors: false,
       #|}
     ),
@@ -46,7 +72,12 @@ test "decode reads revert_on_parse_errors" {
       "revert_on_parse_errors": Json::null(),
     }),
     content=(
-      #|{ path: "/tmp/a.mbt", content: "x", revert_on_parse_errors: true }
+      #|{
+      #|  path: "/tmp/a.mbt",
+      #|  content: "x",
+      #|  encoding: Text,
+      #|  revert_on_parse_errors: true,
+      #|}
     ),
   )
 }

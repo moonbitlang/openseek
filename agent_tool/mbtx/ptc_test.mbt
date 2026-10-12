@@ -1,4 +1,75 @@
 ///|
+async test "PTC writes a large binary artifact without retaining its Base64 payload" {
+  @vfs.with_tmpdir(ws => {
+    @async.with_task_group(group => {
+      let state = @agent_tool.FileStateMap()
+      let service = @ptc.Service::start(
+        group,
+        Tools([
+          @write.definition(workspace_root=ws, file_state=state),
+          @remove.definition(workspace_root=ws, file_state=state),
+        ]),
+      )
+      let tool = @mbtx.definition(workspace_root=ws, program_service=service)
+      let output = dispatch(tool, {
+        "ptc": true,
+        "source": (
+          #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" }
+          #|async fn main {
+          #|  let result = @tools.call("write", { "path": "artifact.bin", "encoding": "base64", "content": "AP+A".repeat(400000) })
+          #|  if result.is_error { fail(result.content) }
+          #|  guard result.data is Some({ "bytes": 1200000, .. }) else { fail("wrong decoded size") }
+          #|  let invalid = @tools.call("write", { "path": "invalid.bin", "encoding": "base64", "content": "AB==" })
+          #|  if !invalid.is_error { fail("invalid base64 accepted") }
+          #|  let temporary = @tools.call("write", { "path": "temporary.bin", "encoding": "base64", "content": "/w==" })
+          #|  if temporary.is_error { fail(temporary.content) }
+          #|  let removed = @tools.call("remove", { "path": "temporary.bin", "reason": "remove generated temporary artifact" })
+          #|  if removed.is_error { fail(removed.content) }
+          #|  println("binary written")
+          #|}
+        ),
+      })
+      assert_false(output.is_error, msg=output.content)
+      let bytes = @fs.read_file("\{ws}/artifact.bin").binary()
+      assert_eq(bytes.length(), 1200000)
+      for index in 0..<400000 {
+        assert_eq(bytes[index * 3], b'\x00')
+        assert_eq(bytes[index * 3 + 1], b'\xff')
+        assert_eq(bytes[index * 3 + 2], b'\x80')
+      }
+      assert_false(@fs.exists("\{ws}/invalid.bin"))
+      assert_false(@fs.exists("\{ws}/temporary.bin"))
+      guard output.data is Some(data) else { fail("expected PTC trace") }
+      assert_true(data.stringify().length() < 10000)
+      assert_false(data.stringify().contains("AP+A"))
+      assert_false(data.stringify().contains("AB=="))
+      assert_true(
+        data
+        is {
+          "ptc_calls": [
+            {
+              "arguments": {
+                "encoding": "base64",
+                "content_base64_chars": 1600000,
+                ..
+              },
+              "result": {
+                "is_error": false,
+                "data": { "bytes": 1200000, .. },
+                ..
+              },
+              ..
+            },
+            ..,
+          ],
+          ..
+        },
+      )
+    })
+  })
+}
+
+///|
 async test "PTC real script edits and receives reply without deadlock" {
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {

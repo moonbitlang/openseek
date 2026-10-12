@@ -3,7 +3,7 @@
 Argument decoding for the `write` tool, which creates or overwrites a file with
 exactly the content given. This package is internal to `agent_tool/write` and
 owns only argument-shape decoding; path resolution, the manifest guards, and the
-post-write syntax gate stay in the parent package.
+pre-write syntax gate stay in the parent package.
 
 ## Arguments
 
@@ -12,6 +12,7 @@ post-write syntax gate stay in the parent package.
 | `path` | string | unless `filename` is provided | Canonical destination field. Non-string raises `arguments.path`. |
 | `filename` | string | no | Alias for `path`. If both are present, both must be strings with identical values. |
 | `content` | string | yes | Missing or non-string raises `arguments.content`. Empty is valid. |
+| `encoding` | `"text"` or `"base64"` | no | Defaults to `"text"` when absent. Null, other types and unknown strings raise. |
 | `revert_on_parse_errors` | boolean | no | Defaults to `true`. `null` also means `true`. A non-boolean raises. |
 
 At least one of `path` or `filename` is required. Conflicting values are rejected
@@ -29,6 +30,7 @@ test "a well-formed write decodes, with the syntax gate on by default" {
       #|{
       #|  path: "agent_tool/write/notes.md",
       #|  content: "# Notes\n",
+      #|  encoding: Text,
       #|  revert_on_parse_errors: true,
       #|}
     ),
@@ -89,7 +91,12 @@ test "an empty content field truncates rather than failing" {
   debug_inspect(
     @decode.decode({ "path": "scratch/log.txt", "content": "" }),
     content=(
-      #|{ path: "scratch/log.txt", content: "", revert_on_parse_errors: true }
+      #|{
+      #|  path: "scratch/log.txt",
+      #|  content: "",
+      #|  encoding: Text,
+      #|  revert_on_parse_errors: true,
+      #|}
     ),
   )
 }
