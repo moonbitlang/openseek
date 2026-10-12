@@ -1247,6 +1247,7 @@ fn default_prompt() -> String {
     #|├── frontend-rabbita
     #|├── moongrep
     #|├── typst
+    #|│   └── slides
     #|└── workflow
     #|```
     #|
