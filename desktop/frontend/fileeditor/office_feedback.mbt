@@ -33,8 +33,8 @@ pub fn show_office_feedback(
       if mounted.target.val != Some(preview) {
         mounted.target.val = Some(preview)
         if office_feedback_anchor(surface, preview)
-          is Some((anchor, prefer_below)) {
-          mounted.input.show(anchor, prefer_below~)
+          is Some((anchor, selection_rects, prefer_below)) {
+          mounted.input.show(anchor, selection_rects~, prefer_below~)
         }
       }
       return
@@ -63,8 +63,9 @@ pub fn show_office_feedback(
       },
     )
     office_feedback_mount.val = Some({ host, input, target, })
-    if office_feedback_anchor(surface, preview) is Some((anchor, prefer_below)) {
-      input.show(anchor, prefer_below~)
+    if office_feedback_anchor(surface, preview)
+      is Some((anchor, selection_rects, prefer_below)) {
+      input.show(anchor, selection_rects~, prefer_below~)
     }
   })
 }
@@ -93,7 +94,7 @@ fn dispose_office_feedback() -> Unit {
 fn office_feedback_anchor(
   surface : @dom.Element,
   preview : OfficeSelectionPreview,
-) -> (() -> @dom.DOMRect?, Bool)? {
+) -> (() -> @dom.DOMRect?, () -> Array[@dom.DOMRect], Bool)? {
   let document : @js.Value = @js.Value::cast_from(surface).get_with_string(
     "ownerDocument",
   )
@@ -114,9 +115,34 @@ fn office_feedback_anchor(
         let end_offset : Int = range.get_with_string("endOffset")
         let prefer_below = focus.is_same_node(end) && offset == end_offset
         if preview.pdf_generation is Some(_) &&
-          pdf_feedback_anchor(surface, preview.materialized, prefer_below)
-          is Some(anchor) {
-          return Some((anchor, prefer_below))
+          pdf_feedback_range(surface, preview.materialized)
+          is Some(measure_range) {
+          return Some(
+            (
+              () => {
+                measure_range().map(range => {
+                  let endpoint : @js.Value = range.apply_with_string(
+                    "cloneRange",
+                    ([] : FixedArray[@js.Value]),
+                  )
+                  let _ : @js.Value = endpoint.apply_with_string("collapse", [
+                    !prefer_below,
+                  ])
+                  endpoint.apply_with_string(
+                    "getBoundingClientRect",
+                    ([] : FixedArray[@js.Value]),
+                  )
+                })
+              },
+              () => {
+                match measure_range() {
+                  Some(range) => feedback_range_rects(range)
+                  None => []
+                }
+              },
+              prefer_below,
+            ),
+          )
         }
         let pinned : @js.Value = range.apply_with_string(
           "cloneRange",
@@ -163,6 +189,13 @@ fn office_feedback_anchor(
                 }
               }
             },
+            () => {
+              if surface.contains(start) && surface.contains(end) {
+                feedback_range_rects(pinned)
+              } else {
+                []
+              }
+            },
             prefer_below,
           ),
         )
@@ -182,6 +215,7 @@ fn office_feedback_anchor(
           None
         }
       },
+      () => [],
       true,
     )
   })
@@ -190,17 +224,45 @@ fn office_feedback_anchor(
 ///|
 /// PDF.js recreates the text layer at a new scale. Resolve the saved item and
 /// UTF-16 endpoint every time instead of retaining a detached browser Range.
-fn pdf_feedback_anchor(
+fn pdf_feedback_range(
   surface : @dom.Element,
   materialized : String,
-  prefer_below : Bool,
-) -> (() -> @dom.DOMRect?)? {
+) -> (() -> @js.Value?)? {
   let value = @json.parse(materialized) catch { _ => return None }
   guard value
     is { "source": { "reference": { "start": start, "end": end, .. }, .. }, .. } else {
     return None
   }
-  let endpoint = if prefer_below { end } else { start }
+  Some(() => {
+    guard pdf_feedback_endpoint(surface, start)
+      is Some((start_node, start_offset)) &&
+      pdf_feedback_endpoint(surface, end) is Some((end_node, end_offset)) else {
+      return None
+    }
+    let document : @js.Value = @js.Value::cast_from(surface).get_with_string(
+      "ownerDocument",
+    )
+    let range : @js.Value = document.apply_with_string(
+      "createRange",
+      ([] : FixedArray[@js.Value]),
+    )
+    let _ : @js.Value = range.apply_with_string("setStart", [
+      @js.Value::cast_from(start_node),
+      @js.Value::cast_from(start_offset),
+    ])
+    let _ : @js.Value = range.apply_with_string("setEnd", [
+      @js.Value::cast_from(end_node),
+      @js.Value::cast_from(end_offset),
+    ])
+    Some(range)
+  })
+}
+
+///|
+fn pdf_feedback_endpoint(
+  surface : @dom.Element,
+  endpoint : Json,
+) -> (@dom.Node, Int)? {
   guard endpoint
     is {
       "page": Number(page, ..),
@@ -211,41 +273,102 @@ fn pdf_feedback_anchor(
     return None
   }
   let selector = "[data-pdf-page='\{page.to_int()}'][data-pdf-item='\{item.to_int()}']"
-  Some(() => {
-    guard surface.query_selector(selector) is Some(element) else { return None }
-    let document : @js.Value = @js.Value::cast_from(element).get_with_string(
-      "ownerDocument",
+  guard surface.query_selector(selector) is Some(element) else { return None }
+  let document : @js.Value = @js.Value::cast_from(element).get_with_string(
+    "ownerDocument",
+  )
+  let walker : @js.Value = document.apply_with_string("createTreeWalker", [
+    @js.Value::cast_from(element),
+    @js.Value::cast_from(4),
+  ])
+  let mut remaining = offset.to_int()
+  while true {
+    let node : @js.Nullable[@dom.Node] = walker.apply_with_string(
+      "nextNode",
+      ([] : FixedArray[@js.Value]),
     )
-    let walker : @js.Value = document.apply_with_string("createTreeWalker", [
-      @js.Value::cast_from(element),
-      @js.Value::cast_from(4),
-    ])
-    let mut remaining = offset.to_int()
-    while true {
-      let node : @js.Nullable[@dom.Node] = walker.apply_with_string(
-        "nextNode",
+    guard node.to_option() is Some(node) else { return None }
+    let length = node.get_node_value().length()
+    if remaining <= length {
+      return Some((node, remaining))
+    }
+    remaining -= length
+  }
+  None
+}
+
+///|
+/// Enumerate text fragments only: a cross-page Range also reports page and
+/// canvas boxes, which must not become full-page selection backgrounds.
+fn feedback_range_rects(range : @js.Value) -> Array[@dom.DOMRect] {
+  let root : @dom.Node = range.get_with_string("commonAncestorContainer")
+  let document : @js.Value = @js.Value::cast_from(root).get_with_string(
+    "ownerDocument",
+  )
+  let walker : @js.Value = document.apply_with_string("createTreeWalker", [
+    @js.Value::cast_from(root),
+    @js.Value::cast_from(4),
+  ])
+  let rects : Array[@dom.DOMRect] = []
+  let mut current = Some(root)
+  while current is Some(node) {
+    let kind : Int = @js.Value::cast_from(node).get_with_string("nodeType")
+    let intersects : Bool = range.apply_with_string("intersectsNode", [node])
+    if kind == 3 && intersects {
+      let contents : @js.Value = document.apply_with_string(
+        "createRange",
         ([] : FixedArray[@js.Value]),
       )
-      guard node.to_option() is Some(node) else { return None }
-      let length = node.get_node_value().length()
-      if remaining <= length {
-        let range : @js.Value = document.apply_with_string(
-          "createRange",
-          ([] : FixedArray[@js.Value]),
+      let _ : @js.Value = contents.apply_with_string("selectNodeContents", [
+        node,
+      ])
+      let selected : @js.Value = range.apply_with_string(
+        "cloneRange",
+        ([] : FixedArray[@js.Value]),
+      )
+      let starts_before : Int = selected.apply_with_string(
+        "compareBoundaryPoints",
+        [@js.Value::cast_from(0), contents],
+      )
+      let ends_after : Int = selected.apply_with_string(
+        "compareBoundaryPoints",
+        [@js.Value::cast_from(2), contents],
+      )
+      if starts_before < 0 {
+        let _ : @js.Value = selected.apply_with_string(
+          "setStart",
+          (
+            [
+              contents.get_with_string("startContainer"),
+              contents.get_with_string("startOffset"),
+            ] : FixedArray[@js.Value]),
         )
-        let _ : @js.Value = range.apply_with_string("setStart", [
-          @js.Value::cast_from(node),
-          @js.Value::cast_from(remaining),
-        ])
-        let _ : @js.Value = range.apply_with_string("collapse", [true])
-        let rect : @dom.DOMRect = range.apply_with_string(
-          "getBoundingClientRect",
-          ([] : FixedArray[@js.Value]),
-        )
-        return Some(rect)
       }
-      remaining -= length
+      if ends_after > 0 {
+        let _ : @js.Value = selected.apply_with_string(
+          "setEnd",
+          (
+            [
+              contents.get_with_string("endContainer"),
+              contents.get_with_string("endOffset"),
+            ] : FixedArray[@js.Value]),
+        )
+      }
+      let fragments : @dom.DOMRectList = selected.apply_with_string(
+        "getClientRects",
+        ([] : FixedArray[@js.Value]),
+      )
+      for fragment in fragments.iter() {
+        if fragment.get_width() > 0.0 && fragment.get_height() > 0.0 {
+          rects.push(fragment)
+        }
+      }
     }
-    None
-  })
+    let next : @js.Nullable[@dom.Node] = walker.apply_with_string(
+      "nextNode",
+      ([] : FixedArray[@js.Value]),
+    )
+    current = next.to_option()
+  }
+  rects
 }

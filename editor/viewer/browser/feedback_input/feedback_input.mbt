@@ -5,6 +5,8 @@ struct FeedbackInput {
   widget : @feedback.AgentFeedbackInputWidget
   container : @rdom.Element
   mut anchor : (() -> @rdom.DOMRect?)?
+  selection_layer : @rdom.Element
+  mut selection_rects : () -> Array[@rdom.DOMRect]
   mut prefer_below : Bool
   subscriptions : Array[@base_common.Disposable]
 }
@@ -38,10 +40,16 @@ pub fn FeedbackInput::FeedbackInput(
     },
     on_change~,
   )
+  let selection_layer = @rdom.document().create_element("div")
+  selection_layer.set_attribute("class", "feedback-source-selection-layer")
+  selection_layer.set_attribute("aria-hidden", "true")
+  container.append_child(selection_layer.as_node())
   let input : FeedbackInput = {
     widget,
     container,
     anchor: None,
+    selection_layer,
+    selection_rects: () => [],
     prefer_below: true,
     subscriptions: [],
   }
@@ -125,7 +133,9 @@ pub fn FeedbackInput::show(
   self : FeedbackInput,
   anchor : () -> @rdom.DOMRect?,
   prefer_below~ : Bool,
+  selection_rects~ : () -> Array[@rdom.DOMRect],
 ) -> Unit {
+  self.selection_rects = selection_rects
   self.anchor = Some(anchor)
   self.prefer_below = prefer_below
   self.widget.clear_input()
@@ -136,6 +146,7 @@ pub fn FeedbackInput::show(
 ///|
 fn FeedbackInput::layout(self : FeedbackInput) -> Unit {
   guard self.anchor is Some(measure) else { return }
+  self.paint_selection()
   guard measure() is Some(anchor) else {
     self.widget.hide()
     return
@@ -172,6 +183,8 @@ fn FeedbackInput::layout(self : FeedbackInput) -> Unit {
 ///|
 pub fn FeedbackInput::hide(self : FeedbackInput) -> Unit {
   self.anchor = None
+  self.selection_rects = () => []
+  self.selection_layer.set_inner_html("")
   self.widget.hide()
   self.widget.clear_input()
 }
@@ -179,9 +192,42 @@ pub fn FeedbackInput::hide(self : FeedbackInput) -> Unit {
 ///|
 pub fn FeedbackInput::dispose(self : FeedbackInput) -> Unit {
   self.anchor = None
+  self.selection_rects = () => []
+  self.selection_layer.set_inner_html("")
   for subscription in self.subscriptions {
     subscription.dispose()
   }
   self.subscriptions.clear()
+  @base_browser.remove_element(self.selection_layer)
   @base_browser.remove_element(self.widget.get_dom_node())
+}
+
+///|
+/// Retain source feedback even when focusing the textarea replaces the native
+/// selection. Clip each fragment to this viewport, independently of the popup.
+fn FeedbackInput::paint_selection(self : FeedbackInput) -> Unit {
+  self.selection_layer.set_inner_html("")
+  let root = self.container.get_bounding_client_rect()
+  for rect in (self.selection_rects)() {
+    let left = rect.get_left().max(root.get_left())
+    let top = rect.get_top().max(root.get_top())
+    let right = rect.get_right().min(root.get_right())
+    let bottom = rect.get_bottom().min(root.get_bottom())
+    guard right > left && bottom > top else { continue }
+    let fragment = @rdom.document().create_element("div")
+    fragment.set_attribute("class", "feedback-source-selection")
+    @base_browser.set_style_property(
+      fragment,
+      "left",
+      "\{left - root.get_left()}px",
+    )
+    @base_browser.set_style_property(
+      fragment,
+      "top",
+      "\{top - root.get_top()}px",
+    )
+    @base_browser.set_style_property(fragment, "width", "\{right - left}px")
+    @base_browser.set_style_property(fragment, "height", "\{bottom - top}px")
+    self.selection_layer.append_child(fragment.as_node())
+  }
 }

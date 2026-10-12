@@ -15,7 +15,7 @@ type FeedbackInput
 pub fn FeedbackInput::FeedbackInput(@dom.Element, viewport~ : @dom.Element, layout_source~ : @dom.Element, localization~ : @localization.Localization, on_submit~ : (String, Bool) -> Unit, on_change~ : (String) -> Unit, on_cancel~ : () -> Unit) -> Self
 pub fn FeedbackInput::dispose(Self) -> Unit
 pub fn FeedbackInput::hide(Self) -> Unit
-pub fn FeedbackInput::show(Self, () -> @dom.DOMRect?, prefer_below~ : Bool) -> Unit
+pub fn FeedbackInput::show(Self, () -> @dom.DOMRect?, prefer_below~ : Bool, selection_rects~ : () -> Array[@dom.DOMRect]) -> Unit
 
 // Type aliases
 

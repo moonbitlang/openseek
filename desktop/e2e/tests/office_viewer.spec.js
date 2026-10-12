@@ -181,7 +181,10 @@ test('Word selections preview, cancel and accumulate only after confirmation', a
   await expect.poll(() => preview.getAttribute('title')).toContain('report.docx');
   await expect.poll(() => preview.getAttribute('title')).toContain('Walking on imported air');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
+  await preview.locator('textarea').fill('Inspect this paragraph');
+  await expect(preview.locator('.feedback-source-selection').first()).toBeVisible();
   await preview.locator('textarea').press('Escape');
+  await expect(preview.locator('.feedback-source-selection')).toHaveCount(0);
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await selectWord();

@@ -409,3 +409,91 @@ test(`PDF annotation matches Markdown and code styling and anchors beside the se
   expect(app.pageErrors).toEqual([]);
 });
 }
+
+test('PDF annotation retains a visible source selection while typing', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const source = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
+  await source.evaluate(element => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  const input = page.locator('#office-feedback-input textarea');
+  await expect(input).toBeVisible();
+  await input.fill('Explain this passage');
+  const highlight = page.locator('#office-feedback-input .feedback-source-selection');
+  const expectHighlight = async () => {
+    await expect(highlight).toHaveCount(1);
+    await expect(highlight).toBeVisible();
+    const actual = await highlight.boundingBox();
+    const expected = await source.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    expect(Math.abs(actual.x - expected.x)).toBeLessThan(2);
+    expect(Math.abs(actual.y - expected.y)).toBeLessThan(2);
+    expect(Math.abs(actual.width - expected.width)).toBeLessThan(2);
+    const paint = await highlight.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, opacity: style.opacity, pointerEvents: style.pointerEvents };
+    });
+    expect(paint.background).not.toBe('rgba(0, 0, 0, 0)');
+    expect(Number(paint.opacity)).toBeGreaterThan(0);
+    expect(paint.pointerEvents).toBe('none');
+  };
+  // Focusing the textarea replaces the native selection. The draft owns its
+  // own painted source fragments instead of trying to steal focus back.
+  expect(await page.evaluate(() => window.getSelection().toString())).not.toContain('Selectable first page text');
+  await expectHighlight();
+  await page.screenshot({ path: testInfo.outputPath('pdf-retained-selection.png') });
+  const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
+  await expect(async () => expectHighlight()).toPass();
+  await page.locator('.pdf-container').evaluate(element => { element.scrollTop += 30; });
+  await expect(async () => expectHighlight()).toPass();
+  await input.press('Escape');
+  await expect(highlight).toHaveCount(0);
+  // A subsequent selection replaces the previous highlight; submitting it
+  // clears the decoration as well as the draft.
+  await source.evaluate(element => {
+    const range = document.createRange(); range.setStart(element.firstChild, 0); range.setEnd(element.firstChild, 10);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await input.fill('Partial selection');
+  await expect(highlight).toHaveCount(1);
+  expect((await highlight.boundingBox()).width).toBeLessThan((await source.boundingBox()).width);
+  await page.locator('#office-feedback-input').getByRole('checkbox').check();
+  await input.press('Enter');
+  await expect(highlight).toHaveCount(0);
+  const secondPage = page.locator('.page[data-page-number="2"] [data-pdf-item]').filter({ hasText: 'Second page selection' }).first();
+  await secondPage.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('[data-pdf-item]')];
+    const start = items.find(element => element.textContent.includes('Selectable first page text'));
+    const end = items.find(element => element.textContent.includes('Second page selection'));
+    const range = document.createRange(); range.setStart(start.firstChild, 0); range.setEnd(end.firstChild, 6);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(input).toBeVisible();
+  await input.fill('Across pages');
+  const boxes = await highlight.evaluateAll(elements => elements.map(element => ({
+    width: element.getBoundingClientRect().width,
+    height: element.getBoundingClientRect().height,
+  })));
+  expect(boxes.length).toBeGreaterThan(0);
+  // Cross-page DOM Ranges include canvas/page rectangles. Only text should
+  // be painted, never the large whitespace between the selected fragments.
+  for (const box of boxes) {
+    expect(box.height).toBeLessThan(40);
+    expect(box.width).toBeLessThan(400);
+  }
+  await input.press('Escape');
+  await expect(highlight).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
