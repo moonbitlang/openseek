@@ -528,3 +528,54 @@ async test "worktree remove enforces the dirty check and keeps recovery referenc
     is Some(_),
   )
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "unsupported Git worktree listing refuses creation before publication" {
+  with_recovery_fixture((repo, host) => {
+    let (code, stdout, _) = @processx.collect_output_no_stdin("/bin/sh", [
+      "-c", "command -v git",
+    ])
+    assert_eq(code, 0)
+    let git = stdout.text().trim().to_owned()
+    guard @sys.get_env_var("PATH") is Some(original_path) else {
+      fail("fixture requires PATH")
+    }
+    let bin = repo.join("fixture-bin")
+    @fsx.ensure_dir(bin.to_path())
+    let shim = bin.join("git")
+    @fsx.write_text(
+      shim.to_path(),
+      "#!/bin/sh\nif [ \"$1 $2 $3 $4\" = 'worktree list --porcelain -z' ]; then printf '%s\\n' \"error: unknown switch z\" >&2; exit 129; fi\nexec '" +
+      git.replace_all(old="'", new="'\\''") +
+      "' \"$@\"\n",
+    )
+    @fs.chmod(shim.to_string(), 0o700)
+    @sys.set_env_var("PATH", bin.to_string() + ":" + original_path)
+    defer @sys.set_env_var("PATH", original_path)
+    let error = try {
+      ignore(
+        create(host, resource_path(repo), WorktreeOwner::openseek("old-git"), _ => {
+          ()
+        }),
+      )
+      None
+    } catch {
+      WorktreeError(message) => Some(message)
+      error => raise error
+    }
+    guard error is Some(message) else { fail("unsupported listing accepted") }
+    assert_true(message.contains("git worktree list --porcelain -z"))
+    assert_true(message.contains("unknown switch z"))
+    assert_true(read_worktrees_unlocked(repo).is_empty())
+    assert_true(!@fsx.exists(repo.join(WorktreesDirName).to_path()))
+    assert_eq(
+      @gitx.run(repo, [
+        "for-each-ref",
+        "--format=%(refname)",
+        WorktreeRecoveryPrefix,
+      ]),
+      "",
+    )
+  })
+}

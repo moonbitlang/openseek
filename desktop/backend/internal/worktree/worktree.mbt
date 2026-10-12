@@ -767,6 +767,10 @@ pub async fn create(
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
+  // Verify the lossless metadata format before creating any ref, checkout or
+  // registry row. Older Git accepts add but rejects list -z during the final
+  // unlock, otherwise leaving a published, provisioning-locked checkout.
+  ignore(worktree_listing(dir))
   if owner is OpenSeekSession(session) {
     @session_store.ensure_not_archived(session)
   }
