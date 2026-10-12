@@ -497,3 +497,42 @@ test('PDF annotation retains a visible source selection while typing', async ({ 
   await expect(highlight).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('PDF annotation closes on an outside click before the input is focused', async ({ page }) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const source = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
+  const select = async () => {
+    await source.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await expect(page.locator('#office-feedback-input textarea')).toBeVisible();
+  };
+  await select();
+  await expect(page.locator('#office-feedback-input textarea')).not.toBeFocused();
+  const paper = page.locator('.page[data-page-number="1"]');
+  await paper.click({ position: { x: 25, y: 200 } });
+  await expect(page.locator('#office-feedback-input textarea')).toBeHidden();
+  await expect(page.locator('.feedback-source-selection')).toHaveCount(0);
+  await select();
+  const input = page.locator('#office-feedback-input textarea');
+  const batch = page.locator('#office-feedback-input').getByRole('checkbox');
+  await batch.check();
+  await expect(input).toBeVisible();
+  await input.click();
+  await expect(input).toBeVisible();
+  await page.locator('#task').click();
+  await expect(page.locator('#office-feedback-input textarea')).toBeHidden();
+  await expect(page.locator('.feedback-source-selection')).toHaveCount(0);
+  await select();
+  await input.fill('Keep this draft');
+  await paper.click({ position: { x: 25, y: 200 } });
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue('Keep this draft');
+  await input.press('Escape');
+  await expect(input).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});

@@ -55,6 +55,33 @@ pub fn FeedbackInput::FeedbackInput(
   }
   slot = Some(input)
   container.append_child(widget.get_dom_node().as_node())
+  // Selection opens the composer without moving focus. An outside click
+  // must therefore dismiss an empty draft even if no focusout can fire.
+  // Match the editor's auto-hide policy: typed drafts stay pinned.
+  let pointer_down : @rdom.Listener = event => {
+    guard input.anchor is Some(_) && !widget.has_text() else { return }
+    if event.target().to_element() is Some(target) &&
+      @base_browser.element_contains(widget.get_dom_node(), target) {
+      return
+    }
+    if event.to_mouse_event() is Some(mouse) && mouse.get_button() == 0 {
+      on_cancel()
+    }
+  }
+  @rdom.document().add_event_listener_with_options(
+    "pointerdown",
+    pointer_down,
+    capture=true,
+  )
+  input.subscriptions.push(
+    @base_common.Disposable::from(() => {
+      @rdom.document().remove_event_listener_with_options(
+        "pointerdown",
+        pointer_down,
+        capture=true,
+      )
+    }),
+  )
   input.subscriptions.push(localization.bind(_ => widget.refresh_labels()))
   if @base_browser.observe_element_resize(container, layout)
     is Some(subscription) {
