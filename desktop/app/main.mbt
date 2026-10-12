@@ -60,16 +60,21 @@ async fn main {
   let development = is_development(app)
   let runtime_dir = @host.prepared_runtime_dir(executable)
   let codex_home = match runtime_dir {
-    Some(dir) => @codex.prepared_home(dir)
+    Some(dir) => Some(@codex.home_dir(dir))
     None => None
   }
-  let codex = @codex.CodexSettings(command=@codex.command(), home=codex_home)
+  // Keep isolation failure local to Codex and retry preparation on its next request.
+  let codex = @codex.CodexSettings(
+    command=@codex.command(),
+    home=codex_home,
+    require_home=true,
+  )
   @xlog.info() <?
     {
       "message": "codex home",
       "path": codex_home
       .map(p => p.to_string())
-      .unwrap_or("(inherited environment)"),
+      .unwrap_or("(unavailable: no isolated home)"),
     }
   // The relay sign-in store: a persisted session from auth.json, unless the
   // environment override pins the connector config directly (development).

@@ -69,7 +69,10 @@ pub async fn[X] connect(
   // it too, so nested codex calls, sandbox approvals, and tool runs agree
   // with the app-server on auth and config.
   let env : Map[String, String] = match home {
-    Some(home) => Map([("CODEX_HOME", home.to_string())])
+    Some(home) => {
+      prepare_home_directory(home)
+      Map([("CODEX_HOME", home.to_string())])
+    }
     None => Map([])
   }
   let (executable, args) = app_server_launch(
