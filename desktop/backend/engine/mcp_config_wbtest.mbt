@@ -3,7 +3,7 @@
 /// are written to.
 async fn mcp_test_manager() -> (EngineManager, @pathx.Path) {
   let dir = @pathx.Path(@fs.tmpdir(prefix="openseek-engine-mcp-"))
-  let server = @mcp.Server::bind([], version="test", config_dir=dir)
+  let server = @mcp.Server([], version="test", config_dir=dir)
   (new_engine_manager("unused", mcp=server), dir)
 }
 

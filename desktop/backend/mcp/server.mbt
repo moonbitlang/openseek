@@ -63,9 +63,10 @@ struct Server {
 }
 
 ///|
-/// Bind the loopback listener on an ephemeral port. `run` serves it; binding
-/// first lets engine configs name the port before anything is accepted.
-pub async fn Server::bind(
+/// A server offering `tools`, with its loopback listener already bound on an
+/// ephemeral port. `run` serves it; binding here lets engine configs name
+/// the port before anything is accepted.
+pub async fn Server::Server(
   tools : Array[Tool],
   version~ : String,
   config_dir~ : @pathx.Path,

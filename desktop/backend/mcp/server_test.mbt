@@ -48,7 +48,7 @@ fn test_tools() -> Array[@mcp.Tool] {
 /// Serve the test tools for the duration of `body`.
 async fn with_server(body : async (@mcp.Server) -> Unit) -> Unit {
   let dir = @pathx.Path(@fs.tmpdir(prefix="openseek-mcp-server-"))
-  let server = @mcp.Server::bind(test_tools(), version="1.2.3", config_dir=dir)
+  let server = @mcp.Server(test_tools(), version="1.2.3", config_dir=dir)
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => server.run())
     body(server)

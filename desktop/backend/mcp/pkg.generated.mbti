@@ -24,7 +24,7 @@ pub impl Show for ToolError
 
 // Types and methods
 type Server
-pub async fn Server::bind(Array[Tool], version~ : String, config_dir~ : @pathx.Path) -> Self
+pub async fn Server::Server(Array[Tool], version~ : String, config_dir~ : @pathx.Path) -> Self
 pub async fn Server::engine_config(Self, session~ : String, inherited? : @pathx.Path) -> @pathx.Path
 pub async fn Server::run(Self) -> Unit
 pub fn Server::url(Self) -> String
