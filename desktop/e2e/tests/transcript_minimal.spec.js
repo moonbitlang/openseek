@@ -777,6 +777,11 @@ test('minimal transcript clears jump to latest when folded content fits the view
   await summary.click();
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
     .toBeGreaterThan(1000);
+  // The reader was pinned while everything fit, so it follows the expansion
+  // to the tail one render later. Scroll away only after that follow lands;
+  // an earlier scroll is overridden and leaves the reader pinned.
+  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight))
+    .toBeLessThanOrEqual(4);
   await transcript.evaluate(node => { node.scrollTop = 0; });
   await expect(jump).toBeVisible();
   await summary.click();

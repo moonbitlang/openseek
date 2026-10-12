@@ -32,6 +32,12 @@ test('workspace search supports toggles and keyboard navigation', async ({ page 
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
+  // The query field is rendered once the project's checkout is known, and the
+  // shortcut focuses it only once. Pressed earlier, the panel keeps the focus
+  // and the field that appears later is left unfocused. The composer offers a
+  // retry for the worktree list for as long as the checkout is unknown.
+  await expect(page.getByRole('complementary').getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  await expect(page.getByTitle("Request this workspace's worktree list again", { exact: true })).toBeHidden();
 
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');

@@ -43,7 +43,14 @@ for (const mode of ['Token', 'Tree']) {
     const line = entry.locator('.moonbit-diff-editor-modified .view-line')
       .filter({ hasText: 'modified long content' }).first();
     await expect(line).toBeVisible();
-    const before = await line.boundingBox();
+    // The panes follow the host's scroll position from a listener, one frame
+    // behind it. Measure only once the reset above has reached them.
+    let before;
+    await expect.poll(async () => {
+      const previous = before;
+      before = await line.boundingBox();
+      return before.x === previous?.x;
+    }).toBe(true);
     const frame = await entry.boundingBox();
     await page.mouse.move(frame.x + frame.width * 0.75, frame.y + 35);
     await page.mouse.wheel(250, 0);

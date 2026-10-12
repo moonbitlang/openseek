@@ -82,6 +82,9 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
     { type: 'text', text: 'Inspect the screenshot' },
     { type: 'image', url: `data:image/png;base64,${png}` },
   ]);
+  // The composer is disabled until the turn is accepted, and a disabled
+  // composer leaves a paste to the browser.
+  await expect(page.getByRole('button', { name: 'Attach images', exact: true })).toBeVisible();
   expect(await app.transfer('paste')).toBe(true);
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#send').click();

@@ -64,7 +64,16 @@ test('active dock tab stays visible when opening, switching, closing and resizin
   await expectActiveVisible(page);
   await strip.evaluate(el => { el.style.removeProperty('flex'); });
   await expectActiveVisible(page);
-  // Ordinary typing must not undo a user's deliberate horizontal scroll.
+  // Ordinary typing must not undo a user's deliberate horizontal scroll. The
+  // strip takes several frames to settle at its restored width, and each step
+  // reveals the active tab again from the resize observer. Let that finish so
+  // a late reveal is not mistaken for typing.
+  let width;
+  await expect.poll(async () => {
+    const previous = width;
+    width = await strip.evaluate(el => el.getBoundingClientRect().width);
+    return width === previous;
+  }).toBe(true);
   await strip.evaluate(el => { el.scrollLeft = 0; });
   await page.locator('#task').fill('keep browsing the earlier tabs');
   await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
