@@ -164,14 +164,12 @@ jobs:
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
 
-      # Stable, matching CI. This is the toolchain that BUILDS the app, not
-      # the seed it ships (that one is pinned by `desktop/.moonbit-version`), but
-      # if the two channels differed then a change compiling on the channel CI
-      # runs could still break the release build, and nothing would catch it
-      # until a release ran.
+      # Build with the same pinned toolchain as CI and the bundled seed.
       - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- latest
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Show MoonBit version
@@ -318,9 +316,11 @@ jobs:
           $nsisDir >> $env:GITHUB_PATH
           & "$nsisDir\makensis.exe" /VERSION
 
-      # Stable, matching CI, for the same reason as the macOS job below.
+      # Build with the same pinned toolchain as CI and the bundled seed.
       - name: Set up MoonBit
         run: |
+          $env:MOONBIT_INSTALL_VERSION = (Get-Content "$env:GITHUB_WORKSPACE/desktop/.moonbit-version" -Raw -ErrorAction Stop).Trim()
+          if (-not $env:MOONBIT_INSTALL_VERSION) { throw "desktop/.moonbit-version is empty" }
           Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
           "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
 
