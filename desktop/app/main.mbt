@@ -336,11 +336,20 @@ async fn main {
   // when the primary finally closed, its marker would be gone and the
   // update would never be entered. The nesting is deliberate; a `&&` chain
   // would take the marker while deciding whether it was allowed to.
+  //
+  // Nor may a host take a marker another bundle's host wrote. The runtime
+  // directory is shared: a development build that exits while the installed
+  // application is waiting to relaunch would otherwise reopen that
+  // application's new version under it and leave it nothing to act on.
   if is_primary {
-    if runtime_dir is Some(dir) {
-      if @update.take_relaunch_target(work_dir=dir.to_string()) is Some(target) {
-        @xlog.info() <? { "message": "relaunch after update", "path": target }
-        let code = @process.run("open", ["-n", target]) catch {
+    if runtime_dir is Some(dir) &&
+      @host.app_bundle_path(executable) is Some(bundle) {
+      if @update.take_relaunch_marker(
+          work_dir=dir.to_string(),
+          bundle_path=bundle,
+        ) {
+        @xlog.info() <? { "message": "relaunch after update", "path": bundle }
+        let code = @process.run("open", ["-n", bundle]) catch {
           error => {
             @xlog.error() <?
               { "message": "relaunch failed", "error": "\{error}" }
