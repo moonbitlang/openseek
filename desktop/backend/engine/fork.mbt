@@ -91,22 +91,28 @@ pub async fn fork_session(
       session~,
       worktree_of=payload.session,
       () => {
-        let output = engine_stdout(manager, args) catch {
-          error => {
-            // Reporting a failure for a fork that exists would invite a
-            // retry that makes a second one.
-            guard @fs.exists(store.session_file(id)) else { raise error }
-            @xlog.warn() <?
-              {
-                "event": "desktop_fork_engine_failed_after_commit",
-                "session": session,
-                "error": error.to_string(),
-              }
-            session
-          }
+        let failure : Error? = try {
+          ignore(engine_stdout(manager, args))
+          None
+        } catch {
+          error => Some(error)
         }
-        guard output.trim() == session else {
-          raise EngineError("engine returned an unexpected fork identity")
+        // The record says whether the fork was made — not how the engine
+        // exited, nor what it printed. Reporting a failure for a fork that
+        // exists would invite a retry that makes a second one.
+        if !@fs.exists(store.session_file(id)) {
+          if failure is Some(error) {
+            raise error
+          }
+          raise EngineError("engine reported a fork it did not write")
+        }
+        if failure is Some(error) {
+          @xlog.warn() <?
+            {
+              "event": "desktop_fork_engine_failed_after_commit",
+              "session": session,
+              "error": error.to_string(),
+            }
         }
       },
       record_exists=() => @fs.exists(store.session_file(id)),
@@ -156,7 +162,7 @@ async test "fork validates its request before spawning and releases its reader l
     EngineError(detail) => Some(detail)
     error => raise error
   }
-  assert_eq(ordinary, Some("engine returned an unexpected fork identity"))
+  assert_eq(ordinary, Some("engine reported a fork it did not write"))
   assert_true(manager.record_guards.get("source") is None)
   // A worktree conversation forks in its checkout, so one whose checkout is
   // gone is refused before anything is spawned or bound.

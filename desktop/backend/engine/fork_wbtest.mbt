@@ -68,8 +68,9 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 /// refuses an id that exists, writes what the host handed it — the directory,
 /// the model, the cut — as the fork's system prompt, and prints the fork's
 /// id. The model `fails-before` makes it fail without writing anything, and
-/// `fails-after` once the record is written; `hangs-after` writes the record,
-/// leaves `<root>/committed` to say so, and then never finishes. Any other
+/// `fails-after` once the record is written; `noisy` succeeds but prints more
+/// than the id; `hangs-after` writes the record, leaves `<root>/committed` to
+/// say so, and then never finishes. Any other
 /// command lists no sessions, which is all archiving asks of it.
 fn worktree_fork_engine_script() -> String {
   // `\{newline}` is the two characters a shell `printf` format needs, not an
@@ -105,6 +106,9 @@ fn worktree_fork_engine_script() -> String {
     $|if [ "$model" = fails-after ]; then
     $|  printf 'error: lost after the record\{newline}' >&2
     $|  exit 1
+    $|fi
+    $|if [ "$model" = noisy ]; then
+    $|  printf 'note: something else on stdout\{newline}'
     $|fi
     $|if [ "$model" = hangs-after ]; then
     $|  printf '%s' "$fork" > "$root/committed"
@@ -256,6 +260,12 @@ async test "a fork is committed exactly when its record was written" {
       fail("the fork's binding must be broadcast once")
     }
     assert_eq(reported.sessions, ["s-src", reply.session])
+    // Likewise when the engine succeeded but printed more than the id.
+    guard fork_with("noisy") is Some(noisy) else {
+      fail("what the engine printed must not undo a fork it wrote")
+    }
+    assert_true(store.exists(SessionId(noisy.session)))
+    assert_eq(created, [reply.session, noisy.session])
   })
 }
 
