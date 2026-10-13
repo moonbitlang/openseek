@@ -1537,6 +1537,11 @@ priv struct Model {
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
   delete_confirm : DeleteConfirm?
+  // The live chat whose delete question is out with the host. Only the
+  // answer about this chat may open the confirmation: an answer overtaken by
+  // a later click, or arriving after Cancel, must not put another chat's
+  // dialog under the user's pointer.
+  delete_pending : (@interop.ChannelId, ArchiveRecordKey)?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   conversation_fork : ConversationFork?
@@ -2793,6 +2798,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     chat_creation_sequence: 0,
     archive_confirm: None,
     delete_confirm: None,
+    delete_pending: None,
     conversation_rename: None,
     conversation_fork: None,
     fork_focus: None,

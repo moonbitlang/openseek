@@ -4760,7 +4760,12 @@ fn update_msg(
                   force=checkout is Some({ dirty_path_count, .. }) &&
                     dirty_path_count > 0,
                 ),
-                { ..model, delete_confirm: None, },
+                {
+                  ..model,
+                  delete_confirm: None,
+                  // The delete can still come back to be confirmed again.
+                  delete_pending: Some((confirm.channel, confirm.key)),
+                },
               )
             ArchivedChat(sessions~) => sessions
           }
@@ -4782,7 +4787,8 @@ fn update_msg(
         }
         None => (@cmd.none, model)
       }
-    CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
+    CancelDeleteSession =>
+      (@cmd.none, { ..model, delete_confirm: None, delete_pending: None, })
     SessionRotated(owner) => {
       // A delayed rotation is owned by the channel that requested it. A focus
       // switch overtakes it; activating the old owner's id here would yank the
@@ -5125,7 +5131,10 @@ fn update_msg(
         }
         // A live chat may take a worktree checkout with it. Only the host
         // knows; the dialog opens on its answer.
-        return (check_delete_session(dispatch, channel, key), model)
+        return (
+          check_delete_session(dispatch, channel, key),
+          { ..model, delete_pending: Some((channel, key)), },
+        )
       }
       guard dev.archived.iter().find_first(item => key.matches(item))
         is Some(item) else {
@@ -5149,6 +5158,7 @@ fn update_msg(
             title: session_item_label(item),
             target: ArchivedChat(sessions~),
           }),
+          delete_pending: None,
         },
       )
     }
@@ -7627,10 +7637,12 @@ fn update_device_msg(
         { ..model, archive_confirm: Some({ channel, session, refusal, }), },
       )
     DeleteChecked(key~, checkout~) => {
-      // The answer can outlive the row it was asked about; only a chat still
-      // listed gets a dialog, titled from the record as it is listed now.
-      guard dev.sessions.iter().find_first(item => key.matches(item))
-        is Some(item) else {
+      // Only the question still outstanding opens a dialog, and only for a
+      // chat still listed, titled from the record as it is listed now.
+      guard model.delete_pending is Some((asked_channel, asked)) &&
+        asked_channel == channel &&
+        asked == key &&
+        dev.sessions.iter().find_first(item => key.matches(item)) is Some(item) else {
         return (@cmd.none, model)
       }
       (
@@ -7643,6 +7655,7 @@ fn update_device_msg(
             title: session_item_label(item),
             target: LiveChat(checkout~),
           }),
+          delete_pending: None,
         },
       )
     }
@@ -17010,6 +17023,44 @@ test "deleting a live chat asks the host first and confirms what it reported" {
   }
   assert_true(again.target == LiveChat(checkout=Some(dirty)))
   assert_true(refused.archive_confirm is None)
+  // A later click overtakes an earlier question. The first chat's answer
+  // opens nothing, whichever order the two arrive in, so a dialog never
+  // changes its chat under the pointer.
+  let other : ArchiveRecordKey = { ..key, session: "desktop-parent-sr-1", }
+  let (_, overtaken) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
+    asked,
+  )
+  let (_, late) = update_dev(
+    dispatch,
+    DeleteChecked(key~, checkout=None),
+    overtaken,
+  )
+  assert_true(late.delete_confirm is None)
+  let (_, current) = update_dev(
+    dispatch,
+    DeleteChecked(key=other, checkout=None),
+    late,
+  )
+  guard current.delete_confirm is Some(latest) else {
+    fail("the latest question staged no confirmation")
+  }
+  assert_true(latest.key == other)
+  let (_, stale) = update_dev(
+    dispatch,
+    DeleteChecked(key~, checkout=Some(dirty)),
+    current,
+  )
+  assert_true(stale.delete_confirm == current.delete_confirm)
+  // Nothing reopens after Cancel.
+  let (_, cancelled) = update(dispatch, CancelDeleteSession, current)
+  let (_, reopened) = update_dev(
+    dispatch,
+    DeleteChecked(key=other, checkout=None),
+    cancelled,
+  )
+  assert_true(reopened.delete_confirm is None)
 }
 
 ///|

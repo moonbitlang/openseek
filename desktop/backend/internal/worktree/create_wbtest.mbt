@@ -39,6 +39,7 @@ async test "worktree creation reads settings using a resource path" {
   let host : WorktreeHost = {
     lifecycle_lock: Mutex(),
     session_is_live: _ => false,
+    session_is_moving: _ => false,
     drain_sessions: _ => (),
   }
   let reply = create(

@@ -1013,3 +1013,50 @@ async test "deleting a live conversation leaves a same-id checkout in another pr
   }
   assert_true(kept.present)
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "a worktree is not created or repaired while its conversation is moving" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  let root = worktree_test_root("openseek-worktree-moving-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  defer restore_home_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let owner = @worktree.WorktreeOwner::openseek("chat")
+  ignore(
+    @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
+  )
+  @fsx.ensure_dir(
+    @workspaces.store_root(repo).join("sessions").join("chat").to_path(),
+  )
+  // An archive or delete has claimed the record and already removed the
+  // checkout; its placement row is still there, which is what Repair needs.
+  let claim = manager.claim_record_move("chat")
+  ignore(owner.archive_checkout(false))
+  assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
+  let detail = try {
+    ignore(
+      @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
+    )
+    "no error"
+  } catch {
+    error => "\{error}"
+  }
+  assert_true(detail.contains("being archived or deleted"))
+  assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
+  // Once the operation lets go — an archive that kept the placement, say —
+  // the same request repairs as before.
+  manager.release_record_move("chat", claim)
+  ignore(
+    @worktree.create(manager.worktree_host(), repo.to_string(), owner, _ => ()),
+  )
+  assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
+}

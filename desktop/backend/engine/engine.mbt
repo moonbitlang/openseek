@@ -921,6 +921,9 @@ pub fn EngineManager::worktree_host(
     session_is_live: session => {
       self.pump is Serving(sessions~) && sessions.get(session) is Some(_)
     },
+    session_is_moving: session => {
+      self.record_guards.get(session) is Some({ moving: true, .. })
+    },
     drain_sessions: sessions => self.close_engines_for_sessions(sessions),
   }
 }

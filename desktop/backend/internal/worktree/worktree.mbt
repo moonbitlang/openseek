@@ -33,10 +33,14 @@ impl Show for WorktreeError with fn output(self, logger) {
 /// conversation already has a slot in the running pump (binding is only for
 /// conversations that are new everywhere), and `drain_sessions` closes the
 /// engines of conversations whose checkout is about to be deleted — an idle
-/// serve process still has its cwd inside that directory.
+/// serve process still has its cwd inside that directory. `session_is_moving`
+/// answers whether an archive, restore or delete has claimed a conversation's
+/// record: such an operation removes the checkout and then settles the
+/// placement, and a checkout created or repaired in between would outlive it.
 pub(all) struct WorktreeHost {
   lifecycle_lock : @async.Mutex
   session_is_live : (String) -> Bool
+  session_is_moving : (String) -> Bool
   drain_sessions : async (Array[String]) -> Unit
 }
 
@@ -957,6 +961,11 @@ pub async fn create(
   ignore(worktree_listing(dir))
   if owner is OpenSeekSession(session) {
     @session_store.ensure_not_archived(session)
+    // The claim is taken under this same lifecycle lock, so the operation
+    // that holds it either has not started or is not finished.
+    guard !(host.session_is_moving)(session) else {
+      raise WorktreeError("this conversation is being archived or deleted")
+    }
   }
   // Snapshot this workspace's setting once for the lifecycle operation. A
   // concurrent page edit applies to the next create or repair instead of
@@ -1346,6 +1355,7 @@ fn test_host(
   {
     lifecycle_lock: Mutex(),
     session_is_live: session => live.contains(session),
+    session_is_moving: _ => false,
     drain_sessions: sessions => drained.append(sessions),
   }
 }
