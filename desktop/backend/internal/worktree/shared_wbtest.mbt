@@ -155,6 +155,102 @@ async test "removing a shared worktree drains every bound conversation" {
 }
 
 ///|
+#cfg(not(platform="windows"))
+async test "a fork is bound to its original's worktree around its record's creation" {
+  with_recovery_fixture((repo, host) => {
+    let created = create(
+      host,
+      resource_path(repo),
+      WorktreeOwner::openseek("first"),
+      _ => (),
+    )
+    let published : Array[Array[WorktreeInfo]] = []
+    // The binding is already committed when the record is created, so an
+    // archive of the original never sees a fork that is bound nowhere.
+    let bound_at_creation : Array[String] = []
+    add_session_to_worktree(
+      repo,
+      session="fork",
+      worktree_of="first",
+      () => {
+        guard read_worktrees_unlocked(repo) is [row] else {
+          fail("the worktree row must still be registered")
+        }
+        bound_at_creation.append(row.sessions)
+      },
+      record_exists=() => true,
+      rows => published.push(rows),
+    )
+    assert_eq(bound_at_creation, ["first", "fork"])
+    guard published is [[row]] else {
+      fail("the new binding must be reported once")
+    }
+    assert_eq(row.name, created.name)
+    assert_eq(row.sessions, ["first", "fork"])
+    // A conversation in the workspace root has no worktree to join.
+    let mut created_in_root = false
+    add_session_to_worktree(
+      repo,
+      session="root-fork",
+      worktree_of="root",
+      () => created_in_root = true,
+      record_exists=() => true,
+      rows => published.push(rows),
+    )
+    assert_true(created_in_root)
+    assert_eq(published.length(), 1)
+    assert_eq(
+      tree_dir(repo, "root-fork").map(dir => dir.to_string()),
+      Some(repo.to_string()),
+    )
+    // A record that could not be created takes its binding back out.
+    let failed = try {
+      add_session_to_worktree(
+        repo,
+        session="broken",
+        worktree_of="first",
+        () => raise WorktreeError("record failed"),
+        record_exists=() => false,
+        rows => published.push(rows),
+      )
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(failed)
+    assert_eq(published.length(), 1)
+    guard read_worktrees_unlocked(repo) is [after] else {
+      fail("the worktree row must survive a failed fork")
+    }
+    assert_eq(after.sessions, ["first", "fork"])
+    // A record that was written keeps its binding whatever became of the
+    // call that wrote it, and the row is still reported.
+    let failed_late = try {
+      add_session_to_worktree(
+        repo,
+        session="late",
+        worktree_of="first",
+        () => raise WorktreeError("the writer failed after the record"),
+        record_exists=() => true,
+        rows => published.push(rows),
+      )
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(failed_late)
+    guard published is [_, [late]] else {
+      fail("a fork that exists must be reported with its binding")
+    }
+    assert_eq(late.sessions, ["first", "fork", "late"])
+    assert_eq(
+      tree_dir(repo, "late").map(dir => dir.to_string()),
+      tree_dir(repo, "first").map(dir => dir.to_string()),
+    )
+  })
+}
+
+///|
 async test "single-member registry rows read as member lists and are rewritten as one" {
   let root = worktree_test_root("openseek-worktree-members-")
   defer @fs.rmdir(root.to_string(), recursive=true)

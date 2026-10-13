@@ -8,9 +8,11 @@ priv struct ConversationFork {
 } derive(Eq)
 
 ///|
+/// Whether a conversation can be forked from its answers: a live record of
+/// its own, wherever it works. The fork of a worktree conversation shares
+/// that worktree.
 fn Conversation::can_fork(self : Conversation) -> Bool {
   self.record is LiveRecord &&
-  self.workspace is Project(..) &&
   @transcript.subrun_parent(self.session_id) is None
 }
 
@@ -132,18 +134,18 @@ fn fork_conversation(
 }
 
 ///|
-test "fork is unavailable for worktrees, archived records, and subruns" {
+test "fork is unavailable for archived records and subruns" {
   let conv = test_conversation()
   assert_true(conv.can_fork())
-  for session_id in ["desktop-test-sr-1", "desktop-test-sr-1-sr-2"] {
-    assert_false(({ ..conv, session_id, } : Conversation).can_fork())
-  }
-  assert_false(({ ..conv, record: ArchivedRecord, } : Conversation).can_fork())
-  assert_false(
+  assert_true(
     (
       { ..conv, workspace: Worktree(project=conv.project(), name="example"), } :
       Conversation).can_fork(),
   )
+  for session_id in ["desktop-test-sr-1", "desktop-test-sr-1-sr-2"] {
+    assert_false(({ ..conv, session_id, } : Conversation).can_fork())
+  }
+  assert_false(({ ..conv, record: ArchivedRecord, } : Conversation).can_fork())
 }
 
 ///|
@@ -187,4 +189,55 @@ test "fork validates requests without effects and preserves a non-chat page" {
   assert_eq(done.active_session, model.active_session)
   assert_true(done.conversation_fork is None)
   assert_true(done.dev().sessions.any(item => item.id == "desktop-fork"))
+}
+
+///|
+test "the fork of a worktree conversation opens in the same worktree" {
+  let channel = @interop.ChannelId::Local
+  let project = channel.test_project()
+  let source : Conversation = {
+    ..test_conversation(),
+    workspace: Worktree(project~, name="wt-1"),
+    sync: Synced,
+    messages: [
+      { kind: @transcript.Answer("done"), sequence: Some(4), ts: None, },
+    ],
+  }
+  let model = test_model().replace_conversation(source)
+  // The host reports the worktree's new member before it replies.
+  let model = model.replace_device({
+    ..model.dev(),
+    worktrees: [
+      {
+        project,
+        rows: [
+          {
+            name: "wt-1",
+            sessions: ["desktop-test", "desktop-fork"],
+            codex_thread: None,
+            path: None,
+            present: true,
+          },
+        ],
+        generation: 0,
+      },
+    ],
+  })
+  guard model.transcript_slot() is Some(slot) else {
+    fail("missing transcript")
+  }
+  let emit = test_dispatch()
+  let (_, requested) = model.request_fork(emit, slot.key(), 4)
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a worktree conversation must be forkable")
+  }
+  let (_, done) = requested.finish_fork(
+    emit,
+    pending,
+    Ok({ session: "desktop-fork", title: pending.source_title, }),
+  )
+  guard done.find_conversation(channel, "desktop-fork") is Some(fork) else {
+    fail("the fork was not opened")
+  }
+  assert_true(fork.workspace == Worktree(project~, name="wt-1"))
 }

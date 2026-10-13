@@ -500,7 +500,10 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_fork, payload => {
-      let reply = @engine.fork_session(state.manager, payload)
+      let reply = @engine.fork_session(state.manager, payload, (
+        workspace,
+        worktrees,
+      ) => publish_worktree_changed(state, workspace, worktrees))
       publish_session_changed(
         state,
         "created",

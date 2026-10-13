@@ -2,9 +2,16 @@
 /// Fork a committed turn through the engine's prompt-building path. The
 /// placement lock and reader lease keep the store attached and unarchived
 /// until the copy is durable; an active source may continue appending.
+///
+/// The fork works where its original works: in the workspace root, or bound
+/// to the same worktree, whose checkout the two then share. The engine writes
+/// the fork's prompt in that directory, so a worktree whose checkout is gone
+/// is refused the way a turn there would be. `on_worktree_changed` reports
+/// the worktree's new member.
 pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
+  on_worktree_changed : (String, Array[WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   guard @session_store.safe_session_id(payload.session) && payload.through > 0 else {
     raise EngineError("invalid session fork boundary")
@@ -23,9 +30,7 @@ pub async fn fork_session(
     @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
-  guard @worktree.run_dir(workspace, payload.session) == workspace else {
-    raise EngineError("forking a worktree conversation is not supported yet")
-  }
+  let dir = @worktree.run_dir(workspace, payload.session)
   let root = @workspaces.store_root(workspace)
   let session = "desktop-" + @uuid.mint()
   let args = [
@@ -39,19 +44,31 @@ pub async fn fork_session(
     "--session-root",
     root.to_string(),
     "--dir",
-    workspace.to_string(),
+    dir.to_string(),
     "--model",
     payload.model,
   ]
   if resolved_global_skills_dir() is Some(dir) {
     args.append(["--global-skills-dir", dir.to_string()])
   }
-  let output = engine_stdout(manager, args)
-  guard output.trim() == session else {
-    raise EngineError("engine returned an unexpected fork identity")
-  }
   let store = @store.SessionStore(root.to_string())
   let id : @agent_session.SessionId = SessionId(session)
+  let workspace_token = workspace.resource_path()
+  // The engine writes the session file last, so it is what says the fork
+  // exists: its worktree binding stays exactly when that file does.
+  @worktree.add_session_to_worktree(
+    workspace,
+    session~,
+    worktree_of=payload.session,
+    () => {
+      let output = engine_stdout(manager, args)
+      guard output.trim() == session else {
+        raise EngineError("engine returned an unexpected fork identity")
+      }
+    },
+    record_exists=() => @fs.exists(store.session_file(id)),
+    worktrees => on_worktree_changed(workspace_token, worktrees),
+  )
   // The renderer uses the same label as the sidebar, including titles derived
   // from the first prompt before any explicit rename has been saved.
   let title = payload.source_title
@@ -73,7 +90,7 @@ pub async fn fork_session(
 
 ///|
 #cfg(not(platform="windows"))
-async test "fork validates placement before spawning and releases its reader lease" {
+async test "fork validates its request before spawning and releases its reader lease" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
@@ -99,7 +116,7 @@ async test "fork validates placement before spawning and releases its reader lea
     source_title: "Source conversation",
   }
   let ordinary = try {
-    ignore(fork_session(manager, payload))
+    ignore(fork_session(manager, payload, (_, _) => ()))
     None
   } catch {
     EngineError(detail) => Some(detail)
@@ -107,9 +124,11 @@ async test "fork validates placement before spawning and releases its reader lea
   }
   assert_eq(ordinary, Some("engine returned an unexpected fork identity"))
   assert_true(manager.record_guards.get("source") is None)
-  @fs.mkdir(workspace + "/.worktrees/example", recursive=true)
+  // A worktree conversation forks in its checkout, so one whose checkout is
+  // gone is refused before anything is spawned or bound.
+  let registry = workspace + "/.openseek/worktrees.json"
   @fs.write_file(
-    workspace + "/.openseek/worktrees.json",
+    registry,
     (
       {
         "worktrees": [
@@ -122,18 +141,25 @@ async test "fork validates placement before spawning and releases its reader lea
         ],
       } : Json).stringify(),
   )
-  let bound = try {
-    ignore(fork_session(manager, payload))
+  let unbound = @fs.read_file(registry).text()
+  let missing = try {
+    ignore(fork_session(manager, payload, (_, _) => ()))
     None
   } catch {
-    EngineError(detail) => Some(detail)
+    @worktree.WorktreeError(detail) => Some(detail)
     error => raise error
   }
-  assert_eq(bound, Some("forking a worktree conversation is not supported yet"))
+  assert_eq(
+    missing,
+    Some(
+      "worktree example for this conversation is gone; rebuild it or archive the conversation",
+    ),
+  )
+  assert_eq(@fs.read_file(registry).text(), unbound)
   assert_true(manager.record_guards.get("source") is None)
   for session in ["source-sr-1", "source-sr-1-sr-2"] {
     let child = try {
-      ignore(fork_session(manager, { ..payload, session, }))
+      ignore(fork_session(manager, { ..payload, session, }, (_, _) => ()))
       None
     } catch {
       EngineError(detail) => Some(detail)
@@ -143,7 +169,7 @@ async test "fork validates placement before spawning and releases its reader lea
     assert_true(manager.record_guards.get(session) is None)
   }
   let invalid = try {
-    ignore(fork_session(manager, { ..payload, through: 0, }))
+    ignore(fork_session(manager, { ..payload, through: 0, }, (_, _) => ()))
     None
   } catch {
     EngineError(detail) => Some(detail)

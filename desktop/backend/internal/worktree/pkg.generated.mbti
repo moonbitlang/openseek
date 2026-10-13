@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub async fn add_session_to_worktree(@pathx.Absolute, session~ : String, worktree_of~ : String, async () -> Unit, record_exists~ : async () -> Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> Unit
+
 pub async fn create(WorktreeHost, String, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
 
 pub async fn drop_placements(@pathx.Absolute, Array[String]) -> Array[@protocol.WorktreeInfo]?

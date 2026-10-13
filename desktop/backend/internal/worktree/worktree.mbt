@@ -602,6 +602,60 @@ pub async fn drop_placements(
 }
 
 ///|
+/// Add `session` to the worktree `worktree_of` works in, around the creation
+/// of `session`'s durable record: a conversation forked from one that works
+/// in a worktree keeps working in that checkout. When `worktree_of` works in
+/// the workspace root there is no worktree to join, and only the record is
+/// created.
+///
+/// The registry stays held from the binding until `create_record` returns,
+/// which is what an archive of `worktree_of` serializes against: it sees
+/// either the row before the fork existed, or a member whose record is
+/// already live. The binding is committed first so that an interruption
+/// leaves at worst a member without a record, which holds nothing.
+///
+/// When `create_record` does not return — it raised, or the request was
+/// cancelled — what says whether the fork exists is its record, not how the
+/// call that wrote it ended. `record_exists` is asked, and only a fork that
+/// is not there has its binding taken back out: a record left without its
+/// placement would work in the workspace root on a history made elsewhere.
+/// `on_committed` reports the rows whenever the binding stays.
+pub async fn add_session_to_worktree(
+  workspace : @pathx.Absolute,
+  session~ : String,
+  worktree_of~ : String,
+  create_record : async () -> Unit,
+  record_exists~ : async () -> Bool,
+  on_committed : (Array[WorktreeInfo]) -> Unit,
+) -> Unit {
+  worktree_registry_lock.acquire()
+  defer worktree_registry_lock.release()
+  let entries = read_worktrees_unlocked(workspace)
+  guard entries.search_by(entry => entry.sessions.contains(worktree_of))
+    is Some(index) else {
+    create_record()
+    return
+  }
+  let row = entries[index]
+  entries[index] = { ..row, sessions: [..row.sessions, session], }
+  write_worktrees(workspace, entries)
+  {
+    errdefer @async.protect_from_cancel(() => {
+      if record_exists() {
+        on_committed(worktree_infos(workspace, entries))
+      } else {
+        entries[index] = row
+        write_worktrees(workspace, entries)
+      }
+    })
+    create_record()
+  }
+  @async.protect_from_cancel(() => {
+    on_committed(worktree_infos(workspace, entries))
+  })
+}
+
+///|
 /// The tree root an absolute in-workspace `path` belongs to: the registered
 /// worktree containing it when one does, otherwise the workspace itself. A
 /// `.worktrees` path with no registry entry (a worker slice, say) keeps
