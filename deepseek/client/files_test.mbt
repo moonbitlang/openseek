@@ -45,7 +45,7 @@ fn UploadServer::client(self : UploadServer) -> @client.Client {
 async test "image upload sends multipart bytes then file ID can enter chat" {
   @async.with_task_group() <| group => {
     // The mock tests the provider's fields and byte preservation. Generic
-    // multipart delimiter and header encoding tests belong to form_data.
+    // multipart delimiter and header encoding tests belong to Yoorkin/multipart.
     let bytes = b"\x89PNG\r\n\x1a\n\x00\xffimage-content"
     let server = UploadServer::start(
       group,
@@ -154,6 +154,74 @@ async test "image upload retains HTTP errors without retrying POST" {
       assert_eq(server.requests.length(), 1)
     }
   }
+}
+
+///|
+async test "image upload does not retry after a lost response" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      let requests : Ref[Int32] = Ref(0)
+      group.spawn_bg(no_wait=true, () => {
+        server.run_forever((_request, body, connection) => {
+          ignore(body.read_all())
+          requests.val += 1
+          connection.close()
+        })
+      })
+      let client = @client.Client(
+        api_key="upload-test-key",
+        api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
+        retry_attempts=3,
+        retry_backoff_ms=1,
+      )
+      try client.upload_image(b"GIF87a", filename="image.gif") catch {
+        @async.TimeoutError => fail("upload stalled after the lost response")
+        _ => ()
+      } noraise {
+        _ => fail("expected the lost response to fail")
+      }
+      assert_eq(requests.val, 1)
+    })
+  })
+}
+
+///|
+async test "cancelling a partial image upload closes the streaming pipeline" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      let client = @client.Client(
+        api_key="upload-test-key",
+        api_url="http://127.0.0.1:\{server.addr.port()}/chat/completions",
+      )
+      let bytes = b"GIF87a" + Bytes::make(32 * 1024 * 1024, b'\x00')
+      let upload = group.spawn(() => {
+        client.upload_image(bytes, filename="image.gif")
+      })
+      let (connection, _) = server.accept()
+      defer connection.close()
+      ignore(connection.read_request())
+      // Cancel only after the producer has started sending the multipart body.
+      assert_eq(connection.read_exactly(1024).length(), 1024)
+      upload.cancel()
+      try upload.wait() catch {
+        @async.WaitedTaskAlreadyCancelled => ()
+        error => raise error
+      } noraise {
+        _ => fail("expected upload cancellation")
+      }
+      // Draining must reach the closed peer, not hang on a stranded producer.
+      try connection.read_all() catch {
+        @async.TimeoutError => fail("cancelled upload left its connection open")
+        _ => ()
+      } noraise {
+        _ => fail("cancelled upload unexpectedly completed its body")
+      }
+    })
+  })
 }
 
 ///|

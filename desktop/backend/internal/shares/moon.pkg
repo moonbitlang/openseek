@@ -1,17 +1,20 @@
 import {
+  "Yoorkin/multipart",
   "openseek_desktop/backend/entropy",
   "openseek_desktop/protocol",
   "moonbitlang/async",
   "moonbitlang/async/http",
-  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/async/io",
 }
 
 import {
   "moonbitlang/async/socket",
+  "moonbitlang/core/encoding/utf8",
 } for "test"
 
 supported_targets = "native"
 
 import {
   "moonbitlang/async/socket",
+  "moonbitlang/core/encoding/utf8",
 } for "wbtest"

@@ -36,11 +36,11 @@ pub extend ShareError with Show::{to_string, output}
 ///|
 /// All fields are UTF-8 multipart bodies, never interpolated into headers.
 /// The limit includes framing, matching POST /v1/shares on openseek-api.
-pub fn Snapshot::Snapshot(
+pub async fn Snapshot::Snapshot(
   title~ : String,
   html~ : String,
   json~ : String,
-) -> Snapshot raise ShareError {
+) -> Snapshot {
   // The API limits the title to 1024 UTF-8 bytes, and a generated title may
   // be the entire first prompt. A UTF-16 code unit encodes to at most three
   // UTF-8 bytes, so 341 units can never exceed the limit; the slice keeps
@@ -48,9 +48,30 @@ pub fn Snapshot::Snapshot(
   let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
   guard @entropy.random_hex(32) is Some(key) else { raise EntropyUnavailable }
-  let body = @utf8.encode(
-    "--\{key}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\n\{title}\r\n--\{key}\r\nContent-Disposition: form-data; name=\"html\"; filename=\"conversation.html\"\r\nContent-Type: text/html; charset=utf-8\r\n\r\n\{html}\r\n--\{key}\r\nContent-Disposition: form-data; name=\"json\"; filename=\"conversation.json\"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n\{json}\r\n--\{key}--\r\n",
-  )
+  let reader = @io.MemoryReader(target => {
+    let form = @multipart.Writer(target, boundary=key)
+    form.write_part(
+      headers={ "Content-Disposition": "form-data; name=\"title\"" },
+      target => target.write(title),
+    )
+    form.write_part(
+      headers={
+        "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",
+        "Content-Type": "text/html; charset=utf-8",
+      },
+      target => target.write(html),
+    )
+    form.write_part(
+      headers={
+        "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
+        "Content-Type": "application/json; charset=utf-8",
+      },
+      target => target.write(json),
+    )
+    form.finish()
+  })
+  defer reader.close()
+  let body = reader.read_all().binary()
   guard body.length() <= 20 * 1024 * 1024 else { raise Oversized }
   { key, body, }
 }

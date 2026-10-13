@@ -27,6 +27,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         }
         // The API rejects boundaries longer than 70 characters.
         assert_true(boundary.length() > 0 && boundary.length() <= 70)
+        assert_eq(request_key, Some(boundary.to_owned()))
         let text = @utf8.decode(uploaded)
         assert_true(text.has_prefix("--\{boundary}\r\n"))
         assert_true(text.has_suffix("\r\n--\{boundary}--\r\n"))
@@ -39,6 +40,10 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
           text.contains("name=\"json\"; filename=\"conversation.json\""),
         )
         assert_true(text.contains("{\"snapshot\":true}"))
+        assert_true(text.contains("Content-Type: text/html; charset=utf-8\r\n"))
+        assert_true(
+          text.contains("Content-Type: application/json; charset=utf-8\r\n"),
+        )
         if attempt == 0 {
           // Drop the connection without a response: publication may have
           // succeeded even though the client never learns it.
@@ -133,7 +138,7 @@ async test "upload maps server replies without following redirects" {
 }
 
 ///|
-test "upload limits count UTF-8 bytes and multipart overhead" {
+async test "upload limits count UTF-8 bytes and multipart overhead" {
   try
     @shares.Snapshot(
       title="Test",

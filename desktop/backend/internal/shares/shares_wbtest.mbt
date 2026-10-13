@@ -35,7 +35,7 @@ async test "upload timeouts are actionable and external cancellation propagates"
 }
 
 ///|
-test "long metadata titles are bounded on character boundaries without truncating conversation files" {
+async test "long metadata titles are bounded on character boundaries without truncating conversation files" {
   for
     (title, expected) in [
       ("a".repeat(341), "a".repeat(341)),

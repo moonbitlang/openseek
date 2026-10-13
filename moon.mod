@@ -12,6 +12,7 @@ import {
   "Lampese/office-viewer@0.1.3",
   "moonbitlang/editor@0.4.6",
   "moonbitlang/workflow@0.10.0",
+  "Yoorkin/multipart@0.1.3",
 }
 
 readme = "README.md"

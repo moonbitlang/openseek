@@ -234,24 +234,33 @@ pub async fn Client::upload_image(
   guard self.api_url.strip_suffix("/chat/completions") is Some(base) else {
     raise UnsupportedApiUrl
   }
-  let parts : Array[@form_data.Part] = [
-    Text(name="purpose", value="user_data"),
-    ..if expires_after_seconds is Some(seconds) {
-      [
-        @form_data.Text(name="expires_after[anchor]", value="created_at"),
-        Text(name="expires_after[seconds]", value=seconds.to_string()),
-      ]
-    },
-    File(name="file", filename~, content_type=media_type, data~),
-  ]
-  let form = @form_data.FormData(parts)
   @async.with_timeout(timeout_ms, () => {
+    // The pipe lets FormWriter choose its boundary before HTTP headers are
+    // sent, while keeping the image streamed rather than buffering the form.
+    let (reader, writer) = @io.pipe()
+    defer reader.close()
+    defer writer.close()
+    let form = @multipart.FormWriter(writer)
     let connection = @http.post_stream("\{base}/files", headers={
       "Authorization": "Bearer \{self.api_key}",
       "Content-Type": form.content_type(),
     })
     defer connection.close()
-    form.write_to(connection)
+    @async.with_task_group(group => {
+      group.spawn_bg(() => {
+        defer writer.close()
+        form.write_field("purpose", "user_data")
+        if expires_after_seconds is Some(seconds) {
+          form.write_field("expires_after[anchor]", "created_at")
+          form.write_field("expires_after[seconds]", seconds.to_string())
+        }
+        let file = @io.MemoryReader(target => target.write(data))
+        defer file.close()
+        form.write_file("file", filename~, content_type=media_type, file)
+        form.finish()
+      })
+      connection.write_reader(reader)
+    })
     let response = connection.end_request()
     let text = connection.read_all().text()
     guard response.code >= 200 && response.code < 300 else {
