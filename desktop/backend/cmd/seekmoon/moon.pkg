@@ -1,0 +1,13 @@
+import {
+  "openseek_desktop/backend/mcp",
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
+
+warnings = "+missing_doc+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")
