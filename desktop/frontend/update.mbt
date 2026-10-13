@@ -4751,15 +4751,8 @@ fn update_msg(
           let sessions = match confirm.target {
             LiveChat(checkout~) =>
               return (
-                delete_session(
-                  dispatch,
-                  confirm.channel,
-                  confirm.key,
-                  // Confirming agrees to discard exactly what the dialog
-                  // listed, and nothing that turned up since.
-                  force=checkout is Some({ dirty_path_count, .. }) &&
-                    dirty_path_count > 0,
-                ),
+                // Confirming agrees to exactly what the dialog showed.
+                delete_session(dispatch, confirm.channel, confirm.key, checkout),
                 {
                   ..model,
                   delete_confirm: None,

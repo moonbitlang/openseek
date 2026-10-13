@@ -424,21 +424,22 @@ pub impl FromJson for SessionDeleteCheckReply with fn from_json(json, path) {
 }
 
 ///|
-/// `session.delete` either commits or stops at a checkout with uncommitted
-/// changes the request did not agree to discard, and reports that checkout so
-/// the caller can ask again. A committed deletion carries no list: every
-/// client, the requester included, learns each removed identity from
-/// `session.changed`.
+/// `session.delete` either commits or stops because it would remove more than
+/// the request agreed to — a checkout the request did not name, or
+/// uncommitted changes it did not agree to discard — and reports that
+/// checkout so the caller can confirm again. A committed deletion carries no
+/// list: every client, the requester included, learns each removed identity
+/// from `session.changed`.
 pub(all) enum SessionDeleteReply {
   Deleted
-  NeedsForce(CheckoutRemoval)
+  Unconfirmed(CheckoutRemoval)
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for SessionDeleteReply with fn to_json(self) {
   match self {
     Deleted => { "kind": "deleted" }
-    NeedsForce(checkout) => { "kind": "needs_force", "checkout": checkout }
+    Unconfirmed(checkout) => { "kind": "unconfirmed", "checkout": checkout }
   }
 }
 
@@ -447,8 +448,8 @@ pub impl FromJson for SessionDeleteReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "SessionDeleteReply")
   match object.required_json("kind") {
     String("deleted") => Deleted
-    String("needs_force") =>
-      NeedsForce(
+    String("unconfirmed") =>
+      Unconfirmed(
         @json.from_json(
           object.required_json("checkout"),
           path=path.add_key("checkout"),

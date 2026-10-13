@@ -28,7 +28,7 @@ pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.C
 
 pub async fn delete_archived_session(EngineManager, String, String, (String, String) -> Unit, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionsReply
 
-pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
+pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, worktree? : String, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
 
 pub async fn delete_session_check(String, String) -> @protocol.SessionDeleteCheckReply
 

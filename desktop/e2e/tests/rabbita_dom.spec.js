@@ -2022,16 +2022,22 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   expect(sent('session.delete')).toEqual([]);
   await expect(stored).toBeVisible();
 
-  // The host is asked again on every click. Now the chat runs in a clean
-  // worktree, and the dialog names the checkout that goes with it.
-  app.sessionCheckout = { worktree: 'wt-1', dirty_paths: [], dirty_path_count: 0 };
+  // The host is asked again on every click, and the delete removes only
+  // what its dialog showed. Here another window repairs the chat's worktree
+  // while the plain dialog is open: the confirm names no checkout, so the
+  // host stops and the same dialog comes back naming it.
   await askToDelete();
+  await expect(body).not.toContainText('worktree');
+  expect(sent('session.delete_check')).toHaveLength(2);
+  app.sessionCheckout = { worktree: 'wt-1', dirty_paths: [], dirty_path_count: 0 };
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
   await expect(body).toContainText('its worktree checkout wt-1 is removed along with any ignored files in it');
   await expect(body).not.toContainText('uncommitted changes');
+  await expect(stored).toBeVisible();
 
-  // The checkout turns dirty before the confirm. The delete agreed to
-  // nothing of the kind, so the host stops and the same dialog comes back
-  // with the changed paths instead of quietly closing.
+  // Then the checkout turns dirty before the next confirm. That request
+  // agreed to remove a clean checkout, so the dialog comes back once more,
+  // now with the changed paths, instead of quietly closing.
   app.sessionCheckout = {
     worktree: 'wt-1',
     dirty_paths: ['notes.txt'],
@@ -2039,17 +2045,15 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   };
   await page.getByRole('button', { name: 'Delete permanently' }).click();
   await expect(body).toContainText('That checkout has uncommitted changes. Changed paths: notes.txt.');
-  expect(sent('session.delete')).toEqual([
-    { session: 'session-1', workspace: '/workspace' },
-  ]);
   await expect(stored).toBeVisible();
 
-  // Confirming now agrees to discard what the dialog listed: the retry
-  // carries force, and there is no further question.
+  // Confirming now agrees to discard what the dialog listed, and there is
+  // no further question.
   await page.getByRole('button', { name: 'Delete permanently' }).click();
   await expect.poll(() => sent('session.delete')).toEqual([
     { session: 'session-1', workspace: '/workspace' },
-    { session: 'session-1', workspace: '/workspace', force: true },
+    { session: 'session-1', workspace: '/workspace', worktree: 'wt-1' },
+    { session: 'session-1', workspace: '/workspace', worktree: 'wt-1', force: true },
   ]);
   await expect(page.locator('.modal-backdrop')).toHaveCount(0);
 

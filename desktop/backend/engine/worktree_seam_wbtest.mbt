@@ -878,6 +878,19 @@ async test "deleting a live conversation skips the archive and drops its placeme
   @debug.assert_eq(delete_session_check("other", repo.resource_path()), {
     checkout: None,
   })
+  let deleted : Array[String] = []
+  // A delete removes only the checkout its confirmation named. A request
+  // that names none — its dialog was built before the checkout was there —
+  // gets the checkout reported back, even a clean one, and changes nothing.
+  guard delete_session(manager, "chat", repo.resource_path(), (session_id, _) => {
+      deleted.push(session_id)
+    })
+    is Unconfirmed(unnamed) else {
+    fail("an unnamed checkout was removed without confirmation")
+  }
+  assert_eq(unnamed.worktree, "wt-1")
+  assert_eq(unnamed.dirty_path_count, 0)
+  assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
   @fs.write_file(
     repo.join(".worktrees/wt-1/junk.txt").to_string(),
     b"x",
@@ -893,11 +906,14 @@ async test "deleting a live conversation skips the archive and drops its placeme
   // The check changed nothing. A delete that did not agree to discard the
   // dirty checkout stops before anything irreversible, exactly as archive
   // does: the family stays live and the checkout stays on disk.
-  let deleted : Array[String] = []
-  guard delete_session(manager, "chat", repo.resource_path(), (session_id, _) => {
-      deleted.push(session_id)
-    })
-    is NeedsForce(refusal) else {
+  guard delete_session(
+      manager,
+      "chat",
+      repo.resource_path(),
+      (session_id, _) => deleted.push(session_id),
+      worktree="wt-1",
+    )
+    is Unconfirmed(refusal) else {
     fail("dirty delete returned no force confirmation")
   }
   assert_eq(refusal.worktree, "wt-1")
@@ -914,6 +930,7 @@ async test "deleting a live conversation skips the archive and drops its placeme
     "chat",
     repo.resource_path(),
     (session_id, _) => deleted.push(session_id),
+    worktree="wt-1",
     force=true,
   )
   assert_true(reply is Deleted)

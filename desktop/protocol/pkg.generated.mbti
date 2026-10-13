@@ -3002,6 +3002,7 @@ pub impl @json.FromJson for SessionDeleteCheckReply
 pub(all) struct SessionDeletePayload {
   session : String
   workspace : String
+  worktree : String?
   force : Bool?
 } derive(Eq, @debug.Debug)
 pub fn SessionDeletePayload::equal(Self, Self) -> Bool
@@ -3014,7 +3015,7 @@ pub impl @json.FromJson for SessionDeletePayload
 
 pub(all) enum SessionDeleteReply {
   Deleted
-  NeedsForce(CheckoutRemoval)
+  Unconfirmed(CheckoutRemoval)
 } derive(Eq, @debug.Debug)
 pub fn SessionDeleteReply::equal(Self, Self) -> Bool
 pub fn SessionDeleteReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

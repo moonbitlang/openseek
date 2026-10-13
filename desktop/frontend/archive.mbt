@@ -236,34 +236,44 @@ fn check_delete_session(
 }
 
 ///|
-/// Permanently delete one live conversation. A committed delete folds
-/// nothing from its reply: the host announces every removed identity through
-/// `session.changed`, to this client like any other. `force` agrees to
-/// discard the uncommitted changes the confirmation listed; a checkout that
-/// turned dirty since comes back to be confirmed again.
+/// Permanently delete one live conversation, agreeing to exactly what the
+/// confirmation showed: `checkout` is the host's account the dialog was
+/// built from. A committed delete folds nothing from its reply: the host
+/// announces every removed identity through `session.changed`, to this
+/// client like any other. If more would go than the dialog said — a checkout
+/// that appeared or turned dirty since — the host reports it instead, and
+/// the same dialog asks again.
 fn delete_session(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
-  force~ : Bool,
+  checkout : @protocol.CheckoutRemoval?,
 ) -> @cmd.Cmd {
   guard key.workspace_payload(channel) is Some(workspace) else {
     return @cmd.none
+  }
+  let payload : @protocol.SessionDeletePayload = match checkout {
+    Some({ worktree, dirty_path_count, .. }) =>
+      {
+        session: key.session,
+        workspace,
+        worktree: Some(worktree),
+        force: if dirty_path_count > 0 {
+          Some(true)
+        } else {
+          None
+        },
+      }
+    None => { session: key.session, workspace, worktree: None, force: None, }
   }
   let device_dispatch = dispatch.map((msg : DeviceMsg) => {
     FromDevice(channel, msg)
   })
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.session_delete, {
-        session: key.session,
-        workspace,
-        force: if force {
-          Some(true)
-        } else {
-          None
-        },
-      }) catch {
+      let reply = @interop.bridge_request(
+        channel, @commands.session_delete, payload,
+      ) catch {
         error => {
           scheduler.add(
             device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
@@ -271,7 +281,7 @@ fn delete_session(
           return
         }
       }
-      if reply is NeedsForce(checkout) {
+      if reply is Unconfirmed(checkout) {
         scheduler.add(
           device_dispatch(DeleteChecked(key~, checkout=Some(checkout))),
         )

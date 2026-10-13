@@ -554,6 +554,7 @@ pub fn endpoints(
         (deleted, workspace) => {
           publish_session_changed(state, "deleted", deleted, workspace)
         },
+        worktree?=payload.worktree,
         force=payload.force is Some(true),
         on_worktree_changed=(workspace, worktrees) => {
           publish_worktree_changed(state, workspace, worktrees)

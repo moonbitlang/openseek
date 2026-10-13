@@ -2442,7 +2442,7 @@ priv enum DeviceMsg {
   )
   // The host's account of what deleting one live conversation removes
   // besides its record: the answer to the check a Delete click sends, or a
-  // delete that stopped at changes its request had not agreed to discard.
+  // delete that stopped because more would go than its request agreed to.
   // Either way it stages the confirmation that states exactly that.
   DeleteChecked(key~ : ArchiveRecordKey, checkout~ : @protocol.CheckoutRemoval?)
   // The archived conversations — the reply to `archived_sessions` and to a

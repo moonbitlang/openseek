@@ -517,7 +517,7 @@ test "delete replies and payloads round-trip with optional fields absent" {
     deleted.to_json(),
   )
   @debug.assert_eq(decoded, deleted)
-  let refusal : @protocol.SessionDeleteReply = NeedsForce(checkout)
+  let refusal : @protocol.SessionDeleteReply = Unconfirmed(checkout)
   let decoded : @protocol.SessionDeleteReply = @json.from_json(
     refusal.to_json(),
   )
@@ -552,6 +552,7 @@ test "delete replies and payloads round-trip with optional fields absent" {
     "session": "chat",
     "workspace": "/work/project",
   })
+  assert_eq(plain.worktree, None)
   assert_eq(plain.force, None)
   @debug.assert_eq(plain.to_json(), {
     "session": "chat",
@@ -560,6 +561,7 @@ test "delete replies and payloads round-trip with optional fields absent" {
   let forced : @protocol.SessionDeletePayload = {
     session: "chat",
     workspace: "/work/project",
+    worktree: Some("wt-1"),
     force: Some(true),
   }
   let decoded : @protocol.SessionDeletePayload = @json.from_json(

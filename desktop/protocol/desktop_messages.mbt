@@ -218,13 +218,14 @@ pub(all) struct SessionDeleteCheckPayload {
 
 ///|
 /// `session.delete` permanently removes one live record from one exact
-/// store, addressed like `ArchivedSessionPayload`. The conversation's
-/// worktree checkout goes with it; `force` discards that checkout's
-/// uncommitted changes — the client sends it when its confirmation dialog
-/// showed them.
+/// store, addressed like `ArchivedSessionPayload`, and with it only what the
+/// caller's confirmation covered: `worktree` names the checkout that
+/// confirmation said would be removed (absent when it named none), and
+/// `force` agrees to discard that checkout's uncommitted changes.
 pub(all) struct SessionDeletePayload {
   session : String
   workspace : String
+  worktree : String?
   force : Bool?
 } derive(Debug, Eq)
 
@@ -2901,6 +2902,7 @@ pub impl FromJson for SessionDeletePayload with fn from_json(json, path) {
       object.required_json("workspace"),
       path=path.add_key("workspace"),
     ),
+    worktree: object.optional_string("worktree"),
     force: match object.optional_json("force") {
       None => None
       Some(value) => Some(@json.from_json(value, path=path.add_key("force")))
@@ -2913,6 +2915,9 @@ pub impl ToJson for SessionDeletePayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["session"] = Json(self.session)
   fields["workspace"] = Json(self.workspace)
+  if self.worktree is Some(worktree) {
+    fields["worktree"] = Json(worktree)
+  }
   if self.force is Some(value) {
     fields["force"] = Json(value)
   }

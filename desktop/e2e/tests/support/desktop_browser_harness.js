@@ -46,8 +46,8 @@ export class DesktopBrowserHarness {
     this.archivedSessions = [];
     // The worktree checkout a live chat runs in, as `session.delete_check`
     // reports it (`{worktree, dirty_paths, dirty_path_count}`); null for a
-    // chat without one. A dirty one stops `session.delete` until the request
-    // carries `force`.
+    // chat without one. `session.delete` stops unless the request names that
+    // worktree and, for a dirty one, carries `force`.
     this.sessionCheckout = null;
     this.hostSettings = {
       revision: 1,
@@ -713,11 +713,15 @@ export class DesktopBrowserHarness {
       case 'session.delete_check':
         return this.sessionCheckout ? { checkout: this.sessionCheckout } : {};
       case 'session.delete': {
-        // Like the host: uncommitted changes the request did not agree to
-        // discard stop it; a committed delete replies with no list and
-        // announces the removed identity.
-        if (this.sessionCheckout?.dirty_path_count > 0 && !request.params?.force) {
-          return { kind: 'needs_force', checkout: this.sessionCheckout };
+        // Like the host: a checkout the request did not name, or changes it
+        // did not agree to discard, stop it; a committed delete replies with
+        // no list and announces the removed identity.
+        const checkout = this.sessionCheckout;
+        if (checkout && (
+          request.params?.worktree !== checkout.worktree ||
+          (checkout.dirty_path_count > 0 && !request.params?.force)
+        )) {
+          return { kind: 'unconfirmed', checkout };
         }
         this.liveSessions = this.liveSessions.filter(
           session => session.id !== request.params?.session,

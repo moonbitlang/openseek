@@ -555,8 +555,11 @@ async fn delete_archived_session_commit(
 ///|
 /// Permanently delete one live conversation family from its selected store,
 /// without the stop in the archived twin. It is refused under the same
-/// conditions as archiving, and the worktree checkout goes the same way: a
-/// dirty one refuses unless `force`. Project files and Git branches remain.
+/// conditions as archiving, and removes the conversation's checkout only as
+/// far as the caller's confirmation covered: `worktree` names the checkout
+/// that confirmation said would go, and `force` agrees to discard its
+/// uncommitted changes. Anything more comes back as `Unconfirmed`. Project
+/// files and Git branches remain.
 /// The family is the record plus its descendants in the live store, as for
 /// archiving; a descendant archived on its own earlier stays in the archive
 /// as its own row.
@@ -565,6 +568,7 @@ pub async fn delete_session(
   session : String,
   workspace : String,
   on_committed : (String, String) -> Unit,
+  worktree? : String,
   force~ : Bool = false,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> SessionDeleteReply {
@@ -579,18 +583,27 @@ pub async fn delete_session(
     selected~,
   )
   defer family.release()
+  // Only the selected project's checkout may go: another project can hold a
+  // conversation with the same id. And only the checkout the confirmation
+  // named: one that appeared since — repaired by another client while the
+  // dialog was open — is reported instead. The claim keeps a further repair
+  // out from here on.
+  let owner = @worktree.WorktreeOwner::openseek(session)
+  if owner.checkout_removal(workspace=selected.workspace) is Some(found) &&
+    worktree != Some(found.worktree) {
+    return Unconfirmed(found)
+  }
   // As in archiving, a dirty refusal lands after the idle engine closed and
   // before anything irreversible; a removal that succeeds while the record
   // move below then fails leaves a live conversation blocked on its retained
-  // missing placement. Only the selected project's checkout may go: another
-  // project can hold a conversation with the same id.
-  let refusal = @worktree.WorktreeOwner::openseek(session).archive_checkout(
+  // missing placement.
+  let refusal = owner.archive_checkout(
     force,
     workspace=selected.workspace,
     on_committed?=on_worktree_changed,
   )
   if refusal is Some({ worktree, dirty_paths, dirty_path_count, }) {
-    return NeedsForce({ worktree, dirty_paths, dirty_path_count, })
+    return Unconfirmed({ worktree, dirty_paths, dirty_path_count, })
   }
   family.delete_records(archived=false, on_committed, on_worktree_changed?)
   manager.sweep_archived_deletions_in(family.root)
