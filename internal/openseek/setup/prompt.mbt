@@ -91,31 +91,17 @@ pub async fn configured_system_prompt(
 }
 
 ///|
-/// Read `AGENTS.md` from the workspace and each ancestor directory. The
-/// resulting section is ordered from the oldest ancestor to the workspace so
-/// more specific instructions appear later, matching Pi's context layering.
+/// Read only the workspace's `AGENTS.md`; ancestor directories may be outside
+/// the caller's filesystem policy. Missing files are optional, but I/O errors
+/// must remain visible.
 async fn agents_prompt_section(workspace_root : String) -> String? {
-  let files : Array[(String, String)] = []
-  let mut current = Some(workspace_root)
-  while current is Some(dir) {
-    let path = @workspace_path.join_child(dir, "AGENTS.md")
-    if @fs.exists(path) && @fs.kind(path) is Regular {
-      // AGENTS files may start with a UTF-8 BOM; keep only the document text.
-      files.push(
-        (path, @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)),
-      )
-    }
-    current = @workspace_path.parent_dir(dir)
-  }
-  guard files.length() > 0 else { return None }
-  let entries = files
-    .rev()
-    .map(file => {
-      let (path, content) = file
-      "<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>"
-    })
-  let joined = entries.join("\n\n")
-  Some("Project-specific instructions and guidelines:\n\n\{joined}")
+  let path = @workspace_path.join_child(workspace_root, "AGENTS.md")
+  guard @fs.exists(path) && @fs.kind(path) is Regular else { return None }
+  // AGENTS files may start with a UTF-8 BOM; keep only the document text.
+  let content = @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)
+  Some(
+    "Project-specific instructions and guidelines:\n\n<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>",
+  )
 }
 
 ///|

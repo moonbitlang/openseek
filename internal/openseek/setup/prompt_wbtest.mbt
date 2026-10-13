@@ -1,5 +1,5 @@
 ///|
-async test "AGENTS.md context is layered from ancestors to workspace" {
+async test "AGENTS.md discovery only reads the workspace" {
   @vfs.with_tmpdir(prefix="openseek-agents-prompt-", root => {
     let workspace = "\{root}/project/service"
     @fs.mkdir(workspace, recursive=true)
@@ -26,19 +26,13 @@ async test "AGENTS.md context is layered from ancestors to workspace" {
       content=(
         $|Project-specific instructions and guidelines:
         $|
-        $|<project_instructions path="\{root}/AGENTS.md">
-        $|outer instructions
-        $|</project_instructions>
-        $|
-        $|<project_instructions path="\{root}/project/AGENTS.md">
-        $|project instructions
-        $|</project_instructions>
-        $|
         $|<project_instructions path="\{workspace}/AGENTS.md">
         $|service instructions
         $|</project_instructions>
       ),
     )
+    @fs.remove("\{workspace}/AGENTS.md")
+    assert_true(agents_prompt_section(workspace) is None)
   })
 }
 
