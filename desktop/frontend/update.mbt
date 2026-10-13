@@ -3475,6 +3475,11 @@ fn update_msg(
       }
     }
     ModelPicked(value, draft~) => {
+      // Project adoption still owns this draft. Transferring it to another
+      // engine would leave the pending add pointing at an abandoned owner.
+      guard !(model.screen is Codex && model.codex_project_adoption_pending()) else {
+        return (@cmd.none, model)
+      }
       guard ModelChoice::parse(value) is Some(choice) else {
         return (@cmd.none, model)
       }

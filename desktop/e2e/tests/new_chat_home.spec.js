@@ -203,6 +203,7 @@ for (const detachPrevious of [false, true]) {
     await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
     const addRequest = app.requests.find(r => r.method === 'workspace.add');
     await expect(page.locator('#send')).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
     await page.locator('#task').press('Enter');
     expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
     await expect(page.locator('#task')).toHaveValue('Send in the added project');
@@ -216,6 +217,7 @@ for (const detachPrevious of [false, true]) {
     expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
     await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
     await expect(page.locator('#task')).toHaveValue('Send in the added project');
+    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
     await page.locator('#send').click();
     await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
     expect(app.pageErrors).toEqual([]);

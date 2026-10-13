@@ -290,7 +290,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     id: "codex-model-picker",
     groups,
     selected,
-    disabled: false,
+    disabled: self.codex_project_adoption_pending(),
     open: self.select_menu is Some(CodexModelMenu),
     title: match self.locale {
       SimplifiedChinese => "Codex 模型"

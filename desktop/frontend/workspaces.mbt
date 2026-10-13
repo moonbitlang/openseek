@@ -878,6 +878,18 @@ test "a Codex project add preserves its draft in either reply order" {
         picked.path,
         started,
       )
+      assert_true(confirmed.codex_model_chip().disabled)
+      let switch_agent = ModelPicked("openseek:deepseek-v4-pro", draft={
+        task: "Keep this draft",
+        mentions: [],
+        images: [],
+      })
+      let (_, unchanged) = update(dispatch, switch_agent, confirmed)
+      let (_, repeated) = update(dispatch, switch_agent, confirmed)
+      assert_true(unchanged.screen is Codex && repeated.screen is Codex)
+      assert_true(unchanged.codex == confirmed.codex)
+      assert_true(repeated.codex == confirmed.codex)
+      assert_true(unchanged.codex_project_adoption_pending())
       let paths = if detach_previous {
         [picked]
       } else {
