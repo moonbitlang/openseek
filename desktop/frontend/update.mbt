@@ -6770,11 +6770,6 @@ fn update_device_msg(
           next
         }
         @protocol.QueueEdit(id~, text=content, images~) => {
-          guard conv.queue_edit is Some(Saving(id=saving_id, run_id=saving_run)) &&
-            saving_id == id &&
-            saving_run == run_id else {
-            return (@cmd.none, model)
-          }
           let queued_inputs = conv.queued_inputs.copy()
           // The engine may already have consumed the item while the save
           // response was travelling back. Still settle the accepted draft.
@@ -6784,6 +6779,16 @@ fn update_device_msg(
               content,
               images: images.map(url => { name: "Image", url, }),
             }
+          }
+          // A held shell result may have taken ownership of the composer.
+          // Reflect the accepted queue edit without consuming that new draft.
+          guard conv.queue_edit is Some(Saving(id=saving_id, run_id=saving_run)) &&
+            saving_id == id &&
+            saving_run == run_id else {
+            return (
+              @cmd.none,
+              model.replace_conversation({ ..conv, queued_inputs, }),
+            )
           }
           let next = {
             ..conv,
@@ -8996,11 +9001,9 @@ fn update_device_msg(
             {
               ..settled_inputs,
               queued_inputs: [],
-              queue_edit: if settled_inputs.saving_queue_edit() {
-                settled_inputs.queue_edit
-              } else {
-                None
-              },
+              // The queue is lost. Retire its pending save so a trailing
+              // acceptance cannot consume the retained composer draft.
+              queue_edit: None,
               pending_steers: settled_inputs.pending_steers.filter(input => {
                 input.behavior is FollowupSteer
               }),
