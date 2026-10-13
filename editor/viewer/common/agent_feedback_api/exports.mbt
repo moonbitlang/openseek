@@ -21,9 +21,9 @@ pub(all) struct AgentFeedbackAddedEvent {
 pub(all) struct AgentFeedbackSubmittedEvent {
   resource : @base_common.Uri
   items : Array[AgentFeedback]
-  user_count : Int
-  agent_review_count : Int
-  reply_count : Int
+  user_count : Int32
+  agent_review_count : Int32
+  reply_count : Int32
 } derive(Debug)
 
 ///|

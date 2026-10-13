@@ -3,7 +3,7 @@
 /// audit reads the worktree against one goal, it does not survey a branch.
 /// Sized so auditing a real workspace (read sources, run the project's own
 /// checks) fits without the child dying at its ceiling unreported.
-pub let default_audit_max_steps : Int = 100
+pub let default_audit_max_steps : Int32 = 100
 
 // `audit_system_prompt()` — the read-only skeptic asking one question, does
 // the worktree actually satisfy the goal the agent just recorded as met? —
@@ -73,13 +73,13 @@ pub async fn run_goal_audit(
   baseline~ : @agent_session.GoalBaseline?,
   api_key~ : String,
   model~ : @deepseek.Model,
-  max_steps~ : Int,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  workspace_root? : String = ".",
-  session_id? : String = "goal-audit",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  workspace_root~ : String = ".",
+  session_id~ : String = "goal-audit",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ReviewReport? {
@@ -108,16 +108,16 @@ pub async fn run_goal_audit(
 ///|
 /// Digest bounds: the gate injects this into the model's context and the
 /// durable log UNCLAMPED, so the caps live here, not in hope.
-let digest_max_findings : Int = 10
+let digest_max_findings : Int32 = 10
 
 ///|
 /// Per-finding line cap in the digest.
-let digest_max_line_chars : Int = 200
+let digest_max_line_chars : Int32 = 200
 
 ///|
 /// Total digest cap: the notice enters model context and the durable log
 /// unclamped, so this bound is the only one.
-let digest_max_chars : Int = 4_000
+let digest_max_chars : Int32 = 4_000
 
 ///|
 /// The bounded `[review]` notice for a report: severity tally, trimmed

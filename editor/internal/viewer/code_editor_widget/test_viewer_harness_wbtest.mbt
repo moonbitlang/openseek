@@ -16,7 +16,7 @@
 /// Builds a TextModel from raw text. The analog of `instantiateTextModel`.
 fn test_model(
   text : String,
-  language_id? : String = "plaintext",
+  language_id~ : String = "plaintext",
 ) -> @model.TextModel {
   TextModel(
     try! @base_common.Uri::from(
@@ -45,7 +45,7 @@ fn test_model(
 fn with_test_viewer(
   text : String,
   body : (CodeEditorWidget) -> Unit raise,
-  options? : CodeEditorOptions = CodeEditorOptions(font_size=12, line_height=18),
+  options~ : CodeEditorOptions = CodeEditorOptions(font_size=12, line_height=18),
 ) -> Unit raise {
   let viewer = CodeEditorWidget::CodeEditorWidget(options~) // NOTE: deliberately no attach()
   viewer.set_model(Some(test_model(text)))
@@ -96,7 +96,7 @@ fn CodeEditorWidget::test_window(
 /// test sets the private column directly. Requires `options.soft_wrap`.
 fn CodeEditorWidget::test_set_soft_wrap_column(
   self : CodeEditorWidget,
-  column : Int,
+  column : Int32,
 ) -> Unit {
   self.configuration.commit_soft_wrap_column(column) |> ignore
   self.on_configuration_changed()
@@ -125,7 +125,7 @@ fn CodeEditorWidget::test_set_viewport(
 
 ///|
 /// A document of `line_count` distinct one-line entries, for windowing tests.
-fn long_document(line_count : Int) -> String {
+fn long_document(line_count : Int32) -> String {
   let out = StringBuilder()
   for i in 0..<line_count {
     if i > 0 {

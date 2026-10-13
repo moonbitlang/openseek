@@ -49,7 +49,7 @@ async fn resolve_host_reference(
 /// "op ext:openseek/host.open_path failed" and hides the reason.
 async fn open_path_op(
   payload : OpenPathPayload,
-  preview_browser? : Bool = false,
+  preview_browser~ : Bool = false,
 ) -> OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference

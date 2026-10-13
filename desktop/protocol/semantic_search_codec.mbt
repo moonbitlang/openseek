@@ -8,10 +8,10 @@
 
 ///|
 fn sem_one_based_line(
-  value : Int,
+  value : Int32,
   path : @json.JsonPath,
   name : String,
-) -> Int raise @json.JsonDecodeError {
+) -> Int32 raise @json.JsonDecodeError {
   if value < 1 {
     raise JsonDecodeError((path.add_key(name), "expected one-based line"))
   }
@@ -22,10 +22,10 @@ fn sem_one_based_line(
 
 ///|
 fn sem_one_based_column(
-  value : Int,
+  value : Int32,
   path : @json.JsonPath,
   name : String,
-) -> Int raise @json.JsonDecodeError {
+) -> Int32 raise @json.JsonDecodeError {
   if value < 1 {
     raise JsonDecodeError((path.add_key(name), "expected one-based column"))
   }
@@ -170,17 +170,17 @@ pub impl FromJson for SemanticSearchHit with fn from_json(json, path) {
 ///|
 pub impl ToJson for SemanticSearchHit with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "path": self.path.to_json(),
-    "rule_id": self.rule_id.to_json(),
-    "start_line": self.start_line.to_json(),
-    "start_column": self.start_column.to_json(),
-    "end_line": self.end_line.to_json(),
-    "end_column": self.end_column.to_json(),
-    "matched_source": self.matched_source.to_json(),
-    "source_context": self.source_context.to_json(),
+    "path": Json(self.path),
+    "rule_id": Json(self.rule_id),
+    "start_line": Json(self.start_line),
+    "start_column": Json(self.start_column),
+    "end_line": Json(self.end_line),
+    "end_column": Json(self.end_column),
+    "matched_source": Json(self.matched_source),
+    "source_context": Json(self.source_context),
   }
   if self.description is Some(description) {
-    fields["description"] = description.to_json()
+    fields["description"] = Json(description)
   }
   Json(fields)
 }
@@ -270,18 +270,18 @@ pub impl FromJson for SearchSemanticReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for SearchSemanticReply with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "root": self.root.to_json(),
-    "generation": self.generation.to_json(),
-    "matches": self.matches.to_json(),
-    "match_count": self.match_count.to_json(),
-    "file_count": self.file_count.to_json(),
-    "limit_hit": self.limit_hit.to_json(),
-    "cancelled": self.cancelled.to_json(),
-    "partial": self.partial.to_json(),
+    "root": Json(self.root),
+    "generation": Json(self.generation),
+    "matches": Json(self.matches),
+    "match_count": Json(self.match_count),
+    "file_count": Json(self.file_count),
+    "limit_hit": Json(self.limit_hit),
+    "cancelled": Json(self.cancelled),
+    "partial": Json(self.partial),
   }
   if self.error is Some(error) {
-    fields["error_code"] = error.code.to_json()
-    fields["error_message"] = error.message.to_json()
+    fields["error_code"] = Json(error.code)
+    fields["error_message"] = Json(error.message)
   }
   Json(fields)
 }

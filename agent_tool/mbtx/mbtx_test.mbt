@@ -138,7 +138,7 @@ async test "script arguments reach inline and reused scripts verbatim on both ru
         "args": values,
       })
       assert_false(saved.is_error, msg=saved.content)
-      assert_true(saved.content.contains(values.to_json().stringify()))
+      assert_true(saved.content.contains(Json(values).stringify()))
       let reused = run_in(ws, {
         "filename": filename,
         "target": target,
@@ -1920,8 +1920,8 @@ async test "a hosted session reserves nothing unless the snippet asks" {
 fn hosted_injection(
   store : String,
   workspace_root : String,
-  first~ : Int,
-) -> (@host.SubrunInjection, Ref[Int]) {
+  first~ : Int32,
+) -> (@host.SubrunInjection, Ref[Int32]) {
   let issued = Ref(first - 1)
   let injection = @host.SubrunInjection(
     exe="/unused/openseek",
@@ -1942,8 +1942,8 @@ async fn run_hosted_with(
   workspace_root : String,
   store : String,
   arguments : Json,
-  first? : Int = 1,
-) -> (@agent_tool.ToolOutput, Int) {
+  first~ : Int32 = 1,
+) -> (@agent_tool.ToolOutput, Int32) {
   let (subrun, issued) = hosted_injection(store, workspace_root, first~)
   let output = dispatch(@mbtx.definition(workspace_root~, subrun~), arguments)
   (output, issued.val - (first - 1))

@@ -9,8 +9,8 @@ pub(all) enum Message {
   RestartToInstall(String)
   CannotInstallUpdate(String)
   RestartingVersion(String)
-  DownloadProgress(String, Int, Int, Int)
-  DownloadBytes(String, Int)
+  DownloadProgress(String, Int32, Int32, Int32)
+  DownloadBytes(String, Int32)
   DownloadVersion(String)
   Status
   Account

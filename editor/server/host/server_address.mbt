@@ -1,7 +1,7 @@
 ///|
 /// Formats an IPv4 address returned by the socket package in network byte
 /// order.
-fn format_ipv4_address(ip : UInt) -> String {
+fn format_ipv4_address(ip : UInt32) -> String {
   "\{ip >> 24}.\{(ip >> 16) & 255}.\{(ip >> 8) & 255}.\{ip & 255}"
 }
 
@@ -24,7 +24,7 @@ async fn default_route_ipv4_address() -> String? {
 }
 
 ///|
-fn editor_server_url(host : String, port : Int) -> String {
+fn editor_server_url(host : String, port : Int32) -> String {
   "http://\{host}:\{port}/"
 }
 
@@ -34,7 +34,7 @@ fn editor_server_url(host : String, port : Int) -> String {
 /// is reported only through the route on which it was bound.
 fn editor_server_listening_messages(
   bind_host : String,
-  port : Int,
+  port : Int32,
   network_host : String?,
 ) -> Array[String] {
   let messages = ["Readonly editor native server listening on:"]

@@ -3,7 +3,7 @@ fn disclosure(
   label : String,
   expanded : Bool,
   action : @cmd.Cmd,
-  section? : Bool = false,
+  section~ : Bool = false,
 ) -> @html.Html {
   @html.button(
     class=if section { "github-heading" } else { "github-group-heading" },

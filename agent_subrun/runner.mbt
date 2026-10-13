@@ -28,9 +28,9 @@ pub enum SubrunTerminal {
 struct SubrunResult[T] {
   value : T?
   terminal : SubrunTerminal
-  steps_used : Int
-  prompt_tokens : Int
-  completion_tokens : Int
+  steps_used : Int32
+  prompt_tokens : Int32
+  completion_tokens : Int32
   cost_usd : Double?
   unaccounted : String?
   subrun_id : String
@@ -50,7 +50,7 @@ pub fn[T] SubrunResult::terminal(self : SubrunResult[T]) -> SubrunTerminal {
 
 ///|
 /// Model requests the child actually made.
-pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int {
+pub fn[T] SubrunResult::steps_used(self : SubrunResult[T]) -> Int32 {
   self.steps_used
 }
 
@@ -114,13 +114,13 @@ pub async fn[T] run_subrun(
   args~ : Array[String],
   input~ : Json,
   parse_report~ : (Json) -> Result[T, String],
-  wall_deadline_ms~ : Int,
+  wall_deadline_ms~ : Int32,
   kind~ : String,
   label~ : String,
   cwd? : String,
   child_session? : ChildSession,
   extra_env? : Map[String, String],
-  emit_event? : (@protocol.Event) -> Unit = event => @emit.emit(event),
+  emit_event~ : (@protocol.Event) -> Unit = event => @emit.emit(event),
 ) -> SubrunResult[T] {
   // Bump the process counter past any child ordinal an earlier engine
   // process already persisted for this parent — monotonic, so it can only
@@ -144,9 +144,9 @@ pub async fn[T] run_subrun(
   )
   fn finished(
     status : String,
-    steps : Int,
-    prompt_tokens : Int,
-    completion_tokens : Int,
+    steps : Int32,
+    prompt_tokens : Int32,
+    completion_tokens : Int32,
     unaccounted : String?,
   ) -> Unit {
     emit_event(
@@ -247,7 +247,7 @@ pub async fn[T] run_subrun(
 struct ChildSession {
   root : String
   parent : String
-  first_free : Int
+  first_free : Int32
 }
 
 ///|
@@ -255,7 +255,7 @@ struct ChildSession {
 pub fn ChildSession::ChildSession(
   root~ : String,
   parent~ : String,
-  first_free? : Int = 1,
+  first_free~ : Int32 = 1,
 ) -> ChildSession {
   { root, parent, first_free, }
 }
@@ -263,7 +263,7 @@ pub fn ChildSession::ChildSession(
 ///|
 /// Per-process monotonic sub-run ids: unique within one engine's stream,
 /// which is all the pairing contract needs.
-let subrun_ids : Ref[Int] = { val: 0, }
+let subrun_ids : Ref[Int32] = { val: 0, }
 
 ///|
 /// Reserve `count` consecutive child ordinals from THIS process's counter and
@@ -279,7 +279,7 @@ let subrun_ids : Ref[Int] = { val: 0, }
 /// no earlier engine process persisted for this parent — applied here so a
 /// block reserved right after a resume cannot reuse a persisted id either.
 /// Monotonic: this can skip ordinals, never reuse one.
-fn reserve_subrun_ordinals(count : Int, first_free~ : Int) -> Int {
+fn reserve_subrun_ordinals(count : Int32, first_free~ : Int32) -> Int32 {
   if subrun_ids.val < first_free - 1 {
     subrun_ids.val = first_free - 1
   }

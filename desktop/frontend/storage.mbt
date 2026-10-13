@@ -141,10 +141,10 @@ fn save_conversation_model(key : String, model : EngineModel) -> @cmd.Cmd {
       .map(parse_conversation_models)
       .unwrap_or([])
     let rows : Array[Json] = remembered_with(stored, key, model).map(entry => {
-      "key": entry.key.to_json(),
-      "model": entry.model.wire().to_json(),
+      "key": Json(entry.key),
+      "model": Json(entry.model.wire()),
     })
-    save_setting(ConversationModelsStorageKey, rows.to_json().stringify())
+    save_setting(ConversationModelsStorageKey, Json(rows).stringify())
   })
 }
 

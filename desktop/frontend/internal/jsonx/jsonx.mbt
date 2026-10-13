@@ -29,7 +29,7 @@ pub fn json_first_text(
 ///|
 /// `key`'s numeric value truncated to `Int`, or `None` when the field is
 /// absent or not a JSON number.
-pub fn json_int(fields : Map[String, Json], key : String) -> Int? {
+pub fn json_int(fields : Map[String, Json], key : String) -> Int32? {
   guard fields.get(key) is Some(Number(value, ..)) else { return None }
   Some(value.to_int())
 }

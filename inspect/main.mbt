@@ -23,7 +23,7 @@
 /// `openseek_session-*.jsonl` files are listed, so `.DS_Store`, lock files, and
 /// malformed/husk directories do not show up as sessions.
 priv struct VizConfig {
-  port : Int
+  port : Int32
   host : String
   session_root : String
   session_root_name : String
@@ -43,7 +43,7 @@ priv struct VizConfig {
   // Whether `--port` (or its env) was given; `--ensure` otherwise derives one.
   port_explicit : Bool
   // Exit after this many minutes without a request; 0 never exits.
-  idle_minutes : Int
+  idle_minutes : Int32
 }
 
 ///|
@@ -292,7 +292,7 @@ async fn print_serving(catalog : SessionCatalog, assets : ViewerAssets) -> Unit 
 
 ///|
 /// `--idle-exit` minutes in milliseconds; 0 stays 0 ("never").
-fn idle_ms(minutes : Int) -> Int64 {
+fn idle_ms(minutes : Int32) -> Int64 {
   minutes.to_int64() * 60_000L
 }
 
@@ -309,8 +309,8 @@ async fn serve(
   access? : Guard,
   idle_ms~ : Int64,
   watch_root? : String,
-  root_check_ms? : Int = 10_000,
-  on_exit? : async () -> Unit = () => (),
+  root_check_ms~ : Int32 = 10_000,
+  on_exit~ : async () -> Unit = () => (),
 ) -> Unit {
   let last_request = Ref(@async.now())
   @async.with_task_group(group => {
@@ -356,7 +356,7 @@ async fn serve(
 /// the discovered LAN URL a remote host can open; a specific bound host prints
 /// just that one URL. The LAN line is best-effort — if no external address can
 /// be found, say so rather than print a misleading URL.
-async fn print_open_urls(host : String, port : Int) -> Unit {
+async fn print_open_urls(host : String, port : Int32) -> Unit {
   if host != "0.0.0.0" {
     println("openseek viz: open http://\{host}:\{port}")
     return
@@ -422,7 +422,7 @@ priv struct ViewerAssets {
 /// send in `handle` is the only place a response is written — there is no way to
 /// start a second response (which would panic `send_response`).
 struct Reply {
-  code : Int
+  code : Int32
   reason : String
   content_type : String
   body : String
@@ -656,7 +656,7 @@ async fn session_envelope_reply(path : String, known_bytes? : Int64) -> Reply {
 
 ///|
 async fn session_list_reply(catalog : SessionCatalog) -> Reply {
-  json_reply(catalog.rows().map(row => row.to_json()).to_json())
+  json_reply(Json(catalog.rows().map(row => row.to_json())))
 }
 
 ///|
@@ -709,7 +709,7 @@ async fn locate_bundle(candidates : Array[String]) -> String? {
       "openseek viz: warning: --bundle '\{explicit}' does not exist; auto-locating instead",
     )
   }
-  let mut best : (String, Int64, Int)? = None
+  let mut best : (String, Int64, Int32)? = None
   for candidate in rest {
     if candidate == "" || !@fs.exists(candidate) {
       continue
@@ -731,7 +731,7 @@ async fn locate_bundle(candidates : Array[String]) -> String? {
 }
 
 ///|
-async fn file_mtime(path : String) -> (Int64, Int)? {
+async fn file_mtime(path : String) -> (Int64, Int32)? {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return None }
   defer file.close()
   let stamp = file.mtime() catch { _ => return None }
@@ -778,7 +778,7 @@ priv struct SessionListRow {
   is_marker : Bool
   path : String
   last_active : Int64?
-  last_active_nanoseconds : Int
+  last_active_nanoseconds : Int32
   first_prompt : String
 }
 
@@ -800,7 +800,7 @@ fn SessionListRow::to_json(self : SessionListRow) -> Json {
 }
 
 ///|
-fn compare_session_list_rows(a : SessionListRow, b : SessionListRow) -> Int {
+fn compare_session_list_rows(a : SessionListRow, b : SessionListRow) -> Int32 {
   match (a.last_active, b.last_active) {
     (Some(a_time), Some(b_time)) => {
       // Most recently active first: compare b to a for a descending order.
@@ -826,7 +826,7 @@ fn compare_session_list_rows(a : SessionListRow, b : SessionListRow) -> Int {
 fn compare_session_list_row_labels(
   a : SessionListRow,
   b : SessionListRow,
-) -> Int {
+) -> Int32 {
   let root_order = a.root_label.compare(b.root_label)
   if root_order != 0 {
     root_order
@@ -1003,7 +1003,7 @@ fn should_skip_session_file_scan_dir(name : String) -> Bool {
 }
 
 ///|
-let first_prompt_scan_limit : Int = 50
+let first_prompt_scan_limit : Int32 = 50
 
 ///|
 async fn unique_roots(roots : Array[SessionRoot]) -> Array[SessionRoot] {
@@ -1148,7 +1148,7 @@ fn session_id_from_file_name(name : String) -> String? {
 }
 
 ///|
-async fn session_file_stamp(path : String) -> (Int64?, Int) {
+async fn session_file_stamp(path : String) -> (Int64?, Int32) {
   let stamp = @fs.mtime(path) catch { _ => return (None, 0) }
   let (seconds, nanoseconds) = stamp
   (Some(seconds), nanoseconds)
@@ -1336,7 +1336,7 @@ fn json_reply(body : Json) -> Reply {
 }
 
 ///|
-fn text_reply(code : Int, reason : String, message : String) -> Reply {
+fn text_reply(code : Int32, reason : String, message : String) -> Reply {
   { code, reason, content_type: "text/plain; charset=utf-8", body: message, }
 }
 
@@ -1493,7 +1493,7 @@ fn effective_search_dirs(matches : @argparse.Matches) -> Array[String] {
 }
 
 ///|
-fn parse_port(text : String) -> Int raise {
+fn parse_port(text : String) -> Int32 raise {
   @string.parse_int(text) catch {
     _ => fail("--port or OPENSEEK_VIZ_PORT must be an integer, got: \{text}")
   }

@@ -9,7 +9,7 @@ priv suberror PatternRepairRequestSub {
   PatternRepairRequest(
     @interop.ConversationKey,
     @protocol.PatternRepairPayload,
-    Int,
+    Int32,
     @cmd.Emit[Msg]
   )
 }

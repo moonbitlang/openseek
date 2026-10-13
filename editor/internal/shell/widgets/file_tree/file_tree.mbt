@@ -259,7 +259,7 @@ fn TreeRow::file_view(
 }
 
 ///|
-fn FileTree::indent_guides(depth : Int) -> @html.Html {
+fn FileTree::indent_guides(depth : Int32) -> @html.Html {
   let guides : Array[@html.Html] = [
     for _ in 0..<depth => @html.span(class="indent-guide", "")
   ]

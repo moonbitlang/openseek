@@ -160,8 +160,8 @@ test "a held result takes the draft out of a queue edit" {
   let dispatch = test_dispatch()
   let conv = {
     ..running_conversation(),
-    compaction: Compacting,
-    queue_edit_id: Some("queued-1"),
+    queue_edit: Some(Saving(id="queued-1", run_id="r7", mentions=[])),
+    queued_inputs: [{ id: "queued-1", content: "original", images: [], }],
   }
   let model = with_running_shell(test_model(), conv)
   // A device that is not focused: the result is held, not sent.
@@ -178,7 +178,53 @@ test "a held result takes the draft out of a queue edit" {
     is Some(after) else {
     fail("the conversation is gone")
   }
-  // The reply to an edit already in flight can no longer clear the draft.
-  assert_true(after.queue_edit_id is None)
+  // The held result takes ownership of the draft, but cannot release the
+  // outstanding request's lock and permit a second save of the same item.
+  assert_true(after.queue_edit is Some(SavingDetached(..)))
   assert_true(after.task.has_prefix("<user_shell_command>\n"))
+  let focused = { ..held, focused: after.device, }
+  let (_, edited) = update(
+    dispatch,
+    ComposerAction(
+      @composer.QueuedInputEditRequested(
+        identity=focused.composer_input().identity,
+        id="queued-1",
+      ),
+    ),
+    focused,
+  )
+  assert_true(edited.active().queue_edit == after.queue_edit)
+  let (_, duplicate) = update(dispatch, Send, edited)
+  assert_eq(duplicate.active().task, after.task)
+  assert_true(duplicate.active().queue_edit == after.queue_edit)
+  let (_, rejected) = update_device_msg(
+    dispatch,
+    after.device,
+    QueueEditRejected(
+      session=after.session_id,
+      id="queued-1",
+      run_id="r7",
+      message="save rejected",
+    ),
+    focused,
+  )
+  assert_true(rejected.active().queue_edit is None)
+  assert_eq(rejected.active().task, after.task)
+  let accepted = QueueAccepted(
+    session=after.session_id,
+    action=QueueEdit(id="queued-1", text="accepted revision", images=[]),
+    run_id="r7",
+  )
+  for _ in 0..<2 {
+    let (_, updated) = update_device_msg(dispatch, after.device, accepted, held)
+    guard updated.find_conversation(after.device, after.session_id)
+      is Some(saved) else {
+      fail("the conversation is gone")
+    }
+    assert_eq(saved.queued_inputs[0].content, "accepted revision")
+    assert_true(saved.queue_edit is None)
+    assert_eq(saved.task, after.task)
+    assert_eq(updated.submission_sequence, held.submission_sequence)
+  }
+  assert_eq(after.queued_inputs[0].content, "original")
 }

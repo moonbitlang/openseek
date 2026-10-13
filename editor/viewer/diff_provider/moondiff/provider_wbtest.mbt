@@ -1,6 +1,6 @@
 ///|
 fn changed_line(
-  index : Int,
+  index : Int32,
   prefix : String,
   changed : String,
   suffix : String,

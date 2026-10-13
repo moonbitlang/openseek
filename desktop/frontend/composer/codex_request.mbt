@@ -19,7 +19,7 @@ fn json_string_parts(values : Array[Json]) -> Array[String] {
 /// remains available below for diagnostics and fields this client does not yet
 /// understand.
 fn CodexRequestInput::approval_details(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
 ) -> Array[@html.Html] {
   guard self.params is Object(fields) else { return [] }
@@ -156,7 +156,7 @@ fn CodexRequestInput::approval_decisions(
 /// decision object is authoritative; the top-level proposal is a fallback for
 /// older request payloads.
 fn CodexRequestInput::execpolicy_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
   decision : Json,
 ) -> String {
@@ -181,7 +181,7 @@ fn CodexRequestInput::execpolicy_label(
 
 ///|
 fn CodexRequestInput::approval_actions(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -276,7 +276,7 @@ fn CodexRequestInput::approval_actions(
 
 ///|
 fn CodexRequestInput::questions(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
 ) -> Array[CodexRequestQuestion] {
   guard self.params is Object(fields) &&
@@ -314,7 +314,7 @@ fn CodexRequestInput::questions(
 
 ///|
 fn CodexRequestInput::raw_details(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
   open~ : Bool,
 ) -> @html.Html {
@@ -327,7 +327,7 @@ fn CodexRequestInput::raw_details(
 
 ///|
 fn CodexRequestInput::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],

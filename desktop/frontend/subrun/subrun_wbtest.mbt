@@ -1,5 +1,5 @@
 ///|
-fn progress_lane(steps : Int, activity : String) -> Lane {
+fn progress_lane(steps : Int32, activity : String) -> Lane {
   { id: "a", kind: "task", label: "investigate", steps, activity, run: None, }
 }
 

@@ -52,7 +52,7 @@ fn git_review_revision(reply : @protocol.GitChangesReply) -> String? {
 fn list_changes(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  generation : Int32,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
   match workspace {
@@ -123,8 +123,8 @@ fn read_git_original(
   owner : @interop.ConversationKey,
   path : @common.Uri,
   source : @pathx.Relative,
-  generation : Int,
-  background? : Bool = false,
+  generation : Int32,
+  background~ : Bool = false,
   revision~ : String?,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -250,7 +250,7 @@ fn ChangedFile::selectable(self : ChangedFile) -> Bool {
 ///|
 /// Explain why an informative row cannot use the ordinary file reader.
 fn ChangedFile::unselectable_title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ChangedFile,
 ) -> String {
   let reason = if self.kind is ChangeSubmodule {

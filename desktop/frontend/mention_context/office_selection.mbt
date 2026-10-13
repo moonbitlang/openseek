@@ -11,7 +11,7 @@ pub(all) struct OfficeSelectionSummary {
 pub extend OfficeSelectionSummary with Eq::{equal, not_equal}
 
 ///|
-fn selection_page(value : Json) -> Int? {
+fn selection_page(value : Json) -> Int32? {
   guard value is Number(number, ..) &&
     !number.is_nan() &&
     !number.is_inf() &&
@@ -24,7 +24,7 @@ fn selection_page(value : Json) -> Int? {
 }
 
 ///|
-fn selection_pages(first : Int, last : Int) -> String {
+fn selection_pages(first : Int32, last : Int32) -> String {
   if first == last {
     "p. \{first}"
   } else {
@@ -97,7 +97,7 @@ pub fn OfficeSelectionSummary::heading(self : OfficeSelectionSummary) -> String 
 }
 
 ///|
-fn selection_excerpt(text : String, limit : Int) -> String {
+fn selection_excerpt(text : String, limit : Int32) -> String {
   let out = StringBuilder()
   let mut count = 0
   let mut space = false
@@ -125,7 +125,10 @@ pub fn office_selection_label(materialized : String) -> String {
   guard office_selection_summary(materialized) is Some(summary) else {
     return "Office selection"
   }
-  let excerpt = selection_excerpt(summary.text, 64)
+  let excerpt = selection_excerpt(
+    office_selection_comment(materialized).unwrap_or(summary.text),
+    64,
+  )
   if excerpt.is_empty() {
     summary.heading()
   } else {
@@ -139,5 +142,17 @@ pub fn office_selection_title(materialized : String) -> String {
     return "Office selection"
   }
   let location = summary.location.map(value => " · " + value).unwrap_or("")
-  "\{summary.file}\{location}\n\{summary.text}"
+  let comment = office_selection_comment(materialized)
+    .map(text => "\n\n" + text)
+    .unwrap_or("")
+  "\{summary.file}\{location}\n\{summary.text}\{comment}"
+}
+
+///|
+fn office_selection_comment(materialized : String) -> String? {
+  let value = @json.parse(materialized) catch { _ => return None }
+  match value {
+    { "comment": String(text), .. } if !text.trim().is_empty() => Some(text)
+    _ => None
+  }
 }

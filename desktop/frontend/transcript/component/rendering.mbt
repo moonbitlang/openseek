@@ -31,7 +31,7 @@ fn TranscriptRenderKey::empty() -> TranscriptRenderKey {
 /// otherwise identical new-chat pages. A scratch or onboarding transcript has
 /// no registered project and keeps the generic question.
 fn empty_title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   project_label : String?,
 ) -> String {
   match project_label {
@@ -112,7 +112,7 @@ fn EmptyProjectControl::keydown(
 
 ///|
 fn EmptyProjectControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : EmptyProjectControl,
   current : @common.Uri,
   label : String,
@@ -264,7 +264,7 @@ fn EmptyProjectControl::render(
 
 ///|
 fn empty_transcript_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : EmptyContent,
   project_menu : EmptyProjectControl,
 ) -> @html.Html {
@@ -306,7 +306,7 @@ fn empty_transcript_view(
 /// remains pure and comparable, so changing the picker state updates this one
 /// stable branch without remounting its input.
 fn EmptyContent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : EmptyContent,
   actions : Actions,
 ) -> @html.Html {
@@ -437,7 +437,7 @@ priv enum BlockContent {
     step_label~ : String?,
     assistant_name~ : String,
     subrun_parent~ : String?,
-    wait_labels~ : Map[Int, String]
+    wait_labels~ : Map[Int32, String]
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -539,7 +539,7 @@ fn Block::branch_key(self : Block) -> String {
 /// The block's Html. The parent's actions are captured by the component and
 /// passed through here; a block never stores them.
 fn Block::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Block,
   actions : Actions,
   changes? : @review_changes.Control,
@@ -604,7 +604,7 @@ fn keyed_stream(
 /// and session, so switching conversations replaces the entire stream instead
 /// of reusing rows whose durable sequence numbers happen to match.
 fn section_children(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : Input,
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,

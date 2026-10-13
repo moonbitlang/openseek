@@ -88,7 +88,7 @@ async test "bridge promise rejections preserve refusal markers and messages" {
 /// `window.innerWidth` in CSS pixels, `None` where there is no window (a
 /// headless test runtime). Read once at startup to seed the narrow-layout
 /// flag; later changes arrive through the resize subscription.
-pub fn viewport_width() -> Int? {
+pub fn viewport_width() -> Int32? {
   js_prop(@js.globalThis, "innerWidth").map(width => {
     let width : Double = width.cast()
     width.to_int()

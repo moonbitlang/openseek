@@ -114,7 +114,7 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
 ///|
 /// Longest first-prompt label a `sessions list` row carries; enough to
 /// recognize a conversation without wrapping a normal terminal row.
-const PromptLabelMaxChars : Int = 60
+const PromptLabelMaxChars : Int32 = 60
 
 ///|
 /// Collapse a prompt to a single-line label — a stored prompt must not be able
@@ -132,7 +132,7 @@ fn compact_prompt_label(prompt : String) -> String {
 
 ///|
 fn format_utc_minute(seconds : Int64) -> String {
-  fn pad2(value : Int) -> String {
+  fn pad2(value : Int32) -> String {
     value.to_string().pad_start(2, '0')
   }
 
@@ -208,7 +208,7 @@ async fn session_listing_updated_at_ms(
 }
 
 ///|
-fn mtime_to_unix_millis(seconds : Int64, nanoseconds : Int) -> Int64 {
+fn mtime_to_unix_millis(seconds : Int64, nanoseconds : Int32) -> Int64 {
   seconds * 1000 + (nanoseconds / 1000000).to_int64()
 }
 
@@ -231,7 +231,7 @@ fn session_title(first_prompt : String) -> String {
 }
 
 ///|
-fn required_positive_int(input : String, label : String) -> Int raise {
+fn required_positive_int(input : String, label : String) -> Int32 raise {
   let trimmed = input.trim()
   if trimmed.is_empty() {
     fail("\{label} is required")

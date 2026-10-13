@@ -92,8 +92,8 @@ fn TestDecorationProvider::access(
 /// `(line, type)` pairs of the provider's live decorations, by position.
 fn TestDecorationProvider::get_decorations(
   self : TestDecorationProvider,
-) -> Array[(Int, String)] {
-  let res : Array[(Int, String)] = []
+) -> Array[(Int32, String)] {
+  let res : Array[(Int32, String)] = []
   for
     decoration in self.model.get_decorations_in_range(
       self.model.get_full_model_range(),
@@ -143,10 +143,10 @@ fn ws_then_exact(rest : String) -> (String) -> Bool {
 /// isCollapsed).
 fn assert_model_ranges(
   folding_model : FoldingModel,
-  expected : Array[(Int, Int, Bool)],
+  expected : Array[(Int32, Int32, Bool)],
   message : String,
 ) -> Unit raise {
-  let actual_ranges : Array[(Int, Int, Bool)] = []
+  let actual_ranges : Array[(Int32, Int32, Bool)] = []
   let actual = folding_model.regions()
   for i in 0..<actual.length() {
     actual_ranges.push(
@@ -167,10 +167,10 @@ fn assert_model_ranges(
 /// (start, end)).
 fn assert_folded_ranges(
   folding_model : FoldingModel,
-  expected : Array[(Int, Int)],
+  expected : Array[(Int32, Int32)],
   message : String,
 ) -> Unit raise {
-  let actual_ranges : Array[(Int, Int)] = []
+  let actual_ranges : Array[(Int32, Int32)] = []
   let actual = folding_model.regions()
   for i in 0..<actual.length() {
     if actual.is_collapsed(i) {
@@ -188,7 +188,7 @@ fn assert_folded_ranges(
 /// The suite's `assertRegions` over a region list.
 fn assert_regions_list(
   actual : Array[FoldingRegion],
-  expected : Array[(Int, Int, Bool)],
+  expected : Array[(Int32, Int32, Bool)],
   message : String,
 ) -> Unit raise {
   let mapped = actual.map(r => {
@@ -203,7 +203,7 @@ fn assert_regions_list(
 /// The suite's `assertRegion` over an optional region.
 fn assert_region_opt(
   actual : FoldingRegion?,
-  expected : (Int, Int, Bool)?,
+  expected : (Int32, Int32, Bool)?,
   message : String,
 ) -> Unit raise {
   match (actual, expected) {

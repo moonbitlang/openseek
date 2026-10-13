@@ -14,19 +14,19 @@ let usual_word_separators : String = "`~!@#$%^&*()-=+[{]}\\|;:'\",.<>/?"
 /// 1-based.
 pub struct WordAtPosition {
   word : String
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
 } derive(Eq, Debug)
 
 ///|
 fn is_ascii_digit(code : UInt16) -> Bool {
-  code is ('0'..='9')
+  code is ('0'..<='9')
 }
 
 ///|
 /// `\w` = `[A-Za-z0-9_]` (ASCII, no `u` flag).
 fn is_regex_word_char(code : UInt16) -> Bool {
-  code is ('A'..='Z' | 'a'..='z' | '0'..='9' | '_')
+  code is ('A'..<='Z' | 'a'..<='z' | '0'..<='9' | '_')
 }
 
 ///|
@@ -42,7 +42,7 @@ fn is_word_break(code : UInt16) -> Bool {
 /// `i`, returning the exclusive end index or `None`. No backtracking is needed:
 /// the dot must immediately follow the greedy `\d*`, so fewer digits can never
 /// recover a failed match.
-fn match_number(text : String, i : Int) -> Int? {
+fn match_number(text : String, i : Int32) -> Int32? {
   let len = text.length()
   let j = if i < len && text[i] == '-' { i + 1 } else { i }
   let j = for j = j; j < len && is_ascii_digit(text[j]); {
@@ -67,7 +67,7 @@ fn match_number(text : String, i : Int) -> Int? {
 ///|
 /// Matches the word alternative `[^<sep>\s]+` anchored at `i`, returning the
 /// exclusive end index or `None`.
-fn match_word_run(text : String, i : Int) -> Int? {
+fn match_word_run(text : String, i : Int32) -> Int32? {
   let len = text.length()
   let j = for j = i; j < len && !is_word_break(text[j]); {
     continue j + 1
@@ -85,7 +85,7 @@ fn match_word_run(text : String, i : Int) -> Int? {
 /// Next regex match at or after `from`, `(start, end_exclusive)`, trying the
 /// number alternative first at each candidate start (alternation priority), then
 /// the word run; advances one character when neither matches.
-fn next_word_match(text : String, from : Int) -> (Int, Int)? {
+fn next_word_match(text : String, from : Int32) -> (Int32, Int32)? {
   let len = text.length()
   for i in from..<len {
     match match_number(text, i) {
@@ -105,9 +105,9 @@ fn next_word_match(text : String, from : Int) -> (Int, Int)? {
 /// `column` in `text`. A position is enclosed when `start <= pos <= end`
 /// (`_findRegexMatchEnclosingPosition`: `matchIndex <= pos && lastIndex >= pos`).
 fn get_word_at_text(
-  column : Int,
+  column : Int32,
   text : String,
-  text_offset : Int,
+  text_offset : Int32,
 ) -> WordAtPosition? {
   let pos = column - 1 - text_offset
   for from = 0 {

@@ -3,28 +3,28 @@
 /// decoders, and each tag yields the expected `mtk<colorId>` class.
 
 ///|
-const TEST_FONT_STYLE_ITALIC : Int = 1
+const TEST_FONT_STYLE_ITALIC : Int32 = 1
 
 ///|
-const TEST_FONT_STYLE_BOLD : Int = 2
+const TEST_FONT_STYLE_BOLD : Int32 = 2
 
 ///|
-fn metadata_language_id(metadata : UInt) -> Int {
+fn metadata_language_id(metadata : UInt32) -> Int32 {
   ((metadata >> @common_tokens.METADATA_LANGUAGEID_OFFSET) & 0xffU).reinterpret_as_int()
 }
 
 ///|
-fn metadata_token_type(metadata : UInt) -> Int {
+fn metadata_token_type(metadata : UInt32) -> Int32 {
   ((metadata >> @common_tokens.METADATA_TOKEN_TYPE_OFFSET) & 0x3U).reinterpret_as_int()
 }
 
 ///|
-fn metadata_font_style(metadata : UInt) -> Int {
+fn metadata_font_style(metadata : UInt32) -> Int32 {
   ((metadata >> @common_tokens.METADATA_FONT_STYLE_OFFSET) & 0xfU).reinterpret_as_int()
 }
 
 ///|
-fn metadata_foreground(metadata : UInt) -> Int {
+fn metadata_foreground(metadata : UInt32) -> Int32 {
   ((metadata >> @common_tokens.METADATA_FOREGROUND_OFFSET) & 0x1ffU).reinterpret_as_int()
 }
 

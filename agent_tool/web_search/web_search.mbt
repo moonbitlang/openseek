@@ -20,27 +20,27 @@ const AnthropicVersion : String = "2023-06-01"
 /// Upper bound on generated tokens for the Messages request. The searching
 /// model's prose is discarded (only result blocks and citations survive), so
 /// this caps cost, not quality.
-const DefaultMaxTokens : Int = 4096
+const DefaultMaxTokens : Int32 = 4096
 
 ///|
 /// Maximum native `web_search` server-tool uses per request.
-const DefaultMaxUses : Int = 5
+const DefaultMaxUses : Int32 = 5
 
 ///|
 /// Upper bound on sources returned to the model. Owned by this consumer, not
 /// the provider: the model just asks a question; the product controls how
 /// much context comes back.
-const DefaultMaxResults : Int = 8
+const DefaultMaxResults : Int32 = 8
 
 ///|
 /// Wall bound on one whole search call. Server-side search runs a model turn
 /// with up to `max_uses` searches, so it is bounded like a chat request, not
 /// like a plain HTTP fetch.
-const DefaultTimeoutMs : Int = 120_000
+const DefaultTimeoutMs : Int32 = 120_000
 
 ///|
 /// Input cap: a query is a question, not a document.
-const MaxQueryChars : Int = 2_000
+const MaxQueryChars : Int32 = 2_000
 
 ///|
 /// One citeable source parsed out of a `web_search_tool_result` block.
@@ -101,12 +101,12 @@ impl Show for SearchFailure with fn output(
 /// `DefaultBaseUrl`), so `--api-url` proxies are not consulted.
 pub fn definition(
   api_key~ : String,
-  base_url? : String = DefaultBaseUrl,
-  model? : String = DefaultSearchModel,
-  max_results? : Int = DefaultMaxResults,
-  max_uses? : Int = DefaultMaxUses,
-  max_tokens? : Int = DefaultMaxTokens,
-  timeout_ms? : Int = DefaultTimeoutMs,
+  base_url~ : String = DefaultBaseUrl,
+  model~ : String = DefaultSearchModel,
+  max_results~ : Int32 = DefaultMaxResults,
+  max_uses~ : Int32 = DefaultMaxUses,
+  max_tokens~ : Int32 = DefaultMaxTokens,
+  timeout_ms~ : Int32 = DefaultTimeoutMs,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     program_callable=true,
@@ -137,10 +137,10 @@ async fn execute(
   api_key : String,
   base_url : String,
   model : String,
-  max_results : Int,
-  max_uses : Int,
-  max_tokens : Int,
-  timeout_ms : Int,
+  max_results : Int32,
+  max_uses : Int32,
+  max_tokens : Int32,
+  timeout_ms : Int32,
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "query": String(query), .. } && !query.is_blank() else {
@@ -183,7 +183,7 @@ async fn execute(
 /// Briefs cap the query segment FIRST (well under `brief_line`'s overall
 /// 72-char cap), so the discriminating suffix — `· N source(s)` vs `(failed)`
 /// — survives for long queries instead of both briefs truncating identically.
-fn success_brief(query : String, count : Int) -> String {
+fn success_brief(query : String, count : Int32) -> String {
   let capped = @agent_tool.brief_line(query, limit=40)
   @agent_tool.brief_line("web_search \{capped} · \{count} source(s)")
 }
@@ -208,22 +208,22 @@ async fn perform_search(
   api_key~ : String,
   base_url~ : String,
   model~ : String,
-  max_results~ : Int,
-  max_uses~ : Int,
-  max_tokens~ : Int,
-  timeout_ms~ : Int,
+  max_results~ : Int32,
+  max_uses~ : Int32,
+  max_tokens~ : Int32,
+  timeout_ms~ : Int32,
   query : String,
 ) -> SearchOutcome {
   let body : Json = {
-    "model": model.to_json(),
-    "max_tokens": max_tokens.to_json(),
+    "model": Json(model),
+    "max_tokens": Json(max_tokens),
     "messages": [
       {
         "role": "user",
         "content": [
           {
             "type": "text",
-            "text": "Perform a web search for the query: \{query}".to_json(),
+            "text": Json("Perform a web search for the query: \{query}"),
           },
         ],
       },
@@ -232,7 +232,7 @@ async fn perform_search(
       {
         "type": "web_search_20250305",
         "name": "web_search",
-        "max_uses": max_uses.to_json(),
+        "max_uses": Json(max_uses),
       },
     ],
   }
@@ -289,7 +289,7 @@ fn error_detail(text : String) -> String {
 /// result.
 fn parse_search_response(
   payload : Json,
-  max_results~ : Int,
+  max_results~ : Int32,
 ) -> SearchOutcome raise {
   guard payload is { "content": Array(blocks), .. } else {
     raise SearchFailure("DeepSeek search response has no content blocks")

@@ -33,7 +33,7 @@ async fn BrowserDefinitionGate::wait(self : BrowserDefinitionGate) -> Unit {
 
 ///|
 priv struct BrowserDefinitionProvider {
-  calls : Ref[Int]
+  calls : Ref[Int32]
   source_uri : @base_common.Uri
   location : @language.Location
   alternate_location : @language.Location?
@@ -43,7 +43,7 @@ priv struct BrowserDefinitionProvider {
   delay : Ref[Bool]
   pending : Ref[Bool]
   release : BrowserDefinitionGate?
-  reference_line : Int
+  reference_line : Int32
 }
 
 ///|
@@ -81,7 +81,7 @@ impl @language.DefinitionProvider for BrowserDefinitionProvider with fn provide_
 
 ///|
 priv struct BrowserReferencesProvider {
-  calls : Ref[Int]
+  calls : Ref[Int32]
   code_uri : @base_common.Uri
   markdown_uri : @base_common.Uri
 }
@@ -127,7 +127,7 @@ impl @language.ReferencesProvider for BrowserReferencesProvider with fn provide_
 
 ///|
 priv struct BrowserDefinitionFixtureState {
-  mut resolver_calls : Int
+  mut resolver_calls : Int32
   opened_uris : Array[String]
   opened_modes : Array[String]
 }
@@ -143,12 +143,12 @@ fn browser_definition_open_mode(
 }
 
 ///|
-fn definition_reference_start_column() -> Int {
+fn definition_reference_start_column() -> Int32 {
   11
 }
 
 ///|
-fn definition_reference_end_column() -> Int {
+fn definition_reference_end_column() -> Int32 {
   27
 }
 
@@ -177,24 +177,24 @@ fn markdown_definition_source() -> String {
 }
 
 ///|
-fn markdown_definition_line() -> Int {
+fn markdown_definition_line() -> Int32 {
   51
 }
 
 ///|
 fn definition_state_json(
   viewer : @viewer.Viewer,
-  provider_calls : Ref[Int],
-  markdown_provider_calls : Ref[Int],
-  references_provider_calls : Ref[Int],
+  provider_calls : Ref[Int32],
+  markdown_provider_calls : Ref[Int32],
+  references_provider_calls : Ref[Int32],
   markdown_provider_pending : Ref[Bool],
   fixture : BrowserDefinitionFixtureState,
 ) -> String {
   let position = match viewer.get_position() {
     Some(position) =>
       Json({
-        "line": position.line_number.to_json(),
-        "column": position.column.to_json(),
+        "line": Json(position.line_number),
+        "column": Json(position.column),
       })
     None => Json::null()
   }
@@ -203,10 +203,10 @@ fn definition_state_json(
       let anchor = selection.get_selection_start()
       let active = selection.get_position()
       Json({
-        "anchorLine": anchor.line_number.to_json(),
-        "anchorColumn": anchor.column.to_json(),
-        "activeLine": active.line_number.to_json(),
-        "activeColumn": active.column.to_json(),
+        "anchorLine": Json(anchor.line_number),
+        "anchorColumn": Json(anchor.column),
+        "activeLine": Json(active.line_number),
+        "activeColumn": Json(active.column),
       })
     }
     None => Json::null()
@@ -214,16 +214,16 @@ fn definition_state_json(
   Json({
     "position": position,
     "selection": selection,
-    "providerCalls": provider_calls.val.to_json(),
-    "markdownProviderCalls": markdown_provider_calls.val.to_json(),
-    "referencesProviderCalls": references_provider_calls.val.to_json(),
-    "markdownProviderPending": markdown_provider_pending.val.to_json(),
-    "resolverCalls": fixture.resolver_calls.to_json(),
-    "openedUris": fixture.opened_uris.to_json(),
-    "openedModes": fixture.opened_modes.to_json(),
-    "scrollTop": viewer.get_scroll_top().to_json(),
-    "scrollHeight": viewer.get_scroll_height().to_json(),
-    "hasTextFocus": viewer.has_text_focus().to_json(),
+    "providerCalls": Json(provider_calls.val),
+    "markdownProviderCalls": Json(markdown_provider_calls.val),
+    "referencesProviderCalls": Json(references_provider_calls.val),
+    "markdownProviderPending": Json(markdown_provider_pending.val),
+    "resolverCalls": Json(fixture.resolver_calls),
+    "openedUris": Json(fixture.opened_uris),
+    "openedModes": Json(fixture.opened_modes),
+    "scrollTop": Json(viewer.get_scroll_top()),
+    "scrollHeight": Json(viewer.get_scroll_height()),
+    "hasTextFocus": Json(viewer.has_text_focus()),
   }).stringify()
 }
 
@@ -459,7 +459,7 @@ pub fn run_definition_browser_test() -> Unit {
 ///|
 fn wait_for_definition_fixture(
   ctx : @support.BrowserTestContext,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if @support.query_text(".definition-host") is Some(code_text) &&
     code_text.contains("definition_alpha") &&

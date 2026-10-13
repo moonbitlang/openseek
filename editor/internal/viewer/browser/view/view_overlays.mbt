@@ -51,8 +51,8 @@ fn DynamicViewOverlayHandle::prepare_render(
 ///|
 fn DynamicViewOverlayHandle::render(
   self : DynamicViewOverlayHandle,
-  start_line_number : Int,
-  line_number : Int,
+  start_line_number : Int32,
+  line_number : Int32,
 ) -> String {
   let render_result = match self {
     CurrentLine(overlay) => overlay.render_result
@@ -71,8 +71,8 @@ fn DynamicViewOverlayHandle::render(
 /// overlay implements over its `_renderResult`.
 fn render_result_slice(
   render_result : Array[String],
-  start_line_number : Int,
-  line_number : Int,
+  start_line_number : Int32,
+  line_number : Int32,
 ) -> String {
   let line_index = line_number - start_line_number
   if line_index < 0 || line_index >= render_result.length() {
@@ -137,9 +137,9 @@ fn ViewOverlayLine::on_tokens_changed(_self : ViewOverlayLine) -> Unit {
 ///|
 fn ViewOverlayLine::render_line(
   self : ViewOverlayLine,
-  line_number : Int,
+  line_number : Int32,
   delta_top : Double,
-  line_height : Int,
+  line_height : Int32,
   viewport : @view_layout.ViewportData,
   builder : StringBuilder,
 ) -> Bool {
@@ -162,9 +162,9 @@ fn ViewOverlayLine::render_line(
 ///|
 fn ViewOverlayLine::layout_line(
   self : ViewOverlayLine,
-  _line_number : Int,
+  _line_number : Int32,
   delta_top : Double,
-  line_height : Int,
+  line_height : Int32,
 ) -> Unit {
   match self.dom_node {
     Some(node) => {

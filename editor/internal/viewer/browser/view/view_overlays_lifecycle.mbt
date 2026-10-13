@@ -356,7 +356,7 @@ fn prepare_selections_overlay(
   context : RenderingContext,
 ) -> Unit {
   let self = part
-  let visible_ranges : Array[(Int, Array[(Double, Double)])] = []
+  let visible_ranges : Array[(Int32, Array[(Double, Double)])] = []
   if context.input.selection_view_range is Some(selection) &&
     context.lines_visible_ranges_for_range(selection, true) is Some(lines) {
     for line in lines {

@@ -8,7 +8,7 @@ priv suberror BridgeSubscription {
   RemoteBridge(
     dispatch~ : @cmd.Emit[Event],
     device_id~ : String,
-    websocket_epoch~ : Int
+    websocket_epoch~ : Int32
   )
 }
 
@@ -28,8 +28,8 @@ pub fn local_connection(dispatch : @cmd.Emit[Event]) -> @sub.Sub {
 /// the socket; ordinary model changes only refresh the event emitter.
 pub fn remote_connection(
   device_id~ : String,
-  websocket_epoch~ : Int,
-  reconnect_attempt~ : Int,
+  websocket_epoch~ : Int32,
+  reconnect_attempt~ : Int32,
   dispatch~ : @cmd.Emit[Event],
 ) -> @sub.Sub {
   @sub.custom_sub(

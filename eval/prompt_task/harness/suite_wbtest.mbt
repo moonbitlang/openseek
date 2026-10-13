@@ -161,7 +161,7 @@ fn validation_for_suite_test(passed : Bool) -> ValidationResult {
 }
 
 ///|
-fn eval_result_for_suite_test(index : Int, success : Bool) -> EvalResult {
+fn eval_result_for_suite_test(index : Int32, success : Bool) -> EvalResult {
   {
     index,
     prompt_label: "alpha:deepseek-v4-flash",

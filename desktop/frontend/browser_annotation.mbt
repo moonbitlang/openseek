@@ -1,6 +1,6 @@
 ///|
 priv struct BrowserAnnotationSession {
-  id : Int
+  id : Int32
   request : String
   owner : @interop.ConversationKey
   codex : Bool

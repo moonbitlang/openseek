@@ -28,8 +28,8 @@
 
 ///|
 fn assert_pairs_eq(
-  actual : Array[(Int, Int)],
-  expected : Array[(Int, Int)],
+  actual : Array[(Int32, Int32)],
+  expected : Array[(Int32, Int32)],
 ) -> Unit raise {
   if actual != expected {
     fail("got \{Repr(actual)}, expected \{Repr(expected)}")
@@ -66,9 +66,9 @@ fn create_cormen_tree() -> IntervalTree {
 ///|
 fn assert_interval_search(
   t : IntervalTree,
-  start : Int,
-  end : Int,
-  expected : Array[(Int, Int)],
+  start : Int32,
+  end : Int32,
+  expected : Array[(Int32, Int32)],
 ) -> Unit raise {
   let actual_nodes = t.interval_search(start, end, 0, false, false, 0, false)
   let actual = actual_nodes.map(n => {

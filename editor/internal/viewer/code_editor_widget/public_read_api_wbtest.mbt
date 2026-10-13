@@ -13,7 +13,7 @@
 /// getters can be exercised without a rendered view.
 fn CodeEditorWidget::test_set_layout_view_zones(
   self : CodeEditorWidget,
-  zones : Array[(Int, Int)],
+  zones : Array[(Int32, Int32)],
 ) -> Unit {
   match self.get_view_model() {
     Some(view_model) =>

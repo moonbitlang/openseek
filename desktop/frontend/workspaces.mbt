@@ -8,8 +8,8 @@
 fn fetch_projects(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -86,7 +86,7 @@ fn project_action(
     @protocol.WorkspacesReply,
   ],
   payload : @protocol.WorkspacePayload,
-  report_added? : Bool = false,
+  report_added~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -662,7 +662,7 @@ test "a picker message with no picker open is dropped" {
 
 ///|
 /// Test-only: the request fence currently expected by an open picker.
-fn picker_generation(model : Model) -> Int raise {
+fn picker_generation(model : Model) -> Int32 raise {
   guard model.project_picker is Some(picker) else {
     fail("expected an open project picker")
   }
@@ -1235,7 +1235,7 @@ fn adopt_picked_directory(
 fn create_chat_workspace(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  generation~ : Int,
+  generation~ : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {

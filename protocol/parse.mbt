@@ -411,7 +411,7 @@ fn text(fields : Map[String, Json], key : String) -> String? {
 ///|
 /// JSON has one number type, so an `Int` field arrives as a `Number`; reject a
 /// fractional value rather than silently truncating it.
-fn int(fields : Map[String, Json], key : String) -> Int? {
+fn int(fields : Map[String, Json], key : String) -> Int32? {
   guard fields.get(key) is Some(Number(value, ..)) else { return None }
   let rounded = value.to_int()
   guard rounded.to_double() == value else { return None }
@@ -429,7 +429,7 @@ fn bool(fields : Map[String, Json], key : String) -> Bool? {
 
 ///|
 /// The `from_sequence`/`to_sequence` pair every compaction event carries.
-fn sequences(fields : Map[String, Json]) -> (Int, Int)? {
+fn sequences(fields : Map[String, Json]) -> (Int32, Int32)? {
   guard int(fields, "from_sequence") is Some(from_sequence) &&
     int(fields, "to_sequence") is Some(to_sequence) else {
     return None

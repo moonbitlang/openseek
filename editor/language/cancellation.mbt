@@ -161,7 +161,7 @@ struct CancellationTokenSource {
 /// a disposable next-turn scheduler.
 fn CancellationTokenSource::new_impl(
   parent? : CancellationToken,
-  schedule? : (() -> Unit) -> @base_common.Disposable = schedule_cancellation_inline,
+  schedule~ : (() -> Unit) -> @base_common.Disposable = schedule_cancellation_inline,
 ) -> CancellationTokenSource {
   let source : CancellationTokenSource = {
     token_value: None,
@@ -181,7 +181,7 @@ fn CancellationTokenSource::new_impl(
 /// scheduling.
 pub fn CancellationTokenSource::CancellationTokenSource(
   parent? : CancellationToken,
-  schedule? : (() -> Unit) -> @base_common.Disposable = schedule_cancellation_inline,
+  schedule~ : (() -> Unit) -> @base_common.Disposable = schedule_cancellation_inline,
 ) -> CancellationTokenSource {
   CancellationTokenSource::new_impl(parent?, schedule~)
 }
@@ -218,7 +218,7 @@ pub fn CancellationTokenSource::token(
 /// the shared never-cancelled token so a later `cancel` remains a no-op.
 fn CancellationTokenSource::dispose_impl(
   self : CancellationTokenSource,
-  cancel? : Bool = false,
+  cancel~ : Bool = false,
 ) -> Unit {
   if cancel {
     self.cancel()
@@ -239,7 +239,7 @@ fn CancellationTokenSource::dispose_impl(
 /// Releases source listeners, optionally requesting cancellation first.
 pub fn CancellationTokenSource::dispose(
   self : CancellationTokenSource,
-  cancel? : Bool = false,
+  cancel~ : Bool = false,
 ) -> Unit {
   self.dispose_impl(cancel~)
 }

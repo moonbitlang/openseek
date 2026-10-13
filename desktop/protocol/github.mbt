@@ -28,7 +28,7 @@ pub impl ToJson for GithubListKind with fn to_json(self) {
 pub(all) struct GithubListPayload {
   cwd : String
   kind : GithubListKind
-  limit : Int
+  limit : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -51,7 +51,7 @@ pub impl ToJson for GithubListPayload with fn to_json(self) {
 
 ///|
 pub(all) struct GithubItem {
-  number : Int
+  number : Int32
   title : String
   url : String
   author : String?
@@ -75,16 +75,16 @@ pub impl FromJson for GithubItem with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubItem with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "number": self.number.to_json(),
-    "title": self.title.to_json(),
-    "url": self.url.to_json(),
-    "draft": self.draft.to_json(),
+    "number": Json(self.number),
+    "title": Json(self.title),
+    "url": Json(self.url),
+    "draft": Json(self.draft),
   }
   if self.author is Some(author) {
-    fields["author"] = author.to_json()
+    fields["author"] = Json(author)
   }
   if self.avatar_url is Some(url) {
-    fields["avatar_url"] = url.to_json()
+    fields["avatar_url"] = Json(url)
   }
   Json(fields)
 }
@@ -113,13 +113,13 @@ pub impl FromJson for GithubListReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for GithubListReply with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "repository": self.repository.to_json(),
-    "repository_url": self.repository_url.to_json(),
-    "items": self.items.to_json(),
-    "has_more": self.has_more.to_json(),
+    "repository": Json(self.repository),
+    "repository_url": Json(self.repository_url),
+    "items": Json(self.items),
+    "has_more": Json(self.has_more),
   }
   if self.avatar_error is Some(error) {
-    fields["avatar_error"] = error.to_json()
+    fields["avatar_error"] = Json(error)
   }
   Json(fields)
 }

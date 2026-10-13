@@ -7,9 +7,9 @@
 test "visibleColumnFromColumn" {
   fn t(
     text : String,
-    tab_size : Int,
-    column : Int,
-    expected : Int,
+    tab_size : Int32,
+    column : Int32,
+    expected : Int32,
   ) -> Unit raise {
     assert_eq(visible_column_from_column(text, column, tab_size), expected)
   }
@@ -67,9 +67,9 @@ test "visibleColumnFromColumn" {
 test "toStatusbarColumn" {
   fn t(
     text : String,
-    tab_size : Int,
-    column : Int,
-    expected : Int,
+    tab_size : Int32,
+    column : Int32,
+    expected : Int32,
   ) -> Unit raise {
     assert_eq(to_statusbar_column(text, column, tab_size), expected)
   }
@@ -124,9 +124,9 @@ test "toStatusbarColumn" {
 test "columnFromVisibleColumn" {
   fn t(
     text : String,
-    tab_size : Int,
-    visible_column : Int,
-    expected : Int,
+    tab_size : Int32,
+    visible_column : Int32,
+    expected : Int32,
   ) -> Unit raise {
     assert_eq(
       column_from_visible_column(text, visible_column, tab_size),
@@ -200,7 +200,7 @@ test "columnFromVisibleColumn" {
 }
 
 ///|
-fn assert_next_tab_stop(f : (Int, Int) -> Int) -> Unit raise {
+fn assert_next_tab_stop(f : (Int32, Int32) -> Int32) -> Unit raise {
   assert_eq(f(0, 4), 4)
   assert_eq(f(1, 4), 4)
   assert_eq(f(2, 4), 4)

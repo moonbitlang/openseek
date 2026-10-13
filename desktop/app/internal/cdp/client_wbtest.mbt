@@ -59,7 +59,7 @@ async test "typed commands preserve interleaved events and correlate replies" {
       })
       let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
       defer connection.close()
-      let result : Int = connection.evaluate("1 + 1").decode_value()
+      let result : Int32 = connection.evaluate("1 + 1").decode_value()
       assert_eq(result, 2)
       guard connection.next_event() is InspectNodeRequested(node) else {
         fail("event was lost")

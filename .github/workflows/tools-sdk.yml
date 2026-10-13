@@ -3,11 +3,13 @@ name: Tools SDK
 on:
   pull_request:
     paths:
+      - "desktop/.moonbit-version"
       - "tools_sdk/**"
       - ".github/workflows/tools-sdk.yml"
   push:
     branches: [main]
     paths:
+      - "desktop/.moonbit-version"
       - "tools_sdk/**"
       - ".github/workflows/tools-sdk.yml"
 
@@ -21,7 +23,9 @@ jobs:
       - uses: actions/checkout@v5
       - name: Install MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - run: moon update
       - run: moon -C tools_sdk check --target native --deny-warn

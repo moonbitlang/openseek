@@ -11,9 +11,9 @@
 ///|
 /// One immutable reference in deterministic display order.
 pub(all) struct ReferenceItem {
-  flat_index : Int
-  group_index : Int
-  index_in_group : Int
+  flat_index : Int32
+  group_index : Int32
+  index_in_group : Int32
   uri : @base_common.Uri
   uri_string : String
   range : @base_common.Range
@@ -35,7 +35,7 @@ pub fn ReferenceItem::fallback_label(self : ReferenceItem) -> String {
 ///|
 /// One canonical-URI group within the ordinary or test partition.
 pub(all) struct ReferenceGroup {
-  group_index : Int
+  group_index : Int32
   uri : @base_common.Uri
   uri_string : String
   references : Array[ReferenceItem]
@@ -54,14 +54,14 @@ pub(all) struct ReferencesModel {
 priv struct IndexedReferenceLocation {
   location : @language.Location
   uri_string : String
-  original_index : Int
+  original_index : Int32
 }
 
 ///|
 fn compare_indexed_reference_locations(
   left : IndexedReferenceLocation,
   right : IndexedReferenceLocation,
-) -> Int {
+) -> Int32 {
   let uri_order = @base_common.compare(left.uri_string, right.uri_string)
   if uri_order != 0 {
     return uri_order
@@ -170,7 +170,7 @@ pub fn ReferencesModel::is_empty(self : ReferencesModel) -> Bool {
 }
 
 ///|
-fn common_uri_prefix_length(left : String, right : String) -> Int {
+fn common_uri_prefix_length(left : String, right : String) -> Int32 {
   let left_chars = left.to_array()
   let right_chars = right.to_array()
   let limit = left_chars.length().min(right_chars.length())
@@ -190,7 +190,7 @@ pub fn ReferencesModel::nearest_reference(
   self : ReferencesModel,
   source_resource : @base_common.Uri,
   anchor : @base_common.Position,
-  prefer_non_test? : Bool = false,
+  prefer_non_test~ : Bool = false,
 ) -> ReferenceItem? {
   let source = source_resource.to_string()
   let mut best : ReferenceItem? = None

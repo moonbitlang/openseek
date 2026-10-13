@@ -5,7 +5,7 @@
 pub async fn first_free_child_ordinal(
   store : @store.SessionStore,
   parent : String,
-) -> Int {
+) -> Int32 {
   let highest = store
     .list()
     .iter()
@@ -18,7 +18,7 @@ pub async fn first_free_child_ordinal(
 ///|
 /// The N of a `<parent>-sr-N` child session id, or `None` for any other id
 /// (bounded to 9 digits so a pathological name cannot overflow).
-fn child_session_ordinal(id : String, parent : String) -> Int? {
+fn child_session_ordinal(id : String, parent : String) -> Int32? {
   guard id.strip_prefix("\{parent}-sr-") is Some(digits) else { return None }
   guard !digits.is_empty() &&
     digits.length() <= 9 &&

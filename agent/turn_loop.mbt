@@ -140,7 +140,7 @@ let ceiling_skip_note : String = "skipped: the turn is yielding at the context c
 async fn AgentLoop::run(
   self : Self,
   session : @agent_session.Session,
-  max_steps : Int,
+  max_steps : Int32,
 ) -> @agent_session.Session {
   self.last_session = session
   let mut failure : Error? = None
@@ -497,7 +497,7 @@ async fn AgentLoop::prepare_step(
 }
 
 ///|
-async fn AgentLoop::chat(self : Self, step : Int) -> @deepseek.ChatResponse {
+async fn AgentLoop::chat(self : Self, step : Int32) -> @deepseek.ChatResponse {
   @emit.emit(AgentStep(step=step + 1))
   let response = self.client.chat(
     self.messages,
@@ -666,10 +666,10 @@ async fn AgentLoop::handle_tool_calls(
 async fn AgentLoop::prefetch_concurrent_results(
   self : Self,
   response : @deepseek.ChatResponse,
-) -> Map[Int, @agent_tool.ToolAction] {
-  let results : Map[Int, @agent_tool.ToolAction] = Map([])
-  let groups : Array[Array[(Int, @agent_tool.AgentToolCall)]] = []
-  let current : Array[(Int, @agent_tool.AgentToolCall)] = []
+) -> Map[Int32, @agent_tool.ToolAction] {
+  let results : Map[Int32, @agent_tool.ToolAction] = Map([])
+  let groups : Array[Array[(Int32, @agent_tool.AgentToolCall)]] = []
+  let current : Array[(Int32, @agent_tool.AgentToolCall)] = []
   fn flush() -> Unit {
     if current.length() >= 2 {
       groups.push(current.copy())
@@ -726,7 +726,7 @@ async fn AgentLoop::execute_tool_call(
   self : Self,
   session : @agent_session.Session,
   response : @deepseek.ChatResponse,
-  call_index : Int,
+  call_index : Int32,
   native_call : @deepseek.ToolCall,
   tool_call : @agent_tool.AgentToolCall,
   spent_result_chars~ : Int64,
@@ -1024,8 +1024,8 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
   self : Self,
   session : @agent_session.Session,
   response : @deepseek.ChatResponse,
-  from? : Int = 0,
-  spent_result_chars? : Int64 = 0,
+  from~ : Int32 = 0,
+  spent_result_chars~ : Int64 = 0,
   last_step~ : Bool,
 ) -> AgentStepOutcome? {
   // The registry must declare a call's tool a CONTROL tool: that is how
@@ -1110,7 +1110,7 @@ async fn AgentLoop::salvage_control_calls_at_ceiling(
 /// incomplete. The clamp therefore only ever fires on custom tool
 /// registrations, which is what gives the soft-tier batch budget a real
 /// per-call bound.
-let max_tool_result_chars : Int = 60_000
+let max_tool_result_chars : Int32 = 60_000
 
 ///|
 let tool_result_truncation_marker : String = "\n[truncated: result exceeded the 60000-char cap]"
@@ -1162,8 +1162,8 @@ async fn AgentLoop::record_tool_result(
   tool_call_id~ : String,
   tool_name~ : String,
   content~ : String,
-  images? : Array[@protocol.Image] = [],
-  is_error? : Bool = false,
+  images~ : Array[@protocol.Image] = [],
+  is_error~ : Bool = false,
   brief? : String,
   data? : Json,
 ) -> @agent_session.Session {
@@ -1384,9 +1384,9 @@ async fn AgentLoop::finish_turn(
   session : @agent_session.Session,
   answer : String,
   usage~ : @deepseek.Usage,
-  spent_result_chars? : Int64 = 0,
+  spent_result_chars~ : Int64 = 0,
   reasoning_content? : String,
-  answer_already_durable? : Bool = false,
+  answer_already_durable~ : Bool = false,
 ) -> FinishOutcome {
   // A met claim reaching a seal that skipped the review continuation (the
   // last bounded step) still gets its audit: the model cannot react this

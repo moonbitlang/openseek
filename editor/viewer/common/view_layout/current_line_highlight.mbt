@@ -59,10 +59,10 @@ pub fn current_line_margin_class(
 /// contiguous). `model_line_of` is the caller's
 /// `model_line_number_of_view_line`; `line_count` is the view line count.
 pub fn view_line_span_of_model_line(
-  view_line_number : Int,
-  line_count : Int,
-  model_line_of : (Int) -> Int,
-) -> (Int, Int) {
+  view_line_number : Int32,
+  line_count : Int32,
+  model_line_of : (Int32) -> Int32,
+) -> (Int32, Int32) {
   let model_line = model_line_of(view_line_number)
   let first = for first = view_line_number; first > 1 &&
                  model_line_of(first - 1) == model_line; {

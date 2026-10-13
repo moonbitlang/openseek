@@ -32,7 +32,7 @@ priv struct SchedulePage {
   snapshot : @protocol.SchedulesReply
   form : ScheduleForm?
   busy : Bool
-  sequence : Int
+  sequence : Int32
   error : String?
   log : (String, String)?
 } derive(Eq)
@@ -61,7 +61,7 @@ priv enum SchedulePageMsg {
   Action(String, String)
   Loaded(
     @interop.ChannelId,
-    Int,
+    Int32,
     Bool,
     Result[@protocol.SchedulesReply, String]
   )
@@ -167,7 +167,7 @@ fn schedule_client_now() -> Int64 {
 }
 
 ///|
-fn schedule_time(locale? : @i18n.Locale = English, at : Int64) -> String {
+fn schedule_time(locale~ : @i18n.Locale = English, at : Int64) -> String {
   let ctor : @js.Value = @js.globalThis.get_with_string("Date")
   let date : @js.Value = ctor.new([@js.Value::cast_from(at.to_double())])
   date.apply_with_string("toLocaleString", [@js.Value::cast_from(locale.tag())])
@@ -175,7 +175,7 @@ fn schedule_time(locale? : @i18n.Locale = English, at : Int64) -> String {
 
 ///|
 fn schedule_form_spec(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   form : ScheduleForm,
 ) -> Result[@protocol.ScheduleSpec, String] {
   let minutes = @string.parse_int(form.minutes) catch {

@@ -65,7 +65,7 @@ pub fn ModelLineProjection::set_visible(
 /// zero while hidden.
 pub fn ModelLineProjection::get_view_line_count(
   self : ModelLineProjection,
-) -> Int {
+) -> Int32 {
   match self {
     Identity => 1
     Hidden => 0
@@ -85,8 +85,8 @@ pub fn ModelLineProjection::get_view_line_count(
 pub fn ModelLineProjection::get_view_line_content(
   self : ModelLineProjection,
   model : @model.TextModel,
-  model_line_number : Int,
-  output_line_index : Int,
+  model_line_number : Int32,
+  output_line_index : Int32,
 ) -> String {
   match self {
     Identity => model.snapshot.line_text(model_line_number - 1)
@@ -110,8 +110,8 @@ pub fn ModelLineProjection::get_view_line_content(
 /// segment's `start_column` is a projected-line column, a different axis).
 pub fn ModelLineProjection::get_view_line_min_column(
   self : ModelLineProjection,
-  output_line_index : Int,
-) -> Int {
+  output_line_index : Int32,
+) -> Int32 {
   match self {
     Identity => 1
     Hidden => abort("Not supported")
@@ -126,9 +126,9 @@ pub fn ModelLineProjection::get_view_line_min_column(
 pub fn ModelLineProjection::get_view_line_max_column(
   self : ModelLineProjection,
   model : @model.TextModel,
-  model_line_number : Int,
-  output_line_index : Int,
-) -> Int {
+  model_line_number : Int32,
+  output_line_index : Int32,
+) -> Int32 {
   match self {
     Identity => model.snapshot.line_text(model_line_number - 1).length() + 1
     Hidden => abort("Not supported")
@@ -153,9 +153,9 @@ pub fn ModelLineProjection::get_view_line_max_column(
 pub fn ModelLineProjection::get_view_line_data(
   self : ModelLineProjection,
   model : @model.TextModel,
-  model_line_number : Int,
-  output_line_index : Int,
-  base_view_line_number : Int,
+  model_line_number : Int32,
+  output_line_index : Int32,
+  base_view_line_number : Int32,
 ) -> ViewLineData {
   match self {
     Identity => {
@@ -199,11 +199,11 @@ pub fn ModelLineProjection::get_view_line_data(
 fn ModelLineProjection::get_view_lines_data(
   self : ModelLineProjection,
   model : @model.TextModel,
-  model_line_number : Int,
-  output_line_index : Int,
-  line_count : Int,
-  base_view_line_number : Int,
-  global_start_index : Int,
+  model_line_number : Int32,
+  output_line_index : Int32,
+  line_count : Int32,
+  base_view_line_number : Int32,
+  global_start_index : Int32,
   needed : Array[Bool],
   result : Array[ViewLineData?],
 ) -> Bool {
@@ -304,9 +304,9 @@ fn ModelLineProjection::get_view_lines_data(
 /// continuation indent and clamps into the segment).
 pub fn ModelLineProjection::get_model_column_of_view_position(
   self : ModelLineProjection,
-  output_line_index : Int,
-  output_column : Int,
-) -> Int {
+  output_line_index : Int32,
+  output_column : Int32,
+) -> Int32 {
   match self {
     Identity => output_column
     Hidden => abort("Not supported")
@@ -331,8 +331,8 @@ pub fn ModelLineProjection::get_model_column_of_view_position(
 /// (Monaco's `getOutputPositionOfInputOffset`).
 pub fn ModelLineProjection::get_view_position_of_model_position(
   self : ModelLineProjection,
-  delta_line_number : Int,
-  input_column : Int,
+  delta_line_number : Int32,
+  input_column : Int32,
   affinity? : @model.PositionAffinity,
 ) -> @base_common.Position {
   match self {
@@ -369,7 +369,7 @@ pub fn ModelLineProjection::get_view_position_of_model_position(
 /// over `normalizeOutputPosition` (`modelLineProjectionData.ts:169-192`).
 pub fn ModelLineProjection::normalize_position(
   self : ModelLineProjection,
-  output_line_index : Int,
+  output_line_index : Int32,
   position : @base_common.Position,
   affinity : @model.PositionAffinity,
 ) -> @base_common.Position {
@@ -448,9 +448,9 @@ pub fn ModelLineProjection::normalize_position(
 /// `getInjectedTextAt`.
 pub fn ModelLineProjection::injected_text_index_at(
   self : ModelLineProjection,
-  output_line_index : Int,
-  column : Int,
-) -> Int {
+  output_line_index : Int32,
+  column : Int32,
+) -> Int32 {
   match self {
     Identity => -1
     Hidden => abort("Not supported")
@@ -520,7 +520,7 @@ fn view_line_data_for_segment_with_injections(
 ///|
 /// A run of `n` spaces — the leading indent prepended to a wrapped continuation
 /// line. Monaco's `spaces(count)`.
-fn spaces(n : Int) -> String {
+fn spaces(n : Int32) -> String {
   " ".repeat(n.max(0))
 }
 
@@ -568,7 +568,7 @@ fn resolve_injection_options(
 /// Source-shaped injection offsets captured by the batch context.
 fn injection_offsets_for_projected_line(
   projected_line : ProjectedTextLine,
-) -> Array[Int] {
+) -> Array[Int32] {
   projected_line.parts.filter_map(part => {
     match part.kind {
       InjectedSegment(model_column~, ..) => Some(model_column)
@@ -591,18 +591,18 @@ priv struct ResolvedInjectedTextOptions {
 fn ResolvedInjectedTextOptions::ResolvedInjectedTextOptions(
   content~ : String,
   inline_class_name? : String,
-  inline_class_name_affects_letter_spacing? : Bool = false,
+  inline_class_name_affects_letter_spacing~ : Bool = false,
 ) -> ResolvedInjectedTextOptions {
   { content, inline_class_name, inline_class_name_affects_letter_spacing, }
 }
 
 ///|
 priv struct InjectedTextInlineDecorationsComputerContext {
-  get_injection_options : (Int) -> Array[ResolvedInjectedTextOptions]?
-  get_injection_offsets : (Int) -> Array[Int]?
-  get_break_offsets : (Int) -> Array[Int]
-  get_wrapped_text_indent_length : (Int) -> Int
-  get_base_view_line_number : (Int) -> Int
+  get_injection_options : (Int32) -> Array[ResolvedInjectedTextOptions]?
+  get_injection_offsets : (Int32) -> Array[Int32]?
+  get_break_offsets : (Int32) -> Array[Int32]
+  get_wrapped_text_indent_length : (Int32) -> Int32
+  get_base_view_line_number : (Int32) -> Int32
 }
 
 ///|
@@ -625,7 +625,7 @@ fn InjectedTextInlineDecorationsComputer::InjectedTextInlineDecorationsComputer(
 /// continuation indent, and absolute view-line ranges.
 fn InjectedTextInlineDecorationsComputer::get_inline_decorations(
   self : InjectedTextInlineDecorationsComputer,
-  model_line_number : Int,
+  model_line_number : Int32,
 ) -> Array[Array[InlineDecoration]] {
   let injection_offsets = (self.context.get_injection_offsets)(
     model_line_number,
@@ -723,9 +723,9 @@ priv struct PreparedProjectedLineDemand {
 ///|
 fn prepare_projected_line_demand(
   context : InjectedTextInlineDecorationsComputerContext,
-  model_line_number : Int,
+  model_line_number : Int32,
   injection_options : Array[@model.InjectedTextOptions],
-  injection_offsets : Array[Int],
+  injection_offsets : Array[Int32],
   read_line_tokens : () -> @tokens.LineTokens,
 ) -> PreparedProjectedLineDemand {
   let computer = InjectedTextInlineDecorationsComputer::InjectedTextInlineDecorationsComputer(
@@ -746,7 +746,7 @@ fn prepare_projected_line_demand(
 /// offsets read by the decoration context.
 fn inserted_tokens_from_injection_data(
   injection_options : Array[@model.InjectedTextOptions],
-  injection_offsets : Array[Int],
+  injection_offsets : Array[Int32],
 ) -> Array[@tokens.InsertedToken] {
   let inserts : Array[@tokens.InsertedToken] = []
   for index, options in injection_options {

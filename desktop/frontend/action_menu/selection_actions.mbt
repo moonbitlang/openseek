@@ -24,8 +24,8 @@ priv struct SelectionAnchor {
   text : String
   // Viewport position of the surface's anchor edge: its bottom centre, or its
   // top centre when `below`.
-  x : Int
-  y : Int
+  x : Int32
+  y : Int32
   below : Bool
 } derive(Eq)
 
@@ -54,7 +54,7 @@ priv struct SelectionState[T] {
   // Sticky for the page: a reader collecting quotes keeps collecting.
   batched : Bool
   // Fences clipboard completions and expiry against later selections.
-  generation : Int
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -62,8 +62,8 @@ priv enum SelectionMsg {
   Settled(SelectionAnchor)
   Closed
   CopyStarted
-  CopyFinished(Int, Result[Unit, String])
-  CopyExpired(Int)
+  CopyFinished(Int32, Result[Unit, String])
+  CopyExpired(Int32)
   ReplyStarted
   CommentChanged(String)
   BatchToggled

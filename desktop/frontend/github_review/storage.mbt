@@ -103,7 +103,7 @@ fn store_browser_drafts(
   } else {
     @base_browser.local_storage_set(
       drafts_storage_key(url),
-      drafts.to_json().stringify(),
+      Json(drafts).stringify(),
     )
   }
   match result {

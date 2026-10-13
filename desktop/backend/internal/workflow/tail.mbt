@@ -38,7 +38,7 @@
 /// cancelling on the bracket would lose exactly those lines, leaving a child
 /// that finished showing as running. Two intervals guarantee one full poll
 /// over the final state of both files.
-pub let drain_grace_ms : Int = 2 * WorkflowTailIntervalMs
+pub let drain_grace_ms : Int32 = 2 * WorkflowTailIntervalMs
 
 ///|
 /// Whether `ordinal` is one the run was announced with. The host synthesizes
@@ -46,7 +46,11 @@ pub let drain_grace_ms : Int = 2 * WorkflowTailIntervalMs
 /// written by the snippet — a buggy or hostile one could name an ordinary
 /// `explore` child's id and collide with a real lane. The announced block is
 /// the host's own knowledge; a child outside it is not this run's.
-pub fn in_block(ordinal : Int, first_child~ : Int, child_count~ : Int) -> Bool {
+pub fn in_block(
+  ordinal : Int32,
+  first_child~ : Int32,
+  child_count~ : Int32,
+) -> Bool {
   ordinal >= first_child && ordinal < first_child + child_count
 }
 
@@ -138,9 +142,9 @@ pub(all) struct ChildFinished {
   /// The contract's own vocabulary: `captured`, `no_report`, `max_steps`,
   /// `context_yield`, `timed_out`, `skipped`, `failed`.
   status : String
-  steps : Int
+  steps : Int32
   /// Prompt and completion tokens together; the sidecar does not split them.
-  tokens : Int
+  tokens : Int32
   /// Why `steps` and `tokens` may fall short of the child's spend (it left no
   /// result, or its launch was cancelled); `None` when they are its account.
   unaccounted : String?
@@ -233,7 +237,7 @@ fn parse_journal(
         _ => "failed"
       }
   }
-  let int_at : (Map[String, Json], String) -> Int = (fields, name) => {
+  let int_at : (Map[String, Json], String) -> Int32 = (fields, name) => {
     match fields.get(name) {
       Some(Number(n, ..)) => n.to_int()
       _ => 0

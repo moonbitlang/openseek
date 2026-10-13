@@ -32,7 +32,7 @@ pub(all) struct HoverPositionPart {
 pub fn compute_hover_positions(
   anchor_range : @base_common.Range,
   hover_parts : Array[HoverPositionPart],
-  start_column_boundary : Int,
+  start_column_boundary : Int32,
 ) -> (@base_common.Position, @base_common.Position) {
   // The anchor range is always on a single line.
   let anchor_start_line_number = anchor_range.start_line_number

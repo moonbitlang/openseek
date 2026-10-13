@@ -63,7 +63,7 @@ constructors, then emits those values through `AgentRuntime::emit_event`.
 ///|
 extenum @agent_runtime.AgentEvent += {
   ReadmeRuntimeEvent(String)
-  ReadmeFloodEvent(Int)
+  ReadmeFloodEvent(Int32)
 }
 
 ///|

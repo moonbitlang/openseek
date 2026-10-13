@@ -4,7 +4,7 @@
 fn test_tokenization_model_state(
   lines : Array[String],
   language_id : String,
-  attached_count : Ref[Int],
+  attached_count : Ref[Int32],
   too_large : Bool,
   disposing : Ref[Bool],
   scheduler : Ref[TokenizationScheduler?],

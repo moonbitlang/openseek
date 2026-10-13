@@ -239,7 +239,7 @@ async fn fork_refused(
   store : @store.SessionStore,
   source : String,
   fork : String,
-  through? : Int,
+  through? : Int32,
 ) -> Bool {
   try
     store.fork(

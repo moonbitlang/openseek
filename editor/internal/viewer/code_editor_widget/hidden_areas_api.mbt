@@ -12,8 +12,8 @@
 pub fn CodeEditorWidget::set_hidden_areas(
   self : CodeEditorWidget,
   ranges : Array[@base_common.Range],
-  source? : String = "",
-  force_update? : Bool = false,
+  source~ : String = "",
+  force_update~ : Bool = false,
 ) -> Unit {
   guard self.get_view_model() is Some(view_model) else { return }
   guard self.get_model() is Some(model) else { return }

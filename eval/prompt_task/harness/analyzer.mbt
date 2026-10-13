@@ -83,7 +83,7 @@ pub fn default_toml_validation_probes() -> Array[ValidationProbeSpec] {
 /// workspace validation are attached when the session came from a prompt-task
 /// trial.
 priv struct EvalResult {
-  index : Int
+  index : Int32
   prompt_label : String
   success : Bool
   reason : String
@@ -91,31 +91,31 @@ priv struct EvalResult {
   log_path : String
   session_id : String
   events_path : String
-  exit_code : Int
-  steps : Int
-  tool_results : Int
-  tool_errors : Int
-  runtime_notices : Int
+  exit_code : Int32
+  steps : Int32
+  tool_results : Int32
+  tool_errors : Int32
+  runtime_notices : Int32
   finished : Bool
   finish_message : String
   terminal_status : String
   terminal_message : String
   validation : ValidationResult
-  parse_errors : Int
+  parse_errors : Int32
   partial_tail : Bool
-  moon_check_uses : Int
-  moon_test_uses : Int
-  moon_run_e_mentions : Int
-  moon_run_c_mentions : Int
-  bad_run_e_mentions : Int
-  from_str_mentions : Int
-  parse_int_mentions : Int
-  argparse_mentions : Int
-  old_argparse_mentions : Int
-  c_ffi_mentions : Int
-  env_args_mentions : Int
-  result_style_mentions : Int
-  try_mentions : Int
+  moon_check_uses : Int32
+  moon_test_uses : Int32
+  moon_run_e_mentions : Int32
+  moon_run_c_mentions : Int32
+  bad_run_e_mentions : Int32
+  from_str_mentions : Int32
+  parse_int_mentions : Int32
+  argparse_mentions : Int32
+  old_argparse_mentions : Int32
+  c_ffi_mentions : Int32
+  env_args_mentions : Int32
+  result_style_mentions : Int32
+  try_mentions : Int32
   warnings : String
 } derive(ToJson)
 
@@ -125,24 +125,24 @@ struct EvalReport {
   model : String
   prompt_label : String
   task_file : String
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  successes : Int
+  runs : Int32
+  concurrency : Int32
+  min_successes : Int32
+  successes : Int32
   out_dir : String
   results : Array[EvalResult]
 }
 
 ///|
 priv struct EvalContext {
-  index : Int
+  index : Int32
   prompt_label : String
   workspace : String
   log_path : String
   events_path : String
-  exit_code : Int
+  exit_code : Int32
   validation : ValidationResult
-  parse_errors : Int
+  parse_errors : Int32
   partial_tail : Bool
   extra_reasons : Array[String]
   extra_warnings : Array[String]
@@ -494,7 +494,7 @@ async fn run_validation_probe(
 ///|
 fn probe_output_result(
   spec : ValidationProbeSpec,
-  code : Int,
+  code : Int32,
   stdout : String,
   stderr : String,
 ) -> ProbeResult {

@@ -1,10 +1,10 @@
 ///|
 pub(all) struct OfficeSelectionPreview {
   owner : @interop.ConversationKey
-  epoch : Int
+  epoch : Int32
   path : @common.Uri
   sig : String
-  pdf_generation : Int?
+  pdf_generation : Int32?
   materialized : String
   summary : @mention_context.OfficeSelectionSummary
 } derive(Eq)
@@ -17,7 +17,7 @@ pub fn State::accepts_office_callback(
   self : State,
   ctx : Ctx,
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @common.Uri,
   sig : String,
 ) -> Bool {
@@ -86,6 +86,12 @@ pub fn State::offer_office_selection(
     ctx.active_file is Some(path) else {
     return Ok(self)
   }
+  // A typed draft pins its original source until submission or cancellation.
+  if self.pending_office_selection(ctx) is Some(_) &&
+    self.office_selection_comment is Some(comment) &&
+    !comment.trim().is_empty() {
+    return Ok(self)
+  }
   let (sig, pdf_generation) = match self.docs.get(path) {
     Some({ state: TabOffice(sig~, ..), stale: false, .. }) => (sig, None)
     Some({ state: TabPdf(document~, sig~), stale: false, .. }) if document.status
@@ -103,6 +109,7 @@ pub fn State::offer_office_selection(
   }
   Ok({
     ..self,
+    office_selection_comment: Some(""),
     office_selection: Some({
       owner: ctx.owner,
       epoch: self.request_epoch,
@@ -126,8 +133,11 @@ pub fn State::dismiss_office_selection(
     return (@cmd.none, self)
   }
   (
-    @office_viewer.clear_selection_command(OfficeSurfaceId),
-    { ..self, office_selection: None, },
+    @cmd.batch([
+      hide_office_feedback(),
+      @office_viewer.clear_selection_command(OfficeSurfaceId),
+    ]),
+    { ..self, office_selection: None, office_selection_comment: None, },
   )
 }
 
@@ -135,7 +145,7 @@ pub fn State::dismiss_office_selection(
 fn State::sync_office_selection(self : State, ctx : Ctx) -> State {
   if self.office_selection is Some(_) &&
     self.pending_office_selection(ctx) is None {
-    { ..self, office_selection: None, }
+    { ..self, office_selection: None, office_selection_comment: None, }
   } else {
     self
   }

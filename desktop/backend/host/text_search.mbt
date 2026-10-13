@@ -2,27 +2,27 @@
 // while each generation runs its own ripgrep process in a cancellable task.
 
 ///|
-const MaxTextSearchResults : Int = 20000
+const MaxTextSearchResults : Int32 = 20000
 
 ///|
 const MaxTextSearchFileSizeBytes : String = "17179869184"
 
 ///|
-const MaxTextSearchCancellationFrontiers : Int = 128
+const MaxTextSearchCancellationFrontiers : Int32 = 128
 
 ///|
 /// VS Code drains all stderr but retains at most one million characters for
 /// diagnostics. Bound by bytes here so invalid UTF-8 cannot evade the cap.
-const MaxTextSearchStderrBytes : Int = 1000000
+const MaxTextSearchStderrBytes : Int32 = 1000000
 
 ///|
-const MaxTextSearchErrorMessageUnits : Int = 1000
+const MaxTextSearchErrorMessageUnits : Int32 = 1000
 
 ///|
-const MaxTextSearchPreviewUnits : Int = 400
+const MaxTextSearchPreviewUnits : Int32 = 400
 
 ///|
-const TextSearchContextBeforeUnits : Int = 120
+const TextSearchContextBeforeUnits : Int32 = 120
 
 ///|
 /// VS Code's default `files.exclude` plus `search.exclude`, Claude metadata,
@@ -38,8 +38,8 @@ let default_text_search_excludes : Array[String] = [
 priv struct ParsedTextMatch {
   path : String
   line : String
-  line_number : Int
-  byte_ranges : Array[(Int, Int)]
+  line_number : Int32
+  byte_ranges : Array[(Int32, Int32)]
 }
 
 ///|
@@ -50,7 +50,7 @@ priv enum TextSearchOutcome {
 
 ///|
 priv struct RunningTextSearch {
-  generation : Int
+  generation : Int32
   root : String
   reply : @async.Queue[SearchTextReply]
   task : @async.Task[Unit]
@@ -62,7 +62,7 @@ priv struct RunningTextSearch {
 /// frontiers so that race stays safe without growing for the whole connection
 /// lifetime.
 priv struct TextSearchCancellationFrontiers {
-  values : Map[String, Int]
+  values : Map[String, Int32]
   order : Array[String]
 }
 
@@ -75,7 +75,7 @@ fn TextSearchCancellationFrontiers::TextSearchCancellationFrontiers() -> TextSea
 fn TextSearchCancellationFrontiers::get(
   self : TextSearchCancellationFrontiers,
   session_key : String,
-) -> Int {
+) -> Int32 {
   self.values.get(session_key).unwrap_or(-1)
 }
 
@@ -83,7 +83,7 @@ fn TextSearchCancellationFrontiers::get(
 fn TextSearchCancellationFrontiers::record(
   self : TextSearchCancellationFrontiers,
   session_key : String,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   self.values[session_key] = self.get(session_key).max(generation)
   self.order.retain(key => key != session_key)
@@ -102,10 +102,14 @@ priv enum TextSearchRequest {
     payload~ : SearchTextPayload,
     reply~ : @async.Queue[SearchTextReply]
   )
-  Cancel(session_key~ : String, generation~ : Int, reply~ : @async.Queue[Unit])
+  Cancel(
+    session_key~ : String,
+    generation~ : Int32,
+    reply~ : @async.Queue[Unit]
+  )
   Finished(
     session_key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     outcome~ : TextSearchOutcome
   )
 }
@@ -123,8 +127,8 @@ fn TextSearchService::TextSearchService() -> TextSearchService {
 ///|
 fn empty_text_search_reply(
   root : String,
-  generation : Int,
-  cancelled? : Bool = false,
+  generation : Int32,
+  cancelled~ : Bool = false,
   error? : @protocol.TextSearchError,
 ) -> SearchTextReply {
   {
@@ -155,7 +159,7 @@ async fn TextSearchService::search(
 async fn TextSearchService::cancel(
   self : TextSearchService,
   session_key : String,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.requests.put(Cancel(session_key~, generation~, reply~))
@@ -762,7 +766,7 @@ fn parse_ripgrep_match(line : String) -> ParsedTextMatch? {
     return None
   }
   let source_line = source_line.trim_end(chars="\r\n").to_owned()
-  let ranges : Array[(Int, Int)] = []
+  let ranges : Array[(Int32, Int32)] = []
   for submatch in submatches {
     if submatch is Object(fields) &&
       fields.get("start") is Some(Number(start, ..)) &&
@@ -786,7 +790,7 @@ fn parse_ripgrep_match(line : String) -> ParsedTextMatch? {
 }
 
 ///|
-fn utf16_offset_for_byte(line : String, byte_offset : Int) -> Int? {
+fn utf16_offset_for_byte(line : String, byte_offset : Int32) -> Int32? {
   let bytes = @utf8.encode(line)
   guard byte_offset >= 0 && byte_offset <= bytes.length() else { return None }
   let prefix = @utf8.decode(bytes[:byte_offset]) catch { _ => return None }
@@ -794,7 +798,7 @@ fn utf16_offset_for_byte(line : String, byte_offset : Int) -> Int? {
 }
 
 ///|
-fn safe_utf16_start(text : String, offset : Int) -> Int {
+fn safe_utf16_start(text : String, offset : Int32) -> Int32 {
   let offset = offset.max(0).min(text.length())
   if offset > 0 &&
     offset < text.length() &&
@@ -807,7 +811,7 @@ fn safe_utf16_start(text : String, offset : Int) -> Int {
 }
 
 ///|
-fn safe_utf16_end(text : String, offset : Int) -> Int {
+fn safe_utf16_end(text : String, offset : Int32) -> Int32 {
   let offset = offset.max(0).min(text.length())
   if offset > 0 &&
     offset < text.length() &&
@@ -822,8 +826,8 @@ fn safe_utf16_end(text : String, offset : Int) -> Int {
 ///|
 fn project_text_match(
   parsed : ParsedTextMatch,
-  remaining : Int,
-) -> (TextSearchMatch?, Int, Bool) {
+  remaining : Int32,
+) -> (TextSearchMatch?, Int32, Bool) {
   let ranges : Array[@protocol.TextSearchRange] = []
   let mut overflow = false
   for byte_range in parsed.byte_ranges {
@@ -974,7 +978,7 @@ fn text_search_error(stderr : String) -> (String, String) {
 
 ///|
 fn text_search_exit_is_fatal(
-  exit_code : Int,
+  exit_code : Int32,
   limit_hit : Bool,
   got_output : Bool,
 ) -> Bool {

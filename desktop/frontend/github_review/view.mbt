@@ -405,7 +405,7 @@ pub fn status_view(
 }
 
 ///|
-pub fn State::comment_count(self : State, path : String) -> Int {
+pub fn State::comment_count(self : State, path : String) -> Int32 {
   if !self.enabled {
     return 0
   }

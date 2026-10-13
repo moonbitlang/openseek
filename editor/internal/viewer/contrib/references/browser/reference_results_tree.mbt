@@ -3,8 +3,8 @@
 /// normalized model group index; reference identity is its flat index.
 priv enum ReferenceResultsTreeRow {
   TestSectionRow
-  GroupRow(Int)
-  ReferenceRow(Int)
+  GroupRow(Int32)
+  ReferenceRow(Int32)
 } derive(Eq)
 
 ///|
@@ -23,7 +23,7 @@ priv struct ReferenceResultsTree {
   mut previews : Array[Array[@references.ReferenceRowPreview]]
   mut expanded_groups : Array[Bool]
   mut requested_groups : Array[Bool]
-  mut selected_flat_index : Int
+  mut selected_flat_index : Int32
   mut roving : ReferenceResultsTreeRow?
   mut group_rows : Array[@rdom.Element?]
   mut group_children : Array[@rdom.Element?]
@@ -36,11 +36,11 @@ priv struct ReferenceResultsTree {
 
 ///|
 fn ReferenceResultsTree::ReferenceResultsTree(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   node : @rdom.Element,
   callbacks : ReferencesPeekWidgetCallbacks,
   layout_changed : () -> Unit,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
 ) -> ReferenceResultsTree {
   node.set_attribute("class", "moonbit-viewer-reference-results-tree")
   node.set_attribute("role", "tree")
@@ -165,7 +165,7 @@ fn ReferenceResultsTree::set_results(
 ///|
 fn ReferenceResultsTree::set_group_previews(
   self : ReferenceResultsTree,
-  group_index : Int,
+  group_index : Int32,
   previews : Array[@references.ReferenceRowPreview],
 ) -> Unit {
   if self.disposed {
@@ -385,7 +385,7 @@ fn ReferenceResultsTree::render_group(
 ///|
 fn ReferenceResultsTree::render_group_references(
   self : ReferenceResultsTree,
-  group_index : Int,
+  group_index : Int32,
   container : @rdom.Element,
 ) -> Unit {
   guard self.model is Some(model) &&
@@ -425,8 +425,8 @@ fn ReferenceResultsTree::render_reference_row(
   self : ReferenceResultsTree,
   reference : @references.ReferenceItem,
   preview : @references.ReferenceRowPreview,
-  level : Int,
-  set_size : Int,
+  level : Int32,
+  set_size : Int32,
 ) -> @rdom.Element {
   let document = @rdom.document()
   let row = document.create_element("button")
@@ -700,7 +700,7 @@ fn ReferenceResultsTree::handle_keydown(
 ///|
 fn ReferenceResultsTree::move_visible(
   self : ReferenceResultsTree,
-  delta : Int,
+  delta : Int32,
 ) -> Unit {
   let rows = self.visible_rows()
   guard rows.length() > 0 else { return }
@@ -773,7 +773,7 @@ fn ReferenceResultsTree::focus_row(
 ///|
 fn ReferenceResultsTree::set_group_expanded(
   self : ReferenceResultsTree,
-  group_index : Int,
+  group_index : Int32,
   expanded : Bool,
 ) -> Unit {
   guard self.model is Some(model) &&
@@ -814,7 +814,7 @@ fn ReferenceResultsTree::set_group_expanded(
 ///|
 fn ReferenceResultsTree::request_group(
   self : ReferenceResultsTree,
-  group_index : Int,
+  group_index : Int32,
 ) -> Unit {
   guard self.model is Some(model) &&
     group_index >= 0 &&
@@ -948,7 +948,7 @@ fn ReferenceResultsTree::contains_reference(
 ///|
 fn ReferenceResultsTree::reference_at(
   self : ReferenceResultsTree,
-  flat_index : Int,
+  flat_index : Int32,
 ) -> @references.ReferenceItem? {
   match self.model {
     Some(model) if flat_index >= 0 && flat_index < model.references.length() =>
@@ -998,7 +998,7 @@ fn ReferenceResultsTree::row_node(
 ///|
 fn ReferenceResultsTree::group_reference_container(
   self : ReferenceResultsTree,
-  group_index : Int,
+  group_index : Int32,
 ) -> @rdom.Element? {
   if group_index >= 0 && group_index < self.group_children.length() {
     self.group_children[group_index]
@@ -1060,7 +1060,7 @@ fn ReferenceResultsTree::reveal_row(
 }
 
 ///|
-fn reference_results_parse_index(raw : String) -> Int? {
+fn reference_results_parse_index(raw : String) -> Int32? {
   guard raw.length() > 0 && raw.length() <= 9 else { return None }
   let mut value = 0
   for unit in raw {
@@ -1074,7 +1074,7 @@ fn reference_results_parse_index(raw : String) -> Int? {
 fn reference_results_row_index(
   rows : Array[ReferenceResultsTreeRow],
   target : ReferenceResultsTreeRow,
-) -> Int {
+) -> Int32 {
   rows.search(target).unwrap_or(-1)
 }
 
@@ -1117,7 +1117,7 @@ fn reference_row_preview_text(
 
 ///|
 fn reference_accessible_label(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   reference : @references.ReferenceItem,
   display : String,
 ) -> String {
@@ -1143,7 +1143,7 @@ fn reference_accessible_label(
 
 ///|
 fn reference_group_accessible_label(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   group : @references.ReferenceGroup,
   basename : String,
   parent : String?,
@@ -1197,9 +1197,9 @@ fn reference_group_accessible_label(
 
 ///|
 fn reference_results_summary(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   model : @references.ReferencesModel,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
 ) -> String {
   let reference_count = model.references.length()
   let files : Set[String] = Set([])

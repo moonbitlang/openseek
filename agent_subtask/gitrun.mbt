@@ -8,7 +8,7 @@
 /// Only `PATH` (to find git) and `HOME` (commit identity, global config)
 /// pass through.
 priv struct GitOutcome {
-  exit_code : Int
+  exit_code : Int32
   output : String
 }
 
@@ -20,7 +20,7 @@ priv struct GitOutcome {
 async fn git_run(
   args : Array[String],
   cwd~ : String,
-  timeout_ms? : Int = 30_000,
+  timeout_ms~ : Int32 = 30_000,
 ) -> GitOutcome {
   let env : Map[String, String] = Map([])
   for key in ["PATH", "HOME"] {

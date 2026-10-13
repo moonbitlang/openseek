@@ -58,7 +58,7 @@ fn nearest_seq(want : Double) -> @dom.Element? {
 /// Retry after rendering until a visible anchor exists, including when a
 /// filtered view has only a following anchor for the requested sequence.
 fn restore_scroll_to_hash_seq() -> Unit {
-  fn attempt(tries : Int) -> Unit {
+  fn attempt(tries : Int32) -> Unit {
     guard hash_param("seq") is Some(value) else { return }
     let want = decimal_prefix(value)
     if want.is_nan() || want.is_inf() {
@@ -197,7 +197,7 @@ fn install_position_tracker() -> Unit {
 }
 
 ///|
-fn scroll_to_card_from_viewport(selector : String, direction : Int) -> Unit {
+fn scroll_to_card_from_viewport(selector : String, direction : Int32) -> Unit {
   let elements = visible_elements(selector)
   guard elements.get(0) is Some(first) && elements.last() is Some(last) else {
     return

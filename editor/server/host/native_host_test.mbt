@@ -142,11 +142,14 @@ async test "native host polling watch emits changed and deleted" {
       task => group.spawn_bg(task, no_wait=true, allow_failure=true),
     )
     @async.sleep(30)
+    // Publish one change atomically: an in-place truncate followed by a write
+    // can legitimately produce two Changed events before the later deletion.
     @fs.write_file(
-      "\{root}/watched.mbt",
+      "\{root}/replacement.mbt",
       "pub fn watched { 2 }\n",
       create_mode=CreateOrTruncate,
     )
+    @fs.rename("\{root}/replacement.mbt", "\{root}/watched.mbt")
     wait_for_events(events, 1)
     @fs.remove("\{root}/watched.mbt")
     wait_for_events(events, 2)
@@ -159,7 +162,7 @@ async test "native host polling watch emits changed and deleted" {
 ///|
 async fn wait_for_events(
   events : Array[@workspace.FileChangeType],
-  count : Int,
+  count : Int32,
 ) -> Unit {
   let mut remaining = 50
   while events.length() < count && remaining > 0 {

@@ -20,8 +20,8 @@ let builtin_language_ids : Array[String] = [
 /// the built-in languages; `register` extends it.
 struct LanguageIdCodec {
   language_id_to_language : Array[String]
-  language_to_language_id : Map[String, Int]
-  mut next_language_id : Int
+  language_to_language_id : Map[String, Int32]
+  mut next_language_id : Int32
 }
 
 ///|
@@ -58,7 +58,7 @@ pub let language_id_codec : LanguageIdCodec = LanguageIdCodec()
 pub fn LanguageIdCodec::register(
   self : LanguageIdCodec,
   language : String,
-) -> Int {
+) -> Int32 {
   match self.language_to_language_id.get(language) {
     Some(id) => id
     None => {
@@ -77,7 +77,7 @@ pub fn LanguageIdCodec::register(
 pub fn LanguageIdCodec::encode_language_id(
   self : LanguageIdCodec,
   language : String,
-) -> Int {
+) -> Int32 {
   self.language_to_language_id.get(language).unwrap_or(0)
 }
 

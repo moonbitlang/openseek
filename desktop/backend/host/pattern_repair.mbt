@@ -1,16 +1,17 @@
 ///|
 /// Bound the complete Host Agent run, including setup, provider retries, and
 /// candidate submission.
-const PatternRepairWallTimeoutSeconds : Int = 120
+const PatternRepairWallTimeoutSeconds : Int32 = 120
 
 ///|
-const PatternRepairWallTimeoutMs : Int = PatternRepairWallTimeoutSeconds * 1000
+const PatternRepairWallTimeoutMs : Int32 = PatternRepairWallTimeoutSeconds *
+  1000
 
 ///|
-const PatternRepairTraceMaxItems : Int = 16
+const PatternRepairTraceMaxItems : Int32 = 16
 
 ///|
-const PatternRepairTraceMaxItemUnits : Int = 240
+const PatternRepairTraceMaxItemUnits : Int32 = 240
 
 ///|
 const PatternRepairTraceOmitted : String = "Earlier events omitted"
@@ -22,7 +23,7 @@ const PatternRepairSessionId : String = "pattern-repair"
 ///|
 priv enum PatternRepairProcessOutcome {
   /// The child exited with this code and this stderr.
-  Finished(Int, String)
+  Finished(Int32, String)
   TimedOut
 }
 

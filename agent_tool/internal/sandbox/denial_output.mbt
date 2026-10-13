@@ -74,7 +74,7 @@ fn source_write_denied_in_text(
       // (`./repo/`, `/x/repo/`); any word character means the match sits
       // inside a longer component (`notrepo/`, `not.repo/`).
       let before = line[at - 1]
-      if !(before is ('a'..='z' | 'A'..='Z' | '0'..='9' | '_' | '-' | '.')) {
+      if !(before is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '_' | '-' | '.')) {
         return true
       }
       from = at + needle.length()

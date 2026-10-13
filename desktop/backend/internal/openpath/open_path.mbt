@@ -16,7 +16,7 @@ pub const MaxEditorFileBytes = 1048576
 /// embedded media makes the package larger than one megabyte.
 // Keep the decoded package below the 32 MiB remote JSON frame limit after
 // base64 expansion and JSON overhead.
-pub const MaxOfficeFileBytes : Int = 20 * 1024 * 1024
+pub const MaxOfficeFileBytes : Int32 = 20 * 1024 * 1024
 
 ///|
 /// One literal path surfaced by the agent and clicked by the user.
@@ -27,7 +27,7 @@ pub(all) struct Reference(String) derive(Debug, Eq)
 pub(all) enum Resolution {
   // UTF-8 text within the viewer's size limit.
   // Position is absent for an ordinary path and a real filename with a suffix.
-  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
+  EditorPath(path~ : String, line~ : Int32?, column~ : Int32?)
   // A supported raster image, identified by its header independently
   // of the text viewer size limit.
   BrowserPath(String)
@@ -40,16 +40,16 @@ pub(all) enum Resolution {
 ///|
 priv struct EditorCandidate {
   path : String
-  line : Int
-  column : Int?
+  line : Int32
+  column : Int32?
 }
 
 ///|
 /// One existing literal or suffix-free path and its optional editor position.
 priv struct ExistingPath {
   path : String
-  line : Int?
-  column : Int?
+  line : Int32?
+  column : Int32?
 }
 
 ///|

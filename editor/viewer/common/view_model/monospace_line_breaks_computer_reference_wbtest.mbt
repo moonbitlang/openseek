@@ -16,8 +16,8 @@
 /// Runs one line through the batch computer (`createLineBreaksComputer` →
 /// `addRequest` → `finalize`).
 fn compute_line_breaks(
-  wrapping_column : Int,
-  tab_size~ : Int,
+  wrapping_column : Int32,
+  tab_size~ : Int32,
   wrapping_indent~ : @editor_api.WrappingIndent,
   line_text : String,
 ) -> ModelLineProjectionData? {
@@ -35,7 +35,9 @@ fn compute_line_breaks(
 /// `(start_offset, end_offset, wrapped_text_indent_length)` per view-line
 /// segment — the break boundaries plus the indent applied to each segment
 /// (`0` for the first, the model line's indent for continuations).
-fn segment_breaks(data : ModelLineProjectionData?) -> Array[(Int, Int, Int)] {
+fn segment_breaks(
+  data : ModelLineProjectionData?,
+) -> Array[(Int32, Int32, Int32)] {
   data.unwrap().segments.map(s => {
     (s.start_offset, s.end_offset, s.wrapped_text_indent_length)
   })
@@ -43,8 +45,8 @@ fn segment_breaks(data : ModelLineProjectionData?) -> Array[(Int, Int, Int)] {
 
 ///|
 fn assert_segment_breaks(
-  actual : Array[(Int, Int, Int)],
-  expected : Array[(Int, Int, Int)],
+  actual : Array[(Int32, Int32, Int32)],
+  expected : Array[(Int32, Int32, Int32)],
 ) -> Unit raise {
   assert_eq(actual.length(), expected.length())
   for i in 0..<expected.length() {

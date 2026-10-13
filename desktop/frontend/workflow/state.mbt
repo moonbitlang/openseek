@@ -28,9 +28,9 @@ pub(all) struct Entry {
   label : String
   phase : String?
   status : String
-  steps : Int
-  prompt_tokens : Int
-  completion_tokens : Int
+  steps : Int32
+  prompt_tokens : Int32
+  completion_tokens : Int32
   cost_usd : Double?
   unaccounted : String?
   /// Milliseconds since the epoch.
@@ -50,13 +50,13 @@ pub(all) struct Row {
   /// The child's session id, `<parent>-sr-N`: what the sidebar folds under
   /// the parent and what a click opens.
   child : String
-  ordinal : Int
+  ordinal : Int32
   kind : String
   label : String
   phase : String?
   status : String?
-  steps : Int
-  tokens : Int
+  steps : Int32
+  tokens : Int32
   cost_usd : Double?
   /// Why `steps` and `tokens` may fall short of what the child spent;
   /// `None` when they are its own account. Unknown spend is not zero spend.
@@ -78,8 +78,8 @@ pub extend Row with @debug.Debug::{to_repr}
 pub(all) struct Run {
   id : String
   session : String
-  first_child : Int
-  child_count : Int
+  first_child : Int32
+  child_count : Int32
   closed : Bool
   rows : Array[Row]
 } derive(Eq, @debug.Debug)
@@ -92,7 +92,7 @@ pub extend Run with @debug.Debug::{to_repr}
 
 ///|
 /// The ordinal in a sub-run id (`sr-7` → 7), or `None` for any other shape.
-fn ordinal_of(id : String) -> Int? {
+fn ordinal_of(id : String) -> Int32? {
   guard id.has_prefix("sr-") else { return None }
   let digits = id.view(start_offset=3)
   // Bounded as `@protocol.split_child_session_id` bounds it: nine digits,
@@ -121,7 +121,7 @@ fn ordinal_of(id : String) -> Int? {
 /// announced block (so nothing outside a run ever wears its ordinals). The
 /// synthesized bracket carries `sr-N` and no run id; carrying one would let
 /// this be explicit, and is the natural next protocol change.
-fn Run::owns(self : Run, ordinal : Int) -> Bool {
+fn Run::owns(self : Run, ordinal : Int32) -> Bool {
   ordinal >= self.first_child && ordinal < self.first_child + self.child_count
 }
 
@@ -133,8 +133,8 @@ pub fn opened(
   runs : Array[Run],
   id~ : String,
   session~ : String,
-  first_child~ : Int,
-  child_count~ : Int,
+  first_child~ : Int32,
+  child_count~ : Int32,
 ) -> Array[Run] {
   match runs.search_by(run => run.id == id) {
     Some(index) => {
@@ -219,8 +219,8 @@ pub fn child_closed(
   runs : Array[Run],
   id~ : String,
   status~ : String,
-  steps~ : Int,
-  tokens~ : Int,
+  steps~ : Int32,
+  tokens~ : Int32,
   unaccounted? : String,
 ) -> Array[Run] {
   guard ordinal_of(id) is Some(ordinal) else { return runs }
@@ -347,21 +347,21 @@ pub fn Run::ordered_rows(self : Run) -> Array[Row] {
 
 ///|
 /// How many of a run's children are still running.
-pub fn Run::running(self : Run) -> Int {
+pub fn Run::running(self : Run) -> Int32 {
   self.rows.filter(row => row.status is None).length()
 }
 
 ///|
 /// Total tokens across the run's resolved children. A floor, not the run's
 /// spend, when `unaccounted` counts any child.
-pub fn Run::tokens(self : Run) -> Int {
+pub fn Run::tokens(self : Run) -> Int32 {
   self.rows.fold(init=0, (sum, row) => sum + row.tokens)
 }
 
 ///|
 /// How many of the run's children spent an amount nobody could account for,
 /// so the totals leave them out.
-pub fn Run::unaccounted(self : Run) -> Int {
+pub fn Run::unaccounted(self : Run) -> Int32 {
   self.rows.filter(row => row.unaccounted is Some(_)).length()
 }
 
@@ -382,7 +382,7 @@ pub fn Run::cost_usd(self : Run) -> Double? {
 /// the finish was lost — and is shown as unresolved rather than pulsing
 /// forever; a run's close is the last word its brackets will say.
 pub fn row_status(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   row : Row,
   closed~ : Bool,
 ) -> (String, String) {

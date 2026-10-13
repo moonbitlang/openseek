@@ -5,12 +5,12 @@ priv enum RequestPhase {
   ResponseHeaders
   ResponseBody
   Sse(SseProgress)
-  Decode(event_count~ : Int, last_event_at~ : Int64?)
+  Decode(event_count~ : Int32, last_event_at~ : Int64?)
 }
 
 ///|
 priv struct SseProgress {
-  mut event_count : Int
+  mut event_count : Int32
   mut last_event_at : Int64?
   mut buffered_data : Bool
 }
@@ -27,9 +27,9 @@ priv enum RetryStopReason {
 /// elapsed clock spans all attempts and backoff. Never retain request contents.
 priv struct RequestProgress {
   started_at : Int64
-  mut attempts : Int
+  mut attempts : Int32
   mut phase : RequestPhase
-  mut http_status : Int?
+  mut http_status : Int32?
   mut stop_reason : RetryStopReason
 }
 

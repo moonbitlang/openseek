@@ -264,11 +264,11 @@ async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit 
 /// announcement).
 pub fn ApiState::ApiState(
   engine~ : String,
-  codex? : @codex.CodexSettings = @codex.CodexSettings::default(),
+  codex~ : @codex.CodexSettings = @codex.CodexSettings::default(),
   runtime_dir? : @pathx.Path,
   executable? : String,
   auth? : @auth.AuthStore,
-  app_version? : String = "development",
+  app_version~ : String = "development",
   console_url? : String,
   resources? : @resources.Resources,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
@@ -388,6 +388,7 @@ pub fn endpoints(
       ignore(
         state.codex.respond(
           request_id=payload.request_id,
+          response_token=payload.response_token,
           result=payload.result,
         ),
       )

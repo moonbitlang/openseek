@@ -51,7 +51,7 @@ test "MarkerDecorationsHandle preserves model leases and change events" {
   let model = @model.TextModel(
     uri, "handle-decorations.mbt", "moonbit", 1, "rev", "diagnostic text",
   )
-  let changed : Array[Int] = []
+  let changed : Array[Int32] = []
   let subscription = handle.on_did_change_marker_decorations(changed_model => {
     changed.push(changed_model.identity())
   })

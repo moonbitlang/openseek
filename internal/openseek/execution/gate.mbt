@@ -4,7 +4,7 @@
 /// audit steps run several seconds each (and slow as the child's context
 /// grows), so the clock must comfortably cover a full step allowance —
 /// dying by deadline instead of ceiling reports nothing either way.
-const GateDeadlineMs : Int = 900_000
+const GateDeadlineMs : Int32 = 900_000
 
 ///|
 /// Parse-and-validate the audit child's report line — the same contract the
@@ -71,7 +71,7 @@ pub fn build_goal_met_gate(
   model~ : @deepseek.Model,
   api_url~ : String?,
   workspace_root~ : String,
-  review_deadline_ms? : Int = GateDeadlineMs,
+  review_deadline_ms~ : Int32 = GateDeadlineMs,
   child_session? : @agent_subrun.ChildSession,
 ) -> async (String, @agent_session.GoalBaseline?) -> String? {
   let (self_exe, launch_prefix) = @setup.workflow_launch(self_exe)

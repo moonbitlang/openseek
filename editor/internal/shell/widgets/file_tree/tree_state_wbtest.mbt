@@ -286,7 +286,7 @@ test "reveal of targets outside the tree is unreachable" {
 struct MemoryTreeProvider {
   root_uri : @base_common.Uri
   directories : Map[String, Array[@workspace.WorkspaceStat]]
-  resolve_counts : Map[String, Int]
+  resolve_counts : Map[String, Int32]
 }
 
 ///|

@@ -4,7 +4,7 @@
 ///|
 fn item(
   kind : @transcript.ItemKind,
-  sequence? : Int,
+  sequence? : Int32,
 ) -> @transcript.TranscriptItem {
   { kind, ts: None, sequence, }
 }
@@ -14,7 +14,7 @@ fn item(
 fn response(
   reasoning? : String,
   prose? : String,
-  calls? : Array[@transcript.ToolCall] = [],
+  calls~ : Array[@transcript.ToolCall] = [],
 ) -> @transcript.ItemKind {
   Assistant(reasoning~, prose~, calls~, replay=false, finished=false)
 }

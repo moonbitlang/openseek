@@ -166,7 +166,7 @@ fn flush_text(parts : Array[MarkdownPart], pending : Array[String]) -> Unit {
 }
 
 ///|
-fn join_lines(lines : Array[String], start : Int, end : Int) -> String {
+fn join_lines(lines : Array[String], start : Int32, end : Int32) -> String {
   let result : Array[String] = []
   for index = start; index < end; index = index + 1 {
     result.push(lines[index])
@@ -176,7 +176,7 @@ fn join_lines(lines : Array[String], start : Int, end : Int) -> String {
 
 ///|
 /// Return the opening backtick count for an exact `openseek-file` fence.
-fn opening_fence(line : String) -> Int? {
+fn opening_fence(line : String) -> Int32? {
   let candidate = line.trim_start()
   guard candidate.length() >= FenceLanguage.length() + 3 else { return None }
   guard candidate.has_prefix("```") else { return None }
@@ -191,7 +191,11 @@ fn opening_fence(line : String) -> Int? {
 }
 
 ///|
-fn closing_fence(lines : Array[String], start : Int, minimum : Int) -> Int? {
+fn closing_fence(
+  lines : Array[String],
+  start : Int32,
+  minimum : Int32,
+) -> Int32? {
   for index = start; index < lines.length(); index = index + 1 {
     let candidate = lines[index].trim()
     if candidate.length() >= minimum && candidate.has_prefix("```") {

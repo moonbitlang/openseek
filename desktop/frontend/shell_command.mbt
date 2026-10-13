@@ -80,7 +80,7 @@ fn run_shell_command(
   session : String,
   id : String,
   command : String,
-  attempt : Int,
+  attempt : Int32,
 ) -> (@cmd.Cmd, Model) {
   // The tab belongs to the command's conversation, which need not be the one
   // on screen by now: project that conversation, as a send does.
@@ -175,7 +175,7 @@ fn shell_command_finished(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   shell : String,
-  exit_code : Int?,
+  exit_code : Int32?,
   output : String,
   truncated : Bool,
 ) -> (@cmd.Cmd, Model) {
@@ -228,7 +228,11 @@ fn send_shell_result(
     // The draft now holds the result, so it is no longer the edit of a queued
     // message: saving it must not rewrite that message, and the reply to an
     // edit already in flight must not clear it.
-    queue_edit_id: None,
+    queue_edit: match conv.queue_edit {
+      Some(Saving(id~, run_id~, ..) | SavingDetached(id~, run_id~)) =>
+        Some(SavingDetached(id~, run_id~))
+      Some(Editing(..)) | None => None
+    },
   }
   guard model.focused == conv.device else {
     return (@cmd.none, model.replace_conversation(held))
@@ -241,7 +245,7 @@ fn send_shell_result(
       images: [],
       composer_draft_present: true,
       // The result is a new message, never an edit of a queued one.
-      queue_edit_id: None,
+      queue_edit: None,
     }),
     active_session: conv.session_id,
   }
@@ -270,7 +274,7 @@ fn send_shell_result(
       mentions: conv.mentions,
       images: conv.images,
       composer_draft_present: conv.composer_draft_present,
-      queue_edit_id: conv.queue_edit_id,
+      queue_edit: conv.queue_edit,
     }
   }
   (cmd, sent.replace_conversation(after))

@@ -1,7 +1,7 @@
 ///|
 /// Default step budget for one code review: the `review` kind's ceiling for a
 /// `base` input when neither `--max-steps` nor the request sets one.
-pub let default_review_max_steps : Int = 120
+pub let default_review_max_steps : Int32 = 120
 
 ///|
 /// Run a code review of the changes between `base` and HEAD IN THIS PROCESS
@@ -22,13 +22,13 @@ pub async fn run_review(
   base~ : String,
   api_key~ : String,
   model~ : @deepseek.Model,
-  max_steps~ : Int,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  workspace_root? : String = ".",
-  session_id? : String = "review",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  workspace_root~ : String = ".",
+  session_id~ : String = "review",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ReviewReport? {

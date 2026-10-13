@@ -1,5 +1,5 @@
 ///|
-const InputByteLimit : Int = 4 * 1024 * 1024
+const InputByteLimit : Int32 = 4 * 1024 * 1024
 
 ///|
 const InputChunkLimit = 4096
@@ -8,7 +8,7 @@ const InputChunkLimit = 4096
 priv struct InputChunk {
   data : String
   binary : Bool
-  bytes : Int
+  bytes : Int32
 } derive(Eq)
 
 ///|
@@ -35,7 +35,7 @@ priv enum InputPause {
 /// tab generation and is discarded with it, never replayed after reconnect.
 priv struct InputQueue {
   pending : Array[InputChunk]
-  pending_bytes : Int
+  pending_bytes : Int32
   active : InputBatch?
   failure : InputPause?
 } derive(Eq)

@@ -16,8 +16,8 @@ pub struct CodeEditorRenderedLines {
   margin_dom_node : @rdom.Element
   height_in_px : Double
   min_width_in_px : Double
-  view_line_count : Int
-  model_line_view_counts : Array[Int]
+  view_line_count : Int32
+  model_line_view_counts : Array[Int32]
 }
 
 ///|
@@ -51,14 +51,14 @@ pub fn CodeEditorRenderedLines::min_width_in_px(
 ///|
 pub fn CodeEditorRenderedLines::view_line_count(
   self : CodeEditorRenderedLines,
-) -> Int {
+) -> Int32 {
   self.view_line_count
 }
 
 ///|
 pub fn CodeEditorRenderedLines::model_line_view_counts(
   self : CodeEditorRenderedLines,
-) -> Array[Int] {
+) -> Array[Int32] {
   self.model_line_view_counts.copy()
 }
 
@@ -66,9 +66,9 @@ pub fn CodeEditorRenderedLines::model_line_view_counts(
 fn detached_line_decorations(
   decorations : Array[CodeEditorRenderLinesDecoration],
   converter : @view_model.CoordinatesConverter,
-  view_line_number : Int,
-  min_column : Int,
-  max_column : Int,
+  view_line_number : Int32,
+  min_column : Int32,
+  max_column : Int32,
 ) -> Array[@view_layout.LineDecoration] {
   let result : Array[@view_layout.LineDecoration] = []
   for decoration in decorations {
@@ -148,8 +148,8 @@ fn detached_margin_line_class(extra : String) -> String {
 ///|
 fn stabilize_render_lines_tokens(
   model : @model.TextModel,
-  start_line_number : Int,
-  end_line_number_exclusive : Int,
+  start_line_number : Int32,
+  end_line_number_exclusive : Int32,
 ) -> Unit {
   let attached = model.on_before_attached()
   attached.set_visible_lines(
@@ -164,16 +164,16 @@ priv struct DetachedRenderedLineWindow {
   content_html : String
   margin_html : String
   max_content_width : Double
-  model_line_numbers : Array[Int]
+  model_line_numbers : Array[Int32]
 }
 
 ///|
 fn render_detached_view_line_window(
   detached_view_model : @view_model.ViewModel,
   configuration : EditorConfigurationSnapshot,
-  range_view_start : Int,
-  window_view_start : Int,
-  window_view_end_exclusive : Int,
+  range_view_start : Int32,
+  window_view_start : Int32,
+  window_view_end_exclusive : Int32,
   decorations : Array[CodeEditorRenderLinesDecoration],
   line_class_name : String,
   margin_line_class_name : String,
@@ -183,7 +183,7 @@ fn render_detached_view_line_window(
   let line_height = configuration.font_info.line_height
   let content_html = StringBuilder()
   let margin_html = StringBuilder()
-  let model_line_numbers : Array[Int] = []
+  let model_line_numbers : Array[Int32] = []
   let line_class = @base_common.escape_html(
     detached_line_class(line_class_name),
   )
@@ -255,10 +255,10 @@ pub fn CodeEditorWidget::render_lines(
   self : CodeEditorWidget,
   source_model : @model.TextModel,
   line_range : @base_common.LineRange,
-  decorations? : Array[CodeEditorRenderLinesDecoration] = [],
-  line_class_name? : String = "",
-  margin_line_class_name? : String = "",
-  render_margin_line_numbers? : Bool = true,
+  decorations~ : Array[CodeEditorRenderLinesDecoration] = [],
+  line_class_name~ : String = "",
+  margin_line_class_name~ : String = "",
+  render_margin_line_numbers~ : Bool = true,
 ) -> CodeEditorRenderedLines? {
   if self.disposed {
     return None

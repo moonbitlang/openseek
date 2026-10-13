@@ -64,7 +64,7 @@ fn review_update(
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
-  current? : @github.State = current_pr(),
+  current~ : @github.State = current_pr(),
 ) -> (@cmd.Cmd, State) {
   update(emit, msg, state, current~)
 }
@@ -290,10 +290,10 @@ test "old-revision drafts remain local and cannot silently attach to the current
   assert_false(next.busy)
   assert_true(next.drafts == [draft])
   assert_true(next.mutation_error is Some(EarlierRevision))
-  let encoded = [
+  let encoded = Json([
     draft,
     { target: Thread(thread="thread-id", comment="9000000001"), body: "reply", },
-  ].to_json()
+  ])
   let restored : Array[GithubDraft] = @json.from_json(encoded)
   assert_true(restored[0] == draft)
   assert_true(restored[1].target is Thread(comment="9000000001", ..))

@@ -12,7 +12,7 @@ struct ValidationProbeSpec {
   stdin : String
   write_file : String
   write_content : String
-  expect_exit : Int
+  expect_exit : Int32
   output_contains : String
   stdout_contains : String
   stderr_contains : String
@@ -27,14 +27,14 @@ pub extend ValidationProbeSpec with ToJson::{to_json}
 fn ValidationProbeSpec::ValidationProbeSpec(
   name~ : String,
   command~ : Array[String],
-  stdin? : String = "",
-  write_file? : String = "",
-  write_content? : String = "",
-  expect_exit? : Int = 0,
-  output_contains? : String = "",
-  stdout_contains? : String = "",
-  stderr_contains? : String = "",
-  stdout_json? : Bool = false,
+  stdin~ : String = "",
+  write_file~ : String = "",
+  write_content~ : String = "",
+  expect_exit~ : Int32 = 0,
+  output_contains~ : String = "",
+  stdout_contains~ : String = "",
+  stderr_contains~ : String = "",
+  stdout_json~ : Bool = false,
 ) -> ValidationProbeSpec {
   {
     name,
@@ -55,23 +55,23 @@ fn ValidationProbeSpec::ValidationProbeSpec(
 /// fields once; analyzers can replay report generation from them without
 /// rerunning the agent.
 priv struct TrialArtifact {
-  index : Int
+  index : Int32
   workspace : String
   log_path : String
   session_id : String
   events_path : String
-  exit_code : Int
+  exit_code : Int32
 } derive(ToJson)
 
 ///|
 /// Build a trial artifact entry for a completed prompt-task experiment trial.
 fn TrialArtifact::TrialArtifact(
-  index~ : Int,
+  index~ : Int32,
   workspace~ : String,
   log_path~ : String,
   session_id~ : String,
   events_path~ : String,
-  exit_code~ : Int,
+  exit_code~ : Int32,
 ) -> TrialArtifact {
   { index, workspace, log_path, session_id, events_path, exit_code, }
 }
@@ -83,10 +83,10 @@ pub struct RunManifest {
   priv problem_id : String
   priv prompt_label : String
   priv task_file : String
-  priv runs : Int
-  priv concurrency : Int
-  priv min_successes : Int
-  priv max_steps : Int
+  priv runs : Int32
+  priv concurrency : Int32
+  priv min_successes : Int32
+  priv max_steps : Int32
   out_dir : String
   priv validation_probes : Array[ValidationProbeSpec]
   priv trials : Array[TrialArtifact]
@@ -102,10 +102,10 @@ fn RunManifest::RunManifest(
   problem_id~ : String,
   prompt_label~ : String,
   task_file~ : String,
-  runs~ : Int,
-  concurrency~ : Int,
-  min_successes~ : Int,
-  max_steps~ : Int,
+  runs~ : Int32,
+  concurrency~ : Int32,
+  min_successes~ : Int32,
+  max_steps~ : Int32,
   out_dir~ : String,
   validation_probes~ : Array[ValidationProbeSpec],
   trials~ : Array[TrialArtifact],
@@ -256,7 +256,7 @@ fn[T] array_field(
 }
 
 ///|
-fn int_field(fields : Map[String, Json], key : String) -> Int raise {
+fn int_field(fields : Map[String, Json], key : String) -> Int32 raise {
   match fields.get(key) {
     Some(Number(value, ..)) => value.to_int()
     Some(_) => fail("\{key} must be an int")
@@ -281,8 +281,8 @@ fn string_field_default(
 fn int_field_default(
   fields : Map[String, Json],
   key : String,
-  default : Int,
-) -> Int raise {
+  default : Int32,
+) -> Int32 raise {
   match fields.get(key) {
     Some(Number(value, ..)) => value.to_int()
     Some(_) => fail("\{key} must be an int")

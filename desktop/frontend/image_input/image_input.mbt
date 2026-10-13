@@ -154,8 +154,8 @@ fn Selection::dragged(event : @dom.DragEvent) -> Unit {
 ///|
 /// Open only when this command executes in response to the user's click.
 pub fn pick(
-  locale? : @i18n.Locale = English,
-  allow_images? : Bool = true,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -172,8 +172,8 @@ pub fn pick(
 /// Event adapters are called only inside DOM callbacks, never by update/view.
 /// Capturing files is synchronous; byte reads and result delivery are commands.
 pub fn pasted(
-  locale? : @i18n.Locale = English,
-  allow_images? : Bool = true,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   event : @dom.ClipboardEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
@@ -182,8 +182,8 @@ pub fn pasted(
 
 ///|
 pub fn dropped(
-  locale? : @i18n.Locale = English,
-  allow_images? : Bool = true,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   event : @dom.DragEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
@@ -200,8 +200,8 @@ pub fn dragged(event : @dom.DragEvent) -> @cmd.Cmd {
 /// Bound allocations before reading. A failed batch adds no partial selection;
 /// previously attached images remain editable and can still be submitted.
 fn Selection::read(
-  locale? : @i18n.Locale = English,
-  allow_images? : Bool = true,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   self : Selection,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
@@ -239,8 +239,8 @@ fn Selection::read(
 
 ///|
 async fn Selection::load(
-  locale? : @i18n.Locale = English,
-  allow_images? : Bool = true,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   self : Selection,
 ) -> Event {
   for file in self.0 {

@@ -156,7 +156,7 @@ async fn execute(
   }
   let paging = page.map_or("", offset => " window_offset=\{offset}")
   let file_hint = snapshot.output_file.map_or("", path => {
-    " output_file=\{path.to_json().stringify()} output_persistent=\{snapshot.output_persistent}"
+    " output_file=\{Json(path).stringify()} output_persistent=\{snapshot.output_persistent}"
   })
   let footer = "<system>job=\{job_id} \{status_label}\{truncation}\{paging}\{binary}\{file_hint}</system>"
   // Assemble: output, then the source-write denial guidance (like the foreground
@@ -211,7 +211,7 @@ fn apply_output_rewrites(
 /// past the end. Counted in characters, the unit the footer's `total_chars`
 /// and `shown_chars` use, so the offsets a reader computes from them land
 /// where it expects.
-fn page_of(text : String, offset~ : Int, window~ : Int) -> String {
+fn page_of(text : String, offset~ : Int32, window~ : Int32) -> String {
   // `iter()` yields characters, so drop/take count characters, not code units.
   String::from_iter(text.iter().drop(offset).take(window))
 }

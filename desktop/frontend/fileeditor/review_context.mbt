@@ -135,8 +135,8 @@ fn review_context_intersects(
 fn reveal_context_in_editor(
   editor : @viewer.DiffEditor,
   selection : @mention_context.ReviewChanges,
-  old_offset : Int?,
-  new_offset : Int?,
+  old_offset : Int32?,
+  new_offset : Int32?,
 ) -> Bool {
   guard editor.is_diff_up_to_date() else { return false }
   for index, hunk in editor.get_hunks() {

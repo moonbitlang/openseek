@@ -7,10 +7,10 @@
 /// ceiling. The full reply and counts stay available; users reveal additional
 /// matching lines explicitly instead of constructing tens of thousands of
 /// nodes in one render.
-const InitialVisibleSearchLines : Int = 500
+const InitialVisibleSearchLines : Int32 = 500
 
 ///|
-const VisibleSearchLineStep : Int = 500
+const VisibleSearchLineStep : Int32 = 500
 
 ///|
 enum Phase {
@@ -59,8 +59,8 @@ struct SemanticSearchState {
 
 ///|
 struct SearchResultSummary {
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
 } derive(Eq)
 
@@ -78,15 +78,15 @@ struct Page {
   details_open : Bool
   include_glob : String
   exclude_glob : String
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
   collapsed : Map[String, Bool]
   // Copy before changing membership so earlier state snapshots stay intact.
   selected : Set[String]
-  semantic_selection_revision : Int
+  semantic_selection_revision : Int32
   semantic_filter : SemanticResultFilter
-  visible_lines : Int
+  visible_lines : Int32
   phase : Phase
   pattern_repair_phase : PatternRepairPhase
   pattern_repair_message : String?
@@ -94,8 +94,8 @@ struct Page {
   /// the active semantic pattern.
   pattern_repair_candidate : String?
   pattern_repair_trace : Array[String]
-  generation : Int
-  delay_ms : Int
+  generation : Int32
+  delay_ms : Int32
 } derive(Eq)
 
 ///|
@@ -115,7 +115,7 @@ pub fn EditorHighlights::ranges(
 ///|
 struct State {
   page : Page
-  generation : Int
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -186,15 +186,15 @@ pub(all) enum Msg {
   FixPattern
   PatternRepairFinished(
     root~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     reply~ : @protocol.PatternRepairReply?
   )
   IncludeChanged(String)
   ExcludeChanged(String)
   // Semantic-mode settings, mirroring the text-mode toggles.
-  PatternChanged(Int, String)
+  PatternChanged(Int32, String)
   AddPattern
-  RemovePattern(Int)
+  RemovePattern(Int32)
   Submit
   Refresh
   ClearResults
@@ -209,18 +209,18 @@ pub(all) enum Msg {
   RequestStarted(
     owner~ : @interop.ConversationKey,
     root~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   Loaded(
     owner~ : @interop.ConversationKey,
     root~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     reply~ : @protocol.SearchTextReply
   )
   SemanticLoaded(
     owner~ : @interop.ConversationKey,
     root~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     reply~ : @protocol.SearchSemanticReply
   )
   // One partial batch of a semantic search still in flight. The Host pushes
@@ -230,15 +230,15 @@ pub(all) enum Msg {
   SemanticProgress(
     root~ : String,
     session_key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     matches~ : Array[@protocol.SemanticSearchHit],
-    match_count~ : Int,
-    file_count~ : Int
+    match_count~ : Int32,
+    file_count~ : Int32
   )
   RequestFailed(
     owner~ : @interop.ConversationKey,
     root~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     code~ : String,
     message~ : String
   )

@@ -103,7 +103,7 @@ fn flush_pending_tool_calls(
 }
 
 ///|
-fn summary_covers_event(summary_event : SessionEvent, sequence : Int) -> Bool {
+fn summary_covers_event(summary_event : SessionEvent, sequence : Int32) -> Bool {
   guard summary_event.item() is Summary(summary) else { return false }
   summary_event.sequence() > sequence &&
   summary.from_sequence() <= sequence &&

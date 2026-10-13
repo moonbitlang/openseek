@@ -107,7 +107,7 @@ test "cancel happens only once" {
 ///|
 test "cancel calls all listeners" {
   let source = @language.CancellationTokenSource()
-  let order : Array[Int] = []
+  let order : Array[Int32] = []
   let subscriptions : Array[@base_common.Disposable] = []
   source
   .token()

@@ -7,7 +7,7 @@
 /// host's workspace-relative form and `range` is one-based for editor reveal.
 pub(all) struct Symbol {
   name : String
-  kind : Int?
+  kind : Int32?
   container : String?
   path : String
   range : @common.Range
@@ -59,7 +59,7 @@ pub fn Symbol::detail(self : Symbol) -> String {
 /// Composer symbol lookups share Quick Open's 150 ms debounce pause. The
 /// timer lives inside the subscription loader, so replacing the subscription
 /// key (a new query, root, or channel) is also the debounce cancellation.
-const SearchingDebounceMs : Int = 150
+const SearchingDebounceMs : Int32 = 150
 
 ///|
 /// The extensible subscription payload. The runtime refreshes it in place on

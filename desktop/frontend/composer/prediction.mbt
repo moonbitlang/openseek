@@ -1,5 +1,5 @@
 ///|
-fn Entry::prediction_eligible(self : Entry, input : Input) -> Int? {
+fn Entry::prediction_eligible(self : Entry, input : Input) -> Int32? {
   guard self.identity() == input.identity &&
     self.draft.is_empty() &&
     self.goal_draft is None &&

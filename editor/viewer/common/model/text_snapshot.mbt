@@ -9,7 +9,7 @@
 /// Monaco.
 struct TextSnapshot {
   text : String
-  line_starts : Array[Int]
+  line_starts : Array[Int32]
 } derive(Debug)
 
 ///|
@@ -25,20 +25,20 @@ pub fn TextSnapshot::TextSnapshot(text : String) -> TextSnapshot {
 ///|
 /// Snapshot length in the repo's JavaScript-compatible UTF-16 indexing model.
 /// Mirrors `IReadonlyTextBuffer.getLength`.
-fn TextSnapshot::get_length(self : TextSnapshot) -> Int {
+fn TextSnapshot::get_length(self : TextSnapshot) -> Int32 {
   self.text.length()
 }
 
 ///|
 /// Number of logical lines, including the final empty line after a trailing
 /// newline.
-pub fn TextSnapshot::line_count(self : TextSnapshot) -> Int {
+pub fn TextSnapshot::line_count(self : TextSnapshot) -> Int32 {
   self.line_starts.length()
 }
 
 ///|
 /// Start offset for `line`, clamped into the snapshot's line range.
-fn TextSnapshot::line_start_offset(self : TextSnapshot, line : Int) -> Int {
+fn TextSnapshot::line_start_offset(self : TextSnapshot, line : Int32) -> Int32 {
   let line = line.clamp(min=0, max=self.line_count() - 1)
   self.line_starts[line]
 }
@@ -46,7 +46,7 @@ fn TextSnapshot::line_start_offset(self : TextSnapshot, line : Int) -> Int {
 ///|
 /// End offset for `line`, clamped into the snapshot's line range and excluding
 /// the stored LF line break.
-fn TextSnapshot::line_end_offset(self : TextSnapshot, line : Int) -> Int {
+fn TextSnapshot::line_end_offset(self : TextSnapshot, line : Int32) -> Int32 {
   let line = line.clamp(min=0, max=self.line_count() - 1)
   if line + 1 < self.line_count() {
     self.line_starts[line + 1] - 1
@@ -59,7 +59,7 @@ fn TextSnapshot::line_end_offset(self : TextSnapshot, line : Int) -> Int {
 /// Text of one logical line without its line break. Zero-based, part of the
 /// offset-centric internal layer (see the README parity ledger); the
 /// `IReadonlyTextBuffer` surface is `get_line_content`.
-pub fn TextSnapshot::line_text(self : TextSnapshot, line : Int) -> String {
+pub fn TextSnapshot::line_text(self : TextSnapshot, line : Int32) -> String {
   let start = self.line_start_offset(line)
   let end = self.line_end_offset(line)
   code_unit_slice(self.text, start, end)
@@ -71,7 +71,7 @@ pub fn TextSnapshot::line_text(self : TextSnapshot, line : Int) -> String {
 /// clamps where Monaco throws `Illegal value for lineNumber`).
 pub fn TextSnapshot::get_line_content(
   self : TextSnapshot,
-  line_number : Int,
+  line_number : Int32,
 ) -> String {
   self.line_text(line_number - 1)
 }
@@ -131,7 +131,7 @@ fn TextSnapshot::get_value_in_range(
 fn TextSnapshot::get_value_length_in_range(
   self : TextSnapshot,
   range : @base_common.Range,
-) -> Int {
+) -> Int32 {
   self.get_value_in_range(range).length()
 }
 
@@ -159,7 +159,7 @@ pub fn TextSnapshot::slice(
 ///|
 /// Zero-based line containing `offset`, with out-of-range offsets clamped to
 /// the snapshot.
-fn TextSnapshot::line_at_offset(self : TextSnapshot, offset : Int) -> Int {
+fn TextSnapshot::line_at_offset(self : TextSnapshot, offset : Int32) -> Int32 {
   let offset = offset.clamp(min=0, max=self.get_length())
   let mut found = 0
   for i in 0..<self.line_starts.length() {
@@ -177,7 +177,7 @@ fn TextSnapshot::line_at_offset(self : TextSnapshot, offset : Int) -> Int {
 /// `IReadonlyTextBuffer.getPositionAt`.
 fn TextSnapshot::get_position_at(
   self : TextSnapshot,
-  offset : Int,
+  offset : Int32,
 ) -> @base_common.Position {
   let offset = offset.clamp(min=0, max=self.get_length())
   let line = self.line_at_offset(offset)
@@ -216,9 +216,9 @@ pub fn TextSnapshot::offset_range_of(
 /// form is `TextModel::get_offset_at`).
 pub fn TextSnapshot::get_offset_at(
   self : TextSnapshot,
-  line_number : Int,
-  column : Int,
-) -> Int {
+  line_number : Int32,
+  column : Int32,
+) -> Int32 {
   let line = (line_number - 1).clamp(min=0, max=self.line_count() - 1)
   let start = self.line_start_offset(line)
   let end = self.line_end_offset(line)
@@ -228,7 +228,7 @@ pub fn TextSnapshot::get_offset_at(
 ///|
 /// Length, in UTF-16 code units, of `line`'s content (1-based, EOL excluded).
 /// Mirrors `IReadonlyTextBuffer.getLineLength`.
-fn TextSnapshot::get_line_length(self : TextSnapshot, line : Int) -> Int {
+fn TextSnapshot::get_line_length(self : TextSnapshot, line : Int32) -> Int32 {
   self.line_text(line - 1).length()
 }
 
@@ -237,8 +237,8 @@ fn TextSnapshot::get_line_length(self : TextSnapshot, line : Int) -> Int {
 /// `getLineMaxColumn`.
 pub fn TextSnapshot::get_line_max_column(
   self : TextSnapshot,
-  line : Int,
-) -> Int {
+  line : Int32,
+) -> Int32 {
   self.get_line_length(line) + 1
 }
 
@@ -248,9 +248,9 @@ pub fn TextSnapshot::get_line_max_column(
 /// pinned source's terminal failure.
 fn TextSnapshot::get_line_char_code(
   self : TextSnapshot,
-  line : Int,
-  index : Int,
-) -> Int {
+  line : Int32,
+  index : Int32,
+) -> Int32 {
   let content = self.line_text(line - 1)
   if line >= 1 && line < self.line_count() && index == content.length() {
     return 10
@@ -263,8 +263,8 @@ fn TextSnapshot::get_line_char_code(
 /// line is empty/whitespace-only. Mirrors `getLineFirstNonWhitespaceColumn`.
 pub fn TextSnapshot::get_line_first_non_whitespace_column(
   self : TextSnapshot,
-  line : Int,
-) -> Int {
+  line : Int32,
+) -> Int32 {
   let result = @base_common.first_non_whitespace_index(self.line_text(line - 1))
   if result == -1 {
     0
@@ -279,8 +279,8 @@ pub fn TextSnapshot::get_line_first_non_whitespace_column(
 /// `getLineLastNonWhitespaceColumn`.
 fn TextSnapshot::get_line_last_non_whitespace_column(
   self : TextSnapshot,
-  line : Int,
-) -> Int {
+  line : Int32,
+) -> Int32 {
   let result = @base_common.last_non_whitespace_index(self.line_text(line - 1))
   if result == -1 {
     0
@@ -331,7 +331,7 @@ fn normalize_eol(text : String) -> String {
 /// scalar boundaries. Bounds are validated/clamped by each caller. Monaco's
 /// JavaScript `substring` likewise permits ranges that begin/end at either
 /// half of a surrogate pair and returns the corresponding lone code unit.
-fn code_unit_slice(text : String, start : Int, end : Int) -> String {
+fn code_unit_slice(text : String, start : Int32, end : Int32) -> String {
   text.unsafe_substring(start~, end~)
 }
 
@@ -340,7 +340,7 @@ fn code_unit_slice(text : String, start : Int, end : Int) -> String {
 /// Construction has already reduced every source EOL to LF, so only LF can
 /// create a start. The raw workspace `DocumentSnapshot` scanner intentionally
 /// remains separate on the provider side of this boundary.
-fn build_line_starts(text : String) -> Array[Int] {
+fn build_line_starts(text : String) -> Array[Int32] {
   let starts = [0]
   for i in 0..<text.length() {
     if text[i].to_int() == 10 {

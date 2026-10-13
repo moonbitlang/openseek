@@ -9,8 +9,8 @@
 /// single batch can span multiple files; all edits for a given file must be
 /// listed contiguously.
 pub fn definition(
-  workspace_root? : String = ".",
-  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  workspace_root~ : String = ".",
+  file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
@@ -237,7 +237,7 @@ priv struct PreparedWrite {
   // The file's pre-batch content, kept so the auto-revert guard can roll the
   // file back (and re-measure the baseline error count) without re-reading.
   original_content : String
-  edit_count : Int
+  edit_count : Int32
 }
 
 ///|
@@ -270,9 +270,9 @@ priv struct PreparedFile {
 async fn multi_edit_files(
   workspace_root : String,
   edits : Array[@decode.MultiEditItem],
-  revert_if_error_delta_greater_or_equal : Int?,
+  revert_if_error_delta_greater_or_equal : Int32?,
   revert_on_parse_errors~ : Bool,
-  revert_if_warning_delta_greater_or_equal~ : Int?,
+  revert_if_warning_delta_greater_or_equal~ : Int32?,
   file_state~ : @agent_tool.FileStateMap,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
@@ -393,7 +393,7 @@ async fn multi_edit_files(
         "not applied: a diagnostic guard is active, but moon check could not verify the tree (\{reason}); no files were changed",
         is_error=true,
         brief~,
-        data=batch_data("unverified", writes, { "reason": reason.to_json() }),
+        data=batch_data("unverified", writes, { "reason": Json(reason) }),
       )
     }
 
@@ -444,8 +444,8 @@ async fn multi_edit_files(
         // Only a complete restore is a rollback: with a file the restore
         // could not put back, the tree is partially modified and says so.
         data=batch_data("error", writes, {
-          "partial": (!restore_failures.is_empty()).to_json(),
-          "rolled_back": restore_failures.is_empty().to_json(),
+          "partial": Json(!restore_failures.is_empty()),
+          "rolled_back": Json(restore_failures.is_empty()),
           "restore_failures": string_array(restore_failures),
         }),
       )
@@ -525,14 +525,14 @@ async fn multi_edit_files(
 ///|
 /// How many offending files a batch reject report details in full; the rest
 /// are named in a summary line so a wide batch cannot flood the transcript.
-const RejectedFileDisplayLimit : Int = 3
+const RejectedFileDisplayLimit : Int32 = 3
 
 ///|
 /// One file the parse gate rejected: how many new parse errors the batch
 /// would introduce there, and the formatted excerpts.
 priv struct FileRejection {
   path : String
-  introduced : Int
+  introduced : Int32
   truncated : Bool
   section : String
   errors : Array[@auto_check.ParseGateError]
@@ -610,23 +610,20 @@ async fn parse_gate_batch_rejection(
       is_error=true,
       brief="multi_edit rejected (\{bound}\{total} parse error(s))",
       data=batch_data("rejected", writes, {
-        "introduced": total.to_json(),
+        "introduced": Json(total),
         "parse_errors": Json::array(
           [
             for rejection in rejections => {
               {
-                "path": rejection.path.to_json(),
-                "introduced": rejection.introduced.to_json(),
+                "path": Json(rejection.path),
+                "introduced": Json(rejection.introduced),
                 "errors": Json::array(
                   [
                     for
                       error in rejection.errors[:rejection.errors
                       .length()
                       .min(IntroducedDisplayLimit)] => {
-                      {
-                        "loc": error.loc.to_json(),
-                        "message": error.message.to_json(),
-                      }
+                      { "loc": Json(error.loc), "message": Json(error.message) }
                     }
                   ],
                 ),
@@ -644,7 +641,7 @@ async fn parse_gate_batch_rejection(
 /// would-be content (capped), and how to retry.
 fn batch_reject_report(
   rejections : Array[FileRejection],
-  total~ : Int,
+  total~ : Int32,
   any_truncated~ : Bool,
 ) -> String {
   let total_label = if any_truncated { "at least \{total}" } else { "\{total}" }
@@ -667,9 +664,9 @@ fn batch_reject_report(
 async fn revert_guarded_response(
   check_paths : Array[String],
   writes : Array[PreparedWrite],
-  threshold : Int,
+  threshold : Int32,
   baseline : Baseline?,
-  warnings_guard~ : Int?,
+  warnings_guard~ : Int32?,
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.ToolAction {
   guard baseline is Some(before) else {
@@ -750,8 +747,8 @@ async fn revert_guarded_response(
   }
   let extra : Map[String, Json] = {
     "check": measured.first.to_json(),
-    "threshold": threshold.to_json(),
-    "error_delta": error_delta.to_json(),
+    "threshold": Json(threshold),
+    "error_delta": Json(error_delta),
     "baseline": baseline_json(before.first),
   }
   for key, value in counts {
@@ -895,7 +892,7 @@ const TruncatedCapture : String = "moon check hid some diagnostic sites behind i
 
 ///|
 /// How many introduced sites a warning revert lists, in text and data.
-const IntroducedDisplayLimit : Int = 20
+const IntroducedDisplayLimit : Int32 = 20
 
 ///|
 /// The batch is on disk but its post-batch check could not be trusted: roll
@@ -923,8 +920,8 @@ async fn reverted_unverified(
 fn reverted_by_errors(
   writes : Array[PreparedWrite],
   after : @auto_check.CheckErrors,
-  introduced~ : Int,
-  threshold~ : Int,
+  introduced~ : Int32,
+  threshold~ : Int32,
   restore_failures~ : Array[String],
   evidence~ : @diagnostic_guard.Comparability,
   counts~ : Map[String, Json],
@@ -932,8 +929,8 @@ fn reverted_by_errors(
   let extra : Map[String, Json] = {
     "reason": "error_delta",
     "check": after.to_json(),
-    "introduced_errors": introduced.to_json(),
-    "threshold": threshold.to_json(),
+    "introduced_errors": Json(introduced),
+    "threshold": Json(threshold),
     "restore_failures": string_array(restore_failures),
   }
   for key, value in counts {
@@ -967,7 +964,7 @@ fn reverted_by_warnings(
   after : @auto_check.CheckErrors,
   delta : @auto_check.Introduced,
   removed : @auto_check.Introduced,
-  limit~ : Int,
+  limit~ : Int32,
   restore_failures~ : Array[String],
 ) -> @agent_tool.ToolAction {
   let before = baseline.all
@@ -1001,7 +998,7 @@ fn reverted_by_warnings(
       "baseline_all": baseline_json(before),
       "introduced_count": counts["introduced_count"],
       "removed_count": counts["removed_count"],
-      "reach_caveat": reach_caveat.to_json(),
+      "reach_caveat": Json(reach_caveat),
       "introduced": {
         "errors": [],
         "warnings": Json::array([ for site in shown => site.to_json() ]),
@@ -1021,12 +1018,12 @@ fn delta_json(
 ) -> Map[String, Json] {
   {
     "introduced_count": {
-      "errors": introduced.errors.length().to_json(),
-      "warnings": introduced.warnings.length().to_json(),
+      "errors": Json(introduced.errors.length()),
+      "warnings": Json(introduced.warnings.length()),
     },
     "removed_count": {
-      "errors": removed.errors.length().to_json(),
-      "warnings": removed.warnings.length().to_json(),
+      "errors": Json(removed.errors.length()),
+      "warnings": Json(removed.warnings.length()),
     },
   }
 }
@@ -1049,15 +1046,15 @@ fn batch_data(
   extra : Map[String, Json],
 ) -> Json {
   let fields : Map[String, Json] = {
-    "outcome": outcome.to_json(),
+    "outcome": Json(outcome),
     "files": Json::array(
       [
         for write in writes => {
-          { "path": write.path.to_json(), "edits": write.edit_count.to_json() }
+          { "path": Json(write.path), "edits": Json(write.edit_count) }
         }
       ],
     ),
-    "edit_count": total_edit_count(writes).to_json(),
+    "edit_count": Json(total_edit_count(writes)),
   }
   for key, value in extra {
     fields[key] = value
@@ -1074,15 +1071,15 @@ fn failures_data(failures : Array[EditFailure]) -> Json {
     "failures": Json::array(
       [
         for failure in failures => {
-          let fields : Map[String, Json] = { "file": failure.file.to_json() }
+          let fields : Map[String, Json] = { "file": Json(failure.file) }
           if failure.index is Some(index) {
-            fields["index"] = index.to_json()
+            fields["index"] = Json(index)
           }
           // A file-level problem (unreadable, write-guarded) has no range.
           if failure.range != "" {
-            fields["range"] = failure.range.to_json()
+            fields["range"] = Json(failure.range)
           }
-          fields["message"] = failure.message.to_json()
+          fields["message"] = Json(failure.message)
           Json::object(fields)
         }
       ],
@@ -1092,14 +1089,14 @@ fn failures_data(failures : Array[EditFailure]) -> Json {
 
 ///|
 fn string_array(items : Array[String]) -> Json {
-  Json::array([ for item in items => item.to_json() ])
+  Json::array([ for item in items => Json(item) ])
 }
 
 ///|
 fn baseline_json(before : @auto_check.CheckErrors) -> Json {
   {
-    "error_count": before.error_count.to_json(),
-    "warning_count": before.warning_count.to_json(),
+    "error_count": Json(before.error_count),
+    "warning_count": Json(before.warning_count),
   }
 }
 
@@ -1137,8 +1134,8 @@ async fn restore_files(
 fn keep_response(
   summary : String,
   after : @auto_check.CheckErrors,
-  threshold : Int,
-  error_delta~ : Int,
+  threshold : Int32,
+  error_delta~ : Int32,
 ) -> String {
   if after.error_count == 0 {
     return "\{summary}\nmoon check: ok — 0 errors, \{after.warning_count} warning(s)"
@@ -1160,8 +1157,8 @@ fn keep_response(
 fn revert_report(
   writes : Array[PreparedWrite],
   after : @auto_check.CheckErrors,
-  introduced~ : Int,
-  threshold~ : Int,
+  introduced~ : Int32,
+  threshold~ : Int32,
   restore_failures~ : Array[String],
   evidence~ : @diagnostic_guard.Comparability,
 ) -> String {
@@ -1218,7 +1215,7 @@ fn check_contiguity(edits : Array[ResolvedEdit]) -> String? {
 /// path. `index` lets failures point the model back at `edit[index]`; `path` is
 /// the grouping key so aliased spellings of one file land together.
 priv struct ResolvedEdit {
-  index : Int
+  index : Int32
   file : String
   path : String
   item : @decode.MultiEditItem
@@ -1250,7 +1247,7 @@ fn group_contiguous(edits : Array[ResolvedEdit]) -> Array[FileGroup] {
 
 ///|
 /// Total number of edits applied across a batch's writes.
-fn total_edit_count(writes : Array[PreparedWrite]) -> Int {
+fn total_edit_count(writes : Array[PreparedWrite]) -> Int32 {
   writes.fold(init=0, (total, write) => total + write.edit_count)
 }
 
@@ -1281,9 +1278,9 @@ priv enum EditValidation {
 
 ///|
 priv struct PlannedEdit {
-  index : Int
-  start : Int
-  end : Int
+  index : Int32
+  start : Int32
+  end : Int32
   new_string : String
   range : String
 }
@@ -1293,7 +1290,7 @@ priv struct PlannedEdit {
 /// `None`). `file` lets the report point at the right file in a multi-file batch.
 priv struct EditFailure {
   file : String
-  index : Int?
+  index : Int32?
   range : String
   message : String
 }
@@ -1302,7 +1299,7 @@ priv struct EditFailure {
 fn validate_edit(
   content : String,
   item : @decode.MultiEditItem,
-  index : Int,
+  index : Int32,
   file~ : String,
 ) -> EditValidation {
   let range = line_range_label(item.start_line, item.end_line)
@@ -1399,12 +1396,12 @@ fn collect_overlap_failures(
 }
 
 ///|
-fn compare_plan_ascending(a : PlannedEdit, b : PlannedEdit) -> Int {
+fn compare_plan_ascending(a : PlannedEdit, b : PlannedEdit) -> Int32 {
   (a.start, a.end, a.index).compare((b.start, b.end, b.index))
 }
 
 ///|
-fn compare_plan_descending(a : PlannedEdit, b : PlannedEdit) -> Int {
+fn compare_plan_descending(a : PlannedEdit, b : PlannedEdit) -> Int32 {
   -compare_plan_ascending(a, b)
 }
 
@@ -1435,14 +1432,14 @@ fn format_failure(failure : EditFailure) -> String {
 ///|
 priv struct EditRegion {
   body : String
-  start_offset : Int
+  start_offset : Int32
 }
 
 ///|
 fn select_edit_region(
   content : String,
-  start_line : Int,
-  end_line : Int?,
+  start_line : Int32,
+  end_line : Int32?,
 ) -> EditRegion {
   let start = @line_offset.line_start_offset(content, start_line)
   let end = match end_line {
@@ -1455,7 +1452,7 @@ fn select_edit_region(
 }
 
 ///|
-fn line_range_label(start_line : Int, end_line : Int?) -> String {
+fn line_range_label(start_line : Int32, end_line : Int32?) -> String {
   match end_line {
     Some(end) => "line range \{start_line}-\{end}"
     None => "from line \{start_line}"

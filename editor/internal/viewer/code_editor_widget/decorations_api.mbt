@@ -59,7 +59,7 @@ struct EditorDecorationsCollection {
 /// `createDecorationsCollection` (`codeEditorWidget.ts:1389`).
 pub fn CodeEditorWidget::create_decorations_collection(
   self : CodeEditorWidget,
-  decorations? : Array[@model.ModelDeltaDecoration] = [],
+  decorations~ : Array[@model.ModelDeltaDecoration] = [],
 ) -> EditorDecorationsCollection {
   let collection : EditorDecorationsCollection = {
     viewer: self,

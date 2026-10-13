@@ -38,7 +38,7 @@ pub fn run_agent_feedback_test() -> Unit {
       let items = Ref(0)
       let mut last_text : String = ""
       let mut previous_items : Array[
-        (String, @agent_feedback_api.AgentFeedbackState, Int),
+        (String, @agent_feedback_api.AgentFeedbackState, Int32),
       ] = []
       let mut track_interactions = false
       let write_log = () => {
@@ -106,7 +106,7 @@ pub fn run_agent_feedback_test() -> Unit {
 fn seed_item(
   id : String,
   uri : @base_common.Uri,
-  line : Int,
+  line : Int32,
   text : String,
 ) -> @agent_feedback_api.AgentFeedback {
   {
@@ -125,7 +125,7 @@ fn seed_item(
 fn poll_rendered(
   ctx : @support.BrowserTestContext,
   done : Ref[Bool],
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if done.val {
     return

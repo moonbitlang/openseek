@@ -106,13 +106,13 @@ priv struct MarkdownDiagramViewport {
   mut pan_mode_enabled : Bool
   mut is_panning : Bool
   mut has_dragged : Bool
-  mut pan_pointer_id : Int?
+  mut pan_pointer_id : Int32?
   mut start_x : Double
   mut start_y : Double
   mut previous_move_x : Double
   mut previous_move_y : Double
   mut is_resizing : Bool
-  mut resize_pointer_id : Int?
+  mut resize_pointer_id : Int32?
   mut resize_start_y : Double
   mut resize_start_height : Double
 }
@@ -177,7 +177,7 @@ struct DiagramViewports {
 pub fn DiagramViewports::DiagramViewports(
   target : @rdom.Element,
   on_size_changed : () -> Unit,
-  fill_container? : Bool = false,
+  fill_container~ : Bool = false,
 ) -> DiagramViewports {
   let schedule_frame = (callback : () -> Unit) => {
     let registration = @base_browser.schedule_at_next_animation_frame(callback)
@@ -260,24 +260,49 @@ fn MarkdownDiagramViewportLifetime::dispose(
 }
 
 ///|
+let diagram_wrapper_class = "moonbit-viewer-markdown-diagram"
+
+///|
+/// The diagram wrappers under `root` that still need a viewport, in document
+/// order.
+///
+/// One selector query, so the cost of looking does not depend on how much
+/// ordinary content the root holds. A host refreshes after every render of a
+/// document that may run to thousands of elements — a transcript, while a
+/// reply streams into it — and reading that tree element by element from here
+/// was most of what each streamed token cost.
 fn collect_diagram_viewport_candidates(
   root : @rdom.Element,
   candidates : Array[@rdom.Element],
 ) -> Unit {
-  for child in root.get_children() {
-    let language = element_attribute_or_empty(child, "data-diagram-language")
-    if element_has_class(child, "moonbit-viewer-markdown-diagram") {
-      if (language == "diago" || language == "uml" || language == "mermaid") &&
-        !element_has_class(child, diagram_viewport_class) &&
-        direct_svg_child(child) is Some(_) {
-        candidates.push(child)
-      }
-      // A diagram wrapper owns one direct SVG. Treat it as a scan boundary so
-      // transcript refreshes never walk the generated SVG or injected controls.
-    } else {
-      collect_diagram_viewport_candidates(child, candidates)
+  for wrapper in root.query_selector_all(".\{diagram_wrapper_class}") {
+    let language = element_attribute_or_empty(wrapper, "data-diagram-language")
+    if (language == "diago" || language == "uml" || language == "mermaid") &&
+      !element_has_class(wrapper, diagram_viewport_class) &&
+      !is_inside_diagram_wrapper(wrapper, root) &&
+      direct_svg_child(wrapper) is Some(_) {
+      candidates.push(wrapper)
     }
   }
+}
+
+///|
+/// Whether another diagram wrapper stands between `wrapper` and `root`. A
+/// wrapper owns one direct SVG and everything beneath it, so nothing inside
+/// one — its generated SVG, the controls injected around it — is a diagram of
+/// this root's own.
+fn is_inside_diagram_wrapper(
+  wrapper : @rdom.Element,
+  root : @rdom.Element,
+) -> Bool {
+  let mut current = wrapper.get_parent_element()
+  while current is Some(ancestor) && !ancestor.is_same_node(root.as_node()) {
+    if element_has_class(ancestor, diagram_wrapper_class) {
+      return true
+    }
+    current = ancestor.get_parent_element()
+  }
+  false
 }
 
 ///|
@@ -774,7 +799,7 @@ fn MarkdownDiagramViewport::listen(
   target : @rdom.EventTarget,
   event_type : String,
   listener : @rdom.Listener,
-  passive_false? : Bool = false,
+  passive_false~ : Bool = false,
 ) -> Unit {
   if passive_false {
     add_non_passive_event_listener(target, event_type, listener)

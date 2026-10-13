@@ -106,7 +106,7 @@ fn is_moon_package_graph_source(source : String) -> Bool {
 /// and finally the exit code. Zero exits still require a successful graph
 /// envelope so failed or malformed JSON cannot masquerade as source.
 fn moon_package_graph_process_reply(
-  code : Int,
+  code : Int32,
   stdout : String,
   stderr : String,
 ) -> MoonPackageGraphReply {

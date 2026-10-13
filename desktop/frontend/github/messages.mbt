@@ -1,14 +1,14 @@
 ///|
 priv enum UiMessage {
-  SuccessfulChecks(Int)
-  PendingChecks(Int)
-  FailedChecks(Int)
-  CancelledChecks(Int)
-  SkippedChecks(Int)
-  NeutralChecks(Int)
-  OtherChecks(Int)
-  BeforeCheckout(Int)
-  BeforeUpdate(Int)
+  SuccessfulChecks(Int32)
+  PendingChecks(Int32)
+  FailedChecks(Int32)
+  CancelledChecks(Int32)
+  SkippedChecks(Int32)
+  NeutralChecks(Int32)
+  OtherChecks(Int32)
+  BeforeCheckout(Int32)
+  BeforeUpdate(Int32)
   RetryAvatars
   DraftLabel
   CurrentCheckout
@@ -19,10 +19,10 @@ priv enum UiMessage {
   ViewAll
   LoadingLabel
   RetryLabel
-  UpdatingCheckout(Int)
-  CheckingOut(Int)
-  UpdateCheckout(Int)
-  CheckoutLocally(Int)
+  UpdatingCheckout(Int32)
+  CheckingOut(Int32)
+  UpdateCheckout(Int32)
+  CheckoutLocally(Int32)
   PullRequestsLabel
   CreatedByMeLabel
   AllOpenLabel
@@ -63,7 +63,7 @@ priv enum UiMessage {
   MilestoneLabel
   NoMilestone
   ChangesLabel
-  ChangedFiles(Int)
+  ChangedFiles(Int32)
   ChecksLabel
   NoChecks
   CheckStatus
@@ -97,8 +97,8 @@ priv enum UiMessage {
   DismissCheckout
   HideDetails
   ShowDetails
-  UncommittedBeforeUpdate(Int)
-  UncommittedBeforeCheckout(Int)
+  UncommittedBeforeUpdate(Int32)
+  UncommittedBeforeCheckout(Int32)
   UncommittedChanges
   StashChanges
   DiscardChanges

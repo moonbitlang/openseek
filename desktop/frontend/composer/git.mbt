@@ -4,16 +4,16 @@
 
 ///|
 struct GitChecks {
-  passed : Int
-  failed : Int
-  pending : Int
+  passed : Int32
+  failed : Int32
+  pending : Int32
 } derive(Eq)
 
 ///|
 pub fn GitChecks::GitChecks(
-  passed~ : Int,
-  failed~ : Int,
-  pending~ : Int,
+  passed~ : Int32,
+  failed~ : Int32,
+  pending~ : Int32,
 ) -> GitChecks {
   { passed, failed, pending, }
 }
@@ -31,7 +31,7 @@ pub fn GitChecks::tone(self : GitChecks) -> String {
 
 ///|
 pub fn GitChecks::summary(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitChecks,
 ) -> String {
   let parts : Array[String] = []
@@ -53,7 +53,7 @@ pub fn GitChecks::summary(
 
 ///|
 struct GitPullRequest {
-  number : Int
+  number : Int32
   title : String
   state : String
   draft : Bool
@@ -63,7 +63,7 @@ struct GitPullRequest {
 
 ///|
 pub fn GitPullRequest::GitPullRequest(
-  number~ : Int,
+  number~ : Int32,
   title~ : String,
   state~ : String,
   draft~ : Bool,
@@ -86,18 +86,18 @@ pub fn GitPullRequest::label(self : GitPullRequest) -> String {
 
 ///|
 struct GitChanges {
-  added : Int
-  removed : Int
-  files : Int
+  added : Int32
+  removed : Int32
+  files : Int32
   partial : Bool
   base : String?
 } derive(Eq)
 
 ///|
 pub fn GitChanges::GitChanges(
-  added~ : Int,
-  removed~ : Int,
-  files~ : Int,
+  added~ : Int32,
+  removed~ : Int32,
+  files~ : Int32,
   partial~ : Bool,
   base? : String,
 ) -> GitChanges {
@@ -106,7 +106,7 @@ pub fn GitChanges::GitChanges(
 
 ///|
 fn GitChanges::file_count(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitChanges,
 ) -> String {
   if self.files == 1 {
@@ -153,7 +153,7 @@ pub fn GitPresentation::label(self : GitPresentation) -> String {
 
 ///|
 pub fn GitPresentation::summary(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitPresentation,
 ) -> String {
   if self.pull_request is Some(pull_request) {
@@ -170,7 +170,7 @@ pub fn GitPresentation::summary(
 /// after the stable button so opening it never replaces the node under the
 /// pointer in Rabbita's positional renderer.
 fn GitPresentation::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitPresentation,
   open~ : Bool,
   toggle~ : @cmd.Cmd,
@@ -200,7 +200,7 @@ fn GitPresentation::render(
 
 ///|
 fn GitPresentation::render_details(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitPresentation,
 ) -> @html.Html {
   ignore(locale)
@@ -262,7 +262,7 @@ fn GitPresentation::render_details(
 
 ///|
 fn GitChanges::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitChanges,
 ) -> @html.Html {
   ignore(locale)
@@ -317,7 +317,7 @@ priv struct GitPopoverRow {
 
 ///|
 fn GitPopoverRow::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitPopoverRow,
 ) -> @html.Html {
   ignore(locale)
@@ -341,7 +341,7 @@ priv struct GitPopoverLink {
 
 ///|
 fn GitPopoverLink::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GitPopoverLink,
 ) -> @html.Html {
   ignore(locale)

@@ -286,7 +286,7 @@ async fn write_worktrees(
   @fsx.ensure_dir(store.to_path()) catch {
     error => raise WorktreeError("could not create \{store}: \{error}")
   }
-  let registry : Json = { "worktrees": entries.to_json() }
+  let registry : Json = { "worktrees": Json(entries) }
   // A registry update may remove only one conversation's placement while
   // retaining every unrelated row. The save builds the whole replacement
   // beside the live file and renames it into place: a failed or cancelled
@@ -569,7 +569,7 @@ const ArchiveDirtyPathPreviewLimit = 8
 /// retaining the full row count. In `-z` mode a rename/copy consumes the next
 /// NUL field as its source; only the current path is useful in the archive
 /// warning.
-fn archive_dirty_path_preview(status : String) -> (Array[String], Int) {
+fn archive_dirty_path_preview(status : String) -> (Array[String], Int32) {
   let fields = status.split("\u{0}").collect()
   let paths : Array[String] = []
   let mut count = 0
@@ -767,6 +767,10 @@ pub async fn create(
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
+  // Verify the lossless metadata format before creating any ref, checkout or
+  // registry row. Older Git accepts add but rejects list -z during the final
+  // unlock, otherwise leaving a published, provisioning-locked checkout.
+  ignore(worktree_listing(dir))
   if owner is OpenSeekSession(session) {
     @session_store.ensure_not_archived(session)
   }
@@ -934,7 +938,7 @@ async fn restore_worktree_checkout(
   dir : @pathx.Absolute,
   entry : WorktreeEntry,
   checkout_submodules~ : Bool,
-  submodule_checkout_timeout_seconds~ : Int,
+  submodule_checkout_timeout_seconds~ : Int32,
 ) -> Unit {
   let revision = entry.checkout.revision()
   let commit = @gitx.run(dir, ["rev-parse", "--verify", "\{revision}^{commit}"])
@@ -1154,8 +1158,8 @@ fn restore_home_env(previous : String?) -> Unit {
 /// `drained` instead of closing a process.
 #cfg(not(platform="windows"))
 fn test_host(
-  live? : Array[String] = [],
-  drained? : Array[String] = [],
+  live~ : Array[String] = [],
+  drained~ : Array[String] = [],
 ) -> WorktreeHost {
   {
     lifecycle_lock: Mutex(),
@@ -1351,7 +1355,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
-  let committed : Ref[Int] = Ref(-1)
+  let committed : Ref[Int32] = Ref(-1)
   let reply = create(
     host,
     repo.to_string(),

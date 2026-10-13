@@ -1,13 +1,13 @@
 ///|
 /// Request framing bounds: aggregate request line plus headers, decoded body,
 /// and total bytes read from the socket for one request.
-const MaxHeaderBytes : Int = 8192
+const MaxHeaderBytes : Int32 = 8192
 
 ///|
-const MaxBodyBytes : Int = 65536
+const MaxBodyBytes : Int32 = 65536
 
 ///|
-const MaxWireBytes : Int = 131072
+const MaxWireBytes : Int32 = 131072
 
 ///|
 /// A single bounded HTTP request. PTC deliberately does not keep connections
@@ -17,8 +17,8 @@ const MaxWireBytes : Int = 131072
 priv struct RequestReader {
   socket : @socket.Tcp
   mut buffer : Bytes
-  mut offset : Int
-  mut wire_bytes : Int
+  mut offset : Int32
+  mut wire_bytes : Int32
 }
 
 ///|
@@ -40,7 +40,7 @@ async fn RequestReader::byte(self : RequestReader) -> Byte {
 }
 
 ///|
-async fn RequestReader::line(self : RequestReader, limit : Int) -> String {
+async fn RequestReader::line(self : RequestReader, limit : Int32) -> String {
   let bytes : Array[Byte] = []
   for _ in 0..<limit {
     let byte = self.byte()

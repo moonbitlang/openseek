@@ -65,6 +65,8 @@ pub fn resize_handle_view() -> @html.Html
 
 pub fn semantic_review_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
 
+pub fn show_office_feedback(@cmd.Emit[Msg], OfficeSelectionPreview) -> @cmd.Cmd
+
 pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx, review_context? : Array[@mention_context.ReviewChanges]) -> (State, @cmd.Cmd)
@@ -272,6 +274,8 @@ pub(all) enum Msg {
   SemanticSelectionChanged(owner~ : @interop.ConversationKey, reference~ : @mention_context.SemanticSearchReference?)
   OfficeSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, selection~ : String)
   OfficeSelectionConfirmed(OfficeSelectionPreview)
+  OfficeFeedbackChanged(OfficeSelectionPreview, String)
+  OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
   OfficeSelectionDismissed(OfficeSelectionPreview)
   OfficeZoomChanged(String)
   OfficeSearchChanged(String)
@@ -509,6 +513,7 @@ pub(all) struct State {
   office_query : String
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?
+  office_selection_comment : String?
   pdf_generation : Int
   explorer_mode : ExplorerMode
   search : @grep_search.State

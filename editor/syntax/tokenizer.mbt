@@ -11,7 +11,7 @@ struct TokenizerState {
 ///|
 /// Creates the canonical normal tokenizer state.
 pub fn TokenizerState::TokenizerState() -> TokenizerState {
-  { modes: @list.new(), }
+  { modes: List([]), }
 }
 
 ///|
@@ -81,8 +81,8 @@ pub(all) enum HighlightTag {
 /// code-unit offsets. Token ranges must never split a surrogate pair: the
 /// viewer slices the document text at these offsets.
 pub(all) struct LineToken {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   tag : HighlightTag
 } derive(Eq, Debug)
 
@@ -109,7 +109,7 @@ pub struct TokenizationChangedEvent {
 
 ///|
 priv struct TokenizationSupportEntry {
-  id : Int
+  id : Int32
   tokenizer : &LineTokenizer
 }
 
@@ -127,7 +127,7 @@ priv struct TokenizationSupportEntry {
 /// `LineTokenizer` API and are intentionally absent.
 struct TokenizationRegistry {
   tokenizers : Map[String, TokenizationSupportEntry]
-  next_id : Ref[Int]
+  next_id : Ref[Int32]
   did_change : @base_common.Emitter[TokenizationChangedEvent]
   mut color_map : Array[String]?
 }
@@ -289,8 +289,8 @@ pub fn is_capitalized(word : StringView) -> Bool {
 /// carry identical copies.
 pub fn push_token(
   tokens : Array[LineToken],
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
   tag : HighlightTag,
 ) -> Unit {
   if tokens is [.., last] && last.tag == tag && last.end == start {

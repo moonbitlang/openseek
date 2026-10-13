@@ -41,7 +41,7 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
         "steps": {
           "type": "array",
           "description": "The complete ordered plan; replaces the previous plan. An empty array clears the plan.",
-          "maxItems": @steps.MAX_STEPS.to_json(),
+          "maxItems": Json(@steps.MAX_STEPS),
           "items": {
             "type": "object",
             "properties": {
@@ -49,7 +49,7 @@ pub fn definition() -> @agent_tool.AgentToolDefinition {
                 "type": "string",
                 "description": "Short imperative step title on a single line; non-blank after trimming.",
                 "minLength": 1,
-                "maxLength": @steps.MAX_TITLE_CHARS.to_json(),
+                "maxLength": Json(@steps.MAX_TITLE_CHARS),
               },
               "status": {
                 "type": "string",

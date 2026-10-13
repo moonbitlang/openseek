@@ -130,7 +130,7 @@ const EmptyTreeObject : String = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 /// `partial`. Each one costs a `git diff` of its own, and a workspace holding
 /// hundreds of them has an unignored build directory rather than that much
 /// work in progress.
-const MaxUntrackedDiffFiles : Int = 100
+const MaxUntrackedDiffFiles : Int32 = 100
 
 ///|
 /// How large an untracked file may be and still be counted. `git diff
@@ -150,7 +150,7 @@ const MaxUntrackedDiffBytes : Int64 = 1048576L
 /// next probe, and reporting nothing beats holding a bridge request open.
 /// Generous against what the work actually costs — a modified 128 MiB tracked
 /// text file measured 1.5s — so only the genuinely pathological trips it.
-const DiffstatTimeoutMs : Int = 5000
+const DiffstatTimeoutMs : Int32 = 5000
 
 ///|
 /// This branch's whole delta, counted locally: from where it left its base
@@ -510,7 +510,7 @@ fn git_change_kind(index_status : String, worktree_status : String) -> String {
 ///|
 /// Stable display order for duplicate current paths. A baseline deletion must
 /// precede its untracked recreation even though `Array::sort_by` is unstable.
-fn compare_git_change_path(left : GitChange, right : GitChange) -> Int {
+fn compare_git_change_path(left : GitChange, right : GitChange) -> Int32 {
   let path_order = left.path.lexical_compare(right.path)
   if path_order != 0 {
     return path_order
@@ -827,7 +827,7 @@ fn git_tree_relative(path : String) -> @pathx.Relative? {
 async fn git_collect(
   dir : String,
   args : Array[String],
-) -> (Int, &@io.Data, &@io.Data) {
+) -> (Int32, &@io.Data, &@io.Data) {
   @processx.collect_output_no_stdin(
     "git",
     args,
@@ -928,7 +928,7 @@ test "Git review revisions accept only full hexadecimal object identities" {
 async fn git_change_snapshot(
   dir : String,
   workspace_prefix : String,
-  retries_left~ : Int,
+  retries_left~ : Int32,
   pr_base? : String,
   worktree_base? : String,
 ) -> (
@@ -1392,8 +1392,8 @@ fn parse_git_history_z(output : String) -> Array[GitHistoryCommit] {
 async fn git_history_page(
   dir : String,
   snapshot : GitHistorySnapshot,
-  skip : Int,
-  limit : Int,
+  skip : Int32,
+  limit : Int32,
 ) -> (Array[GitHistoryCommit], Bool) {
   if snapshot.tips.is_empty() {
     return ([], false)

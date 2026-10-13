@@ -2011,10 +2011,10 @@ test "getColumnOfLinePartOffset 5 - twice indented line, tab size 4" {
 
 ///|
 fn segment(
-  start_offset : Int,
-  end_offset : Int,
+  start_offset : Int32,
+  end_offset : Int32,
   class_name : String,
-  metadata? : Int = 0,
+  metadata~ : Int32 = 0,
 ) -> @view_layout.DecorationSegment {
   { start_offset, end_offset, class_name, metadata, }
 }
@@ -2032,15 +2032,15 @@ fn assert_segments(
 
 ///|
 /// A token part `mtk<cls>` ending at `end_index` (Monaco's `createPart`).
-fn p(end_index : Int, cls : Int) -> @view_layout.LinePart {
+fn p(end_index : Int32, cls : Int32) -> @view_layout.LinePart {
   LinePart(end_index, "mtk\{cls.to_string()}")
 }
 
 ///|
 /// A line decoration (Monaco's `new LineDecoration`).
 fn dec(
-  start_column : Int,
-  end_column : Int,
+  start_column : Int32,
+  end_column : Int32,
   class_name : String,
   decoration_type : @view_layout.InlineDecorationType,
 ) -> @view_layout.LineDecoration {
@@ -2049,7 +2049,7 @@ fn dec(
 
 ///|
 /// An on-line selection range (Monaco's `new OffsetRange`).
-fn sel(start : Int, end_exclusive : Int) -> @base_common.OffsetRange {
+fn sel(start : Int32, end_exclusive : Int32) -> @base_common.OffsetRange {
   OffsetRange(start, end_exclusive)
 }
 
@@ -2059,22 +2059,22 @@ fn sel(start : Int, end_exclusive : Int) -> @base_common.OffsetRange {
 fn monaco_input(
   content : String,
   tokens : Array[@view_layout.LinePart],
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
-  tab_size? : Int = 4,
-  contains_rtl? : Bool = false,
-  is_basic_ascii? : Bool = true,
-  continues_with_wrapped_line? : Bool = false,
-  use_monospace_optimizations? : Bool = false,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  faux_indent_length? : Int = 0,
-  stop_rendering_line_after? : Int = -1,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  font_ligatures? : Bool = false,
-  space_width? : Double = 10.0,
-  middot_width? : Double = 10.0,
-  wsmiddot_width? : Double = 10.0,
-  selections_on_line? : Array[@base_common.OffsetRange] = [],
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
+  tab_size~ : Int32 = 4,
+  contains_rtl~ : Bool = false,
+  is_basic_ascii~ : Bool = true,
+  continues_with_wrapped_line~ : Bool = false,
+  use_monospace_optimizations~ : Bool = false,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  faux_indent_length~ : Int32 = 0,
+  stop_rendering_line_after~ : Int32 = -1,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  font_ligatures~ : Bool = false,
+  space_width~ : Double = 10.0,
+  middot_width~ : Double = 10.0,
+  wsmiddot_width~ : Double = 10.0,
+  selections_on_line~ : Array[@base_common.OffsetRange] = [],
 ) -> @view_layout.RenderLineInput {
   let data : @view_layout.ViewLineRenderingData = {
     min_column: 1,
@@ -2112,22 +2112,22 @@ fn monaco_input(
 fn mr(
   content : String,
   tokens : Array[@view_layout.LinePart],
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
-  tab_size? : Int = 4,
-  contains_rtl? : Bool = false,
-  is_basic_ascii? : Bool = true,
-  continues_with_wrapped_line? : Bool = false,
-  use_monospace_optimizations? : Bool = false,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  faux_indent_length? : Int = 0,
-  stop_rendering_line_after? : Int = -1,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  font_ligatures? : Bool = false,
-  space_width? : Double = 10.0,
-  middot_width? : Double = 10.0,
-  wsmiddot_width? : Double = 10.0,
-  selections_on_line? : Array[@base_common.OffsetRange] = [],
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
+  tab_size~ : Int32 = 4,
+  contains_rtl~ : Bool = false,
+  is_basic_ascii~ : Bool = true,
+  continues_with_wrapped_line~ : Bool = false,
+  use_monospace_optimizations~ : Bool = false,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  faux_indent_length~ : Int32 = 0,
+  stop_rendering_line_after~ : Int32 = -1,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  font_ligatures~ : Bool = false,
+  space_width~ : Double = 10.0,
+  middot_width~ : Double = 10.0,
+  wsmiddot_width~ : Double = 10.0,
+  selections_on_line~ : Array[@base_common.OffsetRange] = [],
 ) -> @view_layout.RenderLineOutput2 {
   @view_layout.render_view_line2(
     monaco_input(
@@ -2226,10 +2226,10 @@ fn assert_map(
 ///|
 fn assert_get_column(
   out : @view_layout.RenderLineOutput2,
-  part_index : Int,
-  part_length : Int,
-  char_index : Int,
-  expected_column : Int,
+  part_index : Int32,
+  part_length : Int32,
+  char_index : Int32,
+  expected_column : Int32,
 ) -> Unit raise {
   let actual = out.character_mapping.get_column(
     { part_index, char_index, },

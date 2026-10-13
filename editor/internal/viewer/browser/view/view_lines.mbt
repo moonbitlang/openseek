@@ -14,7 +14,7 @@ let visible_content_width_css_variable : String = "--moonbit-viewer-visible-cont
 /// same order as Monaco's retained caches. `view_line_options` is the exact
 /// equality-gated subset owned by each retained `ViewLine`.
 struct ViewLinesConfiguration {
-  line_height : Int
+  line_height : Int32
   typical_halfwidth_character_width : Double
   is_viewport_wrapping : Bool
   can_use_layer_hinting : Bool
@@ -23,20 +23,20 @@ struct ViewLinesConfiguration {
 
 ///|
 pub fn ViewLinesConfiguration::ViewLinesConfiguration(
-  line_height? : Int = 20,
-  typical_halfwidth_character_width? : Double = 7.2,
-  is_viewport_wrapping? : Bool = false,
-  can_use_layer_hinting? : Bool = true,
-  space_width? : Double = 7.2,
-  middot_width? : Double = 7.2,
-  wsmiddot_width? : Double = 7.2,
-  use_monospace_optimizations? : Bool = true,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  stop_rendering_line_after? : Int = -1,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  font_ligatures? : Bool = false,
-  vertical_scrollbar_size? : Double = @core.editor_vertical_scrollbar_size,
+  line_height~ : Int32 = 20,
+  typical_halfwidth_character_width~ : Double = 7.2,
+  is_viewport_wrapping~ : Bool = false,
+  can_use_layer_hinting~ : Bool = true,
+  space_width~ : Double = 7.2,
+  middot_width~ : Double = 7.2,
+  wsmiddot_width~ : Double = 7.2,
+  use_monospace_optimizations~ : Bool = true,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  stop_rendering_line_after~ : Int32 = -1,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  font_ligatures~ : Bool = false,
+  vertical_scrollbar_size~ : Double = @core.editor_vertical_scrollbar_size,
 ) -> ViewLinesConfiguration {
   {
     line_height,
@@ -101,15 +101,15 @@ struct ViewLines {
   mut view_line_options : ViewLineOptions
   view_line_options_ref : Ref[ViewLineOptions]
   mut read_configuration : () -> ViewLinesConfiguration
-  mut view_line_to_model_line : (Int) -> Int
-  mut model_line_text_direction : (Int) -> @view_layout.TextDirection
+  mut view_line_to_model_line : (Int32) -> Int32
+  mut model_line_text_direction : (Int32) -> @view_layout.TextDirection
   line_factory : () -> ViewLine
   async_update_line_widths : @base_browser.RunOnceScheduler
   last_rendered_data : LastRenderedData
   mut max_line_width : Double
   mut last_layout : @view_layout.ViewLayout?
   mut should_render : Bool
-  mut content_viewport_geometry_lease_count : Int
+  mut content_viewport_geometry_lease_count : Int32
   mut rendered_scroll_left : Double?
   mut visible_content_width : Double?
 }
@@ -165,8 +165,8 @@ fn ViewLines::ViewLines(
 /// the source's converter progression.
 pub fn ViewLines::install_geometry_readers(
   self : ViewLines,
-  view_line_to_model_line : (Int) -> Int,
-  model_line_text_direction : (Int) -> @view_layout.TextDirection,
+  view_line_to_model_line : (Int32) -> Int32,
+  model_line_text_direction : (Int32) -> @view_layout.TextDirection,
 ) -> Unit {
   self.view_line_to_model_line = view_line_to_model_line
   self.model_line_text_direction = model_line_text_direction
@@ -337,7 +337,7 @@ fn ViewLines::clear_content_viewport_geometry(self : ViewLines) -> Unit {
 ///|
 /// Index of a one-based view-line number within the currently rendered
 /// window, or `-1` when the line is outside the window.
-fn ViewLines::window_index(self : ViewLines, view_line_number : Int) -> Int {
+fn ViewLines::window_index(self : ViewLines, view_line_number : Int32) -> Int32 {
   let index = view_line_number - self.window.start
   if index >= 0 && index < self.lines.length() {
     index
@@ -351,7 +351,7 @@ fn ViewLines::window_index(self : ViewLines, view_line_number : Int) -> Int {
 /// number, if in window.
 fn ViewLines::mapping_at(
   self : ViewLines,
-  view_line_number : Int,
+  view_line_number : Int32,
 ) -> @view_layout.CharacterMapping? {
   let index = self.window_index(view_line_number)
   if index < 0 {
@@ -366,7 +366,7 @@ fn ViewLines::mapping_at(
 /// by selection measurement to read DOM client rects off the live line DOM.
 fn ViewLines::line_node_at(
   self : ViewLines,
-  view_line_number : Int,
+  view_line_number : Int32,
 ) -> @rdom.Element? {
   let index = self.window_index(view_line_number)
   if index < 0 {
@@ -555,7 +555,7 @@ fn viewport_window(
 /// coverage of the normalized per-line render input.
 fn render_line_input_for_viewport(
   viewport : @view_layout.ViewportData,
-  index : Int,
+  index : Int32,
   options : ViewLineOptions,
   selection_view_range~ : @base_common.Range?,
 ) -> @view_layout.RenderLineInput {
@@ -595,7 +595,7 @@ fn render_line_input_for_viewport(
 /// viewer carries a single `selection_view_range`, not Monaco's `selections`
 /// array, so the loop is over zero-or-one selection.
 fn selections_on_line_for(
-  line_number : Int,
+  line_number : Int32,
   line_data : @view_layout.ViewLineRenderingData,
   render_whitespace : @editor_api.RenderWhitespace,
   selection_view_range : @base_common.Range?,
@@ -637,7 +637,7 @@ pub fn ViewLines::get_position_from_dom_info(
   self : ViewLines,
   view_model : @view_model.ViewModel,
   span_node : @rdom.Element,
-  offset : Int,
+  offset : Int32,
 ) -> @base_common.Position? {
   guard get_view_line_dom_node(span_node) is Some(view_line_dom_node) else {
     // Couldn't find view line node
@@ -689,7 +689,7 @@ fn get_view_line_dom_node(node : @rdom.Element) -> @rdom.Element? {
 fn ViewLines::get_line_number_for(
   self : ViewLines,
   dom_node : @rdom.Element,
-) -> Int {
+) -> Int32 {
   for index, line in self.lines {
     if line.get_dom_node().map(node => node.is_same_node(dom_node.as_node())) ==
       Some(true) {
@@ -704,7 +704,10 @@ fn ViewLines::get_line_number_for(
 /// in pixels, `-1` when the line is outside the rendered window. The read
 /// includes CSS-generated content because it is the reading target's
 /// `offsetWidth`.
-pub fn ViewLines::get_line_width(self : ViewLines, line_number : Int) -> Double {
+pub fn ViewLines::get_line_width(
+  self : ViewLines,
+  line_number : Int32,
+) -> Double {
   let index = self.window_index(line_number)
   if index < 0 {
     // Couldn't find line
@@ -723,9 +726,9 @@ pub fn ViewLines::get_line_width(self : ViewLines, line_number : Int) -> Double 
 /// Raw, unrounded visible ranges for one rendered view line.
 fn ViewLines::visible_ranges_for_line_range(
   self : ViewLines,
-  line_number : Int,
-  start_column : Int,
-  end_column : Int,
+  line_number : Int32,
+  start_column : Int32,
+  end_column : Int32,
 ) -> (Bool, Array[(Double, Double)])? {
   let index = self.window_index(line_number)
   if index < 0 {
@@ -750,7 +753,7 @@ fn ViewLines::raw_lines_visible_ranges_for_range(
   self : ViewLines,
   requested_range : @base_common.Range,
   include_new_lines : Bool,
-) -> Array[(Int, Array[(Int, Int)])]? {
+) -> Array[(Int32, Array[(Int32, Int32)])]? {
   let original_end_line_number = requested_range.end_line_number
   guard requested_range.intersect_ranges(
       self.last_rendered_data.get_current_visible_range(),
@@ -758,7 +761,7 @@ fn ViewLines::raw_lines_visible_ranges_for_range(
     is Some(visible_range) else {
     return None
   }
-  let result : Array[(Int, Array[(Int, Int)])] = []
+  let result : Array[(Int32, Array[(Int32, Int32)])] = []
   let context = DomReadingContext::DomReadingContext(
     self.dom_node.element(),
     self.text_range_resting_spot,
@@ -814,7 +817,7 @@ fn ViewLines::raw_lines_visible_ranges_for_range(
         }
       }
     }
-    let rounded_ranges : Array[(Int, Int)] = []
+    let rounded_ranges : Array[(Int32, Int32)] = []
     for range in float_ranges {
       rounded_ranges.push(
         (js_math_round(range.0).to_int(), js_math_round(range.1).to_int()),
@@ -832,8 +835,8 @@ fn ViewLines::raw_lines_visible_ranges_for_range(
 ///|
 fn ViewLines::raw_visible_range_for_position(
   self : ViewLines,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Double? {
   guard self.visible_ranges_for_line_range(line_number, column, column)
     is Some((_outside_rendered_line, ranges)) &&

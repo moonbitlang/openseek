@@ -53,7 +53,7 @@ fn DiffEditorLayoutState::layout(
 fn DiffEditorLayoutState::update_options(
   self : DiffEditorLayoutState,
   options : DiffEditorOptions,
-  recompute_layout? : Bool = true,
+  recompute_layout~ : Bool = true,
 ) -> Bool {
   let previous = self.actual_layout
   let configured_split_changed = options.split_ratio != self.options.split_ratio

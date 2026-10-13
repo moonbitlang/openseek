@@ -4,7 +4,7 @@
 /// exactly to the modified side. Hosts label original ranges in their content.
 pub(all) struct DiffLineWidget {
   original : Bool
-  line : Int
+  line : Int32
   node : @rdom.Element
   on_layout : ((Double, Double, Double)?) -> Unit
 }
@@ -21,9 +21,9 @@ priv struct MountedDiffLineWidget {
 
 ///|
 fn inline_widget_line(
-  line : Int,
+  line : Int32,
   mappings : Array[@diff.DetailedLineRangeMapping],
-) -> Int {
+) -> Int32 {
   let mut delta = 0
   for mapping in mappings {
     if line < mapping.original.start_line_number {
@@ -246,8 +246,8 @@ fn DiffEditorWidget::sync_line_widget_anchors(
 /// model-side hit testing and positioning. None removes the affordance.
 pub fn DiffEditorWidget::set_line_action(
   self : DiffEditorWidget,
-  action : ((Bool, Int) -> Unit)?,
-  allowed? : (Bool, Int) -> Bool,
+  action : ((Bool, Int32) -> Unit)?,
+  allowed? : (Bool, Int32) -> Bool,
 ) -> Unit {
   self.line_action = action
   self.line_action_allowed = allowed
@@ -265,7 +265,7 @@ pub fn DiffEditorWidget::set_line_action(
 fn DiffEditorWidget::line_action_can_run(
   self : DiffEditorWidget,
   original : Bool,
-  line : Int,
+  line : Int32,
 ) -> Bool {
   self.line_action is Some(_) &&
   self.is_diff_up_to_date() &&

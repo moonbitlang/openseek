@@ -10,7 +10,7 @@ const PathInputId : String = "project-picker-path-input"
 const PathListId : String = "project-picker-folder-list"
 
 ///|
-fn path_row_id(index : Int) -> String {
+fn path_row_id(index : Int32) -> String {
   "project-picker-folder-\{index}"
 }
 
@@ -23,7 +23,7 @@ fn focus_path_after_render(select_all : Bool) -> @cmd.Cmd {
 
 ///|
 /// Keep keyboard completion visible while focus stays in the combobox.
-fn scroll_path_row_after_render(index : Int) -> @cmd.Cmd {
+fn scroll_path_row_after_render(index : Int32) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => scroll_path_row(path_row_id(index)),
     kind=@cmd.after_render,
@@ -40,7 +40,7 @@ fn scroll_path_row(id : String) -> Unit {
 
 ///|
 pub fn view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {
@@ -184,7 +184,7 @@ pub fn view(
 
 ///|
 fn path_editor(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
   value : String,
@@ -264,7 +264,7 @@ fn path_editor(
 
 ///|
 fn new_folder_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
   name : String,
@@ -326,7 +326,7 @@ fn new_folder_row(
 
 ///|
 fn empty_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   picker : State,
   filter_active : Bool,
 ) -> @html.Html {
@@ -345,7 +345,7 @@ fn empty_view(
 
 ///|
 fn picker_footer(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {
@@ -379,7 +379,7 @@ fn picker_footer(
 /// selection summary. A loading navigation intentionally keeps showing the
 /// last successful location while the primary action is disabled.
 fn current_location(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   picker : State,
 ) -> @html.Html {
   let (label, path) = match picker.location {
@@ -407,7 +407,7 @@ fn current_location(
 /// guess a platform from a drive-shaped path. UNC never reaches this UI
 /// because the backend rejects it.
 fn picker_breadcrumbs(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {

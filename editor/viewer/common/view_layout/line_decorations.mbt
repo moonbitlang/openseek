@@ -1,8 +1,8 @@
 ///|
 /// One-based line decoration range plus CSS class.
 pub struct LineDecoration {
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
   class_name : String
   decoration_type : InlineDecorationType
 } derive(Eq, Debug)
@@ -10,10 +10,10 @@ pub struct LineDecoration {
 ///|
 /// Builds a line decoration.
 pub fn LineDecoration::LineDecoration(
-  start_column : Int,
-  end_column : Int,
+  start_column : Int32,
+  end_column : Int32,
   class_name : String,
-  decoration_type? : InlineDecorationType = Regular,
+  decoration_type~ : InlineDecorationType = Regular,
 ) -> LineDecoration {
   { start_column, end_column, class_name, decoration_type, }
 }
@@ -23,7 +23,7 @@ pub fn LineDecoration::LineDecoration(
 pub fn LineDecoration::compare(
   left : LineDecoration,
   right : LineDecoration,
-) -> Int {
+) -> Int32 {
   if left.start_column != right.start_column {
     left.start_column - right.start_column
   } else if left.end_column != right.end_column {
@@ -43,7 +43,9 @@ pub fn LineDecoration::compare(
 }
 
 ///|
-fn inline_decoration_type_order(decoration_type : InlineDecorationType) -> Int {
+fn inline_decoration_type_order(
+  decoration_type : InlineDecorationType,
+) -> Int32 {
   match decoration_type {
     Before => 0
     After => 1
@@ -55,10 +57,10 @@ fn inline_decoration_type_order(decoration_type : InlineDecorationType) -> Int {
 ///|
 /// Normalized decoration segment in zero-based offsets.
 pub(all) struct DecorationSegment {
-  start_offset : Int
-  end_offset : Int
+  start_offset : Int32
+  end_offset : Int32
   class_name : String
-  metadata : Int
+  metadata : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -121,10 +123,10 @@ pub fn LineDecorationsNormalizer::normalize(
 
 ///|
 priv struct DecorationSegmentStack {
-  stop_offsets : Array[Int]
+  stop_offsets : Array[Int32]
   class_names : Array[String]
-  metadata : Array[Int]
-  mut count : Int
+  metadata : Array[Int32]
+  mut count : Int32
 }
 
 ///|
@@ -135,10 +137,10 @@ fn DecorationSegmentStack::DecorationSegmentStack() -> DecorationSegmentStack {
 ///|
 fn DecorationSegmentStack::consume_lower_than(
   self : DecorationSegmentStack,
-  max_stop_offset : Int,
-  next_start_offset : Int,
+  max_stop_offset : Int32,
+  next_start_offset : Int32,
   result : Array[DecorationSegment],
-) -> Int {
+) -> Int32 {
   let mut offset = next_start_offset
   while self.count > 0 && self.stop_offsets[0] < max_stop_offset {
     let mut stop_index = 0
@@ -175,9 +177,9 @@ fn DecorationSegmentStack::consume_lower_than(
 ///|
 fn DecorationSegmentStack::insert(
   self : DecorationSegmentStack,
-  stop_offset : Int,
+  stop_offset : Int32,
   class_name : String,
-  metadata : Int,
+  metadata : Int32,
 ) -> Unit {
   if self.count == 0 || self.stop_offsets[self.count - 1] <= stop_offset {
     self.stop_offsets.push(stop_offset)
@@ -200,12 +202,12 @@ fn DecorationSegmentStack::insert(
 }
 
 ///|
-fn decoration_stack_metadata(metadata : Array[Int]) -> Int {
+fn decoration_stack_metadata(metadata : Array[Int32]) -> Int32 {
   metadata.fold(init=0, (bits, item) => bits | item)
 }
 
 ///|
-fn line_decoration_metadata(decoration_type : InlineDecorationType) -> Int {
+fn line_decoration_metadata(decoration_type : InlineDecorationType) -> Int32 {
   match decoration_type {
     Regular => 0
     Before => line_part_metadata_pseudo_before

@@ -7,15 +7,15 @@ pub struct RenderLineInput {
   continues_with_wrapped_line : Bool
   is_basic_ascii : Bool
   contains_rtl : Bool
-  faux_indent_length : Int
+  faux_indent_length : Int32
   line_tokens : Array[LinePart]
   line_decorations : Array[LineDecoration]
-  tab_size : Int
-  start_visible_column : Int
+  tab_size : Int32
+  start_visible_column : Int32
   space_width : Double
   render_space_width : Double
-  render_space_char_code : Int
-  stop_rendering_line_after : Int
+  render_space_char_code : Int32
+  stop_rendering_line_after : Int32
   render_whitespace : @editor_api.RenderWhitespace
   render_control_characters : Bool
   font_ligatures : Bool
@@ -30,20 +30,20 @@ pub struct RenderLineInput {
 /// options.
 pub fn RenderLineInput::from_view_line(
   data : ViewLineRenderingData,
-  line_decorations? : Array[LineDecoration] = [],
-  use_monospace_optimizations? : Bool = true,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  faux_indent_length? : Int = 0,
-  space_width? : Double = 7.2,
-  middot_width? : Double = 7.2,
-  wsmiddot_width? : Double = 7.2,
-  stop_rendering_line_after? : Int = -1,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  font_ligatures? : Bool = false,
-  selections_on_line? : Array[@base_common.OffsetRange] = [],
-  vertical_scrollbar_size? : Double = 0.0,
-  render_new_line_when_empty? : Bool = false,
+  line_decorations~ : Array[LineDecoration] = [],
+  use_monospace_optimizations~ : Bool = true,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  faux_indent_length~ : Int32 = 0,
+  space_width~ : Double = 7.2,
+  middot_width~ : Double = 7.2,
+  wsmiddot_width~ : Double = 7.2,
+  stop_rendering_line_after~ : Int32 = -1,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  font_ligatures~ : Bool = false,
+  selections_on_line~ : Array[@base_common.OffsetRange] = [],
+  vertical_scrollbar_size~ : Double = 0.0,
+  render_new_line_when_empty~ : Bool = false,
 ) -> RenderLineInput {
   let sorted_line_decorations = line_decorations.copy()
   sorted_line_decorations.sort_by(LineDecoration::compare)

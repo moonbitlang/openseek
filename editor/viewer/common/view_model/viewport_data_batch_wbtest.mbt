@@ -4,7 +4,7 @@
 
 ///|
 priv struct ViewportCountingTokenizer {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|

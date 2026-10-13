@@ -12,7 +12,7 @@ pub(all) struct AgentFeedbackEditorWidgetContribution {
   /// `_replyDraftState`: reply drafts surviving rebuilds, by comment id.
   reply_drafts : Map[String, String]
   /// The overlay-widget id pool for mounted bubbles.
-  mut widget_id_pool : Int
+  mut widget_id_pool : Int32
   /// The item-hover range highlight (`_highlightRange`), as owner-scoped
   /// decoration ids.
   mut highlight_decoration_ids : Array[String]

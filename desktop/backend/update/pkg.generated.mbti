@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn apply_staged(staged_app~ : String, bundle_path~ : String) -> Unit
 
+pub async fn can_stage_updates(bundle_path~ : String) -> Bool
+
 pub async fn check_for_update(current~ : String) -> UpdateInfo?
 
 pub async fn cleanup_leftovers(work_dir~ : String, bundle_path~ : String) -> Unit
@@ -16,7 +18,7 @@ pub async fn self_update_unavailable_reason(bundle_path~ : String) -> String?
 
 pub async fn stage_update(UpdateInfo, work_dir~ : String, bundle_path~ : String, on_progress~ : async (Int, Int?) -> Unit) -> StagedUpdate
 
-pub async fn take_relaunch_target(work_dir~ : String) -> String?
+pub async fn take_relaunch_marker(work_dir~ : String, bundle_path~ : String) -> Bool
 
 pub async fn write_relaunch_marker(work_dir~ : String, bundle_path~ : String) -> Unit
 

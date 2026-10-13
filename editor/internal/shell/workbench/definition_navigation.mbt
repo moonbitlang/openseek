@@ -12,8 +12,8 @@ priv enum PreviewResourceLifecycle {
 priv struct PreviewResourceState {
   uri : @base_common.Uri
   mut model : @model.TextModel?
-  mut in_flight : Int
-  mut leases : Int
+  mut in_flight : Int32
+  mut leases : Int32
   mut lifecycle : PreviewResourceLifecycle
 }
 

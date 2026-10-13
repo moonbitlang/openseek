@@ -16,7 +16,7 @@
 /// How many lex/parse errors a reject report surfaces. Each entry carries a
 /// source excerpt, and parse errors cascade — a handful shows the shape of the
 /// breakage without dumping pages.
-const ParseErrorDisplayLimit : Int = 5
+const ParseErrorDisplayLimit : Int32 = 5
 
 ///|
 /// The `error_code` range for lexer and parser diagnostics (e.g. 3001 "Lexing
@@ -26,10 +26,10 @@ const ParseErrorDisplayLimit : Int = 5
 /// parse errors. Those are semantic, not syntactic, and may be a legitimate
 /// transient state mid-edit, so the range check keeps the gate to pure syntax,
 /// matching how `.mbt` type errors never gate.
-const ParseErrorCodeMin : Int = 3000
+const ParseErrorCodeMin : Int32 = 3000
 
 ///|
-const ParseErrorCodeMax : Int = 3999
+const ParseErrorCodeMax : Int32 = 3999
 
 ///|
 fn is_parse_error_code(code : Double) -> Bool {
@@ -38,10 +38,10 @@ fn is_parse_error_code(code : Double) -> Bool {
 }
 
 ///|
-const MooncParseTimeoutMs : Int = 10000
+const MooncParseTimeoutMs : Int32 = 10000
 
 ///|
-const MooncParseMaxOutputChars : Int = 200000
+const MooncParseMaxOutputChars : Int32 = 200000
 
 ///|
 /// The scratch-file basename `moonc syncheck` needs for `path`'s input kind, or
@@ -167,7 +167,7 @@ pub async fn content_parse_errors(
 /// actually parse to completion.
 fn decide_parse_gate(
   text : String,
-  exit_code : Int?,
+  exit_code : Int32?,
   truncated~ : Bool,
 ) -> ParseGate? {
   let errors : Array[ParseGateError] = []
@@ -284,7 +284,7 @@ fn excerpt_for_loc(lines : Array[String], loc : String) -> String {
 ///|
 /// The inclusive 1-based `(first, last)` line pair named by a compiler `loc`
 /// like `7:1-9:2` (or a bare `7:1`). `None` when the loc is malformed.
-fn loc_line_span(loc : String) -> (Int, Int)? {
+fn loc_line_span(loc : String) -> (Int32, Int32)? {
   // Two anchored shapes: `start[:col]-end[:col]` and a bare `start[:col]`.
   // An end that does not open with digits (or is missing) falls back to the
   // start line, matching the compiler's lenient loc forms; parse failures on

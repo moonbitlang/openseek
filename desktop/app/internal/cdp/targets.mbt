@@ -2,13 +2,13 @@
 pub struct Target {
   kind : String
   priv debugger_url : String?
-  priv port : Int
+  priv port : Int32
 }
 
 ///|
 /// Discover targets on a local Chromium debugging endpoint. The host still
 /// owns port allocation and the association between native views and targets.
-pub async fn list_targets(port : Int) -> Array[Target] {
+pub async fn list_targets(port : Int32) -> Array[Target] {
   let (_, body) = @http.get("http://127.0.0.1:\{port}/json/list")
   let json = @json.parse(body.text())
   guard json is Array(targets) else {

@@ -42,7 +42,7 @@ fn tool_definitions(
 
 ///|
 async fn run_read_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let root = @fs.tmpdir(prefix="openseek-tool-read-")
@@ -70,7 +70,7 @@ async fn run_read_case(
 
 ///|
 async fn run_write_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let root = @fs.tmpdir(prefix="openseek-tool-write-")
@@ -98,7 +98,7 @@ async fn run_write_case(
 
 ///|
 async fn run_edit_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let root = @fs.tmpdir(prefix="openseek-tool-edit-")
@@ -143,7 +143,7 @@ async fn run_edit_case(
 
 ///|
 async fn run_multi_edit_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let root = @fs.tmpdir(prefix="openseek-tool-multi-edit-")
@@ -199,7 +199,7 @@ async fn run_multi_edit_case(
 
 ///|
 async fn run_mbtx_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let action = dispatch(tools, "mbtx", {
@@ -221,7 +221,7 @@ async fn run_mbtx_case(
 
 ///|
 async fn run_plan_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let action = dispatch(tools, "plan", {
@@ -253,7 +253,7 @@ async fn run_plan_case(
 
 ///|
 async fn run_finish_case(
-  index : Int,
+  index : Int32,
   tools : @agent_tool.Tools,
 ) -> @report.ReportRow {
   let action = dispatch(tools, "finish", { "answer": "tool harness complete" })
@@ -333,7 +333,7 @@ fn build_report(rows : Array[@report.ReportRow]) -> @report.Report {
 
 ///|
 fn row(
-  index~ : Int,
+  index~ : Int32,
   name~ : String,
   mode~ : String,
   action~ : String,

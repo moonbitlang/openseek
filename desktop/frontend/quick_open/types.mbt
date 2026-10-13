@@ -50,9 +50,9 @@ priv struct Open {
   root : @common.Uri?
   value : String
   items : Array[Item]
-  selected : Int
+  selected : Int32
   phase : Phase
-  generation : Int
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -74,7 +74,7 @@ struct State {
   open : Open?
   /// Page-level counter, kept across close so an old reply cannot become
   /// current again by reopening the palette.
-  generation : Int
+  generation : Int32
   cache : FileQueryCache
 } derive(Eq)
 
@@ -134,23 +134,23 @@ pub(all) enum Msg {
   FilesDue(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   FileCacheLoaded(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   FileCacheRequestFailed(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   FilesLoaded(
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
     query~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     files~ : Array[@pathx.Relative],
     from_cache~ : Bool,
     limit_hit~ : Bool
@@ -159,27 +159,27 @@ pub(all) enum Msg {
     owner~ : @interop.ConversationKey,
     cache_key~ : String,
     query~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   SymbolsDue(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
   SymbolsLoaded(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     items~ : Array[@symbols.Symbol]
   )
   SymbolsRequestFailed(
     owner~ : @interop.ConversationKey,
     query~ : String,
-    generation~ : Int
+    generation~ : Int32
   )
-  Move(Int)
-  Select(Int)
-  Pick(Int)
+  Move(Int32)
+  Select(Int32)
+  Pick(Int32)
   Dismiss
 }
 

@@ -13,7 +13,7 @@ pub(all) enum TrackedRangeStickiness {
 /// Numeric value of the stickiness, matching Monaco's
 /// `TrackedRangeStickiness` enum values (`model.ts`) — the interval tree
 /// packs it into the node metadata byte.
-fn TrackedRangeStickiness::to_int(self : TrackedRangeStickiness) -> Int {
+fn TrackedRangeStickiness::to_int(self : TrackedRangeStickiness) -> Int32 {
   match self {
     AlwaysGrowsWhenTypingAtEdges => 0
     NeverGrowsWhenTypingAtEdges => 1
@@ -61,7 +61,7 @@ pub(all) struct ModelDecorationMinimapOptions {
 fn clean_class_name(class_name : String) -> String {
   let sb = StringBuilder()
   for unit in class_name.code_units() {
-    if unit is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_') {
+    if unit is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '-' | '_') {
       sb.write_char(unit.to_int().unsafe_to_char())
     } else {
       sb.write_char(' ')
@@ -90,7 +90,7 @@ pub struct ModelDecorationOptions {
   message : String?
   inline_class_name : String?
   inline_class_name_affects_letter_spacing : Bool
-  z_index : Int
+  z_index : Int32
   is_whole_line : Bool
   show_if_collapsed : Bool
   should_fill_line_on_line_break : Bool
@@ -126,7 +126,7 @@ struct InjectedTextOptions {
   inline_class_name : String?
   /// `attachedData` reduced to a producer-defined index (`-1` = none), carried
   /// through the projection into hit-testing lookup.
-  attached_index : Int
+  attached_index : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -143,7 +143,7 @@ pub(all) struct ModelDeltaDecoration {
 /// interface; the port materializes value copies (same data, no aliasing).
 pub(all) struct ModelDecoration {
   id : String
-  owner_id : Int
+  owner_id : Int32
   range : @base_common.Range
   options : ModelDecorationOptions
 } derive(Debug)
@@ -175,12 +175,12 @@ pub fn ModelDecorationOptions::ModelDecorationOptions(
   class_name : String,
   message? : String,
   inline_class_name? : String,
-  inline_class_name_affects_letter_spacing? : Bool = false,
-  z_index? : Int = 0,
-  is_whole_line? : Bool = false,
-  show_if_collapsed? : Bool = false,
-  should_fill_line_on_line_break? : Bool = false,
-  stickiness? : TrackedRangeStickiness = AlwaysGrowsWhenTypingAtEdges,
+  inline_class_name_affects_letter_spacing~ : Bool = false,
+  z_index~ : Int32 = 0,
+  is_whole_line~ : Bool = false,
+  show_if_collapsed~ : Bool = false,
+  should_fill_line_on_line_break~ : Bool = false,
+  stickiness~ : TrackedRangeStickiness = AlwaysGrowsWhenTypingAtEdges,
   overview_ruler? : ModelDecorationOverviewRulerOptions,
   minimap? : ModelDecorationMinimapOptions,
   glyph_margin_class_name? : String,
@@ -188,8 +188,8 @@ pub fn ModelDecorationOptions::ModelDecorationOptions(
   first_line_decoration_class_name? : String,
   margin_class_name? : String,
   after_content_class_name? : String,
-  collapse_on_replace_edit? : Bool = false,
-  description? : String = "",
+  collapse_on_replace_edit~ : Bool = false,
+  description~ : String = "",
   before? : InjectedTextOptions,
   after? : InjectedTextOptions,
 ) -> ModelDecorationOptions {

@@ -387,7 +387,7 @@ pub async fn archive_session(
   manager : EngineManager,
   session : String,
   on_committed : (String, String) -> Unit,
-  force? : Bool = false,
+  force~ : Bool = false,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveReply {
   let session = session.trim().to_owned()
@@ -415,7 +415,7 @@ async fn archive_session_commit(
   manager : EngineManager,
   session : String,
   on_committed : (String, String) -> Unit,
-  force? : Bool = false,
+  force~ : Bool = false,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveNeedsForceReply? {
   let family = manager.claim_session_family_move(session, archived=false)

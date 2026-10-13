@@ -26,7 +26,7 @@
 ///|
 /// `_RESERVED_GUTTER_WIDTH` (`agentFeedbackEditorInputContribution.ts:252`):
 /// extra lane width reserved so the add glyph renders fully.
-let agent_feedback_reserved_gutter_px : Int = 18
+let agent_feedback_reserved_gutter_px : Int32 = 18
 
 ///|
 /// The overlay-widget id of the singleton input widget
@@ -255,7 +255,7 @@ fn CodeEditorWidget::on_agent_feedback_mouse_move(
 /// resource whose line has no existing feedback.
 fn CodeEditorWidget::update_agent_feedback_hover_glyph(
   self : CodeEditorWidget,
-  line : Int,
+  line : Int32,
 ) -> Unit {
   guard self.agent_feedback_input_contribution() is Some(ic) else { return }
   guard self.get_model() is Some(model) else {
@@ -310,7 +310,7 @@ fn CodeEditorWidget::update_agent_feedback_hover_glyph(
 /// resolved item is invisible, so its line offers the add affordance again).
 fn agent_feedback_line_has_feedback(
   items : Array[@agent_feedback_api.AgentFeedback],
-  line : Int,
+  line : Int32,
 ) -> Bool {
   items.search_by(item => {
     item.state != Resolved &&
@@ -417,7 +417,7 @@ fn CodeEditorWidget::on_agent_feedback_mouse_up(
 /// into the input so typing can start immediately.
 fn CodeEditorWidget::select_agent_feedback_line(
   self : CodeEditorWidget,
-  line : Int,
+  line : Int32,
 ) -> Unit {
   if self.agent_feedback_input_visible() && self.agent_feedback_has_draft() {
     self.focus_agent_feedback_input()

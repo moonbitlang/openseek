@@ -143,8 +143,8 @@ async fn write_registry(registry : Registry) -> Unit {
     error => raise WorkspaceError("could not create \{root}: \{error}")
   }
   let json : Json = {
-    "workspaces": registry.workspaces.map(path => path.0).to_json(),
-    "initialized": registry.initialized.to_json(),
+    "workspaces": Json(registry.workspaces.map(path => path.0)),
+    "initialized": Json(registry.initialized),
   }
   @fsx.write_text_atomic(
     root.join(WorkspacesFile).to_path(),

@@ -10,7 +10,7 @@ pub(all) enum SkillsCatalogReply {
 ///|
 pub impl ToJson for SkillsCatalogReply with fn to_json(self) {
   match self {
-    SkillsCatalog(value) => { "skills": value.to_json() }
+    SkillsCatalog(value) => { "skills": Json(value) }
     SkillsCatalogError(message) => { "error": Json(message) }
   }
 }
@@ -39,7 +39,7 @@ pub(all) enum InstalledSkillsReply {
 ///|
 pub impl ToJson for InstalledSkillsReply with fn to_json(self) {
   match self {
-    InstalledSkills(value) => { "skills": value.to_json() }
+    InstalledSkills(value) => { "skills": Json(value) }
     InstalledSkillsError(message) => { "error": Json(message) }
   }
 }
@@ -124,7 +124,7 @@ pub(all) enum SkillContentReply {
 ///|
 pub impl ToJson for SkillContentReply with fn to_json(self) {
   match self {
-    SkillContent(value) => { "content": value.to_json() }
+    SkillContent(value) => { "content": Json(value) }
     SkillContentError(message) => { "error": Json(message) }
   }
 }

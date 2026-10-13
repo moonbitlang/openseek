@@ -24,7 +24,7 @@ pub fn render_tokenized_code_block(
 pub fn render_tokenized_code_lines(
   code_block : MarkdownCodeBlock,
   active_language_id : String?,
-  render_line : (Int, MarkdownCodeLine, String) -> String,
+  render_line : (Int32, MarkdownCodeLine, String) -> String,
 ) -> String {
   let language_id = markdown_code_language(code_block, active_language_id)
   let codec = @services.language_id_codec
@@ -50,7 +50,7 @@ pub fn render_tokenized_code_lines(
 fn markdown_code_tokenizer(
   language_id : String,
   codec : @services.LanguageIdCodec,
-) -> (String) -> Array[UInt] {
+) -> (String) -> Array[UInt32] {
   let encoded_language_id = codec.register(language_id)
   let tokenizer = @syntax.tokenization_registry.get(language_id)
   let mut state = tokenizer.map(tokenizer => tokenizer.initial_state())
@@ -69,7 +69,7 @@ fn markdown_code_tokenizer(
       codec,
       language_id=encoded_language_id,
     )
-    let pairs : Array[UInt] = []
+    let pairs : Array[UInt32] = []
     for index in 0..<line_tokens.get_count() {
       pairs.push(line_tokens.get_start_offset(index).reinterpret_as_uint())
       pairs.push(line_tokens.get_metadata(index).to_uint())

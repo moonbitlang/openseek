@@ -54,7 +54,7 @@ pub const GoalContinuePrompt : String =
 struct StandingGoal {
   text : String
   answered_since_set : Bool
-  set_sequence : Int
+  set_sequence : Int32
   blocked : Bool
 } derive(Debug)
 
@@ -68,7 +68,7 @@ pub fn StandingGoal::text(self : StandingGoal) -> String {
 /// Sequence of the set marker event that established this goal. Marker
 /// identity for consumers that must distinguish "this exact set persisted"
 /// from "an identical-text goal was already standing" — text alone cannot.
-pub fn StandingGoal::set_sequence(self : StandingGoal) -> Int {
+pub fn StandingGoal::set_sequence(self : StandingGoal) -> Int32 {
   self.set_sequence
 }
 
@@ -134,7 +134,7 @@ pub fn Session::current_goal(self : Session) -> StandingGoal? {
   // first one encountered before the set marker decides `blocked`, and
   // `blocked_decided` freezes it so an older transition cannot override it.
   let mut blocked_decided = false
-  let covered : Array[(Int, Int)] = []
+  let covered : Array[(Int32, Int32)] = []
   for index in (events.length() - 1)>=..0 {
     let event = events[index]
     match event.item() {

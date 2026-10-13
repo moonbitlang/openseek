@@ -1,7 +1,7 @@
 ///|
 fn valid_document_line_range(
   range : @base_common.LineRange,
-  line_count : Int,
+  line_count : Int32,
 ) -> Bool {
   range.start_line_number >= 1 &&
   range.end_line_number_exclusive >= range.start_line_number &&
@@ -187,8 +187,8 @@ fn valid_document_inner_changes(
 ///|
 fn valid_document_alignment_sequence(
   result : DocumentDiff,
-  original_line_count : Int,
-  modified_line_count : Int,
+  original_line_count : Int32,
+  modified_line_count : Int32,
 ) -> Bool {
   if result.changes.is_empty() {
     return original_line_count == modified_line_count

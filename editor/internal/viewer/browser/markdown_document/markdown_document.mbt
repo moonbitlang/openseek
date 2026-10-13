@@ -4,9 +4,9 @@
 /// `code_line` retains the exact UTF-16 boundary map back into the original
 /// model snapshot.
 pub struct MarkdownSemanticCodeLineDom {
-  block_index : Int
+  block_index : Int32
   block_source_range : @base_common.OffsetRange
-  line_index : Int
+  line_index : Int32
   priv code_line : @markdown_core.MarkdownCodeLine
   element : @rdom.Element
 }
@@ -66,18 +66,18 @@ struct MarkdownDocumentView {
   base_uri : @base_common.Uri
   on_size_changed : () -> Unit
   mut source : String
-  mut source_model_version : Int
+  mut source_model_version : Int32
   mut theme : String
-  mut projection_generation : Int
+  mut projection_generation : Int32
   mut rendered : @browser_markdown.RenderedMarkdown
   mut diagram_viewports : @diagram_viewport.DiagramViewports
   mut semantic_dom : MarkdownSemanticDomLifetime
   listeners : Array[@base_common.Disposable]
-  mut on_section_fold_toggle : (Int) -> Unit
+  mut on_section_fold_toggle : (Int32) -> Unit
   toc_nav : @rdom.Element
   toc_list : @rdom.Element
   toc_toggle : @rdom.Element
-  mut on_toc_navigate : (Int) -> Unit
+  mut on_toc_navigate : (Int32) -> Unit
   mut disposed : Bool
 }
 
@@ -88,9 +88,9 @@ fn markdown_document_root_class(show_unused : Bool) -> String {
 
 ///|
 pub fn MarkdownDocumentView::MarkdownDocumentView(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   source : String,
-  source_model_version : Int,
+  source_model_version : Int32,
   language_id : String,
   base_uri : @base_common.Uri,
   resource_kind : @markdown_core.MarkdownResourceKind,
@@ -98,7 +98,7 @@ pub fn MarkdownDocumentView::MarkdownDocumentView(
   on_scroll : () -> Unit,
   on_focus_changed : (Bool) -> Unit,
   on_size_changed : () -> Unit,
-  show_unused? : Bool = true,
+  show_unused~ : Bool = true,
 ) -> MarkdownDocumentView {
   let document = @rdom.document()
   let root = document.create_element("section")
@@ -330,8 +330,8 @@ fn render_markdown_document_code_block(
 
 ///|
 fn render_semantic_tokenized_code_line(
-  block_index : Int,
-  line_index : Int,
+  block_index : Int32,
+  line_index : Int32,
   code_line : @markdown_core.MarkdownCodeLine,
   tokenized : String,
 ) -> String {
@@ -506,7 +506,7 @@ extern "js" fn markdown_semantic_line_text(element : @rdom.Element) -> String =
 pub fn MarkdownDocumentView::replace_source(
   self : MarkdownDocumentView,
   source : String,
-  source_model_version : Int,
+  source_model_version : Int32,
 ) -> Unit {
   guard !self.disposed else { return }
   self.semantic_dom.dispose()
@@ -577,14 +577,14 @@ pub fn MarkdownDocumentView::projection(
 ///|
 pub fn MarkdownDocumentView::projection_generation(
   self : MarkdownDocumentView,
-) -> Int {
+) -> Int32 {
   self.projection_generation
 }
 
 ///|
 pub fn MarkdownDocumentView::source_model_version(
   self : MarkdownDocumentView,
-) -> Int {
+) -> Int32 {
   self.source_model_version
 }
 
@@ -632,7 +632,7 @@ pub fn MarkdownDocumentView::set_hidden_root_elements(
 ) -> Unit {
   guard !self.disposed else { return }
   let children = self.article.get_children()
-  let hidden : Set[(Int, Int)] = Set([])
+  let hidden : Set[(Int32, Int32)] = Set([])
   for range in hidden_source_ranges {
     hidden.add((range.start, range.end_exclusive))
   }
@@ -664,7 +664,7 @@ let markdown_hidden_element_attribute : String = "data-markdown-section-hidden"
 /// control, which section it toggles, and the state the control displays.
 pub(all) struct MarkdownSectionFoldControl {
   heading_source_range : @base_common.OffsetRange
-  section_index : Int
+  section_index : Int32
   collapsed : Bool
 } derive(Eq, Debug)
 
@@ -688,7 +688,7 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
 ) -> Unit {
   guard !self.disposed else { return }
   let children = self.article.get_children()
-  let wanted : Map[(Int, Int), MarkdownSectionFoldControl] = Map([])
+  let wanted : Map[(Int32, Int32), MarkdownSectionFoldControl] = Map([])
   for control in controls {
     let range = control.heading_source_range
     wanted[(range.start, range.end_exclusive)] = control
@@ -743,7 +743,7 @@ pub fn MarkdownDocumentView::install_section_fold_controls(
 /// projection replacements without per-button listener bookkeeping.
 pub fn MarkdownDocumentView::set_section_fold_toggle_handler(
   self : MarkdownDocumentView,
-  handler : (Int) -> Unit,
+  handler : (Int32) -> Unit,
 ) -> Unit {
   self.on_section_fold_toggle = handler
 }
@@ -764,7 +764,7 @@ fn markdown_first_child(element : @rdom.Element) -> @rdom.Node? {
 /// `None` for every other click. Buttons live inside headings, so `closest`
 /// from the real event target is exact; text selection and link activation in
 /// the same heading never reach here.
-fn markdown_fold_toggle_section(event : @rdom.Event) -> Int? {
+fn markdown_fold_toggle_section(event : @rdom.Event) -> Int32? {
   guard event.target().to_element() is Some(target) else { return None }
   guard target.closest("[data-markdown-fold-section]") is Some(button) else {
     return None
@@ -778,7 +778,7 @@ fn markdown_fold_toggle_section(event : @rdom.Event) -> Int? {
 ///|
 /// Digit-only parser for source offsets and control
 /// indices. Malformed attributes are ignored instead of selecting index 0.
-fn markdown_parse_dom_index(raw : String) -> Int? {
+fn markdown_parse_dom_index(raw : String) -> Int32? {
   guard raw.length() > 0 && raw.length() <= 9 else { return None }
   let value = for unit in raw; value = 0 {
     guard unit >= '0' && unit <= '9' else { return None }
@@ -890,7 +890,7 @@ pub fn MarkdownDocumentView::scroll_height(
 ///|
 fn MarkdownDocumentView::element_for_source_offset(
   self : MarkdownDocumentView,
-  source_offset : Int,
+  source_offset : Int32,
 ) -> @rdom.Element? {
   for block in self.rendered.projection.code_blocks {
     if block.block_source_range.contains(source_offset) ||
@@ -935,7 +935,7 @@ fn MarkdownDocumentView::element_for_source_offset(
 /// ancestors are expanded before the target rectangle is measured.
 fn MarkdownDocumentView::scroll_toc_entry_into_view(
   self : MarkdownDocumentView,
-  source_offset : Int,
+  source_offset : Int32,
 ) -> Unit {
   guard !self.disposed &&
     self.element_for_source_offset(source_offset) is Some(element) else {
@@ -958,7 +958,7 @@ fn MarkdownDocumentView::scroll_toc_entry_into_view(
 /// `start`/`nearest` landing, mirroring the viewport's `scroll-padding-top`.
 pub fn MarkdownDocumentView::reveal_source_offset(
   self : MarkdownDocumentView,
-  source_offset : Int,
+  source_offset : Int32,
   vertical_alignment : String,
 ) -> Unit {
   guard !self.disposed &&
@@ -1042,9 +1042,9 @@ pub fn MarkdownDocumentView::dispose(self : MarkdownDocumentView) -> Unit {
 ///|
 /// One row of the pinned table-of-contents bar.
 pub(all) struct MarkdownTocBarEntry {
-  depth : Int
+  depth : Int32
   text : String
-  source_offset : Int
+  source_offset : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -1058,7 +1058,7 @@ pub(all) struct MarkdownTocBarEntry {
 pub fn MarkdownDocumentView::set_toc_entries(
   self : MarkdownDocumentView,
   entries : Array[MarkdownTocBarEntry],
-  on_navigate : (Int) -> Unit,
+  on_navigate : (Int32) -> Unit,
 ) -> Unit {
   guard !self.disposed else { return }
   self.on_toc_navigate = on_navigate

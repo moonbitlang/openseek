@@ -5,7 +5,7 @@
 /// Constructs normalized line-comment configuration.
 pub fn LineCommentRule::LineCommentRule(
   comment : String,
-  no_indent? : Bool = false,
+  no_indent~ : Bool = false,
 ) -> LineCommentRule {
   new_line_comment_rule(comment, no_indent~)
 }

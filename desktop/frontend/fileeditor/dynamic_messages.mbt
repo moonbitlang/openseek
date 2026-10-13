@@ -1,6 +1,6 @@
 ///|
 priv enum DynamicMessage {
-  DReviewedFiles(Int, Int)
+  DReviewedFiles(Int32, Int32)
   DLoadingDiff(String)
   DLoadingBaseline(String)
   DBinaryBaseline(String)

@@ -79,7 +79,7 @@ fn scope_violations(
   let violations : Array[String] = []
   for change in changes {
     let parts = components(change.path)
-    let admitted = allowed.any(prefix => parts.starts_with(prefix))
+    let admitted = allowed.any(prefix => parts.has_prefix(prefix))
     if !admitted && !violations.contains(change.path) {
       violations.push(change.path)
     }

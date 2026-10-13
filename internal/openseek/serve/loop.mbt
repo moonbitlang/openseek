@@ -222,7 +222,7 @@ async fn run_serve(
     }
     let pending : Array[PendingWork] = []
     let mut active_work : ActiveWork? = None
-    let mut prediction : (Int, @async.Task[Unit])? = None
+    let mut prediction : (Int32, @async.Task[Unit])? = None
     // Preserve model and thinking mode: disabling thinking changes DeepSeek's
     // cached prefix even when the message array and tool schemas are identical.
     let prediction_client = @client.Client(
@@ -247,7 +247,7 @@ async fn run_serve(
     // once a matching set marker NEWER than the baseline is durably standing
     // (goal_auto_promotable), so neither a failed append nor an
     // identical-text goal that was already standing can arm the loop.
-    let mut goal_auto_pending : (String, Int)? = None
+    let mut goal_auto_pending : (String, Int32)? = None
     let mut goal_auto_target : String? = None
     let mut goal_turns_remaining = 0
     let mut goal_promoted_this_boundary = false

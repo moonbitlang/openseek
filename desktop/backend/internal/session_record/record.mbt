@@ -146,7 +146,7 @@ struct Tail {
   // The highest sequence folded in, and therefore what makes re-reading free
   // of consequences: the same line can arrive any number of times and enters
   // the log exactly once.
-  mut watermark : Int
+  mut watermark : Int32
 }
 
 ///|
@@ -204,7 +204,7 @@ pub fn Tail::document(self : Tail) -> @protocol.SessionDocument {
 
 ///|
 /// The highest sequence folded in; 0 for a record with no events.
-pub fn Tail::watermark(self : Tail) -> Int {
+pub fn Tail::watermark(self : Tail) -> Int32 {
   self.watermark
 }
 

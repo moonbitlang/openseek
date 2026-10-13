@@ -4,7 +4,7 @@
 /// immediately (the child closed its write end); this grace only elapses when a
 /// descendant inherited and is holding the pipe open, in which case there is no
 /// more of the job's own output to wait for.
-let reader_drain_grace_ms : Int = 200
+let reader_drain_grace_ms : Int32 = 200
 
 ///|
 /// Terminal or live state of one execution.
@@ -18,7 +18,7 @@ let reader_drain_grace_ms : Int = 200
 pub enum ExecStatus {
   Running
   Backgrounded
-  Exited(Int)
+  Exited(Int32)
   Killed
 } derive(Eq, Debug)
 
@@ -93,11 +93,11 @@ pub async fn[X] ShellExecution::start(
   args~ : Array[String],
   cwd? : String,
   stdin? : &@process.ProcessInput,
-  inline_cap? : Int = default_inline_cap,
-  hard_cap? : Int = default_hard_cap,
+  inline_cap~ : Int32 = default_inline_cap,
+  hard_cap~ : Int32 = default_hard_cap,
   spill_path? : String,
-  kill_when_full? : Bool = false,
-  kill_at_hard_cap? : Bool = false,
+  kill_when_full~ : Bool = false,
+  kill_at_hard_cap~ : Bool = false,
 ) -> ShellExecution {
   let group = scope.group()
   let sink = ShellOutputSink::ShellOutputSink(
@@ -322,7 +322,7 @@ pub fn ShellExecution::status(self : ShellExecution) -> ExecStatus {
 
 ///|
 /// The child's exit code, if it exited on its own.
-pub fn ShellExecution::exit_code(self : ShellExecution) -> Int? {
+pub fn ShellExecution::exit_code(self : ShellExecution) -> Int32? {
   match self.status {
     Exited(code) => Some(code)
     _ => None
@@ -346,7 +346,7 @@ pub async fn ShellExecution::read_all(self : ShellExecution) -> String {
 /// The last `n` characters of output — a bounded window onto recent output.
 pub async fn ShellExecution::read_tail(
   self : ShellExecution,
-  n : Int,
+  n : Int32,
 ) -> String {
   self.sink.read_tail(n)
 }
@@ -424,13 +424,13 @@ pub async fn ShellExecution::discard(self : ShellExecution) -> Unit {
 
 ///|
 /// Full-output length in characters.
-pub fn ShellExecution::size(self : ShellExecution) -> Int {
+pub fn ShellExecution::size(self : ShellExecution) -> Int32 {
   self.sink.size()
 }
 
 ///|
 /// Output version, bumped whenever retained output grows.
-pub fn ShellExecution::seq(self : ShellExecution) -> Int {
+pub fn ShellExecution::seq(self : ShellExecution) -> Int32 {
   self.sink.seq()
 }
 

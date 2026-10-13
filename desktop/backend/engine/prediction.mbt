@@ -4,7 +4,7 @@
 async fn load_prediction(
   root : @pathx.Absolute,
   session : String,
-  sequence : Int,
+  sequence : Int32,
 ) -> @wire.PredictionRecord? {
   let store = @store.SessionStore(root.to_string())
   if store.prediction(SessionId(session)) is Some(record) &&

@@ -6,7 +6,7 @@ priv suberror CodeLensTestError {
 ///|
 priv struct RecordingCodeLensProvider {
   lenses : Array[@language.CodeLens]
-  calls : Ref[Int]
+  calls : Ref[Int32]
   failing : Bool
 }
 
@@ -25,8 +25,8 @@ impl @language.CodeLensProvider for RecordingCodeLensProvider with fn provide_co
 
 ///|
 fn test_code_lens(
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
   title? : String,
 ) -> @language.CodeLens {
   {

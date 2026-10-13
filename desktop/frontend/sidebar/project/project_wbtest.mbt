@@ -13,8 +13,8 @@ fn test_input(activation? : String) -> Input {
 
 ///|
 fn test_conversations(
-  count : Int,
-  active_index? : Int,
+  count : Int32,
+  active_index? : Int32,
 ) -> Array[@conversation.Input] {
   let conversations : Array[@conversation.Input] = []
   for index = 0; index < count; index = index + 1 {

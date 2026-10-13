@@ -88,7 +88,7 @@ pub(all) struct TranscriptItem {
   // The durable event sequence this item came from, `None` for a client-local
   // item. One event projects to at most one item, so the sequence is the
   // item's stable identity.
-  sequence : Int?
+  sequence : Int32?
 } derive(Eq)
 
 ///|

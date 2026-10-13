@@ -305,7 +305,7 @@ disturb the in-flight fan-out.
 ///|
 test "emitter delivers in registration order and disposal is idempotent" {
   let seen = []
-  let emitter : @common.Emitter[Int] = Emitter()
+  let emitter : @common.Emitter[Int32] = Emitter()
   let first = emitter.event(value => seen.push(("first", value)))
   emitter.event(value => seen.push(("second", value))) |> ignore
   emitter.fire(1)
@@ -332,7 +332,7 @@ nothing to combine.
 ///|
 test "the default inline scheduler never batches, so merge is a no-op" {
   let delivered = []
-  let emitter : @common.MicrotaskEmitter[Int] = MicrotaskEmitter(merge=batch => {
+  let emitter : @common.MicrotaskEmitter[Int32] = MicrotaskEmitter(merge=batch => {
     batch.fold(init=0, (a, b) => a + b)
   })
   emitter.event(value => delivered.push(value)) |> ignore
@@ -356,7 +356,7 @@ manual one and drive it explicitly.
 test "a deferring scheduler collapses the batch into one value" {
   let delivered = []
   let pending : Array[() -> Unit] = []
-  let emitter : @common.MicrotaskEmitter[Int] = MicrotaskEmitter(
+  let emitter : @common.MicrotaskEmitter[Int32] = MicrotaskEmitter(
     merge=batch => batch.fold(init=0, (a, b) => a + b),
     schedule=run => pending.push(run),
   )

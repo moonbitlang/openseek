@@ -27,7 +27,7 @@ pub(all) struct DocumentDiffChange {
 ///|
 pub fn DocumentDiffChange::DocumentDiffChange(
   mapping : DetailedLineRangeMapping,
-  kind? : DocumentDiffChangeKind = Visible,
+  kind~ : DocumentDiffChangeKind = Visible,
 ) -> DocumentDiffChange {
   { kind, mapping, }
 }

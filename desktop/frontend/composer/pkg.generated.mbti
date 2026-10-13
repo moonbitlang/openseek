@@ -90,7 +90,7 @@ pub(all) enum ContextComponent {
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[String])
   ShellCommandsRunning(commands~ : Array[String])
-  QueuedInputPanel(items~ : Array[QueuedInput])
+  QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)

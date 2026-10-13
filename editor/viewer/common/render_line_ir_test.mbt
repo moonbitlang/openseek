@@ -179,7 +179,7 @@ fn simple_view_line(
 }
 
 ///|
-fn count_occurrences(haystack : String, needle : String) -> Int {
+fn count_occurrences(haystack : String, needle : String) -> Int32 {
   let mut count = 0
   let needle_len = needle.length()
   if needle_len == 0 {

@@ -225,7 +225,7 @@ test "the bounds, and the units they are counted in" {
     }
   ]
   inspect(
-    rejects({ "steps": too_many.to_json() }, "at most 20 steps, got 21"),
+    rejects({ "steps": Json(too_many) }, "at most 20 steps, got 21"),
     content="true",
   )
   // Length counts code points, matching the `maxLength` the advertised JSON

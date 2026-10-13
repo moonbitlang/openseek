@@ -1,8 +1,8 @@
 ///|
-const SearchDebounceMs : Int = 250
+const SearchDebounceMs : Int32 = 250
 
 ///|
-const MaxSearchResults : Int = 20000
+const MaxSearchResults : Int32 = 20000
 
 ///|
 fn fresh_page() -> Page {
@@ -555,7 +555,7 @@ pub fn State::editor_highlights(
 }
 
 ///|
-fn Page::active_result_count(self : Page) -> Int {
+fn Page::active_result_count(self : Page) -> Int32 {
   match self.mode {
     Text => self.text.matches.length()
     Semantic => self.semantic.hits.length()
@@ -563,7 +563,7 @@ fn Page::active_result_count(self : Page) -> Int {
 }
 
 ///|
-fn Page::active_file_count(self : Page) -> Int {
+fn Page::active_file_count(self : Page) -> Int32 {
   let files : Map[String, Bool] = Map([])
   for path in self.active_paths() {
     files[path] = true

@@ -32,7 +32,7 @@
 ///|
 /// `Number.MAX_VALUE` as a column sentinel (the marker system uses the same
 /// convention, `viewer/common/markers`).
-const MAX_COLUMN : Int = 0x7FFFFFFF
+const MAX_COLUMN : Int32 = 0x7FFFFFFF
 
 ///|
 /// `QuickDiffDecorator.createDecoration` (`quickDiffDecorator.ts:34`)

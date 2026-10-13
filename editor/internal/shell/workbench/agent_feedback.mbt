@@ -16,7 +16,7 @@ fn feedback_storage_key(resource : @base_common.Uri) -> String {
 ///|
 /// Items restored from storage get ids in their own namespace so they can
 /// never collide with the service's session-scoped `viewer-feedback-N` ids.
-let restored_feedback_count : Ref[Int] = Ref(0)
+let restored_feedback_count : Ref[Int32] = Ref(0)
 
 ///|
 /// Subscribes the workbench to the feedback service's change event and
@@ -56,28 +56,32 @@ fn persist_feedback_items(
 ///|
 fn feedback_item_to_json(item : @agent_feedback_api.AgentFeedback) -> Json {
   let fields : Map[String, Json] = Map([])
-  fields["text"] = item.text.to_json()
+  fields["text"] = Json(item.text)
   if item.selected_text is Some(selected_text) {
-    fields["selected_text"] = selected_text.to_json()
+    fields["selected_text"] = Json(selected_text)
   }
   fields["range"] = Json([
-    item.range.start_line_number.to_json(),
-    item.range.start_column.to_json(),
-    item.range.end_line_number.to_json(),
-    item.range.end_column.to_json(),
+    Json(item.range.start_line_number),
+    Json(item.range.start_column),
+    Json(item.range.end_line_number),
+    Json(item.range.end_column),
   ])
-  fields["kind"] = (match item.kind {
-    UserReview => "user"
-    AgentReview => "codeReview"
-  }).to_json()
-  fields["state"] = (match item.state {
-    Created => "created"
-    Accepted => "accepted"
-    Submitted => "submitted"
-    Resolved => "resolved"
-  }).to_json()
+  fields["kind"] = Json(
+    match item.kind {
+      UserReview => "user"
+      AgentReview => "codeReview"
+    },
+  )
+  fields["state"] = Json(
+    match item.state {
+      Created => "created"
+      Accepted => "accepted"
+      Submitted => "submitted"
+      Resolved => "resolved"
+    },
+  )
   if !item.replies.is_empty() {
-    fields["replies"] = Json(item.replies.map(reply => reply.to_json()))
+    fields["replies"] = Json(item.replies.map(reply => Json(reply)))
   }
   Json(fields)
 }

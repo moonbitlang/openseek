@@ -76,7 +76,7 @@ fn ApiProvider::parse(value : String) -> ApiProvider? {
 /// works on `raw` so fields this build does not know survive a rewrite.
 priv struct EngineSettings {
   raw : Map[String, Json]
-  version : Int
+  version : Int32
   provider : ApiProvider
   custom_api_url : String?
   deepseek_api_key : String?
@@ -155,7 +155,7 @@ pub(all) struct SettingsPatch {
 /// broadcast params. Key material never leaves the host — only presence.
 fn settings_status_payload(
   settings : EngineSettings,
-  revision : Int,
+  revision : Int32,
 ) -> @protocol.SettingsStatusPayload {
   {
     revision,
@@ -178,7 +178,7 @@ fn settings_status_payload(
 /// read-modify-write or the Windows replace fallback's remove/rename window.
 async fn EngineManager::settings_snapshot(
   self : EngineManager,
-) -> (EngineSettings, Int) {
+) -> (EngineSettings, Int32) {
   self.settings_lock.acquire()
   defer self.settings_lock.release()
   (load_engine_settings(self.runtime_dir), self.settings_revision)
@@ -587,7 +587,7 @@ async test "a save removes the retired WSL settings group" {
 ///|
 async test "concurrent disjoint settings patches merge and publish in revision order" {
   with_settings_dir((dir, manager) => {
-    let committed : Array[Int] = []
+    let committed : Array[Int32] = []
     let ready : @async.Queue[Unit] = Queue(kind=Blocking(2))
     // Queue both callers behind the manager lock so the test exercises the
     // same contended path as two remote clients instead of relying on I/O

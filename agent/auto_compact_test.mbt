@@ -39,7 +39,7 @@ async fn auto_compact_test_server(
 }
 
 ///|
-fn usage_json(total_tokens : Int) -> Json {
+fn usage_json(total_tokens : Int32) -> Json {
   {
     "prompt_tokens": total_tokens - 1_000,
     "completion_tokens": 1_000,
@@ -48,14 +48,14 @@ fn usage_json(total_tokens : Int) -> Json {
 }
 
 ///|
-fn sse_tool_call(id : String, name : String, total_tokens : Int) -> String {
+fn sse_tool_call(id : String, name : String, total_tokens : Int32) -> String {
   sse_tool_calls([(id, name)], total_tokens)
 }
 
 ///|
 fn sse_tool_calls(
   calls : Array[(String, String)],
-  total_tokens : Int,
+  total_tokens : Int32,
 ) -> String {
   let entries : Array[Json] = [
     for index, call in calls => {
@@ -71,13 +71,13 @@ fn sse_tool_calls(
   ]
   (
     {
-      "choices": [{ "delta": { "tool_calls": entries.to_json() } }],
+      "choices": [{ "delta": { "tool_calls": Json(entries) } }],
       "usage": usage_json(total_tokens),
     } : Json).stringify()
 }
 
 ///|
-fn sse_final(content : String, total_tokens : Int) -> String {
+fn sse_final(content : String, total_tokens : Int32) -> String {
   (
     {
       "choices": [{ "delta": { "content": content } }],
@@ -89,7 +89,7 @@ fn sse_final(content : String, total_tokens : Int) -> String {
 fn sse_final_with_reasoning(
   content : String,
   reasoning : String,
-  total_tokens : Int,
+  total_tokens : Int32,
 ) -> String {
   (
     {
@@ -1109,7 +1109,7 @@ async test "a soft-ceiling batch executes then yields gracefully" {
 }
 
 ///|
-fn flood_definition(chars : Int) -> @agent_tool.AgentToolDefinition {
+fn flood_definition(chars : Int32) -> @agent_tool.AgentToolDefinition {
   let content = "y".repeat(chars)
   AgentToolDefinition(
     name="flood",
@@ -1120,19 +1120,19 @@ fn flood_definition(chars : Int) -> @agent_tool.AgentToolDefinition {
 }
 
 ///|
-fn flood_tools(chars : Int) -> @agent_tool.Tools raise {
+fn flood_tools(chars : Int32) -> @agent_tool.Tools raise {
   Tools([flood_definition(chars)])
 }
 
 ///|
-fn flood_batch(count : Int) -> Array[(String, String)] {
+fn flood_batch(count : Int32) -> Array[(String, String)] {
   [
     for index in 0..<count => ("call_\{index + 1}", "flood")
   ]
 }
 
 ///|
-fn flood_and_finish_tools(chars : Int) -> @agent_tool.Tools raise {
+fn flood_and_finish_tools(chars : Int32) -> @agent_tool.Tools raise {
   Tools([flood_definition(chars), finish_definition()])
 }
 

@@ -55,7 +55,7 @@ fn lenient_string(fields : Map[String, Json], name : String) -> String? {
 ///|
 /// `lenient_string` for a JSON number, truncated the way the raising integer
 /// readers truncate.
-fn lenient_int(fields : Map[String, Json], name : String) -> Int? {
+fn lenient_int(fields : Map[String, Json], name : String) -> Int32? {
   guard fields.get(name) is Some(Number(value, ..)) else { return None }
   Some(value.to_int())
 }
@@ -136,7 +136,7 @@ fn JsonObject::optional_bool(
 fn JsonObject::required_int(
   self : JsonObject,
   name : String,
-) -> Int raise @json.JsonDecodeError {
+) -> Int32 raise @json.JsonDecodeError {
   @json.from_json(self.required_json(name), path=self.path.add_key(name))
 }
 
@@ -144,7 +144,7 @@ fn JsonObject::required_int(
 fn JsonObject::optional_int(
   self : JsonObject,
   name : String,
-) -> Int? raise @json.JsonDecodeError {
+) -> Int32? raise @json.JsonDecodeError {
   guard self.optional_json(name) is Some(value) else { return None }
   Some(@json.from_json(value, path=self.path.add_key(name)))
 }

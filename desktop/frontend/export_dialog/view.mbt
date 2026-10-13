@@ -3,7 +3,7 @@
 /// it keyboard focus containment, Escape dismissal, and focus restoration
 /// without adding DOM bindings or letting background controls receive clicks.
 pub fn Model::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {

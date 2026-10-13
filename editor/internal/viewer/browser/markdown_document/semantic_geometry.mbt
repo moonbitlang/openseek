@@ -3,7 +3,7 @@
 /// offset is in the original Markdown model, not in rendered fence text.
 pub struct MarkdownSemanticPointerHit {
   line : MarkdownSemanticCodeLineDom
-  source_offset : Int
+  source_offset : Int32
   pointer_x : Double
 }
 
@@ -33,10 +33,10 @@ extern "js" fn markdown_native_caret_hit_node(
 ///|
 extern "js" fn markdown_native_caret_hit_offset(
   hit : MarkdownNativeCaretHit,
-) -> Int = "(hit) => Number(hit.offset ?? hit.startOffset ?? 0) | 0"
+) -> Int32 = "(hit) => Number(hit.offset ?? hit.startOffset ?? 0) | 0"
 
 ///|
-extern "js" fn markdown_node_text_length(node : @rdom.Node) -> Int = "(node) => String(node.textContent || '').length"
+extern "js" fn markdown_node_text_length(node : @rdom.Node) -> Int32 = "(node) => String(node.textContent || '').length"
 
 ///|
 fn markdown_node_is_descendant_of(
@@ -57,8 +57,8 @@ fn markdown_node_is_descendant_of(
 fn markdown_text_units_before_node(
   root : @rdom.Node,
   target : @rdom.Node,
-  target_offset : Int,
-) -> (Bool, Int) {
+  target_offset : Int32,
+) -> (Bool, Int32) {
   if root.is_same_node(target) {
     let length = markdown_node_text_length(root)
     if target_offset >= 0 && target_offset <= length {
@@ -136,15 +136,15 @@ pub fn MarkdownDocumentView::semantic_pointer_hit(
 ///|
 priv struct MarkdownTextBoundary {
   node : @rdom.Node
-  offset : Int
+  offset : Int32
 }
 
 ///|
 fn markdown_text_boundary_at_from(
   root : @rdom.Node,
-  wanted : Int,
-  consumed_before : Int,
-) -> (MarkdownTextBoundary?, Int) {
+  wanted : Int32,
+  consumed_before : Int32,
+) -> (MarkdownTextBoundary?, Int32) {
   if root.get_node_type() == 3 {
     let length = markdown_node_text_length(root)
     let consumed_after = consumed_before + length
@@ -180,7 +180,7 @@ fn markdown_text_boundary_at_from(
 ///|
 fn markdown_text_boundary_at(
   root : @rdom.Node,
-  wanted : Int,
+  wanted : Int32,
 ) -> MarkdownTextBoundary? {
   markdown_text_boundary_at_from(root, wanted, 0).0
 }
@@ -198,14 +198,14 @@ extern "js" fn markdown_native_range_create(
 extern "js" fn markdown_native_range_set_start(
   range : MarkdownNativeRange,
   node : @rdom.Node,
-  offset : Int,
+  offset : Int32,
 ) -> Unit = "(range, node, offset) => range.setStart(node, offset)"
 
 ///|
 extern "js" fn markdown_native_range_set_end(
   range : MarkdownNativeRange,
   node : @rdom.Node,
-  offset : Int,
+  offset : Int32,
 ) -> Unit = "(range, node, offset) => range.setEnd(node, offset)"
 
 ///|
@@ -216,8 +216,8 @@ extern "js" fn markdown_native_range_bounding_rect(
 ///|
 fn markdown_measure_text_range_union(
   line : @rdom.Element,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> Array[Double] {
   guard markdown_text_boundary_at(line.as_node(), start) is Some(first) &&
     markdown_text_boundary_at(line.as_node(), end_exclusive) is Some(last) else {

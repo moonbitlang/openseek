@@ -1,5 +1,5 @@
 ///|
-fn github_html_codec(kind : Int, value : Json) -> Json raise {
+fn github_html_codec(kind : Int32, value : Json) -> Json raise {
   match kind {
     0 => {
       let value : @protocol.GithubComment = @json.from_json(value)

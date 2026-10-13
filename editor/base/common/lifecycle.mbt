@@ -27,7 +27,7 @@ pub fn Disposable::dispose(self : Disposable) -> Unit {
 
 ///|
 priv struct ListenerCell[T] {
-  id : Int
+  id : Int32
   listener : (T) -> Unit
   active : Ref[Bool]
 }
@@ -38,7 +38,7 @@ priv struct ListenerCell[T] {
 struct Emitter[T] {
   listeners : Array[ListenerCell[T]]
   disposed : Ref[Bool]
-  next_id : Ref[Int]
+  next_id : Ref[Int32]
 }
 
 ///|
@@ -124,7 +124,7 @@ struct MicrotaskEmitter[T] {
 /// Creates a queueing emitter; `merge` collapses one flush's events into one.
 pub fn[T] MicrotaskEmitter::MicrotaskEmitter(
   merge? : (Array[T]) -> T,
-  schedule? : (() -> Unit) -> Unit = run => run(),
+  schedule~ : (() -> Unit) -> Unit = run => run(),
 ) -> MicrotaskEmitter[T] {
   { inner: Emitter(), queued_events: [], merge_fn: merge, schedule, }
 }

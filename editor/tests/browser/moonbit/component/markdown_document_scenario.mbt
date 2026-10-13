@@ -1,9 +1,9 @@
 ///|
 priv struct MarkdownDocumentHoverCall {
-  id : Int
+  id : Int32
   model : @model.TextModel
   position : @base_common.Position
-  offset : Int
+  offset : Int32
   token : @language.CancellationToken
   gate : AsyncFeatureGate
   mut outcome : String?
@@ -12,18 +12,18 @@ priv struct MarkdownDocumentHoverCall {
 ///|
 fn MarkdownDocumentHoverCall::to_json(self : MarkdownDocumentHoverCall) -> Json {
   Json({
-    "id": self.id.to_json(),
-    "modelIdentity": self.model.identity().to_json(),
-    "uri": self.model.uri.to_string().to_json(),
-    "revision": self.model.revision.to_json(),
-    "hostVersion": self.model.version.to_json(),
-    "internalVersion": self.model.get_version_id().to_json(),
-    "lineNumber": self.position.line_number.to_json(),
-    "column": self.position.column.to_json(),
-    "offset": self.offset.to_json(),
-    "cancelled": self.token.is_cancellation_requested().to_json(),
+    "id": Json(self.id),
+    "modelIdentity": Json(self.model.identity()),
+    "uri": Json(self.model.uri.to_string()),
+    "revision": Json(self.model.revision),
+    "hostVersion": Json(self.model.version),
+    "internalVersion": Json(self.model.get_version_id()),
+    "lineNumber": Json(self.position.line_number),
+    "column": Json(self.position.column),
+    "offset": Json(self.offset),
+    "cancelled": Json(self.token.is_cancellation_requested()),
     "outcome": match self.outcome {
-      Some(outcome) => outcome.to_json()
+      Some(outcome) => Json(outcome)
       None => Json::null()
     },
   })
@@ -32,7 +32,7 @@ fn MarkdownDocumentHoverCall::to_json(self : MarkdownDocumentHoverCall) -> Json 
 ///|
 priv struct MarkdownDocumentHoverHarness {
   calls : Array[MarkdownDocumentHoverCall]
-  next_id : Ref[Int]
+  next_id : Ref[Int32]
 }
 
 ///|
@@ -71,7 +71,7 @@ fn MarkdownDocumentHoverHarness::calls_json(
 ///|
 fn MarkdownDocumentHoverHarness::release(
   self : MarkdownDocumentHoverHarness,
-  call_id : Int,
+  call_id : Int32,
   outcome : String,
 ) -> Bool {
   for call in self.calls {
@@ -107,7 +107,7 @@ impl @language.HoverProvider for MarkdownDocumentHoverProvider with fn provide_h
     model.snapshot.range_of(
       OffsetRange(
         offset,
-        Int::min(offset + 1, model.snapshot.get_value().length()),
+        Int32::min(offset + 1, model.snapshot.get_value().length()),
       ),
     )
   }
@@ -476,7 +476,7 @@ extern "js" fn set_markdown_document_scroll_top(top : Double) -> Unit =
 fn poll_markdown_document_ready(
   ctx : @support.BrowserTestContext,
   model : @model.TextModel,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   let root_count = @support.query_count(
     ".markdown-document-host > .moonbit-viewer-markdown-document",
@@ -564,7 +564,7 @@ extern "js" fn install_markdown_document_controls(
   show_markdown : () -> Unit,
   show_same_uri_markdown : () -> Unit,
   get_hover_calls : () -> String,
-  release_hover : (Int, String) -> Bool,
+  release_hover : (Int32, String) -> Bool,
   update_marker : (String) -> Unit,
   set_marker_policy_fixture : () -> Unit,
   set_marker_unused_visibility : (Bool) -> Unit,

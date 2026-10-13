@@ -1,29 +1,29 @@
 ///|
 /// DOM span/character coordinate for a rendered line.
 pub(all) struct DomPosition {
-  part_index : Int
-  char_index : Int
+  part_index : Int32
+  char_index : Int32
 } derive(Eq, Debug)
 
 ///|
 /// Mapping entry from one line column to rendered DOM coordinates and visible
 /// monospace column.
 pub struct CharacterMappingEntry {
-  part_index : Int
-  char_index : Int
-  visible_column : Int
+  part_index : Int32
+  char_index : Int32
+  visible_column : Int32
 } derive(Eq, Debug)
 
 ///|
 /// Column-to-DOM mapping produced while rendering a line.
 pub struct CharacterMapping {
-  length : Int
+  length : Int32
   entries : Array[CharacterMappingEntry]
 } derive(Eq, Debug)
 
 ///|
 /// Creates a mapping with `length` column slots.
-pub fn CharacterMapping::CharacterMapping(length : Int) -> CharacterMapping {
+pub fn CharacterMapping::CharacterMapping(length : Int32) -> CharacterMapping {
   let entries : Array[CharacterMappingEntry] = []
   for _ in 0..<length {
     entries.push({ part_index: 0, char_index: 0, visible_column: 0, })
@@ -35,10 +35,10 @@ pub fn CharacterMapping::CharacterMapping(length : Int) -> CharacterMapping {
 /// Stores DOM and visible-column info for a one-based line column.
 pub fn CharacterMapping::set_column_info(
   self : CharacterMapping,
-  column : Int,
-  part_index : Int,
-  char_index : Int,
-  visible_column : Int,
+  column : Int32,
+  part_index : Int32,
+  char_index : Int32,
+  visible_column : Int32,
 ) -> Unit {
   let index = column - 1
   if index >= 0 && index < self.entries.length() {
@@ -50,7 +50,7 @@ pub fn CharacterMapping::set_column_info(
 /// Returns the DOM position nearest a one-based line column.
 pub fn CharacterMapping::get_dom_position(
   self : CharacterMapping,
-  column : Int,
+  column : Int32,
 ) -> DomPosition {
   if self.length == 0 {
     return { part_index: 0, char_index: 0, }
@@ -70,8 +70,8 @@ pub fn CharacterMapping::get_dom_position(
 pub fn CharacterMapping::get_column(
   self : CharacterMapping,
   dom_position : DomPosition,
-  part_length : Int,
-) -> Int {
+  part_length : Int32,
+) -> Int32 {
   self.part_data_to_char_offset(
     dom_position.part_index,
     part_length,
@@ -83,10 +83,10 @@ pub fn CharacterMapping::get_column(
 ///|
 fn CharacterMapping::part_data_to_char_offset(
   self : CharacterMapping,
-  part_index : Int,
-  part_length : Int,
-  char_index : Int,
-) -> Int {
+  part_index : Int32,
+  part_length : Int32,
+  char_index : Int32,
+) -> Int32 {
   if self.length == 0 {
     return 0
   }
@@ -136,8 +136,8 @@ fn CharacterMapping::part_data_to_char_offset(
 /// Visible monospace column for a one-based line column.
 pub fn CharacterMapping::get_horizontal_offset(
   self : CharacterMapping,
-  column : Int,
-) -> Int {
+  column : Int32,
+) -> Int32 {
   if self.length == 0 {
     return 0
   }
@@ -149,7 +149,7 @@ pub fn CharacterMapping::get_horizontal_offset(
 /// Horizontal CSS-pixel offset for a one-based line column.
 pub fn CharacterMapping::column_horizontal_offset(
   self : CharacterMapping,
-  column : Int,
+  column : Int32,
   space_width~ : Double,
 ) -> Double {
   self.get_horizontal_offset(column).to_double() * space_width
@@ -164,12 +164,12 @@ pub fn CharacterMapping::inflate(
 }
 
 ///|
-fn mapping_rank(part_index : Int, char_index : Int) -> Int {
+fn mapping_rank(part_index : Int32, char_index : Int32) -> Int32 {
   part_index * 65536 + char_index
 }
 
 ///|
-fn mapping_rank_entry(entry : CharacterMappingEntry) -> Int {
+fn mapping_rank_entry(entry : CharacterMappingEntry) -> Int32 {
   mapping_rank(entry.part_index, entry.char_index)
 }
 

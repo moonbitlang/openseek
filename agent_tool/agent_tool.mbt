@@ -97,12 +97,12 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   description~ : String,
   schema~ : JsonSchema,
   execute~ : ToolExecutor,
-  control? : Bool = false,
-  concurrent_safe? : Bool = false,
-  program_callable? : Bool = false,
-  owns_file_access? : Bool = false,
-  can_request_approval? : Bool = false,
-  requires_image_input? : Bool = false,
+  control~ : Bool = false,
+  concurrent_safe~ : Bool = false,
+  program_callable~ : Bool = false,
+  owns_file_access~ : Bool = false,
+  can_request_approval~ : Bool = false,
+  requires_image_input~ : Bool = false,
 ) -> AgentToolDefinition {
   {
     name,
@@ -181,8 +181,8 @@ pub struct ToolOutput {
 /// one-line summary.
 fn ToolOutput::ToolOutput(
   content : String,
-  images? : Array[@protocol.Image] = [],
-  is_error? : Bool = false,
+  images~ : Array[@protocol.Image] = [],
+  is_error~ : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolOutput {
@@ -216,8 +216,8 @@ pub enum ToolAction {
 /// model.
 pub fn respond(
   content : String,
-  images? : Array[@protocol.Image] = [],
-  is_error? : Bool = false,
+  images~ : Array[@protocol.Image] = [],
+  is_error~ : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolAction {
@@ -231,12 +231,12 @@ pub fn respond(
 /// other C0 controls and DEL are dropped — briefs and labels reach terminals
 /// raw, so `\r`/ESC must not survive into a "single line". Helper for tools
 /// assembling a brief.
-pub fn brief_line(text : String, limit? : Int = 72) -> String {
+pub fn brief_line(text : String, limit~ : Int32 = 72) -> String {
   let sanitized = StringBuilder()
   for ch in text {
     match ch {
       '\n' | '\r' | '\t' => sanitized.write_char(' ')
-      '\u{00}'..='\u{1F}' | '\u{7F}' => ()
+      '\u{00}'..<='\u{1F}' | '\u{7F}' => ()
       _ => sanitized.write_char(ch)
     }
   }
@@ -294,9 +294,9 @@ struct Tools {
 pub fn Tools::Tools(
   definitions : Array[AgentToolDefinition],
   background_jobs? : @bgjobs.BgJobRuntime,
-  program_trace? : Ref[Json?] = Ref(None),
-  program_output? : Ref[@bgjobs.ImageOutput?] = Ref(None),
-  image_input_supported? : Ref[Bool] = Ref(false),
+  program_trace~ : Ref[Json?] = Ref(None),
+  program_output~ : Ref[@bgjobs.ImageOutput?] = Ref(None),
+  image_input_supported~ : Ref[Bool] = Ref(false),
 ) -> Tools raise {
   let by_name : Map[String, AgentToolDefinition] = Map([])
   for definition in definitions {

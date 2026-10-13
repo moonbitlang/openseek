@@ -32,13 +32,13 @@ struct CodeEditorServices {
 /// `services` argument creates the same shape internally and transfers only
 /// that internal bundle's lifetime to the CodeEditorWidget.
 pub fn CodeEditorServices::CodeEditorServices(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   languages? : @languages.LanguageHandle,
   markers? : @markers.MarkerDecorationsSource,
   agent_feedback? : @agent_feedback_api.AgentFeedbackHandle,
   location_opener? : @navigation_api.LocationOpenerHandle,
   text_model_resolver? : @navigation_api.TextModelResolverHandle,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
   quick_diff? : @quick_diff_api.QuickDiffHandle,
   log_service? : @log.LogHandle,
 ) -> CodeEditorServices {

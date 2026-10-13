@@ -559,12 +559,12 @@ fn fork_sample() -> @agent_session.Session raise {
 }
 
 ///|
-fn fork_sequences(session : @agent_session.Session) -> Array[Int] {
+fn fork_sequences(session : @agent_session.Session) -> Array[Int32] {
   session.events().map(event => event.sequence()).to_array()
 }
 
 ///|
-fn fork_refused(session : @agent_session.Session, through? : Int) -> Bool {
+fn fork_refused(session : @agent_session.Session, through? : Int32) -> Bool {
   try
     session.fork(SessionId("fork"), system_prompt="fork system", through?)
   catch {
@@ -596,7 +596,7 @@ test "a fork carries everything short of the turn still in flight" {
 ///|
 test "a fork can stop at the end of any finished turn" {
   let origin = fork_sample()
-  fn through(sequence : Int) -> Array[Int] raise {
+  fn through(sequence : Int32) -> Array[Int32] raise {
     fork_sequences(
       origin.fork(
         SessionId("fork"),

@@ -20,19 +20,19 @@
 /// carries its own literal `failed` marker. Its potentially large arguments
 /// and output stay folded by default, like every other call.
 fn assistant_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   on_open : (String) -> @cmd.Cmd,
-  wait_labels? : Map[Int, String] = Map([]),
+  wait_labels~ : Map[Int32, String] = Map([]),
   prose? : String,
   reasoning? : String,
-  calls? : Array[@transcript.ToolCall] = [],
-  sequence? : Int,
+  calls~ : Array[@transcript.ToolCall] = [],
+  sequence? : Int32,
   ts? : Double,
   step_label? : String,
-  assistant_name? : String = "OpenSeek",
-  finished? : Bool = false,
-  live? : Bool = false,
-  reasoning_complete? : Bool = true,
+  assistant_name~ : String = "OpenSeek",
+  finished~ : Bool = false,
+  live~ : Bool = false,
+  reasoning_complete~ : Bool = true,
   subrun? : SubrunLink,
 ) -> @html.Html {
   // The step ordinal is its own span so it can carry the accent and a fixed
@@ -149,13 +149,13 @@ fn assistant_view(
 /// under the instant it committed. Never a numbered step: nothing in it is
 /// the model's work.
 fn notice_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   label : String,
   brief : String?,
   is_error : Bool,
   body : String?,
   ts? : Double,
-  sequence? : Int,
+  sequence? : Int32,
 ) -> @html.Html {
   let rows : Array[@html.Html] = []
   if step_stamp(locale~, ts?) is Some(stamp) {
@@ -182,11 +182,11 @@ fn notice_view(
 /// makes a burst readable. A lone call — every Codex item, and a notice —
 /// keeps its request beside its own result instead of implying concurrency.
 fn tool_run_views(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   calls : Array[@transcript.ToolCall],
-  sequence? : Int,
+  sequence? : Int32,
   subrun? : SubrunLink,
-  wait_labels? : Map[Int, String] = Map([]),
+  wait_labels~ : Map[Int32, String] = Map([]),
 ) -> Map[String, @html.Html] {
   let rows : Map[String, @html.Html] = Map([])
   let burst = calls.length() > 1 && calls.all(call => call.arguments is Some(_))
@@ -240,7 +240,7 @@ fn tool_run_views(
 /// call order itself is stable in the transcript projection.
 fn tool_run_row_key(
   call : @transcript.ToolCall,
-  index : Int,
+  index : Int32,
   side : String,
 ) -> String {
   "\{side}\u{0}\{call.call_id}\u{0}\{index}"
@@ -266,7 +266,7 @@ priv struct SubrunLink {
 /// inside a `<summary>` would have to fight that element's toggle activation,
 /// and the body keeps it beside the report it explains.
 fn subrun_chip(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   child : String,
   open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -299,9 +299,9 @@ fn tool_result_row_is_visible(call : @transcript.ToolCall) -> Bool {
 /// expanding reveals the arguments and background job identity. Failed calls carry a status
 /// icon, while their separate result row owns the output and failure stage.
 fn tool_request_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   call : @transcript.ToolCall,
-  sequence? : Int,
+  sequence? : Int32,
   wait_label? : String,
 ) -> @html.Html {
   guard call.arguments is Some(arguments) else { return @html.nothing }
@@ -475,9 +475,9 @@ fn tool_request_view(
 /// Codex command gets a row only after it has streamed output, and its label
 /// deliberately says "output" rather than claiming completion.
 fn tool_result_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   call : @transcript.ToolCall,
-  sequence? : Int,
+  sequence? : Int32,
   subrun? : SubrunLink,
 ) -> @html.Html {
   let key = tool_call_tabs_key(call.call_id, sequence)
@@ -530,7 +530,7 @@ fn tool_result_view(
 /// the same compact completed-result shape. `output` is the body the row
 /// expands to, when there is one.
 fn result_row_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   arguments : String?,
   pending~ : Bool,
@@ -625,7 +625,7 @@ fn result_row_view(
 /// fragment when the code-unit cut lands inside a line. Diff rows use this for
 /// their two-character `+ ` / `- ` / context marker; ordinary output leaves it
 /// at zero.
-fn truncate_output(content : String, line_prefix_width? : Int = 0) -> String {
+fn truncate_output(content : String, line_prefix_width~ : Int32 = 0) -> String {
   let code_unit_head_limit = 12_000
   let code_unit_tail_limit = 8_000
   let bounded = if content.length() <=
@@ -665,7 +665,7 @@ fn truncate_output(content : String, line_prefix_width? : Int = 0) -> String {
 fn restore_retained_tail_prefix(
   content : String,
   tail : StringView,
-  line_prefix_width : Int,
+  line_prefix_width : Int32,
 ) -> String {
   if line_prefix_width <= 0 {
     return tail.to_owned()
@@ -894,7 +894,7 @@ fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
 
 ///|
 fn user_message_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   content : @deepseek.Content,
   sent_at? : Double,
   anchor? : String,
@@ -957,7 +957,7 @@ fn user_message_view(
 /// something sent today, the date in front of it for anything older, and
 /// nothing at all for the zero/absent stamps old stores wrote. Local time and
 /// locale order come from the viewer's own environment.
-fn clock_label(locale? : @i18n.Locale = English, unix_ms : Double) -> String {
+fn clock_label(locale~ : @i18n.Locale = English, unix_ms : Double) -> String {
   guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
     return ""
   }
@@ -1010,7 +1010,7 @@ fn clock_label(locale? : @i18n.Locale = English, unix_ms : Double) -> String {
 /// later step at an earlier clock time. The dated form rides along as the
 /// title rather than in the column, since the ambiguity is rare and checking
 /// it is deliberate.
-fn step_stamp(locale? : @i18n.Locale = English, ts? : Double) -> @html.Html? {
+fn step_stamp(locale~ : @i18n.Locale = English, ts? : Double) -> @html.Html? {
   guard ts is Some(ts) else { return None }
   let label = step_time_label(locale~, ts)
   guard !label.is_empty() else { return None }
@@ -1031,7 +1031,7 @@ fn step_stamp(locale? : @i18n.Locale = English, ts? : Double) -> @html.Html? {
 /// repeated. The date is the user message's job — a step is always inside the
 /// turn already dated above it.
 fn step_time_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   unix_ms : Double,
 ) -> String {
   guard !unix_ms.is_nan() && !unix_ms.is_inf() && unix_ms > 0.0 else {
@@ -1056,14 +1056,14 @@ fn step_time_label(
 /// OpenSeek provider response carries ("#3"); every other source and kind
 /// has none.
 fn transcript_item_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
   on_open : (String) -> @cmd.Cmd,
-  wait_labels? : Map[Int, String] = Map([]),
+  wait_labels~ : Map[Int32, String] = Map([]),
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
-  assistant_name? : String = "OpenSeek",
+  assistant_name~ : String = "OpenSeek",
   step_label? : String,
   subrun? : SubrunLink,
 ) -> @html.Html {
@@ -1131,14 +1131,14 @@ fn transcript_item_view(
 /// markdown on every delta. Diagram fences render only after their closing
 /// marker arrives; unclosed fences remain source in completed messages too.
 fn assistant_message_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   content : String,
   on_open : (String) -> @cmd.Cmd,
   assistant_name : String,
   is_danger~ : Bool,
   completed_at? : Double,
-  show_actions? : Bool = false,
-  streaming? : Bool = false,
+  show_actions~ : Bool = false,
+  streaming~ : Bool = false,
 ) -> @html.Html {
   // Errors and abort notices are durable run status rather than assistant
   // prose. Keep their exact text and inline code readable in an unboxed status
@@ -1205,7 +1205,7 @@ fn assistant_message_view(
 /// stands alone between turns, labeled for what it is, with the summary prose
 /// behind the fold.
 fn summary_card_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   content : String,
   on_open : (String) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -1228,7 +1228,7 @@ fn summary_card_view(
 /// `stream_blocks`): the component memoizes those per block, so this view
 /// only assembles them.
 fn transcript_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : Input,
   pinned~ : Bool,
   overview~ : @transcript_overview.State,
@@ -1271,10 +1271,10 @@ fn transcript_view(
 ///|
 /// Reuse the ordinary tool cards for live and retained background-job traces.
 pub fn program_calls_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   data : Json?,
   parent : String,
-  origin? : @transcript.TraceOrigin = Live,
+  origin~ : @transcript.TraceOrigin = Live,
 ) -> @html.Html? {
   let calls = @transcript.program_calls(data, parent, origin~)
   guard !calls.is_empty() else { return None }

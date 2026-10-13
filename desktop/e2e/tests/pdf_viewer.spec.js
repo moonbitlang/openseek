@@ -2,6 +2,15 @@ import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
 
+async function annotateSelection(preview) {
+  await expect(preview.locator('textarea')).toBeVisible();
+  await expect(preview).not.toHaveAttribute('title', '');
+  const source = await preview.getAttribute('title');
+  await preview.locator('textarea').fill(source.slice(source.indexOf('\n') + 1).trim() || 'Inspect selected cells');
+  await preview.getByRole('checkbox').check();
+  await preview.locator('textarea').press('Enter');
+}
+
 async function openFile(app, name) {
   await app.openQuickOpen();
   await app.page.locator('#quick-open-input').fill(name);
@@ -76,22 +85,22 @@ test('PDF controls and confirmed text selections retain structured context', asy
   await expect(preview).toBeHidden();
   await second.dispatchEvent('pointerup', { button: 0, isPrimary: true, pointerId: 7 });
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-source')).toHaveText('report.pdf · p. 2');
-  await expect(preview.locator('.office-selection-excerpt')).toHaveText('Second');
+  await expect.poll(() => preview.getAttribute('title')).toContain('report.pdf · p. 2');
+  await expect.poll(() => preview.getAttribute('title')).toContain('Second');
   await expect(page.locator('.mention-chip')).toHaveCount(0);
-  await preview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await preview.locator('textarea').press('Escape');
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(0);
   await selectSecond();
   await expect(preview).toBeVisible();
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toContainText('report.pdf · p. 2');
   await expect(page.locator('.mention-chip')).toContainText('Second');
   await selectSecond(11);
-  await expect(preview.locator('.office-selection-excerpt')).toHaveText('Second page');
+  await expect.poll(() => preview.getAttribute('title')).toContain('Second page');
   await expect(page.locator('.mention-chip')).toHaveCount(1);
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await annotateSelection(preview);
   await expect(page.locator('.mention-chip')).toHaveCount(2);
   await page.locator('#task').fill('Explain this PDF passage');
   await page.getByTitle('Send', { exact: true }).click();
@@ -232,5 +241,298 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   expect(await page.evaluate(() => window.cancelledPdf.alive)).toBe(false);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
+  const select = async (end) => text.evaluate((element, end) => {
+    const range = document.createRange();
+    range.setStart(element.firstChild, 0);
+    range.setEnd(element.firstChild, end);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  }, end);
+  const preview = page.locator('.office-selection-preview');
+  const input = preview.locator('textarea[data-agent-feedback-input]');
+  await select(8);
+  await expect(input).toBeVisible();
+  await expect(input).not.toBeFocused();
+  await input.fill('Explain this');
+  await input.press('Shift+Enter');
+  await input.press('End');
+  await input.press('x');
+  await expect(input).toHaveValue('Explain this\nx');
+  await select(12);
+  await expect.poll(() => preview.getAttribute('title')).toContain('OpenSeek');
+  await expect(input).toHaveValue('Explain this\nx');
+  await preview.getByRole('checkbox').check();
+  await input.press('Enter');
+  await expect(preview).toBeHidden();
+  await expect(page.locator('.mention-chip')).toContainText('Explain this');
+  expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(0);
+  await select(12);
+  await expect(input).toBeVisible();
+  await expect(preview.getByRole('checkbox')).toBeChecked();
+  await input.fill('Second annotation');
+  await input.press('Escape');
+  await expect(preview).toBeHidden();
+  await expect(page.locator('.mention-chip')).toHaveCount(1);
+  await select(12);
+  await input.fill('Apply both');
+  await page.screenshot({ path: testInfo.outputPath('pdf-annotation.png'), animations: 'disabled' });
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['zh-CN'] });
+    window.dispatchEvent(new Event('languagechange'));
+  });
+  await expect(input).toHaveAttribute('placeholder', '添加反馈');
+  await expect(input).toHaveValue('Apply both');
+  await input.press('Alt+Enter');
+  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task).toContain('<office_selection>');
+  const task = app.requests.find(request => request.method === 'agent.start').params.task;
+  const selections = [...task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
+  expect(selections).toHaveLength(2);
+  expect(selections[0].comment).toBe('Explain this\nx');
+  expect(selections[0].selection.text).toBe('OpenSeek');
+  expect(selections[0].source.reference.start.page).toBe(1);
+  expect(selections[1].comment).toBe('Apply both');
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+for (const theme of ['light', 'dark']) {
+test(`PDF annotation matches Markdown and code styling and anchors beside the selected text (${theme})`, async ({ page }, testInfo) => {
+  await page.emulateMedia({ colorScheme: theme });
+  const app = await setup(page);
+  app.workingFiles['docs/notes.md'] = 'A paragraph for comparing annotation styles.\n';
+  app.searchFiles.push('docs/notes.md', 'src/main.mbt');
+  const measureStyle = (locator) => locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    const input = getComputedStyle(element.querySelector('textarea'));
+    const button = getComputedStyle(element.querySelector('button'));
+    return Object.fromEntries([
+      ...['backgroundColor', 'color', 'border', 'borderRadius', 'boxShadow', 'padding', 'gap', 'font'].map(name => [name, style[name]]),
+      ...['font', 'color', 'padding', 'minHeight'].map(name => ['input.' + name, input[name]]),
+      ...['width', 'height', 'borderRadius', 'backgroundColor', 'color'].map(name => ['button.' + name, button[name]]),
+    ]);
+  });
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
+  await text.evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const selection = window.getSelection();
+    selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  const pdfWidget = page.locator('#office-feedback-input .agent-feedback-input-widget');
+  await expect(pdfWidget).toBeVisible();
+  await expect(page.locator('.office-selection-actions')).toHaveCount(0);
+  await expect(page.locator('#office-feedback-input')).toHaveAttribute('data-theme', theme);
+  const pdfStyle = await measureStyle(pdfWidget);
+  const textBox = await text.boundingBox();
+  const popupBox = await pdfWidget.boundingBox();
+  expect(Math.abs(popupBox.y - (textBox.y + textBox.height))).toBeLessThan(4);
+  await pdfWidget.locator('textarea').fill('Explain this passage');
+  await page.screenshot({ path: testInfo.outputPath('pdf-annotation.png'), animations: 'disabled' });
+  const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
+  await expect.poll(async () => {
+    const anchor = await text.boundingBox();
+    const popup = await pdfWidget.boundingBox();
+    return popup ? Math.abs(popup.y - anchor.y - anchor.height) : Infinity;
+  }).toBeLessThan(4);
+  const before = await pdfWidget.boundingBox();
+  await page.locator('.pdf-container').evaluate(element => { element.scrollTop += 30; });
+  await expect.poll(async () => (await pdfWidget.boundingBox())?.y).toBeLessThan(before.y - 20);
+  await expect(pdfWidget.locator('textarea')).toHaveValue('Explain this passage');
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await expect.poll(async () => {
+    const popup = await pdfWidget.boundingBox();
+    const viewport = await page.locator('#office-feedback-input').boundingBox();
+    return popup && popup.x >= viewport.x && popup.x + popup.width <= viewport.x + viewport.width + 1;
+  }).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await pdfWidget.locator('textarea').press('Escape');
+  const lowerText = page.locator('.page[data-page-number="2"] [data-pdf-item]').filter({ hasText: 'PDF attachments retain source references' }).first();
+  await lowerText.scrollIntoViewIfNeeded();
+  await lowerText.evaluate(element => {
+    const viewport = element.closest('.pdf-container');
+    viewport.scrollTop += element.getBoundingClientRect().bottom - (viewport.getBoundingClientRect().bottom - 8);
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(pdfWidget).toBeVisible();
+  await expect.poll(async () => {
+    const popup = await pdfWidget.boundingBox();
+    const anchor = await lowerText.boundingBox();
+    return Math.abs(popup.y + popup.height - anchor.y);
+  }).toBeLessThan(4);
+  await pdfWidget.locator('textarea').press('Escape');
+
+  await openFile(app, 'notes.md');
+  const markdown = page.locator('#markdown-viewer-host .moonbit-viewer-markdown-document');
+  await expect(markdown).toBeVisible();
+  await markdown.focus();
+  await markdown.locator('p').first().evaluate(element => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  const markdownWidget = markdown.locator('.agent-feedback-input-widget');
+  await expect(markdownWidget).toBeVisible();
+  expect(await measureStyle(markdownWidget)).toEqual(pdfStyle);
+  await markdownWidget.locator('textarea').fill('Explain this passage');
+  await page.screenshot({ path: testInfo.outputPath('markdown-annotation.png'), animations: 'disabled' });
+  await markdownWidget.locator('textarea').press('Escape');
+
+  await openFile(app, 'main.mbt');
+  const code = page.locator('#viewer-host');
+  const line = code.locator('.view-line').filter({ hasText: 'fn main' }).first();
+  await expect(line).toBeVisible();
+  await line.hover();
+  await code.locator('.agent-feedback-glyph.line-hover').click();
+  const codeWidget = code.locator('.agent-feedback-input-widget');
+  await expect(codeWidget).toBeVisible();
+  expect(await measureStyle(codeWidget)).toEqual(pdfStyle);
+  await codeWidget.locator('textarea').fill('Explain this passage');
+  await page.screenshot({ path: testInfo.outputPath('code-annotation.png'), animations: 'disabled' });
+  expect(app.pageErrors).toEqual([]);
+});
+}
+
+test('PDF annotation retains a visible source selection while typing', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const source = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
+  await source.evaluate(element => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  const input = page.locator('#office-feedback-input textarea');
+  await expect(input).toBeVisible();
+  await input.fill('Explain this passage');
+  const highlight = page.locator('#office-feedback-input .feedback-source-selection');
+  const expectHighlight = async () => {
+    await expect(highlight).toHaveCount(1);
+    await expect(highlight).toBeVisible();
+    const actual = await highlight.boundingBox();
+    const expected = await source.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const rect = range.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    });
+    expect(Math.abs(actual.x - expected.x)).toBeLessThan(2);
+    expect(Math.abs(actual.y - expected.y)).toBeLessThan(2);
+    expect(Math.abs(actual.width - expected.width)).toBeLessThan(2);
+    const paint = await highlight.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, opacity: style.opacity, pointerEvents: style.pointerEvents };
+    });
+    expect(paint.background).not.toBe('rgba(0, 0, 0, 0)');
+    expect(Number(paint.opacity)).toBeGreaterThan(0);
+    expect(paint.pointerEvents).toBe('none');
+  };
+  // Focusing the textarea replaces the native selection. The draft owns its
+  // own painted source fragments instead of trying to steal focus back.
+  expect(await page.evaluate(() => window.getSelection().toString())).not.toContain('Selectable first page text');
+  await expectHighlight();
+  await page.screenshot({ path: testInfo.outputPath('pdf-retained-selection.png') });
+  const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
+  await expect(async () => expectHighlight()).toPass();
+  await page.locator('.pdf-container').evaluate(element => { element.scrollTop += 30; });
+  await expect(async () => expectHighlight()).toPass();
+  await input.press('Escape');
+  await expect(highlight).toHaveCount(0);
+  // A subsequent selection replaces the previous highlight; submitting it
+  // clears the decoration as well as the draft.
+  await source.evaluate(element => {
+    const range = document.createRange(); range.setStart(element.firstChild, 0); range.setEnd(element.firstChild, 10);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await input.fill('Partial selection');
+  await expect(highlight).toHaveCount(1);
+  expect((await highlight.boundingBox()).width).toBeLessThan((await source.boundingBox()).width);
+  await page.locator('#office-feedback-input').getByRole('checkbox').check();
+  await input.press('Enter');
+  await expect(highlight).toHaveCount(0);
+  const secondPage = page.locator('.page[data-page-number="2"] [data-pdf-item]').filter({ hasText: 'Second page selection' }).first();
+  await secondPage.scrollIntoViewIfNeeded();
+  await page.evaluate(() => {
+    const items = [...document.querySelectorAll('[data-pdf-item]')];
+    const start = items.find(element => element.textContent.includes('Selectable first page text'));
+    const end = items.find(element => element.textContent.includes('Second page selection'));
+    const range = document.createRange(); range.setStart(start.firstChild, 0); range.setEnd(end.firstChild, 6);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await expect(input).toBeVisible();
+  await input.fill('Across pages');
+  const boxes = await highlight.evaluateAll(elements => elements.map(element => ({
+    width: element.getBoundingClientRect().width,
+    height: element.getBoundingClientRect().height,
+  })));
+  expect(boxes.length).toBeGreaterThan(0);
+  // Cross-page DOM Ranges include canvas/page rectangles. Only text should
+  // be painted, never the large whitespace between the selected fragments.
+  for (const box of boxes) {
+    expect(box.height).toBeLessThan(40);
+    expect(box.width).toBeLessThan(400);
+  }
+  await input.press('Escape');
+  await expect(highlight).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('PDF annotation closes on an outside click before the input is focused', async ({ page }) => {
+  const app = await setup(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const source = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
+  const select = async () => {
+    await source.evaluate(element => {
+      const range = document.createRange(); range.selectNodeContents(element);
+      const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    await expect(page.locator('#office-feedback-input textarea')).toBeVisible();
+  };
+  await select();
+  await expect(page.locator('#office-feedback-input textarea')).not.toBeFocused();
+  const paper = page.locator('.page[data-page-number="1"]');
+  await paper.click({ position: { x: 25, y: 200 } });
+  await expect(page.locator('#office-feedback-input textarea')).toBeHidden();
+  await expect(page.locator('.feedback-source-selection')).toHaveCount(0);
+  await select();
+  const input = page.locator('#office-feedback-input textarea');
+  const batch = page.locator('#office-feedback-input').getByRole('checkbox');
+  await batch.check();
+  await expect(input).toBeVisible();
+  await input.click();
+  await expect(input).toBeVisible();
+  await page.locator('#task').click();
+  await expect(page.locator('#office-feedback-input textarea')).toBeHidden();
+  await expect(page.locator('.feedback-source-selection')).toHaveCount(0);
+  await select();
+  await input.fill('Keep this draft');
+  await paper.click({ position: { x: 25, y: 200 } });
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue('Keep this draft');
+  await input.press('Escape');
+  await expect(input).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });

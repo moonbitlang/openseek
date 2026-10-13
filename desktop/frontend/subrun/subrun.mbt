@@ -15,7 +15,7 @@ pub(all) struct Lane {
   id : String
   kind : String
   label : String
-  steps : Int
+  steps : Int32
   activity : String
   run : String?
 } derive(Eq, @debug.Debug)

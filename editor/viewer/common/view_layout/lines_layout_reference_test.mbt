@@ -23,10 +23,10 @@ fn assert_int_array_eq(
 ///|
 fn insert_whitespace(
   lines_layout : @view_layout.LinesLayout,
-  after_line_number : Int,
-  ordinal : Int,
-  height_in_px : Int,
-  min_width : Int,
+  after_line_number : Int32,
+  ordinal : Int32,
+  height_in_px : Int32,
+  min_width : Int32,
 ) -> String {
   let id = Ref("")
   lines_layout.change_whitespace(fn(accessor) {
@@ -45,8 +45,8 @@ fn insert_whitespace(
 fn change_one_whitespace(
   lines_layout : @view_layout.LinesLayout,
   id : String,
-  new_after_line_number : Int,
-  new_height : Int,
+  new_after_line_number : Int32,
+  new_height : Int32,
 ) -> Unit {
   lines_layout.change_whitespace(fn(accessor) {
     accessor.change_one_whitespace(
@@ -1273,8 +1273,8 @@ test "LinesLayout" {
 ///|
 test "LinesLayout findInsertionIndex" {
   let make_internal_whitespace = fn(
-    after_line_numbers : Array[Int],
-    ordinal : Int,
+    after_line_numbers : Array[Int32],
+    ordinal : Int32,
   ) -> Array[@view_layout.EditorWhitespace] {
     after_line_numbers.map(fn(after_line_number) {
       EditorWhitespace("", after_line_number, ordinal, 0, 0)

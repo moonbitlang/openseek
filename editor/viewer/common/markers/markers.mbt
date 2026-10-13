@@ -6,7 +6,7 @@
 /// (`markerDecorationsService.ts:216`). A producer sets a marker's `end_column`
 /// to this to request the full-line first-non-whitespace snap. Int max stands in
 /// for the JS float sentinel.
-let max_value_column : Int = 2147483647
+let max_value_column : Int32 = 2147483647
 
 ///|
 /// Severity of a marker, with Monaco's load-bearing bit values
@@ -24,7 +24,7 @@ pub(all) enum MarkerSeverity {
 ///|
 /// The marker severity's bit value (`Hint=1, Info=2, Warning=4, Error=8`),
 /// `markers.ts:56-61`.
-fn MarkerSeverity::value(self : MarkerSeverity) -> Int {
+fn MarkerSeverity::value(self : MarkerSeverity) -> Int32 {
   match self {
     Hint => 1
     Info => 2
@@ -87,11 +87,11 @@ struct MarkerData {
   severity : MarkerSeverity
   message : String
   source : String?
-  start_line_number : Int
-  start_column : Int
-  end_line_number : Int
-  end_column : Int
-  model_version_id : Int?
+  start_line_number : Int32
+  start_column : Int32
+  end_line_number : Int32
+  end_column : Int32
+  model_version_id : Int32?
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
@@ -103,13 +103,13 @@ struct MarkerData {
 fn new_marker_data(
   severity~ : MarkerSeverity,
   message~ : String,
-  start_line_number~ : Int,
-  start_column~ : Int,
-  end_line_number~ : Int,
-  end_column~ : Int,
+  start_line_number~ : Int32,
+  start_column~ : Int32,
+  end_line_number~ : Int32,
+  end_column~ : Int32,
   code? : String,
   source? : String,
-  model_version_id? : Int,
+  model_version_id? : Int32,
   related_information? : Array[RelatedInformation],
   tags? : Array[MarkerTag],
   origin? : String,
@@ -189,11 +189,11 @@ pub struct Marker {
   code : String?
   message : String
   source : String?
-  mut start_column : Int
-  start_line_number : Int
-  end_line_number : Int
-  end_column : Int
-  model_version_id : Int?
+  mut start_column : Int32
+  start_line_number : Int32
+  end_line_number : Int32
+  end_column : Int32
+  model_version_id : Int32?
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
@@ -225,8 +225,8 @@ fn Marker::has_tag(self : Marker, tag : MarkerTag) -> Bool {
 priv struct MarkerReadOptions {
   owner : String?
   resource : @base_common.Uri?
-  severities : Int?
-  take : Int?
+  severities : Int32?
+  take : Int32?
   ignore_resource_filters : Bool
 }
 
@@ -236,9 +236,9 @@ priv struct MarkerReadOptions {
 fn MarkerReadOptions::MarkerReadOptions(
   owner? : String,
   resource? : @base_common.Uri,
-  severities? : Int,
-  take? : Int,
-  ignore_resource_filters? : Bool = false,
+  severities? : Int32,
+  take? : Int32,
+  ignore_resource_filters~ : Bool = false,
 ) -> MarkerReadOptions {
   { owner, resource, severities, take, ignore_resource_filters, }
 }

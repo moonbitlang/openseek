@@ -56,19 +56,22 @@ test('PDF upload waits for confirmation then opens from its existing file mentio
   });
   const preview = page.locator('.office-selection-preview');
   await expect(preview).toBeVisible();
-  await expect(preview.locator('.office-selection-excerpt')).toHaveText('OpenSeek');
+  await expect(preview).toHaveAttribute('title', /OpenSeek/);
   await expect(page.locator('.mention-chip')).toHaveCount(1);
-  await preview.getByRole('button', { name: 'Add to context', exact: true }).click();
+  await preview.locator('textarea').fill('Explain the selected passage');
+  await preview.getByRole('checkbox').check();
+  await preview.getByRole('button', { name: 'Add feedback', exact: true }).click();
   await expect(preview).toBeHidden();
   await expect(page.locator('.mention-chip')).toHaveCount(2);
-  // The file mention's `.openseek/attachments` path also contains this word.
-  await expect(page.locator('.mention-chip').filter({ hasText: '“OpenSeek”' })).toBeVisible();
+  await expect(page.locator('.mention-chip').filter({ hasText: 'Explain the selected passage' })).toBeVisible();
+  expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.start')?.params.task).toContain('<office_selection>');
   const request = app.requests.find(r => r.method === 'agent.start');
   const quotation = JSON.parse(request.params.task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
   expect(quotation.source.reference.file).toBe('/workspace/.openseek/attachments/upload-1/下载-5-1.pdf');
   expect(quotation.selection.text).toBe('OpenSeek');
+  expect(quotation.comment).toBe('Explain the selected passage');
   expect(request.params.images).toEqual([]);
   expect(app.requests.find(r => r.method === 'fs.stage_attachments').params.paths).toEqual([
     '.openseek/attachments/upload-1/下载-5-1.pdf',

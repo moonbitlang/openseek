@@ -137,15 +137,15 @@ extern "js" fn restore_scrollable_timeout_test_browser() -> Unit =
   #| }
 
 ///|
-extern "js" fn scrollable_timeout_test_active_count() -> Int =
+extern "js" fn scrollable_timeout_test_active_count() -> Int32 =
   #| () => globalThis.__scrollableTimerActive.size
 
 ///|
-extern "js" fn scrollable_timeout_test_schedule_count() -> Int =
+extern "js" fn scrollable_timeout_test_schedule_count() -> Int32 =
   #| () => globalThis.__scrollableTimerHistory.length
 
 ///|
-extern "js" fn scrollable_timeout_test_clear_count() -> Int =
+extern "js" fn scrollable_timeout_test_clear_count() -> Int32 =
   #| () => globalThis.__scrollableTimerClears
 
 ///|

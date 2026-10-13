@@ -25,41 +25,33 @@ pub fn home_dir(runtime_dir : @pathx.Path) -> @pathx.Path {
 }
 
 ///|
-/// Create the isolated Codex home so the app-server can write auth, config,
-/// threads, and worktrees before its first spawn, and restrict it to the
-/// owner on POSIX hosts (auth.json and private tool credentials live here).
-/// Best-effort: `None` leaves the app-server on the inherited environment,
-/// which is the pre-isolation behavior.
-pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path? {
+/// Prepare the isolated home before spawning Codex. Failure is explicit:
+/// callers must never fall back to the inherited global CODEX_HOME.
+pub async fn prepared_home(runtime_dir : @pathx.Path) -> @pathx.Path {
   let home = home_dir(runtime_dir)
-  // Recursive mkdir on an existing directory raises EEXIST; the steady
-  // state is "created by an earlier launch", not an error.
-  @fs.mkdir(home.to_string(), recursive=true) catch {
-    @os_error.OSError(_) as os_error if os_error.is_EEXIST() => ()
-    error => {
-      @xlog.warn(category="codex") <?
-        {
-          "event": "codex_home_mkdir_failed",
-          "path": home.to_string(),
-          "error": "\{error}",
-        }
-      return None
+  prepare_home_directory(home)
+  home
+}
+
+///|
+async fn prepare_home_directory(home : @pathx.Path) -> Unit {
+  try {
+    @fs.mkdir(home.to_string(), recursive=true, permission=0o700) catch {
+      @os_error.OSError(_) as error if error.is_EEXIST() => ()
+      error => raise error
     }
-  }
-  // `auth.json` is encrypted by the OS keychain, but the home also holds
-  // MCP server config and private tool state; keep it owner-only on POSIX.
-  // Windows has no chmod, so the ACLs of the per-user runtime directory
-  // are the protection boundary there.
-  if !(@async.platform is Windows) {
-    @fs.chmod(home.to_string(), 0o700) catch {
-      error =>
-        @xlog.warn(category="codex") <?
-          {
-            "event": "codex_home_chmod_failed",
-            "path": home.to_string(),
-            "error": "\{error}",
-          }
+    guard @fs.kind(home.to_string()) is Directory else {
+      raise CodexError::Unavailable(
+        "The isolated Codex home is not a directory",
+      )
     }
+    if !(@async.platform is Windows) {
+      @fs.chmod(home.to_string(), 0o700)
+    }
+  } catch {
+    error =>
+      raise CodexError::Unavailable(
+        "Could not prepare isolated Codex home \{home}: \{error}",
+      )
   }
-  Some(home)
 }

@@ -6,7 +6,7 @@
 /// state and returns one fact for the ViewModel's outgoing dispatcher.
 struct CursorsController {
   model : @model.TextModel
-  mut known_model_version_id : Int
+  mut known_model_version_id : Int32
   mut context : CursorContext
   mut cursor : Cursor
   mut is_handling : Bool
@@ -149,8 +149,8 @@ fn CursorsController::normalize(self : CursorsController) -> Unit {
 pub fn CursorsController::set_cursor_state(
   self : CursorsController,
   state : PartialCursorState?,
-  source? : String = "keyboard",
-  reason? : @editor_api.CursorChangeReason = NotSet,
+  source~ : String = "keyboard",
+  reason~ : @editor_api.CursorChangeReason = NotSet,
 ) -> CursorStateChange? {
   let state = match state {
     None => return None

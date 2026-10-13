@@ -185,7 +185,7 @@ pub fn EditorDomMouseEvent::relative_pos(
 /// setter.
 pub fn EditorDomMouseEvent::set_detail(
   self : EditorDomMouseEvent,
-  detail : Int,
+  detail : Int32,
 ) -> Unit {
   self.detail = detail
 }
@@ -272,7 +272,7 @@ pub fn EditorMouseEventFactory::on_context_menu(
 pub fn EditorMouseEventFactory::on_pointer_down(
   self : EditorMouseEventFactory,
   target : @rdom.Element,
-  callback : (EditorDomMouseEvent, Int) -> Unit,
+  callback : (EditorDomMouseEvent, Int32) -> Unit,
 ) -> @base_common.Disposable {
   self.listen(target, "pointerdown", event => {
     callback(event, @base_browser.mouse_event_pointer_id(event.browser_event))
@@ -348,8 +348,8 @@ pub fn GlobalEditorPointerMoveMonitor::dispose(
 pub fn GlobalEditorPointerMoveMonitor::start_monitoring(
   self : GlobalEditorPointerMoveMonitor,
   initial_element : @rdom.Element,
-  pointer_id : Int,
-  initial_buttons : Int,
+  pointer_id : Int32,
+  initial_buttons : Int32,
   pointer_move_callback : (EditorDomMouseEvent) -> Unit,
   on_stop_callback : (@rdom.Event?) -> Unit,
 ) -> Unit {

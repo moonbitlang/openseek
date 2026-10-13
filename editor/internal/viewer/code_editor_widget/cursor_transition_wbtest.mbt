@@ -1,7 +1,7 @@
 ///|
 fn cursor_transition_model(
   text : String,
-  host_version? : Int = 73,
+  host_version~ : Int32 = 73,
 ) -> @model.TextModel {
   TextModel(
     try! @base_common.Uri::from(
@@ -451,7 +451,7 @@ test "two cursor mutations in one listener retain both outgoing facts" {
 test "reentrant ContentFlush retains every queued cursor fact" {
   with_test_viewer("one", viewer => {
     let order : Array[String] = []
-    let versions : Array[Int] = []
+    let versions : Array[Int32] = []
     let mut reentered = false
     viewer.on_did_change_model_content(event => {
       order.push("content:\{event.version_id}")

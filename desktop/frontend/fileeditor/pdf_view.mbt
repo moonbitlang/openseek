@@ -1,6 +1,6 @@
 ///|
 fn pdf_viewer_toolbar(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
@@ -104,7 +104,7 @@ fn pdf_viewer_toolbar(
 
 ///|
 fn pdf_password_dialog(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,

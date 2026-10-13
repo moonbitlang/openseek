@@ -24,9 +24,9 @@ pub struct StandardMouseEvent {
   left_button : Bool
   middle_button : Bool
   right_button : Bool
-  buttons : Int
+  buttons : Int32
   target : @rdom.Element?
-  detail : Int
+  detail : Int32
   posx : Double
   posy : Double
   ctrl_key : Bool
@@ -69,7 +69,7 @@ pub fn StandardMouseEvent::StandardMouseEvent(
 
 ///|
 /// FFI gap-fill: the vendored `@rdom` `IsUIEvent` exposes no `detail`.
-extern "js" fn ui_event_detail(e : @rdom.MouseEvent) -> Int =
+extern "js" fn ui_event_detail(e : @rdom.MouseEvent) -> Int32 =
   #| (e) => e.detail | 0
 
 ///|

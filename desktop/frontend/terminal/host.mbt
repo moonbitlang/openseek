@@ -43,7 +43,7 @@ priv struct TermHost {
   mut opening_channels : Array[@interop.ChannelId]
   /// Output that arrived before `terminal_open` identified its tab:
   /// `(sequence, base64_data)`.
-  pending : Map[String, (@interop.ChannelId, Array[(Int, String)])]
+  pending : Map[String, (@interop.ChannelId, Array[(Int32, String)])]
   /// Command-tab reports issued but not yet delivered, by tab key: each is
   /// waiting for its emulator to finish rendering what the PTY sent. A tab
   /// disposed meanwhile keeps its emulator until the report has read it, so
@@ -137,7 +137,7 @@ fn no_args() -> FixedArray[@js.Value] {
 /// Show `key`'s element, hide the rest, then re-fit and focus the shown one
 /// (its `onResize` keeps the PTY's grid in sync). Imperative display state:
 /// the elements are outside the virtual DOM.
-fn show_only(key : String, focus? : Bool = true) -> Unit {
+fn show_only(key : String, focus~ : Bool = true) -> Unit {
   for entry_key, entry in term_host.entries {
     let style : @js.Value = entry.element.get_with_string("style")
     style.set_with_string(
@@ -176,8 +176,8 @@ fn refit_visible() -> Unit {
 /// and fitting to that would shrink the emulator — and the PTY behind it —
 /// to a single row. An emulator that is not fitted keeps the size it has.
 fn has_area(element : @js.Value) -> Bool {
-  let width : Int = element.get_with_string("clientWidth")
-  let height : Int = element.get_with_string("clientHeight")
+  let width : Int32 = element.get_with_string("clientWidth")
+  let height : Int32 = element.get_with_string("clientHeight")
   width > 0 && height > 0
 }
 
@@ -193,8 +193,8 @@ fn has_area(element : @js.Value) -> Bool {
 fn mount_tab(
   dispatch : @cmd.Emit[Msg],
   key : String,
-  focus? : Bool = true,
-  show? : Bool = true,
+  focus~ : Bool = true,
+  show~ : Bool = true,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
@@ -269,8 +269,8 @@ fn mount_tab(
         // Every re-fit lands here, including reveal-time ones; the update
         // loop forwards it to the tab's PTY while its session runs.
         let on_resize = (size : @js.Value) => {
-          let cols : Int = size.get_with_string("cols")
-          let rows : Int = size.get_with_string("rows")
+          let cols : Int32 = size.get_with_string("cols")
+          let rows : Int32 = size.get_with_string("rows")
           scheduler.add(dispatch(ViewportResized(key~, cols~, rows~)))
         }
         let _ : @js.Value = term.apply_with_string("onResize", [
@@ -301,8 +301,8 @@ fn mount_tab(
         let style : @js.Value = entry.element.get_with_string("style")
         style.set_with_string("display", "none")
       }
-      let cols : Int = entry.term.get_with_string("cols")
-      let rows : Int = entry.term.get_with_string("rows")
+      let cols : Int32 = entry.term.get_with_string("cols")
+      let rows : Int32 = entry.term.get_with_string("rows")
       scheduler.add(dispatch(EmulatorReady(key~, cols~, rows~)))
     },
     kind=@cmd.after_render,
@@ -322,7 +322,7 @@ fn hide_all() -> Unit {
 /// closed): show it, hide the rest, re-fit and focus. `sync` dispatches
 /// this whenever the tab that should be on screen changes — including
 /// conversation switches, which produce no terminal message of their own.
-fn apply_shown(key : String?, focus? : Bool = true) -> @cmd.Cmd {
+fn apply_shown(key : String?, focus~ : Bool = true) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       match key {
@@ -418,7 +418,7 @@ fn TermHost::write_now(
   channel : @interop.ChannelId,
   key : String,
   id : String,
-  sequence : Int,
+  sequence : Int32,
   data : String,
 ) -> Unit {
   guard self.entries.get(key) is Some(entry) && xterm_module() is Some(module_) else {
@@ -441,7 +441,7 @@ fn TermHost::write_to_tab(
   channel : @interop.ChannelId,
   key : String,
   id : String,
-  sequence : Int,
+  sequence : Int32,
   data : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -457,7 +457,7 @@ fn TermHost::write_to_tab(
 pub fn output(
   channel : @interop.ChannelId,
   id : String,
-  sequence : Int,
+  sequence : Int32,
   data : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -541,7 +541,7 @@ const CommandOutputMaxChars = 12000
 /// rows are joined back into their lines and trailing blank lines dropped.
 /// Returns `{ text, truncated }`, keeping the last `max_chars` characters;
 /// `truncated` also covers output that outran the emulator's scrollback.
-extern "js" fn emulator_text(term : @js.Value, max_chars : Int) -> @js.Value =
+extern "js" fn emulator_text(term : @js.Value, max_chars : Int32) -> @js.Value =
   #|(term, maxChars) => {
   #|  const buffer = term.buffer.normal;
   #|  const lines = [];
@@ -586,7 +586,7 @@ fn report_command(
   dispatch : @cmd.Emit[Msg],
   key : String,
   shell : String,
-  exit_code : Int?,
+  exit_code : Int32?,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     guard term_host.entries.get(key) is Some(entry) else {

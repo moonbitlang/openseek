@@ -40,7 +40,7 @@ test "named read workflows preserve all file selectors for display" {
     is Some(call) else {
     fail("expected named workflow")
   }
-  assert_eq(call.args, Some(["x.mbt:120:200", "path with spaces"].to_json()))
+  assert_eq(call.args, Some(Json(["x.mbt:120:200", "path with spaces"])))
   assert_true(call.chips.is_empty())
 }
 

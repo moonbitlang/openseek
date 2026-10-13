@@ -31,7 +31,7 @@ pub fn CodeEditorWidget::reveal_position_in_center_if_outside_viewport(
 ///|
 fn CodeEditorWidget::reveal_line_with(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
   vertical_type : @view_layout.VerticalRevealType,
 ) -> Unit {
   // Monaco's `_revealLine`: a single-line collapsed range, no horizontal reveal.
@@ -42,8 +42,8 @@ fn CodeEditorWidget::reveal_line_with(
 ///|
 fn CodeEditorWidget::reveal_lines_with(
   self : CodeEditorWidget,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
   vertical_type : @view_layout.VerticalRevealType,
 ) -> Unit {
   // Monaco's `_revealLines`: a multi-line range, no horizontal reveal.
@@ -75,9 +75,9 @@ fn CodeEditorWidget::send_reveal_range(
   model_range : @base_common.Range,
   vertical_type : @view_layout.VerticalRevealType,
   reveal_horizontal~ : Bool,
-  source? : String = "",
-  minimal_reveal? : Bool = false,
-  scroll_type? : CursorRevealScrollType = Immediate,
+  source~ : String = "",
+  minimal_reveal~ : Bool = false,
+  scroll_type~ : CursorRevealScrollType = Immediate,
 ) -> Unit {
   guard self.is_code_presentation() else { return }
   self.send_code_reveal_range(
@@ -99,9 +99,9 @@ fn CodeEditorWidget::send_code_reveal_range(
   model_range : @base_common.Range,
   vertical_type : @view_layout.VerticalRevealType,
   reveal_horizontal~ : Bool,
-  source? : String = "",
-  minimal_reveal? : Bool = false,
-  scroll_type? : CursorRevealScrollType = Immediate,
+  source~ : String = "",
+  minimal_reveal~ : Bool = false,
+  scroll_type~ : CursorRevealScrollType = Immediate,
 ) -> Unit {
   guard self.is_code_presentation() else { return }
   guard self.get_view_model() is Some(view_model) else { return }
@@ -129,9 +129,9 @@ fn CodeEditorWidget::send_code_reveal_range(
 fn CodeEditorWidget::reveal_view_cursor(
   self : CodeEditorWidget,
   horizontal~ : Bool,
-  source? : String = "",
-  minimal_reveal? : Bool = false,
-  scroll_type? : CursorRevealScrollType = Immediate,
+  source~ : String = "",
+  minimal_reveal~ : Bool = false,
+  scroll_type~ : CursorRevealScrollType = Immediate,
 ) -> Unit {
   guard self.is_code_presentation() else { return }
   guard self.get_view_model() is Some(view_model) else { return }
@@ -158,7 +158,7 @@ fn CodeEditorWidget::reveal_view_cursor(
 fn cursor_reveal_should_smooth(
   scroll_type : CursorRevealScrollType,
   scroll_top_delta : Double,
-  line_height : Int,
+  line_height : Int32,
 ) -> Bool {
   scroll_type == Smooth && scroll_top_delta > line_height.to_double()
 }
@@ -231,9 +231,9 @@ fn CodeEditorWidget::send_reveal_view_range(
   view_range : @base_common.Range,
   vertical_type : @view_layout.VerticalRevealType,
   reveal_horizontal~ : Bool,
-  source? : String = "",
-  minimal_reveal? : Bool = false,
-  scroll_type? : CursorRevealScrollType = Immediate,
+  source~ : String = "",
+  minimal_reveal~ : Bool = false,
+  scroll_type~ : CursorRevealScrollType = Immediate,
 ) -> Unit {
   guard self.get_view_model() is Some(view_model) else { return }
   // (2) Minimal vertical scroll for the view range.

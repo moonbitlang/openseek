@@ -2,7 +2,7 @@
 /// How long a runtime-backed run stays inline before it is adopted as a job.
 /// Five seconds keeps quick probes inline while moving builds, suites, and
 /// watchers out of the turn without asking the model to predict their duration.
-const AutoBackgroundAfterMs : Int = 5_000
+const AutoBackgroundAfterMs : Int32 = 5_000
 
 ///|
 /// Runtime-less foreground work is bounded to this wall-clock so a runaway loop
@@ -10,7 +10,7 @@ const AutoBackgroundAfterMs : Int = 5_000
 /// as a timeout. Sized for commands, not just compute: a snippet runs whole
 /// `moon test` cycles, and a fresh workspace's first build downloads and
 /// compiles its dependencies.
-const ForegroundTimeoutMs : Int = 300_000
+const ForegroundTimeoutMs : Int32 = 300_000
 
 ///|
 /// Ceiling on the build notes carried into a report, in characters. Warnings
@@ -19,7 +19,7 @@ const ForegroundTimeoutMs : Int = 300_000
 /// agent loop's outer 60k clamp — a clamp that cuts the TAIL, exactly where
 /// the stop/retry and sandbox guidance live. An uncapped prepend would spend
 /// that margin; this cap preserves it.
-const BuildNotesCapChars : Int = 8_000
+const BuildNotesCapChars : Int32 = 8_000
 
 ///|
 /// Wall-clock bound for the synchronous BUILD phase of a wasm run. The build
@@ -32,7 +32,7 @@ const BuildNotesCapChars : Int = 8_000
 /// session cache only the FIRST build of a program in a session is cold, and
 /// parallel subruns each starting with the same bundled script are where cold
 /// builds contend for the machine, so the bound leaves room for that.
-const BuildTimeoutMs : Int = 20_000
+const BuildTimeoutMs : Int32 = 20_000
 
 ///|
 /// Output is streamed to a file on disk, not buffered in memory, so a snippet
@@ -42,7 +42,7 @@ const BuildTimeoutMs : Int = 20_000
 /// `kill_when_full`, so a clipped head means a killed program and the exit code
 /// is not the program's own. Detaching clears that, so a background job is
 /// bounded by the hard cap instead and runs to its own end.
-const OutputCapBytes : Int = 48_000
+const OutputCapBytes : Int32 = 48_000
 
 ///|
 /// The `--warn-list` spec for `warning: "off"`. `-a` disables all warnings;
@@ -54,7 +54,7 @@ const WarnOffList : String = "-a+partial_match@partial_match+multiline_string_es
 ///|
 /// Render an injected millisecond bound without losing sub-second precision in
 /// model-facing text or tool results.
-fn duration_label(milliseconds : Int) -> String {
+fn duration_label(milliseconds : Int32) -> String {
   if milliseconds % 1000 == 0 {
     "\{milliseconds / 1000}s"
   } else {
@@ -117,16 +117,16 @@ fn duration_label(milliseconds : Int) -> String {
 /// ask does not offer an argument whose every use would come back refused.
 pub fn definition(
   workspace_root~ : String,
-  read_only? : Bool = false,
-  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  read_only~ : Bool = false,
+  file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
   bg_runtime? : @bgjobs.BgJobRuntime,
   job_dir? : String,
   scratch_dir? : String,
   worker_sandbox? : WorkerSandbox,
-  auto_background_after_ms? : Int = AutoBackgroundAfterMs,
-  foreground_timeout_ms? : Int = ForegroundTimeoutMs,
-  build_timeout_ms? : Int = BuildTimeoutMs,
+  auto_background_after_ms~ : Int32 = AutoBackgroundAfterMs,
+  foreground_timeout_ms~ : Int32 = ForegroundTimeoutMs,
+  build_timeout_ms~ : Int32 = BuildTimeoutMs,
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
   program_service? : @ptc.Service,
@@ -135,7 +135,7 @@ pub fn definition(
 ) -> @agent_tool.AgentToolDefinition {
   // Per cache key, the generation a stopped build retired (see
   // `open_generation`). Session memory, deliberately: see there.
-  let generations : Map[String, Int] = Map([])
+  let generations : Map[String, Int32] = Map([])
   // Deliberately NOT `concurrent_safe`: wasm builds for one session share
   // build directories (see `build_cache_root`), and a call copies its program
   // out of the shared directory only after its own build returns. Two calls
@@ -229,9 +229,9 @@ pub fn definition(
         (Some(filename), Respond(output)) => {
           // The hint carries `ptc` whenever PTC ran or was explicitly declined,
           // so the re-run lands in the same mode; a defaulted-off run omits it.
-          let retry : Map[String, Json] = { "filename": filename.to_json() }
+          let retry : Map[String, Json] = { "filename": Json(filename) }
           if enabled || input.ptc is Some(false) {
-            retry["ptc"] = enabled.to_json()
+            retry["ptc"] = Json(enabled)
           }
           @agent_tool.respond(
             "Script saved at \{filename}. For subsequent runs, call mbtx with \{Json::object(retry).stringify()} and omit source.\n\n\{output.content}",
@@ -281,7 +281,7 @@ fn described(
 }
 
 ///|
-const DescriptionBriefLimit : Int = 72
+const DescriptionBriefLimit : Int32 = 72
 
 ///|
 /// What the model is told when an escalation did not become a run.
@@ -323,10 +323,10 @@ async fn execute(
   // Independent injectable bounds: a runtime-backed run hands off at the
   // first; a runtime-less run is cancelled at the second; a wasm target's
   // synchronous build phase is cancelled at the third.
-  auto_background_after_ms~ : Int,
-  foreground_timeout_ms~ : Int,
-  build_timeout_ms~ : Int,
-  generations~ : Map[String, Int],
+  auto_background_after_ms~ : Int32,
+  foreground_timeout_ms~ : Int32,
+  build_timeout_ms~ : Int32,
+  generations~ : Map[String, Int32],
   approval? : @agent_runtime.ApprovalChannel,
   subrun? : @host.SubrunInjection,
   program? : @ptc.Program,
@@ -1202,7 +1202,7 @@ async fn build_snippet(
   retire~ : (() -> Unit)?,
   run_cwd~ : String?,
   warning~ : Bool,
-  build_timeout_ms~ : Int,
+  build_timeout_ms~ : Int32,
   empty_stdin~ : String,
   rewrite_bases~ : Array[String],
   source_name~ : String,
@@ -1369,7 +1369,7 @@ fn strip_artifact_report(text : String) -> String {
 /// is what keeps the model from re-reading a runtime trap as a compile error.
 /// The single-shot targets keep the plain framing: their one exit code covers
 /// both stages and claims neither.
-fn finished_body(text : String, exit_code : Int, staged~ : Bool) -> String {
+fn finished_body(text : String, exit_code : Int32, staged~ : Bool) -> String {
   if exit_code == 0 {
     return if text.is_blank() {
       "mbtx: program exited 0 with no output"
@@ -1394,7 +1394,7 @@ fn finished_body(text : String, exit_code : Int, staged~ : Bool) -> String {
 /// The first line of a foreground timeout report. On the staged wasm path the
 /// build had already succeeded, so only the program can be what never
 /// finished; a single-shot target keeps the two-sided hedge.
-fn timeout_head(foreground_timeout_ms : Int, staged~ : Bool) -> String {
+fn timeout_head(foreground_timeout_ms : Int32, staged~ : Bool) -> String {
   let bound = duration_label(foreground_timeout_ms)
   if staged {
     "mbtx: timed out after \{bound} and was cancelled — the build had already succeeded, so it is the PROGRAM that did not finish (an infinite loop, or waiting on something that never arrived)."
@@ -1447,7 +1447,7 @@ async fn refusal_guidance(
   sandboxed_command : @sandbox.SandboxedCommand?,
   log_path : String?,
   head : String,
-  exit_code~ : Int?,
+  exit_code~ : Int32?,
   escalation~ : Bool,
   policy_active~ : Bool,
 ) -> String? {
@@ -1534,17 +1534,17 @@ fn rewrite_temp_paths(
 /// Chunk size for the log denial scan, and the carry kept when a single line
 /// outgrows a chunk — the tail is far larger than any denial pattern, so only
 /// a pattern split exactly at a trim point of a >64KB line is missed.
-const DenialScanChunkBytes : Int = 65_536
+const DenialScanChunkBytes : Int32 = 65_536
 
 ///|
-const DenialScanCarryTailChars : Int = 4_096
+const DenialScanCarryTailChars : Int32 = 4_096
 
 ///|
 /// Byte budget for the denial scan at EACH end of the log. The scan runs after
 /// the run's 60s deadline has already expired, so its work must not scale with
 /// how hard a snippet flooded stdout — a fixed budget keeps the tool call's
 /// wall-clock bounded whatever the log's size.
-const DenialScanBudgetBytes : Int = 16_777_216
+const DenialScanBudgetBytes : Int32 = 16_777_216
 
 ///|
 /// Whether the on-disk output log shows a denial, as `reports_denial` reads
@@ -1561,7 +1561,7 @@ const DenialScanBudgetBytes : Int = 16_777_216
 async fn log_shows_denial(
   path : String,
   reports_denial : (String) -> Bool,
-  budget_bytes~ : Int,
+  budget_bytes~ : Int32,
 ) -> Bool {
   let file = @fs.open(path, mode=ReadOnly) catch { _ => return false }
   defer file.close()
@@ -1805,9 +1805,9 @@ fn description(
   background~ : Bool,
   escalation~ : Bool,
   hosting~ : Bool,
-  auto_background_after_ms~ : Int,
-  foreground_timeout_ms~ : Int,
-  build_timeout_ms~ : Int,
+  auto_background_after_ms~ : Int32,
+  foreground_timeout_ms~ : Int32,
+  build_timeout_ms~ : Int32,
 ) -> String {
   // The one sentence here that depends on what this build can actually do.
   //

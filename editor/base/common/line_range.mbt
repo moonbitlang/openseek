@@ -13,14 +13,14 @@
 ///|
 /// A range of lines (1-based), `[start_line_number, end_line_number_exclusive)`.
 pub(all) struct LineRange {
-  start_line_number : Int
-  end_line_number_exclusive : Int
+  start_line_number : Int32
+  end_line_number_exclusive : Int32
 } derive(Eq, Debug)
 
 ///|
 pub fn LineRange::LineRange(
-  start_line_number : Int,
-  end_line_number_exclusive : Int,
+  start_line_number : Int32,
+  end_line_number_exclusive : Int32,
 ) -> LineRange {
   { start_line_number, end_line_number_exclusive, }
 }
@@ -33,7 +33,7 @@ pub fn LineRange::is_empty(self : LineRange) -> Bool {
 
 ///|
 /// The number of lines this line range spans.
-pub fn LineRange::length(self : LineRange) -> Int {
+pub fn LineRange::length(self : LineRange) -> Int32 {
   self.end_line_number_exclusive - self.start_line_number
 }
 
@@ -64,7 +64,7 @@ struct LineRangeSet {
 
 ///|
 pub fn LineRangeSet::LineRangeSet(
-  normalized_ranges? : Array[LineRange] = [],
+  normalized_ranges~ : Array[LineRange] = [],
 ) -> LineRangeSet {
   { normalized_ranges, }
 }
@@ -163,7 +163,7 @@ fn LineRangeSet::get_union(
 fn find_first_idx_monotonous_or_arr_len(
   array : ArrayView[LineRange],
   predicate : (LineRange) -> Bool,
-) -> Int {
+) -> Int32 {
   for i = 0, j = array.length(); i < j; {
     let k = (i + j) / 2
     if predicate(array[k]) {
@@ -180,7 +180,7 @@ fn find_first_idx_monotonous_or_arr_len(
 fn find_last_idx_monotonous(
   array : ArrayView[LineRange],
   predicate : (LineRange) -> Bool,
-) -> Int {
+) -> Int32 {
   let i = for i = 0, j = array.length(); i < j; {
     let k = (i + j) / 2
     if predicate(array[k]) {
@@ -197,8 +197,8 @@ fn find_last_idx_monotonous(
 ///|
 fn array_splice_replace(
   array : Array[LineRange],
-  start : Int,
-  delete_count : Int,
+  start : Int32,
+  delete_count : Int32,
   item : LineRange,
 ) -> Unit {
   let rest = [ for i in (start + delete_count)..<array.length() => array[i] ]

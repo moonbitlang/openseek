@@ -45,9 +45,9 @@ fn log_entry_json(entry : @log.LogEntry) -> String {
 
 ///|
 fn emit_render_event(
-  line_count : Int,
-  token_count : Int,
-  diagnostic_count : Int,
+  line_count : Int32,
+  token_count : Int32,
+  diagnostic_count : Int32,
   revision : String,
   tokenize_ms : Double,
   build_ms : Double,
@@ -65,7 +65,7 @@ fn emit_render_event(
 }
 
 ///|
-fn emit_language_status(diagnostic_count : Int, revision : String) -> Unit {
+fn emit_language_status(diagnostic_count : Int32, revision : String) -> Unit {
   emit_event(
     "language:diagnostics",
     "{\"count\":\{diagnostic_count.to_string()},\"revision\":\{json_string(revision)}}",
@@ -92,8 +92,8 @@ fn emit_hover_status(ok : Bool, revision : String) -> Unit {
 
 ///|
 fn emit_dom_mounted(
-  rendered_lines : Int,
-  diagnostics : Int,
+  rendered_lines : Int32,
+  diagnostics : Int32,
   status : String,
   patch_ms~ : Double?,
 ) -> Unit {

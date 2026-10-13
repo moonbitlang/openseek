@@ -3,13 +3,13 @@
 // run that opened is reconciled here rather than in each caller.
 
 ///|
-const SymbolDebounceMs : Int = 150
+const SymbolDebounceMs : Int32 = 150
 
 ///|
-const FileDebounceMs : Int = 100
+const FileDebounceMs : Int32 = 100
 
 ///|
-const MaxFileResults : Int = 512
+const MaxFileResults : Int32 = 512
 
 ///|
 /// Open a fresh palette for the shell's focused conversation, or switch an
@@ -279,7 +279,7 @@ fn State::begin_file_request(
   input : Input,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  generation : Int32,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.owner == owner &&
@@ -303,7 +303,7 @@ fn State::apply_cache_loaded(
   input : Input,
   owner : @interop.ConversationKey,
   cache_key : String,
-  _generation : Int,
+  _generation : Int32,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
   guard cache.owner is Some(cached_owner) &&
@@ -338,7 +338,7 @@ fn State::fail_cache_load(
   self : State,
   owner : @interop.ConversationKey,
   cache_key : String,
-  _generation : Int,
+  _generation : Int32,
 ) -> (@cmd.Cmd, State) {
   let cache = self.cache
   guard cache.owner is Some(cached_owner) &&
@@ -366,7 +366,7 @@ fn State::apply_file_result(
   owner : @interop.ConversationKey,
   cache_key : String,
   query : String,
-  generation : Int,
+  generation : Int32,
   files : Array[@pathx.Relative],
 ) -> State {
   guard self.open is Some(open) &&
@@ -387,7 +387,7 @@ fn State::fail_file_request(
   owner : @interop.ConversationKey,
   cache_key : String,
   query : String,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   guard self.open is Some(open) &&
     open.owner == owner &&
@@ -410,7 +410,7 @@ fn State::begin_symbol_request(
   input : Input,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  generation : Int32,
 ) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) &&
     open.owner == owner &&
@@ -434,7 +434,7 @@ fn State::apply_symbol_result(
   self : State,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  generation : Int32,
   items : Array[@symbols.Symbol],
 ) -> State {
   guard self.open is Some(open) &&
@@ -462,7 +462,7 @@ fn State::fail_symbol_request(
   self : State,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   guard self.open is Some(open) &&
     open.owner == owner &&
@@ -476,7 +476,7 @@ fn State::fail_symbol_request(
 }
 
 ///|
-fn State::move_selection(self : State, delta : Int) -> (@cmd.Cmd, State) {
+fn State::move_selection(self : State, delta : Int32) -> (@cmd.Cmd, State) {
   guard self.open is Some(open) else { return (@cmd.none, self) }
   let count = open.items.length()
   guard count > 0 else { return (@cmd.none, self) }
@@ -488,7 +488,7 @@ fn State::move_selection(self : State, delta : Int) -> (@cmd.Cmd, State) {
 }
 
 ///|
-fn State::select_row(self : State, index : Int) -> State {
+fn State::select_row(self : State, index : Int32) -> State {
   guard self.open is Some(open) && open.items.get(index) is Some(_) else {
     return self
   }
@@ -496,7 +496,7 @@ fn State::select_row(self : State, index : Int) -> State {
 }
 
 ///|
-fn State::pick_row(self : State, index : Int) -> (@cmd.Cmd, State, Accepted?) {
+fn State::pick_row(self : State, index : Int32) -> (@cmd.Cmd, State, Accepted?) {
   guard self.open is Some(open) && open.items.get(index) is Some(item) else {
     return (@cmd.none, self, None)
   }
@@ -546,7 +546,10 @@ fn Open::result_files(self : Open) -> Array[@pathx.Relative] {
 }
 
 ///|
-fn file_cache_key(owner : @interop.ConversationKey, generation : Int) -> String {
+fn file_cache_key(
+  owner : @interop.ConversationKey,
+  generation : Int32,
+) -> String {
   "quick-open:\{owner.session}:\{generation}"
 }
 

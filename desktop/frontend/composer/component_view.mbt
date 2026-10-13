@@ -1,6 +1,6 @@
 ///|
 fn Completion::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Completion,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -33,9 +33,10 @@ fn Completion::view(
 /// Render the permanent mention tray. Keeping it mounted when empty preserves
 /// the textarea's positional DOM identity.
 fn Entry::mention_chips(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
+  disabled~ : Bool,
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
   for index, mention in self.draft.mentions {
@@ -70,11 +71,11 @@ fn Entry::mention_chips(
         remove: Some(
           (emit(MentionRemoved(index)), @icons.icon(@icons.icon_close)),
         ),
-      }.render(locale~),
+      }.render(locale~, disabled~),
     )
   }
   if self.review_changes().length() > 0 {
-    chips.push(self.changes_chip(locale~, emit))
+    chips.push(self.changes_chip(locale~, emit, disabled~))
   }
   chips
 }
@@ -92,7 +93,7 @@ fn GoalInput::first_line(_self : GoalInput, text : String) -> String {
 /// Render the stable standing-goal row. All user operations leave the package
 /// as owner-bound actions instead of dispatching root messages directly.
 fn GoalInput::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -184,7 +185,7 @@ fn GoalInput::view(
 
 ///|
 fn Entry::action_buttons(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -243,7 +244,9 @@ fn Entry::action_buttons(
             Queue => ui(locale, QueueNextTurn)
             SaveQueue => ui(locale, SaveQueued)
           },
-          disabled: self.image_reads > 0 || !self.attachment_requests.is_empty(),
+          disabled: input.presentation.disabled ||
+          self.image_reads > 0 ||
+          !self.attachment_requests.is_empty(),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         })
@@ -255,7 +258,7 @@ fn Entry::action_buttons(
 
 ///|
 fn Entry::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -324,8 +327,12 @@ fn Entry::view(
     },
     before_inner: context,
     mentions: [
-      ..self.mention_chips(locale~, emit),
-      ..self.draft.image_previews(locale~, emit),
+      ..self.mention_chips(locale~, emit, disabled=input.presentation.disabled),
+      ..self.draft.image_previews(
+        locale~,
+        emit,
+        disabled=input.presentation.disabled,
+      ),
     ],
     value: if goal_mode {
       self.goal_draft.unwrap_or("")
@@ -414,7 +421,7 @@ fn Entry::submission_choice(self : Entry, input : Input) -> FollowupChoice? {
 
 ///|
 fn Entry::followup_menu(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   input : Input,
   emit : @cmd.Emit[Msg],

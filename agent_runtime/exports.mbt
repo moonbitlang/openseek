@@ -13,7 +13,7 @@
 ///
 /// Steering input does not use this capacity; it is queued separately in an
 /// unbounded queue.
-pub let default_agent_event_capacity : Int = 32
+pub let default_agent_event_capacity : Int32 = 32
 
 ///|
 /// Drain all currently queued runtime events, oldest retained first.

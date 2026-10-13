@@ -5,21 +5,21 @@
 /// UTF-16 on the native backend, which is exactly what `ShellExecuteW`
 /// consumes, so no command interpreter sees the target.
 #borrow(target)
-extern "C" fn windows_open(target : String) -> Int = "moonbit_openseek_desktop_platform_open"
+extern "C" fn windows_open(target : String) -> Int32 = "moonbit_openseek_desktop_platform_open"
 
 ///|
 /// Ask Explorer to show and select one path without routing it through a
 /// command interpreter. The non-Windows stub fails closed; the public wrapper
 /// selects it only on Windows.
 #borrow(target)
-extern "C" fn windows_reveal(target : String) -> Int = "moonbit_openseek_desktop_platform_reveal"
+extern "C" fn windows_reveal(target : String) -> Int32 = "moonbit_openseek_desktop_platform_reveal"
 
 ///|
 /// Hand `path` to the platform's default opener, returning its exit code. The
 /// opener returns as soon as it has handed the file off (LaunchServices on
 /// macOS, the desktop portal on Linux), so the code reports the hand-off, not
 /// the opened app's lifetime. `path` should already be absolute.
-pub async fn open_path(path : String) -> Int {
+pub async fn open_path(path : String) -> Int32 {
   if @async.platform is Windows {
     windows_open(path)
   } else if @async.platform is MacOS {
@@ -41,7 +41,7 @@ pub async fn open_path(path : String) -> Int {
 /// Open a URL in the system's default browser, returning the opener's exit
 /// code. Unlike `open_path` there is no text-editor fallback — a URL that
 /// the opener rejects should fail, not land in an editor.
-pub async fn open_url(url : String) -> Int {
+pub async fn open_url(url : String) -> Int32 {
   if @async.platform is Windows {
     windows_open(url)
   } else if @async.platform is MacOS {
@@ -55,7 +55,7 @@ pub async fn open_url(url : String) -> Int {
 /// Show `path` in the host's file manager. macOS and Windows select the exact
 /// target; Linux has no universal selection protocol, so its portable fallback
 /// opens the containing directory. The code reports the hand-off only.
-pub async fn reveal_path(path : String) -> Int {
+pub async fn reveal_path(path : String) -> Int32 {
   if @async.platform is Windows {
     windows_reveal(path)
   } else if @async.platform is MacOS {

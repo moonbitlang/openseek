@@ -26,11 +26,11 @@ test "emitter listener disposable removes only that listener" {
 ///|
 test "microtask emitter merges queued events into one flush" {
   let scheduled : Array[() -> Unit] = []
-  let emitter : MicrotaskEmitter[Array[Int]] = MicrotaskEmitter(
+  let emitter : MicrotaskEmitter[Array[Int32]] = MicrotaskEmitter(
     merge=all => all.flatten(),
     schedule=run => scheduled.push(run),
   )
-  let fired : Array[Array[Int]] = []
+  let fired : Array[Array[Int32]] = []
   emitter.event(values => fired.push(values)) |> ignore
   emitter.fire([1])
   emitter.fire([2, 3])
@@ -49,7 +49,7 @@ test "microtask emitter merges queued events into one flush" {
 ///|
 test "microtask emitter without listeners queues nothing" {
   let scheduled : Array[() -> Unit] = []
-  let emitter : MicrotaskEmitter[Int] = MicrotaskEmitter(schedule=run => {
+  let emitter : MicrotaskEmitter[Int32] = MicrotaskEmitter(schedule=run => {
     scheduled.push(run)
   })
   emitter.fire(1)
@@ -58,8 +58,8 @@ test "microtask emitter without listeners queues nothing" {
 
 ///|
 test "microtask emitter default schedule flushes inline" {
-  let emitter : MicrotaskEmitter[Int] = MicrotaskEmitter()
-  let fired : Array[Int] = []
+  let emitter : MicrotaskEmitter[Int32] = MicrotaskEmitter()
+  let fired : Array[Int32] = []
   emitter.event(value => fired.push(value)) |> ignore
   emitter.fire(1)
   emitter.fire(2)

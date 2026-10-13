@@ -44,7 +44,7 @@ async fn auto_check_summary(path : String) -> String? {
 /// list. The guards decide by those counts; the list carries the sites the
 /// identity comparisons and the reports use, and a run that overflows it is
 /// marked `truncated` so those comparisons are not mistaken for complete.
-const MoonCheckDiagnosticLimit : Int = 1000
+const MoonCheckDiagnosticLimit : Int32 = 1000
 
 ///|
 /// The document is printed once, at the end, so the capture is all or
@@ -53,12 +53,12 @@ const MoonCheckDiagnosticLimit : Int = 1000
 /// characters each): the document is parsed and dropped, never shown, so
 /// the only cost of a large one is the time to read it. An overflow is no
 /// verdict, not a lower bound.
-const MoonCheckJsonMaxOutputChars : Int = 20000000
+const MoonCheckJsonMaxOutputChars : Int32 = 20000000
 
 ///|
 /// How many individual error diagnostics a revert report surfaces; enough to
 /// show the shape of an over-match without dumping a broken build.
-const RevertErrorDisplayLimit : Int = 10
+const RevertErrorDisplayLimit : Int32 = 10
 
 ///|
 /// One `level == "error"` diagnostic: where moon check placed it and what it
@@ -70,7 +70,7 @@ const RevertErrorDisplayLimit : Int = 10
 pub(all) struct ErrorSite {
   path : String?
   loc : String
-  code : Int?
+  code : Int32?
   message : String
 } derive(Debug, Eq)
 
@@ -94,15 +94,15 @@ pub fn ErrorSite::identity(self : ErrorSite) -> String {
 pub fn ErrorSite::to_json(self : ErrorSite) -> Json {
   let fields : Map[String, Json] = Map([])
   if self.path is Some(path) {
-    fields["path"] = path.to_json()
+    fields["path"] = Json(path)
   }
   if self.loc != "" {
-    fields["loc"] = self.loc.to_json()
+    fields["loc"] = Json(self.loc)
   }
   if self.code is Some(code) {
-    fields["code"] = code.to_json()
+    fields["code"] = Json(code)
   }
-  fields["message"] = self.message.to_json()
+  fields["message"] = Json(self.message)
   Json::object(fields)
 }
 
@@ -137,8 +137,8 @@ pub fn ErrorSite::line(self : ErrorSite) -> String {
 /// that compares two runs must reason about that from the package graph (see
 /// `package_graph`).
 pub(all) struct CheckErrors {
-  error_count : Int
-  warning_count : Int
+  error_count : Int32
+  warning_count : Int32
   errors : Array[ErrorSite]
   warnings : Array[ErrorSite]
   truncated : Bool
@@ -148,7 +148,7 @@ pub(all) struct CheckErrors {
 /// How many sites of each severity `to_json` carries. A tally keeps every
 /// site for identity comparison; a tool result that travels to a script (and
 /// is retained in its trace) does not need thousands of them.
-const JsonSiteLimit : Int = 200
+const JsonSiteLimit : Int32 = 200
 
 ///|
 /// The tally as machine-readable tool `data`: counts, the first
@@ -161,14 +161,17 @@ pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
   }
 
   {
-    "error_count": self.error_count.to_json(),
-    "warning_count": self.warning_count.to_json(),
-    "truncated": self.truncated.to_json(),
+    "error_count": Json(self.error_count),
+    "warning_count": Json(self.warning_count),
+    "truncated": Json(self.truncated),
     "errors": sites(self.errors),
-    "errors_truncated": (self.truncated || self.errors.length() > JsonSiteLimit).to_json(),
+    "errors_truncated": Json(
+      self.truncated || self.errors.length() > JsonSiteLimit,
+    ),
     "warnings": sites(self.warnings),
-    "warnings_truncated": (self.truncated ||
-    self.warnings.length() > JsonSiteLimit).to_json(),
+    "warnings_truncated": Json(
+      self.truncated || self.warnings.length() > JsonSiteLimit,
+    ),
   }
 }
 
@@ -181,9 +184,9 @@ pub fn CheckErrors::to_json(self : CheckErrors) -> Json {
 pub fn CheckErrors::summary_json(self : CheckErrors) -> Json {
   let shown = self.errors.length().min(RevertErrorDisplayLimit)
   {
-    "error_count": self.error_count.to_json(),
-    "warning_count": self.warning_count.to_json(),
-    "truncated": self.truncated.to_json(),
+    "error_count": Json(self.error_count),
+    "warning_count": Json(self.warning_count),
+    "truncated": Json(self.truncated),
     "errors": Json::array([ for site in self.errors[:shown] => site.to_json() ]),
   }
 }
@@ -240,7 +243,7 @@ fn new_sites(
   before : Array[ErrorSite],
   after : Array[ErrorSite],
 ) -> Array[ErrorSite] {
-  let budget : Map[String, Int] = Map([])
+  let budget : Map[String, Int32] = Map([])
   for site in before {
     let key = site.kind()
     budget[key] = budget.get(key).unwrap_or(0) + 1
@@ -301,7 +304,7 @@ pub(all) enum CheckOutcome {
   /// the tally says nothing about the tree. Carries the exit code, the tally
   /// for callers that never distinguished this case, and moon's message(s)
   /// so a caller can say WHY the plan failed, not only that it did.
-  Failed(Int, CheckErrors, String)
+  Failed(Int32, CheckErrors, String)
   Checked(CheckErrors)
 }
 

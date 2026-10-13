@@ -8,8 +8,11 @@
 ///|
 /// Mirrors the suite's `createLineTokens(text, tokens)`: `tokens` is a list of
 /// `(startIndex, foreground)` pairs.
-fn create_line_tokens(text : String, tokens : Array[(Int, Int)]) -> LineTokens {
-  let bin_tokens : Array[UInt] = Array::make(tokens.length() << 1, 0U)
+fn create_line_tokens(
+  text : String,
+  tokens : Array[(Int32, Int32)],
+) -> LineTokens {
+  let bin_tokens : Array[UInt32] = Array::make(tokens.length() << 1, 0U)
   for i in 0..<tokens.length() {
     let end_index = if i + 1 < tokens.length() {
       tokens[i + 1].0
@@ -52,7 +55,7 @@ fn render_line_tokens(tokens : LineTokens) -> String {
 /// Mirrors `assertViewLineTokens`: compares `(endIndex, foreground)` per token.
 fn assert_view_line_tokens(
   actual : ViewLineTokens,
-  expected : Array[(Int, Int)],
+  expected : Array[(Int32, Int32)],
 ) -> Unit raise {
   // Assert scalar fields per element (avoids the deprecated `Show`-based
   // `assert_eq` on tuples/arrays while keeping per-element failure detail).
@@ -142,7 +145,7 @@ test "basics" {
 ///|
 test "findToken" {
   let line_tokens = create_test_line_tokens()
-  let expected : ReadOnlyArray[Int] = [
+  let expected : ReadOnlyArray[Int32] = [
     0, 0, 0, 0, 0, 0, // offsets 0..5  -> token 0
      1, 1, 1, 1, 1, 1, 1, // offsets 6..12 -> token 1
      2, 2, 2, 2, 2, // offsets 13..17 -> token 2

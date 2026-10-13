@@ -20,7 +20,7 @@ pub fn moonbit_source_lines(source : String) -> Array[@rhtml.Html] {
 fn tokenized_lines(
   source : String,
   tokenizer : &@syntax.LineTokenizer?,
-  keep : (Int) -> Bool,
+  keep : (Int32) -> Bool,
 ) -> Array[@rhtml.Html] {
   let lines : Array[@rhtml.Html] = []
   guard tokenizer is Some(tokenizer) else {
@@ -139,7 +139,7 @@ fn numbered_rows(
   // not construct tens of thousands of rows just to discard the middle.
   let total = source.split("\n").count()
   let clamped = total > NUMBERED_HEAD_LINES + NUMBERED_TAIL_LINES + 1
-  let keep = (index : Int) => {
+  let keep = (index : Int32) => {
     !clamped ||
     index < NUMBERED_HEAD_LINES ||
     index >= total - NUMBERED_TAIL_LINES

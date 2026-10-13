@@ -19,7 +19,7 @@ let pending_requests : Map[String, PendingProtocolRequest] = Map([])
 let cancelled_request_ids : Map[String, Unit] = Map([])
 
 ///|
-let request_counter : Ref[Int] = Ref(0)
+let request_counter : Ref[Int32] = Ref(0)
 
 ///|
 /// Sends a client packet over the live protocol socket. Installed at mount
@@ -47,7 +47,7 @@ fn next_request_id(prefix : String) -> String {
 async fn protocol_request(
   prefix : String,
   make_packet : (String) -> @remote_protocol.ClientPacket,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
 ) -> @remote_protocol.ServerPacket noraise {
   let id = next_request_id(prefix)
   if token.is_cancellation_requested() {

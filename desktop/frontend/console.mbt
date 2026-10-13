@@ -48,7 +48,7 @@ priv struct ConsoleState {
   roster_sync : RosterSync
   // The newest `/v1/devices` request. Replies carry this generation so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
-  roster_request_generation : Int
+  roster_request_generation : Int32
   // The required `?device=` from the page's own query. It remains for the
   // page's lifetime: one browser page/tab owns one device and never falls
   // through to another roster entry.
@@ -74,7 +74,7 @@ priv struct ConsoleState {
 fn empty_console_state(
   page_device : String?,
   preselect_project : @common.Uri?,
-  login_return_to? : String = "/console/",
+  login_return_to~ : String = "/console/",
 ) -> ConsoleState {
   {
     auth: AuthChecking,
@@ -149,8 +149,8 @@ priv enum ConsoleMsg {
   MeUnauthorized
   MeFailed(String)
   // `/v1/devices` settled.
-  RosterLoaded(Array[DeviceMeta], generation~ : Int)
-  RosterFailed(message~ : String, generation~ : Int)
+  RosterLoaded(Array[DeviceMeta], generation~ : Int32)
+  RosterFailed(message~ : String, generation~ : Int32)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
   SignOutClicked

@@ -10,14 +10,14 @@
 /// port mints an explicit identity so copying or rebuilding a participant
 /// handle cannot change anchor equality or adoption.
 struct HoverParticipantOwner {
-  id : Int
+  id : Int32
 } derive(Eq, Debug)
 
 ///|
-let next_hover_participant_owner_id : Ref[Int] = Ref(0)
+let next_hover_participant_owner_id : Ref[Int32] = Ref(0)
 
 ///|
-pub fn HoverAnchor::priority(self : HoverAnchor) -> Int {
+pub fn HoverAnchor::priority(self : HoverAnchor) -> Int32 {
   match self {
     HoverRangeAnchor(priority~, ..)
     | HoverForeignElementAnchor(priority~, ..) => priority

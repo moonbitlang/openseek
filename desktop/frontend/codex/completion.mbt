@@ -222,7 +222,7 @@ pub fn State::accepts_composer_identity(
 
 ///|
 fn CodexPermissionPicker::confirmation_dialog(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexPermissionPicker,
   dispatch : @cmd.Emit[Msg],
 ) -> @html.Html? {
@@ -266,7 +266,7 @@ fn CodexPermissionPicker::confirmation_dialog(
 /// the shared composer component. No editable or completion state is retained
 /// in this view projection.
 pub fn State::composer_input(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   context : ComposerContext,
 ) -> @composer.Input {
@@ -277,7 +277,7 @@ pub fn State::composer_input(
     for request in self.pending_requests {
       if request.thread_id == active.id {
         requests.push({
-          request_key: request.request_id.stringify(),
+          request_key: request.response_token,
           method_: request.method_,
           params: request.params,
           answers: request.answers,

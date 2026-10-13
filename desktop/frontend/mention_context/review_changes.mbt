@@ -11,7 +11,7 @@ pub(all) struct ReviewSource {
 
 ///|
 pub(all) struct ChangeLine {
-  number : Int
+  number : Int32
   text : String
 } derive(Eq, Debug)
 

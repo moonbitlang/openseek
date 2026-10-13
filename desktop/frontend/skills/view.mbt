@@ -43,7 +43,7 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
 /// listed so the user sees everything the engine advertises, but the app
 /// never offers to delete them.
 fn installed_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
@@ -102,7 +102,7 @@ fn installed_row(
 /// the button alive as the upgrade path), an install in flight reads as
 /// ui(locale, Installing).
 fn market_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   input : Input,
   item : MarketItem,
@@ -153,7 +153,7 @@ fn market_row(
 
 ///|
 fn detail_page(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
@@ -192,7 +192,7 @@ fn detail_page(
 
 ///|
 fn skill_document_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   source : String,
 ) -> @html.Html {
   let document = parse_skill_document(source)
@@ -222,7 +222,7 @@ fn skill_document_view(
 
 ///|
 fn detail_shell(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   target : PreviewTarget,
   content : @html.Html,
   input : Input,
@@ -271,7 +271,7 @@ fn preview_name(target : PreviewTarget) -> String {
 
 ///|
 fn preview_meta(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   target : PreviewTarget,
 ) -> String {
   match target {
@@ -292,7 +292,7 @@ fn preview_meta(
 
 ///|
 fn detail_action(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   target : PreviewTarget,
   state : State,
   input : Input,
@@ -377,7 +377,7 @@ fn matches(query : String, fields : Array[String]) -> Bool {
 /// The Skills page, shown in the main area in place of the conversation:
 /// header, search, the local library, then the mooncakes.io catalog.
 fn list_page(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],
@@ -491,7 +491,7 @@ fn list_page(
 
 ///|
 fn page(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   input : Input,
   emit : @cmd.Emit[Msg],

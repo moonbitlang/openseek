@@ -3,11 +3,11 @@
 /// Child order is structural because Rabbita diffs by index; the viewer and
 /// browser placeholders must not be re-keyed when the active tab changes.
 fn panel_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : Input,
   actions : Actions,
-  semantic_review? : @html.Html = @html.nothing,
-  tab_menu? : @html.Html = @html.nothing,
+  semantic_review~ : @html.Html = @html.nothing,
+  tab_menu~ : @html.Html = @html.nothing,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
     match tab {

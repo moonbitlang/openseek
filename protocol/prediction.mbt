@@ -1,7 +1,7 @@
 ///|
 /// Auxiliary completion, distinct from a durable conversation event.
 pub(all) enum PredictionOutcome {
-  Completed(text~ : String?, input_tokens~ : Int, output_tokens~ : Int)
+  Completed(text~ : String?, input_tokens~ : Int32, output_tokens~ : Int32)
   Skipped
   Cancelled
   Failed(String)
@@ -53,11 +53,11 @@ pub impl FromJson for PredictionOutcome with fn from_json(json, path) {
             (path.add_key("text"), "expected nonempty text or null"),
           )
       }
-      let input_tokens : Int = @json.from_json(
+      let input_tokens : Int32 = @json.from_json(
         input,
         path=path.add_key("input_tokens"),
       )
-      let output_tokens : Int = @json.from_json(
+      let output_tokens : Int32 = @json.from_json(
         output,
         path=path.add_key("output_tokens"),
       )
@@ -76,7 +76,7 @@ pub impl FromJson for PredictionOutcome with fn from_json(json, path) {
 ///|
 /// Durable auxiliary result, saved only after a prediction completes.
 pub(all) struct PredictionRecord {
-  source_sequence : Int
+  source_sequence : Int32
   outcome : PredictionOutcome
 } derive(Eq, Debug)
 

@@ -73,7 +73,7 @@ fn CodeEditorWidget::folding_enabled(self : CodeEditorWidget) -> Bool {
 /// `FoldingAction.getSelectedLines` (`folding.ts:571`).
 fn CodeEditorWidget::folding_selected_lines(
   self : CodeEditorWidget,
-) -> Array[Int] {
+) -> Array[Int32] {
   self.get_selections().unwrap_or([]).map(s => s.start().line_number)
 }
 

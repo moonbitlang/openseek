@@ -6,8 +6,8 @@
 fn plan_call(
   id : String,
   arguments : String,
-  is_error? : Bool = false,
-  has_result? : Bool = true,
+  is_error~ : Bool = false,
+  has_result~ : Bool = true,
 ) -> @transcript.ToolCall {
   {
     call_id: id,

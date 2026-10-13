@@ -22,15 +22,15 @@ fn browser_code_lens_source() -> String {
 
 ///|
 priv struct BrowserCodeLensProvider {
-  mode : Ref[Int]
-  calls : Ref[Int]
+  mode : Ref[Int32]
+  calls : Ref[Int32]
   executions : Array[String]
 }
 
 ///|
 fn BrowserCodeLensProvider::lens(
   self : BrowserCodeLensProvider,
-  line : Int,
+  line : Int32,
   title : String,
 ) -> @language.CodeLens {
   {
@@ -165,14 +165,14 @@ pub fn run_code_lens_test() -> Unit {
   install_code_lens_controls(
     () => {
       Json({
-        "providerCalls": provider_calls.val.to_json(),
-        "executions": Json(executions.map(title => title.to_json())),
+        "providerCalls": Json(provider_calls.val),
+        "executions": Json(executions.map(title => Json(title))),
         "scrollTop": Json::number(main_viewer.get_scroll_top()),
         "scrollHeight": Json::number(main_viewer.get_scroll_height()),
         "top40": Json::number(
           main_viewer.get_top_for_line_number(40, include_view_zones=true),
         ),
-        "expanded": (mode.val == 1).to_json(),
+        "expanded": Json(mode.val == 1),
       }).stringify()
     },
     () => {
@@ -199,7 +199,7 @@ pub fn run_code_lens_test() -> Unit {
 ///|
 fn poll_code_lens_ready(
   ctx : @support.BrowserTestContext,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   let main_ready = @support.query_count(
       ".code-lens-main-host .codelens-decoration[data-code-lens-line=\"2\"]",

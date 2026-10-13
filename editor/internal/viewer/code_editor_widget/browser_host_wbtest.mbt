@@ -222,30 +222,30 @@ extern "js" fn idle_target_set_now(
 ///|
 extern "js" fn idle_target_request_count(
   target : TokenizationIdleTarget,
-) -> Int = "(target) => target.__idleState.requests.length"
+) -> Int32 = "(target) => target.__idleState.requests.length"
 
 ///|
 extern "js" fn idle_target_request_handle(
   target : TokenizationIdleTarget,
-  index : Int,
-) -> Int = "(target, index) => target.__idleState.requests[index].handle"
+  index : Int32,
+) -> Int32 = "(target, index) => target.__idleState.requests[index].handle"
 
 ///|
 extern "js" fn idle_target_request_had_options(
   target : TokenizationIdleTarget,
-  index : Int,
+  index : Int32,
 ) -> Bool = "(target, index) => target.__idleState.requests[index].options !== undefined"
 
 ///|
 extern "js" fn idle_target_request_timeout(
   target : TokenizationIdleTarget,
-  index : Int,
+  index : Int32,
 ) -> Double = "(target, index) => target.__idleState.requests[index].options.timeout"
 
 ///|
 extern "js" fn idle_target_run_request(
   target : TokenizationIdleTarget,
-  handle : Int,
+  handle : Int32,
   did_timeout : Bool,
   remaining : Double,
 ) -> Unit =
@@ -258,27 +258,29 @@ extern "js" fn idle_target_run_request(
   #| }
 
 ///|
-extern "js" fn idle_target_cancel_count(target : TokenizationIdleTarget) -> Int = "(target) => target.__idleState.cancellations.length"
+extern "js" fn idle_target_cancel_count(
+  target : TokenizationIdleTarget,
+) -> Int32 = "(target) => target.__idleState.cancellations.length"
 
 ///|
 extern "js" fn idle_target_canceled_handle(
   target : TokenizationIdleTarget,
-  index : Int,
-) -> Int = "(target, index) => target.__idleState.cancellations[index]"
+  index : Int32,
+) -> Int32 = "(target, index) => target.__idleState.cancellations[index]"
 
 ///|
 extern "js" fn idle_target_timeout_count(
   target : TokenizationIdleTarget,
-) -> Int = "(target) => target.__idleState.timeouts.length"
+) -> Int32 = "(target) => target.__idleState.timeouts.length"
 
 ///|
 extern "js" fn idle_target_timeout_delay(
   target : TokenizationIdleTarget,
-  index : Int,
-) -> Int = "(target, index) => target.__idleState.timeouts[index].delay"
+  index : Int32,
+) -> Int32 = "(target, index) => target.__idleState.timeouts[index].delay"
 
 ///|
 extern "js" fn idle_target_run_timeout(
   target : TokenizationIdleTarget,
-  index : Int,
+  index : Int32,
 ) -> Unit = "(target, index) => target.__idleState.timeouts[index].callback()"

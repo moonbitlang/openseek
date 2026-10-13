@@ -13,12 +13,12 @@
 
 ///|
 priv struct DiffOffsetRange {
-  start : Int
-  end_exclusive : Int
+  start : Int32
+  end_exclusive : Int32
 }
 
 ///|
-fn DiffOffsetRange::length(self : DiffOffsetRange) -> Int {
+fn DiffOffsetRange::length(self : DiffOffsetRange) -> Int32 {
   self.end_exclusive - self.start
 }
 
@@ -30,7 +30,7 @@ fn DiffOffsetRange::is_empty(self : DiffOffsetRange) -> Bool {
 ///|
 fn DiffOffsetRange::delta(
   self : DiffOffsetRange,
-  offset : Int,
+  offset : Int32,
 ) -> DiffOffsetRange {
   { start: self.start + offset, end_exclusive: self.end_exclusive + offset, }
 }
@@ -75,7 +75,7 @@ priv struct SequenceDiff {
 }
 
 ///|
-fn SequenceDiff::delta(self : SequenceDiff, offset : Int) -> SequenceDiff {
+fn SequenceDiff::delta(self : SequenceDiff, offset : Int32) -> SequenceDiff {
   {
     original: self.original.delta(offset),
     modified: self.modified.delta(offset),
@@ -114,9 +114,9 @@ fn SequenceDiff::intersect(
 
 ///|
 priv struct ReadabilitySequence {
-  values : Array[Int]
-  strongly_equal : (Int, Int) -> Bool
-  boundary_score : (Int) -> Int
+  values : Array[Int32]
+  strongly_equal : (Int32, Int32) -> Bool
+  boundary_score : (Int32) -> Int32
 }
 
 ///|
@@ -137,9 +137,9 @@ fn reverse_sequence_diffs(
 // order, diagonal tie preference, and consecutive-diagonal bonus match the
 // pinned source.
 fn weighted_sequence_diffs(
-  sequence1 : Array[Int],
-  sequence2 : Array[Int],
-  equality_score : (Int, Int) -> Double,
+  sequence1 : Array[Int32],
+  sequence2 : Array[Int32],
+  equality_score : (Int32, Int32) -> Double,
 ) -> Array[SequenceDiff] {
   if sequence1.is_empty() && sequence2.is_empty() {
     return []
@@ -157,7 +157,7 @@ fn weighted_sequence_diffs(
   let scores = Array::make(width * height, 0.0)
   let directions = Array::make(width * height, 0)
   let lengths = Array::make(width * height, 0)
-  let index_of = fn(s1 : Int, s2 : Int) { s1 + s2 * width }
+  let index_of = fn(s1 : Int32, s2 : Int32) { s1 + s2 * width }
   for s1 in 0..<width {
     for s2 in 0..<height {
       let horizontal = if s1 == 0 { 0.0 } else { scores[index_of(s1 - 1, s2)] }
@@ -199,7 +199,7 @@ fn weighted_sequence_diffs(
   let reversed : Array[SequenceDiff] = []
   let mut last_s1 = width
   let mut last_s2 = height
-  let report_alignment = fn(s1 : Int, s2 : Int) {
+  let report_alignment = fn(s1 : Int32, s2 : Int32) {
     if s1 + 1 != last_s1 || s2 + 1 != last_s2 {
       reversed.push({
         original: { start: s1 + 1, end_exclusive: last_s1, },
@@ -228,8 +228,8 @@ fn weighted_sequence_diffs(
 
 ///|
 fn myers_sequence_diffs(
-  sequence1 : Array[Int],
-  sequence2 : Array[Int],
+  sequence1 : Array[Int32],
+  sequence2 : Array[Int32],
 ) -> Array[SequenceDiff] {
   let edits = @core_diff.Diff(
     old=sequence1[:],
@@ -486,8 +486,8 @@ fn optimize_sequence_diffs(
 
 ///|
 fn remove_short_matches(
-  original_values : Array[Int],
-  modified_values : Array[Int],
+  original_values : Array[Int32],
+  modified_values : Array[Int32],
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
   let result : Array[SequenceDiff] = []
@@ -517,15 +517,15 @@ fn remove_short_matches(
 }
 
 ///|
-fn scalar_utf16_length(value : Int) -> Int {
+fn scalar_utf16_length(value : Int32) -> Int32 {
   value.unsafe_to_char().utf16_len()
 }
 
 ///|
 fn scalar_range_utf16_length(
-  values : Array[Int],
+  values : Array[Int32],
   range : DiffOffsetRange,
-) -> Int {
+) -> Int32 {
   let mut length = 0
   for index in range.start..<range.end_exclusive {
     length += scalar_utf16_length(values[index])
@@ -534,7 +534,10 @@ fn scalar_range_utf16_length(
 }
 
 ///|
-fn scalar_range_line_count(values : Array[Int], range : DiffOffsetRange) -> Int {
+fn scalar_range_line_count(
+  values : Array[Int32],
+  range : DiffOffsetRange,
+) -> Int32 {
   let mut count = 0
   for index in range.start..<range.end_exclusive {
     if values[index] == '\n'.to_int() {
@@ -546,7 +549,7 @@ fn scalar_range_line_count(values : Array[Int], range : DiffOffsetRange) -> Int 
 
 ///|
 fn scalar_trimmed_range(
-  values : Array[Int],
+  values : Array[Int32],
   range : DiffOffsetRange,
 ) -> DiffOffsetRange {
   let mut start = range.start
@@ -563,7 +566,7 @@ fn scalar_trimmed_range(
 
 ///|
 fn scalar_extend_to_full_lines(
-  values : Array[Int],
+  values : Array[Int32],
   range : DiffOffsetRange,
 ) -> DiffOffsetRange {
   let mut start = range.start
@@ -579,16 +582,16 @@ fn scalar_extend_to_full_lines(
 }
 
 ///|
-fn long_diff_side_score(line_count : Int, utf16_length : Int) -> Double {
+fn long_diff_side_score(line_count : Int32, utf16_length : Int32) -> Double {
   (line_count * 40 + utf16_length).min(130).to_double()
 }
 
 ///|
 fn long_diff_pair_score(
-  first_line_count : Int,
-  first_utf16_length : Int,
-  second_line_count : Int,
-  second_utf16_length : Int,
+  first_line_count : Int32,
+  first_utf16_length : Int32,
+  second_line_count : Int32,
+  second_utf16_length : Int32,
 ) -> Double {
   @math.pow(
     @math.pow(long_diff_side_score(first_line_count, first_utf16_length), 1.5) +
@@ -599,8 +602,8 @@ fn long_diff_pair_score(
 
 ///|
 fn should_join_long_scalar_diffs(
-  original_values : Array[Int],
-  modified_values : Array[Int],
+  original_values : Array[Int32],
+  modified_values : Array[Int32],
   before : SequenceDiff,
   after : SequenceDiff,
 ) -> Bool {
@@ -635,8 +638,8 @@ fn should_join_long_scalar_diffs(
 
 ///|
 fn mark_short_trim_as_changed(
-  original_values : Array[Int],
-  modified_values : Array[Int],
+  original_values : Array[Int32],
+  modified_values : Array[Int32],
   diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
   let result : Array[SequenceDiff] = []
@@ -738,8 +741,8 @@ fn mark_short_trim_as_changed(
 // It merges tiny one-line matches between substantial edits, then extends
 // large edits over visually meaningless <=3-code-unit line trim.
 fn remove_very_short_matching_text_between_long_diffs(
-  original_values : Array[Int],
-  modified_values : Array[Int],
+  original_values : Array[Int32],
+  modified_values : Array[Int32],
   sequence_diffs : Array[SequenceDiff],
 ) -> Array[SequenceDiff] {
   let mut diffs = sequence_diffs
@@ -793,7 +796,7 @@ fn merge_touching_sequence_diffs(
 }
 
 ///|
-fn line_indentation(line : String) -> Int {
+fn line_indentation(line : String) -> Int32 {
   let mut index = 0
   while index < line.length() && line[index] is (' ' | '\t') {
     index += 1
@@ -803,7 +806,7 @@ fn line_indentation(line : String) -> Int {
 
 ///|
 fn line_readability_sequence(
-  values : Array[Int],
+  values : Array[Int32],
   lines : Array[String],
 ) -> ReadabilitySequence {
   {
@@ -829,8 +832,8 @@ fn line_readability_sequence(
 fn intern_line_values(
   original_lines : Array[String],
   modified_lines : Array[String],
-) -> (Array[Int], Array[Int]) {
-  let keys : Map[String, Int] = Map([])
+) -> (Array[Int32], Array[Int32]) {
+  let keys : Map[String, Int32] = Map([])
   let get_key = fn(line : String) {
     let text = line.trim().to_owned()
     match keys.get(text) {
@@ -945,9 +948,9 @@ fn include_strict_whitespace_line_diffs(
 ///|
 fn line_non_whitespace_length(
   lines : Array[String],
-  start : Int,
-  end_exclusive : Int,
-) -> Int {
+  start : Int32,
+  end_exclusive : Int32,
+) -> Int32 {
   let mut length = 0
   for line_index in start..<end_exclusive {
     for character in lines[line_index] {
@@ -1015,7 +1018,7 @@ priv enum ScalarBoundaryCategory {
 } derive(Eq)
 
 ///|
-fn scalar_boundary_category(value : Int) -> ScalarBoundaryCategory {
+fn scalar_boundary_category(value : Int32) -> ScalarBoundaryCategory {
   if value == '\n'.to_int() {
     LineBreak
   } else if value == ' '.to_int() || value == '\t'.to_int() {
@@ -1036,7 +1039,7 @@ fn scalar_boundary_category(value : Int) -> ScalarBoundaryCategory {
 }
 
 ///|
-fn scalar_category_score(category : ScalarBoundaryCategory) -> Int {
+fn scalar_category_score(category : ScalarBoundaryCategory) -> Int32 {
   match category {
     WordLower | WordUpper | WordNumber => 0
     End | LineBreak => 10
@@ -1047,7 +1050,7 @@ fn scalar_category_score(category : ScalarBoundaryCategory) -> Int {
 }
 
 ///|
-fn scalar_boundary_score(values : Array[Int], length : Int) -> Int {
+fn scalar_boundary_score(values : Array[Int32], length : Int32) -> Int32 {
   let previous = scalar_boundary_category(
     if length > 0 {
       values[length - 1]
@@ -1076,7 +1079,7 @@ fn scalar_boundary_score(values : Array[Int], length : Int) -> Int {
 }
 
 ///|
-fn scalar_readability_sequence(values : Array[Int]) -> ReadabilitySequence {
+fn scalar_readability_sequence(values : Array[Int32]) -> ReadabilitySequence {
   {
     values,
     strongly_equal: fn(first, second) { values[first] == values[second] },
@@ -1085,14 +1088,17 @@ fn scalar_readability_sequence(values : Array[Int]) -> ReadabilitySequence {
 }
 
 ///|
-fn is_ascii_word_scalar(value : Int) -> Bool {
+fn is_ascii_word_scalar(value : Int32) -> Bool {
   (value >= 'a'.to_int() && value <= 'z'.to_int()) ||
   (value >= 'A'.to_int() && value <= 'Z'.to_int()) ||
   (value >= '0'.to_int() && value <= '9'.to_int())
 }
 
 ///|
-fn find_word_containing(values : Array[Int], offset : Int) -> DiffOffsetRange? {
+fn find_word_containing(
+  values : Array[Int32],
+  offset : Int32,
+) -> DiffOffsetRange? {
   if offset < 0 ||
     offset >= values.length() ||
     !is_ascii_word_scalar(values[offset]) {
@@ -1113,8 +1119,8 @@ fn find_word_containing(values : Array[Int], offset : Int) -> DiffOffsetRange? {
 ///|
 fn invert_sequence_diffs(
   sequence_diffs : Array[SequenceDiff],
-  original_length : Int,
-  modified_length : Int,
+  original_length : Int32,
+  modified_length : Int32,
 ) -> Array[SequenceDiff] {
   let result : Array[SequenceDiff] = []
   let mut original_start = 0
@@ -1169,19 +1175,19 @@ fn merge_sequence_diff_sets(
 
 ///|
 fn scan_parent_for_word_extension(
-  sequence1 : Array[Int],
-  sequence2 : Array[Int],
+  sequence1 : Array[Int32],
+  sequence2 : Array[Int32],
   equal_mappings : Array[SequenceDiff],
-  future_index : Int,
-  pair_original : Int,
-  pair_modified : Int,
+  future_index : Int32,
+  pair_original : Int32,
+  pair_modified : Int32,
   equal_mapping : SequenceDiff,
-  last_original : Int,
-  last_modified : Int,
-  find_parent : (Array[Int], Int) -> DiffOffsetRange?,
+  last_original : Int32,
+  last_modified : Int32,
+  find_parent : (Array[Int32], Int32) -> DiffOffsetRange?,
   force : Bool,
   additional : Array[SequenceDiff],
-) -> (Int, Int, Int) {
+) -> (Int32, Int32, Int32) {
   if pair_original < last_original || pair_modified < last_modified {
     return (future_index, last_original, last_modified)
   }
@@ -1234,11 +1240,11 @@ fn scan_parent_for_word_extension(
 
 ///|
 fn extend_diffs_to_parent_if_appropriate(
-  sequence1 : Array[Int],
-  sequence2 : Array[Int],
+  sequence1 : Array[Int32],
+  sequence2 : Array[Int32],
   sequence_diffs : Array[SequenceDiff],
-  find_parent : (Array[Int], Int) -> DiffOffsetRange?,
-  force? : Bool = false,
+  find_parent : (Array[Int32], Int32) -> DiffOffsetRange?,
+  force~ : Bool = false,
 ) -> Array[SequenceDiff] {
   let equal_mappings = invert_sequence_diffs(
     sequence_diffs,
@@ -1295,8 +1301,8 @@ fn extend_diffs_to_parent_if_appropriate(
 
 ///|
 fn compute_advanced_scalar_diffs(
-  original_values : Array[Int],
-  modified_values : Array[Int],
+  original_values : Array[Int32],
+  modified_values : Array[Int32],
 ) -> Array[SequenceDiff] {
   let original_sequence = scalar_readability_sequence(original_values)
   let modified_sequence = scalar_readability_sequence(modified_values)

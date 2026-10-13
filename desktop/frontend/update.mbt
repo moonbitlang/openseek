@@ -1,5 +1,5 @@
 ///|
-const TranscriptReloadMaxAttempts : Int = 3
+const TranscriptReloadMaxAttempts : Int32 = 3
 
 ///|
 /// Write a large selection through the Host only after the user submits it.
@@ -85,7 +85,7 @@ fn session_snapshot_command(
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  generation : Int32,
   activate_on_success : Bool,
 ) -> @cmd.Cmd {
   let (workspace, archived) = match model.find_conversation(channel, session) {
@@ -642,7 +642,7 @@ fn retry_session_snapshot(
   channel : @interop.ChannelId,
   model : Model,
   session : String,
-  generation : Int,
+  generation : Int32,
   activate_on_success : Bool,
   message : String,
 ) -> (@cmd.Cmd, Model) {
@@ -727,10 +727,10 @@ fn apply_session_snapshot(
   model : Model,
   session : String,
   items : Array[@transcript.TranscriptItem],
-  watermark : Int,
+  watermark : Int32,
   goal : @transcript.GoalStanding?,
-  goal_markers : Array[(Int, @transcript.GoalMarker)],
-  generation : Int,
+  goal_markers : Array[(Int32, @transcript.GoalMarker)],
+  generation : Int32,
   activate_on_success : Bool,
   prediction : @wire.PredictionRecord?,
 ) -> (@cmd.Cmd, Model) {
@@ -1603,7 +1603,7 @@ fn covering_overlay(model : Model) -> Bool {
 /// launcher popup, a dock tab menu, the narrow layout's sidebar drawer, a
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
-fn desired_browser_view(model : Model) -> Int? {
+fn desired_browser_view(model : Model) -> Int32? {
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -2442,6 +2442,7 @@ fn update_msg(
               guard conv.run is Open(stage~, ..) &&
                 !(stage is Cancelling) &&
                 conv.pending_semantic_submission is None &&
+                !conv.saving_queue_edit() &&
                 conv.queued_inputs.search_by(item => item.id == id)
                 is Some(index) else {
                 return (@cmd.none, model)
@@ -2455,12 +2456,14 @@ fn update_msg(
                   images: item.images,
                   mentions: [],
                   composer_draft_present: true,
-                  queue_edit_id: Some(id),
+                  queue_edit: Some(Editing(id~)),
                 }),
               )
             }
             @composer.QueuedInputSteerRequested(id~, ..) => {
-              guard conv.run is Open(run_id~, stage~) && !(stage is Cancelling) else {
+              guard conv.run is Open(run_id~, stage~) &&
+                !(stage is Cancelling) &&
+                !conv.saving_queue_edit() else {
                 return (@cmd.none, model)
               }
               guard conv.queued_inputs.search_by(item => item.id == id)
@@ -2491,11 +2494,12 @@ fn update_msg(
               )
             }
             @composer.QueuedInputDeleteRequested(id~, ..) => {
-              guard conv.run is Open(run_id~, stage~) && !(stage is Cancelling) else {
+              guard conv.run is Open(run_id~, stage~) &&
+                !(stage is Cancelling) &&
+                !conv.saving_queue_edit() else {
                 return (@cmd.none, model)
               }
-              let editing = conv.queue_edit_id is Some(queued_id) &&
-                queued_id == id
+              let editing = conv.queue_edit is Some(edit) && edit.id() == id
               // The edit being prepared for sending still targets this row.
               if editing && conv.pending_semantic_submission is Some(_) {
                 return (@cmd.none, model)
@@ -2516,7 +2520,7 @@ fn update_msg(
                     images: [],
                     mentions: [],
                     composer_draft_present: false,
-                    queue_edit_id: None,
+                    queue_edit: None,
                   })
                 } else {
                   model
@@ -2549,7 +2553,8 @@ fn update_msg(
           // The root model may already be preparing a large semantic snapshot
           // while the component still holds its previous local draft. Ignore
           // duplicate submit events until that preparation settles.
-          if conv.pending_semantic_submission is Some(_) {
+          if conv.pending_semantic_submission is Some(_) ||
+            conv.saving_queue_edit() {
             return (@cmd.none, model)
           }
           let original_focus = model.focused
@@ -3209,8 +3214,35 @@ fn update_msg(
       }
       offer_office_selection(dispatch, model, owner, selection)
     }
+    FileEditor(@fileeditor.OfficeFeedbackSubmitted(preview, text, apply~)) => {
+      guard model.file_panel.pending_office_selection(file_ctx(model)) ==
+        Some(preview) &&
+        owns_office_selection(model, preview.owner) &&
+        !text.trim().is_empty() else {
+        return (@cmd.none, model)
+      }
+      let (command, model) = confirm_office_selection(
+        model,
+        preview,
+        comment=text,
+      )
+      if apply {
+        let (send, model) = update_msg(
+          dispatch,
+          FileEditor(@fileeditor.ApplyAllFeedback),
+          model,
+        )
+        (@cmd.batch([command, send]), model)
+      } else {
+        (command, model)
+      }
+    }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
-      confirm_office_selection(model, preview)
+      confirm_office_selection(
+        model,
+        preview,
+        comment?=model.file_panel.office_selection_comment,
+      )
     FileEditor(
       @fileeditor.PdfSelectionChanged(
         owner~,
@@ -4181,7 +4213,7 @@ fn update_msg(
       }
       // A large selection is not allowed to degrade to a prompt marker while
       // its immutable JSONL snapshot is still being written.
-      if conv.pending_semantic_submission is Some(_) {
+      if conv.pending_semantic_submission is Some(_) || conv.saving_queue_edit() {
         return (@cmd.none, model)
       }
       let checkout = model.conversation_placement(conv)
@@ -4244,7 +4276,7 @@ fn update_msg(
         // engine's queue and contaminate a later prompt — so the text stays
         // in the composer.
         if conv.run is Open(run_id~, stage~) && !(stage is Cancelling) {
-          if conv.queue_edit_id is Some(id) {
+          if conv.queue_edit is Some(Editing(id~)) {
             return (
               queue_openseek(
                 locale=model.locale,
@@ -4258,9 +4290,14 @@ fn update_msg(
                 ),
                 run_id,
               ),
-              // Keep the edit in the composer until the in-memory mutation is
-              // accepted. A refusal then loses no user-authored text.
-              model,
+              // Freeze this edit until the RPC settles. Both UI and update
+              // guards reject repeated saves without replacing its draft.
+              model.replace_conversation({
+                ..conv,
+                queue_edit: Some(
+                  Saving(id~, run_id~, mentions=conv.mentions.copy()),
+                ),
+              }),
             )
           }
           let (model, submission_id) = model.allocate_submission_id()
@@ -6735,29 +6772,82 @@ fn update_device_msg(
           next
         }
         @protocol.QueueEdit(id~, text=content, images~) => {
-          guard conv.queued_inputs.search_by(item => item.id == id)
-            is Some(index) else {
-            return (@cmd.none, model)
-          }
           let queued_inputs = conv.queued_inputs.copy()
-          queued_inputs[index] = {
-            id,
-            content,
-            images: images.map(url => { name: "Image", url, }),
-          }
-          if conv.queue_edit_id is Some(queued_id) && queued_id == id {
-            {
-              ..conv,
-              queued_inputs,
-              task: "",
-              images: [],
-              mentions: [],
-              composer_draft_present: false,
-              queue_edit_id: None,
+          // The engine may already have consumed the item while the save
+          // response was travelling back. Still settle the accepted draft.
+          if queued_inputs.search_by(item => item.id == id) is Some(index) {
+            queued_inputs[index] = {
+              id,
+              content,
+              images: images.map(url => { name: "Image", url, }),
             }
-          } else {
-            { ..conv, queued_inputs, }
           }
+          // A held shell result may have taken ownership of the composer.
+          // Reflect the accepted queue edit without consuming that new draft.
+          guard conv.queue_edit
+            is Some(
+              Saving(id=saving_id, run_id=saving_run, ..)
+              | SavingDetached(id=saving_id, run_id=saving_run)
+            ) &&
+            saving_id == id &&
+            saving_run == run_id else {
+            return (
+              @cmd.none,
+              model.replace_conversation({ ..conv, queued_inputs, }),
+            )
+          }
+          if conv.queue_edit is Some(SavingDetached(..)) {
+            return (
+              @cmd.none,
+              model.replace_conversation({
+                ..conv,
+                queued_inputs,
+                queue_edit: None,
+              }),
+            )
+          }
+          // Editors can attach context while the composer is locked. Consume
+          // only unchanged mentions from the submitted snapshot; new or
+          // updated selections belong to the next draft.
+          let mentions = match conv.queue_edit {
+            Some(Saving(mentions=submitted, ..)) => {
+              let mut remaining : @composer.Draft = {
+                task: "",
+                images: [],
+                mentions: conv.mentions.filter(mention => {
+                  !submitted.contains(mention)
+                }),
+              }
+              // Review chips merge selections from the same source. Remove
+              // the submitted lines from that union, preserving later ones.
+              for mention in submitted {
+                if mention.ref_ is ReviewChanges(selection) {
+                  remaining = remaining.with_review_changes(
+                    selection,
+                    adding=false,
+                  )
+                }
+              }
+              remaining.mentions
+            }
+            _ => conv.mentions
+          }
+          let next = {
+            ..conv,
+            queued_inputs,
+            task: "",
+            images: [],
+            mentions,
+            composer_draft_present: false,
+            queue_edit: None,
+          }
+          return (
+            @cmd.none,
+            {
+              ..model.replace_conversation(next),
+              submission_sequence: model.submission_sequence + 1,
+            },
+          )
         }
         @protocol.QueueWithdraw(id~) | @protocol.QueueSteer(id~) => {
           let (next, _) = conv.remove_queued_input(id)
@@ -6765,6 +6855,29 @@ fn update_device_msg(
         }
       }
       (@cmd.none, model.replace_conversation(next))
+    }
+    QueueEditRejected(session~, id~, run_id~, message~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.queue_edit
+        is Some(
+          Saving(id=saving_id, run_id=saving_run, ..)
+          | SavingDetached(id=saving_id, run_id=saving_run)
+        ) &&
+        saving_id == id &&
+        saving_run == run_id else {
+        return (@cmd.none, model)
+      }
+      model
+      .replace_conversation({
+        ..conv,
+        queue_edit: if conv.queue_edit is Some(Saving(..)) &&
+          conv.queued_inputs.any(item => item.id == id) {
+          Some(Editing(id~))
+        } else {
+          None
+        },
+      })
+      .notify_error(dispatch, message)
     }
     QueueAddRejected(session~, submission_id~, run_id~) =>
       if model.find_conversation(channel, session) is Some(conv) {
@@ -8935,7 +9048,9 @@ fn update_device_msg(
             {
               ..settled_inputs,
               queued_inputs: [],
-              queue_edit_id: None,
+              // The queue is lost. Retire its pending save so a trailing
+              // acceptance cannot consume the retained composer draft.
+              queue_edit: None,
               pending_steers: settled_inputs.pending_steers.filter(input => {
                 input.behavior is FollowupSteer
               }),
@@ -9266,7 +9381,7 @@ fn Model::with_listed(self : Model, ids : Array[String]) -> Model raise {
 ///|
 fn sessions_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_generation~ : Int32 = 0,
 ) -> Msg {
   on_home(SessionsLoaded(items, connection_generation=0, request_generation~))
 }
@@ -9375,7 +9490,7 @@ test "the narrow drawer closes when navigation lands elsewhere" {
 ///|
 fn archived_loaded(
   items : Array[@transcript.SessionListItem],
-  request_generation? : Int = 0,
+  request_generation~ : Int32 = 0,
 ) -> Msg {
   on_home(
     ArchivedLoaded(
@@ -9488,7 +9603,7 @@ test "runs resync names exact Starting Open and Idle owners" {
 fn with_pending_steers(
   conv : Conversation,
   texts : Array[String],
-  run_id? : String = "r7",
+  run_id~ : String = "r7",
 ) -> Conversation {
   let mut next = conv
   for index, text in texts {
@@ -14597,10 +14712,10 @@ fn encoded_conversation_models(
   entries : Array[StoredConversationModel],
 ) -> String {
   let rows : Array[Json] = entries.map(entry => {
-    "key": entry.key.to_json(),
-    "model": entry.model.wire().to_json(),
+    "key": Json(entry.key),
+    "model": Json(entry.model.wire()),
   })
-  rows.to_json().stringify()
+  Json(rows).stringify()
 }
 
 ///|
@@ -14681,11 +14796,11 @@ test "a conversation first met through a live run adopts its tier" {
 ///|
 fn host_settings(
   provider~ : String,
-  revision? : Int = 0,
-  has_deepseek_key? : Bool = false,
-  has_glm_key? : Bool = false,
-  has_custom_key? : Bool = false,
-  custom_api_url? : String = "",
+  revision~ : Int32 = 0,
+  has_deepseek_key~ : Bool = false,
+  has_glm_key~ : Bool = false,
+  has_custom_key~ : Bool = false,
+  custom_api_url~ : String = "",
 ) -> HostSettings {
   {
     revision,
@@ -15421,8 +15536,8 @@ test "sidebar navigation leaves the settings page" {
 /// A `git.branch` reply for the test conversation.
 fn branch_reply(
   branch : String,
-  generation? : Int = 0,
-  session? : String = "desktop-test",
+  generation~ : Int32 = 0,
+  session~ : String = "desktop-test",
   diffstat? : DiffStat,
   base_hint? : String,
 ) -> DeviceMsg {
@@ -15441,7 +15556,7 @@ fn branch_reply(
 /// moved mid-request makes them differ.
 fn pull_request_reply(
   branch : String,
-  generation~ : Int,
+  generation~ : Int32,
   queried? : String,
   pull_request? : PullRequest,
   compare_url? : String,
@@ -15716,7 +15831,7 @@ test "a checkout that returns to a branch does not accept the older lookup" {
   let (_, away) = update_dev(dispatch, branch_reply("feature/y"), first)
   let (_, back) = update_dev(dispatch, branch_reply("feature/x"), away)
   assert_eq(back.active().pull_request_generation, 3)
-  fn answered(generation : Int, number : Int) {
+  fn answered(generation : Int32, number : Int32) {
     pull_request_reply("feature/x", generation~, pull_request={
       ..test_pull_request(),
       number,
@@ -16034,7 +16149,7 @@ test "right-panel menu closes when the dock owner changes" {
 /// same durable identity.
 fn archived_item(
   id : String,
-  channel? : @interop.ChannelId = Local,
+  channel~ : @interop.ChannelId = Local,
 ) -> @transcript.SessionListItem {
   {
     id,
@@ -21670,7 +21785,7 @@ test "file context inherits the conversation model and its reasoning family" {
 ///|
 priv struct PendingReviewContext {
   owner : @interop.ConversationKey
-  navigation : Int
+  navigation : Int32
   selection : @mention_context.ReviewChanges
 } derive(Eq)
 

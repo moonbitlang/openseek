@@ -16,8 +16,8 @@ pub(all) struct CursorStateChangedEvent {
   kind : OutgoingViewModelEventKind
   old_selections : Array[@core.Selection]?
   selections : Array[@core.Selection]
-  old_model_version_id : Int
-  model_version_id : Int
+  old_model_version_id : Int32
+  model_version_id : Int32
   source : String
   reason : @editor_api.CursorChangeReason
   reached_max_cursor_count : Bool
@@ -238,10 +238,10 @@ fn PendingOutgoingEvent::attempt_to_merge(
 struct CursorEventDispatcher {
   event_listeners : Array[OutgoingEventListenerCell]
   outgoing_events : Array[PendingOutgoingEvent]
-  mut listener_count : Int
+  mut listener_count : Int32
   mut listeners_are_array : Bool
-  mut delivery_index : Int
-  mut delivery_end : Int
+  mut delivery_index : Int32
+  mut delivery_end : Int32
   mut delivery_value : PendingOutgoingEvent?
   mut delivery_active : Bool
   mut disposed : Bool

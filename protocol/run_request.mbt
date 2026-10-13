@@ -1,6 +1,6 @@
 ///|
 /// The request format version this module writes and reads.
-pub const RunRequestVersion : Int = 1
+pub const RunRequestVersion : Int32 = 1
 
 ///|
 /// One structured request for `openseek run --input-format json`: what to run
@@ -17,14 +17,14 @@ pub(all) struct RunRequest {
   input : Json
   /// The step ceiling the caller asks for (`limits.max_steps`). An explicit
   /// `--max-steps` on the command line wins over it.
-  max_steps : Int?
+  max_steps : Int32?
 } derive(Eq, Debug)
 
 ///|
 /// Why a JSON value is not a request this module can run.
 pub(all) suberror RunRequestError {
   /// A request from a newer (or unknown) format version.
-  UnsupportedVersion(Int)
+  UnsupportedVersion(Int32)
   /// A field is missing or mistyped; names the field.
   Malformed(String)
   /// A field this engine recognizes but does not implement; names it. A
@@ -35,17 +35,17 @@ pub(all) suberror RunRequestError {
 ///|
 pub impl ToJson for RunRequest with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "version": RunRequestVersion.to_json(),
+    "version": Json(RunRequestVersion),
     "input": self.input,
   }
   if self.request_id is Some(id) {
-    fields["request_id"] = id.to_json()
+    fields["request_id"] = Json(id)
   }
   if self.kind is Some(kind) {
-    fields["kind"] = kind.to_json()
+    fields["kind"] = Json(kind)
   }
   if self.max_steps is Some(steps) {
-    fields["limits"] = { "max_steps": steps.to_json() }
+    fields["limits"] = { "max_steps": Json(steps) }
   }
   Json::object(fields)
 }

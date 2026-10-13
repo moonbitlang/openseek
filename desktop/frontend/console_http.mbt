@@ -5,7 +5,7 @@
 fn console_request(
   path : String,
   method_ : @http.RequestMethod,
-  on_done : (Int, String) -> Unit,
+  on_done : (Int32, String) -> Unit,
   on_fail : (String) -> Unit,
 ) -> Unit {
   @js.Promise::from_async(() => {
@@ -82,7 +82,7 @@ fn parse_console_me(body : String) -> ConsoleMsg? {
 /// requests — fold it into the signed-out state rather than an error.
 fn fetch_console_roster(
   dispatch : @cmd.Emit[Msg],
-  generation : Int,
+  generation : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     console_request(
@@ -132,7 +132,7 @@ fn fetch_console_roster(
 ///|
 /// The error line of a failed sign-out: the relay's `{error}` body when it
 /// sent one, the HTTP status otherwise.
-fn sign_out_error(status : Int, body : String) -> String {
+fn sign_out_error(status : Int32, body : String) -> String {
   if (@json.parse(body) catch { _ => Json::null() }) is Object(fields) &&
     @jsonx.json_text(fields, "error") is Some(message) {
     return message

@@ -2705,9 +2705,16 @@ test('composer selects queue for one message and preserves queued controls', asy
   await queued.getByTitle('Edit', { exact: true }).click();
   await expect(choice).toBeHidden();
   await composer.fill('Edited follow-up');
+  app.rpcErrors.set('agent.queue', 'Queue edit rejected');
+  await page.getByTitle('Save queued message', { exact: true }).click();
+  await expect(page.getByText('Queue action failed: Queue edit rejected', { exact: false }).first()).toBeVisible();
+  await expect(composer).toHaveValue('Edited follow-up');
+  await expect(queued).toContainText('Do this after the turn');
+  app.rpcErrors.delete('agent.queue');
   await page.getByTitle('Save queued message', { exact: true }).click();
   await expect(queued).toContainText('Edited follow-up');
   await expect(choice).toContainText('Steer now');
+  await expect(composer).toHaveValue('');
   await queued.getByTitle('Delete', { exact: true }).click();
   await expect(queued).toHaveCount(0);
   await composer.fill('An immediate correction');

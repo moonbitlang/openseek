@@ -77,7 +77,7 @@ pub impl Debug for Uri with fn to_repr(self) {
 ///|
 /// `_schemePattern` (uri.ts:11): `^\w[\w\d+.-]*$` where `\w` is
 /// `[A-Za-z0-9_]`.
-fn is_scheme_word_char(code : Int) -> Bool {
+fn is_scheme_word_char(code : Int32) -> Bool {
   (code >= 'a'.to_int() && code <= 'z'.to_int()) ||
   (code >= 'A'.to_int() && code <= 'Z'.to_int()) ||
   (code >= '0'.to_int() && code <= '9'.to_int()) ||
@@ -339,7 +339,7 @@ fn parse_components(value : String) -> (String, String, String, String, String) 
 /// `URI.parse` (uri.ts:271): creates a new URI from a string, e.g.
 /// `http://www.example.com/some/path`, `file:///usr/home`, or
 /// `scheme:with/path`. Components are percent-decoded before validation.
-pub fn Uri::parse(value : String, strict? : Bool = false) -> Uri raise UriError {
+pub fn Uri::parse(value : String, strict~ : Bool = false) -> Uri raise UriError {
   let (scheme, authority, path, query, fragment) = parse_components(value)
   Uri::new_(
     scheme,
@@ -397,11 +397,11 @@ pub fn Uri::file(path : String) -> Uri {
 /// command arguments etc. Unless `strict` the scheme defaults to `file`.
 pub fn Uri::from(
   scheme~ : String,
-  authority? : String = "",
-  path? : String = "",
-  query? : String = "",
-  fragment? : String = "",
-  strict? : Bool = false,
+  authority~ : String = "",
+  path~ : String = "",
+  query~ : String = "",
+  fragment~ : String = "",
+  strict~ : Bool = false,
 ) -> Uri raise UriError {
   Uri::new_(scheme, authority, path, query, fragment, strict)
 }
@@ -459,7 +459,7 @@ fn Uri::join_path_impl(uri : Uri, path_fragment : Array[String]) -> Uri {
 /// guaranteed to round-trip through `Uri::parse` into an equal URI. The
 /// result is percent-encoded (mostly ignoring scheme-specific rules) and is
 /// meant for externalization or transport, not display.
-pub fn Uri::to_string(self : Uri, skip_encoding? : Bool = false) -> String {
+pub fn Uri::to_string(self : Uri, skip_encoding~ : Bool = false) -> String {
   if !skip_encoding {
     match self.formatted_cache {
       Some(formatted) => formatted
@@ -495,7 +495,7 @@ fn Uri::fs_path_impl(self : Uri) -> String {
 ///|
 /// `encodeTable` (uri.ts:517) — reserved characters
 /// https://tools.ietf.org/html/rfc3986#section-2.2.
-fn encode_table(code : Int) -> String? {
+fn encode_table(code : Int32) -> String? {
   match code {
     58 => Some("%3A") // gen-delims: colon
     47 => Some("%2F") // slash
@@ -524,10 +524,10 @@ fn encode_table(code : Int) -> String? {
 let hex_digits_upper : String = "0123456789ABCDEF"
 
 ///|
-fn write_percent_byte(sb : StringBuilder, byte : Int) -> Unit {
+fn write_percent_byte(sb : StringBuilder, byte : Int32) -> Unit {
   sb.write_char('%')
-  sb.write_char(Int::unsafe_to_char(hex_digits_upper[byte >> 4].to_int()))
-  sb.write_char(Int::unsafe_to_char(hex_digits_upper[byte & 0xF].to_int()))
+  sb.write_char(Int32::unsafe_to_char(hex_digits_upper[byte >> 4].to_int()))
+  sb.write_char(Int32::unsafe_to_char(hex_digits_upper[byte & 0xF].to_int()))
 }
 
 ///|
@@ -539,8 +539,8 @@ fn write_percent_byte(sb : StringBuilder, byte : Int) -> Unit {
 fn write_native_encoded(
   sb : StringBuilder,
   s : String,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> Unit {
   let mut i = start
   while i < end {
@@ -614,7 +614,7 @@ fn encode_uri_component_fast(
       }
       // check if we write into a new string (by default we try to return the param)
       if res is Some(sb) {
-        sb.write_char(Int::unsafe_to_char(code))
+        sb.write_char(Int32::unsafe_to_char(code))
       }
     } else {
       // encoding needed, we need to allocate a new string
@@ -808,7 +808,7 @@ fn as_formatted(uri : Uri, skip_encoding : Bool) -> String {
 }
 
 ///|
-fn last_index_of_char(s : String, code : Int) -> Int {
+fn last_index_of_char(s : String, code : Int32) -> Int32 {
   for i in s.length()>..0 {
     if s[i].to_int() == code {
       return i
@@ -835,8 +835,8 @@ fn decode_uri_component_graceful(str : String) -> String {
 ///|
 /// `%XY` where X and Y are `[0-9A-Za-z]` — the (deliberately loose)
 /// `_rEncodedAsHex` character class (uri.ts:740).
-fn is_encoded_as_hex_at(str : String, pos : Int) -> Bool {
-  fn hexish(code : Int) -> Bool {
+fn is_encoded_as_hex_at(str : String, pos : Int32) -> Bool {
+  fn hexish(code : Int32) -> Bool {
     (code >= '0'.to_int() && code <= '9'.to_int()) ||
     (code >= 'A'.to_int() && code <= 'Z'.to_int()) ||
     (code >= 'a'.to_int() && code <= 'z'.to_int())

@@ -50,6 +50,7 @@ fn office_selection_raw(file : String, text : String) -> String {
 ///|
 test "a new Office range updates only its pending preview; cancel consumes the current one" {
   let (state, ctx, path) = office_selection_fixture()
+  assert_true(state.office_selection_comment is None)
   let first = state
     .offer_office_selection(
       ctx,
@@ -57,6 +58,7 @@ test "a new Office range updates only its pending preview; cancel consumes the c
     )
     .unwrap()
   let first_preview = first.pending_office_selection(ctx).unwrap()
+  assert_eq(first.office_selection_comment, Some(""))
   assert_eq(first_preview.summary.text, "First passage")
   let second = first
     .offer_office_selection(
@@ -70,6 +72,7 @@ test "a new Office range updates only its pending preview; cancel consumes the c
   assert_true(unchanged == second)
   let (_, dismissed) = second.dismiss_office_selection(ctx, second_preview)
   assert_true(dismissed.office_selection is None)
+  assert_true(dismissed.office_selection_comment is None)
   assert_true(dismissed.docs == state.docs)
 }
 
@@ -91,6 +94,7 @@ test "pending Office selections expire on file owner epoch panel or revision cha
     ] {
     let synced = state.sync_office_selection(changed)
     assert_true(synced.office_selection is None)
+    assert_true(synced.office_selection_comment is None)
     assert_true(synced.pending_office_selection(ctx) is None)
   }
   assert_true(

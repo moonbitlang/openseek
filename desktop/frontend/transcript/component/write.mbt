@@ -16,7 +16,7 @@
 /// refuses payloads past the shared ceiling, and the numbered renderer clamps
 /// a degenerate line count itself.
 fn write_card(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   arguments : String,
 ) -> (String, @html.Html)? {
   guard card_fields(arguments) is Some(fields) &&

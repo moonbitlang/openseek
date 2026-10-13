@@ -65,20 +65,20 @@ struct DiffEditorOptions {
 
 ///|
 pub fn DiffEditorOptions::DiffEditorOptions(
-  editor_options? : ViewerOptions = ViewerOptions::default().with_soft_wrap(
+  editor_options~ : ViewerOptions = ViewerOptions::default().with_soft_wrap(
     true,
   ),
-  layout? : DiffEditorLayout = SideBySide,
-  automatic_inline? : Bool = true,
-  automatic_inline_width? : Double = 900.0,
-  sash_enabled? : Bool = true,
-  split_ratio? : Double = 0.5,
-  diff_word_wrap? : DiffWordWrap = Inherit,
-  overview_ruler? : Bool = true,
-  render_indicators? : Bool = true,
-  render_markdown_comments? : Bool = true,
-  handle_mouse_wheel? : Bool = true,
-  ignore_trim_whitespace? : Bool = true,
+  layout~ : DiffEditorLayout = SideBySide,
+  automatic_inline~ : Bool = true,
+  automatic_inline_width~ : Double = 900.0,
+  sash_enabled~ : Bool = true,
+  split_ratio~ : Double = 0.5,
+  diff_word_wrap~ : DiffWordWrap = Inherit,
+  overview_ruler~ : Bool = true,
+  render_indicators~ : Bool = true,
+  render_markdown_comments~ : Bool = true,
+  handle_mouse_wheel~ : Bool = true,
+  ignore_trim_whitespace~ : Bool = true,
 ) -> DiffEditorOptions {
   {
     editor_options,
@@ -181,7 +181,7 @@ struct DiffEditor {
 pub fn DiffEditor::create(
   host : @rdom.Element,
   services? : ViewerServices,
-  options? : DiffEditorOptions = DiffEditorOptions::default(),
+  options~ : DiffEditorOptions = DiffEditorOptions::default(),
   provider? : &@diff.DocumentDiffProvider,
 ) -> DiffEditor {
   let (provider, owned_line_provider) = match provider {
@@ -326,14 +326,14 @@ pub fn DiffEditor::get_hunks(self : DiffEditor) -> Array[DiffHunk] {
 }
 
 ///|
-pub fn DiffEditor::get_active_hunk_index(self : DiffEditor) -> Int? {
+pub fn DiffEditor::get_active_hunk_index(self : DiffEditor) -> Int32? {
   self.widget.get_active_hunk_index()
 }
 
 ///|
 pub fn DiffEditor::on_did_change_active_hunk(
   self : DiffEditor,
-  listener : (Int?) -> Unit,
+  listener : (Int32?) -> Unit,
 ) -> @base_common.Disposable {
   self.widget.on_did_change_active_hunk(listener)
 }
@@ -420,7 +420,7 @@ pub extend DiffWordWrap with Debug::{to_repr}
 /// None removes them. The callback receives the current zero-based hunk index.
 pub fn DiffEditor::set_hunk_action_renderer(
   self : DiffEditor,
-  renderer : ((Int) -> @rdom.Element?)?,
+  renderer : ((Int32) -> @rdom.Element?)?,
 ) -> Unit {
   self.widget.set_hunk_action_renderer(renderer)
 }
@@ -429,7 +429,7 @@ pub fn DiffEditor::set_hunk_action_renderer(
 /// Current hunk bounds in viewport pixels, including pure deletion space.
 pub fn DiffEditor::get_hunk_viewport_bounds(
   self : DiffEditor,
-  index : Int,
+  index : Int32,
 ) -> (Double, Double)? {
   self.widget.get_hunk_viewport_bounds(index)
 }
@@ -437,7 +437,7 @@ pub fn DiffEditor::get_hunk_viewport_bounds(
 ///|
 /// Select a hunk without moving focus, cursor, or scroll. Navigation continues
 /// from this hunk. Outer-scroll hosts use this to track the reading position.
-pub fn DiffEditor::select_hunk(self : DiffEditor, index : Int) -> Unit {
+pub fn DiffEditor::select_hunk(self : DiffEditor, index : Int32) -> Unit {
   self.widget.select_hunk(index)
 }
 
@@ -449,7 +449,7 @@ pub fn DiffEditor::select_hunk(self : DiffEditor, index : Int) -> Unit {
 /// node identity stable across content edits so native focus is preserved.
 pub(all) struct DiffLineWidget {
   original : Bool
-  line : Int
+  line : Int32
   node : @rdom.Element
   on_layout : ((Double, Double, Double)?) -> Unit
 }
@@ -475,8 +475,8 @@ pub fn DiffEditor::set_line_widgets(
 /// An optional predicate restricts the affordance and is rechecked on click.
 pub fn DiffEditor::set_line_action(
   self : DiffEditor,
-  action : ((Bool, Int) -> Unit)?,
-  allowed? : (Bool, Int) -> Bool,
+  action : ((Bool, Int32) -> Unit)?,
+  allowed? : (Bool, Int32) -> Bool,
 ) -> Unit {
   self.widget.set_line_action(action, allowed?)
 }
@@ -486,7 +486,7 @@ pub fn DiffEditor::set_line_action(
 pub fn DiffEditorOptions::with_automatic_inline(
   self : DiffEditorOptions,
   enabled : Bool,
-  width? : Double = 900.0,
+  width~ : Double = 900.0,
 ) -> DiffEditorOptions {
   { ..self, automatic_inline: enabled, automatic_inline_width: width, }
 }

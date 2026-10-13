@@ -5,14 +5,14 @@
 ///|
 fn geometry_render_input(
   content : String,
-  start_visible_column? : Int = 0,
-  tab_size? : Int = 4,
-  use_monospace_optimizations? : Bool = false,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  space_width? : Double = 10.0,
-  middot_width? : Double = 10.0,
-  wsmiddot_width? : Double = 10.0,
-  render_whitespace? : @editor_api.RenderWhitespace = All,
+  start_visible_column~ : Int32 = 0,
+  tab_size~ : Int32 = 4,
+  use_monospace_optimizations~ : Bool = false,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  space_width~ : Double = 10.0,
+  middot_width~ : Double = 10.0,
+  wsmiddot_width~ : Double = 10.0,
+  render_whitespace~ : @editor_api.RenderWhitespace = All,
 ) -> @view_layout.RenderLineInput {
   @view_layout.RenderLineInput::from_view_line(
     {

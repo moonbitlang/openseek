@@ -66,7 +66,7 @@ pub fn run_quick_diff_test() -> Unit {
 fn wait_for_text(
   ctx : @support.BrowserTestContext,
   needle : String,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if @support.query_text(".viewer-host") is Some(text) && text.contains(needle) {
     let added = @support.query_count(

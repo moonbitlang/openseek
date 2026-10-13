@@ -63,11 +63,11 @@ pub fn ViewModel::ViewModel(model : @model.TextModel) -> ViewModel {
 pub fn ViewModel::with_options(
   model : @model.TextModel,
   options : ViewModelOptions,
-  smooth_scrolling? : Bool = false,
-  schedule_at_next_animation_frame? : (() -> Unit) -> @base_common.Disposable = view_model_no_animation_scheduler,
-  now? : () -> Double = view_model_zero_clock,
+  smooth_scrolling~ : Bool = false,
+  schedule_at_next_animation_frame~ : (() -> Unit) -> @base_common.Disposable = view_model_no_animation_scheduler,
+  now~ : () -> Double = view_model_zero_clock,
   attached_view? : @model.AttachedViewImpl,
-  emit_view_tokens_changed? : (Array[ViewTokensChangedRange]) -> Unit = view_model_no_token_event_sink,
+  emit_view_tokens_changed~ : (Array[ViewTokensChangedRange]) -> Unit = view_model_no_token_event_sink,
 ) -> ViewModel {
   let lines = ViewModelLinesFromProjectedModel(
     model,
@@ -354,7 +354,7 @@ pub fn ViewModel::normalize_position(
 
 ///|
 /// Number of view lines.
-pub fn ViewModel::line_count(self : ViewModel) -> Int {
+pub fn ViewModel::line_count(self : ViewModel) -> Int32 {
   self.lines.get_view_line_count()
 }
 
@@ -366,13 +366,13 @@ pub fn ViewModel::line_count(self : ViewModel) -> Int {
 pub fn ViewModel::injected_text_index_at(
   self : ViewModel,
   position : @base_common.Position,
-) -> Int {
+) -> Int32 {
   self.lines.injected_text_index_at(position.line_number, position.column - 1)
 }
 
 ///|
 /// Source document version.
-pub fn ViewModel::version(self : ViewModel) -> Int {
+pub fn ViewModel::version(self : ViewModel) -> Int32 {
   self.model.version
 }
 
@@ -400,7 +400,7 @@ pub fn ViewModel::clamp_window(
 /// Monaco `ViewModel.getLineContent`: the text of a view line.
 pub fn ViewModel::get_line_content(
   self : ViewModel,
-  line_number : Int,
+  line_number : Int32,
 ) -> String {
   // Text-only callers must not enter `getViewLineData`, whose token field is
   // a passive store read. Monaco's `getViewLineContent` delegates directly to
@@ -410,7 +410,10 @@ pub fn ViewModel::get_line_content(
 
 ///|
 /// Monaco `ViewModel.getLineLength`: the text length of a view line.
-pub fn ViewModel::get_line_length(self : ViewModel, line_number : Int) -> Int {
+pub fn ViewModel::get_line_length(
+  self : ViewModel,
+  line_number : Int32,
+) -> Int32 {
   self.lines.get_view_line_content(line_number).length()
 }
 

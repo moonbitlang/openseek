@@ -32,7 +32,7 @@ test "ViewLayout whitespace min width covers below equal above content and scrol
 }
 
 ///|
-fn rail_layout(offset : Int) -> ViewLayout {
+fn rail_layout(offset : Int32) -> ViewLayout {
   let layout = ViewLayout(line_height=18, line_count=3)
   layout.set_viewport_size(width=100.0, height=1.0) |> ignore
   layout.change_whitespace(accessor => {
@@ -44,7 +44,7 @@ fn rail_layout(offset : Int) -> ViewLayout {
 
 ///|
 test "ViewLayout big-number rail is exact at 499999 500000 500001" {
-  let cases : Array[(Int, Int, Double)] = [
+  let cases : Array[(Int32, Int32, Double)] = [
     (499999, 0, 499999.0),
     (500000, 499986, 14.0),
     (500001, 499986, 15.0),

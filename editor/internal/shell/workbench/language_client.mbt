@@ -13,11 +13,11 @@ priv struct RemoteLanguageClient {
 /// caller-owned `version` remains part of the boundary record, while
 /// `content_version` is the mutable TextModel freshness key.
 priv struct RemoteDocumentStamp {
-  generation : Int
+  generation : Int32
   model : @model.TextModel
-  model_identity : Int
-  model_version : Int
-  content_version : Int
+  model_identity : Int32
+  model_version : Int32
+  content_version : Int32
   uri : String
   revision : String
 }
@@ -37,7 +37,7 @@ priv struct RemoteDocumentRegistration {
 /// markers before retiring it.
 priv struct RemoteLanguageFreshness {
   markers : @markers.MarkerService
-  mut generation : Int
+  mut generation : Int32
   mut current : RemoteDocumentRegistration?
 }
 
@@ -92,7 +92,7 @@ fn RemoteLanguageFreshness::capture_model(
 ///|
 fn RemoteLanguageFreshness::invalidate_generation(
   self : RemoteLanguageFreshness,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if self.current is Some(registration) &&
     registration.stamp.generation == generation {

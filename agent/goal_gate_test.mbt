@@ -28,7 +28,7 @@ fn gate_final_payload(text : String) -> String {
 }
 
 ///|
-fn review_notice_count(session : @agent_session.Session) -> Int {
+fn review_notice_count(session : @agent_session.Session) -> Int32 {
   session
   .events()
   .iter()

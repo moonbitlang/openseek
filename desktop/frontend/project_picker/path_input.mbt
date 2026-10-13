@@ -132,7 +132,7 @@ fn State::selected_path_suggestion(self : State) -> String? {
 }
 
 ///|
-fn State::move_path_selection(self : State, delta : Int) -> State {
+fn State::move_path_selection(self : State, delta : Int32) -> State {
   guard !self.path_filter().is_empty() else { return self }
   let count = self.visible_entries().length()
   guard count > 0 else { return self }

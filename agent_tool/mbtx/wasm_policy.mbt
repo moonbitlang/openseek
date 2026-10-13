@@ -197,6 +197,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("codex", ["review"]),
   // Compile documents and raster previews for read_image visual review.
   ("typst", ["compile"]),
+  ("typst", ["watch"]),
+  ("typst", ["eval"]),
   ("typst", ["fonts"]),
   ("typst", ["help"]),
   ("typst", ["--help"]),
@@ -516,16 +518,16 @@ fn wasm_policy_document(
 /// rather than someone else's.
 fn env_set(tmp_dir : String, inject : Map[String, String]) -> Map[String, Json] {
   // A fresh map, so the policy writes below cannot leak back into `inject`.
-  let set = inject.map((_, value) => value.to_json())
+  let set = inject.map((_, value) => Json(value))
   if !set.contains(HostHandoffVar) {
-    set[HostHandoffVar] = "".to_json()
+    set[HostHandoffVar] = Json("")
   }
   if !set.contains("OPENSEEK_PTC") {
-    set["OPENSEEK_PTC"] = ({ "version": 1, "available": false } : Json)
-      .stringify()
-      .to_json()
+    set["OPENSEEK_PTC"] = Json(
+      ({ "version": 1, "available": false } : Json).stringify(),
+    )
   }
-  set["TMPDIR"] = tmp_dir.to_json()
+  set["TMPDIR"] = Json(tmp_dir)
   set
 }
 
@@ -541,7 +543,7 @@ fn json_strings(values : Array[String]) -> Json {
 
 ///|
 test "the reservation reaches the guest, and only its own directory is writable" {
-  fn test_injection(issued : Ref[Int]) -> @host.SubrunInjection {
+  fn test_injection(issued : Ref[Int32]) -> @host.SubrunInjection {
     SubrunInjection(
       exe="/opt/openseek",
       session_root="/store",

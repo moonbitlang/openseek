@@ -67,13 +67,13 @@ pub fn SessionId::value(self : SessionId) -> String {
 pub fn SessionId::generated(
   prefix~ : String,
   now_ms~ : Int64,
-  salt? : String = "",
+  salt~ : String = "",
 ) -> SessionId {
-  fn pad2(value : Int) -> String {
+  fn pad2(value : Int32) -> String {
     value.to_string().pad_start(2, '0')
   }
 
-  fn pad3(value : Int) -> String {
+  fn pad3(value : Int32) -> String {
     value.to_string().pad_start(3, '0')
   }
 
@@ -173,11 +173,11 @@ struct AssistantMessage {
 /// the session log can account for a run without its event stream: summed
 /// over a turn's messages, they equal the turn's `usage` events.
 pub(all) struct TokenUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -202,9 +202,9 @@ fn TokenUsage::from_deepseek(usage : @deepseek.Usage) -> TokenUsage {
 /// answer; ordinary messages omit that field from the stored JSON.
 pub fn AssistantMessage::AssistantMessage(
   content : String,
-  tool_calls? : Array[@deepseek.ToolCall] = [],
+  tool_calls~ : Array[@deepseek.ToolCall] = [],
   reasoning_content? : String,
-  is_replay? : Bool = false,
+  is_replay~ : Bool = false,
 ) -> AssistantMessage {
   {
     content,
@@ -311,7 +311,7 @@ pub fn ToolResult::ToolResult(
   tool_call_id~ : String,
   tool_name~ : String,
   content~ : Array[ContentPart],
-  is_error? : Bool = false,
+  is_error~ : Bool = false,
   brief? : String,
   data? : Json,
 ) -> ToolResult {
@@ -378,8 +378,8 @@ pub fn RuntimeNotice::content(self : RuntimeNotice) -> String {
 /// model context. The durable event log remains append-only.
 struct SessionSummary {
   content : String
-  from_sequence : Int
-  to_sequence : Int
+  from_sequence : Int32
+  to_sequence : Int32
 } derive(Eq, Debug, ToJson, FromJson)
 
 ///|
@@ -390,13 +390,13 @@ pub fn SessionSummary::content(self : SessionSummary) -> String {
 
 ///|
 /// Return the first covered event sequence, inclusive.
-pub fn SessionSummary::from_sequence(self : SessionSummary) -> Int {
+pub fn SessionSummary::from_sequence(self : SessionSummary) -> Int32 {
   self.from_sequence
 }
 
 ///|
 /// Return the last covered event sequence, inclusive.
-pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int {
+pub fn SessionSummary::to_sequence(self : SessionSummary) -> Int32 {
   self.to_sequence
 }
 
@@ -473,7 +473,7 @@ pub(all) enum SessionItem {
 /// appends default to `0`, while `SessionStore::append` stamps with the current
 /// wall clock.
 struct SessionEvent {
-  sequence : Int
+  sequence : Int32
   // Wall-clock stamp (unix milliseconds) of when the event was appended; 0
   // for purely in-memory sessions appended without a clock (the durable
   // store always stamps). The field is named for its wire key, and typed
@@ -485,16 +485,16 @@ struct SessionEvent {
 
 ///|
 fn SessionEvent::SessionEvent(
-  sequence~ : Int,
+  sequence~ : Int32,
   item~ : SessionItem,
-  unix_ms? : Int64 = 0,
+  unix_ms~ : Int64 = 0,
 ) -> SessionEvent {
   { sequence, ts: unix_ms.to_double(), item, }
 }
 
 ///|
 /// Return this event's one-based position in the session log.
-pub fn SessionEvent::sequence(self : SessionEvent) -> Int {
+pub fn SessionEvent::sequence(self : SessionEvent) -> Int32 {
   self.sequence
 }
 
@@ -533,7 +533,7 @@ struct Session {
   id : SessionId
   system_prompt : String
   events : @vector.Vector[SessionEvent]
-  last_sequence : Int
+  last_sequence : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -565,7 +565,7 @@ struct Session {
 pub fn Session::Session(
   id : SessionId,
   system_prompt~ : String,
-  events? : @vector.Vector[SessionEvent] = @vector.new(),
+  events~ : @vector.Vector[SessionEvent] = @vector.new(),
 ) -> Session {
   let last_sequence = events.fold(init=0, (last_sequence, event) => {
     last_sequence.max(event.sequence)
@@ -600,7 +600,7 @@ pub fn Session::events(self : Session) -> @vector.Vector[SessionEvent] {
 /// This is the highest event sequence present, or `0` when the session has no
 /// events. It is the value used by `SessionStore` to detect stale in-memory
 /// snapshots before appending.
-pub fn Session::last_sequence(self : Session) -> Int {
+pub fn Session::last_sequence(self : Session) -> Int32 {
   self.last_sequence
 }
 
@@ -622,7 +622,7 @@ pub fn Session::last_terminal(self : Session) -> TurnTerminal? {
 }
 
 ///|
-fn Session::next_sequence(self : Session) -> Int {
+fn Session::next_sequence(self : Session) -> Int32 {
   self.last_sequence() + 1
 }
 
@@ -636,7 +636,7 @@ fn Session::next_sequence(self : Session) -> Int {
 pub fn Session::append(
   self : Session,
   item : SessionItem,
-  unix_ms? : Int64 = 0,
+  unix_ms~ : Int64 = 0,
 ) -> Session {
   let (next, _) = self.append_event(item, unix_ms~)
   next
@@ -651,7 +651,7 @@ pub fn Session::append(
 pub fn Session::append_event(
   self : Session,
   item : SessionItem,
-  unix_ms? : Int64 = 0,
+  unix_ms~ : Int64 = 0,
 ) -> (Session, SessionEvent) {
   let event = SessionEvent(sequence=self.next_sequence(), item~, unix_ms~)
   (
@@ -677,8 +677,8 @@ pub fn Session::append_event(
 pub fn Session::summary_item(
   self : Session,
   content~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
 ) -> SessionItem raise {
   if content.is_blank() {
     fail("summary content must not be empty")
@@ -709,9 +709,9 @@ pub fn Session::summary_item(
 pub fn Session::compact(
   self : Session,
   content~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
-  unix_ms? : Int64 = 0,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
+  unix_ms~ : Int64 = 0,
 ) -> Session raise {
   self.append(
     self.summary_item(content~, from_sequence~, to_sequence~),
@@ -740,7 +740,7 @@ pub fn Session::fork(
   self : Session,
   id : SessionId,
   system_prompt~ : String,
-  through? : Int,
+  through? : Int32,
 ) -> Session raise {
   let copied : Array[SessionEvent] = []
   let mut settled = 0

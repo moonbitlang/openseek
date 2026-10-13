@@ -15,7 +15,7 @@ pub(all) struct ContentHoverController {
   /// reach the widget. `hover_react_token` invalidates a deferred reaction
   /// the pointer cancelled by entering the widget.
   mut hover_react_pending : Bool
-  mut hover_react_token : Int
+  mut hover_react_token : Int32
   mut hover_pending_target : @editor_browser.MouseTarget?
   /// Clearable handle for the delayed mouse reaction. The generation guard is
   /// retained for dispatch races, but ordinary cancellation clears the host
@@ -33,7 +33,7 @@ pub(all) struct ContentHoverController {
   /// Viewer-lifetime async request generation/source. Model swaps and content
   /// invalidation advance the generation; it never resets while the
   /// contribution remains attached.
-  priv mut hover_request_generation : Int
+  priv mut hover_request_generation : Int32
   priv mut hover_request_source : @language.CancellationTokenSource?
   /// Accepted editor mouse-down state, cleared by the corresponding mouse-up.
   mut hover_is_mouse_down : Bool
@@ -58,7 +58,7 @@ pub(all) struct ContentHoverController {
   hover_mouse_closer : @hover.MouseCloserState
   /// The last anchor token for which the public hover-resolution status
   /// fired, so it fires exactly once per anchor when the operation completes.
-  mut hover_notified_token : Int
+  mut hover_notified_token : Int32
   /// The hover highlight's model decoration ids (the hover-owned decorations
   /// collection): rewritten whenever the hover view's highlighted range
   /// changes.
@@ -105,7 +105,7 @@ pub fn ContentHoverController::ContentHoverController() -> ContentHoverControlle
 pub fn ContentHoverController::begin_request(
   self : ContentHoverController,
   source : @language.CancellationTokenSource,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   match self.hover_request_source {
     Some(previous) => previous.dispose(cancel=true)
@@ -133,7 +133,7 @@ pub fn ContentHoverController::cancel_request(
 /// A stale completion cannot retire a newer source.
 pub fn ContentHoverController::finish_request(
   self : ContentHoverController,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if self.hover_request_generation != generation {
     return

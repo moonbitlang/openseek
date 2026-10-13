@@ -16,7 +16,7 @@ let default_options : DocumentDiffOptions = { ignore_trim_whitespace: false, }
 fn compute(
   original : Array[String],
   modified : Array[String],
-  options? : DocumentDiffOptions = default_options,
+  options~ : DocumentDiffOptions = default_options,
 ) -> DocumentDiff {
   get_line_document_diff_provider().compute_diff(
     TextSnapshot(original.join("\n")),

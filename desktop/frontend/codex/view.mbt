@@ -7,7 +7,7 @@
 /// account group; both render the same connection and account facts.
 pub fn State::connection_label(
   self : State,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   match self.connection {
     CodexStarting => status_text(locale, Starting)
@@ -24,7 +24,7 @@ pub fn State::connection_label(
 ///|
 pub fn State::account_label(
   self : State,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   match self.account {
     CodexAccountUnknown => status_text(locale, CheckingAccount)
@@ -47,7 +47,7 @@ pub fn State::account_label(
 /// catalogs omit effort metadata; in that case there is no honest selector to
 /// render and ordinary turns keep inheriting Codex's own configuration.
 pub fn State::reasoning_effort_chip(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   open : Bool,
 ) -> @composer.ReasoningSelect? {
@@ -158,7 +158,7 @@ fn SidebarContext::project_registered(
 
 ///|
 fn SidebarContext::draft_input(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : SidebarContext,
   draft : CodexDraftTask,
   nested : Bool,
@@ -217,11 +217,11 @@ pub(all) struct CodexProjectRow {
 /// child row. The root pins an off-screen draft with the other this-session
 /// rows instead of ranking it by a stamp it cannot have yet.
 pub fn State::project_draft(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
   root : String,
-  include_selected? : Bool = false,
+  include_selected~ : Bool = false,
 ) -> @conversation.Input? {
   guard (include_selected || !context.selected) &&
     context.project_registered(root) &&
@@ -237,7 +237,7 @@ pub fn State::project_draft(
 /// longer owns a sidebar section — its conversations live beside OpenSeek's
 /// in the shared Projects section, distinguished only by their row identity.
 pub fn State::project_conversations(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
   root : String,
@@ -290,7 +290,7 @@ pub fn State::project_activation(
 /// project. They keep top-level rows at the end of the shared Projects
 /// section, exactly as they did in the retired Codex section.
 pub fn State::loose_entries(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   context : SidebarContext,
 ) -> Array[@section.Entry] {
@@ -326,7 +326,7 @@ pub fn State::loose_entries(
 /// stay non-selectable until restored because the live Codex page owns writer
 /// and composer state only for active app-server threads.
 pub fn State::archived_sidebar_entries(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   channel : @interop.ChannelId,
 ) -> Array[@section.Entry] {
@@ -337,7 +337,7 @@ pub fn State::archived_sidebar_entries(
 
 ///|
 fn CodexThreadRow::archived_sidebar_input(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexThreadRow,
   channel : @interop.ChannelId,
 ) -> @conversation.Input {
@@ -380,7 +380,7 @@ fn CodexThreadRow::project_key(self : CodexThreadRow) -> CodexProject? {
 /// root dispatcher translates the stable id into open/archive messages; this
 /// adapter contains no commands and keeps the component input comparable.
 fn CodexThreadRow::sidebar_input(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexThreadRow,
   state : State,
   context : SidebarContext,
@@ -425,7 +425,7 @@ fn CodexThreadRow::sidebar_input(
 /// Translate app-server Git data once at the package boundary. The shared
 /// presentation owns every label, tone, tooltip, row, and link after this.
 fn CodexGitStatus::presentation(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexGitStatus,
 ) -> @composer.GitPresentation? {
   // App-server normally returns the branch beside a pull request. Preserve
@@ -485,7 +485,7 @@ pub(all) struct PageActions {
 ///|
 /// Contents for the shell-owned header; the shell owns its DOM and geometry.
 pub fn State::header(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   channel : @interop.ChannelId,
   terminal_open~ : Bool,
@@ -558,7 +558,7 @@ pub fn State::header(
 ///|
 /// Conversation content and dialogs beneath the shell-owned header.
 pub fn State::page(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   dispatch : @cmd.Emit[Msg],
   actions : PageActions,
@@ -848,7 +848,7 @@ test "background Codex activity follows its thread instead of selection" {
 pub fn State::files_toggle_label(
   self : State,
   channel : @interop.ChannelId,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   let workspace = self
     .active_placement(channel)

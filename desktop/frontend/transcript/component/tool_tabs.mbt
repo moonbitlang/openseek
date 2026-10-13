@@ -17,7 +17,7 @@ priv struct ToolCallTab {
 /// event, so a later render patches the same controls and preserves the tab
 /// the reader selected. The first view is the useful default on first mount.
 fn tool_call_tabs(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   key : String,
   tabs : Array[ToolCallTab],
 ) -> @html.Html {
@@ -60,7 +60,7 @@ fn tool_call_tabs(
 /// priority because one durable assistant event can emit several calls that
 /// all share its sequence. Legacy calls without an id fall back to that
 /// sequence; transient/test items use the empty id's stable hash last.
-fn tool_call_tabs_key(call_id : String, sequence : Int?) -> String {
+fn tool_call_tabs_key(call_id : String, sequence : Int32?) -> String {
   if !call_id.is_empty() {
     return "call-\{call_id.hash()}"
   }
@@ -81,7 +81,7 @@ fn tool_call_tabs_key(call_id : String, sequence : Int?) -> String {
 /// `None` when there is only one useful view: the existing labeled fallback is
 /// clearer than a one-entry tab strip.
 fn tool_arguments_tabbed_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   key : String,
   name : String,
   arguments : String?,
@@ -120,7 +120,7 @@ fn tool_arguments_tabbed_view(
 /// highlighted Output plus the exact numbered protocol in Original output;
 /// every other result is already its own faithful display.
 fn tool_output_tabs(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   output : String,
 ) -> Array[ToolCallTab] {

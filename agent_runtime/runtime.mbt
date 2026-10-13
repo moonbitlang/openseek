@@ -78,7 +78,7 @@ struct AgentRuntime {
 /// a call that asks anyway is answered `Unavailable` — which is what every
 /// caller with no human attached, and every test that does not care, wants.
 pub fn AgentRuntime::AgentRuntime(
-  workspace_root? : String = ".",
+  workspace_root~ : String = ".",
   approval? : ApprovalChannel,
 ) -> AgentRuntime {
   {
@@ -150,7 +150,7 @@ pub fn[X] AgentTaskScope::group(
 pub fn AgentRuntime::queue_steer(
   self : AgentRuntime,
   input : SteerInput,
-  wake? : Bool = false,
+  wake~ : Bool = false,
 ) -> Unit {
   ignore(self.steers.try_put(input) catch { _ => false })
   if input.has_content() && (wake || !(input is Notice(_))) {

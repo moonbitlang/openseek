@@ -4,7 +4,6 @@
 priv enum UiMessage {
   UnresolvedGithubConversations
   AddToContext
-  OfficeSelectionQuestion
   OfficeControls
   OfficeFind
   OfficeZoomOut
@@ -32,7 +31,6 @@ priv enum UiMessage {
   PdfPreviewCancelled
   OfficeSelectionFailed
   CancelSelection
-  EmptySelection
   PartlyInContext
   InContext
   RemoveHunkContext
@@ -351,25 +349,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AddToContext) => "添加到上下文"
     (TraditionalChinese, AddToContext) => "新增到上下文"
     (Japanese, AddToContext) => "コンテキストに追加"
-    (English, OfficeSelectionQuestion) => "Add this selection to context?"
-    (Spanish, OfficeSelectionQuestion) =>
-      "¿Añadir esta selección al contexto?"
-    (SimplifiedChinese, OfficeSelectionQuestion) =>
-      "将所选内容添加到上下文？"
-    (TraditionalChinese, OfficeSelectionQuestion) =>
-      "將所選內容新增到上下文？"
-    (Japanese, OfficeSelectionQuestion) =>
-      "選択した内容をコンテキストに追加しますか？"
     (English, CancelSelection) => "Cancel"
     (Spanish, CancelSelection) => "Cancelar"
     (SimplifiedChinese, CancelSelection) => "取消"
     (TraditionalChinese, CancelSelection) => "取消"
     (Japanese, CancelSelection) => "キャンセル"
-    (English, EmptySelection) => "The selected cells are empty."
-    (Spanish, EmptySelection) => "Las celdas seleccionadas están vacías."
-    (SimplifiedChinese, EmptySelection) => "所选单元格为空。"
-    (TraditionalChinese, EmptySelection) => "所選儲存格為空。"
-    (Japanese, EmptySelection) => "選択したセルは空です。"
     (English, PartlyInContext) => "Partly in context"
     (Spanish, PartlyInContext) => "Parcialmente en el contexto"
     (SimplifiedChinese, PartlyInContext) => "部分已在上下文中"

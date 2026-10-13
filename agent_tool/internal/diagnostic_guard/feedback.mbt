@@ -3,24 +3,24 @@
 /// count-based rollback itself does not depend on diagnostic identity.
 pub fn Comparability::feedback(
   self : Comparability,
-  delta~ : Int,
+  delta~ : Int32,
 ) -> Map[String, Json] {
   let verdict = self.verdict()
   let data : Map[String, Json] = {
-    "verdict": verdict.name().to_json(),
-    "new_in_edited": self.new_in_edited.to_json(),
-    "new_breaking": self.new_breaking.to_json(),
-    "new_in_dependents": self.new_in_dependents.to_json(),
-    "new_independent": self.new_independent.to_json(),
+    "verdict": Json(verdict.name()),
+    "new_in_edited": Json(self.new_in_edited),
+    "new_breaking": Json(self.new_breaking),
+    "new_in_dependents": Json(self.new_in_dependents),
+    "new_independent": Json(self.new_independent),
   }
   if verdict is Inconclusive(reason) {
-    data["verdict_reason"] = reason.to_json()
+    data["verdict_reason"] = Json(reason)
   }
   if self.before_count is Some(count) {
-    data["baseline_error_count"] = count.to_json()
+    data["baseline_error_count"] = Json(count)
   }
   if verdict is (CertifiedReach | PlausibleReach) {
-    data["reissue_with"] = (delta + 1).to_json()
+    data["reissue_with"] = Json(delta + 1)
   }
   data
 }

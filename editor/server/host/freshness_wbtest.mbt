@@ -230,8 +230,8 @@ priv struct CheckPublishEvent {
 
 ///|
 priv struct ControlledCheck {
-  calls : Ref[Int]
-  started : @aqueue.Queue[Int]
+  calls : Ref[Int32]
+  started : @aqueue.Queue[Int32]
   release_gate : @aqueue.Queue[String]
 }
 
@@ -272,7 +272,7 @@ fn controlled_diagnostics(
 }
 
 ///|
-fn check_event_count(events : Array[CheckPublishEvent], uri : String) -> Int {
+fn check_event_count(events : Array[CheckPublishEvent], uri : String) -> Int32 {
   for event in events; count = 0 {
     if event.uri == uri {
       continue count + 1

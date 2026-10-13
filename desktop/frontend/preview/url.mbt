@@ -73,7 +73,7 @@ fn document_of(url : String) -> String {
 
 ///|
 /// One decimal IPv4 octet's value, or `None` when the text is not one.
-fn octet_value(text : StringView) -> Int? {
+fn octet_value(text : StringView) -> Int32? {
   guard all_digits(text) && text.length() <= 3 else { return None }
   let value = for ch in text; value = 0 {
     continue value * 10 + (ch.to_int() - '0'.to_int())

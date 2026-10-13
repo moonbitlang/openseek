@@ -102,7 +102,7 @@ pub struct BareFontInfo {
   font_size : Double
   font_feature_settings : String
   font_variation_settings : String
-  line_height : Int
+  line_height : Int32
   letter_spacing : Double
 } derive(Eq, Debug)
 
@@ -248,7 +248,7 @@ fn parse_decimal_prefix(value : String) -> String {
 ///|
 /// Leading whitespace accepted by ECMAScript `StringNumericLiteral`, which is
 /// what `parseInt` trims before reading its optional sign and decimal prefix.
-fn is_ecmascript_whitespace(code : Int) -> Bool {
+fn is_ecmascript_whitespace(code : Int32) -> Bool {
   (code >= 0x0009 && code <= 0x000D) ||
   code == 0x0020 ||
   code == 0x00A0 ||
@@ -273,7 +273,7 @@ pub(all) struct FontInfo {
   font_size : Double
   font_feature_settings : String
   font_variation_settings : String
-  line_height : Int
+  line_height : Int32
   letter_spacing : Double
   is_trusted : Bool
   is_monospace : Bool

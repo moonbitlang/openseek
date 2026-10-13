@@ -26,7 +26,7 @@ pub(all) struct Definition {
 ///|
 priv enum Anchor {
   Button
-  Pointer(Int, Int)
+  Pointer(Int32, Int32)
 } derive(Eq)
 
 ///|
@@ -64,7 +64,7 @@ fn trigger_id(target : String) -> String {
 }
 
 ///|
-fn item_id(target : String, index : Int) -> String {
+fn item_id(target : String, index : Int32) -> String {
   menu_id(target) + ":item:\{index}"
 }
 
@@ -322,8 +322,8 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
 }
 
 ///|
-fn Definition::enabled_indices(self : Definition) -> Array[Int] {
-  let result : Array[Int] = []
+fn Definition::enabled_indices(self : Definition) -> Array[Int32] {
+  let result : Array[Int32] = []
   for index, entry in self.entries {
     if entry is Action(item) && item.enabled {
       result.push(index)
@@ -333,15 +333,15 @@ fn Definition::enabled_indices(self : Definition) -> Array[Int] {
 }
 
 ///|
-fn enabled_position(indices : Array[Int], index : Int) -> Int? {
+fn enabled_position(indices : Array[Int32], index : Int32) -> Int32? {
   indices.search(index)
 }
 
 ///|
 fn item_attrs(
   open : Open,
-  enabled : Array[Int],
-  index : Int,
+  enabled : Array[Int32],
+  index : Int32,
   select : @cmd.Cmd,
   dismiss : @cmd.Cmd,
 ) -> @html.Attrs {
@@ -546,7 +546,7 @@ priv suberror DismissSubscription {
 fn dismiss_subscription(
   target_key : String,
   emit : @cmd.Emit[Unit],
-  dismiss_on_context? : Bool = true,
+  dismiss_on_context~ : Bool = true,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "action-menu-dismiss",
@@ -636,7 +636,7 @@ fn dismiss_subscription(
 
 ///|
 priv suberror FocusSubscription {
-  FocusSubscription(String, Array[Int]?, @cmd.Emit[Unit])
+  FocusSubscription(String, Array[Int32]?, @cmd.Emit[Unit])
 }
 
 ///|
@@ -645,7 +645,7 @@ priv suberror FocusSubscription {
 /// back to the previous one.
 fn focus_subscription(
   target : String,
-  enabled : Array[Int]?,
+  enabled : Array[Int32]?,
   close : @cmd.Emit[Unit],
 ) -> @sub.Sub {
   @sub.custom_sub(

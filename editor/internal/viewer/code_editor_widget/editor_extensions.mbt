@@ -66,7 +66,7 @@ priv struct ContentHoverContributionState {
   controller : @hover_browser.ContentHoverController
   mut widget : @hover_browser.ContentHoverWidget?
   mut widget_view : @hover.HoverWidgetView?
-  mut schedule_timeout : (() -> Unit, Int) -> @base_common.Disposable
+  mut schedule_timeout : (() -> Unit, Int32) -> @base_common.Disposable
   mut launch_async_task : (async () -> Unit noraise) -> Unit
 }
 
@@ -372,7 +372,7 @@ priv struct EditorMenuPlacement {
 priv struct ResolvedEditorMenuCandidate {
   group : String
   order : Double
-  registration_order : Int
+  registration_order : Int32
   entry : @contextmenu_browser.ContextMenuEntry
 }
 
@@ -386,7 +386,7 @@ priv struct EditorCommand {
   title : String
   menu_keybinding_label : String?
   menu_placements : Array[EditorMenuPlacement]
-  registration_order : Int
+  registration_order : Int32
   precondition : (CodeEditorWidget) -> Bool
   run : (CodeEditorWidget) -> Unit
 }
@@ -474,10 +474,10 @@ fn EditorContributionRegistry::register_editor_command(
   precondition : (CodeEditorWidget) -> Bool,
   run : (CodeEditorWidget) -> Unit,
   keybindings : Array[(String, Bool, Bool)],
-  shift_keybindings? : Array[(String, Bool, Bool)] = [],
+  shift_keybindings~ : Array[(String, Bool, Bool)] = [],
   title? : String,
   menu_keybinding_label? : String,
-  menu_placements? : Array[EditorMenuPlacement] = [],
+  menu_placements~ : Array[EditorMenuPlacement] = [],
 ) -> Unit {
   let command : EditorCommand = {
     id,
@@ -573,7 +573,7 @@ fn EditorContributionRegistry::resolve_editor_menu(
 fn compare_resolved_editor_menu_candidate(
   left : ResolvedEditorMenuCandidate,
   right : ResolvedEditorMenuCandidate,
-) -> Int {
+) -> Int32 {
   let group_order = @base_common.compare(left.group, right.group)
   if group_order != 0 {
     group_order
@@ -596,7 +596,7 @@ fn EditorContributionRegistry::register_core_editor_command(
   command : CoreEditorCommand,
   keybinding_when : (CodeEditorWidget) -> Bool,
   keybindings : Array[(String, Bool, Bool)],
-  shift_keybindings? : Array[(String, Bool, Bool)] = [],
+  shift_keybindings~ : Array[(String, Bool, Bool)] = [],
 ) -> Unit {
   self.commands.set(command.id, RegisteredCore(command))
   for binding in keybindings {

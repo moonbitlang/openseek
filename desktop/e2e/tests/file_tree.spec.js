@@ -327,6 +327,9 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
   await expect(readme).toBeFocused();
   await readme.press('Home');
   await expect(src).toBeFocused();
+  // Focus changes before Rabbita renders the new roving tab stop. Counting
+  // one tab stop alone can still observe README's previous tabindex=0.
+  await expect(src).toHaveAttribute('tabindex', '0');
   await expect(tree.locator('[role="treeitem"][tabindex="0"]')).toHaveCount(1);
   await src.press('Tab');
   await expect(tree.locator(':focus')).toHaveCount(0);

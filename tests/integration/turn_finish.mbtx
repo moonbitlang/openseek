@@ -443,7 +443,7 @@ async fn run_case(
       }
       guard code == 0 else {
         fail(
-          "CLI exit \{code}: \{diagnostics}\n\{events.to_json().stringify()}",
+          "CLI exit \{code}: \{diagnostics}\n\{Json(events).stringify()}",
         )
       }
       assert_eq(requests, if read { 2 } else if serve { 4 } else { 5 })

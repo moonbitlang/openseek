@@ -14,7 +14,7 @@ priv struct ProblemSpec {
 /// Build one benchmark problem. Empty `prompt_label` falls back to `id`.
 fn ProblemSpec::ProblemSpec(
   id~ : String,
-  prompt_label? : String = "",
+  prompt_label~ : String = "",
   task_file~ : String,
   validation_probes~ : Array[ValidationProbeSpec],
 ) -> ProblemSpec {
@@ -37,10 +37,10 @@ struct SuiteConfig {
   api_key : String
   name : String
   models : Array[@deepseek.Model]
-  runs_per_combo : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
+  runs_per_combo : Int32
+  concurrency : Int32
+  min_successes : Int32
+  max_steps : Int32
   out_dir : String
   repo_root : String
   engine : String
@@ -55,13 +55,13 @@ fn SuiteConfig::SuiteConfig(
   api_key~ : String,
   name~ : String,
   models~ : Array[@deepseek.Model],
-  runs_per_combo~ : Int,
-  concurrency~ : Int,
-  min_successes~ : Int,
-  max_steps~ : Int,
+  runs_per_combo~ : Int32,
+  concurrency~ : Int32,
+  min_successes~ : Int32,
+  max_steps~ : Int32,
   out_dir~ : String,
   repo_root~ : String,
-  engine? : String = "",
+  engine~ : String = "",
   system_prompt_file~ : String,
   system_prompt_addendum_file~ : String,
   problems~ : Array[ProblemSpec],
@@ -113,10 +113,10 @@ fn ComboRun::ComboRun(
 pub struct SuiteManifest {
   priv name : String
   out_dir : String
-  priv runs_per_combo : Int
-  priv concurrency : Int
-  priv min_successes : Int
-  priv max_steps : Int
+  priv runs_per_combo : Int32
+  priv concurrency : Int32
+  priv min_successes : Int32
+  priv max_steps : Int32
   priv models : Array[String]
   priv problems : Array[ProblemSpec]
   priv combos : Array[ComboRun]
@@ -130,10 +130,10 @@ pub extend SuiteManifest with ToJson::{to_json}
 fn SuiteManifest::SuiteManifest(
   name~ : String,
   out_dir~ : String,
-  runs_per_combo~ : Int,
-  concurrency~ : Int,
-  min_successes~ : Int,
-  max_steps~ : Int,
+  runs_per_combo~ : Int32,
+  concurrency~ : Int32,
+  min_successes~ : Int32,
+  max_steps~ : Int32,
   models~ : Array[String],
   problems~ : Array[ProblemSpec],
   combos~ : Array[ComboRun],
@@ -155,7 +155,7 @@ fn SuiteManifest::SuiteManifest(
 priv struct SuiteJob {
   model : @deepseek.Model
   problem : ProblemSpec
-  repeat_index : Int
+  repeat_index : Int32
   out_dir : String
 }
 
@@ -172,8 +172,8 @@ priv struct SuiteTrialArtifact {
 struct SuiteReport {
   name : String
   out_dir : String
-  runs_per_combo : Int
-  concurrency : Int
+  runs_per_combo : Int32
+  concurrency : Int32
   reports : Array[EvalReport]
 }
 
@@ -182,8 +182,8 @@ struct SuiteReport {
 fn SuiteReport::SuiteReport(
   name~ : String,
   out_dir~ : String,
-  runs_per_combo~ : Int,
-  concurrency~ : Int,
+  runs_per_combo~ : Int32,
+  concurrency~ : Int32,
   reports~ : Array[EvalReport],
 ) -> SuiteReport {
   { name, out_dir, runs_per_combo, concurrency, reports, }
@@ -683,7 +683,7 @@ fn SuiteReport::as_report(self : SuiteReport) -> @report.Report {
 fn suite_report_row(
   report : EvalReport,
   suite_out_dir~ : String,
-  index~ : Int,
+  index~ : Int32,
 ) -> @report.ReportRow {
   let output = relative_artifact_path(suite_out_dir, report.out_dir)
   ReportRow(
@@ -742,7 +742,7 @@ fn average_tool_errors(report : EvalReport) -> String {
 ///|
 fn average_result_metric(
   report : EvalReport,
-  metric : (EvalResult) -> Int,
+  metric : (EvalResult) -> Int32,
 ) -> String {
   let total = report.results.fold(init=0, (total, result) => {
     total + metric(result)
@@ -751,7 +751,7 @@ fn average_result_metric(
 }
 
 ///|
-fn format_average(total : Int, count : Int) -> String {
+fn format_average(total : Int32, count : Int32) -> String {
   if count == 0 {
     return "0.0"
   }

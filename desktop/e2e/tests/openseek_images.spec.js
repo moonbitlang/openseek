@@ -100,8 +100,33 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await page.locator('.queued-input-action[aria-label="Edit"]').click();
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
   await page.locator('#task').fill('Compare these');
+  const replyFor = app.replyFor.bind(app);
+  let heldRequest;
+  app.replyFor = request => {
+    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+      heldRequest = request;
+      return new Promise(() => {});
+    }
+    return replyFor(request);
+  };
   await page.locator('#send').click();
-  await expect.poll(() => app.requests.find(r => r.method === 'agent.queue' && r.params.action === 'edit')?.params.images).toEqual([url]);
+  await expect.poll(() => heldRequest?.params.images).toEqual([url]);
+  const remove = page.locator('.composer-image-remove');
+  await expect(remove).toBeDisabled();
+  // Even a click queued before the disabled DOM update cannot change the draft.
+  await remove.dispatchEvent('click');
+  app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: heldRequest.id, result: { accepted: false } }));
+  await expect(remove).toBeEnabled();
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
+  await expect(page.locator('#task')).toHaveValue('Compare these');
+  app.replyFor = replyFor;
+  await page.locator('#send').click();
+  await expect(page.locator('#task')).toHaveValue('');
+  await expect(page.locator('.composer-image')).toHaveCount(0);
+  await page.locator('.queued-input-action[aria-label="Edit"]').click();
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
+  await remove.click();
+  await expect(page.locator('.composer-image')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

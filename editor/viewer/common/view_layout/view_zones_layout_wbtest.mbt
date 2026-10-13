@@ -19,7 +19,7 @@ fn insert_then_fail(
 test "LinesLayout applies exact JavaScript ToInt32 to raw whitespace numbers" {
   let negative_zero = -0.0
   assert_true((1.0 / negative_zero).is_neg_inf())
-  let cases : Array[(Double, Int)] = [
+  let cases : Array[(Double, Int32)] = [
     (0.0, 0),
     (negative_zero, 0),
     (1.9, 1),
@@ -219,7 +219,7 @@ test "ViewLayout exposes ID whitespace viewport and explicit scrollTop data" {
 
 ///|
 fn saved_state_with_zones(
-  zone_count : Int,
+  zone_count : Int32,
 ) -> (SavedScrollState, Double, Double) {
   let layout = ViewLayout(line_height=10, line_count=20, smooth_scrolling=true)
   layout.set_viewport_size(width=100.0, height=20.0) |> ignore

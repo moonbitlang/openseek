@@ -27,7 +27,7 @@ pub fn ToolDefinition::ToolDefinition(
   name : String,
   description : String,
   parameters : Json,
-  strict? : Bool = false,
+  strict~ : Bool = false,
 ) -> ToolDefinition {
   { name, description, parameters, strict, }
 }

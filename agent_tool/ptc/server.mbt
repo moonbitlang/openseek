@@ -1,38 +1,38 @@
 ///|
 /// Bounds, per session, per script, and per request. The README and the
 /// model-facing description quote these values; keep them in step.
-const MaxPrograms : Int = 64
+const MaxPrograms : Int32 = 64
 
 ///|
-const MaxConnections : Int = 16
+const MaxConnections : Int32 = 16
 
 ///|
-const MaxCallsPerProgram : Int = 1024
+const MaxCallsPerProgram : Int32 = 1024
 
 ///|
-const MaxActiveCallsPerProgram : Int = 4
+const MaxActiveCallsPerProgram : Int32 = 4
 
 ///|
 /// Admission (request framing) and reply sends are bounded separately from the
 /// executor deadline, which `Service::start` takes as a parameter.
-const AdmissionTimeoutMs : Int = 5000
+const AdmissionTimeoutMs : Int32 = 5000
 
 ///|
-const SendTimeoutMs : Int = 5000
+const SendTimeoutMs : Int32 = 5000
 
 ///|
 /// A serialized reply above this is replaced by an explicit "executed but
 /// oversized" error; the request body cap lives in `request.mbt`.
-const MaxReplyChars : Int = 65536
+const MaxReplyChars : Int32 = 65536
 
 ///|
 /// Retained trace budget, below the durable job reader's 1 MiB cap.
-const MaxTraceBytes : Int = 524288
+const MaxTraceBytes : Int32 = 524288
 
 ///|
 /// Per-entry headroom reserved for a terminal status and an omitted-result
 /// marker, so a rejected reservation never happens after execution.
-const TraceEntryReserveBytes : Int = 1024
+const TraceEntryReserveBytes : Int32 = 1024
 
 ///|
 /// One session-owned listener. Every program has an independent capability.
@@ -44,8 +44,8 @@ struct Service {
   spawn : (async () -> Json) -> @async.Task[Json]
   mut stop : (async () -> Unit)?
   mut closed : Bool
-  call_timeout_ms : Int
-  trace_timeout_ms : Int
+  call_timeout_ms : Int32
+  trace_timeout_ms : Int32
   image_directory : async () -> String?
 }
 
@@ -53,9 +53,9 @@ struct Service {
 /// Metadata persisted in the trace for one image snapshot file.
 priv struct ImageSnapshot {
   path : String
-  call_index : Int
+  call_index : Int32
   media_type : String
-  bytes : Int
+  bytes : Int32
 } derive(ToJson)
 
 ///|
@@ -73,11 +73,11 @@ struct Program {
   service : Service
   token : String
   calls : Array[Json]
-  image_results : Map[Int, ImageResult]
-  mut reserved_images : Int
-  reservations : Array[Int]
-  mut trace_bytes : Int
-  active : Map[Int, @async.Task[Json]]
+  image_results : Map[Int32, ImageResult]
+  mut reserved_images : Int32
+  reservations : Array[Int32]
+  mut trace_bytes : Int32
+  active : Map[Int32, @async.Task[Json]]
   mut closed : Bool
   mut on_trace : async (Json) -> Unit
   mut on_image_output : (@bgjobs.ImageOutput) -> Unit
@@ -98,9 +98,9 @@ fn call_entry(
   result? : Json,
 ) -> Json {
   let fields : Map[String, Json] = {
-    "name": name.to_json(),
+    "name": Json(name),
     "arguments": arguments,
-    "status": status.to_json(),
+    "status": Json(status),
   }
   if result is Some(result) {
     fields["result"] = result
@@ -114,9 +114,9 @@ fn call_entry(
 pub async fn[X] Service::start(
   group : @async.TaskGroup[X],
   tools : @agent_tool.Tools,
-  call_timeout_ms? : Int = 120000,
-  trace_timeout_ms? : Int = 5000,
-  image_directory? : async () -> String? = () => None,
+  call_timeout_ms~ : Int32 = 120000,
+  trace_timeout_ms~ : Int32 = 5000,
+  image_directory~ : async () -> String? = () => None,
 ) -> Service {
   let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
   let service : Service = {
@@ -271,8 +271,8 @@ pub async fn[X] Service::start(
 /// Register a fresh capability without changing the script's source.
 pub fn Service::register(
   self : Service,
-  on_trace? : (Json) -> Unit = _ => (),
-  on_image_output? : (@bgjobs.ImageOutput) -> Unit = _ => (),
+  on_trace~ : (Json) -> Unit = _ => (),
+  on_image_output~ : (@bgjobs.ImageOutput) -> Unit = _ => (),
 ) -> Program raise {
   guard !self.closed else { fail("PTC service is closed") }
   guard self.programs.length() < MaxPrograms else {
@@ -338,7 +338,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
               tool.name,
             )
             is Some(definition) &&
-            definition.can_request_approval() => tool.name.to_json()
+            definition.can_request_approval() => Json(tool.name)
           ],
         ),
       } : Json).stringify(),
@@ -348,7 +348,7 @@ pub fn Program::env(self : Program) -> Map[String, String] {
 ///|
 /// Immutable bounded trace, without credentials or transport details.
 pub fn Program::trace(self : Program) -> Json {
-  let fields : Map[String, Json] = { "ptc_calls": self.calls.to_json() }
+  let fields : Map[String, Json] = { "ptc_calls": Json(self.calls) }
   let images : Array[ImageSnapshot] = []
   for index in 0..<self.calls.length() {
     if self.image_results.get(index) is Some(result) {
@@ -356,13 +356,13 @@ pub fn Program::trace(self : Program) -> Json {
     }
   }
   if !images.is_empty() {
-    fields["ptc_images"] = images.to_json()
+    fields["ptc_images"] = Json(images)
   }
   if self.job_id is Some(id) {
-    fields["ptc_job_id"] = id.to_json()
+    fields["ptc_job_id"] = Json(id)
   }
   if self.trace_error is Some(error) {
-    fields["ptc_trace_error"] = error.to_json()
+    fields["ptc_trace_error"] = Json(error)
   }
   Json::object(fields)
 }
@@ -412,7 +412,7 @@ pub fn Program::interrupted(self : Program) -> Bool {
 /// background cleanup may run before handoff, so it must retain them by default.
 pub async fn Program::close(
   self : Program,
-  discard_images? : Bool = false,
+  discard_images~ : Bool = false,
 ) -> Unit {
   self.stop()
   @async.protect_from_cancel(() => {
@@ -460,7 +460,7 @@ pub fn Program::stop(self : Program) -> Unit {
 
 ///|
 /// Record revocation even when a queued executor has not started yet.
-fn Program::cancel_call(self : Program, index : Int) -> Unit {
+fn Program::cancel_call(self : Program, index : Int32) -> Unit {
   if self.calls[index]
     is { "name": String(name), "arguments": arguments, "status": "running", .. } {
     self.calls[index] = call_entry(name, arguments, "interrupted")
@@ -551,7 +551,7 @@ fn Program::attach_trace(self : Program, existing : Json?) -> Json? {
 ///|
 async fn Program::execute(
   self : Program,
-  index : Int,
+  index : Int32,
   name : String,
   arguments : Json,
 ) -> Json {
@@ -644,14 +644,14 @@ fn error_result(message : String) -> Json {
 fn output_json(output : @agent_tool.ToolOutput) -> Json {
   let fields : Map[String, Json] = {
     "version": 1,
-    "content": output.content.to_json(),
-    "is_error": output.is_error.to_json(),
+    "content": Json(output.content),
+    "is_error": Json(output.is_error),
   }
   if output.data is Some(data) {
     fields["data"] = data
   }
   if output.brief is Some(brief) {
-    fields["brief"] = brief.to_json()
+    fields["brief"] = Json(brief)
   }
   Json::object(fields)
 }
@@ -713,7 +713,7 @@ pub fn Program::image_output(self : Program) -> @bgjobs.ImageOutput {
 /// budget. Disk snapshots are separate from the bounded JSON trace/reply.
 async fn Program::capture_images(
   self : Program,
-  index : Int,
+  index : Int32,
   text : String,
   images : Array[@protocol.Image],
 ) -> Unit {

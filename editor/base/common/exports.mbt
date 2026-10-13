@@ -9,8 +9,8 @@ pub suberror UriError {
 /// coordinate-value contract.
 pub fn Position::with_(
   self : Position,
-  line_number? : Int,
-  column? : Int,
+  line_number? : Int32,
+  column? : Int32,
 ) -> Position {
   let new_line_number = line_number.unwrap_or(self.line_number)
   let new_column = column.unwrap_or(self.column)
@@ -25,8 +25,8 @@ pub fn Position::with_(
 /// Derives a shifted position, clamping both axes to at least one.
 pub fn Position::delta(
   self : Position,
-  delta_line_number? : Int = 0,
-  delta_column? : Int = 0,
+  delta_line_number~ : Int32 = 0,
+  delta_column~ : Int32 = 0,
 ) -> Position {
   self.with_(
     line_number=(self.line_number + delta_line_number).clamp(
@@ -39,7 +39,7 @@ pub fn Position::delta(
 
 ///|
 /// Compares two positions by line and then column.
-pub fn Position::compare(a : Position, b : Position) -> Int {
+pub fn Position::compare(a : Position, b : Position) -> Int32 {
   if a.line_number == b.line_number {
     return a.column - b.column
   }
@@ -55,7 +55,7 @@ pub fn Range::get_end_position(self : Range) -> Position {
 
 ///|
 /// Indicates whether this half-open line range contains the line number.
-pub fn LineRange::contains(self : LineRange, line_number : Int) -> Bool {
+pub fn LineRange::contains(self : LineRange, line_number : Int32) -> Bool {
   self.start_line_number <= line_number &&
   line_number < self.end_line_number_exclusive
 }
@@ -87,11 +87,11 @@ pub let is_linux : Bool = host_platform == Linux
 pub fn compare_substring(
   a : String,
   b : String,
-  a_start? : Int = 0,
-  a_end? : Int = -1,
-  b_start? : Int = 0,
-  b_end? : Int = -1,
-) -> Int {
+  a_start~ : Int32 = 0,
+  a_end~ : Int32 = -1,
+  b_start~ : Int32 = 0,
+  b_end~ : Int32 = -1,
+) -> Int32 {
   compare_substring_impl(a, b, a_start~, a_end~, b_start~, b_end~)
 }
 
@@ -101,11 +101,11 @@ pub fn compare_substring(
 pub fn compare_substring_ignore_case(
   a : String,
   b : String,
-  a_start? : Int = 0,
-  a_end? : Int = -1,
-  b_start? : Int = 0,
-  b_end? : Int = -1,
-) -> Int {
+  a_start~ : Int32 = 0,
+  a_end~ : Int32 = -1,
+  b_start~ : Int32 = 0,
+  b_end~ : Int32 = -1,
+) -> Int32 {
   compare_substring_ignore_case_impl(a, b, a_start~, a_end~, b_start~, b_end~)
 }
 
@@ -265,8 +265,8 @@ pub fn ExtUri::compare(
   self : ExtUri,
   uri1 : Uri,
   uri2 : Uri,
-  ignore_fragment? : Bool = false,
-) -> Int {
+  ignore_fragment~ : Bool = false,
+) -> Int32 {
   self.compare_impl(uri1, uri2, ignore_fragment~)
 }
 
@@ -276,7 +276,7 @@ pub fn ExtUri::is_equal(
   self : ExtUri,
   uri1 : Uri?,
   uri2 : Uri?,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> Bool {
   self.is_equal_impl(uri1, uri2, ignore_fragment~)
 }
@@ -286,7 +286,7 @@ pub fn ExtUri::is_equal(
 pub fn ExtUri::get_comparison_key(
   self : ExtUri,
   uri : Uri,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> String {
   self.get_comparison_key_impl(uri, ignore_fragment~)
 }
@@ -303,7 +303,7 @@ pub fn ExtUri::is_equal_or_parent(
   self : ExtUri,
   base : Uri,
   parent_candidate : Uri,
-  ignore_fragment? : Bool = false,
+  ignore_fragment~ : Bool = false,
 ) -> Bool {
   self.is_equal_or_parent_impl(base, parent_candidate, ignore_fragment~)
 }
@@ -409,13 +409,13 @@ pub fn CharacterSet::CharacterSet() -> CharacterSet {
 
 ///|
 /// Adds `char_code` to the set.
-pub fn CharacterSet::add(self : CharacterSet, char_code : Int) -> Unit {
+pub fn CharacterSet::add(self : CharacterSet, char_code : Int32) -> Unit {
   self.add_impl(char_code)
 }
 
 ///|
 /// Reports whether `char_code` belongs to the set.
-pub fn CharacterSet::has(self : CharacterSet, char_code : Int) -> Bool {
+pub fn CharacterSet::has(self : CharacterSet, char_code : Int32) -> Bool {
   self.has_impl(char_code)
 }
 

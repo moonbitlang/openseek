@@ -208,7 +208,7 @@ extern "js" fn restore_hover_row_test_document() -> Unit =
 extern "js" fn hover_test_class_count(
   root : @rdom.Element,
   class_name : String,
-) -> Int =
+) -> Int32 =
   #| (root, className) => {
   #|   let count = 0;
   #|   const visit = (node) => {

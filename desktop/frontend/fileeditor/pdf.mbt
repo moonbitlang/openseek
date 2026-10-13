@@ -14,12 +14,12 @@ pub extend PdfStatus with Eq::{equal, not_equal}
 /// PDF.js session. Password input is cleared after submission and every load.
 pub(all) struct PdfDocument {
   bytes : Bytes
-  generation : Int
+  generation : Int32
   status : PdfStatus
-  page : Int
-  pages : Int?
-  rotation : Int
-  search : (Int, Int)?
+  page : Int32
+  pages : Int32?
+  rotation : Int32
+  search : (Int32, Int32)?
   password : String
 } derive(Eq)
 
@@ -28,9 +28,9 @@ pub extend PdfDocument with Eq::{equal, not_equal}
 
 ///|
 fn decode_pdf_document(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   data_base64 : String,
-  generation : Int,
+  generation : Int32,
 ) -> Result[PdfDocument, String] {
   let bytes = @base64.decode(data_base64) catch {
     _ => return Err(ui(locale, PdfPreviewFailed))
@@ -68,10 +68,10 @@ pub fn State::accepts_pdf_callback(
   self : State,
   ctx : Ctx,
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   path : @common.Uri,
   sig : String,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   self.owner == Some(owner) &&
   ctx.owner == owner &&
@@ -159,7 +159,7 @@ fn State::with_pdf_document(
 }
 
 ///|
-fn Doc::prepare_pdf_runtime(self : Doc, generation : Int) -> Doc {
+fn Doc::prepare_pdf_runtime(self : Doc, generation : Int32) -> Doc {
   match self.state {
     TabPdf(document~, sig~) => {
       let document = {
@@ -186,7 +186,7 @@ fn State::record_pdf_generation(self : State, doc : Doc) -> State {
 ///|
 /// PDF.js emits JSON events through the reusable viewer's String callback.
 /// Reject missing, null, fractional, non-finite, and out-of-range counts.
-fn pdf_event_int(value : Json, allow_zero? : Bool = false) -> Int? {
+fn pdf_event_int(value : Json, allow_zero~ : Bool = false) -> Int32? {
   guard value is Number(number, ..) &&
     !number.is_nan() &&
     !number.is_inf() &&
@@ -200,7 +200,7 @@ fn pdf_event_int(value : Json, allow_zero? : Bool = false) -> Int? {
 
 ///|
 fn apply_pdf_event(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   path : @common.Uri,
   document : PdfDocument,

@@ -2,7 +2,7 @@
 /// Keep candidate validation bounded and deterministic. The Host chooses the
 /// executable and fixed arguments, exposes them to the Agent through the
 /// validator tool, and repeats the check authoritatively after submit.
-const PatternRepairDumpMaxDiagnosticUnits : Int = 1000
+const PatternRepairDumpMaxDiagnosticUnits : Int32 = 1000
 
 ///|
 const PatternRepairValidatorEnvironment : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"

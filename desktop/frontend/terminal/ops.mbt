@@ -14,8 +14,8 @@ fn open_session(
   key : String,
   session : String,
   workspace : @common.Uri?,
-  cols : Int,
-  rows : Int,
+  cols : Int32,
+  rows : Int32,
   command? : String,
 ) -> @cmd.Cmd {
   match workspace {
@@ -94,8 +94,8 @@ fn send_input(
 fn send_resize(
   channel : @interop.ChannelId,
   id : String,
-  cols : Int,
-  rows : Int,
+  cols : Int32,
+  rows : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => {
     @js.Promise::from_async(() => {
@@ -121,7 +121,7 @@ fn send_resize(
 priv struct TerminalAck {
   channel : @interop.ChannelId
   id : String
-  sequence : Int
+  sequence : Int32
 }
 
 ///|

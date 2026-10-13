@@ -4,7 +4,7 @@
 
 ///|
 pub fn update(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   msg : Msg,
   state : State,
@@ -549,10 +549,12 @@ pub fn update(
       }
       (cmd, next)
     }
-    ServerRequest(request_id~, method_~, params~, generation~) =>
+    ServerRequest(response_token~, request_id~, method_~, params~, generation~) =>
       (
         @cmd.none,
-        state.with_pending_request(request_id, method_, params, generation),
+        state.with_pending_request(
+          response_token, request_id, method_, params, generation,
+        ),
       )
   }
 }
@@ -1354,6 +1356,7 @@ test "Codex update handlers are pure and idempotent" {
     login_id: Some("login-1"),
     pending_requests: [
       {
+        response_token: "\"request-1\"",
         request_id: Json("request-1"),
         thread_id: "thread-1",
         method_: "item/commandExecution/requestApproval",
@@ -1476,6 +1479,7 @@ test "Codex update handlers are pure and idempotent" {
       generation=0,
     ),
     ServerRequest(
+      response_token="\"request-2\"",
       request_id=Json("request-2"),
       method_="item/commandExecution/requestApproval",
       params={ "threadId": "thread-1", "reason": "test" },
@@ -2092,6 +2096,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
     draft: "pending prompt",
     pending_requests: [
       {
+        response_token: "\"approval-a\"",
         request_id: Json("approval-a"),
         thread_id: "thread-a",
         method_: "item/commandExecution/requestApproval",
@@ -2174,6 +2179,7 @@ test "Codex request generations reject stale snapshots" {
   let (_, notified) = update(
     dispatch,
     ServerRequest(
+      response_token="\"request-new\"",
       request_id=Json("request-new"),
       method_="item/commandExecution/requestApproval",
       params={ "threadId": "thread-1" },
@@ -2203,6 +2209,7 @@ test "Codex approvals cannot be edited from another thread" {
     }),
     pending_requests: [
       {
+        response_token: "\"request-2\"",
         request_id: Json("request-2"),
         thread_id: "thread-2",
         method_: "item/tool/requestUserInput",
@@ -2228,6 +2235,7 @@ test "Codex composer reverse-request actions keep their task identity" {
     }),
     pending_requests: [
       {
+        response_token: "\"request-1\"",
         request_id: Json("request-1"),
         thread_id: "thread-1",
         method_: "item/tool/requestUserInput",

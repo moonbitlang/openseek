@@ -4,15 +4,15 @@
 /// Returns the endpoint URL and a counter of requests actually received.
 async fn flaky_server(
   group : @async.TaskGroup[Unit],
-  failures~ : Int,
-  status~ : Int,
-  sse? : Bool = false,
-) -> (String, Ref[Int])? {
+  failures~ : Int32,
+  status~ : Int32,
+  sse~ : Bool = false,
+) -> (String, Ref[Int32])? {
   guard bind_test_server("local TCP bind unavailable; skipping retry test")
     is Some(server) else {
     return None
   }
-  let hits : Ref[Int] = { val: 0, }
+  let hits : Ref[Int32] = { val: 0, }
   group.spawn_bg(no_wait=true) <| () => {
     server.run_forever(
       (_request, body, conn) => {
@@ -50,7 +50,7 @@ async fn flaky_server(
 /// The retrying client these tests drive: the fake key, the flaky server's
 /// endpoint, and a 1ms backoff so a retry budget is exercised without real
 /// sleeps. Only the attempt budget varies per test.
-fn retry_client(url : String, attempts~ : Int) -> @client.Client {
+fn retry_client(url : String, attempts~ : Int32) -> @client.Client {
   Client(
     api_key="test-key",
     api_url=url,
@@ -162,7 +162,7 @@ async test "streaming chat retries a pre-delta stream drop" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -204,7 +204,7 @@ async test "streaming chat never retries after the first delta" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -248,7 +248,7 @@ async test "streaming chat retries after a delta when the consumer opts in" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
@@ -310,7 +310,7 @@ async test "streaming chat never retries after a tool-call-only delta" {
       is Some(server) else {
       return
     }
-    let hits : Ref[Int] = { val: 0, }
+    let hits : Ref[Int32] = { val: 0, }
     group.spawn_bg(no_wait=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {

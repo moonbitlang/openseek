@@ -50,7 +50,7 @@ fn poll_read_api(
   ctx : @support.BrowserTestContext,
   viewer : @viewer.Viewer,
   done : Ref[Bool],
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if done.val {
     return

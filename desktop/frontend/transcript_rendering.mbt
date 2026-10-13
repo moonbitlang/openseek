@@ -3,8 +3,8 @@
 /// from, which projects to at most one row. Old fixtures without a sequence
 /// use their durable-array position.
 priv enum TranscriptRowIdentity {
-  DurableTranscriptRow(Int)
-  LegacyTranscriptRow(Int)
+  DurableTranscriptRow(Int32)
+  LegacyTranscriptRow(Int32)
 }
 
 ///|

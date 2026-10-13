@@ -17,7 +17,7 @@ fn PageState::local_file(self : PageState) -> @common.Uri? {
 }
 
 ///|
-fn State::with_page(self : State, id : Int, page : PageState) -> State {
+fn State::with_page(self : State, id : Int32, page : PageState) -> State {
   let pages = self.pages.copy()
   pages[id] = page
   let files = if self.pages.get(id).bind(page => page.local_file()) !=
@@ -87,7 +87,7 @@ pub fn State::observe_file(
 /// Return refresh actions after loading settles, coalescing changes received
 /// during a load. Accept before issuing the command so repeated stats cannot
 /// start duplicate reloads. The root owns the native browser commands.
-pub fn State::take_file_reloads(self : State) -> (State, Array[Int]) {
+pub fn State::take_file_reloads(self : State) -> (State, Array[Int32]) {
   let files = self.files.copy()
   let pages = self.pages.copy()
   let reloads = []

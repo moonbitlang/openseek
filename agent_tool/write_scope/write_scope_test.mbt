@@ -2,7 +2,7 @@
 /// Build a scope over `root` or fail the test with the create error.
 async fn scope_of(
   root : String,
-  allowed_paths? : Array[String] = [],
+  allowed_paths~ : Array[String] = [],
 ) -> @write_scope.WriteScope {
   match @write_scope.WriteScope::create(root~, allowed_paths~) {
     Ok(scope) => scope

@@ -1,6 +1,6 @@
 name = "moonbitlang/editor"
 
-version = "0.4.5"
+version = "0.4.6"
 
 readme = "README.md"
 

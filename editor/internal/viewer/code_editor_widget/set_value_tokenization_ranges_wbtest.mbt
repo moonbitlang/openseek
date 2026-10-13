@@ -6,9 +6,9 @@
 fn assert_flush_token_range_domains(
   old_text : String,
   new_text : String,
-  old_line_count : Int,
-  new_line_count : Int,
-  expected_token_to_line : Int,
+  old_line_count : Int32,
+  new_line_count : Int32,
+  expected_token_to_line : Int32,
 ) -> Unit raise {
   let model = test_model(old_text, language_id="flush-range-domain")
   defer model.dispose()
@@ -22,9 +22,9 @@ fn assert_flush_token_range_domains(
   view_model.visible_lines_stabilized()
   assert_eq(view_model.line_count(), old_line_count)
 
-  let token_ranges : Array[(Int, Int)] = []
-  let view_counts_during_token_event : Array[Int] = []
-  let model_counts_during_token_event : Array[Int] = []
+  let token_ranges : Array[(Int32, Int32)] = []
+  let view_counts_during_token_event : Array[Int32] = []
+  let model_counts_during_token_event : Array[Int32] = []
   let subscription = view_model.on_model_tokens_changed(outgoing => {
     for range in outgoing.event.ranges {
       token_ranges.push((range.from_line_number, range.to_line_number))
