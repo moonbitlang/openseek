@@ -1,6 +1,6 @@
 ///|
 /// Which conversation source supplied the normalized rows. The component uses
-/// this for source-specific labels, empty-state copy, and renderer identity.
+/// this for source-specific transcript labels and renderer identity.
 pub(all) enum Source {
   OpenSeek
   Codex
@@ -84,7 +84,7 @@ struct Input {
   current_project : @common.Uri?
   // Every registered project on the focused device, in sidebar order.
   projects : Array[ProjectChoice]
-  // Only an unsent, unpersisted OpenSeek draft may change its project here.
+  // Only an unsent, unpersisted draft may change its project here.
   can_choose_project : Bool
   // Root-owned menu state participates in the shell's native-view occlusion.
   project_menu_open : Bool

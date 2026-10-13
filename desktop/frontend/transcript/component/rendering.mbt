@@ -269,14 +269,7 @@ fn empty_transcript_view(
   project_menu : EmptyProjectControl,
 ) -> @html.Html {
   let children : Array[@html.Html] = [
-    @html.div(class="empty-badge", [
-      @icons.icon(
-        match input.source {
-          OpenSeek => @icons.icon_logo
-          Codex => @icons.icon_sparkle
-        },
-      ),
-    ]),
+    @html.div(class="empty-badge", [@icons.icon(@icons.icon_logo)]),
   ]
   let title = match (input.project_label, input.current_project) {
     (Some(label), Some(project)) if input.can_choose_project &&
@@ -292,12 +285,6 @@ fn empty_transcript_view(
       @html.div(class="empty-title", empty_title(locale~, input.project_label))
   }
   children.push(title)
-  // OpenSeek's explanatory sentence duplicated what the composer and product
-  // already make clear. Codex retains its source-specific account/sandbox
-  // context because that distinguishes the alternate backend.
-  if input.source is Codex {
-    children.push(@html.div(class="empty-sub", ui(locale, CodexDescription)))
-  }
   @html.div(class="empty", children)
 }
 
@@ -400,7 +387,6 @@ priv struct Block {
 /// lets `assoc_by` update only this branch when the menu opens or its query
 /// changes, while the stable branch key preserves its DOM and input focus.
 priv struct EmptyContent {
-  source : Source
   project_label : String?
   current_project : @common.Uri?
   projects : Array[ProjectChoice]
@@ -412,7 +398,6 @@ priv struct EmptyContent {
 ///|
 fn Input::empty_content(self : Input) -> EmptyContent {
   {
-    source: self.source,
     project_label: self.project_label,
     current_project: self.current_project,
     projects: self.projects,

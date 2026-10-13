@@ -3408,8 +3408,7 @@ fn update_msg(
       (@cmd.none, { ..model, select_menu: None, project_menu_query: "", })
     ProjectMenuQueryChanged(query) =>
       if model.select_menu is Some(ProjectMenu) &&
-        model.screen is Chat &&
-        model.composing_new_chat() {
+        model.can_choose_new_chat_project() {
         (@cmd.none, { ..model, project_menu_query: query, })
       } else {
         (@cmd.none, model)
@@ -3422,12 +3421,12 @@ fn update_msg(
         @resource.belongs_to(workspace, model.focused) &&
         model.focused_device() is Some(dev) &&
         dev.projects.contains(workspace) &&
-        model.active_conversation() is Some(active) else {
+        model.new_chat_project() is Some(current) else {
         return (@cmd.none, closed)
       }
       // The selected row is still actionable so keyboard and pointer behavior
       // are uniform, but choosing it must not rotate a second empty session.
-      if active.project() == workspace {
+      if current == workspace {
         (@cmd.none, closed)
       } else {
         update_msg(dispatch, NewChatIn(model.focused, Some(workspace)), closed)

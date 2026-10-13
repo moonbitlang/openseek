@@ -456,13 +456,6 @@
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.empty-sub {
-  max-width: 400px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-}
-
 /* messages */
 .msg {
   display: flex;

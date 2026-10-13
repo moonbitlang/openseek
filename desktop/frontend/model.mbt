@@ -3508,18 +3508,29 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 }
 
 ///|
-/// The title switcher exists only while the visible OpenSeek draft still
+/// The title switcher exists only while the visible draft still
 /// belongs to a registered project. Keeping this predicate at the root lets
 /// rendering, event admission, and post-update menu cleanup share one rule.
 fn Model::can_choose_new_chat_project(self : Model) -> Bool {
-  guard self.screen is Chat &&
-    self.composing_new_chat() &&
-    self.active_conversation() is Some(conv) &&
+  guard self.new_chat_project() is Some(project) &&
     self.focused_device() is Some(dev) else {
     return false
   }
-  dev.projects.contains(conv.project()) &&
-  !dev.is_chat_workspace(conv.project())
+  dev.projects.contains(project) && !dev.is_chat_workspace(project)
+}
+
+///|
+/// The visible unsent draft's project, independent of its execution engine.
+fn Model::new_chat_project(self : Model) -> @common.Uri? {
+  match self.screen {
+    Chat if self.composing_new_chat() =>
+      self.active_conversation().map(conv => conv.project())
+    Codex if self.codex.composing_draft() =>
+      self.codex
+      .active_placement(self.focused)
+      .bind(value => value.project_root())
+    _ => None
+  }
 }
 
 ///|
