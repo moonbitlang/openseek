@@ -171,6 +171,9 @@ extern "js" fn install_diagram_viewport_test_dom() -> DiagramViewportTestHarness
   #|       harness.childReads += 1;
   #|       return collection(this.childNodes.filter(child => child.nodeType === 1));
   #|     }
+  #|     get parentElement() {
+  #|       return this.parentNode?.nodeType === 1 ? this.parentNode : null;
+  #|     }
   #|     get firstChild() { return this.childNodes[0] ?? null; }
   #|     get nextSibling() {
   #|       if (!this.parentNode) return null;
@@ -210,8 +213,10 @@ extern "js" fn install_diagram_viewport_test_dom() -> DiagramViewportTestHarness
   #|     }
   #|     querySelectorAll(selector) {
   #|       const result = [];
+  #|       // The browser's own traversal: it is not the caller reading
+  #|       // `children`, so it does not count toward `childReads`.
   #|       const visit = node => {
-  #|         for (const child of node.children ?? []) {
+  #|         for (const child of node.childNodes.filter(child => child.nodeType === 1)) {
   #|           if (selector === '.moonbit-viewer-markdown-diagram[data-diagram-language="diago"]' &&
   #|               child.matchesDiagramCandidate()) {
   #|             result.push(child);
@@ -361,6 +366,20 @@ extern "js" fn diagram_viewport_test_target(
   #|     add('uml', true, 400, 200, 200, 100);
   #|   } else if (mode === 'mermaid-pending') {
   #|     add('mermaid', false, 400, 200, 200, 100);
+  #|   } else if (mode === 'deep') {
+  #|     // One diagram three levels down, among ordinary content at each level.
+  #|     let parent = target;
+  #|     for (let level = 0; level < 3; level += 1) {
+  #|       for (let index = 0; index < 20; index += 1) {
+  #|         parent.appendChild(document.createElement('p'));
+  #|       }
+  #|       parent = parent.appendChild(document.createElement('div'));
+  #|     }
+  #|     parent.appendChild(add('diago', true, 400, 200, 200, 100));
+  #|   } else if (mode === 'nested') {
+  #|     // A wrapper this component does not enhance, holding one it would.
+  #|     const outer = add('d2', true, 400, 200, 200, 100);
+  #|     outer.appendChild(add('diago', true, 300, 120, 120, 80));
   #|   } else if (mode === 'wide') {
   #|     add('diago', true, 400, 400, 800, 400);
   #|   } else if (mode === 'tall') {
@@ -1007,15 +1026,15 @@ test "refresh preserves current state and disposes wrappers outside its target" 
   let transform = diagram_viewport_test_transform(viewports.lifetime, 0)
 
   // A host may refresh after an unrelated transcript or Editor render. The
-  // same direct SVG keeps its controller, transform, and resize observer. Its
-  // wrapper is also a scan boundary: only the target's direct children are read.
+  // same direct SVG keeps its controller, transform, and resize observer, and
+  // finding that out reads no element's children: the scan is one query.
   diagram_viewport_test_reset_child_reads(harness)
   viewports.refresh()
   assert_eq(diagram_viewport_test_controller_count(viewports.lifetime), 1)
   assert_eq(diagram_viewport_test_observer_count(harness), 1)
   assert_eq(diagram_viewport_test_scale(viewports.lifetime, 0), 1.25)
   assert_eq(diagram_viewport_test_transform(viewports.lifetime, 0), transform)
-  assert_eq(diagram_viewport_test_child_reads(harness), 1)
+  assert_eq(diagram_viewport_test_child_reads(harness), 0)
 
   // Keyed hosts may remove an entire row while retaining the Markdown root.
   // The detached wrapper still owns its content and SVG, so target membership
@@ -1031,6 +1050,52 @@ test "refresh preserves current state and disposes wrappers outside its target" 
     diagram_viewport_test_retained_wrapper_state(harness),
     "moonbit-viewer-markdown-diagram||||auto|SVG|0",
   )
+}
+
+///|
+/// A host refreshes after every render of a document that can hold thousands
+/// of elements, so what a refresh costs must not depend on how much ordinary
+/// content surrounds the diagrams. Mounting a diagram buried in such content
+/// reads exactly what mounting it alone does, and a refresh that finds nothing
+/// new reads nothing at all.
+test "the scan reads nothing of the content around a diagram" {
+  let alone = Ref(0)
+  with_diagram_viewport_test_harness(harness => {
+    let target = diagram_viewport_test_target(harness, "one")
+    diagram_viewport_test_reset_child_reads(harness)
+    let viewports = DiagramViewports(target, () => ())
+    defer viewports.dispose()
+    assert_eq(diagram_viewport_test_controller_count(viewports.lifetime), 1)
+    alone.val = diagram_viewport_test_child_reads(harness)
+    // The mount's geometry frame belongs to this harness; drain it here.
+    diagram_viewport_test_flush_frame(harness)
+  })
+  with_diagram_viewport_test_harness(harness => {
+    let target = diagram_viewport_test_target(harness, "deep")
+    diagram_viewport_test_reset_child_reads(harness)
+    let viewports = DiagramViewports(target, () => ())
+    defer viewports.dispose()
+    assert_eq(diagram_viewport_test_controller_count(viewports.lifetime), 1)
+    assert_eq(diagram_viewport_test_child_reads(harness), alone.val)
+    diagram_viewport_test_flush_frame(harness)
+    diagram_viewport_test_reset_child_reads(harness)
+    viewports.refresh()
+    assert_eq(diagram_viewport_test_controller_count(viewports.lifetime), 1)
+    assert_eq(diagram_viewport_test_child_reads(harness), 0)
+  })
+}
+
+///|
+/// A wrapper owns everything beneath it, whether or not this component
+/// enhances it: a diagram inside another diagram's wrapper is that wrapper's
+/// content, not a second diagram of the root.
+test "a wrapper inside another wrapper is not mounted" {
+  with_diagram_viewport_test_harness(harness => {
+    let target = diagram_viewport_test_target(harness, "nested")
+    let viewports = DiagramViewports(target, () => ())
+    defer viewports.dispose()
+    assert_eq(diagram_viewport_test_controller_count(viewports.lifetime), 0)
+  })
 }
 
 ///|
