@@ -248,4 +248,114 @@ test "parallel directory failures clear independently on successful replies" {
     ctx,
   )
   assert_true(removed.directory_errors.is_empty())
+  // Parent confirmation invalidates only reads already in flight. Keep those
+  // paths loading until their replies arrive, so a retry cannot overlap them.
+  let nested = @pathx.Relative("src/nested")
+  let (_, removed_in_flight) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=root, entries=[]),
+    { ..state, loading: [root, child, nested], },
+    ctx,
+  )
+  let (_, late_failure) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=nested,
+      message="Directory unavailable",
+    ),
+    removed_in_flight,
+    ctx,
+  )
+  assert_true(late_failure.directory_errors.is_empty())
+  assert_true(!late_failure.loading.contains(nested))
+  let (_, late_success) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=child, entries=[]),
+    late_failure,
+    ctx,
+  )
+  assert_true(!late_success.children.contains(child))
+  assert_true(late_success.loading.is_empty())
+  assert_true(late_success.removed_directory_reads.is_empty())
+  // An old empty listing cannot invalidate a new read: the directory may have
+  // been created since it was cached. Preserve permission errors in that case.
+  let (_, retrying) = update(emit, DirExpand(child), late_success, ctx)
+  let (_, new_failure) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=child,
+      message="Permission denied",
+    ),
+    retrying,
+    ctx,
+  )
+  assert_eq(new_failure.directory_errors.get(child), Some("Permission denied"))
+  // A repeated link while the invalidated read drains queues exactly one new
+  // read, including when ancestors are still reloading.
+  let (_, queued) = update(emit, DirExpand(child), removed_in_flight, ctx)
+  let (_, draining) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=child,
+      message="Old failure",
+    ),
+    queued,
+    ctx,
+  )
+  assert_true(draining.loading.contains(child))
+  assert_true(!draining.removed_directory_reads.contains(child))
+  assert_true(draining.directory_errors.is_empty())
+  let (_, reread) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=child, entries=[]),
+    draining,
+    ctx,
+  )
+  assert_true(reread.children.contains(child))
+  assert_true(!reread.loading.contains(child))
+  let (_, breadcrumb) = update(
+    emit,
+    RevealDirectory(child),
+    removed_in_flight,
+    ctx,
+  )
+  let (_, breadcrumb_drained) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=child, entries=[]),
+    breadcrumb,
+    ctx,
+  )
+  assert_true(breadcrumb_drained.loading.contains(child))
+  assert_true(!breadcrumb_drained.removed_directory_reads.contains(child))
+  assert_true(!breadcrumb_drained.children.contains(child))
+  // A failed parent refresh likewise cannot prove a child absent.
+  let (_, parent_failed) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=root,
+      message="Root unavailable",
+    ),
+    { ..removed, loading: [root, child], },
+    ctx,
+  )
+  let (_, child_failed) = update(
+    emit,
+    DirFailed(
+      owner=ctx.owner,
+      epoch=ctx.request_epoch,
+      path=child,
+      message="Permission denied",
+    ),
+    parent_failed,
+    ctx,
+  )
+  assert_eq(child_failed.directory_errors.get(child), Some("Permission denied"))
 }

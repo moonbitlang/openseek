@@ -615,6 +615,9 @@ pub(all) struct State {
   // in flight; plain arrays since a workspace tree is small.
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
+  // In-flight reads invalidated by a newer parent listing; drain their replies
+  // before allowing another read for the same path. Cached listings never mark these.
+  removed_directory_reads : Map[@pathx.Relative, RemovedDirectoryRead]
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
   // Parallel directory replies clear only their own failures.
@@ -712,6 +715,7 @@ pub fn State::empty() -> State {
     tree_reveal: TreeRevealInactive,
     expanded: [],
     loading: [],
+    removed_directory_reads: Map([]),
     children: Map([]),
     directory_errors: Map([]),
     docs: Map([]),
@@ -1428,3 +1432,14 @@ fn Ctx::relative(self : Ctx, file : @common.Uri) -> @pathx.Relative? {
 fn Ctx::resource(self : Ctx, path : @pathx.Relative) -> @common.Uri? {
   self.root().map(root => @resource.join_relative(root, path))
 }
+
+///|
+/// A parent listing invalidated a pending read. Explicit opens coalesce one
+/// retry after its stale reply drains, keeping replies unambiguous per path.
+enum RemovedDirectoryRead {
+  DiscardReply
+  RetryAfterReply
+} derive(Eq)
+
+///|
+pub extend RemovedDirectoryRead with Eq::{equal, not_equal}

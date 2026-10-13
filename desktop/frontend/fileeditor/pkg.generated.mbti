@@ -415,6 +415,10 @@ pub fn ReconciledPlacement::is_parked(Self) -> Bool
 pub fn ReconciledPlacement::not_equal(Self, Self) -> Bool
 pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
 
+type RemovedDirectoryRead derive(Eq)
+pub fn RemovedDirectoryRead::equal(Self, Self) -> Bool
+pub fn RemovedDirectoryRead::not_equal(Self, Self) -> Bool
+
 pub(all) struct ReviewActiveHunk {
   // private fields
 } derive(Eq)
@@ -570,6 +574,7 @@ pub(all) struct State {
   tree_reveal : TreeReveal
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
+  removed_directory_reads : Map[@pathx.Relative, RemovedDirectoryRead]
   children : Map[@pathx.Relative, Array[FileEntry]]
   directory_errors : Map[@pathx.Relative, String]
   docs : Map[@common.Uri, Doc]

@@ -2195,6 +2195,7 @@ pub fn sync(
       children: Map([]),
       directory_errors: Map([]),
       loading: [],
+      removed_directory_reads: Map([]),
       index: IndexEmpty,
       error: None,
       search: state.search.park(),
@@ -3082,7 +3083,11 @@ fn update_inner(
         (@cmd.none, { ..state, highlighted: None, })
       } else {
         let selected = { ..state, highlighted: Some(path), }
-        if state.children.contains(path) {
+        if state.removed_directory_reads.contains(path) {
+          let removed_directory_reads = state.removed_directory_reads.copy()
+          removed_directory_reads[path] = RetryAfterReply
+          (@cmd.none, { ..selected, removed_directory_reads, })
+        } else if state.children.contains(path) {
           (focus_breadcrumb_entry_after_render(0), selected)
         } else if state.loading.contains(path) {
           (@cmd.none, selected)
@@ -3120,6 +3125,11 @@ fn update_inner(
       let expanded = state.expanded.copy()
       if !expanded.contains(path) {
         expanded.push(path)
+      }
+      if state.removed_directory_reads.contains(path) {
+        let removed_directory_reads = state.removed_directory_reads.copy()
+        removed_directory_reads[path] = RetryAfterReply
+        return (@cmd.none, { ..state, expanded, removed_directory_reads, })
       }
       // Explicit expansion retries a failed read; cached and in-flight reads
       // stay idempotent even when the directory is already expanded.
@@ -3169,6 +3179,31 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
+    DirLoaded(owner~, epoch~, path~, ..)
+    | DirFailed(owner~, epoch~, path~, ..) if state.owner == Some(owner) &&
+      state.request_epoch == epoch &&
+      state.removed_directory_reads.contains(path) => {
+      let retry = state.removed_directory_reads.get(path)
+        is Some(RetryAfterReply)
+      let removed_directory_reads = state.removed_directory_reads.copy()
+      removed_directory_reads.remove(path)
+      (
+        if retry {
+          read_directory(dispatch, owner, epoch, path, root=ctx.root())
+        } else {
+          @cmd.none
+        },
+        {
+          ..state,
+          loading: if retry {
+            state.loading
+          } else {
+            state.loading.filter(entry => entry != path)
+          },
+          removed_directory_reads,
+        },
+      )
+    }
     DirLoaded(owner~, epoch~, path~, entries~) =>
       // Drop a reply whose conversation is no longer the panel's.
       if state.owner != Some(owner) || state.request_epoch != epoch {
@@ -3176,21 +3211,18 @@ fn update_inner(
       } else {
         let children = state.children.copy()
         children[path] = entries
+        let removed_directory_reads = state.removed_directory_reads.copy()
+        for pending in state.loading {
+          if directory_listing_excludes(path, entries, pending) &&
+            !removed_directory_reads.contains(pending) {
+            removed_directory_reads[pending] = DiscardReply
+          }
+        }
         let directory_errors = state.directory_errors.copy()
         for failed, _ in state.directory_errors {
           // A successful parent listing also confirms deleted/renamed child
           // directories, whose old paths can no longer be retried.
-          if failed == path ||
-            (
-              (path.is_root() || failed.0.has_prefix(path.0 + "/")) &&
-              !entries.any(entry => {
-                entry.is_dir &&
-                (
-                  failed == entry.path ||
-                  failed.0.has_prefix(entry.path.0 + "/")
-                )
-              })
-            ) {
+          if failed == path || directory_listing_excludes(path, entries, failed) {
             directory_errors.remove(failed)
           }
         }
@@ -3205,6 +3237,7 @@ fn update_inner(
           {
             ..state,
             children,
+            removed_directory_reads,
             loading: state.loading.filter(entry => entry != path),
             directory_errors,
           },
@@ -9658,4 +9691,19 @@ test "same-root conversation switch fences every old watcher push" {
   let (_, second) = update(emit, current_failure, ready, next_ctx)
   assert_eq(first.watch_error, Some("current watcher stopped"))
   assert_true(first.watch_error == second.watch_error)
+}
+
+///|
+/// Only a fresh successful listing may invalidate concurrent descendant reads.
+fn directory_listing_excludes(
+  parent : @pathx.Relative,
+  entries : Array[FileEntry],
+  descendant : @pathx.Relative,
+) -> Bool {
+  descendant != parent &&
+  (parent.is_root() || descendant.0.has_prefix(parent.0 + "/")) &&
+  !entries.any(entry => {
+    entry.is_dir &&
+    (descendant == entry.path || descendant.0.has_prefix(entry.path.0 + "/"))
+  })
 }
