@@ -2022,21 +2022,33 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   expect(sent('session.delete')).toEqual([]);
   await expect(stored).toBeVisible();
 
-  // The host is asked again on every click. Now the chat runs in a worktree
-  // with uncommitted changes, and the one dialog says exactly that.
+  // The host is asked again on every click. Now the chat runs in a clean
+  // worktree, and the dialog names the checkout that goes with it.
+  app.sessionCheckout = { worktree: 'wt-1', dirty_paths: [], dirty_path_count: 0 };
+  await askToDelete();
+  await expect(body).toContainText('its worktree checkout wt-1 is removed along with any ignored files in it');
+  await expect(body).not.toContainText('uncommitted changes');
+
+  // The checkout turns dirty before the confirm. The delete agreed to
+  // nothing of the kind, so the host stops and the same dialog comes back
+  // with the changed paths instead of quietly closing.
   app.sessionCheckout = {
     worktree: 'wt-1',
     dirty_paths: ['notes.txt'],
     dirty_path_count: 1,
   };
-  await askToDelete();
-  await expect(body).toContainText('its worktree checkout wt-1 is removed');
-  await expect(body).toContainText('That checkout has uncommitted changes. Changed paths: notes.txt.');
   await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(body).toContainText('That checkout has uncommitted changes. Changed paths: notes.txt.');
+  expect(sent('session.delete')).toEqual([
+    { session: 'session-1', workspace: '/workspace' },
+  ]);
+  await expect(stored).toBeVisible();
 
-  // Confirming agrees to discard what the dialog listed: one request, with
-  // force, and no second question.
+  // Confirming now agrees to discard what the dialog listed: the retry
+  // carries force, and there is no further question.
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
   await expect.poll(() => sent('session.delete')).toEqual([
+    { session: 'session-1', workspace: '/workspace' },
     { session: 'session-1', workspace: '/workspace', force: true },
   ]);
   await expect(page.locator('.modal-backdrop')).toHaveCount(0);

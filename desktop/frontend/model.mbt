@@ -1538,9 +1538,9 @@ priv struct Model {
   // shares the worktree-discard dialog because the data at risk differs.
   delete_confirm : DeleteConfirm?
   // The live chat whose delete question is out with the host. Only the
-  // answer about this chat may open the confirmation: an answer overtaken by
-  // a later click, or arriving after Cancel, must not put another chat's
-  // dialog under the user's pointer.
+  // answer about this chat may open the confirmation, and only once: an
+  // answer overtaken by a later click must not put another chat's dialog
+  // under the user's pointer.
   delete_pending : (@interop.ChannelId, ArchiveRecordKey)?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?

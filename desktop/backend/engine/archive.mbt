@@ -557,6 +557,9 @@ async fn delete_archived_session_commit(
 /// without the stop in the archived twin. It is refused under the same
 /// conditions as archiving, and the worktree checkout goes the same way: a
 /// dirty one refuses unless `force`. Project files and Git branches remain.
+/// The family is the record plus its descendants in the live store, as for
+/// archiving; a descendant archived on its own earlier stays in the archive
+/// as its own row.
 pub async fn delete_session(
   manager : EngineManager,
   session : String,

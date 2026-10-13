@@ -4787,8 +4787,10 @@ fn update_msg(
         }
         None => (@cmd.none, model)
       }
-    CancelDeleteSession =>
-      (@cmd.none, { ..model, delete_confirm: None, delete_pending: None, })
+    // Closing the dialog leaves `delete_pending` alone. No question is out
+    // while a dialog is open, and the confirm button's click also reaches the
+    // backdrop: that second message must not drop the delete's own answer.
+    CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
     SessionRotated(owner) => {
       // A delayed rotation is owned by the channel that requested it. A focus
       // switch overtakes it; activating the old owner's id here would yank the
@@ -17012,11 +17014,14 @@ test "deleting a live chat asks the host first and confirms what it reported" {
   assert_eq(confirmed.dev().sessions.length(), 2)
   assert_eq(confirmed.dev().archived_request_generation, 0)
   // A checkout that turned dirty after the check comes back from the delete
-  // itself, and the same dialog asks again with the changed paths.
+  // itself, and the same dialog asks again with the changed paths. The
+  // confirming click also reaches the backdrop, whose Cancel must not lose
+  // that answer.
+  let (_, bubbled) = update(dispatch, CancelDeleteSession, confirmed)
   let (_, refused) = update_dev(
     dispatch,
     DeleteChecked(key~, checkout=Some(dirty)),
-    confirmed,
+    bubbled,
   )
   guard refused.delete_confirm is Some(again) else {
     fail("a refused delete staged no second confirmation")
@@ -17053,7 +17058,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     current,
   )
   assert_true(stale.delete_confirm == current.delete_confirm)
-  // Nothing reopens after Cancel.
+  // Nothing reopens after Cancel: an answer opens its dialog once.
   let (_, cancelled) = update(dispatch, CancelDeleteSession, current)
   let (_, reopened) = update_dev(
     dispatch,
