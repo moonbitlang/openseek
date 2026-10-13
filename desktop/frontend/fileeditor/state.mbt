@@ -459,6 +459,9 @@ pub(all) struct State {
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
   tree_open : Bool
+  // Only direct tree toggles animate; document navigation chooses its layout
+  // immediately, including when the surrounding panel is opening.
+  animate_tree : Bool
   // An explicit tree opening for this document wins over its pending content
   // classification. Navigation clears this intent; owner changes discard it.
   tree_open_override : @common.Uri?
@@ -652,6 +655,7 @@ pub fn State::empty() -> State {
     owner: None,
     placement: PlacementUnknown,
     tree_open: false,
+    animate_tree: false,
     tree_open_override: None,
     office_zoom: 100,
     office_query: "",

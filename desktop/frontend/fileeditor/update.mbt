@@ -436,6 +436,7 @@ pub fn open_document(
     ..state.invalidate_review_hunk_surface(),
     highlighted: None,
     tree_open_override: None,
+    animate_tree: false,
   }
   // Files and Search select Content on this document. Retain a known
   // comparison so its Diff control remains an explicit return path.
@@ -636,6 +637,7 @@ pub fn open_changed_document(
       !change.path.0.has_prefix(dir.0 + "/")
     }),
     tree_open_override: None,
+    animate_tree: false,
   }
   // Selecting a Changes row is activation, not a manual reload. Reuse the
   // exact cached review (including one whose paired reads are still pending)
@@ -1166,6 +1168,7 @@ pub fn activate(
     ..state.invalidate_review_hunk_surface(),
     highlighted: None,
     tree_open_override: None,
+    animate_tree: false,
   }
   let (show, doc, review_generation) = show_activated_tab(
     dispatch,
@@ -1226,6 +1229,11 @@ pub fn close_document(
     mbti_view_modes,
     moon_mod_view_modes,
     package_graphs,
+    animate_tree: if was_active {
+      false
+    } else {
+      state.animate_tree
+    },
     tree_open_override: if was_active {
       None
     } else {
@@ -2719,6 +2727,7 @@ fn update_inner(
         {
           ..state,
           tree_open: opening,
+          animate_tree: true,
           tree_open_override: if opening {
             ctx.active_file
           } else {
@@ -3956,18 +3965,19 @@ fn update_inner(
         } else {
           @cmd.none
         }
+        // First PDF classification chooses its layout immediately unless a
+        // later explicit tree opening takes precedence. Reloads keep it.
+        let close_tree = ctx.active_file == Some(path) &&
+          state.tree_open_override != Some(path) &&
+          doc_state is TabPdf(..) &&
+          !(previous is TabPdf(..))
         (
           cmd,
           {
             ..state,
             docs,
-            // Only close on first PDF classification, preserving a later
-            // explicit tree opening and the preference during PDF reloads.
-            tree_open: state.tree_open &&
-            !(ctx.active_file == Some(path) &&
-            state.tree_open_override != Some(path) &&
-            doc_state is TabPdf(..) &&
-            !(previous is TabPdf(..))),
+            tree_open: state.tree_open && !close_tree,
+            animate_tree: state.animate_tree && !close_tree,
             pdf_generation: if doc_state is TabPdf(..) {
               state.pdf_generation + 1
             } else {

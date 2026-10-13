@@ -925,6 +925,7 @@ fn reveal_local_directory(
       ..model.file_panel,
       tree_open: true,
       tree_open_override: @dock.active_file(dock),
+      animate_tree: false,
     },
   }
   let (cmd, panel) = @fileeditor.update(
@@ -1930,7 +1931,14 @@ fn update(
     // without an extension cannot be classified until their bytes arrive.
     (
       @cmd.none,
-      { ..model, file_panel: { ..model.file_panel, tree_open: false, }, },
+      {
+        ..model,
+        file_panel: {
+          ..model.file_panel,
+          tree_open: false,
+          animate_tree: false,
+        },
+      },
     )
   } else if panel_visibility_changed {
     let (command, file_panel) = @fileeditor.panel_toggle_cmds(

@@ -248,14 +248,18 @@ fn icon(image : () -> @html.Html) -> @html.Html {
 /// tree must show regardless of the toggle's state — the panel is otherwise
 /// a dead pane.
 pub fn editor_classes(state : State, ctx : Ctx) -> String {
-  let tree_visible = ctx.panel_open &&
+  let tree_visible = state.tree_open ||
     (
-      state.tree_open ||
-      (ctx.active_file is None && ctx.active_history_diff is None)
+      ctx.panel_open &&
+      ctx.active_file is None &&
+      ctx.active_history_diff is None
     )
   let mut classes = "editor"
   if tree_visible {
     classes += " tree-open"
+  }
+  if state.animate_tree {
+    classes += " tree-animated"
   }
   if ctx.tree_layout is RightSidebar {
     classes += " tree-right"

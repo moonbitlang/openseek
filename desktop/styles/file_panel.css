@@ -300,15 +300,19 @@ button.panel-toggle:not(:disabled):hover {
   overflow: hidden;
   border-top: 1px solid var(--color-separator);
   background: var(--color-bg-surface);
-  visibility: visible;
-  transition:
-    --tree-open-progress var(--drawer-duration) var(--drawer-easing),
-    visibility 0s linear;
+  visibility: inherit;
 }
 .editor:not(.tree-open) .file-tree-pane {
   --tree-open-progress: 0;
   visibility: hidden;
   pointer-events: none;
+}
+.editor.tree-animated .file-tree-pane {
+  transition:
+    --tree-open-progress var(--drawer-duration) var(--drawer-easing),
+    visibility 0s linear;
+}
+.editor.tree-animated:not(.tree-open) .file-tree-pane {
   transition-delay: 0s, var(--drawer-duration);
 }
 
