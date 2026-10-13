@@ -32,8 +32,8 @@ struct BrowserViews {
   // reads its state afresh — so nothing sent would ever be answered.
   mut page_connected : Bool
   // Tabs the page has been asked to open and has not answered for yet, by
-  // request: where the id it gives the tab is delivered.
-  opening : Map[String, @async.Queue[Int32]]
+  // request.
+  opening : Map[String, OpenRequest]
 }
 
 ///|
@@ -81,8 +81,17 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 ///|
 /// A page has connected to the bridge, and from here on hears what it is
 /// told.
-fn BrowserViews::page_is_connected(self : BrowserViews) -> Unit {
+async fn BrowserViews::page_is_connected(self : BrowserViews) -> Unit {
   self.page_connected = true
+  // A request still unanswered was put to a page that has since gone: a
+  // reloading page stops listening before the host can know it has, and
+  // what it was asked is lost with it. The page that took its place has
+  // not heard it, and is asked now.
+  guard self.notify is Some(notify) else { return }
+  let unanswered = [ for _, request in self.opening => request.asked ]
+  for asked in unanswered {
+    notify(asked)
+  }
 }
 
 ///|
