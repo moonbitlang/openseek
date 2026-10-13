@@ -50,14 +50,22 @@ fn[Payload : ToJson] browser_op(
 
 ///|
 /// Create page `id`'s native view loading `url`. The view starts hidden;
-/// the pane sync shows and places it after the next measurement.
+/// the pane sync shows and places it after the next measurement. `owner` is
+/// the dock strip the page is in, which is how the host learns whose tab it
+/// is.
 fn browser_open(
   dispatch : @cmd.Emit[Msg],
   id : Int32,
   url : String,
   dark : Bool,
+  owner : @interop.ConversationKey?,
 ) -> @cmd.Cmd {
-  browser_op(dispatch, @commands.browser_open, { id, url, dark, }, quiet=false)
+  browser_op(
+    dispatch,
+    @commands.browser_open,
+    { id, url, dark, session: owner.map(owner => owner.session), },
+    quiet=false,
+  )
 }
 
 ///|
@@ -66,11 +74,12 @@ fn browser_navigate(
   id : Int32,
   url : String,
   dark : Bool,
+  owner : @interop.ConversationKey?,
 ) -> @cmd.Cmd {
   browser_op(
     dispatch,
     @commands.browser_navigate,
-    { id, url, dark, },
+    { id, url, dark, session: owner.map(owner => owner.session), },
     quiet=false,
   )
 }

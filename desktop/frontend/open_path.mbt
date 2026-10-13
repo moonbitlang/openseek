@@ -228,7 +228,13 @@ fn show_browser_path(
     @dock.open_browser(dock, id)
   }
   (
-    browser_open(dispatch, id, url, model.theme.is_dark(model.system_dark)),
+    browser_open(
+      dispatch,
+      id,
+      url,
+      model.theme.is_dark(model.system_dark),
+      dock.owner,
+    ),
     {
       ..model,
       preview,

@@ -6,12 +6,19 @@
 
 ///|
 /// The registry of native browser views. The window handle arrives with
-/// Proton's window lifecycle and every view hangs off it by name, so this
-/// holds no view map of its own — `WindowHandle::find_view` is the truth.
+/// Proton's window lifecycle and every view hangs off it by name, so which
+/// views exist is never mirrored here — `WindowHandle::find_view` is the
+/// truth.
 struct BrowserViews {
   mut window : @proton.WindowHandle?
   debug_port : Int32
   mut pick : BrowserPick?
+  // The conversation each page's tab belongs to, as the page says whenever
+  // it opens or navigates one. The dock's strips are the page's state, and
+  // the views of a conversation that is off screen stay alive, hidden; this
+  // is what lets a tool an agent calls see its own conversation's tabs and
+  // not another's. A page the dock held under no conversation has no entry.
+  owners : Map[Int32, String]
 }
 
 ///|
@@ -19,7 +26,7 @@ struct BrowserViews {
 /// through window_ready when Proton creates it.
 pub async fn BrowserViews::BrowserViews() -> BrowserViews {
   let debug_port = prepare_debugging()
-  { window: None, debug_port, pick: None, }
+  { window: None, debug_port, pick: None, owners: Map([]), }
 }
 
 ///|
@@ -41,6 +48,7 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 /// views of the previous page must not survive its `host.connect`.
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   self.cancel_pick()
+  self.owners.clear()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -244,6 +252,10 @@ fn BrowserViews::open(
   }
   guard allowed_page_url(payload.url) else { raise BlockedURL(payload.url) }
   let window = self.attached_window()
+  match payload.session {
+    Some(session) => self.owners[payload.id] = session
+    None => self.owners.remove(payload.id)
+  }
   let view = match window.view(view_name(payload.id)) {
     Some(view) => {
       view.load_url(payload.url)
@@ -390,6 +402,7 @@ fn BrowserViews::close(
   if self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
+  self.owners.remove(payload.id)
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }
@@ -517,7 +530,9 @@ async test "browser ops refuse to run without a window; close tolerates it" {
 
   let views = BrowserViews::BrowserViews()
   assert_true(
-    raises(() => views.open({ id: 1, url: "http://x/", dark: true, })),
+    raises(() => {
+      views.open({ id: 1, url: "http://x/", dark: true, session: None, })
+    }),
   )
   assert_true(raises(() => views.back({ id: 1, })))
   assert_true(raises(() => views.forward({ id: 1, })))

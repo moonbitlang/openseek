@@ -1912,11 +1912,29 @@ test "browser payload requires typed fields and ignores unknown fields" {
     url in [
       "https://example.com/", "file:///tmp/index.html", "file:///tmp/a.pdf",
     ] {
-    let payload : @protocol.BrowserOpenPayload = { id: 4, url, dark: false, }
+    let payload : @protocol.BrowserOpenPayload = {
+      id: 4,
+      url,
+      dark: false,
+      session: None,
+    }
     let decoded : @protocol.BrowserOpenPayload = @json.from_json(
       payload.to_json(),
     )
     assert_eq(decoded, payload)
+    // The owning conversation travels when the dock has one, and is left
+    // out, not sent empty, when it does not.
+    assert_true(
+      payload.to_json() is Object(fields) && !fields.contains("session"),
+    )
+    let owned : @protocol.BrowserOpenPayload = {
+      ..payload,
+      session: Some("s-1"),
+    }
+    let decoded : @protocol.BrowserOpenPayload = @json.from_json(
+      owned.to_json(),
+    )
+    assert_eq(decoded, owned)
     let extra : @protocol.BrowserOpenPayload = @json.from_json({
       "id": 4,
       "url": url,
@@ -1936,6 +1954,8 @@ test "browser payload requires typed fields and ignores unknown fields" {
     { "id": 4, "url": "file:///tmp/a.pdf" },
     { "id": 4, "url": "file:///tmp/a.pdf", "dark": null },
     { "id": 4, "url": "file:///tmp/a.pdf", "dark": "false" },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": false, "session": null },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": false, "session": 7 },
   ]
   for json in invalid {
     assert_true(

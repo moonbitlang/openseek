@@ -6030,6 +6030,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
+            model.dock.owner,
           ),
           { shown: None, rect: None, geo: None, },
         )
@@ -6042,6 +6043,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
+            model.dock.owner,
           ),
           model.browser_pane,
         )
@@ -6267,6 +6269,7 @@ fn update_msg(
                 id,
                 url,
                 model.theme.is_dark(model.system_dark),
+                model.dock.owner,
               ),
               {
                 ..model,
@@ -6287,6 +6290,7 @@ fn update_msg(
                 id,
                 url,
                 model.theme.is_dark(model.system_dark),
+                model.dock.owner,
               ),
               {
                 ..model,
