@@ -238,6 +238,44 @@ for (const detachPrevious of [false, true]) {
   }
 }
 
+for (const managementPage of ['Settings', 'Skills', 'Scheduled']) {
+  for (const broadcastFirst of [false, true]) {
+    test(`adding a project from ${managementPage} preserves its hidden draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
+      const app = await open(page, ['/workspace', '/other']);
+      await choose(page, 'Codex test');
+      await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+      await page.locator('#task').fill('Keep the hidden draft');
+      const session = await page.locator('#transcript').getAttribute('data-transcript-session');
+      await page.getByRole('button', { name: managementPage, exact: true }).click();
+      const pending = Promise.withResolvers();
+      const reply = app.replyFor.bind(app);
+      app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
+      await page.getByRole('button', { name: 'Add a project', exact: true }).click();
+      await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+      await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
+      const result = reply(app.requests.find(r => r.method === 'workspace.add'));
+      if (broadcastFirst) {
+        app.notify('workspace.changed', { workspaces: app.workspaces });
+        await expect(page.locator('.workspace-row[title="/Users/test"]')).toBeVisible();
+        pending.resolve(result);
+      } else {
+        pending.resolve(result);
+        // Let the RPC callback settle before publishing the registry snapshot.
+        await page.waitForTimeout(100);
+        app.notify('workspace.changed', { workspaces: app.workspaces });
+      }
+      await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/Users/test');
+      const back = page.getByRole('button', { name: 'Back to conversation', exact: true });
+      await expect(back).toBeVisible();
+      await back.click();
+      await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
+      await expect(page.locator('#task')).toHaveValue('Keep the hidden draft');
+      await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}
+
 test('a completed project add does not replace a newer sidebar thread selection', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex test', isDefault: true }];

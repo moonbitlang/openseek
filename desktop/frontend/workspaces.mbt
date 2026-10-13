@@ -872,59 +872,81 @@ test "a Codex project add preserves its draft in either reply order" {
         Codex(channel~, @codex.Msg::start_draft("codex-add-project", "")),
         { ..test_model(), screen: Codex, default_agent: CodexAgent, },
       )
-      let (_, confirmed) = adopt_picked_directory(
-        dispatch,
-        channel,
-        picked.path,
-        started,
-      )
-      assert_true(confirmed.codex_model_chip().disabled)
-      let switch_agent = ModelPicked("openseek:deepseek-v4-pro", draft={
-        task: "Keep this draft",
-        mentions: [],
-        images: [],
-      })
-      let (_, unchanged) = update(dispatch, switch_agent, confirmed)
-      let (_, repeated) = update(dispatch, switch_agent, confirmed)
-      assert_true(unchanged.screen is Codex && repeated.screen is Codex)
-      assert_true(unchanged.codex == confirmed.codex)
-      assert_true(repeated.codex == confirmed.codex)
-      assert_true(unchanged.codex_project_adoption_pending())
-      for screen in [Screen::Codex, Settings, Skills, Schedules] {
-        let confirmed = { ..confirmed, screen, }
-        let paths = if detach_previous {
-          [picked]
-        } else {
-          [channel.test_project(), picked]
-        }
-        let reply = ProjectAddCommitted(added=picked.path, paths~)
-        let broadcast = ProjectsChanged(paths, chat_root=None)
-        let (_, first) = update_dev(
+      for initial_screen in [Screen::Codex, Settings, Skills, Schedules] {
+        let (_, confirmed) = adopt_picked_directory(
           dispatch,
-          if broadcast_first {
-            broadcast
-          } else {
-            reply
+          channel,
+          picked.path,
+          {
+            ..started,
+            screen: initial_screen,
+            management_return: Some(CodexWork),
           },
-          confirmed,
         )
-        let (_, focused) = update_dev(
+        let (_, repeated) = adopt_picked_directory(
           dispatch,
-          if broadcast_first {
-            reply
-          } else {
-            broadcast
+          channel,
+          picked.path,
+          {
+            ..started,
+            screen: initial_screen,
+            management_return: Some(CodexWork),
           },
-          first,
         )
-        if detach_previous {
-          assert_true(focused.conversation_selection() is None)
+        assert_true(confirmed.codex_project_adoption_pending())
+        assert_true(repeated.codex_project_adoption_pending())
+        assert_true(confirmed.codex == repeated.codex)
+        assert_true(confirmed.screen == initial_screen)
+        if initial_screen is Codex {
+          assert_true(confirmed.codex_model_chip().disabled)
+          let switch_agent = ModelPicked("openseek:deepseek-v4-pro", draft={
+            task: "Keep this draft",
+            mentions: [],
+            images: [],
+          })
+          let (_, unchanged) = update(dispatch, switch_agent, confirmed)
+          let (_, repeated) = update(dispatch, switch_agent, confirmed)
+          assert_true(unchanged.screen is Codex && repeated.screen is Codex)
+          assert_true(unchanged.codex == confirmed.codex)
+          assert_true(repeated.codex == confirmed.codex)
+          assert_true(unchanged.codex_project_adoption_pending())
         }
-        assert_true(focused.screen == screen)
-        assert_eq(focused.codex.active_id(), Some("codex-add-project"))
-        assert_eq(focused.codex.new_thread_cwd(), picked.path)
-        assert_eq(focused.dev().active_project, Some(picked))
-        assert_true(focused.pending_project_adoption is None)
+        for screen in [Screen::Codex, Settings, Skills, Schedules] {
+          let confirmed = { ..confirmed, screen, }
+          let paths = if detach_previous {
+            [picked]
+          } else {
+            [channel.test_project(), picked]
+          }
+          let reply = ProjectAddCommitted(added=picked.path, paths~)
+          let broadcast = ProjectsChanged(paths, chat_root=None)
+          let (_, first) = update_dev(
+            dispatch,
+            if broadcast_first {
+              broadcast
+            } else {
+              reply
+            },
+            confirmed,
+          )
+          let (_, focused) = update_dev(
+            dispatch,
+            if broadcast_first {
+              reply
+            } else {
+              broadcast
+            },
+            first,
+          )
+          if detach_previous {
+            assert_true(focused.conversation_selection() is None)
+          }
+          assert_true(focused.screen == screen)
+          assert_eq(focused.codex.active_id(), Some("codex-add-project"))
+          assert_eq(focused.codex.new_thread_cwd(), picked.path)
+          assert_eq(focused.dev().active_project, Some(picked))
+          assert_true(focused.pending_project_adoption is None)
+        }
       }
     }
   }
@@ -1309,7 +1331,13 @@ fn adopt_picked_directory(
         known: dev.projects.copy(),
         resolved: None,
         codex_draft: if channel == model.focused &&
-          model.screen is Codex &&
+          (
+            model.screen is Codex ||
+            (
+              model.screen.work_screen() is None &&
+              model.management_return is Some(CodexWork)
+            )
+          ) &&
           model.codex.composing_draft() {
           model.codex.active_id()
         } else {
