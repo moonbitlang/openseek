@@ -383,10 +383,8 @@
    is named in that file's theme-bridge selector; nothing here sets `color`,
    or it would override them.
 
-   Bounded and SCROLLABLE, not truncated and not behind a disclosure. The
-   transcript trims a long program because it is reading material; this is the
-   subject of a permission prompt, and hiding any part of what someone is about
-   to allow is exactly the failure this block was added to fix. */
+   Inside the expandable approval details, keep the full program scrollable
+   rather than truncating it so the complete operation can be inspected. */
 .composer-approval-body {
   margin: 8px 0 0;
   padding: 8px 10px;
