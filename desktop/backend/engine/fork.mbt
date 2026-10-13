@@ -61,7 +61,21 @@ pub async fn fork_session(
     session~,
     worktree_of=payload.session,
     () => {
-      let output = engine_stdout(manager, args)
+      let output = engine_stdout(manager, args) catch {
+        error => {
+          // The fork exists once its record does. Reporting a failure for
+          // it would leave the clients unaware of a conversation that is
+          // there, and a retry would make a second one.
+          guard @fs.exists(store.session_file(id)) else { raise error }
+          @xlog.warn() <?
+            {
+              "event": "desktop_fork_engine_failed_after_commit",
+              "session": session,
+              "error": error.to_string(),
+            }
+          session
+        }
+      }
       guard output.trim() == session else {
         raise EngineError("engine returned an unexpected fork identity")
       }

@@ -498,6 +498,11 @@ pub async fn WorktreeOwner::archive_check(
 /// either. A session id names a record only within one store, so a record
 /// with a member's id in another attached project is a different
 /// conversation and holds nothing here.
+///
+/// Only a record that is not there says its conversation has left. One that
+/// cannot be read — a permission or I/O failure — may belong to a
+/// conversation still working here, so the archive is refused rather than
+/// allowed to delete the checkout under it.
 async fn WorktreeEntry::held_by_another(
   self : WorktreeEntry,
   host : WorktreeHost,
@@ -511,7 +516,14 @@ async fn WorktreeEntry::held_by_another(
       return true
     }
     guard @session_store.safe_session_id(bound) else { continue }
-    if @fsx.is_dir(records.join(bound).to_path()) {
+    let record : @fs.FileKind? = Some(@fs.kind(records.join(bound).to_string())) catch {
+      @os_error.OSError(_) as error if error.is_ENOENT() => None
+      error =>
+        raise WorktreeError(
+          "could not tell whether conversation \{bound} still uses this worktree: \{error}",
+        )
+    }
+    if record is Some(Directory) {
       return true
     }
   }
@@ -536,9 +548,20 @@ pub async fn WorktreeOwner::archive_checkout(
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
-  guard !entry.held_by_another(host, workspace, self) else { return None }
+  guard self.binding_unlocked() is Some((workspace, _)) else { return None }
+  // Another host adding a fork to this worktree holds this lock from the
+  // member's binding until its record exists. Deciding in between would see
+  // a member that holds nothing yet and delete the checkout its fork is
+  // being made in. The row is read again once the lock is granted: the read
+  // that found the project may already be stale.
+  let shared = lock_worktrees_file(workspace)
+  defer shared.release()
   let entries = read_worktrees_unlocked(workspace)
+  guard entries.iter().find_first(entry => entry.belongs_to(self))
+    is Some(entry) else {
+    return None
+  }
+  guard !entry.held_by_another(host, workspace, self) else { return None }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   if present {

@@ -197,49 +197,45 @@ async test "a fork of a worktree conversation works in the same checkout" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "a worktree fork keeps its binding exactly when its record was written" {
+async test "a fork is committed exactly when its record was written" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let placements : Array[Array[WorktreeInfo]] = []
-    async fn refused(model : String) -> Bool {
-      try {
-        ignore(
-          fork_session(
-            manager,
-            {
-              session: "s-src",
-              workspace: repo.resource_path(),
-              through: 2,
-              model,
-              source_title: "Original",
-            },
-            (_, rows) => placements.push(rows),
-          ),
-        )
-        false
-      } catch {
-        _ => true
+    async fn fork_with(model : String) -> @protocol.SessionForkReply? {
+      let payload : @protocol.SessionForkPayload = {
+        session: "s-src",
+        workspace: repo.resource_path(),
+        through: 2,
+        model,
+        source_title: "Original",
+      }
+      Some(fork_session(manager, payload, (_, rows) => placements.push(rows))) catch {
+        EngineError(_) => None
+        error => raise error
       }
     }
 
     // The engine refused before writing anything: no fork, no binding.
-    assert_true(refused("fails-before"))
+    assert_true(fork_with("fails-before") is None)
     guard @worktree.list(repo.to_string()).worktrees is [row] else {
       fail("the worktree row must survive a refused fork")
     }
     assert_eq(row.sessions, ["s-src"])
     assert_eq(placements.length(), 0)
-    // The engine wrote the record and then failed. The fork exists, so it
-    // keeps the worktree it was made in and the row is reported.
-    assert_true(refused("fails-after"))
-    guard @worktree.list(repo.to_string()).worktrees is [row] &&
-      row.sessions is ["s-src", fork] else {
-      fail("a fork whose record exists must keep its binding")
+    // The engine wrote the record and then failed. The fork exists, so the
+    // request reports it like any other: clients learn of it, it keeps its
+    // title, and it works in the worktree it was made in.
+    guard fork_with("fails-after") is Some(reply) else {
+      fail("a fork whose record exists must be reported as made")
     }
-    assert_true(store.exists(SessionId(fork)))
-    assert_eq(@worktree.run_dir(repo, fork).to_string(), checkout.to_string())
+    assert_true(store.exists(SessionId(reply.session)))
+    assert_eq(store.title(SessionId(reply.session)), Some("Original"))
+    assert_eq(
+      @worktree.run_dir(repo, reply.session).to_string(),
+      checkout.to_string(),
+    )
     guard placements is [[reported]] else {
-      fail("the kept binding must be broadcast once")
+      fail("the fork's binding must be broadcast once")
     }
-    assert_eq(reported.sessions, ["s-src", fork])
+    assert_eq(reported.sessions, ["s-src", reply.session])
   })
 }

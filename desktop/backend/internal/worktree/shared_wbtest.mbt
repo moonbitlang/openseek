@@ -99,6 +99,57 @@ async test "a record with a member's id in another project holds nothing" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "a sibling record that cannot be read refuses the archive" {
+  with_recovery_fixture((repo, host) => {
+    let first = WorktreeOwner::openseek("first")
+    let created = create(host, resource_path(repo), first, _ => ())
+    let checkout = worktree_dir(repo, created.name)
+    // A name too long for the filesystem fails the stat with something
+    // other than "no such file": whether that conversation left is unknown.
+    let unreadable = String::make(300, 'x')
+    bind_shared_fixture(repo, created.name, ["first", unreadable])
+    @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
+    let refused = try {
+      ignore(first.archive_checkout(host, true))
+      false
+    } catch {
+      WorktreeError(_) => true
+      error => raise error
+    }
+    assert_true(refused)
+    assert_true(@fsx.is_dir(checkout.to_path()))
+  })
+}
+
+///|
+/// Another host adding a fork to the worktree holds the registry's file lock
+/// from the member's binding until its record exists. The lock belongs to
+/// the open file description, so holding it here stands in for that host.
+#cfg(not(platform="windows"))
+async test "an archive waits for another host's fork into the same worktree" {
+  with_recovery_fixture((repo, host) => {
+    let first = WorktreeOwner::openseek("first")
+    let created = create(host, resource_path(repo), first, _ => ())
+    let checkout = worktree_dir(repo, created.name)
+    @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
+    let theirs = lock_worktrees_file(repo)
+    bind_shared_fixture(repo, created.name, ["first", "fork"])
+    @async.with_task_group(group => {
+      group.spawn_bg(() => assert_eq(first.archive_checkout(host, true), None))
+      // Long enough for the archive to reach the lock and block on it.
+      @async.sleep(100)
+      assert_true(@fsx.is_dir(checkout.to_path()))
+      // The other host's engine writes the fork's record, then it lets go.
+      @fsx.ensure_dir(shared_fixture_record(repo, "fork").to_path())
+      theirs.release()
+    })
+    // The archive decided after the fork existed, so the fork holds it.
+    assert_true(@fsx.is_dir(checkout.to_path()))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "a bound conversation holds a checkout only once it starts" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
