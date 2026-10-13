@@ -45,7 +45,8 @@ async test "a committed fork succeeds even when its title cannot be saved" {
       model: "deepseek-flash",
       source_title: "Original title",
     },
-    (_, _) => (),
+    on_created=_ => (),
+    on_worktree_changed=(_, _) => (),
   )
   assert_eq(reply.title, "Original title")
   let store = @store.SessionStore(workspace + "/.openseek")
@@ -67,8 +68,9 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 /// refuses an id that exists, writes what the host handed it — the directory,
 /// the model, the cut — as the fork's system prompt, and prints the fork's
 /// id. The model `fails-before` makes it fail without writing anything, and
-/// `fails-after` once the record is written. Any other command lists no
-/// sessions, which is all archiving asks of it.
+/// `fails-after` once the record is written; `hangs-after` writes the record,
+/// leaves `<root>/committed` to say so, and then never finishes. Any other
+/// command lists no sessions, which is all archiving asks of it.
 fn worktree_fork_engine_script() -> String {
   // `\{newline}` is the two characters a shell `printf` format needs, not an
   // actual line break.
@@ -103,6 +105,10 @@ fn worktree_fork_engine_script() -> String {
     $|if [ "$model" = fails-after ]; then
     $|  printf 'error: lost after the record\{newline}' >&2
     $|  exit 1
+    $|fi
+    $|if [ "$model" = hangs-after ]; then
+    $|  printf '%s' "$fork" > "$root/committed"
+    $|  exec sleep 30
     $|fi
     $|printf '%s\{newline}' "$fork"
     $|
@@ -160,6 +166,7 @@ async fn with_worktree_fork_fixture(
 async test "a fork of a worktree conversation works in the same checkout" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let placements : Array[Array[WorktreeInfo]] = []
+    let created : Array[String] = []
     let reply = fork_session(
       manager,
       {
@@ -169,8 +176,10 @@ async test "a fork of a worktree conversation works in the same checkout" {
         model: "fork-model",
         source_title: "Original",
       },
-      (_, rows) => placements.push(rows),
+      on_created=session => created.push(session),
+      on_worktree_changed=(_, rows) => placements.push(rows),
     )
+    assert_eq(created, [reply.session])
     // The engine wrote the fork's prompt in the original's checkout.
     assert_eq(
       store.load(SessionId(reply.session)).system_prompt(),
@@ -200,6 +209,7 @@ async test "a fork of a worktree conversation works in the same checkout" {
 async test "a fork is committed exactly when its record was written" {
   with_worktree_fork_fixture((manager, repo, store, checkout) => {
     let placements : Array[Array[WorktreeInfo]] = []
+    let created : Array[String] = []
     async fn fork_with(model : String) -> @protocol.SessionForkReply? {
       let payload : @protocol.SessionForkPayload = {
         session: "s-src",
@@ -208,7 +218,14 @@ async test "a fork is committed exactly when its record was written" {
         model,
         source_title: "Original",
       }
-      Some(fork_session(manager, payload, (_, rows) => placements.push(rows))) catch {
+      Some(
+        fork_session(
+          manager,
+          payload,
+          on_created=session => created.push(session),
+          on_worktree_changed=(_, rows) => placements.push(rows),
+        ),
+      ) catch {
         EngineError(_) => None
         error => raise error
       }
@@ -221,12 +238,14 @@ async test "a fork is committed exactly when its record was written" {
     }
     assert_eq(row.sessions, ["s-src"])
     assert_eq(placements.length(), 0)
+    assert_eq(created.length(), 0)
     // The engine wrote the record and then failed. The fork exists, so the
     // request reports it like any other: clients learn of it, it keeps its
     // title, and it works in the worktree it was made in.
     guard fork_with("fails-after") is Some(reply) else {
       fail("a fork whose record exists must be reported as made")
     }
+    assert_eq(created, [reply.session])
     assert_true(store.exists(SessionId(reply.session)))
     assert_eq(store.title(SessionId(reply.session)), Some("Original"))
     assert_eq(
@@ -237,5 +256,57 @@ async test "a fork is committed exactly when its record was written" {
       fail("the fork's binding must be broadcast once")
     }
     assert_eq(reported.sessions, ["s-src", reply.session])
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a fork cancelled after its record was written is still bound and announced" {
+  with_worktree_fork_fixture((manager, repo, store, checkout) => {
+    let placements : Array[Array[WorktreeInfo]] = []
+    let created : Array[String] = []
+    let committed = @workspaces.store_root(repo).join("committed").to_path()
+    @async.with_task_group(group => {
+      let request = group.spawn(() => {
+        ignore(
+          fork_session(
+            manager,
+            {
+              session: "s-src",
+              workspace: repo.resource_path(),
+              through: 2,
+              model: "hangs-after",
+              source_title: "Original",
+            },
+            on_created=session => created.push(session),
+            on_worktree_changed=(_, rows) => placements.push(rows),
+          ),
+        )
+      })
+      while !@fsx.exists(committed) {
+        @async.sleep(1)
+      }
+      request.cancel()
+      let cancelled = try {
+        request.wait()
+        false
+      } catch {
+        @async.WaitedTaskAlreadyCancelled => true
+        _ => false
+      }
+      assert_true(cancelled)
+    })
+    // The request has no reply to give, but the fork is there: every client
+    // hears of it, it has its title, and it works in the worktree it was
+    // made in.
+    let fork = @fsx.read_text(committed)
+    assert_true(store.exists(SessionId(fork)))
+    assert_eq(created, [fork])
+    assert_eq(store.title(SessionId(fork)), Some("Original"))
+    guard placements is [[row]] else {
+      fail("the fork's binding must be broadcast once")
+    }
+    assert_eq(row.sessions, ["s-src", fork])
+    assert_eq(@worktree.run_dir(repo, fork).to_string(), checkout.to_string())
   })
 }

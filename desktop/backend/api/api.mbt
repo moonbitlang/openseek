@@ -500,17 +500,16 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_fork, payload => {
-      let reply = @engine.fork_session(state.manager, payload, (
-        workspace,
-        worktrees,
-      ) => publish_worktree_changed(state, workspace, worktrees))
-      publish_session_changed(
-        state,
-        "created",
-        reply.session,
-        payload.workspace,
+      @engine.fork_session(
+        state.manager,
+        payload,
+        on_created=created => {
+          publish_session_changed(state, "created", created, payload.workspace)
+        },
+        on_worktree_changed=(workspace, worktrees) => {
+          publish_worktree_changed(state, workspace, worktrees)
+        },
       )
-      reply
     }),
     Endpoint(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)
