@@ -187,7 +187,7 @@ fn State::open_draft(
   }
   // Transfers reuse the ID. Open, close, and first Send must share a lane
   // so a delayed close cannot revoke the reopened draft's authorization.
-  CodexDraftOpenReply(draft_id).request(
+  CodexDraftOpenReply(draft_id, cwd~).request(
     dispatch,
     channel,
     @commands.codex_draft_open,

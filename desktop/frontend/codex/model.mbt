@@ -323,7 +323,7 @@ priv enum CodexReplyKind {
   CodexThreadsReply(CodexCatalogReplyContext)
   CodexThreadReply(String, CodexActivityFrontier)
   CodexResumeReply(String)
-  CodexDraftOpenReply(String)
+  CodexDraftOpenReply(String, cwd~ : String)
   CodexDraftThreadReply(String)
   // Both requests own the same composer lock, but their failure receipts are
   // different: start clears the first prompt, while steer clears only Sending.
@@ -348,7 +348,7 @@ priv enum CodexReplyKind {
 /// worktree creation still settles the turn that launched it without allowing
 /// unrelated replies to release the lock.
 priv enum CodexForeground {
-  CodexDraftOpenForeground(String)
+  CodexDraftOpenForeground(String, cwd~ : String)
   CodexThreadForeground(String)
   CodexResumeForeground(String)
   CodexDraftStartForeground(String)
@@ -407,6 +407,7 @@ enum Msg {
     draft~ : @composer.Draft,
     worktree~ : Bool
   )
+  ChangeDraftProject(cwd~ : String)
   AbandonDraft
   OpenThread(String)
   ArchiveThread(String)
@@ -474,6 +475,12 @@ pub fn Msg::model_changed(id : String) -> Msg {
 /// the value before it can become the next `turn/start` override.
 pub fn Msg::effort_changed(effort : String) -> Msg {
   EffortChanged(effort)
+}
+
+///|
+/// Retarget the selected unsent draft without replacing its composer owner.
+pub fn Msg::change_draft_project(cwd : String) -> Msg {
+  ChangeDraftProject(cwd~)
 }
 
 ///|
@@ -968,6 +975,10 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
     | CodexWorktreeTurnReply(thread_id, _)
     | CodexWorktreeRepairReply(thread_id, _) =>
       self.active_thread() is Some(thread) && thread.id == thread_id
+    CodexDraftOpenReply(draft_id, cwd~) =>
+      self.active_draft() is Some(draft) &&
+      draft.id == draft_id &&
+      draft.cwd == cwd
     CodexDraftThreadReply(draft_id) =>
       self.active_draft() is Some(draft) && draft.id == draft_id
     _ => true
@@ -980,7 +991,7 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
 /// foreground lock.
 fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
   match self {
-    CodexDraftOpenReply(id) => Some(CodexDraftOpenForeground(id))
+    CodexDraftOpenReply(id, cwd~) => Some(CodexDraftOpenForeground(id, cwd~))
     CodexThreadReply(id, _) => Some(CodexThreadForeground(id))
     CodexResumeReply(id) => Some(CodexResumeForeground(id))
     CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
@@ -1023,7 +1034,7 @@ fn CodexForeground::belongs_to_thread(
     | CodexUnarchiveForeground(owner)
     | CodexCompactForeground(owner)
     | CodexReviewForeground(owner) => owner == thread_id
-    CodexDraftOpenForeground(_)
+    CodexDraftOpenForeground(_, ..)
     | CodexDraftStartForeground(_)
     | CodexLoginForeground
     | CodexCancelLoginForeground(_)

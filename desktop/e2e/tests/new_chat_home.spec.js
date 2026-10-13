@@ -35,6 +35,19 @@ test('both agents share the first screen and Codex can choose its project in the
   await expect(page.getByText(/Codex inspects, edits/)).toHaveCount(0);
   const session = await transcript.getAttribute('data-transcript-session');
   const openCount = app.requests.filter(r => r.method === 'codex.draft.open').length;
+  const task = page.locator('#task');
+  await task.fill('@main');
+  await page.locator('.completion-item').filter({ hasText: 'src/main.mbt' }).click();
+  await task.press('End');
+  await task.pressSequentially(' Keep this draft when changing projects');
+  const draftText = await task.inputValue();
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
+  const imageURL = `data:image/png;base64,${png}`;
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
+
   await trigger.click();
   const picker = page.getByRole('dialog', { name: 'Choose a project' });
   const search = picker.getByRole('textbox', { name: 'Search projects' });
@@ -54,9 +67,13 @@ test('both agents share the first screen and Codex can choose its project in the
   await picker.getByRole('button', { name: /^other —/ }).click();
   await expect(title).toHaveText('What should we build in other?');
   await expect(page.locator('.workspace-row[title="/other"]')).toHaveClass(/\bactive\b/);
-  await expect(transcript).not.toHaveAttribute('data-transcript-session', session);
+  await expect(transcript).toHaveAttribute('data-transcript-session', session);
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toContainText('Codex test');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.open').at(-1)?.params.cwd).toBe('/other');
+  await expect(task).toHaveValue(draftText);
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
+  await expect(page.locator('.mention-chip').filter({ hasText: 'src/main.mbt' })).toContainText('src/main.mbt');
+  expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
   await page.screenshot({ path: testInfo.outputPath('codex-unified-first-screen.png') });
   const otherTrigger = page.getByRole('button', {
     name: 'Choose project, current project other', exact: true,
@@ -67,9 +84,13 @@ test('both agents share the first screen and Codex can choose its project in the
   await expect(addProject).toBeVisible();
   await addProject.getByRole('button', { name: 'Close project picker' }).click();
   await expect(addProject).toBeHidden();
-  await page.locator('#task').fill('Check the selected project');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/other');
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  await expect.poll(() => app.requests.find(r => r.method === 'codex.turn.start')?.params.input).toEqual([
+    { type: 'text', text: expect.stringContaining('Keep this draft when changing projects') },
+    { type: 'mention', name: 'main.mbt', path: 'src/main.mbt' },
+    { type: 'image', url: imageURL },
+  ]);
   expect(app.pageErrors).toEqual([]);
 });

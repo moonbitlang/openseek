@@ -3428,6 +3428,15 @@ fn update_msg(
       // are uniform, but choosing it must not rotate a second empty session.
       if current == workspace {
         (@cmd.none, closed)
+      } else if model.screen is Codex {
+        guard @resource.path_for(workspace, model.focused) is Some(cwd) else {
+          return (@cmd.none, closed)
+        }
+        update_msg(
+          dispatch,
+          Codex(channel=model.focused, @codex.Msg::change_draft_project(cwd)),
+          closed.with_active_project(Some(workspace)),
+        )
       } else {
         update_msg(dispatch, NewChatIn(model.focused, Some(workspace)), closed)
       }

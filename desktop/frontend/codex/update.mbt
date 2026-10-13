@@ -135,12 +135,35 @@ pub fn update(
       let commands : Array[@cmd.Cmd] = []
       if !cwd.trim().is_empty() {
         commands.push(next.open_draft(dispatch, channel, id, cwd))
-        next = next.begin_foreground(CodexDraftOpenReply(id))
+        next = next.begin_foreground(CodexDraftOpenReply(id, cwd~))
       }
       if previous is Some(previous) && previous != id {
         commands.push(state.close_draft(channel, previous))
       }
       (@cmd.batch(commands), next)
+    }
+    ChangeDraftProject(cwd~) => {
+      guard state.active_draft() is Some(draft) &&
+        state.submitted_first_prompt is None &&
+        !state.loading &&
+        !cwd.trim().is_empty() &&
+        draft.cwd != cwd else {
+        return (@cmd.none, state)
+      }
+      // Keep both the root draft seed and the component-local edits. Only the
+      // workspace context changes; no old composer is closed or retired.
+      let next = {
+        ..state,
+        selection: CodexDraftTask({ ..draft, cwd, project_root: None, }),
+        git_status: None,
+        git_details_open: false,
+        skills: CodexSkillsEmpty,
+        notice: "",
+      }
+      (
+        next.open_draft(dispatch, channel, draft.id, cwd),
+        next.begin_foreground(CodexDraftOpenReply(draft.id, cwd~)),
+      )
     }
     AbandonDraft => {
       guard state.active_draft() is Some(draft) else {
@@ -300,7 +323,7 @@ pub fn update(
             context.archived,
             context.activity_frontier,
           )
-        CodexDraftOpenReply(draft_id) => {
+        CodexDraftOpenReply(draft_id, ..) => {
           next = next.with_open_draft(draft_id, value).loading_context(false)
           cmd = @cmd.batch([
             next.load_skills(dispatch, channel, force_reload=false),
@@ -436,7 +459,7 @@ pub fn update(
           } else {
             notice_text(locale, ThreadsNotice)
           }
-        CodexDraftOpenReply(_) => notice_text(locale, DraftNotice)
+        CodexDraftOpenReply(_, ..) => notice_text(locale, DraftNotice)
         CodexThreadReply(_, _) | CodexDraftThreadReply(_) =>
           notice_text(locale, ThreadNotice)
         CodexTurnStartReply(_)
@@ -645,7 +668,7 @@ test "Codex project add stays local until the first prompt" {
 
   let (_, opened) = update(
     dispatch,
-    Reply(kind=CodexDraftOpenReply("desktop-draft-1"), value={
+    Reply(kind=CodexDraftOpenReply("desktop-draft-1", cwd="/work/project"), value={
       "draftId": "desktop-draft-1",
       "cwd": "/work/project",
       "projectRoot": "/work/project",
@@ -2562,4 +2585,62 @@ test "Codex Git pill opens and closes its details" {
     _ => @cmd.none,
   )
   assert_false(closed.git_details_open())
+}
+
+///|
+test "changing a draft project retains its input and rejects the old workspace reply" {
+  let dispatch : @cmd.Emit[Msg] = _ => @cmd.none
+  let open_external = (_ : String) => @cmd.none
+  let before = {
+    ..State().select_draft("desktop-project-switch", "/first"),
+    draft: "Keep this input",
+    images: [{ name: "image.png", url: "data:image/png;base64,cGlj", }],
+    placement: @composer.FreshWorktree,
+  }
+  let (_, changed) = update(
+    dispatch,
+    Msg::change_draft_project("/second"),
+    before,
+    @interop.Local,
+    open_external,
+  )
+  let (_, repeated) = update(
+    dispatch,
+    Msg::change_draft_project("/second"),
+    before,
+    @interop.Local,
+    open_external,
+  )
+  assert_true(changed == repeated)
+  assert_eq(changed.active_id(), before.active_id())
+  assert_eq(changed.draft, before.draft)
+  assert_true(changed.images == before.images)
+  assert_true(changed.placement == before.placement)
+  assert_eq(before.new_thread_cwd(), "/first")
+  assert_eq(changed.new_thread_cwd(), "/second")
+  let (_, stale) = update(
+    dispatch,
+    Reply(kind=CodexDraftOpenReply("desktop-project-switch", cwd="/first"), value={
+      "draftId": "desktop-project-switch",
+      "cwd": "/first",
+      "projectRoot": "/first",
+    }),
+    changed,
+    @interop.Local,
+    open_external,
+  )
+  assert_true(stale == changed)
+  let (_, opened) = update(
+    dispatch,
+    Reply(kind=CodexDraftOpenReply("desktop-project-switch", cwd="/second"), value={
+      "draftId": "desktop-project-switch",
+      "cwd": "/second",
+      "projectRoot": "/second",
+    }),
+    changed,
+    @interop.Local,
+    open_external,
+  )
+  assert_true(opened.can_prompt())
+  assert_eq(opened.draft, before.draft)
 }

@@ -45,6 +45,7 @@ type Msg
 pub fn Msg::abandon_draft() -> Self
 pub fn Msg::archive_thread(String) -> Self
 pub fn Msg::cancel_login() -> Self
+pub fn Msg::change_draft_project(String) -> Self
 pub fn Msg::close_git_details() -> Self
 pub fn Msg::composer_action(@composer.Action) -> Self
 pub fn Msg::effort_changed(String) -> Self
