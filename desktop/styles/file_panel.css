@@ -281,19 +281,37 @@ button.panel-toggle:not(:disabled):hover {
    clamped so the panel floors at 96px while the viewer keeps at
    least 120px. The clamp also re-fits the panel on window resize
    without any script. */
+/* Animate the stored manual preference. The temporary picker uses full size
+   independently, so selecting a document does not start a closing animation. */
+@property --tree-open-progress {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
 .file-tree-pane {
+  --tree-open-progress: 0;
+  --tree-visibility: hidden;
+  --tree-size: clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 0 0 clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
+  flex: 0 0 calc(var(--tree-size) * var(--tree-open-progress));
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid var(--color-separator);
+  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
   background: var(--color-bg-surface);
-  visibility: inherit;
+  visibility: var(--tree-visibility);
+  transition:
+    --tree-open-progress var(--drawer-duration) var(--drawer-easing),
+    --tree-visibility 0s linear var(--drawer-duration) allow-discrete;
+}
+.editor.tree-manual-open .file-tree-pane {
+  --tree-open-progress: 1;
+  --tree-visibility: visible;
+  transition-delay: 0s, 0s;
 }
 .editor:not(.tree-open) .file-tree-pane {
-  display: none;
+  pointer-events: none;
 }
 
 /* The right-sidebar layout (a Settings choice): same DOM, the body
@@ -305,10 +323,23 @@ button.panel-toggle:not(:disabled):hover {
   flex-direction: row;
 }
 .editor.tree-right .file-tree-pane {
-  flex: 0 0 clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
+  --tree-size: clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
   min-width: 0;
   border-top: none;
-  border-left: 1px solid var(--color-separator);
+  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+}
+.editor.tree-picker .file-tree-pane {
+  flex-basis: var(--tree-size);
+  border-top-width: 1px;
+  visibility: inherit;
+  transition: none;
+}
+.editor.tree-right.tree-picker .file-tree-pane {
+  border-top-width: 0;
+  border-left-width: 1px;
+}
+.content:not(.panel-open) > .editor .file-tree-pane {
+  visibility: inherit;
 }
 
 /* Drag-to-resize handle on the panel's viewer-facing seam — the
