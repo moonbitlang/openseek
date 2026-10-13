@@ -68,6 +68,7 @@ async fn run_pattern_repair_validator(
       no_console_window=true,
     )
   } catch {
+    error if @async.is_being_cancelled() => raise error
     _ => raise Unavailable
   }
   if code != 0 {
