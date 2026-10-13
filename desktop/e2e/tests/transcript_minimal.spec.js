@@ -2,16 +2,6 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Minimal mode is opt-in. Seed the preference only when the profile has none,
-// so the persistence test can still observe an explicit choice surviving reloads.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    if (localStorage.getItem('openseek.minimal_transcript') === null) {
-      localStorage.setItem('openseek.minimal_transcript', 'true');
-    }
-  });
-});
-
 // Exercise the production transport and renderer with recorded events. Fixtures
 // deliberately contain parameters, output, and reasoning that must never enter
 // the minimal subtree, even after every disclosure has been opened.
@@ -52,7 +42,7 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     return super.replyFor(request);
   }
 
-  // The titlebar telescope is off while the minimal transcript is shown.
+  // The titlebar debug toggle is off while the minimal transcript is shown.
   async enableMinimal() {
     await this.openSession();
     await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-process, #stream .minimal-single-call').first()).toBeVisible();
@@ -821,7 +811,7 @@ test('minimal transcript retains stopped failed and empty-success processes acro
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript preference persists and full mode restores details', async ({ page }) => {
+test('minimal transcript is the default and detailed mode persists', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   await app.install();
   await app.goto();
@@ -834,6 +824,7 @@ test('minimal transcript preference persists and full mode restores details', as
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(toggle).not.toHaveClass(/active/);
   await expect(toggle.locator('svg')).toBeVisible();
+  await expect(toggle.locator('svg')).toHaveAttribute('viewBox', '0 0 24 24');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle).toHaveClass(/active/);

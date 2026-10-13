@@ -24,8 +24,8 @@ fn load_saved_settings(
           tree_layout=load_setting(TreeLayoutStorageKey),
           theme=load_setting(ThemeStorageKey),
           font_size=load_setting(AppFontSizeStorageKey),
-          minimal_transcript=load_setting(MinimalTranscriptStorageKey) ==
-            Some("true"),
+          minimal_transcript=load_setting(MinimalTranscriptStorageKey) !=
+            Some("false"),
           fps_overlay_enabled=load_setting(FpsOverlayStorageKey) == Some("true"),
           model=load_setting(ModelStorageKey),
           conversation_models=load_setting(ConversationModelsStorageKey),

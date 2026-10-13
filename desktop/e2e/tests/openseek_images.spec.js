@@ -106,6 +106,7 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
 });
 
 test('durable user and tool content render images between their text parts', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   const part = { type: 'image', media_type: 'image/png', data: png };
   const content = [{ type: 'text', text: 'Show the browser fixture before picture' }, part, { type: 'text', text: 'After picture' }];
@@ -145,6 +146,7 @@ test('durable user and tool content render images between their text parts', asy
 });
 
 test('read_image and PTC results display images when committed and after reload', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
   const app = new DesktopBrowserHarness(page);
   app.sessionEvents = [{ sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture' } } }, { sequence: 2, item: { kind: 'assistant', payload: {
     content: '', tool_calls: [

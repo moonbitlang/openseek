@@ -1647,7 +1647,7 @@ fn Model::minimal_transcript_effective(self : Model) -> Bool {
 }
 
 ///|
-/// The telescope is on for detailed mode. Both conversation sources use the
+/// The debug icon is on for detailed mode. Both conversation sources use the
 /// inverse of the stored minimal preference, preserving existing choices.
 /// This local preference has no connection or run-state gate. Neighboring
 /// controls must clear their disabled state when Rabbita reuses their DOM
@@ -1668,7 +1668,7 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
       .aria_label(shell_text(self.locale, DetailedMode))
       .aria_pressed((!self.minimal_transcript).to_string()),
     on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
-    icon(@icons.icon_telescope),
+    icon(@icons.icon_debug),
   )
 }
 

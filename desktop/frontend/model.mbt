@@ -2735,7 +2735,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     locale: English,
     app_font_size: AppFontSize(14),
     fps_overlay_enabled: false,
-    minimal_transcript: false,
+    minimal_transcript: true,
     narrow,
     sidebar_open: !narrow,
     sidebar_mode: WorkMode,
