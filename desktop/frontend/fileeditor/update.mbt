@@ -432,7 +432,11 @@ pub fn open_document(
       had_active~,
     )
   }
-  let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
+  let state = {
+    ..state.invalidate_review_hunk_surface(),
+    highlighted: None,
+    tree_open_override: None,
+  }
   // Files and Search select Content on this document. Retain a known
   // comparison so its Diff control remains an explicit return path.
   // TODO(diff-search): Preserve a file's selected Diff view when opening a
@@ -631,6 +635,7 @@ pub fn open_changed_document(
     change_tree_collapsed: state.change_tree_collapsed.filter(dir => {
       !change.path.0.has_prefix(dir.0 + "/")
     }),
+    tree_open_override: None,
   }
   // Selecting a Changes row is activation, not a manual reload. Reuse the
   // exact cached review (including one whose paired reads are still pending)
@@ -1157,7 +1162,11 @@ pub fn activate(
   guard ctx.placement_ready() && state.docs.get(path) is Some(doc) else {
     return (@cmd.none, state)
   }
-  let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
+  let state = {
+    ..state.invalidate_review_hunk_surface(),
+    highlighted: None,
+    tree_open_override: None,
+  }
   let (show, doc, review_generation) = show_activated_tab(
     dispatch,
     state,
@@ -1212,7 +1221,17 @@ pub fn close_document(
   moon_mod_view_modes.remove(path)
   let package_graphs = state.package_graphs.copy()
   package_graphs.remove(path)
-  let state = { ..state, mbti_view_modes, moon_mod_view_modes, package_graphs, }
+  let state = {
+    ..state,
+    mbti_view_modes,
+    moon_mod_view_modes,
+    package_graphs,
+    tree_open_override: if was_active {
+      None
+    } else {
+      state.tree_open_override
+    },
+  }
   // Closing a tab is useful local state even while placement is parked, but
   // promoting its neighbor must not address the missing checkout. Recovery's
   // sync pass restores whichever surviving tab the dock made active.
@@ -2086,6 +2105,11 @@ pub fn sync(
       }
     }
     let cmds = [clear_viewer()]
+    // Restoring a conversation reads its active tab directly, without activate.
+    // Reserve the same initial PDF layout before that read starts.
+    let close_tree = ctx.active_file is Some(path) &&
+      docs.get(path) is Some(doc) &&
+      doc.is_pdf_preview()
     // A workspace or resolved root/worktree transition can leave an otherwise
     // identical watch configuration attached to the old checkout. Explicitly
     // retire it; `with_watch` installs the desired watcher after this reroot.
@@ -2124,7 +2148,7 @@ pub fn sync(
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
         placement: PlacementUnknown.reconcile(ctx.placement),
-        tree_open: state.tree_open,
+        tree_open: state.tree_open && !close_tree,
         office_zoom: state.office_zoom,
         office_query: state.office_query,
         office_prefer_system_fonts: state.office_prefer_system_fonts,
@@ -2690,7 +2714,18 @@ fn update_inner(
       // The docked panel takes its height from the viewer, and the viewer
       // cannot see a CSS change on its own.
       let opening = !state.tree_open
-      (request_viewer_remeasure(), { ..state, tree_open: opening, })
+      (
+        request_viewer_remeasure(),
+        {
+          ..state,
+          tree_open: opening,
+          tree_open_override: if opening {
+            ctx.active_file
+          } else {
+            None
+          },
+        },
+      )
     }
     MbtiViewModeSelected(mode) => {
       guard ctx.active_history_diff is None &&
@@ -3926,13 +3961,13 @@ fn update_inner(
           {
             ..state,
             docs,
-            // Only close when content classification first identifies a PDF.
-            // Filename-classified loading tabs already closed on activation;
-            // preserve any manual tree reopening during that read or a reload.
+            // Only close on first PDF classification, preserving a later
+            // explicit tree opening and the preference during PDF reloads.
             tree_open: state.tree_open &&
             !(ctx.active_file == Some(path) &&
+            state.tree_open_override != Some(path) &&
             doc_state is TabPdf(..) &&
-            !doc.is_pdf_preview()),
+            !(previous is TabPdf(..))),
             pdf_generation: if doc_state is TabPdf(..) {
               state.pdf_generation + 1
             } else {
@@ -5831,6 +5866,16 @@ test "sync re-roots the document table from the dock's projection" {
   )
   // The pane-visibility preference follows the panel, not the conversation.
   assert_false(rerooted.tree_open)
+  // A restored PDF reserves its layout before reading, and cannot inherit an
+  // explicit tree opening from the conversation that previously owned it.
+  let pdf = test_file("report.pdf")
+  let (restored_pdf, _) = sync(
+    emit,
+    { ..state, tree_open: true, tree_open_override: Some(pdf), },
+    { ..other, open_files: [pdf], active_file: Some(pdf), },
+  )
+  assert_false(restored_pdf.tree_open)
+  assert_true(restored_pdf.tree_open_override is None)
 }
 
 ///|

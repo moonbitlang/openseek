@@ -98,17 +98,19 @@ test('opening a PDF hides the file tree and still allows reopening it', async ({
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a tree manually reopened while a PDF loads stays open', async ({ page }) => {
-  const app = await setup(page, { openTree: false });
-  app.rpcDelays.set('fs.read_file', 2000);
-  await openFile(app, 'report.pdf');
-  await expect(page.locator('#openseek-office-surface')).not.toHaveAttribute('data-pdf-painted', 'true');
-  await page.getByTitle('Show file tree', { exact: true }).click();
-  await expect(page.locator('.file-tree-pane')).toBeVisible();
-  await expectPdf(page);
-  await expect(page.locator('.file-tree-pane')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
+for (const filename of ['report.pdf', 'extensionless']) {
+  test(`a tree manually reopened while ${filename} loads stays open`, async ({ page }) => {
+    const app = await setup(page, { openTree: false });
+    app.rpcDelays.set('fs.read_file', 2000);
+    await openFile(app, filename);
+    await expect(page.locator('#openseek-office-surface')).not.toHaveAttribute('data-pdf-painted', 'true');
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await expect(page.locator('.file-tree-pane')).toBeVisible();
+    await expectPdf(page);
+    await expect(page.locator('.file-tree-pane')).toBeVisible();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
 
 test('opening an extensionless PDF from a hidden panel does not restore its open tree', async ({ page }) => {
   const app = await setup(page, { openTree: false });

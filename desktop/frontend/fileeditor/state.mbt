@@ -459,6 +459,9 @@ pub(all) struct State {
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
   tree_open : Bool
+  // An explicit tree opening for this document wins over its pending content
+  // classification. Navigation clears this intent; owner changes discard it.
+  tree_open_override : @common.Uri?
   // Office surface preferences are panel-level settings. They apply to both
   // DOCX and XLSX tabs and survive switching conversations, just like the
   // file-tree preference.
@@ -649,6 +652,7 @@ pub fn State::empty() -> State {
     owner: None,
     placement: PlacementUnknown,
     tree_open: false,
+    tree_open_override: None,
     office_zoom: 100,
     office_query: "",
     office_prefer_system_fonts: false,

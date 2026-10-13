@@ -921,7 +921,11 @@ fn reveal_local_directory(
     dock,
     right_panel_open: true,
     right_panel_menu_open: false,
-    file_panel: { ..model.file_panel, tree_open: true, },
+    file_panel: {
+      ..model.file_panel,
+      tree_open: true,
+      tree_open_override: @dock.active_file(dock),
+    },
   }
   let (cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
@@ -1938,7 +1942,11 @@ fn update(
     // Restoring a PDF applies its default closed tree. A directory reveal
     // explicitly requested the tree, so retain that intent after restoration.
     let file_panel = if msg is OpenPathResolved(_, Directory(_)) {
-      { ..file_panel, tree_open: model.file_panel.tree_open, }
+      {
+        ..file_panel,
+        tree_open: model.file_panel.tree_open,
+        tree_open_override: model.file_panel.tree_open_override,
+      }
     } else {
       file_panel
     }
@@ -18180,18 +18188,17 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
 ///|
 test "directory reveal restores the tree beside a hidden PDF" {
   let dispatch = test_dispatch()
-  let (_, pending) = update(dispatch, OpenFile("report.pdf"), test_model())
-  let opened = pending.test_resolve_editor("report.pdf")
-  let owner = file_ctx(opened).owner
-  let file = opened.test_file("report.pdf")
-  let (_, loaded) = update(
-    dispatch,
-    FileEditor(
+  for filename in ["report.pdf", "extensionless"] {
+    let (_, pending) = update(dispatch, OpenFile(filename), test_model())
+    let opened = pending.test_resolve_editor(filename)
+    let owner = file_ctx(opened).owner
+    let file = opened.test_file(filename)
+    let file_loaded = FileEditor(
       @fileeditor.FileLoaded(
         owner~,
         epoch=opened.file_panel.request_epoch,
         path=file,
-        name="report.pdf",
+        name=filename,
         file=@fileeditor.Office(
           data_base64="JVBERi0xLjc=",
           media_type="application/pdf",
@@ -18202,24 +18209,28 @@ test "directory reveal restores the tree beside a hidden PDF" {
         range=None,
         annotation=None,
       ),
-    ),
-    opened,
-  )
-  assert_true(loaded.file_panel.docs[file].state is @fileeditor.TabPdf(..))
-  let (_, hidden) = update(dispatch, ToggleRightPanel, loaded)
-  assert_false(hidden.right_panel_open)
-  let (_, pending) = update(dispatch, OpenFile("src"), hidden)
-  let (_, revealed) = update(
-    dispatch,
-    OpenPathResolved(
-      FileOpenContext::new(owner, pending.file_panel.file_link_generation),
-      Directory({ path: "src", }),
-    ),
-    pending,
-  )
-  assert_true(revealed.right_panel_open)
-  assert_true(revealed.file_panel.tree_open)
-  assert_true(revealed.active_workspace_file() is Some(Relative("report.pdf")))
+    )
+    let (_, loaded) = update(dispatch, file_loaded, opened)
+    assert_true(loaded.file_panel.docs[file].state is @fileeditor.TabPdf(..))
+    let starting = if filename == "report.pdf" { loaded } else { opened }
+    let (_, hidden) = update(dispatch, ToggleRightPanel, starting)
+    assert_false(hidden.right_panel_open)
+    let (_, pending) = update(dispatch, OpenFile("src"), hidden)
+    let (_, revealed) = update(
+      dispatch,
+      OpenPathResolved(
+        FileOpenContext::new(owner, pending.file_panel.file_link_generation),
+        Directory({ path: "src", }),
+      ),
+      pending,
+    )
+    assert_true(revealed.right_panel_open)
+    assert_true(revealed.file_panel.tree_open)
+    assert_eq(revealed.active_workspace_file(), Some(Relative(filename)))
+    let (_, settled) = update(dispatch, file_loaded, revealed)
+    assert_true(settled.file_panel.docs[file].state is @fileeditor.TabPdf(..))
+    assert_true(settled.file_panel.tree_open)
+  }
 }
 
 ///|
