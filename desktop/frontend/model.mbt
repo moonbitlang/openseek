@@ -3977,7 +3977,7 @@ fn Conversation::enqueue_steer(
 /// consumes the queued item in the meantime.
 priv enum QueueEdit {
   Editing(id~ : String)
-  Saving(id~ : String, run_id~ : String)
+  Saving(id~ : String, run_id~ : String, mentions~ : Array[Mention])
   // Shell output replaced the editable draft, but the request still owns
   // the save lock until its response arrives.
   SavingDetached(id~ : String, run_id~ : String)

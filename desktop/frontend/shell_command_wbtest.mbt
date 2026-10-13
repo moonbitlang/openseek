@@ -160,7 +160,7 @@ test "a held result takes the draft out of a queue edit" {
   let dispatch = test_dispatch()
   let conv = {
     ..running_conversation(),
-    queue_edit: Some(Saving(id="queued-1", run_id="r7")),
+    queue_edit: Some(Saving(id="queued-1", run_id="r7", mentions=[])),
     queued_inputs: [{ id: "queued-1", content: "original", images: [], }],
   }
   let model = with_running_shell(test_model(), conv)

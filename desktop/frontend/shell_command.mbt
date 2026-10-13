@@ -229,7 +229,7 @@ fn send_shell_result(
     // message: saving it must not rewrite that message, and the reply to an
     // edit already in flight must not clear it.
     queue_edit: match conv.queue_edit {
-      Some(Saving(id~, run_id~) | SavingDetached(id~, run_id~)) =>
+      Some(Saving(id~, run_id~, ..) | SavingDetached(id~, run_id~)) =>
         Some(SavingDetached(id~, run_id~))
       Some(Editing(..)) | None => None
     },

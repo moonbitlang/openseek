@@ -23,7 +23,7 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await page.getByRole('button', { name: 'Attach files', exact: true }).click();
     await (await chooser).setFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: readFileSync(new URL('../fixtures/office/two-pages.pdf', import.meta.url)) });
     await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
-    const mention = page.locator('.mention-chip').filter({ hasText: 'notes.pdf' });
+    const mention = page.locator('.mention-chip').filter({ hasText: 'notes.pdf', hasNotText: 'Context added during save' });
     await expect(mention).toBeVisible();
 
     // Hold the host response so the real composer can receive repeated input
@@ -57,14 +57,41 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     }
     const edits = () => app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'edit');
     expect(edits()).toHaveLength(1);
+    // The editor is still usable while the composer waits for the save.
+    // Context added here belongs to the next draft, not the held request.
+    await mention.locator('.mention-jump').click();
+    await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
+    const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
+    await text.evaluate(element => {
+      const range = document.createRange();
+      range.setStart(element.firstChild, 0);
+      range.setEnd(element.firstChild, 8);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    const preview = page.locator('.office-selection-preview');
+    await expect(preview).toBeVisible();
+    await preview.locator('textarea').fill('Context added during save');
+    await preview.getByRole('checkbox').check();
+    await preview.getByRole('button', { name: 'Add feedback', exact: true }).click();
+    const added = page.locator('.mention-chip').filter({ hasText: 'Context added during save' });
+    await expect(added).toBeVisible();
+    expect(heldRequest.params.text).not.toContain('Context added during save');
     const response = outcome === 'rpc-error'
       ? { error: { code: -32000, message: 'Save rejected' } }
       : { result: { accepted: outcome === 'accepted' } };
     app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: heldRequest.id, ...response }));
     await expect(composer).toBeEnabled();
+    await expect(added).toBeVisible();
+    await expect(added.locator('.mention-remove')).toBeEnabled();
     if (outcome === 'accepted') {
       await expect(composer).toHaveValue('');
       await expect(queued).toContainText('Edited queued message');
+      await expect(mention).toHaveCount(0);
+      await added.locator('.mention-remove').click();
+      await expect(added).toHaveCount(0);
     } else {
       await expect(composer).toHaveValue('Edited queued message');
       await expect(queued).toContainText('Original queued message');

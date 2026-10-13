@@ -4294,7 +4294,9 @@ fn update_msg(
               // guards reject repeated saves without replacing its draft.
               model.replace_conversation({
                 ..conv,
-                queue_edit: Some(Saving(id~, run_id~)),
+                queue_edit: Some(
+                  Saving(id~, run_id~, mentions=conv.mentions.copy()),
+                ),
               }),
             )
           }
@@ -6784,7 +6786,7 @@ fn update_device_msg(
           // Reflect the accepted queue edit without consuming that new draft.
           guard conv.queue_edit
             is Some(
-              Saving(id=saving_id, run_id=saving_run)
+              Saving(id=saving_id, run_id=saving_run, ..)
               | SavingDetached(id=saving_id, run_id=saving_run)
             ) &&
             saving_id == id &&
@@ -6804,12 +6806,20 @@ fn update_device_msg(
               }),
             )
           }
+          // Editors can attach context while the composer is locked. Consume
+          // only unchanged mentions from the submitted snapshot; new or
+          // updated selections belong to the next draft.
+          let mentions = match conv.queue_edit {
+            Some(Saving(mentions=submitted, ..)) =>
+              conv.mentions.filter(mention => !submitted.contains(mention))
+            _ => conv.mentions
+          }
           let next = {
             ..conv,
             queued_inputs,
             task: "",
             images: [],
-            mentions: [],
+            mentions,
             composer_draft_present: false,
             queue_edit: None,
           }
@@ -6832,7 +6842,7 @@ fn update_device_msg(
       guard model.find_conversation(channel, session) is Some(conv) &&
         conv.queue_edit
         is Some(
-          Saving(id=saving_id, run_id=saving_run)
+          Saving(id=saving_id, run_id=saving_run, ..)
           | SavingDetached(id=saving_id, run_id=saving_run)
         ) &&
         saving_id == id &&
