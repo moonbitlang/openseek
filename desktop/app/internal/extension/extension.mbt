@@ -381,7 +381,9 @@ pub fn openseek_capability(
       // A reloaded page allocates browser ids from scratch; the previous
       // page's native views must not survive its attachment.
       views.close_all()
-      bridge.connect(context)
+      let reply = bridge.connect(context)
+      views.page_is_connected()
+      reply
     }),
     WindowEndpoint(@commands.shell_open_external, (_, payload) => {
       open_external(payload, allow_file=true)

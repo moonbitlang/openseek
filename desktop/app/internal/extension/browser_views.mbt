@@ -22,6 +22,10 @@ struct BrowserViews {
   // How the page is told something (a `browser.event`), once the bridge
   // that carries it exists.
   mut notify : (async (Json) -> Unit)?
+  // Whether a page has connected to the bridge in this window. Until one
+  // has, the bridge drops what it is told to deliver — a page that connects
+  // reads its state afresh — so nothing sent would ever be answered.
+  mut page_connected : Bool
   // Tabs the page has been asked to open and has not answered for yet, by
   // request: where the id it gives the tab is delivered.
   opening : Map[String, @async.Queue[Int32]]
@@ -38,6 +42,7 @@ pub async fn BrowserViews::BrowserViews() -> BrowserViews {
     pick: None,
     owners: Map([]),
     notify: None,
+    page_connected: false,
     opening: Map([]),
   }
 }
@@ -64,6 +69,14 @@ pub fn BrowserViews::page_attached(
 pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.window = None
+  self.page_connected = false
+}
+
+///|
+/// A page has connected to the bridge, and from here on hears what it is
+/// told.
+fn BrowserViews::page_is_connected(self : BrowserViews) -> Unit {
+  self.page_connected = true
 }
 
 ///|
@@ -151,6 +164,7 @@ pub fn view_event_json(id : Int32, event : @proton.ViewEvent) -> Json? {
 ///|
 priv suberror BrowserViewError {
   WindowNotReady
+  PageNotConnected
   UnknownView(Int32)
   BlockedURL(String)
 } derive(Debug)
@@ -159,6 +173,10 @@ priv suberror BrowserViewError {
 impl Show for BrowserViewError with fn output(self, logger) {
   match self {
     WindowNotReady => logger.write_string("The desktop window is not ready")
+    PageNotConnected =>
+      logger.write_string(
+        "The SeekMoon window is still starting; try again in a moment",
+      )
     UnknownView(id) => logger.write_string("Unknown browser view \{id}")
     BlockedURL(url) =>
       logger.write_string("Blocked unsupported page URL: \{url}")

@@ -335,8 +335,12 @@ async fn BrowserViews::open_tab(
     raise @mcp.ToolError("browser_open needs `url`, the address to load.")
   }
   refuse_unless_page_url(url)
+  // Asking a page that has not connected would be asking nobody: the bridge
+  // drops the request, and the wait below would run out unanswered.
+  guard self.page_connected && self.notify is Some(notify) else {
+    raise PageNotConnected
+  }
   ignore(self.attached_window())
-  guard self.notify is Some(notify) else { raise WindowNotReady }
   let request = @uuid.mint()
   let opened : @async.Queue[Int32] = Queue(kind=Unbounded)
   self.opening[request] = opened
@@ -460,10 +464,19 @@ async test "browser tools refuse to run without a window" {
   let views = BrowserViews()
   let not_ready = Some("The desktop window is not ready")
   assert_eq(refusal(views, "browser_tabs", "s-1", {}), not_ready)
-  assert_eq(
-    refusal(views, "browser_open", "s-1", { "url": "https://example.com/" }),
-    not_ready,
+  // A tab can only be asked of a page that is there to open it: before one
+  // has connected the tool says so at once instead of asking nobody.
+  let starting = Some(
+    "The SeekMoon window is still starting; try again in a moment",
   )
+  let open : Json = { "url": "https://example.com/" }
+  assert_eq(refusal(views, "browser_open", "s-1", open), starting)
+  views.page_attached(_ => ())
+  assert_eq(refusal(views, "browser_open", "s-1", open), starting)
+  views.page_is_connected()
+  assert_eq(refusal(views, "browser_open", "s-1", open), not_ready)
+  views.window_closed()
+  assert_eq(refusal(views, "browser_open", "s-1", open), starting)
   // A tab the conversation owns but the window cannot produce.
   views.owners[1] = "s-1"
   assert_eq(
