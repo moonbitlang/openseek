@@ -299,14 +299,17 @@ fn ApprovalNotice::render(
       open=true,
       [
         @html.summary(class="composer-context-summary", question),
-        // Never truncate the exact program whose one-shot permission is being
-        // decided. The shared syntax renderer tokenizes it exactly as its later
-        // transcript representation, but without that card's line numbers:
-        // there are no diagnostics to match yet, and gutter chrome is noise in
-        // a permission prompt.
+        // Bound both tokenization and DOM growth before highlighting. Large
+        // approvals keep their exact text in one text node, including newlines.
+        // The length guard also bounds the work of counting source lines.
         @html.div(class="composer-context-detail", [
           @html.pre(class="composer-approval-body", [
-            @syntax_html.moonbit_source_code(body),
+            if body.length() <= 32_768 &&
+              body.split("\n").take(501).count() <= 500 {
+              @syntax_html.moonbit_source_code(body)
+            } else {
+              @html.code(body)
+            },
           ]),
         ]),
       ],

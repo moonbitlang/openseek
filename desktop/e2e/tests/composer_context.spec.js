@@ -113,6 +113,37 @@ test('replayed write approvals decode content and preserve unrecognized bodies',
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const [name, content, allow] of [
+  ['many short lines', 'x\n'.repeat(10_000) + '<script>你好</script>\n', false],
+  ['one long line', 'x '.repeat(20_000) + '<script>你好</script>', true],
+]) {
+  test(`large write approval preserves ${name} without token nodes`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await page.locator('#task').fill('Start a turn');
+    await page.locator('#send').click();
+    app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event: {
+      event: 'approval_requested', id: 'approval-large', tool_name: 'write',
+      detail: '/workspace/generated.mbt (overwrite existing source file)',
+      body: JSON.stringify({ path: '/workspace/generated.mbt', content }),
+    } });
+    const approval = page.locator('.composer-approval');
+    const source = approval.locator('.composer-approval-body');
+    await expect(source).toBeVisible();
+    expect(await source.textContent()).toBe(content);
+    expect(await source.locator('code').evaluate(el => ({
+      elements: el.childElementCount, nodes: el.childNodes.length,
+    }))).toEqual({ elements: 0, nodes: 1 });
+    await page.locator('#task').fill('Draft while inspecting large content');
+    expect(await source.textContent()).toBe(content);
+    await approval.getByRole('button', { name: allow ? 'Allow once' : 'Deny', exact: true }).click();
+    await expect.poll(() => app.requests.find(r => r.method === 'agent.approval')?.params.allow).toBe(allow);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('Codex questions and approvals expand and retain their responses', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
