@@ -58,6 +58,42 @@ test "opening PDF Changes closes the tree before loading and on cached review ac
 }
 
 ///|
+test "a tree manually reopened during the initial PDF read stays open" {
+  let (state, ctx, path, _) = pdf_fixture()
+  let docs = state.docs.copy()
+  docs[path] = { ..docs[path], state: TabLoading, }
+  let (_, reopened) = update(
+    test_emit(),
+    ToggleTree,
+    { ..state, docs, tree_open: false, },
+    ctx,
+  )
+  assert_true(reopened.tree_open)
+  let (_, loaded) = update(
+    test_emit(),
+    FileLoaded(
+      owner=ctx.owner,
+      epoch=0,
+      path~,
+      name="report.pdf",
+      file=Office(
+        data_base64=@base64.encode(b"%PDF-1.7 fixture"),
+        media_type="application/pdf",
+        sig="pdf:1",
+      ),
+      file_link_generation=None,
+      review_generation=None,
+      range=None,
+      annotation=None,
+    ),
+    reopened,
+    ctx,
+  )
+  assert_true(loaded.docs[path].state is TabPdf(..))
+  assert_true(loaded.tree_open)
+}
+
+///|
 test "PDF callbacks belong to the active file revision and runtime" {
   let (state, ctx, path, _) = pdf_fixture()
   assert_true(state.accepts_pdf_callback(ctx, ctx.owner, 0, path, "pdf:1", 7))

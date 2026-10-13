@@ -3926,12 +3926,13 @@ fn update_inner(
           {
             ..state,
             docs,
-            // Give a newly opened PDF the full viewer width. Reloading a PDF
-            // preserves a file tree the reader explicitly reopened.
+            // Only close when content classification first identifies a PDF.
+            // Filename-classified loading tabs already closed on activation;
+            // preserve any manual tree reopening during that read or a reload.
             tree_open: state.tree_open &&
             !(ctx.active_file == Some(path) &&
             doc_state is TabPdf(..) &&
-            !(previous is TabPdf(..))),
+            !doc.is_pdf_preview()),
             pdf_generation: if doc_state is TabPdf(..) {
               state.pdf_generation + 1
             } else {
