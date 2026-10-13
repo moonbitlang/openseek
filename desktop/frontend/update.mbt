@@ -556,30 +556,27 @@ fn adopt_projects(
   })
   commands.push(refresh_cmd)
   if selected_detached {
-    if focus_target is Some((project, _)) {
-      // This snapshot both removed the active conversation's project and
-      // carries the row the user just added: the explicit add-and-focus
-      // wins over fallback selection. NewChatIn rotates the fresh chat; the
-      // dead session identity clears now so no render can address it while
-      // the rotation is in flight (same rule as the fallback below).
-      let (focus_cmd, focused) = update(
-        dispatch,
-        NewChatIn(channel, Some(project)),
-        next,
+    // The detached OpenSeek selection may be hidden behind a Codex draft.
+    // Clear that stale selection without changing the visible engine.
+    let next = {
+      ..next,
+      active_session: "",
+      selected_conversation: None,
+      conversation_load_failure: None,
+      loading_conversation: None,
+    }
+    if focus_target is Some((project, codex_draft)) {
+      let (focus_cmd, focused) = focus_added_project(
+        dispatch, channel, project, codex_draft, next,
       )
       commands.push(focus_cmd)
       commands.push(reveal_active_project())
-      return (
-        @cmd.batch(commands),
-        {
-          ..focused,
-          active_session: "",
-          selected_conversation: None,
-          conversation_load_failure: None,
-          loading_conversation: None,
-          screen: Chat,
-        },
-      )
+      return (@cmd.batch(commands), focused)
+    }
+    if next.screen is Codex && next.codex.has_active() {
+      // A broadcast can precede the add reply. Keep its captured draft
+      // alive until the reply identifies the project to adopt.
+      return (@cmd.batch(commands), next)
     }
     if sessions.get(0) is Some(fallback) {
       // The retained list is newest-first. Activate its first entry before

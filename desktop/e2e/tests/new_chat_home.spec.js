@@ -184,35 +184,40 @@ test('the title cannot add or change projects until draft opening settles', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a pending project add blocks retargeting and sending until adoption settles', async ({ page }) => {
-  const app = await open(page, ['/workspace', '/other']);
-  await choose(page, 'Codex test');
-  await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
-  await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
-  await page.locator('#task').fill('Send in the added project');
-  await expect(page.locator('#send')).toBeEnabled();
-  const session = await page.locator('#transcript').getAttribute('data-transcript-session');
-  const pending = Promise.withResolvers();
-  const reply = app.replyFor.bind(app);
-  app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
-  await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
-  await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
-  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
-  const addRequest = app.requests.find(r => r.method === 'workspace.add');
-  await expect(page.locator('#send')).toBeDisabled();
-  await page.locator('#task').press('Enter');
-  expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
-  await expect(page.locator('#task')).toHaveValue('Send in the added project');
-  pending.resolve(reply(addRequest));
-  app.notify('workspace.changed', { workspaces: app.workspaces });
-  await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
-  await expect(page.locator('.workspace-row[title="/Users/test"]')).toHaveClass(/\bactive\b/);
-  expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
-  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
-  await expect(page.locator('#task')).toHaveValue('Send in the added project');
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
-  expect(app.pageErrors).toEqual([]);
-});
+for (const detachPrevious of [false, true]) {
+  test(`a pending project add preserves its draft while sending is blocked (detach previous: ${detachPrevious})`, async ({ page }) => {
+    const app = await open(page, ['/workspace', '/other']);
+    await choose(page, 'Codex test');
+    await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
+    await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
+    await page.locator('#task').fill('Send in the added project');
+    await expect(page.locator('#send')).toBeEnabled();
+    const session = await page.locator('#transcript').getAttribute('data-transcript-session');
+    const pending = Promise.withResolvers();
+    const reply = app.replyFor.bind(app);
+    app.replyFor = request => request.method === 'workspace.add' ? pending.promise : reply(request);
+    await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+    await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
+    await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+    const addRequest = app.requests.find(r => r.method === 'workspace.add');
+    await expect(page.locator('#send')).toBeDisabled();
+    await page.locator('#task').press('Enter');
+    expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
+    await expect(page.locator('#task')).toHaveValue('Send in the added project');
+    if (detachPrevious) {
+      app.workspaces = app.workspaces.filter(path => path !== '/workspace');
+    }
+    pending.resolve(reply(addRequest));
+    app.notify('workspace.changed', { workspaces: app.workspaces });
+    await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+    await expect(page.locator('.workspace-row[title="/Users/test"]')).toHaveClass(/\bactive\b/);
+    expect(app.requests.filter(r => r.method === 'codex.draft.open').map(r => r.params.cwd)).toEqual(['/workspace', '/Users/test']);
+    await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
+    await expect(page.locator('#task')).toHaveValue('Send in the added project');
+    await page.locator('#send').click();
+    await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
