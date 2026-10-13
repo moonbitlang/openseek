@@ -692,6 +692,13 @@ pub fn State::State(loading~ : Bool = false) -> State {
 }
 
 ///|
+/// Reset host mirrors without resetting the singleton composer's retirement
+/// cursor. This log spans channels because composer owners include the channel.
+pub fn State::reset_for_channel(self : State) -> State {
+  { ..State(loading=true), composer_retirements: self.composer_retirements, }
+}
+
+///|
 /// The selected mode is request data, independent of whether its menu or the
 /// full-access warning is currently visible.
 fn State::permission_mode(self : State) -> @protocol.CodexPermissionMode {

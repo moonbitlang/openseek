@@ -155,7 +155,7 @@ fn focus_channel(
       // Codex is host-owned just like the other focused mirrors. Clear the
       // previous device's account and conversation list before its replies
       // can be mistaken for this device's sidebar section.
-      codex: @codex.State(loading=true),
+      codex: model.codex.reset_for_channel(),
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
@@ -14566,6 +14566,57 @@ test "model switches transfer one draft and retire the old owner actions" {
     !again.codex.accepts_composer_identity(codex_identity, again.focused),
   )
   assert_true(again.active_conversation() is None)
+}
+
+///|
+test "Codex composer retirements stay monotonic across device focus" {
+  let dispatch = test_dispatch()
+  let source = @interop.ChannelId::Local
+  let remote = @interop.ChannelId::Remote("remote-device")
+  let initial = test_model()
+  let initial = {
+    ..initial,
+    devices: [..initial.devices, empty_device_state(remote)],
+  }
+  let (_, started) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
+    initial,
+  )
+  let old_identity = started.codex_composer_input().identity
+  let (_, retired) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::abandon_draft()),
+    started,
+  )
+  let old_retirements = retired.codex_composer_input().retirements
+  assert_eq(old_retirements.length(), 1)
+  let (_, focused) = focus_channel(dispatch, retired, remote)
+  assert_true(focused.codex_composer_input().retirements == old_retirements)
+  assert_true(!focused.codex.has_active())
+  let (_, remote_started) = update(
+    dispatch,
+    Codex(channel=remote, @codex.Msg::start_draft("remote-draft", "/remote")),
+    focused,
+  )
+  let (_, remote_retired) = update(
+    dispatch,
+    Codex(channel=remote, @codex.Msg::abandon_draft()),
+    remote_started,
+  )
+  let retirements = remote_retired.codex_composer_input().retirements
+  assert_eq(retirements.length(), 2)
+  assert_true(retirements[0] == old_retirements[0])
+  assert_true(retirements[1] == { channel: remote, session: "remote-draft", })
+  let (_, returned) = focus_channel(dispatch, remote_retired, source)
+  let (_, reopened) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
+    returned,
+  )
+  assert_true(reopened.codex_composer_input().retirements == retirements)
+  assert_true(!reopened.codex.accepts_composer_identity(old_identity, source))
+  assert_true(retired.codex_composer_input().retirements == old_retirements)
 }
 
 ///|
