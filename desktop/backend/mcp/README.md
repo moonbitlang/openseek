@@ -2,12 +2,11 @@
 
 How the agents a desktop host runs use capabilities only the host has — the
 dock's browser tabs, to begin with. Two halves live here: the server the host
-runs, and the `seekmoon` command an agent runs to call it.
+runs, and the `seekmoon` command through which an engine reaches it as a
+stdio MCP server.
 
-The package is named for its wire format. The server speaks MCP's tool
-methods (`tools/list`, `tools/call`) as JSON-RPC over HTTP, so an MCP client
-can talk to it; the MCP client engines use for the user's own servers is the
-root module's `mcp/` and shares no code with this.
+The MCP client engines use for the user's own servers is the root module's
+`mcp/`; it is what connects to `seekmoon`, and shares no code with this.
 
 It depends on async HTTP and core codecs, not on Proton, the engine, or any
 package that contributes tools. Dependencies point inward: a package that owns
@@ -26,54 +25,35 @@ app-lifetime owners.
 - `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
   and `tools/call`. Nothing else is offered.
 - `server.mbt` — the listener, the grants, and one task per request.
-- `cli.mbt` — `seekmoon tools`, as a function from a command line and an
-  environment to what it prints and its exit status.
-- `stdio.mbt` — `seekmoon mcp`, the same tools as a stdio MCP server.
-- `cmd/seekmoon` — the executable around the two.
+- `stdio.mbt` — `seekmoon mcp`, as a function from a command line, an
+  environment, and a pair of streams to an exit status.
+- `client.mbt` — how the command sends one message to the server.
+- `cmd/seekmoon` — the executable around it.
 
 ## The command
 
-`seekmoon` knows no tool by name. It asks the server what it offers and builds
-its command line from the answer:
-
-- Tools live under `seekmoon tools`, which leaves the top level free for
-  whatever else the command grows.
-- A tool named `browser_get_text` is run as `seekmoon tools browser get-text`.
-  The text before the first underscore groups related tools; the rest is the
-  verb.
-- Each top-level property of the tool's input schema is an option of the same
-  name, with underscores written as hyphens. A string is passed as written, a
-  boolean is a flag, and anything else is given as JSON (`--tab 3`,
-  `--viewport '{"width":800}'`).
-- The tool's text goes to stdout and the exit status is 0. A tool that fails
-  puts its message on stderr and exits 1, as does a host that cannot be
-  reached. A command line no tool accepts exits 2 without calling anything.
-
-So a host package that contributes a tool gets its command, its options, and
-its `--help` with no code here.
-
-An agent runs commands from sandboxed scripts that may start only programs on
-the engine's allowlist, so `seekmoon` has to be on it before an agent can use
-it this way.
-
-## As an MCP server
-
-`seekmoon mcp` serves the same tools to a client that wants them as MCP tools.
-A user lists it in an MCP configuration like any other stdio server:
+`seekmoon mcp` serves the host's tools to an MCP client over stdin and
+stdout. A user lists it in an MCP configuration like any other stdio server:
 
 ```json
 { "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }
 ```
 
 The engine that reads that file starts the process, which inherits the
-engine's environment and so holds the same grant `seekmoon tools` uses. It is
-a relay: each line from the client is POSTed to the host as it is, and the
-host's reply is written back as one line. When the host cannot be reached a
-request is answered with an error and the server stays up.
+engine's environment and with it a grant (below). The tools reach the model
+as `mcp__seekmoon__<tool>`.
 
-`seekmoon mcp browser` offers only the groups it names. Every tool a server
-lists rides every request its client makes, and a client caps how many it will
-take, so a configuration can ask for less than everything.
+The host's server already speaks MCP, so the command is a relay: each line
+from the client is POSTed to the host as it is, and the host's reply is
+written back as one line. Messages are relayed concurrently, so a slow tool
+call does not hold up a `ping` behind it. When the host cannot be reached a
+request is answered with an error and the command stays up; when its input
+ends it answers what it has already read and exits.
+
+`seekmoon mcp browser` offers only the groups it names, a tool's group being
+its name up to the first underscore. Every tool a server lists rides every
+request its client makes, and a client caps how many it will take, so a
+configuration can ask for less than everything.
 
 ## Grants
 

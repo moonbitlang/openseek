@@ -1,8 +1,8 @@
 // The host's tool server: a loopback HTTP endpoint through which the agents
 // this host runs call tools the host contributes. It speaks MCP's tool
-// methods as JSON-RPC, one request per POST, so anything that can POST JSON
-// can be a client: today that is the `seekmoon` command (`cli.mbt`), which an
-// agent runs from a script.
+// methods as JSON-RPC, one request per POST. Its client is the `seekmoon`
+// command (`stdio.mbt`), which an engine starts as a stdio MCP server and
+// which relays to here.
 //
 // One principal is fenced out and one is let in. An agent is let in by the
 // bearer token its conversation was granted, which also names the
@@ -92,8 +92,8 @@ pub fn Server::url(self : Server) -> String {
 ///|
 /// The environment that lets a process call this server as `session`: where
 /// it is, and the conversation's bearer token. The host puts it on every
-/// engine it starts for that conversation, so the commands an agent runs
-/// find the server without being told and cannot speak for another
+/// engine it starts for that conversation, so what that engine starts
+/// finds the server without being told and cannot speak for another
 /// conversation.
 pub fn Server::grant(
   self : Server,

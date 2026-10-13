@@ -5,8 +5,8 @@
 //   {"mcpServers": {"seekmoon": {"command": "seekmoon", "args": ["mcp"]}}}
 //
 // — and the engine that reads the file starts it. The process inherits that
-// engine's environment, so it holds the same grant `seekmoon tools` uses and
-// speaks for the same conversation.
+// engine's environment, and with it the grant that says where the host is
+// and which conversation this is (`Server::grant`).
 //
 // The host's server already speaks MCP, so this is a relay: each line read
 // from the client is one JSON-RPC message, POSTed to the host as it is, and
