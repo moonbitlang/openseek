@@ -56,6 +56,10 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     await app.openQuickOpen();
     await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
 
+    if (handleSelector === '.tree-resize-handle') {
+      await page.getByTitle('Show file tree', { exact: true }).click();
+    }
+
     const viewer = page.locator('#viewer-host');
     await expect(viewer).toBeVisible();
     const content = viewer.locator('.view-lines');

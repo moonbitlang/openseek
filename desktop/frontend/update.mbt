@@ -1919,8 +1919,15 @@ fn update(
     msg.opens_file_before_panel_reconciliation() &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock) is Some(_)
-  let (panel_visibility_cmd, model) = if panel_visibility_changed &&
-    !file_opened_with_panel {
+  let (panel_visibility_cmd, model) = if file_opened_with_panel {
+    // Opening a document starts with the default closed tree even if the
+    // hidden panel retained a manual toggle. Decide before rendering: PDFs
+    // without an extension cannot be classified until their bytes arrive.
+    (
+      @cmd.none,
+      { ..model, file_panel: { ..model.file_panel, tree_open: false, }, },
+    )
+  } else if panel_visibility_changed {
     let (command, file_panel) = @fileeditor.panel_toggle_cmds(
       dispatch.map(msg => FileEditor(msg)),
       model.file_panel,

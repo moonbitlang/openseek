@@ -24,6 +24,8 @@ async function setup(page, { openTree = true } = {}) {
     media_type: 'application/pdf', sig: 'pdf:broken',
   };
   app.searchFiles = ['docs/report.pdf', 'docs/encrypted.pdf', 'docs/broken.pdf', 'docs/report.docx'];
+  app.officeFiles['docs/extensionless'] = app.officeFiles['docs/report.pdf'];
+  app.searchFiles.push('docs/extensionless');
   app.directoryEntries['/workspace'] = [{ name: 'docs', is_dir: true }];
   app.directoryEntries['/workspace/docs'] = app.searchFiles.map(path => ({ name: path.split('/').at(-1), is_dir: false }));
   await app.install();
@@ -93,6 +95,41 @@ test('opening a PDF hides the file tree and still allows reopening it', async ({
   await page.locator('.editor-tab').filter({ hasText: 'report.pdf' }).click();
   await expectPdf(page);
   await expect(page.locator('.file-tree-pane')).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('opening an extensionless PDF from a hidden panel does not restore its open tree', async ({ page }) => {
+  const app = await setup(page, { openTree: false });
+  await openFile(app, 'report.docx');
+  await expect(page.locator('.word-page').first()).toBeVisible();
+  await page.getByTitle('Show file tree', { exact: true }).click();
+  await expect(page.locator('.file-tree-pane')).toBeVisible();
+  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+  await expect(page.locator('.file-tree-pane')).toBeHidden();
+  app.rpcDelays.set('fs.read_file', 1200);
+  await page.evaluate(() => {
+    window.extensionlessTreeFrames = [];
+    window.recordExtensionlessTree = true;
+    const record = () => {
+      if (!window.recordExtensionlessTree) return;
+      if (document.querySelector('.editor-tab.active .tab-name')?.textContent === 'extensionless') {
+        const tree = document.querySelector('.file-tree-pane');
+        window.extensionlessTreeFrames.push(
+          getComputedStyle(tree).visibility === 'hidden' && tree.getAnimations().length === 0,
+        );
+      }
+      requestAnimationFrame(record);
+    };
+    requestAnimationFrame(record);
+  });
+  await openFile(app, 'extensionless');
+  await expectPdf(page);
+  const frames = await page.evaluate(() => {
+    window.recordExtensionlessTree = false;
+    return window.extensionlessTreeFrames;
+  });
+  expect(frames.length).toBeGreaterThan(0);
+  expect(frames.every(hidden => hidden)).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });
 
