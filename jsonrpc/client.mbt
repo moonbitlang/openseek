@@ -92,6 +92,12 @@ struct Client {
   // Distinguishes the default receiver from an installed receiver rejecting
   // work because its bounded queue is full.
   mut accepts_requests : Bool
+  // Called once, when the client closes — whichever of the reader, the
+  // writer, or a caller gets there first. The default does nothing; an owner
+  // that must react to a lost connection installs its own via
+  // `set_close_handler`. It runs inside `close`, which can be a cancellation
+  // unwinding, so it must not block and must not abort.
+  mut on_close : () -> Unit
 }
 
 ///|
@@ -109,6 +115,7 @@ pub fn[T : Transport] Client::Client(transport : T) -> Client {
     on_notification: (_, _) => (),
     on_request: _ => false,
     accepts_requests: false,
+    on_close: () => (),
   }
 }
 
@@ -288,9 +295,9 @@ async fn Client::dispatch(self : Client, message : Json) -> Unit {
 
 ///|
 /// Mark the client closed, close the transport (unblocking a parked reader/
-/// writer) and the outbox, and fail every outstanding request with `Closed`.
-/// Idempotent and synchronous (transport and queue `close` never suspend), so
-/// it is safe to run during cancellation unwind.
+/// writer) and the outbox, fail every outstanding request with `Closed`, and
+/// run the close handler. Idempotent and synchronous (transport and queue
+/// `close` never suspend), so it is safe to run during cancellation unwind.
 pub fn Client::close(self : Client) -> Unit {
   if self.closed {
     return
@@ -301,4 +308,5 @@ pub fn Client::close(self : Client) -> Unit {
   for _, inbox in self.pending {
     inbox.close(error=Closed)
   }
+  (self.on_close)()
 }

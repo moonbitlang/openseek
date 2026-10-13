@@ -1526,6 +1526,9 @@ priv struct Model {
   // view and root layout. The root owns the opaque state once so neither side
   // reports a second visibility copy back to the other.
   jobs : @jobs.State
+  // The Settings page's MCP panel: what the current conversation's engine
+  // last said it holds of its MCP servers.
+  mcp : @mcp.State
   github : @github.State
   terminal : @terminal.State
   // The archive-discard confirmation, staged when the host refused an
@@ -2132,6 +2135,7 @@ priv enum Msg {
   GithubRequested
   Github(@github.Msg)
   Jobs(@jobs.Msg)
+  Mcp(@mcp.Msg)
   // The browser toolbar, acting on whatever Browser tab is active — the
   // messages carry no id so a stale click cannot outlive a tab switch.
   BrowserAddressEdited(String)
@@ -2511,6 +2515,9 @@ priv enum DeviceMsg {
   // by it, because a conversation compacted before its first prompt of this
   // app-lifetime has no run id to match.
   JobsChanged(String)
+  // The engine of this session reported what it holds of its MCP servers.
+  // The host keeps the report; this only says there is a newer one to read.
+  McpChanged(String)
   Engine(String?, @transcript.EngineEvent, session~ : String?)
   // The exact local start request returned its run result. `accepted` is the
   // prompt's ownership receipt and can recover a Started notification lost on
@@ -2757,6 +2764,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     dock_tab_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
+    mcp: @mcp.State::initial(),
     github: @github.State::empty(),
     terminal: @terminal.State::empty(),
     active_session: "",
@@ -3461,6 +3469,14 @@ fn remembered_with(
 /// the only place with no conversation to render.
 fn Model::active_conversation(self : Model) -> Conversation? {
   self.find_conversation(self.focused, self.active_session)
+}
+
+///|
+/// The conversation the Settings page's MCP panel is about: the one on
+/// screen behind Settings, whose engine is the one to ask.
+fn Model::mcp_conversation(self : Model) -> @interop.ConversationKey? {
+  guard self.active_conversation() is Some(conv) else { return None }
+  Some({ channel: conv.device, session: conv.session_id, })
 }
 
 ///|

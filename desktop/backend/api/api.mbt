@@ -538,6 +538,9 @@ pub fn endpoints(
       state.schedules.action(payload)
     }),
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
+    Endpoint(@commands.mcp_status, payload => {
+      @engine.mcp_status(state.manager, payload)
+    }),
     @endpoint.Endpoint::sync(@commands.app_info, _ => {
       version: state.app_version,
       console_url: state.console_url,
@@ -720,6 +723,7 @@ test "remote endpoint catalog has one entry per command name" {
     names.push(name)
   }
   assert_true(names.contains("codex.config.open"))
+  assert_true(names.contains("mcp.status"))
   assert_true(names.contains("codex.draft.open"))
   assert_true(names.contains("codex.draft.close"))
   assert_true(names.contains("codex.file.search"))

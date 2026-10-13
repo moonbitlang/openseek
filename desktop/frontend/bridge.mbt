@@ -802,6 +802,9 @@ fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   if payload.event is @wire.JobChanged(..) {
     return Some(JobsChanged(payload.session))
   }
+  if payload.event is @wire.McpStatus(..) {
+    return Some(McpChanged(payload.session))
+  }
   guard @transcript.decode_engine_event(payload.event) is Some(event) else {
     return None
   }

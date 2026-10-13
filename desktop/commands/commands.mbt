@@ -154,6 +154,14 @@ pub let settings_set : Command[
 ] = Command("settings.set")
 
 ///|
+/// Ask a conversation's live engine what it holds of its MCP servers. Reads
+/// the engine's state; starts nothing.
+pub let mcp_status : Command[
+  @protocol.McpStatusPayload,
+  @protocol.McpStatusReply,
+] = Command("mcp.status")
+
+///|
 pub let app_info : Command[@protocol.EmptyPayload, @protocol.AppInfoReply] = Command(
   "app.info",
 )

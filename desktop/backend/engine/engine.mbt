@@ -71,6 +71,11 @@ priv struct ServeEngine {
   // reaper (idle.mbt) stops an engine whose stamp is old enough; the reaper's
   // own job probe is the one exchange that leaves it alone.
   mut last_activity_ms : Int64
+  // The engine's latest `mcp_status` — what this process holds of its MCP
+  // servers, in its own words. `None` until it has reported once, which it
+  // does when it has finished connecting them; it reports again on every
+  // change, and each report replaces the last.
+  mut mcp_status : @wire.McpStatus?
 }
 
 ///|
@@ -1594,6 +1599,7 @@ async fn[G] start_serve_engine(
     queued_runs: [],
     job_requests: Map([]),
     last_activity_ms: engine_clock_ms(),
+    mcp_status: None,
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -1789,6 +1795,9 @@ async fn ServeEngine::consume(
             }
             continue
           }
+          // Kept for whoever asks later, and forwarded below like any other
+          // event so a page already showing it knows to read again.
+          Some(McpStatus(status~)) => self.mcp_status = Some(status)
           Some(JobsSnapshot(request_id~, ..) as event)
           | Some(JobStopResult(request_id~, ..) as event) => {
             if self.job_requests.get(request_id) is Some(reply) {
@@ -2295,6 +2304,7 @@ fn test_serve_engine(
     queued_runs: [],
     job_requests: Map([]),
     last_activity_ms,
+    mcp_status: None,
   }
 }
 

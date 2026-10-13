@@ -2091,6 +2091,38 @@ pub fn MaterializeSemanticSelectionReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for MaterializeSemanticSelectionReply
 pub impl @json.FromJson for MaterializeSemanticSelectionReply
 
+pub(all) enum McpEngineStatus {
+  NotRunning
+  Connecting
+  Running(@openseek_protocol.McpStatus)
+} derive(Eq, @debug.Debug)
+pub fn McpEngineStatus::equal(Self, Self) -> Bool
+pub fn McpEngineStatus::not_equal(Self, Self) -> Bool
+pub fn McpEngineStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) struct McpStatusPayload {
+  session : String
+} derive(Eq, @debug.Debug)
+pub fn McpStatusPayload::equal(Self, Self) -> Bool
+pub fn McpStatusPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpStatusPayload::not_equal(Self, Self) -> Bool
+pub fn McpStatusPayload::to_json(Self) -> Json
+pub fn McpStatusPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpStatusPayload
+pub impl @json.FromJson for McpStatusPayload
+
+pub(all) struct McpStatusReply {
+  config_path : String
+  engine : McpEngineStatus
+} derive(Eq, @debug.Debug)
+pub fn McpStatusReply::equal(Self, Self) -> Bool
+pub fn McpStatusReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpStatusReply::not_equal(Self, Self) -> Bool
+pub fn McpStatusReply::to_json(Self) -> Json
+pub fn McpStatusReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpStatusReply
+pub impl @json.FromJson for McpStatusReply
+
 pub(all) struct MoonIdeCodeLens {
   range : LspRange
   title : String

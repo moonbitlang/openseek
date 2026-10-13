@@ -27,6 +27,7 @@
 ///   producers: stdin reader ──────────── Wire(command)
 ///              turn/compact completions ─ TurnDone(finished~) │ CompactDone
 ///              background-job exits ───── BackgroundNotice
+///              MCP connection closes ──── McpConnectionClosed
 ///   pump: for ;; match step
 ///     ├─ Wire(Prompt)          ── active? queue pending : start turn
 ///     ├─ Wire(Steer(Prompt))   ── turn running │ prompt queued? queue steer : reject
@@ -36,6 +37,7 @@
 ///     ├─ Wire(Goal)            ── durable marker; auto=true arms auto-continue
 ///     ├─ Wire(Approval)        ── release a tool blocked INSIDE the active turn
 ///     ├─ BackgroundNotice      ── idle? drain queued context to the log
+///     ├─ McpConnectionClosed   ── emit `mcp_status` if it changed
 ///     ├─ TurnDone              ── drain context ── start next pending work
 ///     │                           └─ armed goal(auto) unmet ⇒ auto-continue
 ///     ├─ CompactDone           ── adopt compacted session ── start next pending
@@ -164,15 +166,36 @@ async fn run_serve(
         criteria=() => @execution.audit_criteria(session),
       )
     })
-    let extra_tools = @execution.build_extra_tools(
+    let mcp = @execution.connect_mcp(
       scope,
+      workspace_root~,
+      config_path?=@options.mcp_config_path(matches),
+    )
+    let extra_tools = @execution.build_extra_tools(
+      mcp,
       model~,
       api_key~,
-      workspace_root~,
-      mcp_config_path?=@options.mcp_config_path(matches),
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )
+    // What this engine holds of its MCP servers goes out unasked: once now
+    // that connecting is over, and again whenever it changes. The close
+    // handler runs inside a connection's own teardown, so it only wakes the
+    // loop and the loop reports — which also means nothing is sent once the
+    // loop has stopped and the group is closing every connection on the way
+    // out. Installed before the first read, so no close falls between them.
+    mcp.on_connection_closed(() => {
+      ignore(steps.try_put(McpConnectionClosed) catch { _ => false })
+    })
+    let mut reported_mcp = mcp.status()
+    @emit.emit(McpStatus(status=reported_mcp))
+    fn report_mcp_status() {
+      let status = mcp.status()
+      if status != reported_mcp {
+        reported_mcp = status
+        @emit.emit(McpStatus(status~))
+      }
+    }
     // The advisory goal-met gate (--review-gate): built once, shared by
     // every turn; engine-initiated, so it runs on its own allowance.
     let on_goal_met = if @options.review_gate_enabled(matches) {
@@ -623,6 +646,7 @@ async fn run_serve(
                 runtime.queue_steer(Notice(text))
               }
           }
+        McpConnectionClosed => report_mcp_status()
         Wire(JobsSnapshot(request_id~)) => {
           let jobs = match tools.background_job_runtime() {
             Some(runtime) => runtime.records()

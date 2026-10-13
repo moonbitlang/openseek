@@ -255,6 +255,62 @@ h2 {
   align-items: stretch;
 }
 
+/* The MCP group: one row per configured server, the state it was found in
+   on the right, and what explains that state under its name. */
+.mcp-server {
+  align-items: flex-start;
+}
+
+.mcp-state {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: nowrap;
+}
+
+.mcp-state.ok {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+.mcp-state.error {
+  border-color: var(--color-danger-border);
+  color: var(--color-danger);
+}
+
+.setting-desc.mcp-error {
+  color: var(--color-danger);
+  /* Engine and spawn errors arrive as one long line. */
+  white-space: pre-wrap;
+}
+
+.mcp-tools {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.mcp-tools summary {
+  cursor: pointer;
+  width: fit-content;
+}
+
+.mcp-tools ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.mcp-tools code {
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+}
+
 /* The bring-your-own-key guide inside the API group's card: prose plus
    numbered steps, with its own padding since the card's default is
    row-shaped. */

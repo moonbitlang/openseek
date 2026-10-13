@@ -4030,11 +4030,25 @@ fn update_msg(
       (cmd, { ..next, update_ux, })
     }
     UpdateApplied => (close_window(), model)
-    OpenSetup =>
-      (
-        @cmd.none,
-        { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
+    OpenSetup => {
+      // The MCP panel shows the current conversation's engine, and asks it
+      // afresh each time Settings opens.
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        Opened(model.mcp_conversation()),
+        model.mcp,
       )
+      (
+        cmd,
+        {
+          ..model,
+          screen: Settings,
+          setup_api_key: "",
+          api_setup_open: false,
+          mcp,
+        },
+      )
+    }
     ReturnToWork =>
       if model.screen.work_screen() is None {
         (
@@ -5898,6 +5912,14 @@ fn update_msg(
         model.jobs,
       )
       (cmd, { ..model, jobs, })
+    }
+    Mcp(msg) => {
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        msg,
+        model.mcp,
+      )
+      (cmd, { ..model, mcp, })
     }
     Github(msg) => {
       let completed = msg is @github.CheckedOut(epoch, _) &&
@@ -8749,6 +8771,14 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
+    McpChanged(session) => {
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        Changed({ channel, session, }),
+        model.mcp,
+      )
+      (cmd, { ..model, mcp, })
+    }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared

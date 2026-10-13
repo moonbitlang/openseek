@@ -8,6 +8,7 @@ import {
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/openseek_protocol/command_context",
   "openseek_desktop/frontend/jobs",
+  "openseek_desktop/frontend/mcp",
   "openseek_desktop/frontend/export_dialog",
   "openseek_desktop/frontend/github",
   "moonbitlang/core/cmp",

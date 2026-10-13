@@ -27,6 +27,40 @@ pub fn McpServer::name(self : McpServer) -> String {
 }
 
 ///|
+/// What identifies the server to a person without echoing a secret: its
+/// command (stdio), or its URL without userinfo and query (http). Arguments,
+/// environment, and headers are left out because that is where tokens live.
+pub fn McpServer::target(self : McpServer) -> String {
+  match self {
+    Stdio(command~, ..) => command
+    Http(url~, ..) => redact_url(url)
+  }
+}
+
+///|
+/// Strip userinfo (`user:pass@`) and the query/fragment from `url`, keeping
+/// scheme, host, and path — enough to identify the endpoint without echoing
+/// embedded credentials.
+fn redact_url(url : String) -> String {
+  // Cut at the first `?` or `#`, then locate the authority after the FIRST
+  // `://` anywhere — matching the decoder's leniency and staying fail-closed
+  // for malformed values like `/https://user:secret@host` — and drop a
+  // `userinfo@` that precedes any `/` in what follows. The userinfo arm is
+  // start-anchored on purpose: an unanchored lexmatch arm SEARCHES, and would
+  // redact an `@` sitting in the path.
+  let kept = if url =~ (re"[?#]", before~, after=_) { before } else { url }
+  let (prefix, rest) = if kept =~ (re"://", before~, after~) {
+    ("\{before}://", after)
+  } else {
+    ("", kept)
+  }
+  lexmatch rest {
+    re"^[^/@]*@" + (re"(.|\n)*$" as tail) => "\{prefix}\{tail}"
+    _ => "\{prefix}\{rest}"
+  }
+}
+
+///|
 /// A malformed MCP configuration.
 pub suberror ConfigError {
   Invalid(String)

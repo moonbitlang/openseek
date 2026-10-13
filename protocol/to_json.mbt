@@ -36,6 +36,7 @@ pub fn Event::to_json(self : Event) -> Json {
       }
     JobsSnapshot(request_id~, jobs~) =>
       { "event": "jobs_snapshot", "request_id": request_id, "jobs": Json(jobs) }
+    McpStatus(status~) => { "event": "mcp_status", "status": Json(status) }
     JobStopResult(request_id~, generation~, job_id~, outcome~) =>
       {
         "event": "job_stop_result",
