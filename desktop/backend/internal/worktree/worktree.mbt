@@ -433,11 +433,14 @@ pub async fn run_dir(
   match tree_of(workspace, session) {
     BoundTree(dir) => dir
     WorkspaceRoot => workspace
-    MissingTree(name) =>
-      raise WorktreeError(
-        "worktree \{name} for this conversation is gone; rebuild it or archive the conversation",
-      )
+    MissingTree(name) => raise WorktreeError(missing_checkout_refusal(name))
   }
+}
+
+///|
+/// What a conversation is told when its worktree's checkout is gone.
+fn missing_checkout_refusal(name : String) -> String {
+  "worktree \{name} for this conversation is gone; rebuild it or archive the conversation"
 }
 
 ///|
@@ -637,6 +640,12 @@ pub async fn drop_placements(
 /// the workspace root there is no worktree to join, and only the record is
 /// created.
 ///
+/// `create_record` is handed the directory `session` will work in. It is
+/// read here, under the same locks as the binding, because a directory
+/// resolved any earlier may name a checkout that was removed since — and a
+/// record written for it would describe a place the registry no longer has.
+/// A worktree whose checkout is gone is refused, as a turn there would be.
+///
 /// The registry stays held from the binding until `create_record` returns,
 /// which is what an archive of `worktree_of` serializes against: it sees
 /// either the row before the fork existed, or a member whose record is
@@ -655,7 +664,7 @@ pub async fn add_session_to_worktree(
   workspace : @pathx.Absolute,
   session~ : String,
   worktree_of~ : String,
-  create_record : async () -> Unit,
+  create_record : async (@pathx.Absolute) -> Unit,
   record_exists~ : async () -> Bool,
   on_committed : (Array[WorktreeInfo]) -> Unit,
 ) -> Unit {
@@ -666,10 +675,13 @@ pub async fn add_session_to_worktree(
   let entries = read_worktrees_unlocked(workspace)
   guard entries.search_by(entry => entry.sessions.contains(worktree_of))
     is Some(index) else {
-    create_record()
+    create_record(workspace)
     return
   }
   let row = entries[index]
+  let checkout = worktree_dir(workspace, row.name)
+  let present = @fsx.is_dir(checkout.to_path()) catch { _ => false }
+  guard present else { raise WorktreeError(missing_checkout_refusal(row.name)) }
   entries[index] = { ..row, sessions: [..row.sessions, session], }
   write_worktrees(workspace, entries)
   {
@@ -681,7 +693,7 @@ pub async fn add_session_to_worktree(
         write_worktrees(workspace, entries)
       }
     })
-    create_record()
+    create_record(checkout)
   }
   @async.protect_from_cancel(() => {
     on_committed(worktree_infos(workspace, entries))

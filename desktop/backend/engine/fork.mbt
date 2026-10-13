@@ -37,27 +37,8 @@ pub async fn fork_session(
     @workspaces.registered_dir(requested) is Some(workspace) else {
     raise EngineError("workspace is not a registered workspace")
   }
-  let dir = @worktree.run_dir(workspace, payload.session)
   let root = @workspaces.store_root(workspace)
   let session = "desktop-" + @uuid.mint()
-  let args = [
-    "sessions",
-    "fork",
-    payload.session,
-    "--as",
-    session,
-    "--through",
-    payload.through.to_string(),
-    "--session-root",
-    root.to_string(),
-    "--dir",
-    dir.to_string(),
-    "--model",
-    payload.model,
-  ]
-  if resolved_global_skills_dir() is Some(dir) {
-    args.append(["--global-skills-dir", dir.to_string()])
-  }
   let store = @store.SessionStore(root.to_string())
   let id : @agent_session.SessionId = SessionId(session)
   let workspace_token = workspace.resource_path()
@@ -90,7 +71,25 @@ pub async fn fork_session(
       workspace,
       session~,
       worktree_of=payload.session,
-      () => {
+      dir => {
+        let args = [
+          "sessions",
+          "fork",
+          payload.session,
+          "--as",
+          session,
+          "--through",
+          payload.through.to_string(),
+          "--session-root",
+          root.to_string(),
+          "--dir",
+          dir.to_string(),
+          "--model",
+          payload.model,
+        ]
+        if resolved_global_skills_dir() is Some(skills) {
+          args.append(["--global-skills-dir", skills.to_string()])
+        }
         let failure : Error? = try {
           ignore(engine_stdout(manager, args))
           None

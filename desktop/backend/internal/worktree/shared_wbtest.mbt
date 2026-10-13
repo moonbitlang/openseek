@@ -150,6 +150,43 @@ async test "an archive waits for another host's fork into the same worktree" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "a worktree whose checkout is gone takes no new member" {
+  with_recovery_fixture((repo, host) => {
+    let created = create(
+      host,
+      resource_path(repo),
+      WorktreeOwner::openseek("first"),
+      _ => (),
+    )
+    @fs.rmdir(worktree_dir(repo, created.name).to_string(), recursive=true)
+    // Nothing is created for a directory that is not there, and nothing is
+    // bound to it.
+    let mut asked = false
+    let refused = try {
+      add_session_to_worktree(
+        repo,
+        session="fork",
+        worktree_of="first",
+        _ => asked = true,
+        record_exists=() => false,
+        _ => (),
+      )
+      false
+    } catch {
+      WorktreeError(_) => true
+      error => raise error
+    }
+    assert_true(refused)
+    assert_false(asked)
+    guard read_worktrees_unlocked(repo) is [row] else {
+      fail("the worktree row must survive a refused fork")
+    }
+    assert_eq(row.sessions, ["first"])
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "a bound conversation holds a checkout only once it starts" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")
@@ -243,7 +280,9 @@ async test "a fork is bound to its original's worktree around its record's creat
       repo,
       session="fork",
       worktree_of="first",
-      () => {
+      dir => {
+        // The record is created for the checkout the registry names now.
+        assert_eq(dir.to_string(), worktree_dir(repo, created.name).to_string())
         guard read_worktrees_unlocked(repo) is [row] else {
           fail("the worktree row must still be registered")
         }
@@ -264,7 +303,7 @@ async test "a fork is bound to its original's worktree around its record's creat
       repo,
       session="root-fork",
       worktree_of="root",
-      () => created_in_root = true,
+      dir => created_in_root = dir == repo,
       record_exists=() => true,
       rows => published.push(rows),
     )
@@ -280,7 +319,7 @@ async test "a fork is bound to its original's worktree around its record's creat
         repo,
         session="broken",
         worktree_of="first",
-        () => raise WorktreeError("record failed"),
+        _ => raise WorktreeError("record failed"),
         record_exists=() => false,
         rows => published.push(rows),
       )
@@ -301,7 +340,7 @@ async test "a fork is bound to its original's worktree around its record's creat
         repo,
         session="late",
         worktree_of="first",
-        () => raise WorktreeError("the writer failed after the record"),
+        _ => raise WorktreeError("the writer failed after the record"),
         record_exists=() => true,
         rows => published.push(rows),
       )
