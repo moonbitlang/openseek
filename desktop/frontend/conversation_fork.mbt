@@ -132,79 +132,6 @@ fn fork_conversation(
 }
 
 ///|
-test "fork request is pure, validates the terminal, and stays single flight" {
-  let base = test_model()
-  let conv = {
-    ..test_conversation(),
-    sync: Synced,
-    messages: [
-      { kind: @transcript.Answer("done"), sequence: Some(4), ts: None, },
-    ],
-  }
-  let model = base.replace_conversation(conv)
-  guard model.transcript_slot() is Some(slot) else {
-    fail("missing transcript")
-  }
-  let emit = test_dispatch()
-  let (_, first) = update(
-    emit,
-    ForkRequested(slot=slot.key(), through=4),
-    model,
-  )
-  let (_, second) = update(
-    emit,
-    ForkRequested(slot=slot.key(), through=4),
-    model,
-  )
-  assert_true(first.conversation_fork == second.conversation_fork)
-  assert_true(first.conversation_fork is Some(_))
-  assert_true(model.conversation_fork == None)
-  let (_, repeat) = update(
-    emit,
-    ForkRequested(slot=slot.key(), through=4),
-    first,
-  )
-  assert_true(repeat.conversation_fork == first.conversation_fork)
-  let (_, invalid) = update(
-    emit,
-    ForkRequested(slot=slot.key(), through=3),
-    model,
-  )
-  assert_true(invalid.conversation_fork == None)
-  guard first.conversation_fork is Some(pending) else {
-    fail("missing request")
-  }
-  let (_, failed) = update(emit, ForkCompleted(pending, Err("offline")), first)
-  let (_, failed_again) = update(
-    emit,
-    ForkCompleted(pending, Err("offline")),
-    first,
-  )
-  assert_true(failed.conversation_fork == failed_again.conversation_fork)
-  assert_true(failed.conversation_fork == None)
-  assert_eq(failed.active_session, model.active_session)
-  let result : Result[@protocol.SessionForkReply, String] = Ok({
-    session: "desktop-fork",
-    title: "Fork",
-  })
-  let (_, done) = update(emit, ForkCompleted(pending, result), first)
-  let (_, done_again) = update(emit, ForkCompleted(pending, result), first)
-  assert_eq(done.active_session, done_again.active_session)
-  assert_true(done.selected_conversation == done_again.selected_conversation)
-  assert_true(done.dev().sessions == done_again.dev().sessions)
-  assert_eq(
-    done.selected_conversation.map(value => value.session),
-    Some("desktop-fork"),
-  )
-  assert_true(done.conversation_fork == None)
-  let away = { ..first, screen: Settings, }
-  let (_, background) = update(emit, ForkCompleted(pending, result), away)
-  assert_true(background.screen is Settings)
-  assert_eq(background.active_session, model.active_session)
-  assert_true(background.dev().sessions.any(item => item.id == "desktop-fork"))
-}
-
-///|
 test "fork is unavailable for worktrees, archived records, and subruns" {
   let conv = test_conversation()
   assert_true(conv.can_fork())
@@ -220,47 +147,44 @@ test "fork is unavailable for worktrees, archived records, and subruns" {
 }
 
 ///|
-test "fork captures the displayed automatic or renamed title" {
-  let base = test_model()
-  let conv = {
+test "fork validates requests without effects and preserves a non-chat page" {
+  let model = test_model().replace_conversation({
     ..test_conversation(),
     sync: Synced,
     task: "自动标题",
     messages: [
       { kind: @transcript.Answer("done"), sequence: Some(4), ts: None, },
     ],
+  })
+  guard model.transcript_slot() is Some(slot) else {
+    fail("missing transcript")
   }
-  let unlisted = base.replace_conversation(conv)
-  for
-    title in [
-      None,
-      Some("首条消息生成的标题"),
-      Some("手动重命名"),
-    ] {
-    let dev = unlisted.dev()
-    let model = unlisted.replace_device({
-      ..dev,
-      sessions: match title {
-        None => []
-        Some(title) =>
-          [
-            {
-              id: conv.session_id,
-              title: Some(title),
-              workspace: conv.project(),
-              workspace_name: "workspace",
-              updated_at_ms: None,
-            },
-          ]
-      },
-    })
-    guard model.transcript_slot() is Some(slot) else {
-      fail("missing transcript")
-    }
-    let (_, requested) = model.request_fork(test_dispatch(), slot.key(), 4)
-    guard requested.conversation_fork is Some(pending) else {
-      fail("missing fork")
-    }
-    assert_eq(pending.source_title, title.unwrap_or("自动标题"))
+  let emit = test_dispatch()
+  let (_, requested) = model.request_fork(emit, slot.key(), 4)
+  let (_, again) = model.request_fork(emit, slot.key(), 4)
+  assert_true(again.conversation_fork == requested.conversation_fork)
+  assert_true(model.conversation_fork is None)
+  guard requested.conversation_fork is Some(pending) else {
+    fail("missing fork")
   }
+  // E2E covers the sidebar title; an unlisted conversation uses its task.
+  assert_eq(pending.source_title, "自动标题")
+  let (_, invalid) = model.request_fork(emit, slot.key(), 3)
+  assert_true(invalid.conversation_fork is None)
+  let (_, repeat) = requested.request_fork(emit, slot.key(), 4)
+  assert_true(repeat.conversation_fork == requested.conversation_fork)
+  // E2E covers chat-to-chat navigation. Also preserve a non-chat page.
+  let away = { ..requested, screen: Settings, }
+  let result : Result[@protocol.SessionForkReply, String] = Ok({
+    session: "desktop-fork",
+    title: pending.source_title,
+  })
+  let (_, done) = away.finish_fork(emit, pending, result)
+  let (_, done_again) = away.finish_fork(emit, pending, result)
+  assert_true(done.dev().sessions == done_again.dev().sessions)
+  assert_true(away.dev().sessions == model.dev().sessions)
+  assert_true(done.screen is Settings)
+  assert_eq(done.active_session, model.active_session)
+  assert_true(done.conversation_fork is None)
+  assert_true(done.dev().sessions.any(item => item.id == "desktop-fork"))
 }

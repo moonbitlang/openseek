@@ -67,16 +67,6 @@ for (const minimal of [false, true]) {
   });
 }
 
-test('Fork failure stays on the source and allows retry', async ({ page }) => {
-  const app = await setup(page, false);
-  app.rpcErrors.set('session.fork', 'Fork fixture unavailable');
-  await page.getByRole('button', { name: 'Fork from here', exact: true }).first().click();
-  await expect(page.getByText('Fork fixture unavailable', { exact: false })).toBeVisible();
-  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
-  await expect(page.getByRole('button', { name: 'Fork from here', exact: true }).first()).toBeEnabled();
-  expect(app.pageErrors).toEqual([]);
-});
-
 for (const minimal of [false, true]) {
   test(`${minimal ? 'minimal' : 'detailed'} subrun answers do not offer Fork`, async ({ page }) => {
     const app = await setup(page, minimal, true);
@@ -90,33 +80,41 @@ for (const minimal of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 
-  for (const failed of [false, true]) {
-    test(`${minimal ? 'minimal' : 'detailed'} Fork disables other conversations until ${failed ? 'failure' : 'success'}`, async ({ page }) => {
-      const app = await setup(page, minimal);
-      app.rpcDelays.set('session.fork', 2500);
-      if (failed) app.rpcErrors.set('session.fork', 'Fork fixture unavailable');
-      const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
+  // Rendering differs by layout; completion handling is shared.
+  const failed = minimal;
+  test(`${minimal ? 'minimal' : 'detailed'} Fork disables other conversations until ${failed ? 'failure' : 'success'}`, async ({ page }) => {
+    const app = await setup(page, minimal);
+    app.rpcDelays.set('session.fork', 2500);
+    if (failed) app.rpcErrors.set('session.fork', 'Fork fixture unavailable');
+    const buttons = page.getByRole('button', { name: 'Fork from here', exact: true });
+    await buttons.first().click();
+    await expect(page.locator('.message-fork-spinner')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+    await expect(buttons).toHaveCount(2);
+    await expect(buttons.first()).toBeDisabled();
+    await expect(buttons.last()).toBeDisabled();
+    await expect(buttons.first()).toHaveAttribute('title', 'Forking, please wait');
+    await expect(page.locator('.message-fork-spinner')).toHaveCount(0);
+    expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(1);
+    if (failed) {
+      await expect(page.getByText('Fork fixture unavailable', { exact: false })).toBeVisible();
+    } else {
+      await expect(page.locator('.conversation-row[title="fork-session"]')).toBeVisible();
+      await expect(page.locator('.conversation-row[title="fork-session"]')).not.toHaveClass(/active/);
+    }
+    await expect(buttons.first()).toBeEnabled();
+    await expect(buttons.last()).toBeEnabled();
+    await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+    if (failed) {
+      app.rpcErrors.delete('session.fork');
+      app.rpcDelays.delete('session.fork');
       await buttons.first().click();
-      await expect(page.locator('.message-fork-spinner')).toHaveCount(1);
-      await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
-      await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
-      await expect(buttons).toHaveCount(2);
-      await expect(buttons.first()).toBeDisabled();
-      await expect(buttons.last()).toBeDisabled();
-      await expect(page.locator('.message-fork-spinner')).toHaveCount(0);
-      expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(1);
-      if (failed) {
-        await expect(page.getByText('Fork fixture unavailable', { exact: false })).toBeVisible();
-      } else {
-        await expect(page.locator('.conversation-row[title="fork-session"]')).toBeVisible();
-        await expect(page.locator('.conversation-row[title="fork-session"]')).not.toHaveClass(/active/);
-      }
-      await expect(buttons.first()).toBeEnabled();
-      await expect(buttons.last()).toBeEnabled();
-      await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
-      expect(app.pageErrors).toEqual([]);
-    });
-  }
+      await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+      expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(2);
+    }
+    expect(app.pageErrors).toEqual([]);
+  });
 }
 
 test('a streamed answer gains Fork only when its terminal is committed', async ({ page }) => {

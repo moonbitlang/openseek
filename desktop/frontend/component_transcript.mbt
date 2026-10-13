@@ -218,9 +218,12 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
     fork_busy=self.conversation_fork is Some(_),
     forking?=conversation.bind(conversation => {
       self.conversation_fork.bind(pending => {
-        if pending.source.channel == conversation.device &&
-          pending.source.session == conversation.session_id &&
-          pending.source.workspace == conversation.project() {
+        if pending.source.matches_record(
+            conversation.device,
+            conversation.session_id,
+            conversation.project(),
+            conversation.record,
+          ) {
           Some(pending.through)
         } else {
           None
