@@ -51,6 +51,7 @@ flowchart LR
 | `api.mbt` | The event vocabulary: `EngineEvent`, `EventSink`, `EngineError`, run statuses, submission-id normalization. |
 | `engine.mbt` | The persistent-engine machinery: `ServeEngine`, `EnginePhase`, `EngineManager`, `EngineActor` and its pump loop, spawn/retire lifecycle. |
 | `follower.mbt` | The session follower actor: tails the durable record and broadcasts `SessionCommit` events. |
+| `idle.mbt` | The idle reaper: stops serve processes that have sat between turns past the deadline. |
 | `ops.mbt` | The operations behind the extension ops: `start_run`, `cancel_run`, `steer_run`, `approve_run`, `compact_run`, `goal_run`, session/workspace queries. |
 | `archive.mbt` | Moving a conversation's record between the live and archived stores, and sweeping condemned records under `archived/deleting`. |
 | `config.mbt` | Turning a `start` payload into the validated `RunConfig` a serve process is spawned with. |
@@ -104,9 +105,9 @@ Key lifecycle facts, straight from `engine.mbt`:
 
 - **One process serves every prompt of one conversation.** Turns are strictly
   sequential per conversation; different conversations run concurrently.
-- **Idle engines stay alive for the app's lifetime.** The durable session makes
-  killing them safe, but keeping them avoids a respawn-and-replay on every
-  conversation switch.
+- **Idle engines outlive conversation switches, not the whole app session.**
+  Keeping one avoids a respawn-and-replay on every switch; the idle reaper
+  stops it once it has gone untouched for twelve hours (see *Idle reaping*).
 - **A handle's identity is its process.** Cleanup paths compare handles with
   `physical_equal` before clearing a slot, so a dead engine's teardown can
   never evict its live successor.
@@ -160,6 +161,33 @@ synchronous submissions addressed by run id, `approve_run` releases a tool
 already waiting on a permission question, `compact_run` asks the engine to
 rewrite the durable record, and `goal_run` appends or steers a `[goal]` marker
 in any phase.
+
+## Idle reaping
+
+An engine is spawned by the first op that needs one, so without a limit a long
+app session holds one process — and one polling follower — per conversation
+ever prompted. Once a minute the pump's reaper stops every engine that:
+
+- is `Idle`, with no op holding its slot and no follow-up queued behind it;
+- has been untouched for twelve hours, where a touch is a command handed to
+  its writer or an event read from its stdout;
+- reports, when asked, no background job that is still running or that
+  finished less than twelve hours ago. Jobs are children of the serve
+  process, so the engine is the only one who knows — and no answer counts as
+  "yes". A recent finish counts because a job's state is terminal from the
+  moment its process exits, before the engine has published the record and
+  queued the completion notice; stopping it there would lose the notice.
+
+Stopping is the same clean close a workspace detach uses: stdin EOF, child
+reaped, the follower's final scan. Nothing is announced, because nothing
+happened to the conversation: its transcript loads from the record without an
+engine, and its next `start` spawns a fresh one exactly as it would after a
+settings change.
+
+The job question suspends the reaper, so it looks at the slot again afterwards
+and condemns in the same synchronous step. An op that claimed the slot or
+touched the engine meanwhile keeps it; one that arrives later finds no live
+engine and its spawn joins the close.
 
 ## Engine phase
 
