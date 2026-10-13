@@ -1738,6 +1738,8 @@ priv struct ProjectAdoption {
   picked : @common.Uri
   known : Array[@common.Uri]
   resolved : @common.Uri?
+  // Retarget only the unsent Codex draft that initiated this add.
+  codex_draft : String?
 } derive(Eq)
 
 ///|
@@ -3526,9 +3528,7 @@ fn Model::new_chat_project(self : Model) -> @common.Uri? {
     Chat if self.composing_new_chat() =>
       self.active_conversation().map(conv => conv.project())
     Codex if self.codex.composing_draft() =>
-      self.codex
-      .active_placement(self.focused)
-      .bind(value => value.project_root())
+      @resource.of_path(self.focused, self.codex.new_thread_cwd())
     _ => None
   }
 }

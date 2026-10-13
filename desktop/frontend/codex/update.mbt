@@ -147,7 +147,7 @@ pub fn update(
         state.submitted_first_prompt is None &&
         !state.loading &&
         !cwd.trim().is_empty() &&
-        draft.cwd != cwd else {
+        (draft.cwd != cwd || draft.project_root is None) else {
         return (@cmd.none, state)
       }
       // Keep both the root draft seed and the component-local edits. Only the

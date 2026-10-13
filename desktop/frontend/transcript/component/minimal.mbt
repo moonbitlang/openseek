@@ -546,7 +546,20 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
       content: Empty(self.empty_content()),
     })
   }
-  @vector.from_array(builder.blocks)
+  if self.has_draft_notices() {
+    @vector.from_array(
+      [
+        {
+          stream: builder.stream,
+          key: TranscriptRenderKey::empty(),
+          content: Empty(self.empty_content()),
+        },
+        ..builder.blocks,
+      ],
+    )
+  } else {
+    @vector.from_array(builder.blocks)
+  }
 }
 
 ///|

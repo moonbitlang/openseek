@@ -861,6 +861,52 @@ test "a confirmed add keeps the raw host path for reply correlation" {
 }
 
 ///|
+test "a Codex project add preserves its draft in either reply order" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let picked = channel.test_resource("/home/u/proj")
+  for broadcast_first in [false, true] {
+    let (_, started) = update(
+      dispatch,
+      Codex(channel~, @codex.Msg::start_draft("codex-add-project", "")),
+      { ..test_model(), screen: Codex, default_agent: CodexAgent, },
+    )
+    let (_, confirmed) = adopt_picked_directory(
+      dispatch,
+      channel,
+      picked.path,
+      started,
+    )
+    let paths = [channel.test_project(), picked]
+    let reply = ProjectAddCommitted(added=picked.path, paths~)
+    let broadcast = ProjectsChanged(paths, chat_root=None)
+    let (_, first) = update_dev(
+      dispatch,
+      if broadcast_first {
+        broadcast
+      } else {
+        reply
+      },
+      confirmed,
+    )
+    let (_, focused) = update_dev(
+      dispatch,
+      if broadcast_first {
+        reply
+      } else {
+        broadcast
+      },
+      first,
+    )
+    assert_true(focused.screen is Codex)
+    assert_eq(focused.codex.active_id(), Some("codex-add-project"))
+    assert_eq(focused.codex.new_thread_cwd(), picked.path)
+    assert_eq(focused.dev().active_project, Some(picked))
+    assert_true(focused.pending_project_adoption is None)
+  }
+}
+
+///|
 test "a confirmed add focuses the new project when its commit lands" {
   let dispatch = test_dispatch()
   let picked = @interop.ChannelId::Local.test_resource("/home/u/proj")
@@ -1226,6 +1272,13 @@ fn adopt_picked_directory(
         picked,
         known: dev.projects.copy(),
         resolved: None,
+        codex_draft: if channel == model.focused &&
+          model.screen is Codex &&
+          model.codex.composing_draft() {
+          model.codex.active_id()
+        } else {
+          None
+        },
       }),
     },
   )

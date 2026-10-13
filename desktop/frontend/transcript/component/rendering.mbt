@@ -153,17 +153,10 @@ fn EmptyProjectControl::render(
           },
           type_="button",
           title=project.root.path,
-          on_click=if selected {
-            @cmd.batch([
-              self.dismiss,
-              focus_empty_project_trigger_after_render(),
-            ])
-          } else {
-            @cmd.batch([
-              (self.choose)(project.root),
-              focus_empty_project_trigger_after_render(),
-            ])
-          },
+          on_click=@cmd.batch([
+            (self.choose)(project.root),
+            focus_empty_project_trigger_after_render(),
+          ]),
           attrs=@html.Attrs::build()
             .aria_label(
               if selected {
@@ -439,9 +432,17 @@ priv enum BlockContent {
 } derive(Eq)
 
 ///|
-/// The direct children of `#stream` in display order: one block per
-/// transcript item, then the
-/// response still streaming; or the empty state alone. Vector order determines
+/// Notices do not consume a new chat's project-selection surface.
+fn Input::has_draft_notices(self : Input) -> Bool {
+  self.can_choose_project &&
+  !self.items.is_empty() &&
+  self.items.all(row => row.item.kind is Failure(_)) &&
+  self.streaming_reasoning is None &&
+  self.streaming_response is None
+}
+
+///|
+/// The direct children of `#stream` in display order. Vector order determines
 /// visual order; the keys only determine node identity.
 fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   if input.minimal {
@@ -463,6 +464,15 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   let assistant_name = input.source.assistant_name()
   let subrun_parent = input.subrun_parent()
   let blocks : Array[Block] = []
+  // An opening failure is not a sent conversation: retain the title picker
+  // alongside the notice so the same draft can retry or choose another root.
+  if input.has_draft_notices() {
+    blocks.push({
+      stream,
+      key: TranscriptRenderKey::empty(),
+      content: Empty(input.empty_content()),
+    })
+  }
   // OpenSeek numbers its model steps: every provider response that is not a
   // checkpoint replay is one. Codex and legacy items carry no ordinal.
   let descriptions : Map[String, String] = Map([])

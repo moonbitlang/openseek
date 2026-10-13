@@ -139,7 +139,10 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
     {
       source: Codex,
       session: self.codex.active_id().unwrap_or("none"),
-      project: placement.bind(value => value.project_root()),
+      project: match self.new_chat_project() {
+        Some(project) => Some(project)
+        None => placement.bind(value => value.project_root())
+      },
       root: placement.bind(value => value.checkout_root()),
       items: @transcript_component.VisibleRow::history(
         self.codex.transcript_items(locale=self.locale),
