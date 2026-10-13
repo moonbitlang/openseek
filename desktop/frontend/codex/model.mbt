@@ -760,6 +760,17 @@ pub fn State::composing_draft(self : State) -> Bool {
 }
 
 ///|
+/// Adding a project can retarget an unsent draft, but must not replace input
+/// awaiting a first-send retry. A lost reply may already have created its
+/// thread in the original project.
+pub fn State::can_add_project(self : State) -> Bool {
+  match self.selection {
+    CodexDraftTask(draft) => !self.loading && !draft.thread_start_attempted
+    CodexNoTask | CodexStoredTask(_) => true
+  }
+}
+
+///|
 /// Preserve the unsent conversation's launch choice across agent switches.
 pub fn State::draft_worktree_mode(self : State) -> Bool {
   self.placement.wants_fresh()

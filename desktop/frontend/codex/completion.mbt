@@ -690,6 +690,7 @@ test "Codex image-only first prompt stays visible and survives failure" {
     mentions: [],
     images: [{ name: "screen.png", url: "data:image/png;base64,aGVsbG8=", }],
   }
+  assert_true(ready.can_add_project())
   let action = @composer.DraftSubmitted(
     identity=ready.composer_identity(@interop.Local),
     draft~,
@@ -698,6 +699,7 @@ test "Codex image-only first prompt stays visible and survives failure" {
   let (_, once) = ready.apply_composer_action(emit, @interop.Local, action)
   let (_, twice) = ready.apply_composer_action(emit, @interop.Local, action)
   assert_true(once == twice)
+  assert_false(once.can_add_project())
   assert_false(once.input_empty())
   assert_eq(once.turn_inputs(), [
     { "type": "image", "url": draft.images[0].url },
@@ -716,6 +718,7 @@ test "Codex image-only first prompt stays visible and survives failure" {
   assert_eq(failed.images, draft.images)
   assert_false(failed.loading)
   assert_false(failed.composing_draft())
+  assert_false(failed.can_add_project())
   let (_, retargeted) = update(
     emit,
     Msg::change_draft_project("/other"),

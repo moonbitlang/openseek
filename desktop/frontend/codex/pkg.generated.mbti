@@ -82,6 +82,7 @@ pub fn State::account_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::active_id(Self) -> String?
 pub fn State::active_placement(Self, @interop.ChannelId) -> @interop.CheckoutPlacement?
 pub fn State::archived_sidebar_entries(locale? : @i18n.Locale, Self, @interop.ChannelId) -> Array[@section.Entry]
+pub fn State::can_add_project(Self) -> Bool
 pub fn State::can_start_thread(Self) -> Bool
 pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @composer.Input
 pub fn State::composing_draft(Self) -> Bool

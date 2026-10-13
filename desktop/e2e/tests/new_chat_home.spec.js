@@ -152,12 +152,18 @@ test('a failed thread start keeps its original draft identity and project for re
   await page.locator('#send').click();
   await expect(page.getByText(/Reply lost/)).toBeVisible();
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
+  await expect(page.locator('#task')).toHaveValue('Retry this prompt');
+  await page.keyboard.press('ControlOrMeta+o');
+  await expect(page.getByRole('dialog', { name: 'Add a project' })).toHaveCount(0);
+  expect(app.requests.some(r => r.method === 'workspace.add')).toBe(false);
   const first = app.requests.find(r => r.method === 'codex.thread.start');
   app.rpcErrors.delete('codex.thread.start');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.thread.start').length).toBe(2);
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
+  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
 

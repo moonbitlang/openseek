@@ -1295,9 +1295,7 @@ fn Model::chat_creation_pending(self : Model) -> Bool {
 
 ///|
 fn Model::can_pick_project(self : Model, channel : @interop.ChannelId) -> Bool {
-  !(channel == self.focused &&
-  self.codex.composing_draft() &&
-  self.codex.is_busy())
+  channel != self.focused || self.codex.can_add_project()
 }
 
 ///|
@@ -1309,7 +1307,7 @@ fn adopt_picked_directory(
 ) -> (@cmd.Cmd, Model) {
   guard model.can_pick_project(channel) else {
     return model.notify_error(
-      dispatch, "Wait for the current project operation to finish before adding a project.",
+      dispatch, "Finish or leave the current Codex draft before adding a project.",
     )
   }
   guard @resource.of_path(channel, path) is Some(picked) else {
