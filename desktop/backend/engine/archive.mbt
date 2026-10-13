@@ -436,6 +436,14 @@ async fn archive_session_commit(
   defer family.release()
   manager.archive_commit_lock.acquire()
   defer manager.archive_commit_lock.release()
+  // The other half, for a second host attached to this project: its archive
+  // of a conversation sharing the checkout has to wait here as well.
+  let shared = @fsx.FileLock::acquire(
+    @session_store.archived_root(family.root).to_path(),
+  ) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
+  defer shared.release()
   // The checkout goes with the conversation. A dirty refusal
   // lands here — after the idle engine already closed, which is harmless
   // (the next prompt respawns) — so nothing irreversible has happened yet;

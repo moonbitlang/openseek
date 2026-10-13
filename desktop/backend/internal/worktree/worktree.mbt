@@ -492,20 +492,26 @@ pub async fn WorktreeOwner::archive_check(
 
 ///|
 /// Whether a conversation other than `leaving` still works in this row's
-/// checkout: it has a slot in the running pump or a live durable record. An
-/// archived member keeps its placement but not the directory, and a member
-/// that was bound and never started holds nothing either.
+/// checkout: it has a slot in the running pump or a live durable record in
+/// `workspace`'s store. An archived member keeps its placement but not the
+/// directory, and a member that was bound and never started holds nothing
+/// either. A session id names a record only within one store, so a record
+/// with a member's id in another attached project is a different
+/// conversation and holds nothing here.
 async fn WorktreeEntry::held_by_another(
   self : WorktreeEntry,
   host : WorktreeHost,
+  workspace : @pathx.Absolute,
   leaving : WorktreeOwner,
 ) -> Bool {
+  let records = @workspaces.store_root(workspace).join("sessions")
   for bound in self.sessions {
     guard leaving != OpenSeekSession(bound) else { continue }
     if (host.session_is_live)(bound) {
       return true
     }
-    if @session_store.workspace_of(bound) is Some(_) {
+    guard @session_store.safe_session_id(bound) else { continue }
+    if @fsx.is_dir(records.join(bound).to_path()) {
       return true
     }
   }
@@ -531,7 +537,7 @@ pub async fn WorktreeOwner::archive_checkout(
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
   guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
-  guard !entry.held_by_another(host, self) else { return None }
+  guard !entry.held_by_another(host, workspace, self) else { return None }
   let entries = read_worktrees_unlocked(workspace)
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
@@ -612,7 +618,9 @@ pub async fn drop_placements(
 /// which is what an archive of `worktree_of` serializes against: it sees
 /// either the row before the fork existed, or a member whose record is
 /// already live. The binding is committed first so that an interruption
-/// leaves at worst a member without a record, which holds nothing.
+/// leaves at worst a member without a record, which holds nothing. Another
+/// host's registry writes wait as well, for as long: a create or removal
+/// that slipped between this read and this write would be lost to it.
 ///
 /// When `create_record` does not return — it raised, or the request was
 /// cancelled — what says whether the fork exists is its record, not how the
@@ -630,6 +638,8 @@ pub async fn add_session_to_worktree(
 ) -> Unit {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
+  let shared = lock_worktrees_file(workspace)
+  defer shared.release()
   let entries = read_worktrees_unlocked(workspace)
   guard entries.search_by(entry => entry.sessions.contains(worktree_of))
     is Some(index) else {

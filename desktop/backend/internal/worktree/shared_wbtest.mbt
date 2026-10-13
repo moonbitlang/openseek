@@ -79,6 +79,26 @@ async test "a shared checkout goes only with the last conversation holding it" {
 
 ///|
 #cfg(not(platform="windows"))
+async test "a record with a member's id in another project holds nothing" {
+  with_recovery_fixture((repo, host) => {
+    let first = WorktreeOwner::openseek("first")
+    let created = create(host, resource_path(repo), first, _ => ())
+    let checkout = worktree_dir(repo, created.name)
+    bind_shared_fixture(repo, created.name, ["first", "second"])
+    @fsx.ensure_dir(shared_fixture_record(repo, "first").to_path())
+    // `second` was archived here. Another attached project has a live
+    // conversation that happens to carry the same id.
+    let elsewhere = repo.join("../elsewhere").normalize()
+    @fsx.ensure_dir(shared_fixture_record(elsewhere, "second").to_path())
+    ignore(@workspaces.add(elsewhere.to_string(), _ => ()))
+    assert_true(@session_store.workspace_of("second") is Some(_))
+    assert_eq(first.archive_checkout(host, false), None)
+    assert_false(@fsx.exists(checkout.to_path()))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
 async test "a bound conversation holds a checkout only once it starts" {
   with_recovery_fixture((repo, host) => {
     let first = WorktreeOwner::openseek("first")

@@ -726,6 +726,59 @@ async test "conversations archived together take their shared checkout with them
 }
 
 ///|
+/// Another host attached to the same project archives through the same
+/// store. The file lock belongs to the open file description, so holding it
+/// here stands in for that host partway through archiving `s-two`.
+#cfg(not(platform="windows"))
+async test "an archive waits for another host's archive of a conversation sharing its checkout" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  let root = worktree_test_root("openseek-worktree-two-hosts-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  defer restore_home_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let created = @worktree.create(
+    manager.worktree_host(),
+    repo.to_string(),
+    @worktree.WorktreeOwner::openseek("s-one"),
+    _ => (),
+  )
+  join_worktree_row(repo, created.name, "s-two")
+  let store = @workspaces.store_root(repo)
+  let sessions = store.join("sessions")
+  for session in ["s-one", "s-two"] {
+    @fsx.ensure_dir(sessions.join(session).to_path())
+  }
+  let checkout = repo.join(".worktrees").join(created.name)
+  let theirs = @fsx.FileLock::acquire(
+    @session_store.archived_root(store).to_path(),
+  )
+  @async.with_task_group(group => {
+    group.spawn_bg(() => {
+      guard archive_session(manager, "s-one", (_, _) => ()) is Archived(_) else {
+        fail("archiving s-one did not commit")
+      }
+    })
+    // Long enough for the archive to reach the lock and block on it.
+    @async.sleep(100)
+    assert_true(@fsx.is_dir(sessions.join("s-one").to_path()))
+    // The other host's archive commits: `s-two` leaves the live store.
+    @fs.rmdir(sessions.join("s-two").to_string(), recursive=true)
+    theirs.release()
+  })
+  // `s-one` decided after that commit, so it was the last holder.
+  assert_false(@fsx.exists(sessions.join("s-one").to_path()))
+  assert_false(@fsx.exists(checkout.to_path()))
+}
+
+///|
 #cfg(not(platform="windows"))
 async test "permanent archived deletion drops placement but keeps files and branch" {
   ambient_env_test_lock.acquire()

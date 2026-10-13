@@ -737,7 +737,9 @@ struct EngineManager {
   // the release of its claims. Conversations sharing a checkout each ask
   // whether another still holds it, and the answer is only true of one
   // archive at a time: two that overlapped would each see the other still
-  // there, and both would leave the checkout behind.
+  // there, and both would leave the checkout behind. It orders this process
+  // only; the archive pairs it with a file lock on the store's archived twin
+  // for the hosts that share the project.
   archive_commit_lock : @async.Mutex
   // Host-owned endpoint settings are a read-modify-write store shared by
   // every client. The lock covers reads too: on Windows the atomic-save
