@@ -648,8 +648,11 @@ fn adopt_projects(
   // Nothing is on screen and this device now has somewhere to put a chat:
   // the app's own startup rotation lands here, because it is issued before
   // the registry has answered and has no project to place until it does.
+  // A selected Codex task already occupies the screen even though it has no
+  // OpenSeek conversation; a registry broadcast must not rotate it away.
   if channel == next.focused &&
     next.active_conversation() is None &&
+    !(next.screen is Codex && next.codex.has_active()) &&
     !paths.is_empty() {
     commands.push(rotate_session(dispatch, channel))
   }

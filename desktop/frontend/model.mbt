@@ -3517,6 +3517,14 @@ fn Model::can_choose_new_chat_project(self : Model) -> Bool {
   if self.screen is Codex && self.codex.is_busy() {
     return false
   }
+  // The add reply and registry broadcast together own the next project.
+  // Keep this draft from starting another retarget before both have landed.
+  if self.screen is Codex &&
+    self.pending_project_adoption is Some(pending) &&
+    pending.channel == self.focused &&
+    pending.codex_draft == self.codex.active_id() {
+    return false
+  }
   guard self.new_chat_project() is Some(project) &&
     self.focused_device() is Some(dev) else {
     return false
