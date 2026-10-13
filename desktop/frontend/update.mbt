@@ -921,6 +921,7 @@ fn reveal_local_directory(
     dock,
     right_panel_open: true,
     right_panel_menu_open: false,
+    file_panel: { ..model.file_panel, tree_open: true, },
   }
   let (cmd, panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
@@ -1934,6 +1935,13 @@ fn update(
       file_ctx(model),
       opening=model.right_panel_open,
     )
+    // Restoring a PDF applies its default closed tree. A directory reveal
+    // explicitly requested the tree, so retain that intent after restoration.
+    let file_panel = if msg is OpenPathResolved(_, Directory(_)) {
+      { ..file_panel, tree_open: model.file_panel.tree_open, }
+    } else {
+      file_panel
+    }
     (command, { ..model, file_panel, })
   } else {
     (@cmd.none, model)
@@ -18170,6 +18178,51 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
 }
 
 ///|
+test "directory reveal restores the tree beside a hidden PDF" {
+  let dispatch = test_dispatch()
+  let (_, pending) = update(dispatch, OpenFile("report.pdf"), test_model())
+  let opened = pending.test_resolve_editor("report.pdf")
+  let owner = file_ctx(opened).owner
+  let file = opened.test_file("report.pdf")
+  let (_, loaded) = update(
+    dispatch,
+    FileEditor(
+      @fileeditor.FileLoaded(
+        owner~,
+        epoch=opened.file_panel.request_epoch,
+        path=file,
+        name="report.pdf",
+        file=@fileeditor.Office(
+          data_base64="JVBERi0xLjc=",
+          media_type="application/pdf",
+          sig="pdf:1",
+        ),
+        file_link_generation=Some(opened.file_panel.file_link_generation),
+        review_generation=None,
+        range=None,
+        annotation=None,
+      ),
+    ),
+    opened,
+  )
+  assert_true(loaded.file_panel.docs[file].state is @fileeditor.TabPdf(..))
+  let (_, hidden) = update(dispatch, ToggleRightPanel, loaded)
+  assert_false(hidden.right_panel_open)
+  let (_, pending) = update(dispatch, OpenFile("src"), hidden)
+  let (_, revealed) = update(
+    dispatch,
+    OpenPathResolved(
+      FileOpenContext::new(owner, pending.file_panel.file_link_generation),
+      Directory({ path: "src", }),
+    ),
+    pending,
+  )
+  assert_true(revealed.right_panel_open)
+  assert_true(revealed.file_panel.tree_open)
+  assert_true(revealed.active_workspace_file() is Some(Relative("report.pdf")))
+}
+
+///|
 test "resolved transcript files and directories stay in the right panel" {
   let dispatch = test_dispatch()
   let model = test_model()
@@ -18204,6 +18257,17 @@ test "resolved transcript files and directories stay in the right panel" {
   )
   assert_true(directory.file_panel.highlighted is Some(Relative("src")))
   assert_true(directory.file_panel.expanded.contains(Relative("src")))
+  // An explicit directory reveal keeps the tree beside non-PDF children
+  // after the picker gives way to the selected document on wide layouts.
+  assert_true(directory.file_panel.tree_open)
+  let (_, child_pending) = update(
+    dispatch,
+    FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
+    directory,
+  )
+  let child = child_pending.test_resolve_editor("src/main.mbt")
+  assert_true(child.active_workspace_file() is Some(Relative("src/main.mbt")))
+  assert_true(child.file_panel.tree_open)
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
