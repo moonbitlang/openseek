@@ -416,7 +416,8 @@ fn review_context_dismiss_loader(
       if !@base_browser.event_target_has_matching_ancestor(
           event, control, ".review-hunk-context",
         ) &&
-        control.query_selector(".review-hunk-context-menu") is Some(menu) {
+        control.query_selector(".review-hunk-context-menu") is Some(menu) &&
+        !menu.has_attribute("hidden") {
         menu.set_attribute("hidden", "")
         if control.query_selector(".review-hunk-context-button") is Some(button) {
           button.set_attribute("aria-expanded", "false")
