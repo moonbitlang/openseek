@@ -26,7 +26,7 @@ pub fn Draft::user_item(self : Draft) -> @transcript.ItemKind {
       [
         Text(self.prompt()),
         ..self.images.map(image => {
-          @deepseek.ContentPart::ImageUrl(url=image.url)
+          @transcript.ContentPart::ImageUrl(url=image.url)
         }),
       ],
     ),

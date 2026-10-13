@@ -75,3 +75,38 @@ test "local pinned transitions are pure" {
   let (jumped, _) = grown.update(input, JumpToLatest, emit)
   assert_true(jumped.pinned)
 }
+
+///|
+test "durable image requests are pure, deduplicated, and fenced by conversation" {
+  let input = base_input()
+  let state = pinned_model(input)
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let image : @protocol.SessionImageRef = {
+    record: "/project/.openseek/sessions/chat/record.jsonl",
+    offset: 80L,
+    length: 200,
+    sequence: 1,
+    part: 0,
+  }
+  let target = StoredImage(image)
+  let (first, _) = state.update(input, ImageRequested(target), emit)
+  let (second, _) = state.update(input, ImageRequested(target), emit)
+  assert_true(first == second)
+  assert_eq(state.images.0.length(), 0)
+  let (duplicate, _) = first.update(input, ImageRequested(target), emit)
+  assert_true(first == duplicate)
+  let message = ImageResolved(
+    input.image_owner(),
+    target,
+    ImageReadReady("data:image/png;base64,fixture"),
+  )
+  let (ready, _) = first.update(input, message, emit)
+  let (again, _) = ready.update(input, ImageRequested(target), emit)
+  assert_true(ready == again)
+  let (switched, _) = first.update(
+    { ..input, active_session: "another", },
+    message,
+    emit,
+  )
+  assert_eq(switched.images.0.length(), 0)
+}

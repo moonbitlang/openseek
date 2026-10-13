@@ -13,7 +13,7 @@
 /// string.
 pub(all) enum ItemKind {
   // Preserve the ordered text and image parts through to rendering.
-  User(content~ : @deepseek.Content)
+  User(content~ : Content)
   // One provider response. `reasoning` is the thinking that preceded the
   // prose, `prose` what the model said (absent for a tool-only response), and
   // `calls` the tool calls that followed it, in the model's own order.
@@ -74,7 +74,7 @@ pub(all) enum ToolOutcome {
   // Historical observation of a background call, with no terminal outcome yet.
   Snapshot(content~ : String)
   Pending(output~ : String?)
-  Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
+  Done(content~ : Content, is_error~ : Bool, brief~ : String?)
 } derive(Eq)
 
 ///|

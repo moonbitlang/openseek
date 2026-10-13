@@ -464,6 +464,9 @@ pub fn endpoints(
       state.hub.runs(known?=payload.known)
     }),
     Endpoint(@commands.session_list, _ => @engine.list_sessions(state.manager)),
+    Endpoint(@commands.session_image, payload => {
+      @session_record.read_image(payload)
+    }),
     Endpoint(@commands.session_load, payload => {
       @engine.load_session(state.manager, payload)
     }),

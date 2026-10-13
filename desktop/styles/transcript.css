@@ -2049,3 +2049,17 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
 }
+
+/* Reserve thumbnail space so decoding cannot move the reader away from the
+   latest message. Preserve the image aspect ratio inside that stable frame. */
+.session-image {
+  width: 320px;
+  height: 240px;
+  object-fit: scale-down;
+}
+.user-image.pending, .user-image.unavailable {
+  min-width: 120px;
+  min-height: 96px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+}

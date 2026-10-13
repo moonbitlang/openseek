@@ -1,10 +1,9 @@
-// Lazy, bounded local-image projection for transcript Markdown. The durable
-// transcript keeps the model-authored path; this component cache contains only
-// display data for the conversation currently mounted in the page.
+// Viewport-driven image projection for Markdown paths and durable image
+// references. Display data belongs only to the currently mounted conversation.
 
 ///|
 fn transcript_image_observer(
-  on_image : (String) -> Unit,
+  on_image : (ImageTarget) -> Unit,
 ) -> @dom.IntersectionObserver {
   @dom.IntersectionObserver::new((entries, observer) => {
     for entry in entries {
@@ -15,7 +14,16 @@ fn transcript_image_observer(
       observer.unobserve(target)
       if target.get_attribute("data-transcript-image") is Some(path) &&
         path != "" {
-        on_image(path)
+        on_image(LocalImage(path))
+      } else if target.get_attribute("data-session-image") is Some(raw) {
+        let image : @protocol.SessionImageRef? = Some(
+          @json.from_json(@json.parse(raw)),
+        ) catch {
+          _ => None
+        }
+        if image is Some(image) {
+          on_image(StoredImage(image))
+        }
       }
     }
   })
@@ -27,7 +35,10 @@ fn observe_transcript_images(
   observer : @dom.IntersectionObserver,
   transcript : @dom.Element,
 ) -> Unit {
-  for image in transcript.query_selector_all("img[data-transcript-image]") {
+  for
+    image in transcript.query_selector_all(
+      "img[data-transcript-image], img[data-session-image]",
+    ) {
     observer.observe(image)
   }
 }
@@ -37,6 +48,7 @@ priv enum LocalImageState {
   ImageLoading
   ImageReady(String)
   ImageUnavailable
+  ImageFailed(String)
 } derive(Eq)
 
 ///|
@@ -49,12 +61,13 @@ priv struct ImageOwner {
 } derive(Eq)
 
 ///|
-priv struct ImageCache(Map[String, LocalImageState]) derive(Eq)
+priv struct ImageCache(Map[ImageTarget, LocalImageState]) derive(Eq)
 
 ///|
 priv enum ImageReadResult {
   ImageReadReady(String)
   ImageReadUnavailable
+  ImageReadFailed(String)
 }
 
 ///|
@@ -74,18 +87,27 @@ fn ImageCache::empty() -> ImageCache {
 fn ImageCache::begin_read(
   self : ImageCache,
   owner : ImageOwner,
-  path : String,
+  target : ImageTarget,
   emit : @cmd.Emit[Msg],
 ) -> (ImageCache, @cmd.Cmd) {
-  guard owner.read_target(path) is Some(target) else {
+  if self.0.get(target) is Some(ImageLoading) {
     return (self, @cmd.none)
   }
-  if self.0.get(path) is Some(ImageLoading) {
+  if target is StoredImage(_) && self.0.contains(target) {
     return (self, @cmd.none)
+  }
+  let command = match target {
+    LocalImage(path) => {
+      guard owner.read_target(path) is Some(file) else {
+        return (self, @cmd.none)
+      }
+      owner.read_image(file, path, emit)
+    }
+    StoredImage(image) => owner.read_stored_image(image, emit)
   }
   let entries = self.0.copy()
-  entries[path] = ImageLoading
-  (ImageCache(entries), owner.read_image(target, path, emit))
+  entries[target] = ImageLoading
+  (ImageCache(entries), command)
 }
 
 ///|
@@ -100,6 +122,8 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
         match state {
           ImageReady(source) => settle_transcript_image(path, Some(source))
           ImageUnavailable => settle_transcript_image(path, None)
+          ImageFailed(message) =>
+            settle_transcript_image(path, None, error=message)
           ImageLoading => ()
         }
       }
@@ -111,13 +135,28 @@ fn ImageCache::apply_after_render(self : ImageCache) -> @cmd.Cmd {
 ///|
 /// Remove the pending marker after either a successful read or a failure so
 /// the viewport observer does not keep retrying an unavailable image.
-fn settle_transcript_image(path : String, source : String?) -> Unit {
-  for image in @dom.document().query_selector_all("img[data-transcript-image]") {
-    if image.get_attribute("data-transcript-image") != Some(path) {
+fn settle_transcript_image(
+  target : ImageTarget,
+  source : String?,
+  error? : String,
+) -> Unit {
+  for
+    image in @dom.document().query_selector_all(
+      "img[data-transcript-image], img[data-session-image]",
+    ) {
+    let (attribute, value) = match target {
+      LocalImage(path) => ("data-transcript-image", path)
+      StoredImage(image) => ("data-session-image", image.to_json().stringify())
+    }
+    if image.get_attribute(attribute) != Some(value) {
       continue
     }
-    image.remove_attribute("data-transcript-image")
+    image.remove_attribute(attribute)
     image_class_toggle(image, "pending", false)
+    if error is Some(message) {
+      image.set_attribute("alt", message)
+      image.set_attribute("title", message)
+    }
     match source {
       Some(source) => image.set_attribute("src", source)
       None => image_class_toggle(image, "unavailable", true)
@@ -133,25 +172,29 @@ test "image cache starts one read and settles only the pending entry" {
     root: @resource.of_path(@interop.Local, "/work"),
   }
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
-  let (loading, _) = ImageCache::empty().begin_read(owner, "image.png", emit)
-  assert_true(loading.0.get("image.png") is Some(ImageLoading))
-  let (duplicate, _) = loading.begin_read(owner, "image.png", emit)
+  let (loading, _) = ImageCache::empty().begin_read(
+    owner,
+    LocalImage("image.png"),
+    emit,
+  )
+  assert_true(loading.0.get(LocalImage("image.png")) is Some(ImageLoading))
+  let (duplicate, _) = loading.begin_read(owner, LocalImage("image.png"), emit)
   assert_eq(duplicate.0.length(), 1)
   let ready = duplicate.settle(
-    "image.png",
+    LocalImage("image.png"),
     ImageReadReady("data:image/png;base64,iVBORw0KGgo="),
   )
   assert_true(
-    ready.0.get("image.png")
+    ready.0.get(LocalImage("image.png"))
     is Some(ImageReady("data:image/png;base64,iVBORw0KGgo=")),
   )
   // A late duplicate result cannot replace the already-settled display data.
-  let unchanged = ready.settle("image.png", ImageReadUnavailable)
+  let unchanged = ready.settle(LocalImage("image.png"), ImageReadUnavailable)
   assert_true(unchanged == ready)
   // A marker emitted after settlement represents a new or recreated image
   // node, so it must start a fresh read instead of projecting stale bytes.
-  let (refreshed, _) = ready.begin_read(owner, "image.png", emit)
-  assert_true(refreshed.0.get("image.png") is Some(ImageLoading))
+  let (refreshed, _) = ready.begin_read(owner, LocalImage("image.png"), emit)
+  assert_true(refreshed.0.get(LocalImage("image.png")) is Some(ImageLoading))
 }
 
 ///|
@@ -179,7 +222,7 @@ test "image read targets preserve absolute or rooted-relative paths" {
 ///|
 fn ImageCache::settle(
   self : ImageCache,
-  path : String,
+  path : ImageTarget,
   result : ImageReadResult,
 ) -> ImageCache {
   guard self.0.get(path) is Some(ImageLoading) else { return self }
@@ -187,6 +230,7 @@ fn ImageCache::settle(
   entries[path] = match result {
     ImageReadReady(source) => ImageReady(source)
     ImageReadUnavailable => ImageUnavailable
+    ImageReadFailed(message) => ImageFailed(message)
   }
   ImageCache(entries)
 }
@@ -227,7 +271,9 @@ fn ImageOwner::read_image(
         target,
       ) catch {
         _ => {
-          scheduler.add(emit(ImageResolved(self, path, ImageReadUnavailable)))
+          scheduler.add(
+            emit(ImageResolved(self, LocalImage(path), ImageReadUnavailable)),
+          )
           return
         }
       }
@@ -237,8 +283,57 @@ fn ImageOwner::read_image(
         @protocol.Binary | @protocol.Oversized | @protocol.Content(..) =>
           ImageReadUnavailable
       }
-      scheduler.add(emit(ImageResolved(self, path, result)))
+      scheduler.add(emit(ImageResolved(self, LocalImage(path), result)))
     })
     |> ignore
   })
+}
+
+///|
+priv enum ImageTarget {
+  LocalImage(String)
+  StoredImage(@protocol.SessionImageRef)
+} derive(Eq, Hash)
+
+///|
+fn ImageOwner::read_stored_image(
+  self : ImageOwner,
+  image : @protocol.SessionImageRef,
+  emit : @cmd.Emit[Msg],
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let result = try {
+        let reply = @interop.bridge_request(
+          self.channel,
+          @commands.session_image,
+          image,
+        )
+        ImageReadReady(reply.data_url)
+      } catch {
+        error => ImageReadFailed(@interop.bridge_error_text(error))
+      }
+      scheduler.add(emit(ImageResolved(self, StoredImage(image), result)))
+    })
+    |> ignore
+  })
+}
+
+///|
+fn session_image_view(
+  locale~ : @i18n.Locale,
+  image : @protocol.SessionImageRef,
+) -> @html.Html {
+  @html.div(class="user-images", [
+    @html.img(
+      alt=ui(locale, AttachedImage),
+      class="user-image session-image pending",
+      loading="lazy",
+      decoding="async",
+      attrs=@html.Attrs::build().data_set(
+        "session-image",
+        image.to_json().stringify(),
+      ),
+    ),
+  ])
 }

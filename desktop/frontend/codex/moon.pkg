@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/core/json",
   "moonbit-community/rabbita/cmd",

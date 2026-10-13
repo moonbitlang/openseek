@@ -275,11 +275,15 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
       // the one place carried pieces are copied. Every later line in the chunk
       // is read where it lies.
       let line = if self.carry.is_empty() {
-        self.consume(segment)
+        self.consume(segment, self.offset - take + line_start.to_int64())
       } else {
+        let position = self.offset -
+          take +
+          line_start.to_int64() -
+          carry_length(self.carry)
         let joined = join_carry(self.carry, segment)
         self.carry.clear()
-        self.consume(joined)
+        self.consume(joined, position)
       }
       if line is Some(event) {
         fresh.push(event)
@@ -296,7 +300,10 @@ async fn Tail::read_forward(self : Tail) -> Array[@protocol.SessionEvent] {
   // sequence check drops the duplicate when the repaired line arrives with its
   // newline, and a JSON object cannot grow into a different valid one.
   if !self.carry.is_empty() {
-    let torn = self.consume(join_carry(self.carry, b"")) catch {
+    let torn = self.consume(
+      join_carry(self.carry, b""),
+      self.offset - carry_length(self.carry),
+    ) catch {
       // Bytes no writer has committed yet are not news, and not a defect.
       _ => None
     }
@@ -328,6 +335,7 @@ fn join_carry(parts : Array[Bytes], tail : BytesView) -> Bytes {
 fn Tail::consume(
   self : Tail,
   line : BytesView,
+  position : Int64,
 ) -> @protocol.SessionEvent? raise RecordError {
   // Strict, like the store's own reader: bytes that are not UTF-8 are a defect
   // to report, not one to paper over. Decoding them lossily would hand clients
@@ -357,7 +365,11 @@ fn Tail::consume(
     self.adopt_header(json)
     return None
   }
-  let event : @protocol.SessionEvent = @json.from_json(json) catch {
+  guard self.path.resolve().to_uri_path() is Some(record) else {
+    raise Unreadable("session record has no portable resource path")
+  }
+  let projected = project_images(json, record, position, line.length())
+  let event : @protocol.SessionEvent = @json.from_json(projected) catch {
     error =>
       raise Unreadable(
         "the session record holds a line this build cannot read: \{error}",
@@ -443,3 +455,8 @@ async fn anchored_at(file : @fs.File, offset : Int64, anchor : Bytes) -> Bool {
 
 ///|
 pub extend RecordError with Debug::{to_repr}
+
+///|
+fn carry_length(parts : Array[Bytes]) -> Int64 {
+  parts.fold(init=0L, (total, part) => total + part.length().to_int64())
+}

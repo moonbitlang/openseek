@@ -77,7 +77,10 @@ test "remote delivery retains streaming runtime and error events" {
         event: {
           sequence: 1,
           ts: None,
-          item: User({ content: Content([Text("test")]), submission_id: None, }),
+          item: User({
+            content: SessionContent([Text("test")]),
+            submission_id: None,
+          }),
         },
         session_root: "/sessions/global",
       }),

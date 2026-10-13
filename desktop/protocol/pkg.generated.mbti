@@ -2945,6 +2945,25 @@ pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionCommitPayload
 pub impl @json.FromJson for SessionCommitPayload
 
+pub(all) struct SessionContent(Array[SessionContentPart]) derive(Eq, @debug.Debug)
+pub fn SessionContent::equal(Self, Self) -> Bool
+pub fn SessionContent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionContent::not_equal(Self, Self) -> Bool
+pub fn SessionContent::text(Self) -> String
+pub fn SessionContent::to_json(Self) -> Json
+pub fn SessionContent::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionContent
+pub impl @json.FromJson for SessionContent
+
+pub(all) enum SessionContentPart {
+  Text(String)
+  Image(@openseek_protocol.Image)
+  ImageRef(SessionImageRef)
+} derive(Eq, @debug.Debug)
+pub fn SessionContentPart::equal(Self, Self) -> Bool
+pub fn SessionContentPart::not_equal(Self, Self) -> Bool
+pub fn SessionContentPart::to_repr(Self) -> @debug.Repr
+
 pub(all) struct SessionDocument {
   version : Int?
   id : String?
@@ -3012,6 +3031,34 @@ pub fn SessionGroup::to_json(Self) -> Json
 pub fn SessionGroup::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionGroup
 pub impl @json.FromJson for SessionGroup
+
+pub(all) struct SessionImageRef {
+  record : String
+  offset : Int64
+  length : Int
+  sequence : Int
+  part : Int
+} derive(Eq, Hash, @debug.Debug)
+pub fn SessionImageRef::equal(Self, Self) -> Bool
+pub fn SessionImageRef::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionImageRef::hash(Self) -> Int
+pub fn SessionImageRef::hash_combine(Self, Hasher) -> Unit
+pub fn SessionImageRef::not_equal(Self, Self) -> Bool
+pub fn SessionImageRef::to_json(Self) -> Json
+pub fn SessionImageRef::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionImageRef
+pub impl @json.FromJson for SessionImageRef
+
+pub(all) struct SessionImageReply {
+  data_url : String
+} derive(Eq, @debug.Debug)
+pub fn SessionImageReply::equal(Self, Self) -> Bool
+pub fn SessionImageReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionImageReply::not_equal(Self, Self) -> Bool
+pub fn SessionImageReply::to_json(Self) -> Json
+pub fn SessionImageReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionImageReply
+pub impl @json.FromJson for SessionImageReply
 
 pub(all) enum SessionItem {
   User(SessionUserMessage)
@@ -3140,7 +3187,7 @@ pub impl @json.FromJson for SessionToolCall
 pub(all) struct SessionToolResult {
   tool_call_id : String
   tool_name : String
-  content : @openseek_protocol.Content
+  content : SessionContent
   is_error : Bool
   brief : String?
   data : Json?
@@ -3154,7 +3201,7 @@ pub impl ToJson for SessionToolResult
 pub impl @json.FromJson for SessionToolResult
 
 pub(all) struct SessionUserMessage {
-  content : @openseek_protocol.Content
+  content : SessionContent
   submission_id : String?
 } derive(Eq, @debug.Debug)
 pub fn SessionUserMessage::equal(Self, Self) -> Bool

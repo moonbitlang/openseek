@@ -9,7 +9,7 @@ priv struct MinimalCall {
   caption : String
   status : ToolStatus
   changes : EditChanges?
-  image_urls : Array[String]
+  images : Array[@transcript.ContentPart]
 } derive(Eq)
 
 ///|
@@ -93,11 +93,13 @@ fn MinimalCall::from_tool(
   } else {
     None
   }
-  let image_urls : Array[String] = []
+  let images : Array[@transcript.ContentPart] = []
   if call.outcome is Done(content~, ..) {
     for part in content.0 {
       if part is ImageUrl(url~) && supported_image_content_url(url) {
-        image_urls.push(url)
+        images.push(part)
+      } else if part is SessionImage(_) {
+        images.push(part)
       }
     }
   }
@@ -108,7 +110,7 @@ fn MinimalCall::from_tool(
     caption,
     status,
     changes,
-    image_urls,
+    images,
   }
 }
 
@@ -647,7 +649,7 @@ fn MinimalActivity::render(
           call.icon(),
         ),
         @html.span(
-          class=if call.image_urls.is_empty() {
+          class=if call.images.is_empty() {
             "minimal-call-caption"
           } else {
             "minimal-call-caption minimal-summary-text"
@@ -655,7 +657,7 @@ fn MinimalActivity::render(
           title=call.caption,
           call.caption,
         ),
-        if call.image_urls.is_empty() {
+        if call.images.is_empty() {
           @html.nothing
         } else {
           @html.span(
@@ -686,7 +688,7 @@ fn MinimalActivity::render(
           "minimal-call"
         },
         [
-          ..if call.image_urls.is_empty() {
+          ..if call.images.is_empty() {
             heading
           } else {
             [
@@ -694,7 +696,13 @@ fn MinimalActivity::render(
                 @html.summary(class="minimal-activity-summary", heading),
                 @html.div(
                   class="minimal-image-body",
-                  call.image_urls.map(url => image_content_view(locale~, url)),
+                  call.images.map(part => {
+                    match part {
+                      ImageUrl(url~) => image_content_view(locale~, url)
+                      SessionImage(image) => session_image_view(locale~, image)
+                      _ => @html.nothing
+                    }
+                  }),
                 ),
               ]),
             ]

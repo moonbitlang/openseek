@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/core/encoding/base64",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/core/debug",
   "moonbitlang/core/json",

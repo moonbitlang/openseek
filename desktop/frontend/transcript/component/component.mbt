@@ -188,8 +188,8 @@ priv enum Msg {
   Pinned(Bool)
   JumpToLatest
   ContentRendered
-  ImageRequested(String)
-  ImageResolved(ImageOwner, String, ImageReadResult)
+  ImageRequested(ImageTarget)
+  ImageResolved(ImageOwner, ImageTarget, ImageReadResult)
   Overview(@transcript_overview.Msg)
 }
 
@@ -742,7 +742,7 @@ priv struct TranscriptDomMount {
 ///|
 fn TranscriptDomMount::TranscriptDomMount(
   on_size_changed : () -> Unit,
-  on_image : (String) -> Unit,
+  on_image : (ImageTarget) -> Unit,
 ) -> Self {
   {
     element: None,
@@ -844,7 +844,7 @@ fn TranscriptDomMount::dispose(self : Self) -> Unit {
 ///|
 fn TranscriptObservers::install(
   on_change : () -> Unit,
-  on_image : (String) -> Unit,
+  on_image : (ImageTarget) -> Unit,
 ) -> Self {
   let mount = TranscriptDomMount(on_change, on_image)
   let resize = @dom.ResizeObserver::new((_, _) => on_change())

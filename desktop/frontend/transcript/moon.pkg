@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/editor/base/common",
   "openseek_desktop/protocol" @desktop_protocol,

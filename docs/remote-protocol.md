@@ -328,8 +328,9 @@ Notifications:
 | method | params | result |
 |---|---|---|
 | `session.list` | `{}` | the session index |
-| `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
-| `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
+| `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the projected durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
+| `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the projected durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
+| `session.image` | `{record, offset, length, sequence, part}` — the exact host-issued image reference | `{data_url}` — one validated raster image; unavailable or rewritten records fail the request |
 | `session.list_archived` | `{}` | the archived index |
 | `session.rename` | `{session, workspace, title}` — all fields are required; `workspace` must name the registered store that owns the live record, and `title` must be non-blank | `{}` — atomically writes display metadata beside the append-only transcript, so a running conversation can be renamed without rewriting its history |
 | `session.archive` | `{session, force?}` | success returns the archived session index (the legacy `{groups}` shape) and moves the conversation plus every sibling `<session>-sr-N` descendant transcript as one family. A dirty checkout returns `{kind:"needs_force", worktree, dirty_paths, dirty_path_count}` without changing durable state; `dirty_paths` previews up to 8 paths and `dirty_path_count` counts all status rows. Clients show a discard-confirmation dialog and retry with `force` only after explicit confirmation. On success the conversation's checkout goes with it, but its name/branch/session placement remains registered (the branch survives; a `worktree.changed` broadcast reports `present: false`). "Dirty" means tracked modifications or non-ignored untracked files; ignored files count as disposable and are removed with the checkout, matching `git worktree remove`'s own semantics |
@@ -342,6 +343,18 @@ Notifications:
 |---|---|
 | `session.event` | `{session, sequence, session_root, event: {sequence, ts, item}}` — one durably **committed** store event, `event` verbatim as `session.load` carries it in `events`. `session_root` is the durable store root the commit was read from: session ids are not globally unique across stores, so the durable identity is `(session_root, session)` and a client must never merge same-id records from different stores; see *The durable transcript* below |
 | `session.changed` | `{change: "archived" \| "unarchived" \| "deleted" \| "renamed", session, workspace}` — broadcast to every client (the requester included) when a record moves between stores, is permanently deleted, or changes display title; `workspace` is the owning project path, so same-ID records in other project stores remain untouched. A family operation emits one fact for the parent and each descendant subagent record. Recipients apply each store-qualified fact immediately, keep placement facts authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
+
+Snapshots and commits replace durable user/tool image parts with
+`{"type":"image_ref","image":{record,offset,length,sequence,part}}`.
+`offset` is a decimal string (the protocol representation of `Int64`); the
+other indices are JSON integers. The reference names a host record and an event byte range, not a path on the
+browser device. The frontend calls `session.image` only when that image is
+visible (collapsed tool output does not request it). The host checks range,
+event sequence and part identity under the record's shared lock and validates
+the requested raster before returning its data URL. Appending does not invalidate
+references; a relocated/deleted record requires reloading the conversation.
+The JSONL record, exports and model input retain their original image bytes;
+references are a display projection and are never persisted into the record.
 
 #### The durable transcript: snapshots + commits
 

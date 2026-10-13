@@ -3403,14 +3403,14 @@ pub fn State::with_review_changes(
 }
 
 ///|
-fn CodexItem::user_content(self : CodexItem) -> @deepseek.Content {
+fn CodexItem::user_content(self : CodexItem) -> @transcript.Content {
   guard self.value is Object(fields) else {
-    return @deepseek.Content([Text(self.value.stringify())])
+    return @transcript.Content([Text(self.value.stringify())])
   }
   guard fields.get("content") is Some(Array(values)) else {
-    return @deepseek.Content([])
+    return @transcript.Content([])
   }
-  let content : Array[@deepseek.ContentPart] = []
+  let content : Array[@transcript.ContentPart] = []
   let texts : Array[String] = []
   let mentions : Array[@mention_context.MentionRef] = []
   let flush_text = () => {
@@ -3450,7 +3450,7 @@ fn CodexItem::user_content(self : CodexItem) -> @deepseek.Content {
     }
   }
   flush_text()
-  @deepseek.Content(content)
+  @transcript.Content(content)
 }
 
 ///|

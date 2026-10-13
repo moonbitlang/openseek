@@ -325,7 +325,7 @@ pub fn apply_session_item(
   match item {
     @desktop_protocol.User(payload) => {
       let content = match payload.content.0 {
-        [Text(text)] => @deepseek.Content([Text(text.trim().to_owned())])
+        [Text(text)] => Content([Text(text.trim().to_owned())])
         _ => model_content(payload.content)
       }
       if !content.0.all(part => part is Text(text) && text.is_blank()) {
@@ -624,12 +624,13 @@ pub extend SessionTreeRow with Eq::{equal, not_equal}
 
 ///|
 /// Project durable image bytes to inline URLs once, when building the transcript.
-fn model_content(content : @protocol.Content) -> @deepseek.Content {
-  @deepseek.Content(
+fn model_content(content : @desktop_protocol.SessionContent) -> Content {
+  Content(
     content.0.map(part => {
       match part {
         Text(text) => Text(text)
         Image(image) => ImageUrl(url=image.data_url())
+        ImageRef(image) => SessionImage(image)
       }
     }),
   )

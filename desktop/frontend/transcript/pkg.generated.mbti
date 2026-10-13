@@ -2,8 +2,8 @@
 package "openseek_desktop/frontend/transcript"
 
 import {
+  "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
-  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
@@ -35,6 +35,24 @@ pub fn subrun_parent(String) -> String?
 // Errors
 
 // Types and methods
+pub(all) struct Content(Array[ContentPart]) derive(Eq, @debug.Debug)
+pub fn Content::contains(Self, StringView) -> Bool
+pub fn Content::equal(Self, Self) -> Bool
+pub fn Content::is_text_only(Self) -> Bool
+pub fn Content::not_equal(Self, Self) -> Bool
+pub fn Content::text(Self) -> String
+pub fn Content::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ContentPart {
+  Text(String)
+  ImageUrl(url~ : String)
+  File(file_id~ : String)
+  SessionImage(@protocol.SessionImageRef)
+} derive(Eq, @debug.Debug)
+pub fn ContentPart::equal(Self, Self) -> Bool
+pub fn ContentPart::not_equal(Self, Self) -> Bool
+pub fn ContentPart::to_repr(Self) -> @debug.Repr
+
 pub(all) enum EngineEvent {
   AgentStep(Int?)
   StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
@@ -83,7 +101,7 @@ pub fn GoalStanding::equal(Self, Self) -> Bool
 pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
-  User(content~ : @deepseek.Content)
+  User(content~ : Content)
   Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
   Answer(String)
   TurnEnd
@@ -132,7 +150,7 @@ pub fn ToolCall::not_equal(Self, Self) -> Bool
 pub(all) enum ToolOutcome {
   Snapshot(content~ : String)
   Pending(output~ : String?)
-  Done(content~ : @deepseek.Content, is_error~ : Bool, brief~ : String?)
+  Done(content~ : Content, is_error~ : Bool, brief~ : String?)
 } derive(Eq)
 pub fn ToolOutcome::equal(Self, Self) -> Bool
 pub fn ToolOutcome::not_equal(Self, Self) -> Bool

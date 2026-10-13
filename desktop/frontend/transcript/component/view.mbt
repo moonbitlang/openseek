@@ -168,7 +168,7 @@ fn notice_view(
     pending=false,
     is_error~,
     brief~,
-    body.map(text => @deepseek.Content([Text(text)])),
+    body.map(text => @transcript.Content([Text(text)])),
     tool_call_tabs_key(label, sequence),
   )
   rows.push(@html.div(class="activity-work", { "notice": row }))
@@ -494,10 +494,10 @@ fn tool_result_view(
         false,
         false,
         Some(ui(locale, SnapshotLabel)),
-        Some(@deepseek.Content([Text(content)])),
+        Some(@transcript.Content([Text(content)])),
       )
     Pending(output~) =>
-      (true, false, None, output.map(text => @deepseek.Content([Text(text)])))
+      (true, false, None, output.map(text => @transcript.Content([Text(text)])))
     // An empty result still gets its row; it just has nothing to expand.
     Done(content~, is_error~, brief~) =>
       (
@@ -536,7 +536,7 @@ fn result_row_view(
   pending~ : Bool,
   is_error~ : Bool,
   brief~ : String?,
-  output : @deepseek.Content?,
+  output : @transcript.Content?,
   key : String,
   subrun? : SubrunLink,
   status? : ToolStatus,
@@ -579,6 +579,7 @@ fn result_row_view(
   if output is Some(content) {
     for index, part in content.0 {
       match part {
+        SessionImage(image) => body.push(session_image_view(locale~, image))
         ImageUrl(url~) => body.push(image_content_view(locale~, url))
         File(file_id~) =>
           body.push(
@@ -895,7 +896,7 @@ fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
 ///|
 fn user_message_view(
   locale~ : @i18n.Locale = English,
-  content : @deepseek.Content,
+  content : @transcript.Content,
   sent_at? : Double,
   anchor? : String,
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
@@ -908,6 +909,7 @@ fn user_message_view(
         for node in user_text_nodes(locale~, text, on_jump?, changes?) {
           body.push(node)
         }
+      SessionImage(image) => body.push(session_image_view(locale~, image))
       ImageUrl(url~) => body.push(image_content_view(locale~, url))
       File(file_id~) =>
         body.push(

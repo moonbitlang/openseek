@@ -369,7 +369,7 @@ pub(all) struct SessionToolCall {
 /// reconciled by exact id instead of by matching text, since two clients can
 /// submit identical text into one session.
 pub(all) struct SessionUserMessage {
-  content : @wire.Content
+  content : SessionContent
   submission_id : String?
 } derive(Debug, Eq)
 
@@ -402,7 +402,7 @@ pub impl FromJson for SessionUserMessage with fn from_json(json, path) {
   guard fields.get("content") is Some(raw_content) else {
     raise JsonDecodeError((path.add_key("content"), "expected message content"))
   }
-  let content : @wire.Content = @json.from_json(
+  let content : SessionContent = @json.from_json(
     raw_content,
     path=path.add_key("content"),
   )
@@ -477,7 +477,7 @@ pub impl FromJson for SessionAssistantMessage with fn from_json(json, path) {
 pub(all) struct SessionToolResult {
   tool_call_id : String
   tool_name : String
-  content : @wire.Content
+  content : SessionContent
   is_error : Bool
   brief : String?
   data : Json?
@@ -529,7 +529,7 @@ pub impl FromJson for SessionToolResult with fn from_json(json, path) {
       (path.add_key("content"), "expected tool result content"),
     )
   }
-  let content : @wire.Content = @json.from_json(
+  let content : SessionContent = @json.from_json(
     raw_content,
     path=path.add_key("content"),
   )

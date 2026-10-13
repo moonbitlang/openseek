@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/backend/internal/session_record",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/resources",
   "openseek_desktop/backend/auth",

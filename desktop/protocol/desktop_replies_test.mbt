@@ -43,12 +43,12 @@ test "unknown session items preserve their complete wire object" {
 test "a durable prompt keeps its text whatever the submission tag looks like" {
   // An absent submission tag is omitted rather than encoded as null.
   let untagged : @protocol.SessionUserMessage = {
-    content: Content([Text("hello")]),
+    content: SessionContent([Text("hello")]),
     submission_id: None,
   }
   @debug.assert_eq(untagged.to_json(), { "content": "hello" })
   let tagged : @protocol.SessionUserMessage = {
-    content: Content([Text("hello")]),
+    content: SessionContent([Text("hello")]),
     submission_id: Some("sub-1"),
   }
   @debug.assert_eq(tagged.to_json(), {
@@ -146,7 +146,7 @@ test "durable tool results explicitly encode their optional brief" {
     data: None,
     tool_call_id: "call-1",
     tool_name: "read",
-    content: Content([Text("contents")]),
+    content: SessionContent([Text("contents")]),
     is_error: false,
     brief: None,
   }
@@ -175,7 +175,7 @@ test "durable tool result data round-trips and null reads as absent" {
     data: Some({ "sources": [{ "url": "https://example.com" }] }),
     tool_call_id: "call-2",
     tool_name: "web_search",
-    content: Content([Text("Sources:")]),
+    content: SessionContent([Text("Sources:")]),
     is_error: false,
     brief: None,
   }

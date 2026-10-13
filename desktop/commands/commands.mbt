@@ -928,3 +928,9 @@ pub let browser_cancel_pick : Command[
   @protocol.BrowserPickPayload,
   @protocol.EmptyReply,
 ] = Command("browser.cancel_pick")
+
+///|
+pub let session_image : Command[
+  @protocol.SessionImageRef,
+  @protocol.SessionImageReply,
+] = Command("session.image")
