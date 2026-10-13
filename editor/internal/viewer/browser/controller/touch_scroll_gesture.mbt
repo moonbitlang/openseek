@@ -47,7 +47,7 @@ fn browser_touch_scroll_runtime() -> TouchScrollRuntime {
 priv struct TouchScrollGesture {
   runtime : TouchScrollRuntime
   on_translation : (Double, Double) -> Unit
-  active_touches : Map[Int, TouchScrollData]
+  active_touches : Map[Int32, TouchScrollData]
   mut inertia_frame : @base_common.Disposable?
   mut disposed : Bool
 }
@@ -85,7 +85,7 @@ fn TouchScrollGesture::begin_touch_event(self : TouchScrollGesture) -> Unit {
 ///|
 fn TouchScrollGesture::start_touch(
   self : TouchScrollGesture,
-  identifier : Int,
+  identifier : Int32,
   page_x : Double,
   page_y : Double,
   timestamp : Double,
@@ -105,7 +105,7 @@ fn TouchScrollGesture::start_touch(
 ///|
 fn TouchScrollGesture::move_touch(
   self : TouchScrollGesture,
-  identifier : Int,
+  identifier : Int32,
   page_x : Double,
   page_y : Double,
   timestamp : Double,
@@ -133,8 +133,8 @@ fn TouchScrollGesture::move_touch(
 ///|
 fn TouchScrollGesture::end_touch(
   self : TouchScrollGesture,
-  identifier : Int,
-  active_touch_count : Int,
+  identifier : Int32,
+  active_touch_count : Int32,
   timestamp : Double,
 ) -> Bool {
   if self.disposed {
@@ -360,7 +360,7 @@ extern "js" fn add_non_passive_touch_listener_js(
   #| }
 
 ///|
-extern "js" fn touch_list_length(event : @rdom.Event, changed : Bool) -> Int =
+extern "js" fn touch_list_length(event : @rdom.Event, changed : Bool) -> Int32 =
   #| (event, changed) =>
   #|   (changed ? event.changedTouches : event.targetTouches)?.length ?? 0
 
@@ -368,8 +368,8 @@ extern "js" fn touch_list_length(event : @rdom.Event, changed : Bool) -> Int =
 extern "js" fn touch_identifier(
   event : @rdom.Event,
   changed : Bool,
-  index : Int,
-) -> Int =
+  index : Int32,
+) -> Int32 =
   #| (event, changed, index) =>
   #|   (changed ? event.changedTouches : event.targetTouches).item(index).identifier
 
@@ -377,7 +377,7 @@ extern "js" fn touch_identifier(
 extern "js" fn touch_page_x(
   event : @rdom.Event,
   changed : Bool,
-  index : Int,
+  index : Int32,
 ) -> Double =
   #| (event, changed, index) =>
   #|   (changed ? event.changedTouches : event.targetTouches).item(index).pageX
@@ -386,7 +386,7 @@ extern "js" fn touch_page_x(
 extern "js" fn touch_page_y(
   event : @rdom.Event,
   changed : Bool,
-  index : Int,
+  index : Int32,
 ) -> Double =
   #| (event, changed, index) =>
   #|   (changed ? event.changedTouches : event.targetTouches).item(index).pageY

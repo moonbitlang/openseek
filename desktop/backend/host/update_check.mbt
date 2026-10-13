@@ -32,7 +32,7 @@ priv struct SelfUpdate {
 fn SelfUpdate::SelfUpdate(
   runtime_dir : @pathx.Path?,
   executable : String?,
-  app_version? : String = "development",
+  app_version~ : String = "development",
 ) -> SelfUpdate {
   {
     app_version,
@@ -47,10 +47,22 @@ fn SelfUpdate::SelfUpdate(
 ///|
 /// Sweep debris a previous update may have left behind (a staging dir, the
 /// old bundle parked aside) — the host's only unprompted update work.
+///
+/// Only a bundle that can update itself has such debris, and only it may
+/// sweep. The work directory is shared by every host process of the user: a
+/// development build, which never downloads an update, would otherwise
+/// delete the one the installed application has downloaded and not yet
+/// applied.
+///
+/// Raises when the bundle's signature could not be read: nothing is swept,
+/// and the caller reports it rather than take a signed bundle for one with
+/// nothing to clean up.
 async fn SelfUpdate::cleanup(self : SelfUpdate) -> Unit {
-  if self.work_dir is Some(dir) && self.bundle_path is Some(bundle) {
-    @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
+  guard self.work_dir is Some(dir) && self.bundle_path is Some(bundle) else {
+    return
   }
+  guard @update.can_stage_updates(bundle_path=bundle) else { return }
+  @update.cleanup_leftovers(work_dir=dir, bundle_path=bundle)
 }
 
 ///|
@@ -321,4 +333,61 @@ async test "self-update apply refuses while a download is active" {
     error => raise error
   }
   assert_true(still_downloading)
+}
+
+///|
+/// The work directory is shared with the installed application. A bundle
+/// that is not signed for self-update — every development build — has no
+/// update debris of its own, so what it finds there is another host's
+/// download, staged and waiting to be applied.
+async test "a bundle that cannot update itself leaves the staging directory alone" {
+  // `codesign` is how the question is asked; only macOS has it to ask.
+  guard @async.platform is MacOS else { return }
+  let work : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-update-shared-"))
+  defer @fs.rmdir(work.to_string(), recursive=true)
+  // An unsigned code object stands in for the bundle: what the probe reads
+  // is whether anyone signed it, not what it contains.
+  let bundle = work.join("SeekMoonDev.app")
+  @fs.write_file(bundle.to_string(), "unsigned", create_mode=CreateNew)
+  let staged = work.join("update/extract/SeekMoon.app")
+  @fs.mkdir(staged.to_string(), recursive=true)
+  let updates : SelfUpdate = {
+    app_version: "0.1.0",
+    work_dir: Some(work.to_string()),
+    bundle_path: Some(bundle.to_string()),
+    downloads: Queue(kind=Blocking(1)),
+    staged: None,
+    busy: false,
+  }
+  updates.cleanup()
+  assert_true(@fsx.is_dir(staged))
+}
+
+///|
+/// A signature that could not be read is not "unsigned". The sweep does not
+/// run, and does not pass in silence either: a signed bundle's own stale
+/// leftovers would otherwise stay with nothing to say why.
+async test "a bundle whose signature cannot be read sweeps nothing and says so" {
+  let work : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-update-unread-"))
+  defer @fs.rmdir(work.to_string(), recursive=true)
+  let staged = work.join("update/extract/SeekMoon.app")
+  @fs.mkdir(staged.to_string(), recursive=true)
+  let updates : SelfUpdate = {
+    app_version: "0.1.0",
+    work_dir: Some(work.to_string()),
+    // Nothing is at this path, so the probe has nothing to read.
+    bundle_path: Some(work.join("Gone.app").to_string()),
+    downloads: Queue(kind=Blocking(1)),
+    staged: None,
+    busy: false,
+  }
+  let reported = try {
+    updates.cleanup()
+    false
+  } catch {
+    @update.UpdateError(_) => true
+    error => raise error
+  }
+  assert_true(reported)
+  assert_true(@fsx.is_dir(staged))
 }

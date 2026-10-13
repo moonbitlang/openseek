@@ -21,8 +21,8 @@ pub fn SessionEvent::unix_ms(self : SessionEvent) -> Int64 {
 /// it validates content and range before appending.
 pub fn SessionSummary::SessionSummary(
   content~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
 ) -> SessionSummary {
   { content, from_sequence, to_sequence, }
 }

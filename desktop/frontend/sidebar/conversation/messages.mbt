@@ -2,7 +2,7 @@
 
 ///|
 priv enum UiMessage {
-  SubagentRuns(Int)
+  SubagentRuns(Int32)
   RenameLabel
   RenameConversation
   ArchiveLabel

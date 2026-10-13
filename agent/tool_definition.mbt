@@ -61,7 +61,7 @@ pub async fn[X] build_tools(
   on_background_wake? : () -> Unit,
   job_log_dir? : String,
   session_scratch_dir? : String,
-  extra_tools? : Array[@agent_tool.AgentToolDefinition] = [],
+  extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
   mbtx_subrun? : @host.SubrunInjection,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()

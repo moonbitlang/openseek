@@ -7,10 +7,10 @@
 /// A rectangle in CSS pixels — the browser pane's placement, which at 100%
 /// zoom equals the window-logical bounds a native view takes.
 pub(all) struct Rect {
-  x : Int
-  y : Int
-  width : Int
-  height : Int
+  x : Int32
+  y : Int32
+  width : Int32
+  height : Int32
 } derive(Eq)
 
 ///|
@@ -38,9 +38,9 @@ pub(all) struct PageState {
 /// Ids are page-global (never per conversation) so parked strips can keep
 /// referring to their pages, and only ever grow.
 pub(all) struct State {
-  pages : Map[Int, PageState]
-  next_id : Int
-  files : Map[Int, FileObservation]
+  pages : Map[Int32, PageState]
+  next_id : Int32
+  files : Map[Int32, FileObservation]
 } derive(Eq)
 
 ///|
@@ -51,7 +51,7 @@ pub fn State::empty() -> State {
 ///|
 /// Allocate a page. A blank tab starts without a URL; a routed link opens
 /// with one (the caller also asks the host to create the native view then).
-pub fn open_page(state : State, url? : String) -> (State, Int) {
+pub fn open_page(state : State, url? : String) -> (State, Int32) {
   let id = state.next_id
   let pages = state.pages.copy()
   pages[id] = {
@@ -65,7 +65,7 @@ pub fn open_page(state : State, url? : String) -> (State, Int) {
 }
 
 ///|
-pub fn close_page(state : State, id : Int) -> State {
+pub fn close_page(state : State, id : Int32) -> State {
   let pages = state.pages.copy()
   pages.remove(id)
   let files = state.files.copy()
@@ -74,7 +74,7 @@ pub fn close_page(state : State, id : Int) -> State {
 }
 
 ///|
-pub fn page(state : State, id : Int) -> PageState? {
+pub fn page(state : State, id : Int32) -> PageState? {
   state.pages.get(id)
 }
 
@@ -99,7 +99,7 @@ fn PageState::commit_url(self : PageState, url : String) -> PageState {
 ///|
 /// Commit a navigation optimistically. The caller sends the matching
 /// `browser.open`/`browser.navigate` to the host.
-pub fn navigate(state : State, id : Int, url : String) -> State {
+pub fn navigate(state : State, id : Int32, url : String) -> State {
   guard state.pages.get(id) is Some(previous) else { return state }
   state.with_page(id, { ..previous.commit_url(url), loading: true, })
 }
@@ -107,7 +107,7 @@ pub fn navigate(state : State, id : Int, url : String) -> State {
 ///|
 /// The tab chip's label: the page title once one arrived, else the URL's
 /// host, else a blank-tab placeholder.
-pub fn page_label(page : PageState, locale? : @i18n.Locale = English) -> String {
+pub fn page_label(page : PageState, locale~ : @i18n.Locale = English) -> String {
   if !page.title.is_empty() {
     return page.title
   }

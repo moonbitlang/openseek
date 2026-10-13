@@ -3,7 +3,7 @@
 ///|
 priv struct BackendHarness {
   model_state : TokenizationModelState
-  attached : Ref[Int]
+  attached : Ref[Int32]
   scheduler : Ref[TokenizationScheduler?]
   disposing : Ref[Bool]
   errors : Array[String]
@@ -12,7 +12,7 @@ priv struct BackendHarness {
 ///|
 fn backend_harness(
   lines : Array[String],
-  too_large? : Bool = false,
+  too_large~ : Bool = false,
 ) -> BackendHarness {
   let attached = Ref(0)
   let scheduler : Ref[TokenizationScheduler?] = Ref(None)
@@ -60,7 +60,7 @@ fn backend_scheduler_harness() -> BackendSchedulerHarness {
 }
 
 ///|
-fn run_idle(task : IdleTask, remaining? : Double = 0.0) -> Unit {
+fn run_idle(task : IdleTask, remaining~ : Double = 0.0) -> Unit {
   if task.active.val {
     (task.callback)(TokenizationIdleDeadline(() => remaining))
   }

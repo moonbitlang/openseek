@@ -8,21 +8,21 @@ pub(all) struct Owner {
 pub(all) struct State {
   owner : Owner?
   active : Bool
-  epoch : Int
+  epoch : Int32
   jobs : Array[@protocol.JobView]
   history_expanded : Bool
   selected : (String, String)?
   listing : Bool
-  next_offset : Int?
+  next_offset : Int32?
   error : String?
   warnings : Array[String]
   text : String
   cursor : Int64?
   reading : Bool
-  read_serial : Int
+  read_serial : Int32
   reading_state : @wire.JobState?
   eof_state : @wire.JobState?
-  read_budget : Int
+  read_budget : Int32
   catching_up : Bool
   reload_pending : Bool
   manual_read : Bool
@@ -74,9 +74,9 @@ pub(all) enum Msg {
   Pause
   Reload
   Stop
-  Listed(Int, Int, Result[@protocol.JobsListReply, String])
-  Read(Int, Int, Result[@protocol.JobReadReply, String])
-  Stopped(Int, (String, String), Result[@protocol.JobStopReply, String])
+  Listed(Int32, Int32, Result[@protocol.JobsListReply, String])
+  Read(Int32, Int32, Result[@protocol.JobReadReply, String])
+  Stopped(Int32, (String, String), Result[@protocol.JobStopReply, String])
 }
 
 ///|
@@ -111,7 +111,7 @@ fn target(owner : Owner, key : (String, String)) -> @protocol.JobTarget {
 fn request_list(
   emit : @cmd.Emit[Msg],
   state : State,
-  offset : Int,
+  offset : Int32,
 ) -> (@cmd.Cmd, State) {
   guard state.active && !state.listing && state.owner is Some(owner) else {
     return (@cmd.none, state)
@@ -219,7 +219,7 @@ pub fn subscriptions(state : State, emit : @cmd.Emit[Msg]) -> @sub.Sub {
 
 ///|
 pub fn update(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   msg : Msg,
   state : State,

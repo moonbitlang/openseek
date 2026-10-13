@@ -54,14 +54,14 @@ fn source_lines(source : String) -> Array[String] {
 }
 
 ///|
-fn valid_hunk_range(start : Int, len : Int, total : Int) -> Bool {
+fn valid_hunk_range(start : Int32, len : Int32, total : Int32) -> Bool {
   start >= 0 && len >= 0 && start <= total && len <= total - start
 }
 
 ///|
 fn valid_fragment_line(
   line : @mbtdiff.DiffLine,
-  expected_index : Int,
+  expected_index : Int32,
   source : Array[String],
 ) -> Bool {
   line.index == expected_index &&
@@ -91,7 +91,7 @@ fn line_end_anchor(line : @mbtdiff.DiffLine) -> @base_common.Range {
 }
 
 ///|
-fn cursor_anchor(lines : Array[String], cursor : Int) -> @base_common.Range {
+fn cursor_anchor(lines : Array[String], cursor : Int32) -> @base_common.Range {
   if lines.is_empty() {
     return Range(1, 1, 1, 1)
   }
@@ -148,7 +148,7 @@ fn paired_change(
 ///|
 fn old_only_change(
   original : @mbtdiff.DiffLine,
-  modified_cursor : Int,
+  modified_cursor : Int32,
   modified_lines : Array[String],
 ) -> @diff.DetailedLineRangeMapping {
   let anchor = cursor_anchor(modified_lines, modified_cursor)
@@ -166,7 +166,7 @@ fn old_only_change(
 ///|
 fn new_only_change(
   modified : @mbtdiff.DiffLine,
-  original_cursor : Int,
+  original_cursor : Int32,
   original_lines : Array[String],
 ) -> @diff.DetailedLineRangeMapping {
   let anchor = cursor_anchor(original_lines, original_cursor)
@@ -227,10 +227,10 @@ fn append_fragment_rows(
   kind : @diff.DocumentDiffChangeKind,
   original_lines : Array[String],
   modified_lines : Array[String],
-  original_cursor : Int,
-  modified_cursor : Int,
+  original_cursor : Int32,
+  modified_cursor : Int32,
   changes : Array[@diff.DocumentDiffChange],
-) -> (Int, Int)? {
+) -> (Int32, Int32)? {
   let mut old_cursor = original_cursor
   let mut new_cursor = modified_cursor
   for row in rows {
@@ -275,8 +275,8 @@ fn append_fragment_rows(
 fn append_ignored_gap(
   original : ArrayView[String],
   modified : ArrayView[String],
-  original_offset : Int,
-  modified_offset : Int,
+  original_offset : Int32,
+  modified_offset : Int32,
   changes : Array[@diff.DocumentDiffChange],
 ) -> Unit {
   for edit in @core_diff.Diff(old=original, new=modified).edits() {

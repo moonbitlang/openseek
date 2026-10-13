@@ -43,7 +43,7 @@ fn CodeEditorWidget::view_selection(
 pub fn CodeEditorWidget::set_position(
   self : CodeEditorWidget,
   position : @base_common.Position,
-  source? : String = "api",
+  source~ : String = "api",
 ) -> Unit {
   self.apply_selection(Selection(position, position), source, NotSet)
 }
@@ -61,7 +61,7 @@ pub fn CodeEditorWidget::set_position(
 pub fn CodeEditorWidget::set_selection(
   self : CodeEditorWidget,
   selection : @core.Selection,
-  source? : String = "api",
+  source~ : String = "api",
 ) -> Unit {
   self.apply_selection(selection, source, NotSet)
 }

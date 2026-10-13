@@ -5,8 +5,8 @@
 pub struct MarkdownSourceSelection {
   source_range : @base_common.OffsetRange
   selected_text : String
-  source_model_version : Int
-  projection_generation : Int
+  source_model_version : Int32
+  projection_generation : Int32
   prefer_below : Bool
   priv dom_range : MarkdownSelectionRange
 }
@@ -36,7 +36,7 @@ pub fn MarkdownSourceSelection::same_dom_range(
 fn markdown_source_range_from_attributes(
   start : String?,
   end_exclusive : String?,
-  source_length : Int,
+  source_length : Int32,
 ) -> @base_common.OffsetRange? {
   guard start.bind(markdown_parse_dom_index) is Some(start) &&
     end_exclusive.bind(markdown_parse_dom_index) is Some(end_exclusive) &&
@@ -50,7 +50,7 @@ fn markdown_source_range_from_attributes(
 ///|
 fn markdown_element_source_range(
   element : @rdom.Element,
-  source_length : Int,
+  source_length : Int32,
 ) -> @base_common.OffsetRange? {
   guard element.get_attribute(@markdown_core.MarkdownSourceOwnerAttribute)
     is Some("true") else {

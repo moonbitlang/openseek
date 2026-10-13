@@ -6,7 +6,7 @@ fn remote_language_test_uri(path : String) -> @base_common.Uri {
 ///|
 fn remote_language_test_model(
   uri : @base_common.Uri,
-  version : Int,
+  version : Int32,
   revision : String,
   text : String,
 ) -> @model.TextModel {

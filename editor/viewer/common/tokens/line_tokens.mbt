@@ -43,15 +43,15 @@ enum ViewLineTokens {
 /// nondecreasing end offsets. For a complete line with at least one token, the
 /// last end offset is the text's UTF-16 length.
 struct LineTokens {
-  tokens : Array[UInt]
-  tokens_count : Int
+  tokens : Array[UInt32]
+  tokens_count : Int32
   text : String
   language_id_codec : @services.LanguageIdCodec
 } derive(Debug)
 
 ///|
 pub fn LineTokens::LineTokens(
-  tokens : Array[UInt],
+  tokens : Array[UInt32],
   text : String,
   decoder : @services.LanguageIdCodec,
 ) -> LineTokens {
@@ -76,8 +76,8 @@ pub fn LineTokens::default_token_metadata() -> TokenMetadata {
 ///|
 /// Rewrites `tokens` start-offset slots in place to be end offsets.
 pub fn LineTokens::convert_to_end_offset(
-  tokens : Array[UInt],
-  line_text_length : Int,
+  tokens : Array[UInt32],
+  line_text_length : Int32,
 ) -> Unit {
   let token_count = tokens.length() >> 1
   let last_token_index = token_count - 1
@@ -91,9 +91,9 @@ pub fn LineTokens::convert_to_end_offset(
 /// Binary-searches the token containing `desired_index`. Mirrors Monaco's
 /// static `findIndexInTokensArray`.
 fn LineTokens::find_index_in_tokens_array(
-  tokens : Array[UInt],
-  desired_index : Int,
-) -> Int {
+  tokens : Array[UInt32],
+  desired_index : Int32,
+) -> Int32 {
   if tokens.length() <= 2 {
     return 0
   }
@@ -115,8 +115,8 @@ fn LineTokens::find_index_in_tokens_array(
 ///|
 pub fn LineTokens::get_start_offset(
   self : LineTokens,
-  token_index : Int,
-) -> Int {
+  token_index : Int32,
+) -> Int32 {
   if token_index > 0 {
     self.tokens[(token_index - 1) << 1].reinterpret_as_int()
   } else {
@@ -133,9 +133,9 @@ pub fn LineTokens::inflate(self : LineTokens) -> ViewLineTokens {
 ///|
 pub fn LineTokens::slice_and_inflate(
   self : LineTokens,
-  start_offset : Int,
-  end_offset : Int,
-  delta_offset : Int,
+  start_offset : Int32,
+  end_offset : Int32,
+  delta_offset : Int32,
 ) -> ViewLineTokens {
   Slice(SliceLineTokens(self, start_offset, end_offset, delta_offset))
 }
@@ -143,14 +143,14 @@ pub fn LineTokens::slice_and_inflate(
 ///|
 /// A token to splice into the line. `insert_tokens` must be sorted by offset.
 struct InsertedToken {
-  offset : Int
+  offset : Int32
   text : String
   token_metadata : TokenMetadata
 }
 
 ///|
 pub fn InsertedToken::InsertedToken(
-  offset : Int,
+  offset : Int32,
   text : String,
   token_metadata : TokenMetadata,
 ) -> InsertedToken {
@@ -170,7 +170,7 @@ pub fn LineTokens::with_inserted(
   let mut next_original_token_idx = 0
   let mut next_insert_token_idx = 0
   let mut text = ""
-  let new_tokens : Array[UInt] = []
+  let new_tokens : Array[UInt32] = []
   let mut original_end_offset = 0
   while true {
     let next_original_token_end_offset = if next_original_token_idx <
@@ -223,7 +223,7 @@ pub fn LineTokens::with_inserted(
 }
 
 ///|
-pub fn LineTokens::get_count(self : LineTokens) -> Int {
+pub fn LineTokens::get_count(self : LineTokens) -> Int32 {
   self.tokens_count
 }
 
@@ -233,27 +233,27 @@ pub fn LineTokens::get_line_content(self : LineTokens) -> String {
 }
 
 ///|
-fn LineTokens::get_end_offset(self : LineTokens, token_index : Int) -> Int {
+fn LineTokens::get_end_offset(self : LineTokens, token_index : Int32) -> Int32 {
   self.tokens[token_index << 1].reinterpret_as_int()
 }
 
 ///|
 pub fn LineTokens::get_metadata(
   self : LineTokens,
-  token_index : Int,
+  token_index : Int32,
 ) -> TokenMetadata {
   TokenMetadata(self.tokens[(token_index << 1) + 1])
 }
 
 ///|
-fn LineTokens::get_class_name(self : LineTokens, token_index : Int) -> String {
+fn LineTokens::get_class_name(self : LineTokens, token_index : Int32) -> String {
   self.get_metadata(token_index).get_class_name()
 }
 
 ///|
 fn LineTokens::get_inline_style(
   self : LineTokens,
-  token_index : Int,
+  token_index : Int32,
   color_map : Array[String],
 ) -> String {
   self.get_metadata(token_index).get_inline_style(color_map)
@@ -262,13 +262,13 @@ fn LineTokens::get_inline_style(
 ///|
 fn LineTokens::find_token_index_at_offset(
   self : LineTokens,
-  offset : Int,
-) -> Int {
+  offset : Int32,
+) -> Int32 {
   LineTokens::find_index_in_tokens_array(self.tokens, offset)
 }
 
 ///|
-fn LineTokens::get_token_text(self : LineTokens, token_index : Int) -> String {
+fn LineTokens::get_token_text(self : LineTokens, token_index : Int32) -> String {
   substr(
     self.text,
     self.get_start_offset(token_index),
@@ -281,19 +281,19 @@ fn LineTokens::get_token_text(self : LineTokens, token_index : Int) -> String {
 /// Monaco's `SliceLineTokens`.
 priv struct SliceLineTokens {
   source : LineTokens
-  start_offset : Int
-  end_offset : Int
-  delta_offset : Int
-  first_token_index : Int
-  tokens_count : Int
+  start_offset : Int32
+  end_offset : Int32
+  delta_offset : Int32
+  first_token_index : Int32
+  tokens_count : Int32
 }
 
 ///|
 fn SliceLineTokens::SliceLineTokens(
   source : LineTokens,
-  start_offset : Int,
-  end_offset : Int,
-  delta_offset : Int,
+  start_offset : Int32,
+  end_offset : Int32,
+  delta_offset : Int32,
 ) -> SliceLineTokens {
   let first_token_index = source.find_token_index_at_offset(start_offset)
   let tokens_count = for i in first_token_index..<source.get_count(); count = 0 {
@@ -316,7 +316,7 @@ fn SliceLineTokens::SliceLineTokens(
 }
 
 ///|
-fn SliceLineTokens::get_count(self : SliceLineTokens) -> Int {
+fn SliceLineTokens::get_count(self : SliceLineTokens) -> Int32 {
   self.tokens_count
 }
 
@@ -328,8 +328,8 @@ fn SliceLineTokens::get_line_content(self : SliceLineTokens) -> String {
 ///|
 fn SliceLineTokens::get_end_offset(
   self : SliceLineTokens,
-  token_index : Int,
-) -> Int {
+  token_index : Int32,
+) -> Int32 {
   let token_end_offset = self.source.get_end_offset(
     self.first_token_index + token_index,
   )
@@ -339,7 +339,7 @@ fn SliceLineTokens::get_end_offset(
 ///|
 fn SliceLineTokens::get_class_name(
   self : SliceLineTokens,
-  token_index : Int,
+  token_index : Int32,
 ) -> String {
   self.source.get_class_name(self.first_token_index + token_index)
 }
@@ -347,7 +347,7 @@ fn SliceLineTokens::get_class_name(
 ///|
 fn SliceLineTokens::get_inline_style(
   self : SliceLineTokens,
-  token_index : Int,
+  token_index : Int32,
   color_map : Array[String],
 ) -> String {
   self.source.get_inline_style(self.first_token_index + token_index, color_map)
@@ -356,7 +356,7 @@ fn SliceLineTokens::get_inline_style(
 ///|
 fn SliceLineTokens::get_token_text(
   self : SliceLineTokens,
-  token_index : Int,
+  token_index : Int32,
 ) -> String {
   let adjusted_token_index = self.first_token_index + token_index
   let token_start_offset = self.source.get_start_offset(adjusted_token_index)
@@ -372,7 +372,7 @@ fn SliceLineTokens::get_token_text(
 }
 
 ///|
-pub fn ViewLineTokens::get_count(self : ViewLineTokens) -> Int {
+pub fn ViewLineTokens::get_count(self : ViewLineTokens) -> Int32 {
   match self {
     Full(tokens) => tokens.get_count()
     Slice(tokens) => tokens.get_count()
@@ -390,8 +390,8 @@ pub fn ViewLineTokens::get_line_content(self : ViewLineTokens) -> String {
 ///|
 pub fn ViewLineTokens::get_end_offset(
   self : ViewLineTokens,
-  token_index : Int,
-) -> Int {
+  token_index : Int32,
+) -> Int32 {
   match self {
     Full(tokens) => tokens.get_end_offset(token_index)
     Slice(tokens) => tokens.get_end_offset(token_index)
@@ -401,7 +401,7 @@ pub fn ViewLineTokens::get_end_offset(
 ///|
 pub fn ViewLineTokens::get_class_name(
   self : ViewLineTokens,
-  token_index : Int,
+  token_index : Int32,
 ) -> String {
   match self {
     Full(tokens) => tokens.get_class_name(token_index)
@@ -412,7 +412,7 @@ pub fn ViewLineTokens::get_class_name(
 ///|
 pub fn ViewLineTokens::get_inline_style(
   self : ViewLineTokens,
-  token_index : Int,
+  token_index : Int32,
   color_map : Array[String],
 ) -> String {
   match self {
@@ -424,7 +424,7 @@ pub fn ViewLineTokens::get_inline_style(
 ///|
 pub fn ViewLineTokens::get_token_text(
   self : ViewLineTokens,
-  token_index : Int,
+  token_index : Int32,
 ) -> String {
   match self {
     Full(tokens) => tokens.get_token_text(token_index)
@@ -435,6 +435,6 @@ pub fn ViewLineTokens::get_token_text(
 ///|
 /// Raw UTF-16 code-unit substring `[start, end)`. Unlike `StringView`, this
 /// preserves lone surrogates and either half of a valid pair.
-fn substr(s : String, start : Int, end : Int) -> String {
+fn substr(s : String, start : Int32, end : Int32) -> String {
   s.unsafe_substring(start~, end~)
 }

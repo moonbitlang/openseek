@@ -59,7 +59,7 @@ priv struct SubrunProbeState {
   /// object is not news. Held as bytes, not text, so a chunk boundary inside
   /// a multi-byte character cannot corrupt the line it belongs to.
   mut carry : Bytes
-  mut steps : Int
+  mut steps : Int32
   mut activity : String
   /// The calls the child's latest assistant item requested and has not
   /// answered yet, as `(id, name)` in call order. A batch runs in that order,
@@ -72,7 +72,7 @@ priv struct SubrunProbeState {
   /// are monotone, so this — not the byte offset — is what keeps a re-read
   /// from counting anything twice. The offset is an optimization; this is
   /// the correctness argument, and it holds however the file was replaced.
-  mut watermark : Int
+  mut watermark : Int32
 }
 
 ///|

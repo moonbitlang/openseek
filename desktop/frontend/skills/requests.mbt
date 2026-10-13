@@ -57,7 +57,7 @@ fn fetch_catalog(
 fn fetch_content(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  request : Int,
+  request : Int32,
   target : PreviewTarget,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -121,7 +121,7 @@ fn fetch_content(
 
 ///|
 fn preview_reply(
-  request : Int,
+  request : Int32,
   target : PreviewTarget,
   reply : @protocol.SkillContentReply,
 ) -> Msg {
@@ -135,7 +135,7 @@ fn preview_reply(
 fn fetch_installed_content(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  request : Int,
+  request : Int32,
   item : InstalledItem,
 ) -> @cmd.Cmd {
   fetch_content(emit, channel, request, Installed(item))

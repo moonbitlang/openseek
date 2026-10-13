@@ -12,18 +12,18 @@
 /// A range in the editor. `(start_line_number, start_column)` is <=
 /// `(end_line_number, end_column)`.
 pub(all) struct Range {
-  start_line_number : Int
-  start_column : Int
-  end_line_number : Int
-  end_column : Int
+  start_line_number : Int32
+  start_column : Int32
+  end_line_number : Int32
+  end_column : Int32
 } derive(Eq, Debug)
 
 ///|
 pub fn Range::Range(
-  start_line_number : Int,
-  start_column : Int,
-  end_line_number : Int,
-  end_column : Int,
+  start_line_number : Int32,
+  start_column : Int32,
+  end_line_number : Int32,
+  end_column : Int32,
 ) -> Range {
   if start_line_number > end_line_number ||
     (start_line_number == end_line_number && start_column > end_column) {
@@ -233,8 +233,8 @@ pub fn Range::get_start_position(self : Range) -> Position {
 /// New range with this range's start and the given end position.
 pub fn Range::set_end_position(
   self : Range,
-  end_line_number : Int,
-  end_column : Int,
+  end_line_number : Int32,
+  end_column : Int32,
 ) -> Range {
   Range(self.start_line_number, self.start_column, end_line_number, end_column)
 }
@@ -275,7 +275,7 @@ fn Range::are_intersecting_impl(a : Range, b : Range) -> Bool {
 
 ///|
 /// Compare ranges by start position, then end position.
-pub fn Range::compare_ranges_using_starts(a : Range, b : Range) -> Int {
+pub fn Range::compare_ranges_using_starts(a : Range, b : Range) -> Int32 {
   if a.start_line_number == b.start_line_number {
     if a.start_column == b.start_column {
       if a.end_line_number == b.end_line_number {

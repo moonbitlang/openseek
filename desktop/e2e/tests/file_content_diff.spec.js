@@ -58,6 +58,7 @@ test('one file tab retains its identity across File, diff modes, and repeated op
   expect(app.requests.filter(request => request.method === 'git.original_file')).toHaveLength(baselineReads);
 
   // Opening another review must not replace the first file's chosen surface.
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await page.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
   await expect(tabs).toHaveCount(2);
   await expect(view.getByRole('button', { name: 'Token diff' })).toHaveAttribute('aria-pressed', 'true');
@@ -91,6 +92,7 @@ test('Search read failures retain the same file comparison and can retry', async
   await page.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   await expect(page.locator('#diff-editor-host')).toContainText('working tree');
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await page.getByRole('tab', { name: 'Search', exact: true }).click();
   await page.getByRole('textbox', { name: 'Search', exact: true }).fill('working');
   app.rpcErrors.set('fs.read_file', 'permission denied');

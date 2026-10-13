@@ -277,6 +277,79 @@ test "decode surfaces a failed durable append off the raw stream" {
 }
 
 ///|
+test "decode surfaces the ways a configured MCP server ends up without tools" {
+  // The engine reports these while it starts and records none of them, so a
+  // dropped arm leaves the user's tools missing with nothing saying why.
+  guard @transcript.decode_engine_event(
+      event_fields({
+        "event": "mcp_config_invalid",
+        "path": "/home/.openseek/mcp.json",
+        "error": "configuration is missing an `mcpServers` object",
+      }),
+    )
+    is Some(
+      @transcript.McpConfigFailed(
+        path="/home/.openseek/mcp.json",
+        error="configuration is missing an `mcpServers` object"
+      )
+    ) else {
+    fail("mcp_config_invalid not decoded")
+  }
+  guard @transcript.decode_engine_event(
+      event_fields({
+        "event": "mcp_config_unreadable",
+        "path": "/home/.openseek/mcp.json",
+        "error": "permission denied",
+      }),
+    )
+    is Some(@transcript.McpConfigFailed(error="permission denied", ..)) else {
+    fail("mcp_config_unreadable not decoded")
+  }
+  guard @transcript.decode_engine_event(
+      event_fields({
+        "event": "mcp_connect_failed",
+        "server": "playwright",
+        "error": "npx: command not found",
+      }),
+    )
+    is Some(
+      @transcript.McpServerFailed(
+        server="playwright",
+        error="npx: command not found"
+      )
+    ) else {
+    fail("mcp_connect_failed not decoded")
+  }
+  for event in ["mcp_list_tools_timeout", "mcp_server_skipped_over_cap"] {
+    guard @transcript.decode_engine_event(
+        event_fields({ "event": event, "server": "playwright" }),
+      )
+      is Some(@transcript.McpServerFailed(server="playwright", ..)) else {
+      fail("\{event} not decoded")
+    }
+  }
+  // A server cut off partway through its tools is reported with the budget
+  // that cut it off, which the engine sends as `kept`.
+  guard @transcript.decode_engine_event(
+      event_fields({
+        "event": "mcp_tools_capped",
+        "server": "playwright",
+        "kept": 100,
+      }),
+    )
+    is Some(@transcript.McpToolsDropped(server="playwright", limit=100)) else {
+    fail("mcp_tools_capped not decoded")
+  }
+  // A server that connected and simply offers no tools is not a failure.
+  assert_true(
+    @transcript.decode_engine_event(
+      event_fields({ "event": "mcp_no_tools", "server": "playwright" }),
+    )
+    is None,
+  )
+}
+
+///|
 test "decode maps subrun brackets onto the lane's open and close" {
   guard @transcript.decode_engine_event(
       event_fields({

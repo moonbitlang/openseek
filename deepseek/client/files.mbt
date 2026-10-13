@@ -20,19 +20,19 @@ pub extend UploadedFile with Debug::{to_repr}
 /// carries the unmodified response body, which need not be JSON.
 pub(all) suberror FileUploadError {
   UnsupportedImageFormat
-  ImageTooLarge(bytes~ : Int, limit~ : Int)
+  ImageTooLarge(bytes~ : Int32, limit~ : Int32)
   InvalidFilename
-  InvalidExpirySeconds(Int)
-  InvalidTimeoutMs(Int)
+  InvalidExpirySeconds(Int32)
+  InvalidTimeoutMs(Int32)
   UnsupportedApiUrl
-  HttpStatus(Int, String)
+  HttpStatus(Int32, String)
   MalformedResponseJson(@json.ParseError)
   InvalidResponseShape(@json.JsonDecodeError)
   UnexpectedFileObject(String)
   UnexpectedFilePurpose(String)
   MissingFileId
   MissingFilename
-  FileByteCountMismatch(expected~ : Int, actual~ : Double)
+  FileByteCountMismatch(expected~ : Int32, actual~ : Double)
   InvalidCreatedAt(Double)
   InvalidExpiresAt(Double)
   MissingExpiresAt
@@ -117,7 +117,7 @@ priv struct FileResponse {
 priv struct ImageUpload {
   data : Bytes
   filename : String
-  expires_after_seconds : Int?
+  expires_after_seconds : Int32?
 }
 
 ///|
@@ -224,8 +224,8 @@ pub async fn Client::upload_image(
   self : Client,
   data : Bytes,
   filename~ : String,
-  expires_after_seconds? : Int,
-  timeout_ms? : Int = 600_000,
+  expires_after_seconds? : Int32,
+  timeout_ms~ : Int32 = 600_000,
 ) -> UploadedFile {
   let upload = ImageUpload::{ data, filename, expires_after_seconds, }
   upload.validate()

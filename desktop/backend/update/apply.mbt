@@ -22,6 +22,23 @@ fn relaunch_marker_path(work_dir : String) -> String {
 }
 
 ///|
+/// The bundle the marker names, or None when there is no readable marker.
+///
+/// The work directory is shared by every host process of one user, so the
+/// marker there is not necessarily this host's: a development build runs
+/// beside the installed application, each from its own bundle. A host acts
+/// only on a marker naming the bundle it runs from, and leaves any other for
+/// the host that wrote it.
+async fn relaunch_marker_target(work_dir : String) -> String? {
+  let marker = relaunch_marker_path(work_dir)
+  guard @fs.exists(marker) else { return None }
+  let target = @fs.read_file(marker).text().trim().to_owned() catch {
+      _ => return None
+    }
+  Some(target)
+}
+
+///|
 /// Swap the staged bundle into the running bundle's place. On a failed
 /// move-in the old bundle is rolled back (clearing any partial copy the
 /// failure left behind first); if even that fails, the raised error names
@@ -101,22 +118,23 @@ pub async fn write_relaunch_marker(
 }
 
 ///|
-/// Consume the relaunch marker: the bundle to reopen, or None. Reading
-/// deletes it, so a crash before the relaunch cannot replay it forever.
-pub async fn take_relaunch_target(work_dir~ : String) -> String? {
-  let marker = relaunch_marker_path(work_dir)
-  guard @fs.exists(marker) else { return None }
-  let target = @fs.read_file(marker).text().trim().to_owned() catch {
-      _ => return None
-    }
-  @fs.remove(marker) catch {
+/// Consume the relaunch marker when it names `bundle_path`, the bundle this
+/// host runs from, and say whether it did. Taking it deletes it, so a crash
+/// before the relaunch cannot replay it forever. A marker naming another
+/// bundle is left alone: taking it would reopen that host's new version
+/// while it is still running, and leave it nothing to relaunch from when it
+/// does exit.
+pub async fn take_relaunch_marker(
+  work_dir~ : String,
+  bundle_path~ : String,
+) -> Bool {
+  guard relaunch_marker_target(work_dir) == Some(bundle_path) else {
+    return false
+  }
+  @fs.remove(relaunch_marker_path(work_dir)) catch {
     _ => ()
   }
-  if target.is_empty() {
-    None
-  } else {
-    Some(target)
-  }
+  true
 }
 
 ///|
@@ -130,8 +148,12 @@ pub async fn cleanup_leftovers(
 ) -> Unit {
   remove_tree(staging_dir(work_dir))
   remove_tree(aside_path(bundle_path))
-  @fs.remove(relaunch_marker_path(work_dir)) catch {
-    _ => ()
+  // Only this bundle's own stale marker. Another bundle's host may have just
+  // written its marker and be about to exit and act on it.
+  if relaunch_marker_target(work_dir) == Some(bundle_path) {
+    @fs.remove(relaunch_marker_path(work_dir)) catch {
+      _ => ()
+    }
   }
 }
 

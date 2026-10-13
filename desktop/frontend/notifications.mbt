@@ -4,14 +4,14 @@
 
 ///|
 /// How long a toast stays up before it dismisses itself.
-const NotificationLifetimeMs : Int = 6000
+const NotificationLifetimeMs : Int32 = 6000
 
 ///|
 /// One transient toast. `id` pairs the auto-dismiss timer with its toast, so
 /// a timer whose toast was already clicked away expires harmlessly instead
 /// of touching a newer one.
 priv struct Notification {
-  id : Int
+  id : Int32
   message : String
 } derive(Eq)
 

@@ -56,6 +56,6 @@ fn is_windows_drive_path(path : String) -> Bool {
 }
 
 ///|
-fn is_ascii_alpha(unit : Int) -> Bool {
+fn is_ascii_alpha(unit : Int32) -> Bool {
   (65 <= unit && unit <= 90) || (97 <= unit && unit <= 122)
 }

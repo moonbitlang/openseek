@@ -1,5 +1,9 @@
 ///|
-fn test_location(uri : String, line : Int, column : Int) -> @language.Location {
+fn test_location(
+  uri : String,
+  line : Int32,
+  column : Int32,
+) -> @language.Location {
   {
     is_test: None,
     uri: try! @base_common.Uri::parse(uri),

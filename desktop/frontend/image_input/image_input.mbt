@@ -3,8 +3,48 @@
 pub(all) enum Event {
   Reading
   Ready(Array[(String, String)])
+  DocumentsReady(
+    images~ : Array[(String, String)],
+    documents~ : Array[Document]
+  )
+  NativeReady(String?)
   Failed(String)
 }
+
+///|
+/// A browser-selected document is plain data. Only a local host may use its
+/// native path; a remote host always receives the selected bytes.
+pub(all) struct Document {
+  name : String
+  data_base64 : String
+  native_path : String?
+} derive(Debug, Eq)
+
+///|
+pub extend Document with Eq::{equal, not_equal}
+
+///|
+pub extend Document with Debug::{to_repr}
+
+///|
+fn document_name(name : String) -> Bool {
+  let name = name.to_lower()
+  name.has_suffix(".pdf") ||
+  name.has_suffix(".docx") ||
+  name.has_suffix(".xlsx")
+}
+
+///|
+extern "js" fn BrowserFile::native_path(
+  self : BrowserFile,
+) -> @js.Nullable[String] =
+  #| file => {
+  #|   if (typeof file.path !== "string" || file.path.length === 0) return null;
+  #|   if (/^[a-zA-Z]:[\\/]/.test(file.path)) {
+  #|     return "/" + file.path[0].toLowerCase() + file.path.slice(1).replaceAll("\\", "/");
+  #|   }
+  #|   return file.path;
+  #| }
 
 ///|
 #external
@@ -25,10 +65,20 @@ fn BrowserFile::blob(self : BrowserFile) -> @dom.Blob {
 
 ///|
 /// Listen to ordinary Event: Rabbita's view-level on_change expects InputEvent.
-fn Selection::pick(on_files : (FixedArray[BrowserFile]) -> Unit) -> Unit {
+fn Selection::pick(
+  on_files : (FixedArray[BrowserFile]) -> Unit,
+  allow_images~ : Bool,
+) -> Unit {
   let input = @dom.document().create_element("input")
   input.set_attribute("type", "file")
-  input.set_attribute("accept", "image/png,image/jpeg,image/webp,image/gif")
+  input.set_attribute(
+    "accept",
+    if allow_images {
+      "image/png,image/jpeg,image/webp,image/gif,.pdf,.docx,.xlsx"
+    } else {
+      ".pdf,.docx,.xlsx"
+    },
+  )
   input.set_attribute("multiple", "")
   input.set_attribute("hidden", "")
   input.add_event_listener_with_options(
@@ -104,11 +154,17 @@ fn Selection::dragged(event : @dom.DragEvent) -> Unit {
 ///|
 /// Open only when this command executes in response to the user's click.
 pub fn pick(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    Selection::pick(files => scheduler.add(Selection(files).read(locale~, emit)))
+    Selection::pick(
+      files => {
+        scheduler.add(Selection(files).read(locale~, allow_images~, emit))
+      },
+      allow_images~,
+    )
   })
 }
 
@@ -116,20 +172,22 @@ pub fn pick(
 /// Event adapters are called only inside DOM callbacks, never by update/view.
 /// Capturing files is synchronous; byte reads and result delivery are commands.
 pub fn pasted(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   event : @dom.ClipboardEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
-  Selection(Selection::pasted(event)).read(locale~, emit)
+  Selection(Selection::pasted(event)).read(locale~, allow_images~, emit)
 }
 
 ///|
 pub fn dropped(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   event : @dom.DragEvent,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
-  Selection(Selection::dropped(event)).read(locale~, emit)
+  Selection(Selection::dropped(event)).read(locale~, allow_images~, emit)
 }
 
 ///|
@@ -142,7 +200,8 @@ pub fn dragged(event : @dom.DragEvent) -> @cmd.Cmd {
 /// Bound allocations before reading. A failed batch adds no partial selection;
 /// previously attached images remain editable and can still be submitted.
 fn Selection::read(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   self : Selection,
   emit : @cmd.Emit[Event],
 ) -> @cmd.Cmd {
@@ -152,17 +211,19 @@ fn Selection::read(
   @cmd.custom_cmd(scheduler => {
     scheduler.add(emit(Reading))
     @js.Promise::from_async(() => {
-      let result = self.load(locale~) catch {
+      let result = self.load(locale~, allow_images~) catch {
         error => {
           scheduler.add(
             emit(
               Failed(
                 match locale {
-                  SimplifiedChinese => "无法读取图片：\{error}"
-                  TraditionalChinese => "無法讀取圖片：\{error}"
-                  Japanese => "画像を読み取れません：\{error}"
-                  English => "Could not read images: \{error}"
-                  Spanish => "No se pudieron leer las imágenes: \{error}"
+                  SimplifiedChinese => "无法读取附件：\{error}"
+                  TraditionalChinese => "無法讀取附件：\{error}"
+                  Japanese =>
+                    "添付ファイルを読み取れません：\{error}"
+                  English => "Could not read attachments: \{error}"
+                  Spanish =>
+                    "No se pudieron leer los archivos adjuntos: \{error}"
                 },
               ),
             ),
@@ -178,11 +239,47 @@ fn Selection::read(
 
 ///|
 async fn Selection::load(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
+  allow_images~ : Bool = true,
   self : Selection,
 ) -> Event {
   for file in self.0 {
     let blob = file.blob()
+    if document_name(file.name()) {
+      if blob.get_size() == 0 || blob.get_size() > 20 * 1024 * 1024 {
+        return Failed(
+          match locale {
+            SimplifiedChinese =>
+              "文档不能为空且不得超过 20 MiB：\{file.name()}"
+            TraditionalChinese =>
+              "文件不能為空且不得超過 20 MiB：\{file.name()}"
+            Japanese =>
+              "文書は空でなく、20 MiB 以下にしてください：\{file.name()}"
+            English =>
+              "Documents must be nonempty and 20 MiB or smaller: \{file.name()}"
+            Spanish =>
+              "Los documentos deben tener contenido y ocupar 20 MiB o menos: \{file.name()}"
+          },
+        )
+      }
+      continue
+    }
+    if !allow_images {
+      return Failed(
+        match locale {
+          SimplifiedChinese =>
+            "当前模型不支持图片，请选择 PDF、DOCX 或 XLSX 文档。"
+          TraditionalChinese =>
+            "目前模型不支援圖片，請選擇 PDF、DOCX 或 XLSX 文件。"
+          Japanese =>
+            "このモデルは画像をサポートしていません。PDF、DOCX、XLSX の文書を選択してください。"
+          English =>
+            "This model does not support images. Choose PDF, DOCX or XLSX documents."
+          Spanish =>
+            "Este modelo no admite imágenes. Elige documentos PDF, DOCX o XLSX."
+        },
+      )
+    }
     if blob.get_size() > 5 * 1024 * 1024 {
       return Failed(
         match locale {
@@ -213,26 +310,41 @@ async fn Selection::load(
         return Failed(
           match locale {
             SimplifiedChinese =>
-              "请选择 PNG、JPEG、WebP 或 GIF 图片：\{file.name()}"
+              "请选择 PNG、JPEG、WebP、GIF 图片或 PDF、DOCX、XLSX 文档：\{file.name()}"
             TraditionalChinese =>
-              "請選擇 PNG、JPEG、WebP 或 GIF 圖片：\{file.name()}"
+              "請選擇 PNG、JPEG、WebP、GIF 圖片或 PDF、DOCX、XLSX 文件：\{file.name()}"
             Japanese =>
-              "PNG、JPEG、WebP または GIF の画像を選択してください：\{file.name()}"
-            English => "Choose PNG, JPEG, WebP or GIF images: \{file.name()}"
-            Spanish => "Elige imágenes PNG, JPEG, WebP o GIF: \{file.name()}"
+              "PNG、JPEG、WebP、GIF の画像、または PDF、DOCX、XLSX の文書を選択してください：\{file.name()}"
+            English =>
+              "Choose PNG, JPEG, WebP or GIF images, or PDF, DOCX or XLSX documents: \{file.name()}"
+            Spanish =>
+              "Elige imágenes PNG, JPEG, WebP o GIF, o documentos PDF, DOCX o XLSX: \{file.name()}"
           },
         )
     }
   }
   let images : Array[(String, String)] = []
+  let documents : Array[Document] = []
   for file in self.0 {
     let blob = file.blob()
     let bytes = blob.bytes()
+    if document_name(file.name()) {
+      documents.push({
+        name: file.name(),
+        data_base64: @base64.encode(bytes),
+        native_path: file.native_path().to_option(),
+      })
+      continue
+    }
     images.push(
       (file.name(), "data:\{blob.get_type()};base64,\{@base64.encode(bytes)}"),
     )
   }
-  Ready(images)
+  if documents.is_empty() {
+    Ready(images)
+  } else {
+    DocumentsReady(images~, documents~)
+  }
 }
 
 ///|

@@ -3,7 +3,7 @@
 /// by the context window instead — a response at the ceiling yields the
 /// turn with a checkpoint summary — so a step count only binds when a
 /// caller passes one explicitly.
-pub let unbounded_max_steps : Int = @int.MAX_VALUE
+pub let unbounded_max_steps : Int32 = @int.MAX_VALUE
 
 ///|
 /// The staleness reminder injected when the `plan` tool has gone unused for
@@ -44,7 +44,7 @@ fn plan_reminder_text(checklist : String?) -> String {
 /// successfully recorded plan for the reminder to re-surface.
 priv struct PlanCadence {
   registered : Bool
-  mut silent_steps : Int
+  mut silent_steps : Int32
   mut checklist : String?
   mut nagged_without_plan : Bool
 }
@@ -129,12 +129,12 @@ pub async fn run_turn_with_append(
   session~ : @agent_session.Session,
   task~ : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
-  max_steps? : Int = unbounded_max_steps,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32 = unbounded_max_steps,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  workspace_root? : String = ".",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  workspace_root~ : String = ".",
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_session.Session {
   @async.with_task_group() <| group => {
@@ -254,11 +254,11 @@ pub async fn[X] run_turn_in_scope(
   content~ : @agent_session.Content,
   submission_id? : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
-  max_steps? : Int = unbounded_max_steps,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32 = unbounded_max_steps,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {

@@ -4,7 +4,7 @@ async fn Schedules::execute(
   entry : @protocol.ScheduleEntry,
   run : @protocol.ScheduleRun,
   on_finished? : (@protocol.ScheduleRun) -> Unit,
-  timeout_ms? : Int,
+  timeout_ms? : Int32,
   sink? : EventSink,
   on_workspaces? : (Array[String]) -> Unit,
 ) -> Unit {
@@ -105,7 +105,7 @@ async fn[G] Schedules::run_cli(
   run : @protocol.ScheduleRun,
   sink? : EventSink,
   on_workspaces? : (Array[String]) -> Unit,
-) -> Int {
+) -> Int32 {
   if spec.workspace is None {
     guard @pathx.Absolute::from_uri_path(run.workspace) is Some(directory) else {
       raise EngineError("Invalid automatic working directory")
@@ -128,10 +128,18 @@ async fn[G] Schedules::run_cli(
   guard config.cwd is Some(cwd) && @fs.kind(cwd.to_string()) is Directory else {
     raise EngineError("The scheduled project's directory is unavailable")
   }
-  let env = engine_process_env(config, self.manager.runtime_dir)
+  let env = engine_process_env(
+    config,
+    self.manager.runtime_dir,
+    host_mcp?=self.manager.host_mcp,
+  )
   let args = ["run", "--session=\{run.session}", "--dir=.", "--approval=never"]
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
+  }
+  // A scheduled run uses the same MCP servers a conversation does.
+  if resolved_mcp_config() is Some(mcp) {
+    args.push("--mcp-config=\{mcp.path.to_string()}")
   }
   args.append(["--", spec.task])
   if self.stopped.contains(run.id) {
@@ -192,7 +200,7 @@ async fn[G] Schedules::run_cli(
 // parsing logs, and fall back to the exit code only when the turn has none.
 async fn scheduled_session_result(
   run : @protocol.ScheduleRun,
-  exit_code~ : Int,
+  exit_code~ : Int32,
 ) -> @protocol.ScheduleRunStatus {
   guard @pathx.Absolute::from_uri_path(run.workspace) is Some(workspace) else {
     raise EngineError("Invalid scheduled workspace")
@@ -211,7 +219,7 @@ async fn scheduled_session_result(
 ///|
 fn schedule_run_status(
   terminal : @agent_session.TurnTerminal?,
-  exit_code~ : Int,
+  exit_code~ : Int32,
 ) -> @protocol.ScheduleRunStatus {
   match terminal {
     Some(Finished(_)) if exit_code == 0 => Succeeded

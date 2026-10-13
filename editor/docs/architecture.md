@@ -215,8 +215,9 @@ The root `viewer` facade and public `viewer/browser` contract package are
 js-only. Concrete browser runtime packages live below the module-private
 `internal/viewer/**` boundary:
 
-- `viewer` is the opaque public façade for `Viewer`, `MarkdownViewer`, and
-  `DiffEditor`. Public `Viewer` construction is only `Viewer::create`;
+- `viewer` is the opaque public façade for `Viewer`, `MarkdownViewer`,
+  `DiffEditor`, and the service-created `FeedbackComposer`. Public `Viewer`
+  construction is only `Viewer::create`;
   precomputed reference locations enter only through
   `Viewer::show_references`, while the provider-backed References contribution
   consumes only the opaque `LanguageHandle`; `ViewerOptions`,
@@ -381,7 +382,13 @@ editor common/browser layers; editor common never depends on them.
   storage/service projection; host DTOs and the callback handle live in
   `viewer/common/agent_feedback_api`, while
   `internal/viewer/contrib/agent_feedback/browser` owns input and bubble
-  widgets. Its emitted stylesheet remains at
+  widgets, including floating composer layout and retained selection painting.
+  Hosts rendering their own documents create an opaque root `FeedbackComposer`
+  through `ViewerServices::create_feedback_composer`, sharing its localization
+  while supplying source geometry and submission callbacks. Hosts dispose the
+  composer before its container or shared services; no concrete feedback widget
+  is exposed through a separate public browser package. Its emitted stylesheet
+  remains at
   `viewer/contrib/agent_feedback/browser/agent_feedback.css`.
 - `internal/viewer/contrib/quick_diff/common` owns baseline state and diff
   contracts; its public host handle lives in

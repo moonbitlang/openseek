@@ -8,7 +8,7 @@
 /// A single review finding at an optional source location.
 struct Finding {
   file : String
-  line : Int?
+  line : Int32?
   severity : String
   category : String
   title : String
@@ -28,8 +28,8 @@ struct ReviewScope {
 /// Deterministic preflight signals that ground the review in the compiler/tests
 /// rather than model opinion.
 struct ReviewStats {
-  files_reviewed : Int
-  findings : Int
+  files_reviewed : Int32
+  findings : Int32
   build : String
   tests : String
 } derive(Debug, Eq, ToJson, FromJson)
@@ -38,7 +38,7 @@ struct ReviewStats {
 /// The full review report. Abstract: the representation stays inside this
 /// package; callers reach it through the accessors and JSON contract below.
 struct ReviewReport {
-  schema_version : Int
+  schema_version : Int32
   scope : ReviewScope
   findings : Array[Finding]
   summary : String
@@ -61,13 +61,13 @@ pub fn ReviewReport::has_blockers(self : ReviewReport) -> Bool {
 
 ///|
 /// Number of findings carried by the report, for summaries and briefs.
-pub fn ReviewReport::finding_count(self : ReviewReport) -> Int {
+pub fn ReviewReport::finding_count(self : ReviewReport) -> Int32 {
   self.findings.length()
 }
 
 ///|
 /// The schema version this build emits and accepts.
-let current_schema_version : Int = 1
+let current_schema_version : Int32 = 1
 
 ///|
 /// Allowed severity values, ordered most to least severe.

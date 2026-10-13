@@ -154,7 +154,7 @@ fn Model::finish_conversation_rename(
 
 ///|
 fn rename_conversation(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   rename : ConversationRename,
 ) -> @cmd.Cmd {

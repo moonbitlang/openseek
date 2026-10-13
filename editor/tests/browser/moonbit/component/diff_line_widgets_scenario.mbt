@@ -128,7 +128,7 @@ pub fn run_diff_line_widgets_test() -> Unit {
 ///|
 extern "js" fn install_line_widget_controls(
   action : (Bool) -> Unit,
-  restrict : (Bool, Int) -> Unit,
+  restrict : (Bool, Int32) -> Unit,
   layout : (Bool) -> Unit,
   refresh : () -> Unit,
   edit : (Bool) -> Unit,

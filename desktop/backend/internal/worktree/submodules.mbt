@@ -28,7 +28,7 @@ fn gitlink_paths(metadata : String) -> Array[String] {
 async fn provision_initialized_submodules(
   origin : @pathx.Absolute,
   checkout : @pathx.Absolute,
-  timeout_seconds : Int,
+  timeout_seconds : Int32,
 ) -> Unit {
   // Worktrees branch from HEAD, not the main checkout's staged index.
   let tree = @gitx.output(origin, ["ls-tree", "-r", "-z", "HEAD"])

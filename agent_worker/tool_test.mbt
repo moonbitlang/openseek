@@ -41,7 +41,11 @@ async fn worker_test_server(
 }
 
 ///|
-fn sse_tool_call(name : String, arguments : Json, total_tokens : Int) -> String {
+fn sse_tool_call(
+  name : String,
+  arguments : Json,
+  total_tokens : Int32,
+) -> String {
   (
     {
       "choices": [
@@ -242,11 +246,11 @@ test "worker input parse validates every field" {
 
 ///|
 fn variant(
-  task? : String = "t",
-  worker_root? : String = "/w",
-  deny_roots? : Array[Json] = ["/g"],
-  allowed_paths? : Array[Json] = ["lib"],
-  base_oid? : String = "abc",
+  task~ : String = "t",
+  worker_root~ : String = "/w",
+  deny_roots~ : Array[Json] = ["/g"],
+  allowed_paths~ : Array[Json] = ["lib"],
+  base_oid~ : String = "abc",
 ) -> Json {
   {
     "task": task,

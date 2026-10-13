@@ -474,7 +474,7 @@ test "encodes and decodes host browse server packets" {
 ///|
 fn assert_hover_plaintext(
   hover : @language.Hover,
-  index : Int,
+  index : Int32,
   expected : String,
 ) -> Unit raise {
   match hover.contents.get(index) {
@@ -487,7 +487,7 @@ fn assert_hover_plaintext(
 ///|
 fn assert_hover_markdown(
   hover : @language.Hover,
-  index : Int,
+  index : Int32,
   expected : String,
 ) -> Unit raise {
   match hover.contents.get(index) {

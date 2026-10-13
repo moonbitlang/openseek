@@ -56,6 +56,10 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     await app.openQuickOpen();
     await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
 
+    if (handleSelector === '.tree-resize-handle') {
+      await page.getByTitle('Show file tree', { exact: true }).click();
+    }
+
     const viewer = page.locator('#viewer-host');
     await expect(viewer).toBeVisible();
     const content = viewer.locator('.view-lines');
@@ -103,6 +107,62 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
     await content.hover();
     await expect.poll(() => viewer.getAttribute('data-test-mouse-moves'))
       .not.toBe('0');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+for (const layout of ['right-sidebar', 'bottom-panel']) {
+  test(`manual ${layout} file tree toggles animate while panel visibility preserves its layout`, async ({ page }) => {
+    await page.addInitScript(layout => localStorage.setItem('openseek.tree_layout', layout), layout);
+    const app = new DesktopBrowserHarness(page);
+    app.directoryEntries['/workspace'] = [{ name: 'README.md', is_dir: false }];
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openQuickOpen();
+    await page.getByRole('option', { name: /src\/main\.mbt/ }).click();
+    const tree = page.locator('.file-tree-pane');
+    await tree.evaluate(element => {
+      element.dataset.treeTransitions = '0';
+      element.addEventListener('transitionrun', event => {
+        if (event.target === element && event.propertyName === '--tree-open-progress') {
+          element.dataset.treeTransitions = String(Number(element.dataset.treeTransitions) + 1);
+        }
+      });
+    });
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await expect(tree).toBeVisible();
+    await expect(tree).toHaveAttribute('data-tree-transitions', '1');
+    await expect.poll(() => tree.evaluate(element => element.getAnimations().length)).toBe(0);
+    for (const name of ['Hide panel', 'Show panel']) {
+      await page.getByRole('button', { name, exact: true }).click();
+      await expect.poll(() => page.locator('.content').evaluate(element => element.getAnimations().length)).toBe(0);
+      await expect(page.locator('.editor')).toHaveClass(/tree-open/);
+      await expect(tree).toHaveAttribute('data-tree-transitions', '1');
+    }
+    await page.getByTitle('Hide file tree', { exact: true }).click();
+    await expect(tree).toHaveAttribute('data-tree-transitions', '2');
+    await expect(tree).toBeHidden();
+    // Narrow layouts show one surface at a time. A hidden tree must release
+    // all layout space, both after a toggle and after selecting a document.
+    await page.setViewportSize({ width: 390, height: 760 });
+    const expectFullViewer = async () => {
+      await expect(tree).toBeHidden();
+      await expect.poll(() => page.locator('.viewer-stack').evaluate(element => {
+        const body = element.parentElement.getBoundingClientRect();
+        const viewer = element.getBoundingClientRect();
+        return Math.max(Math.abs(body.width - viewer.width), Math.abs(body.height - viewer.height));
+      })).toBeLessThanOrEqual(1);
+    };
+    await expectFullViewer();
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await expect(tree).toBeVisible();
+    await page.getByTitle('Hide file tree', { exact: true }).click();
+    await expectFullViewer();
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await page.getByRole('tab', { name: 'Files', exact: true }).click();
+    await tree.getByRole('treeitem', { name: 'README.md', exact: true }).click();
+    await expectFullViewer();
     expect(app.pageErrors).toEqual([]);
   });
 }

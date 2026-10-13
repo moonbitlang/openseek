@@ -10,7 +10,7 @@
 /// is noise. `clock` formats an entry's send stamp; the caller owns the
 /// locale format, and an empty label drops the time row.
 pub fn rail(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   entries : Array[Entry],
   state : State,
   emit : @cmd.Emit[Msg],
@@ -133,7 +133,7 @@ fn preview_measure(event : @dom.MouseEvent) -> (Bool, Double) {
 
 ///|
 fn preview(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   entry : Entry,
   clock : (Double) -> String,
   flip~ : Bool,

@@ -9,7 +9,7 @@ pub suberror ResponseError {
   /// The peer answered with a JSON-RPC error object, carrying its `code` and
   /// `message`. `data` retains the optional protocol-defined diagnostic value
   /// instead of discarding the only structured context supplied by the peer.
-  Failed(code~ : Int, message~ : String, data~ : Json?)
+  Failed(code~ : Int32, message~ : String, data~ : Json?)
   /// The transport ended before a reply to the request arrived.
   Closed
 }
@@ -30,7 +30,7 @@ pub impl Show for ResponseError with fn output(self, logger) {
 ///|
 /// Build a request envelope with a numeric id. Numeric ids let the client
 /// correlate replies by `Int` rather than carrying arbitrary id shapes.
-fn build_request(id : Int, method_ : String, params : Json) -> Json {
+fn build_request(id : Int32, method_ : String, params : Json) -> Json {
   {
     "jsonrpc": "2.0",
     "id": Json(id.to_double()),
@@ -54,11 +54,11 @@ fn build_success_reply(id : Json, result : Json) -> Json {
 
 ///|
 /// The JSON-RPC reserved code for an unimplemented method.
-const MethodNotFound : Int = -32601
+const MethodNotFound : Int32 = -32601
 
 ///|
 /// Build an error reply echoing a peer request's id.
-fn build_error_reply(id : Json, code : Int, message : String) -> Json {
+fn build_error_reply(id : Json, code : Int32, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id,
@@ -82,7 +82,7 @@ struct PeerRequest {
 /// requests (carrying the outcome to deliver), a request *from* the peer we must
 /// answer, or a notification we hand to the notification handler.
 priv enum Incoming {
-  Reply(Int, Result[Json, ResponseError])
+  Reply(Int32, Result[Json, ResponseError])
   // A peer-initiated request. An installed request handler may take ownership
   // and answer it asynchronously; otherwise the client answers with an error.
   PeerRequest(PeerRequest)
@@ -129,7 +129,7 @@ fn classify_incoming(message : Json) -> Incoming {
 ///|
 /// A numeric reply id as an `Int`, but only when it round-trips exactly (no
 /// fractional part, in `Int` range). Otherwise `None`.
-fn int_reply_id(id : Double) -> Int? {
+fn int_reply_id(id : Double) -> Int32? {
   let as_int = id.to_int()
   if as_int.to_double() == id {
     Some(as_int)

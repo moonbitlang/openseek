@@ -16,11 +16,16 @@ for (const deviceScaleFactor of [1, 2]) {
           <script src="/dist/browser/xterm.js"></script>`,
       }));
       await page.goto('/terminal-layout-fixture');
-      await page.evaluate(() => {
+      await page.evaluate(async () => {
         const { Terminal, FitAddon } = globalThis.__openseek_xterm;
         const rootStyle = getComputedStyle(document.documentElement);
+        const fontFamily = rootStyle.getPropertyValue('--font-family-mono').trim();
+        // This isolated page has not used the terminal font yet. Request it
+        // before xterm caches canvas glyph widths; fonts.ready alone does not
+        // load an unused family, and a first-paint fallback can stay cached.
+        await document.fonts.load(`13px ${fontFamily}`, 'MWOK0123456789');
         const terminal = new Terminal({
-          fontFamily: rootStyle.getPropertyValue('--font-family-mono').trim(),
+          fontFamily,
           fontSize: 13,
         });
         const fit = new FitAddon();
@@ -35,6 +40,7 @@ for (const deviceScaleFactor of [1, 2]) {
           for (const width of [428, 700, 360]) {
             await page.evaluate(async ({ fontFamily, fontSize, width }) => {
               const { terminal, fit } = window.terminalFixture;
+              await document.fonts.load(`${fontSize}px ${fontFamily}`, 'MWOK0123456789');
               document.querySelector('.terminal-instance').style.width = `${width}px`;
               terminal.options.fontFamily = fontFamily;
               terminal.options.fontSize = fontSize;

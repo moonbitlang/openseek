@@ -3,21 +3,21 @@
 /// second callback replaces the first delay window; disposal permanently
 /// cancels the currently pending callback.
 pub struct RunOnceScheduler {
-  delay_ms : Int
+  delay_ms : Int32
   mut handle : @base_common.Disposable?
-  schedule_timeout : (() -> Unit, Int) -> @base_common.Disposable
+  schedule_timeout : (() -> Unit, Int32) -> @base_common.Disposable
 }
 
 ///|
-pub fn RunOnceScheduler::RunOnceScheduler(delay_ms : Int) -> RunOnceScheduler {
+pub fn RunOnceScheduler::RunOnceScheduler(delay_ms : Int32) -> RunOnceScheduler {
   RunOnceScheduler::new_with_timer(delay_ms, schedule_timeout)
 }
 
 ///|
 /// Capability-injected constructor used by deterministic widget tests.
 pub fn RunOnceScheduler::new_with_timer(
-  delay_ms : Int,
-  schedule_timeout : (() -> Unit, Int) -> @base_common.Disposable,
+  delay_ms : Int32,
+  schedule_timeout : (() -> Unit, Int32) -> @base_common.Disposable,
 ) -> RunOnceScheduler {
   { delay_ms, handle: None, schedule_timeout, }
 }

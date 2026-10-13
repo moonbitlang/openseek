@@ -53,7 +53,7 @@ fn[Payload : ToJson] browser_op(
 /// the pane sync shows and places it after the next measurement.
 fn browser_open(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : Int32,
   url : String,
   dark : Bool,
 ) -> @cmd.Cmd {
@@ -63,7 +63,7 @@ fn browser_open(
 ///|
 fn browser_navigate(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : Int32,
   url : String,
   dark : Bool,
 ) -> @cmd.Cmd {
@@ -81,7 +81,7 @@ fn browser_navigate(
 /// color-scheme hints and theme attributes the page already opted into.
 fn browser_set_theme(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : Int32,
   dark : Bool,
 ) -> @cmd.Cmd {
   browser_op(dispatch, @commands.browser_set_theme, { id, dark, }, quiet=true)
@@ -130,7 +130,7 @@ fn browser_history_for_active(
 ///|
 fn browser_set_bounds(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : Int32,
   rect : @preview.Rect,
 ) -> @cmd.Cmd {
   browser_op(
@@ -144,7 +144,7 @@ fn browser_set_bounds(
 ///|
 fn browser_set_visible(
   dispatch : @cmd.Emit[Msg],
-  id : Int,
+  id : Int32,
   visible : Bool,
 ) -> @cmd.Cmd {
   browser_op(
@@ -156,7 +156,7 @@ fn browser_set_visible(
 }
 
 ///|
-fn browser_close_view(dispatch : @cmd.Emit[Msg], id : Int) -> @cmd.Cmd {
+fn browser_close_view(dispatch : @cmd.Emit[Msg], id : Int32) -> @cmd.Cmd {
   browser_op(dispatch, @commands.browser_close, { id, }, quiet=true)
 }
 

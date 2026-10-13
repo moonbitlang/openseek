@@ -2,14 +2,14 @@
 priv struct MermaidDiagram {
   wrapper : @rdom.Element
   source : String
-  mut epoch : Int
+  mut epoch : Int32
 }
 
 ///|
 priv struct MermaidRenderRequest {
   lifetime : MarkdownDomLifetime
   diagram : MermaidDiagram
-  epoch : Int
+  epoch : Int32
   theme : String
   loader : MermaidModuleLoader
 }
@@ -23,7 +23,7 @@ priv struct MermaidRuntime {
   mut module_api : MermaidApi?
   mut running : Bool
   mut id_nonce : String
-  mut next_diagram_id : Int
+  mut next_diagram_id : Int32
 }
 
 ///|

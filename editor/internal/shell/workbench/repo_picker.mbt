@@ -8,7 +8,7 @@
 priv struct RepoPickerModel {
   /// The request generation this picker is waiting on; results stamped with
   /// an older generation are superseded and dropped.
-  generation : Int
+  generation : Int32
   /// Absolute host path currently listed; empty until the first listing
   /// (the server starts from the current workspace root).
   path : String
@@ -22,10 +22,10 @@ priv struct RepoPickerModel {
 /// Monotonic stamp for picker requests, module-level like the protocol
 /// request counter: reopening the picker also advances it, so a listing from
 /// a previous picker instance can never land in the current one.
-let repo_picker_generation : Ref[Int] = Ref(0)
+let repo_picker_generation : Ref[Int32] = Ref(0)
 
 ///|
-fn next_repo_picker_generation() -> Int {
+fn next_repo_picker_generation() -> Int32 {
   repo_picker_generation.val += 1
   repo_picker_generation.val
 }
@@ -80,7 +80,7 @@ fn browse_repo_directory_update(
 /// request is still pending.
 fn repo_directory_listed_update(
   model : WorkbenchModel,
-  generation : Int,
+  generation : Int32,
   result : Result[@remote_protocol.HostDirectoryListing, String],
 ) -> (@rabbita.Cmd, WorkbenchModel) {
   match model.repo_picker {
@@ -134,7 +134,7 @@ fn confirm_repo_picker_update(
 ///|
 fn repo_switch_failed_update(
   model : WorkbenchModel,
-  generation : Int,
+  generation : Int32,
   message : String,
 ) -> (@rabbita.Cmd, WorkbenchModel) {
   match model.repo_picker {
@@ -209,7 +209,7 @@ fn workspace_root_switched_update(
 ///|
 fn list_host_directory_cmd(
   emit : @rabbita.Emit[WorkbenchMsg],
-  generation : Int,
+  generation : Int32,
   path : String,
 ) -> @rabbita.Cmd {
   @cmd.perform(result => emit(RepoDirectoryListed(generation, result)), async fn() noraise {
@@ -227,7 +227,7 @@ fn list_host_directory_cmd(
 ///|
 fn switch_workspace_cmd(
   emit : @rabbita.Emit[WorkbenchMsg],
-  generation : Int,
+  generation : Int32,
   path : String,
 ) -> @rabbita.Cmd {
   @cmd.perform(

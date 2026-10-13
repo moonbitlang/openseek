@@ -1,8 +1,10 @@
-// The host's MCP server: a loopback Streamable HTTP endpoint through which
-// the engines this host spawns call host-owned tools. The MCP client those
-// engines use lives in the root module's `mcp/`; this is the other end.
+// The host's tool server: a loopback HTTP endpoint through which the agents
+// this host runs call tools the host contributes. It speaks MCP's tool
+// methods as JSON-RPC, one request per POST, so anything that can POST JSON
+// can be a client: today that is the `seekmoon` command (`cli.mbt`), which an
+// agent runs from a script.
 //
-// One principal is fenced out and one is let in. An engine is let in by the
+// One principal is fenced out and one is let in. An agent is let in by the
 // bearer token its conversation was granted, which also names the
 // conversation — a handler learns who is calling from the token, never from
 // arguments the model wrote. A web page is fenced out: loopback binding
@@ -15,9 +17,16 @@
 // SSE are not offered: the server sends no requests of its own.
 
 ///|
-/// The `mcpServers` entry this server is configured under, and therefore the
-/// middle of every tool's model-facing name: `mcp__seekmoon__<tool>`.
+/// Reported as `serverInfo.name`.
 const ServerName = "seekmoon"
+
+///|
+/// The two variables a grant travels in. The host sets them on every engine
+/// it starts, and everything that engine runs inherits them.
+pub const UrlEnv : String = "OPENSEEK_DESKTOP_TOOLS_URL"
+
+///|
+pub const TokenEnv : String = "OPENSEEK_DESKTOP_TOOLS_TOKEN"
 
 ///|
 const EndpointPath = "/mcp"
@@ -25,12 +34,12 @@ const EndpointPath = "/mcp"
 ///|
 /// Cap on one request body. A `tools/call` carries a tool name and a small
 /// arguments object; anything near this size is not one.
-const MaxRequestBytes : Int = 1048576
+const MaxRequestBytes : Int32 = 1048576
 
 ///|
 /// Deadline for a client to deliver its whole request, so a connection that
 /// opens and then says nothing does not hold a task for the app's lifetime.
-const RequestReadTimeoutMs : Int = 10000
+const RequestReadTimeoutMs : Int32 = 10000
 
 ///|
 /// A failure of the server itself, as opposed to one of its tools.
@@ -53,8 +62,6 @@ struct Server {
   // Reported as `serverInfo.version`.
   version : String
   tools : Map[String, Tool]
-  // Where each conversation's engine config is written; see `config.mbt`.
-  config_dir : @pathx.Path
   // Bearer token to the conversation it was granted to, and back. A grant
   // lasts for the launch: a conversation's engine is respawned many times
   // (model change, idle retirement), and every one of them is the same caller.
@@ -64,31 +71,39 @@ struct Server {
 
 ///|
 /// A server offering `tools`, with its loopback listener already bound on an
-/// ephemeral port. `run` serves it; binding here lets engine configs name
-/// the port before anything is accepted.
-pub async fn Server::Server(
-  tools : Array[Tool],
-  version~ : String,
-  config_dir~ : @pathx.Path,
-) -> Server {
+/// ephemeral port. `run` serves it; binding here lets a grant name the port
+/// before anything is accepted.
+pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
   {
     listener: Server(@socket.Addr::parse("127.0.0.1:0")),
     version,
     tools: Map::from_array(tools.map(tool => (tool.name, tool))),
-    config_dir,
     sessions: Map([]),
     tokens: Map([]),
   }
 }
 
 ///|
-/// The endpoint an engine's MCP client is pointed at.
+/// Where clients POST.
 pub fn Server::url(self : Server) -> String {
   "http://127.0.0.1:\{self.listener.addr.port()}\{EndpointPath}"
 }
 
 ///|
-/// The bearer token `session`'s engines authenticate with, minted on first
+/// The environment that lets a process call this server as `session`: where
+/// it is, and the conversation's bearer token. The host puts it on every
+/// engine it starts for that conversation, so the commands an agent runs
+/// find the server without being told and cannot speak for another
+/// conversation.
+pub fn Server::grant(
+  self : Server,
+  session : String,
+) -> Map[String, String] raise ServerError {
+  Map::from_array([(UrlEnv, self.url()), (TokenEnv, self.token(session))])
+}
+
+///|
+/// The bearer token `session`'s agents authenticate with, minted on first
 /// use.
 fn Server::token(self : Server, session : String) -> String raise ServerError {
   if self.tokens.get(session) is Some(token) {
@@ -173,7 +188,7 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
 /// What reading one request came to.
 priv enum Received {
   Accepted(session~ : String, body~ : Bytes)
-  Refused(Int, String)
+  Refused(Int32, String)
 }
 
 ///|
@@ -193,7 +208,7 @@ async fn read_body(conn : @http.ServerConnection) -> Bytes? {
 ///|
 async fn respond_json(
   conn : @http.ServerConnection,
-  code : Int,
+  code : Int32,
   reason : String,
   body : Json,
 ) -> Unit {
@@ -211,7 +226,7 @@ async fn respond_json(
 ///|
 async fn respond_status(
   conn : @http.ServerConnection,
-  code : Int,
+  code : Int32,
   reason : String,
 ) -> Unit {
   conn.send_response(code, reason, extra_headers={

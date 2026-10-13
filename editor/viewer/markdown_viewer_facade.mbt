@@ -27,9 +27,9 @@ struct MarkdownViewerOptions {
 
 ///|
 pub fn MarkdownViewerOptions::MarkdownViewerOptions(
-  theme? : String = "dark",
-  placeholder? : String = "",
-  show_unused? : Bool = true,
+  theme~ : String = "dark",
+  placeholder~ : String = "",
+  show_unused~ : Bool = true,
 ) -> MarkdownViewerOptions {
   { theme, placeholder, show_unused, }
 }
@@ -120,7 +120,7 @@ fn ViewerServices::markdown_services(
 pub fn MarkdownViewer::create(
   host : @rdom.Element,
   services? : ViewerServices,
-  options? : MarkdownViewerOptions = MarkdownViewerOptions::default(),
+  options~ : MarkdownViewerOptions = MarkdownViewerOptions::default(),
 ) -> MarkdownViewer {
   let markdown_services = services.map(services => {
     services.markdown_services(options)
@@ -256,14 +256,16 @@ pub fn MarkdownViewer::reveal_range_in_center(
 }
 
 ///|
-pub fn MarkdownViewer::collapsed_sections(self : MarkdownViewer) -> Array[Int] {
+pub fn MarkdownViewer::collapsed_sections(
+  self : MarkdownViewer,
+) -> Array[Int32] {
   self.widget.collapsed_sections()
 }
 
 ///|
 pub fn MarkdownViewer::toggle_section_at(
   self : MarkdownViewer,
-  section_index : Int,
+  section_index : Int32,
 ) -> Bool {
   self.widget.toggle_section_at(section_index)
 }

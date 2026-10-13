@@ -8,6 +8,8 @@ import {
 // Values
 pub const MaxEditorFileBytes : Int = 1048576
 
+pub const MaxOfficeFileBytes : Int = 20971520
+
 // Errors
 
 // Types and methods

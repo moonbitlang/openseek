@@ -44,18 +44,18 @@ pub(open) trait Transport {
 /// Cap on the outbox so a peer flooding requests (each answered by the reader)
 /// cannot grow it without bound while the writer is backpressured. Generous
 /// enough that ordinary request/notify traffic never approaches it.
-const OutboxCapacity : Int = 1024
+const OutboxCapacity : Int32 = 1024
 
 ///|
 /// JSON-RPC server error used when an installed peer-request handler cannot
 /// accept more work without blocking the reader.
-const ServerBusy : Int = -32000
+const ServerBusy : Int32 = -32000
 
 ///|
 /// JSON-RPC standard error used when an installed peer-request handler fails.
 /// The handler runs on the reader task, so its error must become a reply rather
 /// than escape and close the client with every unrelated request still pending.
-const InternalError : Int = -32603
+const InternalError : Int32 = -32603
 
 ///|
 /// A JSON-RPC client. Build it with `Client::new`, spawn `run_message_pump` and
@@ -67,14 +67,14 @@ struct Client {
   // each reply's outcome here; the owning request wakes and takes it. Because
   // the reader is the sole reader and MoonBit's async is cooperative, the plain
   // map and counter mutation below never race.
-  pending : Map[Int, @async.Queue[Result[Json, ResponseError]]]
+  pending : Map[Int32, @async.Queue[Result[Json, ResponseError]]]
   // Outgoing messages awaiting the writer, bounded (see OutboxCapacity) so a
   // flooding peer cannot grow it without bound. request/notify block when it is
   // full (natural backpressure); the reader's peer-request auto-replies are
   // dropped when full (see try_enqueue) so routing never blocks. The writer is
   // the only task that touches the wire.
   outbox : @async.Queue[Json]
-  mut next_id : Int
+  mut next_id : Int32
   // Set once the client is closing (EOF, a failed send, or a cancelled task);
   // later requests fail fast with `Closed`, and both tasks return.
   mut closed : Bool
@@ -165,7 +165,7 @@ pub async fn Client::respond(
 pub async fn Client::respond_error(
   self : Client,
   request : PeerRequest,
-  code~ : Int,
+  code~ : Int32,
   message~ : String,
 ) -> Unit {
   guard !self.closed else { return }

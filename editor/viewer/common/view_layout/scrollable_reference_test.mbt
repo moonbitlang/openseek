@@ -3,7 +3,7 @@
 // are kept source-identical.
 
 ///|
-fn simulate_smooth_scroll(from : Double, to : Double) -> Array[(Int, Int)] {
+fn simulate_smooth_scroll(from : Double, to : Double) -> Array[(Int32, Int32)] {
   let viewport_height = 800.0
   let line_height = 20.0
   let operation = @view_layout.SmoothScrollingOperation(
@@ -12,7 +12,7 @@ fn simulate_smooth_scroll(from : Double, to : Double) -> Array[(Int, Int)] {
     -10.0,
     135.0,
   )
-  let result : Array[(Int, Int)] = []
+  let result : Array[(Int32, Int32)] = []
   for now in [0.0, 25.0, 50.0, 75.0, 100.0, 125.0] {
     let scroll_top = operation.tick_at(now).scroll_top
     result.push(
@@ -29,7 +29,7 @@ fn simulate_smooth_scroll(from : Double, to : Double) -> Array[(Int, Int)] {
 fn assert_smooth_trace(
   from : Double,
   to : Double,
-  expected : Array[(Int, Int)],
+  expected : Array[(Int32, Int32)],
 ) -> Unit raise {
   let actual = simulate_smooth_scroll(from, to)
   assert_eq(actual.length(), expected.length())

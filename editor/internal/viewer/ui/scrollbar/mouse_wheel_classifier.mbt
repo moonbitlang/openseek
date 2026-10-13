@@ -21,10 +21,10 @@ fn MouseWheelClassifierItem::MouseWheelClassifierItem(
 
 ///|
 struct MouseWheelClassifier {
-  capacity : Int
+  capacity : Int32
   memory : Array[MouseWheelClassifierItem]
-  mut front : Int
-  mut rear : Int
+  mut front : Int32
+  mut rear : Int32
 }
 
 ///|

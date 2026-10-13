@@ -34,9 +34,9 @@ impl ToJson for ContrastAlgorithm with fn to_json(self) {
 
 ///|
 pub(all) struct Color {
-  r : Int
-  g : Int
-  b : Int
+  r : Int32
+  g : Int32
+  b : Int32
   a : Double
 }
 

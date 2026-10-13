@@ -1,47 +1,82 @@
-# Host MCP server
+# Host tools
 
-The host side of MCP: a loopback Streamable HTTP server through which the
-engines this host spawns call host-owned tools. The MCP *client* those engines
-use is the root module's `mcp/`; this package is the other end and shares no
-code with it.
+How the agents a desktop host runs use capabilities only the host has — the
+dock's browser tabs, to begin with. Two halves live here: the server the host
+runs, and the `seekmoon` command an agent runs to call it.
+
+The package is named for its wire format. The server speaks MCP's tool
+methods (`tools/list`, `tools/call`) as JSON-RPC over HTTP, so an MCP client
+can talk to it; the MCP client engines use for the user's own servers is the
+root module's `mcp/` and shares no code with this.
 
 It depends on async HTTP and core codecs, not on Proton, the engine, or any
 package that contributes tools. Dependencies point inward: a package that owns
-a capability builds `Tool` values over it, and the host binds one `Server`
-with them and hands it to `@api.ApiState`. From there the engine actor asks
-the server for each engine's config, and `ApiState::start_services` serves it
-alongside the backend's other app-lifetime owners.
+a capability builds `Tool` values over it, and the host constructs one
+`Server` with them and hands it to `@api.ApiState`. From there the engine
+actor grants every engine it starts access to the server, and
+`ApiState::start_services` serves it alongside the backend's other
+app-lifetime owners.
 
 ## Shape
 
 - `tool.mbt` — the contract a contributing package implements: `Tool` (name,
   description, input schema, handler) and `ToolCall` (the calling conversation
-  and the arguments). A handler returns the text the model reads; raising makes
-  the call a tool-level failure the model also reads.
+  and the arguments). A handler returns the text the agent reads; raising makes
+  the call a tool-level failure the agent also reads.
 - `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
   and `tools/call`. Nothing else is offered.
-- `server.mbt` — the listener, the bearer-token grants, and one task per
-  request.
-- `config.mbt` — the engine config file that carries a grant to an engine.
+- `server.mbt` — the listener, the grants, and one task per request.
+- `cli.mbt` — the `seekmoon` command, as a function from a command line and
+  an environment to what it prints and its exit status. `cmd/seekmoon` is the
+  executable around it.
+
+## The command
+
+`seekmoon` knows no tool by name. It asks the server what it offers and builds
+its command line from the answer:
+
+- Tools live under `seekmoon tools`, which leaves the top level free for
+  whatever else the command grows.
+- A tool named `browser_get_text` is run as `seekmoon tools browser get-text`.
+  The text before the first underscore groups related tools; the rest is the
+  verb.
+- Each top-level property of the tool's input schema is an option of the same
+  name, with underscores written as hyphens. A string is passed as written, a
+  boolean is a flag, and anything else is given as JSON (`--tab 3`,
+  `--viewport '{"width":800}'`).
+- The tool's text goes to stdout and the exit status is 0. A tool that fails
+  puts its message on stderr and exits 1, as does a host that cannot be
+  reached. A command line no tool accepts exits 2 without calling anything.
+
+So a host package that contributes a tool gets its command, its options, and
+its `--help` with no code here.
+
+An agent runs commands from sandboxed scripts that may start only programs on
+the engine's allowlist, so `seekmoon` has to be on it before an agent can use
+any of this.
 
 ## Grants
 
-An engine reads its MCP servers from one JSON file named by `--mcp-config`,
-once, when it starts. `Server::engine_config(session~)` writes that file: the
-user's own config when they have one (`OPENSEEK_MCP_CONFIG`), with this server
-added under the name `seekmoon` and the conversation's bearer token in its
-`Authorization` header. Tools therefore reach the model as
-`mcp__seekmoon__<tool>`.
+A grant is two environment variables: `OPENSEEK_DESKTOP_TOOLS_URL`, where the
+server is, and `OPENSEEK_DESKTOP_TOOLS_TOKEN`, a bearer token minted for one
+conversation on first use and kept for the launch. `Server::grant(session)`
+returns them and the engine actor sets them on every engine it starts for that
+conversation — a `serve` engine and a scheduled run alike.
 
-A token is minted per conversation on first use and lasts for the launch. It
-is how a handler knows who is calling: `ToolCall.session` comes from the token,
-never from arguments the model wrote.
+The token is how a handler knows who is calling: `ToolCall.session` comes from
+the token, never from arguments the model wrote. Everything an engine runs
+inherits its environment, so a sub-run or a background job acts for the
+conversation that started it. Nothing is written to disk.
+
+A host that offers no tools removes both variables from the engines it starts,
+so a grant it inherited — a host launched from another host's agent — is not
+passed on.
 
 ## Who is kept out
 
 Loopback binding limits reachability, not identity — a web page, including one
 an agent opened in the dock's browser, can reach this port. A request carrying
-an `Origin` header is refused outright, since an engine never sends one and a
+an `Origin` header is refused outright, since `seekmoon` never sends one and a
 browser always does on a cross-origin POST; a request without a granted token
 is refused next. Processes already running as the user are not defended
 against, per `desktop/AGENTS.md`.
@@ -49,7 +84,5 @@ against, per `desktop/AGENTS.md`.
 ## Limits
 
 One megabyte per request body, ten seconds to deliver a request, and 150
-seconds per tool handler — past the engine's own per-call deadline, so a
-handler cannot long outlive the caller that stopped waiting for it. Every
-reply is a single `application/json` body: there is no SSE stream and no
-server-initiated request.
+seconds per tool handler. Every reply is a single `application/json` body:
+there is no SSE stream and no server-initiated request.

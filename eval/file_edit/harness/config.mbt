@@ -9,10 +9,10 @@
 pub struct Config {
   api_key : String
   model : @deepseek.Model
-  runs : Int
-  concurrency : Int
-  min_successes : Int
-  max_steps : Int
+  runs : Int32
+  concurrency : Int32
+  min_successes : Int32
+  max_steps : Int32
   priv out_dir : String
   priv repo_root : String
   prompt_label : String
@@ -26,10 +26,10 @@ pub struct Config {
 pub fn Config::Config(
   api_key~ : String,
   model~ : @deepseek.Model,
-  runs~ : Int,
-  concurrency~ : Int,
-  min_successes~ : Int,
-  max_steps~ : Int,
+  runs~ : Int32,
+  concurrency~ : Int32,
+  min_successes~ : Int32,
+  max_steps~ : Int32,
   out_dir~ : String,
   repo_root~ : String,
   prompt_label~ : String,

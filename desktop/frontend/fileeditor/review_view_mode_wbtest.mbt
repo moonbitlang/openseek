@@ -4,9 +4,9 @@
 fn reviewed_doc(
   path : @pathx.Relative,
   selected : ChangedFile,
-  baseline? : String = "old source",
-  view_mode? : ReviewViewMode = ReviewDiff,
-  generation? : Int = 1,
+  baseline~ : String = "old source",
+  view_mode~ : ReviewViewMode = ReviewDiff,
+  generation~ : Int32 = 1,
 ) -> Doc {
   {
     ..loaded_doc(path.0),

@@ -21,7 +21,7 @@ priv struct CursorRenderData {
   left : Double
   padding_left : Double
   width : Double
-  height : Int
+  height : Int32
 }
 
 ///|
@@ -113,7 +113,7 @@ fn compute_screen_aware_size(
 fn prepare_cursor_render_data(
   measured_left : Double,
   top : Double,
-  line_height : Int,
+  line_height : Int32,
   device_pixel_ratio : Double,
 ) -> CursorRenderData {
   let width = compute_screen_aware_size(device_pixel_ratio, 2.0)
@@ -185,7 +185,7 @@ pub struct ViewCursorRenderData {
   position : @base_common.Position
   content_left : Double
   width : Double
-  height : Int
+  height : Int32
 }
 
 ///|

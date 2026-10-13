@@ -58,7 +58,8 @@ sidebar. Changing the model, reasoning effort, API key, or endpoint replaces
 an idle process before its next start, compaction, or goal; an engine that
 dies mid-turn fails that run with
 its stderr as diagnostics, and the next prompt respawns on the same durable
-session. Idle engines stay alive until the app exits.
+session. An engine left idle for twelve hours, with no background job
+running, is stopped; the next prompt in that conversation starts a new one.
 
 Each conversation is also backed by a durable engine session: the frontend
 generates a `desktop-YYYYMMDD-HHMMSS-mmm` session id at launch and sends it
@@ -157,6 +158,36 @@ shown but never touched: installs refuse to overwrite a same-named entry that
 has no provenance marker, and only entries the app itself installed get an
 Uninstall button.
 
+## MCP servers
+
+The agent can use tools from [MCP](https://modelcontextprotocol.io) servers
+listed in `~/.openseek/mcp.json`, the `{"mcpServers": {...}}` shape described
+in the repository README. The file is created and edited by hand. When no
+file exists the host passes nothing, so an `OPENSEEK_MCP_CONFIG` inherited
+from the launching environment still applies.
+
+An engine connects its servers once, when it starts — one set of server
+processes per conversation. The host therefore reads the file before each
+prompt and keeps a digest of its content among the things that pin an engine
+to its configuration, like the model and the endpoint: an edit starts a new
+engine, and with it every server, on that conversation's next prompt, with no
+desktop restart. A prompt already queued behind a running turn runs on the
+engine it was queued for. Scheduled runs are pointed at the same file.
+
+The engine reads the file itself, a moment after the host does. An edit that
+lands in between leaves the engine on newer content than the host recorded,
+which costs one more engine start than was needed on the next prompt; only an
+edit that is also undone in that moment goes unnoticed until the file changes
+again.
+
+A configuration the engine cannot load, and a server that fails to start, to
+list its tools, or to fit under the tool limit, raise an error toast naming
+the cause; the conversation continues without those tools. A broken file is
+reported once, however many conversations start engines on it. MCP tool calls
+are not gated by the approval prompt, which only covers the built-in tools'
+sandbox escalations. Codex conversations do not
+read this file — Codex takes its MCP servers from its own `config.toml`.
+
 ## API endpoint
 
 SeekMoon is bring-your-own-key: there is no hosted chat proxy, so requests
@@ -234,6 +265,50 @@ outputs beside the frontend bundle, so end users never fetch Mermaid from a
 CDN.
 `viewer_theme.css` supplies the desktop-owned theme variables; the editor's
 reference-shell theme remains development-only.
+
+The file panel imports the pinned `Lampese/office-viewer` Mooncakes package.
+Existing `.docx`, `.xlsx`, and `.pdf` paths open in the file panel and are read
+as bounded binary payloads (up to 20 MiB). DOCX/XLSX use the standalone viewer's
+`office.mbt` reader/layout pipeline. PDFs use its asynchronous PDF.js surface,
+with page navigation, zoom, fit to width, rotation, search, and password prompts.
+The Office/PDF controls and password prompts follow the application's language
+setting. Preview and selection failures show a short message with retry guidance.
+DOCX, XLSX, and PDF previews support trackpad pinch zoom and Ctrl+wheel, with
+the toolbar percentage following the document's zoom. Ordinary two-finger
+scrolling remains available. DOCX/XLSX use the existing 50–200% range and PDFs
+use 25–400%; zooming keeps the document position under the pointer when the
+scroll range permits it. Selecting content continues to work after zooming.
+Selecting text in DOCX/PDF or a cell range in XLSX opens a preview showing its
+content and page or sheet/range. **Add to context** keeps the quotation in the
+active conversation; **Cancel** leaves the draft unchanged. Further selections
+update the pending preview, while separately confirmed quotations accumulate.
+Each quotation chip shows its file, location, and content excerpt, with the
+selected text in its tooltip. PDF quotations retain a complete
+file/hash/parser-bound PDF text-range reference. Image-only pages display
+without OCR or selectable text.
+The composer's **Attach files** action also accepts PDF, DOCX, and XLSX files
+(up to 20 MiB), including clipboard and drop input. A native file already in
+the conversation's workspace becomes a file reference immediately. Otherwise,
+the composer asks before copying the original into
+`.openseek/attachments/<id>/<filename>`; cancelling writes nothing, and the
+source file is retained. Browser and remote attachments upload their bytes
+after the same confirmation. Imported files are present before sending and
+carried into a new task worktree when necessary. Click a file reference to
+preview it and select the content to quote; attaching a document creates no
+extracted-text or JSON sidecar.
+Browser and desktop packages copy the metric-compatible Office fonts and the
+accompanying copyright, license and modification notices from the published
+`Lampese/office-viewer@0.1.3` package into the final web resource tree. The
+browser-ready fonts retain the layout engine's glyphs and metrics and use
+distinct internal names for the modified font programs. No separate font
+checkout or duplicated font assets are needed.
+
+Moon resolves the viewer from the published module declared in `moon.mod`;
+packaging reads its PDF runtime and font assets from the resolved package.
+The runtime and pinned PDF.js engine, worker, stylesheet, CMaps,
+standard fonts, codecs, ICC profiles, and license are packaged in both hosts;
+PDF previews do not fetch runtime resources from a CDN or require a sibling
+Office Viewer checkout.
 
 What still needs preparing, beyond the MoonBit packages:
 

@@ -3,7 +3,7 @@
 priv struct CodexActivityEntry {
   running : Bool
   unseen_outcome : (String, @conversation.RunOutcome)?
-  revision : Int
+  revision : Int32
 } derive(Eq)
 
 ///|
@@ -11,8 +11,8 @@ priv struct CodexActivityEntry {
 /// orders concurrent requests as well as live lifecycle notifications, so a
 /// newer snapshot wins even when its reply arrives first.
 priv struct CodexActivityFrontier {
-  connection_epoch : Int
-  revision : Int
+  connection_epoch : Int32
+  revision : Int32
 }
 
 ///|
@@ -21,8 +21,8 @@ priv struct CodexActivityFrontier {
 /// stale replies; backend-independent display priority lives in the shared row.
 priv struct CodexActivityLedger {
   entries : Map[String, CodexActivityEntry]
-  revision : Int
-  connection_epoch : Int
+  revision : Int32
+  connection_epoch : Int32
 } derive(Eq)
 
 ///|

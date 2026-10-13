@@ -8,6 +8,11 @@ fn empty_result(json : Json) -> Unit raise {
 }
 
 ///|
+pub async fn Connection::bring_to_front(self : Connection) -> Unit {
+  empty_result(self.request("Page.bringToFront", {}))
+}
+
+///|
 pub async fn Connection::enable_dom(self : Connection) -> Unit {
   empty_result(self.request("DOM.enable", {}))
 }
@@ -24,7 +29,7 @@ pub async fn Connection::hide_highlight(self : Connection) -> Unit {
 
 ///|
 pub async fn Connection::add_binding(self : Connection, name : String) -> Unit {
-  empty_result(self.request("Runtime.addBinding", { "name": name.to_json() }))
+  empty_result(self.request("Runtime.addBinding", { "name": Json(name) }))
 }
 
 ///|
@@ -34,7 +39,7 @@ pub async fn Connection::evaluate(
 ) -> Evaluation {
   decode_evaluation(
     self.request("Runtime.evaluate", {
-      "expression": expression.to_json(),
+      "expression": Json(expression),
       "returnByValue": true,
     }),
   )
@@ -51,7 +56,7 @@ pub async fn Connection::resolve_node(
   node : BackendNodeId,
 ) -> RemoteObject {
   decode_resolved_node(
-    self.request("DOM.resolveNode", { "backendNodeId": node.0.to_json() }),
+    self.request("DOM.resolveNode", { "backendNodeId": Json(node.0) }),
   )
 }
 
@@ -64,8 +69,8 @@ pub(all) struct CallFunction {
 ///|
 impl ToJson for CallFunction with fn to_json(self) {
   {
-    "objectId": self.object_id.0.to_json(),
-    "functionDeclaration": self.declaration.to_json(),
+    "objectId": Json(self.object_id.0),
+    "functionDeclaration": Json(self.declaration),
     "returnByValue": true,
   }
 }
@@ -86,7 +91,7 @@ pub async fn Connection::release_object(
   object : RemoteObjectId,
 ) -> Unit {
   empty_result(
-    self.request("Runtime.releaseObject", { "objectId": object.0.to_json() }),
+    self.request("Runtime.releaseObject", { "objectId": Json(object.0) }),
   )
 }
 

@@ -30,7 +30,7 @@ fn CurrentLineMarginHighlightOverlay::CurrentLineMarginHighlightOverlay() -> Cur
 fn prepare_current_line_margin_render(
   viewport : @view_layout.ViewportData,
   view_model : @view_model.ViewModel?,
-  cursor_view_line : Int?,
+  cursor_view_line : Int32?,
   selection_is_empty : Bool,
   editor_has_focus : Bool,
   word_wrap : Bool,

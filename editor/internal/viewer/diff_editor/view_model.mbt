@@ -36,7 +36,7 @@ pub struct DiffEditorViewModel {
   mut state : DiffEditorViewModelState
   mut current_diff : @diff.DocumentDiff?
   priv mut failure : DiffEditorViewModelFailure?
-  mut generation : Int
+  mut generation : Int32
   immediate : @base_browser.RunOnceScheduler
   content_debounce : @base_browser.RunOnceScheduler
   did_change_model : @base_common.Emitter[Unit]
@@ -47,8 +47,8 @@ pub struct DiffEditorViewModel {
 ///|
 pub fn DiffEditorViewModel::DiffEditorViewModel(
   provider : &@diff.DocumentDiffProvider,
-  options? : @diff.DocumentDiffOptions = { ignore_trim_whitespace: true, },
-  schedule_timeout? : (() -> Unit, Int) -> @base_common.Disposable = @base_browser.schedule_timeout,
+  options~ : @diff.DocumentDiffOptions = { ignore_trim_whitespace: true, },
+  schedule_timeout~ : (() -> Unit, Int32) -> @base_common.Disposable = @base_browser.schedule_timeout,
 ) -> DiffEditorViewModel {
   let self : DiffEditorViewModel = {
     provider,
@@ -157,8 +157,8 @@ pub fn DiffEditorViewModel::set_model(
 ///|
 fn DiffEditorViewModel::clear_model_pair_on_will_dispose(
   self : DiffEditorViewModel,
-  original_identity : Int,
-  modified_identity : Int,
+  original_identity : Int32,
+  modified_identity : Int32,
 ) -> Unit {
   if self.disposed {
     return
@@ -255,8 +255,8 @@ fn DiffEditorViewModel::invalidate_content(self : DiffEditorViewModel) -> Unit {
 ///|
 fn DiffEditorViewModel::invalidate_content_for_model_pair(
   self : DiffEditorViewModel,
-  original_identity : Int,
-  modified_identity : Int,
+  original_identity : Int32,
+  modified_identity : Int32,
 ) -> Unit {
   guard self.model is Some(current) &&
     current.original.identity() == original_identity &&
@@ -279,7 +279,7 @@ fn DiffEditorViewModel::schedule_immediate_compute(
 ///|
 fn DiffEditorViewModel::compute_generation(
   self : DiffEditorViewModel,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if !self.disposed && self.generation == generation {
     self.compute_current()

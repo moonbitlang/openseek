@@ -35,7 +35,7 @@ struct WriteScope {
 /// `.worktrees` — because they arrive from a model-facing schema.
 pub async fn WriteScope::create(
   root~ : String,
-  allowed_paths? : Array[String] = [],
+  allowed_paths~ : Array[String] = [],
 ) -> Result[WriteScope, String] {
   let canonical_root = @fs.realpath(root) catch {
     _ => return Err("write scope root does not resolve: \{root}")
@@ -168,7 +168,7 @@ fn WriteScope::prefix_admits(self : WriteScope, path : String) -> Bool {
     path.view(start_offset=root.length() + 1).to_owned()
   }
   let parts = relative.split("/").map(p => p.to_owned()).collect()
-  self.allowed.any(prefix => parts.starts_with(prefix))
+  self.allowed.any(prefix => parts.has_prefix(prefix))
 }
 
 ///|

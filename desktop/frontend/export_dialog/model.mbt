@@ -5,7 +5,7 @@ const DialogId = "conversation-export-dialog"
 /// Each opening captures its source and advances a generation. Late replies
 /// from a dismissed dialog cannot overwrite a later conversation's dialog.
 struct Model {
-  generation : Int
+  generation : Int32
   content : Content?
 } derive(Eq, Debug)
 
@@ -48,15 +48,15 @@ pub(all) enum Msg {
   Download
   Share
   SignIn
-  Downloaded(generation~ : Int, Result[@protocol.SessionExportReply, String])
-  Published(generation~ : Int, @protocol.SessionShareReply)
-  SignedIn(generation~ : Int, Result[Unit, String])
-  ClipboardFinished(generation~ : Int, Result[Unit, String])
+  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
+  Published(generation~ : Int32, @protocol.SessionShareReply)
+  SignedIn(generation~ : Int32, Result[Unit, String])
+  ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
 ///|
 /// The opening a reply belongs to; user actions always target the current one.
-fn Msg::generation(self : Msg) -> Int? {
+fn Msg::generation(self : Msg) -> Int32? {
   match self {
     Downloaded(generation~, _)
     | Published(generation~, _)
@@ -97,7 +97,7 @@ fn Model::showing(self : Model, content : Content) -> Model {
 
 ///|
 pub fn Model::update(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,

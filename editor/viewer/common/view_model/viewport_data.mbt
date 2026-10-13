@@ -12,7 +12,7 @@
 pub fn viewport_data_from_view_model(
   view_model : ViewModel,
   window : @view_layout.LineWindow,
-  line_height~ : Int,
+  line_height~ : Int32,
   layout? : @view_layout.ViewLayout,
   partial_viewport? : @view_layout.PartialViewLinesViewportData,
 ) -> @view_layout.ViewportData {

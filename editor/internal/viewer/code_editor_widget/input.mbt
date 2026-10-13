@@ -177,7 +177,7 @@ fn CodeEditorWidget::handle_editor_key_down(
   key : String,
   alt~ : Bool,
   ctrl_cmd~ : Bool,
-  shift? : Bool = false,
+  shift~ : Bool = false,
 ) -> Bool {
   editor_registry().dispatch_keybinding(self, key, alt~, ctrl_cmd~, shift~)
 }

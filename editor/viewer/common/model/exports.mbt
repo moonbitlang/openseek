@@ -8,7 +8,7 @@
 pub fn InjectedTextOptions::InjectedTextOptions(
   content : String,
   inline_class_name? : String,
-  attached_index? : Int = -1,
+  attached_index~ : Int32 = -1,
 ) -> InjectedTextOptions {
   { content, inline_class_name, attached_index, }
 }
@@ -29,7 +29,7 @@ pub fn InjectedTextOptions::inline_class_name(
 
 ///|
 /// Returns the producer-defined attachment index used by hit testing.
-pub fn InjectedTextOptions::attached_index(self : InjectedTextOptions) -> Int {
+pub fn InjectedTextOptions::attached_index(self : InjectedTextOptions) -> Int32 {
   self.attached_index
 }
 
@@ -40,9 +40,9 @@ pub(all) struct ModelContentChange {
   /// The range that got replaced.
   range : @base_common.Range
   /// The offset of the range that got replaced.
-  range_offset : Int
+  range_offset : Int32
   /// The length of the range that got replaced.
-  range_length : Int
+  range_length : Int32
   /// The new text for the range.
   text : String
 } derive(Debug)

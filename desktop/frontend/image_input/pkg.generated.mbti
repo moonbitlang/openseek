@@ -4,24 +4,36 @@ package "openseek_desktop/frontend/image_input"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
 }
 
 // Values
 pub fn dragged(@dom.DragEvent) -> @cmd.Cmd
 
-pub fn dropped(locale? : @i18n.Locale, @dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn dropped(locale? : @i18n.Locale, allow_images? : Bool, @dom.DragEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pasted(locale? : @i18n.Locale, @dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pasted(locale? : @i18n.Locale, allow_images? : Bool, @dom.ClipboardEvent, @cmd.Emit[Event]) -> @cmd.Cmd
 
-pub fn pick(locale? : @i18n.Locale, @cmd.Emit[Event]) -> @cmd.Cmd
+pub fn pick(locale? : @i18n.Locale, allow_images? : Bool, @cmd.Emit[Event]) -> @cmd.Cmd
 
 // Errors
 
 // Types and methods
+pub(all) struct Document {
+  name : String
+  data_base64 : String
+  native_path : String?
+} derive(Eq, @debug.Debug)
+pub fn Document::equal(Self, Self) -> Bool
+pub fn Document::not_equal(Self, Self) -> Bool
+pub fn Document::to_repr(Self) -> @debug.Repr
+
 pub(all) enum Event {
   Reading
   Ready(Array[(String, String)])
+  DocumentsReady(images~ : Array[(String, String)], documents~ : Array[Document])
+  NativeReady(String?)
   Failed(String)
 }
 

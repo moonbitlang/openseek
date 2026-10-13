@@ -11,12 +11,12 @@
 /// Byte progress for the package currently being downloaded. The total is
 /// optional because HTTP permits responses without Content-Length.
 priv struct UpdateDownloadProgress {
-  downloaded_bytes : Int
-  total_bytes : Int?
+  downloaded_bytes : Int32
+  total_bytes : Int32?
 } derive(Eq)
 
 ///|
-fn UpdateDownloadProgress::percentage(self : UpdateDownloadProgress) -> Int? {
+fn UpdateDownloadProgress::percentage(self : UpdateDownloadProgress) -> Int32? {
   match self.total_bytes {
     Some(total) if total > 0 =>
       Some(
@@ -33,7 +33,7 @@ fn UpdateDownloadProgress::percentage(self : UpdateDownloadProgress) -> Int? {
 fn UpdateDownloadProgress::status_text(
   self : UpdateDownloadProgress,
   version : String,
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
 ) -> String {
   match (self.percentage(), self.total_bytes) {
     (Some(percent), Some(total)) => {
@@ -55,7 +55,7 @@ fn UpdateDownloadProgress::status_text(
 
 ///|
 fn UpdateDownloadProgress::sidebar_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : UpdateDownloadProgress,
 ) -> String {
   match self.percentage() {

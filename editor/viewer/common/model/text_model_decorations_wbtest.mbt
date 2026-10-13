@@ -24,7 +24,7 @@ fn wb_model(text : String) -> TextModel {
 ///|
 fn wb_options(
   class_name : String,
-  stickiness? : TrackedRangeStickiness = AlwaysGrowsWhenTypingAtEdges,
+  stickiness~ : TrackedRangeStickiness = AlwaysGrowsWhenTypingAtEdges,
   glyph_margin_class_name? : String,
   overview_ruler? : ModelDecorationOverviewRulerOptions,
 ) -> ModelDecorationOptions {

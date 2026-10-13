@@ -5,8 +5,8 @@
 ///|
 /// One `tools/call`, as its handler sees it.
 pub(all) struct ToolCall {
-  // The conversation whose engine made the call, recovered from the bearer
-  // token that engine was spawned with — never from anything the model wrote.
+  // The conversation the call is made for, recovered from the bearer token
+  // it was granted — never from anything the model wrote.
   session : String
   // The call's `arguments`, as sent. Handlers decode what they declared in
   // their schema and raise `ToolError` for anything else.
@@ -14,7 +14,7 @@ pub(all) struct ToolCall {
 }
 
 ///|
-/// One tool this host offers to its engines.
+/// One tool this host offers to the agents it runs.
 pub(all) struct Tool {
   name : String
   description : String

@@ -9,13 +9,13 @@ priv type ViewLineFixture
 ///|
 fn geometry_line_input(
   content : String,
-  text_direction? : @view_layout.TextDirection = LTR,
-  contains_rtl? : Bool = false,
-  is_basic_ascii? : Bool = true,
-  stop_rendering_line_after? : Int = -1,
-  space_width? : Double = 10.0,
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
-  continues_with_wrapped_line? : Bool = false,
+  text_direction~ : @view_layout.TextDirection = LTR,
+  contains_rtl~ : Bool = false,
+  is_basic_ascii~ : Bool = true,
+  stop_rendering_line_after~ : Int32 = -1,
+  space_width~ : Double = 10.0,
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
+  continues_with_wrapped_line~ : Bool = false,
 ) -> @view_layout.RenderLineInput {
   @view_layout.RenderLineInput::from_view_line(
     {
@@ -55,7 +55,7 @@ fn render_fixture_line(
 fn mapped_fixture_line(
   input : @view_layout.RenderLineInput,
   fixture : ViewLineFixture,
-  mapping_length : Int,
+  mapping_length : Int32,
 ) -> ViewLine {
   let mapping = @view_layout.CharacterMapping(mapping_length)
   for column in 1..<=mapping_length {
@@ -485,7 +485,7 @@ extern "js" fn view_line_fixture_set_content_first_child(
 ///|
 extern "js" fn view_line_fixture_range_read_count(
   fixture : ViewLineFixture,
-) -> Int = "(fixture) => fixture.rangeReadCount"
+) -> Int32 = "(fixture) => fixture.rangeReadCount"
 
 ///|
 extern "js" fn view_line_fixture_style(

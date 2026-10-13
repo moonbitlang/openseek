@@ -13,10 +13,10 @@
 /// decoration options; `z_index` is kept for parity but — like Monaco's
 /// `LinesDecorationsOverlay` — does not affect the emitted order.
 pub struct DecorationToRender {
-  start_line_number : Int
-  end_line_number : Int
+  start_line_number : Int32
+  end_line_number : Int32
   class_name : String
-  z_index : Int
+  z_index : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -57,8 +57,8 @@ pub fn lines_decorations_to_render(
 /// the previous-decoration dedup window works; `@base_common.compare` also
 /// preserves JavaScript's UTF-16 lexicographic order for different classes.
 pub fn dedup_margin_decorations(
-  visible_start_line_number : Int,
-  visible_end_line_number : Int,
+  visible_start_line_number : Int32,
+  visible_end_line_number : Int32,
   decorations : Array[DecorationToRender],
 ) -> Array[Array[String]] {
   let output : Array[Array[String]] = []

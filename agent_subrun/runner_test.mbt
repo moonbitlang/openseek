@@ -26,7 +26,7 @@ fn parse_answer(json : Json) -> Result[String, String] {
 ///|
 async fn run_script(
   script : String,
-  wall_deadline_ms? : Int = 10_000,
+  wall_deadline_ms~ : Int32 = 10_000,
   child_session? : @agent_subrun.ChildSession,
   emit_event? : (@protocol.Event) -> Unit,
 ) -> @agent_subrun.SubrunResult[String] {

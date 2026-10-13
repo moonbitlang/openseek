@@ -28,7 +28,7 @@ priv struct ServeEngine {
   engine_name : String
   supports_images : Bool
   model : String
-  max_steps : Int
+  max_steps : Int32
   // Owned exclusively by this engine's writer task. No request ever touches
   // it, which is what makes a partial JSONL frame impossible and stdin's
   // close a single-owner event.
@@ -66,6 +66,11 @@ priv struct ServeEngine {
   steer_runs : SteerRunTracker
   job_requests : Map[String, @async.Queue[@wire.Event]]
   queued_runs : Array[QueuedRun]
+  // When this engine last did, or was asked to do, anything: its spawn, a
+  // command handed to its writer, an event read from its stdout. The idle
+  // reaper (idle.mbt) stops an engine whose stamp is old enough; the reaper's
+  // own job probe is the one exchange that leaves it alone.
+  mut last_activity_ms : Int64
 }
 
 ///|
@@ -212,6 +217,11 @@ fn ServeEngine::submit(
   failure_reason~ : String,
   ack? : @async.Queue[EngineError?],
 ) -> Bool {
+  // A jobs snapshot only reads the engine's state — it is what the idle
+  // reaper itself asks before stopping an engine — so it is not activity.
+  if !(command is JobsSnapshot(..)) {
+    self.touch()
+  }
   self.commands.try_put({ command, failure_reason, ack, }) catch {
     _ => false
   }
@@ -675,8 +685,8 @@ fn PendingClaim::release(self : PendingClaim, manager : EngineManager) -> Unit {
 /// sets `moving` first, blocking newcomers, then waits for both counts to
 /// reach zero.
 priv struct SessionRecordGuard {
-  mut readers : Int
-  mut active_ops : Int
+  mut readers : Int32
+  mut active_ops : Int32
   mut moving : Bool
 }
 
@@ -696,16 +706,22 @@ priv enum PumpState {
 /// can run turns concurrently) plus the command queue other ops use to ask
 /// the pump for lifecycle changes. stdin writes go directly from any op;
 /// only spawning needs the pump, because a process must be owned by a task
-/// group that outlives individual IPC requests. Idle engines stay alive for
-/// the app's lifetime — the durable session makes killing them safe, but
-/// keeping them avoids a respawn-and-replay on every conversation switch.
+/// group that outlives individual IPC requests. An idle engine stays alive
+/// across conversation switches — that avoids a respawn-and-replay on each
+/// one — until the idle reaper (idle.mbt) stops it; the durable session is
+/// what makes stopping it safe.
 struct EngineManager {
   engine : String
   runtime_dir : @pathx.Path?
-  // The host's own MCP server, when this launch offers host tools to its
-  // engines. Every engine spawned while it is set starts with a config that
-  // names it (see `engine_mcp_config`).
-  mcp : @mcp.Server?
+  // The host's own tool server, when this host offers tools to the agents it
+  // runs. Every engine started while it is set is granted access to it
+  // through its environment (see `engine_process_env`).
+  host_mcp : @mcp.Server?
+  // The MCP configuration error already forwarded to pages. Every
+  // conversation's engine reports the same broken file, and a person needs
+  // to hear it once; it is forgotten when a configuration loads, or when
+  // there is no file any more.
+  mut mcp_error : String?
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -727,7 +743,7 @@ struct EngineManager {
   // deliberately process-local: BridgeReady starts a fresh revision epoch
   // after a host restart, while the credential file's v1 format stays
   // unchanged.
-  mut settings_revision : Int
+  mut settings_revision : Int32
   commands : @async.Queue[EngineActorCommand]
   mut pump : PumpState
   // Record arbitration must survive pump replacement: a load started under
@@ -1046,12 +1062,13 @@ async fn EngineManager::close_engines_for_sessions(
 fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
-  mcp? : @mcp.Server,
+  host_mcp? : @mcp.Server,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
-    mcp,
+    host_mcp,
+    mcp_error: None,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     settings_lock: Mutex(),
@@ -1067,9 +1084,9 @@ fn new_engine_manager(
 pub fn new_engine_actor(
   engine : String,
   runtime_dir? : @pathx.Path,
-  mcp? : @mcp.Server,
+  host_mcp? : @mcp.Server,
 ) -> EngineActor {
-  { manager: new_engine_manager(engine, runtime_dir?, mcp?), }
+  { manager: new_engine_manager(engine, runtime_dir?, host_mcp?), }
 }
 
 ///|
@@ -1224,6 +1241,11 @@ async fn EngineActor::run_generation(
     // leaves its condemned records under `archived/deleting`. Erase them once
     // per generation; anything this pass misses waits for the next one.
     group.spawn_bg(allow_failure=true, () => manager.sweep_archived_deletions())
+    // Owned by this generation like every engine it stops: a departed pump
+    // takes its reaper with it.
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      manager.reap_idle_engines_forever()
+    })
     for ;; {
       match manager.commands.get() {
         SpawnEngine(claim, config, ack) => {
@@ -1400,6 +1422,7 @@ async fn add_moonbit_path_for_native_engine(
 async fn engine_process_env(
   config : RunConfig,
   runtime_dir : @pathx.Path?,
+  host_mcp? : @mcp.Server,
 ) -> Map[String, String] {
   // Build a complete environment and pass it with `inherit_env=false`.
   // `moonbitlang/async/process` prepends `extra_env` before inherited env on
@@ -1428,15 +1451,28 @@ async fn engine_process_env(
   } else {
     env.remove("OPENSEEK_API_URL")
   }
+  // The host's tools reach an agent as the `seekmoon` command, which finds
+  // the host and proves which conversation it speaks for from the grant in
+  // its environment. Everything the engine runs inherits it, so a sub-run or
+  // a background job acts for the conversation that started it. A host
+  // without tools grants nothing, and must not pass on a grant this process
+  // itself inherited from another host's agent.
+  match host_mcp {
+    Some(server) =>
+      for name, value in server.grant(config.session) {
+        env[name] = value
+      }
+    None => {
+      env.remove(@mcp.UrlEnv)
+      env.remove(@mcp.TokenEnv)
+    }
+  }
   add_moonbit_path_for_native_engine(env, config, runtime_dir)
   env
 }
 
 ///|
-fn engine_process_args(
-  config : RunConfig,
-  mcp_config? : @pathx.Path,
-) -> Array[String] {
+fn engine_process_args(config : RunConfig) -> Array[String] {
   // Desktop engines always run in durable-session mode. Passing placement
   // explicitly keeps it out of the ambient environment inherited by tools.
   // Attach values so a leading `-` remains part of the value.
@@ -1444,48 +1480,13 @@ fn engine_process_args(
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
-  if mcp_config is Some(path) {
-    args.push("--mcp-config=\{path.to_string()}")
+  // The engine reads this file itself and connects its servers once, when
+  // it starts.
+  if config.mcp_config is Some(mcp) {
+    args.push("--mcp-config=\{mcp.path.to_string()}")
   }
   args.append(["--dir", ".", "--approval", "ask"])
   args
-}
-
-///|
-/// The variable an engine takes its MCP config path from when no
-/// `--mcp-config` names one: the user's own, inherited from their shell.
-const McpConfigEnv = "OPENSEEK_MCP_CONFIG"
-
-///|
-/// The MCP config this conversation's engine starts with when the host
-/// offers tools of its own: the config the engine would have inherited
-/// through `env`, with the host's server added. `None` without a host server
-/// leaves the engine on whatever it inherits.
-async fn engine_mcp_config(
-  manager : EngineManager,
-  config : RunConfig,
-  env : Map[String, String],
-) -> @pathx.Path? {
-  guard manager.mcp is Some(server) else { return None }
-  // The engine refuses such an id as well; refusing it first keeps it from
-  // naming a file outside the config directory.
-  guard @session_store.safe_session_id(config.session) else {
-    raise EngineError("session id must be a single path component")
-  }
-  // An empty value is the engine's spelling of "no config".
-  let inherited : @pathx.Path? = if env.get(McpConfigEnv) is Some(value) &&
-    !value.is_empty() {
-    let path = @pathx.Path(value)
-    // The engine would have resolved a relative path against its own
-    // working directory.
-    match config.cwd {
-      Some(cwd) if !path.is_host_absolute() => Some(cwd.join(Relative(value)))
-      _ => Some(path)
-    }
-  } else {
-    None
-  }
-  Some(server.engine_config(session=config.session, inherited?))
 }
 
 ///|
@@ -1535,17 +1536,23 @@ async fn[G] start_serve_engine(
   let (child_stdin, writer) = @process.write_to_process()
   let (reader, child_stdout) = @process.read_from_process()
   let (stderr_reader, child_stderr) = @process.read_from_process()
-  let env = engine_process_env(config, manager.runtime_dir)
+  let env = engine_process_env(
+    config,
+    manager.runtime_dir,
+    host_mcp?=manager.host_mcp,
+  )
   let program = config.engine
+  // An engine with no MCP configuration to load has nothing wrong with it
+  // any more, so the error remembered from one that had is forgotten.
+  if !mcp_configured(config, env) {
+    manager.mcp_error = None
+  }
   // `--approval ask` is the host declaring that it CAN answer a permission
   // question: the engine's own default is never, because an engine cannot tell
   // a controller with a person behind it from a script reading its stdout.
   // Saying so here is what makes the escalation argument exist for this
   // session's model at all.
-  let args = engine_process_args(
-    config,
-    mcp_config?=engine_mcp_config(manager, config, env),
-  )
+  let args = engine_process_args(config)
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {
@@ -1614,6 +1621,7 @@ async fn[G] start_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
+    last_activity_ms: engine_clock_ms(),
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -1684,7 +1692,7 @@ async fn ServeEngine::run(
       self.process.cancel()
       // A wait that errors yields no status; absence stays absent rather
       // than becoming a fabricated exit code downstream.
-      let code : Int? = try self.process.wait() catch {
+      let code : Int32? = try self.process.wait() catch {
         _ => None
       } noraise {
         code => Some(code)
@@ -1761,7 +1769,7 @@ async fn ServeEngine::consume(
   self : ServeEngine,
   manager : EngineManager,
   reader : @process.ReadFromProcess,
-) -> Int {
+) -> Int32 {
   let engine = self
   let sink = self.sink
   // The read end belongs to this task for its whole life, so every way out —
@@ -1788,6 +1796,15 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
+          // One report per error, not one per conversation.
+          Some(McpConfigUnreadable(error~, ..) | McpConfigInvalid(error~, ..)) => {
+            if manager.mcp_error == Some(error) {
+              continue
+            }
+            manager.mcp_error = Some(error)
+          }
+          // A configuration that loaded ends whatever was wrong before it.
+          Some(McpToolsRegistered(..)) => manager.mcp_error = None
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
               emit(
@@ -1810,6 +1827,9 @@ async fn ServeEngine::consume(
           }
           _ => ()
         }
+        // Anything else the engine says on its own account is activity: a
+        // background job reporting in between turns keeps its engine alive.
+        engine.touch()
         // The brackets are the only thing that knows a sub-run's lifetime;
         // the probe in between reads the child's own record, which is the
         // only place its progress is visible to this process.
@@ -2088,7 +2108,7 @@ async fn ServeEngine::retire(
   self : ServeEngine,
   manager : EngineManager,
   stderr_task : @async.Task[String],
-  code? : Int,
+  code? : Int32,
 ) -> Unit {
   let engine = self
   let sink = self.sink
@@ -2099,7 +2119,7 @@ async fn ServeEngine::retire(
       "pid": engine.process.pid,
       // Absent when the process handle yielded no status (a forced
       // retirement whose wait failed) — never a fabricated sentinel.
-      "exit_code": code.map_or(Json::null(), c => c.to_json()),
+      "exit_code": code.map_or(Json::null(), c => Json(c)),
       "run_id": engine.phase.latest_run().unwrap_or(""),
     }
   engine.discard_commands("the engine exited")
@@ -2279,7 +2299,8 @@ fn test_serve_engine(
   phase~ : EnginePhase,
   session_root? : @pathx.Absolute,
   follower? : SessionFollower,
-  condemned? : Bool = false,
+  condemned~ : Bool = false,
+  last_activity_ms~ : Int64 = engine_clock_ms(),
 ) -> ServeEngine {
   {
     session_key: session,
@@ -2301,6 +2322,7 @@ fn test_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
+    last_activity_ms,
   }
 }
 
@@ -2965,6 +2987,7 @@ async test "native engine env has one authoritative bundled moon path" {
     cwd: None,
     session: "s-env",
     session_root: None,
+    mcp_config: None,
   }
   let env = engine_process_env(config, Some(runtime))
   assert_eq(env["OPENSEEK_THINKING"], "high")
@@ -2976,6 +2999,28 @@ async test "native engine env has one authoritative bundled moon path" {
     Some(runtime),
   )
   assert_eq(glm_env["GLM"], "k")
+  // A host with tools grants each conversation's engine its own way in; a
+  // host without them grants nothing, and does not pass on a grant this
+  // process inherited from the agent of another host.
+  let server = @mcp.Server([], version="test")
+  let granted = engine_process_env(config, Some(runtime), host_mcp=server)
+  assert_eq(granted.get(@mcp.UrlEnv), Some(server.url()))
+  let other = engine_process_env(
+    { ..config, session: "s-other", },
+    Some(runtime),
+    host_mcp=server,
+  )
+  assert_true(granted.get(@mcp.TokenEnv) is Some(_))
+  assert_true(granted.get(@mcp.TokenEnv) != other.get(@mcp.TokenEnv))
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  @sys.set_env_var(@mcp.UrlEnv, "http://127.0.0.1:1/mcp")
+  @sys.set_env_var(@mcp.TokenEnv, "inherited")
+  defer @sys.unset_env_var(@mcp.TokenEnv)
+  defer @sys.unset_env_var(@mcp.UrlEnv)
+  let ungranted = engine_process_env(config, Some(runtime))
+  assert_true(ungranted.get(@mcp.UrlEnv) is None)
+  assert_true(ungranted.get(@mcp.TokenEnv) is None)
   @debug.assert_eq(engine_process_args(config), [
     "serve", "--session=s-env", "--dir", ".", "--approval", "ask",
   ])
@@ -2995,6 +3040,25 @@ async test "native engine env has one authoritative bundled moon path" {
       "ask",
     ],
   )
+  // A configured engine is pointed at the user's file, readable or not.
+  let mcp_path = root.join("mcp.json").resolve()
+  for revision in [McpConfigRevision::of_text("{}"), ReadFailed("denied")] {
+    @debug.assert_eq(
+      engine_process_args({
+        ..config,
+        mcp_config: Some({ path: mcp_path, revision, }),
+      }),
+      [
+        "serve",
+        "--session=s-env",
+        "--mcp-config=\{mcp_path.to_string()}",
+        "--dir",
+        ".",
+        "--approval",
+        "ask",
+      ],
+    )
+  }
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"
@@ -3084,6 +3148,7 @@ async test "engine startup rolls back follower on pre-spawn failure" {
     cwd: None,
     session: "s-startup-failure",
     session_root: Some(@pathx.Path(dir + "/root").resolve()),
+    mcp_config: None,
   }
   @async.with_task_group(group => {
     let failed = try {
@@ -3199,6 +3264,7 @@ fn pump_test_config(session : String) -> RunConfig {
     cwd: None,
     session,
     session_root: Some(@pathx.Path("/tmp/openseek-pump-test").resolve()),
+    mcp_config: None,
   }
 }
 

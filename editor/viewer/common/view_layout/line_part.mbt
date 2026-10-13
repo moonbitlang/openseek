@@ -26,19 +26,19 @@ pub(all) enum ForeignElementType {
 ///|
 /// Tokenized segment ending at `end_index` with CSS and metadata flags.
 pub struct LinePart {
-  end_index : Int
+  end_index : Int32
   class_name : String
-  metadata : Int
+  metadata : Int32
   contains_rtl : Bool
 } derive(Eq, Debug)
 
 ///|
 /// Builds a line part.
 pub fn LinePart::LinePart(
-  end_index : Int,
+  end_index : Int32,
   class_name : String,
-  metadata? : Int = 0,
-  contains_rtl? : Bool = false,
+  metadata~ : Int32 = 0,
+  contains_rtl~ : Bool = false,
 ) -> LinePart {
   { end_index, class_name, metadata, contains_rtl, }
 }

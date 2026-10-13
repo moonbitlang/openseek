@@ -4,7 +4,7 @@
 pub async fn configured_system_prompt(
   matches : @argparse.Matches,
   model : @deepseek.Model,
-  workspace_root? : String = ".",
+  workspace_root~ : String = ".",
   session_scratch_dir? : String,
 ) -> String {
   let (base_path, addendum_path, global_skills_dir) = match matches {
@@ -67,7 +67,7 @@ pub async fn configured_system_prompt(
   prompt <+ "\n\n\{environment_block}"
   if session_scratch_dir is Some(dir) {
     prompt <+
-      "\n\nSession scratch directory: \{dir.to_json().stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
+      "\n\nSession scratch directory: \{Json(dir).stringify()} (read/write; helper scripts and cross-call files; allowed outside the workspace)."
   }
   if @resources.directory() is Some(dir) {
     prompt <+ "\n\nBundled resources: \{dir}"
@@ -91,31 +91,17 @@ pub async fn configured_system_prompt(
 }
 
 ///|
-/// Read `AGENTS.md` from the workspace and each ancestor directory. The
-/// resulting section is ordered from the oldest ancestor to the workspace so
-/// more specific instructions appear later, matching Pi's context layering.
+/// Read only the workspace's `AGENTS.md`; ancestor directories may be outside
+/// the caller's filesystem policy. Missing files are optional, but I/O errors
+/// must remain visible.
 async fn agents_prompt_section(workspace_root : String) -> String? {
-  let files : Array[(String, String)] = []
-  let mut current = Some(workspace_root)
-  while current is Some(dir) {
-    let path = @workspace_path.join_child(dir, "AGENTS.md")
-    if @fs.exists(path) && @fs.kind(path) is Regular {
-      // AGENTS files may start with a UTF-8 BOM; keep only the document text.
-      files.push(
-        (path, @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)),
-      )
-    }
-    current = @workspace_path.parent_dir(dir)
-  }
-  guard files.length() > 0 else { return None }
-  let entries = files
-    .rev()
-    .map(file => {
-      let (path, content) = file
-      "<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>"
-    })
-  let joined = entries.join("\n\n")
-  Some("Project-specific instructions and guidelines:\n\n\{joined}")
+  let path = @workspace_path.join_child(workspace_root, "AGENTS.md")
+  guard @fs.exists(path) && @fs.kind(path) is Regular else { return None }
+  // AGENTS files may start with a UTF-8 BOM; keep only the document text.
+  let content = @utf8.decode(@fs.read_file(path).binary(), ignore_bom=true)
+  Some(
+    "Project-specific instructions and guidelines:\n\n<project_instructions path=\"\{path}\">\n\{content}\n</project_instructions>",
+  )
 }
 
 ///|

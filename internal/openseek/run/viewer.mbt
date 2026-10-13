@@ -6,7 +6,7 @@ let inspect_package : String = "moonbitlang/inspect@0.1.0"
 /// How long `--inspect` waits for the viewer to report its URL. The first
 /// launch downloads the viewer, so this is generous; a failure usually shows
 /// up much sooner as an `Error` line.
-let inspect_wait_ms : Int = 60_000
+let inspect_wait_ms : Int32 = 60_000
 
 ///|
 /// `--inspect`: start (or reuse) the session viewer for `session_root` and
@@ -58,7 +58,7 @@ async fn show_in_viewer(session_root : String, session : String) -> Unit {
 async fn start_viewer(
   command : Array[String],
   session_root : String,
-  wait_ms~ : Int,
+  wait_ms~ : Int32,
 ) -> String {
   let dir = @fs.tmpdir(prefix="openseek-inspect-")
   defer (@fs.rmdir(dir, recursive=true) catch { _ => () })

@@ -4,8 +4,8 @@
 ///|
 /// Tree rows currently on screen, in depth-first render order with indentation
 /// depth. Only listed, expanded directories contribute descendants.
-fn visible_entries(state : State) -> Array[(FileEntry, Int)] {
-  let rows : Array[(FileEntry, Int)] = []
+fn visible_entries(state : State) -> Array[(FileEntry, Int32)] {
+  let rows : Array[(FileEntry, Int32)] = []
   push_tree_entries(state, @pathx.Relative::root(), 0, rows)
   rows
 }
@@ -14,8 +14,8 @@ fn visible_entries(state : State) -> Array[(FileEntry, Int)] {
 fn push_tree_entries(
   state : State,
   dir_path : @pathx.Relative,
-  depth : Int,
-  into : Array[(FileEntry, Int)],
+  depth : Int32,
+  into : Array[(FileEntry, Int32)],
 ) -> Unit {
   guard state.children.get(dir_path) is Some(entries) else { return }
   for entry in entries {

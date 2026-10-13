@@ -3,7 +3,7 @@ priv struct GithubReviewIdentity {
   host : String
   owner : String
   repo : String
-  number : Int
+  number : Int32
 }
 
 ///|
@@ -182,7 +182,7 @@ async fn github_review_thread(
     cursor = next
   }
   let normalized = fields.copy()
-  normalized["comments"] = comments.to_json()
+  normalized["comments"] = Json(comments)
   let thread : @protocol.GithubReviewThread = @json.from_json(Json(normalized))
   guard thread.side == "LEFT" || thread.side == "RIGHT" else {
     raise HostError("GitHub returned an unknown diff side.")
@@ -439,7 +439,7 @@ fn github_review_mutation_args(
 ///|
 fn github_review_valid_id(id : String) -> Bool {
   !id.is_empty() &&
-  id.iter().all(c => c is ('0'..='9')) &&
+  id.iter().all(c => c is ('0'..<='9')) &&
   id.iter().any(c => c != '0')
 }
 
@@ -493,7 +493,7 @@ async fn github_review_mutate_op(
             { "thread": { "id": String(id), "isResolved": confirmed, .. }, .. }
           ) &&
           id == thread &&
-          confirmed == resolved.to_json() else {
+          confirmed == Json(resolved) else {
           raise HostError(
             "GitHub did not confirm the conversation update. Refresh before retrying.",
           )

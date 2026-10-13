@@ -20,7 +20,7 @@ async fn bind_test_server(skip_message : String) -> @http.Server? {
 async fn serve_chat_completions(
   group : @async.TaskGroup[Unit],
   skip_message : String,
-  max_connections~ : Int,
+  max_connections~ : Int32,
   handle : async (@http.Request, String, @http.ServerConnection) -> Unit,
 ) -> String? {
   guard bind_test_server(skip_message) is Some(server) else { return None }

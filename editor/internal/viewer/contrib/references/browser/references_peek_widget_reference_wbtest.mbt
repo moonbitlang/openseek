@@ -278,7 +278,7 @@ extern "js" fn references_peek_test_has_attribute(
 extern "js" fn references_peek_test_row(
   tree : @rdom.Element,
   kind : String,
-  index : Int,
+  index : Int32,
 ) -> @rdom.Element =
   #| (tree, kind, index) => {
   #|   const name = kind === "group"
@@ -305,7 +305,7 @@ extern "js" fn references_peek_test_row(
 extern "js" fn references_peek_test_class_descendant(
   root : @rdom.Element,
   class_name : String,
-  index : Int,
+  index : Int32,
 ) -> @rdom.Element =
   #| (root, className, index) => {
   #|   const matches = [];
@@ -325,7 +325,7 @@ extern "js" fn references_peek_test_class_descendant(
 extern "js" fn references_peek_test_class_count(
   root : @rdom.Element,
   class_name : String,
-) -> Int =
+) -> Int32 =
   #| (root, className) => {
   #|   let result = 0;
   #|   const visit = node => {
@@ -342,7 +342,7 @@ extern "js" fn references_peek_test_class_count(
 ///|
 extern "js" fn references_peek_test_visible_row_count(
   tree : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| tree => {
   #|   const hidden = node => {
   #|     for (let current = node; current; current = current.parentElement) {
@@ -366,7 +366,7 @@ extern "js" fn references_peek_test_visible_row_count(
 ///|
 extern "js" fn references_peek_test_visible_tabstop_count(
   tree : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| tree => {
   #|   const hidden = node => {
   #|     for (let current = node; current; current = current.parentElement) {
@@ -392,7 +392,7 @@ extern "js" fn references_peek_test_visible_tabstop_count(
 extern "js" fn references_peek_test_listener_count(
   element : @rdom.Element,
   recursive : Bool,
-) -> Int =
+) -> Int32 =
   #| (element, recursive) => {
   #|   const count = node => {
   #|     const own = [...node.listeners.values()]
@@ -454,7 +454,7 @@ extern "js" fn references_peek_test_same_element(
 ///|
 extern "js" fn references_peek_test_scroll_count(
   element : @rdom.Element,
-) -> Int = "element => element.scrollIntoViewCount"
+) -> Int32 = "element => element.scrollIntoViewCount"
 
 ///|
 extern "js" fn references_peek_test_scroll_options(
@@ -472,13 +472,13 @@ extern "js" fn references_peek_test_scroll_options(
 
 ///|
 priv struct ReferencesPeekTestLog {
-  close_count : Ref[Int]
-  selected : Array[Int]
-  confirmed : Array[Int]
-  opened_side : Array[Int]
-  next_count : Ref[Int]
-  previous_count : Ref[Int]
-  expanded : Array[Int]
+  close_count : Ref[Int32]
+  selected : Array[Int32]
+  confirmed : Array[Int32]
+  opened_side : Array[Int32]
+  next_count : Ref[Int32]
+  previous_count : Ref[Int32]
+  expanded : Array[Int32]
 }
 
 ///|
@@ -512,8 +512,8 @@ fn ReferencesPeekTestLog::callbacks(
 ///|
 fn references_peek_test_location(
   path : String,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
 ) -> @language.Location {
   {
     is_test: None,

@@ -1,7 +1,7 @@
 ///|
 /// Phase 2 of `monaco-hover-logic-chain-port.md`: the Monaco `HoverOperation`
 /// state machine ported into `HoverController`.
-fn markdown_part(start : Int, end : Int, text : String) -> HoverPart {
+fn markdown_part(start : Int32, end : Int32, text : String) -> HoverPart {
   MarkdownHover(
     range=Range(1, start + 1, 1, end + 1),
     contents=[PlainText(text)],
@@ -14,8 +14,8 @@ fn markdown_part(start : Int, end : Int, text : String) -> HoverPart {
 /// shown, the way `on_event` arms one for a fresh anchor (line 1).
 fn HoverController::start_delayed(
   self : HoverController,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> (HoverEffect, HoverController) {
   self.start_showing_or_update_hover(
     HoverRangeAnchor(
@@ -136,8 +136,8 @@ test "clearing rotates the token and drops the shown hover" {
 
 ///|
 fn operation_options(
-  start : Int,
-  source? : HoverStartSource = HoverStartMouse,
+  start : Int32,
+  source~ : HoverStartSource = HoverStartMouse,
 ) -> HoverOperationOptions {
   HoverOperationOptions(
     HoverRangeAnchor(

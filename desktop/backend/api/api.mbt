@@ -34,10 +34,11 @@ struct ApiState {
   // A development build's console entry URL (`internal/remote` serves the
   // frontend on loopback for the system browser); a release build has none.
   console_url : String?
-  // The MCP server through which this backend's engines call tools their
+  // The server through which the agents this backend runs call tools their
   // host contributes; none when the host offers no tools. The engine actor
-  // names it in every engine's config, and `start_services` serves it.
-  mcp : @mcp.Server?
+  // grants every engine it starts access to it, and `start_services` serves
+  // it.
+  host_mcp : @mcp.Server?
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -268,17 +269,17 @@ async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit 
 /// announcement).
 pub fn ApiState::ApiState(
   engine~ : String,
-  codex? : @codex.CodexSettings = @codex.CodexSettings::default(),
+  codex~ : @codex.CodexSettings = @codex.CodexSettings::default(),
   runtime_dir? : @pathx.Path,
   executable? : String,
   auth? : @auth.AuthStore,
-  app_version? : String = "development",
+  app_version~ : String = "development",
   console_url? : String,
   resources? : @resources.Resources,
-  mcp? : @mcp.Server,
+  host_mcp? : @mcp.Server,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
-  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?, mcp?)
+  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?, host_mcp?)
   {
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
@@ -300,7 +301,7 @@ pub fn ApiState::ApiState(
     },
     app_version,
     console_url,
-    mcp,
+    host_mcp,
     on_finished,
   }
 }
@@ -394,6 +395,7 @@ pub fn endpoints(
       ignore(
         state.codex.respond(
           request_id=payload.request_id,
+          response_token=payload.response_token,
           result=payload.result,
         ),
       )
@@ -496,6 +498,16 @@ pub fn endpoints(
           publish_worktree_changed(state, workspace, worktrees)
         },
       )
+    }),
+    Endpoint(@commands.session_fork, payload => {
+      let reply = @engine.fork_session(state.manager, payload)
+      publish_session_changed(
+        state,
+        "created",
+        reply.session,
+        payload.workspace,
+      )
+      reply
     }),
     Endpoint(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)

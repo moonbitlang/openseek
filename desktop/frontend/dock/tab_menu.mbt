@@ -52,7 +52,7 @@ fn tab_menu_target(state : State, tab : DockTab) -> String {
 
 ///|
 pub fn tab_menu(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   state : State,
   target : String,
   dispatch : @cmd.Emit[Msg],

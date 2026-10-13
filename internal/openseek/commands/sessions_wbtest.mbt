@@ -233,3 +233,78 @@ async test "session compaction rejects missing summary file" {
   }
   fail("partial session compaction accepted")
 }
+
+///|
+async test "session fork command copies a session offline under the given id" {
+  @vfs.with_tmpdir(prefix="openseek-cli-session-fork-", root => {
+    let store = @store.SessionStore(root)
+    let origin = @agent_session.Session(
+        SessionId("origin"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("first")]))))
+      .append(Terminal(Finished("one")))
+      .append(User(UserMessage(Content([Text("second")]))))
+      .append(Terminal(Finished("two")))
+    store.create(origin)
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=["origin", "--as", "whole", "--session-root", root],
+        env=Map([]),
+      ),
+    )
+    // Both turns and nothing else. The system prompt is regenerated for the
+    // fork: it names the fork's scratch directory and not the original's.
+    let whole = store.load(SessionId("whole"))
+    assert_eq(whole.last_sequence(), 4)
+    let scratch = Json::Json(store.scratch_dir(SessionId("whole"))).stringify()
+    let origin_scratch = Json::Json(store.scratch_dir(SessionId("origin"))).stringify()
+    assert_true(whole.system_prompt().contains(scratch))
+    assert_false(whole.system_prompt().contains(origin_scratch))
+    assert_eq(store.load(SessionId("origin")).system_prompt(), "system")
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=[
+          "origin", "--as", "first-turn", "--through", "2", "--session-root", root,
+        ],
+        env=Map([]),
+      ),
+    )
+    assert_eq(store.load(SessionId("first-turn")).last_sequence(), 2)
+    // The prompt options are the ones `run` takes: a fork of a session made
+    // with a custom prompt is given that prompt by passing it again.
+    let prompt_file = "\{root}/custom-prompt.txt"
+    @fs.write_file(
+      prompt_file,
+      "custom prompt body",
+      create_mode=CreateOrTruncate,
+    )
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=[
+          "origin", "--as", "custom", "--system-prompt-file", prompt_file, "--session-root",
+          root,
+        ],
+        env=Map([]),
+      ),
+    )
+    assert_true(
+      store
+      .load(SessionId("custom"))
+      .system_prompt()
+      .has_prefix("custom prompt body"),
+    )
+    // Without --as the new session gets a generated id of its own.
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=["origin", "--session-root", root],
+        env=Map([]),
+      ),
+    )
+    assert_eq(store.list().length(), 5)
+  })
+}

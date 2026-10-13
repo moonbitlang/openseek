@@ -9,8 +9,8 @@
 /// `(column, content)` pairs use 1-based model columns.
 fn affinity_view_model(
   text : String,
-  injections : Array[(Int, String)],
-  soft_wrap_column~ : Int,
+  injections : Array[(Int32, String)],
+  soft_wrap_column~ : Int32,
 ) -> @view_model.ViewModel {
   let model = @model.TextModel(
     try! @base_common.Uri::from(
@@ -52,8 +52,8 @@ fn affinity_view_model(
 ///|
 fn view_of(
   vm : @view_model.ViewModel,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
   affinity? : @model.PositionAffinity,
 ) -> String {
   let converter = vm.coordinates_converter()
@@ -67,8 +67,8 @@ fn view_of(
 ///|
 fn normalized(
   vm : @view_model.ViewModel,
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
   affinity : @model.PositionAffinity,
 ) -> String {
   let position = vm.normalize_position(Position(line, column), affinity)

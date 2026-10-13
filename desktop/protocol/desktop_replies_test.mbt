@@ -409,6 +409,7 @@ test "file reads use one absolute path and may return image bytes" {
   let reply = @protocol.BinaryContent(
     data_base64="iVBORw0KGgo=",
     media_type="image/png",
+    sig="12:34",
   )
   let decoded : @protocol.ReadFileReply = @json.from_json(reply.to_json())
   @debug.assert_eq(decoded, reply)

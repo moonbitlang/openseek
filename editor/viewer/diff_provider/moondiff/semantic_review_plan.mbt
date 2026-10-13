@@ -11,8 +11,8 @@ pub(all) enum SemanticReviewStatus {
 /// One physical source range owned by a semantic section. Line numbers are
 /// one-based for display; section DiffEditors use local model coordinates.
 pub(all) struct SemanticReviewSourceRange {
-  start_line_number : Int
-  line_count : Int
+  start_line_number : Int32
+  line_count : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -37,7 +37,7 @@ pub(all) enum SemanticReviewDiff {
 /// a fragment-local diff only; no global two-sided line order is synthesized.
 pub(all) struct SemanticReviewSection {
   key : String
-  identity : Int?
+  identity : Int32?
   kind : SemanticReviewSectionKind
   old_range : SemanticReviewSourceRange?
   new_range : SemanticReviewSourceRange?
@@ -227,7 +227,7 @@ fn whole_section(
 
 ///|
 fn top_level_section(
-  identity : Int,
+  identity : Int32,
   section : @mbtdiff.DiffSection,
   old_lines : Array[String],
   new_lines : Array[String],
@@ -386,10 +386,10 @@ pub fn compute_sectioned_semantic_review_plan(
   old_source : String,
   new_source : String,
   mode : MoonDiffMode,
-  old_name? : String = "old",
-  new_name? : String = "new",
-  ignore_comments? : Bool = true,
-  ignore_tests? : Bool = true,
+  old_name~ : String = "old",
+  new_name~ : String = "new",
+  ignore_comments~ : Bool = true,
+  ignore_tests~ : Bool = true,
 ) -> SectionedSemanticReviewPlan? {
   let diff_mode = match mode {
     Line => return None

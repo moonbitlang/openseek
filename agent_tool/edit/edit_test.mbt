@@ -736,7 +736,7 @@ async test "replace_all_preview lists every site and round-trips into multi_edit
     }
     assert_eq(selected.length(), 2)
     let action = match @multi_edit.definition().execute {
-      Async(execute) => execute({ "edits": selected.to_json() })
+      Async(execute) => execute({ "edits": Json(selected) })
       Sync(_) => fail("multi_edit should be async")
     }
     guard action is Respond(applied) else { fail("expected Respond") }

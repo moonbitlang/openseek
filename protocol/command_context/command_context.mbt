@@ -28,7 +28,7 @@
 /// at the output cap), the merged stdout+stderr `text` (truncated to the
 /// client's character budget), and whether that truncation happened.
 pub(all) struct ShellOutput {
-  exit_code : Int?
+  exit_code : Int32?
   text : String
   output_limit_reached : Bool
 }
@@ -105,7 +105,7 @@ pub fn parse(content : String) -> ShellCommand? {
 }
 
 ///|
-fn exit_header(exit_code : Int?) -> String {
+fn exit_header(exit_code : Int32?) -> String {
   if exit_code is Some(code) {
     "exit=\{code}"
   } else {

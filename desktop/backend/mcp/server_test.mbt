@@ -1,29 +1,20 @@
 ///|
-/// What an engine holds after reading the config its conversation was
-/// granted: where the server is, and the header that lets it in.
+/// What a client holds once its conversation has been granted: where the
+/// server is, and the header that lets it in.
 priv struct Grant {
   url : String
   authorization : String
 }
 
 ///|
-/// Read a grant back out of an engine config, the way an engine would.
-async fn read_grant(config : @pathx.Path) -> Grant {
-  guard @json.parse(@fsx.read_text(config))
-    is {
-      "mcpServers": {
-        "seekmoon": {
-          "url": String(url),
-          "headers": { "Authorization": String(authorization), .. },
-          ..
-        },
-        ..
-      },
-      ..
-    } else {
-    fail("the engine config names no seekmoon server")
+/// `session`'s grant, read back out of the environment the host would set.
+fn grant(server : @mcp.Server, session : String) -> Grant raise {
+  let env = server.grant(session)
+  guard env.get(@mcp.UrlEnv) is Some(url) &&
+    env.get(@mcp.TokenEnv) is Some(token) else {
+    fail("a grant names the server and carries a token")
   }
-  { url, authorization, }
+  { url, authorization: "Bearer \{token}", }
 }
 
 ///|
@@ -41,14 +32,28 @@ fn test_tools() -> Array[@mcp.Tool] {
       input_schema: { "type": "object" },
       call: _ => raise @mcp.ToolError("the page is gone; open it again"),
     },
+    {
+      name: "browser_get_text",
+      description: "Read a tab's text.",
+      input_schema: {
+        "type": "object",
+        "properties": {
+          "tab": { "type": "integer", "description": "The tab to read." },
+          "selector": { "type": "string" },
+          "include_hidden": { "type": "boolean" },
+          "viewport": { "type": "object" },
+        },
+        "required": ["tab"],
+      },
+      call: call => "\{call.session} \{call.arguments.stringify()}",
+    },
   ]
 }
 
 ///|
 /// Serve the test tools for the duration of `body`.
 async fn with_server(body : async (@mcp.Server) -> Unit) -> Unit {
-  let dir = @pathx.Path(@fs.tmpdir(prefix="openseek-mcp-server-"))
-  let server = @mcp.Server(test_tools(), version="1.2.3", config_dir=dir)
+  let server = @mcp.Server(test_tools(), version="1.2.3")
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => server.run())
     body(server)
@@ -58,7 +63,11 @@ async fn with_server(body : async (@mcp.Server) -> Unit) -> Unit {
 ///|
 /// POST one JSON-RPC message, returning the status and the reply body when
 /// there is one.
-async fn post(grant : Grant, message : Json, origin? : String) -> (Int, Json?) {
+async fn post(
+  grant : Grant,
+  message : Json,
+  origin? : String,
+) -> (Int32, Json?) {
   let headers : @http.Headers = {
     "Content-Type": "application/json",
     "Authorization": grant.authorization,
@@ -72,11 +81,11 @@ async fn post(grant : Grant, message : Json, origin? : String) -> (Int, Json?) {
 }
 
 ///|
-fn request(id : Int, method_ : String, params : Json) -> Json {
+fn request(id : Int32, method_ : String, params : Json) -> Json {
   {
     "jsonrpc": "2.0",
-    "id": id.to_json(),
-    "method": method_.to_json(),
+    "id": Json(id),
+    "method": Json(method_),
     "params": params,
   }
 }
@@ -84,7 +93,7 @@ fn request(id : Int, method_ : String, params : Json) -> Json {
 ///|
 async test "the engine's own MCP client lists and calls this server's tools" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-interop"))
+    let grant = grant(server, "s-interop")
     @async.with_task_group(group => {
       let connection = @streamhttp.connect(
         group,
@@ -97,7 +106,9 @@ async test "the engine's own MCP client lists and calls this server's tools" {
       assert_eq(connection.init().server_name, "seekmoon")
       assert_eq(connection.init().server_version, "1.2.3")
       let client = connection.client()
-      assert_eq(client.list_tools().map(tool => tool.name), ["echo", "broken"])
+      assert_eq(client.list_tools().map(tool => tool.name), [
+        "echo", "broken", "browser_get_text",
+      ])
       let echoed = client.call_tool(name="echo", arguments={ "tab": 3 })
       assert_false(echoed.is_error)
       assert_eq(echoed.render_text(), "s-interop {\"tab\":3}")
@@ -114,9 +125,9 @@ async test "the engine's own MCP client lists and calls this server's tools" {
 ///|
 async test "a token names its conversation, and a conversation keeps its token" {
   with_server(server => {
-    let first = read_grant(server.engine_config(session="s-one"))
-    let again = read_grant(server.engine_config(session="s-one"))
-    let other = read_grant(server.engine_config(session="s-two"))
+    let first = grant(server, "s-one")
+    let again = grant(server, "s-one")
+    let other = grant(server, "s-two")
     assert_eq(first.authorization, again.authorization)
     assert_true(first.authorization != other.authorization)
     let call = request(1, "tools/call", { "name": "echo" })
@@ -142,10 +153,10 @@ async test "a token names its conversation, and a conversation keeps its token" 
 ///|
 async test "initialize answers a supported version in kind and any other with the latest" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-version"))
+    let grant = grant(server, "s-version")
     let initialize = (version : String) => {
       request(1, "initialize", {
-        "protocolVersion": version.to_json(),
+        "protocolVersion": Json(version),
         "capabilities": Json::empty_object(),
         "clientInfo": { "name": "test", "version": "0" },
       })
@@ -167,8 +178,8 @@ async test "initialize answers a supported version in kind and any other with th
 ///|
 async test "protocol errors are JSON-RPC errors, not tool results" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-errors"))
-    let code = (reply : (Int, Json?)) => {
+    let grant = grant(server, "s-errors")
+    let code = (reply : (Int32, Json?)) => {
       match reply {
         (200, Some({ "error": { "code": Number(code, ..), .. }, .. })) =>
           Some(code.to_int())
@@ -194,7 +205,7 @@ async test "protocol errors are JSON-RPC errors, not tool results" {
 ///|
 async test "a notification is accepted without a reply" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-notify"))
+    let grant = grant(server, "s-notify")
     let notification : Json = {
       "jsonrpc": "2.0",
       "method": "notifications/initialized",
@@ -207,7 +218,7 @@ async test "a notification is accepted without a reply" {
 ///|
 async test "requests without a granted token, or from a web origin, are refused" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-auth"))
+    let grant = grant(server, "s-auth")
     let ping = request(1, "ping", Json::empty_object())
     assert_true(post(grant, ping) is (200, Some(_)))
     assert_true(
@@ -229,7 +240,7 @@ async test "requests without a granted token, or from a web origin, are refused"
 ///|
 async test "a body that is not JSON is a parse error" {
   with_server(server => {
-    let grant = read_grant(server.engine_config(session="s-parse"))
+    let grant = grant(server, "s-parse")
     let (response, body) = @http.post(grant.url, "{not json", headers={
       "Authorization": grant.authorization,
     })
@@ -241,48 +252,90 @@ async test "a body that is not JSON is a parse error" {
 }
 
 ///|
-async test "the engine config keeps the user's servers beside this one" {
+async test "the command runs a tool by its group and verb, with its schema's properties as options" {
   with_server(server => {
-    let dir = @pathx.Path(@fs.tmpdir(prefix="openseek-mcp-inherited-"))
-    let theirs = dir.join("mcp.json")
-    @fsx.write_text(
-      theirs,
-      (
-        {
-          "mcpServers": {
-            "codex": { "command": "codex", "args": ["mcp-server"] },
-            "seekmoon": { "url": "http://example.invalid/" },
-          },
-          "note": "kept",
-        } : Json).stringify(),
+    let ran = @mcp.cli(
+      [
+        "tools", "browser", "get-text", "--tab", "3", "--selector", "-main", "--include-hidden",
+        "--viewport", "{\"width\":800}",
+      ],
+      server.grant("s-cli"),
     )
-    let config = server.engine_config(session="s-merge", inherited=theirs)
-    let grant = read_grant(config)
-    guard @json.parse(@fsx.read_text(config))
-      is { "mcpServers": Object(servers), "note": String(note), .. } else {
-      fail("the merged config lost its shape")
-    }
-    assert_eq(note, "kept")
-    assert_eq(servers.keys().to_array(), ["codex", "seekmoon"])
-    // The entry under this server's name is this server's, whatever the
-    // user's file had there.
-    assert_true(grant.url.has_prefix("http://127.0.0.1:"))
+    assert_eq(ran.code, 0)
+    assert_eq(ran.stderr, "")
+    // A string is passed as written, a boolean is its flag, and everything
+    // else is read as JSON; the conversation comes from the grant.
+    assert_eq(
+      ran.stdout,
+      "s-cli {\"tab\":3,\"selector\":\"-main\",\"include_hidden\":true,\"viewport\":{\"width\":800}}",
+    )
+    // A tool whose name has no group is its own command, and an unset
+    // option is left out rather than sent empty.
+    let bare = @mcp.cli(["tools", "echo"], server.grant("s-cli"))
+    assert_eq((bare.code, bare.stdout), (0, "s-cli {}"))
+    let only_required = @mcp.cli(
+      ["tools", "browser", "get-text", "--tab", "7"],
+      server.grant("s-other"),
+    )
+    assert_eq(only_required.stdout, "s-other {\"tab\":7}")
   })
 }
 
 ///|
-async test "an unreadable user config costs only the user's servers" {
+async test "a tool that fails is the command failing, with the tool's words on stderr" {
   with_server(server => {
-    let dir = @pathx.Path(@fs.tmpdir(prefix="openseek-mcp-broken-"))
-    let broken = dir.join("mcp.json")
-    @fsx.write_text(broken, "{not json")
-    for inherited in [broken, dir.join("absent.json")] {
-      let config = server.engine_config(session="s-broken", inherited~)
-      guard @json.parse(@fsx.read_text(config))
-        is { "mcpServers": Object(servers), .. } else {
-        fail("no config was written")
-      }
-      assert_eq(servers.keys().to_array(), ["seekmoon"])
+    let failed = @mcp.cli(["tools", "broken"], server.grant("s-cli"))
+    assert_eq(failed.code, 1)
+    assert_eq(failed.stdout, "")
+    assert_eq(failed.stderr, "the page is gone; open it again")
+  })
+}
+
+///|
+async test "a command line no tool accepts is a usage error and calls nothing" {
+  with_server(server => {
+    let env = server.grant("s-cli")
+    for
+      args in [
+        ["tools", "browser", "close"],
+        ["tools", "browser"],
+        ["tools", "browser", "get-text"],
+        ["tools", "browser", "get-text", "--tab", "three"],
+        ["tools", "echo", "--tab", "1"],
+        ["tools"],
+        ["browser", "get-text", "--tab", "3"],
+      ] {
+      let refused = @mcp.cli(args, env)
+      assert_eq(refused.code, 2)
+      assert_eq(refused.stdout, "")
+      assert_false(refused.stderr.is_empty())
     }
+    assert_true(
+      @mcp.cli(["tools", "browser", "get-text", "--tab", "three"], env).stderr.contains(
+        "--tab takes JSON",
+      ),
+    )
+  })
+}
+
+///|
+async test "without a grant the command says so; with a stale one the host refuses it" {
+  with_server(server => {
+    let none = @mcp.cli(["tools", "echo"], {})
+    assert_eq(none.code, 2)
+    assert_true(none.stderr.contains(@mcp.UrlEnv))
+    // A token from an earlier launch of the app: the server is there, and
+    // does not know it.
+    let stale = server.grant("s-cli")
+    stale[@mcp.TokenEnv] = "0000"
+    let refused = @mcp.cli(["tools", "echo"], stale)
+    assert_eq(refused.code, 1)
+    assert_true(refused.stderr.contains("HTTP 401"))
+    // No app at all behind the address.
+    let gone = server.grant("s-cli")
+    gone[@mcp.UrlEnv] = "http://127.0.0.1:1/mcp"
+    let absent = @mcp.cli(["tools", "echo"], gone)
+    assert_eq(absent.code, 1)
+    assert_true(absent.stderr.contains("could not reach"))
   })
 }

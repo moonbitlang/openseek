@@ -74,7 +74,7 @@ struct AuthStore {
 pub async fn AuthStore::load(
   runtime_dir? : @pathx.Path,
   env_override? : ConnectorConfig,
-  app_version? : String = "development",
+  app_version~ : String = "development",
 ) -> AuthStore {
   let session = match runtime_dir {
     Some(dir) => load_session_file(dir)
@@ -97,7 +97,7 @@ pub async fn AuthStore::load(
 ///|
 /// A store with nothing signed in and nothing persisted — the default for
 /// test-constructed API states.
-pub fn AuthStore::empty(app_version? : String = "development") -> AuthStore {
+pub fn AuthStore::empty(app_version~ : String = "development") -> AuthStore {
   {
     runtime_dir: None,
     env_override: None,

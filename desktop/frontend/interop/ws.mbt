@@ -9,8 +9,8 @@
 priv struct RpcSession {
   socket : @js.Value
   // id → the promise/resolve/reject record of the awaiting request.
-  pending : Map[Int, @js.Value]
-  mut next_id : Int
+  pending : Map[Int32, @js.Value]
+  mut next_id : Int32
   mut open_ : Bool
 }
 
@@ -180,6 +180,11 @@ async fn ws_request(
 /// page drives remote channels too, so "this page has an embedded host" says
 /// nothing about a request that went out over a socket.
 fn ws_reply_failure(error : Error) -> Error {
+  if error is @js.Error_(value) &&
+    js_prop(value, "__openseek_connection_lost") is Some(marker) &&
+    (@js.Cast::into(marker) : Bool?) is Some(true) {
+    return BridgeDisconnected(bridge_error_text(error))
+  }
   guard error is @js.Error_(value) && browser_rpc_error_is_definite(value) else {
     return BridgeError(bridge_error_text(error))
   }
@@ -189,7 +194,7 @@ fn ws_reply_failure(error : Error) -> Error {
 ///|
 fn remove_pending_if_same(
   session : RpcSession,
-  id : Int,
+  id : Int32,
   deferred : @js.Value,
 ) -> Unit {
   if session.pending.get(id) is Some(current) &&
@@ -229,7 +234,7 @@ fn handle_message(
     return
   }
   guard js_prop(envelope, "id") is Some(id_value) &&
-    (@js.Cast::into(id_value) : Int?) is Some(id) else {
+    (@js.Cast::into(id_value) : Int32?) is Some(id) else {
     return
   }
   // A reply for a request this session no longer tracks (settled twice, or
@@ -264,7 +269,11 @@ fn handle_message(
 /// message wherever the op's error lands.
 fn reject_all(session : RpcSession, message : String) -> Unit {
   for _, deferred in session.pending {
-    settle(deferred, "reject", js_error(message, rpc_rejection=false))
+    settle(
+      deferred,
+      "reject",
+      js_error(message, rpc_rejection=false, connection_lost=true),
+    )
   }
   session.pending.clear()
 }
@@ -275,11 +284,18 @@ fn settle(deferred : @js.Value, way : String, value : @js.Value) -> Unit {
 }
 
 ///|
-fn js_error(message : String, rpc_rejection~ : Bool) -> @js.Value {
+fn js_error(
+  message : String,
+  rpc_rejection~ : Bool,
+  connection_lost~ : Bool = false,
+) -> @js.Value {
   let ctor : @js.Value = @js.globalThis.get_with_string("Error")
   let error : @js.Value = ctor.new([message])
   if rpc_rejection {
     error.set_with_string("__openseek_rpc_rejection", true)
+  }
+  if connection_lost {
+    error.set_with_string("__openseek_connection_lost", true)
   }
   error
 }
@@ -339,7 +355,7 @@ fn js_raised(value : @js.Value) -> Error {
 
 ///|
 test "a socket that dies under a sent request is not a refusal" {
-  // `reject_all` rejects with an unmarked error, and the classifier's "this
+  // `reject_all` rejects with a connection-loss marker, and the classifier's "this
   // page has an embedded host" shortcut would otherwise read that as the
   // host's own answer — a proton page drives remote channels too, and under
   // that reading a lost socket would hand a goal's draft back while the
@@ -355,15 +371,29 @@ test "a socket that dies under a sent request is not a refusal" {
   defer @js.globalThis.set_with_string("__MoonBit__", previous)
   assert_true(openseek_api() is Some(_))
   let lost = ws_reply_failure(
-    js_raised(js_error("SeekMoon connection lost", rpc_rejection=false)),
+    js_raised(
+      js_error(
+        "SeekMoon connection lost",
+        rpc_rejection=false,
+        connection_lost=true,
+      ),
+    ),
   )
   assert_true(bridge_failure(lost) is Unknown)
+  assert_true(bridge_connection_lost(Remote("device"), lost))
+  assert_false(bridge_connection_lost(Local, lost))
+  assert_true(bridge_connection_lost(Remote("device"), BridgeUnsent("down")))
+  assert_false(bridge_connection_lost(Local, BridgeUnsent("missing bridge")))
+  assert_false(
+    bridge_connection_lost(Remote("device"), BridgeError("Malformed reply")),
+  )
   // A peer's own JSON-RPC error is the one remote failure that *is* an
   // answer, and it stays one.
   let refused = ws_reply_failure(
     js_raised(js_error("host refused", rpc_rejection=true)),
   )
   assert_true(bridge_failure(refused) is Refused)
+  assert_false(bridge_connection_lost(Remote("device"), refused))
 }
 
 ///|

@@ -3,11 +3,11 @@
 
 ///|
 fn pos_part(
-  start_line : Int,
-  start_column : Int,
-  end_line : Int,
-  end_column : Int,
-  force? : Bool = false,
+  start_line : Int32,
+  start_column : Int32,
+  end_line : Int32,
+  end_column : Int32,
+  force~ : Bool = false,
 ) -> HoverPositionPart {
   {
     range: Range(start_line, start_column, end_line, end_column),

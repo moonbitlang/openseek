@@ -3,6 +3,26 @@
 // on the pure text helpers.
 
 ///|
+test "workspace file fences become cards only after the fence closes" {
+  inspect(
+    markdown_nodes(
+      "intro\n\n```openseek-file\nreports/matrix.xlsx\n```\n\noutro",
+    ).length(),
+    content="3",
+  )
+  inspect(
+    markdown_nodes("```openseek-file\nreports/matrix.xlsx").length(),
+    content="1",
+  )
+  // Invalid references stay ordinary code so a model cannot make the
+  // renderer hide a path that does not satisfy the portable-reference rules.
+  inspect(
+    markdown_nodes("```openseek-file\n../matrix.xlsx\n```").length(),
+    content="1",
+  )
+}
+
+///|
 fn first_paragraph(block : @cmark.Block) -> @cmark.BlockParagraph? {
   match block {
     Paragraph(node) => Some(node.v)

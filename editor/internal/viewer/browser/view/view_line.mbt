@@ -16,13 +16,13 @@ pub const VIEW_LINE_CLASS_NAME : String = "view-line"
 /// theme identity remains CSS/root-owned (approved N-A); experimental
 /// whitespace rendering and GPU selection remain explicit deferred seams.
 priv struct ViewLineOptions {
-  line_height : Int
+  line_height : Int32
   space_width : Double
   middot_width : Double
   wsmiddot_width : Double
   use_monospace_optimizations : Bool
   can_use_halfwidth_rightwards_arrow : Bool
-  stop_rendering_line_after : Int
+  stop_rendering_line_after : Int32
   render_whitespace : @editor_api.RenderWhitespace
   render_control_characters : Bool
   font_ligatures : Bool
@@ -31,17 +31,17 @@ priv struct ViewLineOptions {
 
 ///|
 fn ViewLineOptions::ViewLineOptions(
-  line_height? : Int = 20,
-  space_width? : Double = 7.2,
-  middot_width? : Double = 7.2,
-  wsmiddot_width? : Double = 7.2,
-  use_monospace_optimizations? : Bool = true,
-  can_use_halfwidth_rightwards_arrow? : Bool = true,
-  stop_rendering_line_after? : Int = -1,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  font_ligatures? : Bool = false,
-  vertical_scrollbar_size? : Double = @core.editor_vertical_scrollbar_size,
+  line_height~ : Int32 = 20,
+  space_width~ : Double = 7.2,
+  middot_width~ : Double = 7.2,
+  wsmiddot_width~ : Double = 7.2,
+  use_monospace_optimizations~ : Bool = true,
+  can_use_halfwidth_rightwards_arrow~ : Bool = true,
+  stop_rendering_line_after~ : Int32 = -1,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  font_ligatures~ : Bool = false,
+  vertical_scrollbar_size~ : Double = @core.editor_vertical_scrollbar_size,
 ) -> ViewLineOptions {
   {
     line_height,
@@ -81,7 +81,7 @@ priv struct ViewLine {
 
 ///|
 fn ViewLine::ViewLine(
-  options? : ViewLineOptions = ViewLineOptions(),
+  options~ : ViewLineOptions = ViewLineOptions(),
 ) -> ViewLine {
   { options, rendered_view_line: None, is_maybe_invalid: true, }
 }
@@ -153,9 +153,9 @@ fn ViewLine::mapping(self : ViewLine) -> @view_layout.CharacterMapping? {
 /// `ViewLine.layoutLine` (`viewLine.ts:235-241`).
 fn ViewLine::layout_line(
   self : ViewLine,
-  _line_number : Int,
+  _line_number : Int32,
   delta_top : Double,
-  line_height : Int,
+  line_height : Int32,
 ) -> Unit {
   if self.rendered_view_line is Some({ dom_node: Some(node), .. }) {
     node.set_top(Pixels(delta_top))
@@ -170,10 +170,10 @@ fn ViewLine::layout_line(
 /// lines append one complete row to the renderer's shared HTML batch.
 fn ViewLine::render_line(
   self : ViewLine,
-  line_number : Int,
+  line_number : Int32,
   input : @view_layout.RenderLineInput,
   delta_top : Double,
-  line_height : Int,
+  line_height : Int32,
   builder : StringBuilder,
 ) -> Bool {
   if !self.is_maybe_invalid {
@@ -235,9 +235,9 @@ fn ViewLine::get_width_is_fast(self : ViewLine) -> Bool {
 /// source `HorizontalRange` boundary.
 fn ViewLine::get_visible_ranges_for_range(
   self : ViewLine,
-  line_number : Int,
-  start_column : Int,
-  end_column : Int,
+  line_number : Int32,
+  start_column : Int32,
+  end_column : Int32,
   context : DomReadingContext,
 ) -> (Bool, Array[(Double, Double)])? {
   guard self.rendered_view_line is Some(rendered) else { return None }
@@ -361,9 +361,9 @@ fn RenderedViewLine::get_width_is_fast(self : RenderedViewLine) -> Bool {
 ///|
 fn RenderedViewLine::get_visible_ranges_for_range(
   self : RenderedViewLine,
-  line_number : Int,
-  start_column : Int,
-  end_column : Int,
+  line_number : Int32,
+  start_column : Int32,
+  end_column : Int32,
   context : DomReadingContext,
 ) -> Array[(Double, Double)]? {
   guard self.dom_node is Some(dom_node) else { return None }
@@ -394,9 +394,9 @@ fn RenderedViewLine::get_visible_ranges_for_range(
 fn RenderedViewLine::read_visible_ranges_for_range(
   self : RenderedViewLine,
   dom_node : @scrollbar.CachedDomNode,
-  line_number : Int,
-  start_column : Int,
-  end_column : Int,
+  line_number : Int32,
+  start_column : Int32,
+  end_column : Int32,
   context : DomReadingContext,
 ) -> Array[(Double, Double)]? {
   if start_column == end_column {
@@ -419,8 +419,8 @@ fn RenderedViewLine::read_visible_ranges_for_range(
 fn RenderedViewLine::read_pixel_offset(
   self : RenderedViewLine,
   dom_node : @scrollbar.CachedDomNode,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
   context : DomReadingContext,
 ) -> Double {
   if render_input_is_ltr(self.input) && self.character_mapping.length == 0 {
@@ -459,8 +459,8 @@ fn RenderedViewLine::read_pixel_offset(
 fn RenderedViewLine::actual_read_pixel_offset(
   self : RenderedViewLine,
   dom_node : @scrollbar.CachedDomNode,
-  _line_number : Int,
-  column : Int,
+  _line_number : Int32,
+  column : Int32,
   context : DomReadingContext,
 ) -> Double {
   let reading_target = reading_target(dom_node.element())
@@ -508,8 +508,8 @@ fn RenderedViewLine::actual_read_pixel_offset(
 fn RenderedViewLine::read_raw_visible_ranges_for_range(
   self : RenderedViewLine,
   dom_node : @scrollbar.CachedDomNode,
-  start_column : Int,
-  end_column : Int,
+  start_column : Int32,
+  end_column : Int32,
   context : DomReadingContext,
 ) -> Array[(Double, Double)]? {
   if render_input_is_ltr(self.input) &&
@@ -569,8 +569,8 @@ fn element_first_child_offset_width(element : @rdom.Element) -> Double {
 fn get_column_of_node_offset(
   character_mapping : @view_layout.CharacterMapping,
   span_node : @rdom.Element,
-  offset : Int,
-) -> Int {
+  offset : Int32,
+) -> Int32 {
   let span_node_text_content_length = element_text_content_length(span_node)
   let span_index = count_previous_siblings(span_node)
   character_mapping.get_column(
@@ -582,13 +582,13 @@ fn get_column_of_node_offset(
 ///|
 /// FFI gap-fills for `textContent` and sibling traversal, which are not
 /// exposed by the vendored `@rdom` element wrapper.
-extern "js" fn element_text_content_length(el : @rdom.Element) -> Int =
+extern "js" fn element_text_content_length(el : @rdom.Element) -> Int32 =
   #| (el) => (el.textContent || "").length
 
 ///|
 /// The source's `while (spanNode) { spanNode = spanNode.previousSibling;
 /// spanIndex++; }` starting from `spanIndex = -1`.
-extern "js" fn count_previous_siblings(el : @rdom.Element) -> Int =
+extern "js" fn count_previous_siblings(el : @rdom.Element) -> Int32 =
   #| (el) => {
   #|   let i = -1;
   #|   let n = el;

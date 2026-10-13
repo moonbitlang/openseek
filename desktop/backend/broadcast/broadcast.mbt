@@ -13,23 +13,23 @@
 /// stay readable behind the head; a subscription further behind than that
 /// has lagged.
 struct Channel[T] {
-  capacity : Int
+  capacity : Int32
   // The retained window, oldest first: `log[i]` carries sequence `base + i`.
   log : @deque.Deque[T]
-  mut base : Int
+  mut base : Int32
   // Broadcast on every publish. Readers wait on it only once caught up, and
   // re-check the log after waking, so a wake with nothing new is harmless.
   cond : @cond_var.Cond
 }
 
 ///|
-pub fn[T] Channel::Channel(capacity~ : Int) -> Channel[T] {
+pub fn[T] Channel::Channel(capacity~ : Int32) -> Channel[T] {
   { capacity, log: Deque([], capacity~), base: 0, cond: Cond(), }
 }
 
 ///|
 /// The sequence the next published value will carry.
-fn[T] Channel::head(self : Channel[T]) -> Int {
+fn[T] Channel::head(self : Channel[T]) -> Int32 {
   self.base + self.log.length()
 }
 
@@ -59,7 +59,7 @@ pub fn[T] Channel::subscribe(self : Channel[T]) -> Subscription[T] {
 /// One reader's position in a channel's log.
 struct Subscription[T] {
   channel : Channel[T]
-  mut cursor : Int
+  mut cursor : Int32
 }
 
 ///|
@@ -67,7 +67,7 @@ struct Subscription[T] {
 /// values were overwritten before it read them. Reading resumes at the
 /// oldest value still retained.
 pub suberror Lagged {
-  Lagged(missed~ : Int)
+  Lagged(missed~ : Int32)
 } derive(Debug)
 
 ///|

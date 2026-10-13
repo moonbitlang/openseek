@@ -16,11 +16,11 @@
 /// than a dropped line — the counters feed the context-ceiling guard. `parse`
 /// decodes them field by field through `int`, which rejects a fractional value.
 pub(all) struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(Eq, Debug, ToJson)
 
 ///|

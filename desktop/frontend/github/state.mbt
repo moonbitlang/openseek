@@ -58,7 +58,7 @@ pub(all) struct Detail {
 ///|
 pub(all) struct Checkout {
   repository_url : String
-  number : Int
+  number : Int32
   url : String
   updating : Bool
   phase : CheckoutPhase
@@ -76,17 +76,17 @@ pub(all) enum CheckoutPhase {
 pub(all) struct State {
   scope : CheckoutScope?
   active : Bool
-  epoch : Int
+  epoch : Int32
   pulls_expanded : Bool
   created : Group
   all_open : Group
   issues : Group
   detail : Detail?
-  detail_epoch : Int
+  detail_epoch : Int32
   checkout : Checkout?
-  checkout_epoch : Int
+  checkout_epoch : Int32
   current : Result[@protocol.GithubCheckoutStatus, String]?
-  current_epoch : Int
+  current_epoch : Int32
   current_loading : Bool
   current_active : Bool
   review_pending : Bool
@@ -127,14 +127,14 @@ pub(all) enum Msg {
   CloseDetail
   Checkout(String, @protocol.GithubItem)
   UpdatePullRequest(String)
-  CheckedOut(Int, Result[@protocol.GithubCheckoutReply, String])
+  CheckedOut(Int32, Result[@protocol.GithubCheckoutReply, String])
   ConfirmCheckout(@protocol.GithubCheckoutChanges)
   DismissCheckout
   ToggleCheckoutDetails
-  CurrentLoaded(Int, Result[@protocol.GithubCheckoutStatus, String])
-  DetailLoaded(Int, Result[@protocol.GithubPullRequestDetail, String])
+  CurrentLoaded(Int32, Result[@protocol.GithubCheckoutStatus, String])
+  DetailLoaded(Int32, Result[@protocol.GithubPullRequestDetail, String])
   Listed(
-    Int,
+    Int32,
     @protocol.GithubListKind,
     Result[@protocol.GithubListReply, String]
   )
@@ -167,7 +167,7 @@ fn request(
   emit : @cmd.Emit[Msg],
   state : State,
   kind : @protocol.GithubListKind,
-  limit : Int,
+  limit : Int32,
 ) -> (@cmd.Cmd, State) {
   let group = state.group(kind)
   guard state.active && !group.loading && state.scope is Some(owner) else {
@@ -216,8 +216,8 @@ pub fn reconcile(
   state : State,
   checkout : CheckoutScope?,
   active : Bool,
-  review_active? : Bool = false,
-  review_busy? : Bool = false,
+  review_active~ : Bool = false,
+  review_busy~ : Bool = false,
 ) -> (@cmd.Cmd, State) {
   let owner_changed = state.scope.map(scope => (scope.channel, scope.cwd)) !=
     checkout.map(scope => (scope.channel, scope.cwd))

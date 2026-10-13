@@ -54,7 +54,7 @@ fn watch_file_impl(
 ///|
 /// HTTP-like status used by the reference server when serializing provider
 /// failures.
-fn FileSystemProviderError::status(self : FileSystemProviderError) -> Int {
+fn FileSystemProviderError::status(self : FileSystemProviderError) -> Int32 {
   match self.code {
     FileNotFound => 404
     FileExists => 409

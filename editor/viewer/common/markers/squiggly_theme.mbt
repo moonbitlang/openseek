@@ -29,7 +29,7 @@ fn encode_uri_component(text : String) -> String {
 }
 
 ///|
-fn is_unreserved(code : Int) -> Bool {
+fn is_unreserved(code : Int32) -> Bool {
   (code >= '0'.to_int() && code <= '9'.to_int()) ||
   (code >= 'A'.to_int() && code <= 'Z'.to_int()) ||
   (code >= 'a'.to_int() && code <= 'z'.to_int()) ||
@@ -45,7 +45,7 @@ fn is_unreserved(code : Int) -> Bool {
 }
 
 ///|
-fn hex_digit_char(value : Int) -> Char {
+fn hex_digit_char(value : Int32) -> Char {
   if value < 10 {
     (0x30 + value).unsafe_to_char()
   } else {

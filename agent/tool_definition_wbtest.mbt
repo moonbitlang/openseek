@@ -31,7 +31,7 @@ async fn assert_handoff_keeps_guest_marker(
 async fn[X] mbtx_fixture(
   group : @async.TaskGroup[X],
   prefix~ : String,
-  auto_background_after_ms~ : Int,
+  auto_background_after_ms~ : Int32,
   approval? : @agent_runtime.ApprovalChannel,
 ) -> (String, @bgjobs.BgJobRuntime, @agent_tool.AgentToolDefinition) {
   let spill_dir = @fs.tmpdir(prefix~)

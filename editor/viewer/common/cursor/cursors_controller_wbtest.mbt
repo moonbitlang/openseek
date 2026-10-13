@@ -1,7 +1,7 @@
 ///|
 priv struct CursorTestConverter {
-  column_delta : Int
-  range_delta : Int
+  column_delta : Int32
+  range_delta : Int32
 }
 
 ///|
@@ -43,7 +43,7 @@ fn CursorTestConverter::context(self : CursorTestConverter) -> CursorContext {
 }
 
 ///|
-fn cursor_controller_test_model(text? : String = "abc") -> @model.TextModel {
+fn cursor_controller_test_model(text~ : String = "abc") -> @model.TextModel {
   TextModel(
     try! @base_common.Uri::from(
       scheme="inmemory",

@@ -4,10 +4,10 @@
 
 ///|
 fn test_decoration(
-  start_line : Int,
-  end_line : Int,
+  start_line : Int32,
+  end_line : Int32,
   class_name : String,
-  z_index? : Int = 0,
+  z_index~ : Int32 = 0,
 ) -> DecorationToRender {
   {
     start_line_number: start_line,

@@ -15,7 +15,7 @@ pub(all) struct Lane {
   id : String
   kind : String
   label : String
-  steps : Int
+  steps : Int32
   activity : String
   run : String?
 } derive(Eq, @debug.Debug)
@@ -64,7 +64,7 @@ fn lane_view(lane : Lane) -> @html.Html {
     detail.push(@html.span(class="subrun-activity", text))
   }
   @html.div(
-    class="subrun-lane",
+    class="composer-context-row subrun-lane",
     title="\{lane.kind} \{lane.id}: \{lane.label}",
     [
       @html.span(class="subrun-mark", ""),

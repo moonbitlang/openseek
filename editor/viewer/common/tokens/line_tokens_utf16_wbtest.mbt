@@ -5,12 +5,12 @@
 /// BMP content, and empty/end boundaries without scalar-boundary validation.
 
 ///|
-fn utf16_unit(code : Int) -> String {
-  Int::unsafe_to_char(code).to_string()
+fn utf16_unit(code : Int32) -> String {
+  Int32::unsafe_to_char(code).to_string()
 }
 
 ///|
-fn assert_utf16_units(actual : String, expected : Array[Int]) -> Unit raise {
+fn assert_utf16_units(actual : String, expected : Array[Int32]) -> Unit raise {
   assert_eq(actual.length(), expected.length())
   for index in 0..<expected.length() {
     assert_eq(actual[index].to_int(), expected[index])
@@ -39,7 +39,7 @@ test "LineTokens raw UTF-16 token content preserves lone surrogate matrix" {
     text,
     @services.language_id_codec,
   )
-  let expected : ReadOnlyArray[Int] = [
+  let expected : ReadOnlyArray[Int32] = [
     0xD800, 0xDBFF, 0xDC00, 0xDFFF, 0xFEFF, 0x41,
   ]
   for index in 0..<expected.length() {

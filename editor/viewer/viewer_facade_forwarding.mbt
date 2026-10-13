@@ -255,7 +255,7 @@ pub fn Viewer::remove_decorations(
 ///|
 pub fn Viewer::create_decorations_collection(
   self : Viewer,
-  decorations? : Array[@model.ModelDeltaDecoration] = [],
+  decorations~ : Array[@model.ModelDeltaDecoration] = [],
 ) -> EditorDecorationsCollection {
   { inner: self.widget.create_decorations_collection(decorations~), }
 }
@@ -286,14 +286,14 @@ pub fn EditorDecorationsCollection::clear(
 ///|
 pub fn EditorDecorationsCollection::length(
   self : EditorDecorationsCollection,
-) -> Int {
+) -> Int32 {
   self.inner.length()
 }
 
 ///|
 pub fn EditorDecorationsCollection::get_range(
   self : EditorDecorationsCollection,
-  index : Int,
+  index : Int32,
 ) -> @base_common.Range? {
   self.inner.get_range(index)
 }
@@ -308,7 +308,7 @@ pub fn EditorDecorationsCollection::get_ranges(
 ///|
 pub fn Viewer::get_line_decorations(
   self : Viewer,
-  line_number : Int,
+  line_number : Int32,
 ) -> Array[@model.ModelDecoration] {
   self.widget.get_line_decorations(line_number)
 }

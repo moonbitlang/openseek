@@ -14,6 +14,12 @@ pub fn glyph(MentionRef) -> String
 
 pub fn label(MentionRef) -> String
 
+pub fn office_selection_label(String) -> String
+
+pub fn office_selection_summary(String) -> OfficeSelectionSummary?
+
+pub fn office_selection_title(String) -> String
+
 pub fn parse(String) -> MentionMessage?
 
 pub fn review_changes(Array[MentionRef]) -> Array[ReviewChanges]
@@ -74,11 +80,21 @@ pub(all) enum MentionRef {
   Symbol(name~ : String, file~ : String, line~ : Int)
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)
+  OfficeSelection(materialized~ : String)
   Annotation(file~ : String, start_line~ : Int, end_line~ : Int, quote~ : String, comment~ : String, side~ : AnnotationSide)
 } derive(Eq, @debug.Debug)
 pub fn MentionRef::equal(Self, Self) -> Bool
 pub fn MentionRef::not_equal(Self, Self) -> Bool
 pub fn MentionRef::to_repr(Self) -> @debug.Repr
+
+pub(all) struct OfficeSelectionSummary {
+  file : String
+  text : String
+  location : String?
+} derive(Eq)
+pub fn OfficeSelectionSummary::equal(Self, Self) -> Bool
+pub fn OfficeSelectionSummary::heading(Self) -> String
+pub fn OfficeSelectionSummary::not_equal(Self, Self) -> Bool
 
 pub(all) struct ReviewChanges {
   source : ReviewSource

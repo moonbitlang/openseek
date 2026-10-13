@@ -6,15 +6,17 @@ async fn serve_target_list(
   let (conn, _) = server.accept()
   defer conn.close()
   assert_eq(conn.read_request().path, "/json/list")
-  let targets : Json = names
-    .map(name => {
+  let targets : Json = Json(
+    names.map(name => {
       (
         {
           "type": "page",
-          "webSocketDebuggerUrl": "ws://127.0.0.1:\{server.addr.port()}/devtools/page/\{name}".to_json(),
+          "webSocketDebuggerUrl": Json(
+            "ws://127.0.0.1:\{server.addr.port()}/devtools/page/\{name}",
+          ),
         } : Json)
-    })
-    .to_json()
+    }),
+  )
   conn.send_response(200, "OK")
   conn.write_string(targets.stringify())
   conn.end_response()
@@ -148,7 +150,7 @@ async test "empty discovery and unmatched probes retry until the marker appears"
               {
                 "id": 1,
                 "result": {
-                  "result": { "type": "boolean", "value": matched.to_json() },
+                  "result": { "type": "boolean", "value": Json(matched) },
                 },
               } : Json).stringify(),
           )

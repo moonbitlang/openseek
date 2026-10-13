@@ -1,15 +1,15 @@
 ///|
 /// Maximum time a follow-up `moon check` may run.
-pub const TimeoutMs : Int = 30000
+pub const TimeoutMs : Int32 = 30000
 
 ///|
 /// Maximum number of characters captured from a follow-up `moon check`.
-pub const MaxOutputChars : Int = 12000
+pub const MaxOutputChars : Int32 = 12000
 
 ///|
 /// Render a captured `moon check` result for inclusion in tool output.
 pub fn format_output(
-  exit_code : Int?,
+  exit_code : Int32?,
   output : String,
   output_limit_reached : Bool,
 ) -> String {

@@ -23,10 +23,10 @@ fn short_commit(commit : String) -> String {
 fn request_git_history(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  generation : Int32,
   append : Bool,
   snapshot : @protocol.GitHistorySnapshot?,
-  skip : Int,
+  skip : Int32,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
   match workspace {
@@ -80,7 +80,7 @@ fn request_git_history(
 fn request_git_commit_changes(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  generation : Int,
+  generation : Int32,
   commit : String,
   workspace~ : @common.Uri?,
 ) -> @cmd.Cmd {
@@ -134,7 +134,7 @@ fn request_history_blob(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
   key : String,
-  generation : Int,
+  generation : Int32,
   side : HistoryDiffSide,
   path : @pathx.Relative,
   revision : String,
@@ -451,7 +451,7 @@ pub fn close_history_diff(state : State, diff : @dock.GitHistoryDiff) -> State {
 ///|
 struct GraphLane {
   id : String
-  color : Int
+  color : Int32
 } derive(Eq)
 
 ///|
@@ -475,7 +475,7 @@ const GraphUpstreamColor = 6
 const GraphBaseColor = 7
 
 ///|
-fn git_history_ref_rank(kind : String) -> Int {
+fn git_history_ref_rank(kind : String) -> Int32 {
   match kind {
     "current" => 0
     "head" => 1
@@ -489,9 +489,9 @@ fn git_history_ref_rank(kind : String) -> Int {
 fn graph_ref_color(
   snapshot : @protocol.GitHistorySnapshot,
   revision : String,
-) -> Int? {
+) -> Int32? {
   let mut best_rank = 5
-  let mut result : Int? = None
+  let mut result : Int32? = None
   for ref_ in snapshot.refs {
     guard ref_.revision == revision else { continue }
     let rank = git_history_ref_rank(ref_.kind)
@@ -511,7 +511,7 @@ fn graph_ref_color(
 }
 
 ///|
-fn find_graph_lane(lanes : Array[GraphLane], id : String) -> Int? {
+fn find_graph_lane(lanes : Array[GraphLane], id : String) -> Int32? {
   lanes.search_by(lane => lane.id == id)
 }
 

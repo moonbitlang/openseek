@@ -30,6 +30,11 @@ just test-browser
 The repository root keeps `just desktop-test-browser` as an alias. After the
 bundle has been built, `npm test` in this directory runs Playwright alone.
 
+CI builds with `node package/build.mjs browser --release` from `desktop/` so
+each fresh page loads the smaller production bundle. Local `just test-browser`
+keeps the debug bundle for diagnosis. Both use the same static-server script
+compiled for native release to avoid Wasm transfer overhead.
+
 Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network
 traffic with Playwright routes and use retrying assertions instead of fixed

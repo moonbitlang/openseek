@@ -6,8 +6,8 @@ pub struct MultiEditItem {
   file : String
   old_string : String
   new_string : String
-  start_line : Int
-  end_line : Int?
+  start_line : Int32
+  end_line : Int32?
 } derive(Debug)
 
 ///|
@@ -20,13 +20,13 @@ pub struct MultiEditArgs {
   inline : Array[MultiEditItem]
   edits_file : String?
   // Requested auto-revert threshold (`None` = host default).
-  revert_if_error_delta_greater_or_equal : Int?
+  revert_if_error_delta_greater_or_equal : Int32?
   // Pre-write syntax gate (default true): reject the batch when any edited
   // `.mbt` file would gain new lex/parse errors.
   revert_on_parse_errors : Bool
   // Post-write warning guard (absent = off): roll the batch back when it
   // its reported warning-count change is >= this threshold.
-  revert_if_warning_delta_greater_or_equal : Int?
+  revert_if_warning_delta_greater_or_equal : Int32?
 } derive(Debug)
 
 ///|
@@ -79,7 +79,10 @@ pub fn decode_args(arguments : Json) -> MultiEditArgs raise {
 ///|
 /// An optional guard threshold: a non-negative integer, or absent (`null` or
 /// missing) for a guard that is off.
-fn optional_threshold(fields : Map[String, Json], name : String) -> Int? raise {
+fn optional_threshold(
+  fields : Map[String, Json],
+  name : String,
+) -> Int32? raise {
   match fields.get(name) {
     Some(Number(value, ..)) => {
       let int_value = value.to_int()
@@ -113,7 +116,7 @@ fn decode_edit_array(items : Array[Json]) -> Array[MultiEditItem] raise {
 }
 
 ///|
-fn decode_edit_item(item : Json, index : Int) -> MultiEditItem raise {
+fn decode_edit_item(item : Json, index : Int32) -> MultiEditItem raise {
   match item {
     Object(fields) => {
       let prefix = "arguments.edits[\{index}]"
@@ -167,7 +170,7 @@ fn positive_int_of_number(
   value : Double,
   name : String,
   prefix : String,
-) -> Int raise {
+) -> Int32 raise {
   let int_value = value.to_int()
   if int_value.to_double() != value {
     fail("\{prefix}.\{name} to be an integer")
@@ -183,7 +186,7 @@ fn required_positive_int(
   fields : Map[String, Json],
   name : String,
   prefix : String,
-) -> Int raise {
+) -> Int32 raise {
   match fields.get(name) {
     Some(Number(value, ..)) => positive_int_of_number(value, name, prefix)
     Some(Null) | None => fail(missing_field(fields, name, prefix))
@@ -196,7 +199,7 @@ fn optional_positive_int(
   fields : Map[String, Json],
   name : String,
   prefix : String,
-) -> Int? raise {
+) -> Int32? raise {
   match fields.get(name) {
     Some(Number(value, ..)) => Some(positive_int_of_number(value, name, prefix))
     Some(Null) | None => None

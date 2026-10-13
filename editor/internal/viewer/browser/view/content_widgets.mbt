@@ -67,7 +67,7 @@ pub fn ContentWidgetHandle::ContentWidgetHandle(
   get_id : () -> String,
   get_dom_node : () -> @rdom.Element,
   get_position : () -> ContentWidgetPosition?,
-  allow_editor_overflow? : Bool = false,
+  allow_editor_overflow~ : Bool = false,
   after_render? : (ContentWidgetPositionPreference?) -> Unit raise,
 ) -> ContentWidgetHandle {
   let after_render_with_coordinate = after_render.map(callback => {
@@ -416,10 +416,10 @@ fn ContentWidgets::widget_ids_snapshot(self : ContentWidgets) -> Array[String] {
 priv struct ContentWidgetsRenderContext {
   /// Content-space vertical offset of a view line
   /// (`ctx.getVerticalOffsetForLineNumber`).
-  vertical_offset_for_line : (Int) -> Double
+  vertical_offset_for_line : (Int32) -> Double
   /// Monaco `getLineHeightForLineNumber`; the current uniform-height product
   /// still preserves the exact queried line through this capability.
-  line_height_for_line : (Int) -> Double
+  line_height_for_line : (Int32) -> Double
   /// Monaco `RenderingContext.visibleRangeForPosition(...).left`: a rounded,
   /// DOM-measured caret x, or `None` when the line is not rendered.
   visible_range_for_position : (@base_common.Position) -> Double?
@@ -438,8 +438,8 @@ priv struct ContentWidgetsRenderContext {
 /// rendering and the later DOM-read phase begin.
 fn ContentWidgets::on_before_render_widgets(
   self : ContentWidgets,
-  viewport_start : Int,
-  viewport_end : Int,
+  viewport_start : Int32,
+  viewport_end : Int32,
 ) -> Unit {
   let widget_ids = self.widget_ids_snapshot()
   for widget_id in widget_ids {
@@ -597,8 +597,8 @@ fn Widget::update_anchor_view_position(
 /// max-width write.
 fn Widget::on_before_render(
   self : Widget,
-  viewport_start : Int,
-  viewport_end : Int,
+  viewport_start : Int32,
+  viewport_end : Int32,
 ) -> Unit {
   guard self.primary_anchor.view_position is Some(primary) &&
     self.preference is Some(_) else {

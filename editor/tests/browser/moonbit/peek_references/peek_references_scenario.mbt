@@ -5,22 +5,22 @@
 
 ///|
 priv struct PeekReferencesFixtureState {
-  mut resolver_calls : Int
-  mut resolver_acquires : Int
-  mut resolver_releases : Int
+  mut resolver_calls : Int32
+  mut resolver_acquires : Int32
+  mut resolver_releases : Int32
   resolved_uris : Array[String]
   open_modes : Array[String]
   open_uris : Array[String]
-  open_lines : Array[Int]
-  open_columns : Array[Int]
+  open_lines : Array[Int32]
+  open_columns : Array[Int32]
 }
 
 ///|
 fn peek_references_location(
   uri : @base_common.Uri,
-  line : Int,
-  start_column : Int,
-  end_column : Int,
+  line : Int32,
+  start_column : Int32,
+  end_column : Int32,
 ) -> @language.Location {
   { is_test: None, uri, range: Range(line, start_column, line, end_column), }
 }
@@ -66,17 +66,17 @@ fn peek_references_state_json(
   state : PeekReferencesFixtureState,
 ) -> String {
   Json({
-    "resolverCalls": state.resolver_calls.to_json(),
-    "resolverAcquires": state.resolver_acquires.to_json(),
-    "resolverReleases": state.resolver_releases.to_json(),
-    "resolvedUris": state.resolved_uris.to_json(),
-    "openModes": state.open_modes.to_json(),
-    "openUris": state.open_uris.to_json(),
-    "openLines": state.open_lines.to_json(),
-    "openColumns": state.open_columns.to_json(),
-    "codeHasTextFocus": code_viewer.has_text_focus().to_json(),
+    "resolverCalls": Json(state.resolver_calls),
+    "resolverAcquires": Json(state.resolver_acquires),
+    "resolverReleases": Json(state.resolver_releases),
+    "resolvedUris": Json(state.resolved_uris),
+    "openModes": Json(state.open_modes),
+    "openUris": Json(state.open_uris),
+    "openLines": Json(state.open_lines),
+    "openColumns": Json(state.open_columns),
+    "codeHasTextFocus": Json(code_viewer.has_text_focus()),
     "position": match code_viewer.get_position() {
-      Some(position) => [position.line_number, position.column].to_json()
+      Some(position) => Json([position.line_number, position.column])
       None => Json::null()
     },
   }).stringify()
@@ -258,7 +258,7 @@ pub fn run_peek_references_browser_test() -> Unit {
 ///|
 fn wait_for_peek_references_fixture(
   ctx : @support.BrowserTestContext,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if @support.query_count(
       ".peek-references-code-host > .monaco-editor.readonly-editor",

@@ -6,9 +6,9 @@
 
 ///|
 fn require_text_search_non_negative(
-  value : Int,
+  value : Int32,
   path : @json.JsonPath,
-) -> Int raise @json.JsonDecodeError {
+) -> Int32 raise @json.JsonDecodeError {
   if value < 0 {
     raise JsonDecodeError((path, "expected non-negative integer"))
   }
@@ -191,17 +191,17 @@ pub impl FromJson for SearchTextReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for SearchTextReply with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "root": self.root.to_json(),
-    "generation": self.generation.to_json(),
-    "matches": self.matches.to_json(),
-    "match_count": self.match_count.to_json(),
-    "file_count": self.file_count.to_json(),
-    "limit_hit": self.limit_hit.to_json(),
-    "cancelled": self.cancelled.to_json(),
+    "root": Json(self.root),
+    "generation": Json(self.generation),
+    "matches": Json(self.matches),
+    "match_count": Json(self.match_count),
+    "file_count": Json(self.file_count),
+    "limit_hit": Json(self.limit_hit),
+    "cancelled": Json(self.cancelled),
   }
   if self.error is Some(error) {
-    fields["error_code"] = error.code.to_json()
-    fields["error_message"] = error.message.to_json()
+    fields["error_code"] = Json(error.code)
+    fields["error_message"] = Json(error.message)
   }
   Json(fields)
 }

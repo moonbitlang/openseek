@@ -54,8 +54,20 @@ const WorktreeBranchPrefix = "openseek/"
 /// Registry reads and read-modify-write mutations share one process-wide
 /// lock, exactly like `workspaces.json` — without it two concurrent
 /// create/remove operations could both read the same old list and let the
-/// later write silently erase the earlier one.
+/// later write silently erase the earlier one. And exactly like
+/// `workspaces.json`, it orders this process only: each operation that
+/// rewrites a workspace's registry also holds `lock_worktrees_file` across its
+/// read and its write, while reads rely on the save being atomic.
 let worktree_registry_lock : @async.Mutex = Mutex()
+
+///|
+/// The cross-process half of a registry mutation in `workspace`, taken after
+/// `worktree_registry_lock` and before the registry is read.
+async fn lock_worktrees_file(workspace : @pathx.Absolute) -> @fsx.FileLock {
+  @fsx.FileLock::acquire(worktrees_file(workspace).to_path()) catch {
+    error => raise WorktreeError("could not lock the worktree list: \{error}")
+  }
+}
 
 ///|
 priv struct WorktreeEntry {
@@ -273,28 +285,19 @@ async fn write_worktrees(
   @fsx.ensure_dir(store.to_path()) catch {
     error => raise WorktreeError("could not create \{store}: \{error}")
   }
-  let registry : Json = { "worktrees": entries.to_json() }
-  let target = worktrees_file(workspace)
-  let temp = store.join(WorktreesFile + ".tmp")
+  let registry : Json = { "worktrees": Json(entries) }
   // A registry update may remove only one conversation's placement while
-  // retaining every unrelated row. Build the whole replacement beside the
-  // live file first: a failed or cancelled write then leaves the old registry
-  // intact instead of truncating it and orphaning all of those other rows.
-  @fs.write_file(
-    temp.to_string(),
+  // retaining every unrelated row. The save builds the whole replacement
+  // beside the live file and renames it into place: a failed or cancelled
+  // write leaves the old registry intact instead of truncating it and
+  // orphaning all of those other rows, and a reader in another process never
+  // sees a partial list.
+  @fsx.write_text_atomic(
+    worktrees_file(workspace).to_path(),
     registry.stringify(indent=2),
-    create_mode=CreateOrTruncate,
   ) catch {
-    error => raise WorktreeError("could not stage the worktree list: \{error}")
+    error => raise WorktreeError("could not save the worktree list: \{error}")
   }
-  // `rename` replaces a present destination as one filesystem operation. A
-  // cancellation cannot interrupt this short publication step, so callers
-  // learn whether the complete old or complete new registry is authoritative.
-  @async.protect_from_cancel(() => {
-    @fs.rename(temp.to_string(), target.to_string()) catch {
-      error => raise WorktreeError("could not save the worktree list: \{error}")
-    }
-  })
 }
 
 ///|
@@ -525,6 +528,8 @@ pub async fn drop_placements(
 ) -> Array[WorktreeInfo]? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
+  let shared = lock_worktrees_file(workspace)
+  defer shared.release()
   let entries = read_worktrees_unlocked(workspace)
   let remaining = entries.filter(entry => {
     !(entry.session is Some(bound) && sessions.contains(bound))
@@ -562,7 +567,7 @@ const ArchiveDirtyPathPreviewLimit = 8
 /// retaining the full row count. In `-z` mode a rename/copy consumes the next
 /// NUL field as its source; only the current path is useful in the archive
 /// warning.
-fn archive_dirty_path_preview(status : String) -> (Array[String], Int) {
+fn archive_dirty_path_preview(status : String) -> (Array[String], Int32) {
   let fields = status.split("\u{0}").collect()
   let paths : Array[String] = []
   let mut count = 0
@@ -760,6 +765,10 @@ pub async fn create(
     raise WorktreeError("\{workspace} is not a registered workspace")
   }
   require_main_worktree(dir)
+  // Verify the lossless metadata format before creating any ref, checkout or
+  // registry row. Older Git accepts add but rejects list -z during the final
+  // unlock, otherwise leaving a published, provisioning-locked checkout.
+  ignore(worktree_listing(dir))
   if owner is OpenSeekSession(session) {
     @session_store.ensure_not_archived(session)
   }
@@ -771,6 +780,11 @@ pub async fn create(
   let submodule_checkout_timeout_seconds = workspace_settings.submodule_checkout_timeout_seconds
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
+  // Held across the git work below as well as the registry write: a create
+  // that released between them would let another host's create pick the same
+  // name after this one probed it as free.
+  let shared = lock_worktrees_file(dir)
+  defer shared.release()
   let entries = read_worktrees_unlocked(dir)
   // This conversation already holds its environment. Two shapes land here:
   // the idempotent replay of a create whose reply was lost, and the repair
@@ -922,7 +936,7 @@ async fn restore_worktree_checkout(
   dir : @pathx.Absolute,
   entry : WorktreeEntry,
   checkout_submodules~ : Bool,
-  submodule_checkout_timeout_seconds~ : Int,
+  submodule_checkout_timeout_seconds~ : Int32,
 ) -> Unit {
   let revision = entry.checkout.revision()
   let commit = @gitx.run(dir, ["rev-parse", "--verify", "\{revision}^{commit}"])
@@ -1072,6 +1086,12 @@ pub async fn remove(
   // Serialize saving and removal with archive and repair.
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
+  // Before the deletion, not just before the write: a sidecar this process
+  // refuses to open would otherwise fail the removal only once the checkout
+  // — and under `force` its uncommitted work — was already gone, leaving the
+  // registry row behind.
+  let shared = lock_worktrees_file(dir)
+  defer shared.release()
   let target = worktree_dir(dir, name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   if present {
@@ -1136,8 +1156,8 @@ fn restore_home_env(previous : String?) -> Unit {
 /// `drained` instead of closing a process.
 #cfg(not(platform="windows"))
 fn test_host(
-  live? : Array[String] = [],
-  drained? : Array[String] = [],
+  live~ : Array[String] = [],
+  drained~ : Array[String] = [],
 ) -> WorktreeHost {
   {
     lifecycle_lock: Mutex(),
@@ -1236,6 +1256,7 @@ async test "worktree registry decode drops malformed entries" {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async test "failed worktree registry staging preserves every live row" {
   let root = worktree_test_root("openseek-worktree-atomic-write-")
   defer @fs.rmdir(root.to_string(), recursive=true)
@@ -1247,16 +1268,19 @@ async test "failed worktree registry staging preserves every live row" {
     codex_thread: None,
   }
   write_worktrees(root, [retained])
-  // A directory at the candidate path makes the next file write fail before
-  // publication, modeling an interrupted or rejected staging write.
-  let temp = @workspaces.store_root(root).join(WorktreesFile + ".tmp")
-  @fs.mkdir(temp.to_string())
+  // A store that refuses new files makes the staging write fail before
+  // publication, modeling an interrupted or rejected one. A leftover at a
+  // fixed temporary name no longer does: the save names its file randomly,
+  // so that one crash cannot block every later save.
+  let store = @workspaces.store_root(root).to_string()
+  @fs.chmod(store, 0o555)
   let failed = try {
     write_worktrees(root, [])
     false
   } catch {
     _ => true
   }
+  @fs.chmod(store, 0o755)
   assert_true(failed)
   guard read_worktrees_unlocked(root) is [after] else {
     fail("the previous worktree registry must remain readable")
@@ -1329,7 +1353,7 @@ async test "worktree create provisions detached checkout, recovery ref, registry
   prepare_git_repo(repo)
   ignore(@workspaces.add(repo.to_string(), _ => ()))
   let host = test_host()
-  let committed : Ref[Int] = Ref(-1)
+  let committed : Ref[Int32] = Ref(-1)
   let reply = create(
     host,
     repo.to_string(),

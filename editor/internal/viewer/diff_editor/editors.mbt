@@ -18,11 +18,11 @@ pub struct DiffEditorEditors {
 /// half-installed pair as committed state.
 struct DiffEditorModelPairCommitBarrier {
   mut is_committing : Bool
-  mut committed_generation : Int
+  mut committed_generation : Int32
 }
 
 ///|
-let diff_markdown_comment_lane_reserved_px : Int = 16
+let diff_markdown_comment_lane_reserved_px : Int32 = 16
 
 ///|
 /// Diff panes never install the folding contribution. Reserve its 16px lane
@@ -185,7 +185,7 @@ fn DiffEditorEditors::is_committing_model_pair(
 ///|
 fn DiffEditorEditors::committed_model_generation(
   self : DiffEditorEditors,
-) -> Int {
+) -> Int32 {
   self.model_pair_commit.committed_generation
 }
 

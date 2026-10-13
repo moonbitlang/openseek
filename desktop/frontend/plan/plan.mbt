@@ -183,7 +183,7 @@ pub fn latest(calls : Array[@transcript.ToolCall]) -> Array[Step]? {
 
 ///|
 /// How many of these steps are completed.
-fn completed_count(steps : Array[Step]) -> Int {
+fn completed_count(steps : Array[Step]) -> Int32 {
   steps.count_if(step => step.status is Completed)
 }
 
@@ -199,7 +199,7 @@ fn active_step(steps : Array[Step]) -> Step? {
 /// uses (`plan 3/5 · fix the parser`). The progress meter carries it as a
 /// tooltip, so a collapsed run names its active step on hover.
 fn summary_line(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   steps : Array[Step],
 ) -> String {
   let completed = completed_count(steps)

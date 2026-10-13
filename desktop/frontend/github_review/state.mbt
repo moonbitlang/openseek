@@ -7,12 +7,12 @@ pub(all) struct State {
   path : String?
   refresh_pending : Bool
   enabled : Bool
-  epoch : Int
+  epoch : Int32
   loading : Bool
   review : @protocol.GithubReview?
   file : Result[@protocol.GithubReviewFile?, String]?
   files : Array[(String, @protocol.GithubReviewFile?)]
-  file_epoch : Int
+  file_epoch : Int32
   file_loading : Bool
   error : String?
   drafts : Array[GithubDraft]
@@ -20,7 +20,7 @@ pub(all) struct State {
   expanded : Array[String]
   deleting : String?
   busy : Bool
-  mutation_epoch : Int
+  mutation_epoch : Int32
   mutation_error : Failure?
   storage_error : Failure?
 } derive(Eq)
@@ -72,11 +72,11 @@ pub(all) enum Msg {
   Toggle
   Refresh
   Loaded(
-    Int,
+    Int32,
     Result[@protocol.GithubReviewReply, String],
     Result[Array[GithubDraft], Failure]
   )
-  FileLoaded(Int, String, Result[@protocol.GithubReviewFileReply, String])
+  FileLoaded(Int32, String, Result[@protocol.GithubReviewFileReply, String])
   Compose(GithubDraftTarget)
   Edit(GithubDraftTarget, String)
   Cancel(GithubDraftTarget)
@@ -87,7 +87,7 @@ pub(all) enum Msg {
   Resolve(String, Bool)
   Expand(String)
   Mutated(
-    Int,
+    Int32,
     @protocol.GithubReviewAction,
     GithubDraft?,
     Result[@protocol.GithubReviewMutationReply, String],

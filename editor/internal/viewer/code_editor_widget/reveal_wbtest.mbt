@@ -9,7 +9,7 @@
 fn reveal_test_scroll_change(
   scroll_top : Double,
   top_changed : Bool,
-  left_changed? : Bool = false,
+  left_changed~ : Bool = false,
 ) -> @view_layout.ScrollChange {
   {
     position: { scroll_left: 0.0, scroll_top, },

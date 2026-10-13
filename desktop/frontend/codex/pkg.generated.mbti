@@ -45,17 +45,19 @@ type Msg
 pub fn Msg::abandon_draft() -> Self
 pub fn Msg::archive_thread(String) -> Self
 pub fn Msg::cancel_login() -> Self
+pub fn Msg::change_draft_project(String) -> Self
 pub fn Msg::close_git_details() -> Self
 pub fn Msg::composer_action(@composer.Action) -> Self
 pub fn Msg::effort_changed(String) -> Self
+pub fn Msg::is_account_action(Self) -> Bool
 pub fn Msg::login() -> Self
 pub fn Msg::logout() -> Self
 pub fn Msg::model_changed(String) -> Self
 pub fn Msg::notification(String, Json, Int) -> Self
 pub fn Msg::open_thread(String) -> Self
 pub fn Msg::refresh() -> Self
-pub fn Msg::server_request(Json, String, Json, Int) -> Self
-pub fn Msg::start_draft(String, String) -> Self
+pub fn Msg::server_request(String, Json, String, Json, Int) -> Self
+pub fn Msg::start_draft(String, String, draft? : @composer.Draft, worktree? : Bool) -> Self
 pub fn Msg::status_changed(Json) -> Self
 pub fn Msg::unarchive_thread(String) -> Self
 pub fn Msg::worktree_changed(String, String, String, String, Bool) -> Self
@@ -81,11 +83,14 @@ pub fn State::account_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::active_id(Self) -> String?
 pub fn State::active_placement(Self, @interop.ChannelId) -> @interop.CheckoutPlacement?
 pub fn State::archived_sidebar_entries(locale? : @i18n.Locale, Self, @interop.ChannelId) -> Array[@section.Entry]
+pub fn State::can_add_project(Self) -> Bool
 pub fn State::can_start_thread(Self) -> Bool
 pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @composer.Input
 pub fn State::composing_draft(Self) -> Bool
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
+pub fn State::draft_project(Self, @interop.ChannelId) -> Result[@common.Uri?, String]
 pub fn State::draft_text(Self) -> String
+pub fn State::draft_worktree_mode(Self) -> Bool
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::files_toggle_label(Self, @interop.ChannelId, locale? : @i18n.Locale) -> String
 pub fn State::from_thread_snapshot(Json) -> Self
@@ -106,12 +111,14 @@ pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String
 pub fn State::reasoning_effort_chip(locale? : @i18n.Locale, Self, Bool) -> @composer.ReasoningSelect?
 pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
+pub fn State::reset_for_channel(Self) -> Self
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(locale? : @i18n.Locale, Self) -> Array[@transcript.TranscriptItem]
 pub fn State::with_browser_annotation(Self, @composer.Mention) -> Self
 pub fn State::with_editor_comment(Self, String, @common.Range, String, String, side? : @mention_context.AnnotationSide) -> Self
 pub fn State::with_git_details_closed(Self) -> Self
+pub fn State::with_office_selection(Self, String?) -> Self
 pub fn State::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn State::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 pub fn State::worktree_launch_workspace(Self, @interop.ChannelId) -> @common.Uri?

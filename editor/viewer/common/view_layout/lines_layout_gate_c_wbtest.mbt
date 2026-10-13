@@ -1,10 +1,10 @@
 ///|
 fn gate_c_insert_whitespace(
   layout : LinesLayout,
-  after_line_number : Int,
-  ordinal : Int,
-  height : Int,
-  min_width : Int,
+  after_line_number : Int32,
+  ordinal : Int32,
+  height : Int32,
+  min_width : Int32,
 ) -> String {
   let id = Ref("")
   layout.change_whitespace(accessor => {
@@ -23,9 +23,9 @@ fn gate_c_insert_whitespace(
 fn gate_c_assert_rows(
   layout : LinesLayout,
   expected_ids : Array[String],
-  expected_after_line_numbers : Array[Int],
-  expected_ordinals : Array[Int],
-  expected_heights : Array[Int],
+  expected_after_line_numbers : Array[Int32],
+  expected_ordinals : Array[Int32],
+  expected_heights : Array[Int32],
 ) -> Unit raise {
   let rows = layout.get_whitespaces()
   assert_eq(rows.length(), expected_ids.length())
@@ -227,9 +227,9 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
   let expected_ids : Array[String] = [
     old_primary_before, inserted_primary_before, inserted_ordinal_before, old_ordinal_before,
   ]
-  let expected_after_line_numbers : Array[Int] = [2, 3, 4, 4]
-  let expected_ordinals : Array[Int] = [9, 99, 0, 1]
-  let expected_heights : Array[Int] = [50, 60, 61, 51]
+  let expected_after_line_numbers : Array[Int32] = [2, 3, 4, 4]
+  let expected_ordinals : Array[Int32] = [9, 99, 0, 1]
+  let expected_heights : Array[Int32] = [50, 60, 61, 51]
   for i in 0..<20 {
     if i != 3 && i != 4 {
       expected_ids.push(old_peers[i])
@@ -290,7 +290,7 @@ test "LinesLayout mixed bulk commit resolves conflicts, stably sorts, and resets
 
 ///|
 test "LinesLayout bulk ordering matches delicate inserts at Int extremes" {
-  let entries : Array[(Int, Int, Int)] = [
+  let entries : Array[(Int32, Int32, Int32)] = [
     (2147483647, 2147483647, 1),
     (-2147483648, 2147483647, 2),
     (0, 2147483647, 3),

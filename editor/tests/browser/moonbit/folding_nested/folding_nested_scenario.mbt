@@ -58,7 +58,7 @@ pub fn run_folding_nested_test() -> Unit {
 fn wait_for_text(
   ctx : @support.BrowserTestContext,
   needle : String,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   if @support.query_text(".viewer-host") is Some(text) && text.contains(needle) {
     // Two regions — outer (1..5) and inner (2..4) — → two expanded chevrons

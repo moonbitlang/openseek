@@ -64,7 +64,7 @@ pub async fn Snapshot::publish(
   self : Snapshot,
   server_url~ : String,
   token~ : String,
-  timeout_ms? : Int = 240_000,
+  timeout_ms~ : Int32 = 240_000,
 ) -> @protocol.SessionShareReply {
   @async.with_timeout(timeout_ms, () => self.send(server_url~, token~)) catch {
     _ =>

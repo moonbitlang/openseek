@@ -22,12 +22,12 @@ pub(all) struct AgentFeedbackEditorInputContribution {
   /// `_preferBelow`.
   mut prefer_below : Bool
   /// `_hoverLineNumber` (`-1` for none).
-  mut hover_line_number : Int
+  mut hover_line_number : Int32
   /// `_hoverDecorations`, as owner-scoped decoration ids.
   mut hover_decoration_ids : Array[String]
   /// `_reservedGutterSpace`, storing the base `line_decorations_width` to
   /// restore (`Some` while the lane is reserved).
-  mut lane_base_width : Int?
+  mut lane_base_width : Int32?
   /// `_mouseDown`.
   mut mouse_down : Bool
   /// `_suppressSelectionChangeOnce`.

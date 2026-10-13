@@ -25,12 +25,16 @@ class CodexImagesHarness extends DesktopBrowserHarness {
     await this.goto();
     await this.page.getByRole('button', { name: 'Model', exact: true }).click();
     await this.page.getByRole('option', { name: 'Codex images', exact: true }).click();
-    await expect(this.page.getByRole('button', { name: 'Attach images', exact: true })).toBeVisible();
+    // Attach files also exists in the previous agent's composer. Wait for
+    // the model switch to install the Codex draft before dispatching files.
+    await expect(this.page.locator('#task')).toHaveAttribute('placeholder',
+      'Ask Codex to inspect, edit, or explain this workspace.');
+    await expect(this.page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
   }
 
   async select(files) {
     const chooser = this.page.waitForEvent('filechooser');
-    await this.page.getByRole('button', { name: 'Attach images', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Attach files', exact: true }).click();
     await (await chooser).setFiles(files);
   }
 
@@ -69,6 +73,12 @@ test('selected image-only input reaches Codex and remains visible in history', a
 
 test('paste and drop preserve image bytes, allow removal and steer a running task', async ({ page }) => {
   const app = new CodexImagesHarness(page);
+  const startReply = Promise.withResolvers();
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = async request => {
+    if (request.method === 'codex.turn.start') await startReply.promise;
+    return replyFor(request);
+  };
   await app.openCodex();
   expect(await app.transfer('paste')).toBe(true);
   expect(await app.transfer('drop', { name: 'dropped.png' })).toBe(true);
@@ -78,10 +88,17 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   await page.locator('#task').fill('Inspect the screenshot');
   await page.locator('#send').click();
   await expect(page.locator('.user-image')).toHaveCount(1);
+  await expect.poll(() => app.requests.filter(r => r.method === 'codex.turn.start').length).toBe(1);
   expect(app.requests.find(r => r.method === 'codex.turn.start').params.input).toEqual([
     { type: 'text', text: 'Inspect the screenshot' },
     { type: 'image', url: `data:image/png;base64,${png}` },
   ]);
+  // The optimistic user row and attachment button can precede the turn ACK.
+  // Only the running-turn composer can accept this paste as a steer.
+  startReply.resolve();
+  await expect(page.locator('#task')).toHaveAttribute('placeholder',
+    'Steer the running task — your message joins it at the next step.');
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
   expect(await app.transfer('paste')).toBe(true);
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#send').click();
@@ -119,13 +136,15 @@ test('slow file reads disable send and report read errors without losing text', 
     File.prototype.arrayBuffer = () => new Promise((_, reject) => { window.rejectImageRead = reject; });
   });
   await app.select(image);
-  await expect(page.getByText('Reading images…')).toBeVisible();
+  await expect(page.getByText('Reading attachments…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
   await expect(page.locator('#send')).toBeDisabled();
   await page.locator('#task').press('Enter');
   expect(app.requests.some(r => r.method === 'codex.turn.start')).toBe(false);
   await page.evaluate(() => window.rejectImageRead(new Error('test read failure')));
-  await expect(page.getByRole('alert')).toContainText('Could not read images');
+  await expect(page.getByRole('alert')).toContainText('Could not read attachments');
   await expect(page.locator('#task')).toHaveValue('Keep this text');
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await expect(page.locator('#send')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
@@ -160,7 +179,7 @@ test('canceling the file picker removes its input and permits another selection'
   const app = new CodexImagesHarness(page);
   await app.openCodex();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach images', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   const input = (await chooser).element();
   await input.evaluate(element => element.dispatchEvent(new Event('cancel')));
   await expect(page.locator('input[type="file"]')).toHaveCount(0);

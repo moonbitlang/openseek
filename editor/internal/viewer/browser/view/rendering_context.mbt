@@ -146,8 +146,8 @@ fn RenderingContext::margin_transform(self : RenderingContext) -> String {
 /// Scoped `RestrictedRenderingContext.getVerticalOffsetForLineNumber`.
 fn RenderingContext::vertical_offset_for_line(
   self : RenderingContext,
-  line_number : Int,
-  include_view_zones? : Bool = false,
+  line_number : Int32,
+  include_view_zones~ : Bool = false,
 ) -> Double {
   self.input.layout.get_vertical_offset_for_line_number(
     line_number,
@@ -159,7 +159,7 @@ fn RenderingContext::vertical_offset_for_line(
 /// Scoped `RestrictedRenderingContext.getLineHeightForLineNumber`.
 fn RenderingContext::line_height_for_line(
   self : RenderingContext,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   self.input.layout.get_line_height_for_line_number(line_number).to_double()
 }
@@ -196,7 +196,7 @@ fn RenderingContext::lines_visible_ranges_for_range(
 /// Internal tuple-carrier conversion at the ViewLines/RenderingContext
 /// handoff. Input and per-line range order are preserved exactly.
 fn line_visible_ranges_from_raw(
-  raw_lines : Array[(Int, Array[(Int, Int)])],
+  raw_lines : Array[(Int32, Array[(Int32, Int32)])],
 ) -> Array[LineVisibleRanges] {
   [
     for raw in raw_lines => {
@@ -240,7 +240,7 @@ fn RenderingContext::content_widgets_render_context(
 /// rounded `left`; Monaco's additional source carrier fields are intentionally
 /// omitted because no current producer/consumer boundary observes them.
 pub struct HorizontalPosition {
-  left : Int
+  left : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -253,13 +253,13 @@ fn HorizontalPosition::HorizontalPosition(left : Double) -> HorizontalPosition {
 /// continuation/outside-rendered facts are not carried because the readonly
 /// selection renderer has no consumer for them.
 priv struct LineVisibleRanges {
-  line_number : Int
+  line_number : Int32
   ranges : Array[HorizontalRange]
 }
 
 ///|
 fn LineVisibleRanges::LineVisibleRanges(
-  line_number : Int,
+  line_number : Int32,
   ranges : Array[HorizontalRange],
 ) -> LineVisibleRanges {
   { line_number, ranges, }
@@ -268,8 +268,8 @@ fn LineVisibleRanges::LineVisibleRanges(
 ///|
 /// Monaco `HorizontalRange`: integerized DOM geometry.
 priv struct HorizontalRange {
-  left : Int
-  width : Int
+  left : Int32
+  width : Int32
 }
 
 ///|

@@ -1,0 +1,212 @@
+/* One surface for every persistent row above the draft. Content-specific
+   classes retain their behavior; geometry and tone belong to this column. */
+.composer-context {
+  --composer-row-background: light-dark(#f0f0f0, var(--dark-bg-subtle));
+  width: 100%;
+  max-width: 820px;
+  min-width: 0;
+  margin-inline: auto;
+}
+
+.composer-context:not(:empty) {
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.composer-context .composer-context-row {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  max-width: none;
+  margin: 0;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--composer-row-background);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+  overflow-wrap: anywhere;
+}
+
+.composer-context .composer-context-row:is(.error, .blocked) {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.composer-context .composer-context-row.hidden,
+.composer-context .composer-running:empty {
+  display: none;
+}
+
+/* Grouping containers never draw another card around individual rows. */
+.composer-context :is(.pending-steers, .queued-inputs, .subrun-dock,
+  .shell-commands-running, .codex-pending) {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.composer-context :is(.pending-steers, .queued-inputs, .subrun-dock,
+  .shell-commands-running, .codex-pending):empty {
+  display: none;
+}
+
+.composer-context :is(.composer-notice-icon, .pending-steer-icon,
+  .queued-input-icon) {
+  color: var(--color-text-muted);
+}
+
+.composer-context-row.error .composer-notice-icon {
+  color: inherit;
+}
+
+.composer-context .subrun-detail {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-context .subrun-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.composer-context :is(.pending-steer-state, .queued-input-state) {
+  font-size: var(--font-size-sm);
+}
+
+.composer-context :is(.composer-notice-btn, .composer-approval-action,
+  .composer-goal-action, .codex-request-action) {
+  min-height: 28px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 3px 9px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  box-shadow: 0 1px 2px #0000000a;
+}
+
+.composer-context :is(.composer-notice-btn, .composer-approval-action,
+  .composer-goal-action, .codex-request-action):hover:not(:disabled) {
+  background: var(--color-hover-subtle);
+  color: var(--color-text-primary);
+}
+
+.composer-context :is(.composer-approval-allow, .codex-request-action-primary) {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.composer-context .composer-approval-question {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* Native disclosures preserve open state through unrelated model updates and
+   supply keyboard interaction without an extra component state machine. */
+.composer-context .composer-context-disclosure {
+  display: block;
+  padding: 0;
+}
+
+.composer-context-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  list-style: none;
+  cursor: pointer;
+}
+
+.composer-context-summary::-webkit-details-marker {
+  display: none;
+}
+
+.composer-context-summary::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--color-text-muted);
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.composer-context-disclosure[open] > .composer-context-summary::after {
+  transform: rotate(225deg) translate(-2px, -1px);
+}
+
+.composer-context-detail {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 14px 14px;
+  max-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.composer-context-detail .composer-approval-body {
+  margin: 0;
+}
+
+.composer-context .codex-request-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.composer-context .composer-attachment-confirm {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.composer-context .composer-attachment-name {
+  min-width: 0;
+  font-weight: 500;
+}
+
+.composer-context .composer-attachment-question {
+  flex: 1;
+  min-width: 120px;
+}
+
+.composer-context .composer-attachment-actions {
+  margin-left: auto;
+  gap: 6px;
+}
+
+@container main-pane (max-width: 520px) {
+  .composer-context .composer-context-row {
+    flex-wrap: wrap;
+  }
+
+  .composer-context .composer-notice-text {
+    flex-basis: 160px;
+  }
+
+  .composer-context .queued-input-text {
+    flex-basis: 120px;
+  }
+}

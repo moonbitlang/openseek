@@ -7,8 +7,8 @@
 
 ///|
 fn measurement_bare(
-  family? : String = "Test Mono",
-  features? : String = @common_config.editor_font_ligatures_off,
+  family~ : String = "Test Mono",
+  features~ : String = @common_config.editor_font_ligatures_off,
 ) -> @common_config.BareFontInfo {
   @common_config.BareFontInfo::create(
     font_family=family,
@@ -25,7 +25,7 @@ fn measurement_bare(
 ///|
 fn measure_with(
   width_for : (String, CharWidthRequestType) -> Double,
-  features? : String = @common_config.editor_font_ligatures_off,
+  features~ : String = @common_config.editor_font_ligatures_off,
 ) -> @common_config.FontInfo {
   let measurements = new_font_measurements_for_test(
     (_bare, requests) => {
@@ -49,7 +49,7 @@ fn trusted_font(family : String) -> @common_config.FontInfo {
 
 ///|
 fn suspicious_axis_measurement(
-  axis : Int,
+  axis : Int32,
   sample : Double,
 ) -> @common_config.FontInfo {
   measure_with((chr, _request_type) => {
@@ -74,7 +74,10 @@ fn suspicious_axis_measurement(
 }
 
 ///|
-fn suspicious_axis_value(info : @common_config.FontInfo, axis : Int) -> Double {
+fn suspicious_axis_value(
+  info : @common_config.FontInfo,
+  axis : Int32,
+) -> Double {
   match axis {
     0 => info.typical_halfwidth_character_width
     1 => info.typical_fullwidth_character_width
@@ -398,7 +401,7 @@ test "suspicious fallback rereads pixel ratio" {
 test "cache hit, one pending retry, callback ordering, and conditional event" {
   let reads = Ref(0)
   let timers : Array[() -> Unit] = []
-  let delays : Array[Int] = []
+  let delays : Array[Int32] = []
   let measurements = new_font_measurements_for_test(
     (_bare, requests) => {
       reads.val += 1

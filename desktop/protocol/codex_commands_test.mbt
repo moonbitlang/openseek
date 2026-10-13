@@ -162,3 +162,31 @@ test "Codex multi-shape replies preserve their app-server object" {
   })
   @debug.assert_eq(search.to_json(), { "files": ["src/main.mbt"] })
 }
+
+///|
+test "Codex response requires an explicit nonblank ownership token" {
+  let reply : @protocol.CodexServerRequestRespondPayload = @json.from_json({
+    "request_id": 7,
+    "response_token": "request-token",
+    "result": { "decision": "decline" },
+  })
+  assert_eq(reply.response_token, "request-token")
+  let roundtrip : @protocol.CodexServerRequestRespondPayload = @json.from_json(
+    reply.to_json(),
+  )
+  assert_eq(roundtrip, reply)
+  for token in [Json::null(), Json(""), Json("  "), Json(7)] {
+    let decoded : @protocol.CodexServerRequestRespondPayload? = Some(
+      @json.from_json({ "request_id": 7, "response_token": token, "result": {} }),
+    ) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
+  let missing : @protocol.CodexServerRequestRespondPayload? = Some(
+    @json.from_json({ "request_id": 7, "result": {} }),
+  ) catch {
+    _ => None
+  }
+  assert_true(missing is None)
+}

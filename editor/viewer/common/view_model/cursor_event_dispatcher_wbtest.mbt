@@ -1,17 +1,17 @@
 ///|
-fn dispatcher_selection(column : Int) -> @core.Selection {
+fn dispatcher_selection(column : Int32) -> @core.Selection {
   Selection(Position(1, column), Position(1, column))
 }
 
 ///|
 fn dispatcher_event(
   old_selections : Array[@core.Selection]?,
-  column : Int,
-  old_version : Int,
-  new_version : Int,
-  source? : String = "first",
-  reason? : @editor_api.CursorChangeReason = Explicit,
-  reached_max_cursor_count? : Bool = false,
+  column : Int32,
+  old_version : Int32,
+  new_version : Int32,
+  source~ : String = "first",
+  reason~ : @editor_api.CursorChangeReason = Explicit,
+  reached_max_cursor_count~ : Bool = false,
 ) -> CursorStateChangedEvent {
   {
     kind: CursorStateChanged,
@@ -27,8 +27,8 @@ fn dispatcher_event(
 
 ///|
 fn dispatcher_model_tokens_event(
-  from_line_number : Int,
-  to_line_number : Int,
+  from_line_number : Int32,
+  to_line_number : Int32,
 ) -> @model.ModelTokensChangedEvent {
   {
     semantic_tokens_applied: false,
@@ -135,7 +135,7 @@ test "model-token outgoing retains identity and never no-ops or merges" {
 ///|
 test "model-token outgoing typed listener receives every event in FIFO order" {
   let dispatcher = CursorEventDispatcher::CursorEventDispatcher()
-  let delivered : Array[Int] = []
+  let delivered : Array[Int32] = []
   dispatcher.on_model_tokens_changed(event => {
     delivered.push(event.event.ranges[0].from_line_number)
   })
@@ -301,7 +301,7 @@ test "reentrant cross-kind fire uses the shared outgoing listener delivery" {
 ///|
 test "standalone no-op drains before a later live cursor event" {
   let dispatcher = CursorEventDispatcher::CursorEventDispatcher()
-  let delivered : Array[Int] = []
+  let delivered : Array[Int32] = []
   dispatcher.on_event(event => {
     delivered.push(event.selections[0].get_position().column)
   })
@@ -321,7 +321,7 @@ test "standalone no-op drains before a later live cursor event" {
 ///|
 test "cursor outgoing FIFO continues through reentrant delivery" {
   let dispatcher = CursorEventDispatcher::CursorEventDispatcher()
-  let delivered : Array[Int] = []
+  let delivered : Array[Int32] = []
   let mut reentered = false
   dispatcher.on_event(event => {
     delivered.push(event.selections[0].get_position().column)

@@ -3,7 +3,7 @@
 /// scout answering a real question never dies mid-search (a truncated child
 /// burns its whole allowance and returns nothing); the answer-early rule in
 /// the prompt, not this ceiling, is what keeps exploration cheap.
-pub let default_explore_max_steps : Int = 100
+pub let default_explore_max_steps : Int32 = 100
 
 ///|
 /// The entry for `openseek run --kind explore`: decode the request's input
@@ -15,13 +15,13 @@ pub async fn run_child(
   input : Json,
   api_key~ : String,
   model~ : @deepseek.Model,
-  max_steps~ : Int,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  workspace_root? : String = ".",
-  session_id? : String = "explore",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  workspace_root~ : String = ".",
+  session_id~ : String = "explore",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   scratch_dir? : String,
 ) -> ExploreReport? {

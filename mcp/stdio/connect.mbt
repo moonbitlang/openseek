@@ -4,7 +4,7 @@
 /// The default handshake deadline: a server that does not answer `initialize`
 /// within this many milliseconds is abandoned (so a non-MCP or wedged child
 /// cannot hang the caller).
-const DefaultHandshakeTimeoutMs : Int = 30000
+const DefaultHandshakeTimeoutMs : Int32 = 30000
 
 ///|
 /// A live stdio MCP connection: the initialized client. Its reader/writer tasks
@@ -45,7 +45,7 @@ pub async fn[X] connect(
   cwd? : String,
   client_name~ : String,
   client_version~ : String,
-  handshake_timeout_ms? : Int = DefaultHandshakeTimeoutMs,
+  handshake_timeout_ms~ : Int32 = DefaultHandshakeTimeoutMs,
 ) -> StdioConnection {
   let (stdin_writer, stdout_reader, process) = {
     // The child's stdin/stdout pipes via the process helpers, which create the

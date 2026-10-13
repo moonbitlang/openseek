@@ -6,8 +6,8 @@
 fn env_test_config(
   api_key~ : String,
   model~ : @deepseek.Model,
-  problem_id? : String = "toml_parser_cli",
-  min_successes? : Int = 1,
+  problem_id~ : String = "toml_parser_cli",
+  min_successes~ : Int32 = 1,
 ) -> Config {
   Config(
     api_key~,

@@ -6,14 +6,14 @@
 /// `byte_count` bytes of OS entropy, or `None` when the platform's random
 /// source could not be read. Never invents weak randomness — callers that
 /// need a value fail loudly and ask the operator for an explicit one.
-pub fn random_bytes(byte_count : Int) -> Bytes? {
+pub fn random_bytes(byte_count : Int32) -> Bytes? {
   @env.rand(byte_count)
 }
 
 ///|
 /// A lowercase-hex string of `byte_count` random bytes (so its length is
 /// `2 * byte_count`), or `None` when no OS entropy is available.
-pub fn random_hex(byte_count : Int) -> String? {
+pub fn random_hex(byte_count : Int32) -> String? {
   guard random_bytes(byte_count) is Some(bytes) else { return None }
   let builder = StringBuilder()
   for byte in bytes {

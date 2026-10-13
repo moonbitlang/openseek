@@ -2,7 +2,7 @@
 
 ///|
 /// The default handshake deadline, matching the stdio transport's.
-const DefaultHandshakeTimeoutMs : Int = 30000
+const DefaultHandshakeTimeoutMs : Int32 = 30000
 
 ///|
 /// A live Streamable HTTP MCP connection: the initialized client. Its
@@ -37,10 +37,10 @@ pub fn HttpConnection::shutdown(self : HttpConnection) -> Unit {
 pub async fn[X] connect(
   group : @async.TaskGroup[X],
   url~ : String,
-  headers? : Map[String, String] = Map([]),
+  headers~ : Map[String, String] = Map([]),
   client_name~ : String,
   client_version~ : String,
-  handshake_timeout_ms? : Int = DefaultHandshakeTimeoutMs,
+  handshake_timeout_ms~ : Int32 = DefaultHandshakeTimeoutMs,
 ) -> HttpConnection {
   // Each POST exchange runs as its own cancellable task on the connection's
   // group, so the jsonrpc writer is never blocked by a long or stalled response

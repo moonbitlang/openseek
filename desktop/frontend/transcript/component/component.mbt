@@ -1,6 +1,6 @@
 ///|
 /// Which conversation source supplied the normalized rows. The component uses
-/// this for source-specific labels, empty-state copy, and renderer identity.
+/// this for source-specific transcript labels and renderer identity.
 pub(all) enum Source {
   OpenSeek
   Codex
@@ -73,6 +73,11 @@ struct Input {
   source : Source
   focused : @interop.ChannelId
   active_session : String
+  can_fork : Bool
+  // Disable every conversation while a request is pending; only its source
+  // answer receives the spinner's terminal sequence below.
+  fork_busy : Bool
+  forking : Int32?
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
   // The registered project that owns this conversation, kept separate from
@@ -84,7 +89,7 @@ struct Input {
   current_project : @common.Uri?
   // Every registered project on the focused device, in sidebar order.
   projects : Array[ProjectChoice]
-  // Only an unsent, unpersisted OpenSeek draft may change its project here.
+  // Only an unsent, unpersisted draft may change its project here.
   can_choose_project : Bool
   // Root-owned menu state participates in the shell's native-view occlusion.
   project_menu_open : Bool
@@ -106,13 +111,16 @@ struct Input {
 
 ///|
 pub fn Input::Input(
-  locale? : @i18n.Locale = English,
-  dark_mode? : Bool = false,
-  minimal? : Bool = false,
+  locale~ : @i18n.Locale = English,
+  dark_mode~ : Bool = false,
+  minimal~ : Bool = false,
   source~ : Source,
   focused~ : @interop.ChannelId,
   active_session~ : String,
-  scroll? : ScrollPosition = Pinned,
+  can_fork~ : Bool = false,
+  fork_busy~ : Bool = false,
+  forking? : Int32,
+  scroll~ : ScrollPosition = Pinned,
   project_label? : String,
   current_project~ : @common.Uri?,
   projects~ : Array[ProjectChoice],
@@ -123,7 +131,7 @@ pub fn Input::Input(
   items~ : Array[VisibleRow],
   streaming_response~ : String?,
   streaming_reasoning? : String,
-  reasoning_complete? : Bool = false,
+  reasoning_complete~ : Bool = false,
   streaming_identity~ : String,
 ) -> Input {
   {
@@ -133,6 +141,9 @@ pub fn Input::Input(
     source,
     focused,
     active_session,
+    can_fork,
+    fork_busy,
+    forking,
     scroll,
     project_label,
     current_project,
@@ -159,6 +170,7 @@ pub(all) struct Actions {
   /// Open another session's transcript. Used by a sub-run tool card to reach
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
+  fork : @cmd.Emit[Int32]
   /// Start a fresh draft in another registered project.
   choose_project : @cmd.Emit[@common.Uri]
   /// Open the shell-owned folder picker to register another project.
@@ -529,7 +541,7 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
   let bubbles = transcript.query_selector_all(".msg.user")
   let mut low = 0
   let mut high = bubbles.length() - 1
-  let mut found : Int? = None
+  let mut found : Int32? = None
   while low <= high {
     let middle = low + (high - low) / 2
     if bubbles
@@ -584,7 +596,7 @@ fn scroll_turn_into_view(
 fn report_visible_turn_after_render(
   emit : @cmd.Emit[Msg],
   current~ : @transcript_overview.TurnKey?,
-  unpinned? : Bool = false,
+  unpinned~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {

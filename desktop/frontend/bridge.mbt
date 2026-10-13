@@ -126,6 +126,7 @@ fn notification_msg(
       }
     CodexServerRequest(payload) =>
       if payload is Object(fields) &&
+        @jsonx.json_text(fields, "response_token") is Some(response_token) &&
         fields.get("request_id") is Some(request_id) &&
         @jsonx.json_text(fields, "method") is Some(method_) &&
         fields.get("params") is Some(params) &&
@@ -133,7 +134,9 @@ fn notification_msg(
         Some(
           Codex(
             channel~,
-            @codex.Msg::server_request(request_id, method_, params, generation),
+            @codex.Msg::server_request(
+              response_token, request_id, method_, params, generation,
+            ),
           ),
         )
       } else {
@@ -559,7 +562,7 @@ const WsLostAfter = 3
 ///|
 /// Reconnect backoff: quick first retries, settling at 15s so an
 /// overnight-idle page keeps probing without hammering.
-fn reconnect_delay(failures : Int) -> Int {
+fn reconnect_delay(failures : Int32) -> Int32 {
   match failures {
     0 | 1 => 1_000
     2 => 2_000
@@ -582,7 +585,7 @@ fn fetch_runs(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   frontier : Array[RunSnapshotFrontier],
-  connection_generation : Int,
+  connection_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let payload = runs_payload(frontier)
@@ -870,7 +873,7 @@ fn start_openseek(
   max_steps : String,
   session : String,
   workspace~ : @common.Uri,
-  images? : Array[String] = [],
+  images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   guard @resource.belongs_to(workspace, channel) else { return @cmd.none }
   let payload = start_payload(
@@ -918,6 +921,33 @@ async fn request_agent_start(
   submission_id : String,
 ) -> Unit noraise {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
+  try {
+    if payload.workspace is Some(workspace) &&
+      @mention_context.parse(payload.task) is Some(parsed) {
+      @composer.stage_attachments(
+        channel,
+        session,
+        workspace,
+        workspace,
+        parsed.mentions,
+      )
+    }
+  } catch {
+    error => {
+      // Attachment staging happens before agent.start is issued, so even a
+      // lost staging reply leaves the prompt definitely unsubmitted.
+      scheduler.add(
+        dispatch(
+          StartRejected(
+            session~,
+            submission_id~,
+            message=@interop.bridge_error_text(error),
+          ),
+        ),
+      )
+      return
+    }
+  }
   let reply = @interop.bridge_request(channel, @commands.agent_start, payload) catch {
     error => {
       let message = @interop.bridge_error_text(error)
@@ -962,7 +992,7 @@ fn start_payload(
   session : String,
   submission_id : String,
   workspace~ : @common.Uri,
-  images? : Array[String] = [],
+  images~ : Array[String] = [],
 ) -> @protocol.StartPayload {
   let session = session.trim().to_owned()
   {
@@ -981,7 +1011,7 @@ fn start_payload(
 /// The max-steps composer field as a positive step count. The field is
 /// free-form text; anything that does not read as a sensible positive
 /// number is omitted so the engine applies its default.
-fn parsed_max_steps(text : String) -> Int? {
+fn parsed_max_steps(text : String) -> Int32? {
   let value = @string.parse_double(text.trim()) catch { _ => return None }
   if value >= 1.0 && value <= 1_000_000_000.0 {
     Some(value.to_int())
@@ -995,8 +1025,8 @@ fn parsed_max_steps(text : String) -> Int? {
 fn fetch_sessions(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -1016,8 +1046,8 @@ async fn refresh_sessions_into(
   scheduler : &@cmd.Scheduler,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> Unit noraise {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   let reply = @interop.bridge_request(
@@ -1060,8 +1090,8 @@ fn open_session(
   channel : @interop.ChannelId,
   session_id : String,
   workspace~ : @common.Uri?,
-  generation~ : Int,
-  archived? : Bool = false,
+  generation~ : Int32,
+  archived~ : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   load_session_cmd(
@@ -1107,8 +1137,8 @@ fn refresh_session(
   channel : @interop.ChannelId,
   session_id : String,
   workspace~ : @common.Uri?,
-  generation~ : Int,
-  archived? : Bool = false,
+  generation~ : Int32,
+  archived~ : Bool = false,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   load_session_cmd(
@@ -1187,7 +1217,7 @@ fn steer_openseek(
   submission_id : String,
   text : String,
   run_id : String,
-  images? : Array[String] = [],
+  images~ : Array[String] = [],
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -1228,7 +1258,7 @@ async fn steer_delivered(
   text : String,
   submission_id : String,
   run_id : String,
-  images? : Array[String] = [],
+  images~ : Array[String] = [],
 ) -> Bool {
   let reply = @interop.bridge_request(channel, @commands.agent_steer, {
     text,
@@ -1241,7 +1271,7 @@ async fn steer_delivered(
 
 ///|
 fn queue_openseek(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -1273,7 +1303,16 @@ fn queue_openseek(
                     message="Queue action failed: \{@interop.bridge_error_text(error)}",
                   ),
                 )
-              QueueEdit(..) | QueueWithdraw(..) =>
+              QueueEdit(id~, ..) =>
+                dispatch(
+                  QueueEditRejected(
+                    session~,
+                    id~,
+                    run_id~,
+                    message="Queue action failed: \{@interop.bridge_error_text(error)}",
+                  ),
+                )
+              QueueWithdraw(..) =>
                 root_dispatch(
                   HostActionFailed(
                     "Queue action failed: \{@interop.bridge_error_text(error)}",
@@ -1305,7 +1344,23 @@ fn queue_openseek(
                   },
                 ),
               )
-            QueueEdit(..) | QueueWithdraw(..) =>
+            QueueEdit(id~, ..) =>
+              dispatch(
+                QueueEditRejected(
+                  session~,
+                  id~,
+                  run_id~,
+                  message=match locale {
+                    SimplifiedChinese => "队列中的消息已不可用。"
+                    TraditionalChinese => "佇列中的訊息已不可用。"
+                    Japanese =>
+                      "キュー内のメッセージは利用できなくなりました。"
+                    English => "The queued message is no longer available."
+                    Spanish => "El mensaje en cola ya no está disponible."
+                  },
+                ),
+              )
+            QueueWithdraw(..) =>
               root_dispatch(
                 HostActionFailed(
                   match locale {
@@ -1500,7 +1555,7 @@ async fn request_agent_goal(
 /// may be the very notification this page missed. Failures are likewise tied
 /// to the exact run so the optimistic Cancelling phase can be made retryable.
 fn cancel_openseek(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   run_id : String,
@@ -1557,7 +1612,7 @@ fn cancel_openseek(
 /// marked answered would strand it reading "Sending…" forever with the engine
 /// still blocked, and cancelling the run would be the only way out.
 fn approve_openseek(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   session : String,
@@ -1669,7 +1724,7 @@ fn close_window() -> @cmd.Cmd {
 /// platform opener. Success needs no reply handling; a failure surfaces as
 /// an error toast.
 fn open_codex_config(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {

@@ -1,5 +1,5 @@
 ///|
-fn github_review_patch_start(value : String, prefix : String) -> Int raise {
+fn github_review_patch_start(value : String, prefix : String) -> Int32 raise {
   guard value.has_prefix(prefix) &&
     value[1:].split(",").to_array() is [number, ..] else {
     raise HostError("GitHub returned an invalid diff hunk coordinate.")
@@ -16,9 +16,9 @@ fn github_review_patch_lines(
   path : String,
   patch : String,
 ) -> @protocol.GithubCommentableFile raise {
-  let left_lines : Array[Int] = []
-  let right_lines : Array[Int] = []
-  let mut cursor : (Int, Int)? = None
+  let left_lines : Array[Int32] = []
+  let right_lines : Array[Int32] = []
+  let mut cursor : (Int32, Int32)? = None
   for row in patch.split("\n") {
     if row.has_prefix("@@ ") {
       guard row.split(" ").to_array() is ["@@", old, new, "@@", ..] else {

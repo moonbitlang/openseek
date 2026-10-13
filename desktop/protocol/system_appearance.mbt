@@ -12,7 +12,7 @@ pub impl FromJson for AppSystemAppearanceReply with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for AppSystemAppearanceReply with fn to_json(self) {
-  { "dark": self.dark.to_json() }
+  { "dark": Json(self.dark) }
 }
 
 ///|

@@ -6,14 +6,14 @@
 priv struct RemoteBridgeSub {
   device_id : String
   channel : @interop.ChannelId
-  websocket_epoch : Int
+  websocket_epoch : Int32
   mut dispatch : @cmd.Emit[Event]
 }
 
 ///|
 fn RemoteBridgeSub::RemoteBridgeSub(
   device_id : String,
-  websocket_epoch : Int,
+  websocket_epoch : Int32,
   dispatch : @cmd.Emit[Event],
 ) -> RemoteBridgeSub {
   {
@@ -27,8 +27,8 @@ fn RemoteBridgeSub::RemoteBridgeSub(
 ///|
 fn RemoteBridgeSub::subscription_key(
   device_id : String,
-  websocket_epoch : Int,
-  reconnect_attempt : Int,
+  websocket_epoch : Int32,
+  reconnect_attempt : Int32,
 ) -> String {
   let channel : @interop.ChannelId = @interop.ChannelId::Remote(device_id)
   "host-bridge:\{channel.uri_authority()}:\{websocket_epoch}:\{reconnect_attempt}"

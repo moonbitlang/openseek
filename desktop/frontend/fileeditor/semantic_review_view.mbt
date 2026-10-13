@@ -76,7 +76,9 @@ fn semantic_review_input(state : State, ctx : Ctx) -> SemanticReviewInput? {
       }
       let live_modified = match doc.state {
         TabLoaded(..) => Some({ resource: file, path, })
-        TabDeleted
+        TabOffice(..)
+        | TabPdf(..)
+        | TabDeleted
         | TabLoading
         | TabBinary
         | TabOversized
@@ -140,7 +142,7 @@ fn semantic_range_label(
 
 ///|
 fn semantic_section_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   section : @moon_diff_provider.SemanticReviewSection,
 ) -> String {
   match (section.new_context, section.old_context, section.identity) {
@@ -200,7 +202,7 @@ priv enum SemanticReviewSide {
 
 ///|
 fn semantic_fallback_notice(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   section : @moon_diff_provider.SemanticReviewSection,
   requested : @moon_diff_provider.MoonDiffMode,
 ) -> @html.Html {
@@ -238,7 +240,7 @@ fn semantic_fallback_notice(
 /// intraline spans, gutters, and alignment zones are all rendered by the real
 /// DiffEditor mounted after paint.
 fn semantic_section_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   section : @moon_diff_provider.SemanticReviewSection,
   requested : @moon_diff_provider.MoonDiffMode,
@@ -325,7 +327,7 @@ fn semantic_empty_view(message : String) -> @html.Html {
 
 ///|
 fn semantic_status_empty_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   plan : @moon_diff_provider.SectionedSemanticReviewPlan,
   input : SemanticReviewInput,
 ) -> @html.Html? {
@@ -371,7 +373,7 @@ fn semantic_status_empty_view(
 
 ///|
 fn semantic_plan_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   plan : @moon_diff_provider.SectionedSemanticReviewPlan,
   input : SemanticReviewInput,
@@ -421,7 +423,7 @@ fn semantic_plan_view(
 /// Render section metadata and stable DiffEditor mount points. Source text is
 /// intentionally absent from this HTML tree.
 pub fn semantic_review_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   state : State,
 ) -> @html.Html {
@@ -468,7 +470,7 @@ priv struct SemanticReviewEditorHost {
   active_hunk_subscription : @common.Disposable
   content_height_subscription : @common.Disposable
   navigation_reveal_subscription : @common.Disposable
-  pending_navigation_reveal_generation : Ref[Int?]
+  pending_navigation_reveal_generation : Ref[Int32?]
   focus_subscription : @common.Disposable
 }
 
@@ -484,7 +486,7 @@ let semantic_review_active_key : Ref[String?] = Ref(None)
 ///|
 /// Fences deferred reveal events and animation frames across rapid navigation,
 /// section replacement, and surface teardown.
-let semantic_review_navigation_generation : Ref[Int] = Ref(0)
+let semantic_review_navigation_generation : Ref[Int32] = Ref(0)
 
 ///|
 priv enum SemanticReviewNavigationDirection {
@@ -574,7 +576,7 @@ fn semantic_model_uri(side : SemanticReviewSide, key : String) -> @common.Uri? {
 fn semantic_feedback_line_offset(
   section : @moon_diff_provider.SemanticReviewSection,
   side : SemanticReviewSide,
-) -> Int? {
+) -> Int32? {
   if section.kind is @moon_diff_provider.SemanticReviewSectionKind::Whole {
     return Some(0)
   }
@@ -610,7 +612,7 @@ fn semantic_feedback_side_enabled(
 ///|
 fn project_semantic_feedback_range(
   range : @common.Range,
-  line_offset : Int,
+  line_offset : Int32,
 ) -> @common.Range {
   @common.Range(
     range.start_line_number + line_offset,
@@ -661,7 +663,7 @@ priv struct SemanticFeedbackModelProjection {
   model : @model.TextModel
   file : @pathx.Relative
   side : SemanticReviewSide
-  line_offset : Int
+  line_offset : Int32
 }
 
 ///|
@@ -727,13 +729,13 @@ fn sync_semantic_feedback(
 priv struct SemanticModifiedModelProjection {
   resource : @common.Uri
   path : @pathx.Relative
-  line_offset : Int
+  line_offset : Int32
 }
 
 ///|
 fn @moon_diff_provider.SemanticReviewSection::modified_line_offset(
   self : @moon_diff_provider.SemanticReviewSection,
-) -> Int? {
+) -> Int32? {
   semantic_feedback_line_offset(self, SemanticReviewModified)
 }
 
@@ -766,7 +768,7 @@ fn semantic_modified_model_projection(
 fn project_semantic_modified_diagnostics(
   diagnostics : ArrayView[@language.Diagnostic],
   model : @model.TextModel,
-  line_offset : Int,
+  line_offset : Int32,
 ) -> Array[@language.Diagnostic] {
   let projected : Array[@language.Diagnostic] = []
   let line_count = model.get_line_count()
@@ -848,8 +850,8 @@ fn semantic_estimated_height(
   section : @moon_diff_provider.SemanticReviewSection,
   layout : ReviewDiffLayout,
 ) -> Double {
-  let old_lines = section.original_source.split("\n").length()
-  let new_lines = section.modified_source.split("\n").length()
+  let old_lines = section.original_source.split("\n").count()
+  let new_lines = section.modified_source.split("\n").count()
   let lines = match layout {
     ReviewSideBySide => old_lines.max(new_lines)
     ReviewInline => old_lines + new_lines
@@ -953,7 +955,7 @@ fn schedule_semantic_review_reveal_scroll(
   editor_host : @dom.Element,
   editor : @viewer.DiffEditor,
   event : @viewer.DiffEditorRevealEvent,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   @dom.window().request_animation_frame(_ => {
     guard semantic_review_navigation_generation.val == generation &&
@@ -1207,7 +1209,7 @@ fn create_semantic_review_editor(
     apply_semantic_review_editor_height(host, editor, content_height)
     update_semantic_review_scroll_width()
   })
-  let pending_navigation_reveal_generation : Ref[Int?] = Ref(None)
+  let pending_navigation_reveal_generation : Ref[Int32?] = Ref(None)
   let navigation_reveal_subscription = editor.on_did_reveal_change(event => {
     guard pending_navigation_reveal_generation.val is Some(generation) else {
       return
@@ -1324,7 +1326,7 @@ fn clear_semantic_review_editors() -> Unit {
 }
 
 ///|
-fn semantic_review_navigation_index(current : String?) -> Int? {
+fn semantic_review_navigation_index(current : String?) -> Int32? {
   guard current is Some(current) else { return None }
   semantic_review_order.search(current)
 }
@@ -1332,10 +1334,10 @@ fn semantic_review_navigation_index(current : String?) -> Int? {
 ///|
 fn semantic_review_hunk_position(
   key : String,
-  active_index : Int?,
+  active_index : Int32?,
 ) -> ReviewHunkPosition? {
   guard active_index is Some(active_index) else { return None }
-  let mut current : Int? = None
+  let mut current : Int32? = None
   let mut total = 0
   for section_key in semantic_review_order {
     let count = semantic_review_editors
@@ -1408,9 +1410,9 @@ fn semantic_review_section_navigation_index(
   state : State,
   change : ChangedFile?,
   sections : Array[@moon_diff_provider.SemanticReviewSection],
-  current : Int?,
+  current : Int32?,
   previous : Bool,
-) -> Int? {
+) -> Int32? {
   let mut index = match current {
     Some(index) => index + (if previous { -1 } else { 1 })
     None => if previous { sections.length() - 1 } else { 0 }

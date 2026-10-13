@@ -46,7 +46,7 @@ fn Action::test_emit() -> @cmd.Emit[Action] {
 }
 
 ///|
-fn[T] Menu::length(self : Menu[T]) -> Int {
+fn[T] Menu::length(self : Menu[T]) -> Int32 {
   self.items.length()
 }
 
@@ -761,7 +761,7 @@ test "removing an image is pure and affects only the selected draft" {
 test "image read events remain pure and settle their original cached draft" {
   let input = Input::fixture("keep text")
   let model = Model(input)
-  let started = ImageRead(input.identity, @image_input.Reading)
+  let started = ImageRead(input.identity, input.root, @image_input.Reading)
   let (reading, _) = model.update(
     input,
     started,
@@ -792,6 +792,7 @@ test "image read events remain pure and settle their original cached draft" {
   }
   let ready = ImageRead(
     input.identity,
+    input.root,
     @image_input.Ready([("screen.png", "data:image/png;base64,YQ==")]),
   )
   let (settled, _) = reading.update(
@@ -810,7 +811,11 @@ test "image read events remain pure and settle their original cached draft" {
   assert_true(settled.active(other).draft.images.is_empty())
   assert_eq(settled.active(input).draft.images.length(), 1)
   assert_eq(settled.active(input).image_reads, 0)
-  let failed = ImageRead(input.identity, @image_input.Failed("read failed"))
+  let failed = ImageRead(
+    input.identity,
+    input.root,
+    @image_input.Failed("read failed"),
+  )
   let (failure, _) = reading.update(
     input,
     failed,

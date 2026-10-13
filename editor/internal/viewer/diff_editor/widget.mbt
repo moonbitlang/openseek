@@ -54,16 +54,16 @@ pub struct DiffEditorWidget {
   mut modified_alignment_geometry : PaneGeometrySnapshot?
   mut diff_state : DiffState?
   priv line_widgets : Array[MountedDiffLineWidget]
-  priv mut line_action : ((Bool, Int) -> Unit)?
-  priv mut line_action_allowed : ((Bool, Int) -> Bool)?
+  priv mut line_action : ((Bool, Int32) -> Unit)?
+  priv mut line_action_allowed : ((Bool, Int32) -> Bool)?
   priv mut line_action_button : @rdom.Element?
-  priv mut line_action_target : (Bool, Int)?
-  priv mut hunk_action_renderer : ((Int) -> @rdom.Element?)?
-  priv hunk_actions : Array[(Int, @rdom.Element)]
+  priv mut line_action_target : (Bool, Int32)?
+  priv mut hunk_action_renderer : ((Int32) -> @rdom.Element?)?
+  priv hunk_actions : Array[(Int32, @rdom.Element)]
   priv mut hunk_pointer_position : (Double, Double)?
   priv mut navigate_from_active_hunk : Bool
-  priv mut active_hunk_index : Int?
-  priv did_change_active_hunk : @base_common.Emitter[Int?]
+  priv mut active_hunk_index : Int32?
+  priv did_change_active_hunk : @base_common.Emitter[Int32?]
   /// The section-host contract is published only after one complete geometry
   /// reconcile has committed both panes' owned alignment zones. Retaining the
   /// last value prevents a host height write followed by `layout()` from
@@ -77,18 +77,18 @@ pub struct DiffEditorWidget {
   /// generation that was current when the host made it. The request survives
   /// asynchronous diff computation and hidden/layout render barriers, but a
   /// replacement pair makes it stale instead of moving the new document.
-  mut pending_reveal_first_diff_generation : Int?
+  mut pending_reveal_first_diff_generation : Int32?
   /// Symmetric request used when a multi-diff host enters this item while
   /// navigating backward.
-  mut pending_reveal_last_diff_generation : Int?
-  mut reconciling_generation : Int
+  mut pending_reveal_last_diff_generation : Int32?
+  mut reconciling_generation : Int32
   mut is_reconciling : Bool
   /// Cancellable paint barrier for the latest outer layout transaction.
   /// Both layouts wait for both kernels because Inline paints the original
   /// editor's real line-number strip and derives paired geometry from it.
   layout_render_waiters : Array[@base_common.Disposable]
-  mut layout_render_generation : Int
-  mut layout_render_remaining : Int
+  mut layout_render_generation : Int32
+  mut layout_render_remaining : Int32
   /// Model-relative modified viewport captured before an outer layout mutates
   /// pane widths/options. Modified is the canonical viewport: keep this anchor
   /// across the first render and every follow-up Markdown/ViewZone measurement
@@ -141,8 +141,8 @@ fn diff_whole_line_decorations(
 pub fn DiffEditorWidget::create(
   host : @rdom.Element,
   services? : @code_widget.CodeEditorServices,
-  editor_options? : @code_widget.CodeEditorOptions = @code_widget.CodeEditorOptions::default(),
-  options? : DiffEditorOptions = DiffEditorOptions::default(),
+  editor_options~ : @code_widget.CodeEditorOptions = @code_widget.CodeEditorOptions::default(),
+  options~ : DiffEditorOptions = DiffEditorOptions::default(),
   provider : &@diff.DocumentDiffProvider,
 ) -> DiffEditorWidget {
   let localization = services
@@ -332,7 +332,7 @@ fn DiffEditorWidget::cancel_layout_render_barrier(
 ///|
 fn DiffEditorWidget::complete_layout_pane_render(
   self : DiffEditorWidget,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if self.disposed ||
     generation != self.layout_render_generation ||
@@ -979,7 +979,7 @@ fn replace_alignment_zones(
   editor : @code_widget.CodeEditorWidget,
   previous_ids : Array[String],
   specs : Array[@code_widget.ManagedCodeEditorViewZoneSpec],
-  generation : Int,
+  generation : Int32,
 ) -> Array[String] {
   if previous_ids.is_empty() && specs.is_empty() {
     []
@@ -1022,7 +1022,7 @@ fn DiffEditorWidget::modified_viewport_for_geometry_transaction(
 ///|
 fn DiffEditorWidget::clear_overview_ruler(
   self : DiffEditorWidget,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if self.original_overview_ruler is Some(ruler) {
     ruler.clear(generation)
@@ -1036,7 +1036,7 @@ fn DiffEditorWidget::clear_overview_ruler(
 fn DiffEditorWidget::apply_overview_diff_state(
   self : DiffEditorWidget,
   diff_state : DiffState,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   if self.original_overview_ruler is Some(ruler) {
     ruler.set_entries(
@@ -1165,7 +1165,7 @@ fn DiffEditorWidget::sync_failure_diagnostic(self : DiffEditorWidget) -> Unit {
 ///|
 fn DiffEditorWidget::commit_empty_diff_features(
   self : DiffEditorWidget,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   let modified_viewport = self.modified_viewport_for_geometry_transaction()
   self.clear_decorations()
@@ -1198,7 +1198,7 @@ fn DiffEditorWidget::commit_diff_state(
   self : DiffEditorWidget,
   diff_state : DiffState,
   model : DiffEditorModelData,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   let modified_viewport = self.modified_viewport_for_geometry_transaction()
   self.sync_line_widget_anchors(diff_state)
@@ -1613,14 +1613,16 @@ pub fn DiffEditorWidget::get_hunks(self : DiffEditorWidget) -> Array[DiffHunk] {
 }
 
 ///|
-pub fn DiffEditorWidget::get_active_hunk_index(self : DiffEditorWidget) -> Int? {
+pub fn DiffEditorWidget::get_active_hunk_index(
+  self : DiffEditorWidget,
+) -> Int32? {
   self.active_hunk_index
 }
 
 ///|
 pub fn DiffEditorWidget::on_did_change_active_hunk(
   self : DiffEditorWidget,
-  listener : (Int?) -> Unit,
+  listener : (Int32?) -> Unit,
 ) -> @base_common.Disposable {
   self.did_change_active_hunk.event(listener)
 }
@@ -1628,7 +1630,7 @@ pub fn DiffEditorWidget::on_did_change_active_hunk(
 ///|
 fn DiffEditorWidget::set_active_hunk_index(
   self : DiffEditorWidget,
-  index : Int?,
+  index : Int32?,
 ) -> Unit {
   if self.active_hunk_index != index {
     self.active_hunk_index = index
@@ -1650,7 +1652,7 @@ priv struct DiffNavigationRevealPlan {
 ///|
 fn navigation_reveal_range(
   range : @base_common.LineRange,
-  line_count : Int,
+  line_count : Int32,
 ) -> @base_common.Range {
   if range.is_empty() {
     // Empty sides are positions between physical lines. A code editor still
@@ -1668,8 +1670,8 @@ fn navigation_reveal_range(
 fn diff_navigation_reveal_plan(
   _layout : DiffEditorLayout,
   change : @diff.DetailedLineRangeMapping,
-  _original_line_count : Int,
-  modified_line_count : Int,
+  _original_line_count : Int32,
+  modified_line_count : Int32,
 ) -> DiffNavigationRevealPlan? {
   if change.modified.is_empty() && change.original.is_empty() {
     return None
@@ -1685,7 +1687,7 @@ fn diff_navigation_reveal_plan(
 
 ///|
 fn navigation_range_announcement(
-  language? : @localization.Language = English,
+  language~ : @localization.Language = English,
   side : String,
   empty_kind : String,
   range : @base_common.LineRange,
@@ -1755,7 +1757,7 @@ fn navigation_range_announcement(
 
 ///|
 fn diff_navigation_announcement(
-  language? : @localization.Language = English,
+  language~ : @localization.Language = English,
   target : DiffNavigationTarget,
 ) -> String {
   let change = target.change

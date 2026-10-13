@@ -82,7 +82,7 @@ pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
   executable? : String,
-  app_version? : String = "development",
+  app_version~ : String = "development",
   resources? : @resources.Resources,
 ) -> HostState {
   {
@@ -210,6 +210,15 @@ pub fn endpoints(
 ) -> Array[@endpoint.Endpoint] {
   [
     Endpoint(@commands.fs_read_file, payload => read_file_op(payload)),
+    Endpoint(@commands.fs_prepare_attachment, payload => {
+      prepare_attachment_op(payload)
+    }),
+    Endpoint(@commands.fs_import_attachment, payload => {
+      import_attachment_op(payload)
+    }),
+    Endpoint(@commands.fs_stage_attachments, payload => {
+      stage_attachments_op(payload)
+    }),
     Endpoint(@commands.fs_materialize_semantic_selection, payload => {
       materialize_semantic_selection_op(payload)
     }),

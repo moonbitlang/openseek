@@ -21,7 +21,7 @@
 /// Absent (tests, plain rendering), explicit links remain ordinary anchors.
 /// Inline code stays inert.
 pub fn markdown_nodes(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   source : String,
   open_file? : (String) -> @cmd.Cmd,
 ) -> Array[@html.Html] {
@@ -72,7 +72,7 @@ fn MarkdownRender::push_block(
     BlockQuote(node) =>
       out.push(@html.blockquote(self.block_nodes(node.v.block)))
     CodeBlock(node) | ExtMathBlock(node) =>
-      out.push(code_block(locale=self.locale, node.v))
+      out.push(code_block(locale=self.locale, node.v, self.open_file))
     // Raw HTML is shown as text, not injected; see the module comment.
     HtmlBlock(node) =>
       out.push(@html.pre(class="raw-html", lines_text(node.v.0)))
@@ -114,29 +114,37 @@ fn lines_text(lines : @cmark.Seq[@cmark.Node[String]]) -> String {
 
 ///|
 fn code_block(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   block : @cmark.CodeBlock,
+  open_file : ((String) -> @cmd.Cmd)?,
 ) -> @html.Html {
   let source = lines_text(block.code)
+  let language = code_block_language(block)
+  let closed = code_block_is_closed(block)
+  if language == @workspace_file_ref.FenceLanguage {
+    match @workspace_file_ref.parse(language, source, closed~) {
+      Some(reference) =>
+        return workspace_file_card(locale, reference, open_file)
+      None => ()
+    }
+  }
   @html.div(class="chat-code-block", [
     @html.div(class="chat-code-toolbar", [code_copy_button(locale~, source)]),
-    code_block_body(block, source),
+    code_block_body(block, source, language),
   ])
 }
 
 ///|
 #warnings("-alert_xss_vulnerable")
-fn code_block_body(block : @cmark.CodeBlock, source : String) -> @html.Html {
+fn code_block_body(
+  block : @cmark.CodeBlock,
+  source : String,
+  language : String,
+) -> @html.Html {
   // Unlabelled fences and indented code use MoonBit by default, including
   // code inside completed reasoning. Explicit language labels still win.
-  let language = match block.info_string {
-    Some(info) =>
-      match @cmark.CodeBlock::language_of_info_string(info.v) {
-        Some((language, _)) => language
-        None => "mbt"
-      }
-    None => "mbt"
-  }
+  // `language` is computed once by `code_block`, so the file-reference branch
+  // and ordinary code rendering cannot disagree about the info string.
   // cmark also parses unfinished fences as code blocks. Only compile closed
   // diagrams, so each growing prefix stays source, including saved messages
   // whose author never supplied a closing fence.
@@ -190,6 +198,137 @@ fn code_block_body(block : @cmark.CodeBlock, source : String) -> @html.Html {
   }
   let code_class = if language.is_empty() { "" } else { "language-" + language }
   @html.pre([@html.code(class=code_class, source)])
+}
+
+///|
+fn code_block_language(block : @cmark.CodeBlock) -> String {
+  match block.info_string {
+    Some(info) =>
+      match @cmark.CodeBlock::language_of_info_string(info.v) {
+        Some((language, _)) => language
+        None => "mbt"
+      }
+    None => "mbt"
+  }
+}
+
+///|
+fn code_block_is_closed(block : @cmark.CodeBlock) -> Bool {
+  block.layout is Fenced({ closing_fence: Some(_), .. })
+}
+
+///|
+fn workspace_file_card(
+  locale : @i18n.Locale,
+  reference : @workspace_file_ref.WorkspaceFileRef,
+  open_file : ((String) -> @cmd.Cmd)?,
+) -> @html.Html {
+  let kind_class = workspace_file_kind_class(reference.kind)
+  let kind_label = workspace_file_kind_label(locale, reference.kind)
+  let title = match locale {
+    SimplifiedChinese => "打开 \{reference.path}"
+    TraditionalChinese => "開啟 \{reference.path}"
+    Japanese => "\{reference.path} を開く"
+    English => "Open \{reference.path}"
+    Spanish => "Abrir \{reference.path}"
+  }
+  let attrs = @html.Attrs::build()
+    .aria_label(title)
+    .data_set("workspace-file-reference", reference.path)
+    .data_set("context-file", reference.path)
+  let children = [
+    @html.span(
+      class="workspace-file-glyph \{kind_class}",
+      attrs=@html.Attrs::build().aria_hidden("true"),
+      [@icons.codicon(@workspace_file_ref.file_icon_path(reference.kind))],
+    ),
+    @html.span(class="workspace-file-copy", [
+      @html.span(class="workspace-file-name", reference.name),
+      @html.span(class="workspace-file-kind", kind_label),
+    ]),
+  ]
+  match open_file {
+    Some(open) =>
+      @html.button(
+        class="workspace-file-card \{kind_class}",
+        type_="button",
+        title~,
+        attrs~,
+        on_click=open(reference.path),
+        children,
+      )
+    None =>
+      @html.div(class="workspace-file-card \{kind_class}", attrs~, children)
+  }
+}
+
+///|
+fn workspace_file_kind_class(kind : @workspace_file_ref.FileKind) -> String {
+  match kind {
+    Spreadsheet => "spreadsheet"
+    Document => "document"
+    Presentation => "presentation"
+    Image => "image"
+    Pdf => "pdf"
+    Archive => "archive"
+    Code => "code"
+    Text => "text"
+    Generic => "generic"
+  }
+}
+
+///|
+fn workspace_file_kind_label(
+  locale : @i18n.Locale,
+  kind : @workspace_file_ref.FileKind,
+) -> String {
+  match (locale, kind) {
+    (SimplifiedChinese, Spreadsheet) => "电子表格"
+    (SimplifiedChinese, Document) => "文档"
+    (SimplifiedChinese, Presentation) => "演示文稿"
+    (SimplifiedChinese, Image) => "图片"
+    (SimplifiedChinese, Pdf) => "PDF 文档"
+    (SimplifiedChinese, Archive) => "压缩包"
+    (SimplifiedChinese, Code) => "代码文件"
+    (SimplifiedChinese, Text) => "文本文件"
+    (SimplifiedChinese, Generic) => "文件"
+    (TraditionalChinese, Spreadsheet) => "電子表格"
+    (TraditionalChinese, Document) => "文件"
+    (TraditionalChinese, Presentation) => "簡報"
+    (TraditionalChinese, Image) => "圖片"
+    (TraditionalChinese, Pdf) => "PDF 文件"
+    (TraditionalChinese, Archive) => "壓縮檔"
+    (TraditionalChinese, Code) => "程式碼檔案"
+    (TraditionalChinese, Text) => "文字檔案"
+    (TraditionalChinese, Generic) => "檔案"
+    (Japanese, Spreadsheet) => "スプレッドシート"
+    (Japanese, Document) => "ドキュメント"
+    (Japanese, Presentation) => "プレゼンテーション"
+    (Japanese, Image) => "画像"
+    (Japanese, Pdf) => "PDF ドキュメント"
+    (Japanese, Archive) => "アーカイブ"
+    (Japanese, Code) => "コードファイル"
+    (Japanese, Text) => "テキストファイル"
+    (Japanese, Generic) => "ファイル"
+    (Spanish, Spreadsheet) => "Hoja de cálculo"
+    (Spanish, Document) => "Documento"
+    (Spanish, Presentation) => "Presentación"
+    (Spanish, Image) => "Imagen"
+    (Spanish, Pdf) => "Documento PDF"
+    (Spanish, Archive) => "Archivo comprimido"
+    (Spanish, Code) => "Archivo de código"
+    (Spanish, Text) => "Archivo de texto"
+    (Spanish, Generic) => "Archivo"
+    (English, Spreadsheet) => "Spreadsheet"
+    (English, Document) => "Document"
+    (English, Presentation) => "Presentation"
+    (English, Image) => "Image"
+    (English, Pdf) => "PDF document"
+    (English, Archive) => "Archive"
+    (English, Code) => "Code file"
+    (English, Text) => "Text file"
+    (English, Generic) => "File"
+  }
 }
 
 ///|
@@ -264,7 +403,7 @@ fn MarkdownRender::table(
 fn MarkdownRender::inline_nodes(
   self : MarkdownRender,
   inline : @cmark.Inline,
-  linkify_urls? : Bool = true,
+  linkify_urls~ : Bool = true,
 ) -> Array[@html.Html] {
   let out : Array[@html.Html] = []
   self.push_inline(out, inline, linkify_urls~)
@@ -680,7 +819,7 @@ fn link_node(href : String, children : Array[@html.Html]) -> @html.Html {
 /// only buttons carry an `on_click` in this html layer, and opening is an app
 /// action rather than navigation.
 fn file_link_node(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   open : (String) -> @cmd.Cmd,
   path : String,
   children : Array[@html.Html],

@@ -2,6 +2,7 @@
 package "openseek_desktop/frontend/fileeditor"
 
 import {
+  "Lampese/office-viewer/viewer",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
@@ -64,6 +65,8 @@ pub fn resize_handle_view() -> @html.Html
 
 pub fn semantic_review_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
 
+pub fn show_office_feedback(@cmd.Emit[Msg], OfficeSelectionPreview) -> @cmd.Cmd
+
 pub fn subscriptions(State, Ctx, @cmd.Emit[Msg]) -> @sub.Sub
 
 pub fn sync(@cmd.Emit[Msg], State, Ctx, review_context? : Array[@mention_context.ReviewChanges]) -> (State, @cmd.Cmd)
@@ -122,6 +125,7 @@ pub fn ChangedFileReview::equal(Self, Self) -> Bool
 pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
 
 pub(all) struct Ctx {
+  locale : @i18n.Locale
   model : String
   thinking : @protocol.OpenSeekThinking?
   owner : @interop.ConversationKey
@@ -173,6 +177,7 @@ pub fn FileChange::not_equal(Self, Self) -> Bool
 pub(all) enum FileContent {
   Binary
   Oversized
+  Office(data_base64~ : String, media_type~ : String, sig~ : String)
   Content(content~ : String, sig~ : String)
 }
 
@@ -267,10 +272,29 @@ pub(all) enum Msg {
   Search(@grep_search.Msg)
   SearchMatchSelected(path~ : String, range~ : @common.Range)
   SemanticSelectionChanged(owner~ : @interop.ConversationKey, reference~ : @mention_context.SemanticSearchReference?)
+  OfficeSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, selection~ : String)
+  OfficeSelectionConfirmed(OfficeSelectionPreview)
+  OfficeFeedbackChanged(OfficeSelectionPreview, String)
+  OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
+  OfficeSelectionDismissed(OfficeSelectionPreview)
+  OfficeZoomChanged(String)
+  OfficeSearchChanged(String)
+  OfficeSystemFontsToggled
+  PdfStateChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, event~ : String)
+  PdfSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, selection~ : String)
+  PdfPageChanged(String)
+  PdfFitWidth
+  PdfRotated
+  PdfFind(Bool)
+  PdfPasswordChanged(String)
+  PdfPasswordSubmitted
+  PdfPasswordCancelled
   ChangeExtensionToggled(String?)
   ChangeFiltersCleared
   ChangePathFilterChanged(String)
   TreeFocused(@pathx.Relative)
+  RevealTreeDirectory(@pathx.Relative)
+  DirExpand(@pathx.Relative)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])
@@ -338,6 +362,18 @@ pub(all) enum Msg {
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 
+pub(all) struct OfficeSelectionPreview {
+  owner : @interop.ConversationKey
+  epoch : Int
+  path : @common.Uri
+  sig : String
+  pdf_generation : Int?
+  materialized : String
+  summary : @mention_context.OfficeSelectionSummary
+} derive(Eq)
+pub fn OfficeSelectionPreview::equal(Self, Self) -> Bool
+pub fn OfficeSelectionPreview::not_equal(Self, Self) -> Bool
+
 pub(all) enum PackageGraphState {
   PackageGraphLoading(Int)
   PackageGraphReady(Int, String)
@@ -345,6 +381,28 @@ pub(all) enum PackageGraphState {
 } derive(Eq)
 pub fn PackageGraphState::equal(Self, Self) -> Bool
 pub fn PackageGraphState::not_equal(Self, Self) -> Bool
+
+pub(all) struct PdfDocument {
+  bytes : Bytes
+  generation : Int
+  status : PdfStatus
+  page : Int
+  pages : Int?
+  rotation : Int
+  search : (Int, Int)?
+  password : String
+} derive(Eq)
+pub fn PdfDocument::equal(Self, Self) -> Bool
+pub fn PdfDocument::not_equal(Self, Self) -> Bool
+
+pub(all) enum PdfStatus {
+  PdfLoading
+  PdfReady
+  PdfPasswordRequired(incorrect~ : Bool)
+  PdfFailed(String)
+} derive(Eq)
+pub fn PdfStatus::equal(Self, Self) -> Bool
+pub fn PdfStatus::not_equal(Self, Self) -> Bool
 
 pub(all) enum ReconciledPlacement {
   PlacementUnknown
@@ -356,6 +414,10 @@ pub fn ReconciledPlacement::identity(Self) -> @interop.CheckoutPlacement?
 pub fn ReconciledPlacement::is_parked(Self) -> Bool
 pub fn ReconciledPlacement::not_equal(Self, Self) -> Bool
 pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
+
+type RemovedDirectoryRead derive(Eq)
+pub fn RemovedDirectoryRead::equal(Self, Self) -> Bool
+pub fn RemovedDirectoryRead::not_equal(Self, Self) -> Bool
 
 pub(all) struct ReviewActiveHunk {
   // private fields
@@ -453,6 +515,12 @@ pub(all) struct State {
   owner : @interop.ConversationKey?
   placement : ReconciledPlacement
   tree_open : Bool
+  office_zoom : Int
+  office_query : String
+  office_prefer_system_fonts : Bool
+  office_selection : OfficeSelectionPreview?
+  office_selection_comment : String?
+  pdf_generation : Int
   explorer_mode : ExplorerMode
   search : @grep_search.State
   github_review : @github_review.State
@@ -506,7 +574,9 @@ pub(all) struct State {
   tree_reveal : TreeReveal
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
+  removed_directory_reads : Map[@pathx.Relative, RemovedDirectoryRead]
   children : Map[@pathx.Relative, Array[FileEntry]]
+  directory_errors : Map[@pathx.Relative, String]
   docs : Map[@common.Uri, Doc]
   mbti_view_modes : Map[@common.Uri, MbtiViewMode]
   moon_mod_view_modes : Map[@common.Uri, MoonModViewMode]
@@ -516,10 +586,15 @@ pub(all) struct State {
   index : FileIndex
   error : String?
 } derive(Eq)
+pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationKey, Int, @common.Uri, String) -> Bool
+pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationKey, Int, @common.Uri, String, Int) -> Bool
 pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
+pub fn State::dismiss_office_selection(Self, Ctx, OfficeSelectionPreview) -> (@cmd.Cmd, Self)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+pub fn State::offer_office_selection(Self, Ctx, String) -> Result[Self, String]
+pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
 pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
@@ -529,6 +604,8 @@ pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -
 pub(all) enum TabState {
   TabLoading
   TabLoaded(content~ : String, sig~ : String)
+  TabOffice(document~ : @viewer.RenderedDocument, sig~ : String)
+  TabPdf(document~ : PdfDocument, sig~ : String)
   TabBinary
   TabOversized
   TabReadFailed(String)

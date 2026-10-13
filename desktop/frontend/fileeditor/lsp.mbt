@@ -108,8 +108,8 @@ async fn request_hover(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri,
   path~ : @pathx.Relative,
-  line~ : Int,
-  character~ : Int,
+  line~ : Int32,
+  character~ : Int32,
 ) -> @protocol.LspHoverReply {
   @interop.bridge_request(owner.channel, @commands.lsp_hover, {
     session: owner.session,
@@ -126,7 +126,7 @@ async fn request_hover(
 priv struct HoverProjection {
   reply : @protocol.LspHoverReply
   model : @model.TextModel
-  line_offset : Int
+  line_offset : Int32
 }
 
 ///|
@@ -174,7 +174,7 @@ fn HoverProjection::range(self : HoverProjection) -> @common.Range {
 fn request_diagnostics(
   dispatch : @cmd.Emit[Msg],
   owner : @interop.ConversationKey,
-  epoch : Int,
+  epoch : Int32,
   root : @common.Uri,
   absolute : @common.Uri,
 ) -> @cmd.Cmd {
@@ -249,7 +249,7 @@ fn DiagnosticProjection::to_viewer(
 /// Map an LSP `DiagnosticSeverity` (`Error=1 … Hint=4`) to the viewer's. The
 /// field is optional in LSP; an absent or unknown severity reads as `Error`,
 /// LSP's own documented client fallback.
-fn diagnostic_severity(value : Int?) -> @language.DiagnosticSeverity {
+fn diagnostic_severity(value : Int32?) -> @language.DiagnosticSeverity {
   match value {
     Some(2) => Warning
     Some(3) => Info

@@ -32,9 +32,9 @@ test "observations are isolated by viewer id and disposable" {
     _force,
   ) => ())
   defer second_registration.dispose()
-  let build_models : Array[Int] = []
-  let build_counts : Array[Int] = []
-  let render_facts : Array[(Int, Int, Bool)] = []
+  let build_models : Array[Int32] = []
+  let build_counts : Array[Int32] = []
+  let render_facts : Array[(Int32, Int32, Bool)] = []
   let hover_facts : Array[(Bool, String)] = []
   let first_build = on_did_build_view_model("observations-first", observation => {
     build_models.push(observation.model.identity())

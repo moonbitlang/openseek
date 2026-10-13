@@ -11,7 +11,7 @@ priv enum GithubInlineContent {
 priv struct GithubInlineBlock {
   key : String
   original : Bool
-  line : Int
+  line : Int32
   content : GithubInlineContent
 }
 
@@ -103,7 +103,7 @@ fn github_review_blocks(
 fn github_review_local_line(
   block : GithubInlineBlock,
   section : @moon_diff_provider.SemanticReviewSection?,
-) -> Int? {
+) -> Int32? {
   guard section is Some(section) else { return Some(block.line) }
   let side = if block.original {
     SemanticReviewOriginal
@@ -134,8 +134,8 @@ fn github_review_block_id(surface : String, key : String) -> String {
 fn github_review_target_line(
   section : @moon_diff_provider.SemanticReviewSection?,
   original : Bool,
-  line : Int,
-) -> Int? {
+  line : Int32,
+) -> Int32? {
   guard line > 0 else { return None }
   guard section is Some(section) else { return Some(line) }
   let side = if original {
@@ -289,7 +289,7 @@ fn install_github_review_widgets(
     }
   }
   editor.set_line_widgets(widgets)
-  let allowed = (original : Bool, line : Int) => {
+  let allowed = (original : Bool, line : Int32) => {
     guard state.file is Some(Ok(Some(file))) &&
       state.path is Some(path) &&
       state.review is Some(review) &&
@@ -304,7 +304,7 @@ fn install_github_review_widgets(
     !state.busy &&
     state.path is Some(path) &&
     state.review is Some(review) {
-    Some((original : Bool, line : Int) => {
+    Some((original : Bool, line : Int32) => {
       guard allowed(original, line) &&
         github_review_target_line(section, original, line) is Some(line) else {
         return

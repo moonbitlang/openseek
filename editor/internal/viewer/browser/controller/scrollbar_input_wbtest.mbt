@@ -141,9 +141,9 @@ extern "js" fn scrollbar_input_test_element() -> @rdom.Element =
 
 ///|
 extern "js" fn scrollbar_input_test_non_element_mouse(
-  button : Int,
-  buttons : Int,
-  pointer_id : Int,
+  button : Int32,
+  buttons : Int32,
+  pointer_id : Int32,
 ) -> @rdom.MouseEvent =
   #| (button, buttons, pointerId) => {
   #|   const event = new MouseEvent("pointerdown", {
@@ -157,11 +157,11 @@ extern "js" fn scrollbar_input_test_non_element_mouse(
 extern "js" fn scrollbar_input_test_listener_count(
   element : @rdom.Element,
   event_type : String,
-) -> Int =
+) -> Int32 =
   #| (element, type) => element.listenerCount(type)
 
 ///|
-extern "js" fn scrollbar_input_test_raf_cancel_count() -> Int =
+extern "js" fn scrollbar_input_test_raf_cancel_count() -> Int32 =
   #| () => window.__rafCancelCount
 
 ///|

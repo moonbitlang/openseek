@@ -11,7 +11,7 @@ const WorkspaceSettingsFile = "settings.json"
 ///|
 /// Workspaces without an override and malformed hand-edited settings use
 /// the default checkout bound for conversation creation.
-const DefaultSubmoduleCheckoutTimeoutSeconds : Int = 30
+const DefaultSubmoduleCheckoutTimeoutSeconds : Int32 = 30
 
 ///|
 /// Reads and read-modify-write mutations share one process-wide lock, the
@@ -58,7 +58,7 @@ fn worktree_mode_of(fields : Map[String, Json]) -> Bool {
 /// Keep disk input and the Settings select on the same four choices. Other
 /// numbers, fractions, strings, and booleans read as the default instead of
 /// reaching the timeout primitive unchecked.
-fn submodule_timeout_of(fields : Map[String, Json]) -> Int {
+fn submodule_timeout_of(fields : Map[String, Json]) -> Int32 {
   guard fields.get("submodule_checkout_timeout_seconds")
     is Some(Number(value, ..)) else {
     return DefaultSubmoduleCheckoutTimeoutSeconds
@@ -102,7 +102,7 @@ async fn write_settings(
   }
   @fsx.write_text(
     settings_file(workspace).to_path(),
-    fields.to_json().stringify(indent=2),
+    Json(fields).stringify(indent=2),
   ) catch {
     error =>
       raise WorkspaceError("could not save the workspace settings: \{error}")
@@ -134,7 +134,7 @@ pub async fn update_settings(
   on_committed : (@protocol.WorkspaceSettingsPayload) -> Unit,
   worktree_mode? : Bool,
   checkout_submodules? : Bool,
-  submodule_checkout_timeout_seconds? : Int,
+  submodule_checkout_timeout_seconds? : Int32,
 ) -> @protocol.WorkspaceSettingsPayload {
   guard @pathx.Absolute::from_uri_path(workspace) is Some(absolute) &&
     registered_dir(absolute) is Some(dir) else {
@@ -144,10 +144,10 @@ pub async fn update_settings(
   defer settings_lock.release()
   let fields = read_settings_unlocked(dir)
   if worktree_mode is Some(worktree_mode) {
-    fields["worktree_mode"] = worktree_mode.to_json()
+    fields["worktree_mode"] = Json(worktree_mode)
   }
   if checkout_submodules is Some(checkout_submodules) {
-    fields["checkout_submodules"] = checkout_submodules.to_json()
+    fields["checkout_submodules"] = Json(checkout_submodules)
   }
   if submodule_checkout_timeout_seconds is Some(seconds) {
     if !(seconds is (5 | 10 | 30 | 60)) {
@@ -155,7 +155,7 @@ pub async fn update_settings(
         "submodule checkout timeout must be 5, 10, 30, or 60 seconds",
       )
     }
-    fields["submodule_checkout_timeout_seconds"] = seconds.to_json()
+    fields["submodule_checkout_timeout_seconds"] = Json(seconds)
   }
   let payload = settings_payload(dir, fields)
   @async.protect_from_cancel(() => {
@@ -177,7 +177,7 @@ test "workspace settings parse tolerantly and keep unknown fields" {
   assert_false(worktree_mode_of(parse_settings("not json")))
   assert_false(worktree_mode_of(parse_settings("")))
   let fields = parse_settings("{\"future\": 1}")
-  fields["worktree_mode"] = true.to_json()
+  fields["worktree_mode"] = Json(true)
   assert_true(worktree_mode_of(fields))
   assert_true(fields.get("future") is Some(_))
   guard @pathx.Absolute::from_uri_path("/repo") is Some(workspace) else {
@@ -186,7 +186,7 @@ test "workspace settings parse tolerantly and keep unknown fields" {
   let payload = settings_payload(workspace, fields)
   assert_true(payload.checkout_submodules)
   assert_eq(payload.submodule_checkout_timeout_seconds, 30)
-  fields["checkout_submodules"] = false.to_json()
+  fields["checkout_submodules"] = Json(false)
   assert_false(settings_payload(workspace, fields).checkout_submodules)
   fields["submodule_checkout_timeout_seconds"] = Json(30)
   assert_eq(
@@ -211,13 +211,13 @@ async test "workspace settings survive a write/read round trip independently" {
   let sibling = workspace.join("sibling")
   assert_false(worktree_mode_of(read_settings_unlocked(workspace)))
   let fields = read_settings_unlocked(workspace)
-  fields["worktree_mode"] = true.to_json()
-  fields["checkout_submodules"] = false.to_json()
+  fields["worktree_mode"] = Json(true)
+  fields["checkout_submodules"] = Json(false)
   fields["submodule_checkout_timeout_seconds"] = Json(30)
   write_settings(workspace, fields)
   let reread = read_settings_unlocked(workspace)
   assert_true(worktree_mode_of(reread))
-  assert_eq(reread.get("checkout_submodules"), Some(false.to_json()))
+  assert_eq(reread.get("checkout_submodules"), Some(Json(false)))
   assert_eq(reread.get("submodule_checkout_timeout_seconds"), Some(Json(30)))
   // The file lives below one workspace root, so an adjacent workspace keeps
   // both defaults when only this workspace is edited.

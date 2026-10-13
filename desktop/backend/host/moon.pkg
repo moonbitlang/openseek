@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/commands",
   "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/uuid",
   "openseek_desktop/backend/internal/development",
   "openseek_desktop/backend/internal/work_dir",
   "openseek_desktop/backend/endpoint",

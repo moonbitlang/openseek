@@ -15,7 +15,7 @@
 /// Replace a caption's leading family word with the glyph that stands for it,
 /// or return the label unchanged for a family that keeps its words.
 fn tool_display_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   label : String,
 ) -> String {

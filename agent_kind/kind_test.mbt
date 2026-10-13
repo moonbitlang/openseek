@@ -56,7 +56,7 @@ async fn child_test_server(
 }
 
 ///|
-fn usage_json(total_tokens : Int) -> Json {
+fn usage_json(total_tokens : Int32) -> Json {
   {
     "prompt_tokens": total_tokens - 1_000,
     "completion_tokens": 1_000,
@@ -67,7 +67,7 @@ fn usage_json(total_tokens : Int) -> Json {
 ///|
 fn sse_tool_calls(
   calls : Array[(String, String, String)],
-  total_tokens : Int,
+  total_tokens : Int32,
 ) -> String {
   let entries : Array[Json] = [
     for index, call in calls => {
@@ -83,13 +83,13 @@ fn sse_tool_calls(
   ]
   (
     {
-      "choices": [{ "delta": { "tool_calls": entries.to_json() } }],
+      "choices": [{ "delta": { "tool_calls": Json(entries) } }],
       "usage": usage_json(total_tokens),
     } : Json).stringify()
 }
 
 ///|
-fn sse_final(content : String, total_tokens : Int) -> String {
+fn sse_final(content : String, total_tokens : Int32) -> String {
   (
     {
       "choices": [{ "delta": { "content": content } }],
@@ -113,7 +113,7 @@ fn is_checkpoint_request(request : Json) -> Bool {
 async fn run_answer_kind(
   url : String,
   session_id : String,
-  max_steps? : Int = 8,
+  max_steps~ : Int32 = 8,
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> String? {
   @agent_kind.execute_kind(

@@ -21,7 +21,7 @@ fn ToolStatus::from_outcome(outcome : @transcript.ToolOutcome) -> ToolStatus {
 
 ///|
 fn ToolStatus::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ToolStatus,
 ) -> @html.Html {
   let (label, class, icon) = match self {

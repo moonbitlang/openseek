@@ -8,8 +8,8 @@ fn geometry_view_lines(
   visible_range : @base_common.Range,
   layout : @view_layout.ViewLayout,
   fixture : ViewLineFixture,
-  scheduler? : @base_browser.RunOnceScheduler = RunOnceScheduler(200),
-  lines_content? : @rdom.Element = view_line_fixture_context(fixture),
+  scheduler~ : @base_browser.RunOnceScheduler = RunOnceScheduler(200),
+  lines_content~ : @rdom.Element = view_line_fixture_context(fixture),
 ) -> ViewLines {
   let configuration = ViewLinesConfiguration::ViewLinesConfiguration()
   let options_ref = Ref(configuration.view_line_options)
@@ -44,14 +44,14 @@ fn geometry_view_lines(
 ///|
 priv struct GeometryTimerTask {
   handle : Double
-  delay_ms : Int
+  delay_ms : Int32
   callback : () -> Unit
   mut active : Bool
 }
 
 ///|
 priv struct GeometryTimerSpy {
-  mut next_handle : Int
+  mut next_handle : Int32
   tasks : Array[GeometryTimerTask]
   cleared : Array[Double]
 }
@@ -65,7 +65,7 @@ fn GeometryTimerSpy::GeometryTimerSpy() -> GeometryTimerSpy {
 fn GeometryTimerSpy::set_timeout(
   self : GeometryTimerSpy,
   callback : () -> Unit,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> Double {
   self.next_handle += 1
   let handle = self.next_handle.to_double()
@@ -90,7 +90,7 @@ fn GeometryTimerSpy::clear_timeout(
 fn GeometryTimerSpy::schedule_timeout(
   self : GeometryTimerSpy,
   callback : () -> Unit,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> @base_common.Disposable {
   let handle = self.set_timeout(callback, delay_ms)
   @base_common.Disposable::from(() => self.clear_timeout(handle))
@@ -132,10 +132,10 @@ extern "js" fn geometry_style_value(
   #| (element, name) => element.style.values[name] ?? ""
 
 ///|
-extern "js" fn geometry_style_set_count(element : @rdom.Element) -> Int = "(element) => element.style.setCount"
+extern "js" fn geometry_style_set_count(element : @rdom.Element) -> Int32 = "(element) => element.style.setCount"
 
 ///|
-extern "js" fn geometry_style_remove_count(element : @rdom.Element) -> Int = "(element) => element.style.removeCount"
+extern "js" fn geometry_style_remove_count(element : @rdom.Element) -> Int32 = "(element) => element.style.removeCount"
 
 ///|
 test "LastRenderedData initializes and replaces the exact visible Range" {
@@ -391,8 +391,8 @@ test "ViewLines converter progression covers first middle final and partial wind
     layout,
     first_fixture,
   )
-  let converter_calls : Array[Int] = []
-  let direction_calls : Array[Int] = []
+  let converter_calls : Array[Int32] = []
+  let direction_calls : Array[Int32] = []
   view_lines.install_geometry_readers(
     view_line_number => {
       converter_calls.push(view_line_number)
@@ -502,7 +502,7 @@ test "ViewLines scheduler debounces fires the latest callback and disposes pendi
     callback,
     delay_ms,
   ) => spy.schedule_timeout(callback, delay_ms))
-  let fired : Array[Int] = []
+  let fired : Array[Int32] = []
   scheduler.schedule(() => fired.push(1))
   guard scheduler.handle is Some(_) else {
     fail("expected first scheduler handle")

@@ -4,12 +4,12 @@ let definition_contribution_id : String = "editor.contrib.definition"
 ///|
 priv struct DefinitionContributionState {
   mut disposed : Bool
-  mut link_generation : Int
+  mut link_generation : Int32
   mut link_source : @language.CancellationTokenSource?
   mut link_state : @definition.DefinitionLinkState
   mut link_modifier_down : Bool
   mut last_pointer_target : @definition.DefinitionTargetFingerprint?
-  mut definition_mouse_down_line : Int
+  mut definition_mouse_down_line : Int32
   mut last_message : String?
   mut message_widget : @definition_browser.DefinitionMessageWidget?
   mut message_hide : @base_common.Disposable?
@@ -609,7 +609,7 @@ fn CodeEditorWidget::handle_definition_pointer_move(
   meta : Bool,
   alt : Bool,
   shift : Bool,
-  buttons : Int,
+  buttons : Int32,
 ) -> Unit {
   guard self.definition_contribution() is Some(state) else { return }
   state.last_pointer_target = target
@@ -707,8 +707,8 @@ fn CodeEditorWidget::handle_definition_pointer_up(
   meta : Bool,
   alt : Bool,
   shift : Bool,
-  left_button? : Bool = true,
-  detail? : Int = 1,
+  left_button~ : Bool = true,
+  detail~ : Int32 = 1,
 ) -> Bool {
   guard self.definition_contribution() is Some(state) else { return false }
   let modifier_active = definition_link_modifier_is_active(

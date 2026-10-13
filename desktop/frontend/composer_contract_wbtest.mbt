@@ -192,3 +192,147 @@ test "composer follow-up overrides route the message without changing the defaul
     }
   }
 }
+
+///|
+test "queued save rejects duplicate actions and unlocks after rejection" {
+  let model = running_model()
+  let conv = {
+    ..model.active(),
+    queued_inputs: [{ id: "queued", content: "original", images: [], }],
+    queue_edit: Some(Editing(id="queued")),
+    task: "saved revision",
+  }
+  let model = model.replace_conversation(conv)
+  let (_, saving) = update(test_dispatch(), Send, model)
+  assert_true(saving.active().saving_queue_edit())
+  assert_true(saving.composer_input().presentation.disabled)
+  let (_, duplicate) = update(
+    test_dispatch(),
+    ComposerAction(
+      @composer.DraftSubmitted(identity=saving.composer_input().identity, draft={
+        task: "unsent revision",
+        images: [],
+        mentions: [],
+      }),
+    ),
+    saving,
+  )
+  assert_eq(duplicate.active().task, "saved revision")
+  assert_eq(duplicate.submission_sequence, saving.submission_sequence)
+  guard saving.active().queue_edit is Some(Saving(id~, run_id~, ..)) else {
+    fail("expected a pending queued save")
+  }
+  let (_, failed) = update(
+    test_dispatch(),
+    FromDevice(
+      conv.device,
+      QueueEditRejected(
+        session=conv.session_id,
+        id~,
+        run_id~,
+        message="save failed",
+      ),
+    ),
+    duplicate,
+  )
+  assert_eq(failed.active().task, "saved revision")
+  assert_true(
+    failed.active().queue_edit is Some(Editing(id=failed_id)) && failed_id == id,
+  )
+  assert_false(failed.composer_input().presentation.disabled)
+  let (_, retry) = update(test_dispatch(), Send, failed)
+  assert_true(retry.active().saving_queue_edit())
+}
+
+///|
+test "queued save settles after its item is consumed without unlocking early" {
+  let model = running_model()
+  let conv = {
+    ..model.active(),
+    queued_inputs: [{ id: "queued", content: "original", images: [], }],
+    queue_edit: Some(Editing(id="queued")),
+    task: "saved revision",
+  }
+  let (_, saving) = update(
+    test_dispatch(),
+    Send,
+    model.replace_conversation(conv),
+  )
+  guard saving.active().queue_edit is Some(Saving(id~, run_id~, ..)) else {
+    fail("expected a pending queued save")
+  }
+  let (consumed, _) = saving.active().remove_queued_input(id)
+  assert_true(consumed.saving_queue_edit())
+  let (_, accepted) = update(
+    test_dispatch(),
+    FromDevice(
+      conv.device,
+      QueueAccepted(
+        session=conv.session_id,
+        action=QueueEdit(id~, text="saved revision", images=[]),
+        run_id~,
+      ),
+    ),
+    saving.replace_conversation(consumed),
+  )
+  assert_true(accepted.active().queue_edit is None)
+  assert_eq(accepted.active().task, "")
+  assert_true(accepted.active().queued_inputs.is_empty())
+  assert_false(accepted.composer_input().presentation.disabled)
+  assert_eq(accepted.submission_sequence, saving.submission_sequence + 1)
+}
+
+///|
+test "queued save clears its snapshot but retains context added by the editor" {
+  let submitted : Mention = { ref_: Skill(name="review"), range: None, }
+  let base = running_model()
+  let base = base.replace_conversation({
+    ..base.active(),
+    queued_inputs: [{ id: "queued", content: "original", images: [], }],
+    queue_edit: Some(Editing(id="queued")),
+    task: "saved revision",
+    mentions: [submitted],
+  })
+  let (_, saving) = update(test_dispatch(), Send, base)
+  guard saving.active().queue_edit is Some(Saving(id~, run_id~, ..)) else {
+    fail("expected a pending queued save")
+  }
+  let (_, annotated) = update(
+    test_dispatch(),
+    FileEditor(
+      EditorCommentAdded(
+        resource=@fileeditor.ModelUri::of(
+          @interop.ChannelId::Local.test_resource("/work/project/src/main.mbt"),
+        ),
+        file=Relative("src/main.mbt"),
+        range=@common.Range(5, 1, 6, 3),
+        quote="fn parse() {",
+        comment="Context added during save",
+        feedback_id="queued-save-context",
+      ),
+    ),
+    saving,
+  )
+  assert_eq(annotated.active().mentions.length(), 2)
+  let added = annotated.active().mentions[1]
+  let msg : Msg = FromDevice(
+    annotated.active().device,
+    QueueAccepted(
+      session=annotated.active().session_id,
+      action=QueueEdit(id~, text="saved revision", images=[]),
+      run_id~,
+    ),
+  )
+  let (_, accepted) = update(test_dispatch(), msg, annotated)
+  let (_, repeated) = update(test_dispatch(), msg, annotated)
+  assert_eq(accepted.active().mentions, [added])
+  assert_eq(repeated.active().mentions, [added])
+  assert_eq(accepted.active().task, "")
+  assert_eq(repeated.active().task, "")
+  assert_true(accepted.active().queue_edit is None)
+  assert_true(repeated.active().queue_edit is None)
+  assert_eq(accepted.submission_sequence, saving.submission_sequence + 1)
+  assert_eq(repeated.submission_sequence, accepted.submission_sequence)
+  assert_eq(annotated.active().mentions, [submitted, added])
+  assert_eq(saving.active().mentions, [submitted])
+}

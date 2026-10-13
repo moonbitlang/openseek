@@ -4,9 +4,9 @@
 ///|
 fn retained_line_test_input(
   render_whitespace : @editor_api.RenderWhitespace,
-  space_width? : Double = 7.2,
-  middot_width? : Double = 7.2,
-  wsmiddot_width? : Double = 7.2,
+  space_width~ : Double = 7.2,
+  middot_width~ : Double = 7.2,
+  wsmiddot_width~ : Double = 7.2,
 ) -> @view_layout.RenderLineInput {
   @view_layout.RenderLineInput::from_view_line(
     {

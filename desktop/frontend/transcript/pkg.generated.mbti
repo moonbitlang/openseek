@@ -64,6 +64,9 @@ pub(all) enum EngineEvent {
   ApprovalRequested(id~ : String, tool_name~ : String, detail~ : String, body~ : String?)
   ApprovalResolved(id~ : String)
   SessionAppendFailed(String)
+  McpConfigFailed(path~ : String, error~ : String)
+  McpServerFailed(server~ : String, error~ : String)
+  McpToolsDropped(server~ : String, limit~ : Int)
 }
 
 pub(all) enum GoalMarker {
@@ -84,7 +87,7 @@ pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
   User(content~ : @deepseek.Content)
-  Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool)
+  Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool, end_sequence~ : Int?)
   Answer(String)
   TurnEnd
   Failure(String)
@@ -149,6 +152,7 @@ pub(all) struct TranscriptItem {
   sequence : Int?
 } derive(Eq)
 pub fn TranscriptItem::equal(Self, Self) -> Bool
+pub fn TranscriptItem::fork_through(Self) -> Int?
 pub fn TranscriptItem::not_equal(Self, Self) -> Bool
 pub fn TranscriptItem::text(Self) -> String?
 

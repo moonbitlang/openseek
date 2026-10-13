@@ -42,15 +42,18 @@ pub async fn resolved_session_id(
       fail("--no-session contradicts --session; pick one behavior")
     (Some(id), false) => Some(id)
     (None, true) => None
-    (None, false) =>
-      Some(
-        @agent_session.SessionId::generated(
-          prefix="cli",
-          now_ms=@env.now().reinterpret_as_int64(),
-          salt=random_salt(),
-        ),
-      )
+    (None, false) => Some(generated_session_id())
   }
+}
+
+///|
+/// A fresh `cli-<stamp>-<salt>` id for a session the caller did not name.
+pub async fn generated_session_id() -> @agent_session.SessionId {
+  @agent_session.SessionId::generated(
+    prefix="cli",
+    now_ms=@env.now().reinterpret_as_int64(),
+    salt=random_salt(),
+  )
 }
 
 ///|
@@ -75,7 +78,7 @@ pub async fn random_salt() -> String {
   guard dir.rev_split_once(prefix) is Some((_, suffix)) else { return "" }
   let salt = StringBuilder()
   for ch in suffix {
-    if ch is ('0'..='9' | 'a'..='z' | 'A'..='Z') {
+    if ch is ('0'..<='9' | 'a'..<='z' | 'A'..<='Z') {
       salt <+ "\{ch}"
     }
   }
@@ -86,7 +89,7 @@ pub async fn random_salt() -> String {
 /// Resolve the configured session store relative to the workspace, rejecting an empty path.
 pub fn session_root(
   matches : @argparse.Matches,
-  workspace_root? : String = ".",
+  workspace_root~ : String = ".",
 ) -> String raise {
   let root = match matches {
     { values: { "session-root": [root, ..], .. }, .. } => root.trim().to_owned()
@@ -103,7 +106,7 @@ pub async fn load_or_new_session(
   id : @agent_session.SessionId,
   matches : @argparse.Matches,
   model : @deepseek.Model,
-  workspace_root? : String = ".",
+  workspace_root~ : String = ".",
 ) -> @agent_session.Session {
   // The prompt is built only when actually creating a fresh session: a
   // re-load must not read prompt files again.

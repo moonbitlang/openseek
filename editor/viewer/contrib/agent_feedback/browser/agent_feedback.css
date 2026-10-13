@@ -526,3 +526,17 @@
 .agent-feedback-widget-button-delete:hover {
   background: var(--vscode-button-secondaryHoverBackground);
 }
+
+/* The source remains visible while the feedback textarea owns native focus. */
+.feedback-source-selection-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.feedback-source-selection {
+  position: absolute;
+  background: var(--vscode-editor-selectionBackground);
+  opacity: .45;
+  pointer-events: none;
+}

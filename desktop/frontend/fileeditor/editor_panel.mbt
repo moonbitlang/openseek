@@ -136,7 +136,7 @@ priv struct ViewerHost {
   mut navigation : NavigationContext?
   // Monotonic model version; the viewer treats a new version as a new
   // document.
-  mut version : Int
+  mut version : Int32
   // Imperative canvas/Markdown renderers must receive theme changes through
   // their options API; CSS data attributes alone cannot repaint their pixels.
   mut theme : String
@@ -720,8 +720,8 @@ pub fn apply_font_size(font_size : Double) -> @cmd.Cmd {
 /// retained for the main update loop to interpret.
 fn diff_comment_message(
   file : @pathx.Relative,
-  original_line_number~ : Int?,
-  modified_line_number~ : Int?,
+  original_line_number~ : Int32?,
+  modified_line_number~ : Int32?,
   quote~ : String,
   comment~ : String,
   resource? : ModelUri,
@@ -981,7 +981,7 @@ fn show_history_diff_in_viewer(
       dispose_diff_comparison_models(previous)
     }
   })
-  @cmd.batch([show, request_viewer_remeasure()])
+  @cmd.batch([clear_office_surface(), show, request_viewer_remeasure()])
 }
 
 ///|
@@ -1324,9 +1324,9 @@ fn show_file_in_viewer(
   content : String,
   document~ : @common.Uri,
   live~ : Bool,
-  range? : @common.Range? = None,
+  range~ : @common.Range? = None,
   annotation? : String,
-  restore_scroll? : Bool = false,
+  restore_scroll~ : Bool = false,
   review_original? : String,
   diff? : (String, String),
   search_highlights? : @grep_search.EditorHighlights,
@@ -1581,7 +1581,7 @@ fn show_file_in_viewer(
       }
     }
   })
-  @cmd.batch([show, request_viewer_remeasure()])
+  @cmd.batch([clear_office_surface(), show, request_viewer_remeasure()])
 }
 
 ///|
@@ -1630,7 +1630,7 @@ fn should_auto_fold_top_level(text_model : @model.TextModel) -> Bool {
 /// model, so it would otherwise keep showing the previous document. A no-op
 /// until the viewer has been attached.
 fn clear_viewer() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  let clear = @cmd.custom_cmd(_scheduler => {
     viewer_state.view_states.clear()
     viewer_state.markdown_view_states.clear()
     if viewer_state.viewer is Some(viewer) {
@@ -1662,6 +1662,7 @@ fn clear_viewer() -> @cmd.Cmd {
     clear_diff_comparison()
     clear_semantic_review_editors()
   })
+  @cmd.batch([clear, clear_office_surface()])
 }
 
 ///|
@@ -1671,7 +1672,7 @@ fn clear_viewer() -> @cmd.Cmd {
 /// CSS, while the next complete comparison replaces it atomically. Its memory
 /// stays bounded to one pair and `clear_viewer` retires it at an owner boundary.
 fn clear_document() -> @cmd.Cmd {
-  @cmd.custom_cmd(_scheduler => {
+  let clear = @cmd.custom_cmd(_scheduler => {
     if viewer_state.viewer is Some(viewer) {
       if viewer_state.point_range_highlight is Some(highlight) {
         highlight.clear()
@@ -1699,6 +1700,7 @@ fn clear_document() -> @cmd.Cmd {
     clear_mbti_diagram()
     clear_package_graph()
   })
+  @cmd.batch([clear, clear_office_surface()])
 }
 
 ///|

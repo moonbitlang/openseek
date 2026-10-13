@@ -5,7 +5,7 @@
 const PatternRepairValidatorEnv : String = "OPENSEEK_PATTERN_REPAIR_VALIDATOR"
 
 ///|
-const MaxPatternValidationDiagnosticUnits : Int = 1000
+const MaxPatternValidationDiagnosticUnits : Int32 = 1000
 
 ///|
 struct PatternRepairValidator {

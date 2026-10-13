@@ -163,7 +163,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|///|
           #|fn optional_text(value : String?) -> Json {
           #|  match value {
-          #|    Some(text) => text.to_json()
+          #|    Some(text) => Json(text)
           #|    None => null
           #|  }
           #|}
@@ -1017,7 +1017,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      // stays unambiguous, and bound them just like successful bodies.
           #|      // JSON escaping can expand each source byte to six ASCII bytes.
           #|      let (message, _) = prefix(message, (bytes - 128) / 6)
-          #|      ("error reading file: \{message.to_json().stringify()}\n", true)
+          #|      ("error reading file: \{Json(message).stringify()}\n", true)
           #|    }
           #|  }
           #|}
@@ -1072,7 +1072,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|  let mut remaining = OutputBytes - 256
           #|  let mut failed = false
           #|  for index, input in requests {
-          #|    let header = "=== \{input.path.to_json().stringify()} ===\n"
+          #|    let header = "=== \{Json(input.path).stringify()} ===\n"
           #|    let header_bytes = @utf8.encode(header).length()
           #|    if remaining < header_bytes + 512 {
           #|      println(

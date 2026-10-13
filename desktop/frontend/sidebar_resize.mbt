@@ -106,7 +106,7 @@ fn on_sidebar_resize_move(event : @dom.Event) -> Unit {
 
 ///|
 /// Clamp the dragged width into the sidebar's allowed range.
-fn drag_width(raw : Double, ceiling~ : Double) -> Int {
+fn drag_width(raw : Double, ceiling~ : Double) -> Int32 {
   let ceiling = ceiling.clamp(
     min=MinSidebarWidth.to_double(),
     max=MaxSidebarWidth.to_double(),
@@ -125,7 +125,7 @@ fn end_sidebar_resize() -> Unit {
 ///|
 /// Write the dragged width as a custom property on the document element,
 /// where the CSS `clamp(...)` reads it.
-fn set_sidebar_width(width : Int) -> Unit {
+fn set_sidebar_width(width : Int32) -> Unit {
   set_root_custom_property("--sidebar-width", "\{width}px")
 }
 

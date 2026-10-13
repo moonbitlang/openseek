@@ -12,9 +12,9 @@
 ///
 /// `CursorPosition` (`cursorMoveOperations.ts:14-26`).
 priv struct CursorMovePosition {
-  line_number : Int
-  column : Int
-  leftover_visible_columns : Int
+  line_number : Int32
+  column : Int32
+  leftover_visible_columns : Int32
 }
 
 ///|
@@ -29,7 +29,7 @@ priv enum CursorMoveModel {
 
 ///|
 /// `ICursorSimpleModel.getLineCount` (`cursorCommon.ts:253-267`).
-fn CursorMoveModel::get_line_count(self : CursorMoveModel) -> Int {
+fn CursorMoveModel::get_line_count(self : CursorMoveModel) -> Int32 {
   match self {
     Model(model) => model.get_line_count()
     View(view_model) => view_model.line_count()
@@ -40,7 +40,7 @@ fn CursorMoveModel::get_line_count(self : CursorMoveModel) -> Int {
 /// `ICursorSimpleModel.getLineContent` (`cursorCommon.ts:253-267`).
 fn CursorMoveModel::get_line_content(
   self : CursorMoveModel,
-  line_number : Int,
+  line_number : Int32,
 ) -> String {
   match self {
     Model(model) => model.get_line_content(line_number)
@@ -52,8 +52,8 @@ fn CursorMoveModel::get_line_content(
 /// `ICursorSimpleModel.getLineMinColumn` (`cursorCommon.ts:253-267`).
 fn CursorMoveModel::get_line_min_column(
   self : CursorMoveModel,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   match self {
     Model(model) => model.get_line_min_column(line_number)
     View(view_model) => view_model.get_line_min_column(line_number)
@@ -64,8 +64,8 @@ fn CursorMoveModel::get_line_min_column(
 /// `ICursorSimpleModel.getLineMaxColumn` (`cursorCommon.ts:253-267`).
 fn CursorMoveModel::get_line_max_column(
   self : CursorMoveModel,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   match self {
     Model(model) => model.get_line_max_column(line_number)
     View(view_model) => view_model.get_line_max_column(line_number)
@@ -79,8 +79,8 @@ fn CursorMoveModel::get_line_max_column(
 /// (`cursorCommon.ts:258`, `viewModelImpl.ts:828-834`).
 fn CursorMoveModel::get_line_first_non_whitespace_column(
   self : CursorMoveModel,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   match self {
     Model(model) => model.get_line_first_non_whitespace_column(line_number)
     View(view_model) => {
@@ -101,8 +101,8 @@ fn CursorMoveModel::get_line_first_non_whitespace_column(
 /// (`cursorCommon.ts:259`) for both scoped model implementations.
 fn CursorMoveModel::get_line_last_non_whitespace_column(
   self : CursorMoveModel,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   match self {
     Model(model) => model.get_line_last_non_whitespace_column(line_number)
     View(view_model) =>
@@ -114,8 +114,8 @@ fn CursorMoveModel::get_line_last_non_whitespace_column(
 /// View-model side of `ICursorSimpleModel.getLineLastNonWhitespaceColumn`.
 pub fn ViewModel::get_line_last_non_whitespace_column(
   self : ViewModel,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   let result = @base_common.last_non_whitespace_index(
     self.get_line_content(line_number),
   )
@@ -128,7 +128,7 @@ pub fn ViewModel::get_line_last_non_whitespace_column(
 
 ///|
 /// Keep the complete scoped interface adapter in non-test builds.
-let _cursor_move_last_non_whitespace_anchor : (CursorMoveModel, Int) -> Int = CursorMoveModel::get_line_last_non_whitespace_column
+let _cursor_move_last_non_whitespace_anchor : (CursorMoveModel, Int32) -> Int32 = CursorMoveModel::get_line_last_non_whitespace_column
 
 ///|
 /// `ICursorSimpleModel.normalizePosition` (`cursorCommon.ts:260`). The text
@@ -152,10 +152,10 @@ fn CursorMoveModel::normalize_position(
 /// (`cursorCommon.ts:233-247`), including its min/max clamps.
 fn CursorMoveModel::column_from_visible_column(
   self : CursorMoveModel,
-  line_number : Int,
-  visible_column : Int,
-  tab_size : Int,
-) -> Int {
+  line_number : Int32,
+  visible_column : Int32,
+  tab_size : Int32,
+) -> Int32 {
   let result = @core.column_from_visible_column(
     self.get_line_content(line_number),
     visible_column,
@@ -176,7 +176,7 @@ fn CursorMoveModel::column_from_visible_column(
 /// `strings.prevCharLength` at the exact offset consumed by
 ///
 /// `MoveOperations.leftPosition` (`cursorMoveOperations.ts:29-39`).
-fn cursor_prev_char_length(line_content : String, offset : Int) -> Int {
+fn cursor_prev_char_length(line_content : String, offset : Int32) -> Int32 {
   if offset >= 2 &&
     @base_common.is_low_surrogate(line_content[offset - 1].to_int()) &&
     @base_common.is_high_surrogate(line_content[offset - 2].to_int()) {
@@ -190,7 +190,7 @@ fn cursor_prev_char_length(line_content : String, offset : Int) -> Int {
 /// `strings.nextCharLength` at the exact offset consumed by
 ///
 /// `MoveOperations.rightPosition` (`cursorMoveOperations.ts:110-118`).
-fn cursor_next_char_length(line_content : String, offset : Int) -> Int {
+fn cursor_next_char_length(line_content : String, offset : Int32) -> Int32 {
   if offset + 1 < line_content.length() &&
     @base_common.is_high_surrogate(line_content[offset].to_int()) &&
     @base_common.is_low_surrogate(line_content[offset + 1].to_int()) {
@@ -225,7 +225,7 @@ fn cursor_left_position(
 
 ///|
 /// `MoveOperations.clipRange` (`cursorMoveOperations.ts:100-108`).
-fn cursor_clip_range(value : Int, min : Int, max : Int) -> Int {
+fn cursor_clip_range(value : Int32, min : Int32, max : Int32) -> Int32 {
   if value < min {
     return min
   }
@@ -259,7 +259,7 @@ fn cursor_move_left(
   model : CursorMoveModel,
   cursor : @cursor.SingleCursorState,
   in_selection_mode : Bool,
-  no_of_columns : Int,
+  no_of_columns : Int32,
 ) -> @cursor.SingleCursorState {
   let (line_number, column) = if cursor.has_selection() && !in_selection_mode {
     // Collapse to the beginning of the selection (`:68-72`).
@@ -290,8 +290,8 @@ fn cursor_move_left(
 /// `MoveOperations.rightPosition` (`cursorMoveOperations.ts:110-118`).
 fn cursor_right_position(
   model : CursorMoveModel,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> @base_common.Position {
   let mut line_number = line_number
   let mut column = column
@@ -315,7 +315,7 @@ fn cursor_move_right(
   model : CursorMoveModel,
   cursor : @cursor.SingleCursorState,
   in_selection_mode : Bool,
-  no_of_columns : Int,
+  no_of_columns : Int32,
 ) -> @cursor.SingleCursorState {
   let (line_number, column) = if cursor.has_selection() && !in_selection_mode {
     // Collapse to the end of the selection (`:142-146`).
@@ -352,12 +352,12 @@ fn cursor_move_right(
 ///
 /// match the source.
 fn cursor_vertical(
-  tab_size : Int,
+  tab_size : Int32,
   model : CursorMoveModel,
-  line_number : Int,
-  column : Int,
-  leftover_visible_columns : Int,
-  new_line_number : Int,
+  line_number : Int32,
+  column : Int32,
+  leftover_visible_columns : Int32,
+  new_line_number : Int32,
   allow_move_on_edge_line : Bool,
   normalization_affinity? : @model.PositionAffinity,
 ) -> CursorMovePosition {
@@ -422,12 +422,12 @@ fn cursor_vertical(
 ///|
 /// `MoveOperations.down` (`cursorMoveOperations.ts:199-201`).
 fn cursor_down(
-  tab_size : Int,
+  tab_size : Int32,
   model : CursorMoveModel,
-  line_number : Int,
-  column : Int,
-  leftover_visible_columns : Int,
-  count : Int,
+  line_number : Int32,
+  column : Int32,
+  leftover_visible_columns : Int32,
+  count : Int32,
   allow_move_on_last_line : Bool,
 ) -> CursorMovePosition {
   cursor_vertical(
@@ -447,9 +447,9 @@ fn cursor_down(
 ///
 /// the exact retry-normalization cap `i++ < 10`.
 fn cursor_move_down_with_retry(
-  line_number : Int,
-  line_count : Int,
-  step : (Int) -> (CursorMovePosition, Int),
+  line_number : Int32,
+  line_count : Int32,
+  step : (Int32) -> (CursorMovePosition, Int32),
 ) -> CursorMovePosition {
   for i = 0 {
     let (target, normalized_line_number) = step(i)
@@ -468,11 +468,11 @@ fn cursor_move_down_with_retry(
 /// controller above is extracted verbatim so the source's cap is directly
 /// branch-testable without exposing a product debug API.
 fn cursor_move_down(
-  tab_size : Int,
+  tab_size : Int32,
   model : CursorMoveModel,
   cursor : @cursor.SingleCursorState,
   in_selection_mode : Bool,
-  lines_count : Int,
+  lines_count : Int32,
 ) -> @cursor.SingleCursorState {
   let (line_number, column) = if cursor.has_selection() && !in_selection_mode {
     let selection = cursor.selection()
@@ -510,12 +510,12 @@ fn cursor_move_down(
 ///|
 /// `MoveOperations.up` (`cursorMoveOperations.ts:242-246`).
 fn cursor_up(
-  tab_size : Int,
+  tab_size : Int32,
   model : CursorMoveModel,
-  line_number : Int,
-  column : Int,
-  leftover_visible_columns : Int,
-  count : Int,
+  line_number : Int32,
+  column : Int32,
+  leftover_visible_columns : Int32,
+  count : Int32,
   allow_move_on_first_line : Bool,
 ) -> CursorMovePosition {
   cursor_vertical(
@@ -533,11 +533,11 @@ fn cursor_up(
 ///|
 /// `MoveOperations.moveUp` (`cursorMoveOperations.ts:248-264`).
 fn cursor_move_up(
-  tab_size : Int,
+  tab_size : Int32,
   model : CursorMoveModel,
   cursor : @cursor.SingleCursorState,
   in_selection_mode : Bool,
-  lines_count : Int,
+  lines_count : Int32,
 ) -> @cursor.SingleCursorState {
   let (line_number, column) = if cursor.has_selection() && !in_selection_mode {
     let selection = cursor.selection()

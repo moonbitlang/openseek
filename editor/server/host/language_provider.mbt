@@ -10,14 +10,14 @@ struct MoonWorkspaceLanguageProvider {
   /// against the currently served root.
   root : Ref[String]
   moon_command : String
-  run_moon : async (String, String, Array[String]) -> (Int, String)?
+  run_moon : async (String, String, Array[String]) -> (Int32, String)?
 }
 
 ///|
 /// Creates a moon-command language provider over a shared workspace root.
 fn new_moon_workspace_language_provider(
   root : Ref[String],
-  moon_command? : String = "moon",
+  moon_command~ : String = "moon",
 ) -> MoonWorkspaceLanguageProvider {
   new_moon_workspace_language_provider_with_runner(
     root, moon_command, collect_moon_command_output,
@@ -28,7 +28,7 @@ fn new_moon_workspace_language_provider(
 fn new_moon_workspace_language_provider_with_runner(
   root : Ref[String],
   moon_command : String,
-  run_moon : async (String, String, Array[String]) -> (Int, String)?,
+  run_moon : async (String, String, Array[String]) -> (Int32, String)?,
 ) -> MoonWorkspaceLanguageProvider {
   { root, moon_command, run_moon, }
 }
@@ -38,7 +38,7 @@ async fn collect_moon_command_output(
   command : String,
   root : String,
   args : Array[String],
-) -> (Int, String)? {
+) -> (Int32, String)? {
   let output = Some(@process.collect_stdout(command, args, cwd=root)) catch {
     _ => None
   }
@@ -65,7 +65,7 @@ async fn MoonWorkspaceLanguageProvider::provide_hover_with_runner(
   self : MoonWorkspaceLanguageProvider,
   model : @model.TextModel,
   position : @base_common.Position,
-  run : async (String, Array[String]) -> (Int, String)?,
+  run : async (String, Array[String]) -> (Int32, String)?,
 ) -> @language.Hover? {
   match @server.resolve_remote_document_uri(model.uri) {
     ParsedRemotePath(path) => {

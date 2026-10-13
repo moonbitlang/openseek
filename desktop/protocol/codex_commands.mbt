@@ -15,6 +15,7 @@ pub(all) struct CodexDraftClosePayload {
 
 ///|
 pub(all) struct CodexServerRequestRespondPayload {
+  response_token : String
   request_id : Json
   result : Json
 } derive(Debug, Eq)
@@ -52,7 +53,7 @@ pub(all) struct CodexAccountLoginCancelPayload {
 
 ///|
 pub(all) struct CodexModelListPayload {
-  limit : Int
+  limit : Int32
   include_hidden : Bool
 } derive(Debug, Eq)
 
@@ -93,7 +94,7 @@ pub(all) struct CodexThreadReadPayload {
 
 ///|
 pub(all) struct CodexThreadListPayload {
-  limit : Int
+  limit : Int32
   archived : Bool
   cursor : String?
 } derive(Debug, Eq)
@@ -166,7 +167,7 @@ pub(all) struct CodexDataReply {
 /// resolution notifications delivered on the same app-server connection.
 pub(all) struct CodexServerRequestsReply {
   data : Array[Json]
-  generation : Int
+  generation : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -237,7 +238,14 @@ pub impl FromJson for CodexServerRequestRespondPayload with fn from_json(
   let object = JsonObject::decode(
     json, path, "Codex server request response payload",
   )
+  let response_token = object.required_string("response_token")
+  guard !response_token.is_blank() else {
+    raise JsonDecodeError(
+      (path.add_key("response_token"), "reply token must not be blank"),
+    )
+  }
   {
+    response_token,
     request_id: object.required_json("request_id"),
     result: object.required_json("result"),
   }
@@ -245,7 +253,11 @@ pub impl FromJson for CodexServerRequestRespondPayload with fn from_json(
 
 ///|
 pub impl ToJson for CodexServerRequestRespondPayload with fn to_json(self) {
-  { "request_id": self.request_id, "result": self.result }
+  {
+    "request_id": self.request_id,
+    "response_token": self.response_token,
+    "result": self.result,
+  }
 }
 
 ///|

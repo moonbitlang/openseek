@@ -29,9 +29,9 @@ pub struct MarkdownCommentDom {
 /// Creates the required outer/content shape for one normalized half-open line
 /// range. Projection and ViewZone registration remain root responsibilities.
 pub fn MarkdownCommentDom::MarkdownCommentDom(
-  localization? : @localization.Localization = Localization(),
-  start_line_number : Int,
-  end_line_number_exclusive : Int,
+  localization~ : @localization.Localization = Localization(),
+  start_line_number : Int32,
+  end_line_number_exclusive : Int32,
 ) -> MarkdownCommentDom {
   let document = @rdom.document()
   let outer = document.create_element("div")
@@ -272,7 +272,7 @@ pub fn MarkdownCommentDom::pin_to_content_viewport(
 /// column without expanding into the feedback reservation.
 pub fn MarkdownCommentDom::set_margin_fold_lane_width(
   self : MarkdownCommentDom,
-  width_px : Int,
+  width_px : Int32,
 ) -> Unit {
   @base_browser.set_style_property(self.margin_toggle, "width", "\{width_px}px")
 }
@@ -295,7 +295,7 @@ pub fn MarkdownCommentDom::expose_accessible_content(
 /// zone-id stale checks before relayout.
 pub fn MarkdownCommentDom::observe_size(
   self : MarkdownCommentDom,
-  on_height_changed : (Int) -> Unit,
+  on_height_changed : (Int32) -> Unit,
 ) -> MarkdownCommentSizeObserver {
   let disposed = Ref(false)
   let mut frame_scheduled = false
@@ -499,7 +499,7 @@ fn markdown_comment_measured_height(
   outer : @rdom.Element,
   content : @rdom.Element,
   allow_hidden : Bool,
-) -> Int {
+) -> Int32 {
   let direct = @base_browser.element_offset_height(content).to_int()
   if direct > 0 || !allow_hidden || !@base_browser.element_is_connected(content) {
     return direct

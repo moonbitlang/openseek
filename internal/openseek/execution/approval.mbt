@@ -37,7 +37,7 @@ struct ApprovalDesk {
   nonce : String
   /// Ordinal within this desk. Kept beside the nonce rather than replaced by
   /// it because it is what makes a log readable in ask order.
-  mut next_id : Int
+  mut next_id : Int32
 }
 
 ///|

@@ -1,7 +1,7 @@
 ///|
 fn feedback_fixture(
   resource : @base_common.Uri,
-  id? : String = "feedback-1",
+  id~ : String = "feedback-1",
 ) -> @agent_feedback_api.AgentFeedback {
   {
     id,

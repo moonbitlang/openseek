@@ -12,8 +12,8 @@
 pub struct ViewLayout {
   scrollable : EditorScrollable
   priv lines : LinesLayout
-  priv mut line_height : Int
-  priv mut line_count : Int
+  priv mut line_height : Int32
+  priv mut line_count : Int32
   priv mut max_line_width : Double
   priv mut is_viewport_wrapping : Bool
   priv vertical_scrollbar_width : Double
@@ -41,14 +41,14 @@ let smooth_scrolling_time : Double = 125.0
 ///|
 /// Creates a view layout with a fixed line height and optional line count.
 pub fn ViewLayout::ViewLayout(
-  line_height~ : Int,
-  line_count? : Int = 0,
-  smooth_scrolling? : Bool = false,
-  is_viewport_wrapping? : Bool = false,
-  vertical_scrollbar_width? : Double = 14.0,
-  horizontal_scrollbar_height? : Double = 12.0,
-  schedule_at_next_animation_frame? : (() -> Unit) -> @base_common.Disposable = no_animation_scheduler,
-  now? : () -> Double = zero_clock,
+  line_height~ : Int32,
+  line_count~ : Int32 = 0,
+  smooth_scrolling~ : Bool = false,
+  is_viewport_wrapping~ : Bool = false,
+  vertical_scrollbar_width~ : Double = 14.0,
+  horizontal_scrollbar_height~ : Double = 12.0,
+  schedule_at_next_animation_frame~ : (() -> Unit) -> @base_common.Disposable = no_animation_scheduler,
+  now~ : () -> Double = zero_clock,
 ) -> ViewLayout {
   let line_count = line_count.max(0)
   let layout : ViewLayout = {
@@ -81,7 +81,7 @@ pub fn ViewLayout::ViewLayout(
 /// dimensions; the position re-clamps when the document shrank.
 pub fn ViewLayout::set_line_count(
   self : ViewLayout,
-  line_count : Int,
+  line_count : Int32,
 ) -> ScrollChange? {
   self.line_count = line_count.max(0)
   // `LinesLayout.onFlushed` retains source-owned whitespaces. Model-scoped
@@ -96,7 +96,7 @@ pub fn ViewLayout::set_line_count(
 /// survive a flush like the source's; the browser ViewZones owner recomputes
 /// mutable mapping facts on its corresponding view-model event. The scroll
 /// dimensions re-derive in `on_height_maybe_changed`, exactly the source split.
-pub fn ViewLayout::on_flushed(self : ViewLayout, line_count : Int) -> Unit {
+pub fn ViewLayout::on_flushed(self : ViewLayout, line_count : Int32) -> Unit {
   self.line_count = line_count.max(0)
   self.lines.on_flushed(self.line_count)
 }
@@ -135,7 +135,7 @@ pub fn ViewLayout::change_whitespace(
 
 ///|
 /// The uniform line height in pixels (`fontInfo.lineHeight`).
-pub fn ViewLayout::line_height(self : ViewLayout) -> Int {
+pub fn ViewLayout::line_height(self : ViewLayout) -> Int32 {
   self.line_height
 }
 
@@ -145,7 +145,7 @@ pub fn ViewLayout::line_height(self : ViewLayout) -> Int {
 /// (`this._linesLayout.setLineHeight(...)`).
 pub fn ViewLayout::set_line_height(
   self : ViewLayout,
-  line_height : Int,
+  line_height : Int32,
 ) -> ScrollChange? {
   if line_height == self.line_height {
     return None
@@ -213,7 +213,7 @@ pub fn ViewLayout::set_content_width(
 
 ///|
 /// Current number of lines.
-pub fn ViewLayout::line_count(self : ViewLayout) -> Int {
+pub fn ViewLayout::line_count(self : ViewLayout) -> Int32 {
   self.line_count
 }
 
@@ -265,8 +265,8 @@ pub fn ViewLayout::get_current_scroll_top(self : ViewLayout) -> Double {
 /// immediately above the line counts toward the offset.
 pub fn ViewLayout::get_vertical_offset_for_line_number(
   self : ViewLayout,
-  line_number : Int,
-  include_view_zones? : Bool = false,
+  line_number : Int32,
+  include_view_zones~ : Bool = false,
 ) -> Double {
   self.lines.get_vertical_offset_for_line_number(
     line_number,
@@ -279,8 +279,8 @@ pub fn ViewLayout::get_vertical_offset_for_line_number(
 /// Monaco's `ViewLayout.getVerticalOffsetAfterLineNumber`.
 pub fn ViewLayout::get_vertical_offset_after_line_number(
   self : ViewLayout,
-  line_number : Int,
-  include_view_zones? : Bool = false,
+  line_number : Int32,
+  include_view_zones~ : Bool = false,
 ) -> Double {
   self.lines.get_vertical_offset_after_line_number(
     line_number,
@@ -293,8 +293,8 @@ pub fn ViewLayout::get_vertical_offset_after_line_number(
 /// `ViewLayout.getLineHeightForLineNumber`.
 pub fn ViewLayout::get_line_height_for_line_number(
   self : ViewLayout,
-  line_number : Int,
-) -> Int {
+  line_number : Int32,
+) -> Int32 {
   self.lines.get_line_height_for_line_number(line_number)
 }
 
@@ -338,7 +338,7 @@ pub fn ViewLayout::get_lines_viewport_data_at_scroll_top(
 /// line.
 pub fn ViewLayout::completely_visible_line_range(
   self : ViewLayout,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   if self.line_count <= 0 {
     return (1, 1)
   }
@@ -355,7 +355,7 @@ pub fn ViewLayout::completely_visible_line_range(
 /// bottom edge.
 pub fn ViewLayout::vertical_offset_for_line(
   self : ViewLayout,
-  line : Int,
+  line : Int32,
 ) -> Double {
   let line = line.clamp(min=1, max=self.line_count + 1)
   self.lines.get_vertical_offset_for_line_number(line)
@@ -367,7 +367,7 @@ pub fn ViewLayout::vertical_offset_for_line(
 pub fn ViewLayout::line_at_vertical_offset(
   self : ViewLayout,
   offset : Double,
-) -> Int {
+) -> Int32 {
   if self.line_count <= 0 {
     return 1
   }
@@ -414,7 +414,7 @@ pub fn ViewLayout::get_whitespaces(
 pub fn ViewLayout::relative_vertical_offset_for_line(
   self : ViewLayout,
   window : LineWindow,
-  line : Int,
+  line : Int32,
 ) -> Double {
   let start_top = self.vertical_offset_for_line(window.start)
   javascript_to_int32(start_top).to_double() +
@@ -428,7 +428,7 @@ pub fn ViewLayout::relative_vertical_offset_for_line(
 pub fn ViewLayout::big_numbers_delta_for_window(
   self : ViewLayout,
   window : LineWindow,
-) -> Int {
+) -> Int32 {
   let start_vertical_offset = javascript_to_int32(
     self.vertical_offset_for_line(window.start),
   )
@@ -460,8 +460,8 @@ pub fn ViewLayout::scroll_to(
 /// Applies a relative synthetic scroll delta.
 pub fn ViewLayout::scroll_by(
   self : ViewLayout,
-  delta_left? : Double = 0.0,
-  delta_top? : Double = 0.0,
+  delta_left~ : Double = 0.0,
+  delta_top~ : Double = 0.0,
 ) -> ScrollChange? {
   self.scrollable.scroll_by(delta_left~, delta_top~)
 }

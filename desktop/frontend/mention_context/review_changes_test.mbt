@@ -1,7 +1,7 @@
 ///|
 fn selection_fixture(
-  file? : String = "src/main.mbt",
-  version? : String = "snapshot-a",
+  file~ : String = "src/main.mbt",
+  version~ : String = "snapshot-a",
 ) -> @mention_context.ReviewChanges {
   {
     source: {

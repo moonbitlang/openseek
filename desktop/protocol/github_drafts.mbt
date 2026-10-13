@@ -1,6 +1,6 @@
 ///|
 pub(all) enum GithubDraftTarget {
-  Line(path~ : String, side~ : String, line~ : Int, head~ : String)
+  Line(path~ : String, side~ : String, line~ : Int32, head~ : String)
   Thread(thread~ : String, comment~ : String)
 } derive(Eq)
 
@@ -31,7 +31,7 @@ pub impl FromJson for GithubDraftTarget with fn from_json(json, path) {
       "head": String(head),
       ..
     } => {
-      let line : Int = @json.from_json(line)
+      let line : Int32 = @json.from_json(line)
       guard line > 0 && (side == "LEFT" || side == "RIGHT") else {
         raise JsonDecodeError((path, "invalid local comment anchor"))
       }
@@ -80,7 +80,7 @@ pub(all) struct GithubDrafts {
 
 ///|
 pub impl ToJson for GithubDrafts with fn to_json(self) {
-  { "url": self.url, "drafts": self.drafts.to_json() }
+  { "url": self.url, "drafts": Json(self.drafts) }
 }
 
 ///|

@@ -33,9 +33,12 @@ export default defineConfig({
   webServer: {
     // Serve Desktop's own tree so the suite exercises the browser artifacts
     // staged by the real Desktop packager, not a test-only copy of the UI.
-    command: `moon run ../../scripts/serve-static.mbtx .. ${serverPort}`,
+    // The large frontend bundle makes the Wasm script's transfer cost visible
+    // on every fresh page. Compile the same static server for native release.
+    command: `moon run --target native --release ../../scripts/serve-static.mbtx .. ${serverPort}`,
     url: `${baseURL}/dist/browser/index.html`,
     reuseExistingServer: Boolean(configuredBaseURL) || !isCI,
-    timeout: 60_000,
+    // A fresh checkout also compiles the native server and its dependencies.
+    timeout: 120_000,
   },
 });

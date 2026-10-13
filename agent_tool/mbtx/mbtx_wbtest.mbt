@@ -8,7 +8,7 @@ async test "denial scan is bounded to the log's head and tail" {
   @vfs.with_tmpdir(prefix="mbtx-denial-scan-", dir => {
     let denial = "sh: main.mbt: Operation not permitted\n"
     let filler_line = "\{String::make(63, 'x')}\n"
-    fn filler(lines : Int) -> String {
+    fn filler(lines : Int32) -> String {
       let out = StringBuilder()
       for _ in 0..<lines {
         out.write_string(filler_line)

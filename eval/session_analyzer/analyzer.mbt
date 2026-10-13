@@ -8,10 +8,10 @@ pub struct EvalResult {
   session_id : String
   success : Bool
   reason : String
-  steps : Int
-  tool_results : Int
-  tool_errors : Int
-  runtime_notices : Int
+  steps : Int32
+  tool_results : Int32
+  tool_errors : Int32
+  runtime_notices : Int32
   finished : Bool
   finish_message : String
   terminal_status : String
@@ -21,10 +21,10 @@ pub struct EvalResult {
 ///|
 priv struct SessionMetrics {
   finish_message : String
-  steps : Int
-  tool_results : Int
-  tool_errors : Int
-  runtime_notices : Int
+  steps : Int32
+  tool_results : Int32
+  tool_errors : Int32
+  runtime_notices : Int32
   /// The last terminal event the session reached, already scored, or `None`
   /// when it never reached one.
   terminal : TerminalOutcome?

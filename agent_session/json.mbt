@@ -34,7 +34,7 @@ fn int_field(
   fields : Map[String, Json],
   path : @json.JsonPath,
   key : String,
-) -> Int raise @json.JsonDecodeError {
+) -> Int32 raise @json.JsonDecodeError {
   match fields.get(key) {
     Some(Number(value, ..)) => value.to_int()
     _ => json_decode_error(path.add_key(key), "expected int")

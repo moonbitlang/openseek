@@ -4,7 +4,7 @@ fn Input::history_fixture(task : String) -> Input {
 }
 
 ///|
-fn Model::moved(self : Model, input : Input, delta : Int) -> Model {
+fn Model::moved(self : Model, input : Input, delta : Int32) -> Model {
   let (next, _) = self.update(
     input,
     HistoryMoved(delta),

@@ -209,7 +209,7 @@ async fn serve_callback(
 ///|
 async fn respond_html(
   conn : @http.ServerConnection,
-  code : Int,
+  code : Int32,
   reason : String,
   body : String,
 ) -> Unit {
@@ -325,10 +325,10 @@ async fn exchange_code(
     None => server_url
   }
   let body : Json = {
-    "code": code.to_json(),
-    "code_verifier": verifier.to_json(),
-    "hostname": name.to_json(),
-    "name": name.to_json(),
+    "code": Json(code),
+    "code_verifier": Json(verifier),
+    "hostname": Json(name),
+    "name": Json(name),
   }
   guard @async.with_timeout_opt(ExchangeTimeoutMs, () => {
       @http.post("\{origin}/v1/auth/desktop/exchange", body, headers={

@@ -296,6 +296,46 @@ compacted session demo events 1..2; last_sequence=3
 {"version":1,"id":"demo","system_prompt":"system","events":[{"sequence":1,"item":{"kind":"user","payload":{"content":"hello"}}},{"sequence":2,"item":{"kind":"assistant","payload":{"content":"answer","tool_calls":[]}}},{"sequence":3,"item":{"kind":"summary","payload":{"content":"hello and answer","from_sequence":1,"to_sequence":2}}}]}
 ```
 
+## `openseek sessions fork` Continues A Conversation Another Way
+
+`sessions fork <id>` copies a session into a new one and prints the new id,
+which `--session` then resumes. The copy ends where the last finished turn
+ended: the prompt that opened a turn still in flight stays with the original.
+The fork's system prompt is built for the fork: it names the fork's own
+scratch directory, where the original's prompt named the original's.
+`--through` stops at the end of an earlier turn and must name a turn's
+terminal event; an id that already exists is never replaced.
+
+```mooncram
+$ sh <<'EOF'
+> tmp=$(mktemp -d)
+> mkdir -p "$tmp/sessions/demo"
+> cat > "$tmp/sessions/demo/openseek_session-demo.jsonl" <<'JSONL'
+> {"version":1,"id":"demo","system_prompt":"system"}
+> {"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":"hello"}}}
+> {"sequence":2,"ts":0,"item":{"kind":"terminal","payload":{"kind":"finished","message":"answer"}}}
+> {"sequence":3,"ts":0,"item":{"kind":"user","payload":{"content":"go on"}}}
+> JSONL
+> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp"
+> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o '"item":{"kind":"[a-z_]*"' | cut -d'"' -f6
+> env -u DEEPSEEK openseek.exe sessions show retry --session-root "$tmp" | grep -o 'sessions/[a-z]*/scratch'
+> env -u DEEPSEEK openseek.exe sessions fork demo --as retry --session-root "$tmp" 2>&1 || echo exit-non-zero
+> env -u DEEPSEEK openseek.exe sessions fork demo --as early --through 1 --session-root "$tmp" 2>&1 || echo exit-non-zero
+> env -u DEEPSEEK openseek.exe sessions list --session-root "$tmp" | cut -f1 | sort
+> rm -rf "$tmp"
+> EOF
+retry
+user
+terminal
+sessions/retry/scratch
+error: session retry already exists
+exit-non-zero
+error: no turn of session demo ends at sequence 1
+exit-non-zero
+demo
+retry
+```
+
 ## `openseek run` Records A Session By Default
 
 `openseek run "task"` records its conversation to a generated

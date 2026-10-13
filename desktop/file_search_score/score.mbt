@@ -13,10 +13,10 @@ pub struct PathQuery {
 
 ///|
 priv struct RankedPath {
-  tier : Int
-  score : Int
-  label_length : Int
-  path_length : Int
+  tier : Int32
+  score : Int32
+  label_length : Int32
+  path_length : Int32
   path : String
 } derive(Eq)
 
@@ -143,7 +143,7 @@ pub fn PathQuery::matches(self : PathQuery, path : String) -> Bool {
 pub fn PathQuery::rank_paths(
   self : PathQuery,
   paths : Array[String],
-  limit : Int,
+  limit : Int32,
 ) -> Array[String] {
   guard limit > 0 else { return [] }
   if self.is_empty() {
@@ -170,7 +170,7 @@ pub fn PathQuery::rank_paths(
 pub fn rank_paths(
   query : String,
   paths : Array[String],
-  limit : Int,
+  limit : Int32,
 ) -> Array[String] {
   PathQuery::PathQuery(query).rank_paths(paths, limit)
 }

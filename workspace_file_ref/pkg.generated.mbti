@@ -1,0 +1,57 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/workspace_file_ref"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const FenceLanguage : String = "openseek-file"
+
+pub fn file_icon_path(FileKind) -> String
+
+pub fn file_kind(String) -> FileKind
+
+pub fn markdown_parts(String) -> Array[MarkdownPart]
+
+pub fn parse(String, String, closed~ : Bool) -> WorkspaceFileRef?
+
+// Errors
+
+// Types and methods
+pub enum FileKind {
+  Spreadsheet
+  Document
+  Presentation
+  Image
+  Pdf
+  Archive
+  Code
+  Text
+  Generic
+} derive(Eq, @debug.Debug)
+pub fn FileKind::equal(Self, Self) -> Bool
+pub fn FileKind::not_equal(Self, Self) -> Bool
+pub fn FileKind::to_repr(Self) -> @debug.Repr
+
+pub enum MarkdownPart {
+  Text(String)
+  File(WorkspaceFileRef)
+} derive(Eq, @debug.Debug)
+pub fn MarkdownPart::equal(Self, Self) -> Bool
+pub fn MarkdownPart::not_equal(Self, Self) -> Bool
+pub fn MarkdownPart::to_repr(Self) -> @debug.Repr
+
+pub struct WorkspaceFileRef {
+  path : String
+  name : String
+  extension : String?
+  kind : FileKind
+} derive(Eq, @debug.Debug)
+pub fn WorkspaceFileRef::equal(Self, Self) -> Bool
+pub fn WorkspaceFileRef::not_equal(Self, Self) -> Bool
+pub fn WorkspaceFileRef::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

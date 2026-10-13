@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/x/crypto",
   "moonbitlang/core/encoding/base64",
   "moonbitlang/x/uuid" @x_uuid,
   "moonbitlang/core/encoding/utf8",

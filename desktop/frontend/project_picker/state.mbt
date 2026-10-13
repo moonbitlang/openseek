@@ -32,8 +32,8 @@ struct State {
   // derived locally from `entries`; typing a separator after an exact child
   // commits that directory without waiting for a separate Enter press.
   path_draft : String?
-  path_selection : Int
-  generation : Int
+  path_selection : Int32
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -42,7 +42,7 @@ pub extend State with Eq::{equal, not_equal}
 ///|
 /// The fence expected by the current host reply. Exposed with the otherwise
 /// opaque state so black-box adapters can drive the state machine directly.
-pub fn State::request_generation(self : State) -> Int {
+pub fn State::request_generation(self : State) -> Int32 {
   self.generation
 }
 
@@ -71,17 +71,17 @@ pub(all) enum Msg {
     channel~ : @interop.ChannelId,
     location~ : Location,
     entries~ : Array[String],
-    generation~ : Int
+    generation~ : Int32
   )
   // A browse or create failed; the shell pops the message as a toast and the
   // previous listing stays usable.
-  Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int)
+  Failed(channel~ : @interop.ChannelId, message~ : String, generation~ : Int32)
   // Edit and submit a path in place of the breadcrumb. Matching rows and
   // separator-committed children come only from the directory listing already
   // held by this state.
   EditPath
   PathChanged(String)
-  MovePathSelection(Int)
+  MovePathSelection(Int32)
   CompletePath
   SubmitPath
   CancelPathEdit
@@ -113,10 +113,10 @@ pub enum Outcome {
 ///|
 /// One process-wide sequence keeps replies from a closed picker from matching
 /// a later picker opened on the same channel.
-let next_request_generation : Ref[Int] = Ref(0)
+let next_request_generation : Ref[Int32] = Ref(0)
 
 ///|
-fn fresh_request_generation() -> Int {
+fn fresh_request_generation() -> Int32 {
   next_request_generation.val += 1
   next_request_generation.val
 }
@@ -156,7 +156,7 @@ pub fn State::open(
 /// the user registered (the picker has already closed itself) or a
 /// navigation failure the shell should surface as a toast.
 pub fn State::handle(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
   emit : @cmd.Emit[Msg],
   msg : Msg,

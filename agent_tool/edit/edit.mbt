@@ -52,8 +52,8 @@
 /// - `Respond(ToolOutput("error: edit requires ...", is_error=true))` for
 ///   invalid arguments.
 pub fn definition(
-  workspace_root? : String = ".",
-  file_state? : @agent_tool.FileStateMap = FileStateMap(),
+  workspace_root~ : String = ".",
+  file_state~ : @agent_tool.FileStateMap = FileStateMap(),
   write_scope? : @write_scope.WriteScope,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
@@ -373,7 +373,7 @@ fn failure(
     "error editing \{path}: \{message}",
     is_error=true,
     brief~,
-    data={ "outcome": outcome.to_json(), "path": path.to_json() },
+    data={ "outcome": Json(outcome), "path": Json(path) },
   )
 }
 
@@ -381,16 +381,16 @@ fn failure(
 /// At most this many match sites are rendered (and emitted as edits) in one
 /// preview; matches beyond the cap are reported as a count with a nudge to
 /// narrow the line range, so a pathological pattern cannot flood the turn.
-const PreviewSiteCap : Int = 40
+const PreviewSiteCap : Int32 = 40
 
 ///|
 /// Context lines shown above and below each match site.
-const PreviewContextLines : Int = 2
+const PreviewContextLines : Int32 = 2
 
 ///|
 /// Longest rendered context line; longer lines are cut with an ellipsis. The
 /// emitted edits always carry the exact strings — only the display truncates.
-const PreviewLineDisplayCap : Int = 200
+const PreviewLineDisplayCap : Int32 = 200
 
 ///|
 /// Longest line a many-match site may embed as a whole-line entry, and the
@@ -398,7 +398,7 @@ const PreviewLineDisplayCap : Int = 200
 /// per-match growth, computed arithmetically BEFORE `replace_all` so a long
 /// `new_string` times thousands of matches can never materialize hundreds of
 /// MB). Sites past either bound are reported with a note instead of an entry.
-const PreviewEntryCharsCap : Int = 4_096
+const PreviewEntryCharsCap : Int32 = 4_096
 
 ///|
 /// Budget for the rendered context blocks, and separately for the entries
@@ -407,10 +407,10 @@ const PreviewEntryCharsCap : Int = 4_096
 /// and corrupt every entry. Context blocks and entries are each capped so the
 /// whole report stays safely under the clamp; omissions are counted and
 /// stated, and the array always closes validly.
-const PreviewContextBudgetChars : Int = 24_000
+const PreviewContextBudgetChars : Int32 = 24_000
 
 ///|
-const PreviewEntriesBudgetChars : Int = 24_000
+const PreviewEntriesBudgetChars : Int32 = 24_000
 
 ///|
 /// `replace_all_preview=true`: report every match of `old_string` in the
@@ -445,7 +445,7 @@ async fn preview_replace_all(
   // Incremental line tracking; match offsets only move forward.
   let mut scan_offset = 0
   let mut scan_line = 1
-  fn line_at(offset : Int) -> Int {
+  fn line_at(offset : Int32) -> Int32 {
     while scan_offset < offset {
       if content[scan_offset] == '\n' {
         scan_line += 1
@@ -580,10 +580,10 @@ async fn preview_replace_all(
   for site in sites {
     guard site.emit else { continue }
     let entry : Json = {
-      "file": input.path.to_json(),
-      "old_string": site.old_string.to_json(),
-      "new_string": site.new_string.to_json(),
-      "start_line": site.first_line.to_json(),
+      "file": Json(input.path),
+      "old_string": Json(site.old_string),
+      "new_string": Json(site.new_string),
+      "start_line": Json(site.first_line),
     }
     let text = entry.stringify()
     if entries_chars + text.length() > PreviewEntriesBudgetChars {
@@ -614,19 +614,19 @@ async fn preview_replace_all(
     brief="edit preview \{@agent_tool.brief_basename(path)} (\{sites.length()} site(s))",
     data={
       "outcome": "preview",
-      "path": path.to_json(),
-      "matches": total_matches.to_json(),
-      "sites": sites.length().to_json(),
-      "more": more.to_json(),
+      "path": Json(path),
+      "matches": Json(total_matches),
+      "sites": Json(sites.length()),
+      "more": Json(more),
     },
   )
 }
 
 ///|
 priv struct PreviewSite {
-  first_line : Int
-  last_line : Int
-  match_count : Int
+  first_line : Int32
+  last_line : Int32
+  match_count : Int32
   old_string : String
   new_string : String
   // False for a site shown in the report but excluded from the edits array
@@ -651,9 +651,9 @@ fn preview_site_header(site : PreviewSite) -> String {
 fn render_site_context(
   report : StringBuilder,
   content : String,
-  line_starts : Array[Int],
+  line_starts : Array[Int32],
   site : PreviewSite,
-  total_lines : Int,
+  total_lines : Int32,
 ) -> Unit {
   let from = (site.first_line - PreviewContextLines).clamp(
     min=1,
@@ -690,7 +690,7 @@ fn preview_display_line(text : String) -> String {
 /// yields a phantom trailing start equal to the length; `line_text_at`
 /// resolves it to the empty string, and render ranges are clamped to
 /// `total_line_count` anyway.
-fn line_start_index(content : String) -> Array[Int] {
+fn line_start_index(content : String) -> Array[Int32] {
   let starts = [0]
   for index in 0..<content.length() {
     if content[index] == '\n' {
@@ -703,8 +703,8 @@ fn line_start_index(content : String) -> Array[Int] {
 ///|
 fn line_text_at(
   content : String,
-  line_starts : Array[Int],
-  line : Int,
+  line_starts : Array[Int32],
+  line : Int32,
 ) -> String {
   guard line >= 1 && line <= line_starts.length() else { return "" }
   let start = line_starts[line - 1]
@@ -722,7 +722,7 @@ fn line_text_at(
 }
 
 ///|
-fn total_line_count(content : String) -> Int {
+fn total_line_count(content : String) -> Int32 {
   if content == "" {
     return 0
   }
@@ -750,7 +750,7 @@ async fn commit_edit(
   path : String,
   original_content~ : String,
   new_content~ : String,
-  lines~ : (Int, Int),
+  lines~ : (Int32, Int32),
   input~ : @decode.EditInput,
   fail_brief~ : String,
   summary~ : String,
@@ -783,7 +783,7 @@ async fn commit_edit(
       "not applied: a diagnostic guard was requested, but moon check could not verify the tree (\{reason}); \{path} was NOT modified",
       is_error=true,
       brief=fail_brief,
-      data=edit_data("unverified", path, lines, { "reason": reason.to_json() }),
+      data=edit_data("unverified", path, lines, { "reason": Json(reason) }),
     )
   }
 
@@ -948,7 +948,7 @@ async fn commit_edit(
         is_error=true,
         brief="\{fail_brief} (unverified)",
         data=edit_data("unverified", path, lines, {
-          "reason": reason.to_json(),
+          "reason": Json(reason),
           "restore_failed": false,
         }),
       )
@@ -1100,20 +1100,20 @@ async fn resolved_target(path : String) -> String {
 }
 
 ///|
-fn exited_without_diagnostics(code : Int, detail : String) -> String {
+fn exited_without_diagnostics(code : Int32, detail : String) -> String {
   "exited \{code} without diagnostics: \{detail}"
 }
 
 ///|
 /// Optional inclusive count-delta thresholds; both are off by default.
 priv struct Guards {
-  errors : Int?
-  warnings : Int?
+  errors : Int32?
+  warnings : Int32?
 }
 
 ///|
 /// How many introduced sites a revert carries in text and data.
-const IntroducedDisplayLimit : Int = 20
+const IntroducedDisplayLimit : Int32 = 20
 
 ///|
 /// Compare reported count changes against inclusive thresholds. Incomplete
@@ -1124,7 +1124,7 @@ async fn guarded_outcome(
   target~ : String,
   original_content~ : String,
   new_content~ : String,
-  lines~ : (Int, Int),
+  lines~ : (Int32, Int32),
   fail_brief~ : String,
   guards : Guards,
   before : @auto_check.CheckErrors,
@@ -1143,18 +1143,18 @@ async fn guarded_outcome(
   let common : Map[String, Json] = {
     "check": after.summary_json(),
     "baseline": {
-      "error_count": before.error_count.to_json(),
-      "warning_count": before.warning_count.to_json(),
+      "error_count": Json(before.error_count),
+      "warning_count": Json(before.warning_count),
     },
     "introduced_count": {
-      "errors": delta.errors.length().to_json(),
-      "warnings": delta.warnings.length().to_json(),
+      "errors": Json(delta.errors.length()),
+      "warnings": Json(delta.warnings.length()),
     },
     "removed_count": {
-      "errors": removed.errors.length().to_json(),
-      "warnings": removed.warnings.length().to_json(),
+      "errors": Json(removed.errors.length()),
+      "warnings": Json(removed.warnings.length()),
     },
-    "reach_caveat": reach_caveat.to_json(),
+    "reach_caveat": Json(reach_caveat),
   }
   let caveat = if reach_caveat {
     "\nnote: the baseline already had \{before.error_count} error(s); errors can change which packages moon check reaches. Fixes may expose existing diagnostics, and new errors may hide them; a lower count does not prove no new problems."
@@ -1217,9 +1217,9 @@ async fn guarded_outcome(
   common["introduced"] = {
     "errors": Json::array([ for site in shown_errors => site.to_json() ]),
     "warnings": Json::array([ for site in shown_warnings => site.to_json() ]),
-    "complete": delta.complete.to_json(),
-    "errors_omitted": (delta.errors.length() - shown_errors.length()).to_json(),
-    "warnings_omitted": (delta.warnings.length() - shown_warnings.length()).to_json(),
+    "complete": Json(delta.complete),
+    "errors_omitted": Json(delta.errors.length() - shown_errors.length()),
+    "warnings_omitted": Json(delta.warnings.length() - shown_warnings.length()),
   }
   revert_edit(
     path,
@@ -1244,7 +1244,7 @@ async fn revert_edit(
   target~ : String,
   original_content~ : String,
   written~ : String,
-  lines~ : (Int, Int),
+  lines~ : (Int32, Int32),
   fail_brief~ : String,
   extra : Map[String, Json],
   head~ : String,
@@ -1263,7 +1263,7 @@ async fn revert_edit(
     Some(error) =>
       "reverted: \{head}, but \{path} could NOT be restored (\{error}); inspect it manually.\{detail}"
   }
-  extra["restore_failed"] = (restore_failure is Some(_)).to_json()
+  extra["restore_failed"] = Json(restore_failure is Some(_))
   @agent_tool.respond(
     content,
     is_error=true,
@@ -1326,14 +1326,14 @@ async fn restore_content(
 fn edit_data(
   outcome : String,
   path : String,
-  lines : (Int, Int),
+  lines : (Int32, Int32),
   extra : Map[String, Json],
 ) -> Json {
   let (start, end) = lines
   let fields : Map[String, Json] = {
-    "outcome": outcome.to_json(),
-    "path": path.to_json(),
-    "lines": { "start": start.to_json(), "end": end.to_json() },
+    "outcome": Json(outcome),
+    "path": Json(path),
+    "lines": { "start": Json(start), "end": Json(end) },
   }
   for key, value in extra {
     fields[key] = value
@@ -1370,7 +1370,7 @@ fn check_report(tally : @auto_check.CheckErrors) -> String {
 /// smaller edits instead: parse errors cascade, so several of them usually
 /// mean a large replacement (or a misplaced insertion) broke the file's
 /// structure wholesale.
-const SmallerEditsHintThreshold : Int = 3
+const SmallerEditsHintThreshold : Int32 = 3
 
 ///|
 /// Pre-write syntax gate for syncheck-input edits: parse the candidate result
@@ -1438,15 +1438,12 @@ async fn parse_gate_rejection(
         brief="edit rejected (\{bound}\{introduced} parse error(s))",
         data={
           "outcome": "rejected",
-          "path": path.to_json(),
-          "introduced": introduced.to_json(),
+          "path": Json(path),
+          "introduced": Json(introduced),
           "parse_errors": Json::array(
             [
               for error in gate.errors[:shown] => {
-                {
-                  "loc": error.loc.to_json(),
-                  "message": error.message.to_json(),
-                }
+                { "loc": Json(error.loc), "message": Json(error.message) }
               }
             ],
           ),
@@ -1466,8 +1463,8 @@ fn edit_reject_report(
   path : String,
   new_content : String,
   gate : @auto_check.ParseGate,
-  introduced~ : Int,
-  before_count~ : Int,
+  introduced~ : Int32,
+  before_count~ : Int32,
 ) -> String {
   // A truncated capture makes the introduced count a lower bound; never state
   // an exact number the gate does not know.
@@ -1535,12 +1532,12 @@ fn select_edit_region(
 /// `total_line_count`, whose only extra rule — empty content spans 0 lines —
 /// cannot apply here: `new_string` is non-empty on the insertion path, because
 /// both-empty edits are rejected first.
-fn inserted_line_span(new_string : String) -> Int {
+fn inserted_line_span(new_string : String) -> Int32 {
   total_line_count(new_string)
 }
 
 ///|
-fn line_number_at_offset(content : String, offset : Int) -> Int {
+fn line_number_at_offset(content : String, offset : Int32) -> Int32 {
   let bounded_offset = offset.clamp(min=0, max=content.length())
   for cursor in 0..<bounded_offset; line = 1 {
     if content[cursor] == '\n' {
@@ -1566,8 +1563,8 @@ fn range_detail(input : @decode.EditInput) -> String {
 /// character difference with a specific mismatch hint.
 fn old_string_context(
   content : String,
-  start_line : Int,
-  end_line : Int?,
+  start_line : Int32,
+  end_line : Int32?,
 ) -> String {
   let result = StringBuilder()
   result.write_string("\n\n")

@@ -11,13 +11,13 @@ async fn run_task_turn(
   api_key~ : String,
   model~ : @deepseek.Model,
   task~ : String,
-  max_steps? : Int,
+  max_steps? : Int32,
   thinking~ : @deepseek.ThinkingMode,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
   workspace_root~ : String,
-  review_deadline_ms~ : Int?,
+  review_deadline_ms~ : Int32?,
   approval_policy~ : @execution.ApprovalPolicy,
   child_session? : @agent_subrun.ChildSession,
   job_log_dir? : String,
@@ -119,7 +119,7 @@ priv struct TurnRecord {
   /// The durable session the turn records to; `None` for `--no-session`.
   mut session : String?
   /// The session's last sequence before the turn: later events are the turn's.
-  mut started_after : Int
+  mut started_after : Int32
   /// The session after the latest append; `None` until the turn has started.
   mut latest : @agent_session.Session?
 }
@@ -170,7 +170,7 @@ fn TurnRecord::status(
 /// responses it recorded; `None` when the turn never started.
 fn TurnRecord::accounting(
   self : TurnRecord,
-) -> (@openseek_protocol.Usage, Int)? {
+) -> (@openseek_protocol.Usage, Int32)? {
   guard self.latest is Some(session) else { return None }
   let mut total : @openseek_protocol.Usage = {
     prompt_tokens: 0,

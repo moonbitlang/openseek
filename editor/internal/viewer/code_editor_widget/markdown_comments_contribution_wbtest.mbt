@@ -63,8 +63,8 @@ test "original Markdown-comment source uses escaped token HTML" {
 
 ///|
 fn markdown_contribution_block(
-  start_line_number : Int,
-  end_line_number_exclusive : Int,
+  start_line_number : Int32,
+  end_line_number_exclusive : Int32,
   markdown : String,
 ) -> @language.MarkdownCommentBlock {
   {

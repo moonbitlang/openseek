@@ -1,5 +1,5 @@
 ///|
-const MaxPatternChars : Int = 8000
+const MaxPatternChars : Int32 = 8000
 
 ///|
 /// A bounded candidate returned by the Pattern Repair Agent.

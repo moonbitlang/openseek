@@ -9,8 +9,8 @@ pub(all) struct AgentFeedbackChangeEvent {
 /// The position of a navigation anchor in a caller-supplied item order.
 /// `active_idx` is `-1` when no live anchor exists.
 pub(all) struct AgentFeedbackNavigationBearing {
-  active_idx : Int
-  total_count : Int
+  active_idx : Int32
+  total_count : Int32
 } derive(Eq, Debug)
 
 ///|

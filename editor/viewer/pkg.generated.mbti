@@ -128,6 +128,11 @@ pub fn EditorDecorationsCollection::get_ranges(Self) -> Array[@common.Range]
 pub fn EditorDecorationsCollection::length(Self) -> Int
 pub fn EditorDecorationsCollection::set(Self, Array[@model.ModelDeltaDecoration]) -> Array[String]
 
+type FeedbackComposer
+pub fn FeedbackComposer::dispose(Self) -> Unit
+pub fn FeedbackComposer::hide(Self) -> Unit
+pub fn FeedbackComposer::show(Self, () -> @dom.DOMRect?, prefer_below~ : Bool, selection_rects~ : () -> Array[@dom.DOMRect]) -> Unit
+
 pub(all) enum MarkdownResourceKind {
   OrdinaryMarkdown
   MoonBitMarkdown
@@ -301,6 +306,7 @@ pub fn ViewerOptions::with_theme(Self, String) -> Self
 
 type ViewerServices
 pub fn ViewerServices::ViewerServices(localization? : @localization.Localization, languages? : @languages.LanguageHandle, markers? : @markers.MarkerDecorationsSource, agent_feedback? : @agent_feedback_api.AgentFeedbackHandle, location_opener? : @navigation_api.LocationOpenerHandle, text_model_resolver? : @navigation_api.TextModelResolverHandle, resource_path_label? : (@common.Uri) -> String?, quick_diff? : @quick_diff_api.QuickDiffHandle, log_service? : @log.LogHandle) -> Self
+pub fn ViewerServices::create_feedback_composer(Self, @dom.Element, viewport~ : @dom.Element, layout_source~ : @dom.Element, on_submit~ : (String, Bool) -> Unit, on_change~ : (String) -> Unit, on_cancel~ : () -> Unit) -> FeedbackComposer
 pub fn ViewerServices::dispose(Self) -> Unit
 
 type ViewerViewState derive(@debug.Debug)

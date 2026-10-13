@@ -32,6 +32,12 @@ test('workspace search supports toggles and keyboard navigation', async ({ page 
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
+  // The query field is rendered once the project's checkout is known, and the
+  // shortcut focuses it only once. Pressed earlier, the panel keeps the focus
+  // and the field that appears later is left unfocused. The composer offers a
+  // retry for the worktree list for as long as the checkout is unknown.
+  await expect(page.getByRole('complementary').getByRole('button', { name: 'workspace', exact: true })).toBeVisible();
+  await expect(page.getByTitle("Request this workspace's worktree list again", { exact: true })).toBeHidden();
 
   const shortcut = await page.evaluate(() =>
     navigator.platform.includes('Mac') ? 'Meta+Shift+F' : 'Control+Shift+F');
@@ -96,6 +102,7 @@ test('Review loads changed files and preserves its interactive diff workflow', a
   const library = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
   await expect(main).toHaveAttribute('aria-current', 'false');
   await main.click();
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
 
   await expect.poll(() => app.requests.find(request =>
     request.method === 'fs.read_file' && request.params?.path === '/workspace/src/main.mbt'))
@@ -273,6 +280,7 @@ for (const pendingMethod of ['git.original_file', 'fs.read_file']) {
     await app.openReview();
     const changes = page.locator('#review-changes-body');
     await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     const mode = page.getByRole('toolbar', { name: 'Review mode' });
     const line = mode.getByRole('button', { name: 'Line diff' });
     const layout = page.getByRole('group', { name: 'Diff layout' });
@@ -408,6 +416,7 @@ test('Review links hunk and file progress and reports the active hunk', async ({
   await app.openReview();
   const changes = page.locator('#review-changes-body');
   await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
 
   await page.getByRole('toolbar', { name: 'Review mode' })
     .getByRole('button', { name: 'Line diff' }).click();
@@ -476,6 +485,7 @@ for (const mode of ['Token', 'Tree']) {
     await app.openReview();
     const changes = page.locator('#review-changes-body');
     await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     const modeButton = page.getByRole('button', { name: `${mode} diff`, exact: true });
     await modeButton.click();
     await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
@@ -722,7 +732,7 @@ test('Git history expands commits and opens an immutable historical diff', async
         workspace: '/workspace',
       },
     });
-  const history = page.getByRole('tree', { name: 'Git commit history' });
+  const history = page.getByRole('tree', { name: 'Git commit history', includeHidden: true });
   const head = history.getByRole('treeitem', { name: /Cover Desktop Git flows/ });
   const merge = history.getByRole('treeitem', { name: /Merge fixture lanes/ });
   const parent = history.getByRole('treeitem', { name: /Add Review surface/ });
@@ -745,8 +755,9 @@ test('Git history expands commits and opens an immutable historical diff', async
       },
     });
   await expect(head).toHaveAttribute('aria-expanded', 'true');
-  const historicalMain = history.getByRole('treeitem', { name: /src\/main\.mbt/ });
+  const historicalMain = history.getByRole('treeitem', { name: /src\/main\.mbt/, includeHidden: true });
   await historicalMain.click();
+  await expect(history).toBeHidden();
   await expect(historicalMain).toHaveAttribute('aria-current', 'page');
 
   await expect.poll(() => app.requests.filter(request =>
@@ -2699,9 +2710,16 @@ test('composer selects queue for one message and preserves queued controls', asy
   await queued.getByTitle('Edit', { exact: true }).click();
   await expect(choice).toBeHidden();
   await composer.fill('Edited follow-up');
+  app.rpcErrors.set('agent.queue', 'Queue edit rejected');
+  await page.getByTitle('Save queued message', { exact: true }).click();
+  await expect(page.getByText('Queue action failed: Queue edit rejected', { exact: false }).first()).toBeVisible();
+  await expect(composer).toHaveValue('Edited follow-up');
+  await expect(queued).toContainText('Do this after the turn');
+  app.rpcErrors.delete('agent.queue');
   await page.getByTitle('Save queued message', { exact: true }).click();
   await expect(queued).toContainText('Edited follow-up');
   await expect(choice).toContainText('Steer now');
+  await expect(composer).toHaveValue('');
   await queued.getByTitle('Delete', { exact: true }).click();
   await expect(queued).toHaveCount(0);
   await composer.fill('An immediate correction');

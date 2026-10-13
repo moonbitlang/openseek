@@ -21,7 +21,7 @@ fn file_request(
   root~ : @common.Uri?,
   cache_key : String,
   query : String,
-  generation : Int,
+  generation : Int32,
   kind : FileRequestKind,
 ) -> @cmd.Cmd {
   guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
@@ -93,7 +93,7 @@ fn file_request(
 fn cancel_file_search(
   owner : @interop.ConversationKey,
   cache_key : String,
-  generation : Int,
+  generation : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     @js.Promise::from_async(() => {
@@ -140,7 +140,7 @@ fn symbol_request(
   root : @common.Uri?,
   owner : @interop.ConversationKey,
   query : String,
-  generation : Int,
+  generation : Int32,
 ) -> @cmd.Cmd {
   guard root is Some(root) && @resource.belongs_to(root, owner.channel) else {
     return @cmd.none

@@ -13,6 +13,7 @@ test('Review filters changed paths live, clears, and preserves the open diff', a
   const rows = changes.locator('.change-row');
   await expect(rows).toHaveCount(3);
   await changes.locator('[data-path="src/main.mbt"]').click();
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   const activeTab = page.locator('.editor-tab.active');
   await expect(activeTab).toContainText('main.mbt');
   await input.fill('SRC/');
@@ -129,6 +130,9 @@ test('shared filters follow the expanded commit even with no working changes', a
   await app.install();
   await app.goto();
   await app.openSession();
+  await app.openQuickOpen();
+  await page.getByRole('option', { name: /main\.mbt/ }).click();
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await app.openReview();
   const input = page.getByRole('textbox', { name: 'Filter changed files by path' });
   const types = page.getByRole('button', { name: 'Filter by file extension' });

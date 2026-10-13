@@ -41,7 +41,7 @@ fn TokenizerSyntaxTokenBackend::new_with_support_resolver(
   model_state : TokenizationModelState,
   attached_views : AttachedViews,
   resolve_support : (String) -> InternalTokenizationSupportAdapter?,
-  subscribe_registry? : Bool = false,
+  subscribe_registry~ : Bool = false,
 ) -> TokenizerSyntaxTokenBackend {
   let backend : TokenizerSyntaxTokenBackend = {
     shared: AbstractSyntaxTokenBackend(),
@@ -115,7 +115,7 @@ fn TokenizerSyntaxTokenBackend::handle_attached_view_state_change(
 /// Resets stores/support/workers and refreshes current visible ranges.
 fn TokenizerSyntaxTokenBackend::reset_tokenization(
   self : TokenizerSyntaxTokenBackend,
-  fire_token_change_event? : Bool = true,
+  fire_token_change_event~ : Bool = true,
 ) -> Unit {
   self.tokens.flush()
   if fire_token_change_event && !self.model_state.disposing.val {
@@ -255,8 +255,8 @@ fn TokenizerSyntaxTokenBackend::refresh_ranges(
 /// Clamps source-asymmetrically, stores heuristic tokens, and requests accuracy.
 fn TokenizerSyntaxTokenBackend::refresh_range(
   self : TokenizerSyntaxTokenBackend,
-  start_line_number : Int,
-  end_line_number : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
 ) -> Unit {
   guard self.tokenizer is Some(tokenizer) else { return }
   let line_count = self.model_state.snapshot.val.line_count()
@@ -285,7 +285,7 @@ fn TokenizerSyntaxTokenBackend::refresh_range(
 /// Passive stored/default token read; never invokes the lexer.
 fn TokenizerSyntaxTokenBackend::get_line_tokens(
   self : TokenizerSyntaxTokenBackend,
-  line_number : Int,
+  line_number : Int32,
 ) -> @common_tokens.LineTokens {
   self.tokens.get_tokens(
     self.model_state.language_id,

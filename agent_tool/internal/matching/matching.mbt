@@ -4,9 +4,11 @@
 /// the original content corresponding to normalized position `i`. Use this
 /// to map match offsets found in the normalized content back to the
 /// original content for the actual replacement.
-pub fn normalize_content_for_matching(content : String) -> (String, Array[Int]) {
+pub fn normalize_content_for_matching(
+  content : String,
+) -> (String, Array[Int32]) {
   let result = StringBuilder()
-  let map : Array[Int] = []
+  let map : Array[Int32] = []
   let mut i = 0
   while i < content.length() {
     map.push(i)
@@ -39,7 +41,7 @@ pub fn normalize_quotes(s : String) -> String {
 /// `normalize_quotes`. The returned offset is in the original (un-quote-
 /// normalized) body, because quote normalization does not change character
 /// positions (curly and straight quotes are both single characters).
-pub fn find_quote_normalized_match(body : String, needle : String) -> Int? {
+pub fn find_quote_normalized_match(body : String, needle : String) -> Int32? {
   let norm_body = normalize_quotes(body)
   let norm_needle = normalize_quotes(needle)
   norm_body.find(norm_needle)

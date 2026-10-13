@@ -320,12 +320,12 @@ pub fn run_diff_markdown_comments_test() -> Unit {
 extern "js" fn install_diff_markdown_comments_controls(
   set_fixture : (String) -> Unit,
   set_layout : (String) -> Unit,
-  resize : (Int) -> Unit,
+  resize : (Int32) -> Unit,
   set_feedback_enabled : (Bool) -> Unit,
   set_folding_mode : (String) -> Unit,
   set_render_markdown_comments : (Bool) -> Unit,
   enable_auto_height : () -> Unit,
-  content_height_event_count : () -> Int,
+  content_height_event_count : () -> Int32,
   content_height : () -> Double,
 ) -> Unit =
   #| (setFixture, setLayout, resize, setFeedbackEnabled, setFoldingMode, setRenderMarkdownComments, enableAutoHeight, contentHeightEventCount, contentHeight) => {

@@ -14,8 +14,8 @@ priv enum UiMessage {
   CommentPlaceholder
   SendingLabel
   SendLabel
-  OriginalLine(Int)
-  LineLabel(Int)
+  OriginalLine(Int32)
+  LineLabel(Int32)
   FileConversation
   OutdatedLabel
   ResolvedShow
@@ -28,7 +28,7 @@ priv enum UiMessage {
   UpdateHint
   UpdatingCheckout
   UpdateCheckout
-  OutsideDiff(Int)
+  OutsideDiff(Int32)
   EarlierDraft
   EarlierRevision
   LineOutsideDiff

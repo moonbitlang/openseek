@@ -75,6 +75,7 @@ pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequen
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
+pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int) -> Self raise
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
 pub fn Session::last_terminal(Self) -> TurnTerminal?

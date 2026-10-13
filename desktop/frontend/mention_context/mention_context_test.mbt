@@ -112,6 +112,21 @@ test "large semantic searches round-trip as a JSONL file reference" {
 }
 
 ///|
+test "Office selections preserve materialized JSON in the prompt envelope" {
+  let materialized = "{\"schema\":\"office.selection.materialized.v1\",\"selection\":{\"file\":\"report.docx\",\"text\":\"A < B & C\\nnext\"}}"
+  let mention = @mention_context.OfficeSelection(materialized~)
+  let encoded = @mention_context.encode([mention], "Explain this")
+  assert_true(encoded.contains("<office_selection>\n"))
+  assert_true(encoded.contains("office.selection.materialized.v1"))
+  guard @mention_context.parse(encoded) is Some(parsed) else {
+    fail("Office selection should round-trip")
+  }
+  @debug.assert_eq(parsed.mentions, [mention])
+  assert_eq(@mention_context.label(mention), "Office selection")
+  assert_true(@mention_context.target(mention) is None)
+}
+
+///|
 test "encode of chips alone omits the task block" {
   inspect(
     @mention_context.encode([Skill(name="review-pr")], "  "),

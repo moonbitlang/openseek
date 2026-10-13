@@ -4,7 +4,7 @@
 /// conversation that must remain on screen when that reply arrives.
 priv struct FileOpenContext {
   owner : @interop.ConversationKey
-  generation : Int
+  generation : Int32
   range : @common.Range?
   annotation : String?
   return_to : @interop.ConversationKey?
@@ -13,7 +13,7 @@ priv struct FileOpenContext {
 ///|
 fn FileOpenContext::new(
   owner : @interop.ConversationKey,
-  generation : Int,
+  generation : Int32,
   range? : @common.Range,
   annotation? : String,
   return_to? : @interop.ConversationKey,
@@ -137,7 +137,7 @@ fn show_editor_at(
   model : Model,
   path : String,
   range : @common.Range?,
-  file_link_generation~ : Int,
+  file_link_generation~ : Int32,
   annotation? : String,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)

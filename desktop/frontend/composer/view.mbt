@@ -13,7 +13,7 @@ priv struct ActionButton {
 
 ///|
 fn ActionButton::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ActionButton,
 ) -> @html.Html {
   ignore(locale)
@@ -70,9 +70,10 @@ pub(all) struct ModelSelect {
 
 ///|
 fn ModelSelect::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ModelSelect,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
@@ -84,7 +85,7 @@ fn ModelSelect::render(
     open: self.open,
     toggle: action_emit(ModelMenuToggled(identity~)),
     dismiss: action_emit(SelectMenuDismissed(identity~)),
-    change: action_emit.map(value => ModelSelected(identity~, value~)),
+    change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
     presentation: Composer("✦", false),
@@ -106,7 +107,7 @@ pub(all) struct ReasoningSelect {
 
 ///|
 fn ReasoningSelect::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ReasoningSelect,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -170,7 +171,7 @@ pub(all) struct WorktreeControl {
 /// keeps the selected mode visible while its first operation is in flight,
 /// but turns it into a statement so a click cannot disagree with that work.
 fn WorktreeControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -217,13 +218,13 @@ pub(all) struct MissingWorktreeNotice {
 
 ///|
 fn MissingWorktreeNotice::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MissingWorktreeNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  @html.div(class="composer-notice", [
+  @html.div(class="composer-context-row composer-notice error", [
     @html.span(
       class="composer-notice-text",
       dynamic_text(locale, DMissingWorktree(self.name.to_string())),
@@ -254,7 +255,7 @@ fn MissingWorktreeNotice::render(
 /// identity-scoped decision, so arbitrary HTML and commands never cross the
 /// composer boundary.
 fn ApprovalNotice::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ApprovalNotice,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -293,22 +294,24 @@ fn ApprovalNotice::render(
     ],
   )
   if self.body is Some(body) {
-    @html.div(
-      class="composer-notice composer-approval composer-approval-full",
+    @html.details(
+      class="composer-context-row composer-approval composer-context-disclosure",
       [
-        question,
+        @html.summary(class="composer-context-summary", question),
         // Never truncate the exact program whose one-shot permission is being
         // decided. The shared syntax renderer tokenizes it exactly as its later
         // transcript representation, but without that card's line numbers:
         // there are no diagnostics to match yet, and gutter chrome is noise in
         // a permission prompt.
-        @html.pre(class="composer-approval-body", [
-          @syntax_html.moonbit_source_code(body),
+        @html.div(class="composer-context-detail", [
+          @html.pre(class="composer-approval-body", [
+            @syntax_html.moonbit_source_code(body),
+          ]),
         ]),
       ],
     )
   } else {
-    @html.div(class="composer-notice composer-approval", [question])
+    @html.div(class="composer-context-row composer-approval", [question])
   }
 }
 
@@ -318,7 +321,7 @@ fn ApprovalNotice::render(
 /// stable context column. It is public so callers and tests can render the
 /// typed component without reaching through the stateful composer shell.
 pub fn ContextComponent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ContextComponent,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -329,14 +332,15 @@ pub fn ContextComponent::render(
       match device_name {
         Some(name) =>
           @html.div(
-            class="composer-banner",
+            class="composer-context-row composer-banner",
             dynamic_text(locale, DReconnecting(name.to_string())),
           )
-        None => @html.div(class="composer-banner hidden", "")
+        None =>
+          @html.div(class="composer-context-row composer-banner hidden", "")
       }
     SubrunDock(lanes~) => @subrun.dock(lanes)
     ApiSetupNotice(text~) =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", text),
         @html.button(
           class="composer-notice-btn",
@@ -348,9 +352,16 @@ pub fn ContextComponent::render(
       ])
     ApprovalRequest(approval) => approval.render(locale~, identity, action_emit)
     CodexRequests(requests~) => {
-      let rendered : Array[@html.Html] = []
+      // A resolved sibling must not replace a surviving request's focused
+      // control. The response token identifies one request lifetime, even
+      // when app-server later reuses its JSON-RPC request id.
+      let rendered : Map[String, @html.Html] = Map([])
       for request in requests {
-        rendered.push(request.render(locale~, identity, action_emit))
+        rendered[request.request_key] = request.render(
+          locale~,
+          identity,
+          action_emit,
+        )
       }
       @html.div(class="codex-pending", rendered)
     }
@@ -358,16 +369,20 @@ pub fn ContextComponent::render(
       let rows : Array[@html.Html] = []
       for shown in items {
         rows.push(
-          @html.div(class="pending-steer-row", title=shown, [
-            @html.span(class="pending-steer-icon", "⤷"),
-            @html.span(class="pending-steer-text", shown),
-            @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
-          ]),
+          @html.div(
+            class="composer-context-row pending-steer-row",
+            title=shown,
+            [
+              @html.span(class="pending-steer-icon", "⤷"),
+              @html.span(class="pending-steer-text", shown),
+              @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
+            ],
+          ),
         )
       }
       @html.div(class="pending-steers", rows)
     }
-    QueuedInputPanel(items~) => {
+    QueuedInputPanel(items~, enabled~) => {
       let rows : Array[@html.Html] = []
       for item in items {
         let trailing : Array[@html.Html] = []
@@ -393,6 +408,7 @@ pub fn ContextComponent::render(
                   @html.button(
                     class="queued-input-action",
                     type_="button",
+                    disabled=!enabled,
                     title=ui(locale, SteerLabel),
                     attrs=@html.Attrs::build().aria_label(
                       ui(locale, SteerLabel),
@@ -409,6 +425,7 @@ pub fn ContextComponent::render(
                       "queued-input-action"
                     },
                     type_="button",
+                    disabled=!enabled,
                     title=if editing {
                       ui(locale, EditingLabel)
                     } else {
@@ -429,6 +446,7 @@ pub fn ContextComponent::render(
                   @html.button(
                     class="queued-input-action danger",
                     type_="button",
+                    disabled=!enabled,
                     title=ui(locale, DeleteLabel),
                     attrs=@html.Attrs::build().aria_label(
                       ui(locale, DeleteLabel),
@@ -445,7 +463,7 @@ pub fn ContextComponent::render(
         }
         rows.push(
           @html.div(
-            class="queued-input-row",
+            class="composer-context-row queued-input-row",
             title=item.content,
             [
               @html.span(class="queued-input-icon", "↳"),
@@ -461,30 +479,37 @@ pub fn ContextComponent::render(
       @html.div(
         class="shell-commands-running",
         commands.mapi((index, command) => {
-          @html.div(class="composer-notice", title=command, [
-            @html.span(
-              class="composer-notice-icon",
-              @icons.icon(@icons.icon_terminal),
-            ),
-            @html.span(class="composer-notice-text", [
-              @html.code(class="shell-command-text", "$ \{command}"),
-              @html.text(" "),
-              @html.span(class="shell-command-state", ui(locale, ShellRunning)),
-            ]),
-            // The command runs in a terminal tab that stays out of the way
-            // until asked for: this is where it is watched and interrupted.
-            @html.button(
-              class="composer-notice-btn",
-              type_="button",
-              title=ui(locale, ShellShowTerminalHint),
-              on_click=action_emit(ShellTerminalRequested(identity~, index~)),
-              ui(locale, ShellShowTerminal),
-            ),
-          ])
+          @html.div(
+            class="composer-context-row composer-notice",
+            title=command,
+            [
+              @html.span(
+                class="composer-notice-icon",
+                @icons.icon(@icons.icon_terminal),
+              ),
+              @html.span(class="composer-notice-text", [
+                @html.code(class="shell-command-text", "$ \{command}"),
+                @html.text(" "),
+                @html.span(
+                  class="shell-command-state",
+                  ui(locale, ShellRunning),
+                ),
+              ]),
+              // The command runs in a terminal tab that stays out of the way
+              // until asked for: this is where it is watched and interrupted.
+              @html.button(
+                class="composer-notice-btn",
+                type_="button",
+                title=ui(locale, ShellShowTerminalHint),
+                on_click=action_emit(ShellTerminalRequested(identity~, index~)),
+                ui(locale, ShellShowTerminal),
+              ),
+            ],
+          )
         }),
       )
     CompactionNotice(queued~) =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_fold)),
         @html.span(
           class="composer-notice-text",
@@ -496,7 +521,7 @@ pub fn ContextComponent::render(
         ),
       ])
     WorktreePlacementNotice =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),
         @html.button(
           class="composer-notice-btn",
@@ -513,7 +538,7 @@ pub fn ContextComponent::render(
 
 ///|
 fn @protocol.CodexPermissionMode::short_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -525,7 +550,7 @@ fn @protocol.CodexPermissionMode::short_label(
 
 ///|
 fn @protocol.CodexPermissionMode::title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -537,7 +562,7 @@ fn @protocol.CodexPermissionMode::title(
 
 ///|
 fn @protocol.CodexPermissionMode::description(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
@@ -560,7 +585,7 @@ fn @protocol.CodexPermissionMode::glyph(
 
 ///|
 fn @protocol.CodexPermissionMode::render_option(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : @protocol.CodexPermissionMode,
   selected : @protocol.CodexPermissionMode,
   identity : Identity,
@@ -599,7 +624,7 @@ fn @protocol.CodexPermissionMode::render_option(
 
 ///|
 fn PermissionControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : PermissionControl,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
@@ -671,14 +696,16 @@ fn PermissionControl::render(
 
 ///|
 fn StatusComponent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : StatusComponent,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
   match self {
-    ModelStatus(control) => control.render(locale~, identity, action_emit)
+    ModelStatus(control) =>
+      control.render(locale~, identity, draft, action_emit)
     ReasoningStatus(control) => control.render(locale~, identity, action_emit)
     PermissionStatus(control) => control.render(locale~, identity, action_emit)
     GitStatus(control) =>
@@ -704,7 +731,7 @@ pub(all) struct WorktreeArchiveDialog {
 
 ///|
 pub fn WorktreeArchiveDialog::message(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeArchiveDialog,
 ) -> String {
   let refusal = self.refusal
@@ -723,7 +750,7 @@ pub fn WorktreeArchiveDialog::message(
 
 ///|
 pub fn WorktreeArchiveDialog::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : WorktreeArchiveDialog,
 ) -> @html.Html {
   ignore(locale)
@@ -766,8 +793,9 @@ priv struct MentionChip {
 
 ///|
 fn MentionChip::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : MentionChip,
+  disabled~ : Bool,
 ) -> @html.Html {
   ignore(locale)
   let glyph = @html.span(class="mention-glyph", self.glyph)
@@ -789,6 +817,7 @@ fn MentionChip::render(
       @html.button(
         class="mention-remove",
         type_="button",
+        disabled~,
         title=ui(locale, RemoveLabel),
         on_click=command,
         content,
@@ -804,6 +833,7 @@ fn MentionChip::render(
 /// callers cannot construct it or pass rendered fragments through it.
 priv struct View {
   images : @cmd.Emit[@image_input.Event]?
+  allow_images : Bool
   before_inner : Array[@html.Html]
   mentions : Array[@html.Html]
   value : String
@@ -823,7 +853,7 @@ priv struct View {
 }
 
 ///|
-fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
+fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
   ignore(locale)
   let actions : Array[@html.Html] = []
   for action in self.actions {
@@ -909,8 +939,12 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
   let attrs = @html.Attrs::build().data_set("focus-owner", "")
   let attrs = if self.images is Some(emit) {
     attrs
-    .on_paste(event => @image_input.pasted(locale~, event, emit))
-    .on_drop(event => @image_input.dropped(locale~, event, emit))
+    .on_paste(event => {
+      @image_input.pasted(locale~, allow_images=self.allow_images, event, emit)
+    })
+    .on_drop(event => {
+      @image_input.dropped(locale~, allow_images=self.allow_images, event, emit)
+    })
     .on_dragover(event => @image_input.dragged(event))
   } else {
     attrs
@@ -925,18 +959,12 @@ fn View::render(locale? : @i18n.Locale = English, self : View) -> @html.Html {
 /// The open turn's heartbeat, docked directly above the textarea: what it is
 /// doing, how long it has been at it, and what it has spent.
 ///
-/// A model call is silent for as long as it thinks — no delta, no tool
-/// result, no commit — so without this the window is indistinguishable from a
-/// hung one. Deliberately lighter than a `composer-notice`: this is the only
-/// row here that repaints every second, and a bordered card doing that reads
-/// as an alarm rather than a heartbeat.
-///
 /// Always a slot, empty when idle and collapsed by `.composer-running:empty`,
 /// the same shape as the plan panel's and for the same reason: the context
 /// column is diffed by position, so a row that came and went would shift the
 /// goal row below it on every run start and end.
 fn running_row(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   run : RunHeartbeat?,
   clock_ms~ : Double,
 ) -> @html.Html {
@@ -944,10 +972,17 @@ fn running_row(
   guard run is Some(run) else {
     return @html.div(class="composer-running", ([] : Array[@html.Html]))
   }
-  @html.div(class="composer-running", [
-    @html.span(class="composer-running-mark", ""),
-    @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
-  ])
+  @html.div(
+    class=if run.stage is Retrying(..) {
+      "composer-context-row composer-running error"
+    } else {
+      "composer-running"
+    },
+    [
+      @html.span(class="composer-running-mark", ""),
+      @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
+    ],
+  )
 }
 
 ///|
@@ -956,7 +991,7 @@ fn running_row(
 /// turn before its first usage report has no count — so both absent leaves
 /// the bare stage, which is still the one thing worth saying.
 fn RunHeartbeat::label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : RunHeartbeat,
   clock_ms~ : Double,
 ) -> String {
@@ -1050,7 +1085,7 @@ priv struct CompletionRow {
 /// empty/loading state such as "Searching..." or ui(locale, NoFiles).
 priv struct CompletionView {
   rows : Array[CompletionRow]
-  selected : Int
+  selected : Int32
   hint : String
   empty : String
 }
@@ -1059,9 +1094,9 @@ priv struct CompletionView {
 /// Render one completion popup. A row uses `mousedown` so choosing it keeps
 /// focus in the textarea while the owning source updates its draft.
 fn CompletionView::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CompletionView,
-  pick : (Int) -> @cmd.Cmd,
+  pick : (Int32) -> @cmd.Cmd,
 ) -> @html.Html {
   ignore(locale)
   let rows : Array[@html.Html] = []
@@ -1100,9 +1135,9 @@ fn CompletionView::render(
 priv struct KeyboardActions {
   menu_open : Bool
   prediction : @cmd.Cmd?
-  navigate : (Int) -> @cmd.Cmd
+  navigate : (Int32) -> @cmd.Cmd
   // Present while the arrow keys may recall an earlier prompt.
-  history : ((Int) -> @cmd.Cmd)?
+  history : ((Int32) -> @cmd.Cmd)?
   accept : @cmd.Cmd
   dismiss : @cmd.Cmd
   submit : @cmd.Cmd

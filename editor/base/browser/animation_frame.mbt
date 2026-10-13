@@ -11,8 +11,8 @@
 ///|
 priv struct AnimationFrameQueueItem {
   callback : () -> Unit
-  priority : Int
-  sequence : Int
+  priority : Int32
+  sequence : Int32
   mut canceled : Bool
 }
 
@@ -35,7 +35,7 @@ priv struct AnimationFrameCoordinator {
   mut current_queue : Array[AnimationFrameQueueItem]
   mut native_frame_requested : Bool
   mut in_frame_runner : Bool
-  mut next_sequence : Int
+  mut next_sequence : Int32
 }
 
 ///|
@@ -56,7 +56,7 @@ fn AnimationFrameCoordinator::AnimationFrameCoordinator(
 fn AnimationFrameCoordinator::new_item(
   self : AnimationFrameCoordinator,
   callback : () -> Unit,
-  priority : Int,
+  priority : Int32,
 ) -> AnimationFrameQueueItem {
   let item = {
     callback,
@@ -84,7 +84,7 @@ fn AnimationFrameCoordinator::schedule_next(
 fn AnimationFrameCoordinator::schedule_at_next_animation_frame(
   self : AnimationFrameCoordinator,
   callback : () -> Unit,
-  priority : Int,
+  priority : Int32,
 ) -> @base_common.Disposable {
   let item = self.new_item(callback, priority)
   self.schedule_next(item)
@@ -95,7 +95,7 @@ fn AnimationFrameCoordinator::schedule_at_next_animation_frame(
 fn AnimationFrameCoordinator::run_at_this_or_schedule_at_next_animation_frame(
   self : AnimationFrameCoordinator,
   callback : () -> Unit,
-  priority : Int,
+  priority : Int32,
 ) -> @base_common.Disposable {
   let item = self.new_item(callback, priority)
   if self.in_frame_runner {
@@ -147,7 +147,7 @@ let realm_animation_frame_coordinator : AnimationFrameCoordinator = AnimationFra
 /// at equal priority, and can be canceled through the returned handle.
 pub fn schedule_at_next_animation_frame(
   callback : () -> Unit,
-  priority? : Int = 0,
+  priority~ : Int32 = 0,
 ) -> @base_common.Disposable {
   realm_animation_frame_coordinator.schedule_at_next_animation_frame(
     callback, priority,
@@ -160,7 +160,7 @@ pub fn schedule_at_next_animation_frame(
 /// current-drain work participates in the next descending-priority selection.
 pub fn run_at_this_or_schedule_at_next_animation_frame(
   callback : () -> Unit,
-  priority? : Int = 0,
+  priority~ : Int32 = 0,
 ) -> @base_common.Disposable {
   realm_animation_frame_coordinator.run_at_this_or_schedule_at_next_animation_frame(
     callback, priority,

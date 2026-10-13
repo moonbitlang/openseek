@@ -123,3 +123,41 @@ async test "a registry without the marker still receives the default workspace" 
   assert_eq(registered[1], attached)
   assert_true(@workspaces.initialize() is None)
 }
+
+///|
+/// The process-wide mutex orders one host's own requests; another host
+/// process reaches the same file. A mutation must wait for that host's
+/// change and read the registry only afterwards, or its write-back would
+/// erase the entry the other host just committed. The file lock belongs to
+/// the open file description, so holding it here stands in for that host.
+#cfg(not(platform="windows"))
+async test "an attach waits for another host's change and keeps its entry" {
+  registry_env_test_lock.acquire()
+  defer registry_env_test_lock.release()
+  let dir = @fs.tmpdir(prefix="openseek-registry-two-hosts-")
+  defer @fs.rmdir(dir, recursive=true)
+  let root : @pathx.Path = Path(dir)
+  let previous_home = @sys.get_env_var("HOME")
+  @sys.set_env_var("HOME", root.join("home").to_string())
+  defer restore_env("HOME", previous_home)
+  let registry = root.join("home/.openseek/workspaces.json")
+  let theirs = root.join("theirs")
+  let ours = root.join("ours")
+  @fsx.ensure_dir(theirs)
+  @fsx.ensure_dir(ours)
+  guard ours.to_absolute() is Some(ours) else { fail("tmpdir is not absolute") }
+  let held = @fsx.FileLock::acquire(registry)
+  @async.with_task_group(group => {
+    group.spawn_bg(() => @workspaces.register_task_directory(ours))
+    // Long enough for the attach to reach the lock and block on it.
+    @async.sleep(100)
+    @fsx.write_text_atomic(
+      registry,
+      ({ "workspaces": [theirs.to_string()], "initialized": true } : Json).stringify(),
+    )
+    held.release()
+  })
+  assert_eq(@workspaces.registered().map(path => path.to_path().basename()), [
+    "theirs", "ours",
+  ])
+}

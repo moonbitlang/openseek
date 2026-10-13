@@ -55,7 +55,7 @@ fn success(request : Json, result : Json) -> Json {
 
 ///|
 /// A JSON-RPC error reply echoing the request's id.
-fn failure(request : Json, code : Int, message : String) -> Json {
+fn failure(request : Json, code : Int32, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id_of(request),
@@ -209,7 +209,7 @@ async test "list_tools returns tools with pass-through schemas" {
 ///|
 async test "list_tools follows nextCursor pagination" {
   @async.with_task_group(group => {
-    let mut calls : Int = 0
+    let mut calls : Int32 = 0
     let reply = answers("tools/list", request => {
       calls += 1
       if calls == 1 {

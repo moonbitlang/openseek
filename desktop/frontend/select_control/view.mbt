@@ -105,7 +105,7 @@ fn Control::root_id(self : Control) -> String {
 }
 
 ///|
-fn Control::option_id(self : Control, index : Int) -> String {
+fn Control::option_id(self : Control, index : Int32) -> String {
   "\{self.id}-option-\{index}"
 }
 
@@ -114,7 +114,7 @@ fn Control::option_id(self : Control, index : Int) -> String {
 /// when opening or closing changes which option nodes exist.
 fn Control::focus(
   self : Control,
-  option : Int?,
+  option : Int32?,
   after_render : Bool,
 ) -> @cmd.Cmd {
   let id = if option is Some(index) { self.option_id(index) } else { self.id }
@@ -183,8 +183,8 @@ fn Control::dismiss_on_blur(
 ///|
 fn Control::trigger_attrs(
   self : Control,
-  selected_index : Int,
-  option_count : Int,
+  selected_index : Int32,
+  option_count : Int32,
 ) -> @html.Attrs {
   @html.Attrs::build()
   .id(self.id)
@@ -221,8 +221,8 @@ fn Control::trigger_attrs(
 ///|
 fn Control::option_attrs(
   self : Control,
-  index : Int,
-  option_count : Int,
+  index : Int32,
+  option_count : Int32,
   selected : Bool,
 ) -> @html.Attrs {
   @html.Attrs::build()

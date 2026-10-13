@@ -47,8 +47,8 @@ priv struct ContextRequest {
 ///|
 priv struct ContextOpen {
   request : ContextRequest
-  x : Int
-  y : Int
+  x : Int32
+  y : Int32
   restore_focus_id : String?
 } derive(Eq)
 
@@ -59,7 +59,7 @@ priv struct ContextState {
 
 ///|
 priv enum ContextMsg {
-  Requested(ContextRequest, Int, Int, String?)
+  Requested(ContextRequest, Int32, Int32, String?)
   CloseContext
 }
 
@@ -77,8 +77,8 @@ fn event_element(event : @dom.Event) -> @dom.Element? {
 ///|
 fn selected_at(
   element : @dom.Element,
-  x : Int,
-  y : Int,
+  x : Int32,
+  y : Int32,
   keyboard : Bool,
 ) -> String? {
   guard browser_selection().to_option() is Some(selection) &&
@@ -113,7 +113,7 @@ fn selected_at(
 }
 
 ///|
-fn keyboard_anchor(element : @dom.Element) -> (Int, Int) {
+fn keyboard_anchor(element : @dom.Element) -> (Int32, Int32) {
   let rect = if browser_selection().to_option() is Some(selection) &&
     selection.count() > 0 {
     let rect = selection.range(0).bounds()
@@ -167,10 +167,10 @@ fn discard_temporary_focus(element : @dom.Element?) -> Unit {
 ///|
 fn install_context_menu_listener(
   close : () -> Unit,
-  open : (ContextRequest, String?, Int, Int) -> Unit,
+  open : (ContextRequest, String?, Int32, Int32) -> Unit,
 ) -> () -> Unit {
   let document = @dom.document()
-  let mut remembered_selection : (Int, Int, String?)? = None
+  let mut remembered_selection : (Int32, Int32, String?)? = None
   let mut temporary_focus : @dom.Element? = None
   let mut next_focus_id = 0
   let remember_focus = () => {
@@ -323,7 +323,7 @@ fn copy_item(label : String, title : String, text : String) -> Entry {
 
 ///|
 fn reveal_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   platform : ClientPlatform,
 ) -> String? {
   match platform {
@@ -336,7 +336,7 @@ fn reveal_label(
 
 ///|
 fn context_definition(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : ContextInput,
   request : ContextRequest,
   actions : ContextActions,

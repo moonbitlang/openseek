@@ -52,7 +52,7 @@ fn valid_slug(name : String) -> Bool {
   if name.is_empty() || name.length() > 64 {
     return false
   }
-  name.all(ch => ch is ('a'..='z' | '0'..='9' | '-'))
+  name.all(ch => ch is ('a'..<='z' | '0'..<='9' | '-'))
 }
 
 ///|
@@ -65,8 +65,8 @@ fn slugify(name : String) -> String {
   let mut wrote_alnum = false
   let mut pending_dash = false
   for ch in name {
-    let lowered = if ch is ('A'..='Z') { ch.to_ascii_lowercase() } else { ch }
-    if lowered is ('a'..='z' | '0'..='9') {
+    let lowered = if ch is ('A'..<='Z') { ch.to_ascii_lowercase() } else { ch }
+    if lowered is ('a'..<='z' | '0'..<='9') {
       if pending_dash && wrote_alnum {
         builder.write_char('-')
       }
@@ -155,8 +155,8 @@ pub async fn install_skill(
   module_name~ : String,
   version~ : String,
   package_path~ : String,
-  registry? : String = DefaultRegistry,
-  library_dir? : @pathx.Path = library_dir_from_env(),
+  registry~ : String = DefaultRegistry,
+  library_dir~ : @pathx.Path = library_dir_from_env(),
   on_committed? : () -> Unit,
 ) -> InstalledSkill {
   let entry = entry_path(module_name, version, package_path)
@@ -220,7 +220,7 @@ pub async fn install_skill(
 /// library is an empty one. Entries we installed carry their registry
 /// source; everything else is the user's own.
 pub async fn installed_skills(
-  library_dir? : @pathx.Path = library_dir_from_env(),
+  library_dir~ : @pathx.Path = library_dir_from_env(),
 ) -> Array[InstalledSkill] {
   library_lock.acquire()
   defer library_lock.release()
@@ -264,7 +264,7 @@ pub async fn installed_skills(
 /// Read an installed skill without exposing the library root to the frontend.
 pub async fn read_skill_content(
   id : String,
-  library_dir? : @pathx.Path = library_dir_from_env(),
+  library_dir~ : @pathx.Path = library_dir_from_env(),
 ) -> String {
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
@@ -292,7 +292,7 @@ pub async fn read_skill_content(
 /// before any best-effort physical deletion.
 pub async fn uninstall_skill(
   id : String,
-  library_dir? : @pathx.Path = library_dir_from_env(),
+  library_dir~ : @pathx.Path = library_dir_from_env(),
   on_committed? : () -> Unit,
 ) -> Unit {
   library_lock.acquire()

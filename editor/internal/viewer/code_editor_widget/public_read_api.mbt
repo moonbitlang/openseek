@@ -15,7 +15,7 @@
 /// Monaco's `Number.MAX_SAFE_INTEGER` column for `getBottomForLineNumber`: a
 /// column past any line end, clamped down to the line's max column by
 /// `validate_position`.
-let max_safe_column : Int = 2147483647
+let max_safe_column : Int32 = 2147483647
 
 ///|
 /// Full document text, Monaco's `CodeEditorWidget.getValue` (`cew:472`). No
@@ -104,8 +104,8 @@ fn CodeEditorWidget::get_visible_ranges_plus_viewport_above_below(
 /// (`cew:593`). No model → `-1`.
 pub fn CodeEditorWidget::get_top_for_line_number(
   self : CodeEditorWidget,
-  line_number : Int,
-  include_view_zones? : Bool = false,
+  line_number : Int32,
+  include_view_zones~ : Bool = false,
 ) -> Double {
   self.get_vertical_offset_for_position(line_number, 1, include_view_zones~)
 }
@@ -140,7 +140,7 @@ pub fn CodeEditorWidget::get_vertical_reveal_bounds(
 fn CodeEditorWidget::get_statusbar_column(
   self : CodeEditorWidget,
   position : @base_common.Position,
-) -> Int {
+) -> Int32 {
   guard self.get_model() is Some(model) else { return position.column }
   let position = model.validate_position(position)
   let tab_size = self.configuration.snapshot().options.tab_size
@@ -240,8 +240,8 @@ pub fn CodeEditorWidget::get_scroll_top(self : CodeEditorWidget) -> Double {
 /// is no model (the no-model sentinel boundary).
 fn CodeEditorWidget::model_to_view_position(
   self : CodeEditorWidget,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> @base_common.Position? {
   guard (self.get_model(), self.get_view_model())
     is (Some(model), Some(view_model)) else {
@@ -261,8 +261,8 @@ fn CodeEditorWidget::model_to_view_position(
 /// No model → `-1`.
 fn CodeEditorWidget::get_vertical_offset_for_position(
   self : CodeEditorWidget,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
   include_view_zones~ : Bool,
 ) -> Double {
   guard self.get_view_model() is Some(view_model) else { return -1.0 }
@@ -282,8 +282,8 @@ fn CodeEditorWidget::get_vertical_offset_for_position(
 /// → `-1`.
 fn CodeEditorWidget::get_vertical_offset_after_position(
   self : CodeEditorWidget,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
   include_view_zones~ : Bool,
 ) -> Double {
   guard self.get_view_model() is Some(view_model) else { return -1.0 }
@@ -330,8 +330,8 @@ pub fn CodeEditorWidget::get_layout_info(
 /// `-1`; line not in the rendered window → `-1`.
 pub fn CodeEditorWidget::get_offset_for_column(
   self : CodeEditorWidget,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Double {
   guard (self.get_model(), self.get_view_model(), self.current_code_view())
     is (Some(model), Some(view_model), Some(view)) else {
@@ -352,7 +352,7 @@ pub fn CodeEditorWidget::get_offset_for_column(
 /// view → `-1`; line not in the rendered window → `-1`.
 pub fn CodeEditorWidget::get_width_of_line(
   self : CodeEditorWidget,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   guard (self.get_model(), self.get_view_model(), self.current_code_view())
     is (Some(model), Some(view_model), Some(view)) else {

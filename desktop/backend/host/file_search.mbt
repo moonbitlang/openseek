@@ -6,13 +6,13 @@
 // without changing the cache/session state machine.
 
 ///|
-const MaxFileSearchResults : Int = 512
+const MaxFileSearchResults : Int32 = 512
 
 ///|
-const FileSearchRankingChunkSize : Int = 512
+const FileSearchRankingChunkSize : Int32 = 512
 
 ///|
-const FileScanCancellationChunkSize : Int = 512
+const FileScanCancellationChunkSize : Int32 = 512
 
 ///|
 priv struct FileIndexSnapshot {
@@ -111,8 +111,8 @@ priv enum FileScanOutcome {
 ///|
 priv struct PendingFileSearch {
   query : String
-  request_generation : Int
-  max_results : Int
+  request_generation : Int32
+  max_results : Int32
   from_cache : Bool
   reply : @async.Queue[FileSearchResponse]
 }
@@ -121,7 +121,7 @@ priv struct PendingFileSearch {
 priv struct FileSearchComputation {
   files : Array[String]
   limit_hit : Bool
-  inspected : Int
+  inspected : Int32
 }
 
 ///|
@@ -134,13 +134,13 @@ priv enum FileRankOutcome {
 priv struct FileSearchCache {
   root_key : String
   snapshot : FileIndexSnapshot?
-  scan_generation : Int
+  scan_generation : Int32
 }
 
 ///|
 priv struct RunningFileScan {
   root_key : String
-  generation : Int
+  generation : Int32
   waiters : Array[PendingFileSearch]
   task : @async.Task[Unit]
 }
@@ -148,9 +148,9 @@ priv struct RunningFileScan {
 ///|
 priv struct RunningFileRank {
   cache_key : String
-  scan_generation : Int
+  scan_generation : Int32
   query_key : String
-  max_results : Int
+  max_results : Int32
   waiters : Array[PendingFileSearch]
   task : @async.Task[Unit]
 }
@@ -162,26 +162,26 @@ priv enum FileSearchRequest {
     root_key~ : String,
     cache_key~ : String,
     query~ : String,
-    max_results~ : Int,
-    request_generation~ : Int,
+    max_results~ : Int32,
+    request_generation~ : Int32,
     reply~ : @async.Queue[FileSearchResponse]
   )
   Cancel(
     cache_key~ : String,
-    request_generation~ : Int,
+    request_generation~ : Int32,
     reply~ : @async.Queue[Unit]
   )
   Clear(cache_key~ : String, reply~ : @async.Queue[Unit])
   ScanFinished(
     cache_key~ : String,
     root_key~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     outcome~ : FileScanOutcome
   )
   RankFinished(
     cache_key~ : String,
-    scan_generation~ : Int,
-    generation~ : Int,
+    scan_generation~ : Int32,
+    generation~ : Int32,
     outcome~ : FileRankOutcome
   )
 }
@@ -210,8 +210,8 @@ async fn FileSearchService::search(
   root : @pathx.Absolute,
   cache_key : String,
   query : String,
-  max_results : Int,
-  request_generation : Int,
+  max_results : Int32,
+  request_generation : Int32,
 ) -> SearchFilesReply {
   let reply : @async.Queue[FileSearchResponse] = Queue(kind=Blocking(1))
   self.requests.put(
@@ -237,7 +237,7 @@ async fn FileSearchService::search(
 async fn FileSearchService::cancel(
   self : FileSearchService,
   cache_key : String,
-  request_generation : Int,
+  request_generation : Int32,
 ) -> Unit {
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.requests.put(Cancel(cache_key~, request_generation~, reply~))
@@ -272,7 +272,7 @@ fn merge_ranked_chunk(
   query : @file_search_score.PathQuery,
   current : Array[String],
   chunk : Array[String],
-  limit : Int,
+  limit : Int32,
 ) -> Array[String] {
   if chunk.is_empty() || limit <= 0 {
     current
@@ -285,7 +285,7 @@ fn merge_ranked_chunk(
 async fn compute_file_search(
   snapshot : FileIndexSnapshot,
   query_text : String,
-  max_results : Int,
+  max_results : Int32,
 ) -> FileSearchComputation {
   let query = @file_search_score.PathQuery(query_text)
   if query.is_empty() {
@@ -329,11 +329,11 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
     let scan_permit : @semaphore.Semaphore = Semaphore(1, initial_value=1)
     let caches : Map[String, FileSearchCache] = Map([])
     let running_scans : Map[String, RunningFileScan] = Map([])
-    let running_ranks : Map[Int, RunningFileRank] = Map([])
+    let running_ranks : Map[Int32, RunningFileRank] = Map([])
     // The bridge exposes cancellation as a second RPC. Remember its exact
     // monotonic request frontier so cancel-before-search reordering remains
     // equivalent to an in-process CancellationToken.
-    let cancelled_through : Map[String, Int] = Map([])
+    let cancelled_through : Map[String, Int32] = Map([])
     let mut next_scan_generation = 0
     let mut next_rank_generation = 0
 
@@ -358,7 +358,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
         )
         return
       }
-      let mut joined : Int? = None
+      let mut joined : Int32? = None
       for generation, running in running_ranks {
         if running.cache_key == cache_key &&
           running.scan_generation == cache.scan_generation &&
@@ -490,7 +490,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             // one query, matching VS Code's preventCancellation cache row.
             running_scans[cache_key] = { ..running, waiters: kept, }
           }
-          let affected : Array[Int] = []
+          let affected : Array[Int32] = []
           for generation, running in running_ranks {
             if running.cache_key == cache_key {
               affected.push(generation)
@@ -526,7 +526,7 @@ async fn FileSearchService::run(self : FileSearchService) -> Unit {
             }
             running_scans.remove(cache_key)
           }
-          let affected : Array[Int] = []
+          let affected : Array[Int32] = []
           for generation, running in running_ranks {
             if running.cache_key == cache_key {
               affected.push(generation)

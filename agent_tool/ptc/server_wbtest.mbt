@@ -3,7 +3,7 @@
 async fn run(
   tools : @agent_tool.Tools,
   program : async (Map[String, String]) -> @agent_tool.ToolAction,
-  on_trace? : (Json) -> Unit = _ => (),
+  on_trace~ : (Json) -> Unit = _ => (),
 ) -> @agent_tool.ToolAction {
   @async.with_task_group(group => {
     let service = Service::start(group, tools)
@@ -23,8 +23,8 @@ async fn run(
 fn leaf(
   name~ : String,
   execute~ : @agent_tool.ToolExecutor,
-  concurrent_safe? : Bool = false,
-  can_request_approval? : Bool = false,
+  concurrent_safe~ : Bool = false,
+  can_request_approval~ : Bool = false,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name~,

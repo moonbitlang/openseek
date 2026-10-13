@@ -11,7 +11,7 @@ pub(all) enum SettingsSnapshot {
   Loaded(
     worktree_mode~ : Bool,
     checkout_submodules~ : Bool,
-    submodule_checkout_timeout_seconds~ : Int
+    submodule_checkout_timeout_seconds~ : Int32
   )
 } derive(Eq)
 
@@ -138,7 +138,7 @@ fn setting_select(
 
 ///|
 fn dialog_contents(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : Input,
   state : Model,
   emit : @cmd.Emit[Msg],

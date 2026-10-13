@@ -13,7 +13,7 @@ enum AnyPsc {
 }
 
 ///|
-fn AnyPsc::get_total_sum(self : AnyPsc) -> Int {
+fn AnyPsc::get_total_sum(self : AnyPsc) -> Int32 {
   match self {
     Linear(p) => p.get_total_sum()
     Constant(c) => c.get_total_sum()
@@ -22,7 +22,7 @@ fn AnyPsc::get_total_sum(self : AnyPsc) -> Int {
 
 ///|
 /// Sum of the first `count` items, matching the upstream wrapped interface.
-fn AnyPsc::get_prefix_sum(self : AnyPsc, count : Int) -> Int {
+fn AnyPsc::get_prefix_sum(self : AnyPsc, count : Int32) -> Int32 {
   match self {
     Linear(p) => if count == 0 { 0 } else { p.get_prefix_sum(count - 1) }
     Constant(c) => c.get_prefix_sum(count)
@@ -32,7 +32,7 @@ fn AnyPsc::get_prefix_sum(self : AnyPsc, count : Int) -> Int {
 ///|
 fn AnyPsc::get_index_of(
   self : AnyPsc,
-  sum : Int,
+  sum : Int32,
 ) -> @view_layout.PrefixSumIndexOfResult {
   match self {
     Linear(p) => p.get_index_of(sum)
@@ -41,7 +41,7 @@ fn AnyPsc::get_index_of(
 }
 
 ///|
-fn AnyPsc::set_value(self : AnyPsc, index : Int, value : Int) -> Unit {
+fn AnyPsc::set_value(self : AnyPsc, index : Int32, value : Int32) -> Unit {
   match self {
     Linear(p) => p.set_value(index, value) |> ignore
     Constant(c) => c.set_value(index, value)
@@ -51,8 +51,8 @@ fn AnyPsc::set_value(self : AnyPsc, index : Int, value : Int) -> Unit {
 ///|
 fn AnyPsc::insert_values(
   self : AnyPsc,
-  insert_index : Int,
-  insert_arr : Array[Int],
+  insert_index : Int32,
+  insert_arr : Array[Int32],
 ) -> Unit {
   match self {
     Linear(p) => p.insert_values(insert_index, insert_arr) |> ignore
@@ -63,8 +63,8 @@ fn AnyPsc::insert_values(
 ///|
 fn AnyPsc::remove_values(
   self : AnyPsc,
-  start : Int,
-  delete_count : Int,
+  start : Int32,
+  delete_count : Int32,
 ) -> Unit {
   match self {
     Linear(p) => p.remove_values(start, delete_count) |> ignore
@@ -73,13 +73,13 @@ fn AnyPsc::remove_values(
 }
 
 ///|
-fn for_both(values : Array[Int], cb : (AnyPsc) -> Unit raise) -> Unit raise {
+fn for_both(values : Array[Int32], cb : (AnyPsc) -> Unit raise) -> Unit raise {
   cb(Linear(PrefixSumComputer(values[:])))
   cb(Constant(ConstantTimePrefixSumComputer(values[:])))
 }
 
 ///|
-fn res(index : Int, remainder : Int) -> @view_layout.PrefixSumIndexOfResult {
+fn res(index : Int32, remainder : Int32) -> @view_layout.PrefixSumIndexOfResult {
   { index, remainder, }
 }
 

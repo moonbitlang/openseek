@@ -1,5 +1,5 @@
-// Opening a file reference: viewer-sized text goes to the editor, PDFs and
-// raster images can use the native browser, and checkout-local directories
+// Opening a file reference: text, Office documents, and PDFs go to the file
+// panel, raster images can use the native browser, and checkout-local directories
 // go to its Files tree, and other existing paths go to the platform opener.
 // Position suffixes apply only to built-in text files.
 
@@ -49,7 +49,7 @@ async fn resolve_host_reference(
 /// "op ext:openseek/host.open_path failed" and hides the reason.
 async fn open_path_op(
   payload : OpenPathPayload,
-  preview_browser? : Bool = false,
+  preview_browser~ : Bool = false,
 ) -> OpenPathReply {
   let reference = match resolve_host_reference(payload) {
     Ok(reference) => reference
@@ -269,7 +269,7 @@ async test "open_path returns workspace editor positions without a system open" 
       { session: "unused", cwd: Some(cwd), path: "report", },
       preview_browser=true,
     ),
-    Browser("\{cwd}/report"),
+    Editor({ path: "\{cwd}/report", line: None, column: None, }),
   )
   @fs.write_file(
     "\{dir}/notes.pdf",

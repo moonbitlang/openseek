@@ -2,7 +2,7 @@
 
 `moonbitlang/openseek/agent_session/store` is the native filesystem persistence
 layer for typed OpenSeek sessions. It wraps `agent_session.Session` with the
-filesystem rules needed to save, resume, list, and compact durable
+filesystem rules needed to save, resume, list, compact, and fork durable
 conversations.
 
 The package is native-only because it uses `moonbitlang/async/fs` for files,
@@ -51,6 +51,11 @@ let session = store.compact(
   content="summary text",
   from_sequence=1,
   to_sequence=20,
+)
+let fork = store.fork(
+  session.id(),
+  @agent_session.SessionId("another-way"),
+  system_prompt="system prompt for another-way",
 )
 ```
 
@@ -269,6 +274,62 @@ async test "compact appends a durable summary" {
         #|]
       ),
     )
+  })
+}
+```
+
+## Fork
+
+`fork` copies a session into a new session that continues on its own. The copy
+is `Session::fork` of the durable log: every turn that has ended, plus what was
+recorded between turns since, and never a turn still in flight — so forking a
+session another process is running is safe. `through` stops the copy at the
+end of an earlier turn instead. The source's display title is copied; its
+prediction, job logs, scratch files, and sub-run sessions are not.
+
+Nothing records which session a fork came from, so what the copied history
+names relative to its session is looked up under the fork. A `review` result
+names its sub-run as `sr-N`, and readers find that transcript at
+`<session>-sr-N`: in a fork the link is dead, and once the fork has run its
+own `sr-N` it leads to that run instead.
+
+The system prompt is not copied. A prompt names the session's scratch
+directory, which is a different directory for the fork, so `system_prompt` is
+required: the caller passes the prompt a new session in the fork's environment
+would get. The fork's first request therefore does not reuse the source's
+cached prefix past the point where the two prompts differ.
+
+The new id must not exist — not even as a directory without a session file,
+which could hold another session's leftover title or scratch files. The write
+happens under the new session's exclusive lock, so a fork never replaces a
+session and two forks to one new id cannot both succeed.
+
+```mbt check
+///|
+async test "fork continues from the last finished turn" {
+  @vfs.with_tmpdir(prefix="openseek-store-readme-fork-", root => {
+    let store = @store.SessionStore(root)
+    let session = @agent_session.Session(
+        SessionId("demo"),
+        system_prompt="system",
+      )
+      .append(User(UserMessage(Content([Text("fix the parser")]))))
+      .append(Terminal(Finished("fixed")))
+      .append(User(UserMessage(Content([Text("now the lexer")]))))
+    store.create(session)
+
+    let fork = store.fork(
+      SessionId("demo"),
+      SessionId("another-way"),
+      system_prompt="system for another-way",
+    )
+    debug_inspect(
+      (fork.id().value(), fork.system_prompt(), fork.last_sequence()),
+      content=(
+        #|("another-way", "system for another-way", 2)
+      ),
+    )
+    debug_inspect(store.load(SessionId("demo")).last_sequence(), content="3")
   })
 }
 ```

@@ -22,7 +22,7 @@ fn[Payload : ToJson, Reply : @json.FromJson] request(
 
 ///|
 fn Model::share(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionExportPayload,
@@ -53,7 +53,7 @@ fn Model::share(
 
 ///|
 fn Model::download(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionExportPayload,
@@ -78,7 +78,7 @@ fn Model::download(
 /// Sign in to the selected OpenSeek server using the existing browser flow.
 /// Returning to Ready requires another explicit Share click before upload.
 fn Model::sign_in(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {

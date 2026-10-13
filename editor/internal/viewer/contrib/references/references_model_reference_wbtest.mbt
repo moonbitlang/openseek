@@ -14,10 +14,10 @@
 ///|
 fn reference_location(
   uri : String,
-  start_line : Int,
-  start_column : Int,
-  end_line : Int,
-  end_column : Int,
+  start_line : Int32,
+  start_column : Int32,
+  end_line : Int32,
+  end_column : Int32,
 ) -> @language.Location {
   {
     is_test: None,

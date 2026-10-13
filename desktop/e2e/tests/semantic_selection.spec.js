@@ -186,7 +186,6 @@ for (const provider of ['OpenSeek new chat', 'OpenSeek session', 'Codex']) {
     const chip = page.locator('.mention-chip .mention-jump');
     await expect(chip).toContainText('1 matches');
     await page.getByTitle('Open src/main.mbt:1', { exact: true }).click();
-    await page.getByRole('button', { name: 'Hide file tree', exact: true }).click();
     await expect(page.locator('.search-results')).toBeHidden();
     await chip.click();
     await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
@@ -283,3 +282,32 @@ for (const clear of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+
+test('a fresh draft cannot switch agents while its semantic snapshot is being written', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.codexModels = codexModels;
+  app.semanticSearchMatches = largeSelection();
+  const materialization = Promise.withResolvers();
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => request.method === method ? materialization.promise : replyFor(request);
+  await app.install();
+  await app.goto();
+  await selectWholePattern(page);
+  const picker = page.getByRole('button', { name: 'Model', exact: true });
+  await expect(picker).toBeEnabled();
+  await picker.click();
+  await expect(page.getByRole('option', { name: 'GPT-5.4 Codex', exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.locator('#task').fill('Inspect the original selection');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(request => request.method === method).length).toBe(1);
+  await expect(picker).toBeDisabled();
+  materialization.resolve({ path, match_count: 101, file_count: 1 });
+  await expect.poll(() => app.requests.find(request => request.method === 'agent.start')?.params.task)
+    .toContain(`<semantic_search_file path="${path}" patterns="1" matches="101">`);
+  await expect(picker).toBeEnabled();
+  expect(app.requests.filter(request => request.method === 'agent.start')).toHaveLength(1);
+  expect(app.requests.filter(request => request.method === 'codex.draft.open')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});

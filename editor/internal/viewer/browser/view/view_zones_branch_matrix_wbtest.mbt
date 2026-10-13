@@ -27,8 +27,8 @@ priv struct ViewZonesBranchFixture {
   view : View
   view_model : @view_model.ViewModel
   model : @model.TextModel
-  configuration : Ref[(Int, Double, Double)]
-  emitted_changes : Ref[Int]
+  configuration : Ref[(Int32, Double, Double)]
+  emitted_changes : Ref[Int32]
   memory : @log.MemoryLogger
 }
 
@@ -36,9 +36,9 @@ priv struct ViewZonesBranchFixture {
 fn view_zones_branch_fixture_from_model(
   model : @model.TextModel,
   options : @view_model.ViewModelOptions,
-  line_height : Int,
+  line_height : Int32,
 ) -> ViewZonesBranchFixture {
-  let configuration : Ref[(Int, Double, Double)] = Ref(
+  let configuration : Ref[(Int32, Double, Double)] = Ref(
     (line_height, 320.0, 40.0),
   )
   let emitted_changes = Ref(0)
@@ -59,7 +59,7 @@ fn view_zones_branch_fixture(
   path : String,
   text : String,
   options : @view_model.ViewModelOptions,
-  line_height : Int,
+  line_height : Int32,
 ) -> ViewZonesBranchFixture {
   view_zones_branch_fixture_from_model(
     view_zones_branch_model(path, text),
@@ -114,7 +114,7 @@ fn ViewZonesBranchFixture::has_whitespace(
 ///|
 fn ViewZonesBranchFixture::add_height_zone(
   self : ViewZonesBranchFixture,
-  ordinal : Int,
+  ordinal : Int32,
   height_in_lines : Double?,
   height_in_px : Double?,
   computed_height : Ref[Double],
@@ -144,9 +144,9 @@ fn ViewZonesBranchFixture::assert_single_callback_report(
 
 ///|
 fn view_zones_branch_callback_step(
-  index : Int,
-  throw_index : Int,
-  calls : Array[Int],
+  index : Int32,
+  throw_index : Int32,
+  calls : Array[Int32],
 ) -> Unit raise ViewZonesBranchCallbackFailure {
   calls.push(index)
   if index == throw_index {
@@ -170,7 +170,13 @@ test "ViewZones maps zero, first, middle, last, and clamped model anchors" {
     20,
   )
   defer fixture.dispose()
-  let line_cases : Array[(Int, Int)] = [(0, 0), (1, 2), (2, 4), (4, 7), (99, 7)]
+  let line_cases : Array[(Int32, Int32)] = [
+    (0, 0),
+    (1, 2),
+    (2, 4),
+    (4, 7),
+    (99, 7),
+  ]
   for index, pair in line_cases {
     let (after_line_number, expected_view_line) = pair
     let id = fixture.add_zone(
@@ -186,7 +192,7 @@ test "ViewZones maps zero, first, middle, last, and clamped model anchors" {
 
   // Absent uses EOL; 1/middle stay on the first wrap; column 5 is the wrap
   // boundary; max column 9 is EOL; a beyond-EOL column validates back to 9.
-  let column_cases : Array[(Int?, Int)] = [
+  let column_cases : Array[(Int32?, Int32)] = [
     (None, 2),
     (Some(1), 1),
     (Some(3), 1),
@@ -219,7 +225,7 @@ test "ViewZones forwards every affinity at wrap and injected-text boundaries" {
     @view_model.ViewModelOptions::soft_wrap(4),
     20,
   )
-  let wrap_cases : Array[(@model.PositionAffinity, Int)] = [
+  let wrap_cases : Array[(@model.PositionAffinity, Int32)] = [
     (None, 2),
     (Left, 1),
     (Right, 2),
@@ -267,7 +273,7 @@ test "ViewZones forwards every affinity at wrap and injected-text boundaries" {
     20,
   )
   defer injected_fixture.dispose()
-  let injected_cases : Array[(@model.PositionAffinity, Int)] = [
+  let injected_cases : Array[(@model.PositionAffinity, Int32)] = [
     (None, 1),
     (Left, 1),
     (Right, 2),
@@ -720,7 +726,7 @@ test "ViewZones preserves raw height callbacks through retained ToInt32" {
   assert_true(not_a_number.val.is_nan())
   assert_true(positive_infinity.val.is_pos_inf())
   assert_true(negative_infinity.val.is_neg_inf())
-  let expected_retained_heights : ReadOnlyArray[Int] = [
+  let expected_retained_heights : ReadOnlyArray[Int32] = [
     3, 30, 20, 0, 0, 7, -7, 0, 0, 0,
   ]
   for i in 0..<ids.length() {
@@ -1284,7 +1290,7 @@ test "ViewZones contains computed-height throws at first middle and last" {
       @view_model.ViewModelOptions::no_wrap(),
       20,
     )
-    let calls : Array[Int] = []
+    let calls : Array[Int32] = []
     fixture.view.change_view_zones(accessor => {
       accessor.add_zone(
         ViewZone(
@@ -1346,7 +1352,7 @@ test "ViewZones contains DOM-top throws at first middle and last" {
     )
     fixture.view_model.view_layout.set_viewport_size(width=300.0, height=200.0)
     |> ignore
-    let calls : Array[Int] = []
+    let calls : Array[Int32] = []
     let first_node = @rdom.document().create_element("div")
     let middle_node = @rdom.document().create_element("div")
     let last_node = @rdom.document().create_element("div")

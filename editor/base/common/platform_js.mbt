@@ -1,6 +1,6 @@
 ///|
 /// Preserve Monaco's Node-first platform classification.
-fn detect_platform_code() -> Int {
+fn detect_platform_code() -> Int32 {
   let mut node : String? = None
   read_node_platform(value => node = Some(value))
   if node is Some(platform) {

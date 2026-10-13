@@ -29,7 +29,7 @@ heights to vertical offsets. With no whitespace, the map is just
 
 ```mbt check
 ///|
-fn layout(line_count : Int) -> @view_layout.ViewLayout {
+fn layout(line_count : Int32) -> @view_layout.ViewLayout {
   ViewLayout(line_height=20, line_count~)
 }
 

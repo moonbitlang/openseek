@@ -25,7 +25,7 @@ fn seconds(value : String, maximum : Int) -> Int raise {
 ///|
 fn optional_text(value : String?) -> Json {
   match value {
-    Some(text) => text.to_json()
+    Some(text) => Json(text)
     None => null
   }
 }

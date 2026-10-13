@@ -91,7 +91,7 @@ pub fn Model::parse(input : String) -> Model raise {
 /// prompt and completion must fit within, used by the agent loop as the
 /// ceiling for its auto-compaction guard. Per-variant match so adding a
 /// variant forces an explicit choice here.
-pub fn Model::context_window(self : Model) -> Int {
+pub fn Model::context_window(self : Model) -> Int32 {
   match self {
     Deepseek(V4Flash | V4Pro) => 1_000_000
     Kimi(K27Code | K27CodeHighSpeed) => 262_144
@@ -201,7 +201,7 @@ pub struct ChatMessage {
 pub fn ChatMessage::ChatMessage(
   role : Role,
   content~ : Array[ContentPart],
-  tool_calls? : Array[ToolCall] = [],
+  tool_calls~ : Array[ToolCall] = [],
   reasoning_content? : String,
 ) -> ChatMessage {
   { role, content: Content(content), tool_calls, reasoning_content, }
@@ -210,11 +210,11 @@ pub fn ChatMessage::ChatMessage(
 ///|
 /// Token usage reported by DeepSeek chat responses.
 pub struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(Debug, ToJson)
 
 ///|

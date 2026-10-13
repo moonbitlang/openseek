@@ -68,7 +68,7 @@ fn new_codex_chat(
 fn generated_session_id() -> String {
   let date_constructor : @js.Value = @js.globalThis.get_with_string("Date")
   let now : @js.Value = date_constructor.new(([] : FixedArray[@js.Value]))
-  fn utc(name : String) -> Int {
+  fn utc(name : String) -> Int32 {
     now.apply_with_string(name, ([] : FixedArray[@js.Value]))
   }
 
@@ -92,6 +92,6 @@ fn random_salt() -> String {
 }
 
 ///|
-fn pad(value : Int, width : Int) -> String {
+fn pad(value : Int32, width : Int32) -> String {
   value.to_string().pad_start(width, '0')
 }

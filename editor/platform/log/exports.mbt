@@ -33,7 +33,7 @@ pub impl Logger for NullLogger with fn flush(_self) {
 
 ///|
 /// Number of flush calls observed by the documented memory sink.
-pub fn MemoryLogger::flush_count(self : MemoryLogger) -> Int {
+pub fn MemoryLogger::flush_count(self : MemoryLogger) -> Int32 {
   self.flush_count.val
 }
 
@@ -93,7 +93,7 @@ pub fn LogService::trace(
   self : LogService,
   category : String,
   message : String,
-  details? : Array[(String, String)] = [],
+  details~ : Array[(String, String)] = [],
 ) -> Unit {
   self.log({ level: Trace, category, message, details, })
 }
@@ -104,7 +104,7 @@ pub fn LogService::debug(
   self : LogService,
   category : String,
   message : String,
-  details? : Array[(String, String)] = [],
+  details~ : Array[(String, String)] = [],
 ) -> Unit {
   self.log({ level: Debug, category, message, details, })
 }
@@ -115,7 +115,7 @@ pub fn LogService::info(
   self : LogService,
   category : String,
   message : String,
-  details? : Array[(String, String)] = [],
+  details~ : Array[(String, String)] = [],
 ) -> Unit {
   self.log({ level: Info, category, message, details, })
 }

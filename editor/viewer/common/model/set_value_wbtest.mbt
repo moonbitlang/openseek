@@ -83,7 +83,7 @@ test "set_value re-seeds visible token state without a full reset event" {
   let model = wb_model("alpha\nbravo")
   let view = model.on_before_attached()
   view.set_visible_lines([{ start_line_number: 1, end_line_number: 2, }], true)
-  let to_lines : Array[Int] = []
+  let to_lines : Array[Int32] = []
   let _sub = model.on_did_change_tokens(e => {
     to_lines.push(e.ranges[0].to_line_number)
   })

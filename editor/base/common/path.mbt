@@ -9,33 +9,33 @@
 /// `char_code_at` returning `-1`, which fails every comparison the same way.
 
 ///|
-let char_uppercase_a : Int = 65 // A
+let char_uppercase_a : Int32 = 65 // A
 
 ///|
-let char_lowercase_a : Int = 97 // a
+let char_lowercase_a : Int32 = 97 // a
 
 ///|
-let char_uppercase_z : Int = 90 // Z
+let char_uppercase_z : Int32 = 90 // Z
 
 ///|
-let char_lowercase_z : Int = 122 // z
+let char_lowercase_z : Int32 = 122 // z
 
 ///|
-let char_dot : Int = 46 // .
+let char_dot : Int32 = 46 // .
 
 ///|
-let char_forward_slash : Int = 47 // /
+let char_forward_slash : Int32 = 47 // /
 
 ///|
-let char_backward_slash : Int = 92 // \
+let char_backward_slash : Int32 = 92 // \
 
 ///|
-let char_colon : Int = 58 // :
+let char_colon : Int32 = 58 // :
 
 ///|
 /// JS `str.charCodeAt(i)`: out-of-range reads yield NaN there and `-1` here;
 /// both fail every equality/range comparison in this file identically.
-fn char_code_at(s : String, index : Int) -> Int {
+fn char_code_at(s : String, index : Int32) -> Int32 {
   if index < 0 || index >= s.length() {
     -1
   } else {
@@ -47,7 +47,7 @@ fn char_code_at(s : String, index : Int) -> Int {
 /// JS `String.prototype.slice` (negative indices count from the end, ranges
 /// clamp). Cut points in this file always land on ASCII separators, so the
 /// surrogate-boundary conversion cannot fail.
-fn js_slice(s : String, start : Int, end? : Int) -> String {
+fn js_slice(s : String, start : Int32, end? : Int32) -> String {
   let len = s.length()
   let mut start = start
   let mut end = end.unwrap_or(len)
@@ -77,13 +77,13 @@ fn js_slice(s : String, start : Int, end? : Int) -> String {
 
 ///|
 /// JS `str.lastIndexOf(needle)` (`-1` when absent).
-fn last_index_of(s : String, needle : String) -> Int {
+fn last_index_of(s : String, needle : String) -> Int32 {
   s.rev_find(needle).unwrap_or(-1)
 }
 
 ///|
 /// JS `str.indexOf(<single char>, from)` (`-1` when absent).
-fn index_of_char(s : String, code : Int, from : Int) -> Int {
+fn index_of_char(s : String, code : Int32, from : Int32) -> Int32 {
   for i in from..<s.length() {
     if s[i].to_int() == code {
       return i
@@ -94,7 +94,7 @@ fn index_of_char(s : String, code : Int, from : Int) -> Int {
 
 ///|
 /// JS `str.split(<single-char sep>)` semantics (keeps empty parts).
-fn js_split_char(s : String, code : Int) -> Array[String] {
+fn js_split_char(s : String, code : Int32) -> Array[String] {
   let parts : Array[String] = []
   let start = for i in 0..<s.length(); start = 0 {
     if s[i].to_int() == code {
@@ -110,19 +110,19 @@ fn js_split_char(s : String, code : Int) -> Array[String] {
 
 ///|
 /// `path.ts:84 isPathSeparator`.
-fn is_path_separator(code : Int) -> Bool {
+fn is_path_separator(code : Int32) -> Bool {
   code == char_forward_slash || code == char_backward_slash
 }
 
 ///|
 /// `path.ts:88 isPosixPathSeparator`.
-fn is_posix_path_separator(code : Int) -> Bool {
+fn is_posix_path_separator(code : Int32) -> Bool {
   code == char_forward_slash
 }
 
 ///|
 /// `path.ts:92 isWindowsDeviceRoot`.
-fn is_windows_device_root(code : Int) -> Bool {
+fn is_windows_device_root(code : Int32) -> Bool {
   (code >= char_uppercase_a && code <= char_uppercase_z) ||
   (code >= char_lowercase_a && code <= char_lowercase_z)
 }
@@ -134,7 +134,7 @@ fn normalize_string(
   path : String,
   allow_above_root : Bool,
   separator : String,
-  is_path_separator_fn : (Int) -> Bool,
+  is_path_separator_fn : (Int32) -> Bool,
 ) -> String {
   let mut res = ""
   let mut last_segment_length = 0
@@ -713,7 +713,7 @@ fn Win32::relative_impl(from : String, to : String) -> String {
 
 ///|
 /// `toSplit.slice(i).join('\\')` helper for `Win32::relative`.
-fn join_range(parts : ArrayView[String], start : Int, sep : String) -> String {
+fn join_range(parts : ArrayView[String], start : Int32, sep : String) -> String {
   let sb = StringBuilder()
   for i in start..<parts.length() {
     if i > start {

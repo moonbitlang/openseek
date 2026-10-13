@@ -38,7 +38,7 @@ fn open_new_tab(
   state : State,
   ctx : Ctx,
   command? : TabCommand,
-  on_screen? : Bool = true,
+  on_screen~ : Bool = true,
 ) -> (@cmd.Cmd, State) {
   guard workspace_key(ctx) is Some(group) else { return (@cmd.none, state) }
   let key = @uuid.mint()
@@ -51,6 +51,7 @@ fn open_new_tab(
     workspace_path: ctx.placement.bind(placement => placement.project_root()),
     status: TabOpening,
     command,
+    input: InputQueue::empty(),
   }
   let state = { ..state, tabs: state.tabs + [tab], }
   let mount = @cmd.batch([
@@ -348,10 +349,12 @@ fn update(
       } else if state.tab_by_key(key) is Some(tab) &&
         tab.workspace.channel() == channel &&
         tab.status is TabOpening {
-        (
-          flush_pending(key, id),
-          state.replace_tab({ ..tab, id: Some(id), status: TabRunning, }),
-        )
+        let (send, tab) = start_input(dispatch, {
+          ..tab,
+          id: Some(id),
+          status: TabRunning,
+        })
+        (@cmd.batch([flush_pending(key, id), send]), state.replace_tab(tab))
       } else {
         // The tab was closed while the open was in flight; the session
         // belongs to nobody, so retire it on the host connection that opened
@@ -375,32 +378,30 @@ fn update(
           )
         None => (@cmd.none, state)
       }
-    UserInput(key~, data~) =>
-      if checkout_ready &&
+    UserInput(key~, data~) | BinaryInput(key~, data~) => {
+      guard checkout_ready &&
         state.tab_by_key(key) is Some(tab) &&
-        tab.status is TabRunning &&
-        tab.id is Some(id) {
-        (send_input(dispatch, tab.workspace.channel(), id, data, false), state)
-      } else {
-        // Typing into an exited/unopened terminal has nowhere to go.
-        (@cmd.none, state)
+        tab.status is (TabOpening | TabRunning) else {
+        return (@cmd.none, state)
       }
-    // The main frontend consumes this message before it reaches the panel
-    // state machine. Keep direct package callers pure and exhaustive.
-    LinkActivated(url=_) => (@cmd.none, state)
-    BinaryInput(key~, data~) =>
-      if checkout_ready &&
-        state.tab_by_key(key) is Some(tab) &&
-        tab.status is TabRunning &&
-        tab.id is Some(id) {
-        (send_input(dispatch, tab.workspace.channel(), id, data, true), state)
+      let (cmd, tab) = queue_input(dispatch, tab, data, msg is BinaryInput(..))
+      let state = if tab.status is TabRunning &&
+        tab.input.failure is None &&
+        !data.is_empty() {
+        {
+          ..state,
+          interrupted_channels: state.interrupted_channels.filter(channel => {
+            channel != tab.workspace.channel()
+          }),
+        }
       } else {
-        // Typing into an exited/unopened terminal has nowhere to go.
-        (@cmd.none, state)
+        state
       }
-    // The main package pops the toast; the panel's own state has nothing to
-    // record for a lost keystroke.
-    InputFailed(message=_) => (@cmd.none, state)
+      (cmd, state.replace_tab(tab))
+    }
+    InputSettled(key~, id~, token~, result~) =>
+      finish_input(dispatch, state, key, id, token, result)
+    LinkActivated(url=_) | InputFailed(message=_) => (@cmd.none, state)
     ViewportResized(key~, cols~, rows~) =>
       if checkout_ready &&
         state.tab_by_key(key) is Some(tab) &&
@@ -519,6 +520,12 @@ fn disconnect(
     @cmd.batch(commands),
     {
       ..state,
+      interrupted_channels: if !retired_keys.is_empty() &&
+        !state.interrupted_channels.contains(channel) {
+        state.interrupted_channels + [channel]
+      } else {
+        state.interrupted_channels
+      },
       tabs: state.tabs.filter(tab => tab.workspace.channel() != channel),
       active: state.active.filter(entry => entry.0.channel() != channel),
       shown,
@@ -534,7 +541,7 @@ fn disconnect(
 /// code for a child that did not exit by itself (killed with the session, or
 /// by a signal the platform does not translate), which is not a code the
 /// command chose.
-fn exit_code_of(code : Int) -> Int? {
+fn exit_code_of(code : Int32) -> Int32? {
   if code < 0 {
     None
   } else {

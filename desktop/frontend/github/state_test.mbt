@@ -30,7 +30,7 @@ fn active_state() -> @github.State {
 }
 
 ///|
-fn reply(number : Int) -> @protocol.GithubListReply {
+fn reply(number : Int32) -> @protocol.GithubListReply {
   {
     repository: "owner/repo",
     repository_url: "https://github.com/owner/repo",

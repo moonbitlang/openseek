@@ -4,7 +4,7 @@
 
 ///|
 /// Notification banners get roughly two lines; anything longer is noise.
-const NotificationBodyMaxChars : Int = 180
+const NotificationBodyMaxChars : Int32 = 180
 
 ///|
 priv struct FinishedSystemNotification {
@@ -43,7 +43,7 @@ fn truncate_notification_body(body : String) -> String {
 /// Cancellation is user-initiated and stays quiet. Other terminal statuses
 /// preserve the titles used by the former direct native notification path.
 fn FinishedSystemNotification::title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> String? {
   match self.status {
@@ -85,7 +85,7 @@ fn FinishedSystemNotification::title(
 ///|
 /// Use the final answer when present and keep the existing fallback otherwise.
 fn FinishedSystemNotification::body(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> String {
   guard self.answer is Some(answer) && !answer.is_blank() else {
@@ -138,7 +138,7 @@ fn show_system_notification(
 /// attention: either a permission decision or a background result the user has
 /// not opened. It is derived from replicated conversation state rather than
 /// incremented by events, so replay and reconnect converge to one value.
-fn Model::notification_badge_count(self : Model) -> Int {
+fn Model::notification_badge_count(self : Model) -> Int32 {
   self.conversations.count_if(conv => {
     conv.device is Local &&
     (
@@ -152,7 +152,7 @@ fn Model::notification_badge_count(self : Model) -> Int {
 /// Set the absolute native application badge count. Ordinary browsers do not
 /// expose the notification extension; unsupported platforms and rejected
 /// commands stay silent because the conversation cards remain authoritative.
-fn set_notification_badge_count(count : Int) -> @cmd.Cmd {
+fn set_notification_badge_count(count : Int32) -> @cmd.Cmd {
   @cmd.custom_cmd(_scheduler => {
     guard @interop.moonbit_bridge_root() is Some(root) &&
       @interop.js_prop(root, "notification") is Some(notification) &&
@@ -194,7 +194,7 @@ fn notification_badge_command(
 
 ///|
 fn FinishedSystemNotification::command(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : FinishedSystemNotification,
 ) -> @cmd.Cmd {
   guard self.title(locale~) is Some(title) else { return @cmd.none }
@@ -203,7 +203,7 @@ fn FinishedSystemNotification::command(
 
 ///|
 fn ApprovalSystemNotification::title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   _self : ApprovalSystemNotification,
 ) -> String {
   match locale {
@@ -217,7 +217,7 @@ fn ApprovalSystemNotification::title(
 
 ///|
 fn ApprovalSystemNotification::body(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ApprovalSystemNotification,
 ) -> String {
   truncate_notification_body(
@@ -234,7 +234,7 @@ fn ApprovalSystemNotification::body(
 
 ///|
 fn ApprovalSystemNotification::command(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : ApprovalSystemNotification,
 ) -> @cmd.Cmd {
   show_system_notification(self.title(locale~), self.body(locale~), self.run_id)

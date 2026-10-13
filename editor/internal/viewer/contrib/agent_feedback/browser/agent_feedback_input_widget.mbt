@@ -57,8 +57,9 @@ struct AgentFeedbackInputWidget {
 
 ///|
 pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   host : AgentFeedbackInputWidgetHost,
+  on_change~ : (String) -> Unit = _ => (),
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
   let root = document.create_element("div")
@@ -103,6 +104,7 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   widget.refresh_labels()
   widget.update_actions_enabled()
   widget.hook_events()
+  textarea.add_event_listener("input", _ => on_change(widget.value()))
   widget
 }
 
@@ -422,3 +424,11 @@ extern "js" fn input_event_targets(
 
 ///|
 extern "js" fn input_checkbox_checked(element : @rdom.Element) -> Bool = "(el) => el.checked"
+
+///|
+/// Recompute intrinsic size when a non-editor host viewport changes.
+pub fn AgentFeedbackInputWidget::resize(
+  self : AgentFeedbackInputWidget,
+) -> Unit {
+  self.auto_size()
+}

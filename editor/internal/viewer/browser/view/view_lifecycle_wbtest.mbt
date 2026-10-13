@@ -73,7 +73,7 @@ extern "js" fn restore_view_lifecycle_test_browser() -> Unit =
   #| }
 
 ///|
-extern "js" fn view_lifecycle_test_clear_count() -> Int =
+extern "js" fn view_lifecycle_test_clear_count() -> Int32 =
   #| () => globalThis.__viewLifecycleClearCount
 
 ///|
@@ -87,7 +87,7 @@ extern "js" fn view_lifecycle_test_has_parent(
 extern "js" fn view_lifecycle_test_child_index(
   parent : @rdom.Element,
   child : @rdom.Element,
-) -> Int =
+) -> Int32 =
   #| (parent, child) => parent.childNodes.indexOf(child)
 
 ///|

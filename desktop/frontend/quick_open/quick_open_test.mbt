@@ -23,7 +23,7 @@ fn workspace_root() -> @common.Uri raise {
 
 ///|
 fn input(
-  open_files? : Array[@pathx.Relative] = [],
+  open_files~ : Array[@pathx.Relative] = [],
   active_file? : @pathx.Relative,
 ) -> @quick_open.Input raise {
   @quick_open.Input(

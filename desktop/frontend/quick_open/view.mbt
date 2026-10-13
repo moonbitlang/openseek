@@ -9,7 +9,7 @@ const InputId : String = "quick-open-input"
 const ListId : String = "quick-open-list"
 
 ///|
-fn row_id(index : Int) -> String {
+fn row_id(index : Int32) -> String {
   "quick-open-row-\{index}"
 }
 
@@ -31,7 +31,7 @@ fn focus_after_render() -> @cmd.Cmd {
 }
 
 ///|
-fn scroll_selection_after_render(index : Int) -> @cmd.Cmd {
+fn scroll_selection_after_render(index : Int32) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
       if @dom.document().get_element_by_id(row_id(index)).to_option()
@@ -47,7 +47,7 @@ fn scroll_selection_after_render(index : Int) -> @cmd.Cmd {
 /// Codicon class for the LSP SymbolKind numeric wire value. Related kinds are
 /// intentionally grouped so the small quick-pick row has a stable visual
 /// vocabulary rather than 26 barely distinguishable glyphs.
-fn symbol_kind_icon_class(kind : Int?) -> String {
+fn symbol_kind_icon_class(kind : Int32?) -> String {
   match kind {
     Some(1) => "codicon-symbol-file"
     Some(2) | Some(3) | Some(4) | Some(19) => "codicon-symbol-namespace"
@@ -82,7 +82,7 @@ fn Item::icon_class(self : Item) -> String {
 }
 
 ///|
-fn key_attrs(emit : @cmd.Emit[Msg], selected : Int?) -> @html.Attrs {
+fn key_attrs(emit : @cmd.Emit[Msg], selected : Int32?) -> @html.Attrs {
   @html.Attrs::build().on_keydown(event => {
     if event.is_composing() {
       return @cmd.none

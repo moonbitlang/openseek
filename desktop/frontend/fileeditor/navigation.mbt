@@ -51,14 +51,14 @@ fn navigation_context_for_file(
 priv struct MoonIdeModelProjection {
   context : NavigationContext
   path : @pathx.Relative
-  line_offset : Int
+  line_offset : Int32
 }
 
 ///|
 fn MoonIdeModelProjection::source_line_number(
   self : MoonIdeModelProjection,
-  model_line_number : Int,
-) -> Int {
+  model_line_number : Int32,
+) -> Int32 {
   model_line_number + self.line_offset
 }
 

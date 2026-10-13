@@ -34,7 +34,7 @@ struct AgentFeedbackService {
   /// stand-in for upstream's `getSessionForFile` scope test (the host knows
   /// which files belong to the session; the viewer only checks membership).
   enabled_resources : Map[String, Bool]
-  mut next_feedback_handle : Int
+  mut next_feedback_handle : Int32
 }
 
 ///|
@@ -226,8 +226,8 @@ fn AgentFeedbackService::add_feedback(
   resource : @base_common.Uri,
   range : @base_common.Range,
   text : String,
-  kind? : @agent_feedback_api.AgentFeedbackKind = UserReview,
-  state? : @agent_feedback_api.AgentFeedbackState = Accepted,
+  kind~ : @agent_feedback_api.AgentFeedbackKind = UserReview,
+  state~ : @agent_feedback_api.AgentFeedbackState = Accepted,
   selected_text? : String,
 ) -> @agent_feedback_api.AgentFeedback {
   let feedback : @agent_feedback_api.AgentFeedback = {

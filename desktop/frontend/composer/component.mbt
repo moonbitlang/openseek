@@ -4,8 +4,8 @@
 
 ///|
 priv enum PendingSubmission {
-  PromptSubmission(sequence_before~ : Int, Draft)
-  GoalSubmission(sequence_before~ : Int, String)
+  PromptSubmission(sequence_before~ : Int32, Draft)
+  GoalSubmission(sequence_before~ : Int32, String)
 } derive(Eq)
 
 ///|
@@ -14,13 +14,13 @@ priv enum PendingSubmission {
 /// match. There is no pending variant: while a remote lookup is wanted, the
 /// declared `Request::searching` subscription IS the in-flight state.
 priv enum FileCompletion {
-  Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int)
+  Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int32)
   RemoteSettled(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
     files~ : Array[@files.Match],
-    epoch~ : Int
+    epoch~ : Int32
   )
 } derive(Eq)
 
@@ -45,7 +45,7 @@ fn FileCompletion::matches(
   owner : @interop.ConversationKey,
   root : @common.Uri?,
   query : String?,
-  epoch : Int,
+  epoch : Int32,
 ) -> Bool {
   match self {
     RemoteSettled(
@@ -70,7 +70,7 @@ fn FileCompletion::matches(
 /// lifetime, so navigation never mirrors keystrokes into the root Model.
 priv struct Entry {
   owner : @interop.ConversationKey
-  action_generation : Int
+  action_generation : Int32
   source : Draft
   draft : Draft
   source_goal : String?
@@ -80,18 +80,21 @@ priv struct Entry {
   file_completion : FileCompletion
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
+  context_generation : Int32
   turn_id : String?
   followup_choice : FollowupChoice?
   changes_open : Bool
   changes_collapsed : Array[String]
   followup_menu_open : Bool
-  image_reads : Int
+  image_reads : Int32
   image_error : String?
+  attachment_requests : Array[AttachmentRequest]
+  attachment_sequence : Int32
+  images_enabled : Bool
   pending_submission : PendingSubmission?
   // How far back in `Input::history` the draft was recalled from (1 is the
   // latest prompt), or `None` while the draft is the user's own.
-  history_back : Int?
+  history_back : Int32?
 } derive(Eq)
 
 ///|
@@ -117,6 +120,9 @@ fn Entry::Entry(input : Input) -> Entry {
     followup_menu_open: false,
     image_reads: 0,
     image_error: None,
+    attachment_requests: [],
+    attachment_sequence: 0,
+    images_enabled: input.presentation.images_enabled,
     pending_submission: None,
     history_back: None,
   }
@@ -199,6 +205,17 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       },
       file_completion: self.file_completion_for(input, draft.task, input.root),
       root: input.root,
+      image_reads: if root_changed {
+        0
+      } else {
+        self.image_reads
+      },
+      attachment_requests: if root_changed {
+        []
+      } else {
+        self.attachment_requests
+      },
+      images_enabled: input.presentation.images_enabled,
       installed_skills: input.installed_skills,
       context_generation: input.context_generation,
       followup_choice: match self.pending_submission {
@@ -278,6 +295,17 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     symbol_cache,
     file_completion,
     root: input.root,
+    image_reads: if root_changed {
+      0
+    } else {
+      self.image_reads
+    },
+    attachment_requests: if root_changed {
+      []
+    } else {
+      self.attachment_requests
+    },
+    images_enabled: input.presentation.images_enabled,
     installed_skills: input.installed_skills,
     context_generation: input.context_generation,
     pending_submission,
@@ -287,7 +315,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
 ///|
 priv struct Model {
   entries : Array[Entry]
-  applied_retirements : Int
+  applied_retirements : Int32
   // The clock the running row's elapsed span is measured against, advanced by
   // `ClockTicked` and only while a turn is open. Component state rather than
   // the application's: a value that changes every second belongs to the one
@@ -354,9 +382,9 @@ fn Model::with_entry(self : Model, entry : Entry) -> Model {
 priv enum Msg {
   PredictionAccepted
   TextChanged(String)
-  CompletionMove(Int)
+  CompletionMove(Int32)
   CompletionAccept
-  CompletionPick(Int)
+  CompletionPick(Int32)
   CompletionDismiss
   EntriesRetired
   CompletionPump
@@ -364,16 +392,25 @@ priv enum Msg {
   // the clock, and the message exists only to advance the span on screen.
   ClockTicked
   // Up (-1) or Down (+1) through the conversation's earlier prompts.
-  HistoryMoved(Int)
+  HistoryMoved(Int32)
   ChangesToggled
   ChangesDismissed(restore_focus~ : Bool)
   ChangesFileToggled(String)
   ChangesRemoved(Array[@mention_context.ReviewChanges])
   ChangesOpened(@mention_context.ReviewChanges)
-  MentionRemoved(Int)
-  ImageRemoved(Int)
-  ImageRead(Identity, @image_input.Event)
-  MentionJumped(Int)
+  MentionRemoved(Int32)
+  ImageRemoved(Int32)
+  ImageRead(Identity, @common.Uri?, @image_input.Event)
+  AttachmentPrepared(
+    Identity,
+    @common.Uri,
+    Int32,
+    Result[@protocol.PrepareAttachmentReply, String]
+  )
+  AttachmentConfirmed(Identity, @common.Uri, Int32)
+  AttachmentCancelled(Identity, @common.Uri, Int32)
+  AttachmentImported(Identity, @common.Uri, Int32, Result[String, String])
+  MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
   QuoteReplied(QuoteReply)
@@ -395,14 +432,14 @@ priv enum Msg {
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int,
+    epoch~ : Int32,
     files~ : Array[@pathx.Relative]
   )
   FilesFailed(
     owner~ : @interop.ConversationKey,
     root~ : @common.Uri,
     query~ : String,
-    epoch~ : Int
+    epoch~ : Int32
   )
 }
 
@@ -413,7 +450,9 @@ priv enum Msg {
 /// command's output is sent as a message, so Enter in shell mode must not get
 /// past a gate the button respects.
 fn Entry::can_send(self : Entry, input : Input) -> Bool {
+  !input.presentation.disabled &&
   self.image_reads == 0 &&
+  self.attachment_requests.is_empty() &&
   (match input.presentation.primary_action {
     Send(available~) => available
     Running(steer_available~, ..) => steer_available
@@ -423,6 +462,7 @@ fn Entry::can_send(self : Entry, input : Input) -> Bool {
 ///|
 fn Entry::holds_draft(self : Entry) -> Bool {
   self.image_reads > 0 ||
+  !self.attachment_requests.is_empty() ||
   !self.draft.is_blank() ||
   (self.goal_draft is Some(goal) && !goal.is_blank())
 }
@@ -553,7 +593,7 @@ fn Entry::settled_file_completion(
   owner : @interop.ConversationKey,
   root : @common.Uri,
   query : String,
-  epoch : Int,
+  epoch : Int32,
   remote_files : Array[@pathx.Relative]?,
 ) -> Entry? {
   guard owner == self.owner &&
@@ -632,13 +672,54 @@ fn Model::update(
       let (next, command) = entry.edited(input, text, action_emit)
       self.commit_entry_change(entry, next, command, action_emit)
     }
-    ImageRead(identity, event) => {
+    ImageRead(identity, root, event) => {
       // A read belongs to the draft that selected it. Navigation may retain
       // that draft in the cache, but cannot redirect its bytes into another.
       let target = self.entries
         .iter()
         .find_first(entry => entry.identity() == identity)
-      guard target is Some(target) else { return (self, @cmd.none) }
+      guard target is Some(target) && target.root == root else {
+        return (self, @cmd.none)
+      }
+      if event is @image_input.DocumentsReady(images~, documents~) {
+        guard target.image_reads > 0 else { return (self, @cmd.none) }
+        let settled = {
+          ..target,
+          image_reads: target.image_reads - 1,
+          draft: {
+            ..target.draft,
+            images: [
+              ..target.draft.images,
+              ..images.map(image => { name: image.0, url: image.1, }),
+            ],
+          },
+        }
+        let sources = documents.map(document => {
+          if identity.owner.channel == @interop.Local &&
+            document.native_path is Some(path) {
+            @protocol.AttachmentPath(path)
+          } else {
+            @protocol.AttachmentBytes(
+              name=document.name,
+              data_base64=document.data_base64,
+            )
+          }
+        })
+        let (next, command) = settled.prepare_attachments(sources, emit)
+        return self.commit_entry_change(target, next, command, action_emit)
+      }
+      if event is @image_input.NativeReady(path) {
+        guard target.image_reads > 0 else { return (self, @cmd.none) }
+        let settled = { ..target, image_reads: target.image_reads - 1, }
+        let (next, command) = settled.prepare_attachments(
+          match path {
+            Some(path) => [@protocol.AttachmentPath(path)]
+            None => []
+          },
+          emit,
+        )
+        return self.commit_entry_change(target, next, command, action_emit)
+      }
       let next = match event {
         @image_input.Reading =>
           { ..target, image_reads: target.image_reads + 1, image_error: None, }
@@ -664,9 +745,122 @@ fn Model::update(
             image_error: Some(message),
           }
         }
+        @image_input.DocumentsReady(..) | @image_input.NativeReady(_) => target
       }
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }
+    AttachmentPrepared(identity, root, id, result) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => {
+          entry.identity() == identity && entry.root == Some(root)
+        })
+        is Some(target) &&
+        target.attachment_requests
+        .iter()
+        .find_first(request => {
+          request.id == id && request.phase is AttachmentPreparing
+        })
+        is Some(_) else {
+        return (self, @cmd.none)
+      }
+      let next = match result {
+        Ok(@protocol.WorkspaceAttachment(path~)) =>
+          target.without_attachment(id).attachment_reference(path)
+        Ok(@protocol.AttachmentUploadRequired(name~)) =>
+          target.with_attachment_phase(id, AttachmentConfirming(name~))
+        Ok(@protocol.AttachmentImage(name~, url~)) =>
+          if target.images_enabled {
+            {
+              ..target.without_attachment(id),
+              draft: {
+                ..target.draft,
+                images: [..target.draft.images, { name, url, }],
+              },
+            }
+          } else {
+            {
+              ..target.without_attachment(id),
+              image_error: Some(
+                "This model does not support images. Choose PDF, DOCX or XLSX documents.",
+              ),
+            }
+          }
+        Err(message) =>
+          { ..target.without_attachment(id), image_error: Some(message), }
+      }
+      self.commit_entry_change(target, next, @cmd.none, action_emit)
+    }
+    AttachmentConfirmed(identity, root, id) => {
+      guard input.identity == identity && input.root == Some(root) else {
+        return (self, @cmd.none)
+      }
+      guard self.entries
+        .iter()
+        .find_first(entry => {
+          entry.identity() == identity && entry.root == Some(root)
+        })
+        is Some(target) &&
+        target.attachment_requests
+        .iter()
+        .find_first(request => {
+          request.id == id && request.phase is AttachmentConfirming(_)
+        })
+        is Some(request) else {
+        return (self, @cmd.none)
+      }
+      self.commit_entry_change(
+        target,
+        target.with_attachment_phase(id, AttachmentImporting),
+        import_attachment(identity, request, emit),
+        action_emit,
+      )
+    }
+    AttachmentCancelled(identity, root, id) => {
+      guard input.identity == identity && input.root == Some(root) else {
+        return (self, @cmd.none)
+      }
+      guard self.entries
+        .iter()
+        .find_first(entry => {
+          entry.identity() == identity && entry.root == Some(root)
+        })
+        is Some(target) &&
+        target.attachment_requests
+        .iter()
+        .any(request => {
+          request.id == id && request.phase is AttachmentConfirming(_)
+        }) else {
+        return (self, @cmd.none)
+      }
+      self.commit_entry_change(
+        target,
+        target.without_attachment(id),
+        @cmd.none,
+        action_emit,
+      )
+    }
+    AttachmentImported(identity, root, id, result) => {
+      guard self.entries
+        .iter()
+        .find_first(entry => {
+          entry.identity() == identity && entry.root == Some(root)
+        })
+        is Some(target) &&
+        target.attachment_requests
+        .iter()
+        .any(request => request.id == id && request.phase is AttachmentImporting) else {
+        return (self, @cmd.none)
+      }
+      let next = match result {
+        Ok(path) => target.without_attachment(id).attachment_reference(path)
+        Err(message) =>
+          { ..target.without_attachment(id), image_error: Some(message), }
+      }
+      self.commit_entry_change(target, next, @cmd.none, action_emit)
+    }
+    ImageRemoved(_) | MentionRemoved(_) | ChangesRemoved(_) if input.presentation.disabled =>
+      (self, @cmd.none)
     ImageRemoved(index) => {
       let next = {
         ..entry,
@@ -884,6 +1078,7 @@ fn Model::update(
         ),
       )
     }
+    SubmitRequested if input.presentation.disabled => (self, @cmd.none)
     SubmitRequested =>
       if input.goal.draft is Some(_) {
         let text = entry.goal_draft.unwrap_or("").trim().to_owned()
@@ -907,7 +1102,9 @@ fn Model::update(
           ),
         )
       } else {
-        guard !entry.draft.is_blank() && entry.image_reads == 0 else {
+        guard !entry.draft.is_blank() &&
+          entry.image_reads == 0 &&
+          entry.attachment_requests.is_empty() else {
           return (self.with_entry(entry), @cmd.none)
         }
         (

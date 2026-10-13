@@ -24,7 +24,7 @@ struct Localization {
 
 ///|
 pub fn Localization::Localization(
-  language? : Language = English,
+  language~ : Language = English,
 ) -> Localization {
   { language, changes: Emitter(), }
 }

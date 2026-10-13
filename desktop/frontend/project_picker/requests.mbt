@@ -16,7 +16,7 @@ fn browse(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
-  generation~ : Int,
+  generation~ : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -56,7 +56,7 @@ fn create_folder(
   channel : @interop.ChannelId,
   parent : String,
   name : String,
-  generation~ : Int,
+  generation~ : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -106,7 +106,7 @@ fn create_folder(
 fn reply_message(
   channel : @interop.ChannelId,
   reply : @protocol.BrowseDirectoryReply,
-  generation~ : Int,
+  generation~ : Int32,
   drives~ : Bool,
 ) -> Msg {
   match reply {

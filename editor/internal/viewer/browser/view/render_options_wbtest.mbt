@@ -3,7 +3,7 @@
 ///|
 fn render_options_viewport(
   content : String,
-  is_basic_ascii? : Bool = true,
+  is_basic_ascii~ : Bool = true,
 ) -> @view_layout.ViewportData {
   let max_column = content.length() + 1
   {
@@ -39,7 +39,7 @@ fn render_options_input(
   content : String,
   configuration : ViewLinesConfiguration,
   selection_view_range? : @base_common.Range,
-  is_basic_ascii? : Bool = true,
+  is_basic_ascii~ : Bool = true,
 ) -> @view_layout.RenderLineInput {
   render_line_input_for_viewport(
     render_options_viewport(content, is_basic_ascii~),

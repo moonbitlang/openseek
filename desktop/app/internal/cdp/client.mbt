@@ -3,7 +3,7 @@
 /// overlapping reads are rejected instead of competing for WebSocket frames.
 struct Connection {
   socket : @websocket.Conn
-  mut serial : Int
+  mut serial : Int32
   events : Array[Event]
   mut reading : Bool
 }
@@ -51,8 +51,8 @@ async fn Connection::request(
     self.serial += 1
     let id = self.serial
     let message : Json = {
-      "id": id.to_json(),
-      "method": method_.to_json(),
+      "id": Json(id),
+      "method": Json(method_),
       "params": params,
     }
     self.socket.send_text(message.stringify())

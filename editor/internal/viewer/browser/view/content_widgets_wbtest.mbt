@@ -185,7 +185,7 @@ extern "js" fn content_widgets_test_clear_rect_reads() -> Unit =
   #| () => { globalThis.__contentWidgetRectReads = 0; }
 
 ///|
-extern "js" fn content_widgets_test_rect_reads() -> Int =
+extern "js" fn content_widgets_test_rect_reads() -> Int32 =
   #| () => globalThis.__contentWidgetRectReads
 
 ///|
@@ -330,11 +330,11 @@ fn new_test_content_widget(
   id : String,
   primary : @base_common.Position?,
   secondary : @base_common.Position?,
-  allow_overflow? : Bool = false,
-  use_display_none? : Bool = false,
-  before_enabled? : Bool = false,
-  after_enabled? : Bool = false,
-  throw_after? : Bool = false,
+  allow_overflow~ : Bool = false,
+  use_display_none~ : Bool = false,
+  before_enabled~ : Bool = false,
+  after_enabled~ : Bool = false,
+  throw_after~ : Bool = false,
 ) -> TestContentWidget {
   {
     id,
@@ -811,7 +811,7 @@ test "measured anchors preserve affinity, nullable preference, and per-line geom
   let document = @rdom.document()
   let seen_affinities : Array[@model.PositionAffinity?] = []
   let measured_positions : Array[@base_common.Position] = []
-  let line_height_queries : Array[Int] = []
+  let line_height_queries : Array[Int32] = []
   let widget = new_test_content_widget(
     document,
     "measured",

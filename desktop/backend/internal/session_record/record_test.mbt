@@ -15,7 +15,7 @@ fn header_line(session : String) -> String {
 }
 
 ///|
-fn event_line(sequence : Int, content : String) -> String {
+fn event_line(sequence : Int32, content : String) -> String {
   "{\"sequence\":\{sequence},\"ts\":0,\"item\":{\"kind\":\"user\",\"payload\":{\"content\":\"\{content}\"}}}\n"
 }
 

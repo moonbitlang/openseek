@@ -59,7 +59,7 @@ pub fn LanguageFilter::matches(
 pub fn LanguageFilter::score(
   self : LanguageFilter,
   model : @model.TextModel,
-) -> Int {
+) -> Int32 {
   self.score_impl(model)
 }
 

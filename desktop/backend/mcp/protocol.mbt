@@ -22,19 +22,19 @@ fn supported_version(version : String) -> Bool {
 }
 
 ///|
-/// The deadline for one tool handler. An engine stops waiting for a call
-/// after its own, shorter deadline, so a handler still running here has no
-/// reader left; this bounds how long it can outlive that.
-const CallTimeoutMs : Int = 150000
+/// The deadline for one tool handler, so a handler that never returns holds
+/// a task and a connection for a bounded time rather than the app's
+/// lifetime.
+const CallTimeoutMs : Int32 = 150000
 
 ///|
-const InvalidRequest : Int = -32600
+const InvalidRequest : Int32 = -32600
 
 ///|
-const MethodNotFound : Int = -32601
+const MethodNotFound : Int32 = -32601
 
 ///|
-const InvalidParams : Int = -32602
+const InvalidParams : Int32 = -32602
 
 ///|
 fn reply(id : Json, result : Json) -> Json {
@@ -42,16 +42,16 @@ fn reply(id : Json, result : Json) -> Json {
 }
 
 ///|
-fn failure(id : Json, code : Int, message : String) -> Json {
+fn failure(id : Json, code : Int32, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id,
-    "error": { "code": code.to_json(), "message": message.to_json() },
+    "error": { "code": Json(code), "message": Json(message) },
   }
 }
 
 ///|
-/// Answer one inbound message from `session`'s engine. `None` when the
+/// Answer one inbound message sent for `session`. `None` when the
 /// message expects no reply: a notification, or a response to a request —
 /// which this server never sends, so there is nothing to match it to.
 async fn Server::dispatch(
@@ -95,12 +95,9 @@ fn Server::initialize_result(self : Server, params : Json) -> Json {
     _ => LatestProtocolVersion
   }
   {
-    "protocolVersion": version.to_json(),
+    "protocolVersion": Json(version),
     "capabilities": { "tools": Json::empty_object() },
-    "serverInfo": {
-      "name": ServerName.to_json(),
-      "version": self.version.to_json(),
-    },
+    "serverInfo": { "name": Json(ServerName), "version": Json(self.version) },
   }
 }
 
@@ -109,13 +106,13 @@ fn Server::tool_list(self : Server) -> Json {
   let tools : Array[Json] = [
     for _, tool in self.tools => {
       {
-        "name": tool.name.to_json(),
-        "description": tool.description.to_json(),
+        "name": Json(tool.name),
+        "description": Json(tool.description),
         "inputSchema": tool.input_schema,
       }
     }
   ]
-  { "tools": tools.to_json() }
+  { "tools": Json(tools) }
 }
 
 ///|
@@ -160,7 +157,7 @@ async fn Server::call_tool(
       }
   }
   reply(id, {
-    "content": [{ "type": "text", "text": text.to_json() }],
-    "isError": is_error.to_json(),
+    "content": [{ "type": "text", "text": Json(text) }],
+    "isError": Json(is_error),
   })
 }

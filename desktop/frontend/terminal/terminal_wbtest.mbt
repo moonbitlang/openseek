@@ -163,6 +163,7 @@ test "a disconnected channel retires only its terminal tabs" {
         workspace_path: Some(local_workspace),
         status: TabRunning,
         command: None,
+        input: InputQueue::empty(),
       },
       {
         key: "tab-remote",
@@ -173,6 +174,7 @@ test "a disconnected channel retires only its terminal tabs" {
         workspace_path: Some(remote_workspace),
         status: TabRunning,
         command: None,
+        input: InputQueue::empty(),
       },
     ],
     active: [
@@ -186,6 +188,7 @@ test "a disconnected channel retires only its terminal tabs" {
     ],
     synced_dark_mode: Some(false),
     live_channels: [local_channel, remote],
+    interrupted_channels: [],
   }
   let (_, disconnected) = disconnect(@cmd.Emit(_ => @cmd.none), state, remote)
   inspect(disconnected.tabs.length(), content="1")

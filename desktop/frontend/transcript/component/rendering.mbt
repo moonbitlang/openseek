@@ -31,7 +31,7 @@ fn TranscriptRenderKey::empty() -> TranscriptRenderKey {
 /// otherwise identical new-chat pages. A scratch or onboarding transcript has
 /// no registered project and keeps the generic question.
 fn empty_title(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   project_label : String?,
 ) -> String {
   match project_label {
@@ -112,7 +112,7 @@ fn EmptyProjectControl::keydown(
 
 ///|
 fn EmptyProjectControl::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : EmptyProjectControl,
   current : @common.Uri,
   label : String,
@@ -153,17 +153,10 @@ fn EmptyProjectControl::render(
           },
           type_="button",
           title=project.root.path,
-          on_click=if selected {
-            @cmd.batch([
-              self.dismiss,
-              focus_empty_project_trigger_after_render(),
-            ])
-          } else {
-            @cmd.batch([
-              (self.choose)(project.root),
-              focus_empty_project_trigger_after_render(),
-            ])
-          },
+          on_click=@cmd.batch([
+            (self.choose)(project.root),
+            focus_empty_project_trigger_after_render(),
+          ]),
           attrs=@html.Attrs::build()
             .aria_label(
               if selected {
@@ -264,19 +257,12 @@ fn EmptyProjectControl::render(
 
 ///|
 fn empty_transcript_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : EmptyContent,
   project_menu : EmptyProjectControl,
 ) -> @html.Html {
   let children : Array[@html.Html] = [
-    @html.div(class="empty-badge", [
-      @icons.icon(
-        match input.source {
-          OpenSeek => @icons.icon_logo
-          Codex => @icons.icon_sparkle
-        },
-      ),
-    ]),
+    @html.div(class="empty-badge", [@icons.icon(@icons.icon_logo)]),
   ]
   let title = match (input.project_label, input.current_project) {
     (Some(label), Some(project)) if input.can_choose_project &&
@@ -292,12 +278,6 @@ fn empty_transcript_view(
       @html.div(class="empty-title", empty_title(locale~, input.project_label))
   }
   children.push(title)
-  // OpenSeek's explanatory sentence duplicated what the composer and product
-  // already make clear. Codex retains its source-specific account/sandbox
-  // context because that distinguishes the alternate backend.
-  if input.source is Codex {
-    children.push(@html.div(class="empty-sub", ui(locale, CodexDescription)))
-  }
   @html.div(class="empty", children)
 }
 
@@ -306,7 +286,7 @@ fn empty_transcript_view(
 /// remains pure and comparable, so changing the picker state updates this one
 /// stable branch without remounting its input.
 fn EmptyContent::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : EmptyContent,
   actions : Actions,
 ) -> @html.Html {
@@ -400,7 +380,6 @@ priv struct Block {
 /// lets `assoc_by` update only this branch when the menu opens or its query
 /// changes, while the stable branch key preserves its DOM and input focus.
 priv struct EmptyContent {
-  source : Source
   project_label : String?
   current_project : @common.Uri?
   projects : Array[ProjectChoice]
@@ -412,7 +391,6 @@ priv struct EmptyContent {
 ///|
 fn Input::empty_content(self : Input) -> EmptyContent {
   {
-    source: self.source,
     project_label: self.project_label,
     current_project: self.current_project,
     projects: self.projects,
@@ -437,7 +415,8 @@ priv enum BlockContent {
     step_label~ : String?,
     assistant_name~ : String,
     subrun_parent~ : String?,
-    wait_labels~ : Map[Int, String]
+    wait_labels~ : Map[Int32, String],
+    fork~ : ForkAction?
   )
   /// The response still streaming, shown through the same view a settled
   /// response gets. Durable commits are untagged and cannot prove ownership
@@ -454,9 +433,17 @@ priv enum BlockContent {
 } derive(Eq)
 
 ///|
-/// The direct children of `#stream` in display order: one block per
-/// transcript item, then the
-/// response still streaming; or the empty state alone. Vector order determines
+/// Notices do not consume a new chat's project-selection surface.
+fn Input::has_draft_notices(self : Input) -> Bool {
+  self.can_choose_project &&
+  !self.items.is_empty() &&
+  self.items.all(row => row.item.kind is Failure(_)) &&
+  self.streaming_reasoning is None &&
+  self.streaming_response is None
+}
+
+///|
+/// The direct children of `#stream` in display order. Vector order determines
 /// visual order; the keys only determine node identity.
 fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   if input.minimal {
@@ -478,6 +465,15 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
   let assistant_name = input.source.assistant_name()
   let subrun_parent = input.subrun_parent()
   let blocks : Array[Block] = []
+  // An opening failure is not a sent conversation: retain the title picker
+  // alongside the notice so the same draft can retry or choose another root.
+  if input.has_draft_notices() {
+    blocks.push({
+      stream,
+      key: TranscriptRenderKey::empty(),
+      content: Empty(input.empty_content()),
+    })
+  }
   // OpenSeek numbers its model steps: every provider response that is not a
   // checkpoint replay is one. Codex and legacy items carry no ordinal.
   let descriptions : Map[String, String] = Map([])
@@ -501,6 +497,7 @@ fn stream_blocks(input : Input) -> @vector.Vector[Block] {
       key: TranscriptRenderKey::row(row.identity),
       content: Item(
         item~,
+        fork=input.fork_action(item),
         anchor~,
         step_label~,
         assistant_name~,
@@ -539,7 +536,7 @@ fn Block::branch_key(self : Block) -> String {
 /// The block's Html. The parent's actions are captured by the component and
 /// passed through here; a block never stores them.
 fn Block::render(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Block,
   actions : Actions,
   changes? : @review_changes.Control,
@@ -554,13 +551,15 @@ fn Block::render(
       step_label~,
       assistant_name~,
       subrun_parent~,
-      wait_labels~
+      wait_labels~,
+      fork~
     ) =>
       transcript_item_view(
         locale~,
         item,
         on_open,
         wait_labels~,
+        fork?=fork.map(value => value.render(locale~, actions.fork)),
         anchor?,
         changes?,
         on_jump=target => (actions.jump)(target),
@@ -604,7 +603,7 @@ fn keyed_stream(
 /// and session, so switching conversations replaces the entire stream instead
 /// of reusing rows whose durable sequence numbers happen to match.
 fn section_children(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   input : Input,
   stream~ : Map[String, @html.Html],
   pinned~ : Bool,

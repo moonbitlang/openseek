@@ -61,7 +61,7 @@ fn cursor_reference_view_model() -> ViewModel {
 ///|
 fn cursor_reference_wrapped_view_model(
   text : String,
-  column : Int,
+  column : Int32,
 ) -> ViewModel {
   ViewModel::with_options(
     cursor_reference_model(text),
@@ -72,8 +72,8 @@ fn cursor_reference_wrapped_view_model(
 ///|
 fn cursor_reference_set_position(
   view_model : ViewModel,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Unit {
   view_model.move_cursor_to(
     Position(line_number, column),
@@ -87,8 +87,8 @@ fn cursor_reference_set_position(
 ///|
 fn cursor_reference_move_left(
   view_model : ViewModel,
-  select? : Bool = false,
-  value? : Int = 1,
+  select~ : Bool = false,
+  value~ : Int32 = 1,
 ) -> Unit {
   view_model.move_cursor(
     Left,
@@ -104,8 +104,8 @@ fn cursor_reference_move_left(
 ///|
 fn cursor_reference_move_right(
   view_model : ViewModel,
-  select? : Bool = false,
-  value? : Int = 1,
+  select~ : Bool = false,
+  value~ : Int32 = 1,
 ) -> Unit {
   view_model.move_cursor(
     Right,
@@ -121,8 +121,8 @@ fn cursor_reference_move_right(
 ///|
 fn cursor_reference_move_up(
   view_model : ViewModel,
-  select? : Bool = false,
-  value? : Int = 1,
+  select~ : Bool = false,
+  value~ : Int32 = 1,
 ) -> Unit {
   view_model.move_cursor(
     Up,
@@ -138,8 +138,8 @@ fn cursor_reference_move_up(
 ///|
 fn cursor_reference_move_down(
   view_model : ViewModel,
-  select? : Bool = false,
-  value? : Int = 1,
+  select~ : Bool = false,
+  value~ : Int32 = 1,
 ) -> Unit {
   view_model.move_cursor(
     Down,
@@ -155,14 +155,14 @@ fn cursor_reference_move_down(
 ///|
 fn cursor_reference_home(
   view_model : ViewModel,
-  select? : Bool = false,
+  select~ : Bool = false,
 ) -> Unit {
   view_model.move_cursor_to_line_start(select, source="test", reason=Explicit)
   |> ignore
 }
 
 ///|
-fn cursor_reference_end(view_model : ViewModel, select? : Bool = false) -> Unit {
+fn cursor_reference_end(view_model : ViewModel, select~ : Bool = false) -> Unit {
   view_model.move_cursor_to_line_end(select, source="test", reason=Explicit)
   |> ignore
 }
@@ -170,10 +170,10 @@ fn cursor_reference_end(view_model : ViewModel, select? : Bool = false) -> Unit 
 ///|
 fn cursor_reference_assert_cursor(
   view_model : ViewModel,
-  selection_line : Int,
-  selection_column : Int,
-  position_line : Int,
-  position_column : Int,
+  selection_line : Int32,
+  selection_column : Int32,
+  position_line : Int32,
+  position_column : Int32,
 ) -> Unit raise {
   let selection = view_model.cursor.get_model_selection()
   let start = selection.get_selection_start()
@@ -194,8 +194,8 @@ fn cursor_reference_assert_cursor(
 ///|
 fn cursor_reference_assert_position(
   view_model : ViewModel,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Unit raise {
   cursor_reference_assert_cursor(
     view_model, line_number, column, line_number, column,
@@ -205,8 +205,8 @@ fn cursor_reference_assert_position(
 ///|
 fn cursor_reference_assert_view_position(
   view_model : ViewModel,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Unit raise {
   let position = view_model.cursor.get_view_selection().get_position()
   assert_eq(position.line_number, line_number)

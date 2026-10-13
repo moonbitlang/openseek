@@ -23,7 +23,7 @@ priv struct FileTreeModel {
 ///|
 priv struct TreeRow {
   node : TreeNode
-  depth : Int
+  depth : Int32
 }
 
 ///|
@@ -80,8 +80,8 @@ fn TreeNode::from_stats(
 fn workspace_stat_compare(
   left : @workspace.WorkspaceStat,
   right : @workspace.WorkspaceStat,
-) -> Int {
-  fn entry_rank(stat : @workspace.WorkspaceStat) -> Int {
+) -> Int32 {
+  fn entry_rank(stat : @workspace.WorkspaceStat) -> Int32 {
     guard stat.kind is File else { return 0 }
     match stat.name {
       "README" | [.. "README.", ..] => -3
@@ -90,7 +90,7 @@ fn workspace_stat_compare(
       _ => 0
     }
   }
-  fn kind_rank(kind : @workspace.WorkspaceEntryKind) -> Int {
+  fn kind_rank(kind : @workspace.WorkspaceEntryKind) -> Int32 {
     match kind {
       Directory => 0
       File => 1
@@ -219,7 +219,7 @@ fn TreeNode::ancestor_uris(
 fn TreeNode::reveal_ancestors(
   self : TreeNode,
   ancestors : ArrayView[@base_common.Uri],
-  index : Int,
+  index : Int32,
 ) -> (TreeNode, RevealStep) {
   if index == ancestors.length() {
     return match self.children {
@@ -278,7 +278,7 @@ fn TreeNode::visible_rows(self : TreeNode) -> Array[TreeRow] {
 fn TreeNode::push_rows(
   self : TreeNode,
   rows : Array[TreeRow],
-  depth : Int,
+  depth : Int32,
 ) -> Unit {
   rows.push({ node: self, depth, })
   if self.kind == Directory && self.expanded {

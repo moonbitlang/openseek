@@ -36,7 +36,7 @@ priv enum TabStatus {
   TabFailed(message~ : String)
   /// A command tab whose command ended and whose result is being read from
   /// its screen; the tab retires when that report lands.
-  TabExited(code~ : Int)
+  TabExited(code~ : Int32)
 } derive(Eq)
 
 ///|
@@ -64,6 +64,7 @@ priv struct Tab {
   status : TabStatus
   /// `None` for an ordinary shell tab.
   command : TabCommand?
+  input : InputQueue
 } derive(Eq)
 
 ///|
@@ -83,7 +84,7 @@ struct State {
   /// and the exit code that event carried. The reply is the first event that
   /// identifies the opening tab, so it consumes the entry and retires that
   /// tab instead of reviving an already-dead session.
-  exited_before_open : Array[(@interop.ChannelId, String, Int)]
+  exited_before_open : Array[(@interop.ChannelId, String, Int32)]
   /// The color scheme last applied to every mounted emulator. Keeping this in
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
@@ -91,6 +92,9 @@ struct State {
   /// Root-owned input snapshot used to retire dead channels. Keeping it
   /// beside the tabs makes input reconciliation a normal state transition.
   live_channels : Array[@interop.ChannelId]
+  /// A lost connection had terminals. Warn until new input acknowledges
+  /// that recovery creates a fresh shell, without replaying old input.
+  interrupted_channels : Array[@interop.ChannelId]
 } derive(Eq)
 
 ///|
@@ -103,6 +107,7 @@ pub fn State::empty() -> State {
     exited_before_open: [],
     synced_dark_mode: None,
     live_channels: [],
+    interrupted_channels: [],
   }
 }
 
@@ -237,7 +242,7 @@ pub(all) enum Msg {
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
   /// `terminal_exit` event: the shell ended, so its tab retires.
-  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
+  SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int32)
   /// Open one more terminal in the active conversation's workspace.
   NewTerminal
   /// Close the focused workspace's active terminal, as its close button does.
@@ -246,7 +251,7 @@ pub(all) enum Msg {
   /// Close a tab: its shell is torn down, its emulator disposed.
   TabClosed(key~ : String)
   /// The tab's emulator is mounted, fitted, and reports its grid size.
-  EmulatorReady(key~ : String, cols~ : Int, rows~ : Int)
+  EmulatorReady(key~ : String, cols~ : Int32, rows~ : Int32)
   /// `terminal_open` replied for the tab. The channel is retained because the
   /// tab may have been closed or the UI may have switched devices meanwhile.
   Opened(channel~ : @interop.ChannelId, key~ : String, id~ : String)
@@ -259,13 +264,18 @@ pub(all) enum Msg {
   /// xterm's `onBinary` payload, encoded as base64 so each JS character code
   /// reaches the PTY as exactly one byte instead of being UTF-8 re-encoded.
   BinaryInput(key~ : String, data~ : String)
-  /// `terminal_input` failed for the tab: the keystrokes were lost. The
-  /// main package surfaces the message as an error toast (the panel has no
-  /// toast rail of its own); the tab's status is untouched — a lost
-  /// keystroke does not make the session failed.
+  /// One write settled. The batch and PTY identity fence stale replies.
+  InputSettled(
+    key~ : String,
+    id~ : String,
+    token~ : String,
+    result~ : Result[Unit, InputWriteFailure]
+  )
+  /// The panel has paused input and discarded the unsent tail; the main
+  /// frontend displays the reason. Output and explicit close remain available.
   InputFailed(message~ : String)
   /// One tab's emulator re-fit to a new grid size.
-  ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
+  ViewportResized(key~ : String, cols~ : Int32, rows~ : Int32)
   /// A command tab's `!` command ended. `exit_code` is `None` when it did not
   /// exit on its own account — the user closed its tab, its connection
   /// dropped, or a signal killed it — and `output` is the plain text the
@@ -273,7 +283,7 @@ pub(all) enum Msg {
   /// takes the result; the panel then retires the tab.
   CommandFinished(
     shell~ : String,
-    exit_code~ : Int?,
+    exit_code~ : Int32?,
     output~ : String,
     truncated~ : Bool
   )

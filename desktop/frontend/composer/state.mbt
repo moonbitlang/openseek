@@ -143,7 +143,7 @@ pub fn Draft::prompt(self : Draft) -> String {
 }
 
 ///|
-fn Draft::without_mention(self : Draft, index : Int) -> Draft {
+fn Draft::without_mention(self : Draft, index : Int32) -> Draft {
   guard self.mentions.get(index) is Some(_) else { return self }
   let mentions = self.mentions.copy()
   ignore(mentions.remove(index))
@@ -205,7 +205,7 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
 }
 
 ///|
-fn FileIndex::epoch(self : FileIndex) -> Int {
+fn FileIndex::epoch(self : FileIndex) -> Int32 {
   match self {
     FileIndexEmpty(epoch~)
     | FileIndexLoading(epoch~)
@@ -252,8 +252,8 @@ fn Input::completion(
   text : String,
   symbols : SymbolCache,
   owner : @interop.ConversationKey,
-  files? : Array[@files.Match] = [],
-  files_loading? : Bool = false,
+  files~ : Array[@files.Match] = [],
+  files_loading~ : Bool = false,
 ) -> Completion? {
   guard Trigger::parse(text, inline_markers="$#@") is Some(trigger) &&
     CompletionKind::of_trigger(trigger) is Some(kind) else {
@@ -344,6 +344,31 @@ pub fn Draft::with_semantic_selection(
       ref_: @mention_context.SemanticSearch(reference),
       range: None,
     })
+  }
+  { ..self, mentions, }
+}
+
+///|
+/// Keep each explicitly accepted Office quotation. Accepting the same payload
+/// again is idempotent; None clears Office quotations without changing others.
+pub fn Draft::with_office_selection(
+  self : Draft,
+  materialized : String?,
+) -> Draft {
+  let mentions = match materialized {
+    None =>
+      self.mentions.filter(mention => {
+        !(mention.ref_ is @mention_context.OfficeSelection(_))
+      })
+    Some(materialized) => {
+      let ref_ = @mention_context.OfficeSelection(materialized~)
+      if self.mentions.any(mention => mention.ref_ == ref_) {
+        return self
+      }
+      let mentions = self.mentions.copy()
+      mentions.push({ ref_, range: None, })
+      mentions
+    }
   }
   { ..self, mentions, }
 }

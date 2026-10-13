@@ -38,7 +38,7 @@ fn parse_skill_document(source : String) -> SkillDocument {
 }
 
 ///|
-fn find_frontmatter_close(lines : Array[String]) -> Int? {
+fn find_frontmatter_close(lines : Array[String]) -> Int32? {
   lines.search_by(line => {
     let marker = line.trim()
     marker == "---" || marker == "..."

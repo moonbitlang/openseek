@@ -3,9 +3,9 @@
 /// caller and may be absent. Gap separates excerpts whose lexical context is
 /// unknown; it resets both tokenizers without inventing source or coordinates.
 pub(all) enum DiffLine {
-  Context(String, old_line~ : Int?, new_line~ : Int?)
-  Added(String, line~ : Int?)
-  Removed(String, line~ : Int?)
+  Context(String, old_line~ : Int32?, new_line~ : Int32?)
+  Added(String, line~ : Int32?)
+  Removed(String, line~ : Int32?)
   Gap
 }
 

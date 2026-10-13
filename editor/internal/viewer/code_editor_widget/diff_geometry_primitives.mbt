@@ -6,14 +6,14 @@
 /// Exact rendered height of one model line after projection. A wrapped line is
 /// taller than the base line height; a hidden line is exactly zero.
 pub(all) struct CodeEditorModelLineHeight {
-  line_number : Int
+  line_number : Int32
   height_in_px : Double
 } derive(Eq, Debug)
 
 ///|
 /// Actual non-owned zone geometry in model coordinates.
 pub(all) struct CodeEditorForeignZoneHeight {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
 } derive(Eq, Debug)
 
@@ -36,18 +36,18 @@ pub(all) struct CodeEditorScrollContentFacts {
 /// A higher-level diff package adapts this value to its own alignment engine;
 /// the kernel does not depend on that package.
 pub struct CodeEditorGeometrySnapshot {
-  model_version : Int
+  model_version : Int32
   line_height : Double
   model_line_heights : Array[CodeEditorModelLineHeight]
   foreign_zone_heights : Array[CodeEditorForeignZoneHeight]
-  line_max_columns : Array[Int]
+  line_max_columns : Array[Int32]
   scroll_content : CodeEditorScrollContentFacts
 }
 
 ///|
 pub fn CodeEditorGeometrySnapshot::model_version(
   self : CodeEditorGeometrySnapshot,
-) -> Int {
+) -> Int32 {
   self.model_version
 }
 
@@ -75,7 +75,7 @@ pub fn CodeEditorGeometrySnapshot::foreign_zone_heights(
 ///|
 pub fn CodeEditorGeometrySnapshot::line_max_columns(
   self : CodeEditorGeometrySnapshot,
-) -> Array[Int] {
+) -> Array[Int32] {
   self.line_max_columns.copy()
 }
 
@@ -88,7 +88,7 @@ pub fn CodeEditorGeometrySnapshot::scroll_content(
 
 ///|
 fn code_editor_foreign_zone_geometry(
-  layout_infos : Array[(String, Int, Double)],
+  layout_infos : Array[(String, Int32, Double)],
   excluded_zone_ids : Array[String],
 ) -> (Array[CodeEditorForeignZoneHeight], Double) {
   let foreign : Array[CodeEditorForeignZoneHeight] = []
@@ -124,7 +124,7 @@ pub fn CodeEditorWidget::geometry_snapshot(
   let line_height = self.configuration.snapshot().font_info.line_height.to_double()
   let converter = view_model.coordinates_converter()
   let model_line_heights : Array[CodeEditorModelLineHeight] = []
-  let line_max_columns : Array[Int] = []
+  let line_max_columns : Array[Int32] = []
   for line_number in 1..<=model.get_line_count() {
     let max_column = model.get_line_max_column(line_number)
     line_max_columns.push(max_column)
@@ -180,13 +180,13 @@ pub fn CodeEditorWidget::geometry_snapshot(
 /// One managed zone replacement specification. The caller owns the element;
 /// the code editor owns only its registration for the returned id's lifetime.
 pub(all) struct ManagedCodeEditorViewZoneSpec {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
   dom_node : @rdom.Element
   show_in_hidden_areas : Bool
   margin_dom_node : @rdom.Element?
   min_width_in_px : Double?
-  ordinal : Int?
+  ordinal : Int32?
   suppress_mouse_down : Bool
   on_dom_node_top : ((Double) -> Unit raise)?
   on_dom_node_layout : ((Bool, Double) -> Unit raise)?
@@ -195,14 +195,14 @@ pub(all) struct ManagedCodeEditorViewZoneSpec {
 
 ///|
 pub fn ManagedCodeEditorViewZoneSpec::ManagedCodeEditorViewZoneSpec(
-  after_line_number : Int,
+  after_line_number : Int32,
   height_in_px : Double,
   dom_node : @rdom.Element,
-  show_in_hidden_areas? : Bool = true,
+  show_in_hidden_areas~ : Bool = true,
   margin_dom_node? : @rdom.Element,
   min_width_in_px? : Double,
-  ordinal? : Int,
-  suppress_mouse_down? : Bool = true,
+  ordinal? : Int32,
+  suppress_mouse_down~ : Bool = true,
   on_dom_node_top? : (Double) -> Unit raise,
   on_dom_node_layout? : (Bool, Double) -> Unit raise,
   on_zone_registered? : (String, @editor_browser.ViewZone) -> Unit,
@@ -226,7 +226,7 @@ pub fn ManagedCodeEditorViewZoneSpec::ManagedCodeEditorViewZoneSpec(
 fn apply_managed_view_zones_transaction(
   previous_ids : Array[String],
   specs : Array[ManagedCodeEditorViewZoneSpec],
-  generation : Int,
+  generation : Int32,
   transact : ((@editor_browser.ViewZoneChangeAccessor) -> Unit raise) -> Unit,
 ) -> Array[String] {
   let ids : Array[String] = []
@@ -285,7 +285,7 @@ pub fn CodeEditorWidget::apply_managed_view_zones(
   self : CodeEditorWidget,
   previous_ids : Array[String],
   specs : Array[ManagedCodeEditorViewZoneSpec],
-  generation : Int,
+  generation : Int32,
 ) -> Array[String] {
   if self.disposed || self.current_code_browser_data() is None {
     return []
@@ -309,7 +309,7 @@ pub struct StableCodeEditorViewportState {
 ///|
 pub fn StableCodeEditorViewportState::anchor_line_number(
   self : StableCodeEditorViewportState,
-) -> Int {
+) -> Int32 {
   self.anchor_position.line_number
 }
 

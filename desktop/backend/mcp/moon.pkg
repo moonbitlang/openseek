@@ -1,11 +1,9 @@
 import {
   "openseek_desktop/backend/entropy",
-  "openseek_desktop/backend/internal/fsx",
-  "openseek_desktop/backend/pathx",
   "moonbitlang/async",
-  "moonbitlang/async/fs",
   "moonbitlang/async/http",
   "moonbitlang/async/socket",
+  "moonbitlang/core/argparse",
   "moonbitlang/core/buffer",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",

@@ -12,10 +12,10 @@ async fn async_echo(args : Json) -> ToolAction {
 /// (`control`, `concurrent_safe`) are the constructor's own defaults, so no
 /// test below has to restate them just to build an ordinary tool.
 fn test_tool(
-  name? : String = "echo",
-  description? : String = "Echo.",
-  schema? : Json = { "type": "object" },
-  execute? : ToolExecutor = Sync(_args => respond("ok")),
+  name~ : String = "echo",
+  description~ : String = "Echo.",
+  schema~ : Json = { "type": "object" },
+  execute~ : ToolExecutor = Sync(_args => respond("ok")),
 ) -> AgentToolDefinition {
   AgentToolDefinition(name~, description~, schema=JsonSchema(schema), execute~)
 }

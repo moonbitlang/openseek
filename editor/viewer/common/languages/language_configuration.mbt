@@ -19,7 +19,7 @@ pub struct LineCommentRule {
 /// form, with the object form's `noIndent` flag available when needed.
 fn new_line_comment_rule(
   comment : String,
-  no_indent? : Bool = false,
+  no_indent~ : Bool = false,
 ) -> LineCommentRule {
   { comment, no_indent, }
 }

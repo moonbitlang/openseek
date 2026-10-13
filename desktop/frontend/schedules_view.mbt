@@ -1,6 +1,6 @@
 ///|
 fn schedule_status(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   status : @protocol.ScheduleRunStatus,
 ) -> String {
   match status {

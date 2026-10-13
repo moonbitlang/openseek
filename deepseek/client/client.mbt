@@ -96,9 +96,9 @@ pub struct Client {
   model : @deepseek.Model
   api_url : String
   thinking : @deepseek.ThinkingMode
-  retry_attempts : Int
-  retry_backoff_ms : Int
-  idle_timeout_ms : Int
+  retry_attempts : Int32
+  retry_backoff_ms : Int32
+  idle_timeout_ms : Int32
 } derive(Debug(ignore=API_KEY))
 
 ///|
@@ -130,12 +130,12 @@ pub struct Client {
 /// and TUI use).
 pub fn Client::Client(
   api_key~ : String,
-  model? : @deepseek.Model = default_model,
-  api_url? : String = default_api_url_for_model(model),
-  thinking? : @deepseek.ThinkingMode = No,
-  retry_attempts? : Int = 5,
-  retry_backoff_ms? : Int = 500,
-  idle_timeout_ms? : Int = 120_000,
+  model~ : @deepseek.Model = default_model,
+  api_url~ : String = default_api_url_for_model(model),
+  thinking~ : @deepseek.ThinkingMode = No,
+  retry_attempts~ : Int32 = 5,
+  retry_backoff_ms~ : Int32 = 500,
+  idle_timeout_ms~ : Int32 = 120_000,
 ) -> Client {
   {
     api_key,
@@ -173,15 +173,15 @@ pub fn Client::Client(
 struct StreamHandler {
   on_content_delta : async (String) -> Unit
   on_reasoning_delta : async (String) -> Unit
-  on_retry : ((Int, Int, String) -> Unit)?
+  on_retry : ((Int32, Int32, String) -> Unit)?
 }
 
 ///|
 /// Constructs callbacks for `Client::chat(..., stream=...)`.
 pub fn StreamHandler::StreamHandler(
   on_content_delta~ : async (String) -> Unit,
-  on_reasoning_delta? : async (String) -> Unit = _ => (),
-  on_retry? : (Int, Int, String) -> Unit,
+  on_reasoning_delta~ : async (String) -> Unit = _ => (),
+  on_retry? : (Int32, Int32, String) -> Unit,
 ) -> StreamHandler {
   { on_content_delta, on_reasoning_delta, on_retry, }
 }
@@ -190,7 +190,7 @@ pub fn StreamHandler::StreamHandler(
 /// A response status worth retrying: rate limiting or a server-side failure.
 /// Other 4xx are caller errors (bad key, malformed request) that a retry
 /// cannot fix.
-fn retryable_status(code : Int) -> Bool {
+fn retryable_status(code : Int32) -> Bool {
   code == 429 || (code >= 500 && code < 600)
 }
 
@@ -198,8 +198,8 @@ fn retryable_status(code : Int) -> Bool {
 /// These failures may be retried before any response data is received.
 /// The public chat boundary formats them as Failure messages.
 priv suberror RetryableApiError {
-  HttpStatusError(Int, String)
-  IdleTimeout(String, Int)
+  HttpStatusError(Int32, String)
+  IdleTimeout(String, Int32)
   StreamEnded
   StreamTransport(Error)
 }
@@ -218,7 +218,7 @@ fn is_stream_interruption(error : Error) -> Bool {
 /// their sum, which stays a geometric series: raising `retry_attempts` buys
 /// tries at superlinear wall-clock cost (from 500ms, 5 tries sleep 7.5s and
 /// 10 sleep 183.5s).
-let max_backoff_ms : Int = 60_000
+let max_backoff_ms : Int32 = 60_000
 
 ///|
 /// Run `attempt` up to `retry_attempts` total tries via `@async.retry`
@@ -241,7 +241,7 @@ async fn[T] Client::with_retries(
   attempt : async () -> T,
   bail : (Error) -> Bool,
   progress? : RequestProgress,
-  on_retry? : (Int, Error) -> Unit = (_, _) => (),
+  on_retry~ : (Int32, Error) -> Unit = (_, _) => (),
 ) -> T {
   let mut attempts = 0
   @async.retry(
@@ -291,9 +291,9 @@ async fn[T] Client::with_retries(
 pub async fn Client::chat(
   self : Client,
   messages : Array[@deepseek.ChatMessage],
-  tools? : Array[@deepseek.ToolDefinition] = [],
+  tools~ : Array[@deepseek.ToolDefinition] = [],
   response_format? : @deepseek.ResponseFormat,
-  max_tokens? : Int,
+  max_tokens? : Int32,
   stream? : StreamHandler,
 ) -> @deepseek.ChatResponse {
   if max_tokens is Some(limit) && limit <= 0 {

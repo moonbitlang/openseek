@@ -3,9 +3,9 @@
 /// through `body_start_line_number` remains visible when its outline is
 /// collapsed; the fold hides the following body lines and closing brace.
 priv struct MoonbitFunctionBodyFold {
-  declaration_start_line_number : Int
-  body_start_line_number : Int
-  body_end_line_number : Int
+  declaration_start_line_number : Int32
+  body_start_line_number : Int32
+  body_end_line_number : Int32
 }
 
 ///|
@@ -13,8 +13,8 @@ priv struct MoonbitFunctionBodyFold {
 /// typically a copyright or file-header block. The first line stays visible
 /// when the run is collapsed; the fold hides the continuation lines.
 priv struct MoonbitCommentRunFold {
-  start_line_number : Int
-  end_line_number : Int
+  start_line_number : Int32
+  end_line_number : Int32
 }
 
 ///|
@@ -33,7 +33,7 @@ priv struct MoonbitSourceFolds {
 const COMMENT_RUN_FOLDING_RANGE_TYPE : String = "editor.commentRun"
 
 ///|
-fn is_moonbit_outline_identifier_start(code : Int) -> Bool {
+fn is_moonbit_outline_identifier_start(code : Int32) -> Bool {
   (code >= 'a' && code <= 'z') ||
   (code >= 'A' && code <= 'Z') ||
   code == '_' ||
@@ -41,7 +41,7 @@ fn is_moonbit_outline_identifier_start(code : Int) -> Bool {
 }
 
 ///|
-fn is_moonbit_outline_identifier_continue(code : Int) -> Bool {
+fn is_moonbit_outline_identifier_continue(code : Int32) -> Bool {
   is_moonbit_outline_identifier_start(code) || (code >= '0' && code <= '9')
 }
 
@@ -54,7 +54,7 @@ fn is_moonbit_outline_identifier_continue(code : Int) -> Bool {
 /// a split `-> Int` return clause) is invisible to this tail check;
 /// `is_moonbit_leading_continuation_line` catches those when a run is
 /// flushed.
-fn is_moonbit_expression_continuation_code(code : Int) -> Bool {
+fn is_moonbit_expression_continuation_code(code : Int32) -> Bool {
   match code {
     '='
     | '+'
@@ -162,8 +162,8 @@ fn is_moonbit_leading_continuation_line(line : String) -> Bool {
 /// the last token, so the word is read forward from `last_code_index`.
 fn moonbit_line_ends_with_continuation_word(
   line : String,
-  last_code : Int,
-  last_code_index : Int,
+  last_code : Int32,
+  last_code_index : Int32,
 ) -> Bool {
   if !is_moonbit_outline_identifier_start(last_code) {
     return false
@@ -265,7 +265,7 @@ fn moonbit_source_folds(snapshot : @model.TextSnapshot) -> MoonbitSourceFolds {
     let mut quote = 0
     let mut escaped = false
     let mut interpolation_depth = 0
-    let interpolation_resume_depths : Array[Int] = []
+    let interpolation_resume_depths : Array[Int32] = []
     let mut line_saw_equals = false
     let mut line_last_code = 0
     let mut line_last_code_index = -1
@@ -683,9 +683,9 @@ priv struct MoonbitOutlineFold {
   /// First line of the protected construct. Provider ranges reaching into
   /// `protected_start_line_number..=fold_end_line_number` are replaced by the
   /// host fold unless they sit strictly inside the folded span.
-  protected_start_line_number : Int
-  fold_start_line_number : Int
-  fold_end_line_number : Int
+  protected_start_line_number : Int32
+  fold_start_line_number : Int32
+  fold_end_line_number : Int32
   range_type : String
 }
 
@@ -743,7 +743,7 @@ fn moonbit_outline_folds(
 fn moonbit_outline_folding_regions(
   snapshot : @model.TextSnapshot,
   regions : @folding_browser.FoldingRegions,
-  limit : Int,
+  limit : Int32,
 ) -> @folding_browser.FoldingRegions {
   let outline_folds = moonbit_outline_folds(moonbit_source_folds(snapshot))
   if outline_folds.length() == 0 || has_moonbit_outline_folding_ranges(regions) {

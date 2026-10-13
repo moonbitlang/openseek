@@ -15,7 +15,7 @@ pub extend ImageOutput with Eq::{equal, not_equal}
 /// Default retained-output budget for a background job's inline preview, in
 /// characters. Full output beyond this spills to the job's file (see
 /// `ShellOutputSink`).
-let default_max_output_chars : Int = 12000
+let default_max_output_chars : Int32 = 12000
 
 ///|
 /// Terminal or live state of a background job.
@@ -26,7 +26,7 @@ let default_max_output_chars : Int = 12000
 /// - `Stopped`: cancelled (`stop`, a reader error, or teardown) before exit.
 pub enum BgJobStatus {
   Running
-  Exited(Int)
+  Exited(Int32)
   Stopped
 } derive(Eq)
 
@@ -34,7 +34,7 @@ pub enum BgJobStatus {
 /// Default wall-clock lifetime for a background job (thirty minutes): long
 /// enough for real builds and suites, short enough that a runaway spinner —
 /// issue #419 saw one burn 131 minutes unnoticed — is reaped and surfaced.
-let default_hard_timeout_ms : Int = 1_800_000
+let default_hard_timeout_ms : Int32 = 1_800_000
 
 ///|
 /// Session-scoped registry of background ("detached") jobs, each backed by one
@@ -58,7 +58,7 @@ struct BgJobRuntime {
     String,
     Array[String],
     String?,
-    Int,
+    Int32,
     String?,
     &@process.ProcessInput?,
   ) -> @shell_exec.ShellExecution
@@ -71,7 +71,7 @@ struct BgJobRuntime {
     String,
     Array[String],
     String?,
-    Int,
+    Int32,
     String?,
     &@process.ProcessInput?,
   ) -> @shell_exec.ShellExecution
@@ -89,7 +89,7 @@ struct BgJobRuntime {
   // not machine protection: the kill reaches the direct child only, so a
   // spinning grandchild can be orphaned — true process-group kill is
   // upstream work in moonbitlang/async. Tests shrink it to fire cheaply.
-  hard_timeout_ms : Int
+  hard_timeout_ms : Int32
   // Called once for natural exits, watchdog kills, or capture failures. Normal
   // stop/teardown is already user-visible; a capture failure is still reported
   // even if it races a requested stop.
@@ -103,7 +103,7 @@ struct BgJobRuntime {
   // Separate counter for the spill files of detachable foreground executions
   // (which are not registered until adopted), so their `fg-<n>.out` files never
   // collide with a job's `<uuid>.out`.
-  mut fg_index : Int
+  mut fg_index : Int32
 }
 
 ///|
@@ -124,7 +124,7 @@ priv enum JobPhase {
 /// `BgJobSnapshot`.
 priv struct BgJob {
   id : String
-  mut revision : Int
+  mut revision : Int32
   mut announced : Bool
   backgrounded_at_ms : Int64
   mut requested_stop : Bool
@@ -178,8 +178,8 @@ pub struct BgJobSnapshot {
   output_error : String?
   output_truncated : Bool
   priv over_inline_cap : Bool
-  size : Int
-  priv exit_code : Int?
+  size : Int32
+  priv exit_code : Int32?
   // Preserved so a reader can match the foreground path's error semantics: mark
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
@@ -204,10 +204,10 @@ pub struct BgJobSnapshot {
 pub fn[X] BgJobRuntime::BgJobRuntime(
   scope : @agent_runtime.AgentTaskScope[X],
   spill_dir? : String,
-  persistent_logs? : Bool = false,
+  persistent_logs~ : Bool = false,
   prepare_output_dir? : async () -> String,
-  hard_output_cap? : Int = @shell_exec.default_hard_cap,
-  hard_timeout_ms? : Int = default_hard_timeout_ms,
+  hard_output_cap~ : Int32 = @shell_exec.default_hard_cap,
+  hard_timeout_ms~ : Int32 = default_hard_timeout_ms,
   on_job_exit? : (BgJobSnapshot) -> Unit,
   on_job_event? : (@protocol.JobEventKind, @protocol.JobRecord) -> Unit,
 ) -> BgJobRuntime {
@@ -286,7 +286,7 @@ pub async fn BgJobRuntime::spawn_foreground_retained(
   program : String,
   args : Array[String],
   cwd : String?,
-  max_output_chars : Int,
+  max_output_chars : Int32,
   stdin? : &@process.ProcessInput,
 ) -> @shell_exec.ShellExecution {
   self.prepare_output()
@@ -311,11 +311,11 @@ pub async fn BgJobRuntime::start(
   command~ : String,
   description? : String,
   cwd? : String,
-  max_output_chars? : Int = default_max_output_chars,
+  max_output_chars~ : Int32 = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
-  read_only_review? : Bool = false,
-  output_rewrites? : Array[(String, String)] = [],
-  moonrun_policy_active? : Bool = false,
+  read_only_review~ : Bool = false,
+  output_rewrites~ : Array[(String, String)] = [],
+  moonrun_policy_active~ : Bool = false,
   stdin? : &@process.ProcessInput,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
@@ -358,9 +358,9 @@ pub async fn BgJobRuntime::adopt(
   command~ : String,
   description? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
-  read_only_review? : Bool = false,
-  output_rewrites? : Array[(String, String)] = [],
-  moonrun_policy_active? : Bool = false,
+  read_only_review~ : Bool = false,
+  output_rewrites~ : Array[(String, String)] = [],
+  moonrun_policy_active~ : Bool = false,
   on_terminal? : async () -> Unit,
   data? : () -> Json,
   image_output? : () -> ImageOutput,
@@ -575,7 +575,7 @@ pub async fn BgJobRuntime::read_output(
 pub async fn BgJobRuntime::read_output_tail(
   self : BgJobRuntime,
   id : String,
-  n : Int,
+  n : Int32,
 ) -> String? {
   match self.jobs.get(id) {
     Some(job) => Some(job.exec.read_tail(n))
@@ -606,7 +606,7 @@ pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
 async fn poll_until_terminal(
   rt : BgJobRuntime,
   id : String,
-  ticks? : Int = 200,
+  ticks~ : Int32 = 200,
 ) -> BgJobSnapshot {
   for _ in 0..<ticks {
     if rt.snapshot(id) is Some(snap) && !(snap.status is Running) {
