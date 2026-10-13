@@ -392,6 +392,17 @@ fn install_review_hunk_actions(
 /// Semantic editors expand to their full height; the outer scroll plane owns
 /// reading position. Pick one global hunk using its actual rendered geometry.
 fn track_semantic_review_scroll(host : @dom.Element) -> Unit {
+  // Navigation owns the selected hunk while its scroll is being committed.
+  // Only a different reading position may replace it with the viewport's
+  // nearest hunk; short sections and clamped edges need not be centered.
+  if semantic_review_navigation_pending.val {
+    return
+  }
+  if semantic_review_navigation_scroll_top.val is Some(top) &&
+    (host.get_scroll_top() - top).abs() < 1.0 {
+    return
+  }
+  semantic_review_navigation_scroll_top.val = None
   guard review_hunk_bridge_target.val is Some(target) &&
     target.surface is ReviewSemanticSurface else {
     return

@@ -16,6 +16,89 @@ async function selectDiffMode(page, mode) {
   await expect(page.locator('#review-navigation-controls')).toHaveAttribute('aria-busy', 'false');
 }
 
+// Let native scroll events and the two-frame outer reveal finish before
+// checking the selected hunk; a transient toolbar label is not a landing.
+async function settleReviewScroll(page) {
+  await page.evaluate(async () => {
+    for (let i = 0; i < 5; i++) await new Promise(requestAnimationFrame);
+  });
+}
+
+for (const mode of ['Line', 'Token', 'Tree']) {
+  test(`${mode} opening a review returns to its first outstanding hunk`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    const baseline = ['fn review {', ...Array.from({ length: 120 }, (_, i) => `  println("line ${i}")`), '}', ''].join('\n');
+    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
+    app.workingFiles['src/main.mbt'] = baseline.replace('line 5"', 'changed 5"').replace('line 55"', 'changed 55"').replace('line 105"', 'changed 105"');
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openReview();
+    const changes = page.locator('#review-changes-body');
+    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
+    await main.click();
+    await selectDiffMode(page, mode);
+    const position = page.locator('.review-hunk-position');
+    const next = page.getByRole('button', { name: 'Next change', exact: true });
+    await expect(position).toHaveText('Change 1 of 3');
+    await page.getByRole('button', { name: 'Mark hunk viewed', exact: true }).click();
+    await next.click();
+    await expect(position).toHaveText('Change 2 of 3');
+    await next.click();
+    await expect(position).toHaveText('Change 3 of 3');
+    await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+    await expect(position).toHaveText('Change 1 of 1');
+    await main.click();
+    await settleReviewScroll(page);
+    await expect(position).toHaveText('Change 2 of 3');
+    const surface = page.locator(mode === 'Line' ? '#diff-editor-host' : '#semantic-review-host');
+    await expect(surface.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: 'changed 55' }).first()).toBeInViewport();
+    // Explicitly selecting a completed file must keep that file open.
+    await page.getByRole('button', { name: 'Mark file reviewed', exact: true }).click();
+    await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
+    await expect(position).toHaveText('Change 1 of 1');
+    await main.click();
+    await settleReviewScroll(page);
+    await expect(main).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+for (const mode of ['Token', 'Tree']) {
+  test(`${mode} each navigation click retains its target among short sections`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    const baseline = Array.from({ length: 12 }, (_, i) => `fn value_${i}() -> Int {\n  ${i}\n}\n`).join('\n');
+    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
+    app.workingFiles['src/main.mbt'] = baseline.replace(/\n  (\d+)\n/g, '\n  100 + $1\n');
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await app.openReview();
+    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await selectDiffMode(page, mode);
+    const position = page.locator('.review-hunk-position');
+    await settleReviewScroll(page);
+    await expect(position).toHaveText('Change 1 of 12');
+    for (let i = 2; i <= 12; i++) {
+      await page.getByRole('button', { name: 'Next change', exact: true }).click();
+      await settleReviewScroll(page);
+      await expect(position).toHaveText(`Change ${i} of 12`);
+      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
+    }
+    for (let i = 11; i >= 1; i--) {
+      await page.getByRole('button', { name: 'Previous change', exact: true }).click();
+      await settleReviewScroll(page);
+      await expect(position).toHaveText(`Change ${i} of 12`);
+    }
+    // Reading with the wheel must still update the active hunk after a reveal.
+    await page.locator('#semantic-review-host').hover();
+    await page.mouse.wheel(0, 700);
+    await expect(position).not.toHaveText('Change 1 of 12');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 for (const mode of ['Line', 'Token', 'Tree']) {
   test(`${mode} continuous navigation crosses files in both directions and wraps`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);

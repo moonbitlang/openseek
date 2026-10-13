@@ -462,6 +462,10 @@ pub(all) struct ReviewHunkPosition {
 pub fn ReviewHunkPosition::equal(Self, Self) -> Bool
 pub fn ReviewHunkPosition::not_equal(Self, Self) -> Bool
 
+type ReviewNavigationDestination derive(Eq)
+pub fn ReviewNavigationDestination::equal(Self, Self) -> Bool
+pub fn ReviewNavigationDestination::not_equal(Self, Self) -> Bool
+
 pub struct ReviewNavigationDisplay {
   // private fields
 } derive(Eq)
@@ -526,7 +530,7 @@ pub(all) struct State {
   semantic_review_plan : @moondiff.SectionedSemanticReviewPlan?
   semantic_review_collapsed : Array[String]
   review_diff_navigation_available : Bool
-  review_navigation_destination : (ChangedFile, Int, Bool)?
+  review_navigation_destination : ReviewNavigationDestination?
   review_navigation_remaining : Int?
   change_extensions : Array[String?]?
   change_path_filter : String
@@ -591,7 +595,7 @@ pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self
-pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool) -> Self
+pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool, cross_file? : Bool) -> Self
 
 pub(all) enum TabState {
   TabLoading

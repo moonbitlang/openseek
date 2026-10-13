@@ -489,6 +489,14 @@ let semantic_review_active_key : Ref[String?] = Ref(None)
 let semantic_review_navigation_generation : Ref[Int32] = Ref(0)
 
 ///|
+/// Keep the explicit hunk selection through the item-origin scroll, focus,
+/// and deferred centered reveal. Native scroll events arrive after setters.
+let semantic_review_navigation_pending : Ref[Bool] = Ref(false)
+
+///|
+let semantic_review_navigation_scroll_top : Ref[Double?] = Ref(None)
+
+///|
 priv enum SemanticReviewNavigationDirection {
   SemanticReviewPrevious
   SemanticReviewNext
@@ -958,15 +966,21 @@ fn schedule_semantic_review_reveal_scroll(
   generation : Int32,
 ) -> Unit {
   @dom.window().request_animation_frame(_ => {
-    guard semantic_review_navigation_generation.val == generation &&
-      semantic_review_active_key.val is Some(active_key) &&
+    guard semantic_review_navigation_generation.val == generation else {
+      return
+    }
+    guard semantic_review_active_key.val is Some(active_key) &&
       active_key == key &&
       @base_browser.element_is_connected(editor_host) else {
+      semantic_review_navigation_pending.val = false
       return
     }
     @dom.window().request_animation_frame(_ => {
-      guard semantic_review_navigation_generation.val == generation &&
-        semantic_review_active_key.val is Some(active_key) &&
+      guard semantic_review_navigation_generation.val == generation else {
+        return
+      }
+      semantic_review_navigation_pending.val = false
+      guard semantic_review_active_key.val is Some(active_key) &&
         active_key == key &&
         @base_browser.element_is_connected(editor_host) &&
         @dom.document().get_element_by_id(SemanticReviewHostId).to_option()
@@ -1006,6 +1020,11 @@ fn schedule_semantic_review_reveal_scroll(
           reveal_top,
           reveal_bottom,
         ),
+      )
+      // Retain the clamped browser position, including when the requested
+      // hunk cannot be centered near the beginning or end of the document.
+      semantic_review_navigation_scroll_top.val = Some(
+        scroll_host.get_scroll_top(),
       )
     })
     |> ignore
@@ -1097,6 +1116,8 @@ fn schedule_semantic_review_scroll_width_update() -> Unit {
 ///|
 fn dispose_semantic_review_editor(entry : SemanticReviewEditorHost) -> Unit {
   semantic_review_navigation_generation.val += 1
+  semantic_review_navigation_pending.val = false
+  semantic_review_navigation_scroll_top.val = None
   entry.diff_subscription.dispose()
   entry.active_hunk_subscription.dispose()
   entry.content_height_subscription.dispose()
@@ -1313,6 +1334,8 @@ fn refresh_semantic_review_editor_options() -> Unit {
 ///|
 fn clear_semantic_review_editors() -> Unit {
   semantic_review_navigation_generation.val += 1
+  semantic_review_navigation_pending.val = false
+  semantic_review_navigation_scroll_top.val = None
   let keys = semantic_review_editors.to_array().map(pair => pair.0)
   for key in keys {
     if semantic_review_editors.get(key) is Some(entry) {
@@ -1374,6 +1397,8 @@ fn arm_semantic_review_navigation_reveal(
   entry : SemanticReviewEditorHost,
 ) -> Unit {
   semantic_review_navigation_generation.val += 1
+  semantic_review_navigation_pending.val = true
+  semantic_review_navigation_scroll_top.val = None
   entry.pending_navigation_reveal_generation.val = Some(
     semantic_review_navigation_generation.val,
   )
@@ -1506,8 +1531,8 @@ fn reveal_semantic_review_section_change(
         return
       }
       semantic_review_active_key.val = Some(key)
-      reveal_semantic_review_item_start(entry.host)
       arm_semantic_review_navigation_reveal(entry)
+      reveal_semantic_review_item_start(entry.host)
       reveal_review_editor_hunk(entry.editor, index)
     },
     kind=@cmd.after_render,

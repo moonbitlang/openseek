@@ -504,7 +504,7 @@ pub(all) struct State {
   // at least one completed change for cyclic previous/next navigation.
   review_diff_navigation_available : Bool
   // A cross-file destination waits for both sides, fenced by exact row and generation.
-  review_navigation_destination : (ChangedFile, Int32, Bool)?
+  review_navigation_destination : ReviewNavigationDestination?
   // Bound a cross-file search when semantic filters hide unreviewed lines.
   // None means no search is in progress; zero means its one cycle is exhausted.
   review_navigation_remaining : Int32?

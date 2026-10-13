@@ -271,7 +271,10 @@ test "cross-file reveal waits for content and cancels when its review is superse
     ),
   }.with_review_navigation_destination(ctx, change, true)
   let (_, waiting) = sync_review_navigation_destination(test_emit(), state, ctx)
-  assert_true(waiting.review_navigation_destination is Some((_, 1, true)))
+  assert_true(
+    waiting.review_navigation_destination
+    is Some({ generation: 1, last: true, cross_file: true, .. }),
+  )
   let (_, cancelled) = sync_review_navigation_destination(
     test_emit(),
     waiting,

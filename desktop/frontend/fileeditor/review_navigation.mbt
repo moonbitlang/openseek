@@ -84,13 +84,26 @@ fn reveal_review_editor_hunk(
 }
 
 ///|
+struct ReviewNavigationDestination {
+  change : ChangedFile
+  generation : Int32
+  last : Bool
+  cross_file : Bool
+} derive(Eq)
+
+///|
+pub extend ReviewNavigationDestination with Eq::{equal, not_equal}
+
+///|
 /// Arm only after opening the destination, so cached and newly loaded reviews
-/// use the actual generation that owns the incoming content.
+/// use the actual generation that owns the incoming content. Explicit row
+/// selection stays in that file even if all its visible changes are reviewed.
 pub fn State::with_review_navigation_destination(
   self : State,
   ctx : Ctx,
   change : ChangedFile,
   last : Bool,
+  cross_file~ : Bool = true,
 ) -> State {
   guard ctx.resource(change.path).bind(file => self.docs.get(file))
     is Some({ review: Some(review), .. }) &&
@@ -99,7 +112,12 @@ pub fn State::with_review_navigation_destination(
   }
   {
     ..self,
-    review_navigation_destination: Some((change, review.generation, last)),
+    review_navigation_destination: Some({
+      change,
+      generation: review.generation,
+      last,
+      cross_file,
+    }),
   }
 }
 
@@ -134,7 +152,8 @@ fn sync_review_navigation_destination(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
-  guard state.review_navigation_destination is Some((change, generation, last)) else {
+  guard state.review_navigation_destination
+    is Some({ change, generation, last, cross_file, }) else {
     return (@cmd.none, state)
   }
   let cleared = { ..state, review_navigation_destination: None, }
@@ -166,8 +185,10 @@ fn sync_review_navigation_destination(
     if projected_review_file_changes(editor) is Some(file_changes) &&
       state.review_hunk_state(change, file_changes) != ReviewHunkViewed {
       (reveal_line_review_edge(state, ctx, last), cancelled)
-    } else {
+    } else if cross_file {
       (dispatch(ReviewDiffFileBoundary(last)), cleared)
+    } else {
+      (@cmd.none, cancelled)
     }
   } else {
     let sections = semantic_sections(state.semantic_review_plan)
@@ -180,8 +201,10 @@ fn sync_review_navigation_destination(
       )
       is Some(_) {
       reveal_semantic_review_edge(dispatch, cancelled, ctx, last)
-    } else {
+    } else if cross_file {
       (dispatch(ReviewDiffFileBoundary(last)), cleared)
+    } else {
+      (@cmd.none, cancelled)
     }
   }
 }
