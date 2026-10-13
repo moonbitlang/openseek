@@ -309,7 +309,7 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
   } else {
     @files.Search([], [], None)
   }
-  self.codex.composer_input(locale=self.locale, {
+  let input = self.codex.composer_input(locale=self.locale, {
     channel: self.focused,
     // The model state is root-built because a cross-agent pick on a
     // composing draft leaves the Codex package entirely. The resulting
@@ -336,6 +336,17 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
     },
   })
+  if self.codex_project_adoption_pending() {
+    {
+      ..input,
+      presentation: {
+        ..input.presentation,
+        primary_action: @composer.Send(available=false),
+      },
+    }
+  } else {
+    input
+  }
 }
 
 ///|

@@ -2324,6 +2324,10 @@ fn update_msg(
     // apply it once the last write settles.
     CodexComposerAction(action) =>
       match action {
+        @composer.DraftSubmitted(..) if model.codex_project_adoption_pending() =>
+          // The new project owns this draft as soon as Add is confirmed.
+          // Do not start a thread in its old cwd while the registry settles.
+          (@cmd.none, model)
         @composer.ModelMenuToggled(identity~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {

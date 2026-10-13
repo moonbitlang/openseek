@@ -184,7 +184,7 @@ test('the title cannot add or change projects until draft opening settles', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a pending project add keeps the draft from starting another retarget', async ({ page }) => {
+test('a pending project add blocks retargeting and sending until adoption settles', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other']);
   await choose(page, 'Codex test');
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
@@ -201,6 +201,10 @@ test('a pending project add keeps the draft from starting another retarget', asy
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
   const addRequest = app.requests.find(r => r.method === 'workspace.add');
+  await expect(page.locator('#send')).toBeDisabled();
+  await page.locator('#task').press('Enter');
+  expect(app.requests.some(r => r.method === 'codex.thread.start')).toBe(false);
+  await expect(page.locator('#task')).toHaveValue('Send in the added project');
   pending.resolve(reply(addRequest));
   app.notify('workspace.changed', { workspaces: app.workspaces });
   await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();

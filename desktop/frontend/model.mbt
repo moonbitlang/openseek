@@ -3510,6 +3510,14 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 }
 
 ///|
+fn Model::codex_project_adoption_pending(self : Model) -> Bool {
+  self.pending_project_adoption is Some(pending) &&
+  pending.channel == self.focused &&
+  pending.codex_draft is Some(id) &&
+  self.codex.active_id() == Some(id)
+}
+
+///|
 /// The title switcher exists only while the visible draft still
 /// belongs to a registered project. Keeping this predicate at the root lets
 /// rendering, event admission, and post-update menu cleanup share one rule.
@@ -3519,10 +3527,7 @@ fn Model::can_choose_new_chat_project(self : Model) -> Bool {
   }
   // The add reply and registry broadcast together own the next project.
   // Keep this draft from starting another retarget before both have landed.
-  if self.screen is Codex &&
-    self.pending_project_adoption is Some(pending) &&
-    pending.channel == self.focused &&
-    pending.codex_draft == self.codex.active_id() {
+  if self.screen is Codex && self.codex_project_adoption_pending() {
     return false
   }
   guard self.new_chat_project() is Some(project) &&
