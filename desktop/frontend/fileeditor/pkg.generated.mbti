@@ -293,6 +293,7 @@ pub(all) enum Msg {
   ChangeFiltersCleared
   ChangePathFilterChanged(String)
   TreeFocused(@pathx.Relative)
+  RevealTreeDirectory(@pathx.Relative)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])

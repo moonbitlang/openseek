@@ -396,3 +396,45 @@ test('the file picker shows a temporary tree and only a manual toggle keeps it b
   await expect(tree).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const target of ['group_40', 'group_40/nested']) {
+  test(`directory link ${target} focuses and reveals its destination after loading and on repeated clicks`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    app.directoryEntries['/workspace'] = Array.from({ length: 80 }, (_, index) => ({
+      name: `group_${String(index).padStart(2, '0')}`, is_dir: true,
+    }));
+    app.directoryEntries['/workspace/group_40'] = [{ name: 'nested', is_dir: true }];
+    app.directoryEntries['/workspace/group_40/nested'] = [{ name: 'child.mbt', is_dir: false }];
+    app.sessionEvents = [
+      { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture directory' } } },
+      { sequence: 2, item: { kind: 'assistant', payload: {
+        content: `[Target directory](./${target}/)`,
+      } } },
+    ];
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = request => request.method === 'host.open_path'
+      ? { opened: false, directory_target: { path: target } }
+      : replyFor(request);
+    app.rpcDelays.set('fs.read_directory', 300);
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    const link = page.locator('.transcript').getByRole('button', { name: 'Target directory' });
+    const tree = page.getByRole('tree', { name: 'Workspace files' });
+    const destination = tree.getByRole('treeitem', { name: target.split('/').at(-1), exact: true });
+    const scrollport = page.locator('.workspace-file-list');
+    await link.click();
+    await expect(destination).toBeFocused();
+    await expect(destination).toBeInViewport();
+    await expect(destination).toHaveAttribute('aria-expanded', 'true');
+    await expect(tree.getByRole('treeitem', { name: target.includes('/') ? 'child.mbt' : 'nested', exact: true })).toBeVisible();
+    const reads = app.requests.filter(request => request.method === 'fs.read_directory').length;
+    await scrollport.evaluate(element => { element.scrollTop = 0; });
+    await expect(destination).not.toBeInViewport();
+    await link.click();
+    await expect(destination).toBeFocused();
+    await expect(destination).toBeInViewport();
+    expect(app.requests.filter(request => request.method === 'fs.read_directory')).toHaveLength(reads);
+    expect(app.pageErrors).toEqual([]);
+  });
+}

@@ -2675,6 +2675,8 @@ fn update_inner(
         },
       )
     TreeFocused(path) => (@cmd.none, { ..state, tree_focus: Some(path), })
+    RevealTreeDirectory(path) =>
+      (@cmd.none, { ..state, tree_reveal: TreeRevealDirectoryPending(path), })
     RefreshExternalFiles =>
       (
         stat_files(
@@ -3222,6 +3224,9 @@ fn update_inner(
             tree_reveal: match state.tree_reveal {
               TreeRevealPending(target) if path.is_root() ||
                 target.0.has_prefix(path.0 + "/") => TreeRevealSettled(target)
+              TreeRevealDirectoryPending(target) if path.is_root() ||
+                target.0.has_prefix(path.0 + "/") =>
+                TreeRevealDirectorySettled(target)
               _ => state.tree_reveal
             },
           },

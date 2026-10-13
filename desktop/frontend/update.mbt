@@ -923,7 +923,14 @@ fn reveal_local_directory(
       model = { ..model, file_panel, }
     }
   }
-  (@cmd.batch(commands), model)
+  let (reveal_cmd, file_panel) = @fileeditor.update(
+    dispatch.map(msg => FileEditor(msg)),
+    @fileeditor.RevealTreeDirectory(path),
+    model.file_panel,
+    file_ctx(model),
+  )
+  commands.push(reveal_cmd)
+  (@cmd.batch(commands), { ..model, file_panel, })
 }
 
 ///|

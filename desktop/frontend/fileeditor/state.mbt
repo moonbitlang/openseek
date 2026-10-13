@@ -612,7 +612,7 @@ pub(all) struct State {
   watch_error : String?
   // The file tree's keyboard entry, independent of the editor's DOM focus.
   tree_focus : @pathx.Relative?
-  // Follow editor changes once, then leave manual folding/scrolling alone.
+  // Follow editor changes or directory links once, then leave manual scrolling alone.
   tree_reveal : TreeReveal
   // Directory paths the user has expanded, and those with a `read_directory`
   // in flight; plain arrays since a workspace tree is small.
@@ -974,6 +974,8 @@ pub(all) enum Msg {
   ChangeFiltersCleared
   ChangePathFilterChanged(String)
   TreeFocused(@pathx.Relative)
+  // Focus a transcript-linked directory once its expanded ancestors render.
+  RevealTreeDirectory(@pathx.Relative)
   DirToggle(@pathx.Relative)
   // Ensure the current workspace's file snapshot exists. Loading and ready
   // states make this idempotent; a failed first request is retryable.
