@@ -26,19 +26,49 @@ const OpenTimeoutMs : Int32 = 10000
 const SettleTimeoutMs : Int32 = 15000
 
 ///|
-/// How long a navigation has to start loading before it is taken for one
-/// that loads nothing — a step within one document's own history.
-const StartGraceMs : Int32 = 1000
+/// How long a step in a tab's history has to produce a new document before
+/// it is taken for one within the document already there.
+const SameDocumentGraceMs : Int32 = 1000
 
 ///|
-const SettlePollMs : Int32 = 50
+const SettlePollMs : Int32 = 100
 
 ///|
-/// How many loads a view has started and finished.
-priv struct LoadCount {
-  started : Int32
-  finished : Int32
-} derive(Eq)
+/// What a page says of the document it holds. Asked of the page itself: the
+/// view's loading events flicker within one navigation, and a tool that
+/// counted them answered before the page it asked for had arrived.
+priv struct Document {
+  // When the document's own clock started, which no two documents share:
+  // how a new document is told from the one it replaced.
+  origin : Double
+  complete : Bool
+  url : String
+  title : String
+}
+
+///|
+impl @json.FromJson for Document with fn from_json(json, path) {
+  guard json
+    is {
+      "origin": Number(origin, ..),
+      "complete": complete,
+      "url": String(url),
+      "title": String(title),
+      ..
+    } else {
+    raise JsonDecodeError((path, "expected a document's own account"))
+  }
+  let complete = match complete {
+    True => true
+    False => false
+    _ => raise JsonDecodeError((path.add_key("complete"), "expected a bool"))
+  }
+  { origin, complete, url, title, }
+}
+
+///|
+let document_script : String =
+  #|({origin: performance.timeOrigin, complete: document.readyState === "complete", url: location.href, title: document.title})
 
 ///|
 /// The tools an agent uses the dock's browser with.
@@ -46,7 +76,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
   [
     {
       name: "browser_tabs",
-      description: "List the browser tabs open beside this conversation in SeekMoon: each tab's id, URL, title, whether it is still loading, and whether it is the one currently shown to the user.",
+      description: "List the browser tabs open beside this conversation in SeekMoon: each tab's id, URL, title, and whether it is the one currently shown to the user.",
       input_schema: {
         "type": "object",
         "properties": {},
@@ -95,12 +125,8 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
 }
 
 ///|
-/// One tab as a tool reports it.
-fn BrowserViews::tab_json(
-  self : BrowserViews,
-  id : Int32,
-  view : @proton.ViewHandle,
-) -> Json raise {
+/// One tab as `browser_tabs` lists it.
+fn tab_json(id : Int32, view : @proton.ViewHandle) -> Json raise {
   let tab : Map[String, Json] = { "id": Json(id) }
   // A view that has not committed its first navigation has no entry yet:
   // the tab exists, with no page to name.
@@ -108,8 +134,6 @@ fn BrowserViews::tab_json(
     tab["url"] = Json(entry.url)
     tab["title"] = Json(entry.title)
   }
-  let count = self.load_count(id)
-  tab["loading"] = Json(count.started > count.finished)
   tab["visible"] = Json(view.state().visible)
   Json::object(tab)
 }
@@ -125,7 +149,7 @@ fn BrowserViews::tabs(self : BrowserViews, session : String) -> Json raise {
       self.owners.get(id) == Some(session) else {
       continue
     }
-    tabs.push((id, self.tab_json(id, view)))
+    tabs.push((id, tab_json(id, view)))
   }
   tabs.sort_by_key(tab => tab.0)
   { "tabs": Json(tabs.map(tab => tab.1)) }
@@ -157,35 +181,89 @@ fn refuse_unless_page_url(url : String) -> Unit raise @mcp.ToolError {
 }
 
 ///|
-fn BrowserViews::load_count(self : BrowserViews, id : Int32) -> LoadCount {
-  // A view no event has been seen for has loaded nothing yet.
-  self.loads.get(id).unwrap_or({ started: 0, finished: 0, })
-}
-
-///|
-/// Whether a tool that asked a view for a navigation `waited` milliseconds
-/// ago has waited long enough, given the view's loads `before` asking and
-/// `now`: the load it started has finished, or none started within the
-/// grace a load is given to begin, or it has outlasted the tool's patience.
-fn settled(before : LoadCount, now : LoadCount, waited : Int32) -> Bool {
-  if now.started > before.started {
-    now.finished >= now.started || waited >= SettleTimeoutMs
+/// Whether a tool that changed what a view shows `waited` milliseconds ago
+/// can answer with `now`, the page's account of its document, given the
+/// origin of the document that was there `before`. A new document must have
+/// finished loading. The same document is an answer only for a step that may
+/// stay within it, and only once a new one has had its chance to appear.
+fn settled(
+  before : Double?,
+  now : Document,
+  waited : Int32,
+  may_stay~ : Bool,
+) -> Bool {
+  if before == Some(now.origin) {
+    may_stay && now.complete && waited >= SameDocumentGraceMs
   } else {
-    waited >= StartGraceMs
+    now.complete
   }
 }
 
 ///|
-/// Wait for the navigation just asked of page `id`'s view to settle.
-async fn BrowserViews::settle(
+/// The page's account of its document, or `None` while it has none to give:
+/// between two documents there is nothing to ask.
+async fn document(connection : @cdp.Connection) -> Document? {
+  Some(connection.evaluate(document_script).decode_value()) catch {
+    error if @async.is_being_cancelled() => raise error
+    _ => None
+  }
+}
+
+///|
+/// A tab once what `act` asked of its view has settled: do `act`, then ask
+/// the page until it holds the document asked for, or until patience runs
+/// out and the page is reported as it stands, still loading.
+async fn BrowserViews::after(
   self : BrowserViews,
   id : Int32,
-  before : LoadCount,
-) -> Unit {
-  for waited = 0
-      !settled(before, self.load_count(id), waited)
-      waited = waited + SettlePollMs {
-    @async.sleep(SettlePollMs)
+  view : @proton.ViewHandle,
+  may_stay~ : Bool,
+  act : () -> Unit raise,
+) -> Json {
+  let mut answer : Document? = None
+  self.with_page(id, connection => {
+    let before = document(connection).map(document => document.origin)
+    act()
+    for waited = 0; waited < SettleTimeoutMs; waited = waited + SettlePollMs {
+      answer = document(connection)
+      if answer is Some(now) && settled(before, now, waited, may_stay~) {
+        break
+      }
+      @async.sleep(SettlePollMs)
+    }
+  })
+  let tab : Map[String, Json] = { "id": Json(id) }
+  // A page that never gave an account of itself is reported without one.
+  if answer is Some(document) {
+    tab["url"] = Json(document.url)
+    tab["title"] = Json(document.title)
+    tab["loading"] = Json(!document.complete)
+  }
+  tab["visible"] = Json(view.state().visible)
+  Json::object(tab)
+}
+
+///|
+/// `with_cdp` for a view that may be between documents. It finds the view's
+/// page by a mark it leaves in the document, and a document replaced while
+/// it looks takes the mark with it; so the search is tried again on a fresh
+/// mark.
+async fn[T] BrowserViews::with_page(
+  self : BrowserViews,
+  id : Int32,
+  f : async (@cdp.Connection) -> T,
+) -> T {
+  for attempt = 0; ; attempt = attempt + 1 {
+    let mut entered = false
+    return self.with_cdp(id, connection => {
+      entered = true
+      f(connection)
+    }) catch {
+      error if @async.is_being_cancelled() => raise error
+      // Only the search is retried: a failure of `f` itself is the caller's.
+      error if entered || attempt >= 4 => raise error
+      _ => continue
+    }
   }
 }
 
@@ -234,9 +312,9 @@ async fn BrowserViews::open_tab(
       "SeekMoon did not open the tab within \{OpenTimeoutMs / 1000} seconds.",
     )
   }
-  // A view the page has just created has loaded nothing before this.
-  self.settle(id, { started: 0, finished: 0, })
-  self.tab_json(id, self.tab_view(session, id))
+  // The view is already loading what was asked for; there is nothing more
+  // to ask of it but to arrive.
+  self.after(id, self.tab_view(session, id), may_stay=false, () => ())
 }
 
 ///|
@@ -297,25 +375,25 @@ async fn BrowserViews::navigate_tab(
   if self.pick is Some(pick) && pick.id == id {
     self.cancel_pick()
   }
-  let before = self.load_count(id)
-  match destination {
-    To(url) => view.load_url(url)
-    Back => {
-      guard view.can_go_back() else {
-        raise @mcp.ToolError("Tab \{id} has no earlier page to go back to.")
+  // Only a step in history can land in the document already there.
+  self.after(id, view, may_stay=destination is (Back | Forward), () => {
+    match destination {
+      To(url) => view.load_url(url)
+      Back => {
+        guard view.can_go_back() else {
+          raise @mcp.ToolError("Tab \{id} has no earlier page to go back to.")
+        }
+        view.back()
       }
-      view.back()
-    }
-    Forward => {
-      guard view.can_go_forward() else {
-        raise @mcp.ToolError("Tab \{id} has no later page to go forward to.")
+      Forward => {
+        guard view.can_go_forward() else {
+          raise @mcp.ToolError("Tab \{id} has no later page to go forward to.")
+        }
+        view.forward()
       }
-      view.forward()
+      Reload => view.reload(ignore_cache=true)
     }
-    Reload => view.reload(ignore_cache=true)
-  }
-  self.settle(id, before)
-  self.tab_json(id, view)
+  })
 }
 
 ///|
@@ -430,44 +508,57 @@ test "a navigation call names its tab and one destination" {
 }
 
 ///|
-test "a tool waits for the load it started, and not for one that never starts" {
-  let before : LoadCount = { started: 2, finished: 2, }
-  // Nothing has started: wait out the grace, then take it that nothing will.
-  assert_false(settled(before, before, 0))
-  assert_false(settled(before, before, StartGraceMs - SettlePollMs))
-  assert_true(settled(before, before, StartGraceMs))
-  // A load started: wait for it to finish, however long past the grace,
-  // until patience runs out.
-  let loading : LoadCount = { started: 3, finished: 2, }
-  assert_false(settled(before, loading, 0))
-  assert_false(settled(before, loading, StartGraceMs * 3))
-  assert_true(settled(before, loading, SettleTimeoutMs))
-  assert_true(settled(before, { started: 3, finished: 3, }, 0))
-  // A load that was already under way when the tool asked does not count
-  // as the tool's until a new one has started.
-  let busy : LoadCount = { started: 3, finished: 2, }
-  assert_false(settled(busy, { started: 3, finished: 3, }, 0))
-  assert_true(settled(busy, { started: 4, finished: 4, }, 0))
+test "a tool answers with the document it asked for, once that has loaded" {
+  let old : Document = {
+    origin: 100,
+    complete: true,
+    url: "https://example.com/a",
+    title: "A",
+  }
+  let arriving = { ..old, origin: 200, complete: false, }
+  let arrived = { ..arriving, complete: true, }
+  // A navigation that must produce a new document: the old one is never the
+  // answer, however complete, and the new one only once it has loaded.
+  assert_false(settled(Some(100), old, SettleTimeoutMs, may_stay=false))
+  assert_false(settled(Some(100), arriving, 0, may_stay=false))
+  assert_true(settled(Some(100), arrived, 0, may_stay=false))
+  // A step in history may stay within the document: that is the answer, but
+  // only after a new document has had its chance to appear.
+  assert_false(settled(Some(100), old, 0, may_stay=true))
+  assert_true(settled(Some(100), old, SameDocumentGraceMs, may_stay=true))
+  assert_true(settled(Some(100), arrived, 0, may_stay=true))
+  // A view with no document to compare against takes the first that loads.
+  assert_false(settled(None, arriving, 0, may_stay=false))
+  assert_true(settled(None, arrived, 0, may_stay=false))
 }
 
 ///|
-test "a view's loads are counted from its loading events alone" {
-  let views : BrowserViews = {
-    window: None,
-    debug_port: 0,
-    pick: None,
-    owners: Map([]),
-    notify: None,
-    opening: Map([]),
-    loads: Map([]),
+test "a page's account of its document is read whole or not at all" {
+  let document : Document = @json.from_json({
+    "origin": 1791903041652.5,
+    "complete": false,
+    "url": "https://example.com/",
+    "title": "",
+  })
+  assert_true(document.origin == 1791903041652.5)
+  assert_false(document.complete)
+  assert_eq((document.url, document.title), ("https://example.com/", ""))
+  for missing in ["origin", "complete", "url", "title"] {
+    let fields : Map[String, Json] = {
+      "origin": 1,
+      "complete": true,
+      "url": "u",
+      "title": "t",
+    }
+    fields.remove(missing)
+    let refused = try {
+      let _ : Document = @json.from_json(Json::object(fields))
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(refused)
   }
-  assert_true(views.load_count(1) == { started: 0, finished: 0, })
-  views.view_event(1, LoadingChanged(is_loading=true))
-  views.view_event(1, TitleUpdated(title="Example"))
-  assert_true(views.load_count(1) == { started: 1, finished: 0, })
-  views.view_event(1, LoadingChanged(is_loading=false))
-  assert_true(views.load_count(1) == { started: 1, finished: 1, })
-  assert_true(views.load_count(2) == { started: 0, finished: 0, })
 }
 
 ///|

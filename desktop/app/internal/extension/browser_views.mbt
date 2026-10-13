@@ -25,9 +25,6 @@ struct BrowserViews {
   // Tabs the page has been asked to open and has not answered for yet, by
   // request: where the id it gives the tab is delivered.
   opening : Map[String, @async.Queue[Int32]]
-  // How many loads each page's view has started and finished, from its
-  // view events: what a tool waits on after it navigates.
-  loads : Map[Int32, LoadCount]
 }
 
 ///|
@@ -42,7 +39,6 @@ pub async fn BrowserViews::BrowserViews() -> BrowserViews {
     owners: Map([]),
     notify: None,
     opening: Map([]),
-    loads: Map([]),
   }
 }
 
@@ -65,23 +61,6 @@ pub fn BrowserViews::page_attached(
 }
 
 ///|
-/// Take note of one event of page `id`'s view. The page hears of it through
-/// the bridge; this keeps the little of it a tool waits on.
-pub fn BrowserViews::view_event(
-  self : BrowserViews,
-  id : Int32,
-  event : @proton.ViewEvent,
-) -> Unit {
-  guard event is LoadingChanged(is_loading~) else { return }
-  let count = self.load_count(id)
-  self.loads[id] = if is_loading {
-    { ..count, started: count.started + 1, }
-  } else {
-    { ..count, finished: count.finished + 1, }
-  }
-}
-
-///|
 pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.window = None
@@ -93,7 +72,6 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.owners.clear()
-  self.loads.clear()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -449,7 +427,6 @@ fn BrowserViews::close(
     self.cancel_pick()
   }
   self.owners.remove(payload.id)
-  self.loads.remove(payload.id)
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }

@@ -249,8 +249,7 @@ async fn main {
     // views that are not browser tabs are not the frontend's business.
     .on_view_event((view, event) => {
       match @extension.browser_view_id(view.id()) {
-        Some(id) => {
-          views.view_event(id, event)
+        Some(id) =>
           if @extension.view_event_json(id, event) is Some(payload) {
             bridge.notify_browser_event(payload) catch {
               // Only cancellation can interrupt the queue put — the app is
@@ -258,7 +257,6 @@ async fn main {
               _ => ()
             }
           }
-        }
         None => ()
       }
     })
