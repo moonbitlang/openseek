@@ -134,3 +134,84 @@ test "OpenSeek outcomes remain unread while the editor covers the transcript" {
     )
   }
 }
+
+///|
+test "Codex local send and steer request transcript follow exactly once" {
+  for status in ["completed", "inProgress"] {
+    let model = {
+      ..test_model(),
+      screen: Codex,
+      codex: @codex.State::from_thread_snapshot({
+        "thread": {
+          "id": "task-a",
+          "cwd": "/workspace",
+          "projectRoot": "/workspace",
+          "turns": [{ "id": "turn-a", "status": status, "items": [] }],
+        },
+      }),
+    }
+    let message = CodexComposerAction(
+      @composer.DraftSubmitted(
+        identity={
+          owner: { channel: Local, session: "task-a", },
+          archive_generation: 0,
+        },
+        draft={ task: "continue", mentions: [], images: [], },
+      ),
+    )
+    let (_, first) = update(test_dispatch(), message, model)
+    let (_, second) = update(test_dispatch(), message, model)
+    assert_true(first.pending_transcript_follow() is Some(_))
+    assert_eq(
+      first.pending_transcript_follow(),
+      second.pending_transcript_follow(),
+    )
+    assert_eq(first.submission_sequence, model.submission_sequence + 1)
+    assert_eq(second.submission_sequence, first.submission_sequence)
+    assert_true(first.codex == second.codex)
+    assert_true(model.pending_transcript_follow() is None)
+    // A duplicate submit while the request is pending is rejected by Codex.
+    let (_, duplicate) = update(test_dispatch(), message, first)
+    assert_eq(
+      duplicate.transcript_follow_request,
+      first.transcript_follow_request,
+    )
+    assert_eq(duplicate.submission_sequence, first.submission_sequence)
+  }
+}
+
+///|
+test "empty stale and offscreen Codex submissions do not move the reader" {
+  let base = {
+    ..test_model(),
+    screen: Codex,
+    codex: @codex.State::from_thread_snapshot({
+      "thread": {
+        "id": "task-a",
+        "cwd": "/workspace",
+        "projectRoot": "/workspace",
+        "turns": [],
+      },
+    }),
+  }
+  for
+    (screen, session, task) in [
+      (Screen::Codex, "task-a", ""),
+      (Screen::Codex, "old-task", "continue"),
+      (Screen::Chat, "task-a", "continue"),
+    ] {
+    let model = { ..base, screen, }
+    let message = CodexComposerAction(
+      @composer.DraftSubmitted(
+        identity={ owner: { channel: Local, session, }, archive_generation: 0, },
+        draft={ task, mentions: [], images: [], },
+      ),
+    )
+    let (_, first) = update(test_dispatch(), message, model)
+    let (_, second) = update(test_dispatch(), message, model)
+    assert_true(first.transcript_follow_request is None)
+    assert_eq(first.submission_sequence, model.submission_sequence)
+    assert_eq(first.transcript_follow_request, second.transcript_follow_request)
+    assert_eq(first.submission_sequence, second.submission_sequence)
+  }
+}

@@ -135,6 +135,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
         focused=self.focused,
         active_session=self.codex.active_id().unwrap_or("none"),
         scroll=self.remembered_scroll(),
+        follow_request?=self.pending_transcript_follow(),
         project_label?,
         current_project=placement.bind(value => value.project_root()),
         projects~,
@@ -180,6 +181,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             focused=self.focused,
             active_session=self.active_session,
             scroll=self.remembered_scroll(),
+            follow_request?=self.pending_transcript_follow(),
             project_label?=self.project_display_label(conversation.project()),
             current_project=Some(conversation.project()),
             projects~,
@@ -208,4 +210,23 @@ fn Model::project_display_label(self : Model, project : @common.Uri) -> String? 
   } else {
     Some(@resource.label(project))
   }
+}
+
+///|
+/// Request a tail jump only for the conversation receiving this local send.
+/// A mounted component observes each submission once; returning to a previous
+/// conversation does not replay its old request or discard its reading position.
+fn Model::follow_transcript_latest(self : Model, submission : String) -> Model {
+  guard self.transcript_slot() is Some(slot) else { return self }
+  { ..self, transcript_follow_request: Some((slot.key(), submission)), }
+}
+
+///|
+fn Model::pending_transcript_follow(self : Model) -> String? {
+  guard self.transcript_slot() is Some(slot) &&
+    self.transcript_follow_request is Some((target, submission)) &&
+    target == slot.key() else {
+    return None
+  }
+  Some(submission)
 }

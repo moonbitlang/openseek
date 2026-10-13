@@ -1,6 +1,6 @@
 // The rail machine. `update` is pure and command-free: the cross-package
-// effect of a click (scrolling the transcript, unpinning auto-follow) is the
-// root update's to command off the same message.
+// effect of a click (selecting a page, scrolling, unpinning auto-follow) is
+// owned by the transcript component, which handles the same message.
 
 ///|
 /// The tick the pointer is on, owning the preview popover. `flip` and
@@ -44,6 +44,8 @@ pub(all) enum Msg {
   Clicked(TurnKey)
   // Which turn the transcript viewport sits in, `None` above the first one.
   ActiveChanged(TurnKey?)
+  PreviousPage
+  NextPage
 }
 
 ///|
@@ -54,6 +56,7 @@ pub fn update(msg : Msg, state : State) -> State {
     Left => { ..state, hover: None, }
     Clicked(key) => { ..state, active: Some(key), }
     ActiveChanged(key) => { ..state, active: key, }
+    PreviousPage | NextPage => { ..state, hover: None, }
   }
 }
 
