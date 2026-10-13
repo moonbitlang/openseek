@@ -433,6 +433,7 @@ fn focus_added_project(
     // The add belongs to the captured draft, not to whichever conversation
     // the user selects later. A superseded owner must not create a new chat.
     guard channel == model.focused &&
+      model.codex_work_selected() &&
       model.codex.active_id() == Some(id) &&
       model.codex.composing_draft() &&
       @resource.path_for(project, channel) is Some(cwd) else {

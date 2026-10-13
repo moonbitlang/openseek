@@ -3511,6 +3511,7 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 
 ///|
 fn Model::codex_project_adoption_pending(self : Model) -> Bool {
+  self.codex_work_selected() &&
   self.pending_project_adoption is Some(pending) &&
   pending.channel == self.focused &&
   pending.codex_draft is Some(id) &&

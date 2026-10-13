@@ -953,6 +953,52 @@ test "a Codex project add preserves its draft in either reply order" {
 }
 
 ///|
+test "OpenSeek selection supersedes retained Codex project ownership" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let picked = channel.test_resource("/other")
+  let (_, started) = update(
+    dispatch,
+    Codex(channel~, @codex.Msg::start_draft("hidden-codex", "/workspace")),
+    { ..test_model(), screen: Codex, },
+  )
+  assert_false(started.can_pick_project(channel))
+  for screen in [Screen::Chat, Settings, Skills, Schedules] {
+    let selected = { ..started, screen, management_return: Some(OpenSeekWork), }
+    assert_true(selected.can_pick_project(channel))
+    let (_, focused) = focus_added_project(
+      dispatch,
+      channel,
+      picked,
+      Some("hidden-codex"),
+      selected,
+    )
+    let (_, repeated) = focus_added_project(
+      dispatch,
+      channel,
+      picked,
+      Some("hidden-codex"),
+      selected,
+    )
+    assert_true(focused.screen == selected.screen)
+    assert_eq(focused.dev().active_project, selected.dev().active_project)
+    assert_true(focused.codex == selected.codex)
+    assert_true(repeated.codex == focused.codex)
+    assert_eq(repeated.dev().active_project, focused.dev().active_project)
+    let (_, confirmed) = adopt_picked_directory(
+      dispatch,
+      channel,
+      picked.path,
+      selected,
+    )
+    assert_true(
+      confirmed.pending_project_adoption is Some({ codex_draft: None, .. }),
+    )
+    assert_false(confirmed.codex_project_adoption_pending())
+  }
+}
+
+///|
 test "a confirmed add focuses the new project when its commit lands" {
   let dispatch = test_dispatch()
   let picked = @interop.ChannelId::Local.test_resource("/home/u/proj")
@@ -1295,7 +1341,9 @@ fn Model::chat_creation_pending(self : Model) -> Bool {
 
 ///|
 fn Model::can_pick_project(self : Model, channel : @interop.ChannelId) -> Bool {
-  channel != self.focused || self.codex.can_add_project()
+  channel != self.focused ||
+  !self.codex_work_selected() ||
+  self.codex.can_add_project()
 }
 
 ///|
@@ -1329,13 +1377,7 @@ fn adopt_picked_directory(
         known: dev.projects.copy(),
         resolved: None,
         codex_draft: if channel == model.focused &&
-          (
-            model.screen is Codex ||
-            (
-              model.screen.work_screen() is None &&
-              model.management_return is Some(CodexWork)
-            )
-          ) &&
+          model.codex_work_selected() &&
           model.codex.composing_draft() {
           model.codex.active_id()
         } else {
