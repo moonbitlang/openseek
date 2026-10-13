@@ -716,6 +716,14 @@ test "Codex image-only first prompt stays visible and survives failure" {
   assert_eq(failed.images, draft.images)
   assert_false(failed.loading)
   assert_false(failed.composing_draft())
+  let (_, retargeted) = update(
+    emit,
+    Msg::change_draft_project("/other"),
+    failed,
+    @interop.Local,
+    _ => @cmd.none,
+  )
+  assert_true(retargeted == failed)
 }
 
 ///|

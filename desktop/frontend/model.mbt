@@ -3514,6 +3514,9 @@ fn Model::composing_new_chat(self : Model) -> Bool {
 /// belongs to a registered project. Keeping this predicate at the root lets
 /// rendering, event admission, and post-update menu cleanup share one rule.
 fn Model::can_choose_new_chat_project(self : Model) -> Bool {
+  if self.screen is Codex && self.codex.is_busy() {
+    return false
+  }
   guard self.new_chat_project() is Some(project) &&
     self.focused_device() is Some(dev) else {
     return false

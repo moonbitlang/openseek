@@ -143,3 +143,43 @@ for (const failure of ['rpc', 'malformed']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('a failed thread start keeps its original draft identity and project for retry', async ({ page }) => {
+  const app = await open(page, ['/workspace', '/other']);
+  await choose(page, 'Codex test');
+  await page.locator('#task').fill('Retry this prompt');
+  app.rpcErrors.set('codex.thread.start', 'Reply lost');
+  await page.locator('#send').click();
+  await expect(page.getByText(/Reply lost/)).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  const first = app.requests.find(r => r.method === 'codex.thread.start');
+  app.rpcErrors.delete('codex.thread.start');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'codex.thread.start').length).toBe(2);
+  expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
+  await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('the title cannot add or change projects until draft opening settles', async ({ page }) => {
+  const app = await open(page, ['/workspace', '/other']);
+  const pending = Promise.withResolvers();
+  const reply = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'codex.draft.open' ? pending.promise : reply(request);
+  await choose(page, 'Codex test');
+  await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
+  await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  const request = app.requests.find(r => r.method === 'codex.draft.open');
+  app.replyFor = reply;
+  pending.resolve(reply(request));
+  await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
+  app.notify('workspace.changed', { workspaces: app.workspaces });
+  await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
+  await page.locator('#task').fill('Use the newly added project');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.find(r => r.method === 'codex.thread.start')?.params.cwd).toBe('/Users/test');
+  expect(app.pageErrors).toEqual([]);
+});

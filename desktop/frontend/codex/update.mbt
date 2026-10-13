@@ -144,6 +144,7 @@ pub fn update(
     }
     ChangeDraftProject(cwd~) => {
       guard state.active_draft() is Some(draft) &&
+        !draft.thread_start_attempted &&
         state.submitted_first_prompt is None &&
         !state.loading &&
         !cwd.trim().is_empty() &&
