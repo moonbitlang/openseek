@@ -133,6 +133,7 @@ test('editing a goal protects its text until the editor is closed', async ({ pag
   const app = await open(page);
   const task = page.locator('#task');
   await task.fill('/goal');
+  await expect(page.locator('.completion-item').filter({ hasText: 'goal' }).first()).toBeVisible();
   await task.press('Enter');
   await expect(page.locator('#goal-set')).toBeVisible();
   await task.fill('Do not lose this goal');
@@ -161,5 +162,45 @@ test('a failed first Codex send keeps the agent fixed while retrying', async ({ 
   expect(app.requests.filter(r => r.method === 'codex.thread.start')[1].params).toEqual(first.params);
   await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('reusing a draft waits for its pending open and close before reopening', async ({ page }) => {
+  const app = await open(page);
+  const firstOpen = Promise.withResolvers();
+  const closing = Promise.withResolvers();
+  const reply = app.replyFor.bind(app);
+  const authorized = new Set();
+  let opens = 0;
+  app.replyFor = async request => {
+    if (request.method === 'codex.draft.open') {
+      opens += 1;
+      if (opens === 1) await firstOpen.promise;
+      authorized.add(request.params.draft_id);
+    }
+    if (request.method === 'codex.draft.close') {
+      await closing.promise;
+      authorized.delete(request.params.draft_id);
+    }
+    return reply(request);
+  };
+  await page.locator('#task').fill('Retain this prompt');
+  await choose(page, 'Codex test');
+  await expect.poll(() => opens).toBe(1);
+  const id = app.requests.find(r => r.method === 'codex.draft.open').params.draft_id;
+  await choose(page, 'DS Pro');
+  await choose(page, 'Codex test');
+  expect(app.requests.filter(r => r.method === 'codex.draft.close')).toHaveLength(0);
+  expect(opens).toBe(1);
+  firstOpen.resolve();
+  await expect.poll(() => app.requests.filter(r => r.method === 'codex.draft.close').length).toBe(1);
+  expect(opens).toBe(1);
+  closing.resolve();
+  await expect.poll(() => opens).toBe(2);
+  await expect(page.locator('#send')).toBeEnabled();
+  expect(authorized.has(id)).toBe(true);
+  expect(app.requests.filter(r => r.method === 'codex.draft.open').every(r => r.params.draft_id === id)).toBe(true);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
   expect(app.pageErrors).toEqual([]);
 });

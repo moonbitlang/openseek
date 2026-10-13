@@ -9,10 +9,19 @@ fn[Payload : ToJson, Response : FromJson + ToJson] CodexReplyKind::request(
   channel : @interop.ChannelId,
   command : @commands.Command[Payload, @protocol.CodexCommandReply[Response]],
   payload : Payload,
+  lane? : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply : Response = @interop.codex_request(channel, command, payload) catch {
+      let reply : Response = try {
+        match lane {
+          Some(lane) =>
+            @interop.in_ordered_lane(lane, () => {
+              @interop.codex_request(channel, command, payload)
+            })
+          None => @interop.codex_request(channel, command, payload)
+        }
+      } catch {
         error => {
           let message = @interop.bridge_error_text(error)
           scheduler.add(dispatch(Failed(kind=self, message~)))
@@ -176,11 +185,14 @@ fn State::open_draft(
     draft.cwd == cwd else {
     return @cmd.none
   }
+  // Transfers reuse the ID. Open, close, and first Send must share a lane
+  // so a delayed close cannot revoke the reopened draft's authorization.
   CodexDraftOpenReply(draft_id).request(
     dispatch,
     channel,
     @commands.codex_draft_open,
     { draft_id, cwd, },
+    lane=@interop.session_command_lane(channel, draft_id),
   )
 }
 
@@ -195,15 +207,20 @@ fn State::close_draft(
   }
   @cmd.custom_cmd(_scheduler => {
     @js.Promise::from_async(() => {
-      ignore(
-        try
-          @interop.codex_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
-            draft_id,
-          })
-        catch {
-          _ => @protocol.Acknowledged
-        } noraise {
-          value => value
+      @interop.in_ordered_lane(
+        @interop.session_command_lane(channel, draft_id),
+        () => {
+          ignore(
+            try
+              @interop.codex_request(channel, @commands.codex_draft_close, @protocol.CodexDraftClosePayload::{
+                draft_id,
+              })
+            catch {
+              _ => @protocol.Acknowledged
+            } noraise {
+              value => value
+            },
+          )
         },
       )
     })
