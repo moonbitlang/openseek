@@ -186,7 +186,6 @@ for (const provider of ['OpenSeek new chat', 'OpenSeek session', 'Codex']) {
     const chip = page.locator('.mention-chip .mention-jump');
     await expect(chip).toContainText('1 matches');
     await page.getByTitle('Open src/main.mbt:1', { exact: true }).click();
-    await page.getByRole('button', { name: 'Hide file tree', exact: true }).click();
     await expect(page.locator('.search-results')).toBeHidden();
     await chip.click();
     await expect(page.getByRole('button', { name: 'Show all', exact: true })).toBeVisible();
