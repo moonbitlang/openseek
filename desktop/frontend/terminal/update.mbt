@@ -385,6 +385,18 @@ fn update(
         return (@cmd.none, state)
       }
       let (cmd, tab) = queue_input(dispatch, tab, data, msg is BinaryInput(..))
+      let state = if tab.status is TabRunning &&
+        tab.input.failure is None &&
+        !data.is_empty() {
+        {
+          ..state,
+          interrupted_channels: state.interrupted_channels.filter(channel => {
+            channel != tab.workspace.channel()
+          }),
+        }
+      } else {
+        state
+      }
       (cmd, state.replace_tab(tab))
     }
     InputSettled(key~, id~, token~, result~) =>
@@ -508,6 +520,12 @@ fn disconnect(
     @cmd.batch(commands),
     {
       ..state,
+      interrupted_channels: if !retired_keys.is_empty() &&
+        !state.interrupted_channels.contains(channel) {
+        state.interrupted_channels + [channel]
+      } else {
+        state.interrupted_channels
+      },
       tabs: state.tabs.filter(tab => tab.workspace.channel() != channel),
       active: state.active.filter(entry => entry.0.channel() != channel),
       shown,

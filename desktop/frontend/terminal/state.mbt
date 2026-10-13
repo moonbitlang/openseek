@@ -92,6 +92,9 @@ struct State {
   /// Root-owned input snapshot used to retire dead channels. Keeping it
   /// beside the tabs makes input reconciliation a normal state transition.
   live_channels : Array[@interop.ChannelId]
+  /// A lost connection had terminals. Warn until new input acknowledges
+  /// that recovery creates a fresh shell, without replaying old input.
+  interrupted_channels : Array[@interop.ChannelId]
 } derive(Eq)
 
 ///|
@@ -104,6 +107,7 @@ pub fn State::empty() -> State {
     exited_before_open: [],
     synced_dark_mode: None,
     live_channels: [],
+    interrupted_channels: [],
   }
 }
 
@@ -265,7 +269,7 @@ pub(all) enum Msg {
     key~ : String,
     id~ : String,
     token~ : String,
-    result~ : Result[Unit, String]
+    result~ : Result[Unit, InputWriteFailure]
   )
   /// The panel has paused input and discarded the unsent tail; the main
   /// frontend displays the reason. Output and explicit close remain available.

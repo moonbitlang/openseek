@@ -13,6 +13,8 @@ priv suberror BridgeError {
   // The call left this client and something went wrong after that: a reply
   // arrived that could not be read.
   BridgeError(String)
+  // The socket closed while awaiting a reply; delivery remains unknown.
+  BridgeDisconnected(String)
   // The call never left: no bridge, no such method, no open socket. Raised
   // strictly before anything is written to the transport, which is what lets
   // callers treat it as "nothing landed" rather than "unknown".
@@ -22,8 +24,10 @@ priv suberror BridgeError {
 ///|
 impl Show for BridgeError with fn output(self, logger) {
   match self {
-    BridgeRefused(message) | BridgeError(message) | BridgeUnsent(message) =>
-      logger.write_string(message)
+    BridgeRefused(message)
+    | BridgeError(message)
+    | BridgeUnsent(message)
+    | BridgeDisconnected(message) => logger.write_string(message)
   }
 }
 
@@ -239,8 +243,10 @@ test "a Codex command error keeps its detail and is a definite refusal" {
 /// error's `message` over its stringified form.
 pub fn bridge_error_text(error : Error) -> String {
   match error {
-    BridgeRefused(message) | BridgeError(message) | BridgeUnsent(message) =>
-      message
+    BridgeRefused(message)
+    | BridgeError(message)
+    | BridgeUnsent(message)
+    | BridgeDisconnected(message) => message
     @js.Error_(value) =>
       if js_prop(value, "message") is Some(message) &&
         (@js.Cast::into(message) : String?) is Some(text) &&
@@ -289,7 +295,7 @@ pub fn bridge_failure(error : Error) -> BridgeFailure {
     // A reply that arrived and could not be decoded, or a socket that died
     // under a request already sent: it went out, and the answer is what is
     // lost.
-    BridgeError(_) => Unknown
+    BridgeError(_) | BridgeDisconnected(_) => Unknown
     @js.Error_(value) =>
       if openseek_api() is Some(_) || browser_rpc_error_is_definite(value) {
         Refused
@@ -318,4 +324,14 @@ fn browser_rpc_error_is_definite(value : @js.Value) -> Bool {
 let ordered_method_tail : Ref[@js.Value] = {
   let promise : @js.Value = @js.globalThis.get_with_string("Promise")
   Ref(promise.apply_with_string("resolve", ([] : FixedArray[@js.Value])))
+}
+
+///|
+/// A transport loss, distinct from a host rejection or malformed reply.
+/// Remote calls known not to have left can only have failed at the socket.
+/// The connection owner already schedules reconnection; callers must not
+/// restart that loop or replay a request whose delivery is unknown.
+pub fn bridge_connection_lost(channel : ChannelId, error : Error) -> Bool {
+  channel is Remote(_) &&
+  (error is BridgeDisconnected(_) || error is BridgeUnsent(_))
 }

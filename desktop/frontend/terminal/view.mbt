@@ -85,7 +85,14 @@ fn panel_view(
   }
   // The visible tab's failure detail at the right edge; a failed tab is
   // closed with its ✕ and a fresh one opened with "+".
-  if active is Some(tab) {
+  if !ctx.connected {
+    items.push(
+      @html.span(
+        class="terminal-status",
+        "Reconnecting… A new shell will open; previous input will not be replayed.",
+      ),
+    )
+  } else if active is Some(tab) {
     match tab.status {
       TabOpening =>
         items.push(@html.span(class="terminal-status", "starting…"))
@@ -94,10 +101,27 @@ fn panel_view(
       TabExited(code~) =>
         items.push(@html.span(class="terminal-status", "exit \{code}"))
       TabRunning =>
-        if tab.input.failure is Some(message) {
-          items.push(
-            @html.span(class="terminal-status terminal-error", message),
-          )
+        match tab.input.failure {
+          Some(Reconnecting) =>
+            items.push(
+              @html.span(
+                class="terminal-status",
+                "Reconnecting… Previous input will not be replayed.",
+              ),
+            )
+          Some(Failed(message)) =>
+            items.push(
+              @html.span(class="terminal-status terminal-error", message),
+            )
+          None =>
+            if state.interrupted_channels.contains(ctx.channel) {
+              items.push(
+                @html.span(
+                  class="terminal-status",
+                  "Reconnected with a new shell; previous input was not replayed.",
+                ),
+              )
+            }
         }
     }
   } else if ctx.placement is None {
@@ -111,8 +135,6 @@ fn panel_view(
         ui(locale, MissingWorktree),
       ),
     )
-  } else if !ctx.connected {
-    items.push(@html.span(class="terminal-status", "reconnecting…"))
   }
   items.push(
     @html.button(

@@ -18,13 +18,26 @@ priv struct InputBatch {
 } derive(Eq)
 
 ///|
+/// Keep transport loss distinct until the terminal state handles the reply.
+pub(all) enum InputWriteFailure {
+  ConnectionLost
+  WriteFailed(String)
+} derive(Eq)
+
+///|
+priv enum InputPause {
+  Reconnecting
+  Failed(String)
+} derive(Eq)
+
+///|
 /// Exactly one write is in flight for each PTY. Pending input belongs to the
 /// tab generation and is discarded with it, never replayed after reconnect.
 priv struct InputQueue {
   pending : Array[InputChunk]
   pending_bytes : Int
   active : InputBatch?
-  failure : String?
+  failure : InputPause?
 } derive(Eq)
 
 ///|
@@ -48,7 +61,7 @@ fn pause_input(
         pending: [],
         pending_bytes: 0,
         active: tab.input.active,
-        failure: Some(message),
+        failure: Some(Failed(message)),
       },
     },
   )
@@ -138,7 +151,7 @@ fn finish_input(
   key : String,
   id : String,
   token : String,
-  result : Result[Unit, String],
+  result : Result[Unit, InputWriteFailure],
 ) -> (@cmd.Cmd, State) {
   guard state.tab_by_key(key) is Some(tab) &&
     tab.id == Some(id) &&
@@ -149,7 +162,20 @@ fn finish_input(
   let tab = { ..tab, input: { ..tab.input, active: None, }, }
   let (cmd, tab) = match result {
     Ok(_) => start_input(dispatch, tab)
-    Err(message) =>
+    Err(ConnectionLost) =>
+      (
+        @cmd.none,
+        {
+          ..tab,
+          input: {
+            pending: [],
+            pending_bytes: 0,
+            active: None,
+            failure: Some(Reconnecting),
+          },
+        },
+      )
+    Err(WriteFailed(message)) =>
       if tab.input.failure is Some(_) {
         (@cmd.none, tab)
       } else {
@@ -162,3 +188,6 @@ fn finish_input(
   }
   (cmd, state.replace_tab(tab))
 }
+
+///|
+pub extend InputWriteFailure with Eq::{equal, not_equal}

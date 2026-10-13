@@ -122,7 +122,7 @@ test "failed or stale input acknowledgements never replay uncertain writes" {
       key,
       "pty",
       batch.token,
-      Err("disconnected"),
+      Err(WriteFailed("PTY write failed")),
     ).1
   assert_true(state.tabs[0].input.failure is Some(_))
   assert_true(state.tabs[0].input.pending.is_empty())
@@ -172,4 +172,95 @@ test "input budgets count UTF8 bytes and bound queued events without truncation"
   queued = update(emit, UserInput(key~, data="x"), queued, ctx).1
   assert_true(queued.tabs[0].input.failure is Some(_))
   assert_true(queued.tabs[0].input.pending.is_empty())
+}
+
+///|
+test "connection loss recovers with fresh input only in either callback order" {
+  let remote : @interop.ChannelId = Remote("device")
+  guard @resource.of_path(remote, "/work/input") is Some(root) else {
+    fail("invalid fixture")
+  }
+  let ctx : Ctx = {
+    channel: remote,
+    session: "input",
+    placement: Some(@interop.WorkspaceRoot(root~)),
+    dark_mode: false,
+    connected: true,
+  }
+  for reply_first in [true, false] {
+    let messages : Array[Msg] = []
+    let emit : @cmd.Emit[Msg] = @cmd.Emit(msg => {
+      messages.push(msg)
+      @cmd.none
+    })
+    let (_, opening) = update(emit, ToggleTerminal, State::empty(), ctx)
+    let key = opening.tabs[0].key
+    let mut state = update(
+        emit,
+        Opened(channel=remote, key~, id="old"),
+        opening,
+        ctx,
+      ).1
+    state = { ..state, live_channels: [remote], }
+    state = update(emit, UserInput(key~, data="maybe-delivered\n"), state, ctx).1
+    state = update(emit, UserInput(key~, data="unsent-tail\n"), state, ctx).1
+    guard state.tabs[0].input.active is Some(batch) else { fail("no write") }
+    let failure = InputSettled(
+      key~,
+      id="old",
+      token=batch.token,
+      result=Err(ConnectionLost),
+    )
+    if reply_first {
+      state = update(emit, failure, state, ctx).1
+      assert_true(state.tabs[0].input.failure is Some(Reconnecting))
+      assert_true(state.tabs[0].input.pending.is_empty())
+      assert_true(state.tabs[0].input.active is None)
+      assert_true(
+        update(emit, UserInput(key~, data="ignored"), state, ctx).1 == state,
+      )
+    }
+    let down = { ..ctx, connected: false, }
+    state = state.reconcile(
+        emit,
+        Input(ctx=down, live_channels=[], has_devices=true),
+      ).0
+    assert_true(state.open)
+    assert_true(state.tabs.is_empty())
+    assert_true(state.interrupted_channels.contains(remote))
+    if !reply_first {
+      assert_true(update(emit, failure, state, down).1 == state)
+    }
+    state = state.reconcile(
+        emit,
+        Input(ctx~, live_channels=[remote], has_devices=true),
+      ).0
+    assert_eq(state.tabs.length(), 1)
+    let replacement_key = state.tabs[0].key
+    assert_true(replacement_key != key)
+    state = update(
+        emit,
+        Opened(channel=remote, key=replacement_key, id="new"),
+        state,
+        ctx,
+      ).1
+    assert_true(state.tabs[0].input.active is None)
+    assert_true(state.tabs[0].input.pending.is_empty())
+    assert_true(update(emit, failure, state, ctx).1 == state)
+    assert_true(
+      finish_input(emit, state, key, "old", batch.token, Ok(())).1 == state,
+    )
+    state = update(
+        emit,
+        UserInput(key=replacement_key, data="fresh\n"),
+        state,
+        ctx,
+      ).1
+    guard state.tabs[0].input.active is Some(fresh) else {
+      fail("new input remained paused")
+    }
+    assert_eq(fresh.chunk.data, "fresh\n")
+    assert_false(state.interrupted_channels.contains(remote))
+    assert_false(messages.any(msg => msg is InputFailed(..)))
+  }
 }

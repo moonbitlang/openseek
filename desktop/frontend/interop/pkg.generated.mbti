@@ -17,6 +17,8 @@ pub const LocalDeviceId : String = "local"
 
 pub fn add_capture_listener(@js.Value, String, (@dom.Event) -> Unit) -> Unit
 
+pub fn bridge_connection_lost(ChannelId, Error) -> Bool
+
 pub fn bridge_error_is_definite(Error) -> Bool
 
 pub fn bridge_error_text(Error) -> String

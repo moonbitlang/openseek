@@ -1,7 +1,8 @@
 // The terminal panel's bridge calls, routed by the channel that owns each tab.
 // `terminal.open` folds its
 // reply back into the update loop; input writes settle one bounded per-tab
-// queue through InputSettled. Input failures pause that queue with a toast;
+// queue through InputSettled. Transport loss waits for channel reconnection;
+// other input failures pause that queue with a toast;
 // resize/close failures are dropped (their loss only degrades, and a dead
 // session reports itself through `terminal_exit`). Flow-control acks are sent
 // once after xterm renders their output sequence.
@@ -56,7 +57,7 @@ fn send_input(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[Unit, String] = try {
+      let result : Result[Unit, InputWriteFailure] = try {
         ignore(
           @interop.bridge_request(channel, @commands.terminal_input, {
             id,
@@ -74,7 +75,12 @@ fn send_input(
         )
         Ok(())
       } catch {
-        error => Err(@interop.bridge_error_text(error))
+        error =>
+          if @interop.bridge_connection_lost(channel, error) {
+            Err(ConnectionLost)
+          } else {
+            Err(WriteFailed(@interop.bridge_error_text(error)))
+          }
       }
       scheduler.add(
         dispatch(InputSettled(key~, id~, token=batch.token, result~)),
