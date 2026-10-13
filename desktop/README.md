@@ -188,6 +188,24 @@ are not gated by the approval prompt, which only covers the built-in tools'
 sandbox escalations. Codex conversations do not
 read this file — Codex takes its MCP servers from its own `config.toml`.
 
+### The app's own tools
+
+The app offers tools of its own to the agents it runs, starting with the
+dock's browser: `browser_tabs` lists the open Browser tabs with each one's id,
+URL, title, and whether it is the one on show. They are served by the bundled
+`seekmoon` command, which is one more entry in the same file:
+
+```json
+{ "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }
+```
+
+The tools then reach the agent as `mcp__seekmoon__<tool>`. `seekmoon` is on
+the path of every engine the app starts and talks to the app that started it,
+so the entry needs no path and no address; outside the app the command has
+nothing to connect to. `"args": ["mcp", "browser"]` offers only the named
+groups of tools. The server and its command are described in
+`backend/mcp/README.md`.
+
 ## API endpoint
 
 SeekMoon is bring-your-own-key: there is no hosted chat proxy, so requests
