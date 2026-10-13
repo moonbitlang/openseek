@@ -10,7 +10,7 @@ import {
   "moonbitlang/openseek_protocol@0.3.0",
   "moonbit-community/rabbita@0.16.4",
   "Lampese/office-viewer@0.1.3",
-  "moonbitlang/editor@0.4.5",
+  "moonbitlang/editor@0.4.6",
   "moonbitlang/workflow@0.10.0",
 }
 
