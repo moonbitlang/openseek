@@ -197,6 +197,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("codex", ["review"]),
   // Compile documents and raster previews for read_image visual review.
   ("typst", ["compile"]),
+  ("typst", ["watch"]),
+  ("typst", ["eval"]),
   ("typst", ["fonts"]),
   ("typst", ["help"]),
   ("typst", ["--help"]),
