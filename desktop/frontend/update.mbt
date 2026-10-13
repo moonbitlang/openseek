@@ -6782,12 +6782,26 @@ fn update_device_msg(
           }
           // A held shell result may have taken ownership of the composer.
           // Reflect the accepted queue edit without consuming that new draft.
-          guard conv.queue_edit is Some(Saving(id=saving_id, run_id=saving_run)) &&
+          guard conv.queue_edit
+            is Some(
+              Saving(id=saving_id, run_id=saving_run)
+              | SavingDetached(id=saving_id, run_id=saving_run)
+            ) &&
             saving_id == id &&
             saving_run == run_id else {
             return (
               @cmd.none,
               model.replace_conversation({ ..conv, queued_inputs, }),
+            )
+          }
+          if conv.queue_edit is Some(SavingDetached(..)) {
+            return (
+              @cmd.none,
+              model.replace_conversation({
+                ..conv,
+                queued_inputs,
+                queue_edit: None,
+              }),
             )
           }
           let next = {
@@ -6816,7 +6830,11 @@ fn update_device_msg(
     }
     QueueEditRejected(session~, id~, run_id~, message~) => {
       guard model.find_conversation(channel, session) is Some(conv) &&
-        conv.queue_edit is Some(Saving(id=saving_id, run_id=saving_run)) &&
+        conv.queue_edit
+        is Some(
+          Saving(id=saving_id, run_id=saving_run)
+          | SavingDetached(id=saving_id, run_id=saving_run)
+        ) &&
         saving_id == id &&
         saving_run == run_id else {
         return (@cmd.none, model)
@@ -6824,7 +6842,8 @@ fn update_device_msg(
       model
       .replace_conversation({
         ..conv,
-        queue_edit: if conv.queued_inputs.any(item => item.id == id) {
+        queue_edit: if conv.queue_edit is Some(Saving(..)) &&
+          conv.queued_inputs.any(item => item.id == id) {
           Some(Editing(id~))
         } else {
           None

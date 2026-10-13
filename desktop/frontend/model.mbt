@@ -3978,18 +3978,21 @@ fn Conversation::enqueue_steer(
 priv enum QueueEdit {
   Editing(id~ : String)
   Saving(id~ : String, run_id~ : String)
+  // Shell output replaced the editable draft, but the request still owns
+  // the save lock until its response arrives.
+  SavingDetached(id~ : String, run_id~ : String)
 } derive(Eq)
 
 ///|
 fn QueueEdit::id(self : QueueEdit) -> String {
   match self {
-    Editing(id~) | Saving(id~, ..) => id
+    Editing(id~) | Saving(id~, ..) | SavingDetached(id~, ..) => id
   }
 }
 
 ///|
 fn Conversation::saving_queue_edit(self : Conversation) -> Bool {
-  self.queue_edit is Some(Saving(..))
+  self.queue_edit is Some(Saving(..) | SavingDetached(..))
 }
 
 ///|

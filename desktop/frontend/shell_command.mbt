@@ -228,7 +228,11 @@ fn send_shell_result(
     // The draft now holds the result, so it is no longer the edit of a queued
     // message: saving it must not rewrite that message, and the reply to an
     // edit already in flight must not clear it.
-    queue_edit: None,
+    queue_edit: match conv.queue_edit {
+      Some(Saving(id~, run_id~) | SavingDetached(id~, run_id~)) =>
+        Some(SavingDetached(id~, run_id~))
+      Some(Editing(..)) | None => None
+    },
   }
   guard model.focused == conv.device else {
     return (@cmd.none, model.replace_conversation(held))
