@@ -194,8 +194,58 @@ test "directory contents failure still reveals its row after the parent loads" {
     ctx,
   )
   let (revealed, _) = loaded.sync_tree_reveal(emit, ctx)
+  assert_eq(revealed.directory_errors.get(target), Some("Permission denied"))
   assert_eq(revealed.tree_focus, Some(target))
   assert_true(
     revealed.tree_reveal is TreeRevealDirectorySettled(path) && path == target,
   )
+  let (_, retrying) = update(emit, DirExpand(target), revealed, ctx)
+  assert_eq(retrying.directory_errors.get(target), Some("Permission denied"))
+  assert_true(retrying.loading.contains(target))
+}
+
+///|
+test "parallel directory failures clear independently on successful replies" {
+  let emit = test_emit()
+  let ctx = test_ctx()
+  let root = @pathx.Relative::root()
+  let child = @pathx.Relative("src")
+  let state = {
+    ..owned_state(),
+    directory_errors: Map([
+      (root, "Root unavailable"),
+      (child, "Child unavailable"),
+      (@pathx.Relative("src/nested"), "Nested unavailable"),
+    ]),
+  }
+  // A root read may recover through sync or a watcher, without DirExpand.
+  let (_, root_loaded) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=root, entries=[
+      { name: "src", path: child, is_dir: true, },
+    ]),
+    state,
+    ctx,
+  )
+  assert_eq(root_loaded.directory_errors.get(root), None)
+  assert_eq(root_loaded.directory_errors.get(child), Some("Child unavailable"))
+  assert_eq(
+    root_loaded.directory_errors.get(@pathx.Relative("src/nested")),
+    Some("Nested unavailable"),
+  )
+  let (_, recovered) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=child, entries=[]),
+    root_loaded,
+    ctx,
+  )
+  assert_true(recovered.directory_errors.is_empty())
+  // Removing the failed directory removes its entire stale error subtree.
+  let (_, removed) = update(
+    emit,
+    DirLoaded(owner=ctx.owner, epoch=ctx.request_epoch, path=root, entries=[]),
+    state,
+    ctx,
+  )
+  assert_true(removed.directory_errors.is_empty())
 }

@@ -477,6 +477,7 @@ test('a repeated directory link retries failed listings without rereading cached
   const destination = tree.getByRole('treeitem', { name: 'nested', exact: true });
   await expect(destination).toBeFocused();
   await expect(tree.getByRole('treeitem', { name: 'child.mbt', exact: true })).toBeVisible();
+  await expect(page.locator('.file-panel-error')).toBeHidden();
   expect(reads('/workspace')).toBe(rootReads);
   expect(reads('/workspace/src')).toBe(2);
   expect(reads('/workspace/src/nested')).toBe(2);

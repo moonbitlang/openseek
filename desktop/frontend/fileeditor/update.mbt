@@ -2193,6 +2193,7 @@ pub fn sync(
       ..state,
       docs,
       children: Map([]),
+      directory_errors: Map([]),
       loading: [],
       index: IndexEmpty,
       error: None,
@@ -3175,6 +3176,24 @@ fn update_inner(
       } else {
         let children = state.children.copy()
         children[path] = entries
+        let directory_errors = state.directory_errors.copy()
+        for failed, _ in state.directory_errors {
+          // A successful parent listing also confirms deleted/renamed child
+          // directories, whose old paths can no longer be retried.
+          if failed == path ||
+            (
+              (path.is_root() || failed.0.has_prefix(path.0 + "/")) &&
+              !entries.any(entry => {
+                entry.is_dir &&
+                (
+                  failed == entry.path ||
+                  failed.0.has_prefix(entry.path.0 + "/")
+                )
+              })
+            ) {
+            directory_errors.remove(failed)
+          }
+        }
         let breadcrumb_cmd = if state.highlighted is Some(highlighted) &&
           highlighted == path {
           focus_breadcrumb_entry_after_render(0)
@@ -3187,7 +3206,7 @@ fn update_inner(
             ..state,
             children,
             loading: state.loading.filter(entry => entry != path),
-            error: None,
+            directory_errors,
           },
         )
       }
@@ -3195,12 +3214,14 @@ fn update_inner(
       if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
+        let directory_errors = state.directory_errors.copy()
+        directory_errors[path] = message
         (
           @cmd.none,
           {
             ..state,
             loading: state.loading.filter(entry => entry != path),
-            error: Some(message),
+            directory_errors,
             tree_reveal: match state.tree_reveal {
               TreeRevealPending(target) if path.is_root() ||
                 target.0.has_prefix(path.0 + "/") => TreeRevealSettled(target)

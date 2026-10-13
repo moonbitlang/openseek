@@ -617,6 +617,8 @@ pub(all) struct State {
   loading : Array[@pathx.Relative]
   // Listed directories' entries, keyed by the directory's relative path.
   children : Map[@pathx.Relative, Array[FileEntry]]
+  // Parallel directory replies clear only their own failures.
+  directory_errors : Map[@pathx.Relative, String]
   // Each open document, keyed by device-bound absolute URI. The key set
   // mirrors the dock strip's file tabs (`Ctx.open_files`): the root update
   // adds an entry when it opens a tab and drops it when the tab closes.
@@ -638,7 +640,7 @@ pub(all) struct State {
   highlighted : @pathx.Relative?
   // The workspace-wide file snapshot used by completion consumers.
   index : FileIndex
-  // The last directory/file failure, surfaced in the panel header;
+  // The last file operation failure, surfaced in the panel header;
   // `None` while nothing has failed.
   error : String?
 } derive(Eq)
@@ -711,6 +713,7 @@ pub fn State::empty() -> State {
     expanded: [],
     loading: [],
     children: Map([]),
+    directory_errors: Map([]),
     docs: Map([]),
     mbti_view_modes: Map([]),
     moon_mod_view_modes: Map([]),

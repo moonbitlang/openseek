@@ -571,6 +571,7 @@ pub(all) struct State {
   expanded : Array[@pathx.Relative]
   loading : Array[@pathx.Relative]
   children : Map[@pathx.Relative, Array[FileEntry]]
+  directory_errors : Map[@pathx.Relative, String]
   docs : Map[@common.Uri, Doc]
   mbti_view_modes : Map[@common.Uri, MbtiViewMode]
   moon_mod_view_modes : Map[@common.Uri, MoonModViewMode]

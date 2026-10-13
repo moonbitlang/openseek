@@ -615,7 +615,19 @@ fn tree_pane(
   let visible_error = if state.explorer_mode is ExplorerSearch {
     None
   } else {
-    state.error
+    let errors = []
+    if state.error is Some(message) {
+      errors.push(message)
+    }
+    for _, message in state.directory_errors {
+      errors.push(message)
+    }
+    errors.sort()
+    if errors.is_empty() {
+      None
+    } else {
+      Some(errors.join("\n"))
+    }
   }
   let inventory = if ctx.placement is None {
     [@html.div(class="file-panel-empty", ui(locale, WaitingPlacement))]
@@ -3103,7 +3115,7 @@ fn breadcrumb_picker(
       [
         @html.div(
           class="breadcrumb-picker-empty breadcrumb-picker-failed",
-          match state.error {
+          match state.directory_errors.get(directory) {
             Some(message) =>
               dynamic_text(locale, DFolderFailed(message.to_string()))
             None => ui(locale, CannotLoadFolder)
