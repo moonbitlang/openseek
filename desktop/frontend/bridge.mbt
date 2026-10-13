@@ -1303,7 +1303,16 @@ fn queue_openseek(
                     message="Queue action failed: \{@interop.bridge_error_text(error)}",
                   ),
                 )
-              QueueEdit(..) | QueueWithdraw(..) =>
+              QueueEdit(id~, ..) =>
+                dispatch(
+                  QueueEditRejected(
+                    session~,
+                    id~,
+                    run_id~,
+                    message="Queue action failed: \{@interop.bridge_error_text(error)}",
+                  ),
+                )
+              QueueWithdraw(..) =>
                 root_dispatch(
                   HostActionFailed(
                     "Queue action failed: \{@interop.bridge_error_text(error)}",
@@ -1335,7 +1344,23 @@ fn queue_openseek(
                   },
                 ),
               )
-            QueueEdit(..) | QueueWithdraw(..) =>
+            QueueEdit(id~, ..) =>
+              dispatch(
+                QueueEditRejected(
+                  session~,
+                  id~,
+                  run_id~,
+                  message=match locale {
+                    SimplifiedChinese => "队列中的消息已不可用。"
+                    TraditionalChinese => "佇列中的訊息已不可用。"
+                    Japanese =>
+                      "キュー内のメッセージは利用できなくなりました。"
+                    English => "The queued message is no longer available."
+                    Spanish => "El mensaje en cola ya no está disponible."
+                  },
+                ),
+              )
+            QueueWithdraw(..) =>
               root_dispatch(
                 HostActionFailed(
                   match locale {

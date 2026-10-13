@@ -136,7 +136,7 @@ pub(all) enum ContextComponent {
   // `!` commands submitted from this composer that are still running on the
   // host, oldest first. Each settles when its result reaches the engine.
   ShellCommandsRunning(commands~ : Array[String])
-  QueuedInputPanel(items~ : Array[QueuedInput])
+  QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)

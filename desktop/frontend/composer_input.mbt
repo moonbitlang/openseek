@@ -20,6 +20,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     archive_generation: self.composer_entry_retirements.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
+  let queue_save_pending = conv.saving_queue_edit()
   let semantic_selection_pending = conv.pending_semantic_submission is Some(_)
   // Sending needs a live engine and a workspace to run in — nothing about the
   // transcript. The record is what the turn writes, not a precondition for
@@ -35,7 +36,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         conv.run is Open(stage~, ..) &&
         !(stage is Cancelling),
       can_stop=can_stop(conv),
-      submit=if conv.queue_edit_id is Some(_) {
+      submit=if conv.queue_edit is Some(_) {
         @composer.SaveQueue
       } else if self.followup_behavior is FollowupQueue {
         @composer.Queue
@@ -47,6 +48,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     @composer.Send(
       available=root_ready &&
         !semantic_selection_pending &&
+        !queue_save_pending &&
         conv.compaction is NotCompacting,
     )
   }
@@ -142,14 +144,19 @@ fn Model::composer_input(self : Model) -> @composer.Input {
         @composer.Queueing
       } else {
         @composer.Queued(
-          editing=conv.queue_edit_id is Some(id) && id == item.id,
+          editing=conv.queue_edit is Some(edit) && edit.id() == item.id,
           interactive~,
         )
       },
     })
   }
   if !queued_items.is_empty() {
-    context.push(@composer.QueuedInputPanel(items=queued_items))
+    context.push(
+      @composer.QueuedInputPanel(
+        items=queued_items,
+        enabled=!queue_save_pending,
+      ),
+    )
   }
   if !conv.shell_commands.is_empty() {
     context.push(
@@ -207,8 +214,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       },
     ],
     // Editing a queued message rewrites that message; it never runs one.
-    shell_available: conv.queue_edit_id is None,
-    history: conv.sent_prompts(shell=conv.queue_edit_id is None),
+    shell_available: conv.queue_edit is None,
+    history: conv.sent_prompts(shell=conv.queue_edit is None),
     root: self.conversation_root(conv),
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
@@ -234,7 +241,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       conv.pending_steers.is_empty() &&
       conv.shell_commands.is_empty() &&
       conv.goal_edit is None &&
-      conv.queue_edit_id is None &&
+      conv.queue_edit is None &&
       conv.watermark > 0 {
       Some(conv.watermark)
     } else {
@@ -251,7 +258,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       status,
       placeholder: if conv.goal_edit is Some(_) {
         shell_text(self.locale, GoalPlaceholder)
-      } else if conv.queue_edit_id is Some(_) {
+      } else if conv.queue_edit is Some(_) {
         shell_text(self.locale, EditQueuePlaceholder)
       } else if conv.is_running() {
         if self.followup_behavior is FollowupQueue {
@@ -262,11 +269,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       } else {
         shell_text(self.locale, AskPlaceholder)
       },
-      // The file snapshot is the submission boundary. Freeze this composer
-      // until it settles so new local text cannot be mistaken for, or lost
-      // behind, the captured prompt; the File Editor remains usable for the
-      // next semantic selection.
-      disabled: semantic_selection_pending,
+      // Freeze submissions while their snapshot or queue mutation is in
+      // flight, so a later edit cannot be cleared by an earlier response.
+      disabled: semantic_selection_pending || queue_save_pending,
       primary_action,
     },
   }

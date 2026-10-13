@@ -858,7 +858,7 @@ priv struct Conversation {
   // They are transient controller state and never part of the transcript.
   queued_inputs : Array[QueuedInput]
   // The queued prompt currently loaded into the main composer for editing.
-  queue_edit_id : String?
+  queue_edit : QueueEdit?
   // The permission question this conversation's engine is blocked on, if any.
   //
   // A field rather than a queue because the engine can only be blocked on one
@@ -2248,6 +2248,12 @@ priv enum DeviceMsg {
     action~ : @protocol.QueueAction,
     run_id~ : String
   )
+  QueueEditRejected(
+    session~ : String,
+    id~ : String,
+    run_id~ : String,
+    message~ : String
+  )
   QueueAddRejected(session~ : String, submission_id~ : String, run_id~ : String)
   QueueSteerRejected(
     session~ : String,
@@ -2621,7 +2627,7 @@ fn empty_conversation(
     turn: RunState::empty(),
     pending_steers: [],
     queued_inputs: [],
-    queue_edit_id: None,
+    queue_edit: None,
     pending_approval: None,
     pending_prompt: None,
     pending_semantic_submission: None,
@@ -3967,6 +3973,26 @@ fn Conversation::enqueue_steer(
 }
 
 ///|
+/// A queued draft stays locked until its save RPC settles, even if the run
+/// consumes the queued item in the meantime.
+priv enum QueueEdit {
+  Editing(id~ : String)
+  Saving(id~ : String, run_id~ : String)
+} derive(Eq)
+
+///|
+fn QueueEdit::id(self : QueueEdit) -> String {
+  match self {
+    Editing(id~) | Saving(id~, ..) => id
+  }
+}
+
+///|
+fn Conversation::saving_queue_edit(self : Conversation) -> Bool {
+  self.queue_edit is Some(Saving(..))
+}
+
+///|
 fn Conversation::remove_queued_input(
   self : Conversation,
   id : String,
@@ -3979,10 +4005,11 @@ fn Conversation::remove_queued_input(
         {
           ..self,
           queued_inputs,
-          queue_edit_id: if self.queue_edit_id is Some(edit_id) && edit_id == id {
+          queue_edit: if self.queue_edit is Some(Editing(id=edit_id)) &&
+            edit_id == id {
             None
           } else {
-            self.queue_edit_id
+            self.queue_edit
           },
         },
         true,

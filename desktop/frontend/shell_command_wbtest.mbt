@@ -161,7 +161,7 @@ test "a held result takes the draft out of a queue edit" {
   let conv = {
     ..running_conversation(),
     compaction: Compacting,
-    queue_edit_id: Some("queued-1"),
+    queue_edit: Some(Editing(id="queued-1")),
   }
   let model = with_running_shell(test_model(), conv)
   // A device that is not focused: the result is held, not sent.
@@ -179,6 +179,6 @@ test "a held result takes the draft out of a queue edit" {
     fail("the conversation is gone")
   }
   // The reply to an edit already in flight can no longer clear the draft.
-  assert_true(after.queue_edit_id is None)
+  assert_true(after.queue_edit is None)
   assert_true(after.task.has_prefix("<user_shell_command>\n"))
 }

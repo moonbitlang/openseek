@@ -243,7 +243,9 @@ fn Entry::action_buttons(
             Queue => ui(locale, QueueNextTurn)
             SaveQueue => ui(locale, SaveQueued)
           },
-          disabled: self.image_reads > 0 || !self.attachment_requests.is_empty(),
+          disabled: input.presentation.disabled ||
+          self.image_reads > 0 ||
+          !self.attachment_requests.is_empty(),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         })

@@ -450,6 +450,7 @@ priv enum Msg {
 /// command's output is sent as a message, so Enter in shell mode must not get
 /// past a gate the button respects.
 fn Entry::can_send(self : Entry, input : Input) -> Bool {
+  !input.presentation.disabled &&
   self.image_reads == 0 &&
   self.attachment_requests.is_empty() &&
   (match input.presentation.primary_action {
@@ -1075,6 +1076,7 @@ fn Model::update(
         ),
       )
     }
+    SubmitRequested if input.presentation.disabled => (self, @cmd.none)
     SubmitRequested =>
       if input.goal.draft is Some(_) {
         let text = entry.goal_draft.unwrap_or("").trim().to_owned()
