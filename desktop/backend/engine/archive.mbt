@@ -578,9 +578,11 @@ pub async fn delete_session(
   // As in archiving, a dirty refusal lands after the idle engine closed and
   // before anything irreversible; a removal that succeeds while the record
   // move below then fails leaves a live conversation blocked on its retained
-  // missing placement.
+  // missing placement. Only the selected project's checkout may go: another
+  // project can hold a conversation with the same id.
   let refusal = @worktree.WorktreeOwner::openseek(session).archive_checkout(
     force,
+    workspace=selected.workspace,
     on_committed?=on_worktree_changed,
   )
   if refusal is Some(refusal) {

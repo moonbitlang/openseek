@@ -449,14 +449,16 @@ fn missing_checkout_refusal(name : String) -> String {
 /// only Desktop registries, never app-server or Git path conventions.
 async fn WorktreeOwner::binding_unlocked(
   self : WorktreeOwner,
+  workspace? : @pathx.Absolute,
 ) -> (@pathx.Absolute, WorktreeEntry)? {
-  let workspaces = match self {
-    OpenSeekSession(session) =>
+  let workspaces = match (workspace, self) {
+    (Some(workspace), _) => [workspace]
+    (None, OpenSeekSession(session)) =>
       match @session_store.workspace_of(session) {
         Some(workspace) => [workspace]
         None => []
       }
-    CodexThread(_) => @workspaces.registered()
+    (None, CodexThread(_)) => @workspaces.registered()
   }
   for workspace in workspaces {
     for entry in read_worktrees_unlocked(workspace) {
@@ -543,15 +545,21 @@ async fn WorktreeEntry::held_by_another(
 /// goes only with the last conversation that holds it.
 /// The caller must first fence its own backend writer (OpenSeek's slot claim or a
 /// successful Codex `thread/archive`). An owner without a worktree is a no-op.
+///
+/// `workspace` names the one project whose registry may hold the placement.
+/// A caller that already selected a store passes it: session ids can repeat
+/// across projects, and the owner alone resolves to the first project that
+/// holds a record with that id.
 pub async fn WorktreeOwner::archive_checkout(
   self : WorktreeOwner,
   host : WorktreeHost,
   force : Bool,
+  workspace? : @pathx.Absolute,
   on_committed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked() is Some((workspace, _)) else { return None }
+  guard self.binding_unlocked(workspace?) is Some((workspace, _)) else { return None }
   // Another host adding a fork to this worktree holds this lock from the
   // member's binding until its record exists. Deciding in between would see
   // a member that holds nothing yet and delete the checkout its fork is

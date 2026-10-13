@@ -8,6 +8,7 @@ priv enum DynamicMessage {
   DConnecting(String)
   DRestartQuestion(String)
   DDeleteConversation(String)
+  DDeleteWorktreeConversation(String, String)
 }
 
 ///|
@@ -72,5 +73,15 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
       "“\{p0}”及其所有子代理程式歷史記錄將被永久刪除，且無法復原。專案檔案和 Git 分支將被保留。"
     (Japanese, DDeleteConversation(p0)) =>
       "「\{p0}」とそのすべてのサブエージェント履歴は完全に削除され、元に戻せません。プロジェクトのファイルと Git ブランチは保持されます。"
+    (English, DDeleteWorktreeConversation(p0, p1)) =>
+      "“\{p0}” and all of its subagent history will be permanently deleted, and its worktree checkout \{p1} is removed along with any ignored files in it. This cannot be undone. Committed work, project files, and Git branches will remain."
+    (Spanish, DDeleteWorktreeConversation(p0, p1)) =>
+      "Se eliminarán de forma permanente «\{p0}» y todo su historial de subagentes, y se quitará su copia de trabajo \{p1} junto con los archivos ignorados que contenga. Esta acción no se puede deshacer. Se conservarán los commits, los archivos del proyecto y las ramas de Git."
+    (SimplifiedChinese, DDeleteWorktreeConversation(p0, p1)) =>
+      "“\{p0}”及其所有子智能体历史记录将被永久删除，其工作树检出目录 \{p1} 及其中被忽略的文件也会一并移除，且无法撤销。已提交的内容、项目文件和 Git 分支将被保留。"
+    (TraditionalChinese, DDeleteWorktreeConversation(p0, p1)) =>
+      "“\{p0}”及其所有子代理程式歷史記錄將被永久刪除，其工作樹檢出目錄 \{p1} 及其中被忽略的檔案也會一併移除，且無法復原。已提交的內容、專案檔案和 Git 分支將被保留。"
+    (Japanese, DDeleteWorktreeConversation(p0, p1)) =>
+      "「\{p0}」とそのすべてのサブエージェント履歴は完全に削除され、ワークツリーのチェックアウト \{p1} も無視されたファイルごと削除されます。元に戻せません。コミット済みの内容、プロジェクトのファイル、Git ブランチは保持されます。"
   }
 }

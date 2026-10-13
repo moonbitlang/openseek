@@ -922,3 +922,70 @@ async test "deleting a live conversation skips the archive and drops its placeme
   )
   assert_true(manager.record_guards.is_empty())
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "deleting a live conversation leaves a same-id checkout in another project" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  let root = worktree_test_root("openseek-live-delete-same-id-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  defer restore_home_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  // Two projects each hold a conversation with the same id. Only the first
+  // one's runs in a worktree, and the first registered project is the one an
+  // id-only lookup finds.
+  let first = root.join("first")
+  let second = root.join("second")
+  for repo in [first, second] {
+    prepare_git_repo(repo)
+    ignore(@workspaces.add(repo.to_string(), _ => ()))
+  }
+  ignore(
+    @worktree.create(
+      manager.worktree_host(),
+      first.to_string(),
+      @worktree.WorktreeOwner::openseek("chat"),
+      _ => (),
+    ),
+  )
+  for repo in [first, second] {
+    @fsx.ensure_dir(
+      @workspaces.store_root(repo).join("sessions").join("chat").to_path(),
+    )
+  }
+  @fs.write_file(
+    first.join(".worktrees/wt-1/local.txt").to_string(),
+    b"x",
+    create_mode=CreateOrTruncate,
+  )
+  // Even forced, deleting the second project's conversation must not reach
+  // the first project's checkout or its uncommitted file.
+  let reply = delete_session(
+    manager,
+    "chat",
+    second.resource_path(),
+    (_, _) => (),
+    force=true,
+  )
+  assert_true(reply is Deleted)
+  assert_false(
+    @fsx.exists(
+      @workspaces.store_root(second).join("sessions").join("chat").to_path(),
+    ),
+  )
+  assert_true(@fsx.exists(first.join(".worktrees/wt-1/local.txt").to_path()))
+  assert_true(
+    @fsx.is_dir(
+      @workspaces.store_root(first).join("sessions").join("chat").to_path(),
+    ),
+  )
+  guard @worktree.list(first.to_string()).worktrees is [kept] else {
+    fail("the other project's placement must survive")
+  }
+  assert_true(kept.present)
+}

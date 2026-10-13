@@ -5146,6 +5146,11 @@ fn update_msg(
             record,
             sessions,
             title: session_item_label(item),
+            worktree: if record is LiveRecord {
+              worktree_name_for(dev, key.workspace, key.session)
+            } else {
+              None
+            },
           }),
         },
       )
@@ -16930,6 +16935,21 @@ test "deleting a live chat confirms first and skips the archive" {
     ],
     // A same-id archived row is a different record: it authorizes nothing.
     archived: [placed_archived_item("desktop-archived-only")],
+    worktrees: [
+      {
+        project: key.workspace,
+        rows: [
+          {
+            name: "wt-1",
+            session: Some("desktop-parent"),
+            codex_thread: None,
+            path: None,
+            present: true,
+          },
+        ],
+        generation: 1,
+      },
+    ],
   })
   let (_, unlisted) = update(
     dispatch,
@@ -16953,6 +16973,19 @@ test "deleting a live chat confirms first and skips the archive" {
   assert_true(confirm.record is LiveRecord)
   assert_eq(confirm.title, "desktop-parent")
   assert_eq(confirm.sessions, ["desktop-parent", "desktop-parent-sr-1"])
+  // A clean checkout is removed without a second question, so this dialog
+  // is where the user learns the worktree goes too.
+  assert_eq(confirm.worktree, Some("wt-1"))
+  let (_, archived_staged) = update(
+    dispatch,
+    DeleteSession(
+      @interop.ChannelId::Local,
+      { ..key, session: "desktop-archived-only", },
+      ArchivedRecord,
+    ),
+    model,
+  )
+  assert_true(archived_staged.delete_confirm is Some({ worktree: None, .. }))
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)

@@ -21,6 +21,10 @@ priv struct DeleteConfirm {
   // Host notifications still cover a child created after that snapshot.
   sessions : Array[String]
   title : String
+  // The worktree a live chat runs in. Its checkout is removed with the chat,
+  // and a clean one — ignored files included — goes without a second
+  // question, so this dialog has to say so.
+  worktree : String?
 } derive(Eq)
 
 ///|
@@ -255,7 +259,17 @@ fn delete_modal(
       @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
       @html.div(
         class="modal-body",
-        dynamic_text(locale, DDeleteConversation(confirm.title.to_string())),
+        dynamic_text(
+          locale,
+          match confirm.worktree {
+            Some(worktree) =>
+              DDeleteWorktreeConversation(
+                confirm.title.to_string(),
+                worktree.to_string(),
+              )
+            None => DDeleteConversation(confirm.title.to_string())
+          },
+        ),
       ),
       @html.div(class="modal-actions", [
         @html.button(
