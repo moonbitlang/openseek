@@ -912,16 +912,14 @@ fn reveal_local_directory(
     }
     segments.push(segment.to_owned())
     let directory = @pathx.Relative(segments.join("/"))
-    if !model.file_panel.expanded.contains(directory) {
-      let (command, file_panel) = @fileeditor.update(
-        dispatch.map(msg => FileEditor(msg)),
-        @fileeditor.DirToggle(directory),
-        model.file_panel,
-        file_ctx(model),
-      )
-      commands.push(command)
-      model = { ..model, file_panel, }
-    }
+    let (command, file_panel) = @fileeditor.update(
+      dispatch.map(msg => FileEditor(msg)),
+      @fileeditor.DirExpand(directory),
+      model.file_panel,
+      file_ctx(model),
+    )
+    commands.push(command)
+    model = { ..model, file_panel, }
   }
   let (reveal_cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),

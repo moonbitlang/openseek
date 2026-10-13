@@ -294,6 +294,7 @@ pub(all) enum Msg {
   ChangePathFilterChanged(String)
   TreeFocused(@pathx.Relative)
   RevealTreeDirectory(@pathx.Relative)
+  DirExpand(@pathx.Relative)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @pathx.Relative, entries~ : Array[FileEntry])

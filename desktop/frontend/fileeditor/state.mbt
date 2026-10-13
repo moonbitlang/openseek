@@ -976,6 +976,7 @@ pub(all) enum Msg {
   TreeFocused(@pathx.Relative)
   // Focus a transcript-linked directory once its expanded ancestors render.
   RevealTreeDirectory(@pathx.Relative)
+  DirExpand(@pathx.Relative)
   DirToggle(@pathx.Relative)
   // Ensure the current workspace's file snapshot exists. Loading and ready
   // states make this idempotent; a failed first request is retryable.

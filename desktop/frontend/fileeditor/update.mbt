@@ -3128,37 +3128,39 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
-    DirToggle(path) =>
-      if state.expanded.contains(path) {
-        (
-          @cmd.none,
-          {
-            ..state,
-            expanded: state.expanded.filter(entry => entry != path),
-            tree_reveal: state.tree_reveal.settle(),
-          },
-        )
-      } else {
-        let expanded = state.expanded.copy()
+    DirToggle(path) if state.expanded.contains(path) =>
+      (
+        @cmd.none,
+        {
+          ..state,
+          expanded: state.expanded.filter(entry => entry != path),
+          tree_reveal: state.tree_reveal.settle(),
+        },
+      )
+    DirToggle(path) | DirExpand(path) => {
+      let expanded = state.expanded.copy()
+      if !expanded.contains(path) {
         expanded.push(path)
-        // A directory listed once stays cached, so re-expanding is instant.
-        if state.children.contains(path) || state.loading.contains(path) {
-          (@cmd.none, { ..state, expanded, })
-        } else {
-          let loading = state.loading.copy()
-          loading.push(path)
-          (
-            read_directory(
-              dispatch,
-              ctx.owner,
-              ctx.request_epoch,
-              path,
-              root=ctx.root(),
-            ),
-            { ..state, expanded, loading, },
-          )
-        }
       }
+      // Explicit expansion retries a failed read; cached and in-flight reads
+      // stay idempotent even when the directory is already expanded.
+      if state.children.contains(path) || state.loading.contains(path) {
+        (@cmd.none, { ..state, expanded, })
+      } else {
+        let loading = state.loading.copy()
+        loading.push(path)
+        (
+          read_directory(
+            dispatch,
+            ctx.owner,
+            ctx.request_epoch,
+            path,
+            root=ctx.root(),
+          ),
+          { ..state, expanded, loading, },
+        )
+      }
+    }
     EnsureFileIndex =>
       if state.owner != Some(ctx.owner) ||
         state.placement.is_parked() ||

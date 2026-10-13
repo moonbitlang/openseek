@@ -438,3 +438,51 @@ for (const target of ['group_40', 'group_40/nested']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('a repeated directory link retries failed listings without rereading cached directories', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace'] = [{ name: 'src', is_dir: true }];
+  app.directoryEntries['/workspace/src'] = [{ name: 'nested', is_dir: true }];
+  app.directoryEntries['/workspace/src/nested'] = [{ name: 'child.mbt', is_dir: false }];
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture directory' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: { content: '[Target directory](./src/nested/)' } } },
+  ];
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'host.open_path'
+    ? { opened: false, directory_target: { path: 'src/nested' } }
+    : replyFor(request);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  // Cache the root listing, then fail both the target and its ancestor.
+  await app.openReview();
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  const tree = page.getByRole('tree', { name: 'Workspace files' });
+  await expect(tree.getByRole('treeitem', { name: 'src', exact: true })).toBeVisible();
+  app.rpcErrors.set('fs.read_directory', 'Directory unavailable');
+  const link = page.locator('.transcript').getByRole('button', { name: 'Target directory' });
+  const reads = path => app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === path).length;
+  await link.click();
+  await expect(page.locator('.file-panel-error')).toContainText('Directory unavailable');
+  await expect.poll(() => reads('/workspace/src/nested')).toBe(1);
+  // Unrelated focus updates must not automatically retry.
+  await tree.getByRole('treeitem', { name: 'src', exact: true }).focus();
+  await page.getByRole('tab', { name: 'Files', exact: true }).focus();
+  expect(reads('/workspace/src')).toBe(1);
+  expect(reads('/workspace/src/nested')).toBe(1);
+  const rootReads = reads('/workspace');
+  app.rpcErrors.delete('fs.read_directory');
+  await link.click();
+  const destination = tree.getByRole('treeitem', { name: 'nested', exact: true });
+  await expect(destination).toBeFocused();
+  await expect(tree.getByRole('treeitem', { name: 'child.mbt', exact: true })).toBeVisible();
+  expect(reads('/workspace')).toBe(rootReads);
+  expect(reads('/workspace/src')).toBe(2);
+  expect(reads('/workspace/src/nested')).toBe(2);
+  await link.click();
+  await expect(destination).toBeFocused();
+  expect(reads('/workspace/src')).toBe(2);
+  expect(reads('/workspace/src/nested')).toBe(2);
+  expect(app.pageErrors).toEqual([]);
+});
