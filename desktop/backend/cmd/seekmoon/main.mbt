@@ -1,8 +1,15 @@
 ///|
 /// The `seekmoon` command an agent runs to use its host's tools. Everything
-/// it does is `@mcp.cli`; this only connects that to the process.
+/// it does is in `@mcp`; this only connects that to the process.
 async fn main {
-  let outcome = @mcp.cli(@env.args()[1:].to_owned(), @env.get_env_vars())
+  let env = @env.get_env_vars()
+  let outcome = match @env.args()[1:] {
+    // A server for as long as its client keeps stdin open, rather than one
+    // tool run.
+    [@mcp.McpCommand, .. args] =>
+      @mcp.serve_stdio(args.to_owned(), env, @stdio.stdin, @stdio.stdout)
+    args => @mcp.cli(args.to_owned(), env)
+  }
   if !outcome.stdout.is_empty() {
     @stdio.stdout.write(outcome.stdout + "\n")
   }

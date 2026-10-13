@@ -4,8 +4,8 @@
 // server lists, so a host package that contributes a tool gets its command
 // with no code here.
 //
-// Tools live under `seekmoon tools`, which leaves the top level free for
-// whatever else the command grows. A tool named `browser_get_text` is run as
+// Tools live under `seekmoon tools`; `seekmoon mcp` (`stdio.mbt`) is the
+// same tools for a client that speaks MCP. A tool named `browser_get_text` is run as
 // `seekmoon tools browser get-text`: the text before the first underscore
 // groups related tools, and the rest is the verb. Each top-level property of
 // the tool's input schema is an option of the same name, with underscores
@@ -62,9 +62,7 @@ pub async fn cli(args : Array[String], env : Map[String, String]) -> CliOutcome 
 ///|
 async fn run_cli(args : Array[String], env : Map[String, String]) -> CliOutcome {
   guard env.get(UrlEnv) is Some(url) && env.get(TokenEnv) is Some(token) else {
-    raise Usage(
-      "seekmoon talks to the SeekMoon desktop app that started this agent, and nothing here was started by one (\{UrlEnv} and \{TokenEnv} are not set).",
-    )
+    raise Usage(ungranted_message())
   }
   let listed = request(url, token, "tools/list", Json::empty_object())
   guard listed is { "tools": Array(entries), .. } else {
@@ -99,6 +97,41 @@ async fn run_cli(args : Array[String], env : Map[String, String]) -> CliOutcome 
 }
 
 ///|
+/// What the command says when its environment holds no grant.
+fn ungranted_message() -> String {
+  "seekmoon talks to the SeekMoon desktop app that started this agent, and nothing here was started by one (\{UrlEnv} and \{TokenEnv} are not set)."
+}
+
+///|
+/// The JSON-RPC error code for a request the host could not be asked: from
+/// the range the protocol leaves to implementations.
+const HostUnavailable : Int32 = -32000
+
+///|
+/// POST one JSON-RPC message to the server as written, returning its reply,
+/// or `None` when the server accepted it and has nothing to say back.
+async fn post_message(url : String, token : String, body : String) -> Json? {
+  let (response, reply) = @http.post(url, body, headers={
+    "Content-Type": "application/json",
+    "Authorization": "Bearer \{token}",
+  }) catch {
+    error if @async.is_being_cancelled() => raise error
+    error =>
+      raise Unavailable("could not reach the SeekMoon desktop app: \{error}")
+  }
+  match response.code {
+    200 => Some(reply.json())
+    202 => None
+    // A token the server does not know is one from an earlier launch: the
+    // app restarted under an agent that is still running.
+    code =>
+      raise Unavailable(
+        "the SeekMoon desktop app refused the request (HTTP \{code}); it may have restarted since this agent started",
+      )
+  }
+}
+
+///|
 /// One JSON-RPC request to the server, returning its `result`.
 async fn request(
   url : String,
@@ -112,24 +145,9 @@ async fn request(
     "method": Json(method_),
     "params": params,
   }
-  let (response, body) = @http.post(url, message.stringify(), headers={
-    "Content-Type": "application/json",
-    "Authorization": "Bearer \{token}",
-  }) catch {
-    error if @async.is_being_cancelled() => raise error
-    error =>
-      raise Unavailable("could not reach the SeekMoon desktop app: \{error}")
-  }
-  guard response.code == 200 else {
-    // A token the server does not know is one from an earlier launch: the
-    // app restarted under an agent that is still running.
-    raise Unavailable(
-      "the SeekMoon desktop app refused the request (HTTP \{response.code}); it may have restarted since this agent started",
-    )
-  }
-  match body.json() {
-    { "result": result, .. } => result
-    { "error": { "message": String(message), .. }, .. } =>
+  match post_message(url, token, message.stringify()) {
+    Some({ "result": result, .. }) => result
+    Some({ "error": { "message": String(message), .. }, .. }) =>
       raise Unavailable(message)
     _ => raise Unavailable("the SeekMoon desktop app sent an unreadable reply")
   }
@@ -251,6 +269,9 @@ fn command_tree(tools : Array[ListedTool]) -> @argparse.Command {
         subcommands=top,
         subcommand_required=true,
       ),
+      // Listed so `--help` shows it; the executable hands this subcommand to
+      // `serve_stdio` before a command line reaches here.
+      mcp_command(),
     ],
     subcommand_required=true,
   )

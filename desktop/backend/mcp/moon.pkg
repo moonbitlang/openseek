@@ -2,6 +2,7 @@ import {
   "openseek_desktop/backend/entropy",
   "moonbitlang/async",
   "moonbitlang/async/http",
+  "moonbitlang/async/io",
   "moonbitlang/async/socket",
   "moonbitlang/core/argparse",
   "moonbitlang/core/buffer",
@@ -15,5 +16,6 @@ warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op
 supported_targets = "+native"
 
 import {
+  "moonbitlang/async/pipe",
   "moonbitlang/openseek/mcp/streamhttp",
 } for "test"

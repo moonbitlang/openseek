@@ -26,9 +26,10 @@ app-lifetime owners.
 - `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
   and `tools/call`. Nothing else is offered.
 - `server.mbt` — the listener, the grants, and one task per request.
-- `cli.mbt` — the `seekmoon` command, as a function from a command line and
-  an environment to what it prints and its exit status. `cmd/seekmoon` is the
-  executable around it.
+- `cli.mbt` — `seekmoon tools`, as a function from a command line and an
+  environment to what it prints and its exit status.
+- `stdio.mbt` — `seekmoon mcp`, the same tools as a stdio MCP server.
+- `cmd/seekmoon` — the executable around the two.
 
 ## The command
 
@@ -53,7 +54,26 @@ its `--help` with no code here.
 
 An agent runs commands from sandboxed scripts that may start only programs on
 the engine's allowlist, so `seekmoon` has to be on it before an agent can use
-any of this.
+it this way.
+
+## As an MCP server
+
+`seekmoon mcp` serves the same tools to a client that wants them as MCP tools.
+A user lists it in an MCP configuration like any other stdio server:
+
+```json
+{ "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }
+```
+
+The engine that reads that file starts the process, which inherits the
+engine's environment and so holds the same grant `seekmoon tools` uses. It is
+a relay: each line from the client is POSTed to the host as it is, and the
+host's reply is written back as one line. When the host cannot be reached a
+request is answered with an error and the server stays up.
+
+`seekmoon mcp browser` offers only the groups it names. Every tool a server
+lists rides every request its client makes, and a client caps how many it will
+take, so a configuration can ask for less than everything.
 
 ## Grants
 
