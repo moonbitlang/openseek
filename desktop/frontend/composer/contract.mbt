@@ -292,7 +292,7 @@ pub(all) enum Action {
   ModelMenuToggled(identity~ : Identity)
   ReasoningMenuToggled(identity~ : Identity)
   SelectMenuDismissed(identity~ : Identity)
-  ModelSelected(identity~ : Identity, value~ : String)
+  ModelSelected(identity~ : Identity, value~ : String, draft~ : Draft)
   ReasoningSelected(identity~ : Identity, value~ : String)
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
   CodexRequestAnswerChanged(

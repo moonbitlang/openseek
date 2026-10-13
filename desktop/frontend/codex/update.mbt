@@ -118,9 +118,20 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    StartDraft(id~, cwd~) => {
+    StartDraft(id~, cwd~, draft~, worktree~) => {
       let previous = state.active_draft().map(draft => draft.id)
       let mut next = state.select_draft(id, cwd)
+      next = {
+        ..next,
+        draft: draft.task,
+        mentions: draft.mentions,
+        images: draft.images,
+        placement: if worktree {
+          @composer.FreshWorktree
+        } else {
+          @composer.LocalCheckout
+        },
+      }
       let commands : Array[@cmd.Cmd] = []
       if !cwd.trim().is_empty() {
         commands.push(next.open_draft(dispatch, channel, id, cwd))
@@ -148,6 +159,10 @@ pub fn update(
         {
           ..state,
           selection: CodexNoTask,
+          composer_retirements: [
+            ..state.composer_retirements,
+            { channel, session: draft.id, },
+          ],
           draft: "",
           mentions: [],
           images: [],
@@ -617,7 +632,7 @@ test "Codex project add stays local until the first prompt" {
   let open_external = (_ : String) => @cmd.none
   let (_, draft) = update(
     dispatch,
-    StartDraft(id="desktop-draft-1", cwd="/work/project"),
+    Msg::start_draft("desktop-draft-1", "/work/project"),
     State(),
     @interop.ChannelId::Local,
     open_external,
@@ -1156,7 +1171,7 @@ test "abandoning a draft deselects it and clears its composer state" {
   let open_external = (_ : String) => @cmd.none
   let (_, drafting) = update(
     dispatch,
-    StartDraft(id="desktop-draft-1", cwd="/work/project"),
+    Msg::start_draft("desktop-draft-1", "/work/project"),
     State(),
     @interop.ChannelId::Local,
     open_external,
@@ -1390,7 +1405,7 @@ test "Codex update handlers are pure and idempotent" {
     ToggleGitDetails,
     CloseGitDetails,
     ToggleWorktreeMode,
-    StartDraft(id="desktop-test", cwd="/work/project"),
+    Msg::start_draft("desktop-test", "/work/project"),
     OpenThread("thread-1"),
     ArchiveThread("thread-1"),
     UnarchiveThread("thread-archived"),

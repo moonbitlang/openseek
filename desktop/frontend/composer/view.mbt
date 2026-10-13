@@ -73,6 +73,7 @@ fn ModelSelect::render(
   locale~ : @i18n.Locale = English,
   self : ModelSelect,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
@@ -84,7 +85,7 @@ fn ModelSelect::render(
     open: self.open,
     toggle: action_emit(ModelMenuToggled(identity~)),
     dismiss: action_emit(SelectMenuDismissed(identity~)),
-    change: action_emit.map(value => ModelSelected(identity~, value~)),
+    change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
     presentation: Composer("✦", false),
@@ -674,11 +675,13 @@ fn StatusComponent::render(
   locale~ : @i18n.Locale = English,
   self : StatusComponent,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
   match self {
-    ModelStatus(control) => control.render(locale~, identity, action_emit)
+    ModelStatus(control) =>
+      control.render(locale~, identity, draft, action_emit)
     ReasoningStatus(control) => control.render(locale~, identity, action_emit)
     PermissionStatus(control) => control.render(locale~, identity, action_emit)
     GitStatus(control) =>

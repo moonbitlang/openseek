@@ -203,7 +203,7 @@ fn State::composer_identity(
 ) -> @composer.Identity {
   {
     owner: { channel, session: self.active_id().unwrap_or("codex.none"), },
-    archive_generation: 0,
+    archive_generation: self.composer_retirements.length(),
   }
 }
 
@@ -217,7 +217,46 @@ pub fn State::accepts_composer_identity(
   identity : @composer.Identity,
   channel : @interop.ChannelId,
 ) -> Bool {
-  self.has_active() && self.composer_identity(channel) == identity
+  guard self.has_active() &&
+    self.composer_identity(channel).owner == identity.owner &&
+    identity.archive_generation <= self.composer_retirements.length() else {
+    return false
+  }
+  // Other conversations retain their cached entries across this migration.
+  // Only a retirement of this owner invalidates its older editor actions.
+  for index in identity.archive_generation..<self.composer_retirements.length() {
+    if self.composer_retirements[index] == identity.owner {
+      return false
+    }
+  }
+  true
+}
+
+///|
+test "retiring another draft preserves a cached Codex conversation's actions" {
+  let before = State::from_thread_snapshot({
+    "thread": { "id": "existing-thread", "turns": [] },
+  })
+  let identity = before.composer_identity(@interop.Local)
+  let after = {
+    ..before,
+    composer_retirements: [
+      { channel: @interop.Local, session: "migrated-draft", },
+    ],
+  }
+  assert_true(after.accepts_composer_identity(identity, @interop.Local))
+  let retired = {
+    ..after,
+    composer_retirements: [..after.composer_retirements, identity.owner],
+  }
+  assert_false(retired.accepts_composer_identity(identity, @interop.Local))
+  assert_true(
+    retired.accepts_composer_identity(
+      retired.composer_identity(@interop.Local),
+      @interop.Local,
+    ),
+  )
+  assert_true(before.composer_retirements.is_empty())
 }
 
 ///|
@@ -375,7 +414,7 @@ pub fn State::composer_input(
     context_generation: 0,
     turn_id: active_turn,
     submission_sequence: self.submission_sequence,
-    retirements: [],
+    retirements: self.composer_retirements,
     prediction_source: None,
     prediction: None,
     file_candidates: context.file_candidates,

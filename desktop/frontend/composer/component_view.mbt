@@ -284,7 +284,15 @@ fn Entry::view(
     !goal_mode &&
     shell_command is None
   let status = input.presentation.status.map(component => {
-    component.render(locale~, self.identity(), action_emit)
+    // A transfer snapshots completed content. Let attachment reads/uploads
+    // finish before the user can move their owner to another agent.
+    let component = match component {
+      ModelStatus(control) if self.image_reads > 0 ||
+        !self.attachment_requests.is_empty() =>
+        ModelStatus({ ..control, disabled: true, })
+      other => other
+    }
+    component.render(locale~, self.identity(), self.draft, action_emit)
   })
   if can_attach {
     status.push(

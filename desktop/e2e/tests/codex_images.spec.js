@@ -137,12 +137,14 @@ test('slow file reads disable send and report read errors without losing text', 
   });
   await app.select(image);
   await expect(page.getByText('Reading attachments…')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
   await expect(page.locator('#send')).toBeDisabled();
   await page.locator('#task').press('Enter');
   expect(app.requests.some(r => r.method === 'codex.turn.start')).toBe(false);
   await page.evaluate(() => window.rejectImageRead(new Error('test read failure')));
   await expect(page.getByRole('alert')).toContainText('Could not read attachments');
   await expect(page.locator('#task')).toHaveValue('Keep this text');
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
   await expect(page.locator('#send')).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
 });
