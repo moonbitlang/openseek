@@ -970,16 +970,13 @@ fn running_row(
 ) -> @html.Html {
   ignore(locale)
   guard run is Some(run) else {
-    return @html.div(
-      class="composer-context-row composer-running",
-      ([] : Array[@html.Html]),
-    )
+    return @html.div(class="composer-running", ([] : Array[@html.Html]))
   }
   @html.div(
     class=if run.stage is Retrying(..) {
       "composer-context-row composer-running error"
     } else {
-      "composer-context-row composer-running"
+      "composer-running"
     },
     [
       @html.span(class="composer-running-mark", ""),
