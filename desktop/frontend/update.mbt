@@ -4108,7 +4108,17 @@ fn update_msg(
       // Permission questions remain actionable until answered and therefore
       // continue to contribute to the independently derived badge count.
       let model = { ..model, window_focused: focused, }
-      (@cmd.none, model.mark_visible_conversation_read())
+      let cmd = if focused &&
+        desired_browser_view(model) is Some(id) &&
+        model.browser_pane.shown == Some(id) {
+        // Reassert visibility when focus returns from the native page. On
+        // Windows the host also restores its stacking above the main browser,
+        // without taking keyboard focus away from the composer.
+        browser_set_visible(dispatch, id, true)
+      } else {
+        @cmd.none
+      }
+      (cmd, model.mark_visible_conversation_read())
     }
     ViewportResized(width~) => {
       let narrow = width <= NarrowBreakpoint

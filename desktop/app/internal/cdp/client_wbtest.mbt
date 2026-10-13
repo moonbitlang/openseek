@@ -1,4 +1,36 @@
 ///|
+async test "activating the inspected page preserves a selection arriving before the reply" {
+  @async.with_timeout(5000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      defer server.close()
+      group.spawn_bg(() => {
+        let (conn, _) = server.accept()
+        defer conn.close()
+        let ws = @websocket.from_http_server(conn.read_request(), conn)
+        defer ws.close()
+        assert_eq(
+          @json.parse(ws.recv().read_all().text()),
+          ({ "id": 1, "method": "Page.bringToFront", "params": {} } : Json),
+        )
+        ws.send_text(
+          (
+            #|{"method":"Overlay.inspectNodeRequested","params":{"backendNodeId":42}}
+          ),
+        )
+        ws.send_text("{\"id\":1,\"result\":{}}")
+      })
+      let connection = connect("ws://127.0.0.1:\{server.addr.port()}")
+      defer connection.close()
+      connection.bring_to_front()
+      assert_true(
+        connection.next_event() is InspectNodeRequested(BackendNodeId(42)),
+      )
+    })
+  })
+}
+
+///|
 async test "typed commands preserve interleaved events and correlate replies" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
