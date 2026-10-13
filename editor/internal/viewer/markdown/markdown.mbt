@@ -3,9 +3,9 @@
 /// renderer override. `language_id` is the first fenced-info token exactly as
 /// parsed by cmark; an unlabelled or indented block has no language id.
 pub struct MarkdownCodeBlock {
-  block_index : Int
+  block_index : Int32
   /// Present only for a parse rendered with source mapping enabled.
-  node_id : Int?
+  node_id : Int32?
   priv code : String
   language_id : String?
   priv full_info_string : String?
@@ -18,14 +18,14 @@ pub struct MarkdownCodeBlock {
 /// Builds a code-block projection value without exposing mutable record fields
 /// across package boundaries.
 pub fn MarkdownCodeBlock::MarkdownCodeBlock(
-  block_index : Int,
+  block_index : Int32,
   code : String,
   language_id : String?,
   full_info_string : String?,
   info_remainder : String?,
   block_source_range : @common.OffsetRange,
   code_lines : Array[MarkdownCodeLine],
-  node_id? : Int,
+  node_id? : Int32,
 ) -> MarkdownCodeBlock {
   {
     block_index,
@@ -60,8 +60,8 @@ pub struct MarkdownRenderFact {
 pub fn render_markdown(
   markdown : String,
   language_id? : String,
-  source_mapping? : Bool = false,
-  code_block_renderer_owns_source_root? : Bool = false,
+  source_mapping~ : Bool = false,
+  code_block_renderer_owns_source_root~ : Bool = false,
   code_block_renderer? : (MarkdownCodeBlock, String?) -> String,
 ) -> MarkdownRenderFact {
   let saw_code_block = Ref(false)
@@ -167,14 +167,14 @@ fn markdown_cmark_input(markdown : String) -> String {
     if @common.is_high_surrogate(unit) &&
       i + 1 < markdown.length() &&
       @common.is_low_surrogate(markdown[i + 1].to_int()) {
-      cleaned.write_char(Int::unsafe_to_char(unit))
-      cleaned.write_char(Int::unsafe_to_char(markdown[i + 1].to_int()))
+      cleaned.write_char(Int32::unsafe_to_char(unit))
+      cleaned.write_char(Int32::unsafe_to_char(markdown[i + 1].to_int()))
       i += 2
     } else if @common.is_high_surrogate(unit) || @common.is_low_surrogate(unit) {
-      cleaned.write_char(Int::unsafe_to_char(0xFFFD))
+      cleaned.write_char(Int32::unsafe_to_char(0xFFFD))
       i += 1
     } else {
-      cleaned.write_char(Int::unsafe_to_char(unit))
+      cleaned.write_char(Int32::unsafe_to_char(unit))
       i += 1
     }
   }

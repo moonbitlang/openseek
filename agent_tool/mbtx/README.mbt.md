@@ -384,8 +384,8 @@ Probing a language feature (what you pass as `source`):
 fn main {
   let classify = c => {
     match c {
-      'a'..='z' => "lower"
-      '0'..='9' => "digit"
+      'a'..<='z' => "lower"
+      '0'..<='9' => "digit"
       _ => "other"
     }
   }

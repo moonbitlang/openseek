@@ -261,7 +261,7 @@ fn eval_result_artifact_name(result : EvalResult) -> String {
 }
 
 ///|
-fn display_index(result : EvalResult) -> Int {
+fn display_index(result : EvalResult) -> Int32 {
   if result.index > 0 {
     result.index
   } else {

@@ -30,7 +30,7 @@ fn github_content_fixture(comments : Array[Json], page_info : Json) -> Json {
       "repository": {
         "pullRequest": {
           "bodyHTML": "<p>Rendered <strong>by GitHub</strong></p>",
-          "comments": { "nodes": comments.to_json(), "pageInfo": page_info },
+          "comments": { "nodes": Json(comments), "pageInfo": page_info },
         },
       },
     },

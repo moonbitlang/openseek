@@ -10,12 +10,15 @@
 /// must never outlive a conversation switch — the root resets the overview
 /// state when the active conversation changes.
 pub(all) enum TurnKey {
-  Durable(Int)
-  Local(Int)
+  Durable(Int32)
+  Local(Int32)
 } derive(Eq, Debug)
 
 ///|
-pub fn TurnKey::of(item : @transcript.TranscriptItem, index~ : Int) -> TurnKey {
+pub fn TurnKey::of(
+  item : @transcript.TranscriptItem,
+  index~ : Int32,
+) -> TurnKey {
   match item.sequence {
     Some(sequence) => Durable(sequence)
     None => Local(index)
@@ -46,7 +49,7 @@ pub fn TurnKey::from_anchor(id : String) -> TurnKey? {
 }
 
 ///|
-fn ordinal_after(id : String, prefix : String) -> Int? {
+fn ordinal_after(id : String, prefix : String) -> Int32? {
   guard id.strip_prefix(prefix) is Some(digits) else { return None }
   let value = @string.parse_int(digits) catch { _ => return None }
   Some(value)

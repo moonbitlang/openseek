@@ -7,15 +7,15 @@
 
 ///|
 /// The schema version this build emits and accepts.
-let current_schema_version : Int = 1
+let current_schema_version : Int32 = 1
 
 ///|
 /// Summary length ceiling, enforced by `validate`.
-let max_summary_chars : Int = 2_000
+let max_summary_chars : Int32 = 2_000
 
 ///|
 /// Verification length ceiling, enforced by `validate`.
-let max_verification_chars : Int = 2_000
+let max_verification_chars : Int32 = 2_000
 
 ///|
 /// The worker's own account of its run. `status` is one of `done` (the task
@@ -24,7 +24,7 @@ let max_verification_chars : Int = 2_000
 /// names the commands the worker ran and their outcomes — a claim without
 /// verification is a guess.
 pub struct WorkerReport {
-  priv schema_version : Int
+  priv schema_version : Int32
   status : String
   summary : String
   verification : String

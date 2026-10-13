@@ -21,12 +21,12 @@ pub impl FromJson for GitHistoryPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitHistoryPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "session": self.session.to_json(),
-    "skip": self.skip.to_json(),
-    "limit": self.limit.to_json(),
+    "session": Json(self.session),
+    "skip": Json(self.skip),
+    "limit": Json(self.limit),
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   if self.snapshot is Some(snapshot) {
     fields["snapshot"] = ToJson::to_json(snapshot)
@@ -47,11 +47,11 @@ pub impl FromJson for GitCommitChangesPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitCommitChangesPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "session": self.session.to_json(),
-    "commit": self.commit.to_json(),
+    "session": Json(self.session),
+    "commit": Json(self.commit),
   }
   if self.workspace is Some(workspace) {
-    fields["workspace"] = workspace.to_json()
+    fields["workspace"] = Json(workspace)
   }
   Json(fields)
 }
@@ -86,14 +86,14 @@ pub impl FromJson for GitHistorySnapshot with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitHistorySnapshot with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "refs": self.refs.to_json(),
-    "tips": self.tips.to_json(),
+    "refs": Json(self.refs),
+    "tips": Json(self.tips),
   }
   if self.head is Some(head) {
-    fields["head"] = head.to_json()
+    fields["head"] = Json(head)
   }
   if self.branch is Some(branch) {
-    fields["branch"] = branch.to_json()
+    fields["branch"] = Json(branch)
   }
   Json(fields)
 }
@@ -161,12 +161,12 @@ pub impl FromJson for GitHistoricalChange with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitHistoricalChange with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "path": self.path.to_json(),
-    "status": self.status.to_json(),
-    "kind": self.kind.to_json(),
+    "path": Json(self.path),
+    "status": Json(self.status),
+    "kind": Json(self.kind),
   }
   if self.original_path is Some(original_path) {
-    fields["original_path"] = original_path.to_json()
+    fields["original_path"] = Json(original_path)
   }
   Json(fields)
 }
@@ -185,11 +185,11 @@ pub impl FromJson for GitCommitChangesReply with fn from_json(json, path) {
 ///|
 pub impl ToJson for GitCommitChangesReply with fn to_json(self) {
   let fields : Map[String, Json] = {
-    "commit": self.commit.to_json(),
-    "changes": self.changes.to_json(),
+    "commit": Json(self.commit),
+    "changes": Json(self.changes),
   }
   if self.parent is Some(parent) {
-    fields["parent"] = parent.to_json()
+    fields["parent"] = Json(parent)
   }
   Json(fields)
 }

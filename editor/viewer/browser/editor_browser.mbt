@@ -45,7 +45,7 @@ pub(all) struct MouseTargetViewZoneData {
   position_before : @base_common.Position?
   position_after : @base_common.Position?
   position : @base_common.Position
-  after_line_number : Int
+  after_line_number : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -81,14 +81,14 @@ pub(all) enum OutsidePosition {
 pub(all) enum MouseTarget {
   MouseTargetUnknown(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position?,
     range~ : @base_common.Range?
   )
   MouseTargetMargin(
     type_~ : MouseTargetType,
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     detail~ : MouseTargetMarginData
@@ -96,43 +96,43 @@ pub(all) enum MouseTarget {
   MouseTargetViewZone(
     type_~ : MouseTargetType,
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     detail~ : MouseTargetViewZoneData
   )
   MouseTargetContentText(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     detail~ : MouseTargetContentTextData
   )
   MouseTargetContentEmpty(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     detail~ : MouseTargetContentEmptyData
   )
   MouseTargetContentWidget(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     detail~ : String
   )
   MouseTargetScrollbar(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range
   )
   MouseTargetOverlayWidget(
     element~ : @rdom.Element?,
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     detail~ : String
   )
   MouseTargetOutsideEditor(
-    mouse_column~ : Int,
+    mouse_column~ : Int32,
     position~ : @base_common.Position,
     range~ : @base_common.Range,
     outside_position~ : OutsidePosition,
@@ -191,7 +191,7 @@ pub fn MouseTarget::position(self : MouseTarget) -> @base_common.Position? {
 ///|
 /// `IBaseMouseTarget.mouseColumn`: the desired 1-based visual column (e.g.
 /// when the position column got clamped to the text length).
-pub fn MouseTarget::mouse_column(self : MouseTarget) -> Int {
+pub fn MouseTarget::mouse_column(self : MouseTarget) -> Int32 {
   match self {
     MouseTargetUnknown(mouse_column~, ..)
     | MouseTargetMargin(mouse_column~, ..)

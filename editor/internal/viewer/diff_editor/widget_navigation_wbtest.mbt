@@ -1,9 +1,9 @@
 ///|
 fn widget_navigation_test_change(
-  original_start : Int,
-  original_end : Int,
-  modified_start : Int,
-  modified_end : Int,
+  original_start : Int32,
+  original_end : Int32,
+  modified_start : Int32,
+  modified_end : Int32,
 ) -> @diff.DetailedLineRangeMapping {
   DetailedLineRangeMapping(
     LineRange(original_start, original_end),

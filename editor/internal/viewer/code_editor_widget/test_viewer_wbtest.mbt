@@ -206,7 +206,7 @@ test "model change fires before outgoing owner decorations are swept" {
 /// encoder's gap fill makes every non-empty line exactly two tokens, so the
 /// token count discriminates a registry hit (2) from the null fallback (1).
 priv struct FirstCharKeywordToy {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -248,8 +248,8 @@ test "initial-build and token-change telemetry read token counts passively" {
     language_id="telemetry-passive-toy",
   )
   defer model.dispose()
-  let lexer_calls_at_event : Array[Int] = []
-  let token_counts : Array[Int] = []
+  let lexer_calls_at_event : Array[Int32] = []
+  let token_counts : Array[Int32] = []
   let subscription = debug_on_did_build_view_model(viewer, event => {
     lexer_calls_at_event.push(calls.val)
     token_counts.push(event.token_count)

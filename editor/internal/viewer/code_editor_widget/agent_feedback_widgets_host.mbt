@@ -218,7 +218,7 @@ fn CodeEditorWidget::agent_feedback_widget_host(
 fn CodeEditorWidget::layout_agent_feedback_widget(
   self : CodeEditorWidget,
   widget : @agent_feedback_browser.AgentFeedbackEditorWidget,
-  start_line : Int,
+  start_line : Int32,
 ) -> Unit {
   widget.set_anchor_line(start_line)
   let line_height = self.configuration.snapshot().font_info.line_height.to_double()

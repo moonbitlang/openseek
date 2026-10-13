@@ -24,9 +24,9 @@ pub struct SingleCursorState {
   selection_start_start : @base_common.Position
   selection_start_end : @base_common.Position
   selection_start_kind : SelectionStartKind
-  selection_start_leftover_visible_columns : Int
+  selection_start_leftover_visible_columns : Int32
   position : @base_common.Position
-  leftover_visible_columns : Int
+  leftover_visible_columns : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -36,8 +36,8 @@ pub fn SingleCursorState::SingleCursorState(
   selection_start_end : @base_common.Position,
   selection_start_kind : SelectionStartKind,
   position : @base_common.Position,
-  selection_start_leftover_visible_columns? : Int = 0,
-  leftover_visible_columns? : Int = 0,
+  selection_start_leftover_visible_columns~ : Int32 = 0,
+  leftover_visible_columns~ : Int32 = 0,
 ) -> SingleCursorState {
   {
     selection_start_start,
@@ -97,7 +97,7 @@ pub fn SingleCursorState::moved(
   self : SingleCursorState,
   in_selection_mode : Bool,
   position : @base_common.Position,
-  leftover_visible_columns? : Int = 0,
+  leftover_visible_columns~ : Int32 = 0,
 ) -> SingleCursorState {
   if in_selection_mode {
     { ..self, position, leftover_visible_columns, }

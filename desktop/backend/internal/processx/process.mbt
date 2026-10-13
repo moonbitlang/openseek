@@ -8,10 +8,10 @@
 pub async fn collect_output_no_stdin(
   command : StringView,
   args : ArrayView[String],
-  extra_env? : Map[String, String] = Map([]),
-  inherit_env? : Bool = true,
+  extra_env~ : Map[String, String] = Map([]),
+  inherit_env~ : Bool = true,
   cwd? : StringView,
-) -> (Int, &@io.Data, &@io.Data) {
+) -> (Int32, &@io.Data, &@io.Data) {
   let (stdin_reader, stdin_writer) = @process.write_to_process()
   stdin_writer.close()
   @process.collect_output(

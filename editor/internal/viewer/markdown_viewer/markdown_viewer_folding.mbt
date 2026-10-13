@@ -80,7 +80,7 @@ fn MarkdownViewerWidgetAttachment::reconcile_folding(
 ///|
 fn MarkdownViewerWidgetAttachment::toggle_section(
   self : MarkdownViewerWidgetAttachment,
-  section_index : Int,
+  section_index : Int32,
 ) -> Bool {
   guard section_index >= 0 &&
     section_index < self.fold.section_keys.length() &&
@@ -164,7 +164,7 @@ fn MarkdownViewerWidgetAttachment::apply_toc(
 ///|
 fn MarkdownViewerWidgetAttachment::navigate_section(
   self : MarkdownViewerWidgetAttachment,
-  source_offset : Int,
+  source_offset : Int32,
 ) -> Unit {
   guard self.view is Some(view) else { return }
   let projection = view.projection()
@@ -194,7 +194,7 @@ fn MarkdownViewerWidgetAttachment::navigate_section(
 /// offset. Offsets are 0-based UTF-16 positions in the original TextModel.
 pub fn MarkdownViewerWidget::toggle_section_at(
   self : MarkdownViewerWidget,
-  source_offset : Int,
+  source_offset : Int32,
 ) -> Bool {
   guard self.current is Some(current) && current.view is Some(view) else {
     return false
@@ -220,8 +220,8 @@ pub fn MarkdownViewerWidget::toggle_section_at(
 /// Returns collapsed heading offsets in document order.
 pub fn MarkdownViewerWidget::collapsed_sections(
   self : MarkdownViewerWidget,
-) -> Array[Int] {
-  let collapsed : Array[Int] = []
+) -> Array[Int32] {
+  let collapsed : Array[Int32] = []
   guard self.current is Some(current) && current.view is Some(view) else {
     return collapsed
   }

@@ -6,7 +6,7 @@ fn site(path : String, loc : String, message : String) -> @auto_check.ErrorSite 
 ///|
 fn check_result(
   errors : Array[@auto_check.ErrorSite],
-  truncated? : Bool = false,
+  truncated~ : Bool = false,
 ) -> @auto_check.CheckErrors {
   {
     error_count: errors.length(),

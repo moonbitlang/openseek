@@ -110,15 +110,15 @@ pub(all) struct ReferencesPeekHost {
 
 ///|
 priv struct ReferencesGroupPreviewOwner {
-  group_index : Int
-  mut generation : Int
+  group_index : Int32
+  mut generation : Int32
   mut source : @language.CancellationTokenSource?
   mut reference : @navigation_api.TextModelReference?
 }
 
 ///|
 fn ReferencesGroupPreviewOwner::ReferencesGroupPreviewOwner(
-  group_index : Int,
+  group_index : Int32,
 ) -> ReferencesGroupPreviewOwner {
   { group_index, generation: 0, source: None, reference: None, }
 }
@@ -139,14 +139,14 @@ struct ReferencesController {
   resolver : @navigation_api.TextModelResolverHandle?
   resource_path_label : (@base_common.Uri) -> String?
   mut launch_async_task : (async () -> Unit noraise) -> Unit
-  mut generation : Int
-  mut preview_generation : Int
+  mut generation : Int32
+  mut preview_generation : Int32
   mut mode : @references.ReferencesPeekMode?
   mut phase : @references.ReferencesPeekPhase
   mut anchor : @goto_symbol.SymbolNavigationAnchor?
   mut session_key : @references.ReferencesSessionKey?
   mut model : @references.ReferencesModel?
-  mut selected_index : Int
+  mut selected_index : Int32
   mut widget : ReferencesPeekWidget?
   mut mount : ReferencesPeekMount?
   mut preview_source : @language.CancellationTokenSource?
@@ -159,11 +159,11 @@ struct ReferencesController {
 
 ///|
 pub fn ReferencesController::ReferencesController(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   host : ReferencesPeekHost,
   preview_factory : ReferencesPeekPreviewFactory,
   resolver? : @navigation_api.TextModelResolverHandle,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
   launch_async_task : (async () -> Unit noraise) -> Unit,
 ) -> ReferencesController {
   {
@@ -213,7 +213,7 @@ fn ReferencesController::anchor_is_current(
 ///|
 fn ReferencesController::session_is_current(
   self : ReferencesController,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   guard !self.disposed && self.generation == generation else { return false }
   guard self.anchor is Some(anchor) && self.anchor_is_current(anchor) else {
@@ -377,7 +377,7 @@ pub fn ReferencesController::toggle_locations(
 ///|
 fn ReferencesController::install_locations(
   self : ReferencesController,
-  generation : Int,
+  generation : Int32,
   locations : Array[@language.Location],
 ) -> Unit {
   guard self.session_is_current(generation) else { return }
@@ -424,7 +424,7 @@ fn ReferencesController::install_locations(
 
 ///|
 fn definition_no_result_message(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   anchor : @goto_symbol.SymbolNavigationAnchor,
 ) -> String {
   match anchor.model().get_word_at_position(anchor.position()) {
@@ -443,7 +443,7 @@ fn definition_no_result_message(
 ///|
 fn ReferencesController::group_is_current(
   self : ReferencesController,
-  generation : Int,
+  generation : Int32,
   group : @references.ReferenceGroup,
 ) -> Bool {
   guard self.session_is_current(generation) && self.model is Some(model) else {
@@ -457,9 +457,9 @@ fn ReferencesController::group_is_current(
 ///|
 fn ReferencesController::group_slot_is_current(
   self : ReferencesController,
-  generation : Int,
+  generation : Int32,
   group : @references.ReferenceGroup,
-  owner_generation : Int,
+  owner_generation : Int32,
 ) -> Bool {
   guard self.group_is_current(generation, group) else { return false }
   guard group.group_index >= 0 &&
@@ -603,9 +603,9 @@ fn ReferencesController::clear_installed_preview(
 ///|
 fn ReferencesController::preview_selection_is_current(
   self : ReferencesController,
-  generation : Int,
+  generation : Int32,
   result_model : @references.ReferencesModel,
-  index : Int,
+  index : Int32,
   item : @references.ReferenceItem,
   widget : ReferencesPeekWidget,
 ) -> Bool {
@@ -622,8 +622,8 @@ fn ReferencesController::preview_selection_is_current(
 ///|
 fn ReferencesController::preview_commit_is_current(
   self : ReferencesController,
-  generation : Int,
-  preview_generation : Int,
+  generation : Int32,
+  preview_generation : Int32,
   expected_uri : String,
   model : @model.TextModel,
   result_model : @references.ReferencesModel,
@@ -642,9 +642,9 @@ fn ReferencesController::preview_commit_is_current(
 ///|
 fn ReferencesController::load_preview(
   self : ReferencesController,
-  generation : Int,
-  index : Int,
-  reveal_selection? : Bool = true,
+  generation : Int32,
+  index : Int32,
+  reveal_selection~ : Bool = true,
 ) -> Unit {
   guard self.session_is_current(generation) &&
     self.model is Some(result_model) &&
@@ -763,8 +763,8 @@ fn ReferencesController::load_preview(
 #warnings("-unused_async")
 fn ReferencesController::schedule_preview(
   self : ReferencesController,
-  generation : Int,
-  preview_generation : Int,
+  generation : Int32,
+  preview_generation : Int32,
   location : @language.Location,
   model : @model.TextModel,
   reference : @navigation_api.TextModelReference?,
@@ -861,8 +861,8 @@ fn ReferencesController::schedule_preview(
 ///|
 fn ReferencesController::show_preview_unavailable(
   self : ReferencesController,
-  generation : Int,
-  preview_generation : Int,
+  generation : Int32,
+  preview_generation : Int32,
   message : String,
 ) -> Unit {
   guard self.session_is_current(generation) &&
@@ -908,7 +908,7 @@ fn ReferencesController::select_item(
 ///|
 fn ReferencesController::move_selection(
   self : ReferencesController,
-  delta : Int,
+  delta : Int32,
 ) -> Unit {
   guard self.model is Some(model) && !model.references.is_empty() else {
     return

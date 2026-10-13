@@ -20,6 +20,7 @@ test "transcript stream children use stable typed keys in display order" {
   }
   let response : @transcript.TranscriptItem = {
     kind: Assistant(
+      end_sequence=None,
       reasoning=None,
       prose=Some("I will check it."),
       calls=[call],
@@ -66,6 +67,7 @@ test "transcript stream children use stable typed keys in display order" {
         item: {
           ..response,
           kind: Assistant(
+            end_sequence=None,
             reasoning=Some("thinking"),
             prose=Some("I will check it."),
             calls=[
@@ -127,6 +129,7 @@ test "the live response is one node, replaced by the durable one" {
       {
         item: {
           kind: Assistant(
+            end_sequence=None,
             reasoning=Some("next thought"),
             prose=Some("answer"),
             calls=[],
@@ -168,6 +171,7 @@ test "a streaming delta changes only the live block" {
       {
         item: {
           kind: Assistant(
+            end_sequence=None,
             reasoning=Some("thinking"),
             prose=Some("I will check it."),
             calls=[],

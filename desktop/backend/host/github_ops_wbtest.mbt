@@ -2,11 +2,11 @@
 /// One `gh pr list` element, spelled the way gh spells it, for the tests to
 /// vary field by field.
 fn pull_request_json(
-  number~ : Int,
+  number~ : Int32,
   state~ : String,
   draft~ : Bool,
-  checks? : Json = Json::null(),
-  cross? : Bool = false,
+  checks~ : Json = Json::null(),
+  cross~ : Bool = false,
 ) -> Json {
   {
     "number": Json(number.to_double()),

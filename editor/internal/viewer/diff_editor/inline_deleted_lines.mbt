@@ -24,7 +24,7 @@ fn inline_original_decorations(
 }
 
 ///|
-fn inline_deleted_zone_anchor(change : @diff.DetailedLineRangeMapping) -> Int {
+fn inline_deleted_zone_anchor(change : @diff.DetailedLineRangeMapping) -> Int32 {
   (change.modified.start_line_number - 1).max(0)
 }
 
@@ -60,10 +60,10 @@ fn configure_inline_deleted_roots(
 
 ///|
 fn inline_alignment_spacer_spec(
-  after_line_number : Int,
+  after_line_number : Int32,
   height_in_px : Double,
   pane_class : String,
-  ordinal~ : Int,
+  ordinal~ : Int32,
 ) -> @code_widget.ManagedCodeEditorViewZoneSpec {
   let document = @rdom.document()
   let node = document.create_element("div")

@@ -21,7 +21,7 @@ let git_graph_resize_installed : Ref[Bool] = Ref(false)
 let git_graph_resizing : Ref[Bool] = Ref(false)
 
 ///|
-fn set_git_graph_split(height : Int) -> Unit {
+fn set_git_graph_split(height : Int32) -> Unit {
   guard document_element() is Some(root) else { return }
   let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
   let _ : @js.Value = style.apply_with_string("setProperty", [
@@ -77,7 +77,7 @@ fn request_git_graph_resize_mount() -> @cmd.Cmd {
 }
 
 ///|
-fn adjust_git_graph_split(delta : Int) -> Unit {
+fn adjust_git_graph_split(delta : Int32) -> Unit {
   guard @dom.document().get_element_by_id(GitGraphLayoutId).to_option()
     is Some(layout) &&
     @dom.document().get_element_by_id(GitGraphChangesSectionId).to_option()

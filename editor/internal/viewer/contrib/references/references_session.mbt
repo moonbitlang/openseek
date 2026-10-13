@@ -11,11 +11,11 @@ pub(all) enum ReferencesPeekMode {
 /// resources stay with the root Viewer and are keyed by these generations.
 pub(all) enum ReferencesPeekPhase {
   PeekClosed
-  PeekLoadingDefinitions(Int)
-  PeekLoadingReferences(Int)
-  PeekLoadingPreview(Int, Int)
-  PeekShown(Int, Int)
-  PeekUnavailable(Int, Int)
+  PeekLoadingDefinitions(Int32)
+  PeekLoadingReferences(Int32)
+  PeekLoadingPreview(Int32, Int32)
+  PeekShown(Int32, Int32)
+  PeekUnavailable(Int32, Int32)
 } derive(Eq, Debug)
 
 ///|
@@ -23,16 +23,16 @@ pub(all) enum ReferencesPeekPhase {
 /// generation distinguishes repeated attachment of the same physical model;
 /// the content version distinguishes edits within one attachment.
 pub struct ReferencesSessionKey {
-  model_identity : Int
-  model_generation : Int
-  model_version_id : Int
+  model_identity : Int32
+  model_generation : Int32
+  model_version_id : Int32
   anchor : @base_common.Position
 } derive(Eq, Debug)
 
 ///|
 pub fn ReferencesSessionKey::from_model(
   model : @model.TextModel,
-  model_generation : Int,
+  model_generation : Int32,
   anchor : @base_common.Position,
 ) -> ReferencesSessionKey {
   {
@@ -49,7 +49,7 @@ pub fn ReferencesSessionKey::from_model(
 pub fn ReferencesSessionKey::is_current(
   self : ReferencesSessionKey,
   model : @model.TextModel,
-  model_generation : Int,
+  model_generation : Int32,
 ) -> Bool {
   self.model_identity == model.identity() &&
   self.model_generation == model_generation &&

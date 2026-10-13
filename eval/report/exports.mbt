@@ -11,7 +11,7 @@ pub fn Report::all_passed(self : Report) -> Bool {
 
 ///|
 /// How many rows passed.
-pub fn Report::successes(self : Report) -> Int {
+pub fn Report::successes(self : Report) -> Int32 {
   self.rows.count_if(row => row.success)
 }
 

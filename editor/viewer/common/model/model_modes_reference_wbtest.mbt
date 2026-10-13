@@ -27,7 +27,7 @@ fn model_modes_part(calls : Array[String]) -> TokenizationTextModelPart {
 /// production facade that has no current caller.
 fn model_modes_force_tokenization(
   part : TokenizationTextModelPart,
-  line_number : Int,
+  line_number : Int32,
 ) -> Unit {
   let builder = @common_tokens.ContiguousMultilineTokensBuilder()
   match part.backend.tokenizer {

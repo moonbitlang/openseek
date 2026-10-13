@@ -83,7 +83,7 @@ fn decode_mbtx_call(arguments : String) -> MbtxCall? {
 /// refuses payloads past the shared card ceiling, and the numbered renderer
 /// clamps a degenerate line count itself, keeping true numbers on the tail.
 fn mbtx_card(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   arguments : String,
 ) -> (String, @html.Html)? {
   guard decode_mbtx_call(arguments) is Some(call) else { return None }
@@ -150,7 +150,7 @@ fn mbtx_failure_stage(
 /// brief, which already names build failures. mbtx request rows use their
 /// status icon instead.
 fn failure_marker(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   brief : String?,
   is_error : Bool,

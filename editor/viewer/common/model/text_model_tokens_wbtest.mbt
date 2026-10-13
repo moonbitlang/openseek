@@ -31,7 +31,7 @@ fn token_test_harness(lines : Array[String]) -> TokenTestHarness {
 ///|
 fn logging_support(
   calls : Array[String],
-  initial_calls : Ref[Int],
+  initial_calls : Ref[Int32],
 ) -> InternalTokenizationSupportAdapter {
   InternalTokenizationSupportAdapter(
     initial_state=() => {
@@ -158,7 +158,7 @@ test "safe_tokenize missing and failing support reports then returns language fa
 
 ///|
 test "start offset conversion uses next start and final raw UTF16 length" {
-  let words : Array[UInt] = [0, 11, 2, 22, 5, 33]
+  let words : Array[UInt32] = [0, 11, 2, 22, 5, 33]
   start_offsets_to_end_offsets(words, 9)
   assert_eq(words[0], 2)
   assert_eq(words[2], 5)

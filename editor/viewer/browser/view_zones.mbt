@@ -3,15 +3,15 @@
 /// in `internal/viewer/browser/view`; that layer retains this delegate by
 /// identity and rereads the documented live fields during layout.
 pub(all) struct ViewZone {
-  mut after_line_number : Int
-  mut after_column : Int?
+  mut after_line_number : Int32
+  mut after_column : Int32?
   mut after_column_affinity : @model.PositionAffinity?
   mut show_in_hidden_areas : Bool?
   /// When present, hidden-area visibility is tested at the declared anchor
   /// against every hidden-area source except this one. This local extension
   /// leaves Monaco's merged/default visibility behavior unchanged when absent.
   mut ignore_hidden_area_source : String?
-  mut ordinal : Int?
+  mut ordinal : Int32?
   mut suppress_mouse_down : Bool?
   mut height_in_lines : Double?
   mut height_in_px : Double?
@@ -27,13 +27,13 @@ pub(all) struct ViewZone {
 /// Builds the complete public descriptor. Only Monaco's required members are
 /// positional; every optional member remains independently expressible.
 pub fn ViewZone::ViewZone(
-  after_line_number : Int,
+  after_line_number : Int32,
   dom_node : @rdom.Element,
-  after_column? : Int,
+  after_column? : Int32,
   after_column_affinity? : @model.PositionAffinity,
   show_in_hidden_areas? : Bool,
   ignore_hidden_area_source? : String,
-  ordinal? : Int,
+  ordinal? : Int32,
   suppress_mouse_down? : Bool,
   height_in_lines? : Double,
   height_in_px? : Double,

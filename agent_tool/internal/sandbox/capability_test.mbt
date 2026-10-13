@@ -4,7 +4,7 @@
 /// exactly as shipped.
 async fn merged_output_text(
   command : @sandbox.SandboxedCommand,
-) -> (Int, String) {
+) -> (Int32, String) {
   @async.with_task_group() <| group => {
     let (reader, writer) = @process.read_from_process()
     defer reader.close()

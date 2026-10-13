@@ -119,7 +119,7 @@ The compact function body has been formatted:
 ```mooncram
 $ cat answer.mbt
 ///|
-pub fn answer() -> Int {
+pub fn answer() -> Int32 {
   42
 }
 ```

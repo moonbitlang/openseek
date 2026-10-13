@@ -15,7 +15,7 @@ pub(all) struct ReferencesPeekWidgetCallbacks {
 ///|
 /// Monaco's requested default Peek height. The root Viewer caps this against
 /// the live editor viewport before constructing its presentation spacer.
-pub let references_peek_height_in_lines : Int = 18
+pub let references_peek_height_in_lines : Int32 = 18
 
 ///|
 /// Detached browser shell shared by Definition and References Peek sessions.
@@ -40,10 +40,10 @@ struct ReferencesPeekWidget {
 /// Constructs a detached, mode-labelled shell in its loading state.
 #alias(new, deprecated)
 pub fn ReferencesPeekWidget::ReferencesPeekWidget(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
   callbacks : ReferencesPeekWidgetCallbacks,
-  resource_path_label? : (@base_common.Uri) -> String? = _ => None,
+  resource_path_label~ : (@base_common.Uri) -> String? = _ => None,
 ) -> ReferencesPeekWidget {
   let document = @rdom.document()
   let root = document.create_element("section")
@@ -237,7 +237,7 @@ pub fn ReferencesPeekWidget::set_results(
 /// expansion, selection, or the active focus domain.
 pub fn ReferencesPeekWidget::set_group_previews(
   self : ReferencesPeekWidget,
-  group_index : Int,
+  group_index : Int32,
   previews : Array[@references.ReferenceRowPreview],
 ) -> Unit {
   if !self.disposed {
@@ -413,7 +413,7 @@ fn ReferencesPeekWidget::show_status(
 ///|
 fn ReferencesPeekWidget::set_result_count(
   self : ReferencesPeekWidget,
-  count : Int,
+  count : Int32,
 ) -> Unit {
   self.title_meta.set_inner_html("")
   if count > 0 {
@@ -446,7 +446,7 @@ fn ReferencesPeekWidget::set_result_count(
 
 ///|
 fn references_peek_title(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -457,7 +457,7 @@ fn references_peek_title(
 
 ///|
 fn references_peek_dialog_label(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -468,7 +468,7 @@ fn references_peek_dialog_label(
 
 ///|
 fn references_peek_preview_label(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -479,7 +479,7 @@ fn references_peek_preview_label(
 
 ///|
 fn references_peek_loading_message(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {
@@ -490,7 +490,7 @@ fn references_peek_loading_message(
 
 ///|
 fn references_peek_empty_message(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   mode : @references.ReferencesPeekMode,
 ) -> String {
   match mode {

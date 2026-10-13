@@ -25,10 +25,10 @@ let handy_ready_range_state : HandyRangeState = new_handy_range_state()
 ///|
 fn range_util_read_horizontal_ranges(
   dom_node : @rdom.Element,
-  start_child_index : Int,
-  start_offset : Int,
-  end_child_index : Int,
-  end_offset : Int,
+  start_child_index : Int32,
+  start_offset : Int32,
+  end_child_index : Int32,
+  end_offset : Int32,
   context : DomReadingContext,
 ) -> Array[(Double, Double)]? {
   range_util_read_horizontal_ranges_with_state(
@@ -41,10 +41,10 @@ fn range_util_read_horizontal_ranges(
 fn range_util_read_horizontal_ranges_with_state(
   state : HandyRangeState,
   dom_node : @rdom.Element,
-  start_child_index : Int,
-  start_offset : Int,
-  end_child_index : Int,
-  end_offset : Int,
+  start_child_index : Int32,
+  start_offset : Int32,
+  end_child_index : Int32,
+  end_offset : Int32,
   context : DomReadingContext,
 ) -> Array[(Double, Double)]? {
   let min = 0
@@ -162,7 +162,7 @@ fn merge_adjacent_ranges(
 }
 
 ///|
-let max_safe_small_integer : Int = 1 << 30
+let max_safe_small_integer : Int32 = 1 << 30
 
 ///|
 extern "js" fn new_handy_range_state() -> HandyRangeState =
@@ -172,9 +172,9 @@ extern "js" fn new_handy_range_state() -> HandyRangeState =
 extern "js" fn read_client_rects_with_state(
   state : HandyRangeState,
   start_element : DomNode,
-  start_offset : Int,
+  start_offset : Int32,
   end_element : DomNode,
-  end_offset : Int,
+  end_offset : Int32,
   end_node : @rdom.Element,
 ) -> ClientRectList =
   #| (state, startElement, startOffset, endElement, endOffset, endNode) => {
@@ -196,22 +196,25 @@ extern "js" fn read_client_rects_with_state(
   #| }
 
 ///|
-extern "js" fn element_child_count(element : @rdom.Element) -> Int = "(element) => element.children.length"
+extern "js" fn element_child_count(element : @rdom.Element) -> Int32 = "(element) => element.children.length"
 
 ///|
 extern "js" fn element_child_has_first_child(
   element : @rdom.Element,
-  index : Int,
+  index : Int32,
 ) -> Bool = "(element, index) => Boolean(element.children[index].firstChild)"
 
 ///|
 extern "js" fn element_child_first_child_raw(
   element : @rdom.Element,
-  index : Int,
+  index : Int32,
 ) -> DomNode = "(element, index) => element.children[index].firstChild"
 
 ///|
-fn element_child_first_child(element : @rdom.Element, index : Int) -> DomNode? {
+fn element_child_first_child(
+  element : @rdom.Element,
+  index : Int32,
+) -> DomNode? {
   if element_child_has_first_child(element, index) {
     Some(element_child_first_child_raw(element, index))
   } else {
@@ -222,20 +225,26 @@ fn element_child_first_child(element : @rdom.Element, index : Int) -> DomNode? {
 ///|
 extern "js" fn element_child_client_rects(
   element : @rdom.Element,
-  index : Int,
+  index : Int32,
 ) -> ClientRectList = "(element, index) => element.children[index].getClientRects()"
 
 ///|
-extern "js" fn dom_node_text_length(node : DomNode) -> Int = "(node) => node.textContent.length"
+extern "js" fn dom_node_text_length(node : DomNode) -> Int32 = "(node) => node.textContent.length"
 
 ///|
 extern "js" fn client_rect_list_is_null(rects : ClientRectList) -> Bool = "(rects) => rects == null"
 
 ///|
-extern "js" fn client_rect_list_length(rects : ClientRectList) -> Int = "(rects) => rects.length"
+extern "js" fn client_rect_list_length(rects : ClientRectList) -> Int32 = "(rects) => rects.length"
 
 ///|
-extern "js" fn client_rect_left(rects : ClientRectList, index : Int) -> Double = "(rects, index) => rects[index].left"
+extern "js" fn client_rect_left(
+  rects : ClientRectList,
+  index : Int32,
+) -> Double = "(rects, index) => rects[index].left"
 
 ///|
-extern "js" fn client_rect_width(rects : ClientRectList, index : Int) -> Double = "(rects, index) => rects[index].width"
+extern "js" fn client_rect_width(
+  rects : ClientRectList,
+  index : Int32,
+) -> Double = "(rects, index) => rects[index].width"

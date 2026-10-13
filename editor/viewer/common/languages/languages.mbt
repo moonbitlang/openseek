@@ -1,7 +1,7 @@
 ///|
 priv struct LanguageFeatureRegistry[T] {
   entries : Array[LanguageFeatureEntry[T]]
-  mut clock : Int
+  mut clock : Int32
 }
 
 ///|
@@ -9,7 +9,7 @@ priv struct LanguageFeatureEntry[T] {
   selector : @language.LanguageSelector
   provider : T
   active : Ref[Bool]
-  registration_time : Int
+  registration_time : Int32
 }
 
 ///|
@@ -19,8 +19,8 @@ priv struct LanguageFeatureEntry[T] {
 /// to reject a result from a registration disposed during the await.
 priv struct LanguageFeatureSnapshot[T] {
   entry : LanguageFeatureEntry[T]
-  provider_index : Int
-  score : Int
+  provider_index : Int32
+  score : Int32
 }
 
 ///|
@@ -124,17 +124,21 @@ struct Languages {
 struct LanguageHandle {
   get_language_configuration_callback : (String) -> LanguageConfiguration
   markdown_comment_provider_result_callback : (@model.TextModel) -> MarkdownCommentProviderResult?
-  hover_at_callback : async (@model.TextModel, Int, @language.CancellationToken) -> @language.Hover? noraise
+  hover_at_callback : async (
+    @model.TextModel,
+    Int32,
+    @language.CancellationToken,
+  ) -> @language.Hover? noraise
   definition_at_callback : async (
     @model.TextModel,
-    Int,
+    Int32,
     @language.CancellationToken,
     async (Array[async () -> Unit]) -> Unit,
   ) -> Array[@language.Location] noraise
   has_definition_provider_callback : (@model.TextModel) -> Bool
   references_at_callback : async (
     @model.TextModel,
-    Int,
+    Int32,
     @language.CancellationToken,
     async (Array[async () -> Unit]) -> Unit,
   ) -> Array[@language.Location] noraise
@@ -237,8 +241,8 @@ pub fn LanguageHandle::get_language_configuration(
 pub async fn LanguageHandle::hover_at(
   self : LanguageHandle,
   model : @model.TextModel,
-  offset : Int,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
+  offset : Int32,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
 ) -> @language.Hover? noraise {
   (self.hover_at_callback)(model, offset, token)
 }
@@ -251,9 +255,9 @@ pub async fn LanguageHandle::hover_at(
 pub async fn LanguageHandle::definition_at(
   self : LanguageHandle,
   model : @model.TextModel,
-  offset : Int,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  offset : Int32,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.Location] noraise {
   (self.definition_at_callback)(model, offset, token, run_tasks)
 }
@@ -276,9 +280,9 @@ pub fn LanguageHandle::has_definition_provider(
 pub async fn LanguageHandle::references_at(
   self : LanguageHandle,
   model : @model.TextModel,
-  offset : Int,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  offset : Int32,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.Location] noraise {
   (self.references_at_callback)(model, offset, token, run_tasks)
 }
@@ -300,8 +304,8 @@ pub fn LanguageHandle::has_references_provider(
 pub async fn LanguageHandle::code_lenses(
   self : LanguageHandle,
   model : @model.TextModel,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.CodeLens] noraise {
   (self.code_lenses_callback)(model, token, run_tasks)
 }
@@ -395,7 +399,7 @@ pub fn Languages::register_markdown_comment_provider(
   self : Languages,
   selector : @language.LanguageSelector,
   provider : &@language.MarkdownCommentProvider,
-  foldable? : Bool = false,
+  foldable~ : Bool = false,
 ) -> @base_common.Disposable {
   self.markdown_comment_provider.register(selector, { provider, foldable, })
 }
@@ -451,9 +455,9 @@ fn Languages::markdown_comment_provider_result_with_log_handle(
 async fn Languages::hover_at_with_log_handle(
   self : Languages,
   model : @model.TextModel,
-  offset : Int,
+  offset : Int32,
   log_service : @log.LogHandle,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
 ) -> @language.Hover? noraise {
   if token.is_cancellation_requested() {
     return None
@@ -498,10 +502,10 @@ async fn Languages::hover_at_with_log_handle(
 async fn Languages::definition_at_with_log_handle(
   self : Languages,
   model : @model.TextModel,
-  offset : Int,
+  offset : Int32,
   log_service : @log.LogHandle,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.Location] noraise {
   if token.is_cancellation_requested() {
     return []
@@ -567,10 +571,10 @@ fn Languages::has_definition_provider(
 async fn Languages::references_at_with_log_handle(
   self : Languages,
   model : @model.TextModel,
-  offset : Int,
+  offset : Int32,
   log_service : @log.LogHandle,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.Location] noraise {
   if token.is_cancellation_requested() {
     return []
@@ -637,8 +641,8 @@ async fn Languages::code_lenses_with_log_handle(
   self : Languages,
   model : @model.TextModel,
   log_service : @log.LogHandle,
-  token? : @language.CancellationToken = @language.CancellationToken::none(),
-  run_tasks? : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
+  token~ : @language.CancellationToken = @language.CancellationToken::none(),
+  run_tasks~ : async (Array[async () -> Unit]) -> Unit = @base_common.run_async_tasks_sequentially,
 ) -> Array[@language.CodeLens] noraise {
   if token.is_cancellation_requested() {
     return []
@@ -715,7 +719,7 @@ fn log_provider_failure(
   log_service : @log.LogHandle,
   category : String,
   model : @model.TextModel,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   log_service.warn(category, "provider failed", details=[
     ("model", model.uri.to_string()),

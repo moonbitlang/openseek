@@ -25,8 +25,8 @@ priv struct ContextMenuSubmenuView {
   entries : Array[ContextMenuEntry]
   item_nodes : Array[ContextMenuItemNode?]
   listeners : Array[@base_common.Disposable]
-  parent_entry_index : Int
-  mut focused_entry_index : Int
+  parent_entry_index : Int32
+  mut focused_entry_index : Int32
 }
 
 ///|
@@ -44,7 +44,7 @@ struct ContextMenuWidget {
   mut submenu_show_timer : @base_common.Disposable?
   mut submenu_hide_timer : @base_common.Disposable?
   mut focus_to_return : @rdom.Element?
-  mut focused_entry_index : Int
+  mut focused_entry_index : Int32
   mut theme : String
   mut visible : Bool
   mut disposed : Bool
@@ -52,7 +52,7 @@ struct ContextMenuWidget {
 
 ///|
 pub fn ContextMenuWidget::ContextMenuWidget(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   callbacks : ContextMenuWidgetCallbacks,
 ) -> ContextMenuWidget {
   let document = @rdom.document()
@@ -109,7 +109,7 @@ pub fn ContextMenuWidget::show(
   client_y : Double,
   theme : String,
   theme_source? : @rdom.Element,
-  auto_select_first? : Bool = false,
+  auto_select_first~ : Bool = false,
 ) -> Bool {
   if self.disposed {
     return false
@@ -165,7 +165,7 @@ pub fn ContextMenuWidget::show(
 /// execution; all dismissal paths report cancellation.
 pub fn ContextMenuWidget::hide(
   self : ContextMenuWidget,
-  was_cancelled? : Bool = true,
+  was_cancelled~ : Bool = true,
 ) -> Unit {
   if !self.visible {
     return
@@ -264,7 +264,7 @@ fn ContextMenuWidget::rebuild_root_menu(self : ContextMenuWidget) -> Unit {
 ///|
 fn ContextMenuWidget::install_root_item_listeners(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
   entry : ContextMenuEntry,
   node : ContextMenuItemNode,
 ) -> Unit {
@@ -372,7 +372,7 @@ fn ContextMenuWidget::run_action(
 ///|
 fn ContextMenuWidget::focus_root_entry(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
   pointer_driven~ : Bool,
 ) -> Unit {
   guard index >= 0 && index < self.item_nodes.length() else { return }
@@ -388,7 +388,7 @@ fn ContextMenuWidget::focus_root_entry(
 ///|
 fn ContextMenuWidget::focus_relative_root(
   self : ContextMenuWidget,
-  direction : Int,
+  direction : Int32,
 ) -> Unit {
   let next = next_context_menu_item_index(
     self.item_nodes,
@@ -414,7 +414,7 @@ fn ContextMenuWidget::focus_root_boundary(
 ///|
 fn ContextMenuWidget::root_entry_is_submenu(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
 ) -> Bool {
   index >= 0 &&
   index < self.entries.length() &&
@@ -424,7 +424,7 @@ fn ContextMenuWidget::root_entry_is_submenu(
 ///|
 fn ContextMenuWidget::schedule_open_submenu(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   self.cancel_submenu_show_timer()
   self.cancel_submenu_hide_timer()
@@ -462,7 +462,7 @@ fn ContextMenuWidget::schedule_close_submenu(self : ContextMenuWidget) -> Unit {
 ///|
 fn ContextMenuWidget::open_submenu(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
   focus_first~ : Bool,
 ) -> Unit {
   guard self.visible && index >= 0 && index < self.entries.length() else {
@@ -623,7 +623,7 @@ fn ContextMenuWidget::handle_keydown(
 ///|
 fn ContextMenuWidget::focus_submenu_entry(
   self : ContextMenuWidget,
-  index : Int,
+  index : Int32,
   pointer_driven~ : Bool,
 ) -> Unit {
   guard self.submenu is Some(submenu) else { return }
@@ -637,7 +637,7 @@ fn ContextMenuWidget::focus_submenu_entry(
 ///|
 fn ContextMenuWidget::focus_relative_submenu(
   self : ContextMenuWidget,
-  direction : Int,
+  direction : Int32,
 ) -> Unit {
   guard self.submenu is Some(submenu) else { return }
   let next = next_context_menu_item_index(
@@ -770,9 +770,9 @@ fn ContextMenuWidget::clear_show_state(self : ContextMenuWidget) -> Unit {
 
 ///|
 fn build_context_submenu(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   entries : Array[ContextMenuEntry],
-  parent_entry_index : Int,
+  parent_entry_index : Int32,
 ) -> ContextMenuSubmenuView {
   let document = @rdom.document()
   let container = document.create_element("div")
@@ -899,7 +899,7 @@ fn build_context_menu_separator() -> @rdom.Element {
 ///|
 fn update_context_menu_focus(
   nodes : Array[ContextMenuItemNode?],
-  focused_index : Int,
+  focused_index : Int32,
   pointer_driven : Bool,
 ) -> Unit {
   for index, maybe_node in nodes {
@@ -924,9 +924,9 @@ fn update_context_menu_focus(
 ///|
 fn next_context_menu_item_index(
   nodes : Array[ContextMenuItemNode?],
-  current : Int,
-  direction : Int,
-) -> Int {
+  current : Int32,
+  direction : Int32,
+) -> Int32 {
   guard nodes.length() > 0 else { return -1 }
   let step = if direction < 0 { -1 } else { 1 }
   for _ in 0..<nodes.length(); index = current {
@@ -950,7 +950,7 @@ fn next_context_menu_item_index(
 fn context_menu_boundary_index(
   nodes : Array[ContextMenuItemNode?],
   first : Bool,
-) -> Int {
+) -> Int32 {
   if first {
     for index, node in nodes {
       if node is Some(_) {

@@ -2,16 +2,6 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-// Minimal mode is opt-in. Seed the preference only when the profile has none,
-// so the persistence test can still observe an explicit choice surviving reloads.
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => {
-    if (localStorage.getItem('openseek.minimal_transcript') === null) {
-      localStorage.setItem('openseek.minimal_transcript', 'true');
-    }
-  });
-});
-
 // Exercise the production transport and renderer with recorded events. Fixtures
 // deliberately contain parameters, output, and reasoning that must never enter
 // the minimal subtree, even after every disclosure has been opened.
@@ -52,7 +42,7 @@ class MinimalTranscriptHarness extends DesktopBrowserHarness {
     return super.replyFor(request);
   }
 
-  // The titlebar telescope is off while the minimal transcript is shown.
+  // The titlebar debug toggle is off while the minimal transcript is shown.
   async enableMinimal() {
     await this.openSession();
     await expect(this.page.locator('#stream .minimal-tools, #stream .minimal-tools-live, #stream .minimal-process, #stream .minimal-single-call').first()).toBeVisible();
@@ -473,7 +463,7 @@ test('minimal transcript groups live tools and folds completed work around user 
   await expect(stream.getByText('I will explore this project.', { exact: true })).toBeHidden();
   await expect(stream.getByText('Please focus on the architecture.', { exact: true })).toBeVisible();
   await expect(stream.locator('.msg-content strong')).toHaveText('final summary');
-  await expect(stream.locator('.assistant-message-actions .message-copy')).toHaveCount(1);
+  await expect(stream.getByRole('button', { name: 'Copy assistant message as Markdown', exact: true })).toHaveCount(1);
   // Minimal mode mirrors detailed mode's finish line: the confirmed final
   // answer carries its durable commit instant beside the copy action.
   await expect(stream.locator('.assistant-message-actions .assistant-message-time')).toHaveCount(1);
@@ -777,6 +767,11 @@ test('minimal transcript clears jump to latest when folded content fits the view
   await summary.click();
   await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.clientHeight))
     .toBeGreaterThan(1000);
+  // The reader was pinned while everything fit, so it follows the expansion
+  // to the tail one render later. Scroll away only after that follow lands;
+  // an earlier scroll is overridden and leaves the reader pinned.
+  await expect.poll(() => transcript.evaluate(node => node.scrollHeight - node.scrollTop - node.clientHeight))
+    .toBeLessThanOrEqual(4);
   await transcript.evaluate(node => { node.scrollTop = 0; });
   await expect(jump).toBeVisible();
   await summary.click();
@@ -816,7 +811,7 @@ test('minimal transcript retains stopped failed and empty-success processes acro
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal transcript preference persists and full mode restores details', async ({ page }) => {
+test('minimal transcript is the default and detailed mode persists', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   await app.install();
   await app.goto();
@@ -829,6 +824,7 @@ test('minimal transcript preference persists and full mode restores details', as
   await expect(toggle).toHaveAttribute('aria-pressed', 'false');
   await expect(toggle).not.toHaveClass(/active/);
   await expect(toggle.locator('svg')).toBeVisible();
+  await expect(toggle.locator('svg')).toHaveAttribute('viewBox', '0 0 24 24');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-pressed', 'true');
   await expect(toggle).toHaveClass(/active/);

@@ -192,6 +192,104 @@ async test "an explicit session title overrides the first prompt without rewriti
 }
 
 ///|
+async test "fork copies a session's finished turns and title into a new session" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let origin = @agent_session.Session(
+      SessionId("origin"),
+      system_prompt="system",
+    )
+    .append(User(UserMessage(Content([Text("first")]))))
+    .append(Terminal(Finished("one")))
+    .append(User(UserMessage(Content([Text("second")]))))
+  store.create(origin)
+  store.set_title(SessionId("origin"), "Parser fix")
+  let fork = store.fork(
+    SessionId("origin"),
+    SessionId("fork"),
+    system_prompt="fork system",
+  )
+  assert_eq(fork.id().value(), "fork")
+  // The turn still in flight stays with the original: the fork is the
+  // finished turn and nothing else.
+  assert_eq(fork.last_sequence(), 2)
+  let loaded = store.load(SessionId("fork"))
+  // The prompt on disk is the fork's own, never the source's.
+  assert_eq(loaded.system_prompt(), "fork system")
+  assert_eq(store.load(SessionId("origin")).system_prompt(), "system")
+  assert_eq(loaded.last_sequence(), 2)
+  assert_true(loaded.events()[1].item() is Terminal(Finished("one")))
+  assert_eq(store.title(SessionId("fork")), Some("Parser fix"))
+  assert_eq(store.load(SessionId("origin")).last_sequence(), 3)
+  // The fork is an ordinary session: it grows without touching the original.
+  let grown = store.append(
+    loaded,
+    User(UserMessage(Content([Text("another way")]))),
+  )
+  assert_eq(grown.last_sequence(), 3)
+  assert_eq(store.load(SessionId("origin")).last_sequence(), 3)
+  assert_true(
+    store.load(SessionId("origin")).events()[2].item() is User(message) &&
+    message.content().text() == "second",
+  )
+}
+
+///|
+async fn fork_refused(
+  store : @store.SessionStore,
+  source : String,
+  fork : String,
+  through? : Int32,
+) -> Bool {
+  try
+    store.fork(
+      SessionId(source),
+      SessionId(fork),
+      through?,
+      system_prompt="fork system",
+    )
+  catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+async test "fork never replaces a session that already exists" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let origin = @agent_session.Session(
+      SessionId("origin"),
+      system_prompt="system",
+    )
+    .append(User(UserMessage(Content([Text("first")]))))
+    .append(Terminal(Finished("one")))
+  store.create(origin)
+  let other = @agent_session.Session(SessionId("other"), system_prompt="other")
+  store.create(other)
+  for taken in ["other", "origin"] {
+    assert_true(fork_refused(store, "origin", taken))
+  }
+  assert_eq(store.load(SessionId("other")).system_prompt(), "other")
+  assert_eq(store.load(SessionId("origin")).last_sequence(), 2)
+  // A directory without a session file still holds the id: its leftover
+  // title must not become the fork's.
+  @fs.mkdir("\{store.root()}/sessions/husk", recursive=true)
+  @fs.write_file(
+    "\{store.root()}/sessions/husk/session-title",
+    "Somebody else's",
+    create_mode=CreateOrTruncate,
+  )
+  assert_true(fork_refused(store, "origin", "husk"))
+  assert_false(@fs.exists(session_file(store, "husk")))
+  // A source that cannot be forked leaves no directory behind for the id.
+  assert_true(fork_refused(store, "missing", "fork"))
+  assert_true(fork_refused(store, "origin", "fork", through=1))
+  assert_false(store.exists(SessionId("fork")))
+}
+
+///|
 async test "session titles reject blank text and missing records" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)

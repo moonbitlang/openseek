@@ -1,7 +1,7 @@
 ///|
 priv struct ContributionCodeLensProvider {
   lenses : Array[@language.CodeLens]
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -17,7 +17,7 @@ impl @language.CodeLensProvider for ContributionCodeLensProvider with fn provide
 ///|
 priv struct BlockingContributionCodeLensProvider {
   lenses : Array[@language.CodeLens]
-  calls : Ref[Int]
+  calls : Ref[Int32]
   first_started : @async.Semaphore
   release_first : @async.Semaphore
 }
@@ -39,7 +39,7 @@ impl @language.CodeLensProvider for BlockingContributionCodeLensProvider with fn
 ///|
 priv struct CodeLensTestTimeout {
   callback : () -> Unit
-  delay_ms : Int
+  delay_ms : Int32
   mut active : Bool
 }
 
@@ -58,7 +58,7 @@ fn CodeLensTestHost::CodeLensTestHost() -> CodeLensTestHost {
 fn CodeLensTestHost::schedule(
   self : CodeLensTestHost,
   callback : () -> Unit,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> @base_common.Disposable {
   let timeout = { callback, delay_ms, active: true, }
   self.timeouts.push(timeout)
@@ -74,7 +74,7 @@ fn CodeLensTestHost::launch(
 }
 
 ///|
-fn CodeLensTestHost::active_timeout_count(self : CodeLensTestHost) -> Int {
+fn CodeLensTestHost::active_timeout_count(self : CodeLensTestHost) -> Int32 {
   for timeout in self.timeouts; count = 0 {
     if timeout.active {
       continue count + 1
@@ -107,7 +107,7 @@ async fn CodeLensTestHost::run_next_task(
 }
 
 ///|
-fn contribution_code_lens(line : Int, title : String) -> @language.CodeLens {
+fn contribution_code_lens(line : Int32, title : String) -> @language.CodeLens {
   { range: Range(line, 1, line, 1), title, tooltip: None, execute: () => (), }
 }
 
@@ -259,7 +259,7 @@ async test "CodeLens contribution fences model replacement and option-disable st
 ///|
 fn CodeEditorWidget::code_lens_item_count_for_test(
   self : CodeEditorWidget,
-) -> Int {
+) -> Int32 {
   match self.code_lens_contribution() {
     Some(state) => state.items.length()
     None => 0

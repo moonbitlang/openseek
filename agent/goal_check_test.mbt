@@ -61,7 +61,7 @@ async fn goal_ceiling_test_server(
 }
 
 ///|
-fn pressured_final_payload(content : String, total_tokens : Int) -> String {
+fn pressured_final_payload(content : String, total_tokens : Int32) -> String {
   "{\"choices\":[{\"delta\":{\"content\":\"\{content}\"}}],\"usage\":{\"prompt_tokens\":\{total_tokens - 1000},\"completion_tokens\":1000,\"total_tokens\":\{total_tokens}}}"
 }
 

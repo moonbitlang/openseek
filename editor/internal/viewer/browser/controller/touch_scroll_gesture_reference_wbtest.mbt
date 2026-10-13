@@ -6,10 +6,10 @@
 ///|
 priv struct TouchScrollTestHarness {
   mut now : Double
-  mut next_handle : Int
-  frames : Map[Int, () -> Unit]
+  mut next_handle : Int32
+  frames : Map[Int32, () -> Unit]
   translations : Array[(Double, Double)]
-  mut cancel_count : Int
+  mut cancel_count : Int32
 }
 
 ///|
@@ -198,10 +198,10 @@ extern "js" fn enable_scrollbar_input_touch_support() -> Unit =
 extern "js" fn dispatch_scrollbar_input_touch(
   element : @rdom.Element,
   event_type : String,
-  identifier : Int,
+  identifier : Int32,
   page_x : Double,
   page_y : Double,
-) -> Int =
+) -> Int32 =
   #| (element, eventType, identifier, pageX, pageY) => {
   #|   const point = { identifier, pageX, pageY, target: element };
   #|   const active = eventType === "touchend" || eventType === "touchcancel"

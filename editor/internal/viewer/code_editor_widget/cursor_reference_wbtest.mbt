@@ -19,10 +19,10 @@ fn cursor_reference_text() -> String {
 ///|
 fn reference_mouse_data(
   position : @base_common.Position,
-  in_selection_mode? : Bool = false,
-  mouse_down_count? : Int = 1,
-  started_on_line_numbers? : Bool = false,
-  reveal_type? : @controller.NavigationCommandRevealType = Minimal,
+  in_selection_mode~ : Bool = false,
+  mouse_down_count~ : Int32 = 1,
+  started_on_line_numbers~ : Bool = false,
+  reveal_type~ : @controller.NavigationCommandRevealType = Minimal,
 ) -> @controller.MouseDispatchData {
   {
     position,

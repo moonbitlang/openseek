@@ -63,7 +63,7 @@ fn info_reply(identity : String) -> Reply {
 ///|
 /// Whether the server at `host:port` is an `inspect` serving `identity`. False
 /// for a closed port, another program, or an `inspect` serving other sessions.
-async fn probe_inspect(host : String, port : Int, identity : String) -> Bool {
+async fn probe_inspect(host : String, port : Int32, identity : String) -> Bool {
   let reply = @async.with_timeout_opt(3000, () => {
     @http.get("http://\{host}:\{port}/api/info")
   }) catch {
@@ -81,21 +81,21 @@ async fn probe_inspect(host : String, port : Int, identity : String) -> Bool {
 
 ///|
 /// First port of the range `--ensure` derives its ports from.
-let ensure_port_base : Int = 41000
+let ensure_port_base : Int32 = 41000
 
 ///|
 /// Size of that range: 41000–41899.
-let ensure_port_span : Int = 900
+let ensure_port_span : Int32 = 900
 
 ///|
 /// How many consecutive ports `--ensure` tries before giving up.
-let ensure_port_tries : Int = 16
+let ensure_port_tries : Int32 = 16
 
 ///|
 /// The ports `--ensure` tries for `identity`, in order: a window starting at a
 /// port derived from it, so a session root always lands on the same port unless
 /// something else already holds it.
-fn ensure_ports(identity : String) -> Array[Int] {
+fn ensure_ports(identity : String) -> Array[Int32] {
   let start = (fnv1a64(identity) % ensure_port_span.to_uint64()).to_int()
   let ports = []
   for i in 0..<ensure_port_tries {
@@ -108,7 +108,7 @@ fn ensure_ports(identity : String) -> Array[Int] {
 /// What `--ensure` leaves in the session root for the next caller: where the
 /// server listens and the token its URLs need. Readable only by the user.
 priv struct ServerRecord {
-  port : Int
+  port : Int32
   token : String
   version : String
 } derive(ToJson, FromJson)
@@ -207,7 +207,7 @@ async fn tmpdir_entropy() -> String {
 /// What an `--ensure` server checks on every request but `/api/info`.
 priv struct Guard {
   token : String
-  port : Int
+  port : Int32
 }
 
 ///|
@@ -270,7 +270,7 @@ fn cookie_value(header : String?, name : String) -> String? {
 
 ///|
 /// The URL an `--ensure` server is opened with.
-fn ensure_url(port : Int, token : String) -> String {
+fn ensure_url(port : Int32, token : String) -> String {
   "http://127.0.0.1:\{port}/?t=\{token}"
 }
 
@@ -278,8 +278,8 @@ fn ensure_url(port : Int, token : String) -> String {
 /// How `--ensure` got its server: bound a port and must serve on it, or found
 /// one already serving these sessions.
 priv enum Ensured {
-  Started(@http.Server, Int, String)
-  Reused(Int, String)
+  Started(@http.Server, Int32, String)
+  Reused(Int32, String)
 }
 
 ///|
@@ -291,7 +291,7 @@ priv enum Ensured {
 async fn ensure_server(
   session_root : String,
   identity : String,
-  ports : Array[Int],
+  ports : Array[Int32],
 ) -> Ensured {
   let record_file = record_path(session_root)
   for port in ports {
@@ -321,7 +321,7 @@ async fn ensure_server(
 /// does not trust a port that is gone. A newer server's record is left alone.
 async fn remove_own_record(
   session_root : String,
-  port : Int,
+  port : Int32,
   token : String,
 ) -> Unit {
   let path = record_path(session_root)

@@ -54,7 +54,7 @@ pub const LocalConsoleDevice = "host"
 /// Bind the loopback listener on `port`. When that port is taken (another
 /// development host, an unrelated program), a fresh ephemeral port keeps the
 /// console usable; the Settings page shows whichever origin was bound.
-pub async fn LocalConsole::bind(port~ : Int) -> LocalConsole {
+pub async fn LocalConsole::bind(port~ : Int32) -> LocalConsole {
   guard @entropy.random_hex(32) is Some(token) else {
     // No OS entropy is a hard failure, never weak randomness.
     raise @host.HostError("no OS entropy available for the console token")
@@ -87,7 +87,7 @@ pub async fn LocalConsole::bind(port~ : Int) -> LocalConsole {
 }
 
 ///|
-pub fn LocalConsole::port(self : LocalConsole) -> Int {
+pub fn LocalConsole::port(self : LocalConsole) -> Int32 {
   self.server.addr.port()
 }
 
@@ -377,7 +377,7 @@ async fn respond_redirect(
 ///|
 async fn respond_status(
   conn : @http.ServerConnection,
-  code : Int,
+  code : Int32,
   reason : String,
 ) -> Unit {
   conn.send_response(code, reason, extra_headers={

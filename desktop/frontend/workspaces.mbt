@@ -8,8 +8,8 @@
 fn fetch_projects(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  connection_generation : Int,
-  request_generation : Int,
+  connection_generation : Int32,
+  request_generation : Int32,
 ) -> @cmd.Cmd {
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
@@ -86,7 +86,7 @@ fn project_action(
     @protocol.WorkspacesReply,
   ],
   payload : @protocol.WorkspacePayload,
-  report_added? : Bool = false,
+  report_added~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
@@ -662,7 +662,7 @@ test "a picker message with no picker open is dropped" {
 
 ///|
 /// Test-only: the request fence currently expected by an open picker.
-fn picker_generation(model : Model) -> Int raise {
+fn picker_generation(model : Model) -> Int32 raise {
   guard model.project_picker is Some(picker) else {
     fail("expected an open project picker")
   }
@@ -858,6 +858,163 @@ test "a confirmed add keeps the raw host path for reply correlation" {
     resolved,
   )
   assert_eq(focused.dev().active_project, Some(picked))
+}
+
+///|
+test "a Codex project add preserves its draft in either reply order" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let picked = channel.test_resource("/home/u/proj")
+  for detach_previous in [false, true] {
+    for broadcast_first in [false, true] {
+      let (_, started) = update(
+        dispatch,
+        Codex(channel~, @codex.Msg::start_draft("codex-add-project", "")),
+        { ..test_model(), screen: Codex, default_agent: CodexAgent, },
+      )
+      for initial_screen in [Screen::Codex, Settings, Skills, Schedules] {
+        let (_, confirmed) = adopt_picked_directory(
+          dispatch,
+          channel,
+          picked.path,
+          {
+            ..started,
+            screen: initial_screen,
+            management_return: Some(CodexWork),
+          },
+        )
+        let (_, repeated) = adopt_picked_directory(
+          dispatch,
+          channel,
+          picked.path,
+          {
+            ..started,
+            screen: initial_screen,
+            management_return: Some(CodexWork),
+          },
+        )
+        assert_true(confirmed.codex_project_adoption_pending())
+        assert_true(repeated.codex_project_adoption_pending())
+        assert_true(confirmed.codex == repeated.codex)
+        assert_true(confirmed.screen == initial_screen)
+        if initial_screen is Codex {
+          assert_true(confirmed.codex_model_chip().disabled)
+          let switch_agent = ModelPicked("openseek:deepseek-v4-pro", draft={
+            task: "Keep this draft",
+            mentions: [],
+            images: [],
+          })
+          let (_, unchanged) = update(dispatch, switch_agent, confirmed)
+          let (_, repeated) = update(dispatch, switch_agent, confirmed)
+          assert_true(unchanged.screen is Codex && repeated.screen is Codex)
+          assert_true(unchanged.codex == confirmed.codex)
+          assert_true(repeated.codex == confirmed.codex)
+          assert_true(unchanged.codex_project_adoption_pending())
+        }
+        for screen in [Screen::Codex, Settings, Skills, Schedules] {
+          let confirmed = { ..confirmed, screen, }
+          for
+            action in [
+              @codex.Msg::login(),
+              @codex.Msg::logout(),
+              @codex.Msg::cancel_login(),
+            ] {
+            let (_, blocked) = update(
+              dispatch,
+              Codex(channel~, action),
+              confirmed,
+            )
+            let (_, repeated) = update(
+              dispatch,
+              Codex(channel~, action),
+              confirmed,
+            )
+            assert_true(blocked.codex == confirmed.codex)
+            assert_true(repeated.codex == confirmed.codex)
+          }
+          let paths = if detach_previous {
+            [picked]
+          } else {
+            [channel.test_project(), picked]
+          }
+          let reply = ProjectAddCommitted(added=picked.path, paths~)
+          let broadcast = ProjectsChanged(paths, chat_root=None)
+          let (_, first) = update_dev(
+            dispatch,
+            if broadcast_first {
+              broadcast
+            } else {
+              reply
+            },
+            confirmed,
+          )
+          let (_, focused) = update_dev(
+            dispatch,
+            if broadcast_first {
+              reply
+            } else {
+              broadcast
+            },
+            first,
+          )
+          if detach_previous {
+            assert_true(focused.conversation_selection() is None)
+          }
+          assert_true(focused.screen == screen)
+          assert_eq(focused.codex.active_id(), Some("codex-add-project"))
+          assert_eq(focused.codex.new_thread_cwd(), picked.path)
+          assert_eq(focused.dev().active_project, Some(picked))
+          assert_true(focused.pending_project_adoption is None)
+        }
+      }
+    }
+  }
+}
+
+///|
+test "OpenSeek selection supersedes retained Codex project ownership" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Local
+  let picked = channel.test_resource("/other")
+  let (_, started) = update(
+    dispatch,
+    Codex(channel~, @codex.Msg::start_draft("hidden-codex", "/workspace")),
+    { ..test_model(), screen: Codex, },
+  )
+  assert_false(started.can_pick_project(channel))
+  for screen in [Screen::Chat, Settings, Skills, Schedules] {
+    let selected = { ..started, screen, management_return: Some(OpenSeekWork), }
+    assert_true(selected.can_pick_project(channel))
+    let (_, focused) = focus_added_project(
+      dispatch,
+      channel,
+      picked,
+      Some("hidden-codex"),
+      selected,
+    )
+    let (_, repeated) = focus_added_project(
+      dispatch,
+      channel,
+      picked,
+      Some("hidden-codex"),
+      selected,
+    )
+    assert_true(focused.screen == selected.screen)
+    assert_eq(focused.dev().active_project, selected.dev().active_project)
+    assert_true(focused.codex == selected.codex)
+    assert_true(repeated.codex == focused.codex)
+    assert_eq(repeated.dev().active_project, focused.dev().active_project)
+    let (_, confirmed) = adopt_picked_directory(
+      dispatch,
+      channel,
+      picked.path,
+      selected,
+    )
+    assert_true(
+      confirmed.pending_project_adoption is Some({ codex_draft: None, .. }),
+    )
+    assert_false(confirmed.codex_project_adoption_pending())
+  }
 }
 
 ///|
@@ -1202,12 +1359,24 @@ fn Model::chat_creation_pending(self : Model) -> Bool {
 }
 
 ///|
+fn Model::can_pick_project(self : Model, channel : @interop.ChannelId) -> Bool {
+  channel != self.focused ||
+  !self.codex_work_selected() ||
+  self.codex.can_add_project()
+}
+
+///|
 fn adopt_picked_directory(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  guard model.can_pick_project(channel) else {
+    return model.notify_error(
+      dispatch, "Finish or leave the current Codex draft before adding a project.",
+    )
+  }
   guard @resource.of_path(channel, path) is Some(picked) else {
     return model.notify_error(
       dispatch, "The selected folder returned an invalid path.",
@@ -1226,6 +1395,13 @@ fn adopt_picked_directory(
         picked,
         known: dev.projects.copy(),
         resolved: None,
+        codex_draft: if channel == model.focused &&
+          model.codex_work_selected() &&
+          model.codex.composing_draft() {
+          model.codex.active_id()
+        } else {
+          None
+        },
       }),
     },
   )
@@ -1235,7 +1411,7 @@ fn adopt_picked_directory(
 fn create_chat_workspace(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  generation~ : Int,
+  generation~ : Int32,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {

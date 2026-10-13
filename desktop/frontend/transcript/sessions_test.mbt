@@ -271,7 +271,8 @@ test "transcript mapping replays a finished conversation" {
       prose=Some(_),
       calls=[],
       replay=false,
-      finished=true
+      finished=true,
+      end_sequence=_
     ) else {
     fail("expected the terminal-confirmed answer with its reasoning")
   }

@@ -18,7 +18,7 @@
 /// request answers empty. Generous because a first `moon check` on a fresh
 /// project builds the whole dependency graph; the timeout only exists so a
 /// wedged toolchain (a hung registry fetch) cannot pin a request forever.
-const MoonCliTimeoutMs : Int = 300_000
+const MoonCliTimeoutMs : Int32 = 300_000
 
 ///|
 /// The most module roots discovered under one workspace. A workspace rarely
@@ -139,7 +139,7 @@ async fn MoonCliState::run_moon(
   self : MoonCliState,
   args : Array[String],
   cwd : @pathx.Absolute,
-) -> (Int, String, String)? {
+) -> (Int32, String, String)? {
   guard self.resolve_command() is Some(config) else { return None }
   @async.with_timeout_opt(MoonCliTimeoutMs, () => {
     // Moon commands are non-interactive here. Giving them EOF prevents an
@@ -440,7 +440,7 @@ fn absolute_diagnostic_path(
 
 ///|
 /// Map moonc's diagnostic level to an LSP `DiagnosticSeverity`.
-fn check_severity(level : String) -> Int {
+fn check_severity(level : String) -> Int32 {
   match level {
     "error" => 1
     "warning" => 2
@@ -452,7 +452,7 @@ fn check_severity(level : String) -> Int {
 /// The LSP `tags` the viewer renders specially — faded for unnecessary code,
 /// struck through for deprecated use — recovered from moonc's message prefix,
 /// the only place the diagnostic JSON carries the warning's name.
-fn check_tags(message : String) -> Array[Int]? {
+fn check_tags(message : String) -> Array[Int32]? {
   if message.has_prefix("Warning (unused") {
     Some([1])
   } else if message.has_prefix("Warning (deprecated") {
@@ -502,7 +502,7 @@ fn parse_ide_hover(output : String) -> LspHoverReply {
 ///|
 /// Parse moonc's 1-based `"line:col-line:col"` span into 0-based
 /// `(start_line, start_col, end_line, end_col)`.
-fn parse_span(span : StringView) -> (Int, Int, Int, Int)? {
+fn parse_span(span : StringView) -> (Int32, Int32, Int32, Int32)? {
   guard span.split_once("-") is Some((start, end_)) else { return None }
   guard parse_position(start) is Some((start_line, start_col)) &&
     parse_position(end_) is Some((end_line, end_col)) else {
@@ -512,7 +512,7 @@ fn parse_span(span : StringView) -> (Int, Int, Int, Int)? {
 }
 
 ///|
-fn parse_position(position : StringView) -> (Int, Int)? {
+fn parse_position(position : StringView) -> (Int32, Int32)? {
   guard position.split_once(":") is Some((line, col)) else { return None }
   let line = @string.parse_int(line) catch { _ => return None }
   let col = @string.parse_int(col) catch { _ => return None }
@@ -796,7 +796,7 @@ fn symbol_row_range(location : Map[String, Json]) -> SymbolRange {
 ///|
 /// Map an LSP `SymbolKind` name — what `moon ide workspace-symbols` emits —
 /// to its protocol number; `None` for a name outside the LSP set.
-fn lsp_symbol_kind(kind : String) -> Int? {
+fn lsp_symbol_kind(kind : String) -> Int32? {
   match kind {
     "File" => Some(1)
     "Module" => Some(2)

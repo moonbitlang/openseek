@@ -46,6 +46,7 @@ pub(all) struct Color {
 
 type Connection
 pub async fn Connection::add_binding(Self, String) -> Unit
+pub async fn Connection::bring_to_front(Self) -> Unit
 pub async fn Connection::call_function_on(Self, CallFunction) -> Evaluation
 pub fn Connection::close(Self) -> Unit
 pub async fn Connection::enable_dom(Self) -> Unit

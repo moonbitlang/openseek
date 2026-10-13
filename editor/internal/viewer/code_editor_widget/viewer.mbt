@@ -95,14 +95,14 @@ struct CodeEditorWidget {
   /// Monotonic paint generation used by the internal `after_next_render`
   /// primitive. A waiter captures `render_generation + 1`, so a callback from
   /// an older layout transaction can never satisfy a newer render fence.
-  mut render_generation : Int
-  did_render : @base_common.Emitter[Int]
+  mut render_generation : Int32
+  did_render : @base_common.Emitter[Int32]
   mut pending_rendered : PendingRendered?
   mut scroll_dirty : Bool
   /// This editor's decoration `ownerId` (Monaco's per-widget editor id): the
   /// filter handed to `ViewModelDecorations` and the ownerId of the public
   /// `delta_decorations` API.
-  editor_id : Int
+  editor_id : Int32
   /// The per-editor contribution owner around the registry's sole concrete
   /// instance map, including its two-phase disposal lifecycle.
   contributions : EditorContributions
@@ -127,9 +127,9 @@ priv enum CursorRevealScrollType {
 ///|
 priv struct HorizontalRevealRangeRequest {
   minimal_reveal : Bool
-  view_line_number : Int
-  start_column : Int
-  end_column : Int
+  view_line_number : Int32
+  start_column : Int32
+  end_column : Int32
   start_scroll_top : Double
   stop_scroll_top : Double
   scroll_type : CursorRevealScrollType
@@ -149,9 +149,9 @@ struct CodeEditorViewState {
 /// measure and patch.
 fn CodeEditorWidget::CodeEditorWidget(
   services? : CodeEditorServices,
-  options? : CodeEditorOptions = CodeEditorOptions::default(),
+  options~ : CodeEditorOptions = CodeEditorOptions::default(),
   initial_container? : @rdom.Element,
-  contributions? : CodeEditorContributionDescriptors = CodeEditorContributionDescriptors::standalone(),
+  contributions~ : CodeEditorContributionDescriptors = CodeEditorContributionDescriptors::standalone(),
 ) -> CodeEditorWidget {
   let (services, owns_services) = match services {
     Some(services) => (services, false)
@@ -248,7 +248,7 @@ fn CodeEditorWidget::CodeEditorWidget(
 /// production constructor always installs the clearable browser timeout.
 fn CodeEditorWidget::set_hover_host_for_test(
   self : CodeEditorWidget,
-  schedule : (() -> Unit, Int) -> @base_common.Disposable,
+  schedule : (() -> Unit, Int32) -> @base_common.Disposable,
   test_launch_async_task : (async () -> Unit noraise) -> Unit,
 ) -> Unit {
   match self.content_hover_contribution() {
@@ -318,14 +318,14 @@ fn CodeEditorWidget::cancel_render_frame(self : CodeEditorWidget) -> Unit {
 ///|
 /// Process-wide editor id counter (Monaco's per-widget editor id).
 priv struct EditorIdCounter {
-  mut value : Int
+  mut value : Int32
 }
 
 ///|
 let editor_id_counter : EditorIdCounter = { value: 0, }
 
 ///|
-fn next_editor_id() -> Int {
+fn next_editor_id() -> Int32 {
   editor_id_counter.value += 1
   editor_id_counter.value
 }
@@ -336,7 +336,7 @@ fn next_editor_id() -> Int {
 pub fn CodeEditorWidget::create(
   host : @rdom.Element,
   services? : CodeEditorServices,
-  options? : CodeEditorOptions = CodeEditorOptions::default(),
+  options~ : CodeEditorOptions = CodeEditorOptions::default(),
   contributions~ : CodeEditorContributionDescriptors,
 ) -> CodeEditorWidget {
   // `EditorConfiguration` constructs its `ElementSizeObserver` before model

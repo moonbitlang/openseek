@@ -5,7 +5,7 @@
 /// after the previous one ends. A line past the end of `content` yields
 /// `content.length()`, so a range anchored beyond EOF selects an empty slice
 /// instead of failing.
-pub fn line_start_offset(content : String, line : Int) -> Int {
+pub fn line_start_offset(content : String, line : Int32) -> Int32 {
   // Line `line` starts right after line `line - 1` ends (nobreak: both scans
   // land on content.length() for a line past EOF).
   if line <= 1 {
@@ -22,7 +22,7 @@ pub fn line_start_offset(content : String, line : Int) -> Int {
 /// `line_end_offset(content, n)` and `line_start_offset(content, n + 1)` name
 /// the same position. A line that is not newline-terminated — the last one, or
 /// any line past the end — ends at `content.length()`.
-pub fn line_end_offset(content : String, line : Int) -> Int {
+pub fn line_end_offset(content : String, line : Int32) -> Int32 {
   let len = content.length()
   for cursor in 0..<len; current_line = 1 {
     if content[cursor] == '\n' {

@@ -72,7 +72,7 @@ rather than a fixed number.
 
 ```mbt check
 ///|
-fn line_height_for(raw : Double, size : Double) -> Int {
+fn line_height_for(raw : Double, size : Double) -> Int32 {
   @config.BareFontInfo::create(
     font_family="Menlo",
     font_weight="normal",

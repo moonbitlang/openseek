@@ -41,7 +41,7 @@ async fn explore_test_server(
 }
 
 ///|
-fn sse_submit_answer(answer : String, total_tokens : Int) -> String {
+fn sse_submit_answer(answer : String, total_tokens : Int32) -> String {
   let report : Json = {
     "schema_version": 1,
     "answer": answer,
@@ -75,7 +75,7 @@ fn sse_submit_answer(answer : String, total_tokens : Int) -> String {
 }
 
 ///|
-fn sse_plain(content : String, total_tokens : Int) -> String {
+fn sse_plain(content : String, total_tokens : Int32) -> String {
   (
     {
       "choices": [{ "delta": { "content": content } }],

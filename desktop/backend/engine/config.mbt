@@ -26,11 +26,14 @@ priv struct RunConfig {
   api_url : String?
   model : String
   thinking : @protocol.OpenSeekThinking
-  max_steps : Int
+  max_steps : Int32
   engine : String
   cwd : @pathx.Path?
   session : String
   session_root : @pathx.Absolute?
+  // The user's MCP server configuration as the host found it; None when
+  // there is no file.
+  mcp_config : McpConfig?
 }
 
 ///|
@@ -57,7 +60,7 @@ fn configured_api_key(
   stored_key? : String,
   api_url? : String,
   env_key? : String,
-  missing? : String = "an API key is required; add it in Settings",
+  missing~ : String = "an API key is required; add it in Settings",
 ) -> String raise EngineError {
   if stored_key is Some(value) {
     return value
@@ -130,7 +133,7 @@ fn key_env_for(
 }
 
 ///|
-fn configured_max_steps(value : Int?) -> Int raise EngineError {
+fn configured_max_steps(value : Int32?) -> Int32 raise EngineError {
   let parsed = if value is Some(value) {
     value
   } else if @env.get("OPENSEEK_MAX_STEPS") is Some(text) {
@@ -150,6 +153,7 @@ fn configured_max_steps(value : Int?) -> Int raise EngineError {
 async fn run_config(
   manager : EngineManager,
   payload : @protocol.StartPayload,
+  mcp_config? : McpConfig,
 ) -> RunConfig {
   let task = payload.task.trim().to_owned()
   let content = prompt_content(task, payload.images)
@@ -168,6 +172,7 @@ async fn run_config(
     max_steps?=payload.max_steps,
     session~,
     workspace?=payload.workspace,
+    mcp_config?,
   )
   if !payload.images.is_empty() && !config.supports_images() {
     raise EngineError("Images require a DeepSeek image-capable endpoint")
@@ -184,6 +189,7 @@ async fn run_config(
 async fn compact_config(
   manager : EngineManager,
   payload : @protocol.CompactPayload,
+  mcp_config? : McpConfig,
 ) -> RunConfig {
   session_command_config(
     manager,
@@ -192,6 +198,7 @@ async fn compact_config(
     thinking?=payload.thinking,
     max_steps?=payload.max_steps,
     workspace?=payload.workspace,
+    mcp_config?,
   )
 }
 
@@ -202,6 +209,7 @@ async fn compact_config(
 async fn goal_config(
   manager : EngineManager,
   payload : @protocol.GoalPayload,
+  mcp_config? : McpConfig,
 ) -> RunConfig {
   session_command_config(
     manager,
@@ -210,6 +218,7 @@ async fn goal_config(
     thinking?=payload.thinking,
     max_steps?=payload.max_steps,
     workspace?=payload.workspace,
+    mcp_config?,
   )
 }
 
@@ -219,14 +228,24 @@ async fn session_command_config(
   session : String,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
-  max_steps? : Int,
+  max_steps? : Int32,
   workspace? : String,
+  mcp_config? : McpConfig,
 ) -> RunConfig {
   let session = session.trim().to_owned()
   guard !session.is_empty() else {
     raise EngineError("session id must not be empty")
   }
-  serve_config("", manager, model?, thinking?, max_steps?, session~, workspace?)
+  serve_config(
+    "",
+    manager,
+    model?,
+    thinking?,
+    max_steps?,
+    session~,
+    workspace?,
+    mcp_config?,
+  )
 }
 
 ///|
@@ -234,14 +253,19 @@ async fn session_command_config(
 /// engine. The endpoint (provider, key, URL) comes from the host-owned
 /// settings store, never from the request — a client carries no credentials
 /// (docs/remote-protocol.md).
+///
+/// `mcp_config` is what the caller read from the user's MCP file. It is a
+/// parameter because this function runs under the workspace lifecycle lock,
+/// and a file read does not belong there: callers read first, then lock.
 async fn serve_config(
   task : String,
   manager : EngineManager,
   model? : String,
   thinking? : @protocol.OpenSeekThinking,
-  max_steps? : Int,
+  max_steps? : Int32,
   session~ : String,
   workspace? : String,
+  mcp_config? : McpConfig,
 ) -> RunConfig {
   let engine = manager.engine
   let (settings, _) = manager.settings_snapshot()
@@ -300,6 +324,7 @@ async fn serve_config(
     cwd: Some(@worktree.run_dir(dir, session).to_path()),
     session,
     session_root: Some(@workspaces.store_root(dir)),
+    mcp_config,
   }
 }
 
@@ -321,6 +346,9 @@ fn engine_fingerprint(config : RunConfig) -> String {
     config.cwd.map(cwd => cwd.to_string()).unwrap_or(""),
     config.session,
     config.session_root.map(root => root.to_string()).unwrap_or(""),
+    // MCP servers are connected once, when the engine starts, so an edited
+    // configuration takes a new process to apply.
+    mcp_config_fingerprint(config.mcp_config),
   ].join("\u{0}")
 }
 
@@ -338,6 +366,7 @@ test "a different endpoint cannot reuse a live engine process" {
     cwd: None,
     session: "s-fingerprint",
     session_root: None,
+    mcp_config: None,
   }
   let custom = {
     ..base,
@@ -347,6 +376,35 @@ test "a different endpoint cannot reuse a live engine process" {
   assert_true(
     engine_fingerprint(base) !=
     engine_fingerprint({ ..base, thinking: ThinkingHigh, }),
+  )
+  // An edited MCP configuration needs a new process, and so does one that
+  // appears, disappears, or stops being readable.
+  let mcp : McpConfig = {
+    path: @pathx.Path("/home/.openseek/mcp.json").resolve(),
+    revision: McpConfigRevision::of_text("{\"mcpServers\": {}}"),
+  }
+  let configured = { ..base, mcp_config: Some(mcp), }
+  assert_true(engine_fingerprint(base) != engine_fingerprint(configured))
+  assert_true(
+    engine_fingerprint(configured) !=
+    engine_fingerprint({
+      ..base,
+      mcp_config: Some({
+        ..mcp,
+        revision: McpConfigRevision::of_text("{\"mcpServers\": {\"a\": {}}}"),
+      }),
+    }),
+  )
+  assert_true(
+    engine_fingerprint(configured) !=
+    engine_fingerprint({
+      ..base,
+      mcp_config: Some({ ..mcp, revision: ReadFailed("permission denied"), }),
+    }),
+  )
+  assert_eq(
+    engine_fingerprint(configured),
+    engine_fingerprint({ ..base, mcp_config: Some({ ..mcp, }), }),
   )
   assert_eq(
     engine_fingerprint(base),

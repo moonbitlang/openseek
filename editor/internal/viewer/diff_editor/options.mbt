@@ -34,17 +34,17 @@ pub(all) struct DiffEditorOptions {
 
 ///|
 pub fn DiffEditorOptions::DiffEditorOptions(
-  layout? : DiffEditorLayout = SideBySide,
-  automatic_inline? : Bool = true,
-  automatic_inline_width? : Double = 900.0,
-  sash_enabled? : Bool = true,
-  split_ratio? : Double = 0.5,
-  diff_word_wrap? : DiffWordWrap = Inherit,
-  overview_ruler? : Bool = true,
-  render_indicators? : Bool = true,
-  render_markdown_comments? : Bool = true,
-  handle_mouse_wheel? : Bool = true,
-  ignore_trim_whitespace? : Bool = true,
+  layout~ : DiffEditorLayout = SideBySide,
+  automatic_inline~ : Bool = true,
+  automatic_inline_width~ : Double = 900.0,
+  sash_enabled~ : Bool = true,
+  split_ratio~ : Double = 0.5,
+  diff_word_wrap~ : DiffWordWrap = Inherit,
+  overview_ruler~ : Bool = true,
+  render_indicators~ : Bool = true,
+  render_markdown_comments~ : Bool = true,
+  handle_mouse_wheel~ : Bool = true,
+  ignore_trim_whitespace~ : Bool = true,
 ) -> DiffEditorOptions {
   {
     layout,

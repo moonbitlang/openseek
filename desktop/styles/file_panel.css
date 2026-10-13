@@ -189,6 +189,25 @@ button.panel-toggle:not(:disabled):hover {
 .viewer-stack > .viewer-host {
   flex: 1 1 auto;
 }
+/* The Office viewer is a Rabbita-owned sibling surface rather than an
+   imperative editor widget. Keep its root in the same flex slot and let the
+   viewer's own stylesheet provide the page/sheet geometry. */
+.viewer-stack > .office-viewer-surface {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  overflow: auto;
+}
+.office-viewer-surface.word-mode {
+  padding: 28px 24px 56px;
+}
+.office-viewer-surface.sheet-mode {
+  padding: 20px 20px 44px;
+}
+.office-viewer-surface.office-viewer-surface-empty {
+  display: none !important;
+}
 .viewer-host.mbti-diagram-host,
 .viewer-host.package-diagram-host {
   box-sizing: border-box;
@@ -256,41 +275,43 @@ button.panel-toggle:not(:disabled):hover {
 }
 /* The file tree as a flat bottom panel, Emacs-window style: full
    width, a 1px seam against the viewer, no chrome of its own. Non-modal —
-   the viewer above stays live while its flex basis opens or closes.
+   the viewer above stays live when the tree is shown or hidden.
    The height is `--tree-height`, set as the user drags the handle on
    the top seam (see tree_resize.mbt); it defaults to a third and is
    clamped so the panel floors at 96px while the viewer keeps at
    least 120px. The clamp also re-fits the panel on window resize
    without any script. */
-/* Only opening/closing changes this progress. The drag size stays outside
-   the transition, so both tree orientations follow size changes directly. */
+/* Animate the stored manual preference. The temporary picker uses full size
+   independently, so selecting a document does not start a closing animation. */
 @property --tree-open-progress {
   syntax: "<number>";
   inherits: false;
-  initial-value: 1;
+  initial-value: 0;
 }
-
 .file-tree-pane {
+  --tree-open-progress: 0;
+  --tree-visibility: hidden;
+  --tree-size: clamp(96px, var(--tree-height, 32%), calc(100% - 120px));
   position: relative;
   display: flex;
   flex-direction: column;
-  flex: 0 0 calc(
-    clamp(96px, var(--tree-height, 32%), calc(100% - 120px)) * var(--tree-open-progress)
-  );
+  flex: 0 0 calc(var(--tree-size) * var(--tree-open-progress));
   min-height: 0;
   overflow: hidden;
-  border-top: 1px solid var(--color-separator);
+  border-top: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
   background: var(--color-bg-surface);
-  visibility: visible;
+  visibility: var(--tree-visibility);
   transition:
     --tree-open-progress var(--drawer-duration) var(--drawer-easing),
-    visibility 0s linear;
+    --tree-visibility 0s linear var(--drawer-duration) allow-discrete;
+}
+.editor.tree-manual-open .file-tree-pane {
+  --tree-open-progress: 1;
+  --tree-visibility: visible;
+  transition-delay: 0s, 0s;
 }
 .editor:not(.tree-open) .file-tree-pane {
-  --tree-open-progress: 0;
-  visibility: hidden;
   pointer-events: none;
-  transition-delay: 0s, var(--drawer-duration);
 }
 
 /* The right-sidebar layout (a Settings choice): same DOM, the body
@@ -302,12 +323,23 @@ button.panel-toggle:not(:disabled):hover {
   flex-direction: row;
 }
 .editor.tree-right .file-tree-pane {
-  flex: 0 0 calc(
-    clamp(180px, var(--tree-width, 260px), calc(100% - 240px)) * var(--tree-open-progress)
-  );
+  --tree-size: clamp(180px, var(--tree-width, 260px), calc(100% - 240px));
   min-width: 0;
   border-top: none;
-  border-left: 1px solid var(--color-separator);
+  border-left: calc(1px * var(--tree-open-progress)) solid var(--color-separator);
+}
+.editor.tree-picker .file-tree-pane {
+  flex-basis: var(--tree-size);
+  border-top-width: 1px;
+  visibility: inherit;
+  transition: none;
+}
+.editor.tree-right.tree-picker .file-tree-pane {
+  border-top-width: 0;
+  border-left-width: 1px;
+}
+.content:not(.panel-open) > .editor .file-tree-pane {
+  visibility: inherit;
 }
 
 /* Drag-to-resize handle on the panel's viewer-facing seam — the
@@ -2072,6 +2104,17 @@ button.git-history-file.selected {
 .tree-twistie svg { width: 16px; height: 16px; transform: rotate(-90deg); }
 .tree-twistie.expanded svg { transform: rotate(0deg); }
 
+.tree-entry-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-secondary);
+}
+.tree-entry-icon svg { width: 16px; height: 16px; }
+
 .tree-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2181,6 +2224,70 @@ button.git-history-file.selected {
 .crumb-sep {
   flex: 0 0 auto;
   color: var(--color-text-faint);
+}
+
+/* Controls for the read-only Office surface live in the breadcrumb row. The
+   search field can shrink before the path does, keeping the file identity
+   visible in a narrow embedded panel. */
+.office-viewer-toolbar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-control-surface);
+}
+.office-viewer-toolbar input {
+  box-sizing: border-box;
+  width: clamp(96px, 16vw, 220px);
+  min-width: 72px;
+  height: 24px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-primary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-xs);
+}
+.office-viewer-toolbar input:focus {
+  outline: 1px solid var(--color-accent);
+  background: var(--color-bg-surface);
+}
+.office-viewer-control {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--color-text-secondary);
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1;
+  cursor: pointer;
+}
+.office-viewer-control:hover:not(:disabled),
+.office-viewer-control.active {
+  color: var(--color-accent-strong);
+  background: var(--color-accent-soft);
+}
+.office-viewer-control:disabled {
+  color: var(--color-text-muted);
+  cursor: default;
+  opacity: .45;
+}
+.office-viewer-zoom-value {
+  min-width: 38px;
+  color: var(--color-text-faint);
+  font-size: var(--font-size-xs);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
 
 /* VS Code-style breadcrumb picker: clicking a directory opens its immediate

@@ -101,7 +101,7 @@ const InflightRequestCapacity = 32
 ///|
 /// Four 5 MiB images expand to about 27 MiB in base64. Leave room for the
 /// prompt and JSON envelope, while keeping a hard bound on incoming data.
-const InboundFrameMaxBytes : Int = 32 * 1024 * 1024
+const InboundFrameMaxBytes : Int32 = 32 * 1024 * 1024
 
 ///|
 /// Enforce one outbound bound for notifications and responses. A producer
@@ -418,7 +418,7 @@ async fn run_request(
 }
 
 ///|
-fn error_envelope(id : Json, code : Int, message : String) -> Json {
+fn error_envelope(id : Json, code : Int32, message : String) -> Json {
   {
     "jsonrpc": "2.0",
     "id": id,

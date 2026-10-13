@@ -16,6 +16,10 @@ pub async fn start_run(
   manager : EngineManager,
   payload : @protocol.StartPayload,
 ) -> StartReply {
+  // Read the user's MCP configuration before the lifecycle lock, never under
+  // it: the lock serializes every conversation's placement, and a slow home
+  // directory must not hold all of them up.
+  let mcp_config = resolved_mcp_config()
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
@@ -32,7 +36,7 @@ pub async fn start_run(
   }
   let record_guard = manager.begin_record_op(key)
   defer manager.end_record_op(key, record_guard)
-  let config = run_config(manager, payload)
+  let config = run_config(manager, payload, mcp_config?)
   @session_store.ensure_not_archived(key)
   let sessions = manager.serving()
   let slot = slot_for(sessions, key)
@@ -221,6 +225,10 @@ pub async fn compact_run(
   manager : EngineManager,
   payload : @protocol.CompactPayload,
 ) -> CompactReply {
+  // Read the user's MCP configuration before the lifecycle lock, never under
+  // it: the lock serializes every conversation's placement, and a slow home
+  // directory must not hold all of them up.
+  let mcp_config = resolved_mcp_config()
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
@@ -246,11 +254,11 @@ pub async fn compact_run(
   // queued command. The next start applies the new fingerprint after both
   // settle.
   let replacement = match slot.live() {
-    None => Some(compact_config(manager, payload))
+    None => Some(compact_config(manager, payload, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = compact_config(manager, payload)
+          let config = compact_config(manager, payload, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {
@@ -333,6 +341,10 @@ pub async fn goal_run(
   guard !(payload.auto is Some(true)) else {
     raise EngineError("autonomous goal continuation is not supported yet")
   }
+  // Read the user's MCP configuration before the lifecycle lock, never under
+  // it: the lock serializes every conversation's placement, and a slow home
+  // directory must not hold all of them up.
+  let mcp_config = resolved_mcp_config()
   manager.workspace_lifecycle_lock.acquire()
   let mut placement_locked = true
   defer (if placement_locked { manager.workspace_lifecycle_lock.release() })
@@ -361,11 +373,11 @@ pub async fn goal_run(
   // endpoint settings are therefore not resolved in that active path; the
   // next idle start applies their fingerprint.
   let replacement = match slot.live() {
-    None => Some(goal_config(manager, payload))
+    None => Some(goal_config(manager, payload, mcp_config?))
     Some(live) =>
       match live.phase {
         Idle(..) => {
-          let config = goal_config(manager, payload)
+          let config = goal_config(manager, payload, mcp_config?)
           if live.spec_key != engine_fingerprint(config) {
             Some(config)
           } else {

@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",
+  "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/sub",
   "openseek_desktop/frontend/select_control",
@@ -26,6 +27,7 @@ import {
   "openseek_desktop/frontend/subrun",
   "openseek_desktop/frontend/internal/jsonx",
   "openseek_desktop/protocol",
+  "openseek_desktop/commands",
 }
 
 supported_targets = "js"

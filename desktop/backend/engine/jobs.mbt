@@ -53,7 +53,7 @@ async fn ServeEngine::job_request(
   self : ServeEngine,
   request_id : String,
   command : @wire.Command,
-  settlement? : Bool = false,
+  settlement~ : Bool = false,
 ) -> @wire.Event {
   let reply : @async.Queue[@wire.Event] = Queue(kind=Blocking(1))
   self.job_requests[request_id] = reply
@@ -110,7 +110,7 @@ async fn job_view(
   directory : String,
   record : @wire.JobRecord,
   live : Bool,
-  refresh_failed? : Bool = false,
+  refresh_failed~ : Bool = false,
 ) -> @protocol.JobView {
   let mut record = record
   let mut error : String? = None
@@ -225,9 +225,9 @@ pub async fn list_jobs(
 async fn job_history_page(
   directory : String,
   live : Map[String, @wire.JobRecord],
-  offset : Int,
+  offset : Int32,
   errors : Array[String],
-  refresh_failed? : Bool = false,
+  refresh_failed~ : Bool = false,
 ) -> @protocol.JobsListReply {
   guard offset >= 0 else { raise EngineError("invalid history offset") }
   let names = @fs.readdir(directory) catch {
@@ -242,7 +242,7 @@ async fn job_history_page(
       names.push(record.generation)
     }
   }
-  let generations : Array[(String, (Int64, Int)?)] = []
+  let generations : Array[(String, (Int64, Int32)?)] = []
   for name in names {
     if !@wire.valid_job_component(name) {
       continue
@@ -372,7 +372,7 @@ async fn selected_job_view(
   live : Map[String, @wire.JobRecord],
   generation : String,
   id : String,
-  refresh_failed? : Bool = false,
+  refresh_failed~ : Bool = false,
 ) -> @protocol.JobView {
   let key = "\{generation}/\{id}"
   let record = match live.get(key) {
@@ -385,7 +385,7 @@ async fn selected_job_view(
 ///|
 /// Trim a byte page to complete UTF-8 code points. Initial tail reads may
 /// begin inside a character; subsequent reads must begin on a boundary.
-fn job_utf8_window(bytes : Bytes, tail : Bool) -> (Int, Int) raise {
+fn job_utf8_window(bytes : Bytes, tail : Bool) -> (Int32, Int32) raise {
   let mut start = 0
   if tail {
     while start < bytes.length() && (bytes[start].to_int() & 0xc0) == 0x80 {
@@ -474,7 +474,7 @@ pub async fn read_job(
 async fn read_job_page(
   path : String,
   offset : Int64?,
-  limit : Int,
+  limit : Int32,
 ) -> @protocol.JobReadReply {
   guard limit >= 4 &&
     limit <= 65536 &&
@@ -552,7 +552,7 @@ fn jobs_store_path(root : @pathx.Absolute, session : String) -> String {
 /// Delivery has already been acknowledged; timeout must not claim the stop failed.
 async fn await_job_settlement(
   reply : @async.Queue[@wire.Event],
-  timeout_ms? : Int = 30000,
+  timeout_ms~ : Int32 = 30000,
 ) -> @wire.Event {
   match @async.with_timeout_opt(timeout_ms, () => reply.get()) {
     Some(event) => event

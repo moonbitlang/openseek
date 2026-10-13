@@ -119,86 +119,122 @@ fn Model::transcript_projects(
 }
 
 ///|
-fn Model::transcript_input(self : Model) -> @transcript_component.Input {
-  let projects = self.transcript_projects()
-  match self.screen {
-    Codex => {
-      let placement = self.codex.active_placement(self.focused)
-      let project_label = placement
-        .bind(value => value.project_root())
-        .bind(project => self.project_display_label(project))
-      @transcript_component.Input(
-        locale=self.locale,
-        dark_mode=self.theme.is_dark(self.system_dark),
-        minimal=self.minimal_transcript_effective(),
-        source=@transcript_component.Codex,
-        focused=self.focused,
-        active_session=self.codex.active_id().unwrap_or("none"),
-        scroll=self.remembered_scroll(),
-        project_label?,
-        current_project=placement.bind(value => value.project_root()),
-        projects~,
-        can_choose_project=false,
-        project_menu_open=false,
-        project_query="",
-        root=placement.bind(value => value.checkout_root()),
-        items=@transcript_component.VisibleRow::history(
-          self.codex.transcript_items(locale=self.locale),
-        ),
-        streaming_response=None,
-        streaming_identity="idle",
-      )
+/// Engine-owned content normalized before the shared transcript presentation.
+priv struct TranscriptContent {
+  source : @transcript_component.Source
+  session : String
+  project : @common.Uri?
+  root : @common.Uri?
+  items : Array[@transcript_component.VisibleRow]
+  streaming_response : String?
+  streaming_reasoning : String?
+  reasoning_complete : Bool
+  streaming_identity : String
+}
+
+///|
+fn Model::transcript_content(self : Model) -> TranscriptContent {
+  if self.screen is Codex {
+    let placement = self.codex.active_placement(self.focused)
+    {
+      source: Codex,
+      session: self.codex.active_id().unwrap_or("none"),
+      project: match self.new_chat_project() {
+        Ok(Some(project)) => Some(project)
+        Ok(None) => placement.bind(value => value.project_root())
+        // The root page renders this error beside the transcript.
+        Err(_) => None
+      },
+      root: placement.bind(value => value.checkout_root()),
+      items: @transcript_component.VisibleRow::history(
+        self.codex.transcript_items(locale=self.locale),
+      ),
+      streaming_response: None,
+      streaming_reasoning: None,
+      reasoning_complete: false,
+      streaming_identity: "idle",
     }
-    _ =>
-      match self.active_conversation() {
-        None =>
-          @transcript_component.Input(
-            locale=self.locale,
-            dark_mode=self.theme.is_dark(self.system_dark),
-            minimal=self.minimal_transcript_effective(),
-            source=@transcript_component.OpenSeek,
-            focused=self.focused,
-            active_session=self.active_session,
-            current_project=None,
-            projects~,
-            can_choose_project=false,
-            project_menu_open=false,
-            project_query="",
-            root=None,
-            items=[],
-            streaming_response=None,
-            streaming_identity="",
-          )
-        Some(conversation) => {
-          let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
-          let can_choose_project = self.can_choose_new_chat_project()
-          @transcript_component.Input(
-            locale=self.locale,
-            dark_mode=self.theme.is_dark(self.system_dark),
-            minimal=self.minimal_transcript_effective(),
-            source=@transcript_component.OpenSeek,
-            focused=self.focused,
-            active_session=self.active_session,
-            scroll=self.remembered_scroll(),
-            project_label?=self.project_display_label(conversation.project()),
-            current_project=Some(conversation.project()),
-            projects~,
-            can_choose_project~,
-            project_menu_open=can_choose_project &&
-              self.select_menu is Some(ProjectMenu),
-            project_query=self.project_menu_query,
-            root=self
-              .conversation_placement(conversation)
-              .bind(value => value.checkout_root()),
-            items=conversation.visible_transcript_rows(),
-            streaming_response=conversation.turn.streaming_response,
-            streaming_reasoning?,
-            reasoning_complete~,
-            streaming_identity=conversation.streaming_render_identity(),
-          )
-        }
-      }
+  } else if self.active_conversation() is Some(conversation) {
+    let (streaming_reasoning, reasoning_complete) = conversation.reasoning_for_render()
+    {
+      source: OpenSeek,
+      session: self.active_session,
+      project: Some(conversation.project()),
+      root: self
+      .conversation_placement(conversation)
+      .bind(value => value.checkout_root()),
+      items: conversation.visible_transcript_rows(),
+      streaming_response: conversation.turn.streaming_response,
+      streaming_reasoning,
+      reasoning_complete,
+      streaming_identity: conversation.streaming_render_identity(),
+    }
+  } else {
+    {
+      source: OpenSeek,
+      session: self.active_session,
+      project: None,
+      root: None,
+      items: [],
+      streaming_response: None,
+      streaming_reasoning: None,
+      reasoning_complete: false,
+      streaming_identity: "",
+    }
   }
+}
+
+///|
+fn Model::transcript_input(self : Model) -> @transcript_component.Input {
+  let content = self.transcript_content()
+  let can_choose_project = self.can_choose_new_chat_project()
+  let conversation = if self.screen is Chat {
+    self.active_conversation()
+  } else {
+    None
+  }
+  @transcript_component.Input(
+    locale=self.locale,
+    dark_mode=self.theme.is_dark(self.system_dark),
+    minimal=self.minimal_transcript_effective(),
+    source=content.source,
+    focused=self.focused,
+    active_session=content.session,
+    scroll=self.remembered_scroll(),
+    project_label?=content.project.bind(project => {
+      self.project_display_label(project)
+    }),
+    current_project=content.project,
+    projects=self.transcript_projects(),
+    can_choose_project~,
+    project_menu_open=can_choose_project &&
+      self.select_menu is Some(ProjectMenu),
+    project_query=self.project_menu_query,
+    root=content.root,
+    items=content.items,
+    can_fork=conversation
+      .map(conversation => conversation.can_fork())
+      .unwrap_or(false),
+    fork_busy=self.conversation_fork is Some(_),
+    forking?=conversation.bind(conversation => {
+      self.conversation_fork.bind(pending => {
+        if pending.source.matches_record(
+            conversation.device,
+            conversation.session_id,
+            conversation.project(),
+            conversation.record,
+          ) {
+          Some(pending.through)
+        } else {
+          None
+        }
+      })
+    }),
+    streaming_response=content.streaming_response,
+    streaming_reasoning?=content.streaming_reasoning,
+    reasoning_complete=content.reasoning_complete,
+    streaming_identity=content.streaming_identity,
+  )
 }
 
 ///|

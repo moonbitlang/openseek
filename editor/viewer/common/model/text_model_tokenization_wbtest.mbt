@@ -2,7 +2,7 @@
 
 ///|
 priv struct ModelTokenizationCountingTokenizer {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|

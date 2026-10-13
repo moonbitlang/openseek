@@ -8,8 +8,8 @@ pub(all) enum ChatWorkspaceRoot {
 ///|
 pub impl ToJson for ChatWorkspaceRoot with fn to_json(self) {
   match self {
-    Ready(path) => path.to_json()
-    Failed(message) => { "error": message.to_json() }
+    Ready(path) => Json(path)
+    Failed(message) => { "error": Json(message) }
   }
 }
 

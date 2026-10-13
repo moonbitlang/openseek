@@ -23,7 +23,7 @@ fn plan_reminders(result : @agent_session.Session) -> Array[String] {
 async fn plan_test_server(
   group : @async.TaskGroup[Unit],
   bodies : Array[String],
-  plan_calls~ : Int,
+  plan_calls~ : Int32,
   record_first~ : Bool,
 ) -> String? {
   serve_chat_completions(
@@ -176,7 +176,7 @@ async test "a recorded plan delays the reminder and is re-surfaced by it" {
 /// whole conversation, so a reminder injected once keeps appearing in every
 /// later request — "did it fire again" is a count on the newest body, not an
 /// absence check on it.
-fn reminder_count(body : String) -> Int {
+fn reminder_count(body : String) -> Int32 {
   body.split(@agent_session.PlanReminderPrefix).count() - 1
 }
 

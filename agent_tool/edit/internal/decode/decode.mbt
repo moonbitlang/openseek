@@ -14,14 +14,14 @@ pub struct EditInput {
   /// When true, the edit is NOT applied: every match of `old_string` in the
   /// line range is reported instead, as a reviewable `multi_edit` edits array.
   replace_all_preview : Bool
-  start_line : Int
-  end_line : Int?
+  start_line : Int32
+  end_line : Int32?
   revert_on_parse_errors : Bool
   /// Post-write error guard (absent = off): `moon check` runs and
   /// the edit is restored if the net error-count change is >= this threshold.
-  revert_if_error_delta_greater_or_equal : Int?
+  revert_if_error_delta_greater_or_equal : Int32?
   /// Revert when the net warning-count change is >= this threshold (absent = off).
-  revert_if_warning_delta_greater_or_equal : Int?
+  revert_if_warning_delta_greater_or_equal : Int32?
 } derive(Debug)
 
 ///|
@@ -80,7 +80,10 @@ fn parse_fields(fields : Map[String, Json]) -> EditInput raise {
 ///|
 /// An optional guard threshold: a non-negative integer, or absent (`null` or
 /// missing) for a guard that is off.
-fn optional_threshold(fields : Map[String, Json], name : String) -> Int? raise {
+fn optional_threshold(
+  fields : Map[String, Json],
+  name : String,
+) -> Int32? raise {
   match fields.get(name) {
     Some(Number(value, ..)) => {
       let int_value = value.to_int()
@@ -117,7 +120,7 @@ fn optional_bool(
 }
 
 ///|
-fn positive_int(value : Double, name : String) -> Int raise {
+fn positive_int(value : Double, name : String) -> Int32 raise {
   let int_value = value.to_int()
   if int_value.to_double() != value {
     fail("arguments.\{name} to be an integer")
@@ -132,7 +135,7 @@ fn positive_int(value : Double, name : String) -> Int raise {
 fn optional_positive_int_option(
   fields : Map[String, Json],
   name : String,
-) -> Int? raise {
+) -> Int32? raise {
   match fields.get(name) {
     Some(Number(value, ..)) => Some(positive_int(value, name))
     Some(Null) | None => None
@@ -144,7 +147,7 @@ fn optional_positive_int_option(
 fn required_positive_int(
   fields : Map[String, Json],
   name : String,
-) -> Int raise {
+) -> Int32 raise {
   match fields.get(name) {
     Some(Number(value, ..)) => positive_int(value, name)
     _ => fail("arguments.\{name} to be an integer")

@@ -131,7 +131,7 @@ fn InlineModelDecorationsComputer::InlineModelDecorationsComputer(
 /// Inline decorations for one model line, split by view line.
 fn InlineModelDecorationsComputer::get_inline_decorations(
   self : InlineModelDecorationsComputer,
-  model_line_number : Int,
+  model_line_number : Int32,
 ) -> Array[Array[InlineDecoration]] {
   let model_range = @base_common.Range(
     model_line_number,

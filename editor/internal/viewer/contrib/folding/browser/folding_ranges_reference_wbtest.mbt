@@ -22,10 +22,10 @@ fn assert_equal_ranges(
 ///|
 /// The suite's `foldRange` literal helper.
 fn fold_range(
-  from : Int,
-  to : Int,
-  collapsed? : Bool = false,
-  source? : FoldSource = Provider,
+  from : Int32,
+  to : Int32,
+  collapsed~ : Bool = false,
+  source~ : FoldSource = Provider,
   type_? : String,
 ) -> FoldRange {
   {

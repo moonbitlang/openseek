@@ -12,7 +12,7 @@ fn store_test_codec() -> @services.LanguageIdCodec {
 }
 
 ///|
-fn metadata_for(language_id : Int, foreground? : Int = 1) -> UInt {
+fn metadata_for(language_id : Int32, foreground~ : Int32 = 1) -> UInt32 {
   ((language_id << METADATA_LANGUAGEID_OFFSET) |
   (foreground << METADATA_FOREGROUND_OFFSET)).reinterpret_as_uint()
 }
@@ -20,8 +20,8 @@ fn metadata_for(language_id : Int, foreground? : Int = 1) -> UInt {
 ///|
 fn assert_change(
   actual : ContiguousTokensStoreChange,
-  from_line_number : Int,
-  to_line_number : Int,
+  from_line_number : Int32,
+  to_line_number : Int32,
 ) -> Unit raise {
   assert_eq(actual.from_line_number, from_line_number)
   assert_eq(actual.to_line_number, to_line_number)
@@ -158,7 +158,7 @@ test "ContiguousTokensStore setMultilineTokens reports one suffix range per chan
   ignore(store.set_tokens("store-top", 1, 2, Some([2U, metadata_a]), true))
   ignore(store.set_tokens("store-top", 2, 3, Some([3U, metadata_a]), true))
 
-  let line_length_calls : Array[Int] = []
+  let line_length_calls : Array[Int32] = []
   let update = store.set_multiline_tokens(
     [
       ContiguousMultilineTokens(1, [

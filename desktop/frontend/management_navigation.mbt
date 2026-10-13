@@ -17,6 +17,17 @@ fn Screen::work_screen(self : Screen) -> WorkScreen? {
 }
 
 ///|
+/// Management pages cover the selected work surface; switching conversations
+/// selects a new owner even when the other engine retains component state.
+fn Model::codex_work_selected(self : Model) -> Bool {
+  match self.screen.work_screen() {
+    Some(CodexWork) => true
+    Some(OpenSeekWork) => false
+    None => self.management_return is Some(CodexWork)
+  }
+}
+
+///|
 fn management_header(
   dispatch : @cmd.Emit[Msg],
   model : Model,

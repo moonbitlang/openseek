@@ -12,7 +12,7 @@ let markdown_comment_hidden_source : String = "markdown-comments"
 ///|
 priv struct MarkdownCommentContributionState {
   mut presentation_enabled : Bool
-  mut generation : Int
+  mut generation : Int32
   rendered : Map[String, RenderedMarkdownComment]
   listeners : Array[@base_common.Disposable]
   mut viewport_observer : @markdown_comments_browser.MarkdownCommentViewportObserver?
@@ -36,7 +36,7 @@ priv struct RenderedMarkdownComment {
   mut block : @language.MarkdownCommentBlock
   original_source : Ref[String]
   source_visible : Ref[Bool]
-  source_rendered_version : Ref[Int]
+  source_rendered_version : Ref[Int32]
   mut foldable : Bool
   dom : @markdown_comments_browser.MarkdownCommentDom
   zone : @editor_browser.ViewZone
@@ -49,7 +49,7 @@ priv struct RenderedMarkdownComment {
   mut diagram_viewports : @diagram_viewport.DiagramViewports
   size_observer : @markdown_comments_browser.MarkdownCommentSizeObserver
   mut measured_height : Double
-  generation : Ref[Int]
+  generation : Ref[Int32]
 }
 
 ///|
@@ -264,7 +264,7 @@ fn ensure_markdown_comment_original_source(
   block : @language.MarkdownCommentBlock,
   target : @rdom.Element,
   original_source : Ref[String],
-  source_rendered_version : Ref[Int],
+  source_rendered_version : Ref[Int32],
 ) -> Unit {
   let version = model.get_version_id()
   if source_rendered_version.val == version {
@@ -748,7 +748,7 @@ fn CodeEditorWidget::markdown_comment_refresh_is_current(
   self : CodeEditorWidget,
   state : MarkdownCommentContributionState,
   model : @model.TextModel,
-  generation : Int,
+  generation : Int32,
 ) -> Bool {
   if self.disposed || state.generation != generation {
     return false
@@ -765,8 +765,8 @@ fn CodeEditorWidget::apply_markdown_comment_height(
   state : MarkdownCommentContributionState,
   key : String,
   expected_zone_id : String,
-  entry_generation : Ref[Int],
-  height : Int,
+  entry_generation : Ref[Int32],
+  height : Int32,
 ) -> Unit {
   guard !self.disposed else { return }
   guard entry_generation.val == state.generation else { return }

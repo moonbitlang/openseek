@@ -99,7 +99,7 @@ extern "js" fn install_markdown_caret_test_document() -> Unit =
 ///|
 extern "js" fn markdown_caret_test_set_hit(
   node : @rdom.Node,
-  offset : Int,
+  offset : Int32,
 ) -> Unit =
   #| (node, offset) => {
   #|   globalThis.document.__hitNode = node;

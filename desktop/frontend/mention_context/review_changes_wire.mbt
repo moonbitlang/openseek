@@ -73,7 +73,7 @@ let review_side_pattern : Regex = re"^<(?<side>original|modified) lines=\"(?<sta
 ///|
 fn parse_review_changes(
   lines : ArrayView[String],
-) -> (Array[ReviewChanges], Int)? {
+) -> (Array[ReviewChanges], Int32)? {
   guard lines.get(0) is Some(header) &&
     review_changes_pattern.execute(header) is Some(matched) &&
     matched.named_group("workspace") is Some(workspace) else {
@@ -135,9 +135,9 @@ fn parse_review_changes(
 /// closer. Literal XML tags and blank lines in source remain ordinary code.
 fn parse_review_side(
   lines : ArrayView[String],
-  start : Int,
+  start : Int32,
   side : String,
-) -> (Array[ChangeLine], Int)? {
+) -> (Array[ChangeLine], Int32)? {
   if lines.get(start) == Some("<\{side}/>") {
     return Some(([], start + 1))
   }

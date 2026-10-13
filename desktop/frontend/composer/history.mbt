@@ -6,7 +6,7 @@
 /// How far back the draft still is the prompt it was recalled from. A draft
 /// changed by anything but stepping (a recovered draft, an appended quote, a
 /// longer history) is no longer a recall, whatever `history_back` remembers.
-fn Entry::recalled_back(self : Entry, input : Input) -> Int? {
+fn Entry::recalled_back(self : Entry, input : Input) -> Int32? {
   guard self.history_back is Some(back) &&
     back <= input.history.length() &&
     self.draft.task == input.history[input.history.length() - back] &&
@@ -32,7 +32,7 @@ fn Entry::can_recall_history(self : Entry, input : Input) -> Bool {
 /// The draft after one Up (`-1`, older) or Down (`+1`, newer) step. Down from
 /// the latest prompt returns to the empty draft recall started from. `None`
 /// when the key has nothing to do, so the caller leaves the entry untouched.
-fn Entry::history_moved(self : Entry, input : Input, delta : Int) -> Entry? {
+fn Entry::history_moved(self : Entry, input : Input, delta : Int32) -> Entry? {
   guard self.can_recall_history(input) else { return None }
   let count = input.history.length()
   let back = match (self.recalled_back(input), delta) {

@@ -2,10 +2,10 @@
 /// Builds a marker with explicit span and optional tags for transform tests.
 fn make_marker(
   severity : MarkerSeverity,
-  start_line_number : Int,
-  start_column : Int,
-  end_line_number : Int,
-  end_column : Int,
+  start_line_number : Int32,
+  start_column : Int32,
+  end_line_number : Int32,
+  end_column : Int32,
   tags? : Array[MarkerTag],
 ) -> Marker {
   {

@@ -2,7 +2,7 @@
 /// Resolve the workspace and create a missing final directory when its parent exists.
 pub async fn prepare_workspace_root(
   matches : @argparse.Matches,
-  log_created? : Bool = true,
+  log_created~ : Bool = true,
 ) -> String {
   let dir_input = match matches {
     { values: { "dir": [dir, ..], .. }, .. } => dir

@@ -103,18 +103,18 @@ extern "js" fn embedded_get(url : String) -> String = "(url) => window.__OPENSEE
 ///|
 /// `rabbita/dom` binds `DataTransfer.items` but not `DataTransfer.files`; a
 /// dropped `File` is a `Blob` subtype, which is all the reader needs.
-extern "js" fn data_transfer_file_count(transfer : @dom.DataTransfer) -> Int = "(t) => (t.files ? t.files.length : 0)"
+extern "js" fn data_transfer_file_count(transfer : @dom.DataTransfer) -> Int32 = "(t) => (t.files ? t.files.length : 0)"
 
 ///|
 extern "js" fn data_transfer_file_name(
   transfer : @dom.DataTransfer,
-  index : Int,
+  index : Int32,
 ) -> String = "(t, i) => t.files[i].name"
 
 ///|
 extern "js" fn data_transfer_file(
   transfer : @dom.DataTransfer,
-  index : Int,
+  index : Int32,
 ) -> @dom.Blob = "(t, i) => t.files[i]"
 
 ///|
@@ -128,7 +128,7 @@ extern "js" fn format_unix_ms_utc(milliseconds : Double) -> String =
 ///|
 /// The `inspect --watch` polling interval the server injected into the shell as
 /// `window.__OPENSEEK_WATCH_MS__`, or 0 when absent (no `--watch`).
-extern "js" fn watch_interval_ms() -> Int = "() => { const ms = (typeof window !== 'undefined') ? window.__OPENSEEK_WATCH_MS__ : undefined; return (Number.isInteger(ms) && ms > 0) ? ms : 0; }"
+extern "js" fn watch_interval_ms() -> Int32 = "() => { const ms = (typeof window !== 'undefined') ? window.__OPENSEEK_WATCH_MS__ : undefined; return (Number.isInteger(ms) && ms > 0) ? ms : 0; }"
 
 ///|
 /// Whether the scrolling `.main` pane is at (or within a few lines of) its

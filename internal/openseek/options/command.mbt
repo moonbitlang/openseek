@@ -16,6 +16,23 @@ fn dir_option() -> @argparse.OptionArg {
 fn agent_options() -> Array[@argparse.OptionArg] {
   [
     dir_option(),
+    ..prompt_options(),
+    OptionArg(
+      "mcp-config",
+      long="mcp-config",
+      env="OPENSEEK_MCP_CONFIG",
+      default_values=[""],
+      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
+    ),
+  ]
+}
+
+///|
+/// What a system prompt is assembled from besides `--dir` and `--model`:
+/// shared by the commands that run an agent and by `sessions fork`, which
+/// writes the prompt of the session it creates.
+fn prompt_options() -> Array[@argparse.OptionArg] {
+  [
     OptionArg(
       "system-prompt-file",
       long="system-prompt-file",
@@ -36,13 +53,6 @@ fn agent_options() -> Array[@argparse.OptionArg] {
       env="OPENSEEK_GLOBAL_SKILLS_DIR",
       default_values=[""],
       about="User-level skills directory advertised alongside workspace skills; empty means $HOME/.openseek/skills, or %USERPROFILE%/.openseek/skills on Windows.",
-    ),
-    OptionArg(
-      "mcp-config",
-      long="mcp-config",
-      env="OPENSEEK_MCP_CONFIG",
-      default_values=[""],
-      about="Path to a JSON file of MCP servers ({\"mcpServers\": {\"<name>\": {\"command\", \"args\", \"env\"} | {\"url\", \"headers\"}}}); each server's tools (stdio subprocess or Streamable HTTP) are exposed to the agent, namespaced mcp__<server>__<tool>. Empty disables MCP.",
     ),
   ]
 }
@@ -184,6 +194,25 @@ pub fn root_command() -> @argparse.Command {
                 long="to",
                 default_values=[""],
                 about="Last event sequence covered by the summary.",
+              ),
+            ],
+            positionals=[PositionArg("id", about="Session id.")],
+          ),
+          Command(
+            "fork",
+            about="Copy <id> into a new session that continues from its last finished turn.",
+            options=[
+              dir_option(),
+              ..prompt_options(),
+              OptionArg(
+                "as",
+                long="as",
+                about="Id of the new session; generated when omitted.",
+              ),
+              OptionArg(
+                "through",
+                long="through",
+                about="Copy only up to the turn that ended at this event sequence.",
               ),
             ],
             positionals=[PositionArg("id", about="Session id.")],

@@ -14,7 +14,7 @@
 /// and for a payload the card cannot read — both keep the generic rendering,
 /// so a card never has to invent a reading of a call it does not understand.
 fn custom_card(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   name : String,
   arguments : String,
 ) -> (String, @html.Html)? {

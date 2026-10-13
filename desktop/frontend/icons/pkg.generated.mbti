@@ -44,6 +44,8 @@ pub fn icon_comment_discussion() -> @html.Html
 
 pub fn icon_copy() -> @html.Html
 
+pub fn icon_debug() -> @html.Html
+
 pub fn icon_debug_stop() -> @html.Html
 
 pub fn icon_diff_multiple() -> @html.Html
@@ -115,8 +117,6 @@ pub fn icon_sync() -> @html.Html
 pub fn icon_target() -> @html.Html
 
 pub fn icon_tasklist() -> @html.Html
-
-pub fn icon_telescope() -> @html.Html
 
 pub fn icon_terminal() -> @html.Html
 

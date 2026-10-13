@@ -14,15 +14,15 @@
 /// (`MouseCloserState`, Phase 4 increment 2).
 pub(all) enum HoverAnchor {
   HoverRangeAnchor(
-    priority~ : Int,
+    priority~ : Int32,
     range~ : @base_common.Range,
     initial_mouse_pos_x~ : Double?,
     initial_mouse_pos_y~ : Double?
   )
   HoverForeignElementAnchor(
-    priority~ : Int,
+    priority~ : Int32,
     owner~ : HoverParticipantOwner,
-    injected_text_index~ : Int,
+    injected_text_index~ : Int32,
     range~ : @base_common.Range,
     initial_mouse_pos_x~ : Double?,
     initial_mouse_pos_y~ : Double?,

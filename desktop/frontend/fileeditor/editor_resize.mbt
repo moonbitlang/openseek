@@ -110,7 +110,7 @@ fn on_resize_move(event : @dom.Event) -> Unit {
 /// Clamp a dragged edge-to-cursor distance into the pane's allowed range.
 /// Shared by the editor's width drag and both of the tree panel's axes.
 /// On a very narrow window the floor wins, even past the ceiling.
-fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int {
+fn drag_size(raw : Double, floor~ : Double, max~ : Double) -> Int32 {
   let ceiling = if max > floor { max } else { floor }
   raw.clamp(min=floor, max=ceiling).to_int()
 }
@@ -129,13 +129,13 @@ fn end_drag(active : Ref[Bool]) -> Unit {
 /// The dragged sizes, kept so the resizers (editor width, tree height, tree
 /// width) can rewrite the shared root `style` attribute without erasing each
 /// other's property.
-let editor_width : Ref[Int?] = Ref(None)
+let editor_width : Ref[Int32?] = Ref(None)
 
 ///|
-let tree_height : Ref[Int?] = Ref(None)
+let tree_height : Ref[Int32?] = Ref(None)
 
 ///|
-let tree_width : Ref[Int?] = Ref(None)
+let tree_width : Ref[Int32?] = Ref(None)
 
 ///|
 /// Write the dragged sizes as individual custom properties on the document
@@ -146,7 +146,7 @@ fn sync_root_style() -> Unit {
   guard document_element() is Some(root) else { return }
   let style : @js.Value = @js.Value::cast_from(root).get_with_string("style")
   // One `style` handle, one `setProperty` per set size, in the same order.
-  fn set_px(name : String, size : Int?) -> Unit {
+  fn set_px(name : String, size : Int32?) -> Unit {
     if size is Some(px) {
       let _ : @js.Value = style.apply_with_string("setProperty", [
         @js.Value::cast_from(name),
@@ -161,19 +161,19 @@ fn sync_root_style() -> Unit {
 }
 
 ///|
-fn set_editor_width(width : Int) -> Unit {
+fn set_editor_width(width : Int32) -> Unit {
   editor_width.val = Some(width)
   sync_root_style()
 }
 
 ///|
-fn set_tree_height(height : Int) -> Unit {
+fn set_tree_height(height : Int32) -> Unit {
   tree_height.val = Some(height)
   sync_root_style()
 }
 
 ///|
-fn set_tree_width(width : Int) -> Unit {
+fn set_tree_width(width : Int32) -> Unit {
   tree_width.val = Some(width)
   sync_root_style()
 }

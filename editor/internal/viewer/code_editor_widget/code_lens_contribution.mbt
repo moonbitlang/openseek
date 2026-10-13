@@ -6,11 +6,11 @@
 let code_lens_contribution_id : String = "css.editor.codeLens"
 
 ///|
-let code_lens_debounce_milliseconds : Int = 250
+let code_lens_debounce_milliseconds : Int32 = 250
 
 ///|
 priv struct CodeLensRenderedLine {
-  item_indexes : Array[Int]
+  item_indexes : Array[Int32]
   zone : @editor_browser.ViewZone
   mut zone_id : String?
   widget : @view.ContentWidgetHandle
@@ -22,11 +22,11 @@ priv struct CodeLensContributionState {
   mut disposed : Bool
   mut provide_source : @language.CancellationTokenSource?
   mut refresh_timer : @base_common.Disposable?
-  mut schedule_timeout : (() -> Unit, Int) -> @base_common.Disposable
+  mut schedule_timeout : (() -> Unit, Int32) -> @base_common.Disposable
   mut launch_async_task : (async () -> Unit noraise) -> Unit
   mut items : Array[@language.CodeLens]
   mut rows : Array[CodeLensRenderedLine]
-  mut widget_id_pool : Int
+  mut widget_id_pool : Int32
 }
 
 ///|
@@ -273,7 +273,7 @@ fn CodeEditorWidget::render_code_lens_items(
   let mut index = 0
   while index < items.length() {
     let line_number = items[index].range.start_line_number
-    let indexes : Array[Int] = []
+    let indexes : Array[Int32] = []
     while index < items.length() &&
           items[index].range.start_line_number == line_number {
       indexes.push(index)
@@ -305,8 +305,8 @@ fn CodeEditorWidget::render_code_lens_items(
 fn CodeEditorWidget::create_code_lens_row(
   self : CodeEditorWidget,
   state : CodeLensContributionState,
-  line_number : Int,
-  item_indexes : Array[Int],
+  line_number : Int32,
+  item_indexes : Array[Int32],
   height : Double,
 ) -> CodeLensRenderedLine {
   let document = @rdom.document()
@@ -519,7 +519,7 @@ fn CodeEditorWidget::code_lens_on_configuration_changed(
 ///|
 fn CodeEditorWidget::set_code_lens_host_for_test(
   self : CodeEditorWidget,
-  schedule : (() -> Unit, Int) -> @base_common.Disposable,
+  schedule : (() -> Unit, Int32) -> @base_common.Disposable,
   launch : (async () -> Unit noraise) -> Unit,
 ) -> Unit {
   guard self.code_lens_contribution() is Some(state) else { return }

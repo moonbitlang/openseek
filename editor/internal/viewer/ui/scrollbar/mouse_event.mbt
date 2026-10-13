@@ -15,7 +15,7 @@ struct StandardWheelEvent {
 
 ///|
 /// `WheelEvent.DOM_DELTA_LINE`: the deltas are expressed in lines.
-const DOM_DELTA_LINE : Int = 1
+const DOM_DELTA_LINE : Int32 = 1
 
 ///|
 pub fn StandardWheelEvent::StandardWheelEvent(

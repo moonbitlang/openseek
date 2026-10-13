@@ -102,6 +102,9 @@ async test "job history distinguishes dead owner from disconnected client and ma
     message.contains("could not be refreshed"),
   )
   assert_false(unavailable.controllable)
+  // Unlock before closing: a child process that a concurrent test is starting
+  // holds a copy of this descriptor, and so the lock, until its exec.
+  owner.unlock()
   owner.close()
   let interrupted = job_view(root, record, false)
   assert_true(interrupted.job.state is Interrupted)

@@ -173,7 +173,7 @@ extern "js" fn markdown_comment_test_has_attribute(
 ///|
 extern "js" fn markdown_comment_test_child_count(
   element : @rdom.Element,
-) -> Int = "element => element.childNodes.length"
+) -> Int32 = "element => element.childNodes.length"
 
 ///|
 extern "js" fn markdown_comment_test_first_child(
@@ -189,7 +189,7 @@ extern "js" fn markdown_comment_test_same_element(
 ///|
 extern "js" fn markdown_comment_test_child(
   element : @rdom.Element,
-  index : Int,
+  index : Int32,
 ) -> @rdom.Element = "(element, index) => element.childNodes[index]"
 
 ///|
@@ -242,23 +242,23 @@ extern "js" fn markdown_comment_test_observes(
 ///|
 extern "js" fn markdown_comment_test_observer_count(
   harness : MarkdownCommentBrowserTestHarness,
-) -> Int = "harness => harness.observers.length"
+) -> Int32 = "harness => harness.observers.length"
 
 ///|
 extern "js" fn markdown_comment_test_observer_target_count(
   harness : MarkdownCommentBrowserTestHarness,
-  index : Int,
-) -> Int =
+  index : Int32,
+) -> Int32 =
   #| (harness, index) => harness.observers[index]?.targets.length ?? 0
 
 ///|
 extern "js" fn markdown_comment_test_mount_offscreen(
   outer : @rdom.Element,
   content : @rdom.Element,
-  viewport_width : Int,
-  wide_height : Int,
-  narrow_width : Int,
-  narrow_height : Int,
+  viewport_width : Int32,
+  wide_height : Int32,
+  narrow_width : Int32,
+  narrow_height : Int32,
 ) -> @rdom.Element =
   #| (outer, content, viewportWidth, wideHeight, narrowWidth, narrowHeight) => {
   #|   const viewport = document.createElement('div');
@@ -285,7 +285,7 @@ extern "js" fn markdown_comment_test_mount_offscreen(
 ///|
 extern "js" fn markdown_comment_test_set_viewport_width(
   viewport : @rdom.Element,
-  width : Int,
+  width : Int32,
 ) -> Unit =
   #| (viewport, width) => {
   #|   viewport.clientWidth = width;
@@ -298,7 +298,7 @@ extern "js" fn markdown_comment_test_set_viewport_width(
 ///|
 extern "js" fn markdown_comment_test_offset_width(
   element : @rdom.Element,
-) -> Int = "element => Math.trunc(element.offsetWidth)"
+) -> Int32 = "element => Math.trunc(element.offsetWidth)"
 
 ///|
 extern "js" fn markdown_comment_test_style(
@@ -315,7 +315,7 @@ extern "js" fn markdown_comment_test_clear_style_writes(
 extern "js" fn markdown_comment_test_style_write_count(
   element : @rdom.Element,
   name : String,
-) -> Int =
+) -> Int32 =
   #| (element, name) => element.style.writes
   #|   .filter(write => write.name === name).length
 
@@ -337,19 +337,19 @@ extern "js" fn markdown_comment_test_outer_style(
 ///|
 extern "js" fn markdown_comment_test_hidden_measure_count(
   harness : MarkdownCommentBrowserTestHarness,
-) -> Int = "harness => harness.hiddenMeasureCount"
+) -> Int32 = "harness => harness.hiddenMeasureCount"
 
 ///|
 extern "js" fn markdown_comment_test_disconnect_count(
   harness : MarkdownCommentBrowserTestHarness,
-) -> Int =
+) -> Int32 =
   #| harness => harness.observers
   #|   .reduce((sum, observer) => sum + observer.disconnectCount, 0)
 
 ///|
 extern "js" fn markdown_comment_test_pending_frame_count(
   harness : MarkdownCommentBrowserTestHarness,
-) -> Int = "harness => harness.frames.length"
+) -> Int32 = "harness => harness.frames.length"
 
 ///|
 extern "js" fn markdown_comment_test_flush_frame(
@@ -623,7 +623,7 @@ test "size observation coalesces and reports positive changed integer heights" {
   let harness = install_markdown_comment_browser_test_dom()
   defer harness.dispose()
   let dom = MarkdownCommentDom(1, 2)
-  let observed : Array[Int] = []
+  let observed : Array[Int32] = []
   let lifetime = dom.observe_size(height => observed.push(height))
   assert_true(markdown_comment_test_observes(harness, dom.content))
   assert_eq(markdown_comment_test_observer_count(harness), 1)
@@ -658,7 +658,7 @@ test "disconnected zero queued and late observer callbacks are inert" {
   let harness = install_markdown_comment_browser_test_dom()
   defer harness.dispose()
   let dom = MarkdownCommentDom(5, 6)
-  let observed : Array[Int] = []
+  let observed : Array[Int32] = []
   let lifetime = dom.observe_size(height => observed.push(height))
 
   markdown_comment_test_set_measurement(dom.content, false, 20.0)
@@ -712,7 +712,7 @@ test "offscreen measurement retains pinned width and offset and avoids zero feed
   // excludes the fixed 14px vertical rail.
   assert_eq(markdown_comment_test_offset_width(dom.outer), 306)
   let original_style = markdown_comment_test_outer_style(dom.outer)
-  let observed : Array[Int] = []
+  let observed : Array[Int32] = []
   let observer = dom.observe_size(height => observed.push(height))
   let viewport_observer = dom.observe_viewport_width(() => {
     observer.request_measure()

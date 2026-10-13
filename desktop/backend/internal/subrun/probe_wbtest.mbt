@@ -45,14 +45,14 @@ async fn append_record(state : SubrunProbeState, text : String) -> Unit {
 /// One record line. The sequence is explicit because it is what the probe
 /// counts by: the store's are monotone, and a repair rewrites surviving
 /// events under the SAME numbers they already had.
-fn item_line(sequence : Int, kind : String, payload : Json) -> String {
+fn item_line(sequence : Int32, kind : String, payload : Json) -> String {
   ({ "sequence": sequence, "item": { "kind": kind, "payload": payload } } : Json).stringify() +
   "\n"
 }
 
 ///|
 fn tool_line(
-  sequence : Int,
+  sequence : Int32,
   id : String,
   name : String,
   brief? : String,

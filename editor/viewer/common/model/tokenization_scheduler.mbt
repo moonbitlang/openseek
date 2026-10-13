@@ -27,7 +27,7 @@ fn TokenizationIdleDeadline::time_remaining(
 struct TokenizationScheduler {
   schedule_idle : ((TokenizationIdleDeadline) -> Unit) -> @base_common.Disposable
   schedule_zero : (() -> Unit) -> @base_common.Disposable
-  schedule_delay : (Int, () -> Unit) -> @base_common.Disposable
+  schedule_delay : (Int32, () -> Unit) -> @base_common.Disposable
   read_now : () -> Double
 }
 
@@ -37,7 +37,7 @@ struct TokenizationScheduler {
 pub fn TokenizationScheduler::TokenizationScheduler(
   idle~ : ((TokenizationIdleDeadline) -> Unit) -> @base_common.Disposable,
   zero_timeout~ : (() -> Unit) -> @base_common.Disposable,
-  delay~ : (Int, () -> Unit) -> @base_common.Disposable,
+  delay~ : (Int32, () -> Unit) -> @base_common.Disposable,
   now~ : () -> Double,
 ) -> TokenizationScheduler {
   {
@@ -70,7 +70,7 @@ fn TokenizationScheduler::zero_timeout(
 /// Schedules a cancellable delayed continuation.
 fn TokenizationScheduler::delay(
   self : TokenizationScheduler,
-  milliseconds : Int,
+  milliseconds : Int32,
   callback : () -> Unit,
 ) -> @base_common.Disposable {
   (self.schedule_delay)(milliseconds, callback)

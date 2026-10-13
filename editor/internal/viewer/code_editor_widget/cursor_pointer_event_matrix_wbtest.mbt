@@ -6,7 +6,7 @@
 fn assert_pointer_transition(
   viewer : CodeEditorWidget,
   events : Array[@editor_api.CursorSelectionChangedEvent],
-  previous_length : Int,
+  previous_length : Int32,
   old_selection : @core.Selection,
   source : String,
 ) -> Unit raise {

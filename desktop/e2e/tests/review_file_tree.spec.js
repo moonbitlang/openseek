@@ -28,6 +28,7 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await expect(main).toHaveAttribute('aria-selected', 'false');
   await expect(main).toBeFocused();
   await main.press('Enter');
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await expect(page.locator('.editor-tab.active')).toContainText('main.mbt');
   await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toBeVisible();
   await lib.getByRole('checkbox').click();

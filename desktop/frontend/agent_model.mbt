@@ -213,7 +213,9 @@ fn Model::openseek_model_chip(
     id: "openseek-model-picker",
     groups,
     selected: ModelChoice::OpenSeekModel(conv.engine_model).wire(),
-    disabled: false,
+    disabled: conv.goal_edit is Some(_) ||
+    conv.goal_pending is Some(_) ||
+    conv.pending_semantic_submission is Some(_),
     open: self.select_menu is Some(OpenSeekModelMenu),
     title: (match self.locale {
       SimplifiedChinese => "模型："
@@ -288,7 +290,7 @@ fn Model::codex_model_chip(self : Model) -> @composer.ModelSelect {
     id: "codex-model-picker",
     groups,
     selected,
-    disabled: false,
+    disabled: self.codex_project_adoption_pending(),
     open: self.select_menu is Some(CodexModelMenu),
     title: match self.locale {
       SimplifiedChinese => "Codex 模型"

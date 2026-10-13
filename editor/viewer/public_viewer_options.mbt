@@ -8,34 +8,34 @@ struct ViewerOptions {
 
 ///|
 pub fn ViewerOptions::ViewerOptions(
-  soft_wrap? : Bool = false,
-  tab_size? : Int = 2,
-  wrapping_indent? : @editor_api.WrappingIndent = Same,
-  render_whitespace? : @editor_api.RenderWhitespace = Selection,
-  render_control_characters? : Bool = true,
-  render_line_highlight? : @editor_api.RenderLineHighlight = Line,
-  render_line_highlight_only_when_focus? : Bool = false,
-  render_validation_decorations? : @editor_api.RenderValidationDecorations = On,
-  theme? : String = "dark",
-  placeholder? : String = "",
-  line_decorations_width? : Int = 10,
-  line_numbers_min_chars? : Int = 5,
-  folding? : Bool = true,
-  show_folding_controls? : @editor_api.ShowFoldingControls = Mouseover,
-  folding_highlight? : Bool = true,
-  folding_maximum_regions? : Int = 5000,
-  unfold_on_click_after_end_of_line? : Bool = false,
-  smooth_scrolling? : Bool = false,
-  show_unused? : Bool = true,
-  show_deprecated? : Bool = true,
-  code_lens? : Bool = true,
+  soft_wrap~ : Bool = false,
+  tab_size~ : Int32 = 2,
+  wrapping_indent~ : @editor_api.WrappingIndent = Same,
+  render_whitespace~ : @editor_api.RenderWhitespace = Selection,
+  render_control_characters~ : Bool = true,
+  render_line_highlight~ : @editor_api.RenderLineHighlight = Line,
+  render_line_highlight_only_when_focus~ : Bool = false,
+  render_validation_decorations~ : @editor_api.RenderValidationDecorations = On,
+  theme~ : String = "dark",
+  placeholder~ : String = "",
+  line_decorations_width~ : Int32 = 10,
+  line_numbers_min_chars~ : Int32 = 5,
+  folding~ : Bool = true,
+  show_folding_controls~ : @editor_api.ShowFoldingControls = Mouseover,
+  folding_highlight~ : Bool = true,
+  folding_maximum_regions~ : Int32 = 5000,
+  unfold_on_click_after_end_of_line~ : Bool = false,
+  smooth_scrolling~ : Bool = false,
+  show_unused~ : Bool = true,
+  show_deprecated~ : Bool = true,
+  code_lens~ : Bool = true,
   code_lens_font_family? : String,
   code_lens_font_size? : Double,
-  font_family? : String = @config.editor_font_defaults.font_family,
-  font_weight? : String = @config.editor_font_defaults.font_weight,
-  font_size? : Double = @config.editor_font_defaults.font_size,
-  line_height? : Double = @config.editor_font_defaults.line_height,
-  letter_spacing? : Double = @config.editor_font_defaults.letter_spacing,
+  font_family~ : String = @config.editor_font_defaults.font_family,
+  font_weight~ : String = @config.editor_font_defaults.font_weight,
+  font_size~ : Double = @config.editor_font_defaults.font_size,
+  line_height~ : Double = @config.editor_font_defaults.line_height,
+  letter_spacing~ : Double = @config.editor_font_defaults.letter_spacing,
 ) -> ViewerOptions {
   {
     inner: CodeEditorOptions(
@@ -175,7 +175,7 @@ pub fn ViewerOptions::with_render_validation_decorations(
 ///|
 pub fn ViewerOptions::with_tab_size(
   self : ViewerOptions,
-  value : Int,
+  value : Int32,
 ) -> ViewerOptions {
   { inner: self.inner.with_tab_size(value), }
 }
@@ -191,7 +191,7 @@ pub fn ViewerOptions::with_soft_wrap(
 ///|
 pub fn ViewerOptions::with_line_numbers_min_chars(
   self : ViewerOptions,
-  value : Int,
+  value : Int32,
 ) -> ViewerOptions {
   { inner: self.inner.with_line_numbers_min_chars(value), }
 }
@@ -199,7 +199,7 @@ pub fn ViewerOptions::with_line_numbers_min_chars(
 ///|
 pub fn ViewerOptions::with_line_decorations_width(
   self : ViewerOptions,
-  value : Int,
+  value : Int32,
 ) -> ViewerOptions {
   { inner: self.inner.with_line_decorations_width(value), }
 }

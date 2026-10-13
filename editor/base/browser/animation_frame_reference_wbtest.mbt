@@ -7,8 +7,8 @@
 ///|
 priv struct TestAnimationFrameDriver {
   callbacks : Array[() -> Unit]
-  mut request_count : Int
-  mut frame : Int
+  mut request_count : Int32
+  mut frame : Int32
 }
 
 ///|
@@ -40,7 +40,7 @@ fn TestAnimationFrameDriver::run_next(self : TestAnimationFrameDriver) -> Unit {
 test "strict-next coalesces native requests and preserves equal-priority FIFO" {
   let driver = TestAnimationFrameDriver()
   let coordinator = driver.coordinator()
-  let events : Array[(Int, String)] = []
+  let events : Array[(Int32, String)] = []
   coordinator.schedule_at_next_animation_frame(
     () => events.push((driver.frame, "first")),
     0,
@@ -111,7 +111,7 @@ test "current-or-next outside a drain waits for the next native frame" {
 test "strict-next registered during a drain crosses a native-frame boundary" {
   let driver = TestAnimationFrameDriver()
   let coordinator = driver.coordinator()
-  let events : Array[(Int, String)] = []
+  let events : Array[(Int32, String)] = []
   coordinator.schedule_at_next_animation_frame(
     () => {
       events.push((driver.frame, "current"))
@@ -183,7 +183,7 @@ test "cancellation before and during a drain is deterministic and idempotent" {
 test "nested current and next consumers lose no callback and restart after idle" {
   let driver = TestAnimationFrameDriver()
   let coordinator = driver.coordinator()
-  let events : Array[(Int, String)] = []
+  let events : Array[(Int32, String)] = []
   coordinator.schedule_at_next_animation_frame(
     () => {
       events.push((driver.frame, "consumer-a"))

@@ -34,12 +34,12 @@ fn this_model() -> TextSnapshot {
 }
 
 ///|
-fn rng(sl : Int, sc : Int, el : Int, ec : Int) -> @base_common.Range {
+fn rng(sl : Int32, sc : Int32, el : Int32, ec : Int32) -> @base_common.Range {
   Range(sl, sc, el, ec)
 }
 
 ///|
-fn word_at(model : TextModel, column : Int) -> WordAtPosition? {
+fn word_at(model : TextModel, column : Int32) -> WordAtPosition? {
   model.get_word_at_position(Position(1, column))
 }
 

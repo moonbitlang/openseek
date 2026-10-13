@@ -56,9 +56,9 @@ priv struct DurableMark {
 priv struct FileFingerprint {
   size : Int64
   mtime_seconds : Int64
-  mtime_nanoseconds : Int
+  mtime_nanoseconds : Int32
   ctime_seconds : Int64
-  ctime_nanoseconds : Int
+  ctime_nanoseconds : Int32
 } derive(Debug, Eq)
 
 ///|
@@ -427,7 +427,7 @@ async fn sync_dir_best_effort(dir : String) -> Unit {
 }
 
 ///|
-async fn ensure_dir_exists(dir : String, attempts? : Int = 4) -> Unit {
+async fn ensure_dir_exists(dir : String, attempts~ : Int32 = 4) -> Unit {
   if @fs.exists(dir) {
     return
   }
@@ -505,6 +505,71 @@ pub fn SessionStore::session_file(
   id : @agent_session.SessionId,
 ) -> String raise {
   self.session_file_path(id)
+}
+
+///|
+/// Copy the session `source` into the new session `fork` and return it.
+///
+/// The copy is `Session::fork` of the source as it is durably recorded now —
+/// read under the source's shared lock, so it is one consistent log even
+/// while another process appends to it — and carries the source's display
+/// title. Nothing else in the source's directory is copied: a prediction is
+/// about the source's own tail, and job logs and scratch files are its
+/// working state. Sub-run sessions are not copied either, and nothing
+/// records which session the fork came from: a sub-run the copied history
+/// names as `sr-N` is looked up under the fork's id by every reader, where it
+/// is missing — or, once the fork has run its own `sr-N`, a different run.
+///
+/// `system_prompt` is the fork's own. A prompt names the session's scratch
+/// directory, which is a different directory for the fork, so the source's
+/// prompt is never inherited: the caller builds the one a new session in the
+/// fork's environment would get.
+///
+/// `fork` must not exist, in the sense `exists` and `list` give the word: no
+/// directory for the id, with or without a session file in it. A directory
+/// left by an interrupted creation may hold a title, scratch files, or job
+/// logs, and a fork written into it would silently adopt them. Creating the
+/// directory is what claims the id: of two callers naming the same new id
+/// one creates it and the other is refused, whatever the first then does.
+/// The session file is still checked under the fork's exclusive lock, for a
+/// writer that adopts an existing directory — a session started under this
+/// id — and got there first. The call raises for a source that does not
+/// load, for the reasons `Session::fork` raises, on invalid ids, and on
+/// filesystem or lock failures.
+///
+/// The session file is the last thing written, so a fork that raises midway
+/// never leaves a loadable session behind; the directory it leaves holds the
+/// id, and a retry needs another one.
+pub async fn SessionStore::fork(
+  self : SessionStore,
+  source : @agent_session.SessionId,
+  fork : @agent_session.SessionId,
+  through? : Int32,
+  system_prompt~ : String,
+) -> @agent_session.Session {
+  let copy = self.load(source).fork(fork, system_prompt~, through?)
+  let title = self.title(source)
+  @fs.mkdir(self.session_dir(fork), recursive=true) catch {
+    @os_error.OSError(_) as error if error.is_EEXIST() =>
+      fail("session \{fork.value()} already exists")
+    error => raise error
+  }
+  with_session_lock(self, fork, Exclusive, () => {
+    let path = self.session_file_path(fork)
+    guard !@fs.exists(path) else {
+      fail("session \{fork.value()} already exists")
+    }
+    let dirs = self.session_dir_chain(fork)
+    // The session file goes last: it is what makes the id a session, so a
+    // write that fails before it leaves a directory nothing loads rather
+    // than a fork that exists without its title.
+    if title is Some(title) {
+      write_text_atomic(self.title_path(fork), title, dirs~)
+    }
+    write_text_atomic(path, session_file_text(copy), dirs~)
+    record_mark(self, copy)
+  })
+  copy
 }
 
 ///|
@@ -606,7 +671,7 @@ pub async fn SessionStore::set_title(
 /// user prompt, not counting the header line. The agent appends the user turn
 /// as a session's first event, so this is normally one line; the cap keeps a
 /// pathological log from turning a listing into a full read.
-let first_prompt_scan_limit : Int = 50
+let first_prompt_scan_limit : Int32 = 50
 
 ///|
 /// The first user prompt recorded in the session file at `path`, or `""` when
@@ -644,7 +709,10 @@ async fn first_prompt_in_log(path : String) -> String {
 ///|
 /// Order stamped rows newest-first by `(seconds, nanoseconds)`, ignoring the
 /// row payload in tuple position 0.
-fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
+fn[T] stamped_newest_first(
+  a : (T, Int64, Int32),
+  b : (T, Int64, Int32),
+) -> Int32 {
   let (_, a_seconds, a_nanoseconds) = a
   let (_, b_seconds, b_nanoseconds) = b
   // Compared field by field rather than as a tuple: this is a `sort_by`
@@ -668,7 +736,7 @@ fn[T] stamped_newest_first(a : (T, Int64, Int), b : (T, Int64, Int)) -> Int {
 pub async fn SessionStore::listings(
   self : SessionStore,
 ) -> Array[SessionListing] {
-  let stamped : Array[(SessionListing, Int64, Int)] = []
+  let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
     let path = self.session_file_path(id) catch { _ => continue }
@@ -715,7 +783,7 @@ pub async fn SessionStore::listings(
 pub async fn SessionStore::latest(
   self : SessionStore,
 ) -> @agent_session.SessionId? {
-  let stamped : Array[(@agent_session.SessionId, Int64, Int)] = []
+  let stamped : Array[(@agent_session.SessionId, Int64, Int32)] = []
   for id in self.list() {
     let stamp = @fs.mtime(self.session_file_path(id)) catch { _ => continue }
     let (seconds, nanoseconds) = stamp
@@ -823,8 +891,8 @@ pub async fn SessionStore::compact(
   self : SessionStore,
   session : @agent_session.Session,
   content~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
 ) -> @agent_session.Session {
   ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {

@@ -1,7 +1,9 @@
 _build/
 dist/
 target/
-seekmoon/
+# The resource tree a package build stages here. Anchored: other directories
+# of this name are source.
+/seekmoon/
 .ninja_log
 .ninja_deps
 .tmp/

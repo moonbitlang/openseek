@@ -20,12 +20,18 @@
 }
 
 .stream {
-  display: grid;
-  /* A bare `auto` column takes its minimum from content, so one wide
-     <pre> or long token would blow the track past max-width and shove
-     the message off the right. minmax(0, …) lets it shrink so the
-     pre's own `overflow: auto` scrolls and plain text wraps instead. */
-  grid-template-columns: minmax(0, 1fr);
+  /* A column of rows, and deliberately not a one-column grid. A grid sizes
+     its tracks from every item, so each change to the reply being streamed
+     re-ran track sizing over the whole conversation: at a thousand rows that
+     was most of the layout time of every token. A flex column lays out only
+     the row that changed.
+
+     Rows stretch to the column's width whatever they hold: a flex item's
+     automatic minimum size applies along the main axis only, so a wide <pre>
+     or a long token cannot widen its row past max-width — the pre's own
+     `overflow: auto` scrolls and plain text wraps instead. */
+  display: flex;
+  flex-direction: column;
   gap: 20px;
   max-width: 820px;
   margin: 0 auto;
@@ -450,13 +456,6 @@
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
 }
-.empty-sub {
-  max-width: 400px;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-md);
-  line-height: var(--line-height-relaxed);
-}
-
 /* messages */
 .msg {
   display: flex;
@@ -928,6 +927,73 @@
 .file-link:focus-visible .inline-code {
   background: var(--color-accent);
   color: var(--bg, var(--color-on-accent));
+}
+
+/* A fenced `openseek-file` reference. The same markup is usable as a button
+   in the live transcript and as a static div in exported visualizations. */
+.workspace-file-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(100%, 520px);
+  min-width: 0;
+  margin: 0.65em 0;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-surface);
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.msg-content.markdown button.workspace-file-card {
+  font: inherit;
+  cursor: pointer;
+}
+.msg-content.markdown button.workspace-file-card:hover,
+.msg-content.markdown button.workspace-file-card:focus-visible {
+  border-color: var(--color-accent);
+  background: var(--color-bg-subtle);
+  outline: none;
+}
+.workspace-file-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--color-accent);
+}
+.workspace-file-glyph svg {
+  width: 16px;
+  height: 16px;
+}
+.workspace-file-glyph.spreadsheet { color: #18a058; }
+.workspace-file-glyph.document,
+.workspace-file-glyph.text { color: #4b82d9; }
+.workspace-file-glyph.presentation { color: #d97831; }
+.workspace-file-glyph.image { color: #8a68c7; }
+.workspace-file-glyph.pdf { color: #c34f5d; }
+.workspace-file-glyph.archive { color: #a17b26; }
+.workspace-file-glyph.code { color: #2c9a94; }
+.workspace-file-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.workspace-file-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-file-kind {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 /* One provider response: its thought fold, its prose, and its tool rows, in
@@ -1981,4 +2047,11 @@
 .user-shell-note {
   color: var(--color-text-muted);
   font-size: var(--font-size-sm);
+}
+
+.message-fork:disabled { cursor: default; opacity: 0.5; }
+.message-fork-spinner { display: inline-flex; animation: message-fork-spin 1s linear infinite; }
+@keyframes message-fork-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .message-fork-spinner { animation: none; }
 }

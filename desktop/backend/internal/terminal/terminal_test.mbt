@@ -248,7 +248,7 @@ async test "a cumulative acknowledgement resumes terminal output" {
     let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command=[
       "/usr/bin/yes", "flow-control",
     ])
-    let chunks : Array[(Int, Int)] = []
+    let chunks : Array[(Int32, Int32)] = []
     let mut received = 0
     // Match the host's high watermark. Once this much output has arrived, the
     // reader is parked until an acknowledgement makes window capacity.
@@ -294,7 +294,7 @@ test "ops on unknown terminal ids degrade cleanly" {
 
 ///|
 #cfg(not(platform="windows"))
-async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int {
+async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int32 {
   for ;; {
     if pushes.get() is Exited(code~, ..) {
       return code

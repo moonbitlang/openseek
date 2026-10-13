@@ -1,0 +1,712 @@
+/* Embedded Office surface styles. Keep this file scoped to the Office
+   surface: the standalone viewer stylesheet also contains its own shell and
+   body rules, which must not change OpenSeek's application chrome. */
+
+@font-face {
+  font-family: "Carlito";
+  src: url("./fonts/Carlito-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("./fonts/Carlito-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("./fonts/Carlito-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("./fonts/Carlito-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("./fonts/LiberationSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("./fonts/LiberationSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("./fonts/LiberationSans-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("./fonts/LiberationSans-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("./fonts/LiberationSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("./fonts/LiberationSerif-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("./fonts/LiberationSerif-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("./fonts/LiberationSerif-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("./fonts/LiberationMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("./fonts/LiberationMono-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("./fonts/LiberationMono-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("./fonts/LiberationMono-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "Noto Sans SC";
+  src: url("./fonts/NotoSansSC-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+.office-viewer-surface {
+  position: relative;
+  min-height: 100%;
+  color: #1f2937;
+  background: #eef1f5;
+}
+
+/* PDF.js owns page, canvas, text, and annotation geometry. Its scroll container
+   has an explicit absolute box so virtualization uses the file panel's size. */
+.viewer-stack > .office-viewer-surface.pdf-mode {
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+}
+.office-viewer-surface .pdf-container {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.office-viewer-surface .pdfViewer {
+  padding: 20px 12px 40px;
+}
+.office-viewer-surface .pdfViewer .page {
+  box-sizing: content-box;
+  margin-bottom: 20px;
+}
+.office-viewer-surface .textLayer {
+  cursor: text;
+}
+.pdf-command-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 12px;
+}
+.pdf-command-row .office-viewer-toolbar,
+.pdf-viewer-toolbar {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.pdf-viewer-toolbar input.pdf-page-input {
+  flex: 0 0 54px;
+  width: 54px;
+  min-width: 0;
+  text-align: center;
+}
+.pdf-page-total,
+.pdf-search-count {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.pdf-password-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 20%);
+}
+.pdf-password-dialog {
+  display: grid;
+  gap: 16px;
+  width: min(320px, 100%);
+  padding: 24px;
+  color: var(--color-text-primary);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 16%);
+}
+.pdf-password-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.pdf-password-dialog input {
+  width: 100%;
+  padding: 8px;
+  color: inherit;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.pdf-password-error {
+  color: #dc2626;
+}
+.pdf-password-overlay.hidden,
+.pdf-password-error.hidden {
+  display: none;
+}
+.pdf-password-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.pdf-password-actions button {
+  padding: 6px 12px;
+  color: var(--color-text-primary);
+  background: var(--color-control-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pdf-password-actions button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.office-selection-preview {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.office-selection-preview.hidden { display: none; }
+
+.office-viewer-surface .surface-empty {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 24px;
+  color: #6b7280;
+  text-align: center;
+}
+.office-viewer-surface .brand-mark {
+  color: #2563eb;
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.word-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  min-width: max-content;
+}
+.word-page {
+  position: relative;
+  zoom: var(--office-zoom, 1);
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, .13);
+  transform-origin: top center;
+  user-select: text;
+}
+.word-page svg { display: block; }
+.word-page,
+.word-page svg text { cursor: text; }
+.word-page svg text {
+  font-kerning: none;
+  font-variant-ligatures: none;
+  letter-spacing: 0;
+  white-space: pre;
+}
+.word-page svg text.office-search-hit {
+  paint-order: stroke;
+  stroke: #facc15;
+  stroke-width: 4px;
+  stroke-opacity: .45;
+}
+
+/* Reserve a separate gutter for annotations. Keep the paper and its font
+   metrics intact; a narrow file panel starts with the gutter collapsed. */
+.office-viewer-surface .office-context-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+.office-viewer-surface .office-context-document {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.office-viewer-surface .office-context-word > .office-context-document {
+  overflow-x: auto;
+}
+.office-viewer-surface .office-context-excel > .office-context-document {
+  overflow-x: auto;
+}
+.office-viewer-surface .office-context-rail {
+  position: relative;
+  flex: 0 0 304px;
+  width: 304px;
+  min-height: 44px;
+  color: #334155;
+  user-select: none;
+}
+.office-viewer-surface .office-context-rail:not([open]) {
+  flex-basis: 36px;
+  width: 36px;
+}
+.office-viewer-surface .office-context-heading {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #d8dfe8;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  font-weight: 600;
+}
+.office-viewer-surface .office-context-heading::-webkit-details-marker { display: none; }
+.office-viewer-surface .office-context-heading::before {
+  content: "";
+  flex: 0 0 12px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+}
+.office-viewer-surface .office-context-heading::after { content: "›"; margin-left: auto; }
+.office-viewer-surface .office-context-rail[open] > .office-context-heading::after { content: "‹"; }
+.office-viewer-surface .office-context-rail:not([open]) > .office-context-heading {
+  justify-content: center;
+  padding: 8px;
+}
+.office-viewer-surface .office-context-rail:not([open]) .office-context-heading-label { display: none; }
+.office-viewer-surface .office-context-rail:not([open]) > .office-context-heading::after {
+  content: attr(data-count);
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin: 0;
+  padding: 0 3px;
+  border: 2px solid #eef1f5;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+}
+.office-viewer-surface .office-context-placed { position: relative; min-height: 0; }
+.office-viewer-surface .office-context-card {
+  display: block;
+  position: absolute;
+  left: 28px;
+  right: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #d8dfe8;
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 2px 8px rgb(15 23 42 / 6%);
+  text-align: left;
+  line-height: 1.5;
+}
+.office-viewer-surface .office-context-unplaced-card {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  margin: 0 0 12px 28px;
+}
+.office-viewer-surface .office-context-unplaced-heading,
+.office-viewer-surface .office-context-more {
+  margin: 12px 0 10px 28px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.office-viewer-surface .office-context-unplaced-heading[hidden] { display: none; }
+.office-viewer-surface .office-context-active {
+  border-color: #7da4ee;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+.office-viewer-surface .office-context-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #64748b;
+  font-size: 11px;
+}
+.office-viewer-surface .office-context-header strong { font-weight: 500; }
+.office-viewer-surface .office-context-location {
+  margin-top: 8px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.office-viewer-surface .office-context-quote {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-height: 40px;
+  margin: 8px 0 0;
+  padding: 0 0 0 8px;
+  border-left: 2px solid #bfdbfe;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.office-viewer-surface .office-context-entry {
+  display: block;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid #edf0f4;
+  background: transparent;
+  color: inherit;
+}
+.office-viewer-surface .office-context-reply {
+  padding-left: 10px;
+  border-left: 2px solid #e2e8f0;
+}
+.office-viewer-surface .office-context-author { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.office-viewer-surface .office-context-hint,
+.office-viewer-surface .office-context-meta {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.office-viewer-surface .office-annotation-body {
+  margin: 10px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.65;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.office-viewer-surface .office-annotation-body[data-empty="true"]::before { content: "Empty comment"; color: #64748b; }
+.office-viewer-surface .office-context-select {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #d8dfe8;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.office-viewer-surface .office-context-select:hover { background: #eef2f7; }
+.office-viewer-surface .office-context-select:disabled { opacity: .45; cursor: default; }
+.office-viewer-surface .office-context-quote-action { color: #2563eb; background: #eff6ff; border-color: #dbeafe; }
+.office-viewer-surface .office-comment-marker {
+  position: absolute;
+  left: 0;
+  width: 22px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #2563eb;
+  cursor: pointer;
+}
+.office-viewer-surface .office-comment-marker::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 8px;
+  margin: 0 auto;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+.office-viewer-surface .office-note-marker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.office-viewer-surface .office-note-marker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-top: 10px solid #d97706;
+  border-left: 10px solid transparent;
+}
+.office-viewer-surface td.office-has-annotation { position: relative; }
+.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px #93c5fd; }
+.office-viewer-surface .office-context-heading:focus-visible,
+.office-viewer-surface .office-context-select:focus-visible,
+.office-viewer-surface .office-comment-marker:focus-visible,
+.office-viewer-surface .office-note-marker:focus-visible,
+.office-viewer-surface .office-annotation-body:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: #93c5fd; stroke-width: 4px; stroke-opacity: .5; }
+.office-viewer-surface .office-context-entry.office-annotation-selected > .office-annotation-body {
+  background: #eff6ff;
+  box-shadow: 0 0 0 4px #eff6ff;
+  border-radius: 2px;
+}
+
+/* The local system-font option changes glyph selection while keeping the
+   office.mbt page coordinates and line breaks fixed. */
+.office-viewer-surface.prefer-system-fonts
+  .word-page svg text[font-family="Carlito"] {
+  font-family: "Calibri", "Carlito" !important;
+}
+.office-viewer-surface.prefer-system-fonts
+  .word-page svg text[font-family="Liberation Sans"] {
+  font-family: "Arial", "Liberation Sans" !important;
+}
+.office-viewer-surface.prefer-system-fonts
+  .word-page svg text[font-family="Liberation Serif"] {
+  font-family: "Times New Roman", "Liberation Serif" !important;
+}
+.office-viewer-surface.prefer-system-fonts
+  .word-page svg text[font-family="Liberation Mono"] {
+  font-family: "Courier New", "Liberation Mono" !important;
+}
+.office-viewer-surface.prefer-system-fonts
+  .word-page svg text[font-family="Noto Sans SC"] {
+  font-family: "Microsoft YaHei", "SimSun", "Noto Sans SC" !important;
+}
+
+/* The file panel already owns the document title and context actions. Keep
+   the standalone spreadsheet's instructions and inspector out of this host. */
+.office-viewer-surface .excel-view-toolbar,
+.office-viewer-surface .excel-formula-bar,
+.office-viewer-surface .excel-tabs-label,
+.office-viewer-surface .excel-document-title,
+.office-viewer-surface .excel-sheet-heading,
+.office-viewer-surface .office-excel-workbook .frozen-hint {
+  display: none;
+}
+.office-viewer-surface .excel-workspace {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.office-viewer-surface .sheet-document.office-excel-workbook {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.office-viewer-surface .office-excel-workbook section[data-sheet] {
+  margin: 0;
+}
+.office-viewer-surface .office-excel-workbook section[data-sheet][hidden] {
+  display: none;
+}
+.office-viewer-surface .office-grid-column-headings th,
+.office-viewer-surface .office-row-heading {
+  height: 26px;
+  padding: 4px 8px;
+  border: 1px solid #d9dfe8;
+  background: #f1f4f8;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  white-space: nowrap;
+}
+.office-viewer-surface .office-row-heading,
+.office-viewer-surface .office-grid-corner {
+  min-width: 44px;
+}
+.office-viewer-surface .excel-sheet-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 12px;
+  padding: 4px;
+  overflow-x: auto;
+  background: #f8fafc;
+}
+.office-viewer-surface .excel-tab-list {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.office-viewer-surface .excel-sheet-tab {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #64748b;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.office-viewer-surface .excel-sheet-tab:hover { background: #eef2f7; color: #334155; }
+.office-viewer-surface .excel-sheet-tab.is-active {
+  background: #e8f0ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.office-viewer-surface .excel-sheet-tab:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.sheet-document {
+  min-width: max-content;
+  zoom: var(--office-zoom, 1);
+  padding: 8px;
+  background: #fff;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, .12);
+  user-select: none;
+  font-family: "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+}
+.sheet-document figure.chart svg text {
+  font-family: "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+}
+.office-viewer-surface.prefer-system-fonts .sheet-document {
+  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+}
+.office-viewer-surface.prefer-system-fonts .sheet-document figure.chart svg text {
+  font-family: "Calibri", "Arial", "Microsoft YaHei", "SimSun", "Carlito", "Liberation Sans", "Noto Sans SC", sans-serif;
+}
+.sheet-document > h1 { margin: 4px 0 14px; font-size: 17px; }
+.sheet-document section { margin: 0 0 22px; }
+.sheet-document section > h2 {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: max-content;
+  margin: 10px 0 5px;
+  padding: 4px 7px;
+  background: #f3f4f6;
+  border: 1px solid #d6dbe3;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.sheet-document table { border-collapse: collapse; table-layout: fixed; margin: 0; }
+.sheet-document td {
+  min-width: 72px;
+  height: 24px;
+  padding: 3px 7px;
+  border: 1px solid #d9dfe8;
+  background: #fff;
+  white-space: pre;
+  font-size: 12px;
+}
+.sheet-document td.office-cell-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background: #e8f0ff;
+}
+.sheet-document td.office-search-hit { box-shadow: inset 0 0 0 2px #facc15; }
+.sheet-document td.office-cell-anchor { box-shadow: inset 3px 0 0 #2563eb; }
+.sheet-document .formula-pending,
+.sheet-document .truncated,
+.sheet-document .frozen-hint { color: #6b7280; }
+.sheet-document .formula-pending { font-style: italic; }
+.sheet-document .truncated,
+.sheet-document .frozen-hint { font-size: 11px; }
+.sheet-document figure.chart {
+  display: inline-block;
+  margin: 6px 8px 6px 0;
+  padding: 8px;
+  border: 1px solid #d6dbe3;
+  vertical-align: top;
+}
+
+@media (max-width: 760px) {
+  .office-viewer-surface.word-mode { padding: 18px 8px 34px; }
+  .office-viewer-surface.sheet-mode { padding: 10px 8px 28px; }
+}

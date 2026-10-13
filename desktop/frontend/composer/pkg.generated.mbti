@@ -23,6 +23,8 @@ pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Acti
 
 pub fn focus_message_end() -> @cmd.Cmd
 
+pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array[@mention_context.MentionRef]) -> Unit
+
 // Errors
 
 // Types and methods
@@ -46,9 +48,10 @@ pub(all) enum Action {
   ModelMenuToggled(identity~ : Identity)
   ReasoningMenuToggled(identity~ : Identity)
   SelectMenuDismissed(identity~ : Identity)
-  ModelSelected(identity~ : Identity, value~ : String)
+  ModelSelected(identity~ : Identity, value~ : String, draft~ : Draft)
   ReasoningSelected(identity~ : Identity, value~ : String)
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
+  CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(identity~ : Identity, request_key~ : String, question_id~ : String, answer~ : String)
   CodexRequestResponded(identity~ : Identity, request_key~ : String, decision~ : Json)
   PermissionMenuToggled(identity~ : Identity)
@@ -75,6 +78,7 @@ pub(all) struct ApprovalNotice {
 
 pub(all) struct CodexRequestInput {
   request_key : String
+  expanded : Bool
   method_ : String
   params : Json
   answers : Map[String, String]
@@ -88,7 +92,7 @@ pub(all) enum ContextComponent {
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[String])
   ShellCommandsRunning(commands~ : Array[String])
-  QueuedInputPanel(items~ : Array[QueuedInput])
+  QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
   WorktreePlacementNotice
   MissingWorktreeNoticeComponent(MissingWorktreeNotice)
@@ -108,6 +112,7 @@ pub fn Draft::prompt(Self) -> String
 pub fn Draft::to_repr(Self) -> @debug.Repr
 pub fn Draft::user_item(Self) -> @transcript.ItemKind
 pub fn Draft::with_mention(Self, Mention) -> Self
+pub fn Draft::with_office_selection(Self, String?) -> Self
 pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ : Bool) -> Self
 pub fn Draft::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 

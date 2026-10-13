@@ -10,8 +10,8 @@ priv struct MarginDecorationsOverlay {
 
 ///|
 priv struct WholeMarginDecoration {
-  start_line_number : Int
-  end_line_number : Int
+  start_line_number : Int32
+  end_line_number : Int32
   class_name : String
 }
 
@@ -48,8 +48,8 @@ fn margin_decorations_to_render(
 /// helper remains dedicated to `linesDecorationsClassName`; whole-margin
 /// decoration plumbing stays implementation detail here.
 fn dedup_whole_margin_decorations(
-  visible_start_line_number : Int,
-  visible_end_line_number : Int,
+  visible_start_line_number : Int32,
+  visible_end_line_number : Int32,
   decorations : Array[WholeMarginDecoration],
 ) -> Array[Array[String]] {
   let output : Array[Array[String]] = []

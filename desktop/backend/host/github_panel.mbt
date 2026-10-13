@@ -48,7 +48,7 @@ async fn github_panel_json(
 fn github_list_args(
   kind : @protocol.GithubListKind,
   repository_url : String,
-  limit : Int,
+  limit : Int32,
 ) -> Array[String] {
   let args = [
     if kind is Issues {
@@ -92,7 +92,7 @@ fn github_panel_item(
     } else {
     raise HostError("GitHub returned an invalid list item.")
   }
-  let number : Int = @json.from_json(number)
+  let number : Int32 = @json.from_json(number)
   guard number > 0 && !url.is_empty() else {
     raise HostError("GitHub returned an invalid item identity.")
   }
@@ -192,8 +192,8 @@ async fn github_list_op(
 async fn github_list(
   payload : @protocol.GithubListPayload,
   query : async (Array[String]) -> Json,
-  inventory_timeout? : Int = 20000,
-  avatar_timeout? : Int = 5000,
+  inventory_timeout~ : Int32 = 20000,
+  avatar_timeout~ : Int32 = 5000,
 ) -> @protocol.GithubListReply {
   let inventory = @async.with_timeout_opt(inventory_timeout, () => {
     // Keep repository resolution in gh: it understands enterprise hosts,

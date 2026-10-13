@@ -10,7 +10,7 @@
 
 ///|
 /// `MAX_FOLDING_REGIONS_FOR_INDENT_DEFAULT` (`indentRangeProvider.ts:14`).
-const MAX_FOLDING_REGIONS_FOR_INDENT_DEFAULT : Int = 5000
+const MAX_FOLDING_REGIONS_FOR_INDENT_DEFAULT : Int32 = 5000
 
 ///|
 /// The indentation range provider — Monaco's `IndentRangeProvider`
@@ -19,7 +19,7 @@ struct IndentRangeProvider {
   editor_model : @model.TextModel
   language_configuration_service : @languages.LanguageHandle
   folding_ranges_limit : FoldingLimitReporter
-  tab_size : Int
+  tab_size : Int32
 }
 
 ///|
@@ -27,7 +27,7 @@ pub fn IndentRangeProvider::IndentRangeProvider(
   editor_model : @model.TextModel,
   language_configuration_service : @languages.LanguageHandle,
   folding_ranges_limit : FoldingLimitReporter,
-  tab_size? : Int = 4,
+  tab_size~ : Int32 = 4,
 ) -> IndentRangeProvider {
   {
     editor_model,
@@ -71,10 +71,10 @@ pub fn IndentRangeProvider::compute(
 /// (`indentRangeProvider.ts:38`). White-box tests exercise it without adding
 /// it to the package API.
 priv struct RangesCollector {
-  start_indexes : Array[Int]
-  end_indexes : Array[Int]
-  indent_occurrences : Array[Int]
-  mut length : Int
+  start_indexes : Array[Int32]
+  end_indexes : Array[Int32]
+  indent_occurrences : Array[Int32]
+  mut length : Int32
   folding_ranges_limit : FoldingLimitReporter
 }
 
@@ -96,9 +96,9 @@ fn RangesCollector::RangesCollector(
 /// first; `toIndentRanges` reverses them into document order.
 fn RangesCollector::insert_first(
   self : RangesCollector,
-  start_line_number : Int,
-  end_line_number : Int,
-  indent : Int,
+  start_line_number : Int32,
+  end_line_number : Int32,
+  indent : Int32,
 ) -> Unit {
   if start_line_number > MAX_LINE_NUMBER || end_line_number > MAX_LINE_NUMBER {
     return
@@ -122,7 +122,7 @@ fn RangesCollector::insert_first(
 fn RangesCollector::to_indent_ranges(
   self : RangesCollector,
   model : @model.TextModel,
-  tab_size? : Int = 4,
+  tab_size~ : Int32 = 4,
 ) -> FoldingRegions {
   let limit = (self.folding_ranges_limit.limit)()
   if self.length <= limit {
@@ -179,9 +179,9 @@ fn RangesCollector::to_indent_ranges(
 /// for the region above, `line` the start line (only used for marker
 /// regions).
 priv struct PreviousRegion {
-  mut indent : Int
-  mut end_above : Int
-  mut line : Int
+  mut indent : Int32
+  mut end_above : Int32
+  mut line : Int32
 }
 
 ///|
@@ -203,8 +203,8 @@ fn compute_ranges(
   model : @model.TextModel,
   off_side : Bool,
   markers? : @languages.FoldingMarkers,
-  folding_ranges_limit? : FoldingLimitReporter = folding_ranges_limit_default,
-  tab_size? : Int = 4,
+  folding_ranges_limit~ : FoldingLimitReporter = folding_ranges_limit_default,
+  tab_size~ : Int32 = 4,
 ) -> FoldingRegions {
   let result = RangesCollector(folding_ranges_limit)
   let previous_regions : Array[PreviousRegion] = []

@@ -3,9 +3,11 @@ package "openseek_desktop/backend/engine"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/worktree",
+  "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/backend/resources",
   "openseek_desktop/protocol",
@@ -30,6 +32,8 @@ pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) ->
 
 pub async fn engine_command(@resources.Resources) -> String
 
+pub async fn fork_session(EngineManager, @protocol.SessionForkPayload) -> @protocol.SessionForkReply
+
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
@@ -44,7 +48,7 @@ pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @proto
 
 pub async fn migrate_global_store() -> Int
 
-pub fn new_engine_actor(String, runtime_dir? : @pathx.Path) -> EngineActor
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 
@@ -113,6 +117,7 @@ pub struct Schedules {
   manager : EngineManager
   directory : @pathx.Path?
   lock : @async.Mutex
+  mut ownership : @fs.File?
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
   stopped : Map[String, Unit]

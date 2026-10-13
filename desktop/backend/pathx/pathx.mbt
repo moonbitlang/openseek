@@ -133,7 +133,7 @@ pub fn Absolute::from_uri_path(path : String) -> Absolute? {
 ///|
 /// Whether this character can name a Windows drive in an absolute path.
 fn Char::is_ascii_path_drive(self : Char) -> Bool {
-  self is ('a'..='z' | 'A'..='Z')
+  self is ('a'..<='z' | 'A'..<='Z')
 }
 
 ///|

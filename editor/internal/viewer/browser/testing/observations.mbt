@@ -4,8 +4,8 @@
 /// passive counts and timings rather than mutable implementation state.
 pub(all) struct ViewModelBuiltObservation {
   model : @model.TextModel
-  line_count : Int
-  token_count : Int
+  line_count : Int32
+  token_count : Int32
   tokenize_ms : Double
   build_ms : Double
 } derive(Debug)
@@ -16,8 +16,8 @@ pub(all) struct ViewModelBuiltObservation {
 /// not cross this testing boundary.
 pub(all) struct ModelRenderedObservation {
   model : @model.TextModel
-  line_count : Int
-  rendered_lines : Int
+  line_count : Int32
+  rendered_lines : Int32
   patch_ms : Double
   fresh : Bool
 } derive(Debug)

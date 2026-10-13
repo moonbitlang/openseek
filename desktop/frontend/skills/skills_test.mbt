@@ -31,14 +31,14 @@ fn other_device() -> @interop.ChannelId {
 }
 
 ///|
-fn input(installed? : Array[@skills.InstalledItem] = []) -> @skills.Input {
+fn input(installed~ : Array[@skills.InstalledItem] = []) -> @skills.Input {
   { channel: @interop.ChannelId::Local, installed, }
 }
 
 ///|
 fn market_item(
-  version? : String = "1.0.0",
-  package_path? : String = "",
+  version~ : String = "1.0.0",
+  package_path~ : String = "",
 ) -> @skills.MarketItem {
   {
     name: "acme/widget",

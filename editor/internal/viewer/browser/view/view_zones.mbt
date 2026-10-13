@@ -103,7 +103,7 @@ priv struct RegisteredViewZone {
 /// `ToInt32`.
 priv struct ComputedViewZoneProps {
   is_in_hidden_area : Bool
-  after_view_line_number : Int
+  after_view_line_number : Int32
   height_in_px : Double
   min_width_in_px : Double
 }
@@ -113,7 +113,7 @@ priv struct ComputedViewZoneProps {
 priv struct ViewZonesContext {
   view_model : @view_model.ViewModel
   log_service : @log.LogHandle
-  read_configuration : () -> (Int, Double, Double)
+  read_configuration : () -> (Int32, Double, Double)
   emit_view_zones_changed : () -> Unit
 }
 
@@ -126,7 +126,7 @@ struct ViewZones {
   dom_node_cache : FastViewZoneDomNode
   margin_dom_node_cache : FastViewZoneDomNode
   zones : Map[String, RegisteredViewZone]
-  mut line_height : Int
+  mut line_height : Int32
   mut content_width : Double
   mut content_left : Double
   mut context : ViewZonesContext?
@@ -137,7 +137,7 @@ struct ViewZones {
 ///|
 fn ViewZones::ViewZones(
   document : @rdom.Document,
-  read_initial_configuration? : () -> (Int, Double, Double) = () => {
+  read_initial_configuration~ : () -> (Int32, Double, Double) = () => {
     (0, 0.0, 0.0)
   },
 ) -> ViewZones {
@@ -194,7 +194,7 @@ fn ViewZones::install_context(
   self : ViewZones,
   view_model : @view_model.ViewModel,
   log_service : @log.LogHandle,
-  read_configuration : () -> (Int, Double, Double),
+  read_configuration : () -> (Int32, Double, Double),
   emit_view_zones_changed : () -> Unit,
 ) -> Unit {
   self.context = Some({
@@ -393,7 +393,7 @@ fn ViewZones::zone_keys_snapshot(self : ViewZones) -> Array[String] {
 /// follows hidden source lines. Keeping the model anchor from the delegate and
 /// the actual rounded whitespace height from ViewLayout gives coordinators a
 /// read-only, pixel-accurate snapshot without exposing the mutable registry.
-fn ViewZones::layout_infos(self : ViewZones) -> Array[(String, Int, Double)] {
+fn ViewZones::layout_infos(self : ViewZones) -> Array[(String, Int32, Double)] {
   guard self.context is Some(context) else { return [] }
   let layout_heights : Map[String, Double] = Map([])
   for whitespace in context.view_model.get_whitespaces() {
@@ -414,7 +414,7 @@ fn ViewZones::layout_infos(self : ViewZones) -> Array[(String, Int, Double)] {
 fn ViewZones::zone_ordinal(
   _self : ViewZones,
   zone : @editor_browser.ViewZone,
-) -> Int {
+) -> Int32 {
   zone.ordinal.unwrap_or(zone.after_column.unwrap_or(10000))
 }
 
@@ -708,7 +708,7 @@ fn ViewZones::report_callback_error(
 fn ViewZones::render(
   self : ViewZones,
   visible_whitespaces : Array[@view_layout.ViewWhitespaceViewportData],
-  big_numbers_delta : Int,
+  big_numbers_delta : Int32,
   scroll_top : Double,
   scroll_width : Double,
 ) -> Unit {
@@ -800,7 +800,7 @@ fn ViewZones::render(
 let offscreen_absolute_top : Double = -1000000.0
 
 ///|
-fn css_pixels(value : Int) -> String {
+fn css_pixels(value : Int32) -> String {
   "\{value.to_string()}px"
 }
 

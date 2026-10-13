@@ -5,8 +5,8 @@
 /// out of `core/selection.ts`).
 fn selection_from_offsets(
   snapshot : @model.TextSnapshot,
-  anchor_offset : Int,
-  focus_offset : Int,
+  anchor_offset : Int32,
+  focus_offset : Int32,
 ) -> @core.Selection {
   let anchor = snapshot
     .range_of(OffsetRange(anchor_offset, anchor_offset))

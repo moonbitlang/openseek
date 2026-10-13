@@ -60,8 +60,11 @@ import {
   "openseek_desktop/frontend/transcript/component" @transcript_component,
   "openseek_desktop/frontend/workspace_settings",
   "openseek_desktop/frontend/crash_page",
-  "openseek_desktop/frontend/composer",
 }
+
+import {
+  "Lampese/office-viewer/viewer" @office_viewer,
+} for "wbtest"
 
 supported_targets = "js"
 

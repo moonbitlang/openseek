@@ -2,7 +2,7 @@
 /// Bounded merged stdout/stderr from a compiler process. An output-limit kill
 /// has no exit code; an ordinary failure retains the process's non-zero code.
 priv struct ProcessOutput {
-  exit_code : Int?
+  exit_code : Int32?
   text : String
   output_limit_reached : Bool
 }
@@ -15,7 +15,7 @@ async fn collect_process_output(
   program : String,
   args : Array[String],
   cwd~ : String,
-  max_output_chars~ : Int,
+  max_output_chars~ : Int32,
 ) -> ProcessOutput {
   let (reader, writer) = @process.read_from_process()
   @async.with_task_group() <| group => {
@@ -60,7 +60,7 @@ priv struct OutputPrefix {
 /// size; the bytes of a character split across two reads wait in `pending`.
 async fn read_output_prefix(
   reader : @process.ReadFromProcess,
-  max_output_chars : Int,
+  max_output_chars : Int32,
 ) -> OutputPrefix {
   let text = StringBuilder()
   let mut chars = 0
@@ -88,7 +88,7 @@ async fn read_output_prefix(
 }
 
 ///|
-fn text_prefix_by_chars(text : String, max_chars : Int) -> String {
+fn text_prefix_by_chars(text : String, max_chars : Int32) -> String {
   text.offset_of_nth_char(max_chars).map_or(text, end => "\{text[:end]}")
 }
 
@@ -108,7 +108,7 @@ fn decode_complete_chars(bytes : Bytes) -> (String, Bytes) {
 /// How many bytes at the end of `bytes` are a lead byte and continuation
 /// bytes short of the length that lead announces; 0 when the input ends on a
 /// character boundary, or on bytes no later byte could complete.
-fn incomplete_tail_length(bytes : Bytes) -> Int {
+fn incomplete_tail_length(bytes : Bytes) -> Int32 {
   let length = bytes.length()
   for back in 1..<=3 {
     if back > length {
@@ -116,13 +116,13 @@ fn incomplete_tail_length(bytes : Bytes) -> Int {
     }
     let byte = bytes[length - back].to_int()
     // A continuation byte: the lead is further back.
-    if byte is (0x80..=0xBF) {
+    if byte is (0x80..<=0xBF) {
       continue
     }
     let announced = match byte {
-      0xC0..=0xDF => 2
-      0xE0..=0xEF => 3
-      0xF0..=0xF7 => 4
+      0xC0..<=0xDF => 2
+      0xE0..<=0xEF => 3
+      0xF0..<=0xF7 => 4
       _ => 1
     }
     return if announced > back { back } else { 0 }

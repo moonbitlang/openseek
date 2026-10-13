@@ -5,8 +5,8 @@
 
 ///|
 fn text_target(
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
   injected_text? : @view_model.InjectedText,
 ) -> @editor_browser.MouseTarget {
   MouseTargetContentText(
@@ -23,10 +23,10 @@ fn text_target(
 
 ///|
 fn empty_target(
-  line : Int,
-  column : Int,
+  line : Int32,
+  column : Int32,
   horizontal_distance_to_text : Double?,
-  is_after_lines? : Bool = false,
+  is_after_lines~ : Bool = false,
 ) -> @editor_browser.MouseTarget {
   MouseTargetContentEmpty(
     element=None,
@@ -38,7 +38,7 @@ fn empty_target(
 }
 
 ///|
-fn candidate_range(column : Int) -> @base_common.Range {
+fn candidate_range(column : Int32) -> @base_common.Range {
   Range(1, column, 1, column)
 }
 

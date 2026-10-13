@@ -389,6 +389,9 @@ pub fn openseek_capability(
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)
     }),
+    WindowEndpoint(@commands.host_pick_attachment, (context, _) => {
+      pick_attachment(context)
+    }),
     WindowEndpoint(@commands.session_share, (_, payload) => {
       SessionShare::{ state, payload, }.publish()
     }),

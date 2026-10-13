@@ -540,6 +540,9 @@ The package exposes:
   event without scanning the whole log.
 - `Session::chat_messages` for model projection.
 - `Session::compact` for validated summary append.
+- `Session::fork` for a new session, with a system prompt of its own, that
+  starts from a state this one stood in: every finished turn, or the turns up
+  to a chosen one.
 
 ```mbt check
 ///|

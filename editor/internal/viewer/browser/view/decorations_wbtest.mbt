@@ -10,10 +10,10 @@
 fn overlay_dec(
   range : @base_common.Range,
   class_name : String,
-  z_index? : Int = 0,
-  is_whole_line? : Bool = false,
-  show_if_collapsed? : Bool = false,
-  should_fill_line_on_line_break? : Bool = false,
+  z_index~ : Int32 = 0,
+  is_whole_line~ : Bool = false,
+  show_if_collapsed~ : Bool = false,
+  should_fill_line_on_line_break~ : Bool = false,
 ) -> @view_model.ViewModelDecoration {
   {
     range,
@@ -31,9 +31,9 @@ fn overlay_dec(
 ///|
 /// 7px-per-column monospace fake of the measurement seam: one rect per call.
 fn fake_measure(
-  line_number : Int,
-  start_column0 : Int,
-  end_column0 : Int,
+  line_number : Int32,
+  start_column0 : Int32,
+  end_column0 : Int32,
 ) -> Array[(Double, Double)] {
   ignore(line_number)
   [
@@ -47,9 +47,9 @@ fn fake_measure(
 ///|
 fn pieces_for(
   decorations : Array[@view_model.ViewModelDecoration],
-  visible_start? : Int = 1,
-  visible_end? : Int = 3,
-  max_column? : Int = 11,
+  visible_start~ : Int32 = 1,
+  visible_end~ : Int32 = 3,
+  max_column~ : Int32 = 11,
 ) -> Array[DecorationOverlayPiece] {
   compute_decoration_overlay_pieces(
     decorations,

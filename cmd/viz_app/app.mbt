@@ -32,7 +32,7 @@ struct Model {
   // Monotonic ticket for dropped-file reads. Every new drop and every session
   // selection advances it, so a read that finishes after the user moved on
   // carries a stale ticket and is discarded.
-  drop_ticket : Int
+  drop_ticket : Int32
   parsed : @session_log.ParsedLog?
   system_prompt : String
   header_present : Bool
@@ -60,12 +60,12 @@ struct Model {
   subrun_children : Map[String, @agent_session.Session]
   // `inspect --watch` polling interval in milliseconds; 0 when not watching
   // (no `--watch`, or a standalone export).
-  watch_ms : Int
+  watch_ms : Int32
   // A watch refresh of the open session is in flight; the next tick waits.
   watch_pending : Bool
   // Ticks since startup, to refresh the session list less often than the
   // open session.
-  watch_ticks : Int
+  watch_ticks : Int32
 } derive(Eq)
 
 ///|
@@ -105,18 +105,18 @@ enum Msg {
   // (parent key, child session id, response).
   SubrunFetched(String, String, Result[String, Error])
   FileDropped(String, Int64, @dom.Blob)
-  DroppedFileRead(Int, String, Int64, Result[String, Error])
+  DroppedFileRead(Int32, String, Int64, Result[String, Error])
   SetMode(@viz.ViewMode)
   SetArgsView(Bool)
   SetTheme(Theme)
   ToggleSidebar
   ToggleRoot(String)
   ToggleErrorsOnly
-  JumpToError(Int)
+  JumpToError(Int32)
   ToggleEscalatedOnly
-  JumpToEscalated(Int)
+  JumpToEscalated(Int32)
   ToggleBuildErrorsOnly
-  JumpToBuildError(Int)
+  JumpToBuildError(Int32)
   UnfoldCurrent
   // `--watch`: time to re-check the open session (and now and then the list).
   WatchTick
@@ -228,7 +228,7 @@ fn init_model() -> Model {
 /// How many watch ticks pass between session-list refreshes. The list scan
 /// reads every log's first prompt, so it runs less often than the open
 /// session's cheap size check.
-let watch_list_every : Int = 5
+let watch_list_every : Int32 = 5
 
 // ---- update ----------------------------------------------------------------
 
@@ -1235,7 +1235,7 @@ fn sidebar_row(
   emit : @cmd.Emit[Msg],
   model : Model,
   row : SessionRow,
-  child? : Bool = false,
+  child~ : Bool = false,
 ) -> @html.Html {
   let selected = model.selected is Some(current) && current == row.key
   let label = if row.first_prompt.is_blank() {
@@ -1454,7 +1454,7 @@ fn session_metadata(
 }
 
 ///|
-fn agent_step_count(parsed : @session_log.ParsedLog) -> Int {
+fn agent_step_count(parsed : @session_log.ParsedLog) -> Int32 {
   parsed.events.count_if(event => event.is_agent_step())
 }
 
@@ -1582,14 +1582,14 @@ fn session_view_class(model : Model) -> String {
 /// visibility test, because those genuinely differ.
 fn filter_bar(
   emit : @cmd.Emit[Msg],
-  count : Int,
+  count : Int32,
   kind~ : String,
   active~ : Bool,
   count_label~ : String,
   toggle_title~ : String,
   toggle_label~ : String,
   toggle~ : Msg,
-  jump~ : (Int) -> Msg,
+  jump~ : (Int32) -> Msg,
   jump_noun~ : String,
 ) -> @html.Html {
   let children : Array[@html.Html] = [
@@ -1626,7 +1626,7 @@ fn filter_bar(
 /// so a clean session shows no chrome — but if the filter is on it stays visible
 /// even at zero failures, otherwise "Errors only" could hide the whole log with
 /// no way to switch it back off.
-fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
+fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int32) -> @html.Html {
   if count == 0 && !model.errors_only {
     return @html.nothing
   }
@@ -1651,7 +1651,7 @@ fn error_bar(emit : @cmd.Emit[Msg], model : Model, count : Int) -> @html.Html {
 fn escalated_bar(
   emit : @cmd.Emit[Msg],
   model : Model,
-  count : Int,
+  count : Int32,
 ) -> @html.Html {
   if count == 0 && !model.escalated_only {
     return @html.nothing
@@ -1683,7 +1683,7 @@ fn escalated_bar(
 fn build_error_bar(
   emit : @cmd.Emit[Msg],
   model : Model,
-  count : Int,
+  count : Int32,
   present~ : Bool,
 ) -> @html.Html {
   if !present && count == 0 && !model.build_errors_only {
@@ -1709,9 +1709,9 @@ fn build_error_bar(
 fn session_log_view(
   model : Model,
   session : @agent_session.Session,
-  error_count : Int,
-  escalated_count : Int,
-  build_error_count : Int,
+  error_count : Int32,
+  escalated_count : Int32,
+  build_error_count : Int32,
 ) -> @html.Html {
   if model.errors_only && error_count == 0 {
     @html.div(class="errors-only-empty") <| "No failed tool results in this view."
@@ -1732,7 +1732,7 @@ fn session_log_view(
 /// Number of failures the active view will draw, recomputed from the loaded
 /// log — served or dropped; the session id plays no part in the count.
 /// Returns 0 when nothing is loaded.
-fn current_error_count(model : Model) -> Int {
+fn current_error_count(model : Model) -> Int32 {
   guard model.parsed is Some(parsed) else { return 0 }
   let session = @viz.session_from_parse(
     parsed,
@@ -1744,7 +1744,7 @@ fn current_error_count(model : Model) -> Int {
 
 ///|
 /// Number of explicitly escalated calls the active projection will render.
-fn current_escalated_count(model : Model) -> Int {
+fn current_escalated_count(model : Model) -> Int32 {
   guard model.parsed is Some(parsed) else { return 0 }
   let session = @viz.session_from_parse(
     parsed,
@@ -1755,7 +1755,7 @@ fn current_escalated_count(model : Model) -> Int {
 }
 
 ///|
-fn current_build_error_count(model : Model) -> Int {
+fn current_build_error_count(model : Model) -> Int32 {
   guard model.parsed is Some(parsed) else { return 0 }
   let session = @viz.session_from_parse(
     parsed,
@@ -1766,7 +1766,7 @@ fn current_build_error_count(model : Model) -> Int {
 }
 
 ///|
-fn plural_s(n : Int) -> String {
+fn plural_s(n : Int32) -> String {
   if n == 1 {
     ""
   } else {

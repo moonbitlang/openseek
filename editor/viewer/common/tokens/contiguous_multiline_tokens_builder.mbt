@@ -26,8 +26,8 @@ pub fn ContiguousMultilineTokensBuilder::ContiguousMultilineTokensBuilder() -> C
 /// Source: `contiguousMultilineTokensBuilder.ts:27-37`.
 pub fn ContiguousMultilineTokensBuilder::add(
   self : ContiguousMultilineTokensBuilder,
-  line_number : Int,
-  line_tokens : Array[UInt],
+  line_number : Int32,
+  line_tokens : Array[UInt32],
 ) -> Unit {
   if self.tokens is [.., last] && last.end_line_number() + 1 == line_number {
     last.append_line_tokens(line_tokens)

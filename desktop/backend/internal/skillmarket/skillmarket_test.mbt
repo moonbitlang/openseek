@@ -19,8 +19,8 @@ let reference_body : Bytes = b"Extra reference notes.\n"
 /// Test-only request concurrency observed by one fake registry.
 struct RegistryProbe {
   lock : @async.Mutex
-  mut active : Int
-  mut max_active : Int
+  mut active : Int32
+  mut max_active : Int32
 }
 
 ///|

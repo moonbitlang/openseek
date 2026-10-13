@@ -1,12 +1,22 @@
 // Resolution of file references. Viewer-sized text opens in the editor;
-// PDFs and supported raster images open in the browser. Other existing paths
-// go to the system application. A trailing `:line[:column]` or `#Lline` is
+// Office documents and PDFs open in the file panel; raster images open in the
+// browser. Other existing paths go to the system application.
+// A trailing `:line[:column]` or `#Lline` is
 // only treated as an editor position after the literal path is known not to exist.
 
 ///|
 /// Keep routing and loading on the same size boundary. Larger files cannot be
 /// displayed by the built-in viewer, even when their bytes happen to be text.
 pub const MaxEditorFileBytes = 1048576
+
+///|
+/// Office packages and PDFs need their original bytes for the read-only
+/// document viewer. Keep their limit separate from the
+/// text editor limit so a normal document is not rejected merely because its
+/// embedded media makes the package larger than one megabyte.
+// Keep the decoded package below the 32 MiB remote JSON frame limit after
+// base64 expansion and JSON overhead.
+pub const MaxOfficeFileBytes : Int32 = 20 * 1024 * 1024
 
 ///|
 /// One literal path surfaced by the agent and clicked by the user.
@@ -17,8 +27,8 @@ pub(all) struct Reference(String) derive(Debug, Eq)
 pub(all) enum Resolution {
   // UTF-8 text within the viewer's size limit.
   // Position is absent for an ordinary path and a real filename with a suffix.
-  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
-  // A PDF or supported raster image, identified by its header independently
+  EditorPath(path~ : String, line~ : Int32?, column~ : Int32?)
+  // A supported raster image, identified by its header independently
   // of the text viewer size limit.
   BrowserPath(String)
   // An existing directory, other binary file, or text too large for the viewer.
@@ -30,16 +40,16 @@ pub(all) enum Resolution {
 ///|
 priv struct EditorCandidate {
   path : String
-  line : Int
-  column : Int?
+  line : Int32
+  column : Int32?
 }
 
 ///|
 /// One existing literal or suffix-free path and its optional editor position.
 priv struct ExistingPath {
   path : String
-  line : Int?
-  column : Int?
+  line : Int32?
+  column : Int32?
 }
 
 ///|
@@ -71,23 +81,46 @@ async fn ExistingPath::resolve(self : ExistingPath) -> Resolution {
   guard @fs.kind(self.path) is Regular else { return SystemPath(self.path) }
   let source = @fs.open(self.path, mode=ReadOnly)
   defer source.close()
+  let office = is_office_path(self.path)
   let size = source.size()
-  // Twelve bytes cover every supported raster signature, including WebP.
-  let header_size = if size < 12 { size.to_int() } else { 12 }
-  let header = source.read_exactly_at(header_size, position=0)
-  if @filekind.classify(header) is (Pdf | Image(_)) {
-    return BrowserPath(self.path)
+  if !office {
+    // Twelve bytes cover every supported raster signature, including WebP.
+    let header_size = if size < 12 { size.to_int() } else { 12 }
+    let header = source.read_exactly_at(header_size, position=0)
+    match @filekind.classify(header) {
+      Pdf => {
+        guard size <= MaxOfficeFileBytes.to_int64() else {
+          return SystemPath(self.path)
+        }
+        return EditorPath(path=self.path, line=self.line, column=self.column)
+      }
+      Image(_) => return BrowserPath(self.path)
+      _ => ()
+    }
   }
-  guard size <= MaxEditorFileBytes.to_int64() else {
-    return SystemPath(self.path)
+  let size_limit = if office { MaxOfficeFileBytes } else { MaxEditorFileBytes }
+  guard size <= size_limit.to_int64() else { return SystemPath(self.path) }
+  if office {
+    return EditorPath(path=self.path, line=self.line, column=self.column)
   }
   let data = source.read_all()
   match @filekind.classify(data.binary()) {
     Utf8Text(_) =>
       EditorPath(path=self.path, line=self.line, column=self.column)
-    Pdf | Image(_) => BrowserPath(self.path)
+    Pdf => EditorPath(path=self.path, line=self.line, column=self.column)
+    Image(_) => BrowserPath(self.path)
     UnknownBinary => SystemPath(self.path)
   }
+}
+
+///|
+/// Document extensions route to the file panel. Its Office reader or PDF.js
+/// validates the original bytes before showing the document.
+fn is_office_path(path : String) -> Bool {
+  let lower = path.to_lower()
+  lower.has_suffix(".docx") ||
+  lower.has_suffix(".xlsx") ||
+  lower.has_suffix(".pdf")
 }
 
 ///|

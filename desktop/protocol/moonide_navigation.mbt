@@ -10,7 +10,7 @@ pub(all) enum MoonIdeNavigationReply {
 pub impl ToJson for MoonIdeNavigationReply with fn to_json(self) {
   match self {
     NavigationLocations(reply) =>
-      { "kind": "locations", "locations": reply.locations.to_json() }
+      { "kind": "locations", "locations": Json(reply.locations) }
     NavigationError(message) => { "kind": "error", "message": message }
   }
 }

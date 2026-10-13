@@ -306,6 +306,7 @@ test('GitHub comments disable feedback during loading; file switches and refresh
   const reads = app.requests.filter(r => r.method === 'github.review').length;
   const files = app.requests.filter(r => r.method === 'github.review_file').length;
   const changes = page.locator('#review-changes-body');
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'github.review_file').length).toBe(files + 1);
   await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();

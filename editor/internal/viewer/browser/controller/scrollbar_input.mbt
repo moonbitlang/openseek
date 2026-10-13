@@ -275,7 +275,7 @@ fn scrollbar_drag_orthogonal_coord(
 fn scrollbar_drag_should_reset(
   initial_orthogonal_coord : Double,
   current_orthogonal_coord : Double,
-  is_windows? : Bool = @base_common.platform_is_win32(),
+  is_windows~ : Bool = @base_common.platform_is_win32(),
 ) -> Bool {
   is_windows &&
   (current_orthogonal_coord - initial_orthogonal_coord).abs() > 140.0

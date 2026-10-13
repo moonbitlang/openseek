@@ -1,0 +1,59 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/mcp"
+
+import {
+  "moonbitlang/async/io",
+}
+
+// Values
+pub const McpCommand : String = "mcp"
+
+pub const TokenEnv : String = "OPENSEEK_DESKTOP_TOOLS_TOKEN"
+
+pub const UrlEnv : String = "OPENSEEK_DESKTOP_TOOLS_URL"
+
+pub async fn serve_stdio(Array[String], Map[String, String], &@io.Reader, &@io.Writer) -> CliOutcome
+
+// Errors
+pub suberror ServerError {
+  ServerError(String)
+}
+pub fn ServerError::output(Self, &Logger) -> Unit
+pub fn ServerError::to_string(Self) -> String
+pub impl Show for ServerError
+
+pub(all) suberror ToolError {
+  ToolError(String)
+}
+pub fn ToolError::output(Self, &Logger) -> Unit
+pub fn ToolError::to_string(Self) -> String
+pub impl Show for ToolError
+
+// Types and methods
+pub(all) struct CliOutcome {
+  code : Int
+  stdout : String
+  stderr : String
+}
+
+type Server
+pub async fn Server::Server(Array[Tool], version~ : String) -> Self
+pub fn Server::grant(Self, String) -> Map[String, String] raise ServerError
+pub async fn Server::run(Self) -> Unit
+pub fn Server::url(Self) -> String
+
+pub(all) struct Tool {
+  name : String
+  description : String
+  input_schema : Json
+  call : async (ToolCall) -> String
+}
+
+pub(all) struct ToolCall {
+  session : String
+  arguments : Json
+}
+
+// Type aliases
+
+// Traits

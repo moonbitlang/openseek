@@ -11,14 +11,14 @@
 /// consecutive production sweeps. 300 is ~3x the observed completion
 /// envelope; the wall deadline below is the hang guard, and the prompt's
 /// answer-early rule is what bounds real cost.
-pub let default_worker_max_steps : Int = 300
+pub let default_worker_max_steps : Int32 = 300
 
 ///|
 /// Wall deadline for one worker child. Observed sweep pace is ~6-8s/step,
 /// so the step ceiling above spends at most ~30-40 minutes of steady
 /// progress; 45 minutes keeps the deadline from truncating a worker the
 /// step ceiling would allow, while still cutting off a hung child.
-pub let default_worker_deadline_ms : Int = 2_700_000
+pub let default_worker_deadline_ms : Int32 = 2_700_000
 
 ///|
 /// The geometry and work order a worker child receives from the worker
@@ -120,12 +120,12 @@ pub async fn run_child(
   input : Json,
   api_key~ : String,
   model~ : @deepseek.Model,
-  max_steps~ : Int,
-  thinking? : @deepseek.ThinkingMode = Max,
+  max_steps~ : Int32,
+  thinking~ : @deepseek.ThinkingMode = Max,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
-  session_id? : String = "worker",
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
+  session_id~ : String = "worker",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> Result[WorkerReport?, String] {
   let input = match WorkerInput::parse(input) {

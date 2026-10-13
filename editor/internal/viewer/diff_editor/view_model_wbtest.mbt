@@ -1,6 +1,6 @@
 ///|
 priv struct DiffViewModelTimerTask {
-  delay_ms : Int
+  delay_ms : Int32
   callback : () -> Unit
   active : Ref[Bool]
 }
@@ -19,7 +19,7 @@ fn DiffViewModelFakeTimer::DiffViewModelFakeTimer() -> DiffViewModelFakeTimer {
 fn DiffViewModelFakeTimer::schedule_timeout(
   self : DiffViewModelFakeTimer,
   callback : () -> Unit,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> @base_common.Disposable {
   let active = Ref(true)
   self.tasks.push({ delay_ms, callback, active, })
@@ -29,7 +29,7 @@ fn DiffViewModelFakeTimer::schedule_timeout(
 ///|
 fn DiffViewModelFakeTimer::active_delays(
   self : DiffViewModelFakeTimer,
-) -> Array[Int] {
+) -> Array[Int32] {
   self.tasks.filter_map(task => {
     if task.active.val {
       Some(task.delay_ms)
@@ -42,7 +42,7 @@ fn DiffViewModelFakeTimer::active_delays(
 ///|
 fn DiffViewModelFakeTimer::fire_next(
   self : DiffViewModelFakeTimer,
-  delay_ms : Int,
+  delay_ms : Int32,
 ) -> Unit raise {
   for task in self.tasks {
     if task.active.val && task.delay_ms == delay_ms {
@@ -73,7 +73,7 @@ priv suberror FakeDocumentDiffProviderError {
 ///|
 priv struct FakeDocumentDiffProvider {
   result : Ref[FakeDocumentDiffResult]
-  calls : Ref[Int]
+  calls : Ref[Int32]
   observed_ignore_trim_whitespace : Array[Bool]
   observed_original_values : Array[String]
   observed_modified_values : Array[String]
@@ -83,7 +83,7 @@ priv struct FakeDocumentDiffProvider {
 
 ///|
 fn FakeDocumentDiffProvider::FakeDocumentDiffProvider(
-  result? : FakeDocumentDiffResult = Empty,
+  result~ : FakeDocumentDiffResult = Empty,
 ) -> FakeDocumentDiffProvider {
   {
     result: Ref(result),

@@ -62,8 +62,8 @@ async fn append_compaction_summary(
   store? : @store.SessionStore,
   session : @agent_session.Session,
   summary~ : String,
-  from_sequence~ : Int,
-  to_sequence~ : Int,
+  from_sequence~ : Int32,
+  to_sequence~ : Int32,
 ) -> @agent_session.Session {
   if store is Some(store) {
     store.compact(session, content=summary, from_sequence~, to_sequence~)
@@ -86,8 +86,8 @@ pub async fn compact_session(
   api_key~ : String,
   model~ : @deepseek.Model,
   api_url? : String,
-  retry_attempts? : Int,
-  retry_backoff_ms? : Int,
+  retry_attempts? : Int32,
+  retry_backoff_ms? : Int32,
 ) -> @agent_session.Session {
   let from_sequence = 1
   let to_sequence = session.last_sequence()

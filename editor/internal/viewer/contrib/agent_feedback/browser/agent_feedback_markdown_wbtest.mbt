@@ -201,7 +201,7 @@ extern "js" fn agent_feedback_test_dispatch_blur(
 ///|
 fn agent_feedback_test_comment(
   id : String,
-  line : Int,
+  line : Int32,
   text : String,
   replies : Array[String],
 ) -> @agent_feedback.SessionEditorComment {
@@ -220,7 +220,7 @@ fn agent_feedback_test_comment(
 
 ///|
 fn agent_feedback_test_host(
-  layout_count : Ref[Int],
+  layout_count : Ref[Int32],
 ) -> AgentFeedbackEditorWidgetHost {
   {
     on_remove: _ => (),
@@ -239,7 +239,7 @@ fn agent_feedback_test_host(
 fn AgentFeedbackEditorWidget::test_wrap_markdown_disposable(
   self : AgentFeedbackEditorWidget,
   key : String,
-  dispose_count : Ref[Int],
+  dispose_count : Ref[Int32],
 ) -> Unit {
   guard self.markdown_disposables.get(key) is Some(original) else {
     abort("missing Markdown target \{key}")

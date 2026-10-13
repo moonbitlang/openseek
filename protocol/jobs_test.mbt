@@ -49,19 +49,19 @@ test "job records and lifecycle wire messages roundtrip" {
 test "job record decoder rejects malformed optional fields and unsafe identities" {
   for
     (key, value) in [
-      ("output_file", "../secret".to_json()),
-      ("generation", "/tmp".to_json()),
-      ("revision", (0).to_json()),
-      ("output_bytes", (-1).to_json()),
-      ("description", (7).to_json()),
-      ("finished_at_ms", 1.5.to_json()),
-      ("schema_version", (2).to_json()),
+      ("output_file", Json("../secret")),
+      ("generation", Json("/tmp")),
+      ("revision", Json(0)),
+      ("output_bytes", Json(-1)),
+      ("description", Json(7)),
+      ("finished_at_ms", Json(1.5)),
+      ("schema_version", Json(2)),
     ] {
     guard sample_job().to_json() is Object(fields) else {
       fail("expected object")
     }
     fields[key] = value
-    try @json.from_json(fields.to_json()) catch {
+    try @json.from_json(Json(fields)) catch {
       _ => ()
     } noraise {
       (_ : @openseek_protocol.JobRecord) =>

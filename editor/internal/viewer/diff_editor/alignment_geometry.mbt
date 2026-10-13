@@ -7,7 +7,7 @@
 /// height greater than `line_height`; hidden lines are represented separately
 /// and always resolve to zero height.
 pub(all) struct PaneModelLineHeight {
-  line_number : Int
+  line_number : Int32
   height_in_px : Double
 } derive(Eq, Debug)
 
@@ -16,7 +16,7 @@ pub(all) struct PaneModelLineHeight {
 /// padding before line 1. The snapshot producer must omit zones owned by the
 /// current alignment transaction.
 pub(all) struct PaneForeignZoneHeight {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
 } derive(Eq, Debug)
 
@@ -27,14 +27,14 @@ pub struct PaneGeometrySnapshot {
   line_height : Double
   viewport_width : Double
   line_heights : Array[Double]
-  line_max_columns : Array[Int]?
+  line_max_columns : Array[Int32]?
   foreign_zone_heights : Array[PaneForeignZoneHeight]
   cumulative_pixels : Array[Double]
 }
 
 ///|
 fn normalized_foreign_zone_heights(
-  line_count : Int,
+  line_count : Int32,
   zones : Array[PaneForeignZoneHeight],
 ) -> Array[PaneForeignZoneHeight] {
   let heights = Array::make(line_count + 1, 0.0)
@@ -63,13 +63,13 @@ fn normalized_foreign_zone_heights(
 /// zero pixels. `line_max_columns` is optional and only enables the secondary
 /// synchronization point after a character-level change.
 pub fn PaneGeometrySnapshot::PaneGeometrySnapshot(
-  line_count : Int,
+  line_count : Int32,
   line_height : Double,
-  model_line_heights? : Array[PaneModelLineHeight] = [],
-  hidden_lines? : Array[@base_common.LineRange] = [],
-  foreign_zone_heights? : Array[PaneForeignZoneHeight] = [],
-  line_max_columns? : Array[Int],
-  viewport_width? : Double = 0.0,
+  model_line_heights~ : Array[PaneModelLineHeight] = [],
+  hidden_lines~ : Array[@base_common.LineRange] = [],
+  foreign_zone_heights~ : Array[PaneForeignZoneHeight] = [],
+  line_max_columns? : Array[Int32],
+  viewport_width~ : Double = 0.0,
 ) -> PaneGeometrySnapshot {
   let line_count = line_count.max(0)
   let line_height = line_height.max(0.0)
@@ -123,7 +123,7 @@ pub fn PaneGeometrySnapshot::line_height(self : PaneGeometrySnapshot) -> Double 
 }
 
 ///|
-pub fn PaneGeometrySnapshot::line_count(self : PaneGeometrySnapshot) -> Int {
+pub fn PaneGeometrySnapshot::line_count(self : PaneGeometrySnapshot) -> Int32 {
   self.line_heights.length()
 }
 
@@ -144,8 +144,8 @@ pub fn PaneGeometrySnapshot::foreign_zone_heights(
 ///|
 fn PaneGeometrySnapshot::max_column(
   self : PaneGeometrySnapshot,
-  line_number : Int,
-) -> Int? {
+  line_number : Int32,
+) -> Int32? {
   guard self.line_max_columns is Some(columns) else { return None }
   if line_number < 1 || line_number > columns.length() {
     None
@@ -158,7 +158,7 @@ fn PaneGeometrySnapshot::max_column(
 /// A zone specification applied by the owning widget. A zero anchor places a
 /// spacer before line 1, matching the editor's managed-zone coordinate system.
 pub(all) struct ManagedAlignmentSpacer {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
 } derive(Eq, Debug)
 
@@ -185,7 +185,7 @@ pub fn ManagedAlignmentSpacers::modified(
 ///|
 fn append_managed_spacer(
   target : Array[ManagedAlignmentSpacer],
-  after_line_number : Int,
+  after_line_number : Int32,
   height_in_px : Double,
 ) -> Unit {
   if height_in_px <= 0.01 {
@@ -205,7 +205,7 @@ fn append_managed_spacer(
 
 ///|
 priv struct AdditionalLineHeight {
-  line_number : Int
+  line_number : Int32
   height_in_px : Double
 }
 
@@ -213,7 +213,7 @@ priv struct AdditionalLineHeight {
 fn compare_additional_line_height(
   left : AdditionalLineHeight,
   right : AdditionalLineHeight,
-) -> Int {
+) -> Int32 {
   left.line_number - right.line_number
 }
 
@@ -302,7 +302,7 @@ fn compute_range_alignments(
   diff_state : DiffState,
   original_geometry : PaneGeometrySnapshot,
   modified_geometry : PaneGeometrySnapshot,
-  inner_hunk_alignment? : Bool = true,
+  inner_hunk_alignment~ : Bool = true,
 ) -> Array[LineRangeAlignment] {
   let original_overrides = additional_line_heights(original_geometry)
   let modified_overrides = additional_line_heights(modified_geometry)
@@ -313,8 +313,8 @@ fn compute_range_alignments(
   let result : Array[LineRangeAlignment] = []
 
   let handle_alignments_outside_diffs = fn(
-    until_original_line_number_exclusive : Int,
-    until_modified_line_number_exclusive : Int,
+    until_original_line_number_exclusive : Int32,
+    until_modified_line_number_exclusive : Int32,
   ) {
     while true {
       let original_next = if original_override_index <
@@ -404,8 +404,8 @@ fn compute_range_alignments(
     let mut last_original_in_hunk = mapping.original.start_line_number
     let mut last_modified_in_hunk = mapping.modified.start_line_number
     let emit_alignment = fn(
-      original_line_number_exclusive : Int,
-      modified_line_number_exclusive : Int,
+      original_line_number_exclusive : Int32,
+      modified_line_number_exclusive : Int32,
       force_alignment : Bool,
     ) {
       if original_line_number_exclusive < last_original_in_hunk ||
@@ -514,7 +514,7 @@ fn compute_managed_alignment_spacers(
   diff_state : DiffState,
   original_geometry : PaneGeometrySnapshot,
   modified_geometry : PaneGeometrySnapshot,
-  inner_hunk_alignment? : Bool = true,
+  inner_hunk_alignment~ : Bool = true,
 ) -> ManagedAlignmentSpacers {
   let original_spacers : Array[ManagedAlignmentSpacer] = []
   let modified_spacers : Array[ManagedAlignmentSpacer] = []

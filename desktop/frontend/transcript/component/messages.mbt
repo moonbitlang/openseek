@@ -10,7 +10,6 @@ priv enum UiMessage {
   NewProject
   BuildInPrefix
   BuildInSuffix
-  CodexDescription
   JumpLatest
   RecordedSnapshot
   ToolInProgress
@@ -130,16 +129,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, BuildInSuffix) => "\u{A0}中构建什么？"
     (TraditionalChinese, BuildInSuffix) => "\u{A0}中構建什麼？"
     (Japanese, BuildInSuffix) => "で何を作りましょうか？"
-    (English, CodexDescription) =>
-      "Codex inspects, edits, and runs this workspace with its own account, sandbox, and approvals."
-    (Spanish, CodexDescription) =>
-      "Codex examina, edita y ejecuta este espacio de trabajo con su propia cuenta, entorno aislado y aprobaciones."
-    (SimplifiedChinese, CodexDescription) =>
-      "Codex 使用自己的账户、沙盒和审批设置来检查、编辑和运行此工作区。"
-    (TraditionalChinese, CodexDescription) =>
-      "Codex 使用自己的帳戶、沙盒和審批設定來檢查、編輯和執行此工作區。"
-    (Japanese, CodexDescription) =>
-      "Codex は独自のアカウント、サンドボックス、承認設定を使用して、このワークスペースの調査・編集・実行を行います。"
     (English, JumpLatest) => "Jump to latest"
     (Spanish, JumpLatest) => "Ir al final"
     (SimplifiedChinese, JumpLatest) => "跳至最新消息"

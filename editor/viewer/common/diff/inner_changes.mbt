@@ -11,14 +11,14 @@ const MaxInnerDiffCodeUnits = 20000
 
 ///|
 priv struct InnerDiffSequence {
-  values : Array[Int]
+  values : Array[Int32]
   start_boundaries : Array[@base_common.Position]
   end_boundaries : Array[@base_common.Position]
 }
 
 ///|
 priv struct InnerDiffLine {
-  values : Array[Int]
+  values : Array[Int32]
   start_right : @base_common.Position
   start_left : @base_common.Position
   ends : Array[@base_common.Position]
@@ -28,7 +28,7 @@ priv struct InnerDiffLine {
 fn line_range_code_units(
   lines : Array[String],
   range : @base_common.LineRange,
-) -> Int {
+) -> Int32 {
   let mut length = 0
   for line_number in range.start_line_number..<range.end_line_number_exclusive {
     length += lines[line_number - 1].length()
@@ -42,7 +42,7 @@ fn line_range_code_units(
 ///|
 fn empty_line_range_anchor(
   lines : Array[String],
-  line_number : Int,
+  line_number : Int32,
 ) -> @base_common.Position {
   if lines.is_empty() {
     Position(1, 1)
@@ -57,13 +57,13 @@ fn empty_line_range_anchor(
 ///|
 fn flatten_inner_diff_line(
   line : String,
-  line_number : Int,
+  line_number : Int32,
   ignore_trim_whitespace : Bool,
 ) -> InnerDiffLine {
-  let values : Array[Int] = []
+  let values : Array[Int32] = []
   let whitespace : Array[Bool] = []
-  let starts : Array[Int] = []
-  let ends : Array[Int] = []
+  let starts : Array[Int32] = []
+  let ends : Array[Int32] = []
   let mut column = 1
   for character in line {
     values.push(character.to_int())
@@ -82,7 +82,7 @@ fn flatten_inner_diff_line(
       end -= 1
     }
   }
-  let normalized : Array[Int] = []
+  let normalized : Array[Int32] = []
   let start_right_column = if start < end {
     starts[start]
   } else if ignore_trim_whitespace {
@@ -124,7 +124,7 @@ fn flatten_inner_diff_sequence(
       )
     }
   ]
-  let values : Array[Int] = []
+  let values : Array[Int32] = []
   let start_boundaries : Array[@base_common.Position] = []
   let end_boundaries : Array[@base_common.Position] = []
   let first = line_sequences[0]
@@ -171,8 +171,8 @@ fn flatten_inner_diff_sequence(
 ///|
 fn InnerDiffSequence::range(
   self : InnerDiffSequence,
-  start : Int,
-  end_exclusive : Int,
+  start : Int32,
+  end_exclusive : Int32,
 ) -> @base_common.Range {
   let start_position = self.start_boundaries[start]
   let end_position = self.end_boundaries[end_exclusive]
@@ -185,7 +185,7 @@ fn InnerDiffSequence::range(
 
 ///|
 fn is_valid_inner_diff_line_number(
-  line_number : Int,
+  line_number : Int32,
   lines : Array[String],
 ) -> Bool {
   line_number >= 1 && line_number <= lines.length()

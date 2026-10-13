@@ -1,13 +1,13 @@
 ///|
 /// How often a `--watch` viewer re-checks the open session, in milliseconds.
-let watch_interval_ms : Int = 1000
+let watch_interval_ms : Int32 = 1000
 
 ///|
 /// The shell handed to a `--watch` browser: a one-line script ahead of
 /// `</head>` sets `window.__OPENSEEK_WATCH_MS__`, which the frontend reads at
 /// startup to begin polling. Without `--watch` the shell is served unchanged,
 /// and a standalone export never carries the setting.
-fn shell_with_watch(html : String, interval_ms : Int) -> String {
+fn shell_with_watch(html : String, interval_ms : Int32) -> String {
   let script = "<script>window.__OPENSEEK_WATCH_MS__ = \{interval_ms};</script>\n"
   match html.find("</head>") {
     Some(index) => "\{html[:index]}\{script}\{html[index:]}"

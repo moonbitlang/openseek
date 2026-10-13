@@ -6,7 +6,7 @@
 
 ///|
 priv struct CursorTokenizationCountingTokenizer {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|

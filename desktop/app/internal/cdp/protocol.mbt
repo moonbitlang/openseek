@@ -4,7 +4,7 @@
 ///|
 pub suberror CDPError {
   Protocol(String)
-  CommandFailed(code~ : Int, message~ : String, data~ : Json?)
+  CommandFailed(code~ : Int32, message~ : String, data~ : Json?)
   JavaScriptException(String)
   MissingValue
   ConcurrentRead
@@ -33,7 +33,7 @@ fn[T : @json.FromJson] optional(json : Json, key : String) -> T? raise {
 }
 
 ///|
-pub struct BackendNodeId(Int) derive(Debug, Eq)
+pub struct BackendNodeId(Int32) derive(Debug, Eq)
 
 ///|
 pub struct RemoteObjectId(String) derive(Debug, Eq)
@@ -87,7 +87,11 @@ pub fn[T : @json.FromJson] Evaluation::decode_value(
 pub(all) enum Event {
   InspectNodeRequested(BackendNodeId)
   InspectModeCanceled
-  BindingCalled(name~ : String, payload~ : String, execution_context_id~ : Int)
+  BindingCalled(
+    name~ : String,
+    payload~ : String,
+    execution_context_id~ : Int32
+  )
 } derive(Debug, Eq)
 
 ///|
@@ -117,14 +121,14 @@ fn decode_event(json : Json) -> Event? raise {
 
 ///|
 priv enum Incoming {
-  Reply(Int, Result[Json, CDPError])
+  Reply(Int32, Result[Json, CDPError])
   Notification(Event?)
 }
 
 ///|
 fn decode_incoming(json : Json) -> Incoming raise {
   if field(json, "id") is Some(_) {
-    let id : Int = required(json, "id")
+    let id : Int32 = required(json, "id")
     if field(json, "error") is Some(error) {
       return Reply(
         id,

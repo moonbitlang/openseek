@@ -9,66 +9,66 @@
 // byte-for-byte (see `monaco_render_line_reference_test.mbt`).
 
 ///|
-let long_token : Int = 50
+let long_token : Int32 = 50
 
 // Character codes (mirroring base/common/charCode.ts entries used here).
 
 ///|
-let cc_tab : Int = 9
+let cc_tab : Int32 = 9
 
 ///|
-let cc_space : Int = 32
+let cc_space : Int32 = 32
 
 ///|
-let cc_lt : Int = 60
+let cc_lt : Int32 = 60
 
 ///|
-let cc_gt : Int = 62
+let cc_gt : Int32 = 62
 
 ///|
-let cc_amp : Int = 38
+let cc_amp : Int32 = 38
 
 ///|
-let cc_null : Int = 0
+let cc_null : Int32 = 0
 
 ///|
-let cc_utf8_bom : Int = 0xFEFF
+let cc_utf8_bom : Int32 = 0xFEFF
 
 ///|
-let cc_line_separator : Int = 0x2028
+let cc_line_separator : Int32 = 0x2028
 
 ///|
-let cc_paragraph_separator : Int = 0x2029
+let cc_paragraph_separator : Int32 = 0x2029
 
 ///|
-let cc_next_line : Int = 0x0085
+let cc_next_line : Int32 = 0x0085
 
 ///|
-let ch_nbsp : Int = 0xA0
+let ch_nbsp : Int32 = 0xA0
 
 ///|
-let ch_zwnj : Int = 0x200C
+let ch_zwnj : Int32 = 0x200C
 
 ///|
-let ch_rightwards_arrow : Int = 0x2192
+let ch_rightwards_arrow : Int32 = 0x2192
 
 ///|
-let ch_halfwidth_rightwards_arrow : Int = 0xFFEB
+let ch_halfwidth_rightwards_arrow : Int32 = 0xFFEB
 
 ///|
-let ch_replacement : Int = 0xFFFD
+let ch_replacement : Int32 = 0xFFFD
 
 ///|
-let ch_control_picture_base : Int = 9216
+let ch_control_picture_base : Int32 = 9216
 
 ///|
-let ch_del_picture : Int = 9249
+let ch_del_picture : Int32 = 9249
 
 ///|
-let ch_middot : Int = 0xB7
+let ch_middot : Int32 = 0xB7
 
 ///|
-let ch_word_separator_middot : Int = 0x2E31
+let ch_word_separator_middot : Int32 = 0x2E31
 
 ///|
 /// Renders one line into `html` and returns mapping/foreign-element metadata.
@@ -137,16 +137,16 @@ priv struct ResolvedRenderLineInput {
   font_is_monospace : Bool
   can_use_halfwidth_rightwards_arrow : Bool
   line_content : String
-  len : Int
+  len : Int32
   is_overflowing : Bool
-  overflowing_char_count : Int
+  overflowing_char_count : Int32
   parts : Array[LinePart]
   contains_foreign_elements : ForeignElementType
-  faux_indent_length : Int
-  tab_size : Int
-  start_visible_column : Int
+  faux_indent_length : Int32
+  tab_size : Int32
+  start_visible_column : Int32
   space_width : Double
-  render_space_char_code : Int
+  render_space_char_code : Int32
   render_whitespace : @editor_api.RenderWhitespace
   render_control_characters : Bool
 }
@@ -238,8 +238,8 @@ fn transform_and_remove_overflowing(
   line_content : String,
   line_contains_rtl : Bool,
   tokens : Array[LinePart],
-  faux_indent_length : Int,
-  len : Int,
+  faux_indent_length : Int32,
+  len : Int32,
 ) -> Array[LinePart] {
   let result : Array[LinePart] = []
   if faux_indent_length > 0 {
@@ -392,7 +392,7 @@ fn split_leading_whitespace_from_rtl(
 }
 
 ///|
-fn is_control_character(charcode : Int) -> Bool {
+fn is_control_character(charcode : Int32) -> Bool {
   if charcode < 32 {
     return charcode != cc_tab
   }
@@ -455,7 +455,7 @@ fn extract_control_characters(
 fn apply_render_whitespace(
   input : RenderLineInput,
   line_content : String,
-  len : Int,
+  len : Int32,
   tokens : Array[LinePart],
 ) -> Array[LinePart] {
   let continues_with_wrapped_line = input.continues_with_wrapped_line
@@ -641,7 +641,7 @@ fn apply_render_whitespace(
 ///|
 fn apply_inline_decorations(
   line_content : String,
-  len : Int,
+  len : Int32,
   tokens : Array[LinePart],
   line_decorations : Array[LineDecoration],
 ) -> Array[LinePart] {
@@ -947,8 +947,8 @@ fn render_line(
 fn flush_run(
   html : StringBuilder,
   line_content : String,
-  start : Int,
-  end : Int,
+  start : Int32,
+  end : Int32,
 ) -> Unit {
   if end > start {
     // Run boundaries fall on BMP special chars or clean token ends, never
@@ -958,7 +958,7 @@ fn flush_run(
 }
 
 ///|
-fn append_code(html : StringBuilder, code : Int) -> Unit {
+fn append_code(html : StringBuilder, code : Int32) -> Unit {
   html.write_char(code.unsafe_to_char())
 }
 
@@ -973,7 +973,7 @@ fn write_css_px(html : StringBuilder, value : Double) -> Unit {
 }
 
 ///|
-fn to_4_char_hex(n : Int) -> String {
+fn to_4_char_hex(n : Int32) -> String {
   let sb = StringBuilder()
   append_code(sb, hex_digit((n >> 12) & 0xF))
   append_code(sb, hex_digit((n >> 8) & 0xF))
@@ -983,7 +983,7 @@ fn to_4_char_hex(n : Int) -> String {
 }
 
 ///|
-fn hex_digit(value : Int) -> Int {
+fn hex_digit(value : Int32) -> Int32 {
   if value < 10 {
     0x30 + value
   } else {
@@ -992,7 +992,7 @@ fn hex_digit(value : Int) -> Int {
 }
 
 ///|
-fn render_overflowing_char_count(n : Int) -> String {
+fn render_overflowing_char_count(n : Int32) -> String {
   if n < 1024 {
     "\{n} chars"
   } else if n < 1024 * 1024 {
@@ -1037,7 +1037,7 @@ fn add_foreign_element(
 }
 
 ///|
-fn first_non_whitespace_index_of(view : StringView, len : Int) -> Int {
+fn first_non_whitespace_index_of(view : StringView, len : Int32) -> Int32 {
   for i in 0..<len {
     let charcode = view.unsafe_get(i).to_int()
     if charcode != cc_space && charcode != cc_tab {
@@ -1048,7 +1048,7 @@ fn first_non_whitespace_index_of(view : StringView, len : Int) -> Int {
 }
 
 ///|
-fn last_non_whitespace_index_of(view : StringView, len : Int) -> Int {
+fn last_non_whitespace_index_of(view : StringView, len : Int32) -> Int32 {
   for i in len>..0 {
     let charcode = view.unsafe_get(i).to_int()
     if charcode != cc_space && charcode != cc_tab {
@@ -1061,7 +1061,7 @@ fn last_non_whitespace_index_of(view : StringView, len : Int) -> Int {
 ///|
 /// Monaco's `strings.containsRTL`, restricted to the code units in
 /// `line_content[start:end)` (surrogate pairs decoded to code points).
-fn contains_rtl_in(line_content : String, start : Int, end : Int) -> Bool {
+fn contains_rtl_in(line_content : String, start : Int32, end : Int32) -> Bool {
   let view = line_content.view()
   for i = start; i < end; {
     let c = view.unsafe_get(i).to_int()
@@ -1085,7 +1085,7 @@ fn contains_rtl_in(line_content : String, start : Int, end : Int) -> Bool {
 }
 
 ///|
-fn is_rtl_code(code : Int) -> Bool {
+fn is_rtl_code(code : Int32) -> Bool {
   // Generated from vscode's CONTAINS_RTL regex.
   code == 0x05BE ||
   code == 0x05C0 ||

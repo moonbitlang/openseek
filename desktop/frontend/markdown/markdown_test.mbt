@@ -63,6 +63,45 @@ test "markdown file actions decode URI destinations exactly once" {
 }
 
 ///|
+test "workspace file cards pass literal Office and PDF paths to the shared open action" {
+  let paths : Array[String] = []
+  let open = path => {
+    paths.push(path)
+    @cmd.none
+  }
+  let expected = [
+    "docs/产品评审-带批注.docx", "reports/季度销售演示.xlsx", ".openseek/attachments/upload-1/下载-5-1.pdf",
+    "docs/100%25 literal space.docx",
+  ]
+  for path in expected {
+    let nodes = @markdown.markdown_nodes(
+      "```openseek-file\n\{path}\n```",
+      open_file=open,
+    )
+    assert_eq(nodes.length(), 1)
+  }
+  assert_eq(paths, expected)
+}
+
+///|
+test "unfinished and invalid workspace file fences do not create open actions" {
+  let paths : Array[String] = []
+  let open = path => {
+    paths.push(path)
+    @cmd.none
+  }
+  for
+    source in [
+      "```openseek-file\ndocs/report.docx", "```openseek-file\n../report.pdf\n```",
+      "```openseek-file\n/workspace/docs/report.docx\n```", "```openseek-file\ndocs/a.xlsx\ndocs/b.xlsx\n```",
+      "```text\ndocs/report.pdf\n```",
+    ] {
+    assert_eq(@markdown.markdown_nodes(source, open_file=open).length(), 1)
+  }
+  assert_true(paths.is_empty())
+}
+
+///|
 test "markdown renders block structure" {
   inspect(@markdown.markdown_nodes("").length(), content="0")
   inspect(@markdown.markdown_nodes("just a paragraph").length(), content="1")

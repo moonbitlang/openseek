@@ -6,9 +6,11 @@ import {
   "moonbitlang/openseek/agent_tool/mbtx/html" @read_html,
   "moonbitlang/openseek/deepseek",
   "moonbit-community/rabbita/html",
+  "moonbit-community/rabbita/svg",
   "moonbitlang/core/immut/vector",
   "moonbitlang/core/json",
   "moonbitlang/editor/viewer/html" @syntax_html,
+  "moonbitlang/openseek/workspace_file_ref",
 }
 
 warnings = "+unnecessary_annotation"

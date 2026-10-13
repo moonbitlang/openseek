@@ -65,7 +65,10 @@ extern "js" fn view_zones_geometry_style(
   #| (element, name) => String(element.style[name] ?? "")
 
 ///|
-fn geometry_event_index(events : FixedArray[String], expected : String) -> Int {
+fn geometry_event_index(
+  events : FixedArray[String],
+  expected : String,
+) -> Int32 {
   for index, event in events {
     if event == expected {
       return index

@@ -24,11 +24,28 @@ fn window_focus_sub_loader(
       }
       window.add_event_listener("focus", focus_listener)
       window.add_event_listener("blur", blur_listener)
+      // CEF can restack its main HWND for focus changes inside the renderer
+      // too (for example, removing an annotation then focusing the composer).
+      // Window focus does not fire again when the renderer already has focus.
+      document.add_event_listener("focusin", focus_listener)
+      // Clicking an already-focused control can raise the HWND without any
+      // DOM focus change. Capture also covers controls that stop propagation.
+      document.add_event_listener_with_options(
+        "pointerdown",
+        focus_listener,
+        capture=true,
+      )
       document.add_event_listener("visibilitychange", visibility_listener)
       Some({
         unload: _ => {
           window.remove_event_listener("focus", focus_listener)
           window.remove_event_listener("blur", blur_listener)
+          document.remove_event_listener("focusin", focus_listener)
+          document.remove_event_listener_with_options(
+            "pointerdown",
+            focus_listener,
+            capture=true,
+          )
           document.remove_event_listener(
             "visibilitychange", visibility_listener,
           )

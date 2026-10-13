@@ -30,7 +30,7 @@ fn LineNumbersOverlay::LineNumbersOverlay() -> LineNumbersOverlay {
 fn prepare_line_numbers_render(
   viewport : @view_layout.ViewportData,
   view_model : @view_model.ViewModel?,
-  active_model_line_number : Int?,
+  active_model_line_number : Int32?,
   left~ : Double,
   width~ : Double,
 ) -> Array[String] {

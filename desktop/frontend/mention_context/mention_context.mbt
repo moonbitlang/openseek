@@ -56,13 +56,16 @@ pub(all) enum MentionRef {
   ReviewChanges(ReviewChanges)
   Skill(name~ : String)
   File(path~ : String)
-  Symbol(name~ : String, file~ : String, line~ : Int)
+  Symbol(name~ : String, file~ : String, line~ : Int32)
   SemanticSearch(SemanticSearchReference)
   SemanticSearchArtifact(SemanticSearchArtifact)
+  // A materialized read-only Office selection. The JSON body is carried
+  // verbatim into the Agent prompt using the office-viewer schema.
+  OfficeSelection(materialized~ : String)
   Annotation(
     file~ : String,
-    start_line~ : Int,
-    end_line~ : Int,
+    start_line~ : Int32,
+    end_line~ : Int32,
     quote~ : String,
     comment~ : String,
     side~ : AnnotationSide
@@ -86,10 +89,10 @@ pub(all) struct SemanticSearchReference {
 /// Small selections stay in the prompt as structured XML. Larger selections
 /// are materialized only when the user sends, so the composer never creates
 /// files merely because a search row was toggled.
-const MaxInlineSemanticReferenceMatches : Int = 100
+const MaxInlineSemanticReferenceMatches : Int32 = 100
 
 ///|
-const MaxInlineSemanticReferenceSourceUnits : Int = 24000
+const MaxInlineSemanticReferenceSourceUnits : Int32 = 24000
 
 ///|
 pub fn SemanticSearchReference::is_inlineable(
@@ -125,8 +128,8 @@ pub fn SemanticSearchReference::materialize_payload(
 /// put in the prompt itself.
 pub(all) struct SemanticSearchArtifact {
   path : String
-  pattern_count : Int
-  match_count : Int
+  pattern_count : Int32
+  match_count : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -207,6 +210,7 @@ pub fn glyph(mention : MentionRef) -> String {
     File(_) => "@"
     Symbol(_) => "#"
     SemanticSearch(_) | SemanticSearchArtifact(_) => "⌕"
+    OfficeSelection(_) => "▦"
     Annotation(_) => "✎"
   }
 }
@@ -227,6 +231,7 @@ pub fn label(mention : MentionRef) -> String {
     }
     SemanticSearchArtifact(artifact) =>
       "Semantic search · \{artifact.pattern_count} patterns · \{artifact.match_count} matches (file)"
+    OfficeSelection(materialized~) => office_selection_label(materialized)
     Annotation(file~, start_line~, end_line~, side~, ..) => {
       let suffix = if side is OriginalRevision { " (original)" } else { "" }
       "\{file}:\{start_line}-\{end_line}\{suffix}"
@@ -256,6 +261,7 @@ pub fn target(mention : MentionRef) -> Target? {
       }
     SemanticSearch(_)
     | SemanticSearchArtifact(_)
+    | OfficeSelection(_)
     | Annotation(side=OriginalRevision, ..) => None
     Annotation(
       file~,
@@ -357,6 +363,11 @@ fn write_mention(parts : StringBuilder, mention : MentionRef) -> Unit {
       parts <+
         "This file is an immutable JSONL semantic-search selection snapshot. Inspect it selectively before reading broad source ranges.\n"
       parts <+ "</semantic_search_file>\n"
+    }
+    OfficeSelection(materialized~) => {
+      parts <+ "<office_selection>\n"
+      write_body(parts, materialized)
+      parts <+ "</office_selection>\n"
     }
     Annotation(file~, start_line~, end_line~, quote~, comment~, side~) => {
       let file = MentionAttribute::encode(file).wire
@@ -473,6 +484,10 @@ let semantic_search_pattern : Regex = re"^<semantic_search id=\"(?<id>[^\"]*)\" 
 
 ///|
 let semantic_search_file_pattern : Regex = re"^<semantic_search_file path=\"(?<path>[^\"]+)\" patterns=\"(?<patterns>[0-9]+)\" matches=\"(?<matches>[0-9]+)\">$"
+
+///|
+/// `<office_selection>` carries one materialized Office selection JSON body.
+let office_selection_pattern : Regex = re"^<office_selection>$"
 
 ///|
 let semantic_match_pattern : Regex = re"^<match file=\"(?<file>[^\"]+)\" lines=\"(?<start>[0-9]+)-(?<end>[0-9]+)\" columns=\"(?<start_column>[0-9]+)-(?<end_column>[0-9]+)\" rule=\"(?<rule>[^\"]*)\"( description=\"(?<description>[^\"]*)\")?>$"
@@ -602,6 +617,16 @@ fn parse_mention_block(lines : ArrayView[String]) -> Array[MentionRef]? {
         }),
       )
       index += end + 3
+      continue
+    }
+    if office_selection_pattern.execute(line) is Some(_) {
+      guard lines[index + 1:].search("</office_selection>") is Some(end) else {
+        return None
+      }
+      let materialized = lines[index + 1:index + 1 + end].join("\n")
+      guard !materialized.is_empty() else { return None }
+      mentions.push(OfficeSelection(materialized~))
+      index += end + 2
       continue
     }
     if semantic_search_pattern.execute(line) is Some(matched) {

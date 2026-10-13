@@ -1,6 +1,6 @@
 ///|
 priv struct BrowserPick {
-  id : Int
+  id : Int32
   request : String
   token : String
   mut task : @async.Task[@protocol.BrowserPickReply]?
@@ -67,8 +67,8 @@ async fn BrowserViews::inspect_element(
   connection : @cdp.Connection,
 ) -> @protocol.BrowserPickReply {
   let binding = "__seekmoon_cancel_" + pick.token
-  let binding_json = binding.to_json().stringify()
-  let listener_json = (binding + "_listener").to_json().stringify()
+  let binding_json = Json(binding).stringify()
+  let listener_json = Json(binding + "_listener").stringify()
   defer (self
     .view(pick.id)
     .eval(
@@ -96,7 +96,9 @@ async fn BrowserViews::inspect_element(
   connection.enable_dom()
   connection.enable_overlay()
   connection.set_inspect_mode(SearchForNode(@cdp.devtools_highlight()))
-  self.view(pick.id).focus()
+  // Activate the inspected page through Chromium. Native CEF focus alone can
+  // leave the embedded view blank on Windows after entering inspect mode.
+  connection.bring_to_front()
   for ;; {
     let node = match connection.next_event() {
       BindingCalled(name~, ..) if name == binding => return Cancelled

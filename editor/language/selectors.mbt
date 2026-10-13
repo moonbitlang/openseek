@@ -51,7 +51,7 @@ fn LanguageSelector::matches_impl(
 pub fn LanguageSelector::score(
   self : LanguageSelector,
   model : @model.TextModel,
-) -> Int {
+) -> Int32 {
   match self {
     LanguageId("*") => 5
     LanguageId(language_id) =>
@@ -91,7 +91,7 @@ fn LanguageFilter::matches_impl(
 fn LanguageFilter::score_impl(
   self : LanguageFilter,
   model : @model.TextModel,
-) -> Int {
+) -> Int32 {
   let mut result = 0
   if self.language is Some(language) {
     if language == model.language_id {

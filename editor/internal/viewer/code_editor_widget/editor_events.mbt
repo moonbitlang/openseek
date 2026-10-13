@@ -368,7 +368,7 @@ fn CodeEditorWidget::on_editor_scroll_changed(
 fn CodeEditorWidget::dispatch_editor_event(
   self : CodeEditorWidget,
   event : @hover_browser.EditorEvent,
-  sticky_mouse_getting_closer? : Bool = false,
+  sticky_mouse_getting_closer~ : Bool = false,
 ) -> Unit {
   guard self.content_hover_controller() is Some(hc) else { return }
   // Escape hides immediately and must drop any deferred mouse-move reaction so a

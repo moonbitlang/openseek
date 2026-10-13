@@ -516,7 +516,7 @@ test "non-ASCII and astral path round-trips (D4)" {
 
 ///|
 test "panic toString with lone surrogate raises like URIError (D4)" {
-  let lone = Int::unsafe_to_char(0xD800).to_string()
+  let lone = Int32::unsafe_to_char(0xD800).to_string()
   let value = Uri::from(scheme="s", authority="a", path="/\{lone}")
   ignore(value.to_string())
 }

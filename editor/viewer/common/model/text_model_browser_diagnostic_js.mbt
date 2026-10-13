@@ -4,6 +4,6 @@
 
 ///|
 extern "js" fn offer_text_model_browser_diagnostic(
-  get_attached_count : (TextModel) -> Int,
+  get_attached_count : (TextModel) -> Int32,
 ) -> Unit =
   #| (getAttachedCount) => globalThis.__viewerPrivateTestProbe?.acceptTextModelAttachedCount?.(getAttachedCount)

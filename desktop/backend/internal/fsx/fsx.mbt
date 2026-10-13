@@ -101,7 +101,7 @@ pub async fn copy_dir(source : @pathx.Path, destination : @pathx.Path) -> Unit {
 }
 
 ///|
-async fn chmod(path : StringView, permission : Int) -> Unit {
+async fn chmod(path : StringView, permission : Int32) -> Unit {
   // Windows has no Unix execute bit and async/fs deliberately reports chmod
   // as unsupported there. Keep the operation in this shared implementation so
   // every platform type-checks the real copy path without issuing an async

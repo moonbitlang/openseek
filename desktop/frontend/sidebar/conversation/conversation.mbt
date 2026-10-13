@@ -231,7 +231,7 @@ fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
 
 ///|
 fn Input::menu_entries_for_kind(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Input,
   actions : Actions,
   kind : MenuKind,
@@ -309,7 +309,7 @@ fn Input::menu_entries_for_kind(
 /// no contextual actions, independent of whether it has visible direct
 /// buttons.
 pub fn Input::menu_entries(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Input,
   actions : Actions,
 ) -> Array[@action_menu.Entry]? {

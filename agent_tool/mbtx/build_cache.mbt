@@ -50,7 +50,7 @@ fn cache_key(script_path : String?) -> String {
       let name = StringBuilder()
       for c in base.iter().take(40) {
         name.write_char(
-          if c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '-' | '_') {
+          if c is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '.' | '-' | '_') {
             c
           } else {
             '_'
@@ -74,7 +74,7 @@ fn cache_key(script_path : String?) -> String {
 /// meant to fence off. Older generations are swept here, best-effort: by the
 /// time a later call arrives the orphan is long gone, and a sweep that still
 /// loses the race only leaves garbage the session reclaims.
-async fn open_generation(key_dir : String, generation : Int) -> String {
+async fn open_generation(key_dir : String, generation : Int32) -> String {
   let name = "gen-\{generation}"
   let dir = "\{key_dir}/\{name}"
   if !@fs.exists(dir) {

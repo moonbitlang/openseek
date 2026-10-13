@@ -8,7 +8,7 @@
 
 ///|
 priv struct RestoreStateCountingTokenizer {
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -58,7 +58,7 @@ test "restore view state commits scroll before stabilized visible lines" {
   calls.val = 0
 
   let scroll_positions : Array[(Double, Double)] = []
-  let lexer_calls_during_scroll : Array[Int] = []
+  let lexer_calls_during_scroll : Array[Int32] = []
   let listener = layout.on_did_scroll(_change => {
     let position = layout.position()
     scroll_positions.push((position.scroll_top, position.scroll_left))

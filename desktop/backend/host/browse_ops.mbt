@@ -130,7 +130,10 @@ async fn create_directory_listing(
   let target = parent.join((name : @pathx.Relative)).normalize()
   // `name` is a single leaf, but keep this containment assertion close to the
   // mutation so future path-policy changes cannot turn it into traversal.
-  guard target.to_path().dirname().to_string() == parent.to_string() else {
+  // Compare relative paths: normalization preserves a parent's trailing slash,
+  // and dirname uses host separators rather than the serialized path spelling.
+  guard target.relative_to(root=parent) is Some(relative) &&
+    relative == (name : @pathx.Relative) else {
     raise HostError("folder name must be a single name")
   }
   if @fs.exists(target.to_string()) {

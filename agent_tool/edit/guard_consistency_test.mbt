@@ -5,7 +5,7 @@ async fn run_guard_case(
   path : String,
   old : String,
   replacement : String,
-  threshold : Int?,
+  threshold : Int32?,
 ) -> @agent_tool.ToolOutput {
   let fields : Map[String, Json] = if batch {
     {
@@ -20,14 +20,14 @@ async fn run_guard_case(
     }
   } else {
     {
-      "path": path.to_json(),
-      "old_string": old.to_json(),
-      "new_string": replacement.to_json(),
+      "path": Json(path),
+      "old_string": Json(old),
+      "new_string": Json(replacement),
       "start_line": 1,
     }
   }
   if threshold is Some(value) {
-    fields["revert_if_error_delta_greater_or_equal"] = value.to_json()
+    fields["revert_if_error_delta_greater_or_equal"] = Json(value)
   }
   let tool = if batch { @multi_edit.definition() } else { @edit.definition() }
   let action = match tool.execute {

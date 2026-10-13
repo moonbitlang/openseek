@@ -242,12 +242,42 @@ test('tab menu hides and restores the native browser view through the host bridg
   await page.locator('#browser-address-input').press('Enter');
   const visible = () => app.requests.filter(r => r.method === 'browser.set_visible').at(-1)?.params.visible;
   await expect.poll(visible).toBe(true);
+  const shows = () => app.requests.filter(r => r.method === 'browser.set_visible' && r.params.visible);
+  const composer = page.locator('#task');
+  await composer.fill('Keep this draft');
+  // Native browser contents have a separate renderer. Model its focus return
+  // at the window boundary, while leaving the real composer focused.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const before = shows().length;
+    await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect.poll(() => shows().length).toBe(before + 1);
+    await expect(composer).toBeFocused();
+    await expect(composer).toHaveValue('Keep this draft');
+  }
+  // Switching between HTML controls does not refire the window focus event.
+  await page.locator('#browser-address-input').focus();
+  const beforeComposerFocus = shows().length;
+  await composer.focus();
+  await expect.poll(() => shows().length).toBeGreaterThan(beforeComposerFocus);
+  await expect(composer).toBeFocused();
+  await expect(composer).toHaveValue('Keep this draft');
+  // Clicking a control that already has focus still raises CEF's main HWND.
+  const beforeComposerClick = shows().length;
+  await composer.click();
+  await expect.poll(() => shows().length).toBeGreaterThan(beforeComposerClick);
+  await expect(composer).toBeFocused();
   const tab = page.locator('.editor-tab.active');
   const menu = page.getByRole('menu', { name: 'Tab actions' });
   for (const dismiss of ['escape', 'outside', 'resize', 'action']) {
     await tab.click({ button: 'right' });
     await expect(menu).toBeVisible();
     await expect.poll(visible).toBe(false);
+    const before = shows().length;
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    // A focus return must not expose a browser over an HTML popup.
+    await page.waitForTimeout(100);
+    expect(shows()).toHaveLength(before);
     if (dismiss === 'escape') await page.keyboard.press('Escape');
     else if (dismiss === 'outside') await page.locator('#task').click();
     else if (dismiss === 'resize') await page.setViewportSize({ width: 1300, height: 900 });

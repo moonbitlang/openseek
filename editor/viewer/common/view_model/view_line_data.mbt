@@ -9,11 +9,11 @@ pub struct ViewLineData {
   /// Does this line continue with a wrapped line?
   continues_with_wrapped_line : Bool
   /// The minimum allowed column at this view line.
-  min_column : Int
+  min_column : Int32
   /// The maximum allowed column at this view line.
-  max_column : Int
+  max_column : Int32
   /// The visible column at the start of the line (after the fauxIndent).
-  start_visible_column : Int
+  start_visible_column : Int32
   /// The tokens at this view line.
   tokens : @tokens.ViewLineTokens
   /// Additional inline decorations for this line (the injected-text classes,
@@ -28,8 +28,8 @@ pub struct ViewLineData {
 /// `LineDecoration`, see `line_decorations_for_line`).
 pub fn view_line_rendering_data_from_view_line_data(
   line : ViewLineData,
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
-  tab_size? : Int = 2,
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
+  tab_size~ : Int32 = 2,
 ) -> @view_layout.ViewLineRenderingData {
   {
     min_column: line.min_column,
@@ -62,11 +62,11 @@ pub fn view_line_rendering_data_from_view_line_data(
 /// viewport path in `line_decorations_for_line` produces both).
 pub fn render_line_input_from_view_line_data(
   line : ViewLineData,
-  line_decorations? : Array[@view_layout.LineDecoration] = [],
-  space_width? : Double = 7.2,
-  render_whitespace? : @editor_api.RenderWhitespace = None,
-  render_control_characters? : Bool = false,
-  vertical_scrollbar_size? : Double = 0.0,
+  line_decorations~ : Array[@view_layout.LineDecoration] = [],
+  space_width~ : Double = 7.2,
+  render_whitespace~ : @editor_api.RenderWhitespace = None,
+  render_control_characters~ : Bool = false,
+  vertical_scrollbar_size~ : Double = 0.0,
 ) -> @view_layout.RenderLineInput {
   let merged = line_decorations.copy()
   for injected in line.inline_decorations {
@@ -132,9 +132,9 @@ fn line_parts_from_view_line_data(
 /// column `LineDecoration`s. Empty-range Regular decorations are dropped.
 fn line_decorations_filter(
   line_decorations : Array[InlineDecoration],
-  line_number : Int,
-  min_line_column : Int,
-  max_line_column : Int,
+  line_number : Int32,
+  min_line_column : Int32,
+  max_line_column : Int32,
 ) -> Array[@view_layout.LineDecoration] {
   if line_decorations.length() == 0 {
     return []
@@ -194,8 +194,8 @@ fn to_view_layout_decoration_type(
 /// `DecorationsOverlay` (decoration plan Phase 4), not as line spans.
 fn line_decorations_for_line(
   collection : ViewDecorationsCollection,
-  viewport_start_line_number : Int,
-  line_number : Int,
+  viewport_start_line_number : Int32,
+  line_number : Int32,
   line : ViewLineData,
 ) -> Array[@view_layout.LineDecoration] {
   let max_column = line.content.length() + 1

@@ -33,6 +33,7 @@ test "minimal user boundaries group recorded and streaming assistant content" {
           ],
           replay=false,
           finished=false,
+          end_sequence=None,
         ),
         ts: None,
         sequence: Some(2),

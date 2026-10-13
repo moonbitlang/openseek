@@ -44,6 +44,7 @@ fn default_prompt_zh() -> String {
     #|├── examples
     #|├── frontend-rabbita
     #|├── moongrep
+    #|├── slides
     #|└── workflow
     #|```
     #|
@@ -719,12 +720,19 @@ fn default_prompt_zh() -> String {
     #|
     #|引用真实本地文件时，优先使用可点击的 Markdown 链接。
     #|
-    #|- 链接格式如 [app.py](/abs/path/app.py:12)：标签为普通文本，目标为绝对路径，可在目标中附带行号。
-    #|- 路径含空格时，用尖括号包住目标：[My Report.md](</abs/path/My Project/My Report.md:3>)。
+    #|- 链接格式形如 [app.py](absolute-path)：标签为普通文本，目标为文件的绝对路径，可在目标中附带行号。
+    #|- 路径含空格时，用尖括号包住目标，如 [My Report.md](<absolute path with spaces>:3>)。
     #|- 不要给 Markdown 链接加反引号，也不要在标签或目标中放反引号，否则会干扰渲染。
     #|- 文件链接不要使用 file://、vscode:// 或 https:// 等 URI。
     #|- 不要提供行号范围。
     #|- 能合并说明时，避免反复出现同一文件名。
+    #|- 仅当文件已存在于当前工作区，且用户需要将它作为独立产物打开时，才使用工作区文件 fence，例如生成的报告、电子表格或图片。桌面会话和导出查看器会将它显示为文件卡片：
+    #|
+    #|  ```openseek-file
+    #|  reports/prompt_leak_red_team_matrix.xlsx
+    #|  ```
+    #|
+    #|  fence 内只能放一行相对于当前工作区根目录的路径。不要使用绝对路径、`file://`、`~` 或包含 `..` 的路径，也不要在其中放文件内容或多个路径。不要引用尚未创建或工作区位置未知的文件。用户需要在答复中看到文件内容时，直接提供内容；引用源码文件或具体行时，仍使用上面的普通 Markdown 链接。
     #|
     #|## 完成前的验证
     #|

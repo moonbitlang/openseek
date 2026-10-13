@@ -17,7 +17,7 @@ pub fn Viewer::get_selections(self : Viewer) -> Array[@core.Selection]? {
 pub fn Viewer::set_position(
   self : Viewer,
   position : @base_common.Position,
-  source? : String = "api",
+  source~ : String = "api",
 ) -> Unit {
   self.widget.set_position(position, source~)
 }
@@ -26,7 +26,7 @@ pub fn Viewer::set_position(
 pub fn Viewer::set_selection(
   self : Viewer,
   selection : @core.Selection,
-  source? : String = "api",
+  source~ : String = "api",
 ) -> Unit {
   self.widget.set_selection(selection, source~)
 }
@@ -35,8 +35,8 @@ pub fn Viewer::set_selection(
 pub fn Viewer::set_selections(
   self : Viewer,
   selections : Array[@core.Selection],
-  source? : String = "api",
-  reason? : @editor_api.CursorChangeReason = NotSet,
+  source~ : String = "api",
+  reason~ : @editor_api.CursorChangeReason = NotSet,
 ) -> Unit {
   self.widget.set_selections(selections, source~, reason~)
 }
@@ -98,8 +98,8 @@ pub fn Viewer::set_scroll_position(
 ///|
 pub fn Viewer::get_top_for_line_number(
   self : Viewer,
-  line_number : Int,
-  include_view_zones? : Bool = false,
+  line_number : Int32,
+  include_view_zones~ : Bool = false,
 ) -> Double {
   self.widget.get_top_for_line_number(line_number, include_view_zones~)
 }
@@ -107,8 +107,8 @@ pub fn Viewer::get_top_for_line_number(
 ///|
 pub fn Viewer::get_top_for_position(
   self : Viewer,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Double {
   self.widget.get_top_for_position(line_number, column)
 }
@@ -116,7 +116,7 @@ pub fn Viewer::get_top_for_position(
 ///|
 pub fn Viewer::get_bottom_for_line_number(
   self : Viewer,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   self.widget.get_bottom_for_line_number(line_number)
 }
@@ -133,21 +133,21 @@ pub fn Viewer::get_line_height_for_position(
 pub fn Viewer::get_visible_column_from_position(
   self : Viewer,
   position : @base_common.Position,
-) -> Int {
+) -> Int32 {
   self.widget.get_visible_column_from_position(position)
 }
 
 ///|
 pub fn Viewer::get_offset_for_column(
   self : Viewer,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> Double {
   self.widget.get_offset_for_column(line_number, column)
 }
 
 ///|
-pub fn Viewer::get_width_of_line(self : Viewer, line_number : Int) -> Double {
+pub fn Viewer::get_width_of_line(self : Viewer, line_number : Int32) -> Double {
   self.widget.get_width_of_line(line_number)
 }
 

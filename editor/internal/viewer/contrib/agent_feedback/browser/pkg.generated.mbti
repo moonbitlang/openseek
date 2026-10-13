@@ -69,7 +69,7 @@ pub(all) struct AgentFeedbackEditorWidgetHost {
 }
 
 type AgentFeedbackInputWidget
-pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(localization? : @localization.Localization, AgentFeedbackInputWidgetHost) -> Self
+pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(localization? : @localization.Localization, AgentFeedbackInputWidgetHost, on_change? : (String) -> Unit) -> Self
 pub fn AgentFeedbackInputWidget::clear_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::focus_input(Self) -> Unit
 pub fn AgentFeedbackInputWidget::get_dom_node(Self) -> @dom.Element
@@ -78,6 +78,7 @@ pub fn AgentFeedbackInputWidget::hide(Self) -> Unit
 pub fn AgentFeedbackInputWidget::measured_height(Self) -> Double
 pub fn AgentFeedbackInputWidget::measured_width(Self) -> Double
 pub fn AgentFeedbackInputWidget::refresh_labels(Self) -> Unit
+pub fn AgentFeedbackInputWidget::resize(Self) -> Unit
 pub fn AgentFeedbackInputWidget::set_placeholder(Self, String) -> Unit
 pub fn AgentFeedbackInputWidget::set_position(Self, Double, Double) -> Unit
 pub fn AgentFeedbackInputWidget::show(Self) -> Unit
@@ -91,6 +92,12 @@ pub(all) struct AgentFeedbackInputWidgetHost {
   on_blur_empty : () -> Unit
   content_width : () -> Double
 }
+
+type FeedbackComposerWidget
+pub fn FeedbackComposerWidget::FeedbackComposerWidget(@dom.Element, viewport~ : @dom.Element, layout_source~ : @dom.Element, localization~ : @localization.Localization, on_submit~ : (String, Bool) -> Unit, on_change~ : (String) -> Unit, on_cancel~ : () -> Unit) -> Self
+pub fn FeedbackComposerWidget::dispose(Self) -> Unit
+pub fn FeedbackComposerWidget::hide(Self) -> Unit
+pub fn FeedbackComposerWidget::show(Self, () -> @dom.DOMRect?, prefer_below~ : Bool, selection_rects~ : () -> Array[@dom.DOMRect]) -> Unit
 
 // Type aliases
 

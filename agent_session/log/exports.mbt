@@ -36,7 +36,7 @@ pub fn parse_events(text : String) -> ParsedLog {
   // The one policy for a line that does not decode: an unterminated final
   // line is a torn tail; anything else is a recorded per-line error.
   fn note_bad_line(
-    line_number : Int,
+    line_number : Int32,
     line : String,
     torn : Bool,
     message : String,

@@ -1,7 +1,7 @@
 ///|
 priv struct RecordingDefinitionProvider {
   locations : Array[@language.Location]
-  calls : Ref[Int]
+  calls : Ref[Int32]
   observed_tokens : Array[@language.CancellationToken]
 }
 

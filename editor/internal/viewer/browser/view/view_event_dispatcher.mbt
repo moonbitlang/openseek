@@ -29,7 +29,7 @@ priv struct ViewEventDispatcher {
   mut after_view_events : Array[() -> Unit]
   mut consuming : Bool
   mut collector : ViewEventCollector?
-  mut collector_depth : Int
+  mut collector_depth : Int32
 }
 
 ///|

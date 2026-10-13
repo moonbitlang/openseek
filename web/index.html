@@ -628,6 +628,40 @@
       margin: 0; white-space: pre-wrap; word-break: break-word;
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px;
     }
+    /* Static workspace-file projections used by standalone exports. The
+       original fence remains in the embedded JSONL; this card carries no
+       local path action and never loads workspace bytes. */
+    .workspace-file-card {
+      display: flex; align-items: center; gap: 8px;
+      width: min(100%, 520px); min-width: 0;
+      margin: 8px 0; padding: 7px 10px;
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--panel-2); color: var(--text); text-align: left;
+    }
+    .workspace-file-card-static { cursor: default; }
+    .workspace-file-glyph {
+      display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+      width: 16px; height: 16px;
+      color: var(--accent);
+    }
+    .workspace-file-glyph svg {
+      width: 16px; height: 16px;
+    }
+    .workspace-file-glyph.spreadsheet { color: #18a058; }
+    .workspace-file-glyph.document,
+    .workspace-file-glyph.text { color: #4b82d9; }
+    .workspace-file-glyph.presentation { color: #d97831; }
+    .workspace-file-glyph.image { color: #8a68c7; }
+    .workspace-file-glyph.pdf { color: #c34f5d; }
+    .workspace-file-glyph.archive { color: #a17b26; }
+    .workspace-file-glyph.code { color: #2c9a94; }
+    .workspace-file-copy { display: grid; min-width: 0; gap: 2px; }
+    .workspace-file-name {
+      min-width: 0; overflow: hidden; color: var(--text);
+      font-size: 14px; font-weight: 600; text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .workspace-file-kind { color: var(--muted); font-size: 12px; }
     .empty { color: var(--muted); font-style: italic; }
 
     /* assistant reasoning + tool calls */

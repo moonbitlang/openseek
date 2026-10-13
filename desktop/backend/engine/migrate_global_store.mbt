@@ -22,7 +22,7 @@
 /// working directories under `<Documents>/OpenSeek/<session id>` are left
 /// exactly where they are — they already sit inside the default workspace, so
 /// the agent's past output stays visible and reachable.
-pub async fn migrate_global_store() -> Int {
+pub async fn migrate_global_store() -> Int32 {
   guard @workspaces.global_store_root() is Some(global) else { return 0 }
   guard @workspaces.default_workspace() is Some(workspace) else { return 0 }
   let destination = @workspaces.store_root(workspace)
@@ -63,7 +63,7 @@ async fn move_records(
   source : @pathx.Absolute,
   destination : @pathx.Absolute,
   staging~ : @pathx.Absolute,
-) -> Int {
+) -> Int32 {
   guard @fsx.Directory::try_open(source.to_path()) is Some(dir) else {
     return 0
   }

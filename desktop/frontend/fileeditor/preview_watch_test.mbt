@@ -6,6 +6,7 @@ test "PDF-only dock retains the watcher without opening text documents" {
     "/work/_build/report.pdf",
   ).unwrap()
   let ctx : @fileeditor.Ctx = {
+    locale: English,
     owner: { channel: @interop.ChannelId::Local, session: "preview-test", },
     request_epoch: 0,
     watch_namespace: "preview-test",

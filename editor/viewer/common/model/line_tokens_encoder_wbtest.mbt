@@ -54,12 +54,12 @@ fn assert_same_code_units(actual : String, expected : String) -> Unit raise {
 
 ///|
 test "raw UTF16 encoder preserves lone surrogates pair halves FEFF and BMP boundaries" {
-  let d800 = Int::unsafe_to_char(0xD800).to_string()
-  let dbff = Int::unsafe_to_char(0xDBFF).to_string()
-  let dc00 = Int::unsafe_to_char(0xDC00).to_string()
-  let dfff = Int::unsafe_to_char(0xDFFF).to_string()
-  let high = Int::unsafe_to_char(0xD83D).to_string()
-  let low = Int::unsafe_to_char(0xDE0A).to_string()
+  let d800 = Int32::unsafe_to_char(0xD800).to_string()
+  let dbff = Int32::unsafe_to_char(0xDBFF).to_string()
+  let dc00 = Int32::unsafe_to_char(0xDC00).to_string()
+  let dfff = Int32::unsafe_to_char(0xDFFF).to_string()
+  let high = Int32::unsafe_to_char(0xD83D).to_string()
+  let low = Int32::unsafe_to_char(0xDE0A).to_string()
   for held in [d800, dbff, dc00, dfff, high, low, "\u{FEFF}", "A"] {
     let line = "\{held}x"
     let words = encode_raw_start_offsets(

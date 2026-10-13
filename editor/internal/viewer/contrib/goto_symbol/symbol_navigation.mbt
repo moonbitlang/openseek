@@ -6,9 +6,9 @@ struct SymbolNavigationAnchor {
   model : @model.TextModel
   position : @base_common.Position
   range : @base_common.Range
-  model_identity : Int
-  model_version_id : Int
-  surface_generation : Int
+  model_identity : Int32
+  model_version_id : Int32
+  surface_generation : Int32
 }
 
 ///|
@@ -16,7 +16,7 @@ pub fn SymbolNavigationAnchor::from_model(
   model : @model.TextModel,
   position : @base_common.Position,
   range : @base_common.Range,
-  surface_generation : Int,
+  surface_generation : Int32,
 ) -> SymbolNavigationAnchor {
   let position = model.validate_position(position)
   {
@@ -53,7 +53,7 @@ pub fn SymbolNavigationAnchor::range(
 ///|
 pub fn SymbolNavigationAnchor::surface_generation(
   self : SymbolNavigationAnchor,
-) -> Int {
+) -> Int32 {
   self.surface_generation
 }
 
@@ -104,7 +104,7 @@ pub fn SymbolNavigationCommand::id(self : SymbolNavigationCommand) -> String {
 ///|
 pub fn SymbolNavigationCommand::title(
   self : SymbolNavigationCommand,
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
 ) -> String {
   match self {
     RevealDefinition => localization.text(GoDefinition)
@@ -225,14 +225,14 @@ struct SymbolNavigationAction {
   languages : @languages.LanguageHandle
   host : SymbolNavigationActionHost
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit
-  mut generation : Int
+  mut generation : Int32
   mut source : @language.CancellationTokenSource?
   mut disposed : Bool
 }
 
 ///|
 pub fn SymbolNavigationAction::SymbolNavigationAction(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   languages : @languages.LanguageHandle,
   host : SymbolNavigationActionHost,
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit,
@@ -271,7 +271,7 @@ pub fn SymbolNavigationAction::dispose(self : SymbolNavigationAction) -> Unit {
 ///|
 fn SymbolNavigationAction::request_is_current(
   self : SymbolNavigationAction,
-  generation : Int,
+  generation : Int32,
   source : @language.CancellationTokenSource,
   anchor : SymbolNavigationAnchor,
 ) -> Bool {
@@ -287,7 +287,7 @@ fn SymbolNavigationAction::request_is_current(
 ///|
 fn SymbolNavigationAction::result_is_current(
   self : SymbolNavigationAction,
-  generation : Int,
+  generation : Int32,
   anchor : SymbolNavigationAnchor,
 ) -> Bool {
   !self.disposed &&
@@ -361,7 +361,7 @@ struct DefinitionLinkResolver {
   languages : @languages.LanguageHandle
   is_anchor_current : (SymbolNavigationAnchor) -> Bool
   run_provider_tasks : async (Array[async () -> Unit]) -> Unit
-  mut generation : Int
+  mut generation : Int32
   mut source : @language.CancellationTokenSource?
   mut disposed : Bool
 }
@@ -397,7 +397,7 @@ pub fn DefinitionLinkResolver::cancel(self : DefinitionLinkResolver) -> Unit {
 pub fn DefinitionLinkResolver::begin(
   self : DefinitionLinkResolver,
   anchor : SymbolNavigationAnchor,
-) -> Int? {
+) -> Int32? {
   guard !self.disposed &&
     anchor.model_is_current() &&
     (self.is_anchor_current)(anchor) else {
@@ -412,7 +412,7 @@ pub fn DefinitionLinkResolver::begin(
 pub async fn DefinitionLinkResolver::resolve_reserved(
   self : DefinitionLinkResolver,
   anchor : SymbolNavigationAnchor,
-  generation : Int,
+  generation : Int32,
 ) -> Array[@language.Location] noraise {
   guard !self.disposed &&
     self.generation == generation &&
@@ -461,7 +461,7 @@ pub fn DefinitionLinkResolver::dispose(self : DefinitionLinkResolver) -> Unit {
 
 ///|
 fn symbol_navigation_no_result_message(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   kind : SymbolNavigationQueryKind,
   anchor : SymbolNavigationAnchor,
 ) -> String {
@@ -490,7 +490,7 @@ fn symbol_navigation_no_result_message(
 
 ///|
 fn symbol_navigation_open_failure_message(
-  localization? : @localization.Localization = Localization(),
+  localization~ : @localization.Localization = Localization(),
   kind : SymbolNavigationQueryKind,
 ) -> String {
   match kind {
@@ -521,7 +521,7 @@ fn symbol_navigation_peek_mode(
 fn SymbolNavigationAction::begin(
   self : SymbolNavigationAction,
   anchor : SymbolNavigationAnchor,
-) -> Int? {
+) -> Int32? {
   guard !self.disposed && anchor.model_is_current() else { return None }
   self.cancel()
   self.generation += 1
@@ -540,7 +540,7 @@ async fn SymbolNavigationAction::run_reserved(
   kind : SymbolNavigationQueryKind,
   anchor : SymbolNavigationAnchor,
   config : SymbolNavigationActionConfig,
-  generation : Int,
+  generation : Int32,
 ) -> Unit noraise {
   guard self.result_is_current(generation, anchor) else { return }
   let source = @language.CancellationTokenSource()
@@ -623,7 +623,7 @@ pub fn DefinitionAction::DefinitionAction(
 pub fn DefinitionAction::begin(
   self : DefinitionAction,
   anchor : SymbolNavigationAnchor,
-) -> Int? {
+) -> Int32? {
   self.action.begin(anchor)
 }
 
@@ -632,7 +632,7 @@ pub async fn DefinitionAction::run_reserved(
   self : DefinitionAction,
   anchor : SymbolNavigationAnchor,
   config : SymbolNavigationActionConfig,
-  generation : Int,
+  generation : Int32,
 ) -> Unit noraise {
   self.action.run_reserved(DefinitionQuery, anchor, config, generation)
 }
@@ -663,7 +663,7 @@ pub fn ReferencesAction::ReferencesAction(
 pub fn ReferencesAction::begin(
   self : ReferencesAction,
   anchor : SymbolNavigationAnchor,
-) -> Int? {
+) -> Int32? {
   self.action.begin(anchor)
 }
 
@@ -672,7 +672,7 @@ pub async fn ReferencesAction::run_reserved(
   self : ReferencesAction,
   anchor : SymbolNavigationAnchor,
   config : SymbolNavigationActionConfig,
-  generation : Int,
+  generation : Int32,
 ) -> Unit noraise {
   self.action.run_reserved(ReferencesQuery, anchor, config, generation)
 }

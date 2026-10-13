@@ -150,7 +150,7 @@ async fn resolve_host_directory_listing(
 /// connected clients move together.
 async fn switch_workspace_packets(
   workspace : NativeWorkspace,
-  session : Int,
+  session : Int32,
   outbox : @aqueue.Queue[String],
   request : @remote_protocol.HostPathRequest,
 ) -> Unit {
@@ -263,7 +263,7 @@ async fn looks_like_repository_root(path : String) -> Bool {
 ///|
 /// Code-unit lexicographic comparison (the default `String` order is
 /// shortlex, which reads wrongly in a file listing).
-fn compare_names_lexicographic(left : String, right : String) -> Int {
+fn compare_names_lexicographic(left : String, right : String) -> Int32 {
   let shared = left.length().min(right.length())
   for index in 0..<shared {
     let l = left[index].to_int()

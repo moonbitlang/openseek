@@ -31,9 +31,9 @@ fn emit() -> @cmd.Emit[Msg] {
 ///|
 /// Open the picker and land one listing at `location`.
 fn opened(
-  channel? : @interop.ChannelId = @interop.ChannelId::Local,
+  channel~ : @interop.ChannelId = @interop.ChannelId::Local,
   location~ : Location,
-  entries? : Array[String] = [],
+  entries~ : Array[String] = [],
 ) -> State raise {
   let (_, opening) = State::open(channel, emit())
   assert_true(opening.loading)

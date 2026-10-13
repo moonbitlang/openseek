@@ -6,7 +6,7 @@
 fn dispatch_navigation_key(
   viewer : CodeEditorWidget,
   key : String,
-  shift? : Bool = false,
+  shift~ : Bool = false,
 ) -> Bool {
   viewer.handle_editor_key_down(key, alt=false, ctrl_cmd=false, shift~)
 }
@@ -14,16 +14,16 @@ fn dispatch_navigation_key(
 ///|
 fn mouse_dispatch_data(
   position : @base_common.Position,
-  started_on_line_numbers? : Bool = false,
-  in_selection_mode? : Bool = false,
-  mouse_down_count? : Int = 1,
-  alt_key? : Bool = false,
-  ctrl_key? : Bool = false,
-  meta_key? : Bool = false,
-  shift_key? : Bool = false,
-  middle_button? : Bool = false,
-  on_injected_text? : Bool = false,
-  reveal_type? : @controller.NavigationCommandRevealType = Minimal,
+  started_on_line_numbers~ : Bool = false,
+  in_selection_mode~ : Bool = false,
+  mouse_down_count~ : Int32 = 1,
+  alt_key~ : Bool = false,
+  ctrl_key~ : Bool = false,
+  meta_key~ : Bool = false,
+  shift_key~ : Bool = false,
+  middle_button~ : Bool = false,
+  on_injected_text~ : Bool = false,
+  reveal_type~ : @controller.NavigationCommandRevealType = Minimal,
 ) -> @controller.MouseDispatchData {
   {
     position,

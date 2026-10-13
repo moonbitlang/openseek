@@ -227,8 +227,8 @@ fn ViewModel::capture_stable_viewport(self : ViewModel) -> StableViewport {
 pub fn ViewModel::set_hidden_areas(
   self : ViewModel,
   ranges : Array[@base_common.Range],
-  source? : String = "",
-  force_update? : Bool = false,
+  source~ : String = "",
+  force_update~ : Bool = false,
   with_event_batch? : (() -> Bool) -> Bool,
   on_line_mapping_changed? : (() -> Unit) -> Unit,
 ) -> Bool {

@@ -7,7 +7,7 @@
 /// page, while still preventing one browser request from creating an
 /// unbounded hidden workspace file. Refuse rather than truncate: a partial
 /// selection must never look authoritative to an agent.
-const MaxSemanticSelectionArtifactUnits : Int = 8_000_000
+const MaxSemanticSelectionArtifactUnits : Int32 = 8_000_000
 
 ///|
 fn semantic_selection_artifact_id_is_safe(id : String) -> Bool {
@@ -38,7 +38,6 @@ async fn materialize_semantic_selection_op(
   let relative_dir = ".openseek/agent-context/semantic-search"
   let dir = root.join(relative_dir)
   @fs.mkdir(dir.to_string(), recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     // `recursive=true` only creates missing parents; an existing artifact
     // directory is the normal steady state. A file squatting on this path
     // surfaces as the write below failing.
@@ -48,27 +47,29 @@ async fn materialize_semantic_selection_op(
   }
   let header : Json = {
     "version": Json(1),
-    "kind": "semantic-search-selection".to_json(),
-    "root": payload.root.to_json(),
-    "patterns": payload.patterns.to_json(),
-    "include": payload.include_glob.to_json(),
-    "exclude": payload.exclude_glob.to_json(),
-    "selected_matches": payload.matches.length().to_json(),
-    "selected_files": files.length().to_json(),
-    "instructions": "This is an immutable semantic-search selection snapshot. Filter its JSONL match records before reading broadly; the working-tree files are the current source of truth.".to_json(),
+    "kind": Json("semantic-search-selection"),
+    "root": Json(payload.root),
+    "patterns": Json(payload.patterns),
+    "include": Json(payload.include_glob),
+    "exclude": Json(payload.exclude_glob),
+    "selected_matches": Json(payload.matches.length()),
+    "selected_files": Json(files.length()),
+    "instructions": Json(
+      "This is an immutable semantic-search selection snapshot. Filter its JSONL match records before reading broadly; the working-tree files are the current source of truth.",
+    ),
   }
   let lines : Array[String] = [header.stringify()]
   for match_ in payload.matches {
     let record : Json = {
-      "kind": "match".to_json(),
-      "rule_id": match_.rule_id.to_json(),
-      "description": match_.description.to_json(),
-      "file": match_.file.to_json(),
-      "start_line": match_.start_line.to_json(),
-      "start_column": match_.start_column.to_json(),
-      "end_line": match_.end_line.to_json(),
-      "end_column": match_.end_column.to_json(),
-      "matched_source": match_.matched_source.to_json(),
+      "kind": Json("match"),
+      "rule_id": Json(match_.rule_id),
+      "description": Json(match_.description),
+      "file": Json(match_.file),
+      "start_line": Json(match_.start_line),
+      "start_column": Json(match_.start_column),
+      "end_line": Json(match_.end_line),
+      "end_column": Json(match_.end_column),
+      "matched_source": Json(match_.matched_source),
     }
     lines.push(record.stringify())
   }
@@ -85,7 +86,6 @@ async fn materialize_semantic_selection_op(
     let relative_path = "\{relative_dir}/\{payload.artifact_id}\{suffix}.jsonl"
     let target = root.join(relative_path)
     @fs.write_file(target.to_string(), content, create_mode=CreateNew) catch {
-      error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_EEXIST() => continue
       error =>
         // Do not remove the path on an unknown write error: another process
@@ -288,9 +288,34 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
     error => raise HostError("failed to read file: \{error}")
   }
   defer source.close()
-  // Check the size before reading anything: a multi-gigabyte build artifact
-  // must produce the notice, not a host-sized allocation.
-  if source.size() > @openpath.MaxEditorFileBytes.to_int64() {
+  let office_media_type = match office_media_type(file.to_string()) {
+    Some(media_type) => Some(media_type)
+    None => {
+      // Retain signature-based PDF routing even for a file with no .pdf
+      // suffix. Only the small header is read before the allocation limit.
+      let size = source.size()
+      let header = source.read_exactly_at(
+        if size < 12 {
+          size.to_int()
+        } else {
+          12
+        },
+        position=0,
+      )
+      if @filekind.classify(header) is Pdf {
+        Some("application/pdf")
+      } else {
+        None
+      }
+    }
+  }
+  // Check the size before reading the body so a large build artifact produces
+  // the notice without a host-sized allocation.
+  let size_limit = match office_media_type {
+    Some(_) => @openpath.MaxOfficeFileBytes
+    None => @openpath.MaxEditorFileBytes
+  }
+  if source.size() > size_limit.to_int64() {
     return Oversized
   }
   let data = source.read_all() catch {
@@ -305,14 +330,71 @@ async fn read_file_op(payload : ReadFilePayload) -> ReadFileReply {
   // raster signatures rather than extensions and returns decoded text without
   // making callers perform a second UTF-8 pass.
   let bytes = data.binary()
-  match @filekind.classify(bytes) {
-    Image(media_type~) =>
-      BinaryContent(data_base64=@base64.encode(bytes), media_type~)
-    Utf8Text(content) => {
-      let absolute = file.resource_path()
-      Content(content~, absolute~, sig~)
+  match office_media_type {
+    Some(media_type) =>
+      BinaryContent(data_base64=@base64.encode(bytes), media_type~, sig~)
+    None =>
+      match @filekind.classify(bytes) {
+        Image(media_type~) =>
+          BinaryContent(data_base64=@base64.encode(bytes), media_type~, sig~)
+        Utf8Text(content) => {
+          let absolute = file.resource_path()
+          Content(content~, absolute~, sig~)
+        }
+        Pdf | UnknownBinary => Binary
+      }
+  }
+}
+
+///|
+/// Office packages are ZIP-based and intentionally classified as generic
+/// binary by the shared text/image policy. The extension is the host's only
+/// format signal here; the viewer performs the structural parse after the
+/// bytes arrive in the JS frontend.
+fn office_media_type(path : String) -> String? {
+  let lower = path.to_lower()
+  if lower.has_suffix(".docx") {
+    Some(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+  } else if lower.has_suffix(".xlsx") {
+    Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+  } else if lower.has_suffix(".pdf") {
+    Some("application/pdf")
+  } else {
+    None
+  }
+}
+
+///|
+async test "PDF reads preserve bytes and use the document limit with or without an extension" {
+  let dir = @fs.tmpdir(prefix="openseek-read-pdf-")
+  defer @fs.rmdir(dir, recursive=true)
+  let bytes = @utf8.encode(
+    "%PDF-1.7\n" + "x".repeat(@openpath.MaxEditorFileBytes + 1),
+  )
+  for name in ["report.PDF", "report-without-extension"] {
+    let file = "\{dir}/\{name}"
+    @fs.write_file(file, bytes, create_mode=CreateOrTruncate)
+    let absolute = @pathx.Path(@fs.realpath(file))
+      .to_absolute()
+      .unwrap()
+      .to_uri_path()
+      .unwrap()
+    match read_file_op({ path: absolute, root: None, }) {
+      BinaryContent(data_base64~, media_type~, sig~) => {
+        assert_eq(media_type, "application/pdf")
+        assert_eq(@base64.decode(data_base64), bytes)
+        assert_true(!sig.is_empty())
+      }
+      _ => fail("PDF reads must retain the original binary payload")
     }
-    Pdf | UnknownBinary => Binary
+    @fs.write_file(
+      file,
+      "%PDF-1.7\n" + "x".repeat(@openpath.MaxOfficeFileBytes),
+      create_mode=TruncateExisting,
+    )
+    assert_eq(read_file_op({ path: absolute, root: None, }), Oversized)
   }
 }
 
@@ -330,18 +412,26 @@ async test "binary file reads expose only recognized raster signatures" {
     .unwrap()
     .to_uri_path()
     .unwrap()
-  assert_eq(
-    read_file_op({ path: absolute, root: None, }),
-    BinaryContent(data_base64="iVBORw0KGgpzbWFsbA==", media_type="image/png"),
+  assert_true(
+    read_file_op({ path: absolute, root: None, })
+    is BinaryContent(
+      data_base64="iVBORw0KGgpzbWFsbA==",
+      media_type="image/png",
+      sig=_
+    ),
   )
   let root = @pathx.Path(@fs.realpath(dir))
     .to_absolute()
     .unwrap()
     .to_uri_path()
     .unwrap()
-  assert_eq(
-    read_file_op({ path: "image.png", root: Some(root), }),
-    BinaryContent(data_base64="iVBORw0KGgpzbWFsbA==", media_type="image/png"),
+  assert_true(
+    read_file_op({ path: "image.png", root: Some(root), })
+    is BinaryContent(
+      data_base64="iVBORw0KGgpzbWFsbA==",
+      media_type="image/png",
+      sig=_
+    ),
   )
   let disguised = "\{dir}/not-an-image.png"
   @fs.write_file(disguised, b"\xffnot an image", create_mode=CreateOrTruncate)
@@ -351,6 +441,34 @@ async test "binary file reads expose only recognized raster signatures" {
     .to_uri_path()
     .unwrap()
   assert_eq(read_file_op({ path: disguised_absolute, root: None, }), Binary)
+  @fs.rmdir(dir, recursive=true)
+}
+
+///|
+async test "Office file reads return original package bytes and media type" {
+  let dir = "_build/host-read-file-office-test"
+  if @fs.exists(dir) {
+    @fs.rmdir(dir, recursive=true)
+  }
+  @fs.mkdir(dir, recursive=true)
+  let xlsx = "\{dir}/example.xlsx"
+  let package_bytes = b"PK\x03\x04office fixture"
+  @fs.write_file(xlsx, package_bytes, create_mode=CreateOrTruncate)
+  let absolute = @pathx.Path(@fs.realpath(xlsx))
+    .to_absolute()
+    .unwrap()
+    .to_uri_path()
+    .unwrap()
+  match read_file_op({ path: absolute, root: None, }) {
+    BinaryContent(data_base64~, media_type~, sig~) => {
+      assert_eq(
+        media_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      )
+      assert_eq(data_base64, @base64.encode(package_bytes))
+      assert_true(!sig.is_empty())
+    }
+    _ => fail("an .xlsx read must preserve its original package bytes")
+  }
   @fs.rmdir(dir, recursive=true)
 }
 
@@ -396,8 +514,8 @@ async fn file_signature(absolute : String) -> FileSignature {
 
 ///|
 fn file_stamp(
-  mtime : (Int64, Int),
-  ctime : (Int64, Int),
+  mtime : (Int64, Int32),
+  ctime : (Int64, Int32),
   size : Int64,
 ) -> String {
   "\{mtime.0}:\{mtime.1}:\{ctime.0}:\{ctime.1}:\{size}"

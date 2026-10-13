@@ -10,6 +10,7 @@ import {
   "moonbitlang/editor/base/common",
   "moonbitlang/editor/viewer" @editor_viewer,
   "moonbitlang/editor/viewer/html" @syntax_html,
+  "moonbitlang/openseek/workspace_file_ref",
   "openseek_desktop/frontend/icons",
 }
 

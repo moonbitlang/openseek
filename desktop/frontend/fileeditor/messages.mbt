@@ -1,9 +1,36 @@
-// Feature-owned UI messages; both locales are exhaustive.
+// Feature-owned UI messages; all supported locales are exhaustive.
 
 ///|
 priv enum UiMessage {
   UnresolvedGithubConversations
   AddToContext
+  OfficeControls
+  OfficeFind
+  OfficeZoomOut
+  OfficeZoomIn
+  OfficeBundledFonts
+  OfficeInstalledFonts
+  OfficeFontSource
+  PdfPreviousPage
+  PdfPageNumber
+  PdfNextPage
+  PdfFitWidth
+  PdfRotate
+  PdfSearching
+  PdfPreviousMatch
+  PdfNextMatch
+  PdfControls
+  PdfUnlockTitle
+  PdfPassword
+  PdfPasswordLabel
+  PdfIncorrectPassword
+  PdfUnlock
+  PdfLoading
+  OfficePreviewFailed
+  PdfPreviewFailed
+  PdfPreviewCancelled
+  OfficeSelectionFailed
+  CancelSelection
   PartlyInContext
   InContext
   RemoveHunkContext
@@ -154,6 +181,159 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, OfficeControls) => "Office viewer controls"
+    (SimplifiedChinese, OfficeControls) => "文档预览控件"
+    (TraditionalChinese, OfficeControls) => "文件預覽控制項"
+    (Japanese, OfficeControls) => "文書プレビューの操作"
+    (Spanish, OfficeControls) => "Controles de vista del documento"
+    (English, OfficeFind) => "Find in document"
+    (SimplifiedChinese, OfficeFind) => "在文档中查找"
+    (TraditionalChinese, OfficeFind) => "在文件中尋找"
+    (Japanese, OfficeFind) => "文書内を検索"
+    (Spanish, OfficeFind) => "Buscar en el documento"
+    (English, OfficeZoomOut) => "Zoom out"
+    (SimplifiedChinese, OfficeZoomOut) => "缩小"
+    (TraditionalChinese, OfficeZoomOut) => "縮小"
+    (Japanese, OfficeZoomOut) => "縮小"
+    (Spanish, OfficeZoomOut) => "Alejar"
+    (English, OfficeZoomIn) => "Zoom in"
+    (SimplifiedChinese, OfficeZoomIn) => "放大"
+    (TraditionalChinese, OfficeZoomIn) => "放大"
+    (Japanese, OfficeZoomIn) => "拡大"
+    (Spanish, OfficeZoomIn) => "Acercar"
+    (English, OfficeBundledFonts) => "Use bundled Office fonts"
+    (SimplifiedChinese, OfficeBundledFonts) => "使用随应用提供的字体"
+    (TraditionalChinese, OfficeBundledFonts) =>
+      "使用應用程式提供的字型"
+    (Japanese, OfficeBundledFonts) => "アプリ付属のフォントを使用"
+    (Spanish, OfficeBundledFonts) => "Usar las fuentes incluidas"
+    (English, OfficeInstalledFonts) => "Prefer installed Office fonts"
+    (SimplifiedChinese, OfficeInstalledFonts) => "优先使用本机字体"
+    (TraditionalChinese, OfficeInstalledFonts) => "優先使用本機字型"
+    (Japanese, OfficeInstalledFonts) =>
+      "インストール済みのフォントを優先"
+    (Spanish, OfficeInstalledFonts) => "Preferir las fuentes instaladas"
+    (English, OfficeFontSource) => "Document fonts"
+    (SimplifiedChinese, OfficeFontSource) => "文档字体"
+    (TraditionalChinese, OfficeFontSource) => "文件字型"
+    (Japanese, OfficeFontSource) => "文書のフォント"
+    (Spanish, OfficeFontSource) => "Fuentes del documento"
+    (English, PdfPreviousPage) => "Previous page"
+    (SimplifiedChinese, PdfPreviousPage) => "上一页"
+    (TraditionalChinese, PdfPreviousPage) => "上一頁"
+    (Japanese, PdfPreviousPage) => "前のページ"
+    (Spanish, PdfPreviousPage) => "Página anterior"
+    (English, PdfPageNumber) => "PDF page number"
+    (SimplifiedChinese, PdfPageNumber) => "PDF 页码"
+    (TraditionalChinese, PdfPageNumber) => "PDF 頁碼"
+    (Japanese, PdfPageNumber) => "PDF のページ番号"
+    (Spanish, PdfPageNumber) => "Número de página del PDF"
+    (English, PdfNextPage) => "Next page"
+    (SimplifiedChinese, PdfNextPage) => "下一页"
+    (TraditionalChinese, PdfNextPage) => "下一頁"
+    (Japanese, PdfNextPage) => "次のページ"
+    (Spanish, PdfNextPage) => "Página siguiente"
+    (English, PdfFitWidth) => "Fit page width"
+    (SimplifiedChinese, PdfFitWidth) => "适应页宽"
+    (TraditionalChinese, PdfFitWidth) => "符合頁面寬度"
+    (Japanese, PdfFitWidth) => "ページ幅に合わせる"
+    (Spanish, PdfFitWidth) => "Ajustar al ancho de página"
+    (English, PdfRotate) => "Rotate clockwise"
+    (SimplifiedChinese, PdfRotate) => "顺时针旋转"
+    (TraditionalChinese, PdfRotate) => "順時針旋轉"
+    (Japanese, PdfRotate) => "時計回りに回転"
+    (Spanish, PdfRotate) => "Girar en sentido horario"
+    (English, PdfSearching) => "Searching…"
+    (SimplifiedChinese, PdfSearching) => "正在查找…"
+    (TraditionalChinese, PdfSearching) => "正在尋找…"
+    (Japanese, PdfSearching) => "検索中…"
+    (Spanish, PdfSearching) => "Buscando…"
+    (English, PdfPreviousMatch) => "Previous match"
+    (SimplifiedChinese, PdfPreviousMatch) => "上一个匹配项"
+    (TraditionalChinese, PdfPreviousMatch) => "上一個符合項目"
+    (Japanese, PdfPreviousMatch) => "前の一致"
+    (Spanish, PdfPreviousMatch) => "Coincidencia anterior"
+    (English, PdfNextMatch) => "Next match"
+    (SimplifiedChinese, PdfNextMatch) => "下一个匹配项"
+    (TraditionalChinese, PdfNextMatch) => "下一個符合項目"
+    (Japanese, PdfNextMatch) => "次の一致"
+    (Spanish, PdfNextMatch) => "Coincidencia siguiente"
+    (English, PdfControls) => "PDF viewer controls"
+    (SimplifiedChinese, PdfControls) => "PDF 预览控件"
+    (TraditionalChinese, PdfControls) => "PDF 預覽控制項"
+    (Japanese, PdfControls) => "PDF プレビューの操作"
+    (Spanish, PdfControls) => "Controles de vista del PDF"
+    (English, PdfUnlockTitle) => "Unlock PDF"
+    (SimplifiedChinese, PdfUnlockTitle) => "解锁 PDF"
+    (TraditionalChinese, PdfUnlockTitle) => "解鎖 PDF"
+    (Japanese, PdfUnlockTitle) => "PDF のロックを解除"
+    (Spanish, PdfUnlockTitle) => "Desbloquear PDF"
+    (English, PdfPassword) => "Password"
+    (SimplifiedChinese, PdfPassword) => "密码"
+    (TraditionalChinese, PdfPassword) => "密碼"
+    (Japanese, PdfPassword) => "パスワード"
+    (Spanish, PdfPassword) => "Contraseña"
+    (English, PdfPasswordLabel) => "PDF password"
+    (SimplifiedChinese, PdfPasswordLabel) => "PDF 密码"
+    (TraditionalChinese, PdfPasswordLabel) => "PDF 密碼"
+    (Japanese, PdfPasswordLabel) => "PDF のパスワード"
+    (Spanish, PdfPasswordLabel) => "Contraseña del PDF"
+    (English, PdfIncorrectPassword) => "Incorrect password."
+    (SimplifiedChinese, PdfIncorrectPassword) => "密码错误。"
+    (TraditionalChinese, PdfIncorrectPassword) => "密碼錯誤。"
+    (Japanese, PdfIncorrectPassword) =>
+      "パスワードが正しくありません。"
+    (Spanish, PdfIncorrectPassword) => "Contraseña incorrecta."
+    (English, PdfUnlock) => "Unlock"
+    (SimplifiedChinese, PdfUnlock) => "解锁"
+    (TraditionalChinese, PdfUnlock) => "解鎖"
+    (Japanese, PdfUnlock) => "ロックを解除"
+    (Spanish, PdfUnlock) => "Desbloquear"
+    (English, PdfLoading) => "Loading PDF…"
+    (SimplifiedChinese, PdfLoading) => "正在加载 PDF…"
+    (TraditionalChinese, PdfLoading) => "正在載入 PDF…"
+    (Japanese, PdfLoading) => "PDF を読み込み中…"
+    (Spanish, PdfLoading) => "Cargando PDF…"
+    (English, OfficePreviewFailed) =>
+      "Could not preview this document. Try reopening the file."
+    (SimplifiedChinese, OfficePreviewFailed) =>
+      "无法预览此文档。请重新打开文件。"
+    (TraditionalChinese, OfficePreviewFailed) =>
+      "無法預覽此文件。請重新開啟檔案。"
+    (Japanese, OfficePreviewFailed) =>
+      "この文書をプレビューできませんでした。ファイルを開き直してください。"
+    (Spanish, OfficePreviewFailed) =>
+      "No se pudo previsualizar este documento. Vuelve a abrir el archivo."
+    (English, PdfPreviewFailed) =>
+      "Could not preview this PDF. Try reopening the file."
+    (SimplifiedChinese, PdfPreviewFailed) =>
+      "无法预览此 PDF。请重新打开文件。"
+    (TraditionalChinese, PdfPreviewFailed) =>
+      "無法預覽此 PDF。請重新開啟檔案。"
+    (Japanese, PdfPreviewFailed) =>
+      "この PDF をプレビューできませんでした。ファイルを開き直してください。"
+    (Spanish, PdfPreviewFailed) =>
+      "No se pudo previsualizar este PDF. Vuelve a abrir el archivo."
+    (English, PdfPreviewCancelled) =>
+      "PDF preview cancelled. Reopen the file to try again."
+    (SimplifiedChinese, PdfPreviewCancelled) =>
+      "已取消 PDF 预览。重新打开文件即可重试。"
+    (TraditionalChinese, PdfPreviewCancelled) =>
+      "已取消 PDF 預覽。重新開啟檔案即可重試。"
+    (Japanese, PdfPreviewCancelled) =>
+      "PDF のプレビューをキャンセルしました。ファイルを開き直すと再試行できます。"
+    (Spanish, PdfPreviewCancelled) =>
+      "Vista del PDF cancelada. Vuelve a abrir el archivo para intentarlo de nuevo."
+    (English, OfficeSelectionFailed) =>
+      "Could not add this selection. Select the content again."
+    (SimplifiedChinese, OfficeSelectionFailed) =>
+      "无法添加所选内容。请重新选择。"
+    (TraditionalChinese, OfficeSelectionFailed) =>
+      "無法新增所選內容。請重新選取。"
+    (Japanese, OfficeSelectionFailed) =>
+      "選択した内容を追加できませんでした。もう一度選択してください。"
+    (Spanish, OfficeSelectionFailed) =>
+      "No se pudo añadir esta selección. Vuelve a seleccionar el contenido."
     (English, UnresolvedGithubConversations) =>
       "Unresolved GitHub conversations"
     (SimplifiedChinese, UnresolvedGithubConversations) =>
@@ -169,6 +349,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, AddToContext) => "添加到上下文"
     (TraditionalChinese, AddToContext) => "新增到上下文"
     (Japanese, AddToContext) => "コンテキストに追加"
+    (English, CancelSelection) => "Cancel"
+    (Spanish, CancelSelection) => "Cancelar"
+    (SimplifiedChinese, CancelSelection) => "取消"
+    (TraditionalChinese, CancelSelection) => "取消"
+    (Japanese, CancelSelection) => "キャンセル"
     (English, PartlyInContext) => "Partly in context"
     (Spanish, PartlyInContext) => "Parcialmente en el contexto"
     (SimplifiedChinese, PartlyInContext) => "部分已在上下文中"

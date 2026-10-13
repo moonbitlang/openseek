@@ -222,7 +222,7 @@ pub fn run_render_invalidation_test() -> Unit {
 fn poll_render_invalidation_ready(
   ctx : @support.BrowserTestContext,
   root : @rdom.Element,
-  remaining : Int,
+  remaining : Int32,
 ) -> Unit {
   let line_count = @support.query_count(".render-invalidation-host .view-line")
   let validation_count = @support.query_count(

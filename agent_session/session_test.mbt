@@ -540,3 +540,95 @@ test "durable content replays mixed content without provider IDs" {
   let messages = resumed.chat_messages()
   assert_eq(messages[1].content.0, expected)
 }
+
+///|
+/// Two finished turns, a goal marker and a summary recorded between turns,
+/// and a third turn still in flight: the turns end at sequences 3 and 6, and
+/// the unfinished one opens at 8.
+fn fork_sample() -> @agent_session.Session raise {
+  @agent_session.Session(SessionId("origin"), system_prompt="system")
+  .append(User(UserMessage(Content([Text("first")]))))
+  .append(Runtime(RuntimeNotice("mid-turn reminder")))
+  .append(Terminal(Finished("one")))
+  .append(Runtime(RuntimeNotice("[goal]\nship it")))
+  .append(User(UserMessage(Content([Text("second")]))))
+  .append(Terminal(Finished("two")))
+  .compact(content="the first turn", from_sequence=1, to_sequence=3)
+  .append(User(UserMessage(Content([Text("third")]))))
+  .append(Runtime(RuntimeNotice("mid-turn reminder")))
+}
+
+///|
+fn fork_sequences(session : @agent_session.Session) -> Array[Int32] {
+  session.events().map(event => event.sequence()).to_array()
+}
+
+///|
+fn fork_refused(session : @agent_session.Session, through? : Int32) -> Bool {
+  try
+    session.fork(SessionId("fork"), system_prompt="fork system", through?)
+  catch {
+    _ => true
+  } noraise {
+    _ => false
+  }
+}
+
+///|
+test "a fork carries everything short of the turn still in flight" {
+  let origin = fork_sample()
+  let fork = origin.fork(SessionId("fork"), system_prompt="fork system")
+  assert_eq(fork.id().value(), "fork")
+  // The prompt is the fork's own; the original keeps the one it was made with.
+  assert_eq(fork.system_prompt(), "fork system")
+  assert_eq(origin.system_prompt(), "system")
+  // The summary recorded after the last finished turn belongs to the fork;
+  // the prompt that opened the unfinished turn, and what followed, do not.
+  assert_eq(fork_sequences(fork), [1, 2, 3, 4, 5, 6, 7])
+  assert_eq(fork.last_sequence(), 7)
+  assert_true(fork.events()[6].item() is Summary(_))
+  // The original is untouched, and the fork grows on from its own tail.
+  assert_eq(origin.last_sequence(), 9)
+  let next = fork.append(User(UserMessage(Content([Text("another way")]))))
+  assert_eq(next.last_sequence(), 8)
+}
+
+///|
+test "a fork can stop at the end of any finished turn" {
+  let origin = fork_sample()
+  fn through(sequence : Int32) -> Array[Int32] raise {
+    fork_sequences(
+      origin.fork(
+        SessionId("fork"),
+        system_prompt="fork system",
+        through=sequence,
+      ),
+    )
+  }
+
+  assert_eq(through(3), [1, 2, 3])
+  assert_eq(through(6), [1, 2, 3, 4, 5, 6])
+  // A sequence inside a turn, between turns, or past the log ends no turn.
+  for sequence in [2, 4, 7, 42] {
+    assert_true(fork_refused(origin, through=sequence))
+  }
+}
+
+///|
+test "a fork needs something that precedes the unfinished turn" {
+  let empty = @agent_session.Session(
+    SessionId("origin"),
+    system_prompt="system",
+  )
+  assert_true(fork_refused(empty))
+  let first_turn = empty.append(User(UserMessage(Content([Text("first")]))))
+  assert_true(fork_refused(first_turn))
+  // A goal set before the first prompt is already a state worth copying.
+  let goal_only = empty.append(Runtime(RuntimeNotice("[goal]\nship it")))
+  assert_eq(
+    fork_sequences(
+      goal_only.fork(SessionId("fork"), system_prompt="fork system"),
+    ),
+    [1],
+  )
+}

@@ -36,13 +36,13 @@ async fn ReferencesControllerTestTasks::run_all(
 ///|
 priv struct ReferencesControllerTestHost {
   source_model : @model.TextModel
-  surface_generation : Ref[Int]
+  surface_generation : Ref[Int32]
   current : Ref[Bool]
   container : @rdom.Element
-  mount_count : Ref[Int]
-  mount_dispose_count : Ref[Int]
-  reveal_count : Ref[Int]
-  restore_focus_count : Ref[Int]
+  mount_count : Ref[Int32]
+  mount_dispose_count : Ref[Int32]
+  reveal_count : Ref[Int32]
+  restore_focus_count : Ref[Int32]
   opened_resources : Array[String]
   messages : Array[String]
 }
@@ -98,7 +98,7 @@ fn ReferencesControllerTestHost::host(
 ///|
 fn references_controller_test_host(
   model : @model.TextModel,
-  surface_generation : Ref[Int],
+  surface_generation : Ref[Int32],
 ) -> ReferencesControllerTestHost {
   {
     source_model: model,
@@ -118,10 +118,10 @@ fn references_controller_test_host(
 priv struct ReferencesControllerTestPreviewLog {
   resources : Array[String]
   targets : Array[@base_common.Range]
-  match_counts : Array[Int]
+  match_counts : Array[Int32]
   modes : Array[@references.ReferencesPeekMode]
-  dispose_count : Ref[Int]
-  focus_count : Ref[Int]
+  dispose_count : Ref[Int32]
+  focus_count : Ref[Int32]
   contains_focus : Ref[Bool]
   on_dispose : Ref[(() -> Unit)?]
 }
@@ -182,7 +182,7 @@ fn references_controller_test_model(resource : String) -> @model.TextModel {
 ///|
 fn references_controller_test_anchor(
   model : @model.TextModel,
-  surface_generation : Int,
+  surface_generation : Int32,
 ) -> @goto_symbol.SymbolNavigationAnchor {
   @goto_symbol.SymbolNavigationAnchor::from_model(
     model,

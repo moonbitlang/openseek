@@ -2,12 +2,12 @@
 /// Test helper: `should_auto_continue` with every input defaulted to its
 /// continuing value, so a case reads as the one condition it flips.
 fn auto_continues(
-  auto? : Bool = true,
-  finished? : Bool = true,
-  idle? : Bool = true,
-  shutting_down? : Bool = false,
-  goal_standing? : Bool = true,
-  turns_remaining? : Int = 1,
+  auto~ : Bool = true,
+  finished~ : Bool = true,
+  idle~ : Bool = true,
+  shutting_down~ : Bool = false,
+  goal_standing~ : Bool = true,
+  turns_remaining~ : Int32 = 1,
 ) -> Bool {
   should_auto_continue(
     auto~,

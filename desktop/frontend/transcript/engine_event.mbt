@@ -7,17 +7,17 @@ pub(all) enum EngineEvent {
   // The 1-based step counter. Optional only because the run stage that
   // carries it (`AtStep`) is: every engine that emits `agent_step` has
   // numbered it (1f761102, the commit that introduced both).
-  AgentStep(Int?)
+  AgentStep(Int32?)
   // The provider request for the current step failed and is being retried.
   // The view discards the failed attempt's transient streams and shows the
   // retry while the engine waits out its backoff.
-  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  StreamRetry(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
   BackgroundNotice(String)
-  Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
+  Usage(prompt_tokens~ : Int32, completion_tokens~ : Int32)
   ToolResult(
     tool_name~ : String,
     is_error~ : Bool,
@@ -33,8 +33,8 @@ pub(all) enum EngineEvent {
   SubrunClosed(
     id~ : String,
     status~ : String,
-    steps~ : Int,
-    tokens~ : Int,
+    steps~ : Int32,
+    tokens~ : Int32,
     unaccounted~ : String?
   )
   // A workflow's lifecycle brackets. A workflow is a run inside an `mbtx`
@@ -49,8 +49,8 @@ pub(all) enum EngineEvent {
     id~ : String,
     journal~ : String,
     events~ : String,
-    first_child~ : Int,
-    child_count~ : Int
+    first_child~ : Int32,
+    child_count~ : Int32
   )
   WorkflowClosed(id~ : String)
   AgentFinished(String)
@@ -97,6 +97,16 @@ pub(all) enum EngineEvent {
   // waiting on that append — a goal command most of all — would otherwise
   // wait on a commit that is never coming, with no word of why.
   SessionAppendFailed(String)
+  // The engine could not load the user's MCP configuration, or one server
+  // in it contributed no tools. Reported while the engine starts, before any
+  // turn, and never recorded: without a word here the configured tools are
+  // simply missing from the conversation and nothing says why.
+  McpConfigFailed(path~ : String, error~ : String)
+  McpServerFailed(server~ : String, error~ : String)
+  // A server connected, but the registry's budget for MCP tools ran out
+  // partway through its list: the tools past `limit` were dropped, so the
+  // conversation has only some of what the server offers.
+  McpToolsDropped(server~ : String, limit~ : Int32)
 }
 
 ///|
@@ -149,6 +159,20 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     // has no use for it and drops it, so unless the view reads it off the raw
     // stream nobody hears about it at all.
     SessionError(error~) => Some(SessionAppendFailed(error))
+    // The ways a configured MCP server ends up with none, or only some, of
+    // its tools in this engine.
+    McpConfigUnreadable(path~, error~) | McpConfigInvalid(path~, error~) =>
+      Some(McpConfigFailed(path~, error~))
+    McpConnectFailed(server~, error~) | McpListToolsFailed(server~, error~) =>
+      Some(McpServerFailed(server~, error~))
+    McpListToolsTimeout(server~) =>
+      Some(McpServerFailed(server~, error="timed out listing its tools"))
+    McpServerSkippedOverCap(server~) =>
+      Some(
+        McpServerFailed(server~, error="the MCP tool limit was already reached"),
+      )
+    // The engine reports the registry-wide budget as `kept`.
+    McpToolsCapped(server~, kept~) => Some(McpToolsDropped(server~, limit=kept))
     ApprovalRequested(id~, tool_name~, detail~, body~) =>
       Some(ApprovalRequested(id~, tool_name~, detail~, body~))
     // The outcome word is dropped: this view shows one prompt at a time and
@@ -193,7 +217,8 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     // error, not as stream events; `auto_compaction_started/failed` are internal
     // to an open turn, unlike the finish this view previews;
     // `session_started`/`workspace_created` describe a headless
-    // run's setup; the MCP events are engine-side registry diagnostics.
+    // run's setup; the remaining MCP events are registry bookkeeping for
+    // tools that did register, or a server that has none to offer.
     GoalUpdated(..)
     | GoalBlocked(..)
     | GoalUnblocked
@@ -209,16 +234,9 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     | SessionStarted(..)
     | WorkspaceCreated(..)
     | McpConfigIgnored(..)
-    | McpConfigUnreadable(..)
-    | McpConfigInvalid(..)
     | McpToolsRegistered(..)
     | McpToolDuplicate(..)
     | McpToolRenamed(..)
-    | McpToolsCapped(..)
-    | McpServerSkippedOverCap(..)
-    | McpConnectFailed(..)
-    | McpListToolsFailed(..)
-    | McpListToolsTimeout(..)
     | McpNoTools(..) => None
   }
 }

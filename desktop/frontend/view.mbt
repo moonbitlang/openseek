@@ -4,7 +4,7 @@ fn can_stop(conv : Conversation) -> Bool {
 }
 
 ///|
-fn token_label(locale? : @i18n.Locale = English, tokens : Int) -> String {
+fn token_label(locale~ : @i18n.Locale = English, tokens : Int32) -> String {
   dynamic_text(locale, DTokens(@labels.compact_count(tokens).to_string()))
 }
 
@@ -21,7 +21,7 @@ fn SelectMenu::setting_control(
   selected~ : String,
   aria_label~ : String,
   change~ : @cmd.Emit[String],
-  disabled? : Bool = false,
+  disabled~ : Bool = false,
 ) -> @html.Html {
   @select_control.Control::{
     id,
@@ -42,7 +42,7 @@ fn SelectMenu::setting_control(
 /// Temporary label shared by the sidebar and header before the host lists
 /// this conversation. Listed records always use the host's resolved title.
 fn unlisted_conversation_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   conv : Conversation,
 ) -> String {
   // Titles follow the committed user transcript.
@@ -105,12 +105,12 @@ fn session_component_input(
   channel : @interop.ChannelId,
   session_id : String,
   label : String,
-  archivable? : Bool = false,
-  nested? : Bool = false,
+  archivable~ : Bool = false,
+  nested~ : Bool = false,
   worktree? : String,
-  subrun? : Bool = false,
+  subrun~ : Bool = false,
   root? : String,
-  children? : Array[@conversation.Input] = [],
+  children~ : Array[@conversation.Input] = [],
 ) -> @conversation.Input {
   let active = model.screen is Chat &&
     channel == model.focused &&
@@ -205,7 +205,7 @@ fn Model::push_group_component_inputs(
   workspace : @common.Uri,
   listed~ : (String) -> Bool,
   archived~ : (String) -> Bool,
-  standalone? : Bool = false,
+  standalone~ : Bool = false,
 ) -> Unit {
   let composing = self.composing_new_chat()
   // Every row in this group shares the group's store placement; it becomes
@@ -347,7 +347,7 @@ priv enum RowStamp {
 }
 
 ///|
-fn RowStamp::rank(self : RowStamp) -> Int {
+fn RowStamp::rank(self : RowStamp) -> Int32 {
   match self {
     ComposingNow => 0
     ActiveAt(_) => 1
@@ -542,7 +542,7 @@ fn Model::sidebar_component_sections(
     },
     action: Some({
       title: @sidebar_messages.text(self.locale, AddProject),
-      disabled: false,
+      disabled: !self.can_pick_project(dev.channel),
     }),
     entries: projects,
   }
@@ -783,7 +783,7 @@ fn editable_text(text : String) -> String {
 /// the live composer means there is no textarea, model selector, goal editor,
 /// Send, or Stop control for an archived durable record.
 fn Conversation::archived_read_only_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Conversation,
   dispatch : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -829,7 +829,7 @@ fn codex_account_rows(
         [
           @html.button(
             class="button secondary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::logout())),
             @settings.text(model.locale, SignOut),
           ),
@@ -844,7 +844,7 @@ fn codex_account_rows(
         [
           @html.button(
             class="button primary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
             @settings.text(model.locale, SignInChatGPT),
           ),
@@ -872,7 +872,7 @@ fn codex_account_rows(
           ),
           @html.button(
             class="button secondary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::cancel_login())),
             @settings.text(model.locale, CancelSignIn),
           ),
@@ -1187,7 +1187,7 @@ fn byok_setup_guide(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       [icon(icon_link_external), @html.span(label)],
     )
   }
-  let step : (Int, String) -> @html.Html = (index, text) => {
+  let step : (Int32, String) -> @html.Html = (index, text) => {
     @html.div(class="setup-guide-step", [
       @html.span(class="setup-guide-index", index.to_string()),
       @html.span(class="setup-guide-text", text),
@@ -1647,7 +1647,7 @@ fn Model::minimal_transcript_effective(self : Model) -> Bool {
 }
 
 ///|
-/// The telescope is on for detailed mode. Both conversation sources use the
+/// The debug icon is on for detailed mode. Both conversation sources use the
 /// inverse of the stored minimal preference, preserving existing choices.
 /// This local preference has no connection or run-state gate. Neighboring
 /// controls must clear their disabled state when Rabbita reuses their DOM
@@ -1668,7 +1668,7 @@ fn Model::detail_toggle(self : Model, dispatch : @cmd.Emit[Msg]) -> @html.Html {
       .aria_label(shell_text(self.locale, DetailedMode))
       .aria_pressed((!self.minimal_transcript).to_string()),
     on_click=dispatch(MinimalTranscriptChanged(!self.minimal_transcript)),
-    icon(@icons.icon_telescope),
+    icon(@icons.icon_debug),
   )
 }
 
@@ -1787,7 +1787,7 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 /// authentication gets its own progress/retry states, and a signed-in page
 /// stays here until its one query-selected device is available.
 fn console_gate_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
 ) -> @html.Html {
@@ -1944,7 +1944,7 @@ fn Model::selected_conversation_loaded(self : Model) -> Bool {
 }
 
 ///|
-fn conversation_loading_view(locale? : @i18n.Locale = English) -> @html.Html {
+fn conversation_loading_view(locale~ : @i18n.Locale = English) -> @html.Html {
   @html.div(
     class="conversation-load-state",
     shell_text(locale, LoadingConversation),
@@ -1953,7 +1953,7 @@ fn conversation_loading_view(locale? : @i18n.Locale = English) -> @html.Html {
 
 ///|
 fn conversation_load_failed_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   message : String,
 ) -> @html.Html {
@@ -2077,12 +2077,17 @@ fn view(
             },
           ]
       }
-    Codex =>
-      model.codex.page(
+    Codex => {
+      let page = model.codex.page(
         locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         codex_actions,
       )
+      if model.new_chat_project() is Err(message) {
+        page.push(@html.div(class="notice error", [@html.text(message)]))
+      }
+      page
+    }
     Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
     Settings => [settings_page(dispatch, model)]
@@ -2254,7 +2259,7 @@ fn view(
 /// The full-screen card shown when the bridge is lost: a plain explanation
 /// and what to do; the only action here is the instruction itself.
 fn bridge_lost_overlay(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   message : String,
 ) -> @html.Html {
   @html.div(class="bridge-lost-backdrop", [
@@ -2274,7 +2279,7 @@ fn bridge_lost_overlay(
 /// The backdrop and the Cancel button both keep the current version running,
 /// with the downloaded release parked for later.
 fn update_confirm_modal(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   version : String,
 ) -> @html.Html {

@@ -15,6 +15,8 @@ pub async fn configured_system_prompt(@argparse.Matches, @deepseek.Model, worksp
 
 pub async fn first_free_child_ordinal(@store.SessionStore, String) -> Int
 
+pub async fn generated_session_id() -> @agent_session.SessionId
+
 pub async fn load_or_new_session(@store.SessionStore, @agent_session.SessionId, @argparse.Matches, @deepseek.Model, workspace_root? : String) -> @agent_session.Session
 
 pub async fn new_scratch_lab(String) -> String

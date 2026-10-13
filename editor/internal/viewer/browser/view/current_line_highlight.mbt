@@ -28,7 +28,7 @@ priv struct CurrentLineHighlightState {
   mut selection_is_empty : Bool
   mut render_line_highlight_only_when_focus : Bool
   mut focused : Bool
-  mut cursor_line_numbers : Array[Int]
+  mut cursor_line_numbers : Array[Int32]
   mut selections : Array[@core.Selection]
   mut read_configuration : () -> (
     @editor_api.RenderLineHighlight,
@@ -115,7 +115,7 @@ fn CurrentLineHighlightState::on_cursor_state_changed(
 fn CurrentLineHighlightState::read_from_selections(
   self : CurrentLineHighlightState,
 ) -> Bool {
-  let line_numbers : Array[Int] = []
+  let line_numbers : Array[Int32] = []
   let mut selection_is_empty = true
   for selection in self.selections {
     let line_number = selection.get_position().line_number
@@ -177,7 +177,7 @@ fn CurrentLineHighlightOverlay::CurrentLineHighlightOverlay() -> CurrentLineHigh
 fn prepare_current_line_render(
   viewport : @view_layout.ViewportData,
   view_model : @view_model.ViewModel?,
-  cursor_view_line : Int?,
+  cursor_view_line : Int32?,
   selection_is_empty : Bool,
   editor_has_focus : Bool,
   word_wrap : Bool,
@@ -231,9 +231,9 @@ fn render_one(in_margin~ : Bool, exact~ : Bool, width~ : Double) -> String {
 /// cursor line.
 fn current_line_span(
   view_model : @view_model.ViewModel?,
-  cursor_view_line : Int,
+  cursor_view_line : Int32,
   word_wrap : Bool,
-) -> (Int, Int) {
+) -> (Int32, Int32) {
   if !word_wrap {
     return (cursor_view_line, cursor_view_line)
   }

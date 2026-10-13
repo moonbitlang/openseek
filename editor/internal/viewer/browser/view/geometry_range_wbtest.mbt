@@ -6,10 +6,10 @@
 priv type RangeFixture
 
 ///|
-extern "js" fn handy_range_create_count(state : HandyRangeState) -> Int = "(state) => state.createCount"
+extern "js" fn handy_range_create_count(state : HandyRangeState) -> Int32 = "(state) => state.createCount"
 
 ///|
-extern "js" fn handy_range_detach_count(state : HandyRangeState) -> Int = "(state) => state.detachCount"
+extern "js" fn handy_range_detach_count(state : HandyRangeState) -> Int32 = "(state) => state.detachCount"
 
 ///|
 test "DomReadingContext reads delta and scale once with zero-width fallback" {
@@ -358,7 +358,7 @@ extern "js" fn range_fixture_end_node(fixture : RangeFixture) -> @rdom.Element =
 ///|
 extern "js" fn range_fixture_text_node(
   fixture : RangeFixture,
-  index : Int,
+  index : Int32,
 ) -> DomNode = "(fixture, index) => fixture.root.children[index].firstChild"
 
 ///|
@@ -368,13 +368,15 @@ extern "js" fn range_fixture_set_failure(
 ) -> Unit = "(fixture, failure) => { fixture.failure = failure; }"
 
 ///|
-extern "js" fn range_fixture_context_read_count(fixture : RangeFixture) -> Int = "(fixture) => fixture.contextReadCount"
+extern "js" fn range_fixture_context_read_count(
+  fixture : RangeFixture,
+) -> Int32 = "(fixture) => fixture.contextReadCount"
 
 ///|
-extern "js" fn range_fixture_last_start_offset(fixture : RangeFixture) -> Int = "(fixture) => fixture.lastStartOffset"
+extern "js" fn range_fixture_last_start_offset(fixture : RangeFixture) -> Int32 = "(fixture) => fixture.lastStartOffset"
 
 ///|
-extern "js" fn range_fixture_last_end_offset(fixture : RangeFixture) -> Int = "(fixture) => fixture.lastEndOffset"
+extern "js" fn range_fixture_last_end_offset(fixture : RangeFixture) -> Int32 = "(fixture) => fixture.lastEndOffset"
 
 ///|
 extern "js" fn range_fixture_was_parked(fixture : RangeFixture) -> Bool = "(fixture) => fixture.parked"

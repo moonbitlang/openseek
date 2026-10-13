@@ -7,12 +7,12 @@
 /// Token accounting is part of the runner's observable contract — the
 /// runner tests assert it — and completes the `steps_used`/`subrun_id`
 /// getter family.
-pub fn[T] SubrunResult::prompt_tokens(self : SubrunResult[T]) -> Int {
+pub fn[T] SubrunResult::prompt_tokens(self : SubrunResult[T]) -> Int32 {
   self.prompt_tokens
 }
 
 ///|
 /// Completion tokens the child consumed, from its result file's `usage`.
-pub fn[T] SubrunResult::completion_tokens(self : SubrunResult[T]) -> Int {
+pub fn[T] SubrunResult::completion_tokens(self : SubrunResult[T]) -> Int32 {
   self.completion_tokens
 }

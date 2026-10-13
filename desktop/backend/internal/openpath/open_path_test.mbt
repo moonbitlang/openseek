@@ -61,7 +61,26 @@ async test "existing files win before editor positions" {
   @debug.assert_eq(@openpath.Reference(binary).resolve(), BrowserPath(binary))
   let pdf = "\{dir}/document.pdf"
   @fs.write_file(pdf, "%PDF-1.7\n%%EOF\n", create_mode=CreateOrTruncate)
-  @debug.assert_eq(@openpath.Reference(pdf).resolve(), BrowserPath(pdf))
+  @debug.assert_eq(
+    @openpath.Reference(pdf).resolve(),
+    EditorPath(path=pdf, line=None, column=None),
+  )
+  let office = "\{dir}/document.docx"
+  @fs.write_file(office, b"PK\x03\x04office", create_mode=CreateOrTruncate)
+  @debug.assert_eq(
+    @openpath.Reference(office).resolve(),
+    EditorPath(path=office, line=None, column=None),
+  )
+  let oversized_office = "\{dir}/large.xlsx"
+  @fs.write_file(
+    oversized_office,
+    "x".repeat(@openpath.MaxOfficeFileBytes + 1),
+    create_mode=CreateOrTruncate,
+  )
+  @debug.assert_eq(
+    @openpath.Reference(oversized_office).resolve(),
+    SystemPath(oversized_office),
+  )
   let oversized = "\{dir}/large.txt"
   let content = "x".repeat(@openpath.MaxEditorFileBytes + 1)
   @fs.write_file(oversized, content, create_mode=CreateOrTruncate)
@@ -82,7 +101,16 @@ async test "PDF content is recognized before the text size limit" {
     create_mode=CreateOrTruncate,
   )
   assert_true(
-    @openpath.Reference(path).resolve() is BrowserPath(actual) && actual == path,
+    @openpath.Reference(path).resolve() is EditorPath(path=actual, ..) &&
+    actual == path,
+  )
+  @fs.write_file(
+    path,
+    "%PDF-1.7\n" + "x".repeat(@openpath.MaxOfficeFileBytes),
+    create_mode=TruncateExisting,
+  )
+  assert_true(
+    @openpath.Reference(path).resolve() is SystemPath(actual) && actual == path,
   )
   @fs.write_file(path, "ordinary text", create_mode=TruncateExisting)
   assert_true(@openpath.Reference(path).resolve() is EditorPath(..))

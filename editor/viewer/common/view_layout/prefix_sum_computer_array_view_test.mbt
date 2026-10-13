@@ -1,5 +1,5 @@
 ///|
-fn assert_view_total(values : ArrayView[Int], expected : Int) -> Unit raise {
+fn assert_view_total(values : ArrayView[Int32], expected : Int32) -> Unit raise {
   let linear = @view_layout.PrefixSumComputer(values)
   let constant = @view_layout.ConstantTimePrefixSumComputer(values)
   assert_eq(linear.get_total_sum(), expected)
@@ -14,7 +14,7 @@ test "prefix sum constructors accept an empty view" {
 
 ///|
 test "prefix sum constructors accept a complete array view" {
-  let source : ReadOnlyArray[Int] = [1, 2, 3]
+  let source : ReadOnlyArray[Int32] = [1, 2, 3]
   assert_view_total(source[:], 6)
 }
 

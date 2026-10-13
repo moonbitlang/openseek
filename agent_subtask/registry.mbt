@@ -29,7 +29,7 @@ pub fn SubtaskState::is_terminal(self : SubtaskState) -> Bool {
 ///|
 /// One subtask's durable lifecycle record; see the file comment.
 pub struct SubtaskEntry {
-  priv schema_version : Int
+  priv schema_version : Int32
   name : String
   priv nonce : String
   branch : String
@@ -45,7 +45,7 @@ pub struct SubtaskEntry {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
-let registry_schema_version : Int = 1
+let registry_schema_version : Int32 = 1
 
 ///|
 /// Where entries live under the canonical common git dir.
@@ -146,7 +146,7 @@ fn paths_overlap(a : Array[String], b : Array[String]) -> Bool {
       let r = components(right)
       // Either component list being a prefix of the other is an overlap;
       // equal lists count as covered.
-      r.starts_with(l) || l.starts_with(r)
+      r.has_prefix(l) || l.has_prefix(r)
     })
   })
 }
@@ -198,7 +198,7 @@ fn with_default_conflict_paths(json : Json) -> Json {
       // original handle is returned rather than re-wrapped (Json's
       // constructors are read-only outside core).
       if !map.contains("conflict_paths") {
-        map["conflict_paths"] = ([] : Array[String]).to_json()
+        map["conflict_paths"] = Json(([] : Array[String]))
       }
       json
     }

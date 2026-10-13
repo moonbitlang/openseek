@@ -15,39 +15,39 @@
 
 ///|
 /// `FontStyle` — values are 2^x so a bit mask can be used.
-pub const FONT_STYLE_NONE : Int = 0
+pub const FONT_STYLE_NONE : Int32 = 0
 
 ///|
-const FONT_STYLE_ITALIC : Int = 1
+const FONT_STYLE_ITALIC : Int32 = 1
 
 ///|
-const FONT_STYLE_BOLD : Int = 2
+const FONT_STYLE_BOLD : Int32 = 2
 
 ///|
-const FONT_STYLE_UNDERLINE : Int = 4
+const FONT_STYLE_UNDERLINE : Int32 = 4
 
 ///|
-const FONT_STYLE_STRIKETHROUGH : Int = 8
+const FONT_STYLE_STRIKETHROUGH : Int32 = 8
 
 ///|
 /// `ColorId` — open ended at runtime.
-pub const COLOR_ID_DEFAULT_FOREGROUND : Int = 1
+pub const COLOR_ID_DEFAULT_FOREGROUND : Int32 = 1
 
 ///|
-pub const COLOR_ID_DEFAULT_BACKGROUND : Int = 2
+pub const COLOR_ID_DEFAULT_BACKGROUND : Int32 = 2
 
 ///|
 /// `StandardTokenType`.
-pub const STANDARD_TOKEN_TYPE_OTHER : Int = 0
+pub const STANDARD_TOKEN_TYPE_OTHER : Int32 = 0
 
 ///|
-pub const STANDARD_TOKEN_TYPE_COMMENT : Int = 1
+pub const STANDARD_TOKEN_TYPE_COMMENT : Int32 = 1
 
 ///|
-pub const STANDARD_TOKEN_TYPE_STRING : Int = 2
+pub const STANDARD_TOKEN_TYPE_STRING : Int32 = 2
 
 ///|
-pub const STANDARD_TOKEN_TYPE_REGEX : Int = 3
+pub const STANDARD_TOKEN_TYPE_REGEX : Int32 = 3
 
 // The binary metadata format (see encodedTokenAttributes.ts):
 //   bbbb bbbb ffff ffff fFFF FBTT LLLL LLLL
@@ -55,67 +55,67 @@ pub const STANDARD_TOKEN_TYPE_REGEX : Int = 3
 //   F = FontStyle (4), f = foreground (9), b = background (8)
 
 ///|
-const METADATA_LANGUAGEID_MASK : UInt = 0x0000_00FFU
+const METADATA_LANGUAGEID_MASK : UInt32 = 0x0000_00FFU
 
 ///|
-const METADATA_TOKEN_TYPE_MASK : UInt = 0x0000_0300U
+const METADATA_TOKEN_TYPE_MASK : UInt32 = 0x0000_0300U
 
 ///|
-const METADATA_BALANCED_BRACKETS_MASK : UInt = 0x0000_0400U
+const METADATA_BALANCED_BRACKETS_MASK : UInt32 = 0x0000_0400U
 
 ///|
-const METADATA_FONT_STYLE_MASK : UInt = 0x0000_7800U
+const METADATA_FONT_STYLE_MASK : UInt32 = 0x0000_7800U
 
 ///|
-const METADATA_FOREGROUND_MASK : UInt = 0x00FF_8000U
+const METADATA_FOREGROUND_MASK : UInt32 = 0x00FF_8000U
 
 ///|
-const METADATA_BACKGROUND_MASK : UInt = 0xFF00_0000U
+const METADATA_BACKGROUND_MASK : UInt32 = 0xFF00_0000U
 
 // The shift offsets are exposed (Monaco's public `MetadataConsts.*_OFFSET`) so
 // callers can build metadata words as `field << OFFSET`, as the suite does.
 
 ///|
-pub const METADATA_LANGUAGEID_OFFSET : Int = 0
+pub const METADATA_LANGUAGEID_OFFSET : Int32 = 0
 
 ///|
-pub const METADATA_TOKEN_TYPE_OFFSET : Int = 8
+pub const METADATA_TOKEN_TYPE_OFFSET : Int32 = 8
 
 ///|
-const METADATA_BALANCED_BRACKETS_OFFSET : Int = 10
+const METADATA_BALANCED_BRACKETS_OFFSET : Int32 = 10
 
 ///|
-pub const METADATA_FONT_STYLE_OFFSET : Int = 11
+pub const METADATA_FONT_STYLE_OFFSET : Int32 = 11
 
 ///|
-pub const METADATA_FOREGROUND_OFFSET : Int = 15
+pub const METADATA_FOREGROUND_OFFSET : Int32 = 15
 
 ///|
-pub const METADATA_BACKGROUND_OFFSET : Int = 24
+pub const METADATA_BACKGROUND_OFFSET : Int32 = 24
 
 ///|
 /// One packed 32-bit token metadata word. The distinct type keeps semantic APIs
 /// from accidentally accepting offsets or unrelated `UInt` values while its
 /// public scalar representation remains available at raw storage seams.
-pub(all) struct TokenMetadata(UInt) derive(Eq)
+pub(all) struct TokenMetadata(UInt32) derive(Eq)
 
 ///|
 /// Returns the raw word for flat encoded-token storage or transport.
-pub fn TokenMetadata::to_uint(self : TokenMetadata) -> UInt {
+pub fn TokenMetadata::to_uint(self : TokenMetadata) -> UInt32 {
   let TokenMetadata(raw) = self
   raw
 }
 
 ///|
 /// Returns the encoded language id.
-fn TokenMetadata::get_language_id(self : TokenMetadata) -> Int {
+fn TokenMetadata::get_language_id(self : TokenMetadata) -> Int32 {
   ((self.to_uint() & METADATA_LANGUAGEID_MASK) >> METADATA_LANGUAGEID_OFFSET).reinterpret_as_int()
 }
 
 ///|
 /// Returns the encoded standard token type.
 #warnings("-unused_value")
-fn TokenMetadata::get_token_type(self : TokenMetadata) -> Int {
+fn TokenMetadata::get_token_type(self : TokenMetadata) -> Int32 {
   ((self.to_uint() & METADATA_TOKEN_TYPE_MASK) >> METADATA_TOKEN_TYPE_OFFSET).reinterpret_as_int()
 }
 
@@ -128,20 +128,20 @@ fn TokenMetadata::contains_balanced_brackets(self : TokenMetadata) -> Bool {
 
 ///|
 /// Returns the encoded font-style bitset.
-fn TokenMetadata::get_font_style(self : TokenMetadata) -> Int {
+fn TokenMetadata::get_font_style(self : TokenMetadata) -> Int32 {
   ((self.to_uint() & METADATA_FONT_STYLE_MASK) >> METADATA_FONT_STYLE_OFFSET).reinterpret_as_int()
 }
 
 ///|
 /// Returns the foreground color id.
-fn TokenMetadata::get_foreground(self : TokenMetadata) -> Int {
+fn TokenMetadata::get_foreground(self : TokenMetadata) -> Int32 {
   ((self.to_uint() & METADATA_FOREGROUND_MASK) >> METADATA_FOREGROUND_OFFSET).reinterpret_as_int()
 }
 
 ///|
 /// Returns the background color id.
 #warnings("-unused_value")
-fn TokenMetadata::get_background(self : TokenMetadata) -> Int {
+fn TokenMetadata::get_background(self : TokenMetadata) -> Int32 {
   ((self.to_uint() & METADATA_BACKGROUND_MASK) >> METADATA_BACKGROUND_OFFSET).reinterpret_as_int()
 }
 

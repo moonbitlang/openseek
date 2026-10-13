@@ -26,7 +26,7 @@
 /// model can start from inside one, and goal runs execute unattended for
 /// hours. Generous enough that a real fan-out never notices; small enough that
 /// a runaway stops inside one call.
-pub let block_size : Int = 32
+pub let block_size : Int32 = 32
 
 ///|
 /// What a review child audits against when the model gives no criteria: the
@@ -66,7 +66,7 @@ struct SubrunInjection {
   model : String?
   api_url : String?
   /// Reserve N consecutive child ordinals and return the first.
-  reserve_ordinals : (Int) -> Int
+  reserve_ordinals : (Int32) -> Int32
   /// The standing goal at reservation time, if one stands.
   criteria : () -> AuditCriteria?
 }
@@ -91,14 +91,14 @@ struct SubrunInjection {
 /// resolving the engine through `PATH`: the report's derived JSON codecs cannot drift.
 pub fn SubrunInjection::SubrunInjection(
   exe~ : String,
-  launch_prefix? : Array[String] = [],
+  launch_prefix~ : Array[String] = [],
   session_root~ : String,
   parent~ : String,
   workspace_root~ : String,
-  reserve_ordinals~ : (Int) -> Int,
+  reserve_ordinals~ : (Int32) -> Int32,
   model? : String,
   api_url? : String,
-  criteria? : () -> AuditCriteria? = () => None,
+  criteria~ : () -> AuditCriteria? = () => None,
 ) -> SubrunInjection {
   {
     exe,
@@ -133,8 +133,8 @@ pub fn SubrunInjection::launch_prefix(self : SubrunInjection) -> Array[String] {
 /// directory holding the two files a reader tails for this run, and the guest
 /// variable that carries them.
 struct SubrunReservation {
-  base : Int
-  limit : Int
+  base : Int32
+  limit : Int32
   dir : String
   journal_path : String
   events_path : String
@@ -144,13 +144,13 @@ struct SubrunReservation {
 
 ///|
 /// The first child ordinal of the block.
-pub fn SubrunReservation::base(self : SubrunReservation) -> Int {
+pub fn SubrunReservation::base(self : SubrunReservation) -> Int32 {
   self.base
 }
 
 ///|
 /// How many ordinals the block holds — also the run's launch ceiling.
-pub fn SubrunReservation::limit(self : SubrunReservation) -> Int {
+pub fn SubrunReservation::limit(self : SubrunReservation) -> Int32 {
   self.limit
 }
 

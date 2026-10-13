@@ -35,7 +35,7 @@ pub fn agent_settings(
 ///|
 /// `None` — no flag, no env — means turns bounded by the model's context
 /// window (the engine's own default), not by a step count.
-pub fn max_steps(matches : @argparse.Matches) -> Int? raise {
+pub fn max_steps(matches : @argparse.Matches) -> Int32? raise {
   optional_positive_int(matches, "max-steps")
 }
 
@@ -46,7 +46,7 @@ pub fn max_steps(matches : @argparse.Matches) -> Int? raise {
 fn optional_positive_int(
   matches : @argparse.Matches,
   name : String,
-) -> Int? raise {
+) -> Int32? raise {
   match matches.values.get(name) {
     Some([input, ..]) => Some(@cli.parse_positive_int(input, "--\{name}"))
     _ => None
@@ -61,7 +61,7 @@ fn optional_positive_int(
 /// The pair is forwarded as `retry_attempts?, retry_backoff_ms?` down to every
 /// in-process `@client.Client`; `export_retry_overrides` carries it to child
 /// processes.
-pub fn retry_overrides(matches : @argparse.Matches) -> (Int?, Int?) raise {
+pub fn retry_overrides(matches : @argparse.Matches) -> (Int32?, Int32?) raise {
   let attempts = optional_positive_int(matches, "retry-attempts")
   let backoff_ms = optional_positive_int(matches, "retry-backoff-ms")
   (attempts, backoff_ms)

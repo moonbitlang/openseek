@@ -87,7 +87,7 @@ impl @language.HoverProvider for ComputerHoverProvider with fn provide_hover(
 
 ///|
 priv struct RecordingHoverProvider {
-  calls : Ref[Int]
+  calls : Ref[Int32]
   seen_token : Ref[@language.CancellationToken?]
 }
 
@@ -218,7 +218,7 @@ async fn run_hover_test_tasks_concurrently(
 
 ///|
 priv struct SuspendedHoverParticipant {
-  ordinal_value : Int
+  ordinal_value : Int32
   text : String
   started : @async.Semaphore
   release_gate : @async.Semaphore

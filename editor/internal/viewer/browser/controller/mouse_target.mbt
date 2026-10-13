@@ -61,7 +61,7 @@ fn HitTestResult::hit_target(self : HitTestResult) -> @rdom.Element? {
 fn hit_test_result_from_dom_info(
   ctx : HitTestContext,
   span_node : @rdom.Element,
-  offset : Int,
+  offset : Int32,
 ) -> HitTestResult {
   match ctx.get_position_from_dom_info(span_node, offset) {
     Some(position) =>
@@ -104,7 +104,7 @@ fn deduce_rage(
 /// `MouseTarget.createUnknown` (mouseTarget.ts:81-83).
 fn @editor_browser.MouseTarget::create_unknown(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position?,
 ) -> @editor_browser.MouseTarget {
   MouseTargetUnknown(
@@ -121,7 +121,7 @@ fn @editor_browser.MouseTarget::create_unknown(
 fn @editor_browser.MouseTarget::create_margin(
   type_ : @editor_browser.MouseTargetType,
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
   range : @base_common.Range,
   detail : @editor_browser.MouseTargetMarginData,
@@ -135,7 +135,7 @@ fn @editor_browser.MouseTarget::create_margin(
 fn @editor_browser.MouseTarget::create_view_zone(
   type_ : @editor_browser.MouseTargetType,
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
   detail : @editor_browser.MouseTargetViewZoneData,
 ) -> @editor_browser.MouseTarget {
@@ -153,7 +153,7 @@ fn @editor_browser.MouseTarget::create_view_zone(
 /// `MouseTarget.createContentText` (mouseTarget.ts:93-95).
 fn @editor_browser.MouseTarget::create_content_text(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
   range : @base_common.Range?,
   detail : @editor_browser.MouseTargetContentTextData,
@@ -171,7 +171,7 @@ fn @editor_browser.MouseTarget::create_content_text(
 /// `MouseTarget.createContentEmpty` (mouseTarget.ts:96-98).
 fn @editor_browser.MouseTarget::create_content_empty(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
   detail : @editor_browser.MouseTargetContentEmptyData,
 ) -> @editor_browser.MouseTarget {
@@ -188,7 +188,7 @@ fn @editor_browser.MouseTarget::create_content_empty(
 /// `MouseTarget.createContentWidget` (mouseTarget.ts:99-101).
 fn @editor_browser.MouseTarget::create_content_widget(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   detail : String,
 ) -> @editor_browser.MouseTarget {
   MouseTargetContentWidget(element~, mouse_column~, detail~)
@@ -198,7 +198,7 @@ fn @editor_browser.MouseTarget::create_content_widget(
 /// `MouseTarget.createScrollbar` (mouseTarget.ts:102-104).
 fn @editor_browser.MouseTarget::create_scrollbar(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
 ) -> @editor_browser.MouseTarget {
   MouseTargetScrollbar(
@@ -213,7 +213,7 @@ fn @editor_browser.MouseTarget::create_scrollbar(
 /// `MouseTarget.createOverlayWidget` (mouseTarget.ts:105-107).
 fn @editor_browser.MouseTarget::create_overlay_widget(
   element : @rdom.Element?,
-  mouse_column : Int,
+  mouse_column : Int32,
   detail : String,
 ) -> @editor_browser.MouseTarget {
   MouseTargetOverlayWidget(element~, mouse_column~, detail~)
@@ -222,7 +222,7 @@ fn @editor_browser.MouseTarget::create_overlay_widget(
 ///|
 /// `MouseTarget.createOutsideEditor` (mouseTarget.ts:108-110).
 fn @editor_browser.MouseTarget::create_outside_editor(
-  mouse_column : Int,
+  mouse_column : Int32,
   position : @base_common.Position,
   outside_position : @editor_browser.OutsidePosition,
   outside_distance : Double,
@@ -313,7 +313,7 @@ priv struct HitTestContext {
   view_model : @view_model.ViewModel
   layout_info : @config.EditorLayoutInfo
   view_dom_node : @rdom.Element
-  line_height : Int
+  line_height : Int32
   typical_halfwidth_character_width : Double
   last_render_data : PointerHandlerLastRenderData
   view_helper : PointerHandlerHelper
@@ -425,7 +425,7 @@ fn HitTestContext::get_full_line_range_at_coord(
 fn HitTestContext::get_line_number_at_vertical_offset(
   self : HitTestContext,
   mouse_vertical_offset : Double,
-) -> Int {
+) -> Int32 {
   self.view_model.view_layout.line_at_vertical_offset(mouse_vertical_offset)
 }
 
@@ -456,7 +456,7 @@ fn HitTestContext::is_in_bottom_padding(
 ///|
 fn HitTestContext::get_vertical_offset_for_line_number(
   self : HitTestContext,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   self.view_model.view_layout.get_vertical_offset_for_line_number(line_number)
 }
@@ -495,7 +495,7 @@ fn find_attribute_up_to(
 ///|
 fn HitTestContext::get_line_width(
   self : HitTestContext,
-  line_number : Int,
+  line_number : Int32,
 ) -> Double {
   (self.view_helper.get_line_width)(line_number)
 }
@@ -503,8 +503,8 @@ fn HitTestContext::get_line_width(
 ///|
 fn HitTestContext::visible_range_for_position(
   self : HitTestContext,
-  line_number : Int,
-  column : Int,
+  line_number : Int32,
+  column : Int32,
 ) -> @view.HorizontalPosition? {
   (self.view_helper.visible_range_for_position)(line_number, column)
 }
@@ -513,7 +513,7 @@ fn HitTestContext::visible_range_for_position(
 fn HitTestContext::get_position_from_dom_info(
   self : HitTestContext,
   span_node : @rdom.Element,
-  offset : Int,
+  offset : Int32,
 ) -> @base_common.Position? {
   (self.view_helper.get_position_from_dom_info)(span_node, offset)
 }
@@ -541,7 +541,7 @@ priv struct HitTestRequest {
   is_in_margin_area : Bool
   is_in_content_area : Bool
   mouse_content_horizontal_offset : Double
-  mouse_column : Int
+  mouse_column : Int32
   event_target : @rdom.Element?
   mut hit_test_result_cache : HitTestResult?
   mut use_hit_test_target : Bool
@@ -652,7 +652,7 @@ fn HitTestRequest::switch_to_hit_test_target(self : HitTestRequest) -> Unit {
 fn HitTestRequest::get_mouse_column(
   self : HitTestRequest,
   position? : @base_common.Position,
-) -> Int {
+) -> Int32 {
   match position {
     Some(position) =>
       if position.column <
@@ -1192,7 +1192,7 @@ fn hit_test_scrollbar(
 fn MouseTargetFactory::get_mouse_column(
   self : MouseTargetFactory,
   relative_pos : @editor_browser.CoordinatesRelativeToEditor,
-) -> Int {
+) -> Int32 {
   let layout_info = (self.view_helper.get_layout_info)()
   let font_info = (self.view_helper.get_font_info)()
   let scroll_left = match (self.view_helper.view_model)() {
@@ -1213,7 +1213,7 @@ fn MouseTargetFactory::get_mouse_column(
 fn get_mouse_column_static(
   mouse_content_horizontal_offset : Double,
   typical_halfwidth_character_width : Double,
-) -> Int {
+) -> Int32 {
   if mouse_content_horizontal_offset < 0.0 {
     return 1
   }
@@ -1256,7 +1256,7 @@ fn create_mouse_target_from_hit_test_position(
     })
   }
   // Let's define a, b, c and check if the offset is in between them...
-  let points : Array[(Double, Int)] = [] // (offset, column)
+  let points : Array[(Double, Int32)] = [] // (offset, column)
   points.push((visible_range.left.to_double(), column))
   if column > 1 &&
     ctx.visible_range_for_position(line_number, column - 1)
@@ -1570,7 +1570,7 @@ extern "js" fn native_caret_hit_node(hit : NativeCaretHit) -> @rdom.Node =
   #| (h) => h.node
 
 ///|
-extern "js" fn native_caret_hit_offset(hit : NativeCaretHit) -> Int =
+extern "js" fn native_caret_hit_offset(hit : NativeCaretHit) -> Int32 =
   #| (h) => h.offset | 0
 
 ///|
@@ -1622,7 +1622,7 @@ extern "js" fn controller_element_class_name(el : @rdom.Element) -> String =
   #| (el) => typeof el.className === "string" ? el.className : ""
 
 ///|
-extern "js" fn controller_text_content_length(el : @rdom.Element) -> Int =
+extern "js" fn controller_text_content_length(el : @rdom.Element) -> Int32 =
   #| (el) => (el.textContent || "").length
 
 ///|

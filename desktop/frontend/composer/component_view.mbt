@@ -1,6 +1,6 @@
 ///|
 fn Completion::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Completion,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -33,9 +33,10 @@ fn Completion::view(
 /// Render the permanent mention tray. Keeping it mounted when empty preserves
 /// the textarea's positional DOM identity.
 fn Entry::mention_chips(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
+  disabled~ : Bool,
 ) -> Array[@html.Html] {
   let chips : Array[@html.Html] = []
   for index, mention in self.draft.mentions {
@@ -53,6 +54,9 @@ fn Entry::mention_chips(
           element.url + "\n" + element.selector.unwrap_or(element.tag)
         } else if mention.ref_ is @mention_context.SemanticSearch(reference) {
           "Open semantic search with \{reference.matches.length()} matches"
+        } else if mention.ref_
+          is @mention_context.OfficeSelection(materialized~) {
+          @mention_context.office_selection_title(materialized)
         } else if target is Some(target) {
           dynamic_text(locale, DJump(target.file.to_string()))
         } else {
@@ -67,11 +71,11 @@ fn Entry::mention_chips(
         remove: Some(
           (emit(MentionRemoved(index)), @icons.icon(@icons.icon_close)),
         ),
-      }.render(locale~),
+      }.render(locale~, disabled~),
     )
   }
   if self.review_changes().length() > 0 {
-    chips.push(self.changes_chip(locale~, emit))
+    chips.push(self.changes_chip(locale~, emit, disabled~))
   }
   chips
 }
@@ -89,14 +93,14 @@ fn GoalInput::first_line(_self : GoalInput, text : String) -> String {
 /// Render the stable standing-goal row. All user operations leave the package
 /// as owner-bound actions instead of dispatching root messages directly.
 fn GoalInput::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : GoalInput,
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
   if self.draft is Some(_) {
-    return @html.div(class="composer-goal editing", [
+    return @html.div(class="composer-context-row composer-goal editing", [
       @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
       @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
       @html.button(
@@ -113,14 +117,14 @@ fn GoalInput::view(
     match pending {
       GoalSetting(text) =>
         (
-          "composer-goal pending",
+          "composer-context-row composer-goal pending",
           dynamic_text(locale, DSettingGoal(self.first_line(text).to_string())),
           text,
           true,
         )
       GoalClearing =>
         (
-          "composer-goal pending",
+          "composer-context-row composer-goal pending",
           ui(locale, ClearingGoal),
           ui(locale, WaitingEngine),
           false,
@@ -128,11 +132,11 @@ fn GoalInput::view(
     }
   } else {
     guard self.standing is Some(goal) else {
-      return @html.div(class="composer-goal hidden", "")
+      return @html.div(class="composer-context-row composer-goal hidden", "")
     }
     if goal.blocked is Some(reason) {
       (
-        "composer-goal blocked",
+        "composer-context-row composer-goal blocked",
         dynamic_text(locale, DGoalBlocked(self.first_line(reason).to_string())),
         dynamic_text(
           locale,
@@ -142,7 +146,7 @@ fn GoalInput::view(
       )
     } else {
       (
-        "composer-goal",
+        "composer-context-row composer-goal",
         dynamic_text(locale, DGoal(self.first_line(goal.text).to_string())),
         goal.text,
         true,
@@ -181,7 +185,7 @@ fn GoalInput::view(
 
 ///|
 fn Entry::action_buttons(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -209,6 +213,7 @@ fn Entry::action_buttons(
           title: ui(locale, SendLabel),
           disabled: !available ||
           self.image_reads > 0 ||
+          !self.attachment_requests.is_empty() ||
           self.draft.is_blank() ||
           (
             input.shell_command(self.draft) is Some(command) &&
@@ -239,7 +244,9 @@ fn Entry::action_buttons(
             Queue => ui(locale, QueueNextTurn)
             SaveQueue => ui(locale, SaveQueued)
           },
-          disabled: self.image_reads > 0,
+          disabled: input.presentation.disabled ||
+          self.image_reads > 0 ||
+          !self.attachment_requests.is_empty(),
           command: emit(SubmitRequested),
           content: @icons.icon(@icons.icon_arrow_up),
         })
@@ -251,7 +258,7 @@ fn Entry::action_buttons(
 
 ///|
 fn Entry::view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
   action_emit : @cmd.Emit[Action],
@@ -272,13 +279,23 @@ fn Entry::view(
   // other's child index as a run starts and ends.
   context.push(running_row(locale~, input.run, clock_ms~))
   context.push(input.goal.view(locale~, self.identity(), action_emit))
-  let image_emit = emit.map(event => ImageRead(self.identity(), event))
-  let can_attach = input.presentation.images_enabled &&
+  let image_emit = emit.map(event => {
+    ImageRead(self.identity(), self.root, event)
+  })
+  let can_attach = (input.presentation.images_enabled || input.root is Some(_)) &&
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None
   let status = input.presentation.status.map(component => {
-    component.render(locale~, self.identity(), action_emit)
+    // A transfer snapshots completed content. Let attachment reads/uploads
+    // finish before the user can move their owner to another agent.
+    let component = match component {
+      ModelStatus(control) if self.image_reads > 0 ||
+        !self.attachment_requests.is_empty() =>
+        ModelStatus({ ..control, disabled: true, })
+      other => other
+    }
+    component.render(locale~, self.identity(), self.draft, action_emit)
   })
   if can_attach {
     status.push(
@@ -286,7 +303,7 @@ fn Entry::view(
         class="composer-attach",
         type_="button",
         title=ui(locale, AttachHint),
-        on_click=@image_input.pick(locale~, image_emit),
+        on_click=pick_attachments(locale, input, image_emit),
         attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
         ui(locale, AttachImages),
       ),
@@ -294,19 +311,26 @@ fn Entry::view(
   }
   if self.image_reads > 0 {
     context.push(
-      @html.div(class="composer-image-notice", ui(locale, ReadingImages)),
+      @html.div(
+        class="composer-context-row composer-image-notice",
+        ui(locale, ReadingImages),
+      ),
     )
   }
   if self.image_error is Some(message) {
     context.push(
       @html.div(
-        class="composer-image-notice error",
+        class="composer-context-row composer-image-notice error",
         attrs=@html.Attrs::build().role("alert"),
         message,
       ),
     )
   }
+  for confirmation in self.attachment_confirmations(locale, emit) {
+    context.push(confirmation)
+  }
   View::{
+    allow_images: input.presentation.images_enabled,
     images: if can_attach {
       Some(image_emit)
     } else {
@@ -314,8 +338,12 @@ fn Entry::view(
     },
     before_inner: context,
     mentions: [
-      ..self.mention_chips(locale~, emit),
-      ..self.draft.image_previews(locale~, emit),
+      ..self.mention_chips(locale~, emit, disabled=input.presentation.disabled),
+      ..self.draft.image_previews(
+        locale~,
+        emit,
+        disabled=input.presentation.disabled,
+      ),
     ],
     value: if goal_mode {
       self.goal_draft.unwrap_or("")
@@ -404,7 +432,7 @@ fn Entry::submission_choice(self : Entry, input : Input) -> FollowupChoice? {
 
 ///|
 fn Entry::followup_menu(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : Entry,
   input : Input,
   emit : @cmd.Emit[Msg],

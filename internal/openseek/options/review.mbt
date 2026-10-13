@@ -30,6 +30,6 @@ fn review_deadline_option() -> @argparse.OptionArg {
 
 ///|
 /// `None` — no flag — means `execution`'s `GateDeadlineMs` default (900000).
-pub fn review_deadline_ms(matches : @argparse.Matches) -> Int? raise {
+pub fn review_deadline_ms(matches : @argparse.Matches) -> Int32? raise {
   optional_positive_int(matches, "review-deadline")
 }

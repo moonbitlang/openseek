@@ -5,7 +5,7 @@
 async fn Inbound::read(reader : &@io.Reader) -> Inbound {
   let buffer = Buffer()
   while reader.read_some(
-          max_len=Int::min(65536, InboundFrameMaxBytes - buffer.length() + 1),
+          max_len=Int32::min(65536, InboundFrameMaxBytes - buffer.length() + 1),
         )
         is Some(chunk) {
     if chunk.length() > InboundFrameMaxBytes - buffer.length() {
@@ -23,7 +23,7 @@ async test "remote image requests survive incremental reads at the frame limit" 
     writer.write(request)
     let padding = b" ".repeat(65536)
     for remaining = InboundFrameMaxBytes - request.length(); remaining > 0; {
-      let count = Int::min(remaining, padding.length())
+      let count = Int32::min(remaining, padding.length())
       writer.write(padding[:count])
       continue remaining - count
     }

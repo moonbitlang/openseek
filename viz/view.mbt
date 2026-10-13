@@ -13,7 +13,7 @@ pub(all) enum ViewMode {
 pub fn render_session(
   session : @agent_session.Session,
   mode : ViewMode,
-  subrun_children? : Map[String, @agent_session.Session] = Map([]),
+  subrun_children~ : Map[String, @agent_session.Session] = Map([]),
 ) -> @html.Html {
   let subrun = SubrunView::{
     parent: session.id().value(),
@@ -161,9 +161,9 @@ test "group_turns splits on terminals and keeps an unterminated tail" {
 /// Durable session logs do not store the transient `agent_step` events the CLI
 /// emits while running. Each current-format provider response has one
 /// non-replay `Assistant` event, whose sequence gives the stable step label.
-fn agent_step_labels(session : @agent_session.Session) -> Map[Int, String] {
+fn agent_step_labels(session : @agent_session.Session) -> Map[Int32, String] {
   let sequences = agent_step_sequences(session)
-  let labels : Map[Int, String] = Map([])
+  let labels : Map[Int32, String] = Map([])
   for index, sequence in sequences {
     labels.set(sequence, "Step \{index + 1}/\{sequences.length()}")
   }
@@ -172,7 +172,7 @@ fn agent_step_labels(session : @agent_session.Session) -> Map[Int, String] {
 
 ///|
 /// Sequence numbers of the events that represent agent steps, in log order.
-fn agent_step_sequences(session : @agent_session.Session) -> Array[Int] {
+fn agent_step_sequences(session : @agent_session.Session) -> Array[Int32] {
   [
     for event in session.events() if event.is_agent_step() => event.sequence()
   ]
@@ -180,14 +180,14 @@ fn agent_step_sequences(session : @agent_session.Session) -> Array[Int] {
 
 ///|
 fn turn_block(
-  number : Int,
+  number : Int32,
   turn : Array[@agent_session.SessionEvent],
   briefs : Map[String, String],
   failed : Map[String, Unit],
   escalated : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
-  step_labels : Map[Int, String],
+  step_labels : Map[Int32, String],
   subrun : SubrunView,
 ) -> @html.Html {
   // Offsets are relative to the turn's first stamped event: for reading a
@@ -240,13 +240,13 @@ fn turn_block(
 
 ///|
 /// Number of failed tool results in a turn, for the turn header's error badge.
-fn count_turn_tool_errors(turn : Array[@agent_session.SessionEvent]) -> Int {
+fn count_turn_tool_errors(turn : Array[@agent_session.SessionEvent]) -> Int32 {
   turn.count_if(event => event.item() is Tool(result) && result.is_error())
 }
 
 ///|
 /// `""` for one, `"s"` otherwise — for pluralizing a count in a label.
-fn plural(n : Int) -> String {
+fn plural(n : Int32) -> String {
   if n == 1 {
     ""
   } else {
@@ -351,7 +351,7 @@ test "the turn header counts only the steers a person typed" {
 /// person actually typed. A collapsed turn hides its cards, so the header
 /// carries a count — without it, an interjection that redirected a whole turn
 /// is invisible until the turn is expanded.
-fn count_turn_steers(turn : Array[@agent_session.SessionEvent]) -> Int {
+fn count_turn_steers(turn : Array[@agent_session.SessionEvent]) -> Int32 {
   let mut steers = 0
   let mut seen_first = false
   for event in turn {
@@ -463,7 +463,7 @@ fn event_card(
   briefs : Map[String, String],
   failed : Map[String, Unit],
   escalated : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
   step_label~ : String,
   subrun : SubrunView,
@@ -504,7 +504,7 @@ fn event_card(
 /// goal reminders and finish-time goal checks — surfaces the goal text
 /// itself instead of a wall of boilerplate. Any other runtime notice keeps
 /// the generic card.
-fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
+fn runtime_card(seq : Int32, time : String, content : String) -> @html.Html {
   if content.has_prefix(@agent_session.PlanReminderPrefix) {
     return plan_reminder_card(seq, time, content)
   }
@@ -553,7 +553,11 @@ fn runtime_card(seq : Int, time : String, content : String) -> @html.Html {
 ///|
 /// A plan-cadence reminder card: prose kept verbatim, the re-surfaced
 /// checklist (when present) as a progress meter plus status-classed rows.
-fn plan_reminder_card(seq : Int, time : String, content : String) -> @html.Html {
+fn plan_reminder_card(
+  seq : Int32,
+  time : String,
+  content : String,
+) -> @html.Html {
   let body : Array[@html.Html] = match split_plan_checklist(content) {
     Some((prose, steps)) =>
       [
@@ -580,7 +584,7 @@ fn plan_reminder_card(seq : Int, time : String, content : String) -> @html.Html 
 fn goal_notice_card(
   kind : String,
   label : String,
-  seq : Int,
+  seq : Int32,
   time : String,
   content : String,
   boilerplate~ : String,
@@ -847,7 +851,7 @@ fn plan_evolves(
 /// A compact progress meter: a proportional fill plus a `completed/total`
 /// tally. The fill switches to the "added" green only when every step is
 /// completed, so a finished plan reads differently from one merely underway.
-fn plan_progress_view(completed : Int, total : Int) -> @html.Html {
+fn plan_progress_view(completed : Int32, total : Int32) -> @html.Html {
   let percent = if total == 0 { 0 } else { completed * 100 / total }
   let fill_class = if completed == total {
     "plan-progress-fill complete"
@@ -864,7 +868,7 @@ fn plan_progress_view(completed : Int, total : Int) -> @html.Html {
 
 ///|
 fn plan_call_step(
-  number : Int,
+  number : Int32,
   step : @steps.PlanStep,
   baseline : Array[@steps.PlanStep]?,
 ) -> @html.Html {
@@ -887,7 +891,7 @@ fn plan_call_step(
 /// as the row's CSS class.
 fn plan_step_row(
   status~ : String,
-  number? : String = "",
+  number~ : String = "",
   title~ : String,
   chip~ : @html.Html,
 ) -> @html.Html {
@@ -993,12 +997,12 @@ fn plan_ribbon(steps : Array[@steps.PlanStep]) -> @html.Html {
 
 ///|
 fn assistant_card(
-  seq : Int,
+  seq : Int32,
   time : String,
   message : @agent_session.AssistantMessage,
   briefs : Map[String, String],
   failed : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
   step_label~ : String,
 ) -> @html.Html {
@@ -1013,7 +1017,7 @@ fn assistant_card(
       ]
     },
     ..if !message.content().is_blank() {
-      [text_block(message.content())]
+      workspace_file_content(message.content())
     },
     ..if !calls.is_empty() {
       [
@@ -1049,7 +1053,7 @@ fn tool_call_view(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
 ) -> @html.Html {
   let plan_steps = plan_call_steps(call)
@@ -1338,11 +1342,11 @@ fn is_blank_args(args : String) -> Bool {
 /// keeps the tool name and, on failure, a red flag — both visible while the card
 /// is collapsed — so a failed tool stands out without expanding it.
 fn tool_card(
-  seq : Int,
+  seq : Int32,
   time : String,
   result : @agent_session.ToolResult,
   escalated : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   subrun : SubrunView,
 ) -> @html.Html {
   let is_error = result.is_error()
@@ -1434,7 +1438,7 @@ fn result_flag(result : @agent_session.ToolResult) -> @html.Html {
 ///|
 /// The `call N` chip on a result card, linking back to the originating call;
 /// nothing for an unpaired result.
-fn result_back_link(pair : Int?) -> @html.Html {
+fn result_back_link(pair : Int32?) -> @html.Html {
   match pair {
     Some(n) =>
       pair_link(
@@ -1448,7 +1452,7 @@ fn result_back_link(pair : Int?) -> @html.Html {
 
 ///|
 fn summary_card(
-  seq : Int,
+  seq : Int32,
   time : String,
   summary : @agent_session.SessionSummary,
 ) -> @html.Html {
@@ -1462,13 +1466,13 @@ fn summary_card(
 ///|
 /// Caption for a compaction summary, shared by the raw log's card and the
 /// model view's projection of the same event so the two cannot drift.
-fn summary_label(from~ : Int, to~ : Int) -> String {
+fn summary_label(from~ : Int32, to~ : Int32) -> String {
   "Summary · covers events \{from}..\{to}"
 }
 
 ///|
 fn terminal_card(
-  seq : Int,
+  seq : Int32,
   time : String,
   terminal : @agent_session.TurnTerminal,
   step_label~ : String,
@@ -1535,9 +1539,9 @@ pub fn step_scrubber(session : @agent_session.Session) -> @html.Html {
 /// the last one at or before the error.
 fn steps_with_errors(
   session : @agent_session.Session,
-  seqs : Array[Int],
-) -> Map[Int, Unit] {
-  let flagged : Map[Int, Unit] = Map([])
+  seqs : Array[Int32],
+) -> Map[Int32, Unit] {
+  let flagged : Map[Int32, Unit] = Map([])
   for event in session.events() {
     guard event.item() is Tool(result) && result.is_error() else { continue }
     for index in (seqs.length() - 1)>=..0 {
@@ -1558,10 +1562,10 @@ fn steps_with_errors(
 /// whether the work it started hit tool errors, and how the model's reply
 /// opened.
 priv struct PromptMark {
-  seq : Int
+  seq : Int32
   time : String
   text : String
-  mut errors : Int
+  mut errors : Int32
   mut reply : String
 }
 
@@ -1685,7 +1689,7 @@ fn wall_clock_label(unix_ms : Int64) -> String {
 /// derives — month, day, hour and minute, so `n` is always in 0..=59. The
 /// domain matters: `pad_start` pads the rendered text, so a negative would
 /// come back as "-5" rather than a zero-padded field.
-fn pad2(n : Int) -> String {
+fn pad2(n : Int32) -> String {
   n.to_string().pad_start(2, '0')
 }
 
@@ -1796,8 +1800,8 @@ fn render_model(
 /// Relative event-time labels, keyed by durable event sequence. This uses the
 /// same per-turn base as the raw log, but keeps labels in total seconds so
 /// minute-boundary chips stay unambiguous in the compact model projection.
-fn event_time_labels(session : @agent_session.Session) -> Map[Int, String] {
-  let labels : Map[Int, String] = Map([])
+fn event_time_labels(session : @agent_session.Session) -> Map[Int32, String] {
+  let labels : Map[Int32, String] = Map([])
   for turn in group_turns(session.events()) {
     let base = turn_base_ms(turn)
     for event in turn {
@@ -1810,7 +1814,7 @@ fn event_time_labels(session : @agent_session.Session) -> Map[Int, String] {
 ///|
 fn model_summary_covers_event(
   summary_event : @agent_session.SessionEvent,
-  sequence : Int,
+  sequence : Int32,
 ) -> Bool {
   guard summary_event.item() is Summary(summary) else { return false }
   summary_event.sequence() > sequence &&
@@ -1878,7 +1882,7 @@ fn item_projects_model_message(item : @agent_session.SessionItem) -> Bool {
 
 ///|
 fn event_label(
-  labels : Map[Int, String],
+  labels : Map[Int32, String],
   event : @agent_session.SessionEvent,
 ) -> String {
   labels.get(event.sequence()).unwrap_or("")
@@ -1922,7 +1926,7 @@ priv enum MessageOrigin {
   FromRuntime
   /// A compaction summary, carrying the range it covers so the model view can
   /// caption it exactly as the raw log's own card does.
-  FromSummary(from~ : Int, to~ : Int)
+  FromSummary(from~ : Int32, to~ : Int32)
   /// An assistant/tool/terminal event, or a message with no durable event at
   /// all: the system prompt and the projection's synthesized tool repairs.
   Other
@@ -2226,7 +2230,7 @@ fn tool_call_is_build_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
 ) -> Bool {
   // `tags` holds exactly the unambiguous 1:1 call/result pairs. A duplicated
   // id collapses briefs into one map entry, which would make a call's stage
@@ -2250,7 +2254,7 @@ fn tool_call_is_run_failed(
   call : @deepseek.ToolCall,
   briefs : Map[String, String],
   failed : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
 ) -> Bool {
   tags.contains(call.id) &&
   call.name == "mbtx" &&
@@ -2276,7 +2280,7 @@ fn result_is_build_failed(result : @agent_session.ToolResult) -> Bool {
 /// the relationship ambiguous.
 fn raw_escalated_result_ids(
   session : @agent_session.Session,
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
 ) -> Map[String, Unit] {
   let ids : Map[String, Unit] = Map([])
   for event in session.events() {
@@ -2296,7 +2300,7 @@ fn raw_escalated_result_ids(
 /// and result messages that the model projection actually renders.
 fn model_escalated_result_ids(
   messages : Array[@deepseek.ChatMessage],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
 ) -> Map[String, Unit] {
   let ids : Map[String, Unit] = Map([])
   for message in messages {
@@ -2328,10 +2332,10 @@ fn model_escalated_result_ids(
 fn assign_pair_tags(
   call_ids : Array[String],
   result_ids : Array[String],
-) -> Map[String, Int] {
+) -> Map[String, Int32] {
   let call_counts = occurrence_counts(call_ids)
   let result_counts = occurrence_counts(result_ids)
-  let tags : Map[String, Int] = Map([])
+  let tags : Map[String, Int32] = Map([])
   let mut next = 1
   // A call_count of 1 means the id occurs exactly once in `call_ids`, so the loop
   // reaches each tagged id once and assigns it a unique number in call order.
@@ -2348,8 +2352,8 @@ fn assign_pair_tags(
 
 ///|
 /// How many times each id occurs in `ids`.
-fn occurrence_counts(ids : Array[String]) -> Map[String, Int] {
-  let counts : Map[String, Int] = Map([])
+fn occurrence_counts(ids : Array[String]) -> Map[String, Int32] {
+  let counts : Map[String, Int32] = Map([])
   for id in ids {
     counts.set(id, counts.get(id).unwrap_or(0) + 1)
   }
@@ -2358,7 +2362,7 @@ fn occurrence_counts(ids : Array[String]) -> Map[String, Int] {
 
 ///|
 /// Pair numbers for the raw view, drawn from every durable event it renders.
-fn raw_pair_tags(session : @agent_session.Session) -> Map[String, Int] {
+fn raw_pair_tags(session : @agent_session.Session) -> Map[String, Int32] {
   let call_ids : Array[String] = []
   let result_ids : Array[String] = []
   for event in session.events() {
@@ -2379,7 +2383,9 @@ fn raw_pair_tags(session : @agent_session.Session) -> Map[String, Int] {
 /// (so a healed synthetic tool message is a valid result partner, and a call
 /// compacted away contributes nothing). Only the structural id feeds this — the
 /// error flag, tool name, and brief still come solely through `model_shown_result`.
-fn model_pair_tags(messages : Array[@deepseek.ChatMessage]) -> Map[String, Int] {
+fn model_pair_tags(
+  messages : Array[@deepseek.ChatMessage],
+) -> Map[String, Int32] {
   let call_ids : Array[String] = []
   let result_ids : Array[String] = []
   for message in messages {
@@ -2395,13 +2401,13 @@ fn model_pair_tags(messages : Array[@deepseek.ChatMessage]) -> Map[String, Int] 
 
 ///|
 /// DOM anchor id for a tool call, keyed by pair number.
-fn tool_call_anchor(n : Int) -> String {
+fn tool_call_anchor(n : Int32) -> String {
   "\{anchor_namespace.val}tool-call-\{n}"
 }
 
 ///|
 /// DOM anchor id for a tool result, keyed by pair number.
-fn tool_result_anchor(n : Int) -> String {
+fn tool_result_anchor(n : Int32) -> String {
   "\{anchor_namespace.val}tool-result-\{n}"
 }
 
@@ -2409,7 +2415,7 @@ fn tool_result_anchor(n : Int) -> String {
 /// The `call N` chip shown on both a tool call and its result. It is an anchor
 /// that jumps to its partner (`href`), so clicking the chip on a call scrolls to
 /// its result card and vice versa; `title` states the direction.
-fn pair_link(n : Int, href~ : String, title~ : String) -> @html.Html {
+fn pair_link(n : Int32, href~ : String, title~ : String) -> @html.Html {
   @html.a(class="tool-link", href~, title~) <| "call \{n}"
 }
 
@@ -2453,13 +2459,110 @@ fn model_content_view(content : @agent_session.Content) -> Array[@html.Html] {
 }
 
 ///|
+/// Project assistant text into ordinary preformatted pieces and static file
+/// cards. The source remains in the durable JSONL; this function only changes
+/// the visual projection used by the standalone viewer.
+fn workspace_file_content(content : String) -> Array[@html.Html] {
+  let out : Array[@html.Html] = []
+  for part in @workspace_file_ref.markdown_parts(content) {
+    match part {
+      Text(text) => if !text.is_blank() { out.push(text_block(text)) }
+      File(reference) => out.push(workspace_file_card(reference))
+    }
+  }
+  if out.is_empty() {
+    [text_block(content)]
+  } else {
+    out
+  }
+}
+
+///|
+/// A standalone export has no desktop host to open a path through. Keep this
+/// card inert and show the reference without embedding or fetching its bytes.
+fn workspace_file_card(
+  reference : @workspace_file_ref.WorkspaceFileRef,
+) -> @html.Html {
+  let kind_class = workspace_file_kind_class(reference.kind)
+  @html.div(
+    class="workspace-file-card \{kind_class} workspace-file-card-static",
+    attrs=@html.Attrs::build().aria_label("Workspace file: \{reference.path}"),
+    [
+      @html.span(
+        class="workspace-file-glyph \{kind_class}",
+        attrs=@html.Attrs::build().aria_hidden("true"),
+        [workspace_file_icon(reference.kind)],
+      ),
+      @html.span(class="workspace-file-copy", [
+        @html.span(class="workspace-file-name", reference.name),
+        @html.span(
+          class="workspace-file-kind",
+          workspace_file_kind_label(reference.kind),
+        ),
+      ]),
+    ],
+  )
+}
+
+///|
+fn workspace_file_icon(kind : @workspace_file_ref.FileKind) -> @html.Html {
+  @svg.svg(
+    width=22,
+    height=22,
+    view_box="0 0 16 16",
+    attrs=@svg.Attrs::build().fill("currentColor"),
+    [@svg.path(d=@workspace_file_ref.file_icon_path(kind))],
+  )
+}
+
+///|
+fn workspace_file_kind_class(kind : @workspace_file_ref.FileKind) -> String {
+  match kind {
+    Spreadsheet => "spreadsheet"
+    Document => "document"
+    Presentation => "presentation"
+    Image => "image"
+    Pdf => "pdf"
+    Archive => "archive"
+    Code => "code"
+    Text => "text"
+    Generic => "generic"
+  }
+}
+
+///|
+fn workspace_file_kind_label(kind : @workspace_file_ref.FileKind) -> String {
+  match kind {
+    Spreadsheet => "Spreadsheet"
+    Document => "Document"
+    Presentation => "Presentation"
+    Image => "Image"
+    Pdf => "PDF document"
+    Archive => "Archive"
+    Code => "Code file"
+    Text => "Text file"
+    Generic => "File"
+  }
+}
+
+///|
+test "viz projects workspace file fences without accepting unsafe paths" {
+  let blocks = workspace_file_content(
+    "intro\n\n```openseek-file\nreports/matrix.xlsx\n```\n\noutro",
+  )
+  assert_eq(blocks.length(), 3)
+  let invalid = workspace_file_content("```openseek-file\n../matrix.xlsx\n```")
+  assert_eq(invalid.length(), 1)
+}
+
+///|
 fn message_card(
   message : @deepseek.ChatMessage,
   tool_results : Map[String, @agent_session.ToolResult],
   failed : Map[String, Unit],
   escalated : Map[String, Unit],
   briefs : Map[String, String],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
   time~ : String,
   step_label~ : String,
@@ -2566,7 +2669,7 @@ fn model_shown_result(
 pub fn rendered_error_count(
   session : @agent_session.Session,
   mode : ViewMode,
-) -> Int {
+) -> Int32 {
   rendered_result_count(session, mode, result => result.is_error())
 }
 
@@ -2578,7 +2681,7 @@ fn rendered_result_count(
   session : @agent_session.Session,
   mode : ViewMode,
   counts : (@agent_session.ToolResult) -> Bool,
-) -> Int {
+) -> Int32 {
   match mode {
     RawLog =>
       session
@@ -2605,7 +2708,7 @@ fn rendered_result_count(
 pub fn rendered_escalated_count(
   session : @agent_session.Session,
   mode : ViewMode,
-) -> Int {
+) -> Int32 {
   let mut count = 0
   match mode {
     RawLog =>
@@ -2633,7 +2736,7 @@ pub fn rendered_escalated_count(
 pub fn rendered_build_error_count(
   session : @agent_session.Session,
   mode : ViewMode,
-) -> Int {
+) -> Int32 {
   rendered_result_count(session, mode, result_is_build_failed)
 }
 
@@ -2672,7 +2775,7 @@ fn model_tool_card(
   message : @deepseek.ChatMessage,
   shown : @agent_session.ToolResult?,
   escalated : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   subrun : SubrunView,
   time~ : String,
   anchor~ : String?,
@@ -2741,7 +2844,7 @@ fn model_card(
   message : @deepseek.ChatMessage,
   briefs : Map[String, String],
   failed : Map[String, Unit],
-  tags : Map[String, Int],
+  tags : Map[String, Int32],
   plans : Map[String, Array[@steps.PlanStep]],
   time~ : String,
   step_label~ : String,
@@ -2756,7 +2859,10 @@ fn model_card(
         ],
       ]
     },
-    ..request_content_view(message.content),
+    ..request_content_view(
+      message.content,
+      render_workspace_files=message.role is Assistant,
+    ),
     ..if !message.tool_calls.is_empty() {
       [
         @html.div(class="tool-calls") <| [
@@ -2779,9 +2885,9 @@ fn model_card(
 fn model_card_head(
   label : String,
   time~ : String,
-  flag? : @html.Html = @html.nothing,
-  link? : @html.Html = @html.nothing,
-  step_label? : String = "",
+  flag~ : @html.Html = @html.nothing,
+  link~ : @html.Html = @html.nothing,
+  step_label~ : String = "",
 ) -> Array[@html.Html] {
   [
     flag,
@@ -2800,10 +2906,10 @@ fn model_card_head(
 fn card(
   kind : String,
   label : String,
-  seq : Int,
+  seq : Int32,
   time~ : String,
   body : Array[@html.Html],
-  step_label? : String = "",
+  step_label~ : String = "",
 ) -> @html.Html {
   // Every raw-view card anchors at its durable sequence: the id is what the
   // shell's scrollspy/restore and the step scrubber navigate by, and the
@@ -2817,7 +2923,7 @@ fn card(
 
 ///|
 /// DOM anchor id for the card of the event with durable sequence `seq`.
-fn seq_anchor(seq : Int) -> String {
+fn seq_anchor(seq : Int32) -> String {
   "\{anchor_namespace.val}seq-\{seq}"
 }
 
@@ -2828,11 +2934,11 @@ fn seq_anchor(seq : Int) -> String {
 /// its summary; it defaults to nothing for ordinary cards.
 fn card_head(
   label : String,
-  seq : Int,
+  seq : Int32,
   time~ : String,
-  flag? : @html.Html = @html.nothing,
-  link? : @html.Html = @html.nothing,
-  step_label? : String = "",
+  flag~ : @html.Html = @html.nothing,
+  link~ : @html.Html = @html.nothing,
+  step_label~ : String = "",
 ) -> Array[@html.Html] {
   [
     @html.span(class="card-seq") <| "#\{seq}",
@@ -2896,7 +3002,7 @@ fn one_line(text : String) -> String {
 ///|
 /// Keep the first `limit` characters, appending an ellipsis when text is cut.
 /// Iterates by character so it never splits a surrogate pair.
-fn truncate(text : String, limit : Int) -> String {
+fn truncate(text : String, limit : Int32) -> String {
   if text.length() <= limit {
     text
   } else {
@@ -3008,13 +3114,13 @@ fn encode_hash_component(value : String) -> String {
     "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F",
   ]
   let out = StringBuilder()
-  fn put_byte(b : Int) -> Unit {
+  fn put_byte(b : Int32) -> Unit {
     out <+ "%\{hex[b >> 4 & 0xF]}\{hex[b & 0xF]}"
   }
 
   for c in value {
     let code = c.to_int()
-    if c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~') {
+    if c is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '-' | '_' | '.' | '~') {
       out <+ "\{c}"
     } else if code < 0x80 {
       put_byte(code)
@@ -3114,15 +3220,26 @@ pub extend ViewMode with Eq::{equal, not_equal}
 
 ///|
 /// Render provider content without exposing image URLs or base64 payloads.
-fn request_content_view(content : @deepseek.Content) -> Array[@html.Html] {
-  content
-  .iter()
-  .filter_map(part => {
+/// Assistant text may additionally project workspace-file fences into static
+/// cards; the other roles keep the raw viewer presentation.
+fn request_content_view(
+  content : @deepseek.Content,
+  render_workspace_files~ : Bool = false,
+) -> Array[@html.Html] {
+  let out : Array[@html.Html] = []
+  for part in content.iter() {
     match part {
-      Text(text) => if text.is_blank() { None } else { Some(text_block(text)) }
-      File(file_id~) => Some(text_block("Image file: \{file_id}"))
-      ImageUrl(_) => Some(text_block("[Image]"))
+      Text(text) =>
+        if !text.is_blank() {
+          if render_workspace_files {
+            out.append(workspace_file_content(text))
+          } else {
+            out.push(text_block(text))
+          }
+        }
+      File(file_id~) => out.push(text_block("Image file: \{file_id}"))
+      ImageUrl(_) => out.push(text_block("[Image]"))
     }
-  })
-  .collect()
+  }
+  out
 }

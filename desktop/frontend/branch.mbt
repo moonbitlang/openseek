@@ -14,9 +14,9 @@
 /// `partial` marks a count that stopped short of every untracked file, which
 /// the chip says out loud rather than under-reporting quietly.
 priv struct DiffStat {
-  added : Int
-  removed : Int
-  files : Int
+  added : Int32
+  removed : Int32
+  files : Int32
   base : String?
   partial : Bool
 } derive(Eq, Debug)
@@ -51,7 +51,7 @@ priv struct PullRequestProbe {
 /// question from the locally measured `DiffStat` — and the reason only one of
 /// the two is ever on screen at a time.
 priv struct PullRequest {
-  number : Int
+  number : Int32
   title : String
   state : PullRequestState
   draft : Bool
@@ -61,9 +61,9 @@ priv struct PullRequest {
   // branch" — and the only one that survives a stacked pull request, whose
   // base is another feature branch no local rule would ever name.
   base : String
-  additions : Int
-  deletions : Int
-  changed_files : Int
+  additions : Int32
+  deletions : Int32
+  changed_files : Int32
   checks : Checks?
 } derive(Eq, Debug)
 
@@ -79,9 +79,9 @@ priv enum PullRequestState {
 ///|
 /// The head commit's checks, bucketed into what a chip can show at a glance.
 priv struct Checks {
-  passed : Int
-  failed : Int
-  pending : Int
+  passed : Int32
+  failed : Int32
+  pending : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -213,7 +213,7 @@ fn fetch_branch(
   channel : @interop.ChannelId,
   session : String,
   cwd : @common.Uri?,
-  generation~ : Int,
+  generation~ : Int32,
   base_hint? : String,
 ) -> @cmd.Cmd {
   match cwd {
@@ -295,7 +295,7 @@ fn probe_branch(
 /// makes it good for both jobs: stamping a probe whose reply will be matched
 /// against it, and — spent without a probe — fencing off the replies of
 /// probes whose answers are no longer wanted.
-fn Model::mint_git_request(self : Model) -> (Int, Model) {
+fn Model::mint_git_request(self : Model) -> (Int32, Model) {
   let generation = self.git_request_generation + 1
   (generation, { ..self, git_request_generation: generation, })
 }
@@ -458,7 +458,7 @@ fn probe_pull_request(
 /// in flight or yet to be issued can carry it.
 fn Conversation::forget_pull_request(
   self : Conversation,
-  fence~ : Int,
+  fence~ : Int32,
 ) -> Conversation {
   { ..self, pull_request: None, pull_request_generation: fence, }
 }
@@ -469,7 +469,10 @@ fn Conversation::forget_pull_request(
 /// checkout that has gone away, where anything still arriving describes a
 /// directory that no longer exists. One `fence` retires both probes: it is
 /// spent on neither.
-fn Conversation::forget_git(self : Conversation, fence~ : Int) -> Conversation {
+fn Conversation::forget_git(
+  self : Conversation,
+  fence~ : Int32,
+) -> Conversation {
   {
     ..self.forget_pull_request(fence~),
     branch: None,
@@ -489,7 +492,7 @@ fn fetch_pull_request(
   session : String,
   branch : String,
   cwd : @common.Uri?,
-  generation~ : Int,
+  generation~ : Int32,
 ) -> @cmd.Cmd {
   match cwd {
     Some(resource) if !@resource.belongs_to(resource, channel) =>

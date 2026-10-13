@@ -33,9 +33,9 @@ fn Verdict::name(self : Verdict) -> String {
 pub(all) struct Comparability {
   // The pre-batch run's error count; `None` when that run could not be made
   // (then every post-batch error was counted as introduced).
-  before_count : Int?
+  before_count : Int32?
   // Pre-batch errors (by `ErrorSite::identity`) still reported after.
-  remaining : Int
+  remaining : Int32
   // New errors inside a file this batch wrote — the signature of an over-match.
   new_in_edited : Array[String]
   // New errors in code that compiled cleanly before and depends on (or shares
@@ -48,13 +48,13 @@ pub(all) struct Comparability {
   new_in_dependents : Array[String]
   // New errors in packages independent of everything edited — cannot be
   // caused by the batch.
-  new_independent : Int
+  new_independent : Int32
   // New errors that could not be placed: no path, or a path in no package
   // moon knows from the checked project.
-  unlocated : Int
+  unlocated : Int32
   // Edited files outside every package of the checked project: the check ran
   // somewhere the batch did not edit, so its silence about them proves nothing.
-  unmapped_edits : Int
+  unmapped_edits : Int32
   // A `moon.mod`/`moon.work` edit can change what every package sees; the
   // package graph then says nothing about causation.
   module_manifest_edited : Bool
@@ -239,7 +239,7 @@ fn comparability(
   })
   // The packages this batch edited, and the subset that had pre-batch errors
   // (the ones the batch may have fixed, whose dependents moon skipped).
-  let edited_pkgs : Array[Int] = []
+  let edited_pkgs : Array[Int32] = []
   let mut unmapped_edits = 0
   if graph is Some(graph) {
     for target in edited {
@@ -267,7 +267,7 @@ fn comparability(
       }
     }
   }
-  let fixed_pkgs : Array[Int] = []
+  let fixed_pkgs : Array[Int32] = []
   if graph is Some(graph) && before is Some(before) {
     for site in before.errors {
       guard site.path is Some(path) else { continue }
@@ -377,7 +377,7 @@ fn in_edited_file(diagnostic_path : String, spellings : Array[String]) -> Bool {
 
 ///|
 /// How many sites of one class the revert report lists by name.
-const SiteDisplayLimit : Int = 5
+const SiteDisplayLimit : Int32 = 5
 
 ///|
 /// List up to `SiteDisplayLimit` sites of one class, with an overflow note.
@@ -394,7 +394,7 @@ fn site_list(sites : Array[String]) -> String {
 
 ///|
 /// The inclusive threshold that admits the reported delta.
-fn reissue_advice(introduced : Int) -> String {
+fn reissue_advice(introduced : Int32) -> String {
   "Re-issue the batch UNCHANGED with revert_if_error_delta_greater_or_equal=\{introduced + 1}; it will then be kept and the remaining errors reported."
 }
 
@@ -402,7 +402,7 @@ fn reissue_advice(introduced : Int) -> String {
 /// Explain the verdict and, for reach cases, give the inclusive retry threshold.
 pub fn comparability_advice(
   evidence : Comparability,
-  introduced~ : Int,
+  introduced~ : Int32,
 ) -> String {
   let narrow = "re-issue with more precise old_strings (include the receiver) and/or smaller batches so a replacement cannot stray onto unintended sites."
   let pre_batch = match evidence.before_count {

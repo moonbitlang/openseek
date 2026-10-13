@@ -50,14 +50,14 @@ pub struct PlanInput {
 /// Upper bound on plan length. More steps than this is a sign the model is
 /// planning at the wrong granularity, so decoding rejects it instead of
 /// letting the plan crowd out real work.
-pub const MAX_STEPS : Int = 20
+pub const MAX_STEPS : Int32 = 20
 
 ///|
 /// Upper bound on a step title, in Unicode characters (code points), counted
 /// after trimming. Titles are rendered into the UI brief and replayed with
 /// the tool-call arguments on every request, so oversized titles crowd out
 /// context.
-pub const MAX_TITLE_CHARS : Int = 120
+pub const MAX_TITLE_CHARS : Int32 = 120
 
 ///|
 /// Decode `plan` tool-call arguments.
@@ -104,7 +104,7 @@ pub fn decode(arguments : Json) -> PlanInput raise {
 }
 
 ///|
-fn decode_step(index : Int, item : Json) -> PlanStep raise {
+fn decode_step(index : Int32, item : Json) -> PlanStep raise {
   guard item is Object(fields) else {
     fail("arguments.steps[\{index}] to be an object")
   }
@@ -141,7 +141,7 @@ fn decode_step(index : Int, item : Json) -> PlanStep raise {
 /// Length counts code points, matching the `maxLength` the advertised JSON
 /// Schema promises, so a schema-valid title is never rejected over its
 /// encoding.
-fn normalize_title(index : Int, raw_title : String) -> String raise {
+fn normalize_title(index : Int32, raw_title : String) -> String raise {
   let title = raw_title.trim().to_owned()
   if title.contains("\n") || title.contains("\r") {
     fail("arguments.steps[\{index}].title to be a single line")

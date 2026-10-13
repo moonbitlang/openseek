@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek/jsonrpc",
+  "openseek_desktop/backend/uuid",
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/io",

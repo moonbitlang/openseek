@@ -17,7 +17,7 @@ pub(all) enum TraceOrigin {
 pub fn program_calls(
   data : Json?,
   parent : String,
-  origin? : TraceOrigin = Live,
+  origin~ : TraceOrigin = Live,
 ) -> Array[ToolCall] {
   guard data is Some({ "ptc_calls": Array(entries), .. }) else { return [] }
   // Only a recorded trace with a still-running entry needs the note; name

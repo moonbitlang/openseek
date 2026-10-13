@@ -44,7 +44,7 @@ pub fn ViewModel::model_position_to_view_position(
   self : ViewModel,
   position : @base_common.Position,
   affinity? : @model.PositionAffinity,
-  allow_zero_line_number? : Bool = false,
+  allow_zero_line_number~ : Bool = false,
 ) -> @base_common.Position {
   self.lines.convert_model_position_to_view_position(
     position.line_number,
@@ -58,8 +58,8 @@ pub fn ViewModel::model_position_to_view_position(
 /// Minimum one-based column of a view line, Monaco's `getLineMinColumn`.
 pub fn ViewModel::get_line_min_column(
   self : ViewModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   self.lines.get_view_line_min_column(view_line_number)
 }
 
@@ -67,8 +67,8 @@ pub fn ViewModel::get_line_min_column(
 /// Maximum one-based column of a view line, Monaco's `getLineMaxColumn`.
 pub fn ViewModel::get_line_max_column(
   self : ViewModel,
-  view_line_number : Int,
-) -> Int {
+  view_line_number : Int32,
+) -> Int32 {
   self.lines.get_view_line_max_column(view_line_number)
 }
 
@@ -78,8 +78,8 @@ pub fn ViewModel::get_line_max_column(
 /// region's boundary line.
 pub fn ViewModel::model_line_max_column(
   self : ViewModel,
-  model_line_number : Int,
-) -> Int {
+  model_line_number : Int32,
+) -> Int32 {
   self.model.snapshot.line_text(model_line_number - 1).length() + 1
 }
 

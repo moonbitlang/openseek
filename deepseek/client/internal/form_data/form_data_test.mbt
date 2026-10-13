@@ -145,7 +145,7 @@ priv suberror RejectedWrite {
 
 ///|
 priv struct RejectingWriter {
-  mut writes : Int
+  mut writes : Int32
 }
 
 ///|

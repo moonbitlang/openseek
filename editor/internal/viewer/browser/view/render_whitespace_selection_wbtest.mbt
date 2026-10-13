@@ -9,8 +9,8 @@
 /// Minimal view-line data for the derivation: only `min_column`/`max_column`
 /// (the non-anchor clamp bounds) feed `selections_on_line_for`.
 fn selection_line_data(
-  min_column : Int,
-  max_column : Int,
+  min_column : Int32,
+  max_column : Int32,
 ) -> @view_layout.ViewLineRenderingData {
   {
     min_column,
@@ -30,10 +30,10 @@ fn selection_line_data(
 
 ///|
 fn view_range(
-  start_line : Int,
-  start_column : Int,
-  end_line : Int,
-  end_column : Int,
+  start_line : Int32,
+  start_column : Int32,
+  end_line : Int32,
+  end_column : Int32,
 ) -> @base_common.Range {
   Range(start_line, start_column, end_line, end_column)
 }

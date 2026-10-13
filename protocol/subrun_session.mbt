@@ -15,7 +15,7 @@
 /// so a pathological session name cannot overflow it — beyond that the id is
 /// simply not a child id, which is the fail-closed reading (it renders as an
 /// ordinary session rather than folding under a parent it may not have).
-pub fn split_child_session_id(id : String) -> (String, Int)? {
+pub fn split_child_session_id(id : String) -> (String, Int32)? {
   let marker = "-sr-"
   let mut offset = 0
   let mut last = None

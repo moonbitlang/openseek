@@ -13,7 +13,7 @@ pub(all) enum CodeEditorOverviewRulerLane {
 
 ///|
 pub(all) struct CodeEditorOverviewRulerEntry {
-  id : Int
+  id : Int32
   range : @base_common.LineRange
   color : String
   lane : CodeEditorOverviewRulerLane
@@ -21,7 +21,7 @@ pub(all) struct CodeEditorOverviewRulerEntry {
 
 ///|
 priv struct CodeEditorOverviewRulerOffsetEntry {
-  id : Int
+  id : Int32
   start_offset : Double
   end_offset : Double
   color : String
@@ -30,9 +30,9 @@ priv struct CodeEditorOverviewRulerOffsetEntry {
 
 ///|
 struct CodeEditorOverviewRulerBand {
-  id : Int
-  from : Int
-  to : Int
+  id : Int32
+  from : Int32
+  to : Int32
   color : String
   lane : CodeEditorOverviewRulerLane
 } derive(Eq, Debug)
@@ -40,7 +40,7 @@ struct CodeEditorOverviewRulerBand {
 ///|
 fn code_editor_overview_ruler_lane_value(
   lane : CodeEditorOverviewRulerLane,
-) -> Int {
+) -> Int32 {
   match lane {
     Left => 1
     Center => 2
@@ -52,8 +52,8 @@ fn code_editor_overview_ruler_lane_value(
 ///|
 fn code_editor_overview_ruler_lane_geometry(
   lane : CodeEditorOverviewRulerLane,
-  width : Int,
-) -> (Int, Int) {
+  width : Int32,
+) -> (Int32, Int32) {
   let width = width.max(0)
   let left_width = width / 3
   let right_width = width / 3
@@ -123,7 +123,7 @@ fn resolve_code_editor_overview_ruler_bands(
 fn compare_code_editor_overview_ruler_bands(
   left : CodeEditorOverviewRulerBand,
   right : CodeEditorOverviewRulerBand,
-) -> Int {
+) -> Int32 {
   let lane = code_editor_overview_ruler_lane_value(left.lane) -
     code_editor_overview_ruler_lane_value(right.lane)
   if lane != 0 {
@@ -166,9 +166,9 @@ fn merge_code_editor_overview_ruler_bands(
 ///|
 fn closest_code_editor_overview_ruler_entry(
   bands : Array[CodeEditorOverviewRulerBand],
-  offset : Int,
-) -> Int? {
-  let mut best_id : Int? = None
+  offset : Int32,
+) -> Int32? {
+  let mut best_id : Int32? = None
   let mut best_distance = 2147483647
   let mut best_height = 2147483647
   for band in bands {
@@ -201,12 +201,12 @@ pub struct CodeEditorOverviewRuler {
   root : @rdom.Element
   external_host : @rdom.Element?
   minimum_marker_height : Double
-  on_select : ((Int) -> Unit)?
+  on_select : ((Int32) -> Unit)?
   listeners : Array[@base_common.Disposable]
   mut resize_observer : @base_common.Disposable?
   mut entries : Array[CodeEditorOverviewRulerEntry]
   mut bands : Array[CodeEditorOverviewRulerBand]
-  mut generation : Int
+  mut generation : Int32
   mut disposed : Bool
 }
 
@@ -229,8 +229,8 @@ fn CodeEditorOverviewRuler::attach_to_current_view(
 fn code_editor_overview_ruler_end_offset(
   start_offset : Double,
   converted_end_offset : Double,
-  view_line_count : Int,
-  line_height : Int,
+  view_line_count : Int32,
+  line_height : Int32,
 ) -> Double {
   if view_line_count == 0 {
     converted_end_offset + line_height.to_double()
@@ -406,8 +406,8 @@ fn initialize_code_editor_overview_ruler_dom(root : @rdom.Element) -> Unit {
 
 ///|
 fn code_editor_overview_ruler_accepts_generation(
-  current_generation : Int,
-  incoming_generation : Int,
+  current_generation : Int32,
+  incoming_generation : Int32,
 ) -> Bool {
   incoming_generation >= current_generation
 }
@@ -416,8 +416,8 @@ fn code_editor_overview_ruler_accepts_generation(
 pub fn CodeEditorWidget::create_overview_ruler(
   self : CodeEditorWidget,
   external_host? : @rdom.Element,
-  minimum_marker_height? : Double = 4.0,
-  on_select? : (Int) -> Unit,
+  minimum_marker_height~ : Double = 4.0,
+  on_select? : (Int32) -> Unit,
 ) -> CodeEditorOverviewRuler {
   let root = @rdom.document().create_element("canvas")
   initialize_code_editor_overview_ruler_dom(root)
@@ -467,7 +467,7 @@ pub fn CodeEditorWidget::create_overview_ruler(
 ///|
 pub fn CodeEditorOverviewRuler::set_entries(
   self : CodeEditorOverviewRuler,
-  generation : Int,
+  generation : Int32,
   entries : Array[CodeEditorOverviewRulerEntry],
 ) -> Unit {
   if self.disposed ||
@@ -482,7 +482,7 @@ pub fn CodeEditorOverviewRuler::set_entries(
 ///|
 pub fn CodeEditorOverviewRuler::clear(
   self : CodeEditorOverviewRuler,
-  generation : Int,
+  generation : Int32,
 ) -> Unit {
   self.set_entries(generation, [])
 }
@@ -497,14 +497,14 @@ pub fn CodeEditorOverviewRuler::get_dom_node(
 ///|
 pub fn CodeEditorOverviewRuler::generation(
   self : CodeEditorOverviewRuler,
-) -> Int {
+) -> Int32 {
   self.generation
 }
 
 ///|
 pub fn CodeEditorOverviewRuler::entry_count(
   self : CodeEditorOverviewRuler,
-) -> Int {
+) -> Int32 {
   self.entries.length()
 }
 
@@ -589,7 +589,7 @@ extern "js" fn prepare_code_editor_overview_ruler_canvas(
 ///|
 extern "js" fn code_editor_overview_ruler_canvas_width(
   canvas : @rdom.Element,
-) -> Int = "(canvas) => canvas.width | 0"
+) -> Int32 = "(canvas) => canvas.width | 0"
 
 ///|
 extern "js" fn resolve_code_editor_overview_ruler_color(
@@ -606,10 +606,10 @@ extern "js" fn resolve_code_editor_overview_ruler_color(
 ///|
 extern "js" fn fill_code_editor_overview_ruler_canvas_band(
   canvas : @rdom.Element,
-  left : Int,
-  width : Int,
-  from : Int,
-  to : Int,
+  left : Int32,
+  width : Int32,
+  from : Int32,
+  to : Int32,
   color : String,
 ) -> Unit =
   #| (canvas, left, width, from, to, color) => {

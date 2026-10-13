@@ -5,7 +5,7 @@ fn pane_geometry_from_code_editor_parts(
   line_height : Double,
   model_line_heights : Array[@code_widget.CodeEditorModelLineHeight],
   foreign_zone_heights : Array[@code_widget.CodeEditorForeignZoneHeight],
-  line_max_columns : Array[Int],
+  line_max_columns : Array[Int32],
   viewport_width : Double,
 ) -> PaneGeometrySnapshot {
   PaneGeometrySnapshot(

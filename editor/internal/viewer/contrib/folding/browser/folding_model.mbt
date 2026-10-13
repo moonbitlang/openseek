@@ -12,9 +12,9 @@
 /// (`foldingModel.ts:21`). Optional fields retain the source's compatibility
 /// defaults even though states produced by this version fill all three.
 priv struct FoldingLineMemento {
-  start_line_number : Int
-  end_line_number : Int
-  checksum : Int?
+  start_line_number : Int32
+  end_line_number : Int32
+  checksum : Int32?
   is_collapsed : Bool?
   source : FoldSource?
 } derive(Debug)
@@ -137,12 +137,12 @@ pub fn FoldingModel::toggle_collapse_state(
   let processed : Map[String, Bool] = Map([])
   self.decoration_access.change_decorations(accessor => {
     // index from [0 ... this.regions.length]
-    let mut k : Int = 0
+    let mut k : Int32 = 0
     // end of the range where decorations need to be updated
-    let mut dirty_region_end_line : Int = -1
+    let mut dirty_region_end_line : Int32 = -1
     // the end of the last hidden lines
-    let last_hidden_line : Ref[Int] = { val: -1, }
-    let update_decorations_until = (index : Int) => {
+    let last_hidden_line : Ref[Int32] = { val: -1, }
+    let update_decorations_until = (index : Int32) => {
       while k < index {
         let end_line_number = self.regions.get_end_line_number(k)
         let is_collapsed = self.regions.is_collapsed(k)
@@ -370,9 +370,9 @@ fn FoldingModel::apply_memento(
 /// stale persisted ranges.
 fn FoldingModel::get_lines_checksum(
   self : FoldingModel,
-  line_number_1 : Int,
-  line_number_2 : Int,
-) -> Int {
+  line_number_1 : Int32,
+  line_number_2 : Int32,
+) -> Int32 {
   let text = self.text_model.get_line_content(line_number_1) +
     self.text_model.get_line_content(line_number_2)
   let mut hash = 149417
@@ -394,8 +394,8 @@ fn FoldingModel::dispose(self : FoldingModel) -> Unit {
 /// `(region, level)` (level 1 = innermost).
 pub fn FoldingModel::get_all_regions_at_line(
   self : FoldingModel,
-  line_number : Int,
-  filter? : (FoldingRegion, Int) -> Bool,
+  line_number : Int32,
+  filter? : (FoldingRegion, Int32) -> Bool,
 ) -> Array[FoldingRegion] {
   let result : Array[FoldingRegion] = []
   let mut index = self.regions.find_range(line_number)
@@ -417,7 +417,7 @@ pub fn FoldingModel::get_all_regions_at_line(
 /// `line_number`.
 pub fn FoldingModel::get_region_at_line(
   self : FoldingModel,
-  line_number : Int,
+  line_number : Int32,
 ) -> FoldingRegion? {
   let index = self.regions.find_range(line_number)
   if index >= 0 {
@@ -432,7 +432,7 @@ pub fn FoldingModel::get_region_at_line(
 /// with-level form for the collapse helpers that track relative nesting.
 struct RegionFilter {
   plain : ((FoldingRegion) -> Bool)?
-  with_level : ((FoldingRegion, Int) -> Bool)?
+  with_level : ((FoldingRegion, Int32) -> Bool)?
 }
 
 ///|
@@ -444,7 +444,7 @@ pub fn RegionFilter::RegionFilter(
 
 ///|
 fn region_filter_with_level(
-  filter : (FoldingRegion, Int) -> Bool,
+  filter : (FoldingRegion, Int32) -> Bool,
 ) -> RegionFilter {
   { plain: None, with_level: Some(filter), }
 }
@@ -507,8 +507,8 @@ pub fn FoldingModel::get_regions_inside(
 pub fn set_collapse_state_levels_down(
   folding_model : FoldingModel,
   do_collapse : Bool,
-  levels? : Int = 0x7FFFFFFF,
-  line_numbers? : Array[Int],
+  levels~ : Int32 = 0x7FFFFFFF,
+  line_numbers? : Array[Int32],
 ) -> Unit {
   let to_toggle : Array[FoldingRegion] = []
   let inside_filter = region_filter_with_level((r, level) => {
@@ -543,7 +543,7 @@ pub fn set_collapse_state_levels_down(
 pub fn set_collapse_state_up(
   folding_model : FoldingModel,
   do_collapse : Bool,
-  line_numbers : Array[Int],
+  line_numbers : Array[Int32],
 ) -> Unit {
   let to_toggle : Array[FoldingRegion] = []
   for line_number in line_numbers {
@@ -564,9 +564,9 @@ pub fn set_collapse_state_up(
 /// blocked line.
 pub fn set_collapse_state_at_level(
   folding_model : FoldingModel,
-  fold_level : Int,
+  fold_level : Int32,
   do_collapse : Bool,
-  blocked_line_numbers : Array[Int],
+  blocked_line_numbers : Array[Int32],
 ) -> Unit {
   let filter = region_filter_with_level((region, level) => {
     level == fold_level &&

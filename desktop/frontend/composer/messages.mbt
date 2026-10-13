@@ -25,6 +25,10 @@ priv enum UiMessage {
   AttachHint
   AttachImages
   ReadingImages
+  UploadAttachment
+  UploadAttachmentQuestion
+  CancelAttachment
+  PreparingAttachment
   SteerPlaceholder
   QueuePlaceholder
   ThisMessage
@@ -229,21 +233,51 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, SaveQueued) => "保存排队消息"
     (TraditionalChinese, SaveQueued) => "儲存排隊訊息"
     (Japanese, SaveQueued) => "待機中のメッセージを保存"
-    (English, AttachHint) => "Attach images, 5 MiB each"
-    (Spanish, AttachHint) => "Adjuntar imágenes de hasta 5 MiB cada una"
-    (SimplifiedChinese, AttachHint) => "添加图片，每张不超过 5 MiB"
-    (TraditionalChinese, AttachHint) => "新增圖片，每張不超過 5 MiB"
-    (Japanese, AttachHint) => "1 枚あたり 5 MiB 以下の画像を追加"
-    (English, AttachImages) => "Attach images"
-    (Spanish, AttachImages) => "Adjuntar imágenes"
-    (SimplifiedChinese, AttachImages) => "添加图片"
-    (TraditionalChinese, AttachImages) => "新增圖片"
-    (Japanese, AttachImages) => "画像を追加"
-    (English, ReadingImages) => "Reading images…"
-    (Spanish, ReadingImages) => "Leyendo imágenes…"
-    (SimplifiedChinese, ReadingImages) => "正在读取图片…"
-    (TraditionalChinese, ReadingImages) => "正在讀取圖片…"
-    (Japanese, ReadingImages) => "画像を読み込み中…"
+    (English, AttachHint) =>
+      "Attach images (5 MiB) or PDF, DOCX, XLSX documents (20 MiB)"
+    (Spanish, AttachHint) =>
+      "Adjuntar imágenes (5 MiB) o documentos PDF, DOCX, XLSX (20 MiB)"
+    (SimplifiedChinese, AttachHint) =>
+      "添加图片（5 MiB）或 PDF、DOCX、XLSX 文档（20 MiB）"
+    (TraditionalChinese, AttachHint) =>
+      "新增圖片（5 MiB）或 PDF、DOCX、XLSX 文件（20 MiB）"
+    (Japanese, AttachHint) =>
+      "画像（5 MiB）または PDF、DOCX、XLSX 文書（20 MiB）を添付"
+    (English, AttachImages) => "Attach files"
+    (Spanish, AttachImages) => "Adjuntar archivos"
+    (SimplifiedChinese, AttachImages) => "添加附件"
+    (TraditionalChinese, AttachImages) => "新增附件"
+    (Japanese, AttachImages) => "ファイルを添付"
+    (English, ReadingImages) => "Reading attachments…"
+    (English, PreparingAttachment) => "Preparing attachment…"
+    (English, CancelAttachment) => "Cancel"
+    (English, UploadAttachmentQuestion) =>
+      "Upload this file to the current workspace? The original file will be kept."
+    (English, UploadAttachment) => "Upload to workspace"
+    (Spanish, ReadingImages) => "Leyendo archivos adjuntos…"
+    (Spanish, PreparingAttachment) => "Preparando archivo adjunto…"
+    (Spanish, CancelAttachment) => "Cancelar"
+    (Spanish, UploadAttachmentQuestion) =>
+      "¿Subir este archivo al espacio de trabajo actual? Se conservará el original."
+    (Spanish, UploadAttachment) => "Subir al espacio de trabajo"
+    (SimplifiedChinese, ReadingImages) => "正在读取附件…"
+    (SimplifiedChinese, PreparingAttachment) => "正在准备附件…"
+    (SimplifiedChinese, CancelAttachment) => "取消"
+    (SimplifiedChinese, UploadAttachmentQuestion) =>
+      "将此文件上传到当前工作区？原文件会保留。"
+    (SimplifiedChinese, UploadAttachment) => "上传到工作区"
+    (TraditionalChinese, ReadingImages) => "正在讀取附件…"
+    (TraditionalChinese, PreparingAttachment) => "正在準備附件…"
+    (TraditionalChinese, CancelAttachment) => "取消"
+    (TraditionalChinese, UploadAttachmentQuestion) =>
+      "將此文件上傳到目前工作區？原文件會保留。"
+    (TraditionalChinese, UploadAttachment) => "上傳到工作區"
+    (Japanese, ReadingImages) => "添付ファイルを読み込み中…"
+    (Japanese, PreparingAttachment) => "添付ファイルを準備中…"
+    (Japanese, CancelAttachment) => "キャンセル"
+    (Japanese, UploadAttachmentQuestion) =>
+      "このファイルを現在のワークスペースにアップロードしますか？元のファイルは保持されます。"
+    (Japanese, UploadAttachment) => "ワークスペースにアップロード"
     (English, SteerPlaceholder) => "Steer the running task."
     (Spanish, SteerPlaceholder) => "Orientar la tarea en curso."
     (SimplifiedChinese, SteerPlaceholder) => "引导正在运行的任务。"

@@ -1,6 +1,6 @@
 ///|
 test "every subscription reads the same published order" {
-  let channel : @broadcast.Channel[Int] = Channel(capacity=8)
+  let channel : @broadcast.Channel[Int32] = Channel(capacity=8)
   let first = channel.subscribe()
   let second = channel.subscribe()
   channel.publish(1)
@@ -25,7 +25,7 @@ test "a subscription starts at the head" {
 
 ///|
 test "falling behind the window lags once and resumes at the oldest retained value" {
-  let channel : @broadcast.Channel[Int] = Channel(capacity=2)
+  let channel : @broadcast.Channel[Int32] = Channel(capacity=2)
   let behind = channel.subscribe()
   let keeping_up = channel.subscribe()
   for value in 1..<=5 {
@@ -49,7 +49,7 @@ test "falling behind the window lags once and resumes at the oldest retained val
 
 ///|
 test "skipping to the head gives up the retained window" {
-  let channel : @broadcast.Channel[Int] = Channel(capacity=2)
+  let channel : @broadcast.Channel[Int32] = Channel(capacity=2)
   let subscription = channel.subscribe()
   for value in 1..<=5 {
     channel.publish(value)
@@ -68,7 +68,7 @@ test "skipping to the head gives up the retained window" {
 
 ///|
 test "lag reads as a sentence" {
-  let channel : @broadcast.Channel[Int] = Channel(capacity=1)
+  let channel : @broadcast.Channel[Int32] = Channel(capacity=1)
   let subscription = channel.subscribe()
   channel.publish(1)
   channel.publish(2)
@@ -84,7 +84,7 @@ test "lag reads as a sentence" {
 
 ///|
 async test "next waits for a publish and consumes nothing when cancelled" {
-  let channel : @broadcast.Channel[Int] = Channel(capacity=2)
+  let channel : @broadcast.Channel[Int32] = Channel(capacity=2)
   let subscription = channel.subscribe()
   // Nothing published: the timeout cancels the wait.
   assert_true(@async.with_timeout_opt(20, () => subscription.next()) is None)

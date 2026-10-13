@@ -1,7 +1,7 @@
 ///|
 /// Native filesystem host for the reference remote server.
 struct NativeServerHost {
-  poll_interval_ms : Int
+  poll_interval_ms : Int32
 }
 
 ///|
@@ -13,7 +13,7 @@ fn new_native_server_host() -> NativeServerHost {
 ///|
 /// Creates the native host with a clamped polling interval.
 fn native_server_host_with_poll_interval(
-  poll_interval_ms : Int,
+  poll_interval_ms : Int32,
 ) -> NativeServerHost {
   { poll_interval_ms: poll_interval_ms.max(10), }
 }
@@ -93,7 +93,7 @@ async fn read_native_directory(
 async fn poll_native_file_watch(
   root : String,
   path : @workspace.SourcePath,
-  poll_interval_ms : Int,
+  poll_interval_ms : Int32,
   disposed : Ref[Bool],
   listener : async (@workspace.FileChangeType) -> Unit,
 ) -> Unit {
@@ -249,8 +249,8 @@ fn skip_workspace_entry(path~ : String, name~ : String) -> Bool {
 /// Live protocol websocket outboxes, keyed by session id. Server-initiated
 /// pushes (diagnostics) broadcast one encoded frame to every session.
 priv struct ProtocolSessions {
-  next_session_id : Ref[Int]
-  outboxes : Map[Int, @aqueue.Queue[String]]
+  next_session_id : Ref[Int32]
+  outboxes : Map[Int32, @aqueue.Queue[String]]
 }
 
 ///|
@@ -262,14 +262,14 @@ fn ProtocolSessions::ProtocolSessions() -> ProtocolSessions {
 fn ProtocolSessions::attach(
   self : ProtocolSessions,
   outbox : @aqueue.Queue[String],
-) -> Int {
+) -> Int32 {
   self.next_session_id.val += 1
   self.outboxes.set(self.next_session_id.val, outbox)
   self.next_session_id.val
 }
 
 ///|
-fn ProtocolSessions::detach(self : ProtocolSessions, session : Int) -> Unit {
+fn ProtocolSessions::detach(self : ProtocolSessions, session : Int32) -> Unit {
   self.outboxes.remove(session)
 }
 
@@ -285,7 +285,7 @@ fn ProtocolSessions::broadcast(self : ProtocolSessions, raw : String) -> Unit {
 /// session already received a correlated response.
 fn ProtocolSessions::broadcast_except(
   self : ProtocolSessions,
-  excluded : Int,
+  excluded : Int32,
   raw : String,
 ) -> Unit {
   for session, outbox in self.outboxes {
@@ -308,12 +308,12 @@ fn enqueue(queue : @aqueue.Queue[String], message : String) -> Unit {
 /// `host="0.0.0.0"` opts into every IPv4 interface and LAN URL discovery.
 pub async fn run_native_editor_server(
   root : String,
-  host? : String = "127.0.0.1",
-  port? : Int = 5173,
-  asset_dir? : String = "web/dist",
-  moon_command? : String = "moon",
-  browse_root? : String = "",
-  log? : (String) -> Unit = println,
+  host~ : String = "127.0.0.1",
+  port~ : Int32 = 5173,
+  asset_dir~ : String = "web/dist",
+  moon_command~ : String = "moon",
+  browse_root~ : String = "",
+  log~ : (String) -> Unit = println,
 ) -> Unit {
   let server_host = NativeServerHost::NativeServerHost()
   let root : Ref[String] = Ref(realpath_or_normalized(root))
@@ -515,7 +515,7 @@ async fn handle_protocol_connection(
 async fn handle_protocol_message(
   workspace : NativeWorkspace,
   session_server : @server.RemoteServer,
-  session : Int,
+  session : Int32,
   outbox : @aqueue.Queue[String],
   raw : String,
   spawn_watch : (async () -> Unit) -> Unit,

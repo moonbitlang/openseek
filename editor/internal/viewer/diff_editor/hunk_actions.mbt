@@ -17,7 +17,7 @@ fn DiffEditorWidget::hunk_action_gutter_width(
 /// space. The widget owns their attachment and lifetime, but not their policy.
 pub fn DiffEditorWidget::set_hunk_action_renderer(
   self : DiffEditorWidget,
-  renderer : ((Int) -> @rdom.Element?)?,
+  renderer : ((Int32) -> @rdom.Element?)?,
 ) -> Unit {
   let previous_width = self.hunk_action_gutter_width()
   self.hunk_action_renderer = renderer
@@ -142,7 +142,7 @@ fn DiffEditorWidget::update_hunk_action_hover(self : DiffEditorWidget) -> Unit {
 
 ///|
 fn DiffEditorWidget::render_hunk_actions(self : DiffEditorWidget) -> Unit {
-  let mut focused : (Int, Int?, String?)? = None
+  let mut focused : (Int32, Int32?, String?)? = None
   for (index, node) in self.hunk_actions {
     if @base_browser.element_contains_active_element(node) {
       focused = Some(
@@ -220,7 +220,7 @@ fn DiffEditorWidget::layout_hunk_action_anchor(
 /// hosts. Original lines retain deletion geometry in both Split and Inline.
 pub fn DiffEditorWidget::get_hunk_viewport_bounds(
   self : DiffEditorWidget,
-  index : Int,
+  index : Int32,
 ) -> (Double, Double)? {
   let hunks = self.get_hunks()
   guard index >= 0 && index < hunks.length() else { return None }
@@ -289,7 +289,7 @@ fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
 /// at this hunk, so manual reading and toolbar navigation share one position.
 pub fn DiffEditorWidget::select_hunk(
   self : DiffEditorWidget,
-  index : Int,
+  index : Int32,
 ) -> Unit {
   guard index >= 0 && index < self.get_hunks().length() else { return }
   self.navigate_from_active_hunk = true
@@ -310,7 +310,7 @@ fn DiffEditorWidget::track_hunk_at_viewport_offset(
   self : DiffEditorWidget,
   offset : Double,
 ) -> Unit {
-  let mut nearest : (Int, Double)? = None
+  let mut nearest : (Int32, Double)? = None
   for index, _ in self.get_hunks() {
     if self.get_hunk_viewport_bounds(index) is Some((top, bottom)) {
       let distance = hunk_distance(top, bottom, offset)
@@ -328,7 +328,7 @@ fn DiffEditorWidget::track_hunk_at_viewport_offset(
 ///|
 fn DiffEditorWidget::navigate_active_hunk(
   self : DiffEditorWidget,
-  direction : Int,
+  direction : Int32,
   wrap : Bool,
 ) -> Bool {
   let hunks = self.get_hunks()

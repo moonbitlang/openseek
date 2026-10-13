@@ -176,8 +176,8 @@ priv struct CodexTurn {
   // Legacy interrupted turns can retain `startedAt` without ever receiving a
   // `completedAt`. Only app-server's explicit `inProgress` status reports a
   // live turn; it does not identify which process owns the writer.
-  started_at : Int?
-  completed_at : Int?
+  started_at : Int32?
+  completed_at : Int32?
   items : Array[CodexItem]
   // App-server's own statement of how complete `items` is: "full" is the
   // whole history, while "summary" (a `turn/completed` envelope drops the
@@ -223,6 +223,9 @@ priv struct CodexDraftTask {
   id : String
   cwd : String
   project_root : String?
+  // A lost thread/start reply may still leave a host-cached thread for this
+  // identity and cwd. Retrying must keep that pair even after an error.
+  thread_start_attempted : Bool
 } derive(Eq)
 
 ///|
@@ -252,6 +255,8 @@ priv struct CodexQuestion {
 
 ///|
 priv struct CodexPendingRequest {
+  response_token : String
+  expanded : Bool
   request_id : Json
   // Every supported app-server reverse request names its owning thread.
   // Keeping that identity here prevents one task from rendering or answering
@@ -273,7 +278,7 @@ priv struct CodexPendingRequest {
 /// canonical item is observed under the single-client FIFO rule documented in
 /// `State::with_observed_steer_item`.
 priv struct CodexSteerReceipt {
-  submission_id : Int
+  submission_id : Int32
   turn_id : String
   submitted : @composer.Draft
   known_user_item_ids : Array[String]
@@ -295,7 +300,7 @@ priv enum CodexSteerDelivery {
 /// accidentally pairing one generation with another request's frontier.
 priv struct CodexCatalogReplyContext {
   archived : Bool
-  generation : Int
+  generation : Int32
   activity_frontier : CodexActivityFrontier
 }
 
@@ -319,7 +324,7 @@ priv enum CodexReplyKind {
   CodexThreadsReply(CodexCatalogReplyContext)
   CodexThreadReply(String, CodexActivityFrontier)
   CodexResumeReply(String)
-  CodexDraftOpenReply(String)
+  CodexDraftOpenReply(String, cwd~ : String)
   CodexDraftThreadReply(String)
   // Both requests own the same composer lock, but their failure receipts are
   // different: start clears the first prompt, while steer clears only Sending.
@@ -344,7 +349,7 @@ priv enum CodexReplyKind {
 /// worktree creation still settles the turn that launched it without allowing
 /// unrelated replies to release the lock.
 priv enum CodexForeground {
-  CodexDraftOpenForeground(String)
+  CodexDraftOpenForeground(String, cwd~ : String)
   CodexThreadForeground(String)
   CodexResumeForeground(String)
   CodexDraftStartForeground(String)
@@ -380,7 +385,7 @@ enum Msg {
   CancelFullAccess
   GitLoaded(
     thread_id~ : String,
-    generation~ : Int,
+    generation~ : Int32,
     requested_cwd~ : String,
     reply~ : @protocol.GitPullRequestReply
   )
@@ -397,7 +402,13 @@ enum Msg {
   ToggleGitDetails
   CloseGitDetails
   ToggleWorktreeMode
-  StartDraft(id~ : String, cwd~ : String)
+  StartDraft(
+    id~ : String,
+    cwd~ : String,
+    draft~ : @composer.Draft,
+    worktree~ : Bool
+  )
+  ChangeDraftProject(cwd~ : String)
   AbandonDraft
   OpenThread(String)
   ArchiveThread(String)
@@ -417,12 +428,13 @@ enum Msg {
   Reply(kind~ : CodexReplyKind, value~ : Json)
   Failed(kind~ : CodexReplyKind, message~ : String)
   StatusChanged(Json)
-  Notification(method_~ : String, params~ : Json, generation~ : Int)
+  Notification(method_~ : String, params~ : Json, generation~ : Int32)
   ServerRequest(
+    response_token~ : String,
     request_id~ : Json,
     method_~ : String,
     params~ : Json,
-    generation~ : Int
+    generation~ : Int32
   )
 }
 
@@ -442,8 +454,13 @@ pub fn Msg::composer_action(action : @composer.Action) -> Msg {
 ///|
 /// Shell entrypoint for opening a local draft in an exact project directory.
 /// No app-server thread exists until the draft sends its first prompt.
-pub fn Msg::start_draft(id : String, cwd : String) -> Msg {
-  StartDraft(id~, cwd~)
+pub fn Msg::start_draft(
+  id : String,
+  cwd : String,
+  draft~ : @composer.Draft = { task: "", mentions: [], images: [], },
+  worktree~ : Bool = false,
+) -> Msg {
+  StartDraft(id~, cwd~, draft~, worktree~)
 }
 
 ///|
@@ -459,6 +476,12 @@ pub fn Msg::model_changed(id : String) -> Msg {
 /// the value before it can become the next `turn/start` override.
 pub fn Msg::effort_changed(effort : String) -> Msg {
   EffortChanged(effort)
+}
+
+///|
+/// Retarget the selected unsent draft without replacing its composer owner.
+pub fn Msg::change_draft_project(cwd : String) -> Msg {
+  ChangeDraftProject(cwd~)
 }
 
 ///|
@@ -483,6 +506,11 @@ pub fn Msg::cancel_login() -> Msg {
 ///|
 pub fn Msg::logout() -> Msg {
   Logout
+}
+
+///|
+pub fn Msg::is_account_action(self : Msg) -> Bool {
+  self is (Login | Logout | CancelLogin)
 }
 
 ///|
@@ -553,7 +581,7 @@ pub fn Msg::status_changed(value : Json) -> Msg {
 pub fn Msg::notification(
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> Msg {
   Notification(method_~, params~, generation~)
 }
@@ -561,12 +589,13 @@ pub fn Msg::notification(
 ///|
 /// Decode-free boundary for an app-server request forwarded by the host.
 pub fn Msg::server_request(
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> Msg {
-  ServerRequest(request_id~, method_~, params~, generation~)
+  ServerRequest(response_token~, request_id~, method_~, params~, generation~)
 }
 
 ///|
@@ -590,8 +619,8 @@ struct State {
   // Live and archived pagination are independent requests. Each refresh
   // advances both generations so a slower older walk cannot overwrite a
   // newer catalog after reconnect, archive, or device focus changes.
-  live_catalog_generation : Int
-  archived_catalog_generation : Int
+  live_catalog_generation : Int32
+  archived_catalog_generation : Int32
   selection : CodexSelection
   // The last sidebar selection awaiting a history snapshot. A reply carries
   // the same id, so an older request can never replace a newer selection.
@@ -600,11 +629,13 @@ struct State {
   // Every live Git lookup carries the number minted here. The counter belongs
   // to the Codex page rather than a thread or checkout because either can be
   // replaced while an older request is still in flight.
-  git_request_generation : Int
+  git_request_generation : Int32
   git_details_open : Bool
   draft : String
   mentions : Array[@composer.Mention]
   images : Array[@composer.Image]
+  // Leaving a draft retires its component cache and delayed editor actions.
+  composer_retirements : Array[@interop.ConversationKey]
   // The first submitted input remains visible while thread/worktree startup
   // has not produced its real app-server User item yet. This is display-only:
   // request construction continues to read `draft`, `mentions`, and `images`, and no
@@ -615,10 +646,10 @@ struct State {
   // turn items because app-server does not return the new user item id from
   // `turn/steer`.
   pending_steers : Array[CodexSteerReceipt]
-  next_steer_submission_id : Int
+  next_steer_submission_id : Int32
   // The shared component advances only after app-server accepts a submission.
   // Failed sends therefore keep the local draft.
-  submission_sequence : Int
+  submission_sequence : Int32
   // `$` remains the cwd-scoped app-server catalog. `@` and `#` are owned by
   // the shared component and use the same file/symbol subscriptions as Chat.
   skills : CodexSkillCatalog
@@ -628,14 +659,14 @@ struct State {
   // Actor-owned request generations order the attach snapshot and live
   // reverse-request events. Older snapshots/events are ignored instead of
   // erasing a request that arrived while the snapshot was in flight.
-  request_generation : Int
+  request_generation : Int32
   loading : Bool
   foreground : CodexForeground?
   notice : String
 } derive(Eq)
 
 ///|
-pub fn State::State(loading? : Bool = false) -> State {
+pub fn State::State(loading~ : Bool = false) -> State {
   {
     connection: CodexStarting,
     account: CodexAccountUnknown,
@@ -660,6 +691,7 @@ pub fn State::State(loading? : Bool = false) -> State {
     draft: "",
     mentions: [],
     images: [],
+    composer_retirements: [],
     submitted_first_prompt: None,
     pending_steers: [],
     next_steer_submission_id: 1,
@@ -673,6 +705,13 @@ pub fn State::State(loading? : Bool = false) -> State {
     foreground: None,
     notice: "",
   }
+}
+
+///|
+/// Reset host mirrors without resetting the singleton composer's retirement
+/// cursor. This log spans channels because composer owners include the channel.
+pub fn State::reset_for_channel(self : State) -> State {
+  { ..State(loading=true), composer_retirements: self.composer_retirements, }
 }
 
 ///|
@@ -723,7 +762,24 @@ pub fn State::can_start_thread(self : State) -> Bool {
 /// app-server thread yet — the only Codex surface where the unified model
 /// chip may still switch the conversation to another agent.
 pub fn State::composing_draft(self : State) -> Bool {
-  self.selection is CodexDraftTask(_)
+  self.selection is CodexDraftTask({ thread_start_attempted: false, .. })
+}
+
+///|
+/// Adding a project can retarget an unsent draft, but must not replace input
+/// awaiting a first-send retry. A lost reply may already have created its
+/// thread in the original project.
+pub fn State::can_add_project(self : State) -> Bool {
+  match self.selection {
+    CodexDraftTask(draft) => !self.loading && !draft.thread_start_attempted
+    CodexNoTask | CodexStoredTask(_) => true
+  }
+}
+
+///|
+/// Preserve the unsent conversation's launch choice across agent switches.
+pub fn State::draft_worktree_mode(self : State) -> Bool {
+  self.placement.wants_fresh()
 }
 
 ///|
@@ -796,7 +852,7 @@ pub enum CodexModelListing {
 
 ///|
 pub fn State::model_listing(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
 ) -> CodexModelListing {
   if !self.models.is_empty() {
@@ -936,6 +992,10 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
     | CodexWorktreeTurnReply(thread_id, _)
     | CodexWorktreeRepairReply(thread_id, _) =>
       self.active_thread() is Some(thread) && thread.id == thread_id
+    CodexDraftOpenReply(draft_id, cwd~) =>
+      self.active_draft() is Some(draft) &&
+      draft.id == draft_id &&
+      draft.cwd == cwd
     CodexDraftThreadReply(draft_id) =>
       self.active_draft() is Some(draft) && draft.id == draft_id
     _ => true
@@ -948,7 +1008,7 @@ fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
 /// foreground lock.
 fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
   match self {
-    CodexDraftOpenReply(id) => Some(CodexDraftOpenForeground(id))
+    CodexDraftOpenReply(id, cwd~) => Some(CodexDraftOpenForeground(id, cwd~))
     CodexThreadReply(id, _) => Some(CodexThreadForeground(id))
     CodexResumeReply(id) => Some(CodexResumeForeground(id))
     CodexDraftThreadReply(id) => Some(CodexDraftStartForeground(id))
@@ -991,7 +1051,7 @@ fn CodexForeground::belongs_to_thread(
     | CodexUnarchiveForeground(owner)
     | CodexCompactForeground(owner)
     | CodexReviewForeground(owner) => owner == thread_id
-    CodexDraftOpenForeground(_)
+    CodexDraftOpenForeground(_, ..)
     | CodexDraftStartForeground(_)
     | CodexLoginForeground
     | CodexCancelLoginForeground(_)
@@ -1116,6 +1176,28 @@ pub fn State::new_thread_cwd(self : State) -> String {
 }
 
 ///|
+/// Typed project boundary for the new-chat shell. The older Codex launch
+/// representation permits a cwd-less draft; malformed paths remain errors.
+pub fn State::draft_project(
+  self : State,
+  channel : @interop.ChannelId,
+) -> Result[@common.Uri?, String] {
+  guard self.active_draft() is Some(draft) else { return Ok(None) }
+  let path = if draft.project_root is Some(root) {
+    root
+  } else if draft.cwd.is_empty() {
+    return Ok(None)
+  } else {
+    draft.cwd
+  }
+  if @resource.of_path(channel, path) is Some(project) {
+    Ok(Some(project))
+  } else {
+    Err("Invalid Codex draft project path: " + path)
+  }
+}
+
+///|
 /// The project in which the selected local draft may create a worktree. A
 /// draft receives `project_root` only from `codex.draft.open`; the browser's
 /// original cwd is not enough to offer a filesystem-mutating launch mode.
@@ -1201,7 +1283,12 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
   let cwd = cwd.trim().to_owned()
   {
     ..self,
-    selection: CodexDraftTask({ id, cwd, project_root: None, }),
+    selection: CodexDraftTask({
+      id,
+      cwd,
+      project_root: None,
+      thread_start_attempted: false,
+    }),
     requested_thread: None,
     git_status: None,
     git_details_open: false,
@@ -1237,7 +1324,7 @@ pub fn State::with_editor_comment(
   range : @common.Range,
   comment : String,
   quote : String,
-  side? : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
+  side~ : @mention_context.AnnotationSide = @mention_context.WorkingRevision,
 ) -> State {
   let mentions = self.mentions.copy()
   let annotation : @composer.Mention = {
@@ -1273,6 +1360,21 @@ pub fn State::with_semantic_selection(
     images: self.images,
   }
   { ..self, mentions: draft.with_semantic_selection(reference).mentions, }
+}
+
+///|
+/// Keep Office selections in Codex's independently owned composer using the
+/// same explicit-confirmation and accumulation rules as the OpenSeek composer.
+pub fn State::with_office_selection(
+  self : State,
+  materialized : String?,
+) -> State {
+  let draft : @composer.Draft = {
+    task: self.draft,
+    mentions: self.mentions,
+    images: self.images,
+  }
+  { ..self, mentions: draft.with_office_selection(materialized).mentions, }
 }
 
 ///|
@@ -1673,21 +1775,26 @@ fn State::with_requests(self : State, value : Json) -> State {
   let pending_requests : Array[CodexPendingRequest] = []
   for value in values {
     guard value is Object(request) &&
+      @jsonx.json_text(request, "response_token") is Some(response_token) &&
       request.get("request_id") is Some(request_id) &&
       @jsonx.json_text(request, "method") is Some(method_) &&
       request.get("params") is Some(params) &&
-      CodexPendingRequest::decode(request_id, method_, params) is Some(decoded) else {
+      CodexPendingRequest::decode(response_token, request_id, method_, params)
+      is Some(decoded) else {
       continue
     }
     // Preserve edits for a request already shown while replacing the list
     // with the actor's exact live ownership snapshot.
-    let key = request_id.stringify()
-    let answers = self.pending_requests
+    let existing = self.pending_requests
       .iter()
-      .find_first(existing => existing.request_id.stringify() == key)
-      .map(existing => existing.answers)
-      .unwrap_or(Map([]))
-    pending_requests.push({ ..decoded, answers, })
+      .find_first(existing => existing.response_token == response_token)
+    pending_requests.push(
+      match existing {
+        Some(existing) =>
+          { ..decoded, answers: existing.answers, expanded: existing.expanded, }
+        None => decoded
+      },
+    )
   }
   { ..self, pending_requests, request_generation: generation, }
 }
@@ -1869,7 +1976,7 @@ fn State::with_worktree_change(
 fn State::with_git_reply(
   self : State,
   thread_id : String,
-  generation : Int,
+  generation : Int32,
   requested_cwd : String,
   reply : @protocol.GitPullRequestReply,
 ) -> State {
@@ -2188,7 +2295,7 @@ fn State::with_notification(
   self : State,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   guard params is Object(fields) else { return self }
   if method_ == "serverRequest/resolved" &&
@@ -2314,38 +2421,69 @@ fn State::with_notification(
 ///|
 fn State::with_pending_request(
   self : State,
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
-  generation : Int,
+  generation : Int32,
 ) -> State {
   if generation <= self.request_generation {
     return self
   }
-  guard CodexPendingRequest::decode(request_id, method_, params)
+  guard CodexPendingRequest::decode(response_token, request_id, method_, params)
     is Some(request) else {
     return { ..self, request_generation: generation, }
   }
   let key = request_id.stringify()
-  if self.pending_requests.any(request => request.request_id.stringify() == key) {
+  if self.pending_requests.any(request => {
+      request.response_token == response_token
+    }) {
     return { ..self, request_generation: generation, }
   }
-  let pending_requests = self.pending_requests.copy()
+  let pending_requests = self.pending_requests.filter(previous => {
+    previous.request_id.stringify() != key
+  })
   pending_requests.push(request)
   { ..self, pending_requests, request_generation: generation, }
 }
 
 ///|
 fn CodexPendingRequest::decode(
+  response_token : String,
   request_id : Json,
   method_ : String,
   params : Json,
 ) -> CodexPendingRequest? {
-  guard params is Object(fields) &&
+  guard !response_token.is_blank() &&
+    params is Object(fields) &&
     @jsonx.json_text(fields, "threadId") is Some(thread_id) else {
     return None
   }
-  Some({ request_id, thread_id, method_, params, answers: Map([]), })
+  Some({
+    response_token,
+    request_id,
+    thread_id,
+    method_,
+    params,
+    answers: Map([]),
+    expanded: false,
+  })
+}
+
+///|
+fn State::toggle_request(self : State, request_key : String) -> State {
+  {
+    ..self,
+    pending_requests: self.pending_requests.map(request => {
+      if request.response_token == request_key &&
+        self.active_thread() is Some(active) &&
+        request.thread_id == active.id {
+        { ..request, expanded: !request.expanded, }
+      } else {
+        request
+      }
+    }),
+  }
 }
 
 ///|
@@ -2358,7 +2496,7 @@ fn State::with_request_answer(
   {
     ..self,
     pending_requests: self.pending_requests.map(request => {
-      if request.request_id.stringify() == request_key &&
+      if request.response_token == request_key &&
         self.active_thread() is Some(active) &&
         request.thread_id == active.id {
         let answers = request.answers.copy()
@@ -2447,7 +2585,7 @@ fn CodexPendingRequest::response(
 
 ///|
 fn CodexItem::text(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> String {
   let streamed = self.streamed
@@ -2517,7 +2655,7 @@ fn CodexItem::text(
 /// OpenSeek's transcript renderer. This is the only place that knows both
 /// vocabularies; the shared view never switches on Codex JSON item names.
 fn CodexItem::transcript_item(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> @transcript.TranscriptItem {
   // Every app-server item is one response-shaped item: prose, a thought, or
@@ -2534,6 +2672,7 @@ fn CodexItem::transcript_item(
       calls~,
       replay=false,
       finished=false,
+      end_sequence=None,
     )
   }
   let kind = match self.kind {
@@ -2702,7 +2841,7 @@ fn CodexItem::tool_output(self : CodexItem) -> String {
 /// The activity summary owns the count (for example "Ran 2 commands"); this
 /// brief labels the individual expandable row underneath it.
 fn CodexItem::tool_brief(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : CodexItem,
 ) -> String? {
   guard self.value is Object(fields) else { return Some(self.kind) }
@@ -2741,7 +2880,7 @@ fn CodexItem::tool_brief(
 /// view used for OpenSeek. Notices and per-turn failures become ordinary
 /// danger messages, so Codex does not need a parallel banner/message layout.
 pub fn State::transcript_items(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : State,
 ) -> Array[@transcript.TranscriptItem] {
   let items : Array[@transcript.TranscriptItem] = []
@@ -2786,6 +2925,7 @@ pub fn State::transcript_items(
               calls~,
               replay~,
               finished=true,
+              end_sequence=None,
             ),
           }
         } else {
@@ -2952,6 +3092,7 @@ test "Codex running turn supplies the interrupt target" {
 ///|
 test "Codex request replies preserve structured values" {
   let request : CodexPendingRequest = {
+    response_token: "token-1",
     request_id: Json(7),
     thread_id: "thread-1",
     method_: "item/tool/requestUserInput",
@@ -2966,17 +3107,20 @@ test "Codex request replies preserve structured values" {
       ],
     },
     answers: { "scope": "Small" },
+    expanded: false,
   }
   assert_eq(
     request.response(Json("accept")),
     Some({ "answers": { "scope": { "answers": ["Small"] } } }),
   )
   let command : CodexPendingRequest = {
+    response_token: "token-1",
     request_id: Json(8),
     thread_id: "thread-1",
     method_: "item/commandExecution/requestApproval",
     params: { "threadId": "thread-1" },
     answers: {},
+    expanded: false,
   }
   let decision : Json = {
     "acceptWithExecpolicyAmendment": {
@@ -3429,4 +3573,111 @@ pub fn State::with_browser_annotation(
     images: self.images,
   }
   { ..self, mentions: draft.with_mention(mention).mentions, }
+}
+
+///|
+test "Codex same-id replacement does not inherit answers, disclosure, or old card actions" {
+  let initial = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let params : Json = {
+    "threadId": "thread-1",
+    "questions": [{ "id": "scope" }],
+  }
+  let old = initial
+    .with_pending_request(
+      "old-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      1,
+    )
+    .with_request_answer("old-token", "scope", "old answer")
+    .toggle_request("old-token")
+  assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
+  let snapshot = old.with_requests({
+    "generation": 1,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "old-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(
+    snapshot.pending_requests[0].answers.get("scope"),
+    Some("old answer"),
+  )
+  assert_true(snapshot.pending_requests[0].expanded)
+  let fresh = snapshot
+    .with_pending_request(
+      "new-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      3,
+    )
+    .with_request_answer("old-token", "scope", "late edit")
+  assert_eq(fresh.pending_requests.length(), 1)
+  assert_eq(fresh.pending_requests[0].response_token, "new-token")
+  assert_true(fresh.pending_requests[0].answers.is_empty())
+  assert_false(fresh.pending_requests[0].expanded)
+  let recovered = old.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(recovered.pending_requests[0].response_token, "new-token")
+  assert_true(recovered.pending_requests[0].answers.is_empty())
+  assert_false(recovered.pending_requests[0].expanded)
+  let resolved = recovered.with_notification(
+    "serverRequest/resolved",
+    { "requestId": 7 },
+    4,
+  )
+  let stale = resolved.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_true(stale.pending_requests.is_empty())
+}
+
+///|
+test "draft project distinguishes no project from malformed paths" {
+  let channel = @interop.ChannelId::Local
+  assert_eq(State().draft_project(channel), Ok(None))
+  assert_eq(
+    State().select_draft("scratch", "").draft_project(channel),
+    Ok(None),
+  )
+  let valid = State().select_draft("project", "/workspace")
+  assert_true(valid.draft_project(channel) is Ok(Some(_)))
+  assert_true(
+    State().select_draft("invalid", "relative").draft_project(channel) is Err(_),
+  )
+  let confirmed_invalid = {
+    ..valid,
+    selection: CodexDraftTask({
+      id: "project",
+      cwd: "/workspace",
+      project_root: Some(""),
+      thread_start_attempted: false,
+    }),
+  }
+  assert_true(confirmed_invalid.draft_project(channel) is Err(_))
 }

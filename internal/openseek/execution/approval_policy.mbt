@@ -27,7 +27,7 @@ pub enum ApprovalPolicy {
 pub fn approval_policy(
   matches : @argparse.Matches,
   interactive~ : Bool,
-  delegated? : Bool = false,
+  delegated~ : Bool = false,
 ) -> ApprovalPolicy raise {
   // Every subcommand that reads this declares the option with a default, so
   // an absent value is a command tree that forgot one — not a state a user

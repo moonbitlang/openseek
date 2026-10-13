@@ -33,7 +33,7 @@ pub async fn run_experiments(config : Config) -> RunManifest {
 async fn run_trial(
   config : Config,
   task_template : String,
-  index : Int,
+  index : Int32,
 ) -> TrialArtifact {
   let trial_name = @runner.padded_index(index + 1)
   let workspace = "\{config.out_dir}/workspaces/\{trial_name}"

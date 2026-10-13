@@ -1,0 +1,3 @@
+supported_targets = "native+js"
+
+warnings = "+missing_doc+unnecessary_annotation"

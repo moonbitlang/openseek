@@ -108,7 +108,7 @@ async fn checkout_pull_request(
 /// lets Git keep non-conflicting edits and refuse overwrites; it never forces.
 async fn github_prepare_checkout(
   dir : String,
-  number : Int,
+  number : Int32,
   changes : @protocol.GithubCheckoutChanges,
 ) -> Bool {
   let status = github_checkout_git(dir, [

@@ -81,23 +81,23 @@ pub fn run_markdown_feedback_test() -> Unit {
         .map(item => {
           let range = item.range
           Json({
-            "text": item.text.to_json(),
+            "text": Json(item.text),
             "selected_text": match item.selected_text {
-              Some(text) => text.to_json()
+              Some(text) => Json(text)
               None => Json::null()
             },
-            "resource": item.resource.to_string().to_json(),
+            "resource": Json(item.resource.to_string()),
             "range": Json([
-              range.start_line_number.to_json(),
-              range.start_column.to_json(),
-              range.end_line_number.to_json(),
-              range.end_column.to_json(),
+              Json(range.start_line_number),
+              Json(range.start_column),
+              Json(range.end_line_number),
+              Json(range.end_column),
             ]),
-            "source": current_model.val.get_value_in_range(range).to_json(),
-            "submitted": (item.state == Submitted).to_json(),
+            "source": Json(current_model.val.get_value_in_range(range)),
+            "submitted": Json(item.state == Submitted),
           })
         })
-      Json({ "items": items.to_json(), "submitted": submitted.val.to_json() }).stringify()
+      Json({ "items": Json(items), "submitted": Json(submitted.val) }).stringify()
     },
     () => current_model.val.get_value(),
     source => current_model.val.set_value(source),

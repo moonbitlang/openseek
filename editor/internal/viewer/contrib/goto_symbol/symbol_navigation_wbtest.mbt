@@ -1,7 +1,7 @@
 ///|
 priv struct SymbolNavigationTestDefinitionProvider {
   locations : Array[@language.Location]
-  calls : Ref[Int]
+  calls : Ref[Int32]
   tokens : Array[@language.CancellationToken]
   started : @async.Semaphore?
   release : @async.Semaphore?
@@ -30,7 +30,7 @@ impl @language.DefinitionProvider for SymbolNavigationTestDefinitionProvider wit
 ///|
 priv struct SymbolNavigationTestReferencesProvider {
   locations : Array[@language.Location]
-  calls : Ref[Int]
+  calls : Ref[Int32]
 }
 
 ///|
@@ -47,8 +47,8 @@ impl @language.ReferencesProvider for SymbolNavigationTestReferencesProvider wit
 ///|
 priv struct SymbolNavigationTestHost {
   model : @model.TextModel
-  surface_generation : Ref[Int]
-  prepare_calls : Ref[Int]
+  surface_generation : Ref[Int32]
+  prepare_calls : Ref[Int32]
   opened : Array[@language.Location]
   open_modes : Array[@navigation_api.OpenLocationMode]
   peek_modes : Array[@references.ReferencesPeekMode]
@@ -96,7 +96,7 @@ fn symbol_navigation_test_model() -> @model.TextModel {
 ///|
 fn symbol_navigation_test_anchor(
   model : @model.TextModel,
-  surface_generation : Int,
+  surface_generation : Int32,
 ) -> SymbolNavigationAnchor {
   SymbolNavigationAnchor::from_model(
     model,
@@ -109,7 +109,7 @@ fn symbol_navigation_test_anchor(
 ///|
 fn symbol_navigation_test_host(
   model : @model.TextModel,
-  surface_generation : Ref[Int],
+  surface_generation : Ref[Int32],
 ) -> SymbolNavigationTestHost {
   {
     model,

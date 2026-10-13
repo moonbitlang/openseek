@@ -23,7 +23,7 @@ priv struct EditDiff {
   anchors : Array[String]
   diff : String
   path : String?
-  start_line : Int?
+  start_line : Int32?
   lines : Array[EditDiffLine]
 } derive(Eq)
 
@@ -44,7 +44,7 @@ const MAX_RENDERED_EDITS = 50
 /// projection structurally comparable.
 priv struct EditChanges {
   edits : Array[EditDiff]
-  omitted : Int
+  omitted : Int32
 } derive(Eq)
 
 ///|
@@ -156,10 +156,10 @@ fn EditDiff::from_fields(
   } else {
     None
   }
-  let start_line : Int? = fields
+  let start_line : Int32? = fields
     .get("start_line")
     .bind(value => {
-      let line : Int = @json.from_json(value) catch { _ => return None }
+      let line : Int32 = @json.from_json(value) catch { _ => return None }
       if value is Number(number, ..) && line > 0 && number == line.to_double() {
         Some(line)
       } else {
@@ -203,8 +203,8 @@ fn diff_block(text : String) -> @html.Html {
 /// advance each side, and a unified hunk resets both absolute positions.
 priv struct EditDiffLine {
   text : String
-  old_line : Int?
-  new_line : Int?
+  old_line : Int32?
+  new_line : Int32?
   class_name : String
   content : EditDiffLineContent
   truncated : Bool
@@ -212,7 +212,7 @@ priv struct EditDiffLine {
 
 ///|
 priv enum EditDiffLineContent {
-  SourceRow(Int)
+  SourceRow(Int32)
   Boundary
   Metadata
   Unknown
@@ -221,7 +221,7 @@ priv enum EditDiffLineContent {
 ///|
 /// Unified ranges omit the count for a single line; zero counts describe
 /// insertions/deletions. Keep counts so header-looking source stays source.
-fn edit_diff_range(value : StringView) -> (Int, Int)? {
+fn edit_diff_range(value : StringView) -> (Int32, Int32)? {
   let fields = [..value.split(",")]
   guard fields.length() == 1 || fields.length() == 2 else { return None }
   try {
@@ -260,15 +260,15 @@ fn edit_diff_metadata(text : String) -> Bool {
 fn EditDiff::new(
   anchors : Array[String],
   path : String?,
-  start_line : Int?,
+  start_line : Int32?,
   diff : String,
-  unified? : Bool = false,
+  unified~ : Bool = false,
 ) -> EditDiff {
   let mut old_line = start_line
   let mut new_line = start_line
   let mut first_line = start_line
   let mut in_hunk = !unified
-  let mut remaining : (Int, Int)? = None
+  let mut remaining : (Int32, Int32)? = None
   let rows : Array[EditDiffLine] = []
   for raw in diff.split("\n") {
     let text = raw.to_owned()
@@ -442,7 +442,7 @@ fn EditDiff::new(
 /// Minimal mode keeps source coordinates in the gutter. Its title opens the
 /// current file in the ordinary editor, without requesting a source position.
 fn EditChanges::render_minimal(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   self : EditChanges,
   actions : Actions,
 ) -> @html.Html {

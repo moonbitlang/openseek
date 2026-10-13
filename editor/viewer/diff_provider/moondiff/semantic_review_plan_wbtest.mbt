@@ -3,8 +3,8 @@ fn semantic_plan_or_fail(
   old_source : String,
   new_source : String,
   mode : MoonDiffMode,
-  ignore_comments? : Bool = false,
-  ignore_tests? : Bool = false,
+  ignore_comments~ : Bool = false,
+  ignore_tests~ : Bool = false,
 ) -> SectionedSemanticReviewPlan raise {
   guard compute_sectioned_semantic_review_plan(
       old_source,

@@ -422,10 +422,10 @@ impl @workspace.WorkspaceTreeProvider for MemoryWorkspace with fn resolve(
 let workspace_backend : MemoryWorkspace = memory_workspace()
 
 ///|
-let embed_model_version : Ref[Int] = Ref(0)
+let embed_model_version : Ref[Int32] = Ref(0)
 
 ///|
-fn next_embed_model_version() -> Int {
+fn next_embed_model_version() -> Int32 {
   embed_model_version.val += 1
   embed_model_version.val
 }

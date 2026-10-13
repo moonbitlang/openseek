@@ -3,7 +3,7 @@
 ///|
 /// App-server must answer initialize promptly. This bounds accidental launches
 /// of an incompatible `codex` executable and a wedged child process.
-const HandshakeTimeoutMs : Int = 30000
+const HandshakeTimeoutMs : Int32 = 30000
 
 ///|
 /// The initialized JSON-RPC connection. Its tasks and child process belong to
@@ -34,7 +34,7 @@ pub async fn Connection::respond(
 pub async fn Connection::respond_error(
   self : Connection,
   request : @jsonrpc.PeerRequest,
-  code~ : Int,
+  code~ : Int32,
   message~ : String,
 ) -> Unit {
   self.rpc.respond_error(request, code~, message~)
@@ -62,14 +62,17 @@ pub async fn[X] connect(
   on_closed~ : () -> Unit,
   version~ : String,
   home~ : @pathx.Path?,
-  handshake_timeout_ms? : Int = HandshakeTimeoutMs,
+  handshake_timeout_ms~ : Int32 = HandshakeTimeoutMs,
 ) -> Connection {
   // The Desktop's isolated CODEX_HOME must win over anything the login-shell
   // environment inherited. Every process the app-server later spawns inherits
   // it too, so nested codex calls, sandbox approvals, and tool runs agree
   // with the app-server on auth and config.
   let env : Map[String, String] = match home {
-    Some(home) => Map([("CODEX_HOME", home.to_string())])
+    Some(home) => {
+      prepare_home_directory(home)
+      Map([("CODEX_HOME", home.to_string())])
+    }
     None => Map([])
   }
   let (executable, args) = app_server_launch(

@@ -23,7 +23,9 @@ jobs:
 
       - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Update MoonBit package registry
@@ -50,7 +52,9 @@ jobs:
 
       - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           "$HOME/.moon/bin/moon" version --all
 
@@ -109,7 +113,6 @@ jobs:
         target: [native, js, wasm]
         include:
           - moonbit-channel: stable
-            moonbit-version: latest
             deny-warn: "--deny-warn"
     steps:
       - name: Checkout code
@@ -117,7 +120,9 @@ jobs:
 
       - name: Set up MoonBit (${{ matrix.moonbit-channel }})
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "${{ matrix.moonbit-version }}"
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> $GITHUB_PATH
 
       - name: Show MoonBit version
@@ -281,7 +286,9 @@ jobs:
 
       - name: Set up MoonBit
         run: |
-          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          version="$(cat "$GITHUB_WORKSPACE/desktop/.moonbit-version")"
+          test -n "$version"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
 
       - name: Set up Node.js

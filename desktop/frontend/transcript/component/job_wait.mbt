@@ -2,9 +2,9 @@
 /// Keep the selected jobs visible even when the arguments disclosure is shut.
 /// Pending is already part of the normal tool lifecycle; no new run state.
 fn pending_job_wait_label(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   call : @transcript.ToolCall,
-  descriptions? : Map[String, String] = Map([]),
+  descriptions~ : Map[String, String] = Map([]),
 ) -> String? {
   guard call.name == "job_wait" &&
     call.outcome is Pending(..) &&
@@ -93,11 +93,11 @@ fn collect_job_description(
 
 ///|
 fn job_wait_labels(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   item : @transcript.TranscriptItem,
   descriptions : Map[String, String],
-) -> Map[Int, String] {
-  let labels : Map[Int, String] = Map([])
+) -> Map[Int32, String] {
+  let labels : Map[Int32, String] = Map([])
   if item.kind is Assistant(calls~, ..) {
     for call in calls {
       collect_job_description(call, descriptions)

@@ -20,7 +20,7 @@ pub(all) struct Actions {
 /// The panel body. Always rendered — CSS shows it only while its tab is
 /// active — so the right panel's child order stays structural.
 pub fn panel(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   runs : Array[Run],
   actions : Actions,
 ) -> @html.Html {
@@ -40,7 +40,7 @@ pub fn panel(
 
 ///|
 fn run_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   run : Run,
   actions : Actions,
 ) -> @html.Html {
@@ -153,7 +153,7 @@ fn run_view(
 
 ///|
 fn row_view(
-  locale? : @i18n.Locale = English,
+  locale~ : @i18n.Locale = English,
   row : Row,
   closed~ : Bool,
   actions : Actions,
@@ -236,7 +236,7 @@ fn row_view(
 }
 
 ///|
-fn plural(n : Int) -> String {
+fn plural(n : Int32) -> String {
   if n == 1 {
     ""
   } else {

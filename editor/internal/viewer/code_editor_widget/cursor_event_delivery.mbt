@@ -14,8 +14,8 @@ fn is_model_flush_cursor_event(
 priv struct CursorEventDelivery {
   queue : Array[@view_model.CursorStateChangedEvent]
   mut is_draining : Bool
-  mut content_barrier_depth : Int
-  completed_content_versions : Array[Int]
+  mut content_barrier_depth : Int32
+  completed_content_versions : Array[Int32]
 }
 
 ///|
@@ -31,7 +31,7 @@ fn CursorEventDelivery::CursorEventDelivery() -> CursorEventDelivery {
 ///|
 fn CursorEventDelivery::has_completed_content_version(
   self : CursorEventDelivery,
-  version_id : Int,
+  version_id : Int32,
 ) -> Bool {
   self.completed_content_versions.contains(version_id)
 }
@@ -100,7 +100,7 @@ fn CursorEventDelivery::take_next_ready(
 ///|
 fn CursorEventDelivery::mark_content_complete(
   self : CursorEventDelivery,
-  version_id : Int,
+  version_id : Int32,
 ) -> Unit {
   if !self.has_completed_content_version(version_id) {
     self.completed_content_versions.push(version_id)
@@ -148,7 +148,7 @@ fn CodeEditorWidget::enqueue_cursor_state_change(
 fn CodeEditorWidget::complete_model_content_delivery(
   self : CodeEditorWidget,
   model : @model.TextModel,
-  version_id : Int,
+  version_id : Int32,
 ) -> Unit {
   guard self.get_model() is Some(active_model) && active_model.same(model) else {
     return

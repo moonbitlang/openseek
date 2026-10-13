@@ -145,7 +145,11 @@ pub let fs_create_directory : Command[@protocol.CreateDirectoryPayload, @protoco
 
 pub let fs_create_unnamed_workspace : Command[@protocol.EmptyPayload, @protocol.BrowseDirectoryReply]
 
+pub let fs_import_attachment : Command[@protocol.PrepareAttachmentPayload, @protocol.ImportAttachmentReply]
+
 pub let fs_materialize_semantic_selection : Command[@protocol.MaterializeSemanticSelectionPayload, @protocol.MaterializeSemanticSelectionReply]
+
+pub let fs_prepare_attachment : Command[@protocol.PrepareAttachmentPayload, @protocol.PrepareAttachmentReply]
 
 pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirReply]
 
@@ -156,6 +160,8 @@ pub let fs_search_files : Command[@protocol.SearchFilesPayload, @protocol.Search
 pub let fs_search_semantic : Command[@protocol.SearchSemanticPayload, @protocol.SearchSemanticReply]
 
 pub let fs_search_text : Command[@protocol.SearchTextPayload, @protocol.SearchTextReply]
+
+pub let fs_stage_attachments : Command[@protocol.StageAttachmentsPayload, @protocol.EmptyReply]
 
 pub let fs_stat_files : Command[@protocol.StatFilesPayload, @protocol.StatFilesReply]
 
@@ -199,6 +205,8 @@ pub let host_open_path : Command[@protocol.OpenPathPayload, @protocol.OpenPathRe
 
 pub let host_open_path_preview : Command[@protocol.OpenPathPayload, @protocol.OpenPathReply]
 
+pub let host_pick_attachment : Command[@protocol.EmptyPayload, @protocol.PickAttachmentReply]
+
 pub let host_reveal_path : Command[@protocol.OpenPathPayload, @protocol.RevealPathReply]
 
 pub let jobs_list : Command[@protocol.JobsListPayload, @protocol.JobsListReply]
@@ -234,6 +242,8 @@ pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveRep
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
+
+pub let session_fork : Command[@protocol.SessionForkPayload, @protocol.SessionForkReply]
 
 pub let session_list : Command[@protocol.EmptyPayload, @protocol.SessionsReply]
 

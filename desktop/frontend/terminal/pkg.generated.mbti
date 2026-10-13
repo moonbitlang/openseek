@@ -43,6 +43,13 @@ pub fn Input::Input(ctx~ : Ctx, live_channels~ : Array[@interop.ChannelId], has_
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
+pub(all) enum InputWriteFailure {
+  ConnectionLost
+  WriteFailed(String)
+} derive(Eq)
+pub fn InputWriteFailure::equal(Self, Self) -> Bool
+pub fn InputWriteFailure::not_equal(Self, Self) -> Bool
+
 pub(all) enum Msg {
   ToggleTerminal
   SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
@@ -56,6 +63,7 @@ pub(all) enum Msg {
   UserInput(key~ : String, data~ : String)
   LinkActivated(url~ : String)
   BinaryInput(key~ : String, data~ : String)
+  InputSettled(key~ : String, id~ : String, token~ : String, result~ : Result[Unit, InputWriteFailure])
   InputFailed(message~ : String)
   ViewportResized(key~ : String, cols~ : Int, rows~ : Int)
   CommandFinished(shell~ : String, exit_code~ : Int?, output~ : String, truncated~ : Bool)

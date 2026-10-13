@@ -133,7 +133,7 @@ fn has_multicursor_modifier(data : @controller.MouseDispatchData) -> Bool {
 /// documented command-boundary N-A seam.
 fn CodeEditorWidget::run_select_all_core_command(
   self : CodeEditorWidget,
-  nominal_source? : String = "",
+  nominal_source~ : String = "",
 ) -> Bool {
   // ViewController `_selectAll` supplies `{source:'mouse'}` but the core body
   // intentionally ignores it and hard-codes `keyboard`.

@@ -118,7 +118,7 @@ extern "js" fn disable_markdown_input(element : @rdom.Element) -> Unit =
   #| }
 
 ///|
-extern "js" fn markdown_event_button(event : @rdom.Event) -> Int = "(event) => event.button === undefined ? -1 : Number(event.button)"
+extern "js" fn markdown_event_button(event : @rdom.Event) -> Int32 = "(event) => event.button === undefined ? -1 : Number(event.button)"
 
 ///|
 extern "js" fn markdown_event_key(event : @rdom.Event) -> String = "(event) => String(event.key || '')"

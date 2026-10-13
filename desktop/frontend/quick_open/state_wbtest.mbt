@@ -26,7 +26,7 @@ fn test_uri(path : String) -> @common.Uri raise {
 fn test_input(
   root? : @common.Uri,
   owner? : @interop.ConversationKey,
-  open_files? : Array[@pathx.Relative] = [],
+  open_files~ : Array[@pathx.Relative] = [],
   active_file? : @pathx.Relative,
 ) -> Input {
   { owner: owner.unwrap_or(test_owner()), root, open_files, active_file, }

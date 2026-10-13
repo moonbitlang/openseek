@@ -90,15 +90,15 @@ fn run_worker_zero(task : WorkerZeroTask) -> Unit {
 ///|
 priv struct DefaultWorkerHarness {
   worker : DefaultBackgroundTokenizer
-  attached : Ref[Int]
+  attached : Ref[Int32]
   lexer_calls : Array[String]
-  token_batches : Ref[Int]
+  token_batches : Ref[Int32]
 }
 
 ///|
 fn default_worker_harness(
-  line_count : Int,
-  attached_count : Int,
+  line_count : Int32,
+  attached_count : Int32,
   scheduling : WorkerSchedulerHarness,
 ) -> DefaultWorkerHarness raise {
   let lines : Array[String] = []

@@ -12,7 +12,7 @@ pub fn row(
   name : String,
   controls : Array[@html.Html],
   desc? : String,
-  stack? : Bool = false,
+  stack~ : Bool = false,
 ) -> @html.Html {
   let text : Array[@html.Html] = [@html.div(class="setting-name", name)]
   if desc is Some(desc) && !desc.is_empty() {
