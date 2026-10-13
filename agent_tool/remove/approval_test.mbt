@@ -27,7 +27,9 @@ async test "existing and externally changed files ask once with path reason and 
       assert_eq(
         ask.body,
         Some(
-          ({ "path": path, "reason": "replace obsolete starter" } : Json).stringify(),
+          ({ "path": path, "reason": "replace obsolete starter" } : Json).stringify(
+            indent=2,
+          ),
         ),
       )
     }

@@ -1046,8 +1046,8 @@ priv struct QueuedInput {
 
 ///|
 /// A permission question the engine announced and is blocked on. `detail` is
-/// the permission, `body` the program it would be spent on; both are shown
-/// verbatim, since a client that paraphrases a permission can get it wrong.
+/// the permission, `body` the program it would be spent on. Write requests
+/// decode their content string from the argument object; source is shown verbatim.
 ///
 /// `run_id` is the run this question belongs to. It rides the answer so a
 /// decision the user takes a while over cannot settle a question in a later

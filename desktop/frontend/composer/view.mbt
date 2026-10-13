@@ -288,7 +288,7 @@ fn ApprovalNotice::render(
       @html.span(class="composer-notice-text", [
         // A tool name is code, not a decorative text pill.
         @html.code(class="composer-approval-tool", self.tool_name),
-        @html.span(" wants to \{self.detail}"),
+        @html.span(" \{self.detail}"),
       ]),
       ..actions,
     ],
@@ -296,6 +296,7 @@ fn ApprovalNotice::render(
   if self.body is Some(body) {
     @html.details(
       class="composer-context-row composer-approval composer-context-disclosure",
+      open=true,
       [
         @html.summary(class="composer-context-summary", question),
         // Never truncate the exact program whose one-shot permission is being

@@ -172,7 +172,7 @@ async fn write_file(
     write_scope?,
     approval?,
     reason?=if source_overwrite {
-      Some("overwrite an existing source file with the supplied full contents")
+      Some("overwrite existing source file")
     } else {
       None
     },

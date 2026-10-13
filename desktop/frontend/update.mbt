@@ -1391,7 +1391,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
-            body,
+            body: approval_display_body(tool_name, body),
             answered: false,
           }),
         },
