@@ -9,6 +9,7 @@ import {
   "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -20,9 +21,11 @@ pub fn approval_policy(@argparse.Matches, interactive~ : Bool, delegated? : Bool
 
 pub fn audit_criteria(@agent_session.Session) -> @host.AuditCriteria?
 
-pub async fn[X] build_extra_tools(@agent_runtime.AgentTaskScope[X], model~ : @deepseek.Model, api_key~ : String, workspace_root~ : String, mcp_config_path? : String, deepseek_api_key? : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
+pub fn build_extra_tools(McpRegistry, model~ : @deepseek.Model, api_key~ : String, deepseek_api_key? : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
 
 pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, review_deadline_ms? : Int, child_session? : @agent_subrun.ChildSession) -> async (String, @agent_session.GoalBaseline?) -> String?
+
+pub async fn[X] connect_mcp(@agent_runtime.AgentTaskScope[X], workspace_root~ : String, config_path? : String) -> McpRegistry
 
 pub async fn with_jsonl_stdout(async () -> Unit) -> Unit
 
@@ -41,6 +44,10 @@ pub enum ApprovalPolicy {
   Never
   Always
 }
+
+type McpRegistry
+pub fn McpRegistry::on_connection_closed(Self, () -> Unit) -> Unit
+pub fn McpRegistry::status(Self) -> @openseek_protocol.McpStatus
 
 // Type aliases
 

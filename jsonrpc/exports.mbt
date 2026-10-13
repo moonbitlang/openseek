@@ -11,6 +11,16 @@ pub fn Client::is_closed(self : Client) -> Bool {
 }
 
 ///|
+/// Install the handler run when the client closes, for whatever reason: the
+/// peer ended the stream, the transport failed, a task was cancelled, or
+/// `close` was called. Replaces any previous handler. It runs once, inside
+/// `close`, so it must not block; a client that has already closed never runs
+/// it — read `is_closed` after installing to cover that case.
+pub fn Client::set_close_handler(self : Client, handler : () -> Unit) -> Unit {
+  self.on_close = handler
+}
+
+///|
 /// Install the handler run for each peer-initiated notification (`method`,
 /// `params`). Replaces any previous handler; it runs on the reader task, so it
 /// must not block on I/O.

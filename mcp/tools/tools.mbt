@@ -118,18 +118,65 @@ pub async fn[X] build_grouped(
   workspace_root? : String,
   discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
 ) -> Array[(String, Array[@agent_tool.AgentToolDefinition])] {
-  let groups : Array[(String, Array[@agent_tool.AgentToolDefinition])] = []
+  connect(
+    scope,
+    servers,
+    client_name~,
+    client_version~,
+    workspace_root?,
+    discovery_timeout_ms~,
+  ).map(entry => (entry.server.name(), entry.tools))
+}
+
+///|
+/// What connecting one configured server came to.
+pub enum Connection {
+  /// Connected and contributing tools, through this client. The client stays
+  /// open for as long as the scope lives, so it also says whether the
+  /// connection has been lost since.
+  Live(@mcp.McpClient)
+  /// Connected, offered no tools, and was released.
+  NoTools
+  /// It could not be started, reached, or asked for its tools; the text says
+  /// which and why.
+  Failed(String)
+  /// Never tried: earlier servers had already used up the tool budget.
+  Skipped
+}
+
+///|
+/// One configured server with what connecting to it came to and the tools it
+/// contributed to the registry (empty unless the connection is `Live`).
+pub struct ServerEntry {
+  server : @config.McpServer
+  connection : Connection
+  tools : Array[@agent_tool.AgentToolDefinition]
+}
+
+///|
+/// Connect every configured server, in config order, and keep the outcome of
+/// each beside the tools it contributed. This is the build itself: `build` and
+/// `build_grouped` are views of its result, and every failure it returns is
+/// also reported as the event it always was.
+pub async fn[X] connect(
+  scope : @agent_runtime.AgentTaskScope[X],
+  servers : Array[@config.McpServer],
+  client_name~ : String,
+  client_version~ : String,
+  workspace_root? : String,
+  discovery_timeout_ms~ : Int32 = DefaultDiscoveryTimeoutMs,
+) -> Array[ServerEntry] {
+  let entries : Array[ServerEntry] = []
   let mut total = 0
   let seen : Set[String] = Set([])
   for server in servers {
-    let mine : Array[@agent_tool.AgentToolDefinition] = []
-    groups.push((server.name(), mine))
     // Budget exhausted: don't launch servers whose tools could not register.
     if total >= MaxTotalMcpTools {
       @emit.emit(McpServerSkippedOverCap(server=server.name()))
+      entries.push({ server, connection: Skipped, tools: [], })
       continue
     }
-    let discovered = connect_server(
+    let (connection, discovered) = connect_server(
       scope,
       server,
       client_name~,
@@ -137,6 +184,7 @@ pub async fn[X] build_grouped(
       workspace_root?,
       discovery_timeout_ms~,
     )
+    let mine : Array[@agent_tool.AgentToolDefinition] = []
     for tool in discovered {
       // The provider accepts at most 128 function definitions per request; the
       // MCP budget leaves room for the built-ins. Beyond it, drop with a log.
@@ -161,15 +209,17 @@ pub async fn[X] build_grouped(
         ),
       )
     }
+    entries.push({ server, connection, tools: mine, })
   }
-  groups
+  entries
 }
 
 ///|
-/// Connect one server and return its bridged tools, or `[]` on any failure
-/// (logged) — including discovery outrunning `discovery_timeout_ms`, so a
-/// server that handshakes but never answers `tools/list` cannot hang the
-/// engine's startup. Cancellation propagates.
+/// Connect one server and return what that came to with its bridged tools —
+/// no tools on any failure (reported as an event), including discovery
+/// outrunning `discovery_timeout_ms`, so a server that handshakes but never
+/// answers `tools/list` cannot hang the engine's startup. Cancellation
+/// propagates.
 async fn[X] connect_server(
   scope : @agent_runtime.AgentTaskScope[X],
   server : @config.McpServer,
@@ -177,7 +227,7 @@ async fn[X] connect_server(
   client_version~ : String,
   workspace_root? : String,
   discovery_timeout_ms~ : Int32,
-) -> Array[@agent_tool.AgentToolDefinition] {
+) -> (Connection, Array[@agent_tool.AgentToolDefinition]) {
   let name = server.name()
   // A connected server, normalized across transports: the initialized client;
   // closing it tears the transport (and, for stdio, the process) down.
@@ -208,7 +258,7 @@ async fn[X] connect_server(
   } catch {
     error => {
       @emit.emit(McpConnectFailed(server=name, error="\{error}"))
-      return []
+      return (Failed("\{error}"), [])
     }
   }
   let discovered = try {
@@ -219,11 +269,11 @@ async fn[X] connect_server(
   } catch {
     @async.TimeoutError => {
       @emit.emit(McpListToolsTimeout(server=name))
-      return []
+      return (Failed("timed out listing its tools"), [])
     }
     error => {
       @emit.emit(McpListToolsFailed(server=name, error="\{error}"))
-      return []
+      return (Failed("\{error}"), [])
     }
   }
   // A server with nothing to offer is useless for the rest of the session:
@@ -231,8 +281,9 @@ async fn[X] connect_server(
   if discovered.is_empty() {
     @emit.emit(McpNoTools(server=name))
     client.close()
+    return (NoTools, [])
   }
-  discovered
+  (Live(client), discovered)
 }
 
 ///|

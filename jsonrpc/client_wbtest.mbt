@@ -496,3 +496,25 @@ async test "notify enqueues an id-less message the writer sends" {
     assert_true(!(sent is { "id": _, .. }))
   })
 }
+
+///|
+/// The handler is how an owner learns a connection is gone without polling
+/// `is_closed`. It has to fire for a peer that ends the stream, not only for a
+/// local `close`, and a second close must not run it again.
+async test "the close handler runs once when the peer ends the stream" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let client = Client::Client(transport)
+    let closes = Ref(0)
+    client.set_close_handler(() => closes.val += 1)
+    let pump = group.spawn(() => client.run_message_pump())
+    let writer = group.spawn(() => client.run_writer())
+    assert_eq(closes.val, 0)
+    transport.inbound.close()
+    pump.wait()
+    writer.wait()
+    assert_eq(closes.val, 1)
+    client.close()
+    assert_eq(closes.val, 1)
+  })
+}

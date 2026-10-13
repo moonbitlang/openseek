@@ -91,29 +91,6 @@ fn server_label(server : @mcpconfig.McpServer) -> String {
       } else {
         "stdio: \{@cli.terminal_safe_line(command)} [\{args.length()} arg(s)]"
       }
-    Http(url~, ..) => "http: \{@cli.terminal_safe_line(redact_url(url))}"
-  }
-}
-
-///|
-/// Strip userinfo (`user:pass@`) and the query/fragment from `url`, keeping
-/// scheme, host, and path — enough to identify the endpoint without echoing
-/// embedded credentials.
-fn redact_url(url : String) -> String {
-  // Cut at the first `?` or `#`, then locate the authority after the FIRST
-  // `://` anywhere — matching the decoder's leniency and staying fail-closed
-  // for malformed values like `/https://user:secret@host` — and drop a
-  // `userinfo@` that precedes any `/` in what follows. The userinfo arm is
-  // start-anchored on purpose: an unanchored lexmatch arm SEARCHES, and would
-  // redact an `@` sitting in the path.
-  let kept = if url =~ (re"[?#]", before~, after=_) { before } else { url }
-  let (prefix, rest) = if kept =~ (re"://", before~, after~) {
-    ("\{before}://", after)
-  } else {
-    ("", kept)
-  }
-  lexmatch rest {
-    re"^[^/@]*@" + (re"(.|\n)*$" as tail) => "\{prefix}\{tail}"
-    _ => "\{prefix}\{rest}"
+    Http(..) => "http: \{@cli.terminal_safe_line(server.target())}"
   }
 }

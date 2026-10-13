@@ -42,6 +42,24 @@ pub fn McpClient::close(self : McpClient) -> Unit {
 }
 
 ///|
+/// Whether the connection is gone: closed here, or ended by the server
+/// exiting or the transport failing.
+pub fn McpClient::is_closed(self : McpClient) -> Bool {
+  self.rpc.is_closed()
+}
+
+///|
+/// Run `handler` when the connection goes, in any of the ways `is_closed`
+/// counts. It runs once and must not block. A connection already gone never
+/// runs it, so install it and then read `is_closed`.
+pub fn McpClient::set_close_handler(
+  self : McpClient,
+  handler : () -> Unit,
+) -> Unit {
+  self.rpc.set_close_handler(handler)
+}
+
+///|
 /// Run the MCP handshake: send `initialize` with our client identity, then the
 /// `notifications/initialized` notification once the server has answered.
 /// Returns the server's negotiated protocol version and identity. Raises on

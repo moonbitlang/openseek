@@ -13,6 +13,8 @@ pub async fn[X] build(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer]
 
 pub async fn[X] build_grouped(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[(String, Array[@agent_tool.AgentToolDefinition])]
 
+pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[ServerEntry]
+
 pub fn tool_name(String, String) -> String
 
 pub async fn tools_for_client(String, @mcp.McpClient) -> Array[@agent_tool.AgentToolDefinition]
@@ -20,6 +22,18 @@ pub async fn tools_for_client(String, @mcp.McpClient) -> Array[@agent_tool.Agent
 // Errors
 
 // Types and methods
+pub enum Connection {
+  Live(@mcp.McpClient)
+  NoTools
+  Failed(String)
+  Skipped
+}
+
+pub struct ServerEntry {
+  server : @config.McpServer
+  connection : Connection
+  tools : Array[@agent_tool.AgentToolDefinition]
+}
 
 // Type aliases
 
