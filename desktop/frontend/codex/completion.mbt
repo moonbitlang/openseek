@@ -124,6 +124,7 @@ fn State::submit_composer(
         mentions: self.mentions.copy(),
         images: self.images.copy(),
       }),
+      selection: CodexDraftTask({ ..draft, thread_start_attempted: true, }),
     }
     (
       next.start_draft_thread(dispatch, channel),
@@ -714,6 +715,7 @@ test "Codex image-only first prompt stays visible and survives failure" {
   )
   assert_eq(failed.images, draft.images)
   assert_false(failed.loading)
+  assert_false(failed.composing_draft())
 }
 
 ///|

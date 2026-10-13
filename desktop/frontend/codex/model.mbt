@@ -223,6 +223,9 @@ priv struct CodexDraftTask {
   id : String
   cwd : String
   project_root : String?
+  // A lost thread/start reply may still leave a host-cached thread for this
+  // identity and cwd. Retrying must keep that pair even after an error.
+  thread_start_attempted : Bool
 } derive(Eq)
 
 ///|
@@ -746,7 +749,7 @@ pub fn State::can_start_thread(self : State) -> Bool {
 /// app-server thread yet — the only Codex surface where the unified model
 /// chip may still switch the conversation to another agent.
 pub fn State::composing_draft(self : State) -> Bool {
-  self.selection is CodexDraftTask(_) && self.submitted_first_prompt is None
+  self.selection is CodexDraftTask({ thread_start_attempted: false, .. })
 }
 
 ///|
@@ -1230,7 +1233,12 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
   let cwd = cwd.trim().to_owned()
   {
     ..self,
-    selection: CodexDraftTask({ id, cwd, project_root: None, }),
+    selection: CodexDraftTask({
+      id,
+      cwd,
+      project_root: None,
+      thread_start_attempted: false,
+    }),
     requested_thread: None,
     git_status: None,
     git_details_open: false,
