@@ -38,9 +38,11 @@ async fn snapshot(path : String, scope : @write_scope.WriteScope?) -> Snapshot {
 /// Authorize one validated operation, never a session or a subtree. Called
 /// under the file gate; only the human wait releases it. All affected targets,
 /// including descendants of a removed directory, are revalidated before resuming.
+/// `target_path` names the operation's root for the approval summary.
 /// `reason` adds an operation-specific permission requirement (e.g. deletion).
 pub async fn authorize(
   paths : Array[String],
+  target_path~ : String,
   tool_name~ : String,
   arguments~ : Json,
   file_state~ : @agent_tool.FileStateMap,
@@ -76,7 +78,7 @@ pub async fn authorize(
   let outcome = file_state.without_access(() => {
     channel.ask({
       tool_name,
-      detail: "\{paths.join(", ")} (\{reasons.join("; ")})",
+      detail: "\{target_path} (\{reasons.join("; ")})",
       body: Some(arguments.stringify(indent=2)),
     })
   })

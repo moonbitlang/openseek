@@ -120,6 +120,7 @@ async fn execute_with_workspace(
     }
     let write_scope = @permission.authorize(
       version.entries.map(entry => entry.0),
+      target_path=path,
       tool_name="remove",
       arguments={ "path": path, "reason": input.reason },
       file_state~,

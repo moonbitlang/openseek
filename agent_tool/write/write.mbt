@@ -166,6 +166,7 @@ async fn write_file(
   }
   let write_scope = @permission.authorize(
     [path],
+    target_path=path,
     tool_name="write",
     arguments={ "path": path, "content": input.content },
     file_state~,

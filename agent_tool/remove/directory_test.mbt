@@ -13,8 +13,10 @@ async test "directory approval describes and removes a complete tree including h
       file_state=state,
       approval=ApprovalChannel(ask => {
         asked.val = true
-        assert_true(ask.detail.contains("recursive directory deletion"))
-        assert_true(ask.detail.contains("2 files and 2 subdirectories"))
+        assert_eq(
+          ask.detail,
+          "\{dir}/tree (recursive directory deletion: 2 files and 2 subdirectories; all contents will be removed)",
+        )
         assert_true(ask.body is Some(body) && body.contains("cleanup"))
         AllowedOnce
       }),
