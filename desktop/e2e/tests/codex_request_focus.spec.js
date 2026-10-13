@@ -45,6 +45,7 @@ test('removing an earlier approval preserves keyboard focus and response ownersh
   approval(app, 'first-command', 2);
   approval(app, 'second-command', 3);
   const second = card(page, 'second-command');
+  await second.locator(':scope > summary').click();
   const approve = second.getByRole('button', { name: 'Approve once', exact: true });
   await approve.focus();
   const original = await approve.elementHandle();
@@ -78,6 +79,9 @@ for (const kind of ['question', 'mcp-form']) {
         requestedSchema: { type: 'object', properties: { scope: { type: 'string' } } },
       });
     }
+    await page.locator('.codex-request').filter({
+      hasText: kind === 'question' ? 'Which files?' : 'Choose files',
+    }).locator(':scope > summary').click();
     const input = page.locator(kind === 'question' ? '.codex-question input' : '.codex-request textarea');
     const draft = kind === 'question' ? 'the parser files' : '{"scope":"parser"}';
     await input.fill(draft);
@@ -101,11 +105,14 @@ for (const kind of ['question', 'mcp-form']) {
 test('reusing a request id with a new response token replaces its DOM node', async ({ page }) => {
   const app = await openCodex(page);
   approval(app, 'old-command', 2, 'reused-id');
+  await card(page, 'old-command').locator(':scope > summary').click();
   const old = card(page, 'old-command').getByRole('button', { name: 'Approve once', exact: true });
   await old.focus();
   const original = await old.elementHandle();
   approval(app, 'new-command', 3, 'reused-id');
   await expect(card(page, 'old-command')).toHaveCount(0);
+  await expect(card(page, 'new-command')).not.toHaveAttribute('open', '');
+  await card(page, 'new-command').locator(':scope > summary').click();
   const replacement = card(page, 'new-command').getByRole('button', { name: 'Approve once', exact: true });
   await expect(replacement).toBeVisible();
   expect(await original.evaluate(node => node.isConnected)).toBe(false);
