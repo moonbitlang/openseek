@@ -256,6 +256,7 @@ priv struct CodexQuestion {
 ///|
 priv struct CodexPendingRequest {
   response_token : String
+  expanded : Bool
   request_id : Json
   // Every supported app-server reverse request names its owning thread.
   // Keeping that identity here prevents one task from rendering or answering
@@ -1735,13 +1736,16 @@ fn State::with_requests(self : State, value : Json) -> State {
     }
     // Preserve edits for a request already shown while replacing the list
     // with the actor's exact live ownership snapshot.
-    let key = response_token
-    let answers = self.pending_requests
+    let existing = self.pending_requests
       .iter()
-      .find_first(existing => existing.response_token == key)
-      .map(existing => existing.answers)
-      .unwrap_or(Map([]))
-    pending_requests.push({ ..decoded, answers, })
+      .find_first(existing => existing.response_token == response_token)
+    pending_requests.push(
+      match existing {
+        Some(existing) =>
+          { ..decoded, answers: existing.answers, expanded: existing.expanded, }
+        None => decoded
+      },
+    )
   }
   { ..self, pending_requests, request_generation: generation, }
 }
@@ -2413,7 +2417,24 @@ fn CodexPendingRequest::decode(
     method_,
     params,
     answers: Map([]),
+    expanded: false,
   })
+}
+
+///|
+fn State::toggle_request(self : State, request_key : String) -> State {
+  {
+    ..self,
+    pending_requests: self.pending_requests.map(request => {
+      if request.response_token == request_key &&
+        self.active_thread() is Some(active) &&
+        request.thread_id == active.id {
+        { ..request, expanded: !request.expanded, }
+      } else {
+        request
+      }
+    }),
+  }
 }
 
 ///|
@@ -3035,6 +3056,7 @@ test "Codex request replies preserve structured values" {
       ],
     },
     answers: { "scope": "Small" },
+    expanded: false,
   }
   assert_eq(
     request.response(Json("accept")),
@@ -3047,6 +3069,7 @@ test "Codex request replies preserve structured values" {
     method_: "item/commandExecution/requestApproval",
     params: { "threadId": "thread-1" },
     answers: {},
+    expanded: false,
   }
   let decision : Json = {
     "acceptWithExecpolicyAmendment": {
@@ -3502,7 +3525,7 @@ pub fn State::with_browser_annotation(
 }
 
 ///|
-test "Codex same-id replacement does not inherit draft answers or old card actions" {
+test "Codex same-id replacement does not inherit answers, disclosure, or old card actions" {
   let initial = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   })
@@ -3519,6 +3542,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
       1,
     )
     .with_request_answer("old-token", "scope", "old answer")
+    .toggle_request("old-token")
   assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
   let snapshot = old.with_requests({
     "generation": 1,
@@ -3535,6 +3559,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
     snapshot.pending_requests[0].answers.get("scope"),
     Some("old answer"),
   )
+  assert_true(snapshot.pending_requests[0].expanded)
   let fresh = snapshot
     .with_pending_request(
       "new-token",
@@ -3547,6 +3572,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
   assert_eq(fresh.pending_requests.length(), 1)
   assert_eq(fresh.pending_requests[0].response_token, "new-token")
   assert_true(fresh.pending_requests[0].answers.is_empty())
+  assert_false(fresh.pending_requests[0].expanded)
   let recovered = old.with_requests({
     "generation": 3,
     "data": [
@@ -3560,6 +3586,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
   })
   assert_eq(recovered.pending_requests[0].response_token, "new-token")
   assert_true(recovered.pending_requests[0].answers.is_empty())
+  assert_false(recovered.pending_requests[0].expanded)
   let resolved = recovered.with_notification(
     "serverRequest/resolved",
     { "requestId": 7 },

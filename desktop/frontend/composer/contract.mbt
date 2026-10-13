@@ -117,6 +117,7 @@ pub(all) struct QueuedInput {
 /// back through an identity-scoped composer Action.
 pub(all) struct CodexRequestInput {
   request_key : String
+  expanded : Bool
   method_ : String
   params : Json
   answers : Map[String, String]
@@ -295,6 +296,7 @@ pub(all) enum Action {
   ModelSelected(identity~ : Identity, value~ : String, draft~ : Draft)
   ReasoningSelected(identity~ : Identity, value~ : String)
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
+  CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(
     identity~ : Identity,
     request_key~ : String,
@@ -350,6 +352,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | ModelSelected(identity~, ..)
     | ReasoningSelected(identity~, ..)
     | ApprovalAnswered(identity~, ..)
+    | CodexRequestToggled(identity~, ..)
     | CodexRequestAnswerChanged(identity~, ..)
     | CodexRequestResponded(identity~, ..)
     | PermissionMenuToggled(identity~)

@@ -1377,6 +1377,7 @@ test "Codex update handlers are pure and idempotent" {
         method_: "item/commandExecution/requestApproval",
         params: { "threadId": "thread-1", "reason": "test" },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -2117,6 +2118,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
         method_: "item/commandExecution/requestApproval",
         params: { "threadId": "thread-a" },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }.begin_foreground(CodexTurnStartReply("thread-a"))
@@ -2230,6 +2232,7 @@ test "Codex approvals cannot be edited from another thread" {
         method_: "item/tool/requestUserInput",
         params: { "threadId": "thread-2", "questions": [{ "id": "scope" }] },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -2256,6 +2259,7 @@ test "Codex composer reverse-request actions keep their task identity" {
         method_: "item/tool/requestUserInput",
         params: { "threadId": "thread-1", "questions": [{ "id": "scope" }] },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -2293,6 +2297,54 @@ test "Codex composer reverse-request actions keep their task identity" {
     _ => @cmd.none,
   )
   assert_eq(unchanged.pending_requests[0].answers.get("scope"), Some("all"))
+  let toggle : Msg = ComposerAction(
+    @composer.CodexRequestToggled(
+      identity~,
+      request_key=Json("request-1").stringify(),
+    ),
+  )
+  let (_, opened) = update(
+    dispatch,
+    toggle,
+    answered,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, repeated) = update(
+    dispatch,
+    toggle,
+    answered,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(opened == repeated)
+  assert_true(opened.pending_requests[0].expanded)
+  assert_false(answered.pending_requests[0].expanded)
+  assert_eq(opened.pending_requests[0].answers.get("scope"), Some("all"))
+  let (_, closed) = update(
+    dispatch,
+    toggle,
+    opened,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_false(closed.pending_requests[0].expanded)
+  let (_, foreign_toggle) = update(
+    dispatch,
+    ComposerAction(
+      @composer.CodexRequestToggled(
+        identity={
+          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          archive_generation: 0,
+        },
+        request_key=Json("request-1").stringify(),
+      ),
+    ),
+    opened,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(foreign_toggle == opened)
 }
 
 ///|

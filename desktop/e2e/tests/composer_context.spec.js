@@ -114,3 +114,48 @@ test('Codex questions and approvals expand and retain their responses', async ({
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(2);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const expanded of [false, true]) {
+  test(`Codex request retains its ${expanded ? 'expanded' : 'collapsed'} state when an earlier request resolves`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
+      defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
+    await app.install();
+    await app.goto();
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
+    await expect(page.locator('#task')).toHaveAttribute('placeholder', /Ask Codex/);
+    await expect(page.locator('#task')).toBeEnabled();
+    await page.locator('#task').fill('Review this project');
+    await page.getByTitle('Send', { exact: true }).click();
+    await expect.poll(() => app.requests.some(r => r.method === 'codex.turn.start')).toBe(true);
+    for (const [index, command] of ['first-command', 'second-command'].entries()) {
+      app.notify('codex.server_request', {
+        response_token: command, request_id: command, generation: index + 2,
+        method: 'item/commandExecution/requestApproval',
+        params: { threadId: 'codex-thread-e2e', command, cwd: '/workspace' },
+      });
+    }
+    const first = page.locator('.codex-request').filter({ hasText: 'first-command' });
+    const second = page.locator('.codex-request').filter({ hasText: 'second-command' });
+    await expect(first).toBeVisible();
+    await expect(second).toBeVisible();
+    const opened = expanded ? second : first;
+    await opened.locator('summary').first().focus();
+    await page.keyboard.press('Enter');
+    await expect(opened).toHaveAttribute('open', '');
+    app.notify('codex.notification', {
+      generation: 4, method: 'serverRequest/resolved',
+      params: { requestId: 'first-command' },
+    });
+    await expect(first).toHaveCount(0);
+    await expect(second).toHaveCount(1);
+    if (expanded) await expect(second).toHaveAttribute('open', '');
+    else await expect(second).not.toHaveAttribute('open');
+    await second.locator('summary').first().focus();
+    await page.keyboard.press('Space');
+    if (expanded) await expect(second).not.toHaveAttribute('open');
+    else await expect(second).toHaveAttribute('open', '');
+    expect(app.pageErrors).toEqual([]);
+  });
+}

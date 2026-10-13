@@ -539,19 +539,32 @@ fn CodexRequestInput::render(
     | "item/tool/requestUserInput"
     | "mcpServer/elicitation/request")
   @html.details(
+    open=self.expanded,
     class=if supported {
       "composer-context-row codex-request composer-context-disclosure"
     } else {
       "composer-context-row codex-request composer-context-disclosure error"
     },
     [
-      @html.summary(class="composer-context-summary", [
-        @html.span(
-          class="composer-notice-icon",
-          @icons.icon(@icons.icon_question),
-        ),
-        heading,
-      ]),
+      @html.summary(
+        attrs=@html.Attrs::build()
+          .class("composer-context-summary")
+          .on_click(event => {
+            // Keep the DOM's open state controlled by this request's identity.
+            // Native summary keyboard activation also dispatches a click.
+            event.prevent_default()
+            action_emit(
+              CodexRequestToggled(identity~, request_key=self.request_key),
+            )
+          }),
+        [
+          @html.span(
+            class="composer-notice-icon",
+            @icons.icon(@icons.icon_question),
+          ),
+          heading,
+        ],
+      ),
       @html.div(class="composer-context-detail", body),
     ],
   )

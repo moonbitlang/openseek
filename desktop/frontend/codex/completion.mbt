@@ -318,6 +318,7 @@ pub fn State::composer_input(
       if request.thread_id == active.id {
         requests.push({
           request_key: request.response_token,
+          expanded: request.expanded,
           method_: request.method_,
           params: request.params,
           answers: request.answers,
@@ -561,6 +562,8 @@ fn State::apply_composer_action(
           })
         None => (@cmd.none, self)
       }
+    @composer.CodexRequestToggled(request_key~, ..) =>
+      (@cmd.none, self.toggle_request(request_key))
     @composer.CodexRequestAnswerChanged(request_key~, question_id~, answer~, ..) =>
       update(
         dispatch,
