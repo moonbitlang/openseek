@@ -519,33 +519,30 @@ async fn execute(
   let policy_active = input.target == "wasm" && !escalated
   let handoff_dir_has_owner = job_dir is Some(_) || scratch_dir is Some(_)
   // A directory that an automatic handoff may give to a job must outlive this
-  // call, so it is UUID-named inside a caller-owned job dir or scratch lab when
-  // one exists. Its `tmp` subtree is the snippet's writable result area and may
-  // contain paths named in completion output, so only the separate build subtree
-  // is reclaimed when a handed-off job becomes terminal.
+  // call, so it gets a name of its own inside a caller-owned job dir or scratch
+  // lab when one exists (see `fresh_call_dir` for why that name is short). Its
+  // `tmp` subtree is the snippet's writable result area and may contain paths
+  // named in completion output, so only the separate build subtree is
+  // reclaimed when a handed-off job becomes terminal.
   let dir = if job_dir is Some(scratch) {
-    let dir = "\{scratch}/snippet-\{@uuid.v7()}"
-    @fs.mkdir(dir, recursive=true) catch {
+    fresh_call_dir(scratch, "snippet-") catch {
       _ =>
         return @agent_tool.respond(
           "mbtx: could not create a working directory for the background job.",
           is_error=true,
         )
     }
-    dir
   } else if scratch_dir is Some(lab) {
     // With a lab wired, the snippet builds INSIDE it: the profile re-allows
     // exactly one subtree, and pointing it at the lab then covers both the
     // lab writes the caller sanctioned and moon's own build output.
-    let dir = "\{lab}/mbtx-\{@uuid.v7()}"
-    @fs.mkdir(dir, recursive=true) catch {
+    fresh_call_dir(lab, "mbtx-") catch {
       _ =>
         return @agent_tool.respond(
           "mbtx: could not create a working directory in the scratch lab.",
           is_error=true,
         )
     }
-    dir
   } else {
     @fs.tmpdir(prefix="openseek-mbtx-") catch {
       // Let a cancellation propagate to the loop's Interrupted terminal instead of
@@ -583,7 +580,7 @@ async fn execute(
   defer cleanup()
   // Keep disposable compiler inputs and artifacts apart from `tmp`, whose
   // result files may need to remain readable after a background job exits.
-  // `dir` is one UUID-named call directory under `job_dir` or `scratch_dir`,
+  // `dir` is one uniquely named call directory under `job_dir` or `scratch_dir`,
   // or a fresh system temp directory when neither was supplied. Keep moon's
   // target directory in `build/_build`: single-file builds append the input
   // filename, so targeting `build` itself collides with `build/snippet.mbtx`.

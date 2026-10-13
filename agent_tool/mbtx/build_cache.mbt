@@ -23,6 +23,20 @@ fn build_cache_root(job_dir? : String, scratch_dir? : String) -> String? {
 }
 
 ///|
+/// How much of a script's basename a cache key keeps.
+///
+/// Windows tools (moonc, the C compiler, the linker) refuse a path of 260
+/// characters or more, and below the keyed directory moon appends about 120
+/// for one dependency artifact
+/// (`gen-N/_build/snippet.mbtx/<target>/debug/build/.mooncakes/<owner>/<module>/<package>/<package>.core`)
+/// on top of the user's temp directory and the session's job dir. The key is
+/// the one segment of that path this package sizes, so it carries a label,
+/// not the name: with the digest in hexadecimal a key is at most 35
+/// characters, where the 40-character basename and decimal digest it replaces
+/// could reach 67.
+const CacheKeyNameChars : Int32 = 12
+
+///|
 /// The subdirectory of the cache root a program builds in.
 ///
 /// Every script is staged under the same file name, so the DIRECTORY is the
@@ -37,18 +51,21 @@ fn build_cache_root(job_dir? : String, scratch_dir? : String) -> String? {
 ///
 /// The resolved path, not the filename the model wrote, is what is keyed: a
 /// workspace `check.mbtx` and `@builtin/check.mbtx` are different programs.
-/// The basename is kept in the name for a person reading the directory; the
-/// digest is what makes it unique.
+/// The start of the basename is kept in the name for a person reading the
+/// directory; the digest is what makes it unique.
+///
+/// The name is kept short on purpose (see `CacheKeyNameChars`): it sits in
+/// front of every path moon writes for the build, so a long script name would
+/// otherwise be spent out of the same budget as its dependencies' artifacts.
 fn cache_key(script_path : String?) -> String {
   match script_path {
     None => "snippet"
     Some(path) => {
-      let base = match path.rev_find("/") {
-        Some(i) => path[i + 1:]
-        None => path
-      }
+      // A path resolved on Windows is separated by `\`; splitting on `/`
+      // alone would take the start of the whole path for the basename.
+      let base = @workspace_path.path_basename(path)
       let name = StringBuilder()
-      for c in base.iter().take(40) {
+      for c in base.iter().take(CacheKeyNameChars) {
         name.write_char(
           if c is ('a'..<='z' | 'A'..<='Z' | '0'..<='9' | '.' | '-' | '_') {
             c
@@ -57,7 +74,7 @@ fn cache_key(script_path : String?) -> String {
           },
         )
       }
-      "named-\{name}-\{fnv1a64(path)}"
+      "named-\{name}-\{fnv1a64(path).to_string(radix=16)}"
     }
   }
 }
@@ -146,10 +163,17 @@ test "cache keys: one shared snippet dir, named scripts keyed by resolved path" 
   assert_true(b.has_prefix("named-check.mbtx-"))
   assert_not_eq(a, b)
   assert_eq(a, cache_key(Some("/project/check.mbtx")))
+  // A path resolved on Windows names the same script by its basename too.
+  let windows = cache_key(Some("C:\\Users\\me\\project\\check.mbtx"))
+  assert_true(windows.has_prefix("named-check.mbtx-"), msg=windows)
   // Unsafe characters never reach the directory name; long names are cut.
-  let odd = cache_key(Some("/p/we ird:name\\x.mbtx"))
-  assert_true(odd.has_prefix("named-we_ird_name_x.mbtx-"))
+  let odd = cache_key(Some("/p/a b:c d.mbtx"))
+  assert_true(odd.has_prefix("named-a_b_c_d.mbtx-"))
   let long = cache_key(Some("/p/" + "a".repeat(60) + ".mbtx"))
-  assert_true(long.has_prefix("named-" + "a".repeat(40) + "-"))
-  assert_false(long.contains("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"))
+  assert_true(long.has_prefix("named-" + "a".repeat(12) + "-"))
+  assert_false(long.contains("a".repeat(13)))
+  // The key is one segment of every path the build writes, so its length is
+  // bounded whatever the script is called: label, separator, 64-bit hex digest.
+  assert_true(long.length() <= 35, msg=long)
+  assert_not_eq(long, cache_key(Some("/q/" + "a".repeat(60) + ".mbtx")))
 }

@@ -304,3 +304,28 @@ async test "cache: a detached job's cleanup keeps the cache and its own run" {
     }
   })
 }
+
+///|
+/// The keyed directory sits in front of everything moon appends for a
+/// dependency (`_build/snippet.mbtx/<target>/debug/build/.mooncakes/...`), and
+/// Windows tools refuse a path of 260 characters or more. A long script name
+/// must not be what pushes a dependency's artifacts past that.
+async test "cache: a long script name still builds its dependencies" {
+  @vfs.with_tmpdir(prefix="mbtx-cache-long-", ws => {
+    let spill = "\{ws}/spill"
+    @fs.mkdir(spill)
+    let name = "a".repeat(35) + ".mbtx"
+    let source =
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  @async.sleep(1)
+      #|  println("built with a dependency")
+      #|}
+    @fs.write_file("\{ws}/\{name}", source, create_mode=CreateOrTruncate)
+    let definition = @mbtx.definition(workspace_root=ws, job_dir=spill)
+    let output = dispatch(definition, { "filename": name })
+    assert_false(output.is_error, msg=output.content)
+    assert_true(output.content.contains("built with a dependency"))
+  })
+}
