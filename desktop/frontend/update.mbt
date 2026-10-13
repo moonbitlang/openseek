@@ -3535,6 +3535,7 @@ fn update_msg(
             guard model.composing_new_chat() &&
               model.active_conversation() is Some(conv) &&
               conv.goal_edit is None &&
+              conv.goal_pending is None &&
               conv.pending_semantic_submission is None &&
               @resource.path_for(conv.project(), model.focused) is Some(cwd) else {
               return (@cmd.none, model)
@@ -14639,6 +14640,47 @@ test "a goal editor cannot lose its draft through an agent switch" {
   assert_true(after.screen is Chat)
   assert_true(after.active().goal_edit == before.active().goal_edit)
   assert_true(after.composer_entry_retirements.is_empty())
+}
+
+///|
+test "an agent switch cannot discard a pending goal write" {
+  let dispatch = test_dispatch()
+  let (_, pending) = update(
+    dispatch,
+    SubmitGoal,
+    test_model().replace_conversation({
+      ..test_conversation(),
+      goal_edit: Some({ draft: "Keep this goal", }),
+    }),
+  )
+  assert_true(pending.active().goal_edit is None)
+  assert_true(pending.openseek_model_chip(pending.active()).disabled)
+  let (_, after) = update(
+    dispatch,
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
+    pending,
+  )
+  assert_true(after.screen is Chat)
+  assert_true(after.active().goal_pending == pending.active().goal_pending)
+  guard after.active().goal_pending is Some(command) else {
+    fail("pending goal must remain recoverable")
+  }
+  let (_, rejected) = update_dev(
+    dispatch,
+    GoalRejected(
+      session="desktop-test",
+      command=command.id,
+      draft=Some("Keep this goal"),
+      message="disk full",
+    ),
+    after,
+  )
+  assert_true(rejected.active().goal_edit is Some({ draft: "Keep this goal", }))
+  assert_true(rejected.active().goal_pending is None)
 }
 
 ///|
