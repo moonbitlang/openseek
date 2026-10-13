@@ -55,7 +55,7 @@ pub fn Msg::notification(String, Json, Int) -> Self
 pub fn Msg::open_thread(String) -> Self
 pub fn Msg::refresh() -> Self
 pub fn Msg::server_request(String, Json, String, Json, Int) -> Self
-pub fn Msg::start_draft(String, String) -> Self
+pub fn Msg::start_draft(String, String, draft? : @composer.Draft, worktree? : Bool) -> Self
 pub fn Msg::status_changed(Json) -> Self
 pub fn Msg::unarchive_thread(String) -> Self
 pub fn Msg::worktree_changed(String, String, String, String, Bool) -> Self
@@ -86,6 +86,7 @@ pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @
 pub fn State::composing_draft(Self) -> Bool
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::draft_text(Self) -> String
+pub fn State::draft_worktree_mode(Self) -> Bool
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::files_toggle_label(Self, @interop.ChannelId, locale? : @i18n.Locale) -> String
 pub fn State::from_thread_snapshot(Json) -> Self
@@ -106,6 +107,7 @@ pub fn State::project_draft(locale? : @i18n.Locale, Self, SidebarContext, String
 pub fn State::reasoning_effort_chip(locale? : @i18n.Locale, Self, Bool) -> @composer.ReasoningSelect?
 pub fn State::refresh(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn State::refresh_git(Self, @cmd.Emit[Msg], @interop.ChannelId) -> (@cmd.Cmd, Self)
+pub fn State::reset_for_channel(Self) -> Self
 pub fn State::sign_in_required(Self) -> Bool
 pub fn State::signed_in(Self) -> Bool
 pub fn State::transcript_items(locale? : @i18n.Locale, Self) -> Array[@transcript.TranscriptItem]

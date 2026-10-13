@@ -223,6 +223,9 @@ priv struct CodexDraftTask {
   id : String
   cwd : String
   project_root : String?
+  // A lost thread/start reply may still leave a host-cached thread for this
+  // identity and cwd. Retrying must keep that pair even after an error.
+  thread_start_attempted : Bool
 } derive(Eq)
 
 ///|
@@ -253,6 +256,7 @@ priv struct CodexQuestion {
 ///|
 priv struct CodexPendingRequest {
   response_token : String
+  expanded : Bool
   request_id : Json
   // Every supported app-server reverse request names its owning thread.
   // Keeping that identity here prevents one task from rendering or answering
@@ -398,7 +402,12 @@ enum Msg {
   ToggleGitDetails
   CloseGitDetails
   ToggleWorktreeMode
-  StartDraft(id~ : String, cwd~ : String)
+  StartDraft(
+    id~ : String,
+    cwd~ : String,
+    draft~ : @composer.Draft,
+    worktree~ : Bool
+  )
   AbandonDraft
   OpenThread(String)
   ArchiveThread(String)
@@ -444,8 +453,13 @@ pub fn Msg::composer_action(action : @composer.Action) -> Msg {
 ///|
 /// Shell entrypoint for opening a local draft in an exact project directory.
 /// No app-server thread exists until the draft sends its first prompt.
-pub fn Msg::start_draft(id : String, cwd : String) -> Msg {
-  StartDraft(id~, cwd~)
+pub fn Msg::start_draft(
+  id : String,
+  cwd : String,
+  draft~ : @composer.Draft = { task: "", mentions: [], images: [], },
+  worktree~ : Bool = false,
+) -> Msg {
+  StartDraft(id~, cwd~, draft~, worktree~)
 }
 
 ///|
@@ -608,6 +622,8 @@ struct State {
   draft : String
   mentions : Array[@composer.Mention]
   images : Array[@composer.Image]
+  // Leaving a draft retires its component cache and delayed editor actions.
+  composer_retirements : Array[@interop.ConversationKey]
   // The first submitted input remains visible while thread/worktree startup
   // has not produced its real app-server User item yet. This is display-only:
   // request construction continues to read `draft`, `mentions`, and `images`, and no
@@ -663,6 +679,7 @@ pub fn State::State(loading~ : Bool = false) -> State {
     draft: "",
     mentions: [],
     images: [],
+    composer_retirements: [],
     submitted_first_prompt: None,
     pending_steers: [],
     next_steer_submission_id: 1,
@@ -676,6 +693,13 @@ pub fn State::State(loading~ : Bool = false) -> State {
     foreground: None,
     notice: "",
   }
+}
+
+///|
+/// Reset host mirrors without resetting the singleton composer's retirement
+/// cursor. This log spans channels because composer owners include the channel.
+pub fn State::reset_for_channel(self : State) -> State {
+  { ..State(loading=true), composer_retirements: self.composer_retirements, }
 }
 
 ///|
@@ -726,7 +750,13 @@ pub fn State::can_start_thread(self : State) -> Bool {
 /// app-server thread yet — the only Codex surface where the unified model
 /// chip may still switch the conversation to another agent.
 pub fn State::composing_draft(self : State) -> Bool {
-  self.selection is CodexDraftTask(_)
+  self.selection is CodexDraftTask({ thread_start_attempted: false, .. })
+}
+
+///|
+/// Preserve the unsent conversation's launch choice across agent switches.
+pub fn State::draft_worktree_mode(self : State) -> Bool {
+  self.placement.wants_fresh()
 }
 
 ///|
@@ -1204,7 +1234,12 @@ fn State::select_draft(self : State, id : String, cwd : String) -> State {
   let cwd = cwd.trim().to_owned()
   {
     ..self,
-    selection: CodexDraftTask({ id, cwd, project_root: None, }),
+    selection: CodexDraftTask({
+      id,
+      cwd,
+      project_root: None,
+      thread_start_attempted: false,
+    }),
     requested_thread: None,
     git_status: None,
     git_details_open: false,
@@ -1701,13 +1736,16 @@ fn State::with_requests(self : State, value : Json) -> State {
     }
     // Preserve edits for a request already shown while replacing the list
     // with the actor's exact live ownership snapshot.
-    let key = response_token
-    let answers = self.pending_requests
+    let existing = self.pending_requests
       .iter()
-      .find_first(existing => existing.response_token == key)
-      .map(existing => existing.answers)
-      .unwrap_or(Map([]))
-    pending_requests.push({ ..decoded, answers, })
+      .find_first(existing => existing.response_token == response_token)
+    pending_requests.push(
+      match existing {
+        Some(existing) =>
+          { ..decoded, answers: existing.answers, expanded: existing.expanded, }
+        None => decoded
+      },
+    )
   }
   { ..self, pending_requests, request_generation: generation, }
 }
@@ -2379,7 +2417,24 @@ fn CodexPendingRequest::decode(
     method_,
     params,
     answers: Map([]),
+    expanded: false,
   })
+}
+
+///|
+fn State::toggle_request(self : State, request_key : String) -> State {
+  {
+    ..self,
+    pending_requests: self.pending_requests.map(request => {
+      if request.response_token == request_key &&
+        self.active_thread() is Some(active) &&
+        request.thread_id == active.id {
+        { ..request, expanded: !request.expanded, }
+      } else {
+        request
+      }
+    }),
+  }
 }
 
 ///|
@@ -3001,6 +3056,7 @@ test "Codex request replies preserve structured values" {
       ],
     },
     answers: { "scope": "Small" },
+    expanded: false,
   }
   assert_eq(
     request.response(Json("accept")),
@@ -3013,6 +3069,7 @@ test "Codex request replies preserve structured values" {
     method_: "item/commandExecution/requestApproval",
     params: { "threadId": "thread-1" },
     answers: {},
+    expanded: false,
   }
   let decision : Json = {
     "acceptWithExecpolicyAmendment": {
@@ -3468,7 +3525,7 @@ pub fn State::with_browser_annotation(
 }
 
 ///|
-test "Codex same-id replacement does not inherit draft answers or old card actions" {
+test "Codex same-id replacement does not inherit answers, disclosure, or old card actions" {
   let initial = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   })
@@ -3485,6 +3542,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
       1,
     )
     .with_request_answer("old-token", "scope", "old answer")
+    .toggle_request("old-token")
   assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
   let snapshot = old.with_requests({
     "generation": 1,
@@ -3501,6 +3559,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
     snapshot.pending_requests[0].answers.get("scope"),
     Some("old answer"),
   )
+  assert_true(snapshot.pending_requests[0].expanded)
   let fresh = snapshot
     .with_pending_request(
       "new-token",
@@ -3513,6 +3572,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
   assert_eq(fresh.pending_requests.length(), 1)
   assert_eq(fresh.pending_requests[0].response_token, "new-token")
   assert_true(fresh.pending_requests[0].answers.is_empty())
+  assert_false(fresh.pending_requests[0].expanded)
   let recovered = old.with_requests({
     "generation": 3,
     "data": [
@@ -3526,6 +3586,7 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
   })
   assert_eq(recovered.pending_requests[0].response_token, "new-token")
   assert_true(recovered.pending_requests[0].answers.is_empty())
+  assert_false(recovered.pending_requests[0].expanded)
   let resolved = recovered.with_notification(
     "serverRequest/resolved",
     { "requestId": 7 },

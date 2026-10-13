@@ -291,7 +291,6 @@ async fn request_pattern_repair_candidate(
     root.0,
     agent_env,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return Failed("\{error}", [])
   }
   // The repair's trace, read from the child's session; empty when the child

@@ -38,7 +38,6 @@ async fn materialize_semantic_selection_op(
   let relative_dir = ".openseek/agent-context/semantic-search"
   let dir = root.join(relative_dir)
   @fs.mkdir(dir.to_string(), recursive=true) catch {
-    error if @async.is_being_cancelled() => raise error
     // `recursive=true` only creates missing parents; an existing artifact
     // directory is the normal steady state. A file squatting on this path
     // surfaces as the write below failing.
@@ -87,7 +86,6 @@ async fn materialize_semantic_selection_op(
     let relative_path = "\{relative_dir}/\{payload.artifact_id}\{suffix}.jsonl"
     let target = root.join(relative_path)
     @fs.write_file(target.to_string(), content, create_mode=CreateNew) catch {
-      error if @async.is_being_cancelled() => raise error
       @os_error.OSError(_) as error if error.is_EEXIST() => continue
       error =>
         // Do not remove the path on an unknown write error: another process

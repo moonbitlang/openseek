@@ -371,7 +371,14 @@ fn BrowserViews::set_visible(
   if !payload.visible && self.pick is Some(pick) && pick.id == payload.id {
     self.cancel_pick()
   }
-  self.view(payload.id).set_visible(payload.visible)
+  let view = self.view(payload.id)
+  view.set_visible(payload.visible)
+  if payload.visible && @async.platform is Windows {
+    // CEF can raise the main browser's sibling HWND when focus returns to
+    // the composer. Restore the view stack without activating the page:
+    // Proton applies z-order with SWP_NOACTIVATE, preserving keyboard focus.
+    view.set_z_order(0)
+  }
   Acknowledged
 }
 

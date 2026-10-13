@@ -8,6 +8,11 @@ fn empty_result(json : Json) -> Unit raise {
 }
 
 ///|
+pub async fn Connection::bring_to_front(self : Connection) -> Unit {
+  empty_result(self.request("Page.bringToFront", {}))
+}
+
+///|
 pub async fn Connection::enable_dom(self : Connection) -> Unit {
   empty_result(self.request("DOM.enable", {}))
 }

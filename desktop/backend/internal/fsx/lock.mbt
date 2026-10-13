@@ -77,14 +77,12 @@ async fn open_lock_file(sidecar : String) -> @fs.File {
   let created = Some(
     @fs.open(sidecar, mode=ReadWrite, create_mode=CreateNew, permission=0o600),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => None
   }
   if created is Some(file) {
     return file
   }
   let regular = (@fs.kind(sidecar, follow_symlink=false) is Regular) catch {
-    error if @async.is_being_cancelled() => raise error
     _ => false
   }
   guard regular else {

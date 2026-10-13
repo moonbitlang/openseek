@@ -73,6 +73,7 @@ fn ModelSelect::render(
   locale~ : @i18n.Locale = English,
   self : ModelSelect,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
@@ -84,7 +85,7 @@ fn ModelSelect::render(
     open: self.open,
     toggle: action_emit(ModelMenuToggled(identity~)),
     dismiss: action_emit(SelectMenuDismissed(identity~)),
-    change: action_emit.map(value => ModelSelected(identity~, value~)),
+    change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
     presentation: Composer("✦", false),
@@ -223,7 +224,7 @@ fn MissingWorktreeNotice::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  @html.div(class="composer-notice", [
+  @html.div(class="composer-context-row composer-notice error", [
     @html.span(
       class="composer-notice-text",
       dynamic_text(locale, DMissingWorktree(self.name.to_string())),
@@ -293,22 +294,24 @@ fn ApprovalNotice::render(
     ],
   )
   if self.body is Some(body) {
-    @html.div(
-      class="composer-notice composer-approval composer-approval-full",
+    @html.details(
+      class="composer-context-row composer-approval composer-context-disclosure",
       [
-        question,
+        @html.summary(class="composer-context-summary", question),
         // Never truncate the exact program whose one-shot permission is being
         // decided. The shared syntax renderer tokenizes it exactly as its later
         // transcript representation, but without that card's line numbers:
         // there are no diagnostics to match yet, and gutter chrome is noise in
         // a permission prompt.
-        @html.pre(class="composer-approval-body", [
-          @syntax_html.moonbit_source_code(body),
+        @html.div(class="composer-context-detail", [
+          @html.pre(class="composer-approval-body", [
+            @syntax_html.moonbit_source_code(body),
+          ]),
         ]),
       ],
     )
   } else {
-    @html.div(class="composer-notice composer-approval", [question])
+    @html.div(class="composer-context-row composer-approval", [question])
   }
 }
 
@@ -329,14 +332,15 @@ pub fn ContextComponent::render(
       match device_name {
         Some(name) =>
           @html.div(
-            class="composer-banner",
+            class="composer-context-row composer-banner",
             dynamic_text(locale, DReconnecting(name.to_string())),
           )
-        None => @html.div(class="composer-banner hidden", "")
+        None =>
+          @html.div(class="composer-context-row composer-banner hidden", "")
       }
     SubrunDock(lanes~) => @subrun.dock(lanes)
     ApiSetupNotice(text~) =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", text),
         @html.button(
           class="composer-notice-btn",
@@ -348,9 +352,16 @@ pub fn ContextComponent::render(
       ])
     ApprovalRequest(approval) => approval.render(locale~, identity, action_emit)
     CodexRequests(requests~) => {
-      let rendered : Array[@html.Html] = []
+      // A resolved sibling must not replace a surviving request's focused
+      // control. The response token identifies one request lifetime, even
+      // when app-server later reuses its JSON-RPC request id.
+      let rendered : Map[String, @html.Html] = Map([])
       for request in requests {
-        rendered.push(request.render(locale~, identity, action_emit))
+        rendered[request.request_key] = request.render(
+          locale~,
+          identity,
+          action_emit,
+        )
       }
       @html.div(class="codex-pending", rendered)
     }
@@ -358,11 +369,15 @@ pub fn ContextComponent::render(
       let rows : Array[@html.Html] = []
       for shown in items {
         rows.push(
-          @html.div(class="pending-steer-row", title=shown, [
-            @html.span(class="pending-steer-icon", "⤷"),
-            @html.span(class="pending-steer-text", shown),
-            @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
-          ]),
+          @html.div(
+            class="composer-context-row pending-steer-row",
+            title=shown,
+            [
+              @html.span(class="pending-steer-icon", "⤷"),
+              @html.span(class="pending-steer-text", shown),
+              @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
+            ],
+          ),
         )
       }
       @html.div(class="pending-steers", rows)
@@ -448,7 +463,7 @@ pub fn ContextComponent::render(
         }
         rows.push(
           @html.div(
-            class="queued-input-row",
+            class="composer-context-row queued-input-row",
             title=item.content,
             [
               @html.span(class="queued-input-icon", "↳"),
@@ -464,30 +479,37 @@ pub fn ContextComponent::render(
       @html.div(
         class="shell-commands-running",
         commands.mapi((index, command) => {
-          @html.div(class="composer-notice", title=command, [
-            @html.span(
-              class="composer-notice-icon",
-              @icons.icon(@icons.icon_terminal),
-            ),
-            @html.span(class="composer-notice-text", [
-              @html.code(class="shell-command-text", "$ \{command}"),
-              @html.text(" "),
-              @html.span(class="shell-command-state", ui(locale, ShellRunning)),
-            ]),
-            // The command runs in a terminal tab that stays out of the way
-            // until asked for: this is where it is watched and interrupted.
-            @html.button(
-              class="composer-notice-btn",
-              type_="button",
-              title=ui(locale, ShellShowTerminalHint),
-              on_click=action_emit(ShellTerminalRequested(identity~, index~)),
-              ui(locale, ShellShowTerminal),
-            ),
-          ])
+          @html.div(
+            class="composer-context-row composer-notice",
+            title=command,
+            [
+              @html.span(
+                class="composer-notice-icon",
+                @icons.icon(@icons.icon_terminal),
+              ),
+              @html.span(class="composer-notice-text", [
+                @html.code(class="shell-command-text", "$ \{command}"),
+                @html.text(" "),
+                @html.span(
+                  class="shell-command-state",
+                  ui(locale, ShellRunning),
+                ),
+              ]),
+              // The command runs in a terminal tab that stays out of the way
+              // until asked for: this is where it is watched and interrupted.
+              @html.button(
+                class="composer-notice-btn",
+                type_="button",
+                title=ui(locale, ShellShowTerminalHint),
+                on_click=action_emit(ShellTerminalRequested(identity~, index~)),
+                ui(locale, ShellShowTerminal),
+              ),
+            ],
+          )
         }),
       )
     CompactionNotice(queued~) =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_fold)),
         @html.span(
           class="composer-notice-text",
@@ -499,7 +521,7 @@ pub fn ContextComponent::render(
         ),
       ])
     WorktreePlacementNotice =>
-      @html.div(class="composer-notice", [
+      @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),
         @html.button(
           class="composer-notice-btn",
@@ -677,11 +699,13 @@ fn StatusComponent::render(
   locale~ : @i18n.Locale = English,
   self : StatusComponent,
   identity : Identity,
+  draft : Draft,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
   match self {
-    ModelStatus(control) => control.render(locale~, identity, action_emit)
+    ModelStatus(control) =>
+      control.render(locale~, identity, draft, action_emit)
     ReasoningStatus(control) => control.render(locale~, identity, action_emit)
     PermissionStatus(control) => control.render(locale~, identity, action_emit)
     GitStatus(control) =>
@@ -935,12 +959,6 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
 /// The open turn's heartbeat, docked directly above the textarea: what it is
 /// doing, how long it has been at it, and what it has spent.
 ///
-/// A model call is silent for as long as it thinks — no delta, no tool
-/// result, no commit — so without this the window is indistinguishable from a
-/// hung one. Deliberately lighter than a `composer-notice`: this is the only
-/// row here that repaints every second, and a bordered card doing that reads
-/// as an alarm rather than a heartbeat.
-///
 /// Always a slot, empty when idle and collapsed by `.composer-running:empty`,
 /// the same shape as the plan panel's and for the same reason: the context
 /// column is diffed by position, so a row that came and went would shift the
@@ -954,10 +972,17 @@ fn running_row(
   guard run is Some(run) else {
     return @html.div(class="composer-running", ([] : Array[@html.Html]))
   }
-  @html.div(class="composer-running", [
-    @html.span(class="composer-running-mark", ""),
-    @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
-  ])
+  @html.div(
+    class=if run.stage is Retrying(..) {
+      "composer-context-row composer-running error"
+    } else {
+      "composer-running"
+    },
+    [
+      @html.span(class="composer-running-mark", ""),
+      @html.span(class="composer-running-text", run.label(locale~, clock_ms~)),
+    ],
+  )
 }
 
 ///|

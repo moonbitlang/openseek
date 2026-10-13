@@ -155,7 +155,7 @@ fn focus_channel(
       // Codex is host-owned just like the other focused mirrors. Clear the
       // previous device's account and conversation list before its replies
       // can be mistaken for this device's sidebar section.
-      codex: @codex.State(loading=true),
+      codex: model.codex.reset_for_channel(),
       // The old HostConnection is already parked. Preserve the remaining
       // owner/root state until the post-dispatch sync retires its file-index
       // cache and re-roots against the newly focused host.
@@ -2318,12 +2318,12 @@ fn update_msg(
           }
           update_msg(dispatch, CloseSelectMenu, model)
         }
-        @composer.ModelSelected(identity~, value~) => {
+        @composer.ModelSelected(identity~, value~, draft~) => {
           guard model.screen is Codex &&
             model.codex.accepts_composer_identity(identity, model.focused) else {
             return (@cmd.none, model)
           }
-          update_msg(dispatch, ModelPicked(value), model)
+          update_msg(dispatch, ModelPicked(value, draft~), model)
         }
         @composer.ReasoningSelected(identity~, value~) => {
           guard model.screen is Codex &&
@@ -2391,6 +2391,7 @@ fn update_msg(
         | @composer.ModelSelected(..)
         | @composer.ReasoningSelected(..)
         | @composer.ApprovalAnswered(..)
+        | @composer.CodexRequestToggled(..)
         | @composer.CodexRequestAnswerChanged(..)
         | @composer.CodexRequestResponded(..)
         | @composer.PermissionMenuToggled(..)
@@ -2423,8 +2424,8 @@ fn update_msg(
               )
             @composer.SelectMenuDismissed(..) =>
               update_msg(dispatch, CloseSelectMenu, model)
-            @composer.ModelSelected(value~, ..) =>
-              update_msg(dispatch, ModelPicked(value), model)
+            @composer.ModelSelected(value~, draft~, ..) =>
+              update_msg(dispatch, ModelPicked(value, draft~), model)
             @composer.ReasoningSelected(value~, ..) =>
               update_msg(dispatch, OpenSeekEffortPicked(value), model)
             @composer.ApprovalAnswered(allow~, ..) =>
@@ -2540,6 +2541,7 @@ fn update_msg(
             @composer.PermissionMenuToggled(..)
             | @composer.PermissionMenuDismissed(..)
             | @composer.PermissionSelected(..)
+            | @composer.CodexRequestToggled(..)
             | @composer.CodexRequestAnswerChanged(..)
             | @composer.CodexRequestResponded(..) => (@cmd.none, model)
             _ => (@cmd.none, model)
@@ -3433,7 +3435,7 @@ fn update_msg(
         update_msg(dispatch, NewChatIn(model.focused, Some(workspace)), closed)
       }
     }
-    ModelPicked(value) => {
+    ModelPicked(value, draft~) => {
       guard ModelChoice::parse(value) is Some(choice) else {
         return (@cmd.none, model)
       }
@@ -3441,15 +3443,15 @@ fn update_msg(
       match choice {
         OpenSeekModel(engine_model) =>
           if model.screen is Codex {
-            // Only a composing draft's chip offers the OpenSeek group; the
-            // pick hands the fresh conversation back to OpenSeek. The draft
-            // is abandoned and a fresh OpenSeek chat rotates into the
-            // draft's project (or whatever project is active when the draft
-            // never resolved one).
-            guard model.codex.composing_draft() else {
+            // Transfer the same unsent conversation, including the component's
+            // current draft. No id rotation or second sidebar row is needed.
+            guard model.codex.composing_draft() &&
+              model.codex.active_id() is Some(session) &&
+              @resource.of_path(model.focused, model.codex.new_thread_cwd())
+              is Some(workspace) else {
               return (@cmd.none, model)
             }
-            let root = model.codex.new_thread_cwd()
+            let worktree_mode = model.codex.draft_worktree_mode()
             let (abandon_cmd, codex) = @codex.update(
               locale=model.locale,
               dispatch.map(msg => Codex(channel=model.focused, msg)),
@@ -3458,27 +3460,36 @@ fn update_msg(
               model.focused,
               url => open_external_link(dispatch, url),
             )
-            let next = {
-              ..model,
-              codex,
-              default_model: engine_model,
-              default_agent: OpenSeekAgent,
-              loading_conversation: None,
+            let conv = {
+              ..empty_conversation(
+                model.focused,
+                session,
+                workspace,
+                model=engine_model,
+              ),
+              task: draft.task,
+              mentions: draft.mentions,
+              images: draft.images,
+              composer_draft_present: !draft.is_empty(),
+              worktree_mode,
             }
-            let next = if !root.is_empty() &&
-              @resource.of_path(model.focused, root) is Some(workspace) {
-              next.with_active_project(Some(workspace))
-            } else {
-              next
-            }
+            let next = { ..model, codex, }
+              .replace_conversation(conv)
+              .activate(model.focused, session, workspace)
+              .with_active_project(Some(workspace))
             (
               @cmd.batch([
                 abandon_cmd,
                 save_default_model(engine_model),
                 save_default_agent(OpenSeekAgent),
-                rotate_session(dispatch, next.focused),
               ]),
-              next,
+              {
+                ..next,
+                screen: Chat,
+                default_model: engine_model,
+                default_agent: OpenSeekAgent,
+                loading_conversation: None,
+              },
             )
           } else {
             // The selector changes the conversation on screen. The tier is
@@ -3528,35 +3539,43 @@ fn update_msg(
             // uses it, on the draft and stored-thread surfaces alike.
             (persist, { ..model, codex, default_agent: CodexAgent, })
           } else {
-            // Only a composing OpenSeek chat's chip offers the Codex group;
-            // the pick hands the fresh conversation to Codex. One composing
-            // row at a time: an empty husk that was only ever the "New chat"
-            // placeholder is deactivated so its row vanishes with the
-            // switch; a husk holding typed writing keeps its row (and the
-            // text survives a switch back).
             guard model.composing_new_chat() &&
-              model.active_conversation() is Some(conv) else {
+              model.active_conversation() is Some(conv) &&
+              conv.goal_edit is None &&
+              conv.goal_pending is None &&
+              conv.pending_semantic_submission is None &&
+              @resource.path_for(conv.project(), model.focused) is Some(cwd) else {
               return (@cmd.none, model)
             }
-            let cwd = @resource.path_for(conv.project(), model.focused).unwrap_or(
-              "",
+            let (start_cmd, codex) = @codex.update(
+              locale=model.locale,
+              dispatch.map(msg => Codex(channel=model.focused, msg)),
+              @codex.Msg::start_draft(
+                conv.session_id,
+                cwd,
+                draft~,
+                worktree=conv.worktree_mode,
+              ),
+              codex,
+              model.focused,
+              url => open_external_link(dispatch, url),
             )
-            let active_session = if conv.worth_keeping() {
-              model.active_session
-            } else {
-              ""
-            }
             (
-              @cmd.batch([
-                persist,
-                CodexDraftRotation::{ cwd, }.rotate(dispatch),
-              ]),
+              @cmd.batch([persist, start_cmd]),
               {
                 ..model,
                 codex,
                 default_agent: CodexAgent,
                 screen: Codex,
-                active_session,
+                selected_conversation: None,
+                conversations: model.conversations.filter(item => {
+                  item.device != conv.device ||
+                  item.session_id != conv.session_id
+                }),
+                composer_entry_retirements: [
+                  ..model.composer_entry_retirements,
+                  { channel: conv.device, session: conv.session_id, },
+                ],
                 sidebar_open: model.sidebar_open && !model.narrow,
               },
             )
@@ -4091,7 +4110,17 @@ fn update_msg(
       // Permission questions remain actionable until answered and therefore
       // continue to contribute to the independently derived badge count.
       let model = { ..model, window_focused: focused, }
-      (@cmd.none, model.mark_visible_conversation_read())
+      let cmd = if focused &&
+        desired_browser_view(model) is Some(id) &&
+        model.browser_pane.shown == Some(id) {
+        // Reassert visibility when focus returns from the native page. On
+        // Windows the host also restores its stacking above the main browser,
+        // without taking keyboard focus away from the composer.
+        browser_set_visible(dispatch, id, true)
+      } else {
+        @cmd.none
+      }
+      (cmd, model.mark_visible_conversation_read())
     }
     ViewportResized(width~) => {
       let narrow = width <= NarrowBreakpoint
@@ -14390,7 +14419,11 @@ test "the model selector switches one conversation, not the app" {
   )
   let (_, flash) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     model,
   )
   assert_true(flash.active().engine_model is DsFlash)
@@ -14398,7 +14431,11 @@ test "the model selector switches one conversation, not the app" {
   // the same selected/default/stored model state.
   let (_, flash_again) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     model,
   )
   @debug.assert_eq(
@@ -14427,7 +14464,11 @@ test "the model selector switches one conversation, not the app" {
   )
   let (_, pro) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-pro"),
+    ModelPicked("openseek:deepseek-v4-pro", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     flash,
   )
   assert_true(pro.active().engine_model is DsPro)
@@ -14442,7 +14483,11 @@ test "a start never overrides the tier picked for the next turn" {
   // client began, which says nothing about what this user means to send.
   let (_, queued) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     test_model(),
   )
   assert_true(queued.active().engine_model is DsFlash)
@@ -14469,7 +14514,11 @@ test "reopening a conversation recovers its own tier, not the last pick" {
   // must not follow the first conversation home.
   let (_, flash) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     test_model(),
   )
   let other = flash.activate(
@@ -14480,7 +14529,11 @@ test "reopening a conversation recovers its own tier, not the last pick" {
   assert_true(other.active().engine_model is DsFlash)
   let (_, pro) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-pro"),
+    ModelPicked("openseek:deepseek-v4-pro", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     other,
   )
   assert_true(pro.default_model is DsPro)
@@ -14524,7 +14577,11 @@ test "a run pins an inherited tier the user never clicked for" {
   )
   let (_, moved) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     elsewhere,
   )
   assert_true(moved.default_model is DsFlash)
@@ -14538,30 +14595,223 @@ test "a run pins an inherited tier the user never clicked for" {
 }
 
 ///|
-test "a Codex pick hands a fresh chat to Codex" {
+test "model switches transfer one draft and retire the old owner actions" {
   let dispatch = test_dispatch()
-  // The fixture chat has sent nothing, so its chip still offers both agent
-  // groups. Picking a Codex model switches the surface and the defaults; the
-  // real draft arrives via the rotation command's `CodexDraftRotated`.
-  let (_, switched) = update(
-    dispatch,
-    ModelPicked("codex:gpt-5.4-codex"),
-    test_model(),
-  )
-  assert_true(switched.screen is Codex)
-  assert_true(switched.default_agent is CodexAgent)
-  // One composing row at a time: the empty husk was only ever the "New
-  // chat" placeholder, so it deactivates and its sidebar row goes with it.
-  assert_true(switched.active_conversation() is None)
-  // A husk holding typed writing keeps its row instead — switching back
-  // finds the text.
-  let typed = test_model().replace_conversation({
+  let before = test_model().replace_conversation({
     ..test_conversation(),
     composer_draft_present: true,
+    worktree_mode: true,
   })
-  let (_, kept) = update(dispatch, ModelPicked("codex:gpt-5.4-codex"), typed)
-  assert_true(kept.screen is Codex)
-  assert_true(kept.active_conversation() is Some(_))
+  let identity = before.composer_input().identity
+  let draft : @composer.Draft = {
+    task: "Inspect this screenshot 👀",
+    mentions: [],
+    images: [{ name: "screen.png", url: "data:image/png;base64,cGlj", }],
+  }
+  let action = ComposerAction(
+    @composer.ModelSelected(identity~, value="codex:gpt-5.4-codex", draft~),
+  )
+  let (_, switched) = update(dispatch, action, before)
+  let (_, repeated) = update(dispatch, action, before)
+  assert_true(switched.screen is Codex)
+  assert_true(switched.default_agent is CodexAgent)
+  assert_true(switched.active_conversation() is None)
+  assert_true(switched.codex.active_id() == Some(identity.owner.session))
+  assert_true(switched.codex_composer_input().draft == draft)
+  assert_true(switched.codex == repeated.codex)
+  assert_true(
+    switched.composer_entry_retirements == repeated.composer_entry_retirements,
+  )
+  assert_true(switched.codex.draft_worktree_mode())
+  assert_true(before.active_conversation() is Some(_))
+  assert_true(before.composer_entry_retirements.is_empty())
+  let codex_identity = switched.codex_composer_input().identity
+  let edited = { ..draft, task: "Edited in Codex", }
+  let back_action = CodexComposerAction(
+    @composer.ModelSelected(
+      identity=codex_identity,
+      value="openseek:deepseek-v4-pro",
+      draft=edited,
+    ),
+  )
+  let (_, back) = update(dispatch, back_action, switched)
+  let (_, back_repeated) = update(dispatch, back_action, switched)
+  assert_true(back.screen is Chat)
+  assert_true(!back.codex.composing_draft())
+  assert_true(back.composer_input().draft == edited)
+  assert_true(back.composer_input() == back_repeated.composer_input())
+  assert_true(back.codex == back_repeated.codex)
+  assert_true(back.active().worktree_mode)
+  assert_eq(back.active_session, identity.owner.session)
+  assert_true(back.conversation_for_composer_action(identity) is None)
+  assert_true(
+    !back.codex.accepts_composer_identity(codex_identity, back.focused),
+  )
+  let (_, stale) = update(dispatch, action, back)
+  assert_true(stale.screen is Chat)
+  assert_true(stale.composer_input().draft == edited)
+  // Returning again must use the latest draft, including an intentional clear.
+  let empty : @composer.Draft = { task: "", mentions: [], images: [], }
+  let (_, again) = update(
+    dispatch,
+    ComposerAction(
+      @composer.ModelSelected(
+        identity=back.composer_input().identity,
+        value="codex:gpt-5.4-codex",
+        draft=empty,
+      ),
+    ),
+    back,
+  )
+  assert_true(again.codex_composer_input().draft == empty)
+  assert_true(
+    !again.codex.accepts_composer_identity(codex_identity, again.focused),
+  )
+  assert_true(again.active_conversation() is None)
+}
+
+///|
+test "Codex composer retirements stay monotonic across device focus" {
+  let dispatch = test_dispatch()
+  let source = @interop.ChannelId::Local
+  let remote = @interop.ChannelId::Remote("remote-device")
+  let initial = test_model()
+  let initial = {
+    ..initial,
+    devices: [..initial.devices, empty_device_state(remote)],
+  }
+  let (_, started) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
+    initial,
+  )
+  let old_identity = started.codex_composer_input().identity
+  let (_, retired) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::abandon_draft()),
+    started,
+  )
+  let old_retirements = retired.codex_composer_input().retirements
+  assert_eq(old_retirements.length(), 1)
+  let (_, focused) = focus_channel(dispatch, retired, remote)
+  assert_true(focused.codex_composer_input().retirements == old_retirements)
+  assert_true(!focused.codex.has_active())
+  let (_, remote_started) = update(
+    dispatch,
+    Codex(channel=remote, @codex.Msg::start_draft("remote-draft", "/remote")),
+    focused,
+  )
+  let (_, remote_retired) = update(
+    dispatch,
+    Codex(channel=remote, @codex.Msg::abandon_draft()),
+    remote_started,
+  )
+  let retirements = remote_retired.codex_composer_input().retirements
+  assert_eq(retirements.length(), 2)
+  assert_true(retirements[0] == old_retirements[0])
+  assert_true(retirements[1] == { channel: remote, session: "remote-draft", })
+  let (_, returned) = focus_channel(dispatch, remote_retired, source)
+  let (_, reopened) = update(
+    dispatch,
+    Codex(channel=source, @codex.Msg::start_draft("local-draft", "/local")),
+    returned,
+  )
+  assert_true(reopened.codex_composer_input().retirements == retirements)
+  assert_true(!reopened.codex.accepts_composer_identity(old_identity, source))
+  assert_true(retired.codex_composer_input().retirements == old_retirements)
+}
+
+///|
+test "a goal editor cannot lose its draft through an agent switch" {
+  let before = test_model().replace_conversation({
+    ..test_conversation(),
+    goal_edit: Some({ draft: "Keep this goal", }),
+  })
+  assert_true(before.openseek_model_chip(before.active()).disabled)
+  let (_, after) = update(
+    test_dispatch(),
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
+    before,
+  )
+  assert_true(after.screen is Chat)
+  assert_true(after.active().goal_edit == before.active().goal_edit)
+  assert_true(after.composer_entry_retirements.is_empty())
+}
+
+///|
+test "an agent switch cannot discard a pending goal write" {
+  let dispatch = test_dispatch()
+  let (_, pending) = update(
+    dispatch,
+    SubmitGoal,
+    test_model().replace_conversation({
+      ..test_conversation(),
+      goal_edit: Some({ draft: "Keep this goal", }),
+    }),
+  )
+  assert_true(pending.active().goal_edit is None)
+  assert_true(pending.openseek_model_chip(pending.active()).disabled)
+  let (_, after) = update(
+    dispatch,
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
+    pending,
+  )
+  assert_true(after.screen is Chat)
+  assert_true(after.active().goal_pending == pending.active().goal_pending)
+  guard after.active().goal_pending is Some(command) else {
+    fail("pending goal must remain recoverable")
+  }
+  let (_, rejected) = update_dev(
+    dispatch,
+    GoalRejected(
+      session="desktop-test",
+      command=command.id,
+      draft=Some("Keep this goal"),
+      message="disk full",
+    ),
+    after,
+  )
+  assert_true(rejected.active().goal_edit is Some({ draft: "Keep this goal", }))
+  assert_true(rejected.active().goal_pending is None)
+}
+
+///|
+test "an agent switch cannot discard a pending semantic submission" {
+  let before = test_model().replace_conversation({
+    ..test_conversation(),
+    pending_semantic_submission: Some({
+      submission_id: "pending-semantic-send",
+      reference: large_semantic_reference_for_test(),
+      task: "Inspect these matches",
+      mentions: [],
+      followup: None,
+    }),
+  })
+  assert_true(before.openseek_model_chip(before.active()).disabled)
+  let (_, after) = update(
+    test_dispatch(),
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "Inspect these matches",
+      mentions: [],
+      images: [],
+    }),
+    before,
+  )
+  assert_true(after.screen is Chat)
+  assert_true(after.default_agent is OpenSeekAgent)
+  assert_true(
+    after.active().pending_semantic_submission ==
+    before.active().pending_semantic_submission,
+  )
+  assert_true(after.composer_entry_retirements.is_empty())
 }
 
 ///|
@@ -14579,7 +14829,15 @@ test "a begun conversation never changes agents" {
     ),
     test_model(),
   )
-  let (_, unchanged) = update(dispatch, ModelPicked("codex:gpt-5.4-codex"), ran)
+  let (_, unchanged) = update(
+    dispatch,
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
+    ran,
+  )
   assert_true(unchanged.screen is Chat)
   assert_true(unchanged.default_agent is OpenSeekAgent)
 }
@@ -14596,7 +14854,11 @@ test "an OpenSeek pick on a composing Codex draft hands the chat back" {
   assert_true(drafting.codex.composing_draft())
   let (_, back) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     drafting,
   )
   assert_false(back.codex.composing_draft())
@@ -14609,7 +14871,11 @@ test "the Codex group's placeholder row opens Settings" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
-    ModelPicked("codex.unavailable"),
+    ModelPicked("codex.unavailable", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     test_model(),
   )
   // Sign-in and connection state live in the Settings page's Codex group.
@@ -14674,7 +14940,11 @@ test "remembered tiers survive a round trip through storage" {
   let dispatch = test_dispatch()
   let (_, chosen) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     test_model(),
   )
   let restored = parse_conversation_models(
@@ -15967,7 +16237,11 @@ test "custom select menus switch and dismiss deterministically" {
   )
   let (_, picked) = update(
     dispatch,
-    ModelPicked("openseek:deepseek-v4-flash"),
+    ModelPicked("openseek:deepseek-v4-flash", draft={
+      task: "",
+      mentions: [],
+      images: [],
+    }),
     reopened,
   )
   assert_true(picked.select_menu is None)

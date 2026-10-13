@@ -693,8 +693,8 @@ fn config_from_matches(matches : @argparse.Matches) -> Config raise {
 
 引用真实本地文件时，优先使用可点击的 Markdown 链接。
 
-- 链接格式如 [app.py](/abs/path/app.py:12)：标签为普通文本，目标为绝对路径，可在目标中附带行号。
-- 路径含空格时，用尖括号包住目标：[My Report.md](</abs/path/My Project/My Report.md:3>)。
+- 链接格式形如 [app.py](absolute-path)：标签为普通文本，目标为文件的绝对路径，可在目标中附带行号。
+- 路径含空格时，用尖括号包住目标，如 [My Report.md](<absolute path with spaces>:3>)。
 - 不要给 Markdown 链接加反引号，也不要在标签或目标中放反引号，否则会干扰渲染。
 - 文件链接不要使用 file://、vscode:// 或 https:// 等 URI。
 - 不要提供行号范围。

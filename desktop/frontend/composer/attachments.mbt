@@ -225,7 +225,7 @@ fn Entry::attachment_confirmations(
     match request.phase {
       AttachmentConfirming(name~) =>
         @html.div(
-          class="composer-attachment-confirm",
+          class="composer-context-row composer-attachment-confirm",
           attrs=@html.Attrs::build()
             .role("group")
             .aria_label(ui(locale, UploadAttachment)),
@@ -257,7 +257,7 @@ fn Entry::attachment_confirmations(
         )
       AttachmentPreparing | AttachmentImporting =>
         @html.div(
-          class="composer-image-notice",
+          class="composer-context-row composer-image-notice",
           ui(locale, PreparingAttachment),
         )
     }

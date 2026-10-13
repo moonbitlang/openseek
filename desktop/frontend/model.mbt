@@ -1818,7 +1818,7 @@ priv enum Msg {
   // model; on a composing conversation a cross-agent pick hands the fresh
   // chat to the other agent instead. Either way the pick becomes the default
   // agent and model for new conversations.
-  ModelPicked(String)
+  ModelPicked(String, draft~ : @composer.Draft)
   // The Codex-only reasoning chip applies to the next ordinary turn. It is a
   // separate setting because the catalog exposes model and effort as two
   // independent fields.

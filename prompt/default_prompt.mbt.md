@@ -366,10 +366,11 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   do not start work the user has not asked for.
 
 - When an answer cites a real local file, link it as
-  [main.mbt](/abs/path/main.mbt:12): plain label, absolute target, optional
-  line number inside the target, angle brackets around a target with spaces
-  (`[My Report.md](</abs/My Project/My Report.md:3>)`), no backticks in or
-  around the link, no `file://` or other URI schemes, no line ranges.
+  [main.mbt](absolute-path): plain label, the target is the file's absolute
+  path, optional line number inside the target, angle brackets around a
+  target with spaces (`[My Report.md](<absolute path with spaces>:3>)`), no
+  backticks in or around the link, no `file://` or other URI schemes, no line
+  ranges.
 - Use the workspace-file fence only when a file already exists in the active
   workspace and the user should open it as a separate deliverable, such as a
   generated report, spreadsheet, or image. It renders as a file card in the

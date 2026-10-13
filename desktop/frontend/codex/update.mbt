@@ -118,9 +118,20 @@ pub fn update(
       } else {
         (@cmd.none, state)
       }
-    StartDraft(id~, cwd~) => {
+    StartDraft(id~, cwd~, draft~, worktree~) => {
       let previous = state.active_draft().map(draft => draft.id)
       let mut next = state.select_draft(id, cwd)
+      next = {
+        ..next,
+        draft: draft.task,
+        mentions: draft.mentions,
+        images: draft.images,
+        placement: if worktree {
+          @composer.FreshWorktree
+        } else {
+          @composer.LocalCheckout
+        },
+      }
       let commands : Array[@cmd.Cmd] = []
       if !cwd.trim().is_empty() {
         commands.push(next.open_draft(dispatch, channel, id, cwd))
@@ -148,6 +159,10 @@ pub fn update(
         {
           ..state,
           selection: CodexNoTask,
+          composer_retirements: [
+            ..state.composer_retirements,
+            { channel, session: draft.id, },
+          ],
           draft: "",
           mentions: [],
           images: [],
@@ -617,7 +632,7 @@ test "Codex project add stays local until the first prompt" {
   let open_external = (_ : String) => @cmd.none
   let (_, draft) = update(
     dispatch,
-    StartDraft(id="desktop-draft-1", cwd="/work/project"),
+    Msg::start_draft("desktop-draft-1", "/work/project"),
     State(),
     @interop.ChannelId::Local,
     open_external,
@@ -1156,7 +1171,7 @@ test "abandoning a draft deselects it and clears its composer state" {
   let open_external = (_ : String) => @cmd.none
   let (_, drafting) = update(
     dispatch,
-    StartDraft(id="desktop-draft-1", cwd="/work/project"),
+    Msg::start_draft("desktop-draft-1", "/work/project"),
     State(),
     @interop.ChannelId::Local,
     open_external,
@@ -1362,6 +1377,7 @@ test "Codex update handlers are pure and idempotent" {
         method_: "item/commandExecution/requestApproval",
         params: { "threadId": "thread-1", "reason": "test" },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -1390,7 +1406,7 @@ test "Codex update handlers are pure and idempotent" {
     ToggleGitDetails,
     CloseGitDetails,
     ToggleWorktreeMode,
-    StartDraft(id="desktop-test", cwd="/work/project"),
+    Msg::start_draft("desktop-test", "/work/project"),
     OpenThread("thread-1"),
     ArchiveThread("thread-1"),
     UnarchiveThread("thread-archived"),
@@ -2102,6 +2118,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
         method_: "item/commandExecution/requestApproval",
         params: { "threadId": "thread-a" },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }.begin_foreground(CodexTurnStartReply("thread-a"))
@@ -2215,6 +2232,7 @@ test "Codex approvals cannot be edited from another thread" {
         method_: "item/tool/requestUserInput",
         params: { "threadId": "thread-2", "questions": [{ "id": "scope" }] },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -2241,6 +2259,7 @@ test "Codex composer reverse-request actions keep their task identity" {
         method_: "item/tool/requestUserInput",
         params: { "threadId": "thread-1", "questions": [{ "id": "scope" }] },
         answers: Map([]),
+        expanded: false,
       },
     ],
   }
@@ -2278,6 +2297,54 @@ test "Codex composer reverse-request actions keep their task identity" {
     _ => @cmd.none,
   )
   assert_eq(unchanged.pending_requests[0].answers.get("scope"), Some("all"))
+  let toggle : Msg = ComposerAction(
+    @composer.CodexRequestToggled(
+      identity~,
+      request_key=Json("request-1").stringify(),
+    ),
+  )
+  let (_, opened) = update(
+    dispatch,
+    toggle,
+    answered,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let (_, repeated) = update(
+    dispatch,
+    toggle,
+    answered,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(opened == repeated)
+  assert_true(opened.pending_requests[0].expanded)
+  assert_false(answered.pending_requests[0].expanded)
+  assert_eq(opened.pending_requests[0].answers.get("scope"), Some("all"))
+  let (_, closed) = update(
+    dispatch,
+    toggle,
+    opened,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_false(closed.pending_requests[0].expanded)
+  let (_, foreign_toggle) = update(
+    dispatch,
+    ComposerAction(
+      @composer.CodexRequestToggled(
+        identity={
+          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          archive_generation: 0,
+        },
+        request_key=Json("request-1").stringify(),
+      ),
+    ),
+    opened,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(foreign_toggle == opened)
 }
 
 ///|

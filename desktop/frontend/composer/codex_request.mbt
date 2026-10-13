@@ -333,25 +333,24 @@ fn CodexRequestInput::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  let body : Array[@html.Html] = [
-    @html.div(
-      class="codex-request-title",
-      match self.method_ {
-        "item/commandExecution/requestApproval" =>
-          if self.params is Object(fields) &&
-            fields.get("networkApprovalContext") is Some(Object(_)) {
-            ui(locale, NetworkApproval)
-          } else {
-            ui(locale, CommandApproval)
-          }
-        "item/fileChange/requestApproval" => ui(locale, FileApproval)
-        "item/permissions/requestApproval" => ui(locale, PermissionRequest)
-        "item/tool/requestUserInput" => ui(locale, CodexNeedsInput)
-        "mcpServer/elicitation/request" => ui(locale, ToolRequest)
-        other => other
-      },
-    ),
-  ]
+  let heading = @html.span(
+    class="codex-request-title",
+    match self.method_ {
+      "item/commandExecution/requestApproval" =>
+        if self.params is Object(fields) &&
+          fields.get("networkApprovalContext") is Some(Object(_)) {
+          ui(locale, NetworkApproval)
+        } else {
+          ui(locale, CommandApproval)
+        }
+      "item/fileChange/requestApproval" => ui(locale, FileApproval)
+      "item/permissions/requestApproval" => ui(locale, PermissionRequest)
+      "item/tool/requestUserInput" => ui(locale, CodexNeedsInput)
+      "mcpServer/elicitation/request" => ui(locale, ToolRequest)
+      other => other
+    },
+  )
+  let body : Array[@html.Html] = []
   if self.params is Object(fields) &&
     @jsonx.json_text(fields, "reason") is Some(reason) &&
     !reason.is_empty() {
@@ -533,5 +532,40 @@ fn CodexRequestInput::render(
         ),
       )
   }
-  @html.section(class="codex-request", body)
+  let supported = self.method_
+    is ("item/commandExecution/requestApproval"
+    | "item/fileChange/requestApproval"
+    | "item/permissions/requestApproval"
+    | "item/tool/requestUserInput"
+    | "mcpServer/elicitation/request")
+  @html.details(
+    open=self.expanded,
+    class=if supported {
+      "composer-context-row codex-request composer-context-disclosure"
+    } else {
+      "composer-context-row codex-request composer-context-disclosure error"
+    },
+    [
+      @html.summary(
+        attrs=@html.Attrs::build()
+          .class("composer-context-summary")
+          .on_click(event => {
+            // Keep the DOM's open state controlled by this request's identity.
+            // Native summary keyboard activation also dispatches a click.
+            event.prevent_default()
+            action_emit(
+              CodexRequestToggled(identity~, request_key=self.request_key),
+            )
+          }),
+        [
+          @html.span(
+            class="composer-notice-icon",
+            @icons.icon(@icons.icon_question),
+          ),
+          heading,
+        ],
+      ),
+      @html.div(class="composer-context-detail", body),
+    ],
+  )
 }

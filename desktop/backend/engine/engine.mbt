@@ -66,6 +66,11 @@ priv struct ServeEngine {
   steer_runs : SteerRunTracker
   job_requests : Map[String, @async.Queue[@wire.Event]]
   queued_runs : Array[QueuedRun]
+  // When this engine last did, or was asked to do, anything: its spawn, a
+  // command handed to its writer, an event read from its stdout. The idle
+  // reaper (idle.mbt) stops an engine whose stamp is old enough; the reaper's
+  // own job probe is the one exchange that leaves it alone.
+  mut last_activity_ms : Int64
 }
 
 ///|
@@ -212,6 +217,11 @@ fn ServeEngine::submit(
   failure_reason~ : String,
   ack? : @async.Queue[EngineError?],
 ) -> Bool {
+  // A jobs snapshot only reads the engine's state — it is what the idle
+  // reaper itself asks before stopping an engine — so it is not activity.
+  if !(command is JobsSnapshot(..)) {
+    self.touch()
+  }
   self.commands.try_put({ command, failure_reason, ack, }) catch {
     _ => false
   }
@@ -696,9 +706,10 @@ priv enum PumpState {
 /// can run turns concurrently) plus the command queue other ops use to ask
 /// the pump for lifecycle changes. stdin writes go directly from any op;
 /// only spawning needs the pump, because a process must be owned by a task
-/// group that outlives individual IPC requests. Idle engines stay alive for
-/// the app's lifetime — the durable session makes killing them safe, but
-/// keeping them avoids a respawn-and-replay on every conversation switch.
+/// group that outlives individual IPC requests. An idle engine stays alive
+/// across conversation switches — that avoids a respawn-and-replay on each
+/// one — until the idle reaper (idle.mbt) stops it; the durable session is
+/// what makes stopping it safe.
 struct EngineManager {
   engine : String
   runtime_dir : @pathx.Path?
@@ -1217,6 +1228,11 @@ async fn EngineActor::run_generation(
     // leaves its condemned records under `archived/deleting`. Erase them once
     // per generation; anything this pass misses waits for the next one.
     group.spawn_bg(allow_failure=true, () => manager.sweep_archived_deletions())
+    // Owned by this generation like every engine it stops: a departed pump
+    // takes its reaper with it.
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      manager.reap_idle_engines_forever()
+    })
     for ;; {
       match manager.commands.get() {
         SpawnEngine(claim, config, ack) => {
@@ -1561,6 +1577,7 @@ async fn[G] start_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
+    last_activity_ms: engine_clock_ms(),
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -1757,6 +1774,9 @@ async fn ServeEngine::consume(
           }
           _ => ()
         }
+        // Anything else the engine says on its own account is activity: a
+        // background job reporting in between turns keeps its engine alive.
+        engine.touch()
         // The brackets are the only thing that knows a sub-run's lifetime;
         // the probe in between reads the child's own record, which is the
         // only place its progress is visible to this process.
@@ -2227,6 +2247,7 @@ fn test_serve_engine(
   session_root? : @pathx.Absolute,
   follower? : SessionFollower,
   condemned~ : Bool = false,
+  last_activity_ms~ : Int64 = engine_clock_ms(),
 ) -> ServeEngine {
   {
     session_key: session,
@@ -2248,6 +2269,7 @@ fn test_serve_engine(
     steer_runs: SteerRunTracker(),
     queued_runs: [],
     job_requests: Map([]),
+    last_activity_ms,
   }
 }
 

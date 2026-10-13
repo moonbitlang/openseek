@@ -25,9 +25,9 @@
   flex: 0 1 auto;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
+  min-height: 28px;
   max-width: 100%;
-  padding: 6px 11px;
+  padding: 3px 9px;
   border-color: var(--color-border);
   background: var(--color-bg-surface);
   color: var(--color-text-primary);
@@ -372,12 +372,6 @@
 /* These controls belong to the conversation pane, whose width can change
    independently when the sidebar or file panel is resized. */
 @container main-pane (max-width: 720px) {
-  .codex-request-action {
-    min-height: 44px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-  }
-
   .codex-topbar .codex-account-label {
     display: none;
   }

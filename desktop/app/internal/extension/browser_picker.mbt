@@ -96,7 +96,9 @@ async fn BrowserViews::inspect_element(
   connection.enable_dom()
   connection.enable_overlay()
   connection.set_inspect_mode(SearchForNode(@cdp.devtools_highlight()))
-  self.view(pick.id).focus()
+  // Activate the inspected page through Chromium. Native CEF focus alone can
+  // leave the embedded view blank on Windows after entering inspect mode.
+  connection.bring_to_front()
   for ;; {
     let node = match connection.next_event() {
       BindingCalled(name~, ..) if name == binding => return Cancelled

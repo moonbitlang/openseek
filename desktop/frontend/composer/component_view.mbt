@@ -100,7 +100,7 @@ fn GoalInput::view(
 ) -> @html.Html {
   ignore(locale)
   if self.draft is Some(_) {
-    return @html.div(class="composer-goal editing", [
+    return @html.div(class="composer-context-row composer-goal editing", [
       @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_target)),
       @html.span(class="composer-goal-text", ui(locale, EditingGoal)),
       @html.button(
@@ -117,14 +117,14 @@ fn GoalInput::view(
     match pending {
       GoalSetting(text) =>
         (
-          "composer-goal pending",
+          "composer-context-row composer-goal pending",
           dynamic_text(locale, DSettingGoal(self.first_line(text).to_string())),
           text,
           true,
         )
       GoalClearing =>
         (
-          "composer-goal pending",
+          "composer-context-row composer-goal pending",
           ui(locale, ClearingGoal),
           ui(locale, WaitingEngine),
           false,
@@ -132,11 +132,11 @@ fn GoalInput::view(
     }
   } else {
     guard self.standing is Some(goal) else {
-      return @html.div(class="composer-goal hidden", "")
+      return @html.div(class="composer-context-row composer-goal hidden", "")
     }
     if goal.blocked is Some(reason) {
       (
-        "composer-goal blocked",
+        "composer-context-row composer-goal blocked",
         dynamic_text(locale, DGoalBlocked(self.first_line(reason).to_string())),
         dynamic_text(
           locale,
@@ -146,7 +146,7 @@ fn GoalInput::view(
       )
     } else {
       (
-        "composer-goal",
+        "composer-context-row composer-goal",
         dynamic_text(locale, DGoal(self.first_line(goal.text).to_string())),
         goal.text,
         true,
@@ -287,7 +287,15 @@ fn Entry::view(
     !goal_mode &&
     shell_command is None
   let status = input.presentation.status.map(component => {
-    component.render(locale~, self.identity(), action_emit)
+    // A transfer snapshots completed content. Let attachment reads/uploads
+    // finish before the user can move their owner to another agent.
+    let component = match component {
+      ModelStatus(control) if self.image_reads > 0 ||
+        !self.attachment_requests.is_empty() =>
+        ModelStatus({ ..control, disabled: true, })
+      other => other
+    }
+    component.render(locale~, self.identity(), self.draft, action_emit)
   })
   if can_attach {
     status.push(
@@ -303,13 +311,16 @@ fn Entry::view(
   }
   if self.image_reads > 0 {
     context.push(
-      @html.div(class="composer-image-notice", ui(locale, ReadingImages)),
+      @html.div(
+        class="composer-context-row composer-image-notice",
+        ui(locale, ReadingImages),
+      ),
     )
   }
   if self.image_error is Some(message) {
     context.push(
       @html.div(
-        class="composer-image-notice error",
+        class="composer-context-row composer-image-notice error",
         attrs=@html.Attrs::build().role("alert"),
         message,
       ),
