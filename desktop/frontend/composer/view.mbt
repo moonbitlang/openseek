@@ -349,9 +349,16 @@ pub fn ContextComponent::render(
       ])
     ApprovalRequest(approval) => approval.render(locale~, identity, action_emit)
     CodexRequests(requests~) => {
-      let rendered : Array[@html.Html] = []
+      // A resolved sibling must not replace a surviving request's focused
+      // control. The response token identifies one request lifetime, even
+      // when app-server later reuses its JSON-RPC request id.
+      let rendered : Map[String, @html.Html] = Map([])
       for request in requests {
-        rendered.push(request.render(locale~, identity, action_emit))
+        rendered[request.request_key] = request.render(
+          locale~,
+          identity,
+          action_emit,
+        )
       }
       @html.div(class="codex-pending", rendered)
     }
