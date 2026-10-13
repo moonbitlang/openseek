@@ -181,66 +181,102 @@ fn refuse_unless_page_url(url : String) -> Unit raise @mcp.ToolError {
 }
 
 ///|
-/// Whether a tool that changed what a view shows `waited` milliseconds ago
-/// can answer with `now`, the page's account of its document, given the
-/// origin of the document that was there `before`. A new document must have
-/// finished loading. The same document is an answer only for a step that may
-/// stay within it, and only once a new one has had its chance to appear.
+/// What a tool is waiting for a view to show.
+priv enum Awaited {
+  // A tab just opened: the page it was opened on, which may be there
+  // already. There is no earlier document it has to take the place of.
+  Arrival
+  // A load or a reload: a document other than the one that was there.
+  Replacement
+  // A step in history: another document, or the same one — a step can stay
+  // within a document.
+  Step
+}
+
+///|
+/// Whether a tool that has waited `waited` milliseconds can answer with
+/// `now`, the page's account of its document, given the origin of the
+/// document that was there `before` it acted. The document awaited must have
+/// finished loading. The one that was already there is an answer only to a
+/// step, and only once another has had its chance to appear.
 fn settled(
+  awaited : Awaited,
   before : Double?,
   now : Document,
   waited : Int32,
-  may_stay~ : Bool,
 ) -> Bool {
-  if before == Some(now.origin) {
-    may_stay && now.complete && waited >= SameDocumentGraceMs
-  } else {
-    now.complete
+  guard now.complete else { return false }
+  match awaited {
+    Arrival => true
+    Replacement => before != Some(now.origin)
+    Step => before != Some(now.origin) || waited >= SameDocumentGraceMs
   }
 }
 
 ///|
+/// The address of the empty document a view holds before its first page.
+const BlankDocument = "about:blank"
+
+///|
 /// The page's account of its document, or `None` while it has none to give:
-/// between two documents there is nothing to ask.
+/// between two documents there is nothing to ask, and the empty document a
+/// new view starts with is not a page. Any other failure to ask is a
+/// failure, and is the caller's to report.
 async fn document(connection : @cdp.Connection) -> Document? {
-  Some(connection.evaluate(document_script).decode_value()) catch {
-    error if @async.is_being_cancelled() => raise error
-    _ => None
+  let document : Document = connection.evaluate(document_script).decode_value() catch {
+      // The document that was asked has gone and the next has not arrived.
+      @cdp.CommandFailed(..) => return None
+      error => raise error
+    }
+  if document.url == BlankDocument {
+    None
+  } else {
+    Some(document)
   }
 }
 
 ///|
 /// A tab once what `act` asked of its view has settled: do `act`, then ask
-/// the page until it holds the document asked for, or until patience runs
-/// out and the page is reported as it stands, still loading.
+/// the page until it holds the document awaited. When patience runs out
+/// first, the page is reported as it stands and as still loading — it may
+/// not even have left the document it had.
 async fn BrowserViews::after(
   self : BrowserViews,
   id : Int32,
   view : @proton.ViewHandle,
-  may_stay~ : Bool,
+  awaited : Awaited,
   act : () -> Unit raise,
 ) -> Json {
   let mut answer : Document? = None
+  let mut arrived = false
   self.with_page(id, connection => {
-    let before = document(connection).map(document => document.origin)
+    let before = match awaited {
+      Arrival => None
+      Replacement | Step =>
+        document(connection).map(document => document.origin)
+    }
     act()
     for waited = 0; waited < SettleTimeoutMs; waited = waited + SettlePollMs {
       answer = document(connection)
-      if answer is Some(now) && settled(before, now, waited, may_stay~) {
+      if answer is Some(now) && settled(awaited, before, now, waited) {
+        arrived = true
         break
       }
       @async.sleep(SettlePollMs)
     }
   })
-  let tab : Map[String, Json] = { "id": Json(id) }
-  // A page that never gave an account of itself is reported without one.
-  if answer is Some(document) {
-    tab["url"] = Json(document.url)
-    tab["title"] = Json(document.title)
-    tab["loading"] = Json(!document.complete)
+  guard answer is Some(document) else {
+    raise @mcp.ToolError(
+      "Tab \{id} showed no page within \{SettleTimeoutMs / 1000} seconds.",
+    )
   }
-  tab["visible"] = Json(view.state().visible)
-  Json::object(tab)
+  {
+    "id": Json(id),
+    "url": Json(document.url),
+    "title": Json(document.title),
+    "loading": Json(!arrived),
+    "visible": Json(view.state().visible),
+  }
 }
 
 ///|
@@ -314,7 +350,7 @@ async fn BrowserViews::open_tab(
   }
   // The view is already loading what was asked for; there is nothing more
   // to ask of it but to arrive.
-  self.after(id, self.tab_view(session, id), may_stay=false, () => ())
+  self.after(id, self.tab_view(session, id), Arrival, () => ())
 }
 
 ///|
@@ -375,8 +411,11 @@ async fn BrowserViews::navigate_tab(
   if self.pick is Some(pick) && pick.id == id {
     self.cancel_pick()
   }
-  // Only a step in history can land in the document already there.
-  self.after(id, view, may_stay=destination is (Back | Forward), () => {
+  let awaited = match destination {
+    To(_) | Reload => Replacement
+    Back | Forward => Step
+  }
+  self.after(id, view, awaited, () => {
     match destination {
       To(url) => view.load_url(url)
       Back => {
@@ -508,7 +547,7 @@ test "a navigation call names its tab and one destination" {
 }
 
 ///|
-test "a tool answers with the document it asked for, once that has loaded" {
+test "a tool answers with the document it awaited, once that has loaded" {
   let old : Document = {
     origin: 100,
     complete: true,
@@ -517,19 +556,24 @@ test "a tool answers with the document it asked for, once that has loaded" {
   }
   let arriving = { ..old, origin: 200, complete: false, }
   let arrived = { ..arriving, complete: true, }
-  // A navigation that must produce a new document: the old one is never the
-  // answer, however complete, and the new one only once it has loaded.
-  assert_false(settled(Some(100), old, SettleTimeoutMs, may_stay=false))
-  assert_false(settled(Some(100), arriving, 0, may_stay=false))
-  assert_true(settled(Some(100), arrived, 0, may_stay=false))
+  // A load or a reload must produce a new document: the old one is never
+  // the answer, however complete, and the new one only once it has loaded.
+  assert_false(settled(Replacement, Some(100), old, SettleTimeoutMs))
+  assert_false(settled(Replacement, Some(100), arriving, 0))
+  assert_true(settled(Replacement, Some(100), arrived, 0))
   // A step in history may stay within the document: that is the answer, but
-  // only after a new document has had its chance to appear.
-  assert_false(settled(Some(100), old, 0, may_stay=true))
-  assert_true(settled(Some(100), old, SameDocumentGraceMs, may_stay=true))
-  assert_true(settled(Some(100), arrived, 0, may_stay=true))
-  // A view with no document to compare against takes the first that loads.
-  assert_false(settled(None, arriving, 0, may_stay=false))
-  assert_true(settled(None, arrived, 0, may_stay=false))
+  // only after another document has had its chance to appear.
+  assert_false(settled(Step, Some(100), old, 0))
+  assert_true(settled(Step, Some(100), old, SameDocumentGraceMs))
+  assert_true(settled(Step, Some(100), arrived, 0))
+  assert_false(settled(Step, Some(100), arriving, SameDocumentGraceMs))
+  // A tab just opened is waiting for a page to arrive, not for one to be
+  // replaced: the document it finds complete is the answer at once, even
+  // when it was there before the tool first looked.
+  assert_true(settled(Arrival, None, old, 0))
+  assert_false(settled(Arrival, None, arriving, SettleTimeoutMs))
+  // A view whose earlier document gave no account takes the first to load.
+  assert_true(settled(Replacement, None, arrived, 0))
 }
 
 ///|
