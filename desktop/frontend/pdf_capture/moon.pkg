@@ -1,0 +1,5 @@
+import {
+  "moonbit-community/rabbita/cmd",
+}
+
+supported_targets = "js"

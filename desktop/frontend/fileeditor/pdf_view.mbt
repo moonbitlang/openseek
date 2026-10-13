@@ -60,6 +60,17 @@ fn pdf_viewer_toolbar(
       "↻",
     ),
   ]
+  controls.push(
+    @html.button(
+      type_="button",
+      class="icon-button pdf-capture-button",
+      disabled=!ready,
+      title=ui(locale, PdfCapture),
+      attrs=@html.Attrs::build().aria_label(ui(locale, PdfCapture)),
+      on_click=dispatch(PdfCaptureRequested),
+      @icons.icon(@icons.icon_device_camera),
+    ),
+  )
   if !state.office_query.is_empty() {
     controls.push(
       @html.span(

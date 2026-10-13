@@ -12,6 +12,8 @@ struct FeedbackComposer {
 /// The host owns the returned composer and must dispose it before removing
 /// its container or disposing these services. `on_submit` receives the text
 /// and whether to apply it immediately rather than queue it in Batch mode.
+/// Set `allow_empty_submit` when the source already contains an attachment,
+/// so the optional comment does not prevent submitting that attachment.
 pub fn ViewerServices::create_feedback_composer(
   self : ViewerServices,
   container : @rdom.Element,
@@ -20,6 +22,7 @@ pub fn ViewerServices::create_feedback_composer(
   on_submit~ : (String, Bool) -> Unit,
   on_change~ : (String) -> Unit,
   on_cancel~ : () -> Unit,
+  allow_empty_submit~ : Bool = false,
 ) -> FeedbackComposer {
   {
     inner: FeedbackComposerWidget(
@@ -30,6 +33,7 @@ pub fn ViewerServices::create_feedback_composer(
       on_submit~,
       on_change~,
       on_cancel~,
+      allow_empty_submit~,
     ),
   }
 }

@@ -3287,6 +3287,69 @@ fn update_msg(
         (command, model)
       }
     }
+    FileEditor(@fileeditor.PdfCaptureRequested) => {
+      guard model.can_attach_pdf_capture() else {
+        return model.notify_error(
+          dispatch,
+          @fileeditor.capture_unavailable_message(model.locale),
+        )
+      }
+      (
+        @fileeditor.capture_pdf_region(
+          dispatch.map(msg => FileEditor(msg)),
+          model.file_panel,
+          file_ctx(model),
+        ),
+        { ..model, file_panel: { ..model.file_panel, pdf_capture: None, }, },
+      )
+    }
+    FileEditor(
+      @fileeditor.PdfCaptureFinished(
+        owner~,
+        epoch~,
+        path~,
+        sig~,
+        generation~,
+        result~
+      )
+    ) => {
+      let ctx = file_ctx(model)
+      guard ctx.panel_open &&
+        owns_office_selection(model, owner) &&
+        model.file_panel.accepts_pdf_callback(
+          ctx, owner, epoch, path, sig, generation,
+        ) else {
+        return (@cmd.none, model)
+      }
+      guard model.can_attach_pdf_capture() else {
+        return model.notify_error(
+          dispatch,
+          @fileeditor.capture_unavailable_message(model.locale),
+        )
+      }
+      let capture = match result {
+        Ok(capture) => capture
+        Err(message) => return model.notify_error(dispatch, message)
+      }
+      let preview : @fileeditor.PdfCapturePreview = {
+        owner,
+        epoch,
+        path,
+        sig,
+        generation,
+        capture,
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          file_panel: {
+            ..model.file_panel,
+            pdf_capture: Some({ preview, comment: "", }),
+          },
+        },
+      )
+    }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
       confirm_office_selection(
         model,

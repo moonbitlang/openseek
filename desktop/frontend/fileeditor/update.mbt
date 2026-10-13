@@ -2367,7 +2367,9 @@ pub fn sync(
   )
   let state = state.sync_review_navigation_display(ctx)
   let state = state.sync_office_selection(ctx)
+  let (capture_cmd, state) = state.sync_pdf_capture(ctx)
   let pending_cmd = @cmd.batch([
+    capture_cmd,
     retire_index_cmd,
     reroot_cmd,
     restore_cmd,
@@ -2539,7 +2541,17 @@ fn update_inner(
     OfficeFeedbackSubmitted(_, _, ..) => (@cmd.none, state)
     OfficeSelectionChanged(..)
     | PdfSelectionChanged(..)
+    | PdfCaptureRequested
+    | PdfCaptureFinished(..)
     | OfficeSelectionConfirmed(_) => (@cmd.none, state)
+    PdfCaptureFeedbackChanged(preview, comment) =>
+      if state.pending_pdf_capture(ctx).map(draft => draft.preview) ==
+        Some(preview) {
+        (@cmd.none, { ..state, pdf_capture: Some({ preview, comment, }), })
+      } else {
+        (@cmd.none, state)
+      }
+    PdfCaptureDismissed(preview) => state.dismiss_pdf_capture(ctx, preview)
     OfficeSelectionDismissed(preview) =>
       state.dismiss_office_selection(ctx, preview)
     PdfStateChanged(..)

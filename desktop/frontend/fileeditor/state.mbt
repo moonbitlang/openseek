@@ -471,6 +471,7 @@ pub(all) struct State {
   office_selection_comment : String?
   // Monotonic across document reloads and owner changes, so late PDF runtime
   // callbacks cannot settle a later load of the same path and signature.
+  pdf_capture : PdfCaptureDraft?
   pdf_generation : Int32
   // The explorer's Files/Changes/Search selection. The selection survives a
   // conversation switch; checkout-derived inventories do not (see `sync`).
@@ -659,6 +660,7 @@ pub fn State::empty() -> State {
     office_prefer_system_fonts: false,
     office_selection: None,
     office_selection_comment: None,
+    pdf_capture: None,
     pdf_generation: 0,
     explorer_mode: ExplorerFiles,
     search: @grep_search.State::empty(),
@@ -964,6 +966,17 @@ pub(all) enum Msg {
     generation~ : Int32,
     selection~ : String
   )
+  PdfCaptureRequested
+  PdfCaptureFinished(
+    owner~ : @interop.ConversationKey,
+    epoch~ : Int32,
+    path~ : @common.Uri,
+    sig~ : String,
+    generation~ : Int32,
+    result~ : Result[@pdf_capture.Capture, String]
+  )
+  PdfCaptureFeedbackChanged(PdfCapturePreview, String)
+  PdfCaptureDismissed(PdfCapturePreview)
   PdfPageChanged(String)
   PdfFitWidth
   PdfRotated

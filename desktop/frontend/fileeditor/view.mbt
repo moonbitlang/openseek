@@ -460,6 +460,7 @@ pub fn body_view(
       viewer_notice(locale~, state, ctx),
       github_review_line_layer(locale~, dispatch, state, ctx),
       office_selection_preview_view(state, ctx),
+      pdf_capture_feedback_view(state, ctx),
     ]),
     tree_pane(locale~, dispatch, state, ctx),
   ])

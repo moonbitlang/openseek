@@ -14,6 +14,11 @@ priv enum UiMessage {
   PdfPreviousPage
   PdfPageNumber
   PdfNextPage
+  PdfCapture
+  PdfCaptureHint
+  PdfCaptureFailed
+  PdfCaptureTooLarge
+  PdfCaptureUnavailable
   PdfFitWidth
   PdfRotate
   PdfSearching
@@ -233,6 +238,50 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, PdfNextPage) => "下一頁"
     (Japanese, PdfNextPage) => "次のページ"
     (Spanish, PdfNextPage) => "Página siguiente"
+    (English, PdfCapture) => "Capture region"
+    (SimplifiedChinese, PdfCapture) => "区域截图"
+    (TraditionalChinese, PdfCapture) => "區域截圖"
+    (Japanese, PdfCapture) => "範囲を撮影"
+    (Spanish, PdfCapture) => "Capturar región"
+    (English, PdfCaptureHint) => "Drag to attach a screenshot · Esc to cancel"
+    (SimplifiedChinese, PdfCaptureHint) =>
+      "拖动框选并添加图片附件 · Esc 取消"
+    (TraditionalChinese, PdfCaptureHint) =>
+      "拖曳框選並加入圖片附件 · Esc 取消"
+    (Japanese, PdfCaptureHint) =>
+      "ドラッグして画像を添付 · Esc でキャンセル"
+    (Spanish, PdfCaptureHint) =>
+      "Arrastra para adjuntar una captura · Esc para cancelar"
+    (English, PdfCaptureFailed) =>
+      "Could not capture this region. Wait for the PDF to finish rendering and try again."
+    (SimplifiedChinese, PdfCaptureFailed) =>
+      "无法截取该区域，请等待 PDF 渲染完成后重试。"
+    (TraditionalChinese, PdfCaptureFailed) =>
+      "無法擷取此區域，請等待 PDF 完成繪製後重試。"
+    (Japanese, PdfCaptureFailed) =>
+      "範囲を撮影できませんでした。PDF の描画完了後に再試行してください。"
+    (Spanish, PdfCaptureFailed) =>
+      "No se pudo capturar la región. Espera a que termine de renderizarse el PDF e inténtalo de nuevo."
+    (English, PdfCaptureTooLarge) =>
+      "Screenshot is too large. Select a smaller region (maximum 5 MiB)."
+    (SimplifiedChinese, PdfCaptureTooLarge) =>
+      "截图过大，请缩小选区（最大 5 MiB）。"
+    (TraditionalChinese, PdfCaptureTooLarge) =>
+      "截圖過大，請縮小選區（最大 5 MiB）。"
+    (Japanese, PdfCaptureTooLarge) =>
+      "画像が大きすぎます。範囲を小さくしてください（最大 5 MiB）。"
+    (Spanish, PdfCaptureTooLarge) =>
+      "La captura es demasiado grande. Selecciona una región más pequeña (máximo 5 MiB)."
+    (English, PdfCaptureUnavailable) =>
+      "To attach a screenshot, open a conversation with an image-capable model."
+    (SimplifiedChinese, PdfCaptureUnavailable) =>
+      "请在支持图片的模型对话中添加截图附件。"
+    (TraditionalChinese, PdfCaptureUnavailable) =>
+      "請在支援圖片的模型對話中加入截圖附件。"
+    (Japanese, PdfCaptureUnavailable) =>
+      "画像対応モデルの会話でスクリーンショットを添付してください。"
+    (Spanish, PdfCaptureUnavailable) =>
+      "Para adjuntar una captura, abre una conversación con un modelo que admita imágenes."
     (English, PdfFitWidth) => "Fit page width"
     (SimplifiedChinese, PdfFitWidth) => "适应页宽"
     (TraditionalChinese, PdfFitWidth) => "符合頁面寬度"

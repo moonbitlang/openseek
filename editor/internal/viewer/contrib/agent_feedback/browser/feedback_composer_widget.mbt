@@ -20,6 +20,7 @@ pub fn FeedbackComposerWidget::FeedbackComposerWidget(
   on_submit~ : (String, Bool) -> Unit,
   on_change~ : (String) -> Unit,
   on_cancel~ : () -> Unit,
+  allow_empty_submit~ : Bool = false,
 ) -> FeedbackComposerWidget {
   let mut slot : FeedbackComposerWidget? = None
   let submit = apply => {
@@ -39,6 +40,7 @@ pub fn FeedbackComposerWidget::FeedbackComposerWidget(
       content_width: () => @base_browser.element_client_width(container),
     },
     on_change~,
+    allow_empty_submit~,
   )
   let selection_layer = @rdom.document().create_element("div")
   selection_layer.set_attribute("class", "feedback-source-selection-layer")

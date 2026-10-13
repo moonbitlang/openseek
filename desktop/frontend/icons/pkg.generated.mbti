@@ -48,6 +48,8 @@ pub fn icon_debug() -> @html.Html
 
 pub fn icon_debug_stop() -> @html.Html
 
+pub fn icon_device_camera() -> @html.Html
+
 pub fn icon_diff_multiple() -> @html.Html
 
 pub fn icon_edit() -> @html.Html

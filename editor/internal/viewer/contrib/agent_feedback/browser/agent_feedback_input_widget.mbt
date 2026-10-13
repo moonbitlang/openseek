@@ -53,6 +53,7 @@ struct AgentFeedbackInputWidget {
   batch_text : @rdom.Element
   batch : @rdom.Element
   submit : @rdom.Element
+  allow_empty_submit : Bool
 }
 
 ///|
@@ -60,6 +61,7 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   localization~ : @localization.Localization = Localization(),
   host : AgentFeedbackInputWidgetHost,
   on_change~ : (String) -> Unit = _ => (),
+  allow_empty_submit~ : Bool = false,
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
   let root = document.create_element("div")
@@ -100,6 +102,7 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
     batch_text,
     batch,
     submit,
+    allow_empty_submit,
   }
   widget.refresh_labels()
   widget.update_actions_enabled()
@@ -190,7 +193,7 @@ fn AgentFeedbackInputWidget::submit_feedback(
   self : AgentFeedbackInputWidget,
   force_apply~ : Bool,
 ) -> Unit {
-  guard self.has_text() else { return }
+  guard self.allow_empty_submit || self.has_text() else { return }
   if force_apply || !input_checkbox_checked(self.batch) {
     (self.host.on_add_and_submit)()
   } else {
@@ -360,7 +363,7 @@ pub fn AgentFeedbackInputWidget::measured_width(
 fn AgentFeedbackInputWidget::update_actions_enabled(
   self : AgentFeedbackInputWidget,
 ) -> Unit {
-  if self.has_text() {
+  if self.allow_empty_submit || self.has_text() {
     self.submit.remove_attribute("disabled")
   } else {
     self.submit.set_attribute("disabled", "true")

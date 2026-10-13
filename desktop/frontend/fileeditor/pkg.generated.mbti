@@ -17,6 +17,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/pdf_capture",
   "openseek_desktop/protocol",
 }
 
@@ -39,6 +40,10 @@ pub fn body_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, semantic_re
 
 pub fn breadcrumb_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, reveal? : (String, @cmd.Cmd)?) -> @html.Html
 
+pub fn capture_pdf_region(@cmd.Emit[Msg], State, Ctx) -> @cmd.Cmd
+
+pub fn capture_unavailable_message(@i18n.Locale) -> String
+
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, next~ : @common.Uri?, was_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn close_history_diff(State, @dock.GitHistoryDiff) -> State
@@ -56,6 +61,8 @@ pub fn open_file(@cmd.Emit[Msg], State, Ctx, @common.Uri, file_link_generation? 
 pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@cmd.Cmd, State)
 
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
+
+pub fn pdf_capture_feedback_subscription(@cmd.Emit[Msg], PdfCapturePreview, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
@@ -282,6 +289,10 @@ pub(all) enum Msg {
   OfficeSystemFontsToggled
   PdfStateChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, event~ : String)
   PdfSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, selection~ : String)
+  PdfCaptureRequested
+  PdfCaptureFinished(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, result~ : Result[@pdf_capture.Capture, String])
+  PdfCaptureFeedbackChanged(PdfCapturePreview, String)
+  PdfCaptureDismissed(PdfCapturePreview)
   PdfPageChanged(String)
   PdfFitWidth
   PdfRotated
@@ -381,6 +392,24 @@ pub(all) enum PackageGraphState {
 } derive(Eq)
 pub fn PackageGraphState::equal(Self, Self) -> Bool
 pub fn PackageGraphState::not_equal(Self, Self) -> Bool
+
+pub(all) struct PdfCaptureDraft {
+  preview : PdfCapturePreview
+  comment : String
+} derive(Eq)
+pub fn PdfCaptureDraft::equal(Self, Self) -> Bool
+pub fn PdfCaptureDraft::not_equal(Self, Self) -> Bool
+
+pub(all) struct PdfCapturePreview {
+  owner : @interop.ConversationKey
+  epoch : Int
+  path : @common.Uri
+  sig : String
+  generation : Int
+  capture : @pdf_capture.Capture
+} derive(Eq)
+pub fn PdfCapturePreview::equal(Self, Self) -> Bool
+pub fn PdfCapturePreview::not_equal(Self, Self) -> Bool
 
 pub(all) struct PdfDocument {
   bytes : Bytes
@@ -524,6 +553,7 @@ pub(all) struct State {
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?
   office_selection_comment : String?
+  pdf_capture : PdfCaptureDraft?
   pdf_generation : Int
   explorer_mode : ExplorerMode
   search : @grep_search.State
@@ -594,11 +624,13 @@ pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationKey, Int, 
 pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationKey, Int, @common.Uri, String, Int) -> Bool
 pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
 pub fn State::dismiss_office_selection(Self, Ctx, OfficeSelectionPreview) -> (@cmd.Cmd, Self)
+pub fn State::dismiss_pdf_capture(Self, Ctx, PdfCapturePreview) -> (@cmd.Cmd, Self)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::offer_office_selection(Self, Ctx, String) -> Result[Self, String]
 pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
+pub fn State::pending_pdf_capture(Self, Ctx) -> PdfCaptureDraft?
 pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)

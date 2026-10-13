@@ -37,7 +37,8 @@ fn Model::quoted(
     input,
     QuoteReplied({
       identity,
-      quote: "quoted",
+      quote: Some("quoted"),
+      images: [],
       comment: "why?",
       send,
       accepted: @cmd.none,
@@ -135,4 +136,72 @@ test "a composer that is not editing a message declines a reply" {
     .active(shell)
   assert_eq(entry.draft.task, "!echo hello")
   assert_true(entry.pending_submission is None)
+}
+
+///|
+test "image feedback preserves local typing and uses ordinary submission" {
+  for send in [false, true] {
+    let base = Input::fixture("")
+    let input = {
+      ..base,
+      presentation: { ..base.presentation, images_enabled: true, },
+    }
+    let typed = Model(input).update(
+        input,
+        TextChanged("local draft"),
+        Msg::test_emit(),
+        Action::test_emit(),
+      ).0
+    let image : Image = {
+      name: "capture.png",
+      url: "data:image/png;base64,image",
+    }
+    let next = typed.update(
+      input,
+      QuoteReplied({
+        identity: input.identity,
+        quote: None,
+        comment: "Change this heading",
+        images: [image],
+        send,
+        accepted: @cmd.none,
+        declined: @cmd.none,
+      }),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0.active(input)
+    if send {
+      guard next.pending_submission is Some(PromptSubmission(draft, ..)) else {
+        fail("not submitted")
+      }
+      assert_eq(draft.task, "local draft\n\nChange this heading\n\n")
+      assert_true(draft.images == [image])
+    } else {
+      assert_eq(next.draft.task, "local draft\n\nChange this heading\n\n")
+      assert_true(next.draft.images == [image])
+      assert_true(next.pending_submission is None)
+    }
+  }
+}
+
+///|
+test "a model which lost image support declines screenshot feedback" {
+  let input = Input::fixture("keep")
+  let next = Model(input).update(
+    input,
+    QuoteReplied({
+      identity: input.identity,
+      quote: None,
+      comment: "change",
+      images: [{ name: "capture.png", url: "data:image/png;base64,image", }],
+      send: true,
+      accepted: @cmd.none,
+      declined: @cmd.none,
+    }),
+    Msg::test_emit(),
+    Action::test_emit(),
+  ).0.active(input)
+  assert_eq(next.draft.task, "keep")
+  assert_true(next.draft.images.is_empty())
+  assert_true(next.pending_submission is None)
 }

@@ -710,8 +710,67 @@ fn main {
           None => None
         }
       })
-    let context_menu_html = @rabbita.Val::map2(
+    // Mount the PDF feedback with the same direct composer delivery as text
+    // replies. The component owns the live draft, including unsent typing.
+    let pdf_feedback = state
+      .map(model => {
+        model.file_panel
+        .pending_pdf_capture(file_ctx(model))
+        .map(draft => draft.preview)
+      })
+      .map2(quote_target, (preview, target) => (preview, target))
+      .switch_by(
+        slot => {
+          guard slot is (Some(preview), Some(target)) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          let (mounted, _) = @rabbita.create_state_with_init(
+            init=(_ : @cmd.Emit[Unit]) => ((), @cmd.none),
+            update=(_, _, _) => ((), @cmd.none),
+            subscriptions=(_, _) => {
+              @fileeditor.pdf_capture_feedback_subscription(
+                emit.map(msg => FileEditor(msg)),
+                preview,
+                (comment, send) => {
+                  let (deliver, identity) = match target {
+                    ChatComposer(identity) => (composer_quote, identity)
+                    CodexComposer(identity) => (codex_composer_quote, identity)
+                  }
+                  deliver({
+                    identity,
+                    quote: None,
+                    comment,
+                    send,
+                    images: [
+                      {
+                        name: @common.basename_or_authority(preview.path) +
+                        "-capture.png",
+                        url: preview.capture.url,
+                      },
+                    ],
+                    accepted: emit(
+                      FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
+                    ),
+                    declined: @cmd.none,
+                  })
+                },
+              )
+            },
+          )
+          mounted.map(_ => @html.nothing)
+        },
+        by=slot => {
+          match slot {
+            (Some(p), Some(_)) =>
+              "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:" +
+              p.capture.url
+            _ => "closed"
+          }
+        },
+      )
+    let context_menu_html = @rabbita.Val::map3(
       context_menu_html,
+      pdf_feedback,
       @action_menu.selection_component(
         state.map(model => model.locale),
         quote_target,
@@ -722,7 +781,8 @@ fn main {
           }
           quote({
             identity,
-            quote: reply.quote,
+            quote: Some(reply.quote),
+            images: [],
             comment: reply.comment,
             send: reply.send,
             accepted: reply.accepted,
@@ -730,7 +790,7 @@ fn main {
           })
         },
       ),
-      (context_menu, selection_actions) => {
+      (context_menu, _, selection_actions) => {
         @html.fragment([context_menu, selection_actions])
       },
     )

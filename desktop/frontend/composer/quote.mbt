@@ -7,10 +7,11 @@
 const MessageInputId : String = "task"
 
 ///|
-/// A reply quoting on-screen text, addressed to one conversation's composer.
+/// A reply with selected text or captured images, addressed to one composer.
 pub(all) struct QuoteReply {
   identity : Identity
-  quote : String
+  quote : String?
+  images : Array[Image]
   comment : String
   // Submit the message once the reply is in it; otherwise it waits there.
   send : Bool
@@ -92,16 +93,33 @@ fn Model::quote_replied(
 ) -> (Model, @cmd.Cmd) {
   // A `!` draft is a shell command; a reply appended to it would run as one.
   guard input.quote_target() == Some(reply.identity) &&
-    input.shell_command(entry.draft) is None else {
+    input.shell_command(entry.draft) is None &&
+    (reply.images.is_empty() || input.presentation.images_enabled) else {
     return (self, reply.declined)
   }
-  let task = entry.draft.task +
-    quote_insertion(entry.draft.task, reply.quote, reply.comment)
+  let insertion = match reply.quote {
+    Some(quote) => quote_insertion(entry.draft.task, quote, reply.comment)
+    None => {
+      let comment = reply.comment.trim().to_owned()
+      if comment.is_empty() {
+        ""
+      } else {
+        (if entry.draft.task.is_empty() { "" } else { "\n\n" }) +
+        comment +
+        "\n\n"
+      }
+    }
+  }
+  let task = entry.draft.task + insertion
   let (model, changed) = self.commit_entry_change(
     entry,
     {
       ..entry,
-      draft: { ..entry.draft, task, },
+      draft: {
+        ..entry.draft,
+        task,
+        images: [..entry.draft.images, ..reply.images],
+      },
       completion: None,
       pending_submission: None,
     },

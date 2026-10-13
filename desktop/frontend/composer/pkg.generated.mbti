@@ -305,7 +305,8 @@ pub fn QueuedInputState::not_equal(Self, Self) -> Bool
 
 pub(all) struct QuoteReply {
   identity : Identity
-  quote : String
+  quote : String?
+  images : Array[Image]
   comment : String
   send : Bool
   accepted : @cmd.Cmd
