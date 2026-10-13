@@ -771,6 +771,7 @@ priv struct MentionChip {
 fn MentionChip::render(
   locale~ : @i18n.Locale = English,
   self : MentionChip,
+  disabled~ : Bool,
 ) -> @html.Html {
   ignore(locale)
   let glyph = @html.span(class="mention-glyph", self.glyph)
@@ -792,6 +793,7 @@ fn MentionChip::render(
       @html.button(
         class="mention-remove",
         type_="button",
+        disabled~,
         title=ui(locale, RemoveLabel),
         on_click=command,
         content,

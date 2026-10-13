@@ -10,6 +10,7 @@ fn Entry::changes_chip(
   locale~ : @i18n.Locale = English,
   self : Entry,
   emit : @cmd.Emit[Msg],
+  disabled~ : Bool,
 ) -> @html.Html {
   @review_changes.Control::{
     id: "composer-review-changes",
@@ -19,7 +20,11 @@ fn Entry::changes_chip(
     dismiss: emit(ChangesDismissed(restore_focus=true)),
     toggle_file: emit.map(key => ChangesFileToggled(key)),
     open_review: emit.map(selection => ChangesOpened(selection)),
-    remove: Some(emit.map(selections => ChangesRemoved(selections))),
+    remove: if disabled {
+      None
+    } else {
+      Some(emit.map(selections => ChangesRemoved(selections)))
+    },
   }.view(locale~, self.review_changes())
 }
 

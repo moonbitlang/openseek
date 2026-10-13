@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
@@ -18,6 +19,12 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await queued.getByTitle('Edit', { exact: true }).click();
     await expect(composer).toHaveValue('Original queued message');
     await composer.fill('Edited queued message');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await (await chooser).setFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: readFileSync(new URL('../fixtures/office/two-pages.pdf', import.meta.url)) });
+    await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
+    const mention = page.locator('.mention-chip').filter({ hasText: 'notes.pdf' });
+    await expect(mention).toBeVisible();
 
     // Hold the host response so the real composer can receive repeated input
     // events, including events already queued before its DOM became disabled.
@@ -35,6 +42,8 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await expect.poll(() => heldRequest?.id).toBeDefined();
     await expect(composer).toBeDisabled();
     await expect(save).toBeDisabled();
+    await expect(mention.locator('.mention-remove')).toBeDisabled();
+    await mention.locator('.mention-remove').dispatchEvent('click');
     for (const button of await queued.getByRole('button').all()) {
       await expect(button).toBeDisabled();
     }
@@ -60,6 +69,9 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
       await expect(composer).toHaveValue('Edited queued message');
       await expect(queued).toContainText('Original queued message');
       await expect(save).toBeEnabled();
+      await expect(mention.locator('.mention-remove')).toBeEnabled();
+      await mention.locator('.mention-remove').click();
+      await expect(mention).toHaveCount(0);
       app.replyFor = replyFor;
       await composer.fill('Retry this edit');
       await save.click();

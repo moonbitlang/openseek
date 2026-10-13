@@ -54,6 +54,7 @@ fn Draft::image_previews(
   locale~ : @i18n.Locale = English,
   self : Draft,
   emit : @cmd.Emit[Msg],
+  disabled~ : Bool,
 ) -> Array[@html.Html] {
   self.images.mapi((index, image) => {
     @html.div(class="composer-image", [
@@ -61,6 +62,7 @@ fn Draft::image_previews(
       @html.button(
         type_="button",
         class="composer-image-remove",
+        disabled~,
         title=ui(locale, RemoveImage),
         on_click=emit(ImageRemoved(index)),
         attrs=@html.Attrs::build().aria_label(

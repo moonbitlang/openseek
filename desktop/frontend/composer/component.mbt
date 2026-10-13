@@ -859,6 +859,8 @@ fn Model::update(
       }
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }
+    ImageRemoved(_) | MentionRemoved(_) | ChangesRemoved(_) if input.presentation.disabled =>
+      (self, @cmd.none)
     ImageRemoved(index) => {
       let next = {
         ..entry,
