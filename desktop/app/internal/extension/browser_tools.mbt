@@ -26,11 +26,6 @@ const OpenTimeoutMs : Int32 = 10000
 const SettleTimeoutMs : Int32 = 15000
 
 ///|
-/// How long a step in a tab's history has to produce a new document before
-/// it is taken for one within the document already there.
-const SameDocumentGraceMs : Int32 = 1000
-
-///|
 const SettlePollMs : Int32 = 100
 
 ///|
@@ -41,6 +36,11 @@ priv struct Document {
   // When the document's own clock started, which no two documents share:
   // how a new document is told from the one it replaced.
   origin : Double
+  // The key of the history entry the document is showing, which changes
+  // when a navigation stays within the document — a fragment, a step in the
+  // page's own history — and only once that navigation has happened. `None`
+  // for a document that keeps no such entry.
+  entry : String?
   complete : Bool
   url : String
   title : String
@@ -51,6 +51,7 @@ impl @json.FromJson for Document with fn from_json(json, path) {
   guard json
     is {
       "origin": Number(origin, ..),
+      "entry": entry,
       "complete": complete,
       "url": String(url),
       "title": String(title),
@@ -58,17 +59,25 @@ impl @json.FromJson for Document with fn from_json(json, path) {
     } else {
     raise JsonDecodeError((path, "expected a document's own account"))
   }
+  let entry = match entry {
+    String(key) => Some(key)
+    Null => None
+    _ =>
+      raise JsonDecodeError(
+        (path.add_key("entry"), "expected a history entry key or null"),
+      )
+  }
   let complete = match complete {
     True => true
     False => false
     _ => raise JsonDecodeError((path.add_key("complete"), "expected a bool"))
   }
-  { origin, complete, url, title, }
+  { origin, entry, complete, url, title, }
 }
 
 ///|
 let document_script : String =
-  #|({origin: performance.timeOrigin, complete: document.readyState === "complete", url: location.href, title: document.title})
+  #|({origin: performance.timeOrigin, entry: globalThis.navigation?.currentEntry?.key ?? null, complete: document.readyState === "complete", url: location.href, title: document.title})
 
 ///|
 /// The tools an agent uses the dock's browser with.
@@ -186,30 +195,26 @@ priv enum Awaited {
   // A tab just opened: the page it was opened on, which may be there
   // already. There is no earlier document it has to take the place of.
   Arrival
-  // A load or a reload: a document other than the one that was there.
-  Replacement
-  // A step in history: another document, or the same one — a step can stay
-  // within a document.
-  Step
+  // Something the tool asked of a view that shows a page: a load, a reload,
+  // a step in history. What it had before must have given way.
+  Change
 }
 
 ///|
-/// Whether a tool that has waited `waited` milliseconds can answer with
-/// `now`, the page's account of its document, given the origin of the
-/// document that was there `before` it acted. The document awaited must have
-/// finished loading. The one that was already there is an answer only to a
-/// step, and only once another has had its chance to appear.
-fn settled(
-  awaited : Awaited,
-  before : Double?,
-  now : Document,
-  waited : Int32,
-) -> Bool {
+/// Whether a tool can answer with `now`, the page's account of its document,
+/// given the account it gave `before` the tool acted. The document must have
+/// finished loading, and for a change it must not be where the page already
+/// was: either another document, or the same one at another history entry,
+/// which is how a navigation within a document shows — a fragment, a step in
+/// the page's own history. Time is no part of it: a slow navigation that has
+/// not committed looks exactly like the page it has not left.
+fn settled(awaited : Awaited, before : Document?, now : Document) -> Bool {
   guard now.complete else { return false }
-  match awaited {
-    Arrival => true
-    Replacement => before != Some(now.origin)
-    Step => before != Some(now.origin) || waited >= SameDocumentGraceMs
+  match (awaited, before) {
+    // A page that gave no account before had none to give way.
+    (Arrival, _) | (Change, None) => true
+    (Change, Some(before)) =>
+      now.origin != before.origin || now.entry != before.entry
   }
 }
 
@@ -252,13 +257,12 @@ async fn BrowserViews::after(
   self.with_page(id, connection => {
     let before = match awaited {
       Arrival => None
-      Replacement | Step =>
-        document(connection).map(document => document.origin)
+      Change => document(connection)
     }
     act()
     for waited = 0; waited < SettleTimeoutMs; waited = waited + SettlePollMs {
       answer = document(connection)
-      if answer is Some(now) && settled(awaited, before, now, waited) {
+      if answer is Some(now) && settled(awaited, before, now) {
         arrived = true
         break
       }
@@ -411,11 +415,7 @@ async fn BrowserViews::navigate_tab(
   if self.pick is Some(pick) && pick.id == id {
     self.cancel_pick()
   }
-  let awaited = match destination {
-    To(_) | Reload => Replacement
-    Back | Forward => Step
-  }
-  self.after(id, view, awaited, () => {
+  self.after(id, view, Change, () => {
     match destination {
       To(url) => view.load_url(url)
       Back => {
@@ -550,53 +550,61 @@ test "a navigation call names its tab and one destination" {
 test "a tool answers with the document it awaited, once that has loaded" {
   let old : Document = {
     origin: 100,
+    entry: Some("e-1"),
     complete: true,
     url: "https://example.com/a",
     title: "A",
   }
-  let arriving = { ..old, origin: 200, complete: false, }
+  let arriving = { ..old, origin: 200, entry: Some("e-2"), complete: false, }
   let arrived = { ..arriving, complete: true, }
-  // A load or a reload must produce a new document: the old one is never
-  // the answer, however complete, and the new one only once it has loaded.
-  assert_false(settled(Replacement, Some(100), old, SettleTimeoutMs))
-  assert_false(settled(Replacement, Some(100), arriving, 0))
-  assert_true(settled(Replacement, Some(100), arrived, 0))
-  // A step in history may stay within the document: that is the answer, but
-  // only after another document has had its chance to appear.
-  assert_false(settled(Step, Some(100), old, 0))
-  assert_true(settled(Step, Some(100), old, SameDocumentGraceMs))
-  assert_true(settled(Step, Some(100), arrived, 0))
-  assert_false(settled(Step, Some(100), arriving, SameDocumentGraceMs))
-  // A tab just opened is waiting for a page to arrive, not for one to be
-  // replaced: the document it finds complete is the answer at once, even
-  // when it was there before the tool first looked.
-  assert_true(settled(Arrival, None, old, 0))
-  assert_false(settled(Arrival, None, arriving, SettleTimeoutMs))
-  // A view whose earlier document gave no account takes the first to load.
-  assert_true(settled(Replacement, None, arrived, 0))
+  // A navigation that has not committed looks exactly like the page it has
+  // not left, however long it has been: that is never the answer.
+  assert_false(settled(Change, Some(old), old))
+  assert_false(settled(Change, Some(old), arriving))
+  assert_true(settled(Change, Some(old), arrived))
+  // A reload keeps its history entry and is another document all the same.
+  assert_true(settled(Change, Some(old), { ..old, origin: 300, }))
+  // A navigation within the document — a fragment, a step in the page's own
+  // history — keeps the document and shows as another entry.
+  let within = { ..old, entry: Some("e-3"), url: "https://example.com/a#b", }
+  assert_true(settled(Change, Some(old), within))
+  assert_false(settled(Change, Some(old), { ..within, complete: false, }))
+  // A tab just opened is waiting for a page to arrive, not for one to give
+  // way: the document it finds complete is the answer at once.
+  assert_true(settled(Arrival, None, old))
+  assert_false(settled(Arrival, None, arriving))
+  // A page that gave no account before takes the first document to load.
+  assert_true(settled(Change, None, arrived))
+  // Documents that keep no history entry are told apart by origin alone.
+  let bare = { ..old, entry: None, }
+  assert_false(settled(Change, Some(bare), bare))
+  assert_true(settled(Change, Some(bare), { ..bare, origin: 300, }))
 }
 
 ///|
 test "a page's account of its document is read whole or not at all" {
-  let document : Document = @json.from_json({
+  let account : Map[String, Json] = {
     "origin": 1791903041652.5,
+    "entry": "e-1",
     "complete": false,
     "url": "https://example.com/",
     "title": "",
-  })
+  }
+  let document : Document = @json.from_json(Json::object(account))
   assert_true(document.origin == 1791903041652.5)
+  assert_eq(document.entry, Some("e-1"))
   assert_false(document.complete)
   assert_eq((document.url, document.title), ("https://example.com/", ""))
-  for missing in ["origin", "complete", "url", "title"] {
-    let fields : Map[String, Json] = {
-      "origin": 1,
-      "complete": true,
-      "url": "u",
-      "title": "t",
-    }
-    fields.remove(missing)
+  // No history entry is said as null, which is not the same as not saying.
+  let without = account.copy()
+  without["entry"] = Json::null()
+  let document : Document = @json.from_json(Json::object(without))
+  assert_true(document.entry is None)
+  for missing in ["origin", "entry", "complete", "url", "title"] {
+    let partial = account.copy()
+    partial.remove(missing)
     let refused = try {
-      let _ : Document = @json.from_json(Json::object(fields))
+      let _ : Document = @json.from_json(Json::object(partial))
       false
     } catch {
       _ => true
