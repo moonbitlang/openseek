@@ -3535,6 +3535,7 @@ fn update_msg(
             guard model.composing_new_chat() &&
               model.active_conversation() is Some(conv) &&
               conv.goal_edit is None &&
+              conv.pending_semantic_submission is None &&
               @resource.path_for(conv.project(), model.focused) is Some(cwd) else {
               return (@cmd.none, model)
             }
@@ -14637,6 +14638,37 @@ test "a goal editor cannot lose its draft through an agent switch" {
   )
   assert_true(after.screen is Chat)
   assert_true(after.active().goal_edit == before.active().goal_edit)
+  assert_true(after.composer_entry_retirements.is_empty())
+}
+
+///|
+test "an agent switch cannot discard a pending semantic submission" {
+  let before = test_model().replace_conversation({
+    ..test_conversation(),
+    pending_semantic_submission: Some({
+      submission_id: "pending-semantic-send",
+      reference: large_semantic_reference_for_test(),
+      task: "Inspect these matches",
+      mentions: [],
+      followup: None,
+    }),
+  })
+  assert_true(before.openseek_model_chip(before.active()).disabled)
+  let (_, after) = update(
+    test_dispatch(),
+    ModelPicked("codex:gpt-5.4-codex", draft={
+      task: "Inspect these matches",
+      mentions: [],
+      images: [],
+    }),
+    before,
+  )
+  assert_true(after.screen is Chat)
+  assert_true(after.default_agent is OpenSeekAgent)
+  assert_true(
+    after.active().pending_semantic_submission ==
+    before.active().pending_semantic_submission,
+  )
   assert_true(after.composer_entry_retirements.is_empty())
 }
 
