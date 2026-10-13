@@ -20,14 +20,6 @@
 - **Language and punctuation**: Default to Simplified Chinese unless the user requests Traditional; use full-width punctuation for Chinese, and half-width for English words, numbers, code, URLs, paths, technical identifiers, and mathematical content.
 - **Font choice**: Choose fonts by language and tone. Use sans-serif for general reports; serif for academic, cultural, and formal presentations; rounded fonts for children's and educational scenarios; and monospaced fonts for code, number alignment, and metrics.
 - **Font hierarchy**: Clearly define the division of labor between display and body fonts, unify the size baselines for headings, body text, captions, and sources, and establish hierarchy through size and weight rather than color.
-- **Setting fonts in Typst**: When you need to set a specific font in a Typst document, you can list the fonts available on the device in a way like the following (using Simplified Chinese SC as an example):
-
-```
-let out = @shell.Pipeline([
-    @shell.Cmd("typst", ["fonts"]),
-    @shell.Cmd("rg", ["SC"]),
-  ]).output()
-```
 
 ## 4. Content Organization and Page Layout
 
