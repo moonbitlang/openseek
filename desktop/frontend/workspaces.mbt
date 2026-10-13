@@ -1272,12 +1272,24 @@ fn Model::chat_creation_pending(self : Model) -> Bool {
 }
 
 ///|
+fn Model::can_pick_project(self : Model, channel : @interop.ChannelId) -> Bool {
+  !(channel == self.focused &&
+  self.codex.composing_draft() &&
+  self.codex.is_busy())
+}
+
+///|
 fn adopt_picked_directory(
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   path : String,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
+  guard model.can_pick_project(channel) else {
+    return model.notify_error(
+      dispatch, "Wait for the current project operation to finish before adding a project.",
+    )
+  }
   guard @resource.of_path(channel, path) is Some(picked) else {
     return model.notify_error(
       dispatch, "The selected folder returned an invalid path.",

@@ -429,11 +429,15 @@ fn focus_added_project(
   codex_draft : String?,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
-  if channel == model.focused &&
-    codex_draft is Some(id) &&
-    model.codex.active_id() == Some(id) &&
-    model.codex.composing_draft() &&
-    @resource.path_for(project, channel) is Some(cwd) {
+  if codex_draft is Some(id) {
+    // The add belongs to the captured draft, not to whichever conversation
+    // the user selects later. A superseded owner must not create a new chat.
+    guard channel == model.focused &&
+      model.codex.active_id() == Some(id) &&
+      model.codex.composing_draft() &&
+      @resource.path_for(project, channel) is Some(cwd) else {
+      return (@cmd.none, model)
+    }
     return update(
       dispatch,
       Codex(channel~, @codex.Msg::change_draft_project(cwd)),
@@ -4809,7 +4813,8 @@ fn update_msg(
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
-      guard model.device_state(channel) is Some(_) else {
+      guard model.device_state(channel) is Some(_) &&
+        model.can_pick_project(channel) else {
         return (@cmd.none, model)
       }
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)

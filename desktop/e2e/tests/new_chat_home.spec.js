@@ -169,9 +169,11 @@ test('the title cannot add or change projects until draft opening settles', asyn
   await choose(page, 'Codex test');
   await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
   await expect(page.getByRole('button', { name: /^Choose project, current project/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeDisabled();
   const request = app.requests.find(r => r.method === 'codex.draft.open');
   app.replyFor = reply;
   pending.resolve(reply(request));
+  await expect(page.getByRole('button', { name: 'Add a project', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
   await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
@@ -235,3 +237,37 @@ for (const detachPrevious of [false, true]) {
     });
   }
 }
+
+test('a completed project add does not replace a newer sidebar thread selection', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.codexModels = [{ id: 'gpt-test', displayName: 'Codex test', isDefault: true }];
+  const existing = {
+    id: 'codex-existing', cwd: '/workspace', projectRoot: '/workspace',
+    preview: 'Existing Codex task', updatedAt: 2, turns: [],
+  };
+  const pending = Promise.withResolvers();
+  const reply = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'codex.thread.list') return { data: request.params?.archived ? [] : [existing] };
+    if (request.method === 'codex.thread.history.read') return { thread: existing };
+    if (request.method === 'workspace.add') return pending.promise;
+    return reply(request);
+  };
+  await app.install();
+  await app.goto();
+  await choose(page, 'Codex test');
+  await page.locator('#task').fill('Leave the selected thread alone');
+  await page.getByRole('button', { name: 'Choose project, current project workspace', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Choose a project' }).getByRole('button', { name: 'New project', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Add a project' }).getByRole('button', { name: 'Add project', exact: true }).click();
+  await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
+  await page.getByRole('button', { name: 'Existing Codex task', exact: true }).click();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', existing.id);
+  const opens = app.requests.filter(r => r.method === 'codex.draft.open').length;
+  pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
+  app.notify('workspace.changed', { workspaces: app.workspaces });
+  await expect(page.locator('.workspace-row[title="/Users/test"]')).toBeVisible();
+  await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', existing.id);
+  expect(app.requests.filter(r => r.method === 'codex.draft.open')).toHaveLength(opens);
+  expect(app.pageErrors).toEqual([]);
+});

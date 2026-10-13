@@ -542,7 +542,7 @@ fn Model::sidebar_component_sections(
     },
     action: Some({
       title: @sidebar_messages.text(self.locale, AddProject),
-      disabled: false,
+      disabled: !self.can_pick_project(dev.channel),
     }),
     entries: projects,
   }
