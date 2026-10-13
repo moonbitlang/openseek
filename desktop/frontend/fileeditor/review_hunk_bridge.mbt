@@ -27,6 +27,23 @@ priv struct ReviewHunkBridgeTarget {
 let review_hunk_bridge_target : Ref[ReviewHunkBridgeTarget?] = Ref(None)
 
 ///|
+/// Only these host inputs affect the installed actions. Reinstalling the
+/// renderer destroys its DOM, including an open menu and keyboard focus, so
+/// ordinary Git polls and unrelated app updates must retain the current one.
+/// DiffEditor still renders it when its own hunks change.
+priv struct ReviewHunkActionsInput {
+  owner : @interop.ConversationKey
+  change : ChangedFile
+  review_generation : Int32
+  surface_generation : Int32
+  source : @mention_context.ReviewSource?
+  progress : ReviewFileProgress?
+  has_file_changes : Bool
+  context : Array[@mention_context.ReviewChanges]
+  locale : @i18n.Locale
+} derive(Eq)
+
+///|
 fn current_review_hunk_bridge_target(
   state : State,
   ctx : Ctx,
@@ -232,8 +249,15 @@ fn sync_review_hunk_actions(state : State) -> Unit {
   }
   if mounted_diff_editor() is Some(editor) {
     if target is Some(target) && target.surface is ReviewLineSurface {
-      install_review_hunk_actions(state, target, editor, None)
-    } else {
+      install_review_hunk_actions(
+        state,
+        target,
+        editor,
+        None,
+        viewer_state.review_hunk_actions_input,
+      )
+    } else if viewer_state.review_hunk_actions_input.val is Some(_) {
+      viewer_state.review_hunk_actions_input.val = None
       editor.set_hunk_action_renderer(None)
     }
   }
@@ -244,6 +268,7 @@ fn sync_review_hunk_actions(state : State) -> Unit {
         target,
         entry.editor,
         Some((key, entry.section)),
+        entry.hunk_actions_input,
       )
     }
   }
@@ -255,7 +280,24 @@ fn install_review_hunk_actions(
   target : ReviewHunkBridgeTarget,
   editor : @viewer.DiffEditor,
   section : (String, @moon_diff_provider.SemanticReviewSection)?,
+  installed : Ref[ReviewHunkActionsInput?],
 ) -> Unit {
+  let input : ReviewHunkActionsInput = {
+    owner: target.owner,
+    change: target.change,
+    review_generation: target.review_generation,
+    surface_generation: target.surface_generation,
+    source: state.review_source(target.change),
+    progress: state.review_file_progress(target.change),
+    has_file_changes: mounted_diff_editor().bind(projected_review_file_changes)
+    is Some(_),
+    context: state.review_context,
+    locale: viewer_locale(),
+  }
+  if installed.val == Some(input) {
+    return
+  }
+  installed.val = Some(input)
   editor.set_hunk_action_renderer(
     Some(index => {
       guard editor.is_diff_up_to_date() else { return None }
@@ -280,8 +322,7 @@ fn install_review_hunk_actions(
       let viewed = status is ReviewHunkViewed
       let button = @dom.document().create_element("button")
       button.set_attribute("type", "button")
-      if state.is_change_reviewed(target.change) &&
-        mounted_diff_editor().bind(projected_review_file_changes) is None {
+      if state.is_change_reviewed(target.change) && !input.has_file_changes {
         button.set_attribute("disabled", "")
       }
       button.set_attribute("class", "review-hunk-marker")

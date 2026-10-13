@@ -465,6 +465,7 @@ priv struct SemanticReviewEditorHost {
   live_modified : SemanticReviewLiveDocument?
   host : @dom.Element
   editor : @viewer.DiffEditor
+  hunk_actions_input : Ref[ReviewHunkActionsInput?]
   provider : @moon_diff_provider.MoonFragmentDiffProvider?
   diff_subscription : @common.Disposable
   active_hunk_subscription : @common.Disposable
@@ -1257,6 +1258,7 @@ fn create_semantic_review_editor(
     live_modified: input.live_modified,
     host,
     editor,
+    hunk_actions_input: Ref(None),
     provider,
     diff_subscription,
     active_hunk_subscription,

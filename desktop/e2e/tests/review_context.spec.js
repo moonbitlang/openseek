@@ -30,6 +30,14 @@ async function clickHunkContext(page, button = contextButtons(page).first()) {
   await button.click();
 }
 
+async function waitForGitRefresh(app) {
+  const polls = () => app.requests.filter(request => request.method === 'git.changes').length;
+  const previous = polls();
+  // The next poll starts only after the previous response has settled. Wait
+  // through two polls so assertions cannot race the first response's render.
+  await expect.poll(polls, { timeout: 10000 }).toBeGreaterThan(previous + 1);
+}
+
 test('selected changes retain their preview during live language switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await openReview(page, app);
@@ -260,6 +268,9 @@ test('review context survives regrouping and a partial group changes only on exp
   await expect(page.locator('.composer-changes .changes-chip .mention-jump')).toBeFocused();
   await clickHunkContext(page, contextButtons(page));
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
+  await waitForGitRefresh(app);
+  await expect(contextButtons(page)).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeVisible();
   const menu = page.getByRole('menu');
   const editorBounds = await contextButtons(page).evaluate(button =>
     button.closest('.moonbit-diff-editor').getBoundingClientRect().toJSON());
@@ -276,6 +287,9 @@ test('review context survives regrouping and a partial group changes only on exp
   await page.screenshot({ path: testInfo.outputPath('partial-context.png') });
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
+  await waitForGitRefresh(app);
+  await expect(page.getByRole('menuitem', { name: 'Add remaining changes' })).toBeFocused();
+  await page.screenshot({ path: testInfo.outputPath('partial-context-after-refresh.png') });
   await page.keyboard.press('Enter');
   await expect(contextButtons(page)).toHaveText('In context');
   await expect(contextButtons(page)).toBeFocused();
