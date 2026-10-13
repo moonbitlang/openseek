@@ -102,6 +102,8 @@ test('queued OpenSeek images survive editing', async ({ page }) => {
   await page.locator('#task').fill('Compare these');
   await page.locator('#send').click();
   await expect.poll(() => app.requests.find(r => r.method === 'agent.queue' && r.params.action === 'edit')?.params.images).toEqual([url]);
+  await expect(page.locator('#task')).toHaveValue('');
+  await expect(page.locator('.composer-image')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

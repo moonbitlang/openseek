@@ -6773,7 +6773,7 @@ fn update_device_msg(
             images: images.map(url => { name: "Image", url, }),
           }
           if conv.queue_edit_id is Some(queued_id) && queued_id == id {
-            {
+            let next = {
               ..conv,
               queued_inputs,
               task: "",
@@ -6782,6 +6782,15 @@ fn update_device_msg(
               composer_draft_present: false,
               queue_edit_id: None,
             }
+            // A saved edit is a completed composer submission. Without the
+            // acknowledgement, draft reconciliation preserves the local text.
+            return (
+              @cmd.none,
+              {
+                ..model.replace_conversation(next),
+                submission_sequence: model.submission_sequence + 1,
+              },
+            )
           } else {
             { ..conv, queued_inputs, }
           }
