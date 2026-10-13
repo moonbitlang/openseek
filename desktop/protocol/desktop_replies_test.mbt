@@ -1917,6 +1917,7 @@ test "browser payload requires typed fields and ignores unknown fields" {
       url,
       dark: false,
       session: None,
+      request: None,
     }
     let decoded : @protocol.BrowserOpenPayload = @json.from_json(
       payload.to_json(),
@@ -1930,6 +1931,7 @@ test "browser payload requires typed fields and ignores unknown fields" {
     let owned : @protocol.BrowserOpenPayload = {
       ..payload,
       session: Some("s-1"),
+      request: Some("r-1"),
     }
     let decoded : @protocol.BrowserOpenPayload = @json.from_json(
       owned.to_json(),
@@ -1956,6 +1958,7 @@ test "browser payload requires typed fields and ignores unknown fields" {
     { "id": 4, "url": "file:///tmp/a.pdf", "dark": "false" },
     { "id": 4, "url": "file:///tmp/a.pdf", "dark": false, "session": null },
     { "id": 4, "url": "file:///tmp/a.pdf", "dark": false, "session": 7 },
+    { "id": 4, "url": "file:///tmp/a.pdf", "dark": false, "request": null },
   ]
   for json in invalid {
     assert_true(

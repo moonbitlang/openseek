@@ -84,6 +84,30 @@ pub fn open_browser(state : State, id : Int32) -> State {
 }
 
 ///|
+/// Open browser page `id`'s tab in `owner`'s strip, whichever conversation
+/// is on screen. For the live strip this is `open_browser`. For another
+/// conversation's, the tab joins its parked strip as the active one, to be
+/// found there when that conversation returns; the strip on screen is left
+/// as it is.
+pub fn open_browser_for(
+  state : State,
+  owner : @interop.ConversationKey,
+  id : Int32,
+) -> State {
+  if state.owner == Some(owner) {
+    return open_browser(state, id)
+  }
+  let tab = DockTab::Browser(id~)
+  let tabs = match state.remembered.get(owner) {
+    Some(parked) => [..parked.tabs, tab]
+    None => [tab]
+  }
+  let remembered = state.remembered.copy()
+  remembered[owner] = { tabs, active: Some(tab), }
+  { ..state, remembered, }
+}
+
+///|
 /// Open the transient file-picker tab, re-activating the existing one — at
 /// most one lives in the strip.
 pub fn open_picker(state : State) -> State {

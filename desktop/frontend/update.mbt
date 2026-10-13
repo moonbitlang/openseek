@@ -5878,6 +5878,34 @@ fn update_msg(
       )
     }
     BrowserAnnotation(msg) => update_browser_annotation(dispatch, msg, model)
+    BrowserOpenRequested(request~, session~, url~) => {
+      // Native views exist only in the desktop window, whose conversations
+      // are all on the local channel.
+      let owner : @interop.ConversationKey = { channel: Local, session, }
+      let (preview, id) = @preview.open_page(model.preview, url~)
+      // An agent working in the conversation on screen shows its page the
+      // way a followed link does. One working in another conversation
+      // leaves this screen alone: its tab waits in that conversation's
+      // strip, its view created hidden.
+      let on_screen = model.dock.owner == Some(owner)
+      (
+        browser_open(
+          dispatch,
+          id,
+          url,
+          model.theme.is_dark(model.system_dark),
+          Some(owner),
+          request~,
+        ),
+        {
+          ..model,
+          preview,
+          dock: @dock.open_browser_for(model.dock, owner, id),
+          right_panel_open: model.right_panel_open || on_screen,
+          right_panel_menu_open: model.right_panel_menu_open && !on_screen,
+        },
+      )
+    }
     BrowserTabRequested => {
       let model = model.begin_editor_navigation()
       let (preview, id) = @preview.open_page(model.preview)
@@ -21284,6 +21312,82 @@ test "file watcher failures toast once and retain lifecycle state" {
   )
   assert_eq(stale.file_panel.watch_error, Some(message))
   assert_eq(stale.notifications.length(), 1)
+}
+
+///|
+test "a tab the host asks for opens in its conversation's strip, on screen or not" {
+  let dispatch = test_dispatch()
+  let model = desktop_model()
+  // The root update keeps the dock on the active conversation, so the
+  // conversation on screen is the model's to name.
+  guard model.dock.owner is Some(on_screen) else {
+    fail("the test model shows a conversation")
+  }
+  let away : @interop.ConversationKey = { channel: Local, session: "s-away", }
+  // The conversation on screen shows its agent's page the way a followed
+  // link is shown.
+  let (_, shown) = update(
+    dispatch,
+    BrowserOpenRequested(
+      request="r-1",
+      session=on_screen.session,
+      url="https://example.com/",
+    ),
+    model,
+  )
+  assert_true(shown.right_panel_open)
+  assert_true(@dock.active_browser(shown.dock) == Some(1))
+  assert_true(
+    @preview.page(shown.preview, 1).unwrap().url == Some("https://example.com/"),
+  )
+  // Another conversation's agent leaves this screen as it is: its tab waits
+  // in that conversation's strip and is the one shown when it returns.
+  let (_, elsewhere) = update(
+    dispatch,
+    BrowserOpenRequested(
+      request="r-2",
+      session="s-away",
+      url="https://example.org/",
+    ),
+    shown,
+  )
+  assert_true(elsewhere.dock.tabs == shown.dock.tabs)
+  assert_true(@dock.active_browser(elsewhere.dock) == Some(1))
+  assert_true(
+    @preview.page(elsewhere.preview, 2).unwrap().url ==
+    Some("https://example.org/"),
+  )
+  let returned = @dock.sync(elsewhere.dock, away)
+  assert_true(returned.tabs == [Browser(id=2)])
+  assert_true(@dock.active_browser(returned) == Some(2))
+  // And the first conversation's strip is intact when it comes back.
+  let back = @dock.sync(returned, on_screen)
+  assert_true(@dock.active_browser(back) == Some(1))
+}
+
+///|
+test "the host's request for a tab is decoded without a page id; a partial one drops" {
+  let asked : Map[String, Json] = {
+    "kind": "open_requested",
+    "request": "r-1",
+    "session": "s-1",
+    "url": "https://example.com/",
+  }
+  assert_true(
+    browser_event_msg(asked)
+    is Some(
+      BrowserOpenRequested(
+        request="r-1",
+        session="s-1",
+        url="https://example.com/"
+      )
+    ),
+  )
+  for missing in ["request", "session", "url"] {
+    let partial = asked.copy()
+    partial.remove(missing)
+    assert_true(browser_event_msg(partial) is None)
+  }
 }
 
 ///|

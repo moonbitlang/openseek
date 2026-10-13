@@ -287,6 +287,7 @@ pub(all) struct BrowserOpenPayload {
   url : String
   dark : Bool
   session : String?
+  request : String?
 } derive(Eq, @debug.Debug)
 pub fn BrowserOpenPayload::equal(Self, Self) -> Bool
 pub fn BrowserOpenPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

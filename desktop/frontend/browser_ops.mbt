@@ -59,11 +59,12 @@ fn browser_open(
   url : String,
   dark : Bool,
   owner : @interop.ConversationKey?,
+  request? : String,
 ) -> @cmd.Cmd {
   browser_op(
     dispatch,
     @commands.browser_open,
-    { id, url, dark, session: owner.map(owner => owner.session), },
+    { id, url, dark, session: owner.map(owner => owner.session), request, },
     quiet=false,
   )
 }
@@ -79,7 +80,13 @@ fn browser_navigate(
   browser_op(
     dispatch,
     @commands.browser_navigate,
-    { id, url, dark, session: owner.map(owner => owner.session), },
+    {
+      id,
+      url,
+      dark,
+      session: owner.map(owner => owner.session),
+      request: None,
+    },
     quiet=false,
   )
 }
@@ -270,6 +277,16 @@ fn focus_browser_address() -> @cmd.Cmd {
 /// Decode one `browser.event` notification into the preview subsystem's
 /// message. Unknown kinds and malformed payloads drop.
 fn browser_event_msg(payload : Map[String, Json]) -> Msg? {
+  // The one event about a page that does not exist yet: the host wants a
+  // tab opened, and learns its id from the `browser.open` that follows.
+  if @jsonx.json_text(payload, "kind") == Some("open_requested") {
+    guard @jsonx.json_text(payload, "request") is Some(request) &&
+      @jsonx.json_text(payload, "session") is Some(session) &&
+      @jsonx.json_text(payload, "url") is Some(url) else {
+      return None
+    }
+    return Some(BrowserOpenRequested(request~, session~, url~))
+  }
   guard @jsonx.json_int(payload, "id") is Some(id) &&
     @jsonx.json_text(payload, "kind") is Some(kind) else {
     return None

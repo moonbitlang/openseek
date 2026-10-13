@@ -191,9 +191,11 @@ read this file — Codex takes its MCP servers from its own `config.toml`.
 ### The app's own tools
 
 The app offers tools of its own to the agents it runs, starting with the
-dock's browser: `browser_tabs` lists the open Browser tabs with each one's id,
-URL, title, and whether it is the one on show. They are served by the bundled
-`seekmoon` command, which is one more entry in the same file:
+dock's browser. An agent works with the Browser tabs of its own conversation:
+`browser_tabs` lists them, `browser_open` opens a new one on an address, and
+`browser_navigate` loads an address in one, steps back or forward in its
+history, or reloads it. They are served by the bundled `seekmoon` command,
+which is one more entry in the same file:
 
 ```json
 { "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }

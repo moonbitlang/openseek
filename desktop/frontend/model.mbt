@@ -2125,6 +2125,11 @@ priv enum Msg {
   // menu; all inventories share this one shell transition.
   BrowserAnnotation(@preview.AnnotationMsg)
   BrowserTabRequested
+  // The host asks for a Browser tab in one conversation's strip, on behalf
+  // of that conversation's agent (`browser.event` kind `open_requested`).
+  // The page allocates the tab, as it does every tab, and names `request`
+  // in the `browser.open` that creates the view.
+  BrowserOpenRequested(request~ : String, session~ : String, url~ : String)
   ExplorerRequested(@fileeditor.ExplorerMode)
   // Open the Workflows tab in the right panel.
   WorkflowsRequested

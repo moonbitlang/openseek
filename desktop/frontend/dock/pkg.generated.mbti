@@ -27,6 +27,8 @@ pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html
 
 pub fn open_browser(State, Int) -> State
 
+pub fn open_browser_for(State, @interop.ConversationKey, Int) -> State
+
 pub fn open_file(State, @common.Uri) -> State
 
 pub fn open_github(State) -> State

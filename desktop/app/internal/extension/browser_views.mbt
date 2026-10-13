@@ -19,6 +19,15 @@ struct BrowserViews {
   // is what lets a tool an agent calls see its own conversation's tabs and
   // not another's. A page the dock held under no conversation has no entry.
   owners : Map[Int32, String]
+  // How the page is told something (a `browser.event`), once the bridge
+  // that carries it exists.
+  mut notify : (async (Json) -> Unit)?
+  // Tabs the page has been asked to open and has not answered for yet, by
+  // request: where the id it gives the tab is delivered.
+  opening : Map[String, @async.Queue[Int32]]
+  // How many loads each page's view has started and finished, from its
+  // view events: what a tool waits on after it navigates.
+  loads : Map[Int32, LoadCount]
 }
 
 ///|
@@ -26,7 +35,15 @@ struct BrowserViews {
 /// through window_ready when Proton creates it.
 pub async fn BrowserViews::BrowserViews() -> BrowserViews {
   let debug_port = prepare_debugging()
-  { window: None, debug_port, pick: None, owners: Map([]), }
+  {
+    window: None,
+    debug_port,
+    pick: None,
+    owners: Map([]),
+    notify: None,
+    opening: Map([]),
+    loads: Map([]),
+  }
 }
 
 ///|
@@ -35,6 +52,33 @@ pub fn BrowserViews::window_ready(
   window : @proton.WindowHandle,
 ) -> Unit {
   self.window = Some(window)
+}
+
+///|
+/// Give the views their way to reach the page: `notify` delivers one
+/// `browser.event`. Set once the bridge exists, which is after the views do.
+pub fn BrowserViews::page_attached(
+  self : BrowserViews,
+  notify : async (Json) -> Unit,
+) -> Unit {
+  self.notify = Some(notify)
+}
+
+///|
+/// Take note of one event of page `id`'s view. The page hears of it through
+/// the bridge; this keeps the little of it a tool waits on.
+pub fn BrowserViews::view_event(
+  self : BrowserViews,
+  id : Int32,
+  event : @proton.ViewEvent,
+) -> Unit {
+  guard event is LoadingChanged(is_loading~) else { return }
+  let count = self.load_count(id)
+  self.loads[id] = if is_loading {
+    { ..count, started: count.started + 1, }
+  } else {
+    { ..count, finished: count.finished + 1, }
+  }
 }
 
 ///|
@@ -49,6 +93,7 @@ pub fn BrowserViews::window_closed(self : BrowserViews) -> Unit {
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.owners.clear()
+  self.loads.clear()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -274,6 +319,7 @@ fn BrowserViews::open(
       )
   }
   apply_browser_theme(view, payload.dark)
+  self.answer_open(payload)
   Acknowledged
 }
 
@@ -403,6 +449,7 @@ fn BrowserViews::close(
     self.cancel_pick()
   }
   self.owners.remove(payload.id)
+  self.loads.remove(payload.id)
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }
@@ -531,7 +578,13 @@ async test "browser ops refuse to run without a window; close tolerates it" {
   let views = BrowserViews::BrowserViews()
   assert_true(
     raises(() => {
-      views.open({ id: 1, url: "http://x/", dark: true, session: None, })
+      views.open({
+        id: 1,
+        url: "http://x/",
+        dark: true,
+        session: None,
+        request: None,
+      })
     }),
   )
   assert_true(raises(() => views.back({ id: 1, })))

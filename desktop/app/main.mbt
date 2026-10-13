@@ -121,6 +121,7 @@ async fn main {
     host_mcp~,
   )
   let bridge = @extension.DesktopBridgeActor(state)
+  views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
   })
@@ -248,7 +249,8 @@ async fn main {
     // views that are not browser tabs are not the frontend's business.
     .on_view_event((view, event) => {
       match @extension.browser_view_id(view.id()) {
-        Some(id) =>
+        Some(id) => {
+          views.view_event(id, event)
           if @extension.view_event_json(id, event) is Some(payload) {
             bridge.notify_browser_event(payload) catch {
               // Only cancellation can interrupt the queue put — the app is
@@ -256,6 +258,7 @@ async fn main {
               _ => ()
             }
           }
+        }
         None => ()
       }
     })
