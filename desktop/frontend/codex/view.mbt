@@ -569,6 +569,7 @@ pub fn State::page(
       @composer.WorktreeArchiveDialog::{
         refusal: confirm.refusal,
         conversation_noun: "task",
+        deleting: false,
         cancel: dispatch(CancelArchiveDiscard),
         confirm: dispatch(ConfirmArchiveDiscard),
       }.render(),

@@ -209,6 +209,17 @@ pub(all) struct ArchivedSessionPayload {
 } derive(Debug, Eq)
 
 ///|
+/// `session.delete` permanently removes one live record from one exact
+/// store, addressed like `ArchivedSessionPayload`. The conversation's
+/// worktree checkout goes with it; `force` discards that checkout's
+/// uncommitted changes — the client sends it after its confirmation dialog.
+pub(all) struct SessionDeletePayload {
+  session : String
+  workspace : String
+  force : Bool?
+} derive(Debug, Eq)
+
+///|
 pub(all) struct SettingsSetPayload {
   provider : String?
   custom_api_url : String?
@@ -2198,6 +2209,18 @@ pub extend SessionCommitPayload with Eq::{equal, not_equal}
 pub extend SessionCommitPayload with ToJson::{to_json}
 
 ///|
+pub extend SessionDeletePayload with Debug::{to_repr}
+
+///|
+pub extend SessionDeletePayload with FromJson::{from_json}
+
+///|
+pub extend SessionDeletePayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionDeletePayload with ToJson::{to_json}
+
+///|
 pub extend SessionPayload with Debug::{to_repr}
 
 ///|
@@ -2819,6 +2842,36 @@ pub impl ToJson for ArchivedSessionPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["session"] = Json(self.session)
   fields["workspace"] = Json(self.workspace)
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionDeletePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionDeletePayload")
+  {
+    session: @json.from_json(
+      object.required_json("session"),
+      path=path.add_key("session"),
+    ),
+    workspace: @json.from_json(
+      object.required_json("workspace"),
+      path=path.add_key("workspace"),
+    ),
+    force: match object.optional_json("force") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("force")))
+    },
+  }
+}
+
+///|
+pub impl ToJson for SessionDeletePayload with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["session"] = Json(self.session)
+  fields["workspace"] = Json(self.workspace)
+  if self.force is Some(value) {
+    fields["force"] = Json(value)
+  }
   Json(fields)
 }
 

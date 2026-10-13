@@ -1989,6 +1989,63 @@ test('archiving a selected chat restores the existing project draft', async ({ p
   expect(app.pageErrors).toEqual([]);
 });
 
+test('deleting a live chat confirms, discards a dirty worktree, and leaves a fresh chat', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.dirtyWorktree = {
+    worktree: 'wt-1',
+    dirty_paths: ['notes.txt'],
+    dirty_path_count: 1,
+  };
+  await app.install();
+  await app.goto();
+
+  const deletes = () => app.requests.filter(request =>
+    request.method === 'session.delete');
+  const stored = page.locator('.conversation-row[title="session-1"]');
+  await stored.click();
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  const openMenu = async () => {
+    await stored.hover();
+    await stored.getByRole('button', { name: 'Conversation actions' }).click();
+  };
+
+  // Cancel sends nothing and keeps the chat.
+  await openMenu();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await expect(page.locator('.modal-title')).toHaveText('Permanently delete this chat?');
+  await expect(page.locator('.modal-body')).toContainText('Rabbita browser fixture');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  expect(deletes()).toEqual([]);
+  await expect(stored).toBeVisible();
+
+  // Confirming addresses the row's exact store. The dirty worktree comes
+  // back as a second question, whose confirm repeats the delete with force.
+  await openMenu();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await page.getByRole('button', { name: 'Delete permanently' }).click();
+  await expect(page.locator('.modal-body')).toContainText('Worktree wt-1 has uncommitted changes. Changed paths: notes.txt.');
+  expect(deletes().map(request => request.params)).toEqual([
+    { session: 'session-1', workspace: '/workspace' },
+  ]);
+  await expect(stored).toBeVisible();
+  await page.getByRole('button', { name: 'Discard local changes and delete' }).click();
+  await expect.poll(() => deletes().map(request => request.params)).toEqual([
+    { session: 'session-1', workspace: '/workspace' },
+    { session: 'session-1', workspace: '/workspace', force: true },
+  ]);
+
+  // The row is gone without a stop in the archive, and the open transcript
+  // gave way to a fresh chat in the same project.
+  await expect(stored).toHaveCount(0);
+  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.empty-title')).toHaveText('What should we build in workspace?');
+  await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
+  expect(app.requests.some(request => request.method === 'session.archive')).toBe(false);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('shared WebView action menu supports context position, keyboard, and rename', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.workspaces.push('/other');
@@ -2064,7 +2121,7 @@ test('shared WebView action menu supports context position, keyboard, and rename
   await actionsButton.click();
   await expect(actionsButton).toHaveAttribute('aria-expanded', 'true');
   await expect(menu).toBeFocused();
-  await expect(menu.getByRole('menuitem')).toHaveText(['Rename…', 'Archive']);
+  await expect(menu.getByRole('menuitem')).toHaveText(['Rename…', 'Archive', 'Delete…']);
   await expect(archive).toHaveAttribute('title', /Archive —/);
   await actionsButton.click();
   await expect(menu).toHaveCount(0);

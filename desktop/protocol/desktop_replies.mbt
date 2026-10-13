@@ -356,6 +356,48 @@ pub impl FromJson for ArchiveReply with fn from_json(json, path) {
 }
 
 ///|
+/// `session.delete` either commits or, like `session.archive`, stops at a
+/// dirty checkout and asks the caller to confirm discarding it. A committed
+/// deletion carries no list: every client, the requester included, learns
+/// each removed identity from `session.changed`.
+pub(all) enum SessionDeleteReply {
+  Deleted
+  NeedsForce(ArchiveNeedsForceReply)
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for SessionDeleteReply with fn to_json(self) {
+  match self {
+    Deleted => { "kind": "deleted" }
+    NeedsForce(refusal) =>
+      {
+        "kind": "needs_force",
+        "worktree": refusal.worktree,
+        "dirty_paths": refusal.dirty_paths,
+        "dirty_path_count": refusal.dirty_path_count,
+      }
+  }
+}
+
+///|
+pub impl FromJson for SessionDeleteReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionDeleteReply")
+  match object.required_json("kind") {
+    String("deleted") => Deleted
+    String("needs_force") => {
+      let refusal : ArchiveNeedsForceReply = @json.from_json(json, path~)
+      NeedsForce(refusal)
+    }
+    String(_) =>
+      raise JsonDecodeError((path.add_key("kind"), "unknown delete reply kind"))
+    _ =>
+      raise JsonDecodeError(
+        (path.add_key("kind"), "delete reply kind must be a string"),
+      )
+  }
+}
+
+///|
 pub(all) struct SessionToolCall {
   id : String
   name : String
@@ -2156,6 +2198,18 @@ pub extend ArchiveReply with Eq::{equal, not_equal}
 
 ///|
 pub extend ArchiveReply with ToJson::{to_json}
+
+///|
+pub extend SessionDeleteReply with Debug::{to_repr}
+
+///|
+pub extend SessionDeleteReply with FromJson::{from_json}
+
+///|
+pub extend SessionDeleteReply with Eq::{equal, not_equal}
+
+///|
+pub extend SessionDeleteReply with ToJson::{to_json}
 
 ///|
 pub extend BrowseDirectoryReply with Debug::{to_repr}

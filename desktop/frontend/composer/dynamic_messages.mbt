@@ -13,6 +13,8 @@ priv enum DynamicMessage {
   DReconnecting(String)
   DArchiveWarning(String, String)
   DArchiveQuestion(String)
+  DDeleteWarning(String, String)
+  DDeleteQuestion(String)
   DWorkingStep(String)
   DRetry(String, String, String)
   DFailedChecks(String)
@@ -126,6 +128,23 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (TraditionalChinese, DArchiveQuestion(_)) => "歸檔此對話？"
     (Japanese, DArchiveQuestion(_)) =>
       "このチャットをアーカイブしますか？"
+    (English, DDeleteWarning(p0, p1)) =>
+      "Worktree \{p0} has uncommitted changes.\{p1} Deleting removes this checkout and permanently discards its uncommitted, untracked, and ignored files. Committed work stays in Git."
+    (Spanish, DDeleteWarning(p0, p1)) =>
+      "El worktree \{p0} tiene cambios sin confirmar.\{p1} Al eliminarla se elimina esta copia de trabajo y se descartan de forma permanente los cambios sin confirmar y los archivos sin seguimiento e ignorados. Los commits se conservan en Git."
+    (SimplifiedChinese, DDeleteWarning(p0, p1)) =>
+      "工作树 \{p0} 中有未提交的更改。\{p1} 删除会移除此检出目录，永久丢弃未提交、未跟踪和已忽略的文件。已提交的内容仍保留在 Git 中。"
+    (TraditionalChinese, DDeleteWarning(p0, p1)) =>
+      "工作樹 \{p0} 中有未提交的更改。\{p1} 刪除會移除此檢出目錄，永久丟棄未提交、未跟蹤和已忽略的檔案。已提交的內容仍保留在 Git 中。"
+    (Japanese, DDeleteWarning(p0, p1)) =>
+      "ワークツリー \{p0} に未コミットの変更があります。\{p1} 削除するとこのチェックアウトが削除され、未コミット・未追跡・無視されたファイルは完全に失われます。コミット済みの内容は Git に残ります。"
+    (English, DDeleteQuestion(p0)) => "Permanently delete this \{p0}?"
+    (Spanish, DDeleteQuestion(_)) =>
+      "¿Eliminar esta conversación de forma permanente?"
+    (SimplifiedChinese, DDeleteQuestion(_)) => "永久删除此对话？"
+    (TraditionalChinese, DDeleteQuestion(_)) => "永久刪除此對話？"
+    (Japanese, DDeleteQuestion(_)) =>
+      "このチャットを完全に削除しますか？"
     (English, DWorkingStep(p0)) => "Working · step \{p0}"
     (Spanish, DWorkingStep(p0)) => "Trabajando · paso \{p0}"
     (SimplifiedChinese, DWorkingStep(p0)) => "正在处理 · 第 \{p0} 步"

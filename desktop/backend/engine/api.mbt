@@ -80,6 +80,9 @@ type WorktreeInfo = @protocol.WorktreeInfo
 type ArchiveReply = @protocol.ArchiveReply
 
 ///|
+type SessionDeleteReply = @protocol.SessionDeleteReply
+
+///|
 type ArchiveNeedsForceReply = @protocol.ArchiveNeedsForceReply
 
 ///|

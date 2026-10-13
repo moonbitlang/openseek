@@ -33,14 +33,23 @@ priv struct ProjectWorktrees {
 } derive(Eq)
 
 ///|
-/// The archive-discard confirmation: the host refused to archive because
+/// The discard confirmation: the host refused to archive or delete because
 /// the conversation's worktree holds uncommitted changes; confirming
-/// retries the archive with force. The structured refusal names the worktree
+/// retries that action with force. The structured refusal names the worktree
 /// and carries a bounded path preview without exposing arbitrary host errors.
 priv struct ArchiveConfirm {
   channel : @interop.ChannelId
   session : String
   refusal : @protocol.ArchiveNeedsForceReply
+  retry : DiscardRetry
+} derive(Eq)
+
+///|
+/// What the discard dialog's confirm repeats with force: the archive, or the
+/// permanent deletion of the live record in one exact store.
+priv enum DiscardRetry {
+  RetryArchive
+  RetryDelete(workspace~ : @common.Uri)
 } derive(Eq)
 
 ///|
@@ -1623,7 +1632,11 @@ test "a remote removal closes this client's discard dialog" {
     })
   let (_, staged) = update_dev(
     dispatch,
-    ArchiveNeedsForce(session="desktop-test", refusal=test_archive_refusal()),
+    ArchiveNeedsForce(
+      session="desktop-test",
+      refusal=test_archive_refusal(),
+      retry=RetryArchive,
+    ),
     model,
   )
   assert_true(staged.archive_confirm is Some(_))
@@ -1863,6 +1876,7 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
         dirty_paths=["desktop/lepus", "editor/tokenizer.mbt"],
         dirty_path_count=4,
       ),
+      retry=RetryArchive,
     ),
     test_model(),
   )
@@ -1875,6 +1889,7 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   let warning = @composer.WorktreeArchiveDialog::{
     refusal: confirm.refusal,
     conversation_noun: "chat",
+    deleting: false,
     cancel: @cmd.none,
     confirm: @cmd.none,
   }.message()
@@ -1887,7 +1902,11 @@ test "a dirty archive stages the discard dialog and confirm retries forced" {
   // a plain archive click) and closes the dialog.
   let (_, restaged) = update_dev(
     dispatch,
-    ArchiveNeedsForce(session="desktop-test", refusal=test_archive_refusal()),
+    ArchiveNeedsForce(
+      session="desktop-test",
+      refusal=test_archive_refusal(),
+      retry=RetryArchive,
+    ),
     cancelled,
   )
   let before = restaged.dev().archived_request_generation

@@ -4,7 +4,8 @@
 // keeps the engine's own layout, so listing archived conversations — titles
 // included — is one more `sessions list` against `<root>/archived`. Files in
 // the conversation's workspace are never touched: archiving hides the
-// conversation, not the user's work.
+// conversation, not the user's work. Deleting a live conversation skips the
+// archived twin: its record goes straight to the store's condemned directory.
 
 ///|
 /// Erase every condemned record left under one store's `archived/deleting`
@@ -543,7 +544,7 @@ async fn delete_archived_session_commit(
     selected~,
   )
   defer family.release()
-  family.delete_archived_records(on_committed, on_worktree_changed?)
+  family.delete_records(archived=true, on_committed, on_worktree_changed?)
   // Physical erasure happens after the commit: the records are already
   // invisible, so a failed or cancelled attempt here only defers their
   // cleanup to the next sweep instead of undoing a published deletion.
@@ -551,24 +552,70 @@ async fn delete_archived_session_commit(
 }
 
 ///|
-/// Commit permanent deletion by renaming each family record into the store's
-/// condemned `deleting` directory — descendants first, the parent last, so an
-/// interruption leaves a smaller but coherent family — then dropping the
+/// Permanently delete one live conversation family from its selected store,
+/// without the stop in the archived twin. It is refused under the same
+/// conditions as archiving, and the worktree checkout goes the same way: a
+/// dirty one refuses unless `force`. Project files and Git branches remain.
+pub async fn delete_session(
+  manager : EngineManager,
+  session : String,
+  workspace : String,
+  on_committed : (String, String) -> Unit,
+  force~ : Bool = false,
+  on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
+) -> SessionDeleteReply {
+  let session = session.trim().to_owned()
+  guard !session.is_empty() && @session_store.safe_session_id(session) else {
+    raise EngineError("invalid session id")
+  }
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let family = manager.claim_session_family_move(
+    session,
+    archived=false,
+    selected~,
+  )
+  defer family.release()
+  // As in archiving, a dirty refusal lands after the idle engine closed and
+  // before anything irreversible; a removal that succeeds while the record
+  // move below then fails leaves a live conversation blocked on its retained
+  // missing placement.
+  let refusal = @worktree.WorktreeOwner::openseek(session).archive_checkout(
+    force,
+    on_committed?=on_worktree_changed,
+  )
+  if refusal is Some(refusal) {
+    return NeedsForce(refusal)
+  }
+  family.delete_records(archived=false, on_committed, on_worktree_changed?)
+  manager.sweep_archived_deletions_in(family.root)
+  Deleted
+}
+
+///|
+/// Commit permanent deletion by renaming each family record — out of the
+/// archived twin, or out of the live store — into the store's condemned
+/// `deleting` directory, descendants first and the parent last, so an
+/// interruption leaves a smaller but coherent family; then dropping the
 /// retained worktree placement and notifying every moved identity. A
 /// filesystem failure rolls the completed renames back best-effort before
 /// surfacing the error. Physical erasure is the caller's post-commit sweep.
-async fn SessionFamilyMove::delete_archived_records(
+async fn SessionFamilyMove::delete_records(
   self : SessionFamilyMove,
+  archived~ : Bool,
   on_committed : (String, String) -> Unit,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> Unit {
-  let archived = @session_store.archived_root(self.root).join("sessions")
+  let source = if archived {
+    @session_store.archived_root(self.root).join("sessions")
+  } else {
+    self.root.join("sessions")
+  }
   let deleting = @session_store.deleting_root(self.root)
   let order = self.members[1:].to_owned()
   order.push(self.members[0])
   for session_id in order {
-    guard @fsx.is_dir(archived.join(session_id).to_path()) else {
-      raise EngineError("no archived record for conversation \{session_id}")
+    guard @fsx.is_dir(source.join(session_id).to_path()) else {
+      raise EngineError("no durable record for conversation \{session_id}")
     }
   }
   @fsx.ensure_dir(deleting.to_path()) catch {
@@ -589,7 +636,7 @@ async fn SessionFamilyMove::delete_archived_records(
         if @fsx.exists(deleting.join(session_id).to_path()) {
           @fs.rmdir(deleting.join(session_id).to_string(), recursive=true)
         }
-        move_session_record(archived.join(session_id), deleting, session_id)
+        move_session_record(source.join(session_id), deleting, session_id)
         moved.push(session_id)
       }
       self.remove_worktree_placements(on_committed?=on_worktree_changed)
@@ -597,7 +644,7 @@ async fn SessionFamilyMove::delete_archived_records(
       error => {
         let mut rollback_failed = false
         for session_id in moved.rev_iter() {
-          move_session_record(deleting.join(session_id), archived, session_id) catch {
+          move_session_record(deleting.join(session_id), source, session_id) catch {
             _ => rollback_failed = true
           }
         }

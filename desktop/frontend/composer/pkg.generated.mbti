@@ -380,6 +380,7 @@ pub fn Trigger::query(Self) -> String
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
   conversation_noun : String
+  deleting : Bool
   cancel : @cmd.Cmd
   confirm : @cmd.Cmd
 }

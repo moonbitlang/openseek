@@ -171,7 +171,10 @@ fn session_component_input(
     // presents Archive disabled, while the browser fallback hides it.
     run_mark,
     trailing: if archivable {
-      [@conversation.Archive(title=shell_text(model.locale, ArchiveHint))]
+      [
+        @conversation.Archive(title=shell_text(model.locale, ArchiveHint)),
+        @conversation.Delete(title=shell_text(model.locale, DeletePermanently)),
+      ]
     } else {
       []
     },
@@ -2236,13 +2239,14 @@ fn view(
       @composer.WorktreeArchiveDialog::{
         refusal: confirm.refusal,
         conversation_noun: "chat",
+        deleting: confirm.retry is RetryDelete(..),
         cancel: dispatch(CancelArchiveDiscard),
         confirm: dispatch(ConfirmArchiveDiscard),
       }.render(locale=model.locale),
     )
   }
-  if model.archived_delete_confirm is Some(confirm) {
-    children.push(archived_delete_modal(locale=model.locale, dispatch, confirm))
+  if model.delete_confirm is Some(confirm) {
+    children.push(delete_modal(locale=model.locale, dispatch, confirm))
   }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
@@ -2422,7 +2426,9 @@ test "archived families collapse while a live orphan child stays archivable" {
     fail("expected live orphan conversation")
   }
   assert_eq(orphan.id().conversation(), "chat-sr-1")
-  assert_true(orphan.trailing is [@conversation.Archive(_)])
+  assert_true(
+    orphan.trailing is [@conversation.Archive(_), @conversation.Delete(_)],
+  )
 }
 
 ///|

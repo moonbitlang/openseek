@@ -2963,6 +2963,31 @@ pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionCommitPayload
 pub impl @json.FromJson for SessionCommitPayload
 
+pub(all) struct SessionDeletePayload {
+  session : String
+  workspace : String
+  force : Bool?
+} derive(Eq, @debug.Debug)
+pub fn SessionDeletePayload::equal(Self, Self) -> Bool
+pub fn SessionDeletePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionDeletePayload::not_equal(Self, Self) -> Bool
+pub fn SessionDeletePayload::to_json(Self) -> Json
+pub fn SessionDeletePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionDeletePayload
+pub impl @json.FromJson for SessionDeletePayload
+
+pub(all) enum SessionDeleteReply {
+  Deleted
+  NeedsForce(ArchiveNeedsForceReply)
+} derive(Eq, @debug.Debug)
+pub fn SessionDeleteReply::equal(Self, Self) -> Bool
+pub fn SessionDeleteReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionDeleteReply::not_equal(Self, Self) -> Bool
+pub fn SessionDeleteReply::to_json(Self) -> Json
+pub fn SessionDeleteReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionDeleteReply
+pub impl @json.FromJson for SessionDeleteReply
+
 pub(all) struct SessionDocument {
   version : Int?
   id : String?

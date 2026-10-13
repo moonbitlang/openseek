@@ -44,6 +44,9 @@ export class DesktopBrowserHarness {
       },
     ];
     this.archivedSessions = [];
+    // Set to an `ArchiveNeedsForceReply` body to make `session.delete` stop
+    // at a dirty worktree until the request carries `force`.
+    this.dirtyWorktree = null;
     this.hostSettings = {
       revision: 1,
       provider: 'deepseek',
@@ -704,6 +707,22 @@ export class DesktopBrowserHarness {
           this.liveSessions.push(...this.archivedSessions.splice(index, 1));
         }
         return this.sessionGroups(this.archivedSessions);
+      }
+      case 'session.delete': {
+        // Like the host: a dirty worktree asks first; a committed delete
+        // replies with no list and announces the removed identity.
+        if (this.dirtyWorktree && !request.params?.force) {
+          return { kind: 'needs_force', ...this.dirtyWorktree };
+        }
+        this.liveSessions = this.liveSessions.filter(
+          session => session.id !== request.params?.session,
+        );
+        this.notify('session.changed', {
+          change: 'deleted',
+          session: request.params?.session,
+          workspace: request.params?.workspace,
+        });
+        return { kind: 'deleted' };
       }
       case 'codex.status':
         return { status: 'ready' };

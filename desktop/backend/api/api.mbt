@@ -543,6 +543,20 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_delete, payload => {
+      @engine.delete_session(
+        state.manager,
+        payload.session,
+        payload.workspace,
+        (deleted, workspace) => {
+          publish_session_changed(state, "deleted", deleted, workspace)
+        },
+        force=payload.force is Some(true),
+        on_worktree_changed=(workspace, worktrees) => {
+          publish_worktree_changed(state, workspace, worktrees)
+        },
+      )
+    }),
     Endpoint(@commands.schedules_list, _ => state.schedules.list()),
     Endpoint(@commands.schedules_save, payload => state.schedules.save(payload)),
     Endpoint(@commands.schedules_action, payload => {
@@ -749,6 +763,7 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("agent.goal"))
   assert_true(names.contains("session.load_archived"))
   assert_true(names.contains("session.delete_archived"))
+  assert_true(names.contains("session.delete"))
   assert_true(names.contains("workspace.settings_get"))
   assert_true(names.contains("workspace.settings_set"))
   assert_true(names.contains("app.info"))

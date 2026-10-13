@@ -239,6 +239,8 @@ pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.Schedu
 
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 
+pub let session_delete : Command[@protocol.SessionDeletePayload, @protocol.SessionDeleteReply]
+
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]

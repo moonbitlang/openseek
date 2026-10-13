@@ -63,14 +63,14 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (Japanese, DRestartQuestion(p0)) =>
       "再起動して \{p0} に更新しますか？"
     (English, DDeleteConversation(p0)) =>
-      "“\{p0}” and all of its archived subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain."
+      "“\{p0}” and all of its subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain."
     (Spanish, DDeleteConversation(p0)) =>
-      "Se eliminarán de forma permanente «\{p0}» y todo su historial de subagentes archivados. Esta acción no se puede deshacer. Se conservarán los archivos del proyecto y las ramas de Git."
+      "Se eliminarán de forma permanente «\{p0}» y todo su historial de subagentes. Esta acción no se puede deshacer. Se conservarán los archivos del proyecto y las ramas de Git."
     (SimplifiedChinese, DDeleteConversation(p0)) =>
-      "“\{p0}”及其所有已归档的子智能体历史记录将被永久删除，且无法撤销。项目文件和 Git 分支将被保留。"
+      "“\{p0}”及其所有子智能体历史记录将被永久删除，且无法撤销。项目文件和 Git 分支将被保留。"
     (TraditionalChinese, DDeleteConversation(p0)) =>
-      "“\{p0}”及其所有已歸檔的子代理程式歷史記錄將被永久刪除，且無法復原。專案檔案和 Git 分支將被保留。"
+      "“\{p0}”及其所有子代理程式歷史記錄將被永久刪除，且無法復原。專案檔案和 Git 分支將被保留。"
     (Japanese, DDeleteConversation(p0)) =>
-      "「\{p0}」とそのすべてのアーカイブ済みサブエージェント履歴は完全に削除され、元に戻せません。プロジェクトのファイルと Git ブランチは保持されます。"
+      "「\{p0}」とそのすべてのサブエージェント履歴は完全に削除され、元に戻せません。プロジェクトのファイルと Git ブランチは保持されます。"
   }
 }

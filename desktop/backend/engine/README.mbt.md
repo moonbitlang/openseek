@@ -293,14 +293,16 @@ flowchart LR
   live -->|archive_session\nclose engine, drain follower, move| archived
   archived -->|unarchive_session| live
   archived -->|delete_archived_session\nrename out, then erase| deleting
+  live -->|delete_session\nclose engine, drain follower,\nrename out, then erase| deleting
   deleting -->|"sweep (once per pump generation,\nidempotent)"| gone(("removed"))
 ```
 
 The archived store keeps the engine's own layout, so listing archived
 conversations — titles included — is one more `sessions list` against
-`<root>/archived`. Deletion renames the record out of the archived store
-first (the commit point), then erases it; a failed erase leaves the entry for
-the next sweep.
+`<root>/archived`. Deletion renames the record out of its store — the
+archived one, or the live one when a conversation is deleted without being
+archived first — as the commit point, then erases it; a failed erase leaves
+the entry for the next sweep.
 
 ## Settings
 

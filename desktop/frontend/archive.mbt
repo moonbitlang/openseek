@@ -6,15 +6,18 @@
 // the same shape as `list_sessions`; archive can instead return a structured
 // dirty-checkout confirmation state. Since the actions move records between
 // the stores the sidebar lists, both commands refresh the live list too.
+// `delete_session` permanently removes a live record without the stop in the
+// archive.
 
 ///|
-/// The exact archived row awaiting permanent-deletion confirmation. The
-/// visible title is captured with the identity so another render cannot make
-/// the dialog appear to authorize a different conversation.
-priv struct ArchivedDeleteConfirm {
+/// The exact live or archived row awaiting permanent-deletion confirmation.
+/// The visible title is captured with the identity so another render cannot
+/// make the dialog appear to authorize a different conversation.
+priv struct DeleteConfirm {
   channel : @interop.ChannelId
   key : ArchiveRecordKey
-  // The parent plus every descendant visible in the same archived snapshot.
+  record : ConversationRecord
+  // The parent plus every descendant visible in the same listed snapshot.
   // Host notifications still cover a child created after that snapshot.
   sessions : Array[String]
   title : String
@@ -107,7 +110,7 @@ async fn archive_session_into(
     NeedsForce(refusal) =>
       scheduler.add(
         dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))(
-          ArchiveNeedsForce(session~, refusal~),
+          ArchiveNeedsForce(session~, refusal~, retry=RetryArchive),
         ),
       )
     Archived(reply) =>
@@ -165,9 +168,7 @@ fn delete_archived_session(
       ) catch {
         error => {
           scheduler.add(
-            device_dispatch(
-              DeleteArchivedFailed(@interop.bridge_error_text(error)),
-            ),
+            device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
           )
           return
         }
@@ -190,39 +191,86 @@ fn delete_archived_session(
 }
 
 ///|
-/// Permanent archived-chat deletion requires a second, explicit click. The
+/// Permanently delete one live conversation. A committed delete folds
+/// nothing from its reply: the host announces every removed identity through
+/// `session.changed`, to this client like any other. A dirty worktree comes
+/// back as the same confirmation state archiving uses.
+fn delete_session(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  key : ArchiveRecordKey,
+  force~ : Bool = false,
+) -> @cmd.Cmd {
+  guard key.workspace_payload(channel) is Some(workspace) else {
+    return @cmd.none
+  }
+  let device_dispatch = dispatch.map((msg : DeviceMsg) => {
+    FromDevice(channel, msg)
+  })
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let reply = @interop.bridge_request(channel, @commands.session_delete, {
+        session: key.session,
+        workspace,
+        force: if force {
+          Some(true)
+        } else {
+          None
+        },
+      }) catch {
+        error => {
+          scheduler.add(
+            device_dispatch(DeleteFailed(@interop.bridge_error_text(error))),
+          )
+          return
+        }
+      }
+      if reply is NeedsForce(refusal) {
+        scheduler.add(
+          device_dispatch(
+            ArchiveNeedsForce(
+              session=key.session,
+              refusal~,
+              retry=RetryDelete(workspace=key.workspace),
+            ),
+          ),
+        )
+      }
+    })
+    |> ignore
+  })
+}
+
+///|
+/// Permanent chat deletion requires a second, explicit click. The
 /// copy names what disappears and what survives so the user does not have to
 /// infer filesystem or Git consequences from the word "delete".
-fn archived_delete_modal(
+fn delete_modal(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
-  confirm : ArchivedDeleteConfirm,
+  confirm : DeleteConfirm,
 ) -> @html.Html {
-  @html.div(
-    class="modal-backdrop",
-    on_click=dispatch(CancelDeleteArchivedSession),
-    [
-      @html.div(class="modal", [
-        @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
-        @html.div(
-          class="modal-body",
-          dynamic_text(locale, DDeleteConversation(confirm.title.to_string())),
+  @html.div(class="modal-backdrop", on_click=dispatch(CancelDeleteSession), [
+    @html.div(class="modal", [
+      @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
+      @html.div(
+        class="modal-body",
+        dynamic_text(locale, DDeleteConversation(confirm.title.to_string())),
+      ),
+      @html.div(class="modal-actions", [
+        @html.button(
+          class="button secondary",
+          on_click=dispatch(CancelDeleteSession),
+          shell_text(locale, CancelLabel),
         ),
-        @html.div(class="modal-actions", [
-          @html.button(
-            class="button secondary",
-            on_click=dispatch(CancelDeleteArchivedSession),
-            shell_text(locale, CancelLabel),
-          ),
-          @html.button(
-            class="button danger",
-            on_click=dispatch(ConfirmDeleteArchivedSession),
-            shell_text(locale, DeletePermanently),
-          ),
-        ]),
+        @html.button(
+          class="button danger",
+          on_click=dispatch(ConfirmDeleteSession),
+          shell_text(locale, DeletePermanently),
+        ),
       ]),
-    ],
-  )
+    ]),
+  ])
 }
 
 ///|

@@ -837,3 +837,88 @@ async test "permanent archived deletion drops placement but keeps files and bran
     ),
   )
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "deleting a live conversation skips the archive and drops its placement" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  let root = worktree_test_root("openseek-live-delete-worktree-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  defer restore_home_env(previous)
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  ignore(
+    @worktree.create(
+      manager.worktree_host(),
+      repo.to_string(),
+      @worktree.WorktreeOwner::openseek("chat"),
+      _ => (),
+    ),
+  )
+  let store = @workspaces.store_root(repo)
+  let live = store.join("sessions")
+  let family = ["chat", "chat-sr-1", "chat-sr-1-sr-2"]
+  for session_id in family {
+    @fsx.ensure_dir(live.join(session_id).to_path())
+  }
+  @fsx.ensure_dir(live.join("other").to_path())
+  @fs.write_file(
+    repo.join(".worktrees/wt-1/junk.txt").to_string(),
+    b"x",
+    create_mode=CreateOrTruncate,
+  )
+  // A dirty checkout stops before anything irreversible, exactly as archive
+  // does: the family stays live and the checkout stays on disk.
+  let deleted : Array[String] = []
+  guard delete_session(manager, "chat", repo.resource_path(), (session_id, _) => {
+      deleted.push(session_id)
+    })
+    is NeedsForce(refusal) else {
+    fail("dirty delete returned no force confirmation")
+  }
+  assert_eq(refusal.worktree, "wt-1")
+  assert_eq(refusal.dirty_paths, ["junk.txt"])
+  assert_true(deleted.is_empty())
+  for session_id in family {
+    assert_true(@fsx.is_dir(live.join(session_id).to_path()))
+  }
+  assert_true(@fsx.is_dir(repo.join(".worktrees/wt-1").to_path()))
+  // The confirmed retry removes the checkout, the whole family (the parent
+  // announced last), and the placement row; nothing lands in the archive.
+  let reply = delete_session(
+    manager,
+    "chat",
+    repo.resource_path(),
+    (session_id, _) => deleted.push(session_id),
+    force=true,
+  )
+  assert_true(reply is Deleted)
+  assert_eq(deleted.length(), family.length())
+  assert_eq(deleted[deleted.length() - 1], "chat")
+  let archived = @session_store.archived_root(store).join("sessions")
+  for session_id in family {
+    assert_false(@fsx.exists(live.join(session_id).to_path()))
+    assert_false(@fsx.exists(archived.join(session_id).to_path()))
+    assert_false(
+      @fsx.exists(
+        @session_store.deleting_root(store).join(session_id).to_path(),
+      ),
+    )
+  }
+  assert_true(@fsx.is_dir(live.join("other").to_path()))
+  assert_false(@fsx.exists(repo.join(".worktrees/wt-1").to_path()))
+  assert_true(@worktree.list(repo.to_string()).worktrees.is_empty())
+  assert_false(
+    @gitx.run(repo, [
+      "for-each-ref", "--format=%(refname)", "refs/openseek/worktrees/",
+    ]).is_empty(),
+  )
+  assert_true(manager.record_guards.is_empty())
+}

@@ -723,12 +723,14 @@ fn StatusComponent::render(
 }
 
 ///|
-/// A destructive confirmation for archiving a conversation with a
-/// dirty worktree. The owner supplies commands, while this value owns the
-/// complete path preview and the explicit data-loss warning.
+/// A destructive confirmation for archiving — or, with `deleting`, for
+/// permanently deleting — a conversation with a dirty worktree. The owner
+/// supplies commands, while this value owns the complete path preview and
+/// the explicit data-loss warning.
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
   conversation_noun : String
+  deleting : Bool
   cancel : @cmd.Cmd
   confirm : @cmd.Cmd
 }
@@ -746,9 +748,14 @@ pub fn WorktreeArchiveDialog::message(
     let suffix = if remaining > 0 { ", and \{remaining} more" } else { "" }
     " Changed paths: \{refusal.dirty_paths.join(", ")}\{suffix}."
   }
+  let worktree = refusal.worktree.to_string()
   dynamic_text(
     locale,
-    DArchiveWarning(refusal.worktree.to_string(), preview.to_string()),
+    if self.deleting {
+      DDeleteWarning(worktree, preview.to_string())
+    } else {
+      DArchiveWarning(worktree, preview.to_string())
+    },
   )
 }
 
@@ -764,7 +771,11 @@ pub fn WorktreeArchiveDialog::render(
         class="modal-title",
         dynamic_text(
           locale,
-          DArchiveQuestion(self.conversation_noun.to_string()),
+          if self.deleting {
+            DDeleteQuestion(self.conversation_noun.to_string())
+          } else {
+            DArchiveQuestion(self.conversation_noun.to_string())
+          },
         ),
       ),
       @html.div(class="modal-body", self.message(locale~)),
@@ -775,9 +786,16 @@ pub fn WorktreeArchiveDialog::render(
           ui(locale, KeepWorking),
         ),
         @html.button(
-          class="button primary",
+          class=if self.deleting { "button danger" } else { "button primary" },
           on_click=self.confirm,
-          ui(locale, DiscardAndArchive),
+          ui(
+            locale,
+            if self.deleting {
+              DiscardAndDelete
+            } else {
+              DiscardAndArchive
+            },
+          ),
         ),
       ]),
     ]),

@@ -295,16 +295,21 @@ fn SidebarDispatcher::conversation_delete(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  let record = match id.source() {
+    @conversation.OpenSeekLive => Some(LiveRecord)
+    @conversation.OpenSeekArchived => Some(ArchivedRecord)
+    _ => None
+  }
   // The row carries the store its record lives in; a delete that could not
   // name one would address every same-id record at once.
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) &&
-    id.source() is @conversation.OpenSeekArchived &&
+    record is Some(record) &&
     id.root() is Some(root) &&
     @resource.of_path(channel, root) is Some(workspace) else {
     return self.unroutable("delete", "\{Repr(id.source())}@\{id.channel()}")
   }
   self.emit(
-    DeleteArchivedSession(channel, { session: id.conversation(), workspace, }),
+    DeleteSession(channel, { session: id.conversation(), workspace, }, record),
   )
 }
 

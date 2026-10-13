@@ -13,6 +13,7 @@ priv enum UiMessage {
   DeleteLabel
   DeletePermanently
   DeleteUnavailable
+  StopBeforeDelete
   LoadingConversation
   ConversationLoadFailed
   RunningLabel
@@ -92,6 +93,13 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "此對話來源不支援永久刪除"
     (Japanese, DeleteUnavailable) =>
       "このチャットのソースは完全削除に対応していません"
+    (English, StopBeforeDelete) => "Stop this conversation before deleting it"
+    (Spanish, StopBeforeDelete) =>
+      "Detén esta conversación antes de eliminarla"
+    (SimplifiedChinese, StopBeforeDelete) => "停止此对话后才能删除"
+    (TraditionalChinese, StopBeforeDelete) => "停止此對話後才能刪除"
+    (Japanese, StopBeforeDelete) =>
+      "削除するにはこのチャットを停止してください"
     (English, LoadingConversation) => "Loading conversation"
     (Spanish, LoadingConversation) => "Cargando conversación"
     (SimplifiedChinese, LoadingConversation) => "正在加载对话"

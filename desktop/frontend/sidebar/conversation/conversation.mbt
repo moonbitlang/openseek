@@ -112,9 +112,9 @@ pub fn RunMark::for_task(
 }
 
 ///|
-/// One hover-revealed control on the row's trailing edge. A live durable
-/// conversation offers Archive; an archived record offers Restore and the
-/// permanent Delete.
+/// One action a row offers. A live durable conversation offers Archive, and
+/// the permanent Delete where its source supports one; an archived record
+/// offers Restore and Delete.
 pub(all) enum TrailingAction {
   Archive(title~ : String)
   Restore(title~ : String)
@@ -225,7 +225,7 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
 fn Input::menu_enabled(self : Input) -> (Bool, Bool) {
   (
     self.trailing.any(action => action is Archive(..)) && !self.running,
-    self.trailing.any(action => action is Delete(..)),
+    self.trailing.any(action => action is Delete(..)) && !self.running,
   )
 }
 
@@ -238,8 +238,8 @@ fn Input::menu_entries_for_kind(
 ) -> Array[@action_menu.Entry] {
   let (archive_enabled, delete_enabled) = self.menu_enabled()
   match kind {
-    LiveMenu =>
-      [
+    LiveMenu => {
+      let entries : Array[@action_menu.Entry] = [
         Action({
           label: ui(locale, RenameLabel),
           title: ui(locale, RenameConversation),
@@ -266,6 +266,25 @@ fn Input::menu_entries_for_kind(
           command: (actions.archive)(self.id),
         }),
       ]
+      // Only a source with a permanent delete lists it.
+      if self.trailing.any(action => action is Delete(..)) {
+        entries.push(
+          Action({
+            label: ui(locale, DeleteLabel),
+            title: if delete_enabled {
+              ui(locale, DeletePermanently)
+            } else {
+              ui(locale, StopBeforeDelete)
+            },
+            icon: Some(@icons.icon(@icons.icon_close)),
+            enabled: delete_enabled,
+            destructive: true,
+            command: (actions.delete)(self.id),
+          }),
+        )
+      }
+      entries
+    }
     OpenSeekArchivedMenu =>
       [
         Action({
@@ -605,7 +624,8 @@ pub fn component(
     }
     let menu_kind = input.menu_kind()
     // A live row folds its actions behind one overflow trigger, so Rename
-    // sits beside Archive in the menu the row's context click also opens.
+    // sits beside Archive and Delete in the menu the row's context click
+    // also opens.
     // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
     if menu_kind is Some(LiveMenu) {
