@@ -723,16 +723,28 @@ fn StatusComponent::render(
 }
 
 ///|
-/// A destructive confirmation for archiving — or, with `deleting`, for
-/// permanently deleting — a conversation with a dirty worktree. The owner
-/// supplies commands, while this value owns the complete path preview and
-/// the explicit data-loss warning.
+/// A destructive confirmation for archiving a conversation with a
+/// dirty worktree. The owner supplies commands, while this value owns the
+/// complete path preview and the explicit data-loss warning.
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
   conversation_noun : String
-  deleting : Bool
   cancel : @cmd.Cmd
   confirm : @cmd.Cmd
+}
+
+///|
+/// The sentence a discard warning inserts to name a checkout's changed paths:
+/// the host's bounded preview and how many more there are. Empty when there
+/// is nothing to name.
+pub fn dirty_paths_preview(
+  dirty_paths : Array[String],
+  dirty_path_count : Int32,
+) -> String {
+  guard !dirty_paths.is_empty() else { return "" }
+  let remaining = dirty_path_count - dirty_paths.length()
+  let suffix = if remaining > 0 { ", and \{remaining} more" } else { "" }
+  " Changed paths: \{dirty_paths.join(", ")}\{suffix}."
 }
 
 ///|
@@ -741,21 +753,13 @@ pub fn WorktreeArchiveDialog::message(
   self : WorktreeArchiveDialog,
 ) -> String {
   let refusal = self.refusal
-  let preview = if refusal.dirty_paths.is_empty() {
-    ""
-  } else {
-    let remaining = refusal.dirty_path_count - refusal.dirty_paths.length()
-    let suffix = if remaining > 0 { ", and \{remaining} more" } else { "" }
-    " Changed paths: \{refusal.dirty_paths.join(", ")}\{suffix}."
-  }
-  let worktree = refusal.worktree.to_string()
+  let preview = dirty_paths_preview(
+    refusal.dirty_paths,
+    refusal.dirty_path_count,
+  )
   dynamic_text(
     locale,
-    if self.deleting {
-      DDeleteWarning(worktree, preview.to_string())
-    } else {
-      DArchiveWarning(worktree, preview.to_string())
-    },
+    DArchiveWarning(refusal.worktree.to_string(), preview.to_string()),
   )
 }
 
@@ -771,11 +775,7 @@ pub fn WorktreeArchiveDialog::render(
         class="modal-title",
         dynamic_text(
           locale,
-          if self.deleting {
-            DDeleteQuestion(self.conversation_noun.to_string())
-          } else {
-            DArchiveQuestion(self.conversation_noun.to_string())
-          },
+          DArchiveQuestion(self.conversation_noun.to_string()),
         ),
       ),
       @html.div(class="modal-body", self.message(locale~)),
@@ -786,16 +786,9 @@ pub fn WorktreeArchiveDialog::render(
           ui(locale, KeepWorking),
         ),
         @html.button(
-          class=if self.deleting { "button danger" } else { "button primary" },
+          class="button primary",
           on_click=self.confirm,
-          ui(
-            locale,
-            if self.deleting {
-              DiscardAndDelete
-            } else {
-              DiscardAndArchive
-            },
-          ),
+          ui(locale, DiscardAndArchive),
         ),
       ]),
     ]),

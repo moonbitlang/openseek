@@ -869,12 +869,29 @@ async test "deleting a live conversation skips the archive and drops its placeme
     @fsx.ensure_dir(live.join(session_id).to_path())
   }
   @fsx.ensure_dir(live.join("other").to_path())
+  // The check the client runs before its confirmation reports the checkout
+  // even while it is clean — its ignored files go too — and a conversation
+  // without a worktree reports none.
+  @debug.assert_eq(delete_session_check("chat", repo.resource_path()), {
+    checkout: Some({ worktree: "wt-1", dirty_paths: [], dirty_path_count: 0, }),
+  })
+  @debug.assert_eq(delete_session_check("other", repo.resource_path()), {
+    checkout: None,
+  })
   @fs.write_file(
     repo.join(".worktrees/wt-1/junk.txt").to_string(),
     b"x",
     create_mode=CreateOrTruncate,
   )
-  // A dirty checkout stops before anything irreversible, exactly as archive
+  @debug.assert_eq(delete_session_check("chat", repo.resource_path()), {
+    checkout: Some({
+      worktree: "wt-1",
+      dirty_paths: ["junk.txt"],
+      dirty_path_count: 1,
+    }),
+  })
+  // The check changed nothing. A delete that did not agree to discard the
+  // dirty checkout stops before anything irreversible, exactly as archive
   // does: the family stays live and the checkout stays on disk.
   let deleted : Array[String] = []
   guard delete_session(manager, "chat", repo.resource_path(), (session_id, _) => {
@@ -962,6 +979,13 @@ async test "deleting a live conversation leaves a same-id checkout in another pr
     first.join(".worktrees/wt-1/local.txt").to_string(),
     b"x",
     create_mode=CreateOrTruncate,
+  )
+  // The check answers for the selected project only.
+  @debug.assert_eq(delete_session_check("chat", second.resource_path()), {
+    checkout: None,
+  })
+  assert_true(
+    delete_session_check("chat", first.resource_path()).checkout is Some(_),
   )
   // Even forced, deleting the second project's conversation must not reach
   // the first project's checkout or its uncommitted file.

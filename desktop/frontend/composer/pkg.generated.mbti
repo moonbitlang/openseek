@@ -21,6 +21,8 @@ import {
 // Values
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply])
 
+pub fn dirty_paths_preview(Array[String], Int) -> String
+
 pub fn focus_message_end() -> @cmd.Cmd
 
 pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array[@mention_context.MentionRef]) -> Unit
@@ -380,7 +382,6 @@ pub fn Trigger::query(Self) -> String
 pub(all) struct WorktreeArchiveDialog {
   refusal : @protocol.ArchiveNeedsForceReply
   conversation_noun : String
-  deleting : Bool
   cancel : @cmd.Cmd
   confirm : @cmd.Cmd
 }

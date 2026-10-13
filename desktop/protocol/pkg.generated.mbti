@@ -442,6 +442,19 @@ pub fn CheckUpdateReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for CheckUpdateReply
 pub impl @json.FromJson for CheckUpdateReply
 
+pub(all) struct CheckoutRemoval {
+  worktree : String
+  dirty_paths : Array[String]
+  dirty_path_count : Int
+} derive(Eq, @debug.Debug)
+pub fn CheckoutRemoval::equal(Self, Self) -> Bool
+pub fn CheckoutRemoval::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CheckoutRemoval::not_equal(Self, Self) -> Bool
+pub fn CheckoutRemoval::to_json(Self) -> Json
+pub fn CheckoutRemoval::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CheckoutRemoval
+pub impl @json.FromJson for CheckoutRemoval
+
 pub(all) struct ClearFileSearchCachePayload {
   cache_key : String
 } derive(Eq, @debug.Debug)
@@ -2963,6 +2976,29 @@ pub fn SessionCommitPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionCommitPayload
 pub impl @json.FromJson for SessionCommitPayload
 
+pub(all) struct SessionDeleteCheckPayload {
+  session : String
+  workspace : String
+} derive(Eq, @debug.Debug)
+pub fn SessionDeleteCheckPayload::equal(Self, Self) -> Bool
+pub fn SessionDeleteCheckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionDeleteCheckPayload::not_equal(Self, Self) -> Bool
+pub fn SessionDeleteCheckPayload::to_json(Self) -> Json
+pub fn SessionDeleteCheckPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionDeleteCheckPayload
+pub impl @json.FromJson for SessionDeleteCheckPayload
+
+pub(all) struct SessionDeleteCheckReply {
+  checkout : CheckoutRemoval?
+} derive(Eq, @debug.Debug)
+pub fn SessionDeleteCheckReply::equal(Self, Self) -> Bool
+pub fn SessionDeleteCheckReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionDeleteCheckReply::not_equal(Self, Self) -> Bool
+pub fn SessionDeleteCheckReply::to_json(Self) -> Json
+pub fn SessionDeleteCheckReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionDeleteCheckReply
+pub impl @json.FromJson for SessionDeleteCheckReply
+
 pub(all) struct SessionDeletePayload {
   session : String
   workspace : String
@@ -2978,7 +3014,7 @@ pub impl @json.FromJson for SessionDeletePayload
 
 pub(all) enum SessionDeleteReply {
   Deleted
-  NeedsForce(ArchiveNeedsForceReply)
+  NeedsForce(CheckoutRemoval)
 } derive(Eq, @debug.Debug)
 pub fn SessionDeleteReply::equal(Self, Self) -> Bool
 pub fn SessionDeleteReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

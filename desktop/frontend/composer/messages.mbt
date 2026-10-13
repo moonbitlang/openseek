@@ -72,7 +72,6 @@ priv enum UiMessage {
   PermissionQuestion
   KeepWorking
   DiscardAndArchive
-  DiscardAndDelete
   RemoveLabel
   StartingLabel
   ThinkingLabel
@@ -561,11 +560,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, DiscardAndArchive) => "丟棄本地更改並歸檔"
     (Japanese, DiscardAndArchive) =>
       "ローカルの変更を破棄してアーカイブ"
-    (English, DiscardAndDelete) => "Discard local changes and delete"
-    (Spanish, DiscardAndDelete) => "Descartar cambios locales y eliminar"
-    (SimplifiedChinese, DiscardAndDelete) => "丢弃本地更改并删除"
-    (TraditionalChinese, DiscardAndDelete) => "丟棄本地更改並刪除"
-    (Japanese, DiscardAndDelete) => "ローカルの変更を破棄して削除"
     (English, RemoveLabel) => "Remove"
     (Spanish, RemoveLabel) => "Quitar"
     (SimplifiedChinese, RemoveLabel) => "移除"

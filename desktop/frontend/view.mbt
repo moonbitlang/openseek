@@ -2239,7 +2239,6 @@ fn view(
       @composer.WorktreeArchiveDialog::{
         refusal: confirm.refusal,
         conversation_noun: "chat",
-        deleting: confirm.retry is RetryDelete(..),
         cancel: dispatch(CancelArchiveDiscard),
         confirm: dispatch(ConfirmArchiveDiscard),
       }.render(locale=model.locale),

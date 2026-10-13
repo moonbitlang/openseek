@@ -209,10 +209,19 @@ pub(all) struct ArchivedSessionPayload {
 } derive(Debug, Eq)
 
 ///|
+/// `session.delete_check` asks what deleting one live record from one exact
+/// store would remove besides the record. It changes nothing.
+pub(all) struct SessionDeleteCheckPayload {
+  session : String
+  workspace : String
+} derive(Debug, Eq)
+
+///|
 /// `session.delete` permanently removes one live record from one exact
 /// store, addressed like `ArchivedSessionPayload`. The conversation's
 /// worktree checkout goes with it; `force` discards that checkout's
-/// uncommitted changes — the client sends it after its confirmation dialog.
+/// uncommitted changes — the client sends it when its confirmation dialog
+/// showed them.
 pub(all) struct SessionDeletePayload {
   session : String
   workspace : String
@@ -2209,6 +2218,18 @@ pub extend SessionCommitPayload with Eq::{equal, not_equal}
 pub extend SessionCommitPayload with ToJson::{to_json}
 
 ///|
+pub extend SessionDeleteCheckPayload with Debug::{to_repr}
+
+///|
+pub extend SessionDeleteCheckPayload with FromJson::{from_json}
+
+///|
+pub extend SessionDeleteCheckPayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionDeleteCheckPayload with ToJson::{to_json}
+
+///|
 pub extend SessionDeletePayload with Debug::{to_repr}
 
 ///|
@@ -2839,6 +2860,29 @@ pub impl FromJson for ArchivedSessionPayload with fn from_json(json, path) {
 
 ///|
 pub impl ToJson for ArchivedSessionPayload with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  fields["session"] = Json(self.session)
+  fields["workspace"] = Json(self.workspace)
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionDeleteCheckPayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionDeleteCheckPayload")
+  {
+    session: @json.from_json(
+      object.required_json("session"),
+      path=path.add_key("session"),
+    ),
+    workspace: @json.from_json(
+      object.required_json("workspace"),
+      path=path.add_key("workspace"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionDeleteCheckPayload with fn to_json(self) {
   let fields : Map[String, Json] = Map([])
   fields["session"] = Json(self.session)
   fields["workspace"] = Json(self.workspace)

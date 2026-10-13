@@ -543,6 +543,9 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_delete_check, payload => {
+      @engine.delete_session_check(payload.session, payload.workspace)
+    }),
     Endpoint(@commands.session_delete, payload => {
       @engine.delete_session(
         state.manager,
@@ -764,6 +767,7 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("session.load_archived"))
   assert_true(names.contains("session.delete_archived"))
   assert_true(names.contains("session.delete"))
+  assert_true(names.contains("session.delete_check"))
   assert_true(names.contains("workspace.settings_get"))
   assert_true(names.contains("workspace.settings_set"))
   assert_true(names.contains("app.info"))

@@ -1530,13 +1530,12 @@ priv struct Model {
   jobs : @jobs.State
   github : @github.State
   terminal : @terminal.State
-  // The discard confirmation, staged when the host refused an archive or a
-  // delete because the conversation's worktree holds uncommitted changes;
-  // confirming retries the refused action with force.
+  // The archive-discard confirmation, staged when the host refused an
+  // archive because the conversation's worktree holds uncommitted changes;
+  // confirming retries the archive with force.
   archive_confirm : ArchiveConfirm?
   // Permanent chat deletion has its own explicit confirmation. It never
-  // shares the worktree-discard dialog because the data at risk differs; a
-  // live chat with a dirty worktree passes through both.
+  // shares the worktree-discard dialog because the data at risk differs.
   delete_confirm : DeleteConfirm?
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
@@ -2057,9 +2056,10 @@ priv enum Msg {
   ArchiveSession(@interop.ChannelId, String)
   // Restore an archived conversation into its device's live list.
   UnarchiveSession(@interop.ChannelId, String)
-  // Stage, confirm, or cancel permanent deletion of a live or an archived
-  // conversation. The confirmation's display title comes from the listed
-  // record itself.
+  // Ask for, confirm, or cancel permanent deletion of a live or an archived
+  // conversation. An archived row stages its confirmation at once; a live
+  // row first asks the host what goes with it (`DeleteChecked`). The
+  // confirmation's display title comes from the listed record itself.
   DeleteSession(@interop.ChannelId, ArchiveRecordKey, ConversationRecord)
   ConfirmDeleteSession
   CancelDeleteSession
@@ -2429,14 +2429,17 @@ priv enum DeviceMsg {
   // the composing conversation to the new environment (the start request
   // follows inside the same command).
   WorktreeCreated(workspace~ : @common.Uri, name~ : String, session~ : String)
-  // An archive, or the delete of a live conversation, was refused because
-  // the conversation's worktree holds uncommitted changes; the client stages
-  // the discard-confirmation dialog.
+  // An archive was refused because the conversation's worktree holds
+  // uncommitted changes; the client stages the discard-confirmation dialog.
   ArchiveNeedsForce(
     session~ : String,
-    refusal~ : @protocol.ArchiveNeedsForceReply,
-    retry~ : DiscardRetry
+    refusal~ : @protocol.ArchiveNeedsForceReply
   )
+  // The host's account of what deleting one live conversation removes
+  // besides its record: the answer to the check a Delete click sends, or a
+  // delete that stopped at changes its request had not agreed to discard.
+  // Either way it stages the confirmation that states exactly that.
+  DeleteChecked(key~ : ArchiveRecordKey, checkout~ : @protocol.CheckoutRemoval?)
   // The archived conversations — the reply to `archived_sessions` and to a
   // successful `archive_session`/`unarchive_session` alike.
   ArchivedLoaded(

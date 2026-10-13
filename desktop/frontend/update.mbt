@@ -4711,20 +4711,9 @@ fn update_msg(
     ConfirmArchiveDiscard =>
       match model.archive_confirm {
         Some(confirm) => {
-          // The dialog's confirm IS the force: retry the refused action
-          // discarding the worktree's uncommitted changes.
-          if confirm.retry is RetryDelete(workspace~) {
-            return (
-              delete_session(
-                dispatch,
-                confirm.channel,
-                { session: confirm.session, workspace, },
-                force=true,
-              ),
-              { ..model, archive_confirm: None, },
-            )
-          }
-          // Same generation dance as the plain archive click.
+          // The dialog's confirm IS the force: retry the archive discarding
+          // the worktree's uncommitted changes. Same generation dance as
+          // the plain archive click.
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, archive_confirm: None, })
           }
@@ -4759,11 +4748,21 @@ fn update_msg(
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, delete_confirm: None, })
           }
-          if confirm.record is LiveRecord {
-            return (
-              delete_session(dispatch, confirm.channel, confirm.key),
-              { ..model, delete_confirm: None, },
-            )
+          let sessions = match confirm.target {
+            LiveChat(checkout~) =>
+              return (
+                delete_session(
+                  dispatch,
+                  confirm.channel,
+                  confirm.key,
+                  // Confirming agrees to discard exactly what the dialog
+                  // listed, and nothing that turned up since.
+                  force=checkout is Some({ dirty_path_count, .. }) &&
+                    dirty_path_count > 0,
+                ),
+                { ..model, delete_confirm: None, },
+              )
+            ArchivedChat(sessions~) => sessions
           }
           let archived_request_generation = dev.archived_request_generation + 1
           (
@@ -4771,7 +4770,7 @@ fn update_msg(
               dispatch,
               confirm.channel,
               confirm.key,
-              confirm.sessions,
+              sessions,
               dev.connection_generation,
               archived_request_generation,
             ),
@@ -5120,16 +5119,20 @@ fn update_msg(
         key.workspace_payload(channel) is Some(_) else {
         return (@cmd.none, model)
       }
-      let listed = if record is ArchivedRecord {
-        dev.archived
-      } else {
-        dev.sessions
+      if record is LiveRecord {
+        guard dev.sessions.any(item => key.matches(item)) else {
+          return (@cmd.none, model)
+        }
+        // A live chat may take a worktree checkout with it. Only the host
+        // knows; the dialog opens on its answer.
+        return (check_delete_session(dispatch, channel, key), model)
       }
-      guard listed.iter().find_first(item => key.matches(item)) is Some(item) else {
+      guard dev.archived.iter().find_first(item => key.matches(item))
+        is Some(item) else {
         return (@cmd.none, model)
       }
       let sessions : Array[String] = [key.session]
-      for row in @transcript.session_tree(listed) {
+      for row in @transcript.session_tree(dev.archived) {
         if key.matches(row.item) {
           for child in row.children {
             sessions.push(child.id)
@@ -5143,19 +5146,8 @@ fn update_msg(
           delete_confirm: Some({
             channel,
             key,
-            record,
-            sessions,
             title: session_item_label(item),
-            checkout: if record is ArchivedRecord {
-              NoCheckout
-            } else if !dev.worktrees.any(group => group.project == key.workspace) {
-              UnknownCheckout
-            } else {
-              match worktree_name_for(dev, key.workspace, key.session) {
-                Some(worktree) => Checkout(worktree)
-                None => NoCheckout
-              }
-            },
+            target: ArchivedChat(sessions~),
           }),
         },
       )
@@ -7626,17 +7618,34 @@ fn update_device_msg(
         }),
       )
     }
-    ArchiveNeedsForce(session~, refusal~, retry~) =>
-      // The host refused to archive or delete over the worktree's
-      // uncommitted changes; stage the discard-confirmation dialog, whose
-      // confirm retries with force.
+    ArchiveNeedsForce(session~, refusal~) =>
+      // The host refused to archive over the worktree's uncommitted
+      // changes; stage the discard-confirmation dialog, whose confirm
+      // retries with force.
+      (
+        @cmd.none,
+        { ..model, archive_confirm: Some({ channel, session, refusal, }), },
+      )
+    DeleteChecked(key~, checkout~) => {
+      // The answer can outlive the row it was asked about; only a chat still
+      // listed gets a dialog, titled from the record as it is listed now.
+      guard dev.sessions.iter().find_first(item => key.matches(item))
+        is Some(item) else {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         {
           ..model,
-          archive_confirm: Some({ channel, session, refusal, retry, }),
+          delete_confirm: Some({
+            channel,
+            key,
+            title: session_item_label(item),
+            target: LiveChat(checkout~),
+          }),
         },
       )
+    }
     ArchivedLoaded(
       items,
       connection_generation~,
@@ -16912,8 +16921,11 @@ test "archived deletion confirmation owns one visible conversation family" {
   // The record's blank title falls back to its id: the dialog names what the
   // archived list showed, not whatever label the click happened to carry.
   assert_eq(confirm.title, "desktop-parent")
-  assert_true(confirm.sessions.contains("desktop-parent"))
-  assert_true(confirm.sessions.contains("desktop-parent-sr-1"))
+  guard confirm.target is ArchivedChat(sessions~) else {
+    fail("an archived row staged a live delete")
+  }
+  assert_true(sessions.contains("desktop-parent"))
+  assert_true(sessions.contains("desktop-parent-sr-1"))
   let (_, cancelled) = update(dispatch, CancelDeleteSession, staged)
   assert_true(cancelled.delete_confirm is None)
   let (_, cancelled_twice) = update(dispatch, CancelDeleteSession, cancelled)
@@ -16926,7 +16938,7 @@ test "archived deletion confirmation owns one visible conversation family" {
 }
 
 ///|
-test "deleting a live chat confirms first and skips the archive" {
+test "deleting a live chat asks the host first and confirms what it reported" {
   let dispatch = test_dispatch()
   let key : ArchiveRecordKey = {
     session: "desktop-parent",
@@ -16938,117 +16950,106 @@ test "deleting a live chat confirms first and skips the archive" {
       placed_archived_item("desktop-parent"),
       placed_archived_item("desktop-parent-sr-1"),
     ],
-    // A same-id archived row is a different record: it authorizes nothing.
     archived: [placed_archived_item("desktop-archived-only")],
-    worktrees: [
-      {
-        project: key.workspace,
-        rows: [
-          {
-            name: "wt-1",
-            session: Some("desktop-parent"),
-            codex_thread: None,
-            path: None,
-            present: true,
-          },
-        ],
-        generation: 1,
-      },
-    ],
   })
-  let (_, unlisted) = update(
+  // The click stages nothing by itself: the dialog waits for the host's
+  // account of what goes with the chat.
+  let (_, asked) = update(
     dispatch,
-    DeleteSession(
-      @interop.ChannelId::Local,
-      { ..key, session: "desktop-archived-only", },
-      LiveRecord,
-    ),
+    DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
     model,
+  )
+  assert_true(asked.delete_confirm is None)
+  let clean : @protocol.CheckoutRemoval = {
+    worktree: "wt-1",
+    dirty_paths: [],
+    dirty_path_count: 0,
+  }
+  let dirty : @protocol.CheckoutRemoval = {
+    worktree: "wt-1",
+    dirty_paths: ["notes.txt", "todo.md"],
+    dirty_path_count: 5,
+  }
+  // An answer about a row that is not a listed live chat opens nothing — a
+  // same-id archived row is a different record.
+  let (_, unlisted) = update_dev(
+    dispatch,
+    DeleteChecked(
+      key={ ..key, session: "desktop-archived-only", },
+      checkout=None,
+    ),
+    asked,
   )
   assert_true(unlisted.delete_confirm is None)
-  let (_, staged) = update(
+  let (_, staged) = update_dev(
     dispatch,
-    DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
-    model,
+    DeleteChecked(key~, checkout=Some(clean)),
+    asked,
   )
   guard staged.delete_confirm is Some(confirm) else {
-    fail("delete confirmation was not staged")
+    fail("the host's answer staged no confirmation")
   }
   assert_true(confirm.key == key)
-  assert_true(confirm.record is LiveRecord)
   assert_eq(confirm.title, "desktop-parent")
-  assert_eq(confirm.sessions, ["desktop-parent", "desktop-parent-sr-1"])
-  // A clean checkout is removed without a second question, so this dialog
-  // is where the user learns the worktree goes too.
-  assert_true(confirm.checkout == Checkout("wt-1"))
-  // Until the project's registry has been read, no worktree is not a fact:
-  // the dialog warns conditionally instead of promising files remain.
-  let (_, unread) = update(
-    dispatch,
-    DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
-    model.with_dev(dev => { ..dev, worktrees: [], }),
-  )
-  assert_true(unread.delete_confirm is Some({ checkout: UnknownCheckout, .. }))
-  let (_, plain) = update(
-    dispatch,
-    DeleteSession(
-      @interop.ChannelId::Local,
-      { ..key, session: "desktop-parent-sr-1", },
-      LiveRecord,
-    ),
-    model,
-  )
-  assert_true(plain.delete_confirm is Some({ checkout: NoCheckout, .. }))
-  let (_, archived_staged) = update(
-    dispatch,
-    DeleteSession(
-      @interop.ChannelId::Local,
-      { ..key, session: "desktop-archived-only", },
-      ArchivedRecord,
-    ),
-    model,
-  )
-  assert_true(
-    archived_staged.delete_confirm is Some({ checkout: NoCheckout, .. }),
-  )
+  assert_true(confirm.target == LiveChat(checkout=Some(clean)))
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
   assert_true(confirmed.delete_confirm is None)
   assert_eq(confirmed.dev().sessions.length(), 2)
   assert_eq(confirmed.dev().archived_request_generation, 0)
-  // A dirty worktree comes back as the discard dialog; its confirm repeats
-  // the delete, not an archive.
+  // A checkout that turned dirty after the check comes back from the delete
+  // itself, and the same dialog asks again with the changed paths.
   let (_, refused) = update_dev(
     dispatch,
-    ArchiveNeedsForce(
-      session=key.session,
-      refusal={
-        worktree: "wt-1",
-        dirty_paths: ["notes.txt"],
-        dirty_path_count: 1,
-      },
-      retry=RetryDelete(workspace=key.workspace),
-    ),
+    DeleteChecked(key~, checkout=Some(dirty)),
     confirmed,
   )
-  guard refused.archive_confirm is Some(discard) else {
-    fail("dirty delete staged no discard dialog")
+  guard refused.delete_confirm is Some(again) else {
+    fail("a refused delete staged no second confirmation")
   }
-  assert_true(discard.retry == RetryDelete(workspace=key.workspace))
-  let warning = @composer.WorktreeArchiveDialog::{
-    refusal: discard.refusal,
-    conversation_noun: "chat",
-    deleting: true,
-    cancel: @cmd.none,
-    confirm: @cmd.none,
-  }.message()
-  assert_true(warning.contains("notes.txt"))
-  assert_true(warning.contains("Deleting removes this checkout"))
-  let (_, forced) = update(dispatch, ConfirmArchiveDiscard, refused)
-  assert_true(forced.archive_confirm is None)
-  assert_eq(forced.dev().sessions_request_generation, 0)
-  assert_eq(forced.dev().archived_request_generation, 0)
+  assert_true(again.target == LiveChat(checkout=Some(dirty)))
+  assert_true(refused.archive_confirm is None)
+}
+
+///|
+test "the delete confirmation states what the host reported" {
+  let body = (target : DeleteTarget) => {
+    let confirm : DeleteConfirm = {
+      channel: @interop.ChannelId::Local,
+      key: {
+        session: "desktop-parent",
+        workspace: @interop.ChannelId::Local.test_project(),
+      },
+      title: "Fix the parser",
+      target,
+    }
+    confirm.message()
+  }
+  let plain = body(LiveChat(checkout=None))
+  assert_true(plain.contains("Fix the parser"))
+  assert_true(plain.contains("Project files and Git branches will remain."))
+  assert_false(plain.contains("worktree"))
+  assert_true(body(ArchivedChat(sessions=["desktop-parent"])) == plain)
+  let clean = body(
+    LiveChat(
+      checkout=Some({ worktree: "wt-1", dirty_paths: [], dirty_path_count: 0, }),
+    ),
+  )
+  assert_true(clean.contains("its worktree checkout wt-1 is removed"))
+  assert_true(clean.contains("ignored files"))
+  assert_false(clean.contains("uncommitted changes"))
+  let dirty = body(
+    LiveChat(
+      checkout=Some({
+        worktree: "wt-1",
+        dirty_paths: ["notes.txt", "todo.md"],
+        dirty_path_count: 5,
+      }),
+    ),
+  )
+  assert_true(dirty.contains("That checkout has uncommitted changes."))
+  assert_true(dirty.contains("Changed paths: notes.txt, todo.md, and 3 more."))
 }
 
 ///|
@@ -17128,7 +17129,10 @@ test "archived deletion keeps same-id rows in other stores" {
     fail("delete confirmation was not staged")
   }
   assert_true(confirm.key == key)
-  assert_eq(confirm.sessions, ["shared", "shared-sr-1"])
+  guard confirm.target is ArchivedChat(sessions~) else {
+    fail("an archived row staged a live delete")
+  }
+  assert_eq(sessions, ["shared", "shared-sr-1"])
   let response_model = staged.with_dev(dev => {
     ..dev,
     archived_request_generation: 1,
@@ -17137,7 +17141,7 @@ test "archived deletion keeps same-id rows in other stores" {
     dispatch,
     ArchivedDeleted(
       key~,
-      sessions=confirm.sessions,
+      sessions~,
       items=[unplaced, project_parent, project_child],
       connection_generation=0,
       request_generation=1,
@@ -22142,15 +22146,11 @@ test "full-screen modals hide the native view and closing restores it" {
   // archive-discard confirmation and Quick Open.
   let (_, archiving) = update_dev(
     dispatch,
-    ArchiveNeedsForce(
-      session="desktop-test",
-      refusal={
-        worktree: "wt-1",
-        dirty_paths: ["desktop/lepus"],
-        dirty_path_count: 1,
-      },
-      retry=RetryArchive,
-    ),
+    ArchiveNeedsForce(session="desktop-test", refusal={
+      worktree: "wt-1",
+      dirty_paths: ["desktop/lepus"],
+      dirty_path_count: 1,
+    }),
     restored,
   )
   assert_true(archiving.archive_confirm is Some(_))

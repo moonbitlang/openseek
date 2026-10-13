@@ -188,6 +188,9 @@ type WorktreeCreateReply = @protocol.WorktreeCreateReply
 type ArchiveNeedsForceReply = @protocol.ArchiveNeedsForceReply
 
 ///|
+type CheckoutRemoval = @protocol.CheckoutRemoval
+
+///|
 /// One Codex thread's Desktop-owned placement. The API uses this snapshot to
 /// annotate app-server thread replies; it never infers ownership from a cwd,
 /// so worktrees created by Codex App or another Git client remain external.
@@ -478,21 +481,35 @@ async fn WorktreeOwner::binding_unlocked(
 pub async fn WorktreeOwner::archive_check(
   self : WorktreeOwner,
 ) -> ArchiveNeedsForceReply? {
+  match self.checkout_removal() {
+    Some({ worktree, dirty_paths, dirty_path_count, }) if dirty_path_count > 0 =>
+      Some({ worktree, dirty_paths, dirty_path_count, })
+    _ => None
+  }
+}
+
+///|
+/// The checkout bound to this owner, when one is on disk, with a preview of
+/// what removing it would discard: its uncommitted and untracked paths, none
+/// for a clean checkout. Read-only, like `archive_check`. `workspace` is the
+/// one project to look in, as for `archive_checkout`.
+pub async fn WorktreeOwner::checkout_removal(
+  self : WorktreeOwner,
+  workspace? : @pathx.Absolute,
+) -> CheckoutRemoval? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked() is Some((workspace, entry)) else { return None }
+  guard self.binding_unlocked(workspace?) is Some((workspace, entry)) else {
+    return None
+  }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   guard present else { return None }
   let status = @gitx.output(target, [
     "status", "--porcelain=v1", "-z", "--untracked-files=all",
   ])
-  if status.is_empty() {
-    None
-  } else {
-    let (dirty_paths, dirty_path_count) = archive_dirty_path_preview(status)
-    Some({ worktree: entry.name, dirty_paths, dirty_path_count, })
-  }
+  let (dirty_paths, dirty_path_count) = archive_dirty_path_preview(status)
+  Some({ worktree: entry.name, dirty_paths, dirty_path_count, })
 }
 
 ///|

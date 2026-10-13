@@ -266,13 +266,14 @@ fn Input::menu_entries_for_kind(
           command: (actions.archive)(self.id),
         }),
       ]
-      // Only a source with a permanent delete lists it.
-      if self.trailing.any(action => action is Delete(..)) {
+      // Only a source with a permanent delete lists it, under its own hint.
+      if self.trailing.iter().find_first(action => action is Delete(..))
+        is Some(Delete(title~)) {
         entries.push(
           Action({
             label: ui(locale, DeleteLabel),
             title: if delete_enabled {
-              ui(locale, DeletePermanently)
+              title
             } else {
               ui(locale, StopBeforeDelete)
             },

@@ -44,9 +44,11 @@ export class DesktopBrowserHarness {
       },
     ];
     this.archivedSessions = [];
-    // Set to an `ArchiveNeedsForceReply` body to make `session.delete` stop
-    // at a dirty worktree until the request carries `force`.
-    this.dirtyWorktree = null;
+    // The worktree checkout a live chat runs in, as `session.delete_check`
+    // reports it (`{worktree, dirty_paths, dirty_path_count}`); null for a
+    // chat without one. A dirty one stops `session.delete` until the request
+    // carries `force`.
+    this.sessionCheckout = null;
     this.hostSettings = {
       revision: 1,
       provider: 'deepseek',
@@ -708,11 +710,14 @@ export class DesktopBrowserHarness {
         }
         return this.sessionGroups(this.archivedSessions);
       }
+      case 'session.delete_check':
+        return this.sessionCheckout ? { checkout: this.sessionCheckout } : {};
       case 'session.delete': {
-        // Like the host: a dirty worktree asks first; a committed delete
-        // replies with no list and announces the removed identity.
-        if (this.dirtyWorktree && !request.params?.force) {
-          return { kind: 'needs_force', ...this.dirtyWorktree };
+        // Like the host: uncommitted changes the request did not agree to
+        // discard stop it; a committed delete replies with no list and
+        // announces the removed identity.
+        if (this.sessionCheckout?.dirty_path_count > 0 && !request.params?.force) {
+          return { kind: 'needs_force', checkout: this.sessionCheckout };
         }
         this.liveSessions = this.liveSessions.filter(
           session => session.id !== request.params?.session,

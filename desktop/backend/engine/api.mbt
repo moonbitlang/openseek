@@ -83,6 +83,9 @@ type ArchiveReply = @protocol.ArchiveReply
 type SessionDeleteReply = @protocol.SessionDeleteReply
 
 ///|
+type SessionDeleteCheckReply = @protocol.SessionDeleteCheckReply
+
+///|
 type ArchiveNeedsForceReply = @protocol.ArchiveNeedsForceReply
 
 ///|

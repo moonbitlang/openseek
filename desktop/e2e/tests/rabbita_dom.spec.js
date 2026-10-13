@@ -1989,60 +1989,65 @@ test('archiving a selected chat restores the existing project draft', async ({ p
   expect(app.pageErrors).toEqual([]);
 });
 
-test('deleting a live chat confirms, discards a dirty worktree, and leaves a fresh chat', async ({ page }) => {
+test('deleting a live chat asks the host what goes with it and confirms once', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  app.dirtyWorktree = {
+  await app.install();
+  await app.goto();
+
+  const sent = method => app.requests
+    .filter(request => request.method === method)
+    .map(request => request.params);
+  const stored = page.locator('.conversation-row[title="session-1"]');
+  await stored.click();
+  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+  const askToDelete = async () => {
+    await stored.hover();
+    await stored.getByRole('button', { name: 'Conversation actions' }).click();
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  };
+  const body = page.locator('.modal-body');
+
+  // A chat without a worktree: the dialog is the plain one, and Cancel
+  // deletes nothing.
+  await askToDelete();
+  await expect(page.locator('.modal-title')).toHaveText('Permanently delete this chat?');
+  await expect(body).toContainText('“Rabbita browser fixture” and all of its subagent history');
+  await expect(body).toContainText('Project files and Git branches will remain.');
+  await expect(body).not.toContainText('worktree');
+  expect(sent('session.delete_check')).toEqual([
+    { session: 'session-1', workspace: '/workspace' },
+  ]);
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+  expect(sent('session.delete')).toEqual([]);
+  await expect(stored).toBeVisible();
+
+  // The host is asked again on every click. Now the chat runs in a worktree
+  // with uncommitted changes, and the one dialog says exactly that.
+  app.sessionCheckout = {
     worktree: 'wt-1',
     dirty_paths: ['notes.txt'],
     dirty_path_count: 1,
   };
-  await app.install();
-  await app.goto();
-
-  const deletes = () => app.requests.filter(request =>
-    request.method === 'session.delete');
-  const stored = page.locator('.conversation-row[title="session-1"]');
-  await stored.click();
-  await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
-  const openMenu = async () => {
-    await stored.hover();
-    await stored.getByRole('button', { name: 'Conversation actions' }).click();
-  };
-
-  // Cancel sends nothing and keeps the chat.
-  await openMenu();
-  await page.getByRole('menuitem', { name: 'Delete…' }).click();
-  await expect(page.locator('.modal-title')).toHaveText('Permanently delete this chat?');
-  await expect(page.locator('.modal-body')).toContainText('Rabbita browser fixture');
-  await page.getByRole('button', { name: 'Cancel' }).click();
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
-  expect(deletes()).toEqual([]);
-  await expect(stored).toBeVisible();
-
-  // Confirming addresses the row's exact store. The dirty worktree comes
-  // back as a second question, whose confirm repeats the delete with force.
-  await openMenu();
-  await page.getByRole('menuitem', { name: 'Delete…' }).click();
+  await askToDelete();
+  await expect(body).toContainText('its worktree checkout wt-1 is removed');
+  await expect(body).toContainText('That checkout has uncommitted changes. Changed paths: notes.txt.');
   await page.getByRole('button', { name: 'Delete permanently' }).click();
-  await expect(page.locator('.modal-body')).toContainText('Worktree wt-1 has uncommitted changes. Changed paths: notes.txt.');
-  expect(deletes().map(request => request.params)).toEqual([
-    { session: 'session-1', workspace: '/workspace' },
-  ]);
-  await expect(stored).toBeVisible();
-  await page.getByRole('button', { name: 'Discard local changes and delete' }).click();
-  await expect.poll(() => deletes().map(request => request.params)).toEqual([
-    { session: 'session-1', workspace: '/workspace' },
+
+  // Confirming agrees to discard what the dialog listed: one request, with
+  // force, and no second question.
+  await expect.poll(() => sent('session.delete')).toEqual([
     { session: 'session-1', workspace: '/workspace', force: true },
   ]);
+  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
 
   // The row is gone without a stop in the archive, and the open transcript
   // gave way to a fresh chat in the same project.
   await expect(stored).toHaveCount(0);
-  await expect(page.locator('.modal-backdrop')).toHaveCount(0);
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
   await expect(page.locator('.empty-title')).toHaveText('What should we build in workspace?');
   await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
-  expect(app.requests.some(request => request.method === 'session.archive')).toBe(false);
+  expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
 

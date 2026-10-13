@@ -505,18 +505,19 @@ test "archive replies keep success compatible and encode dirty confirmation" {
 }
 
 ///|
-test "delete replies and payloads round-trip with force optional" {
+test "delete replies and payloads round-trip with optional fields absent" {
+  let checkout : @protocol.CheckoutRemoval = {
+    worktree: "wt-1",
+    dirty_paths: ["notes.txt"],
+    dirty_path_count: 3,
+  }
   let deleted : @protocol.SessionDeleteReply = Deleted
   @debug.assert_eq(deleted.to_json(), { "kind": "deleted" })
   let decoded : @protocol.SessionDeleteReply = @json.from_json(
     deleted.to_json(),
   )
   @debug.assert_eq(decoded, deleted)
-  let refusal : @protocol.SessionDeleteReply = NeedsForce({
-    worktree: "wt-1",
-    dirty_paths: ["notes.txt"],
-    dirty_path_count: 3,
-  })
+  let refusal : @protocol.SessionDeleteReply = NeedsForce(checkout)
   let decoded : @protocol.SessionDeleteReply = @json.from_json(
     refusal.to_json(),
   )
@@ -529,6 +530,24 @@ test "delete replies and payloads round-trip with force optional" {
   } noraise {
     _ => fail("a delete reply without a kind decoded")
   }
+  // No checkout is an absent field, not an empty worktree name.
+  let nothing : @protocol.SessionDeleteCheckReply = { checkout: None, }
+  @debug.assert_eq(nothing.to_json(), {})
+  let decoded : @protocol.SessionDeleteCheckReply = @json.from_json({})
+  @debug.assert_eq(decoded, nothing)
+  let found : @protocol.SessionDeleteCheckReply = { checkout: Some(checkout), }
+  let decoded : @protocol.SessionDeleteCheckReply = @json.from_json(
+    found.to_json(),
+  )
+  @debug.assert_eq(decoded, found)
+  let check : @protocol.SessionDeleteCheckPayload = {
+    session: "chat",
+    workspace: "/work/project",
+  }
+  let decoded : @protocol.SessionDeleteCheckPayload = @json.from_json(
+    check.to_json(),
+  )
+  @debug.assert_eq(decoded, check)
   let plain : @protocol.SessionDeletePayload = @json.from_json({
     "session": "chat",
     "workspace": "/work/project",

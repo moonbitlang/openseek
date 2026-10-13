@@ -453,6 +453,7 @@ async fn archive_session_commit(
   let refusal = @worktree.WorktreeOwner::openseek(session).archive_checkout(
     manager.worktree_host(),
     force,
+    workspace?=family.workspace,
     on_committed?=on_worktree_changed,
   )
   if refusal is Some(refusal) {
@@ -585,12 +586,33 @@ pub async fn delete_session(
     workspace=selected.workspace,
     on_committed?=on_worktree_changed,
   )
-  if refusal is Some(refusal) {
-    return NeedsForce(refusal)
+  if refusal is Some({ worktree, dirty_paths, dirty_path_count, }) {
+    return NeedsForce({ worktree, dirty_paths, dirty_path_count, })
   }
   family.delete_records(archived=false, on_committed, on_worktree_changed?)
   manager.sweep_archived_deletions_in(family.root)
   Deleted
+}
+
+///|
+/// What `delete_session` would remove besides the conversation's records:
+/// the worktree checkout it runs in, if one is on disk in the selected
+/// project. Read-only — the client asks before it shows its confirmation, so
+/// the dialog states what the host will do instead of guessing.
+pub async fn delete_session_check(
+  session : String,
+  workspace : String,
+) -> SessionDeleteCheckReply {
+  let session = session.trim().to_owned()
+  guard !session.is_empty() && @session_store.safe_session_id(session) else {
+    raise EngineError("invalid session id")
+  }
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  {
+    checkout: @worktree.WorktreeOwner::openseek(session).checkout_removal(
+      workspace=selected.workspace,
+    ),
+  }
 }
 
 ///|

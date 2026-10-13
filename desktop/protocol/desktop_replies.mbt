@@ -356,26 +356,89 @@ pub impl FromJson for ArchiveReply with fn from_json(json, path) {
 }
 
 ///|
-/// `session.delete` either commits or, like `session.archive`, stops at a
-/// dirty checkout and asks the caller to confirm discarding it. A committed
-/// deletion carries no list: every client, the requester included, learns
-/// each removed identity from `session.changed`.
+/// The worktree checkout that goes with a deleted conversation, and what its
+/// removal discards. `dirty_paths` is a bounded preview of the checkout's
+/// uncommitted and untracked paths and `dirty_path_count` their complete
+/// number; both are empty for a clean checkout, whose ignored files are
+/// removed all the same.
+pub(all) struct CheckoutRemoval {
+  worktree : String
+  dirty_paths : Array[String]
+  dirty_path_count : Int32
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for CheckoutRemoval with fn to_json(self) {
+  {
+    "worktree": self.worktree,
+    "dirty_paths": self.dirty_paths,
+    "dirty_path_count": self.dirty_path_count,
+  }
+}
+
+///|
+pub impl FromJson for CheckoutRemoval with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "CheckoutRemoval")
+  {
+    worktree: @json.from_json(
+      object.required_json("worktree"),
+      path=path.add_key("worktree"),
+    ),
+    dirty_paths: @json.from_json(
+      object.required_json("dirty_paths"),
+      path=path.add_key("dirty_paths"),
+    ),
+    dirty_path_count: @json.from_json(
+      object.required_json("dirty_path_count"),
+      path=path.add_key("dirty_path_count"),
+    ),
+  }
+}
+
+///|
+/// `session.delete_check`: what the delete would remove besides the
+/// conversation record. `checkout` is absent when the conversation has no
+/// worktree checkout on disk.
+pub(all) struct SessionDeleteCheckReply {
+  checkout : CheckoutRemoval?
+} derive(Debug, Eq)
+
+///|
+pub impl ToJson for SessionDeleteCheckReply with fn to_json(self) {
+  let fields : Map[String, Json] = Map([])
+  if self.checkout is Some(checkout) {
+    fields["checkout"] = checkout.to_json()
+  }
+  Json(fields)
+}
+
+///|
+pub impl FromJson for SessionDeleteCheckReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "SessionDeleteCheckReply")
+  {
+    checkout: match object.optional_json("checkout") {
+      None => None
+      Some(value) => Some(@json.from_json(value, path=path.add_key("checkout")))
+    },
+  }
+}
+
+///|
+/// `session.delete` either commits or stops at a checkout with uncommitted
+/// changes the request did not agree to discard, and reports that checkout so
+/// the caller can ask again. A committed deletion carries no list: every
+/// client, the requester included, learns each removed identity from
+/// `session.changed`.
 pub(all) enum SessionDeleteReply {
   Deleted
-  NeedsForce(ArchiveNeedsForceReply)
+  NeedsForce(CheckoutRemoval)
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for SessionDeleteReply with fn to_json(self) {
   match self {
     Deleted => { "kind": "deleted" }
-    NeedsForce(refusal) =>
-      {
-        "kind": "needs_force",
-        "worktree": refusal.worktree,
-        "dirty_paths": refusal.dirty_paths,
-        "dirty_path_count": refusal.dirty_path_count,
-      }
+    NeedsForce(checkout) => { "kind": "needs_force", "checkout": checkout }
   }
 }
 
@@ -384,10 +447,13 @@ pub impl FromJson for SessionDeleteReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "SessionDeleteReply")
   match object.required_json("kind") {
     String("deleted") => Deleted
-    String("needs_force") => {
-      let refusal : ArchiveNeedsForceReply = @json.from_json(json, path~)
-      NeedsForce(refusal)
-    }
+    String("needs_force") =>
+      NeedsForce(
+        @json.from_json(
+          object.required_json("checkout"),
+          path=path.add_key("checkout"),
+        ),
+      )
     String(_) =>
       raise JsonDecodeError((path.add_key("kind"), "unknown delete reply kind"))
     _ =>
@@ -2198,6 +2264,30 @@ pub extend ArchiveReply with Eq::{equal, not_equal}
 
 ///|
 pub extend ArchiveReply with ToJson::{to_json}
+
+///|
+pub extend CheckoutRemoval with Debug::{to_repr}
+
+///|
+pub extend CheckoutRemoval with FromJson::{from_json}
+
+///|
+pub extend CheckoutRemoval with Eq::{equal, not_equal}
+
+///|
+pub extend CheckoutRemoval with ToJson::{to_json}
+
+///|
+pub extend SessionDeleteCheckReply with Debug::{to_repr}
+
+///|
+pub extend SessionDeleteCheckReply with FromJson::{from_json}
+
+///|
+pub extend SessionDeleteCheckReply with Eq::{equal, not_equal}
+
+///|
+pub extend SessionDeleteCheckReply with ToJson::{to_json}
 
 ///|
 pub extend SessionDeleteReply with Debug::{to_repr}
