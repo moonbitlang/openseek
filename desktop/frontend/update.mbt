@@ -5146,10 +5146,15 @@ fn update_msg(
             record,
             sessions,
             title: session_item_label(item),
-            worktree: if record is LiveRecord {
-              worktree_name_for(dev, key.workspace, key.session)
+            checkout: if record is ArchivedRecord {
+              NoCheckout
+            } else if !dev.worktrees.any(group => group.project == key.workspace) {
+              UnknownCheckout
             } else {
-              None
+              match worktree_name_for(dev, key.workspace, key.session) {
+                Some(worktree) => Checkout(worktree)
+                None => NoCheckout
+              }
             },
           }),
         },
@@ -16975,7 +16980,25 @@ test "deleting a live chat confirms first and skips the archive" {
   assert_eq(confirm.sessions, ["desktop-parent", "desktop-parent-sr-1"])
   // A clean checkout is removed without a second question, so this dialog
   // is where the user learns the worktree goes too.
-  assert_eq(confirm.worktree, Some("wt-1"))
+  assert_true(confirm.checkout == Checkout("wt-1"))
+  // Until the project's registry has been read, no worktree is not a fact:
+  // the dialog warns conditionally instead of promising files remain.
+  let (_, unread) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
+    model.with_dev(dev => { ..dev, worktrees: [], }),
+  )
+  assert_true(unread.delete_confirm is Some({ checkout: UnknownCheckout, .. }))
+  let (_, plain) = update(
+    dispatch,
+    DeleteSession(
+      @interop.ChannelId::Local,
+      { ..key, session: "desktop-parent-sr-1", },
+      LiveRecord,
+    ),
+    model,
+  )
+  assert_true(plain.delete_confirm is Some({ checkout: NoCheckout, .. }))
   let (_, archived_staged) = update(
     dispatch,
     DeleteSession(
@@ -16985,7 +17008,9 @@ test "deleting a live chat confirms first and skips the archive" {
     ),
     model,
   )
-  assert_true(archived_staged.delete_confirm is Some({ worktree: None, .. }))
+  assert_true(
+    archived_staged.delete_confirm is Some({ checkout: NoCheckout, .. }),
+  )
   // The row stays listed until the host announces the deletion, and the
   // archived list is not this request's to refresh.
   let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)

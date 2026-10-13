@@ -21,10 +21,21 @@ priv struct DeleteConfirm {
   // Host notifications still cover a child created after that snapshot.
   sessions : Array[String]
   title : String
-  // The worktree a live chat runs in. Its checkout is removed with the chat,
-  // and a clean one — ignored files included — goes without a second
-  // question, so this dialog has to say so.
-  worktree : String?
+  // A live chat's checkout is removed with the chat, and a clean one —
+  // ignored files included — goes without a second question, so this dialog
+  // has to say so.
+  checkout : DeleteCheckout
+} derive(Eq)
+
+///|
+/// What deleting a chat does to a worktree checkout, as far as this page
+/// knows. An archived chat has none: its checkout went when it was archived.
+priv enum DeleteCheckout {
+  NoCheckout
+  Checkout(String)
+  // The project's worktree registry has not been read. A pending or failed
+  // list is not an empty one, so the dialog must not promise there is none.
+  UnknownCheckout
 } derive(Eq)
 
 ///|
@@ -261,13 +272,15 @@ fn delete_modal(
         class="modal-body",
         dynamic_text(
           locale,
-          match confirm.worktree {
-            Some(worktree) =>
+          match confirm.checkout {
+            NoCheckout => DDeleteConversation(confirm.title.to_string())
+            Checkout(worktree) =>
               DDeleteWorktreeConversation(
                 confirm.title.to_string(),
                 worktree.to_string(),
               )
-            None => DDeleteConversation(confirm.title.to_string())
+            UnknownCheckout =>
+              DDeleteMaybeWorktreeConversation(confirm.title.to_string())
           },
         ),
       ),
