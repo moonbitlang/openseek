@@ -19,15 +19,18 @@ pub fn DiffEditorWidget::set_hunk_action_renderer(
   self : DiffEditorWidget,
   renderer : ((Int32) -> @rdom.Element?)?,
 ) -> Unit {
+  if self.hunk_action_renderer is None && renderer is None {
+    return
+  }
   let previous_width = self.hunk_action_gutter_width()
   self.hunk_action_renderer = renderer
   let width = self.hunk_action_gutter_width()
-  @base_browser.set_style_property(
-    self.root,
-    "--diff-hunk-action-gutter-width",
-    "\{width}px",
-  )
   if width != previous_width {
+    @base_browser.set_style_property(
+      self.root,
+      "--diff-hunk-action-gutter-width",
+      "\{width}px",
+    )
     self.layout()
   }
   self.render_hunk_actions()
@@ -199,6 +202,15 @@ fn DiffEditorWidget::layout_hunk_action_anchor(
   self : DiffEditorWidget,
   node : @rdom.Element,
 ) -> Unit {
+  let (left, width) = self.measure_hunk_action_anchor(node)
+  apply_hunk_action_anchor(node, left, width)
+}
+
+///|
+fn DiffEditorWidget::measure_hunk_action_anchor(
+  self : DiffEditorWidget,
+  node : @rdom.Element,
+) -> (Double, Double) {
   let pane = if self.layout_state.actual_layout == SideBySide &&
     node.get_attribute("data-hovered-side") == Some("modified") {
     self.modified_host
@@ -207,12 +219,17 @@ fn DiffEditorWidget::layout_hunk_action_anchor(
   }
   let bounds = node.get_bounding_client_rect()
   let left = pane.get_bounding_client_rect().get_left() - bounds.get_left()
+  (left, bounds.get_width())
+}
+
+///|
+fn apply_hunk_action_anchor(
+  node : @rdom.Element,
+  left : Double,
+  width : Double,
+) -> Unit {
   @base_browser.set_style_property(node, "--diff-hunk-hover-left", "\{left}px")
-  @base_browser.set_style_property(
-    node,
-    "--diff-hunk-width",
-    "\{bounds.get_width()}px",
-  )
+  @base_browser.set_style_property(node, "--diff-hunk-width", "\{width}px")
 }
 
 ///|
@@ -265,7 +282,9 @@ fn DiffEditorWidget::hunk_viewport_bounds(
 
 ///|
 fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
+  guard !self.hunk_actions.is_empty() else { return }
   let height = self.root.get_client_height()
+  let visible : Array[@rdom.Element] = []
   for (index, node) in self.hunk_actions {
     match self.get_hunk_viewport_bounds(index) {
       Some((top, bottom)) if bottom > 0.0 && top < height => {
@@ -276,10 +295,18 @@ fn DiffEditorWidget::layout_hunk_actions(self : DiffEditorWidget) -> Unit {
           "\{bottom - top.max(0.0)}px",
         )
         @base_browser.set_style_property(node, "top", "\{top.max(0.0)}px")
-        self.layout_hunk_action_anchor(node)
+        visible.push(node)
       }
       _ => node.set_attribute("hidden", "")
     }
+  }
+  // Finish all geometry writes before reading any action bounds. Reading a
+  // rect between each hunk's top/height writes forces a layout per hunk.
+  let anchors = visible.map(node => {
+    (node, self.measure_hunk_action_anchor(node))
+  })
+  for (node, (left, width)) in anchors {
+    apply_hunk_action_anchor(node, left, width)
   }
   self.update_hunk_action_hover()
 }

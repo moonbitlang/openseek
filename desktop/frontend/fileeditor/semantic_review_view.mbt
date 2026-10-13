@@ -465,7 +465,8 @@ priv struct SemanticReviewEditorHost {
   live_modified : SemanticReviewLiveDocument?
   host : @dom.Element
   editor : @viewer.DiffEditor
-  hunk_actions_input : Ref[ReviewHunkActionsInput?]
+  actions : Ref[ReviewHunkActionBinding?]
+  mut layout : ReviewDiffLayout
   provider : @moon_diff_provider.MoonFragmentDiffProvider?
   diff_subscription : @common.Disposable
   active_hunk_subscription : @common.Disposable
@@ -1258,7 +1259,8 @@ fn create_semantic_review_editor(
     live_modified: input.live_modified,
     host,
     editor,
-    hunk_actions_input: Ref(None),
+    actions: Ref(None),
+    layout,
     provider,
     diff_subscription,
     active_hunk_subscription,
@@ -1291,6 +1293,7 @@ fn layout_semantic_review_editors() -> Unit {
 ///|
 fn update_semantic_review_editor_layout(layout : ReviewDiffLayout) -> Unit {
   for _, entry in semantic_review_editors {
+    entry.layout = layout
     entry.editor.update_options(semantic_diff_options(layout))
     entry.editor.layout()
   }
@@ -1305,6 +1308,7 @@ fn refresh_semantic_review_editor_options() -> Unit {
       @viewer.SideBySide => ReviewSideBySide
       @viewer.Inline => ReviewInline
     }
+    entry.layout = layout
     entry.editor.update_options(semantic_diff_options(layout))
     entry.editor.layout()
   }
@@ -1314,6 +1318,7 @@ fn refresh_semantic_review_editor_options() -> Unit {
 
 ///|
 fn clear_semantic_review_editors() -> Unit {
+  semantic_review_projection.val = None
   semantic_review_navigation_generation.val += 1
   let keys = semantic_review_editors.to_array().map(pair => pair.0)
   for key in keys {
@@ -1524,115 +1529,175 @@ fn sync_semantic_review_editors(
   state : State,
   ctx : Ctx,
 ) -> @cmd.Cmd {
-  @cmd.custom_cmd(
-    scheduler => {
-      // Model installation and layout can publish synchronously. Reconnect
-      // only after the whole section collection belongs to the current input.
-      review_hunk_bridge_target.val = None
-      guard state.semantic_review_input is Some(input) else {
-        clear_semantic_review_editors()
-        sync_review_hunk_bridge_target(state, ctx, msg => {
-          scheduler.add(dispatch(msg))
-        })
-        sync_review_hunk_actions(state)
-        return
+  @cmd.custom_cmd(scheduler => {
+    let scheduled = pending_semantic_review_sync.val is Some(_)
+    pending_semantic_review_sync.val = Some((dispatch, state, ctx))
+    if !scheduled {
+      scheduler.add(
+        @cmd.custom_cmd(
+          scheduler => {
+            guard pending_semantic_review_sync.val
+              is Some((dispatch, state, ctx)) else {
+              return
+            }
+            pending_semantic_review_sync.val = None
+            reconcile_semantic_review_editors(scheduler, dispatch, state, ctx)
+          },
+          kind=@cmd.after_render,
+        ),
+      )
+    }
+  })
+}
+
+///|
+// After-render commands from a batch of messages must apply the latest model
+// once, not replay stale snapshots against the same committed DOM.
+let pending_semantic_review_sync : Ref[(@cmd.Emit[Msg], State, Ctx)?] = Ref(
+  None,
+)
+
+///|
+priv struct SemanticReviewProjection {
+  input : SemanticReviewInput
+  plan : @moon_diff_provider.SectionedSemanticReviewPlan?
+  collapsed : Array[String]
+  layout : ReviewDiffLayout
+} derive(Eq)
+
+///|
+let semantic_review_projection : Ref[(SemanticReviewProjection, @dom.Element)?] = Ref(
+  None,
+)
+
+///|
+fn reconcile_semantic_review_editors(
+  scheduler : &@cmd.Scheduler,
+  dispatch : @cmd.Emit[Msg],
+  state : State,
+  ctx : Ctx,
+) -> Unit {
+  // Model installation and layout can publish synchronously. Reconnect
+  // only after the whole section collection belongs to the current input.
+  review_hunk_bridge_target.val = None
+  guard state.semantic_review_input is Some(input) else {
+    clear_semantic_review_editors()
+    sync_review_hunk_bridge_target(state, ctx, msg => {
+      scheduler.add(dispatch(msg))
+    })
+    sync_review_hunk_actions(state)
+    return
+  }
+  let projection : SemanticReviewProjection = {
+    input,
+    plan: state.semantic_review_plan,
+    collapsed: state.semantic_review_collapsed,
+    layout: state.review_diff_layout,
+  }
+  let host = @dom.document().get_element_by_id(SemanticReviewHostId).to_option()
+  let needs_reconcile = !(semantic_review_projection.val
+    is Some((previous, previous_host)) &&
+    previous == projection &&
+    host is Some(host) &&
+    previous_host.is_same_node(host.as_node()))
+  let desired = semantic_sections(state.semantic_review_plan)
+  let desired_keys = desired.map(section => section.key)
+  let visible_keys = desired_keys.filter(key => {
+    !state.semantic_review_collapsed.contains(key)
+  })
+  if needs_reconcile {
+    semantic_review_order.clear()
+    semantic_review_order.append(desired_keys)
+    if semantic_review_active_key.val is Some(key) &&
+      !visible_keys.contains(key) {
+      semantic_review_active_key.val = None
+    }
+    if semantic_review_active_key.val is None && !visible_keys.is_empty() {
+      semantic_review_active_key.val = Some(visible_keys[0])
+    }
+    let stale = semantic_review_editors
+      .to_array()
+      .map(pair => pair.0)
+      .filter(key => !desired_keys.contains(key))
+    for key in stale {
+      if semantic_review_editors.get(key) is Some(entry) {
+        dispose_semantic_review_editor(entry)
+        semantic_review_editors.remove(key)
       }
-      let desired = semantic_sections(state.semantic_review_plan)
-      let desired_keys = desired.map(section => section.key)
-      let visible_keys = desired_keys.filter(key => {
-        !state.semantic_review_collapsed.contains(key)
-      })
-      semantic_review_order.clear()
-      semantic_review_order.append(desired_keys)
-      if semantic_review_active_key.val is Some(key) &&
-        !visible_keys.contains(key) {
-        semantic_review_active_key.val = None
-      }
-      if semantic_review_active_key.val is None && !visible_keys.is_empty() {
-        semantic_review_active_key.val = Some(visible_keys[0])
-      }
-      let stale = semantic_review_editors
-        .to_array()
-        .map(pair => pair.0)
-        .filter(key => !desired_keys.contains(key))
-      for key in stale {
-        if semantic_review_editors.get(key) is Some(entry) {
-          dispose_semantic_review_editor(entry)
-          semantic_review_editors.remove(key)
-        }
-      }
-      for section in desired {
-        let key = section.key
-        guard @dom.document()
-          .get_element_by_id(semantic_editor_host_id(key))
-          .to_option()
-          is Some(host) else {
-          if semantic_review_editors.get(key) is Some(previous) {
-            dispose_semantic_review_editor(previous)
-            semantic_review_editors.remove(key)
-          }
-          continue
-        }
-        let reusable = semantic_review_editors
-          .get(key)
-          .map(previous => {
-            previous.section == section &&
-            previous.old_name == input.old_name &&
-            previous.new_name == input.new_name &&
-            previous.feedback_file == input.feedback_file &&
-            previous.live_modified == input.live_modified &&
-            previous.host.is_same_node(host.as_node())
-          })
-          .unwrap_or(false)
-        if reusable {
-          let entry = semantic_review_editors[key]
-          entry.editor.update_options(
-            semantic_diff_options(state.review_diff_layout),
-          )
-          entry.editor.layout()
-          continue
-        }
+    }
+    for section in desired {
+      let key = section.key
+      guard @dom.document()
+        .get_element_by_id(semantic_editor_host_id(key))
+        .to_option()
+        is Some(host) else {
         if semantic_review_editors.get(key) is Some(previous) {
           dispose_semantic_review_editor(previous)
           semantic_review_editors.remove(key)
         }
-        if create_semantic_review_editor(
-            input,
-            section,
-            state.review_diff_layout,
-            host,
+        continue
+      }
+      let reusable = semantic_review_editors
+        .get(key)
+        .map(previous => {
+          previous.section == section &&
+          previous.old_name == input.old_name &&
+          previous.new_name == input.new_name &&
+          previous.feedback_file == input.feedback_file &&
+          previous.live_modified == input.live_modified &&
+          previous.host.is_same_node(host.as_node())
+        })
+        .unwrap_or(false)
+      if reusable {
+        let entry = semantic_review_editors[key]
+        if entry.layout != state.review_diff_layout {
+          entry.layout = state.review_diff_layout
+          entry.editor.update_options(
+            semantic_diff_options(state.review_diff_layout),
           )
-          is Some(entry) {
-          semantic_review_editors[key] = entry
         }
+        continue
       }
-      sync_review_hunk_bridge_target(state, ctx, msg => {
-        scheduler.add(dispatch(msg))
-      })
-      if semantic_review_active_key.val is Some(key) &&
-        semantic_review_editors.get(key) is Some(entry) {
-        publish_semantic_review_active_hunk(
+      if semantic_review_editors.get(key) is Some(previous) {
+        dispose_semantic_review_editor(previous)
+        semantic_review_editors.remove(key)
+      }
+      if create_semantic_review_editor(
           input,
-          key,
-          entry.editor,
-          entry.section,
-          entry.editor.get_active_hunk_index(),
+          section,
+          state.review_diff_layout,
+          host,
         )
-      } else if visible_keys.is_empty() {
-        publish_review_active_hunk(
-          ReviewSemanticSurface,
-          None,
-          None,
-          None,
-          ready=true,
-        )
+        is Some(entry) {
+        semantic_review_editors[key] = entry
       }
-      sync_review_hunk_actions(state)
-      update_semantic_review_scroll_width()
-      schedule_semantic_review_scroll_width_update()
-    },
-    kind=@cmd.after_render,
-  )
+    }
+    semantic_review_projection.val = host.map(host => (projection, host))
+  }
+  sync_review_hunk_bridge_target(state, ctx, msg => scheduler.add(dispatch(msg)))
+  if semantic_review_active_key.val is Some(key) &&
+    semantic_review_editors.get(key) is Some(entry) {
+    publish_semantic_review_active_hunk(
+      input,
+      key,
+      entry.editor,
+      entry.section,
+      entry.editor.get_active_hunk_index(),
+    )
+  } else if visible_keys.is_empty() {
+    publish_review_active_hunk(
+      ReviewSemanticSurface,
+      None,
+      None,
+      None,
+      ready=true,
+    )
+  }
+  sync_review_hunk_actions(state)
+  if needs_reconcile {
+    update_semantic_review_scroll_width()
+    schedule_semantic_review_scroll_width_update()
+  }
 }
 
 ///|

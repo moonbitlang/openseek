@@ -226,16 +226,8 @@ fn append_review_context_action(
   state : State,
   target : ReviewHunkBridgeTarget,
   selection : @mention_context.ReviewChanges,
-) -> Unit {
-  let coverage = selection.coverage(state.review_context)
-  actions.set_attribute(
-    "data-context",
-    match coverage {
-      @mention_context.NotIncluded => "none"
-      @mention_context.PartlyIncluded => "partial"
-      @mention_context.Included => "full"
-    },
-  )
+) -> (State) -> Unit {
+  let coverage = Ref(selection.coverage(state.review_context))
   let send = fn(adding : Bool) {
     guard review_hunk_bridge_target.val is Some(current) &&
       current.owner == target.owner &&
@@ -254,108 +246,158 @@ fn append_review_context_action(
   button.set_attribute("type", "button")
   button.set_attribute("class", "review-hunk-context-button")
   button.set_attribute("data-hunk-action", "context")
-  let label = match coverage {
-    @mention_context.NotIncluded => ui(viewer_locale(), AddToContext)
-    @mention_context.PartlyIncluded => ui(viewer_locale(), PartlyInContext)
-    @mention_context.Included => ui(viewer_locale(), InContext)
-  }
-  button.set_attribute("aria-label", label)
-  button.set_attribute(
-    "aria-pressed",
-    match coverage {
-      @mention_context.NotIncluded => "false"
-      @mention_context.PartlyIncluded => "mixed"
-      @mention_context.Included => "true"
-    },
-  )
-  button.set_attribute(
-    "title",
-    if coverage is @mention_context.Included {
-      ui(viewer_locale(), RemoveHunkContext)
-    } else {
-      label
-    },
-  )
   // Constant icon markup; selected source is only ever inserted as text.
   button.set_inner_html(
     "<svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" aria-hidden=\"true\"><path d=\"M21 11 12 20a6 6 0 0 1-8-8L14 2a4 4 0 0 1 6 6L9 19a2 2 0 0 1-3-3L16 6\"/></svg>",
   )
   let label_element = @dom.document().create_element("span")
   label_element.set_attribute("class", "review-hunk-context-label")
-  label_element.append_child(@dom.document().create_text_node(label).as_node())
+  let label_text = @dom.document().create_text_node("")
+  label_element.append_child(label_text.as_node())
   button.append_child(label_element.as_node())
   control.append_child(button.as_node())
-  if coverage is @mention_context.PartlyIncluded {
-    button.set_attribute("aria-haspopup", "menu")
-    button.set_attribute("aria-expanded", "false")
-    let menu = @dom.document().create_element("div")
-    menu.set_attribute("class", "review-hunk-context-menu")
-    menu.set_attribute("role", "menu")
-    menu.set_attribute("hidden", "")
-    button.add_event_listener("click", event => {
-      event.stop_propagation()
-      if menu.has_attribute("hidden") {
-        menu.remove_attribute("hidden")
-        button.set_attribute("aria-expanded", "true")
-      } else {
-        menu.set_attribute("hidden", "")
-        button.set_attribute("aria-expanded", "false")
-      }
-    })
-    control.add_event_listener("keydown", event => {
-      guard event.to_keyboard_event() is Some(key) else { return }
-      if key.key() == "Escape" {
-        event.prevent_default()
-        event.stop_propagation()
-        menu.set_attribute("hidden", "")
-        button.set_attribute("aria-expanded", "false")
-        @base_browser.focus_prevent_scroll(button)
-      } else if key.key() == "ArrowDown" || key.key() == "ArrowUp" {
-        event.prevent_default()
-        event.stop_propagation()
-        menu.remove_attribute("hidden")
-        button.set_attribute("aria-expanded", "true")
-        let items = [ for item in menu.query_selector_all("button") => item ]
-        guard !items.is_empty() else { return }
-        let current = items.search_by(item => {
-          @base_browser.element_contains_active_element(item)
-        })
-        let next = match current {
-          Some(index) =>
-            (
-              index +
-              (if key.key() == "ArrowDown" { 1 } else { items.length() - 1 })
-            ) %
-            items.length()
-          None => if key.key() == "ArrowDown" { 0 } else { items.length() - 1 }
-        }
-        @base_browser.focus_prevent_scroll(items[next])
-      }
-    })
-    for
-      (label, adding) in [
-        (ui(viewer_locale(), AddRemainingChanges), true),
-        (ui(viewer_locale(), RemoveIncludedChanges), false),
-      ] {
-      let item = @dom.document().create_element("button")
-      item.set_attribute("type", "button")
-      item.set_attribute("role", "menuitem")
-      item.append_child(@dom.document().create_text_node(label).as_node())
-      item.add_event_listener("click", event => {
-        event.stop_propagation()
-        @base_browser.focus_prevent_scroll(button)
-        send(adding)
-      })
-      menu.append_child(item.as_node())
+  let items : Array[@dom.Element] = []
+  let menu = @dom.document().create_element("div")
+  menu.set_attribute("class", "review-hunk-context-menu")
+  menu.set_attribute("role", "menu")
+  menu.set_attribute("hidden", "")
+  button.add_event_listener("click", event => {
+    event.stop_propagation()
+    if coverage.val != @mention_context.PartlyIncluded {
+      send(coverage.val is @mention_context.NotIncluded)
+    } else if menu.has_attribute("hidden") {
+      menu.remove_attribute("hidden")
+      button.set_attribute("aria-expanded", "true")
+    } else {
+      menu.set_attribute("hidden", "")
+      button.set_attribute("aria-expanded", "false")
     }
-    control.append_child(menu.as_node())
-  } else {
-    button.add_event_listener("click", event => {
+  })
+  control.add_event_listener("keydown", event => {
+    guard coverage.val == @mention_context.PartlyIncluded &&
+      event.to_keyboard_event() is Some(key) else {
+      return
+    }
+    if key.key() == "Escape" {
+      event.prevent_default()
       event.stop_propagation()
-      send(coverage is @mention_context.NotIncluded)
+      menu.set_attribute("hidden", "")
+      button.set_attribute("aria-expanded", "false")
+      @base_browser.focus_prevent_scroll(button)
+    } else if key.key() == "ArrowDown" || key.key() == "ArrowUp" {
+      event.prevent_default()
+      event.stop_propagation()
+      menu.remove_attribute("hidden")
+      button.set_attribute("aria-expanded", "true")
+      let items = [ for item in menu.query_selector_all("button") => item ]
+      guard !items.is_empty() else { return }
+      let current = items.search_by(item => {
+        @base_browser.element_contains_active_element(item)
+      })
+      let next = match current {
+        Some(index) =>
+          (
+            index +
+            (if key.key() == "ArrowDown" { 1 } else { items.length() - 1 })
+          ) %
+          items.length()
+        None => if key.key() == "ArrowDown" { 0 } else { items.length() - 1 }
+      }
+      @base_browser.focus_prevent_scroll(items[next])
+    }
+  })
+  for
+    (label, adding) in [
+      (ui(viewer_locale(), AddRemainingChanges), true),
+      (ui(viewer_locale(), RemoveIncludedChanges), false),
+    ] {
+    let item = @dom.document().create_element("button")
+    item.set_attribute("type", "button")
+    item.set_attribute("role", "menuitem")
+    item.append_child(@dom.document().create_text_node(label).as_node())
+    item.add_event_listener("click", event => {
+      event.stop_propagation()
+      @base_browser.focus_prevent_scroll(button)
+      send(adding)
     })
+    menu.append_child(item.as_node())
+    items.push(item)
   }
+  control.append_child(menu.as_node())
   actions.append_child(control.as_node())
+  let previous : Ref[(@mention_context.ContextCoverage, @i18n.Locale)?] = Ref(
+    None,
+  )
+  let refresh = fn(state : State) {
+    let next = selection.coverage(state.review_context)
+    let locale = viewer_locale()
+    if previous.val == Some((next, locale)) {
+      return
+    }
+    previous.val = Some((next, locale))
+    coverage.val = next
+    actions.set_attribute(
+      "data-context",
+      match next {
+        @mention_context.NotIncluded => "none"
+        @mention_context.PartlyIncluded => "partial"
+        @mention_context.Included => "full"
+      },
+    )
+    let label = match next {
+      @mention_context.NotIncluded => ui(viewer_locale(), AddToContext)
+      @mention_context.PartlyIncluded => ui(viewer_locale(), PartlyInContext)
+      @mention_context.Included => ui(viewer_locale(), InContext)
+    }
+    button.set_attribute("aria-label", label)
+    button.set_attribute(
+      "aria-pressed",
+      match next {
+        @mention_context.NotIncluded => "false"
+        @mention_context.PartlyIncluded => "mixed"
+        @mention_context.Included => "true"
+      },
+    )
+    button.set_attribute(
+      "title",
+      if next is @mention_context.Included {
+        ui(viewer_locale(), RemoveHunkContext)
+      } else {
+        label
+      },
+    )
+
+    label_text.set_node_value(@js.Nullable::from_option(Some(label)))
+    if next is @mention_context.PartlyIncluded {
+      button.set_attribute("aria-haspopup", "menu")
+      button.set_attribute(
+        "aria-expanded",
+        if menu.has_attribute("hidden") {
+          "false"
+        } else {
+          "true"
+        },
+      )
+    } else {
+      menu.set_attribute("hidden", "")
+      button.remove_attribute("aria-haspopup")
+      button.remove_attribute("aria-expanded")
+    }
+    for
+      index, label in [
+        ui(locale, AddRemainingChanges),
+        ui(locale, RemoveIncludedChanges),
+      ] {
+      // Labels are trusted localization strings; keep the menu buttons and
+      // their listeners stable when language or coverage changes.
+      if items.get(index) is Some(item) {
+        item.set_inner_html("")
+        item.append_child(@dom.document().create_text_node(label).as_node())
+      }
+    }
+  }
+  refresh(state)
+  refresh
 }
 
 ///|

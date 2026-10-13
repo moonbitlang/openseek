@@ -27,23 +27,6 @@ priv struct ReviewHunkBridgeTarget {
 let review_hunk_bridge_target : Ref[ReviewHunkBridgeTarget?] = Ref(None)
 
 ///|
-/// Only these host inputs affect the installed actions. Reinstalling the
-/// renderer destroys its DOM, including an open menu and keyboard focus, so
-/// ordinary Git polls and unrelated app updates must retain the current one.
-/// DiffEditor still renders it when its own hunks change.
-priv struct ReviewHunkActionsInput {
-  owner : @interop.ConversationKey
-  change : ChangedFile
-  review_generation : Int32
-  surface_generation : Int32
-  source : @mention_context.ReviewSource?
-  progress : ReviewFileProgress?
-  has_file_changes : Bool
-  context : Array[@mention_context.ReviewChanges]
-  locale : @i18n.Locale
-} derive(Eq)
-
-///|
 fn current_review_hunk_bridge_target(
   state : State,
   ctx : Ctx,
@@ -250,25 +233,25 @@ fn sync_review_hunk_actions(state : State) -> Unit {
   if mounted_diff_editor() is Some(editor) {
     if target is Some(target) && target.surface is ReviewLineSurface {
       install_review_hunk_actions(
+        viewer_state.review_hunk_actions,
         state,
         target,
         editor,
         None,
-        viewer_state.review_hunk_actions_input,
       )
-    } else if viewer_state.review_hunk_actions_input.val is Some(_) {
-      viewer_state.review_hunk_actions_input.val = None
+    } else if viewer_state.review_hunk_actions.val is Some(_) {
+      viewer_state.review_hunk_actions.val = None
       editor.set_hunk_action_renderer(None)
     }
   }
   if target is Some(target) && target.surface is ReviewSemanticSurface {
     for key, entry in semantic_review_editors {
       install_review_hunk_actions(
+        entry.actions,
         state,
         target,
         entry.editor,
         Some((key, entry.section)),
-        entry.hunk_actions_input,
       )
     }
   }
@@ -276,30 +259,35 @@ fn sync_review_hunk_actions(state : State) -> Unit {
 
 ///|
 fn install_review_hunk_actions(
+  slot : Ref[ReviewHunkActionBinding?],
   state : State,
   target : ReviewHunkBridgeTarget,
   editor : @viewer.DiffEditor,
   section : (String, @moon_diff_provider.SemanticReviewSection)?,
-  installed : Ref[ReviewHunkActionsInput?],
 ) -> Unit {
-  let input : ReviewHunkActionsInput = {
-    owner: target.owner,
-    change: target.change,
-    review_generation: target.review_generation,
-    surface_generation: target.surface_generation,
-    source: state.review_source(target.change),
-    progress: state.review_file_progress(target.change),
-    has_file_changes: mounted_diff_editor().bind(projected_review_file_changes)
-    is Some(_),
-    context: state.review_context,
-    locale: viewer_locale(),
-  }
-  if installed.val == Some(input) {
+  if slot.val is Some(binding) &&
+    binding.target.owner == target.owner &&
+    binding.target.change == target.change &&
+    binding.target.review_generation == target.review_generation &&
+    binding.target.surface_generation == target.surface_generation &&
+    binding.target.surface == target.surface {
+    binding.state = state
+    // Detached controls belong to a previous diff render. Retain only the
+    // nodes the widget currently owns; callbacks always see the latest state.
+    for index, action in binding.controls.copy() {
+      if @base_browser.element_is_connected(action.node) {
+        (action.refresh)(state)
+      } else {
+        binding.controls.remove(index)
+      }
+    }
     return
   }
-  installed.val = Some(input)
+  let binding : ReviewHunkActionBinding = { state, target, controls: Map([]), }
+  slot.val = Some(binding)
   editor.set_hunk_action_renderer(
     Some(index => {
+      let state = binding.state
       guard editor.is_diff_up_to_date() else { return None }
       let (old_offset, new_offset) = match section {
         None => (Some(0), Some(0))
@@ -318,67 +306,8 @@ fn install_review_hunk_actions(
         is Some(hunk) else {
         return None
       }
-      let status = state.review_hunk_state(target.change, hunk)
-      let viewed = status is ReviewHunkViewed
       let button = @dom.document().create_element("button")
       button.set_attribute("type", "button")
-      if state.is_change_reviewed(target.change) && !input.has_file_changes {
-        button.set_attribute("disabled", "")
-      }
-      button.set_attribute("class", "review-hunk-marker")
-      button.set_attribute(
-        "aria-label",
-        if viewed {
-          match viewer_locale() {
-            SimplifiedChinese =>
-              "取消第 \{index + 1} 个差异块的已查看标记"
-            TraditionalChinese =>
-              "取消第 \{index + 1} 個差異塊的已檢視標記"
-            Japanese =>
-              "差分ブロック \{index + 1} の確認済みマークを解除"
-            English => "Unmark hunk \{index + 1} viewed"
-            Spanish => "Desmarcar bloque \{index + 1} como visto"
-          }
-        } else {
-          match viewer_locale() {
-            SimplifiedChinese =>
-              "将第 \{index + 1} 个差异块标为已查看"
-            TraditionalChinese =>
-              "將第 \{index + 1} 個差異塊標為已檢視"
-            Japanese =>
-              "差分ブロック \{index + 1} を確認済みにする"
-            English => "Mark hunk \{index + 1} viewed"
-            Spanish => "Marcar bloque \{index + 1} como visto"
-          }
-        },
-      )
-      button.set_attribute(
-        "aria-pressed",
-        match status {
-          ReviewHunkViewed => "true"
-          ReviewHunkPartial => "mixed"
-          ReviewHunkUnviewed => "false"
-        },
-      )
-      button.set_attribute(
-        "title",
-        if viewed {
-          ui(viewer_locale(), MarkHunkUnviewed)
-        } else {
-          ui(viewer_locale(), MarkHunkViewed)
-        },
-      )
-      button.append_child(
-        @dom.document()
-        .create_text_node(
-          match status {
-            ReviewHunkViewed => "✓"
-            ReviewHunkPartial => "−"
-            ReviewHunkUnviewed => ""
-          },
-        )
-        .as_node(),
-      )
       // Restoring a button's focus after a state refresh must not let the
       // section's editor-focus bridge replace the outer scroll selection.
       button.add_event_listener("focusin", event => event.stop_propagation())
@@ -421,9 +350,29 @@ fn install_review_hunk_actions(
       actions.set_attribute("tabindex", "-1")
       actions.add_event_listener("focusin", event => event.stop_propagation())
       actions.append_child(button.as_node())
-      if state.review_context_selection(target.change, hunk) is Some(selection) {
-        append_review_context_action(actions, state, target, selection)
+      let refresh_context = state
+        .review_context_selection(target.change, hunk)
+        .map(selection => {
+          append_review_context_action(actions, state, target, selection)
+        })
+      let previous : Ref[(ReviewHunkState, Bool, @i18n.Locale)?] = Ref(None)
+      let refresh = fn(state : State) {
+        let presentation = (
+          state.review_hunk_state(target.change, hunk),
+          state.is_change_reviewed(target.change) &&
+          mounted_diff_editor().bind(projected_review_file_changes) is None,
+          viewer_locale(),
+        )
+        if previous.val != Some(presentation) {
+          previous.val = Some(presentation)
+          update_review_hunk_marker(button, state, target, hunk, index)
+        }
+        if refresh_context is Some(refresh) {
+          refresh(state)
+        }
       }
+      refresh(state)
+      binding.controls[index] = { node: actions, refresh, }
       Some(actions)
     }),
   )
@@ -474,4 +423,82 @@ fn track_semantic_review_scroll(host : @dom.Element) -> Unit {
       )
     }
   }
+}
+
+///|
+priv struct ReviewHunkActionBinding {
+  mut state : State
+  target : ReviewHunkBridgeTarget
+  controls : Map[Int32, ReviewHunkActionControl]
+}
+
+///|
+priv struct ReviewHunkActionControl {
+  node : @dom.Element
+  refresh : (State) -> Unit
+}
+
+///|
+fn update_review_hunk_marker(
+  button : @dom.Element,
+  state : State,
+  target : ReviewHunkBridgeTarget,
+  hunk : ReviewHunk,
+  index : Int32,
+) -> Unit {
+  let status = state.review_hunk_state(target.change, hunk)
+  let viewed = status is ReviewHunkViewed
+  if state.is_change_reviewed(target.change) &&
+    mounted_diff_editor().bind(projected_review_file_changes) is None {
+    button.set_attribute("disabled", "")
+  } else {
+    button.remove_attribute("disabled")
+  }
+  button.set_attribute("class", "review-hunk-marker")
+  button.set_attribute(
+    "aria-label",
+    if viewed {
+      match viewer_locale() {
+        SimplifiedChinese =>
+          "取消第 \{index + 1} 个差异块的已查看标记"
+        TraditionalChinese =>
+          "取消第 \{index + 1} 個差異塊的已檢視標記"
+        Japanese =>
+          "差分ブロック \{index + 1} の確認済みマークを解除"
+        English => "Unmark hunk \{index + 1} viewed"
+        Spanish => "Desmarcar bloque \{index + 1} como visto"
+      }
+    } else {
+      match viewer_locale() {
+        SimplifiedChinese => "将第 \{index + 1} 个差异块标为已查看"
+        TraditionalChinese => "將第 \{index + 1} 個差異塊標為已檢視"
+        Japanese => "差分ブロック \{index + 1} を確認済みにする"
+        English => "Mark hunk \{index + 1} viewed"
+        Spanish => "Marcar bloque \{index + 1} como visto"
+      }
+    },
+  )
+  button.set_attribute(
+    "aria-pressed",
+    match status {
+      ReviewHunkViewed => "true"
+      ReviewHunkPartial => "mixed"
+      ReviewHunkUnviewed => "false"
+    },
+  )
+  button.set_attribute(
+    "title",
+    if viewed {
+      ui(viewer_locale(), MarkHunkUnviewed)
+    } else {
+      ui(viewer_locale(), MarkHunkViewed)
+    },
+  )
+  button.set_inner_html(
+    match status {
+      ReviewHunkViewed => "✓"
+      ReviewHunkPartial => "−"
+      ReviewHunkUnviewed => ""
+    },
+  )
 }

@@ -83,7 +83,7 @@ priv struct ViewerHost {
   // the source model, selection, folding, and scroll state. DiffEditor owns
   // two code kernels directly rather than wrapping public Viewers.
   mut diff_editor : @viewer.DiffEditor?
-  review_hunk_actions_input : Ref[ReviewHunkActionsInput?]
+  review_hunk_actions : Ref[ReviewHunkActionBinding?]
   // Exact host inputs for the installed review pair. Models normalize CRLF,
   // so model text cannot identify the original input across async updates.
   mut review_diff_inputs : (String, String)?
@@ -160,7 +160,7 @@ let viewer_state : ViewerHost = {
   viewer: None,
   _viewer_resize_observer: None,
   diff_editor: None,
-  review_hunk_actions_input: Ref(None),
+  review_hunk_actions: Ref(None),
   review_diff_inputs: None,
   markdown_viewer: None,
   mbti_resource: None,
