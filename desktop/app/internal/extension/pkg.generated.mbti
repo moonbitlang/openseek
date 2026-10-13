@@ -5,10 +5,13 @@ import {
   "moonbit-community/proton",
   "openseek_desktop/app/internal/cdp",
   "openseek_desktop/backend/api",
+  "openseek_desktop/backend/mcp",
   "openseek_desktop/protocol",
 }
 
 // Values
+pub fn browser_tools(BrowserViews) -> Array[@mcp.Tool]
+
 pub fn browser_view_id(String) -> Int?
 
 pub fn localized_menu(String) -> @proton.MenuBar

@@ -98,6 +98,17 @@ async fn main {
   } else {
     None
   }
+  // The dock's browser tabs: native web contents views, owned by the
+  // window and commanded over bridge-local `browser.*` ops.
+  let views = @extension.BrowserViews()
+  // The server through which the agents this host runs reach its tools — the
+  // browser tabs above, to begin with. It binds now so every engine can be
+  // granted its address from the first spawn; the backend serves it with its
+  // other services.
+  let host_mcp = @mcp.Server(
+    @extension.browser_tools(views),
+    version=app_version,
+  )
   let state = @api.ApiState(
     engine~,
     codex~,
@@ -107,11 +118,9 @@ async fn main {
     app_version~,
     console_url?=console.map(console => console.entry_url()),
     resources~,
+    host_mcp~,
   )
   let bridge = @extension.DesktopBridgeActor(state)
-  // The dock's browser tabs: native web contents views, owned by the
-  // window and commanded over bridge-local `browser.*` ops.
-  let views = @extension.BrowserViews()
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
   })
