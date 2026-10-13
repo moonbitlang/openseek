@@ -890,39 +890,42 @@ test "a Codex project add preserves its draft in either reply order" {
       assert_true(unchanged.codex == confirmed.codex)
       assert_true(repeated.codex == confirmed.codex)
       assert_true(unchanged.codex_project_adoption_pending())
-      let paths = if detach_previous {
-        [picked]
-      } else {
-        [channel.test_project(), picked]
-      }
-      let reply = ProjectAddCommitted(added=picked.path, paths~)
-      let broadcast = ProjectsChanged(paths, chat_root=None)
-      let (_, first) = update_dev(
-        dispatch,
-        if broadcast_first {
-          broadcast
+      for screen in [Screen::Codex, Settings, Skills, Schedules] {
+        let confirmed = { ..confirmed, screen, }
+        let paths = if detach_previous {
+          [picked]
         } else {
-          reply
-        },
-        confirmed,
-      )
-      let (_, focused) = update_dev(
-        dispatch,
-        if broadcast_first {
-          reply
-        } else {
-          broadcast
-        },
-        first,
-      )
-      if detach_previous {
-        assert_true(focused.conversation_selection() is None)
+          [channel.test_project(), picked]
+        }
+        let reply = ProjectAddCommitted(added=picked.path, paths~)
+        let broadcast = ProjectsChanged(paths, chat_root=None)
+        let (_, first) = update_dev(
+          dispatch,
+          if broadcast_first {
+            broadcast
+          } else {
+            reply
+          },
+          confirmed,
+        )
+        let (_, focused) = update_dev(
+          dispatch,
+          if broadcast_first {
+            reply
+          } else {
+            broadcast
+          },
+          first,
+        )
+        if detach_previous {
+          assert_true(focused.conversation_selection() is None)
+        }
+        assert_true(focused.screen == screen)
+        assert_eq(focused.codex.active_id(), Some("codex-add-project"))
+        assert_eq(focused.codex.new_thread_cwd(), picked.path)
+        assert_eq(focused.dev().active_project, Some(picked))
+        assert_true(focused.pending_project_adoption is None)
       }
-      assert_true(focused.screen is Codex)
-      assert_eq(focused.codex.active_id(), Some("codex-add-project"))
-      assert_eq(focused.codex.new_thread_cwd(), picked.path)
-      assert_eq(focused.dev().active_project, Some(picked))
-      assert_true(focused.pending_project_adoption is None)
     }
   }
 }

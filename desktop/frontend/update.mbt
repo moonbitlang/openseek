@@ -430,7 +430,6 @@ fn focus_added_project(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   if channel == model.focused &&
-    model.screen is Codex &&
     codex_draft is Some(id) &&
     model.codex.active_id() == Some(id) &&
     model.codex.composing_draft() &&
@@ -573,7 +572,8 @@ fn adopt_projects(
       commands.push(reveal_active_project())
       return (@cmd.batch(commands), focused)
     }
-    if next.screen is Codex && next.codex.has_active() {
+    if (next.screen is Codex && next.codex.has_active()) ||
+      next.codex_project_adoption_pending() {
       // A broadcast can precede the add reply. Keep its captured draft
       // alive until the reply identifies the project to adopt.
       return (@cmd.batch(commands), next)
@@ -650,6 +650,7 @@ fn adopt_projects(
   if channel == next.focused &&
     next.active_conversation() is None &&
     !(next.screen is Codex && next.codex.has_active()) &&
+    !next.codex_project_adoption_pending() &&
     !paths.is_empty() {
     commands.push(rotate_session(dispatch, channel))
   }
