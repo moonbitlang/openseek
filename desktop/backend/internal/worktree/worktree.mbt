@@ -65,7 +65,6 @@ let worktree_registry_lock : @async.Mutex = Mutex()
 /// `worktree_registry_lock` and before the registry is read.
 async fn lock_worktrees_file(workspace : @pathx.Absolute) -> @fsx.FileLock {
   @fsx.FileLock::acquire(worktrees_file(workspace).to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorktreeError("could not lock the worktree list: \{error}")
   }
 }
@@ -297,7 +296,6 @@ async fn write_worktrees(
     worktrees_file(workspace).to_path(),
     registry.stringify(indent=2),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorktreeError("could not save the worktree list: \{error}")
   }
 }

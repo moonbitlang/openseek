@@ -207,7 +207,6 @@ async fn signing_team(app_path : String) -> SigningTeam {
     ["-dv", app_path],
     inherit_env=true,
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return Unreadable("codesign could not run: \{error}")
   }
   let text = output.text()

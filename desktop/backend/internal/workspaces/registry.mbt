@@ -58,7 +58,6 @@ async fn lock_registry_file() -> @fsx.FileLock {
     raise WorkspaceError("cannot determine a session root: HOME is unavailable")
   }
   @fsx.FileLock::acquire(file.to_path()) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not lock the workspace list: \{error}")
   }
 }
@@ -150,7 +149,6 @@ async fn write_registry(registry : Registry) -> Unit {
     root.join(WorkspacesFile).to_path(),
     json.stringify(indent=2),
   ) catch {
-    error if @async.is_being_cancelled() => raise error
     error => raise WorkspaceError("could not save the workspace list: \{error}")
   }
 }

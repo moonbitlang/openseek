@@ -425,7 +425,6 @@ async fn moonide_navigation_reply(
   payload : MoonIdeNavigationPayload,
 ) -> @protocol.MoonIdeNavigationReply {
   let reply = moonide_navigation_op(state, query, payload) catch {
-    error if @async.is_being_cancelled() => raise error
     error => return NavigationError("\{error}")
   }
   NavigationLocations(reply)
