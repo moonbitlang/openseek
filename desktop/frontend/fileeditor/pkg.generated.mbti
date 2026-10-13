@@ -511,7 +511,6 @@ pub(all) struct State {
   owner : @interop.ConversationKey?
   placement : ReconciledPlacement
   tree_open : Bool
-  animate_tree : Bool
   office_zoom : Int
   office_query : String
   office_prefer_system_fonts : Bool

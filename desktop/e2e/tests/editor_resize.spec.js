@@ -111,7 +111,7 @@ for (const handleSelector of ['.editor-resize-handle', '.tree-resize-handle']) {
   });
 }
 
-test('panel visibility preserves an open file tree without another tree transition', async ({ page }) => {
+test('panel visibility preserves an open file tree without tree transitions', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -122,23 +122,23 @@ test('panel visibility preserves an open file tree without another tree transiti
   await tree.evaluate(element => {
     element.dataset.treeTransitions = '0';
     element.addEventListener('transitionrun', event => {
-      if (event.propertyName === '--tree-open-progress') {
+      if (event.target === element) {
         element.dataset.treeTransitions = String(Number(element.dataset.treeTransitions) + 1);
       }
     });
   });
   await page.getByTitle('Show file tree', { exact: true }).click();
-  await expect.poll(() => tree.getAttribute('data-tree-transitions')).toBe('1');
+  await expect(tree).toBeVisible();
+  await expect(tree).toHaveAttribute('data-tree-transitions', '0');
   await expect.poll(() => tree.evaluate(element => element.getAnimations().length)).toBe(0);
   for (const name of ['Hide panel', 'Show panel']) {
     await page.getByRole('button', { name, exact: true }).click();
     await expect.poll(() => page.locator('.content').evaluate(element => element.getAnimations().length)).toBe(0);
     await expect(page.locator('.editor')).toHaveClass(/tree-open/);
-    await expect(tree).toHaveAttribute('data-tree-transitions', '1');
-    expect(await tree.evaluate(element => Number(getComputedStyle(element).getPropertyValue('--tree-open-progress')))).toBe(1);
+    await expect(tree).toHaveAttribute('data-tree-transitions', '0');
   }
   await page.getByTitle('Hide file tree', { exact: true }).click();
-  await expect.poll(() => tree.getAttribute('data-tree-transitions')).toBe('2');
+  await expect(tree).toHaveAttribute('data-tree-transitions', '0');
   await expect(tree).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });

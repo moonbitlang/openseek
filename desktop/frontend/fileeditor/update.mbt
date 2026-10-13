@@ -432,11 +432,7 @@ pub fn open_document(
       had_active~,
     )
   }
-  let state = {
-    ..state.invalidate_review_hunk_surface(),
-    highlighted: None,
-    animate_tree: false,
-  }
+  let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
   // Files and Search select Content on this document. Retain a known
   // comparison so its Diff control remains an explicit return path.
   // TODO(diff-search): Preserve a file's selected Diff view when opening a
@@ -632,7 +628,6 @@ pub fn open_changed_document(
     change_tree_collapsed: state.change_tree_collapsed.filter(dir => {
       !change.path.0.has_prefix(dir.0 + "/")
     }),
-    animate_tree: false,
   }
   // Selecting a Changes row is activation, not a manual reload. Reuse the
   // exact cached review (including one whose paired reads are still pending)
@@ -1157,11 +1152,7 @@ pub fn activate(
   guard ctx.placement_ready() && state.docs.get(path) is Some(doc) else {
     return (@cmd.none, state)
   }
-  let state = {
-    ..state.invalidate_review_hunk_surface(),
-    highlighted: None,
-    animate_tree: false,
-  }
+  let state = { ..state.invalidate_review_hunk_surface(), highlighted: None, }
   let (show, doc, review_generation) = show_activated_tab(
     dispatch,
     state,
@@ -1215,17 +1206,7 @@ pub fn close_document(
   moon_mod_view_modes.remove(path)
   let package_graphs = state.package_graphs.copy()
   package_graphs.remove(path)
-  let state = {
-    ..state,
-    mbti_view_modes,
-    moon_mod_view_modes,
-    package_graphs,
-    animate_tree: if was_active {
-      false
-    } else {
-      state.animate_tree
-    },
-  }
+  let state = { ..state, mbti_view_modes, moon_mod_view_modes, package_graphs, }
   // Closing a tab is useful local state even while placement is parked, but
   // promoting its neighbor must not address the missing checkout. Recovery's
   // sync pass restores whichever surviving tab the dock made active.
@@ -2692,10 +2673,7 @@ fn update_inner(
       // The docked panel takes its height from the viewer, and the viewer
       // cannot see a CSS change on its own.
       let opening = !state.tree_open
-      (
-        request_viewer_remeasure(),
-        { ..state, tree_open: opening, animate_tree: true, },
-      )
+      (request_viewer_remeasure(), { ..state, tree_open: opening, })
     }
     MbtiViewModeSelected(mode) => {
       guard ctx.active_history_diff is None &&

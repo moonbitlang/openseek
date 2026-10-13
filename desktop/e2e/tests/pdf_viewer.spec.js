@@ -60,7 +60,7 @@ test('opening a PDF defaults to a hidden tree and preserves manual reopening acr
       if (active?.textContent === 'report.pdf') {
         const tree = document.querySelector('.file-tree-pane');
         window.pdfTreeFrames.push({
-          visible: getComputedStyle(tree).visibility !== 'hidden',
+          visible: tree.getClientRects().length > 0 && getComputedStyle(tree).visibility !== 'hidden',
           animations: tree.getAnimations().length,
         });
       }
@@ -126,7 +126,7 @@ test('opening an extensionless PDF from a hidden panel keeps the default tree cl
       if (document.querySelector('.editor-tab.active .tab-name')?.textContent === 'extensionless') {
         const tree = document.querySelector('.file-tree-pane');
         window.extensionlessTreeFrames.push(
-          getComputedStyle(tree).visibility === 'hidden' && tree.getAnimations().length === 0,
+          (tree.getClientRects().length === 0 || getComputedStyle(tree).visibility === 'hidden') && tree.getAnimations().length === 0,
         );
       }
       requestAnimationFrame(record);

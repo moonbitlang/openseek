@@ -258,9 +258,6 @@ pub fn editor_classes(state : State, ctx : Ctx) -> String {
   if tree_visible {
     classes += " tree-open"
   }
-  if state.animate_tree {
-    classes += " tree-animated"
-  }
   if ctx.tree_layout is RightSidebar {
     classes += " tree-right"
   }

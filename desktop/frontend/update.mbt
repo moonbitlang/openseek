@@ -880,7 +880,6 @@ fn open_explorer(
     dock: @dock.open_picker(model.dock),
     right_panel_open: true,
     right_panel_menu_open: false,
-    file_panel: { ..model.file_panel, animate_tree: false, },
   }
   let (cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),

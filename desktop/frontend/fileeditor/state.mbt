@@ -459,9 +459,6 @@ pub(all) struct State {
   // is shown. A panel preference, not per-conversation state, so it
   // survives conversation switches.
   tree_open : Bool
-  // Only direct tree toggles animate; document navigation chooses its layout
-  // immediately, including when the surrounding panel is opening.
-  animate_tree : Bool
   // Office surface preferences are panel-level settings. They apply to both
   // DOCX and XLSX tabs and survive switching conversations, just like the
   // file-tree preference.
@@ -652,7 +649,6 @@ pub fn State::empty() -> State {
     owner: None,
     placement: PlacementUnknown,
     tree_open: false,
-    animate_tree: false,
     office_zoom: 100,
     office_query: "",
     office_prefer_system_fonts: false,
