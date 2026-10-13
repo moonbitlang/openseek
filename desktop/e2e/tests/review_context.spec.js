@@ -468,3 +468,52 @@ last added
   await expect(preview.locator('before, after')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('queued save consumes only the submitted part of a merged review selection', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.hostSettings.followup_behavior = 'queue';
+  const old = ['fn first() -> Int {', '  1', '}', ...Array(24).fill(''), 'fn second() -> Int {', '  2', '}', ''].join('\n');
+  app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = old;
+  app.workingFiles['src/main.mbt'] = old.replace('  1', '  100').replace('  2', '  200');
+  await openReview(page, app);
+  const composer = page.locator('#task');
+  await composer.fill('Start a turn');
+  await page.locator('#send').click();
+  await composer.fill('Queued message');
+  await composer.press('Enter');
+  await page.locator('.queued-input-row').getByTitle('Edit', { exact: true }).click();
+  await expect(composer).toHaveValue('Queued message');
+  await clickHunkContext(page, contextButtons(page).first());
+  const replyFor = app.replyFor.bind(app);
+  let heldRequest;
+  app.replyFor = request => {
+    if (request.method === 'agent.queue' && request.params.action === 'edit') {
+      heldRequest = request;
+      return new Promise(() => {});
+    }
+    return replyFor(request);
+  };
+  await page.getByTitle('Save queued message', { exact: true }).click();
+  await expect.poll(() => heldRequest?.id).toBeDefined();
+  await expect(composer).toBeDisabled();
+  await clickHunkContext(page, contextButtons(page).nth(1));
+  await expect(contextButtons(page).nth(1)).toHaveText('In context');
+  expect(heldRequest.params.text).toContain('\n  100\n');
+  expect(heldRequest.params.text).not.toContain('\n  200\n');
+  app.socket.send(JSON.stringify({ jsonrpc: '2.0', id: heldRequest.id, result: { accepted: true } }));
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue('');
+  await expect(contextButtons(page).first()).toHaveText('Add to context');
+  await expect(contextButtons(page).nth(1)).toHaveText('In context');
+  await page.locator('.composer-changes .changes-chip .mention-jump').click();
+  const preview = page.getByRole('dialog', { name: 'Selected changes' }).locator('.changes-preview');
+  await expect(preview).toContainText('200');
+  await expect(preview).not.toContainText('100');
+  await page.keyboard.press('Escape');
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'add').length).toBe(2);
+  const next = app.requests.filter(r => r.method === 'agent.queue' && r.params.action === 'add')[1];
+  expect(next.params.text).toContain('\n  200\n');
+  expect(next.params.text).not.toContain('\n  100\n');
+  expect(app.pageErrors).toEqual([]);
+});

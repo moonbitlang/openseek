@@ -6810,8 +6810,26 @@ fn update_device_msg(
           // only unchanged mentions from the submitted snapshot; new or
           // updated selections belong to the next draft.
           let mentions = match conv.queue_edit {
-            Some(Saving(mentions=submitted, ..)) =>
-              conv.mentions.filter(mention => !submitted.contains(mention))
+            Some(Saving(mentions=submitted, ..)) => {
+              let mut remaining : @composer.Draft = {
+                task: "",
+                images: [],
+                mentions: conv.mentions.filter(mention => {
+                  !submitted.contains(mention)
+                }),
+              }
+              // Review chips merge selections from the same source. Remove
+              // the submitted lines from that union, preserving later ones.
+              for mention in submitted {
+                if mention.ref_ is ReviewChanges(selection) {
+                  remaining = remaining.with_review_changes(
+                    selection,
+                    adding=false,
+                  )
+                }
+              }
+              remaining.mentions
+            }
             _ => conv.mentions
           }
           let next = {
