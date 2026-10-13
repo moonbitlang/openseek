@@ -829,7 +829,7 @@ fn codex_account_rows(
         [
           @html.button(
             class="button secondary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::logout())),
             @settings.text(model.locale, SignOut),
           ),
@@ -844,7 +844,7 @@ fn codex_account_rows(
         [
           @html.button(
             class="button primary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
             @settings.text(model.locale, SignInChatGPT),
           ),
@@ -872,7 +872,7 @@ fn codex_account_rows(
           ),
           @html.button(
             class="button secondary",
-            disabled=codex.is_busy(),
+            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::cancel_login())),
             @settings.text(model.locale, CancelSignIn),
           ),
@@ -2077,12 +2077,17 @@ fn view(
             },
           ]
       }
-    Codex =>
-      model.codex.page(
+    Codex => {
+      let page = model.codex.page(
         locale=model.locale,
         dispatch.map(msg => Codex(channel=model.focused, msg)),
         codex_actions,
       )
+      if model.new_chat_project() is Err(message) {
+        page.push(@html.div(class="notice error", [@html.text(message)]))
+      }
+      page
+    }
     Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
     Settings => [settings_page(dispatch, model)]

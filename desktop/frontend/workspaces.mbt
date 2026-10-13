@@ -913,6 +913,25 @@ test "a Codex project add preserves its draft in either reply order" {
         }
         for screen in [Screen::Codex, Settings, Skills, Schedules] {
           let confirmed = { ..confirmed, screen, }
+          for
+            action in [
+              @codex.Msg::login(),
+              @codex.Msg::logout(),
+              @codex.Msg::cancel_login(),
+            ] {
+            let (_, blocked) = update(
+              dispatch,
+              Codex(channel~, action),
+              confirmed,
+            )
+            let (_, repeated) = update(
+              dispatch,
+              Codex(channel~, action),
+              confirmed,
+            )
+            assert_true(blocked.codex == confirmed.codex)
+            assert_true(repeated.codex == confirmed.codex)
+          }
           let paths = if detach_previous {
             [picked]
           } else {

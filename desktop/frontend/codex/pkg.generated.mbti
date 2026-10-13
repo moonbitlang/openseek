@@ -49,6 +49,7 @@ pub fn Msg::change_draft_project(String) -> Self
 pub fn Msg::close_git_details() -> Self
 pub fn Msg::composer_action(@composer.Action) -> Self
 pub fn Msg::effort_changed(String) -> Self
+pub fn Msg::is_account_action(Self) -> Bool
 pub fn Msg::login() -> Self
 pub fn Msg::logout() -> Self
 pub fn Msg::model_changed(String) -> Self
@@ -87,6 +88,7 @@ pub fn State::can_start_thread(Self) -> Bool
 pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @composer.Input
 pub fn State::composing_draft(Self) -> Bool
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
+pub fn State::draft_project(Self, @interop.ChannelId) -> Result[@common.Uri?, String]
 pub fn State::draft_text(Self) -> String
 pub fn State::draft_worktree_mode(Self) -> Bool
 pub fn State::equal(Self, Self) -> Bool

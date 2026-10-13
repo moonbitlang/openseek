@@ -508,6 +508,11 @@ pub fn Msg::logout() -> Msg {
 }
 
 ///|
+pub fn Msg::is_account_action(self : Msg) -> Bool {
+  self is (Login | Logout | CancelLogin)
+}
+
+///|
 /// Whether a ChatGPT account is signed in on the app-server.
 pub fn State::signed_in(self : State) -> Bool {
   self.account is CodexSignedIn(..)
@@ -1166,6 +1171,28 @@ pub fn State::new_thread_cwd(self : State) -> String {
         None => thread.cwd.unwrap_or("")
       }
     CodexNoTask => ""
+  }
+}
+
+///|
+/// Typed project boundary for the new-chat shell. The older Codex launch
+/// representation permits a cwd-less draft; malformed paths remain errors.
+pub fn State::draft_project(
+  self : State,
+  channel : @interop.ChannelId,
+) -> Result[@common.Uri?, String] {
+  guard self.active_draft() is Some(draft) else { return Ok(None) }
+  let path = if draft.project_root is Some(root) {
+    root
+  } else if draft.cwd.is_empty() {
+    return Ok(None)
+  } else {
+    draft.cwd
+  }
+  if @resource.of_path(channel, path) is Some(project) {
+    Ok(Some(project))
+  } else {
+    Err("Invalid Codex draft project path: " + path)
   }
 }
 
@@ -3599,4 +3626,29 @@ test "Codex same-id replacement does not inherit draft answers or old card actio
     ],
   })
   assert_true(stale.pending_requests.is_empty())
+}
+
+///|
+test "draft project distinguishes no project from malformed paths" {
+  let channel = @interop.ChannelId::Local
+  assert_eq(State().draft_project(channel), Ok(None))
+  assert_eq(
+    State().select_draft("scratch", "").draft_project(channel),
+    Ok(None),
+  )
+  let valid = State().select_draft("project", "/workspace")
+  assert_true(valid.draft_project(channel) is Ok(Some(_)))
+  assert_true(
+    State().select_draft("invalid", "relative").draft_project(channel) is Err(_),
+  )
+  let confirmed_invalid = {
+    ..valid,
+    selection: CodexDraftTask({
+      id: "project",
+      cwd: "/workspace",
+      project_root: Some(""),
+      thread_start_attempted: false,
+    }),
+  }
+  assert_true(confirmed_invalid.draft_project(channel) is Err(_))
 }

@@ -1,11 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-async function open(page, workspaces = ['/workspace']) {
+async function open(page, workspaces = ['/workspace'], signedIn = false) {
   const app = new DesktopBrowserHarness(page);
   app.workspaces = workspaces;
   app.codexModels = [{ id: 'gpt-test', displayName: 'Codex test', isDefault: true }];
   app.searchFiles = ['src/main.mbt'];
+  if (signedIn) {
+    const reply = app.replyFor.bind(app);
+    app.replyFor = request => request.method === 'codex.account.read'
+      ? { account: { type: 'chatgpt', planType: 'pro' }, requiresOpenaiAuth: true }
+      : reply(request);
+  }
   await app.install();
   await app.goto();
   await expect(page.getByRole('button', { name: 'Rabbita browser fixture', exact: true })).toBeVisible();
@@ -195,7 +201,7 @@ test('the title cannot add or change projects until draft opening settles', asyn
 for (const detachPrevious of [false, true]) {
   for (const managementPage of [null, 'Settings', 'Skills', 'Scheduled']) {
     test(`a pending project add preserves its draft while sending is blocked (detach previous: ${detachPrevious}, page: ${managementPage})`, async ({ page }) => {
-      const app = await open(page, ['/workspace', '/other']);
+      const app = await open(page, ['/workspace', '/other'], true);
       await choose(page, 'Codex test');
       await expect.poll(() => app.requests.some(r => r.method === 'codex.draft.open')).toBe(true);
       await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
@@ -219,6 +225,9 @@ for (const detachPrevious of [false, true]) {
       if (managementPage) {
         await page.getByRole('button', { name: managementPage, exact: true }).click();
         await expect(page.getByRole('button', { name: 'Back to conversation', exact: true })).toBeVisible();
+        if (managementPage === 'Settings') {
+          await expect(page.locator('main').getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
+        }
       }
       if (detachPrevious) {
         app.workspaces = app.workspaces.filter(path => path !== '/workspace');
@@ -229,6 +238,9 @@ for (const detachPrevious of [false, true]) {
       if (managementPage) {
         const back = page.getByRole('button', { name: 'Back to conversation', exact: true });
         await expect(back).toBeVisible();
+        if (managementPage === 'Settings') {
+          await expect(page.locator('main').getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+        }
         await back.click();
       }
       await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();

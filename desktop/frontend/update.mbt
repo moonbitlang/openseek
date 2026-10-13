@@ -3455,7 +3455,7 @@ fn update_msg(
         @resource.belongs_to(workspace, model.focused) &&
         model.focused_device() is Some(dev) &&
         dev.projects.contains(workspace) &&
-        model.new_chat_project() is Some(current) else {
+        model.new_chat_project() is Ok(Some(current)) else {
         return (@cmd.none, closed)
       }
       // The selected row is still actionable so keyboard and pointer behavior
@@ -4132,6 +4132,9 @@ fn update_msg(
       // A reply, approval request, or status event belongs to the host that
       // produced it. Device focus is the root authority boundary.
       if channel != model.focused {
+        return (@cmd.none, model)
+      }
+      if model.codex_project_adoption_pending() && msg.is_account_action() {
         return (@cmd.none, model)
       }
       let (cmd, codex) = @codex.update(

@@ -3531,7 +3531,7 @@ fn Model::can_choose_new_chat_project(self : Model) -> Bool {
   if self.screen is Codex && self.codex_project_adoption_pending() {
     return false
   }
-  guard self.new_chat_project() is Some(project) &&
+  guard self.new_chat_project() is Ok(Some(project)) &&
     self.focused_device() is Some(dev) else {
     return false
   }
@@ -3540,13 +3540,13 @@ fn Model::can_choose_new_chat_project(self : Model) -> Bool {
 
 ///|
 /// The visible unsent draft's project, independent of its execution engine.
-fn Model::new_chat_project(self : Model) -> @common.Uri? {
+fn Model::new_chat_project(self : Model) -> Result[@common.Uri?, String] {
   match self.screen {
     Chat if self.composing_new_chat() =>
-      self.active_conversation().map(conv => conv.project())
+      Ok(self.active_conversation().map(conv => conv.project()))
     Codex if self.codex.composing_draft() =>
-      @resource.of_path(self.focused, self.codex.new_thread_cwd())
-    _ => None
+      self.codex.draft_project(self.focused)
+    _ => Ok(None)
   }
 }
 

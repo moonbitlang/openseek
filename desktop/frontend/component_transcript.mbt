@@ -140,8 +140,10 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
       source: Codex,
       session: self.codex.active_id().unwrap_or("none"),
       project: match self.new_chat_project() {
-        Some(project) => Some(project)
-        None => placement.bind(value => value.project_root())
+        Ok(Some(project)) => Some(project)
+        Ok(None) => placement.bind(value => value.project_root())
+        // The root page renders this error beside the transcript.
+        Err(_) => None
       },
       root: placement.bind(value => value.checkout_root()),
       items: @transcript_component.VisibleRow::history(
