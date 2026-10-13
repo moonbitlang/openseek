@@ -22,6 +22,11 @@ struct BrowserViews {
   // How the page is told something (a `browser.event`), once the bridge
   // that carries it exists.
   mut notify : (async (Json) -> Unit)?
+  // One lock per tab a tool is navigating, so that two navigations of the
+  // same tab happen one after the other: each waits for the page to change
+  // from what it was, and two waiting at once would both take the first
+  // change for their own.
+  navigating : Map[Int32, @async.Mutex]
   // Whether a page has connected to the bridge in this window. Until one
   // has, the bridge drops what it is told to deliver — a page that connects
   // reads its state afresh — so nothing sent would ever be answered.
@@ -42,6 +47,7 @@ pub async fn BrowserViews::BrowserViews() -> BrowserViews {
     pick: None,
     owners: Map([]),
     notify: None,
+    navigating: Map([]),
     page_connected: false,
     opening: Map([]),
   }
@@ -85,6 +91,7 @@ fn BrowserViews::page_is_connected(self : BrowserViews) -> Unit {
 fn BrowserViews::close_all(self : BrowserViews) -> Unit {
   self.cancel_pick()
   self.owners.clear()
+  self.navigating.clear()
   guard self.window is Some(window) else { return }
   for view in window.views() {
     if browser_view_id(view.id()) is Some(_) {
@@ -445,6 +452,7 @@ fn BrowserViews::close(
     self.cancel_pick()
   }
   self.owners.remove(payload.id)
+  self.navigating.remove(payload.id)
   // Closing a view that is already gone is not an error: the close raced a
   // page reload's `close_all`.
   guard self.window is Some(window) else { return Acknowledged }

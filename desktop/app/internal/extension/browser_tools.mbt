@@ -252,6 +252,12 @@ async fn BrowserViews::after(
   awaited : Awaited,
   act : () -> Unit raise,
 ) -> Json {
+  // One navigation of a tab at a time; see `navigating`. A person
+  // navigating the tab meanwhile cannot be made to wait, and the answer is
+  // then the page they went to — which is what the tab shows, and says so.
+  let turn = self.tab_turn(id)
+  turn.acquire()
+  defer turn.release()
   let mut answer : Document? = None
   let mut arrived = false
   self.with_page(id, connection => {
@@ -281,6 +287,17 @@ async fn BrowserViews::after(
     "loading": Json(!arrived),
     "visible": Json(view.state().visible),
   }
+}
+
+///|
+/// The lock that orders the navigations of tab `id`.
+fn BrowserViews::tab_turn(self : BrowserViews, id : Int32) -> @async.Mutex {
+  if self.navigating.get(id) is Some(turn) {
+    return turn
+  }
+  let turn = @async.Mutex()
+  self.navigating[id] = turn
+  turn
 }
 
 ///|
@@ -498,6 +515,27 @@ async test "a tab's conversation is forgotten with the tab" {
   // page's tabs may be left to name a new one's.
   views.close_all()
   assert_true(views.owners.is_empty())
+}
+
+///|
+async test "navigations of one tab take turns; those of different tabs do not wait" {
+  let views = BrowserViews()
+  let first = views.tab_turn(1)
+  first.acquire()
+  // The same tab's next navigation waits behind the one under way.
+  assert_false(views.tab_turn(1).try_acquire())
+  // Another tab's does not.
+  let other = views.tab_turn(2)
+  assert_true(other.try_acquire())
+  other.release()
+  first.release()
+  assert_true(views.tab_turn(1).try_acquire())
+  // A closed tab's turn is forgotten with it.
+  assert_true(views.close({ id: 1, }) is Acknowledged)
+  assert_true(views.navigating.get(1) is None)
+  assert_true(views.navigating.get(2) is Some(_))
+  views.close_all()
+  assert_true(views.navigating.is_empty())
 }
 
 ///|
