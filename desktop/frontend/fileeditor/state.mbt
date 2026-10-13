@@ -462,9 +462,6 @@ pub(all) struct State {
   // Only direct tree toggles animate; document navigation chooses its layout
   // immediately, including when the surrounding panel is opening.
   animate_tree : Bool
-  // An explicit tree opening for this document wins over its pending content
-  // classification. Navigation clears this intent; owner changes discard it.
-  tree_open_override : @common.Uri?
   // Office surface preferences are panel-level settings. They apply to both
   // DOCX and XLSX tabs and survive switching conversations, just like the
   // file-tree preference.
@@ -656,7 +653,6 @@ pub fn State::empty() -> State {
     placement: PlacementUnknown,
     tree_open: false,
     animate_tree: false,
-    tree_open_override: None,
     office_zoom: 100,
     office_query: "",
     office_prefer_system_fonts: false,

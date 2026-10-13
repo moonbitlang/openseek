@@ -435,7 +435,6 @@ pub fn open_document(
   let state = {
     ..state.invalidate_review_hunk_surface(),
     highlighted: None,
-    tree_open_override: None,
     animate_tree: false,
   }
   // Files and Search select Content on this document. Retain a known
@@ -515,12 +514,11 @@ pub fn open_document(
     let state = state.record_pdf_generation(doc)
     let docs = state.docs.copy()
     docs[path] = doc
-    let close_tree = ctx.narrow || doc.is_pdf_preview()
     // Gaining the first active tab reveals the breadcrumb row. Closing the
-    // tree for a PDF or a narrow drill-down also changes the viewer's space;
+    // tree for a narrow drill-down also changes the viewer's space;
     // both need a remeasure alongside the show.
     let cmd = if !had_active ||
-      (state.tree_open && close_tree) ||
+      (state.tree_open && ctx.narrow) ||
       doc.review is Some(_) {
       @cmd.batch([clear_review, show, request_viewer_remeasure()])
     } else {
@@ -533,7 +531,7 @@ pub fn open_document(
         docs,
         review_generation,
         error: None,
-        tree_open: state.tree_open && !close_tree,
+        tree_open: state.tree_open && !ctx.narrow,
       },
     )
   }
@@ -579,13 +577,11 @@ pub fn open_document(
     range~,
     annotation?,
   )
-  let close_tree = ctx.narrow ||
-    docs.get(path).map_or(false, doc => doc.is_pdf_preview())
   // Gaining the first active tab reveals the breadcrumb row, and the narrow
   // drill-down closing the tree reveals a hidden-measured viewer — either
   // way the viewer must remeasure before the reply's document lands.
   let cmd = if !had_active ||
-    (state.tree_open && close_tree) ||
+    (state.tree_open && ctx.narrow) ||
     working_generation is Some(_) {
     @cmd.batch([clear_review, read, request_viewer_remeasure()])
   } else {
@@ -598,7 +594,7 @@ pub fn open_document(
       docs,
       review_generation,
       error: None,
-      tree_open: state.tree_open && !close_tree,
+      tree_open: state.tree_open && !ctx.narrow,
     },
   )
 }
@@ -636,7 +632,6 @@ pub fn open_changed_document(
     change_tree_collapsed: state.change_tree_collapsed.filter(dir => {
       !change.path.0.has_prefix(dir.0 + "/")
     }),
-    tree_open_override: None,
     animate_tree: false,
   }
   // Selecting a Changes row is activation, not a manual reload. Reuse the
@@ -661,8 +656,7 @@ pub fn open_changed_document(
     let docs = state.docs.copy()
     docs[path] = next_doc
     let cmds = [show, delayed_diff_loading(dispatch, ctx.owner, path, next_doc)]
-    let close_tree = ctx.narrow || next_doc.is_pdf_preview()
-    if !had_active || (state.tree_open && close_tree) {
+    if !had_active || (state.tree_open && ctx.narrow) {
       cmds.push(request_viewer_remeasure())
     }
     return (
@@ -672,7 +666,7 @@ pub fn open_changed_document(
         docs,
         review_generation,
         error: None,
-        tree_open: state.tree_open && !close_tree,
+        tree_open: state.tree_open && !ctx.narrow,
       },
     )
   }
@@ -785,8 +779,7 @@ pub fn open_changed_document(
     cmds.push(clear_document())
   }
   cmds.push(delayed_diff_loading(dispatch, ctx.owner, path, review_doc))
-  let close_tree = ctx.narrow || review_doc.is_pdf_preview()
-  if !had_active || (state.tree_open && close_tree) {
+  if !had_active || (state.tree_open && ctx.narrow) {
     cmds.push(request_viewer_remeasure())
   }
   (
@@ -796,7 +789,7 @@ pub fn open_changed_document(
       docs,
       review_generation: generation,
       error: None,
-      tree_open: state.tree_open && !close_tree,
+      tree_open: state.tree_open && !ctx.narrow,
     },
   )
 }
@@ -1167,7 +1160,6 @@ pub fn activate(
   let state = {
     ..state.invalidate_review_hunk_surface(),
     highlighted: None,
-    tree_open_override: None,
     animate_tree: false,
   }
   let (show, doc, review_generation) = show_activated_tab(
@@ -1182,9 +1174,8 @@ pub fn activate(
   let state = state.record_pdf_generation(doc)
   let docs = state.docs.copy()
   docs[path] = doc
-  let close_tree = ctx.narrow || doc.is_pdf_preview()
   // Closing the tree changes the space available to the activated viewer.
-  let cmd = if state.tree_open && close_tree {
+  let cmd = if state.tree_open && ctx.narrow {
     @cmd.batch([show, request_viewer_remeasure()])
   } else {
     show
@@ -1196,7 +1187,7 @@ pub fn activate(
       docs,
       review_generation,
       error: None,
-      tree_open: state.tree_open && !close_tree,
+      tree_open: state.tree_open && !ctx.narrow,
     },
   )
 }
@@ -1204,8 +1195,8 @@ pub fn activate(
 ///|
 /// Drop `path`'s document after its dock tab closed. `next`, when the closed
 /// tab owned the screen, is the file the dock promoted (`None` when the
-/// strip emptied — the viewer falls back to the placeholder, and the tree is
-/// forced open so the panel is never a dead pane). The closed document's
+/// strip emptied — the view shows the file picker without changing the
+/// manual tree preference). The closed document's
 /// parked scroll is forgotten after the neighbor's show re-parks the
 /// outgoing document.
 pub fn close_document(
@@ -1234,25 +1225,12 @@ pub fn close_document(
     } else {
       state.animate_tree
     },
-    tree_open_override: if was_active {
-      None
-    } else {
-      state.tree_open_override
-    },
   }
   // Closing a tab is useful local state even while placement is parked, but
   // promoting its neighbor must not address the missing checkout. Recovery's
   // sync pass restores whichever surviving tab the dock made active.
   if !ctx.placement_ready() {
-    let state = {
-      ..state,
-      docs,
-      tree_open: if was_active && next is None {
-        true
-      } else {
-        state.tree_open
-      },
-    }
+    let state = { ..state, docs, }
     let cmd = if was_active && next is None {
       @cmd.batch([
         clear_document(),
@@ -1281,19 +1259,14 @@ pub fn close_document(
         docs[next_path] = doc
         (
           @cmd.batch([show, forget_view_state(path)]),
-          {
-            ..state,
-            docs,
-            review_generation,
-            tree_open: state.tree_open && !doc.is_pdf_preview(),
-          },
+          { ..state, docs, review_generation, },
         )
       } else {
         (forget_view_state(path), { ..state, docs, })
       }
-    // The last tab: fall back to the placeholder and force the tree open so
-    // the panel is never a dead pane. Losing the active tab also hides the
-    // breadcrumb row, so the viewer must remeasure.
+    // The last tab falls back to the picker. Its tree is derived by the view;
+    // keep the manual preference for the next document. Losing the active tab
+    // also hides the breadcrumb row, so the viewer must remeasure.
     None =>
       (
         @cmd.batch([
@@ -1301,7 +1274,7 @@ pub fn close_document(
           forget_view_state(path),
           request_viewer_remeasure(),
         ]),
-        { ..state, docs, tree_open: true, },
+        { ..state, docs, },
       )
   }
 }
@@ -2113,11 +2086,6 @@ pub fn sync(
       }
     }
     let cmds = [clear_viewer()]
-    // Restoring a conversation reads its active tab directly, without activate.
-    // Reserve the same initial PDF layout before that read starts.
-    let close_tree = ctx.active_file is Some(path) &&
-      docs.get(path) is Some(doc) &&
-      doc.is_pdf_preview()
     // A workspace or resolved root/worktree transition can leave an otherwise
     // identical watch configuration attached to the old checkout. Explicitly
     // retire it; `with_watch` installs the desired watcher after this reroot.
@@ -2156,7 +2124,7 @@ pub fn sync(
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
         placement: PlacementUnknown.reconcile(ctx.placement),
-        tree_open: state.tree_open && !close_tree,
+        tree_open: state.tree_open,
         office_zoom: state.office_zoom,
         office_query: state.office_query,
         office_prefer_system_fonts: state.office_prefer_system_fonts,
@@ -2724,16 +2692,7 @@ fn update_inner(
       let opening = !state.tree_open
       (
         request_viewer_remeasure(),
-        {
-          ..state,
-          tree_open: opening,
-          animate_tree: true,
-          tree_open_override: if opening {
-            ctx.active_file
-          } else {
-            None
-          },
-        },
+        { ..state, tree_open: opening, animate_tree: true, },
       )
     }
     MbtiViewModeSelected(mode) => {
@@ -3965,19 +3924,11 @@ fn update_inner(
         } else {
           @cmd.none
         }
-        // First PDF classification chooses its layout immediately unless a
-        // later explicit tree opening takes precedence. Reloads keep it.
-        let close_tree = ctx.active_file == Some(path) &&
-          state.tree_open_override != Some(path) &&
-          doc_state is TabPdf(..) &&
-          !(previous is TabPdf(..))
         (
           cmd,
           {
             ..state,
             docs,
-            tree_open: state.tree_open && !close_tree,
-            animate_tree: state.animate_tree && !close_tree,
             pdf_generation: if doc_state is TabPdf(..) {
               state.pdf_generation + 1
             } else {
@@ -5676,7 +5627,7 @@ test "activate without a document entry is a no-op" {
 }
 
 ///|
-test "close_document drops the entry and forces the tree open on the last one" {
+test "close_document preserves the manual tree preference on the last one" {
   let emit = test_emit()
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[test_file("a.mbt")] = loaded_doc("a.mbt")
@@ -5695,8 +5646,7 @@ test "close_document drops the entry and forces the tree open on the last one" {
   assert_false(one.docs.contains(test_file("a.mbt")))
   assert_true(one.docs.contains(test_file("b.mbt")))
   assert_false(one.tree_open)
-  // Closing the last document: the viewer falls back to the placeholder and
-  // the tree is forced open so the panel is never a dead pane.
+  // Closing the last document shows the picker without changing preference.
   let (_, last) = close_document(
     emit,
     one,
@@ -5706,7 +5656,7 @@ test "close_document drops the entry and forces the tree open on the last one" {
     was_active=true,
   )
   assert_true(last.docs.is_empty())
-  assert_true(last.tree_open)
+  assert_false(last.tree_open)
 }
 
 ///|
@@ -5876,16 +5826,6 @@ test "sync re-roots the document table from the dock's projection" {
   )
   // The pane-visibility preference follows the panel, not the conversation.
   assert_false(rerooted.tree_open)
-  // A restored PDF reserves its layout before reading, and cannot inherit an
-  // explicit tree opening from the conversation that previously owned it.
-  let pdf = test_file("report.pdf")
-  let (restored_pdf, _) = sync(
-    emit,
-    { ..state, tree_open: true, tree_open_override: Some(pdf), },
-    { ..other, open_files: [pdf], active_file: Some(pdf), },
-  )
-  assert_false(restored_pdf.tree_open)
-  assert_true(restored_pdf.tree_open_override is None)
 }
 
 ///|

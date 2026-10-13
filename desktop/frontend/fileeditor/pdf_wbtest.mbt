@@ -22,7 +22,7 @@ fn pdf_in(state : State, path : @common.Uri) -> PdfDocument raise {
 }
 
 ///|
-test "opening PDF Changes closes the tree before loading and on cached review activation" {
+test "PDF Changes preserves the manual tree preference during loading and activation" {
   let (fixture, ctx, path, _) = pdf_fixture()
   let change : ChangedFile = {
     path: Relative("report.pdf"),
@@ -38,7 +38,7 @@ test "opening PDF Changes closes the tree before loading and on cached review ac
     change,
     had_active=false,
   )
-  assert_false(loading.tree_open)
+  assert_true(loading.tree_open)
   assert_true(loading.docs[path].state is TabLoading)
   // Reopening either the pending review or its loaded PDF must apply the
   // same layout without waiting for another working-tree reply.
@@ -52,7 +52,7 @@ test "opening PDF Changes closes the tree before loading and on cached review ac
       change,
       had_active=true,
     )
-    assert_false(activated.tree_open)
+    assert_true(activated.tree_open)
     assert_eq(activated.review_generation, loading.review_generation)
   }
 }

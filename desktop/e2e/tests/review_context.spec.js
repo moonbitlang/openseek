@@ -307,6 +307,7 @@ test('Codex composer groups multiple files and preserves deletion context on sen
   const files = page.locator('#review-changes-body');
   await files.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
   await clickHunkContext(page);
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await files.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
   await clickHunkContext(page);
   const chip = page.locator('.composer-changes .changes-chip .mention-jump');

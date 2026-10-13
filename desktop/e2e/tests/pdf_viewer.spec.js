@@ -47,7 +47,7 @@ async function expectPdf(page) {
   await expect(page.getByRole('dialog', { name: 'Unlock PDF', exact: true })).toBeHidden();
 }
 
-test('opening a PDF hides the file tree and still allows reopening it', async ({ page }) => {
+test('opening a PDF defaults to a hidden tree and preserves manual reopening across files', async ({ page }) => {
   const app = await setup(page, { openTree: false });
   await expect(page.locator('.file-tree-pane')).toBeHidden();
   app.rpcDelays.set('fs.read_file', 1200);
@@ -88,13 +88,12 @@ test('opening a PDF hides the file tree and still allows reopening it', async ({
   await expect(page.locator('.file-tree-pane')).toBeVisible();
   await openFile(app, 'report.pdf');
   await expectPdf(page);
-  await expect(page.locator('.file-tree-pane')).toBeHidden();
-  await page.getByTitle('Show file tree', { exact: true }).click();
+  await expect(page.locator('.file-tree-pane')).toBeVisible();
   await page.locator('.editor-tab').filter({ hasText: 'report.docx' }).click();
   await expect(page.locator('.word-page').first()).toBeVisible();
   await page.locator('.editor-tab').filter({ hasText: 'report.pdf' }).click();
   await expectPdf(page);
-  await expect(page.locator('.file-tree-pane')).toBeHidden();
+  await expect(page.locator('.file-tree-pane')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -112,12 +111,10 @@ for (const filename of ['report.pdf', 'extensionless']) {
   });
 }
 
-test('opening an extensionless PDF from a hidden panel does not restore its open tree', async ({ page }) => {
+test('opening an extensionless PDF from a hidden panel keeps the default tree closed', async ({ page }) => {
   const app = await setup(page, { openTree: false });
   await openFile(app, 'report.docx');
   await expect(page.locator('.word-page').first()).toBeVisible();
-  await page.getByTitle('Show file tree', { exact: true }).click();
-  await expect(page.locator('.file-tree-pane')).toBeVisible();
   await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
   await expect(page.locator('.file-tree-pane')).toBeHidden();
   app.rpcDelays.set('fs.read_file', 1200);

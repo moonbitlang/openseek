@@ -880,10 +880,7 @@ fn open_explorer(
     dock: @dock.open_picker(model.dock),
     right_panel_open: true,
     right_panel_menu_open: false,
-    // Invoking any Explorer inventory is an explicit request to keep it next
-    // to the selected file on wide layouts. Narrow file opens still perform
-    // the normal drill-down and close this tree.
-    file_panel: { ..model.file_panel, tree_open: true, },
+    file_panel: { ..model.file_panel, animate_tree: false, },
   }
   let (cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
@@ -897,54 +894,36 @@ fn open_explorer(
 }
 
 ///|
-/// Reveal a transcript-linked directory in the editor's Files tree. Keep an
-/// active file visible beside the tree; otherwise activate the picker body so
-/// the reveal has a visible home. `RevealDirectory` expands the ancestors;
-/// transcript navigation additionally expands the target itself, without
-/// toggling an already-open row closed.
+/// Reveal a transcript-linked directory in the file picker. Retain existing
+/// document tabs without turning the picker's temporary tree into a preference.
+/// Expand and load the target and each ancestor, without collapsing open rows.
 fn reveal_local_directory(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : @pathx.Relative,
 ) -> (@cmd.Cmd, Model) {
-  let dock = match model.dock.active {
-    Some(File(_)) | Some(FilePicker) => model.dock
-    None
-    | Some(Browser(_))
-    | Some(GitDiff(_))
-    | Some(Workflows)
-    | Some(Jobs)
-    | Some(Github) => @dock.open_picker(model.dock)
+  let (open_cmd, opened) = open_explorer(dispatch, model, ExplorerFiles)
+  let mut model = opened
+  let commands = [open_cmd]
+  let segments : Array[String] = []
+  for segment in path.0.split("/") {
+    if segment.is_empty() {
+      continue
+    }
+    segments.push(segment.to_owned())
+    let directory = @pathx.Relative(segments.join("/"))
+    if !model.file_panel.expanded.contains(directory) {
+      let (command, file_panel) = @fileeditor.update(
+        dispatch.map(msg => FileEditor(msg)),
+        @fileeditor.DirToggle(directory),
+        model.file_panel,
+        file_ctx(model),
+      )
+      commands.push(command)
+      model = { ..model, file_panel, }
+    }
   }
-  let model = {
-    ..model,
-    dock,
-    right_panel_open: true,
-    right_panel_menu_open: false,
-    file_panel: {
-      ..model.file_panel,
-      tree_open: true,
-      tree_open_override: @dock.active_file(dock),
-      animate_tree: false,
-    },
-  }
-  let (cmd, panel) = @fileeditor.update(
-    dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.RevealDirectory(path),
-    model.file_panel,
-    file_ctx(model),
-  )
-  let model = { ..model, file_panel: panel, }
-  if path.is_root() || panel.expanded.contains(path) {
-    return (cmd, model)
-  }
-  let (expand_cmd, panel) = @fileeditor.update(
-    dispatch.map(msg => FileEditor(msg)),
-    @fileeditor.DirToggle(path),
-    panel,
-    file_ctx(model),
-  )
-  (@cmd.batch([cmd, expand_cmd]), { ..model, file_panel: panel, })
+  (@cmd.batch(commands), model)
 }
 
 ///|
@@ -1925,39 +1904,14 @@ fn update(
     msg.opens_file_before_panel_reconciliation() &&
     model.file_panel.error is None &&
     @dock.active_file(model.dock) is Some(_)
-  let (panel_visibility_cmd, model) = if file_opened_with_panel {
-    // Opening a document starts with the default closed tree even if the
-    // hidden panel retained a manual toggle. Decide before rendering: PDFs
-    // without an extension cannot be classified until their bytes arrive.
-    (
-      @cmd.none,
-      {
-        ..model,
-        file_panel: {
-          ..model.file_panel,
-          tree_open: false,
-          animate_tree: false,
-        },
-      },
-    )
-  } else if panel_visibility_changed {
+  let (panel_visibility_cmd, model) = if panel_visibility_changed &&
+    !file_opened_with_panel {
     let (command, file_panel) = @fileeditor.panel_toggle_cmds(
       dispatch.map(msg => FileEditor(msg)),
       model.file_panel,
       file_ctx(model),
       opening=model.right_panel_open,
     )
-    // Restoring a PDF applies its default closed tree. A directory reveal
-    // explicitly requested the tree, so retain that intent after restoration.
-    let file_panel = if msg is OpenPathResolved(_, Directory(_)) {
-      {
-        ..file_panel,
-        tree_open: model.file_panel.tree_open,
-        tree_open_override: model.file_panel.tree_open_override,
-      }
-    } else {
-      file_panel
-    }
     (command, { ..model, file_panel, })
   } else {
     (@cmd.none, model)
@@ -18194,7 +18148,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
 }
 
 ///|
-test "directory reveal restores the tree beside a hidden PDF" {
+test "directory reveal opens a picker without changing the manual tree preference" {
   let dispatch = test_dispatch()
   for filename in ["report.pdf", "extensionless"] {
     let (_, pending) = update(dispatch, OpenFile(filename), test_model())
@@ -18223,21 +18177,28 @@ test "directory reveal restores the tree beside a hidden PDF" {
     let starting = if filename == "report.pdf" { loaded } else { opened }
     let (_, hidden) = update(dispatch, ToggleRightPanel, starting)
     assert_false(hidden.right_panel_open)
-    let (_, pending) = update(dispatch, OpenFile("src"), hidden)
+    let hidden = {
+      ..hidden,
+      file_panel: { ..hidden.file_panel, explorer_mode: ExplorerSearch, },
+    }
+    let (_, pending) = update(dispatch, OpenFile("src/nested"), hidden)
     let (_, revealed) = update(
       dispatch,
       OpenPathResolved(
         FileOpenContext::new(owner, pending.file_panel.file_link_generation),
-        Directory({ path: "src", }),
+        Directory({ path: "src/nested", }),
       ),
       pending,
     )
     assert_true(revealed.right_panel_open)
-    assert_true(revealed.file_panel.tree_open)
-    assert_eq(revealed.active_workspace_file(), Some(Relative(filename)))
+    assert_true(revealed.file_panel.explorer_mode is ExplorerFiles)
+    assert_true(revealed.file_panel.expanded.contains(Relative("src")))
+    assert_true(revealed.file_panel.expanded.contains(Relative("src/nested")))
+    assert_false(revealed.file_panel.tree_open)
+    assert_true(revealed.dock.active is Some(FilePicker))
     let (_, settled) = update(dispatch, file_loaded, revealed)
     assert_true(settled.file_panel.docs[file].state is @fileeditor.TabPdf(..))
-    assert_true(settled.file_panel.tree_open)
+    assert_false(settled.file_panel.tree_open)
   }
 }
 
@@ -18274,11 +18235,9 @@ test "resolved transcript files and directories stay in the right panel" {
       "tree-open",
     ),
   )
-  assert_true(directory.file_panel.highlighted is Some(Relative("src")))
   assert_true(directory.file_panel.expanded.contains(Relative("src")))
-  // An explicit directory reveal keeps the tree beside non-PDF children
-  // after the picker gives way to the selected document on wide layouts.
-  assert_true(directory.file_panel.tree_open)
+  // The picker temporarily shows the tree; selecting a file hides it.
+  assert_false(directory.file_panel.tree_open)
   let (_, child_pending) = update(
     dispatch,
     FileEditor(FileSelected(path=Relative("src/main.mbt"), name="main.mbt")),
@@ -18286,7 +18245,7 @@ test "resolved transcript files and directories stay in the right panel" {
   )
   let child = child_pending.test_resolve_editor("src/main.mbt")
   assert_true(child.active_workspace_file() is Some(Relative("src/main.mbt")))
-  assert_true(child.file_panel.tree_open)
+  assert_false(child.file_panel.tree_open)
   // Repeating the same link is a reveal, not the row's collapse toggle.
   let (_, repeated) = update(dispatch, directory_msg, directory)
   assert_true(repeated.file_panel.expanded.contains(Relative("src")))
@@ -20899,7 +20858,7 @@ test "launcher rows open Browser and all Explorer destinations" {
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerSearch), model)
   assert_true(model.file_panel.explorer_mode is ExplorerSearch)
-  assert_true(model.file_panel.tree_open)
+  assert_false(model.file_panel.tree_open)
 }
 
 ///|
@@ -21477,7 +21436,7 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
   assert_true(opened.dock.active is Some(@dock.DockTab::FilePicker))
   assert_true(opened.dock.tabs == [@dock.DockTab::FilePicker])
   assert_true(opened.file_panel.explorer_mode is ExplorerSearch)
-  assert_true(opened.file_panel.tree_open)
+  assert_false(opened.file_panel.tree_open)
   let (_, reopened_picker) = update(
     dispatch,
     ExplorerRequested(ExplorerSearch),
@@ -21505,7 +21464,7 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
 }
 
 ///|
-test "a Search result fulfills the picker while preserving Search beside the file" {
+test "a Search result fulfills the picker without pinning Search beside the file" {
   let dispatch = test_dispatch()
   let (_, opened) = update(
     dispatch,
@@ -21529,7 +21488,7 @@ test "a Search result fulfills the picker while preserving Search beside the fil
   assert_true(selected.dock.tabs == [@dock.DockTab::File(path=file)])
   assert_true(@dock.active_file(selected.dock) == Some(file))
   assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
-  assert_true(selected.file_panel.tree_open)
+  assert_false(selected.file_panel.tree_open)
   assert_true(
     selected.file_panel.docs.get(file)
     is Some({ review: None, state: TabLoading, .. }),

@@ -98,6 +98,8 @@ for (const mode of ['Text', 'Code']) {
     await destination.focus();
     await page.keyboard.press('Enter');
     await expect(page.locator('#viewer-host .view-lines')).toContainText('moon moon');
+    await expect(results).toBeHidden();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     const header = results.getByRole('button', { name: /main.mbt.*src/ });
     const expectChevronAligned = async () => {
       const offset = await header.evaluate(element => {

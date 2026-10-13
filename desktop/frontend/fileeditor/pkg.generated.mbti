@@ -510,7 +510,6 @@ pub(all) struct State {
   placement : ReconciledPlacement
   tree_open : Bool
   animate_tree : Bool
-  tree_open_override : @common.Uri?
   office_zoom : Int
   office_query : String
   office_prefer_system_fonts : Bool

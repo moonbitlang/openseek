@@ -33,6 +33,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
     const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
     await main.click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
     const navigation = page.getByRole('group', { name: 'Diff change navigation' });
     const position = navigation.locator('.review-hunk-position');
@@ -79,6 +80,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
     const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
     await main.click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     await selectDiffMode(page, mode);
     const navigation = page.getByRole('group', { name: 'Diff change navigation' });
     const next = navigation.getByRole('button', { name: 'Next change', exact: true });
@@ -161,6 +163,7 @@ for (const mode of ['Token', 'Tree']) {
     const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
     const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
     await main.click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     await selectDiffMode(page, mode);
     const position = page.locator('.review-hunk-position');
     const mark = page.locator('.review-navigation-controls .review-progress');
@@ -231,6 +234,7 @@ test('review shortcuts preserve modified keys, composition, repeats, and feedbac
   const changes = page.locator('#review-changes-body');
   const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
   await main.click();
+  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
   await page.getByRole('button', { name: 'Line diff', exact: true }).click();
   const next = page.getByRole('button', { name: 'Next change', exact: true });
   const consumed = await next.evaluate(button => ['ctrlKey', 'altKey', 'metaKey', 'shiftKey', 'isComposing', 'repeat'].map(flag => {
@@ -261,6 +265,7 @@ for (const mode of ['Line', 'Tree']) {
     await app.openReview();
     const changes = page.locator('#review-changes-body');
     await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
     await page.getByRole('button', { name: 'Next change', exact: true }).click();
     await expect(changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ })).toHaveAttribute('aria-current', 'page');
