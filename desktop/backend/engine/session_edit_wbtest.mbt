@@ -16,6 +16,11 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     .append(User(UserMessage(Content([Text("original")]))))
     .append(Terminal(Finished("answer")))
   store.create(source)
+  let child = @agent_session.Session(
+    SessionId("source-sr-1"),
+    system_prompt="child",
+  ).append(User(UserMessage(Content([Text("child prompt")]))))
+  store.create(child)
   let replacement = @agent_session.Session(
     SessionId("replacement"),
     system_prompt="test",
@@ -88,13 +93,22 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
       })
       is None,
     )
+    assert_true(
+      @async.with_timeout_opt(100, () => {
+        store.append(
+          child,
+          User(UserMessage(Content([Text("another host's child event")]))),
+        )
+      })
+      is None,
+    )
     manager.archive_cleanup_lock.release()
     held = false
     assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Deleted)
   })
   assert_false(store.exists(SessionId("source")))
   assert_true(store.exists(SessionId("replacement")))
-  assert_eq(notifications, ["source"])
+  assert_eq(notifications, ["source-sr-1", "source"])
   assert_true(
     commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
       _,
@@ -102,7 +116,7 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     ) => ())
     is Deleted,
   )
-  assert_eq(notifications, ["source", "source"])
+  assert_eq(notifications, ["source-sr-1", "source", "source"])
   assert_true(manager.record_guards.is_empty())
 }
 
@@ -148,7 +162,42 @@ async test "first-message replacement keeps its source's dirty checkout" {
     on_created=_ => (),
     on_worktree_changed=(_, _) => (),
   )
-  assert_false(store.exists(SessionId(prepared.session)))
+  assert_true(store.exists(SessionId(prepared.session)))
+  assert_false(@fs.exists(store.session_file(SessionId(prepared.session))))
+  // A lost prepare reply is recoverable through the durable listing and can
+  // be deleted without stranding an invisible worktree registry member.
+  let listings = store.listings()
+  guard listings.search_by(row => row.id().value() == prepared.session)
+    is Some(index) else {
+    fail("reservation was not discoverable")
+  }
+  assert_eq(listings[index].title(), Some("Original"))
+  let empty = load_session(manager, {
+    session: prepared.session,
+    workspace: Some(repo.resource_path()),
+  })
+  assert_true(empty.session.events.unwrap_or([]).is_empty())
+  let lost = prepare_session_edit(
+    manager,
+    {
+      session: "original",
+      workspace: repo.resource_path(),
+      through: None,
+      model: "deepseek-flash",
+      source_title: "Lost reply",
+    },
+    on_created=_ => (),
+    on_worktree_changed=(_, _) => (),
+  )
+  assert_true(
+    delete_session(manager, lost.session, repo.resource_path(), (_, _) => ())
+    is Deleted,
+  )
+  assert_false(store.exists(SessionId(lost.session)))
+  guard @worktree.list(repo.to_string()).worktrees is [before_send] else {
+    fail("checkout")
+  }
+  assert_false(before_send.sessions.contains(lost.session))
   // The ordinary first prompt creates the record inside the inherited tree.
   store.create(
     @agent_session.Session(SessionId(prepared.session), system_prompt="test").append(

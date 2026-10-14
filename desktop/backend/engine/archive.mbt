@@ -626,14 +626,22 @@ pub async fn delete_session(
   }
   let result = if edit_replacement is Some(edit) {
     // The store lock protects the replacement from concurrent deletion. The
-    // source record lock also excludes ordinary writers through the rename.
+    // family record locks also exclude ordinary writers through the rename.
     require_edited_receipt(family.root, edit)
-    @session_record.with_document(family.root, session, source => {
-      guard session_max_sequence(source) == edit.source_sequence else {
-        raise EngineError("the original conversation changed; it was kept")
+    async fn lock_member(index : Int32) -> SessionDeleteReply {
+      if index == family.members.length() {
+        return commit()
       }
-      commit()
-    })
+      let session_id = family.members[index]
+      @session_record.with_document(family.root, session_id, document => {
+        if session_id == session &&
+          session_max_sequence(document) != edit.source_sequence {
+          raise EngineError("the original conversation changed; it was kept")
+        }
+        lock_member(index + 1)
+      })
+    }
+    lock_member(0)
   } else {
     commit()
   }

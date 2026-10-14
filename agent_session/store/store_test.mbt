@@ -1187,3 +1187,24 @@ async test "image-only conversations have a nonempty listing preview" {
   store.create(session)
   assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }
+
+///|
+async test "a reserved session is discoverable before its first prompt" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id : @agent_session.SessionId = SessionId("reserved")
+  store.reserve(id, "Edited conversation")
+  assert_true(store.exists(id))
+  assert_false(@fs.exists(store.session_file(id)))
+  guard store.listings() is [row] else { fail("reservation not listed") }
+  assert_eq(row.id(), id)
+  assert_eq(row.title(), Some("Edited conversation"))
+  // No copied header pins the old prompt or scratch directory.
+  let session = @agent_session.Session(
+    id,
+    system_prompt="fresh configured prompt",
+  )
+  ignore(store.append(session, User(UserMessage(Content([Text("edited")])))))
+  assert_eq(store.load(id).system_prompt(), "fresh configured prompt")
+  assert_eq(store.title(id), Some("Edited conversation"))
+}

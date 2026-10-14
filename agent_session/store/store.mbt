@@ -643,6 +643,31 @@ pub async fn SessionStore::title(
 }
 
 ///|
+/// Reserve a discoverable empty session before its first prompt is written.
+/// The title and directory make the id visible to listings and deletion;
+/// omitting a JSONL header lets the first run build its own configured prompt.
+/// An already recorded session must not be converted into a reservation.
+pub async fn SessionStore::reserve(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  title : String,
+) -> Unit {
+  let title = title.trim().to_owned()
+  guard !title.is_empty() else { fail("session title must not be blank") }
+  ensure_session_dir(self, id)
+  with_session_lock(self, id, Exclusive, () => {
+    guard !@fs.exists(self.session_file_path(id)) else {
+      fail("session \{id.value()} already has a durable record")
+    }
+    write_text_atomic(
+      self.title_path(id),
+      title,
+      dirs=self.session_dir_chain(id),
+    )
+  })
+}
+
+///|
 /// Persist a user-authored display title without touching the append-only
 /// transcript. The title file is atomically replaced under the session lock,
 /// so concurrent readers see either complete value and a running engine may

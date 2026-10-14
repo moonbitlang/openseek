@@ -27,6 +27,9 @@ pub async fn prepare_session_edit(
     @wire.split_child_session_id(payload.session) is None else {
     raise EngineError("invalid source conversation")
   }
+  guard !payload.source_title.is_blank() else {
+    raise EngineError("session edit source title is required")
+  }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   manager.require_idle_edit_source(payload.session)
@@ -35,14 +38,24 @@ pub async fn prepare_session_edit(
   let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
   ignore(@session_record.read_document(selected.root, payload.session))
   let session = "desktop-" + @uuid.mint()
-  @worktree.add_session_to_worktree(
-    selected.workspace,
-    session~,
-    worktree_of=payload.session,
-    _ => (),
-    record_exists=() => false,
-    worktrees => on_worktree_changed(payload.workspace, worktrees),
-  )
+  let store = @store.SessionStore(selected.root.to_string())
+  let id : @agent_session.SessionId = SessionId(session)
+  {
+    errdefer @async.protect_from_cancel(() => {
+      if store.exists(id) {
+        on_created(session)
+      }
+    })
+    @worktree.add_session_to_worktree(
+      selected.workspace,
+      session~,
+      worktree_of=payload.session,
+      _ => store.reserve(id, payload.source_title),
+      record_exists=() => store.exists(id),
+      worktrees => on_worktree_changed(payload.workspace, worktrees),
+    )
+  }
+  on_created(session)
   { session, title: payload.source_title, }
 }
 
