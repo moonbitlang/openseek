@@ -2,7 +2,7 @@
 fn finish_capture(
   url : String,
   identity : String,
-  pieces : FixedArray[@js.Value],
+  pieces : Array[CapturePiece],
   rotation : Int32,
   text : String?,
   failure~ : String,
@@ -14,9 +14,9 @@ fn finish_capture(
   let regions : Array[Region] = []
   let source_regions : Array[Json] = []
   for piece in pieces {
-    let page : Int32 = piece.get_with_string("page")
-    let bounds = read_rect(piece.get_with_string("pageRect"))
-    let normalized = read_rect(piece).mapped(from=bounds, to={
+    let page = piece.page
+    let bounds = piece.page_bounds
+    let normalized = piece.crop.mapped(from=bounds, to={
       x: 0,
       y: 0,
       width: 1,
@@ -29,8 +29,8 @@ fn finish_capture(
       width: normalized.width,
       height: normalized.height,
     })
-    let start : FixedArray[Double] = piece.get_with_string("pdfStart")
-    let end : FixedArray[Double] = piece.get_with_string("pdfEnd")
+    guard piece.pdf_start is Some(start) else { return Err(failure) }
+    guard piece.pdf_end is Some(end) else { return Err(failure) }
     source_regions.push({
       "page": Json(page),
       "geometry": {

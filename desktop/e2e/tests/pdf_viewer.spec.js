@@ -1464,3 +1464,54 @@ for (const tagged of [false, true]) {
     });
   }
 }
+
+for (const restart of [false, true]) {
+  test(`PDF element cache ignores retired async results after ${restart ? 'capture restart' : 'text rerender'}`, async ({ page }) => {
+    const app = await setup(page);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    // Hold the first index's structure request. A subsequent index must become
+    // usable before this older request resolves, even for the same DOM page.
+    await page.locator('#openseek-office-surface').evaluate(async host => {
+      const session = host.__officeViewerPdf;
+      const mapping = await session.mapping(1);
+      const pdfPage = mapping.data.page;
+      const original = pdfPage.getStructTree.bind(pdfPage);
+      let first = true;
+      window.pdfIndexPending = false;
+      pdfPage.getStructTree = () => {
+        if (!first) return original();
+        first = false;
+        window.pdfIndexPending = true;
+        return new Promise(resolve => { window.releasePdfIndex = () => resolve(null); });
+      };
+    });
+    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
+    await camera.click();
+    await expect.poll(() => page.evaluate(() => window.pdfIndexPending)).toBe(true);
+    if (restart) {
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
+      await camera.click();
+    } else {
+      await page.locator('#openseek-office-surface').evaluate(host => {
+        host.__officeViewerPdf.bus.dispatch('textlayerrendered', { pageNumber: 1 });
+      });
+    }
+    const bounds = await hoverPdfText(page, 'OpenSeek PDF preview');
+    await page.evaluate(() => window.releasePdfIndex());
+    // Drain the native promise continuations and render observers without sleeps.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(page.locator('.pdf-region-capture')).toHaveCount(1);
+    await expect(page.locator('.pdf-region-capture-box')).toBeVisible();
+    await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    const feedback = page.locator('.pdf-capture-feedback');
+    await expect(feedback.locator('textarea')).toBeVisible();
+    await feedback.getByRole('checkbox').check();
+    await feedback.locator('.agent-feedback-input-action').click();
+    await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', /OpenSeek PDF preview/);
+    await expect(page.locator('.composer-image img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
