@@ -104,6 +104,7 @@ async fn moonide_spawn_config(state : HostState) -> MoonIdeSpawnConfig {
   let toolchain = @moonbit.resolve_toolchain(
     state.engine,
     runtime_dir?=state.runtime_dir,
+    source=state.resources.moonbit,
   ) catch {
     @moonbit.ToolchainUnavailable as unavailable =>
       raise HostError("\{unavailable}")

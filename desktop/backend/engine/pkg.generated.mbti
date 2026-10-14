@@ -8,6 +8,7 @@ import {
   "moonbitlang/core/debug",
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/backend/mcp",
+  "openseek_desktop/backend/moonbit",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/backend/resources",
   "openseek_desktop/protocol",
@@ -54,7 +55,7 @@ pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @proto
 
 pub async fn migrate_global_store() -> Int
 
-pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server) -> EngineActor
+pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, moonbit? : @moonbit.ToolchainSource) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 

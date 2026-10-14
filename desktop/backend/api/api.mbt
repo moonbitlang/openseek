@@ -275,11 +275,16 @@ pub fn ApiState::ApiState(
   auth? : @auth.AuthStore,
   app_version~ : String = "development",
   console_url? : String,
-  resources? : @resources.Resources,
+  resources~ : @host.HostResources = @host.HostResources::from_path(),
   host_mcp? : @mcp.Server,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
-  let engine_actor = @engine.new_engine_actor(engine, runtime_dir?, host_mcp?)
+  let engine_actor = @engine.new_engine_actor(
+    engine,
+    runtime_dir?,
+    host_mcp?,
+    moonbit=resources.moonbit,
+  )
   {
     codex: Actor(codex),
     codex_projects: ProjectCatalog(),
@@ -292,7 +297,7 @@ pub fn ApiState::ApiState(
       runtime_dir?,
       executable?,
       app_version~,
-      resources?,
+      resources~,
     ),
     hub: Hub(),
     auth: match auth {

@@ -102,7 +102,7 @@ fn SemanticSearchCancellationFrontiers::record(
 ///|
 priv enum SemanticSearchRequest {
   Search(
-    command~ : String?,
+    command~ : SemanticProvider?,
     root~ : @pathx.Absolute,
     payload~ : SearchSemanticPayload,
     reply~ : @async.Queue[SearchSemanticReply]
@@ -153,7 +153,7 @@ fn empty_semantic_search_reply(
 ///|
 async fn SemanticSearchService::search(
   self : SemanticSearchService,
-  command : String?,
+  command : SemanticProvider?,
   root : @pathx.Absolute,
   payload : SearchSemanticPayload,
 ) -> SearchSemanticReply {
@@ -308,13 +308,7 @@ fn semantic_search_args(
   command : String,
   payload : SearchSemanticPayload,
 ) -> Array[String] {
-  let args : Array[String] = if command == "moonx" ||
-    command.has_suffix("/moonx") ||
-    command.has_suffix("\\moonx") {
-    [MoongrepPackageCoordinate, "--"]
-  } else {
-    []
-  }
+  let args = semantic_provider_prefix_args(command)
   args.push("scan")
   for pattern in payload.patterns {
     if !pattern.is_empty() {
@@ -616,7 +610,7 @@ async fn publish_semantic_progress(
 
 ///|
 async fn run_semantic_search(
-  command : String?,
+  command : SemanticProvider?,
   root : @pathx.Absolute,
   payload : SearchSemanticPayload,
   emit : async (@protocol.Notification) -> Unit,
@@ -635,6 +629,8 @@ async fn run_semantic_search(
       message: "This SeekMoon installation does not include a semantic-search provider.",
     })
   }
+  let provider = command.resolve()
+  let command = provider.command
   let directory = @fs.opendir(native_root) catch {
     error =>
       return empty_semantic_search_reply(reply_root, payload.generation, error={
@@ -660,7 +656,8 @@ async fn run_semantic_search(
       group,
       command,
       semantic_search_args(command, payload),
-      inherit_env=true,
+      inherit_env=false,
+      extra_env=provider.environment,
       stdin=stdin_reader,
       stdout=child_stdout,
       stderr=child_stderr,
@@ -794,12 +791,11 @@ async fn run_semantic_search(
 
 ///|
 async fn search_semantic_op(
-  resources : @resources.Resources?,
   service : SemanticSearchService,
   payload : SearchSemanticPayload,
+  command : SemanticProvider?,
 ) -> SearchSemanticReply {
   let root = WirePath::parse(payload.root).absolute
-  let command = moongrep_command(resources)
   service.search(command, root, payload)
 }
 
@@ -831,6 +827,10 @@ test "semantic search builds moonx and bundled moongrep invocations" {
     "inspect($(x:arg))",
     "--json",
   ])
+  assert_eq(
+    semantic_search_args("C:\\tools\\moonx.exe", pattern),
+    semantic_search_args("moonx", pattern),
+  )
   let second_pattern : SearchSemanticPayload = {
     ..pattern,
     patterns: ["match($x)"],

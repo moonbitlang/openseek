@@ -1129,12 +1129,11 @@ async fn run_text_search(
 
 ///|
 async fn search_text_op(
-  resources : @resources.Resources?,
+  command : String?,
   service : TextSearchService,
   payload : SearchTextPayload,
 ) -> SearchTextReply {
   let root = WirePath::parse(payload.root).absolute
-  let command = ripgrep_command(resources)
   service.search(command, root, payload)
 }
 

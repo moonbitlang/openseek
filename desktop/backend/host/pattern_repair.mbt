@@ -237,6 +237,7 @@ test "pattern repair trace remains bounded and retains recent events" {
 async fn request_pattern_repair_candidate(
   state : HostState,
   agent_env : Map[String, String],
+  provider : ResolvedSemanticProvider?,
   root : @pathx.Absolute,
   pattern : String,
   instruction : String,
@@ -245,9 +246,9 @@ async fn request_pattern_repair_candidate(
 ) -> PatternRepairCandidateOutcome {
   // The Agent receives only a closed validator configuration. It cannot
   // select another executable or alter the dump arguments.
-  if moongrep_command(state.resources) is Some(command) {
+  if provider is Some(provider) {
     agent_env[PatternRepairValidatorEnvironment] = pattern_repair_validator_config(
-      command,
+      provider.command,
     ).stringify()
   }
   // A private directory for the child's result and session, removed when
@@ -361,9 +362,31 @@ async fn pattern_repair_op(
     )
   }
   let root = WirePath::parse(payload.root).absolute
+  let provider = try {
+    let toolchain = @moonbit.resolve_toolchain(
+      state.engine,
+      runtime_dir?=state.runtime_dir,
+      source=state.resources.moonbit,
+    )
+    toolchain.apply_to_env(agent_env)
+    match state.semantic_provider() {
+      Some(provider) => Some(provider.resolve(env=agent_env))
+      None => None
+    }
+  } catch {
+    error =>
+      return pattern_repair_failure(
+        payload,
+        Failed,
+        None,
+        "Cannot prepare semantic-search provider: \{error}",
+        [],
+      )
+  }
   let candidate = request_pattern_repair_candidate(
     state,
     agent_env,
+    provider,
     root,
     payload.pattern,
     payload.instruction,
@@ -383,7 +406,7 @@ async fn pattern_repair_op(
     Failed(error, trace) =>
       return pattern_repair_failure(payload, Failed, None, error, trace)
   }
-  match validate_pattern_repair_candidate(state.resources, root, candidate) {
+  match validate_pattern_repair_candidate(root, candidate, provider) {
     PatternRepairValid =>
       {
         root: payload.root,

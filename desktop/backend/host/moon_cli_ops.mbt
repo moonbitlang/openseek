@@ -58,6 +58,7 @@ priv enum ToolSpawnResolution {
 /// carries diagnostic pushes to the transports.
 priv struct MoonCliState {
   engine : String
+  source : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
   // Resolved on first use; concurrent first requests may both resolve, which
   // is benign — bundled preparation serializes itself and the results agree.
@@ -74,9 +75,11 @@ priv struct MoonCliState {
 fn MoonCliState::MoonCliState(
   engine : String,
   runtime_dir? : @pathx.Path,
+  source~ : @moonbit.ToolchainSource,
 ) -> MoonCliState {
   {
     engine,
+    source,
     runtime_dir,
     command: ToolUnresolved,
     published: Map([]),
@@ -105,6 +108,7 @@ async fn MoonCliState::resolve_command(self : MoonCliState) -> ToolSpawnConfig? 
   let toolchain = @moonbit.resolve_toolchain(
     self.engine,
     runtime_dir?=self.runtime_dir,
+    source=self.source,
   ) catch {
     @moonbit.ToolchainUnavailable as unavailable => {
       @xlog.warn() <?

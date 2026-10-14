@@ -1,4 +1,40 @@
 ///|
+/// Desktop discovery remains an embedding policy. Headless launchers select a
+/// platform-checked seed explicitly, or use the working machine's toolchain.
+pub(all) enum ToolchainSource {
+  DesktopBundle
+  External
+  Bundled(platform~ : String, seed_dir~ : @pathx.Absolute)
+}
+
+///|
+/// Validate the selected seed before starting work with this toolchain.
+pub async fn bundled_source(
+  platform~ : String,
+  seed_dir~ : String,
+  host_platform~ : String,
+) -> ToolchainSource {
+  let expected = match platform {
+    "linux-x64" => "Linux-x86_64"
+    "linux-arm64" => "Linux-aarch64"
+    "macos-arm64" => "Darwin-arm64"
+    _ => fail("unsupported MoonBit seed platform: \{platform}")
+  }
+  guard expected == host_platform else {
+    fail(
+      "MoonBit seed \{platform} does not match working host \{host_platform}",
+    )
+  }
+  guard @pathx.Path(seed_dir).to_absolute() is Some(directory) else {
+    fail("MoonBit seed directory must be absolute")
+  }
+  guard bundled_moonbit_seed_version(directory) is Some(_) else {
+    fail("MoonBit seed version stamp is missing or empty: \{seed_dir}")
+  }
+  Bundled(platform~, seed_dir=directory)
+}
+
+///|
 /// Where a usable MoonBit toolchain's executable lives, probed once at
 /// resolution. `moon` serves the engine tools and every host language request.
 /// Everything else a moon command needs (`moonc`, `lib/core`, `include`) is
@@ -52,9 +88,19 @@ pub impl Show for ToolchainUnavailable with fn output(_self, logger) {
 pub async fn resolve_toolchain(
   engine_command : String,
   runtime_dir? : @pathx.Path,
+  source~ : ToolchainSource = DesktopBundle,
 ) -> ResolvedToolchain {
-  if bundled_moonbit_seed_dir(engine_command) is Some(seed_dir) {
-    guard prepared_bundled_moonbit_payload(seed_dir~, runtime_dir?)
+  let (seed_dir, payload_name) = match source {
+    DesktopBundle => (bundled_moonbit_seed_dir(engine_command), None)
+    External => (None, None)
+    Bundled(platform~, seed_dir~) => (Some(seed_dir), Some(platform))
+  }
+  if seed_dir is Some(seed_dir) {
+    guard prepared_bundled_moonbit_payload(
+        seed_dir~,
+        runtime_dir?,
+        payload_name?,
+      )
       is Some(payload) else {
       fail("failed to prepare bundled MoonBit toolchain")
     }

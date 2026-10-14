@@ -1048,11 +1048,24 @@ async test "start echoes the client submission id in Started" {
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nwhile IFS= read -r line; do :; done\n",
+    "#!/bin/sh\nif [ \"$1\" = \"sessions\" ]; then printf '%s' '{\"events\":[]}'; exit 0; fi\nprintf '%s' \"$(command -v moon)\" > selected-moon.tmp\nmv selected-moon.tmp selected-moon\nwhile IFS= read -r line; do :; done\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let actor = new_engine_actor(engine.to_string(), runtime_dir=runtime)
+  let selected_seed = root.join("explicit seed")
+  let selected_home = runtime.join("toolchains/moonbit/linux-x64")
+  prepare_fake_moonbit_seed(selected_seed, version="explicit-test")
+  prepare_fake_bundled_moonbit_home(selected_home, version="explicit-test")
+  let source = @moonbit.bundled_source(
+    platform="linux-x64",
+    host_platform="Linux-x86_64",
+    seed_dir=selected_seed.resolve().to_string(),
+  )
+  let actor = new_engine_actor(
+    engine.to_string(),
+    runtime_dir=runtime,
+    moonbit=source,
+  )
   let manager = actor.manager()
   configure_custom_provider(manager)
   let emitted : Array[EngineEvent] = []
@@ -1081,6 +1094,16 @@ async test "start echoes the client submission id in Started" {
       }
     }
     assert_eq(echoed, Some("submission-start"))
+    let marker = @pathx.Path(workspace).join("selected-moon")
+    @async.with_timeout(5000, () => {
+      while !@fsx.exists(marker) {
+        @async.sleep(5)
+      }
+    })
+    assert_eq(
+      @fsx.read_text(marker),
+      selected_home.resolve().join("bin/moon").to_string(),
+    )
     group.return_immediately(())
   })
 }

@@ -43,9 +43,7 @@ struct HostState {
   runtime_dir : @pathx.Path?
   moon : MoonCliState
   updates : SelfUpdate
-  /// The host's bundled files; `None` when it was started with none, and
-  /// every tool then comes from PATH.
-  resources : @resources.Resources?
+  resources : HostResources
 }
 
 ///|
@@ -72,23 +70,23 @@ pub fn HostConnection::HostConnection() -> HostConnection {
 }
 
 ///|
-/// `engine` is the engine executable (the language services resolve the
-/// bundled `moon` next to it); `executable` is the host's own binary, which
+/// `engine` is the engine executable; `resources` selects the tools and assets
+/// this working host uses; `executable` is the host's own binary, which
 /// only self-update needs, because replacing the running application is the
 /// one job whose meaning depends on this exact process. Absent paths retain
-/// development fallbacks but disable installed-only work. `resources` is the
-/// resource directory the operations that need bundled files resolve from.
+/// external-tool defaults but disable installed-only work. Desktop callers
+/// pass `desktop_resources`; other embedders provide explicit paths.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
   executable? : String,
   app_version~ : String = "development",
-  resources? : @resources.Resources,
+  resources~ : HostResources = HostResources::from_path(),
 ) -> HostState {
   {
     engine,
     runtime_dir,
-    moon: MoonCliState(engine, runtime_dir?),
+    moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
   }
@@ -230,13 +228,17 @@ pub fn endpoints(
       cancel_search_files_op(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(state.resources, connection.text_search, payload)
+      search_text_op(state.resources.ripgrep, connection.text_search, payload)
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
       cancel_search_text_op(connection.text_search, payload)
     }),
     Endpoint(@commands.fs_search_semantic, payload => {
-      search_semantic_op(state.resources, connection.semantic_search, payload)
+      search_semantic_op(
+        connection.semantic_search,
+        payload,
+        state.semantic_provider(),
+      )
     }),
     Endpoint(@commands.fs_cancel_search_semantic, payload => {
       cancel_search_semantic_op(connection.semantic_search, payload)

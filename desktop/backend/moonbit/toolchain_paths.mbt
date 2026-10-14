@@ -55,6 +55,7 @@ async fn bundled_moonbit_seed_dir(engine_command : String) -> @pathx.Absolute? {
 async fn prepared_moonbit_payload_dir(
   seed_dir~ : @pathx.Absolute,
   runtime_dir? : @pathx.Path,
+  payload_name? : String,
 ) -> @pathx.Path? {
   guard runtime_dir is Some(runtime_dir) else {
     @xlog.debug() <?
@@ -64,7 +65,9 @@ async fn prepared_moonbit_payload_dir(
       }
     return None
   }
-  let seed_name = seed_dir.to_path().basename().to_owned()
+  let seed_name = payload_name.unwrap_or_else(() => {
+    seed_dir.to_path().basename().to_owned()
+  })
   if seed_name.is_empty() {
     @xlog.debug() <?
       {

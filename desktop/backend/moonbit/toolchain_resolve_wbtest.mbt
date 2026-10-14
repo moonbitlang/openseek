@@ -150,3 +150,80 @@ async test "toolchain env policy leaves MOON_HOME alone" {
     Some(true),
   )
 }
+
+///|
+async test "explicit seed selection checks platform and fails without fallback" {
+  async fn rejected(body : async () -> Unit) -> Unit {
+    try body() catch {
+      _ => ()
+    } noraise {
+      _ => fail("expected invalid seed to be rejected")
+    }
+  }
+  with_toolchain_test_tree(root => {
+    let seed = root.join("seed with spaces")
+    @fs.mkdir(seed.to_string(), recursive=true)
+    @fs.write_file(
+      seed.join(MoonbitSeedVersionFile).to_string(),
+      "fixture",
+      create_mode=CreateOrTruncate,
+    )
+    for
+      pair in [
+        ("linux-x64", "Linux-x86_64"),
+        ("linux-arm64", "Linux-aarch64"),
+        ("macos-arm64", "Darwin-arm64"),
+      ] {
+      let (platform, host_platform) = pair
+      assert_true(
+        bundled_source(platform~, host_platform~, seed_dir=seed.to_string())
+        is Bundled(_),
+      )
+    }
+    rejected(() => {
+      ignore(
+        bundled_source(
+          platform="linux-arm64",
+          host_platform="Linux-x86_64",
+          seed_dir=seed.to_string(),
+        ),
+      )
+    })
+    rejected(() => {
+      ignore(
+        bundled_source(
+          platform="linux-x64",
+          host_platform="Linux-x86_64",
+          seed_dir="relative",
+        ),
+      )
+    })
+    rejected(() => {
+      ignore(
+        bundled_source(
+          platform="unsupported",
+          host_platform="Linux-x86_64",
+          seed_dir=seed.to_string(),
+        ),
+      )
+    })
+    let selected = bundled_source(
+      platform="linux-x64",
+      host_platform="Linux-x86_64",
+      seed_dir=seed.to_string(),
+    )
+    // No runtime means preparation cannot succeed. Never fall back to the
+    // running test machine's otherwise available MoonBit installation.
+    rejected(() => ignore(resolve_toolchain("unused", source=selected)))
+    @fs.remove(seed.join(MoonbitSeedVersionFile).to_string())
+    rejected(() => {
+      ignore(
+        bundled_source(
+          platform="linux-x64",
+          host_platform="Linux-x86_64",
+          seed_dir=seed.to_string(),
+        ),
+      )
+    })
+  })
+}

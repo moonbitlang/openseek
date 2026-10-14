@@ -155,6 +155,22 @@ async fn initialize_moonbit(
 let prepare_payload_lock : @semaphore.Semaphore = Semaphore(1, initial_value=1)
 
 ///|
+// SDK archives omit the installer's moonx alias. Keep it beside the writable
+// moon executable so registry tools use the same compiler and core bundles.
+async fn ensure_moonx_alias(moon_home : @pathx.Path) -> Unit {
+  let bin = moonbit_bin_dir(moon_home)
+  let moonx = bin.join("moonx" + ExecutableSuffix)
+  if !@fsx.exists(moonx) {
+    let unique : @pathx.Path = @fs.tmpdir(prefix="openseek-moonx-")
+    defer @fs.rmdir(unique.to_string())
+    let temporary = bin.join(unique.basename().to_owned())
+    defer @fsx.remove_if_exists(temporary)
+    @fsx.copy_file(moonbit_command(moon_home), temporary)
+    @fs.rename(temporary.to_string(), moonx.to_string(), replace=true)
+  }
+}
+
+///|
 fn payload_lock_path(moon_home : @pathx.Path) -> @pathx.Path {
   moon_home.dirname().join(moon_home.basename().to_owned() + ".lock")
 }
@@ -188,8 +204,10 @@ async fn[T] with_payload_lock(
 async fn prepared_bundled_moonbit_payload(
   seed_dir~ : @pathx.Absolute,
   runtime_dir? : @pathx.Path,
+  payload_name? : String,
 ) -> @pathx.Path? {
-  guard prepared_moonbit_payload_dir(seed_dir~, runtime_dir?) is Some(moon_home) else {
+  guard prepared_moonbit_payload_dir(seed_dir~, runtime_dir?, payload_name?)
+    is Some(moon_home) else {
     return None
   }
   prepare_payload_lock.acquire()
@@ -229,6 +247,7 @@ async fn prepare_moonbit_payload(
         "moon_home": moon_home.to_string(),
         "version": version,
       }
+    ensure_moonx_alias(moon_home)
     return
   }
   @xlog.debug() <?
@@ -240,6 +259,7 @@ async fn prepare_moonbit_payload(
   @fsx.remove_if_exists(moon_home)
   copy_moonbit_seed_dir(seed_dir, moon_home)
   initialize_moonbit(moon_home, version, runtime_dir)
+  ensure_moonx_alias(moon_home)
   @xlog.debug() <?
     {
       "event": "desktop_moonbit_prepare_payload_complete",

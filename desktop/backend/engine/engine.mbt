@@ -712,6 +712,7 @@ priv enum PumpState {
 /// what makes stopping it safe.
 struct EngineManager {
   engine : String
+  moonbit : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
   // The host's own tool server, when this host offers tools to the agents it
   // runs. Every engine started while it is set is granted access to it
@@ -1074,11 +1075,13 @@ fn new_engine_manager(
   engine : String,
   runtime_dir? : @pathx.Path,
   host_mcp? : @mcp.Server,
+  moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
 ) -> EngineManager {
   {
     engine,
     runtime_dir,
     host_mcp,
+    moonbit,
     mcp_error: None,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
@@ -1097,8 +1100,9 @@ pub fn new_engine_actor(
   engine : String,
   runtime_dir? : @pathx.Path,
   host_mcp? : @mcp.Server,
+  moonbit~ : @moonbit.ToolchainSource = DesktopBundle,
 ) -> EngineActor {
-  { manager: new_engine_manager(engine, runtime_dir?, host_mcp?), }
+  { manager: new_engine_manager(engine, runtime_dir?, host_mcp?, moonbit~), }
 }
 
 ///|
@@ -1410,6 +1414,7 @@ async fn add_moonbit_path_for_native_engine(
   env : Map[String, String],
   config : RunConfig,
   runtime_dir : @pathx.Path?,
+  source : @moonbit.ToolchainSource,
 ) -> Unit {
   // The agent tools spawn `moon` by name, so prepend the resolved toolchain's
   // bin to the path variable (updating `Path` in place on Windows — see
@@ -1420,7 +1425,11 @@ async fn add_moonbit_path_for_native_engine(
   // An unavailable toolchain fails the spawn: a session whose `moon` would
   // break in confusing ways downstream is worth less than a clear error
   // naming the cause now.
-  let toolchain = @moonbit.resolve_toolchain(config.engine, runtime_dir?)
+  let toolchain = @moonbit.resolve_toolchain(
+    config.engine,
+    runtime_dir?,
+    source~,
+  )
   toolchain.apply_to_env(env)
   @xlog.debug() <?
     {
@@ -1435,6 +1444,7 @@ async fn engine_process_env(
   config : RunConfig,
   runtime_dir : @pathx.Path?,
   host_mcp? : @mcp.Server,
+  source~ : @moonbit.ToolchainSource = DesktopBundle,
 ) -> Map[String, String] {
   // Build a complete environment and pass it with `inherit_env=false`.
   // `moonbitlang/async/process` prepends `extra_env` before inherited env on
@@ -1479,7 +1489,7 @@ async fn engine_process_env(
       env.remove(@mcp.TokenEnv)
     }
   }
-  add_moonbit_path_for_native_engine(env, config, runtime_dir)
+  add_moonbit_path_for_native_engine(env, config, runtime_dir, source)
   env
 }
 
@@ -1552,6 +1562,7 @@ async fn[G] start_serve_engine(
     config,
     manager.runtime_dir,
     host_mcp?=manager.host_mcp,
+    source=manager.moonbit,
   )
   let program = config.engine
   // An engine with no MCP configuration to load has nothing wrong with it

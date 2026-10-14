@@ -71,6 +71,7 @@ async fn terminal_open_op(
   let toolchain = @moonbit.resolve_toolchain(
     state.engine,
     runtime_dir?=state.runtime_dir,
+    source=state.resources.moonbit,
   ) catch {
     @moonbit.ToolchainUnavailable as unavailable =>
       raise HostError("\{unavailable}")
@@ -83,8 +84,8 @@ async fn terminal_open_op(
     @sys.get_env_var("SHELL").unwrap_or("/bin/sh")
   }
   let path_entries = [toolchain.bin_dir.to_string()]
-  if PackagedTools::resolve(state.resources) is Some(tools) {
-    path_entries.push(tools.bin_dir)
+  if state.resources.bin_dir is Some(bin_dir) {
+    path_entries.push(bin_dir)
   }
   // A `!` command is the session's only process: no login shell starts, so
   // there is no prompt to activate and the path rides the command's own argv.

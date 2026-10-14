@@ -286,11 +286,24 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   )
   @fs.write_file(
     engine.to_string(),
-    "#!/bin/sh\nprintf '%s\\n' \"$@\"\nprintf 'stderr marker\\n' >&2\nexit 0\n",
+    "#!/bin/sh\nprintf '%s\\n' \"$@\"\nprintf 'moon=%s\\n' \"$(command -v moon)\"\nprintf 'stderr marker\\n' >&2\nexit 0\n",
     create_mode=CreateOrTruncate,
   )
   assert_eq(@process.run("chmod", ["+x", engine.to_string()]), 0)
-  let manager = new_engine_manager(engine.to_string(), runtime_dir=runtime)
+  let selected_seed = root.join("explicit seed")
+  let selected_home = runtime.join("toolchains/moonbit/linux-x64")
+  prepare_fake_moonbit_seed(selected_seed, version="explicit-test")
+  prepare_fake_bundled_moonbit_home(selected_home, version="explicit-test")
+  let source = @moonbit.bundled_source(
+    platform="linux-x64",
+    host_platform="Linux-x86_64",
+    seed_dir=selected_seed.resolve().to_string(),
+  )
+  let manager = new_engine_manager(
+    engine.to_string(),
+    runtime_dir=runtime,
+    moonbit=source,
+  )
   configure_custom_provider(manager)
   let service = Schedules(manager, Some(runtime))
   ignore(service.list())
@@ -322,6 +335,9 @@ async test "scheduled CLI writes bounded-memory logs and settles an independent 
   assert_true(log.contains("--approval=never\n"))
   assert_true(log.contains("--literal prompt\nsecond line"))
   assert_true(log.contains("stderr marker"))
+  assert_true(
+    log.contains("moon=" + selected_home.resolve().join("bin/moon").to_string()),
+  )
 
   let automatic = service.save({
       id: None,

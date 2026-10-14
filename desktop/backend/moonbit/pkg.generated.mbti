@@ -1,12 +1,14 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/backend/internal/moonbit"
+package "openseek_desktop/backend/moonbit"
 
 import {
   "openseek_desktop/backend/pathx",
 }
 
 // Values
-pub async fn resolve_toolchain(String, runtime_dir? : @pathx.Path) -> ResolvedToolchain
+pub async fn bundled_source(platform~ : String, seed_dir~ : String, host_platform~ : String) -> ToolchainSource
+
+pub async fn resolve_toolchain(String, runtime_dir? : @pathx.Path, source? : ToolchainSource) -> ResolvedToolchain
 
 // Errors
 pub suberror ToolchainUnavailable
@@ -21,6 +23,12 @@ pub struct ResolvedToolchain {
 }
 pub fn ResolvedToolchain::apply_to_env(Self, Map[String, String]) -> Unit
 pub fn ResolvedToolchain::tool_env(Self) -> Map[String, String]
+
+pub(all) enum ToolchainSource {
+  DesktopBundle
+  External
+  Bundled(platform~ : String, seed_dir~ : @pathx.Absolute)
+}
 
 // Type aliases
 

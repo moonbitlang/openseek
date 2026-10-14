@@ -10,7 +10,7 @@
 /// survived into `pkg.generated.mbti`, so regenerating the interface on Windows
 /// rewrites it and the committed one no longer matches. A `let` records only
 /// `path_sep : String`, which is identical on every platform.
-/// `ExecutableSuffix` in `internal/moonbit` has the same `#cfg` shape but is
+/// `ExecutableSuffix` in `moonbit` has the same `#cfg` shape but is
 /// private, so it never reaches an interface at all.
 ///
 /// TODO(upstream): support `declare pub let`, so this note can sit on one

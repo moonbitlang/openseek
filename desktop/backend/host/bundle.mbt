@@ -32,13 +32,6 @@ const PackagedExecutableSuffix = ".exe"
 const PackagedExecutableSuffix = ""
 
 ///|
-/// The visualizer shell and compiled bundle used for a standalone export.
-pub struct VizAssets {
-  shell : String
-  bundle : String
-}
-
-///|
 /// Locate the visualizer assets belonging to this exact host build.
 ///
 /// Both branches read the host's resource directory, exactly like
@@ -49,21 +42,8 @@ pub struct VizAssets {
 /// running. A missing asset fails instead of silently embedding an unrelated
 /// artifact.
 pub async fn HostState::viz_assets(self : HostState) -> VizAssets {
-  guard self.resources is Some(resources) else {
+  guard self.resources.viz is Some(assets) else {
     raise HostError("this host has no bundled session visualizer")
-  }
-  let assets : VizAssets = if resources.packaged {
-    let viz = resources.dir.join(PackagedVizDir)
-    {
-      shell: viz.join("index.html").normalize().to_string(),
-      bundle: viz.join("viz_app.js").normalize().to_string(),
-    }
-  } else {
-    let checkout = resources.dir.dirname()
-    {
-      shell: checkout.join(DevelopmentVizShellPath).normalize().to_string(),
-      bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
-    }
   }
   guard @fs.exists(assets.shell) else {
     raise HostError("session visualizer shell does not exist: \{assets.shell}")
@@ -196,13 +176,13 @@ async fn ripgrep_command(resources : @resources.Resources?) -> String? {
 ///|
 /// Locate the semantic-search provider beside the installed Host. A packaged
 /// `moongrep` binary serves installed bundles, mirroring the ripgrep layout;
-/// otherwise the provider resolves through `moonx` from PATH with a pinned
+/// otherwise the provider resolves through the selected toolchain's `moonx` with a pinned
 /// mooncakes registry coordinate.
 ///
 /// This is deliberately not fail-closed like ripgrep: moongrep ships no
 /// upstream release binaries, so a trial build has no asset to fail back on. A
-/// real bundle with a staged `moongrep` binary always wins; the `moonx` PATH
-/// fallback stays a documented interim provider until the package vendors a
+/// real bundle with a staged `moongrep` binary always wins; `moonx` remains
+/// the interim provider until the package vendors a
 /// moongrep binary (or a bundled `moongrep.wasm` run through the packaged
 /// moonrun). The pinned coordinate keeps the version deterministic instead of
 /// silently running an arbitrary machine binary.
@@ -293,5 +273,33 @@ pub fn app_bundle_path(executable : String) -> String? {
     Some(bundle)
   } else {
     None
+  }
+}
+
+///|
+/// Resolve this desktop bundle's working-host resources. Missing visualizer
+/// files are reported when exporting, not when starting unrelated services.
+pub async fn desktop_resources(
+  resources : @resources.Resources,
+) -> HostResources {
+  let assets : VizAssets = if resources.packaged {
+    let viz = resources.dir.join(PackagedVizDir)
+    {
+      shell: viz.join("index.html").normalize().to_string(),
+      bundle: viz.join("viz_app.js").normalize().to_string(),
+    }
+  } else {
+    let checkout = resources.dir.dirname()
+    {
+      shell: checkout.join(DevelopmentVizShellPath).normalize().to_string(),
+      bundle: checkout.join(DevelopmentVizBundlePath).normalize().to_string(),
+    }
+  }
+  {
+    moonbit: DesktopBundle,
+    viz: Some(assets),
+    bin_dir: PackagedTools::resolve(Some(resources)).map(tools => tools.bin_dir),
+    ripgrep: ripgrep_command(Some(resources)),
+    moongrep: moongrep_command(Some(resources)),
   }
 }

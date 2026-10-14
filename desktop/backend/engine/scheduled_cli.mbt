@@ -132,6 +132,7 @@ async fn[G] Schedules::run_cli(
     config,
     self.manager.runtime_dir,
     host_mcp?=self.manager.host_mcp,
+    source=self.manager.moonbit,
   )
   let args = ["run", "--session=\{run.session}", "--dir=.", "--approval=never"]
   if config.session_root is Some(root) {

@@ -6,6 +6,7 @@ import {
   "moonbitlang/core/debug",
   "openseek_desktop/backend/endpoint",
   "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/moonbit",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/backend/resources",
   "openseek_desktop/protocol",
@@ -16,13 +17,15 @@ pub fn app_bundle_path(String) -> String?
 
 pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
 
+pub async fn desktop_resources(@resources.Resources) -> HostResources
+
 pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
 
 pub async fn ensure_codex_config(@pathx.Path?) -> String
 
 pub async fn frontend_entry_path(@resources.Resources) -> String
 
-pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String, resources? : @resources.Resources) -> HostState
+pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String, resources? : HostResources) -> HostState
 
 pub async fn open_codex_config(@pathx.Path?) -> Unit
 
@@ -59,6 +62,15 @@ pub fn HostConnection::HostConnection() -> Self
 pub fn HostConnection::close_terminals(Self) -> Unit
 pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, async (@protocol.Notification) -> Unit) -> Unit
 
+pub(all) struct HostResources {
+  moonbit : @moonbit.ToolchainSource
+  viz : VizAssets?
+  bin_dir : String?
+  ripgrep : String?
+  moongrep : String?
+}
+pub fn HostResources::from_path() -> Self
+
 type HostState
 pub async fn HostState::viz_assets(Self) -> VizAssets
 
@@ -66,7 +78,7 @@ type PackagedTools
 pub fn PackagedTools::apply_to_process_env(Self) -> Unit
 pub async fn PackagedTools::resolve(@resources.Resources?) -> Self?
 
-pub struct VizAssets {
+pub(all) struct VizAssets {
   shell : String
   bundle : String
 }

@@ -16,28 +16,14 @@ fn pattern_repair_provider_args(
   command : String,
   pattern : String,
 ) -> Array[String] {
-  let args = pattern_repair_provider_prefix_args(command)
+  let args = semantic_provider_prefix_args(command)
   args.append(["dump", "--expr", pattern, "--strict-check", "--exit-code"])
   args
 }
 
 ///|
-fn pattern_repair_provider_prefix_args(command : String) -> Array[String] {
-  if command == "moonx" ||
-    command.has_suffix("/moonx") ||
-    command.has_suffix("\\moonx") {
-    [MoongrepPackageCoordinate, "--"]
-  } else {
-    []
-  }
-}
-
-///|
 fn pattern_repair_validator_config(command : String) -> Json {
-  {
-    "command": command,
-    "prefix_args": pattern_repair_provider_prefix_args(command),
-  }
+  { "command": command, "prefix_args": semantic_provider_prefix_args(command) }
 }
 
 ///|
@@ -49,21 +35,23 @@ priv enum PatternRepairValidation {
 
 ///|
 async fn validate_pattern_repair_candidate(
-  resources : @resources.Resources?,
   root : @pathx.Absolute,
   pattern : String,
+  provider : ResolvedSemanticProvider?,
 ) -> PatternRepairValidation {
   if !PatternRepairValidationEnabled {
     PatternRepairUnavailable
   } else {
-    guard moongrep_command(resources) is Some(command) else {
+    guard provider is Some(provider) else {
       return PatternRepairInvalid(
         "The semantic-search provider is unavailable.",
       )
     }
     let (code, stdout, stderr) = @processx.collect_output_no_stdin(
-      command,
-      pattern_repair_provider_args(command, pattern),
+      provider.command,
+      pattern_repair_provider_args(provider.command, pattern),
+      extra_env=provider.environment,
+      inherit_env=false,
       cwd=root.0,
     ) catch {
       error =>
@@ -98,6 +86,10 @@ fn pattern_repair_diagnostic(stderr : String) -> String {
 
 ///|
 test "pattern repair validation preserves the dump command" {
+  assert_eq(
+    pattern_repair_provider_args("C:\\tools\\moonx.exe", "foo()"),
+    pattern_repair_provider_args("moonx", "foo()"),
+  )
   assert_eq(pattern_repair_provider_args("moonx", "foo()"), [
     MoongrepPackageCoordinate,
     "--",

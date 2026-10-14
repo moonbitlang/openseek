@@ -30,7 +30,7 @@ async test "standalone script checks do not require or inherit a module" {
   assert_eq(module_scope.cwd(), root)
   assert_eq(module_scope.check_args(), ["check", "--output-json"])
   // The actual diagnostic cache must distinguish all three check owners.
-  let state = MoonCliState("unused")
+  let state = MoonCliState("unused", source=External)
   state.published.set(script, [file])
   state.published.set(module_scope, [scripts.join("lib.mbt")])
   guard moon_cli_scope(root, scripts.join("other.mbtx")) is Some(other) else {

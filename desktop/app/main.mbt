@@ -117,7 +117,7 @@ async fn main {
     auth~,
     app_version~,
     console_url?=console.map(console => console.entry_url()),
-    resources~,
+    resources=@host.desktop_resources(resources),
     host_mcp~,
   )
   let bridge = @extension.DesktopBridgeActor(state)
