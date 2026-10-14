@@ -48,6 +48,9 @@ fn annotation_has_css_paint(style : @js.Value) -> Bool {
 
 ///|
 fn has_unsupported_annotation(page : @js.Value, crop : @selection.Rect) -> Bool {
+  // PDF.js line/shape/ink SVGs are transparent popup hit areas. Their visible
+  // markup is painted in the page/annotation bitmap, including synthesized
+  // appearances when /AP is absent. Rejecting every SVG would block valid crops.
   // The current viewer disables editable forms/XFA. Keep the boundary explicit
   // for native controls as well as the read-only HTML fallbacks PDF.js uses.
   for

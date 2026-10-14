@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
-import { annotationPdf, formPdf } from './support/pdf_annotation_fixture.js';
+import { annotationPdf, formPdf, markupPdf } from './support/pdf_annotation_fixture.js';
 
 async function annotateSelection(preview) {
   await expect(preview.locator('textarea')).toBeVisible();
@@ -1593,6 +1593,49 @@ for (const kind of ['pushButton', 'checkbox', 'radio', 'choice']) {
       return red;
     });
     expect(red).toBeGreaterThan(100);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+for (const kind of ['Line', 'Square', 'Circle', 'PolyLine', 'Polygon', 'Ink']) {
+  test(`PDF capture preserves ${kind} markup beneath transparent SVG hit areas`, async ({ page }) => {
+    const app = await setup(page);
+    app.officeFiles['docs/report.pdf'] = markupPdf(kind);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const svg = page.locator('.annotationLayer svg');
+    await expect(svg).toHaveCount(1);
+    const shapes = svg.locator('line, rect, ellipse, polyline, polygon');
+    await expect(shapes).toHaveCount(1);
+    await expect(shapes).toHaveCSS('stroke', 'rgba(0, 0, 0, 0)');
+    await expect(shapes).toHaveCSS('fill', 'rgba(0, 0, 0, 0)');
+    const painted = await page.locator('.page[data-page-number="1"] canvas').evaluateAll(canvases => {
+      let red = 0;
+      for (const canvas of canvases) {
+        const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i] > 200 && pixels[i + 1] < 80 && pixels[i + 2] < 80 && pixels[i + 3] > 0) red++;
+        }
+      }
+      return red;
+    });
+    expect(painted).toBeGreaterThan(100);
+    const b = await page.locator('.pdfViewer .canvasWrapper canvas').first().boundingBox();
+    const scale = b.width / 612;
+    await captureRegion(page, { x: b.x + 65 * scale, y: b.y + (792 - 737) * scale, width: 255 * scale, height: 100 * scale });
+    const captured = await page.locator('.composer-image img').evaluate(img => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let red = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 200 && pixels[i + 1] < 80 && pixels[i + 2] < 80 && pixels[i + 3] > 0) red++;
+      }
+      return red;
+    });
+    expect(captured).toBeGreaterThan(100);
     expect(app.pageErrors).toEqual([]);
   });
 }

@@ -51,6 +51,27 @@ export function formPdf({ readOnly = true, appearance = true, noRotate = false, 
   ], `form:${readOnly}:${appearance}:${noRotate}:${note}:${kind}`);
 }
 
+// No /AP: PDF.js must synthesize the visible bitmap appearance. The SVG in
+// the annotation layer is a separate transparent hit area for these markups.
+export function markupPdf(kind) {
+  const shapes = {
+    Line: '/L [80 655 300 720]',
+    Square: '',
+    Circle: '',
+    PolyLine: '/Vertices [80 655 190 720 300 655]',
+    Polygon: '/Vertices [80 655 190 720 300 655 80 655]',
+    Ink: '/InkList [[80 655 190 720 300 655]]',
+  };
+  if (!Object.hasOwn(shapes, kind)) throw new Error(`Unknown markup fixture: ${kind}`);
+  return pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Annots [5 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>',
+    `<< /Type /Annot /Subtype /${kind} /Rect [72 645 312 730] /P 3 0 R /F 4 /C [1 0 0] /BS << /W 4 /S /S >> ${shapes[kind]} >>`,
+  ], `markup:${kind}`);
+}
+
 function pdfFixture(objects, sig) {
   let pdf = '%PDF-1.7\n';
   const offsets = [0];
