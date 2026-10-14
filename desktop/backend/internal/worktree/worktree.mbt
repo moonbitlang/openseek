@@ -484,8 +484,9 @@ async fn WorktreeOwner::binding_unlocked(
 /// between confirmation and deletion.
 pub async fn WorktreeOwner::archive_check(
   self : WorktreeOwner,
+  host : WorktreeHost,
 ) -> ArchiveNeedsForceReply? {
-  match self.checkout_removal() {
+  match self.checkout_removal(host) {
     Some({ worktree, dirty_paths, dirty_path_count, }) if dirty_path_count > 0 =>
       Some({ worktree, dirty_paths, dirty_path_count, })
     _ => None
@@ -493,19 +494,30 @@ pub async fn WorktreeOwner::archive_check(
 }
 
 ///|
-/// The checkout bound to this owner, when one is on disk, with a preview of
+/// The checkout this owner would remove, when one is on disk and no other
+/// conversation still holds it, with a preview of
 /// what removing it would discard: its uncommitted and untracked paths, none
 /// for a clean checkout. Read-only, like `archive_check`. `workspace` is the
 /// one project to look in, as for `archive_checkout`.
 pub async fn WorktreeOwner::checkout_removal(
   self : WorktreeOwner,
+  host : WorktreeHost,
   workspace? : @pathx.Absolute,
 ) -> CheckoutRemoval? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked(workspace?) is Some((workspace, entry)) else {
+  guard self.binding_unlocked(workspace?) is Some((workspace, _)) else {
     return None
   }
+  let shared = lock_worktrees_file(workspace)
+  defer shared.release()
+  guard read_worktrees_unlocked(workspace)
+    .iter()
+    .find_first(entry => entry.belongs_to(self))
+    is Some(entry) else {
+    return None
+  }
+  guard !entry.held_by_another(host, workspace, self) else { return None }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   guard present else { return None }
@@ -580,7 +592,9 @@ pub async fn WorktreeOwner::archive_checkout(
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
-  guard self.binding_unlocked(workspace?) is Some((workspace, _)) else { return None }
+  guard self.binding_unlocked(workspace?) is Some((workspace, _)) else {
+    return None
+  }
   // Another host adding a fork to this worktree holds this lock from the
   // member's binding until its record exists. Deciding in between would see
   // a member that holds nothing yet and delete the checkout its fork is

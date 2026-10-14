@@ -544,7 +544,11 @@ pub fn endpoints(
       )
     }),
     Endpoint(@commands.session_delete_check, payload => {
-      @engine.delete_session_check(payload.session, payload.workspace)
+      @engine.delete_session_check(
+        state.manager,
+        payload.session,
+        payload.workspace,
+      )
     }),
     Endpoint(@commands.session_delete, payload => {
       @engine.delete_session(
@@ -1125,7 +1129,9 @@ async fn ApiState::codex_request(
   // failed bridge command, so the frontend can keep the task selected.
   if archive is Some(request) &&
     !request.force &&
-    @worktree.WorktreeOwner::codex(request.thread_id).archive_check()
+    @worktree.WorktreeOwner::codex(request.thread_id).archive_check(
+      self.manager.worktree_host(),
+    )
     is Some(refusal) {
     return request.needs_force(refusal)
   }

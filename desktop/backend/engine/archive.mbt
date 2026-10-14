@@ -583,13 +583,25 @@ pub async fn delete_session(
     selected~,
   )
   defer family.release()
+  manager.archive_commit_lock.acquire()
+  defer manager.archive_commit_lock.release()
+  let shared = @fsx.FileLock::acquire(
+    @session_store.archived_root(family.root).to_path(),
+  ) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
+  defer shared.release()
   // Only the selected project's checkout may go: another project can hold a
   // conversation with the same id. And only the checkout the confirmation
   // named: one that appeared since — repaired by another client while the
   // dialog was open — is reported instead. The claim keeps a further repair
   // out from here on.
   let owner = @worktree.WorktreeOwner::openseek(session)
-  if owner.checkout_removal(workspace=selected.workspace) is Some(found) &&
+  if owner.checkout_removal(
+      manager.worktree_host(),
+      workspace=selected.workspace,
+    )
+    is Some(found) &&
     worktree != Some(found.worktree) {
     return Unconfirmed(found)
   }
@@ -598,6 +610,7 @@ pub async fn delete_session(
   // move below then fails leaves a live conversation blocked on its retained
   // missing placement.
   let refusal = owner.archive_checkout(
+    manager.worktree_host(),
     force,
     workspace=selected.workspace,
     on_committed?=on_worktree_changed,
@@ -606,6 +619,7 @@ pub async fn delete_session(
     return Unconfirmed({ worktree, dirty_paths, dirty_path_count, })
   }
   family.delete_records(archived=false, on_committed, on_worktree_changed?)
+  family.release()
   manager.sweep_archived_deletions_in(family.root)
   Deleted
 }
@@ -616,6 +630,7 @@ pub async fn delete_session(
 /// project. Read-only — the client asks before it shows its confirmation, so
 /// the dialog states what the host will do instead of guessing.
 pub async fn delete_session_check(
+  manager : EngineManager,
   session : String,
   workspace : String,
 ) -> SessionDeleteCheckReply {
@@ -626,6 +641,7 @@ pub async fn delete_session_check(
   let selected = @session_store.ArchivedStore::for_workspace(workspace)
   {
     checkout: @worktree.WorktreeOwner::openseek(session).checkout_removal(
+      manager.worktree_host(),
       workspace=selected.workspace,
     ),
   }

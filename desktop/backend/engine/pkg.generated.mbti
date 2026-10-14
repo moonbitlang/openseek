@@ -30,7 +30,7 @@ pub async fn delete_archived_session(EngineManager, String, String, (String, Str
 
 pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, worktree? : String, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
 
-pub async fn delete_session_check(String, String) -> @protocol.SessionDeleteCheckReply
+pub async fn delete_session_check(EngineManager, String, String) -> @protocol.SessionDeleteCheckReply
 
 pub async fn detach_workspace(EngineManager, String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
