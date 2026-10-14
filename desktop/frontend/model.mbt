@@ -1985,7 +1985,11 @@ priv enum Msg {
     draft~ : @composer.Draft
   )
   ForkRequested(slot~ : String, through~ : Int32)
-  ForkCompleted(ConversationFork, Result[@protocol.SessionForkReply, String])
+  ForkCompleted(
+    ConversationFork,
+    Result[@protocol.SessionForkReply, String],
+    fresh_session~ : String
+  )
   // Open a row from the archived index. Its workspace is part of the row's
   // durable placement and selects the archived twin without restoring it.
   OpenArchivedSession(

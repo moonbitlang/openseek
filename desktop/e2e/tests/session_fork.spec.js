@@ -316,6 +316,54 @@ test('failed fork retains the edited text and later transcript for retry', async
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const navigate of [false, true]) {
+  test(`an edit error after another client deletes its source ${navigate ? 'preserves the other conversation' : 'retires the deleted conversation'}`, async ({ page }) => {
+    const app = await setup(page, true);
+    const error = 'The original conversation was deleted by another client';
+    app.rpcErrors.set('session.edit', error);
+    app.rpcDelays.set('session.edit', 2000);
+    const originalReply = app.replyFor.bind(app);
+    app.replyFor = request => {
+      if (request.method === 'session.load' && request.params.session === 'session-other') {
+        const events = [event(1, 'user', { content: 'An unrelated conversation' })];
+        return { session: { version: 1, id: 'session-other', events }, watermark: 1, prediction: null };
+      }
+      return originalReply(request);
+    };
+    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+    const editor = page.locator('.message-editor');
+    await editor.locator('textarea').fill('An edit overtaken by deletion');
+    await editor.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => app.requests.filter(request => request.method === 'session.edit').length).toBe(1);
+
+    // The same authoritative notification reaches this client when another
+    // browser uses Delete. The edit reply is still pending at this point.
+    const lists = app.requests.filter(request => request.method === 'session.list').length;
+    app.liveSessions = app.liveSessions.filter(row => row.id !== 'session-1');
+    app.notify('session.changed', { change: 'deleted', session: 'session-1', workspace: '/workspace' });
+    await expect.poll(() => app.requests.filter(request => request.method === 'session.list').length).toBeGreaterThan(lists);
+    await expect(editor.locator('textarea')).toBeDisabled();
+    await expect(page.locator('#transcript')).toContainText('Second answer.');
+    if (navigate) {
+      await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+      await expect(page.locator('#transcript')).toContainText('An unrelated conversation');
+      await page.locator('#task').fill('Keep this unrelated draft');
+    }
+
+    await expect(page.getByText(error, { exact: false })).toBeVisible();
+    await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
+    await expect(page.locator('#transcript')).not.toContainText('Second answer.');
+    await expect(editor).toHaveCount(0);
+    if (navigate) {
+      await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);
+      await expect(page.locator('#transcript')).toContainText('An unrelated conversation');
+      await expect(page.locator('#task')).toHaveValue('Keep this unrelated draft');
+    }
+    expect(app.requests.filter(request => ['session.edit', 'session.fork', 'agent.start', 'session.delete'].includes(request.method)).map(request => request.method)).toEqual(['session.edit']);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('Send completes in its fork after navigation without replacing the other composer', async ({ page }) => {
   const app = await setup(page, true);
   app.rpcDelays.set('session.edit', 1200);

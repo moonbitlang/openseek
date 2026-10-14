@@ -59,20 +59,27 @@ fn Model::finish_fork(
   emit : @cmd.Emit[Msg],
   pending : ConversationFork,
   result : Result[@protocol.SessionForkReply, String],
+  fresh_session~ : String,
 ) -> (@cmd.Cmd, Model) {
   guard self.conversation_fork == Some(pending) else {
     return (@cmd.none, self)
   }
   let model = { ..self, conversation_fork: None, }
   match result {
-    Err(message) => model.notify_error(emit, message)
+    Err(message) =>
+      model
+      .retire_deleted_edit_source(pending, fresh_session)
+      .notify_error(emit, message)
     Ok(reply) => {
       let should_open = model.screen is Chat &&
         model.conversation_selection() == Some(pending.source)
       guard model.device_state(pending.source.channel) is Some(dev) &&
         dev.connection_generation == pending.connection_generation &&
         dev.projects.contains(pending.source.workspace) else {
-        return (@cmd.none, model)
+        return (
+          @cmd.none,
+          model.retire_deleted_edit_source(pending, fresh_session),
+        )
       }
       let sessions = dev.sessions.filter(item => {
         item.id != reply.session || item.workspace != pending.source.workspace
@@ -144,6 +151,42 @@ fn Model::finish_fork(
 }
 
 ///|
+/// A failed edit still reports its error. If a deletion notification already
+/// removed the source, finish the ordinary local deletion transition too.
+fn Model::retire_deleted_edit_source(
+  self : Model,
+  pending : ConversationFork,
+  fresh_session : String,
+) -> Model {
+  let source = pending.source
+  guard pending.is_edit() &&
+    self.archive_override(source.channel, {
+      session: source.session,
+      workspace: source.workspace,
+    })
+    is Some(ArchiveDeleted) else {
+    return self
+  }
+  let model = replace_removed_selection(
+    self,
+    source.channel,
+    source.session,
+    fresh_session,
+    source.workspace,
+    source.record,
+  )
+  {
+    ..model,
+    screen: self.screen,
+    conversations: model.conversations.filter(conv => {
+      conv.device != source.channel ||
+      conv.session_id != source.session ||
+      conv.project() != source.workspace
+    }),
+  }
+}
+
+///|
 fn fork_conversation(
   emit : @cmd.Emit[Msg],
   pending : ConversationFork,
@@ -175,7 +218,11 @@ fn fork_conversation(
       } catch {
         error => Err(@interop.bridge_error_text(error))
       }
-      scheduler.add(emit(ForkCompleted(pending, result)))
+      scheduler.add(
+        emit(
+          ForkCompleted(pending, result, fresh_session=generated_session_id()),
+        ),
+      )
     })
     |> ignore
   })
@@ -229,8 +276,18 @@ test "fork and message editing are pure and preserve navigation" {
     session: "desktop-fork",
     title: pending.source_title,
   })
-  let (_, done) = away.finish_fork(emit, pending, result)
-  let (_, done_again) = away.finish_fork(emit, pending, result)
+  let (_, done) = away.finish_fork(
+    emit,
+    pending,
+    result,
+    fresh_session="desktop-fallback",
+  )
+  let (_, done_again) = away.finish_fork(
+    emit,
+    pending,
+    result,
+    fresh_session="desktop-fallback",
+  )
   assert_true(done.dev().sessions == done_again.dev().sessions)
   assert_true(away.dev().sessions == model.dev().sessions)
   assert_true(done.screen is Settings)
@@ -280,8 +337,62 @@ test "fork and message editing are pure and preserve navigation" {
       fail("edit pending")
     }
     assert_true(pending.kind is EditedMessage(_))
-    let (_, done) = requested.finish_fork(emit, pending, result)
-    let (_, again) = requested.finish_fork(emit, pending, result)
+    let failed : Result[@protocol.SessionForkReply, String] = Err("edit failed")
+    let (_, retained) = requested.finish_fork(
+      emit,
+      pending,
+      failed,
+      fresh_session="desktop-fallback",
+    )
+    assert_true(
+      retained.find_conversation(source.device, source.session_id) is Some(_),
+    )
+    let deleted = requested.with_archive_override(
+      source.device,
+      { session: source.session_id, workspace: source.project(), },
+      ArchiveDeleted,
+    )
+    for screen in [Chat, Settings] {
+      let (_, retired) = { ..deleted, screen, }.finish_fork(
+        emit,
+        pending,
+        failed,
+        fresh_session="desktop-fallback",
+      )
+      assert_true(retired.screen == screen)
+      assert_true(
+        retired.find_conversation(source.device, source.session_id) is None,
+      )
+      assert_eq(retired.active_session, "desktop-fallback")
+      assert_true(retired.conversation_fork is None)
+    }
+    // Only a still-current deletion fact may retire the source.
+    let live = deleted.with_archive_override(
+      source.device,
+      { session: source.session_id, workspace: source.project(), },
+      ArchiveLive,
+    )
+    let (_, retained) = live.finish_fork(
+      emit,
+      pending,
+      failed,
+      fresh_session="desktop-fallback",
+    )
+    assert_true(
+      retained.find_conversation(source.device, source.session_id) is Some(_),
+    )
+    let (_, done) = requested.finish_fork(
+      emit,
+      pending,
+      result,
+      fresh_session="desktop-fallback",
+    )
+    let (_, again) = requested.finish_fork(
+      emit,
+      pending,
+      result,
+      fresh_session="desktop-fallback",
+    )
     guard done.find_conversation(source.device, "desktop-fork") is Some(created) &&
       again.find_conversation(source.device, "desktop-fork") is Some(repeated) else {
       fail("edit destination")
@@ -301,7 +412,12 @@ test "fork and message editing are pure and preserve navigation" {
           { kind: Answer("already loaded"), sequence: Some(4), ts: None, },
         ],
       })
-      let (_, preserved) = arrived.finish_fork(emit, pending, result)
+      let (_, preserved) = arrived.finish_fork(
+        emit,
+        pending,
+        result,
+        fresh_session="desktop-fallback",
+      )
       assert_true(
         preserved
         .find_conversation(source.device, "desktop-fork")
@@ -309,8 +425,18 @@ test "fork and message editing are pure and preserve navigation" {
         Some(1),
       )
     }
-    let (_, stale) = requested.finish_fork(emit, pending, result)
-    let (_, replayed) = stale.finish_fork(emit, pending, result)
+    let (_, stale) = requested.finish_fork(
+      emit,
+      pending,
+      result,
+      fresh_session="desktop-fallback",
+    )
+    let (_, replayed) = stale.finish_fork(
+      emit,
+      pending,
+      result,
+      fresh_session="desktop-fallback",
+    )
     assert_true(stale.conversations == replayed.conversations)
   }
   for sequence in [4, 6, 99] {
@@ -373,6 +499,7 @@ test "the fork of a worktree conversation opens in the same worktree" {
     emit,
     pending,
     Ok({ session: "desktop-fork", title: pending.source_title, }),
+    fresh_session="desktop-fallback",
   )
   guard done.find_conversation(channel, "desktop-fork") is Some(fork) else {
     fail("the fork was not opened")

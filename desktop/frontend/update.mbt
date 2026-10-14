@@ -5236,8 +5236,8 @@ fn update_msg(
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
       model.request_fork(dispatch, slot, through)
-    ForkCompleted(pending, result) =>
-      model.finish_fork(dispatch, pending, result)
+    ForkCompleted(pending, result, fresh_session~) =>
+      model.finish_fork(dispatch, pending, result, fresh_session~)
     // A transcript link naming a session on the device already focused. It
     // delegates rather than duplicating: the sub-run child this opens is an
     // ordinary durable session, and `OpenSession` is how one is opened.
