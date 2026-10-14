@@ -212,3 +212,39 @@ test "edited cleanup waits for the exact receipt and retries only deletion" {
     is None,
   )
 }
+
+///|
+test "a first-message replacement retains its late receipt across navigation" {
+  let model = test_model()
+  guard model.conversation_selection() is Some(source) else { fail("source") }
+  let edited = {
+    ..empty_conversation(Local, "edited", model.active().project()),
+    edit_replacement: Some({
+      source,
+      source_sequence: 2,
+      state: Waiting("late-edit"),
+    }),
+  }
+  // An indeterminate start has returned to NoRun with no pending prompt or
+  // transcript. The replacement receipt is still allowed to arrive later.
+  assert_false(edited.has_begun())
+  assert_true(edited.draft_empty())
+  let away = model
+    .replace_conversation(edited)
+    .activate(Local, "another", source.workspace)
+  assert_true(away.find_conversation(Local, "edited") is Some(_))
+  let (_, received) = away.observe_edited_message(
+    test_dispatch(),
+    Local,
+    "edited",
+    User({
+      content: Content([Text("edited")]),
+      submission_id: Some("late-edit"),
+    }),
+  )
+  assert_eq(received.active_session, "another")
+  assert_true(
+    received.find_conversation(Local, "edited").unwrap().edit_replacement
+    is Some({ state: Deleting("late-edit"), .. }),
+  )
+}

@@ -592,44 +592,52 @@ pub async fn delete_session(
     error => raise EngineError("could not lock the archived store: \{error}")
   }
   defer shared.release()
-  if edit_replacement is Some(edit) {
-    // Validate both records inside the cross-host deletion lock. A local
-    // read lease alone cannot stop another Desktop from deleting the copy.
-    require_edited_receipt(family.root, edit)
-    let source = @session_record.read_document(family.root, session)
-    guard session_max_sequence(source) == edit.source_sequence else {
-      raise EngineError("the original conversation changed; it was kept")
-    }
-  }
 
-  // Only the selected project's checkout may go: another project can hold a
-  // conversation with the same id. And only the checkout the confirmation
-  // named: one that appeared since — repaired by another client while the
-  // dialog was open — is reported instead. The claim keeps a further repair
-  // out from here on.
-  let owner = @worktree.WorktreeOwner::openseek(session)
-  if owner.checkout_removal(
+  async fn commit() -> SessionDeleteReply {
+    // Only the selected project's checkout may go: another project can hold a
+    // conversation with the same id. And only the checkout the confirmation
+    // named: one that appeared since — repaired by another client while the
+    // dialog was open — is reported instead. The claim keeps a further repair
+    // out from here on.
+    let owner = @worktree.WorktreeOwner::openseek(session)
+    if owner.checkout_removal(
+        manager.worktree_host(),
+        workspace=selected.workspace,
+      )
+      is Some(found) &&
+      worktree != Some(found.worktree) {
+      return Unconfirmed(found)
+    }
+    // As in archiving, a dirty refusal lands after the idle engine closed and
+    // before anything irreversible; a removal that succeeds while the record
+    // move below then fails leaves a live conversation blocked on its retained
+    // missing placement.
+    let refusal = owner.archive_checkout(
       manager.worktree_host(),
+      force,
       workspace=selected.workspace,
+      on_committed?=on_worktree_changed,
     )
-    is Some(found) &&
-    worktree != Some(found.worktree) {
-    return Unconfirmed(found)
+    if refusal is Some({ worktree, dirty_paths, dirty_path_count, }) {
+      return Unconfirmed({ worktree, dirty_paths, dirty_path_count, })
+    }
+    family.delete_records(archived=false, on_committed, on_worktree_changed?)
+    Deleted
   }
-  // As in archiving, a dirty refusal lands after the idle engine closed and
-  // before anything irreversible; a removal that succeeds while the record
-  // move below then fails leaves a live conversation blocked on its retained
-  // missing placement.
-  let refusal = owner.archive_checkout(
-    manager.worktree_host(),
-    force,
-    workspace=selected.workspace,
-    on_committed?=on_worktree_changed,
-  )
-  if refusal is Some({ worktree, dirty_paths, dirty_path_count, }) {
-    return Unconfirmed({ worktree, dirty_paths, dirty_path_count, })
+  let result = if edit_replacement is Some(edit) {
+    // The store lock protects the replacement from concurrent deletion. The
+    // source record lock also excludes ordinary writers through the rename.
+    require_edited_receipt(family.root, edit)
+    @session_record.with_document(family.root, session, source => {
+      guard session_max_sequence(source) == edit.source_sequence else {
+        raise EngineError("the original conversation changed; it was kept")
+      }
+      commit()
+    })
+  } else {
+    commit()
   }
-  family.delete_records(archived=false, on_committed, on_worktree_changed?)
+  guard result is Deleted else { return result }
   family.release()
   manager.sweep_archived_deletions_in(family.root)
   Deleted

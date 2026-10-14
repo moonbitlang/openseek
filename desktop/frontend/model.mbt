@@ -3830,7 +3830,7 @@ fn Model::activate(
 /// one the list cannot reach does not save the draft, it strands it — the
 /// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
-  self.has_begun() || !self.draft_empty()
+  self.has_begun() || !self.draft_empty() || self.edit_replacement is Some(_)
 }
 
 ///|

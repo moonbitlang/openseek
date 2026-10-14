@@ -48,13 +48,50 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     assert_true(store.exists(SessionId("source")))
     assert_true(notifications.is_empty())
   }
-  assert_true(
-    commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
-      _,
-      _,
-    ) => ())
-    is Deleted,
-  )
+  @async.with_task_group(group => {
+    // Pause deletion after validation but before its irreversible rename.
+    manager.archive_cleanup_lock.acquire()
+    let mut held = true
+    defer (if held { manager.archive_cleanup_lock.release() })
+    let cleanup = group.spawn(() => {
+      commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
+        _,
+        _,
+      ) => ())
+    })
+    let writer = @fs.open(
+      selected.root
+      .join("sessions")
+      .join("source")
+      .join("session.lock")
+      .to_string(),
+      mode=ReadWrite,
+    )
+    defer writer.close()
+    // Brief snapshot reads may also hold the lock. Wait for the sustained
+    // hold at the paused rename; without it this loop times out.
+    @async.with_timeout(3000, () => {
+      while @async.with_timeout_opt(100, () => {
+              writer.lock(Exclusive)
+              writer.unlock()
+            })
+            is Some(_) {
+        @async.sleep(1)
+      }
+    })
+    assert_true(
+      @async.with_timeout_opt(100, () => {
+        store.append(
+          source,
+          User(UserMessage(Content([Text("another host's message")]))),
+        )
+      })
+      is None,
+    )
+    manager.archive_cleanup_lock.release()
+    held = false
+    assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Deleted)
+  })
   assert_false(store.exists(SessionId("source")))
   assert_true(store.exists(SessionId("replacement")))
   assert_eq(notifications, ["source"])

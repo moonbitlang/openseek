@@ -216,9 +216,23 @@ pub async fn read_document(
   root : @pathx.Absolute,
   session : String,
 ) -> @protocol.SessionDocument {
+  with_document(root, session, document => document)
+}
+
+///|
+/// Keep ordinary record writers excluded while consuming a committed snapshot.
+/// The callback may rename the record directory; its lock remains held until
+/// the callback returns, so validation and the rename share one snapshot.
+pub async fn[T] with_document(
+  root : @pathx.Absolute,
+  session : String,
+  body : async (@protocol.SessionDocument) -> T,
+) -> T {
   let tail = Tail(root, session)
-  ignore(tail.poll())
-  tail.document()
+  with_shared_record_lock(tail.lock, () => {
+    ignore(tail.read_forward())
+    body(tail.document())
+  })
 }
 
 ///|

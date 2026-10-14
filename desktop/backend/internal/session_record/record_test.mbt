@@ -280,3 +280,27 @@ async test "read_document answers with the whole record at once" {
     content="[1, 2]",
   )
 }
+
+///|
+async test "with_document excludes a writer until its consuming callback finishes" {
+  let (root, path) = record_fixture("locked-edit")
+  write_record(path, header_line("locked-edit") + event_line(1, "one"))
+  let writer = @fs.open(
+    path.dirname().join("session.lock").to_string(),
+    mode=ReadWrite,
+    create_mode=OpenOrCreate,
+  )
+  defer writer.close()
+  @session_record.with_document(root, "locked-edit", document => {
+    assert_eq(document.events.unwrap_or([]).length(), 1)
+    assert_true(
+      @async.with_timeout_opt(100, () => {
+        writer.lock(Exclusive)
+        writer.unlock()
+      })
+      is None,
+    )
+  })
+  @async.with_timeout(1000, () => writer.lock(Exclusive))
+  writer.unlock()
+}

@@ -14,6 +14,8 @@ pub async fn read_text(@pathx.Absolute, String) -> String
 
 pub fn record_path(@pathx.Absolute, String) -> @pathx.Path
 
+pub async fn[T] with_document(@pathx.Absolute, String, async (@protocol.SessionDocument) -> T) -> T
+
 // Errors
 pub(all) suberror RecordError {
   Absent(String)
