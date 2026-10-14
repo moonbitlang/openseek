@@ -24,7 +24,7 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
         "cannot read \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
       )
   }
-  let servers = @mcpconfig.decode(@json.parse(text)) catch {
+  let servers = @mcpconfig.decode(@json.parse(text), env=@env.get_env_vars()) catch {
     error =>
       fail(
         "invalid MCP configuration in \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",

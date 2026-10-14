@@ -94,7 +94,6 @@ class Build {
     this.argv = argv;
     this.desktop = fileURLToPath(new URL("../", import.meta.url));
     this.app = join(this.desktop, "app");
-    this.backend = join(this.desktop, "backend");
     this.repo = resolve(this.desktop, "..");
     this.host = Hosts[process.platform];
   }
@@ -319,27 +318,18 @@ class Build {
     if (this.command === "macos") {
       await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.app, env });
       await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", "desktop/target/moonbuild/macos-12.0", ...release], { cwd: this.repo, env });
-      // The command agents run to use the host's tools (`backend/cmd/seekmoon`).
-      await this.commandRun("moon", ["build", "cmd/seekmoon", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.backend, env });
       const host = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/openseek_desktop/app/app.exe`);
       const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/app/app.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
       const built = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build`);
-      return {
-        engine: join(built, "moonbitlang/openseek/openseek.exe"),
-        seekmoon: join(built, "openseek_desktop/backend/cmd/seekmoon/seekmoon.exe"),
-      };
+      return join(built, "moonbitlang/openseek/openseek.exe");
     }
     const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
     await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.app });
     await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.repo });
-    await this.commandRun("moon", ["build", "cmd/seekmoon", "--target", "native", ...warning, ...release], { cwd: this.backend });
     const built = join(this.repo, `_build/native/${profile}/build`);
-    return {
-      engine: join(built, "moonbitlang/openseek/openseek.exe"),
-      seekmoon: join(built, "openseek_desktop/backend/cmd/seekmoon/seekmoon.exe"),
-    };
+    return join(built, "moonbitlang/openseek/openseek.exe");
   }
 
   async vendors() {
@@ -382,7 +372,7 @@ class Build {
     return { rg, seed };
   }
 
-  async stage(profile, binaries, vendors) {
+  async stage(profile, engine, vendors) {
     const root = join(this.desktop, "seekmoon");
     await rm(root, { recursive: true, force: true });
     await mkdir(join(root, "web/viz"), { recursive: true });
@@ -394,9 +384,7 @@ class Build {
     await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(root, "web/viz/viz_app.js"));
     await this.sharedWeb(join(root, "web"));
     const suffix = this.command === "windows" ? ".exe" : "";
-    await cp(binaries.engine, join(root, `bin/openseek${suffix}`));
-    // Beside `rg`, so it is on the PATH the host gives every engine.
-    await cp(binaries.seekmoon, join(root, `bin/seekmoon${suffix}`));
+    await cp(engine, join(root, `bin/openseek${suffix}`));
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));
     await cp(join(vendors.rg, `rg${suffix}`), join(root, `bin/rg${suffix}`));
@@ -405,20 +393,16 @@ class Build {
     await cp(vendors.seed, join(root, `toolchains/moonbit/${this.host.platform}`), { recursive: true, dereference: true });
     if (this.command !== "windows") {
       await chmod(join(root, "bin/openseek"), 0o755);
-      await chmod(join(root, "bin/seekmoon"), 0o755);
       await chmod(join(root, "bin/rg"), 0o755);
     } else {
-      // Both are started by a host with no console; as console programs
-      // each would open a window of its own.
-      for (const name of ["openseek.exe", "seekmoon.exe"]) {
-        const path = join(root, "bin", name);
-        const bytes = Buffer.from(await readFile(path));
-        if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error(`${path} is not a PE executable`);
-        const pe = bytes.readUInt32LE(0x3c);
-        if (bytes.toString("ascii", pe, pe + 4) !== "PE\0\0" || bytes.readUInt16LE(pe + 20) < 70) throw new Error(`${path} has an invalid PE header`);
-        bytes.writeUInt16LE(2, pe + 24 + 68);
-        await writeFile(path, bytes);
-      }
+      // The engine is started by a host with no console.
+      const path = join(root, "bin/openseek.exe");
+      const bytes = Buffer.from(await readFile(path));
+      if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error(`${path} is not a PE executable`);
+      const pe = bytes.readUInt32LE(0x3c);
+      if (bytes.toString("ascii", pe, pe + 4) !== "PE\0\0" || bytes.readUInt16LE(pe + 20) < 70) throw new Error(`${path} has an invalid PE header`);
+      bytes.writeUInt16LE(2, pe + 24 + 68);
+      await writeFile(path, bytes);
     }
   }
 
@@ -457,9 +441,9 @@ class Build {
     }
     const profile = options.release ? "release" : "debug";
     await this.web(profile);
-    const binaries = await this.native(profile);
+    const engine = await this.native(profile);
     const vendors = await this.vendors();
-    await this.stage(profile, binaries, vendors);
+    await this.stage(profile, engine, vendors);
     const formats = this.command === "macos"
       ? ["app", ...options.targets.filter(target => target !== "app")]
       : this.command === "windows"

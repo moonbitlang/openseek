@@ -1,5 +1,5 @@
 // The browser tools this host offers the agents it runs (`@mcp`, reached
-// through `seekmoon mcp`): what an agent can do with the dock's Browser
+// through HTTP MCP): what an agent can do with the dock's Browser
 // tabs. They act on the same native views the `browser.*` window commands
 // drive, so a tab is one thing whether the user or an agent is looking at
 // it.

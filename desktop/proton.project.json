@@ -18,7 +18,6 @@
       "binaries": [
         "seekmoon/bin/openseek",
         "seekmoon/bin/rg",
-        "seekmoon/bin/seekmoon",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/internal/tcc",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moon",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moon-cram",

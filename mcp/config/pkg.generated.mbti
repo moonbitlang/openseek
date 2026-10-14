@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn decode(Json) -> Array[McpServer] raise
+pub fn decode(Json, env? : Map[String, String]) -> Array[McpServer] raise
 
 // Errors
 pub suberror ConfigError {

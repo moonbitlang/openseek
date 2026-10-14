@@ -194,19 +194,32 @@ The app offers tools of its own to the agents it runs, starting with the
 dock's browser. An agent works with the Browser tabs of its own conversation:
 `browser_tabs` lists them, `browser_open` opens a new one on an address, and
 `browser_navigate` loads an address in one, steps back or forward in its
-history, or reloads it. They are served by the bundled `seekmoon` command,
-which is one more entry in the same file:
+history, or reloads it. The engine connects directly to the host over MCP
+Streamable HTTP. Add this to `~/.openseek/mcp.json`:
 
 ```json
-{ "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }
+{
+  "mcpServers": {
+    "seekmoon": {
+      "url": "${OPENSEEK_DESKTOP_TOOLS_URL}",
+      "headers": {
+        "Authorization": "Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
-The tools then reach the agent as `mcp__seekmoon__<tool>`. `seekmoon` is on
-the path of every engine the app starts and talks to the app that started it,
-so the entry needs no path and no address; outside the app the command has
-nothing to connect to. `"args": ["mcp", "browser"]` offers only the named
-groups of tools. The server and its command are described in
-`backend/mcp/README.md`.
+The tools reach the agent as `mcp__seekmoon__<tool>`. The host supplies the
+address and conversation token in the engine's environment; no relay process
+or credentials on disk are needed. Without the entry no tools are added.
+Outside a desktop-launched engine the variables are absent, so loading this
+configuration fails and no MCP tools are registered. To offer only browser
+tools, add
+`"X-SeekMoon-Tool-Groups": "browser"` to `headers`; multiple groups are comma
+separated. Replace older `"command": "seekmoon", "args": ["mcp"]` entries
+with the HTTP entry above; the relay executable is no longer packaged.
+See `backend/mcp/README.md`.
 
 ## API endpoint
 

@@ -1,8 +1,7 @@
 // The host's tool server: a loopback HTTP endpoint through which the agents
 // this host runs call tools the host contributes. It speaks MCP's tool
-// methods as JSON-RPC, one request per POST. Its client is the `seekmoon`
-// command (`stdio.mbt`), which an engine starts as a stdio MCP server and
-// which relays to here.
+// methods as JSON-RPC, one request per POST. The engine connects directly
+// with its Streamable HTTP MCP client, using the grant in its environment.
 //
 // One principal is fenced out and one is let in. An agent is let in by the
 // bearer token its conversation was granted, which also names the
@@ -157,14 +156,19 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
     guard request.meth is Post else {
       return Refused(405, "Method Not Allowed")
     }
+    let groups = if request.headers.get("x-seekmoon-tool-groups") is Some(value) {
+      value.split(",").map(group => group.trim().to_owned()).to_array()
+    } else {
+      []
+    }
     match read_body(conn) {
-      Some(body) => Accepted(session~, body~)
+      Some(body) => Accepted(session~, body~, groups~)
       None => Refused(413, "Content Too Large")
     }
   })
   match received {
     Refused(code, reason) => respond_status(conn, code, reason)
-    Accepted(session~, body~) => {
+    Accepted(session~, body~, groups~) => {
       let message = @json.parse(@utf8.decode(body)) catch {
         _ => {
           respond_json(
@@ -176,7 +180,7 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
           return
         }
       }
-      match self.dispatch(session, message) {
+      match self.dispatch(session, message, groups) {
         Some(answer) => respond_json(conn, 200, "OK", answer)
         None => respond_status(conn, 202, "Accepted")
       }
@@ -187,7 +191,7 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
 ///|
 /// What reading one request came to.
 priv enum Received {
-  Accepted(session~ : String, body~ : Bytes)
+  Accepted(session~ : String, body~ : Bytes, groups~ : Array[String])
   Refused(Int32, String)
 }
 
