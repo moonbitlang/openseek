@@ -3045,6 +3045,7 @@ pub(all) struct SessionEditCommitPayload {
   replacement : String
   submission_id : String
   source_sequence : Int
+  source_descendants : Array[SessionEditDescendant]
 } derive(Eq, @debug.Debug)
 pub fn SessionEditCommitPayload::equal(Self, Self) -> Bool
 pub fn SessionEditCommitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3053,6 +3054,18 @@ pub fn SessionEditCommitPayload::to_json(Self) -> Json
 pub fn SessionEditCommitPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionEditCommitPayload
 pub impl @json.FromJson for SessionEditCommitPayload
+
+pub(all) struct SessionEditDescendant {
+  session : String
+  sequence : Int
+} derive(Eq, @debug.Debug)
+pub fn SessionEditDescendant::equal(Self, Self) -> Bool
+pub fn SessionEditDescendant::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionEditDescendant::not_equal(Self, Self) -> Bool
+pub fn SessionEditDescendant::to_json(Self) -> Json
+pub fn SessionEditDescendant::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionEditDescendant
+pub impl @json.FromJson for SessionEditDescendant
 
 pub(all) struct SessionEditPreparePayload {
   session : String
@@ -3068,6 +3081,19 @@ pub fn SessionEditPreparePayload::to_json(Self) -> Json
 pub fn SessionEditPreparePayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionEditPreparePayload
 pub impl @json.FromJson for SessionEditPreparePayload
+
+pub(all) struct SessionEditPrepareReply {
+  session : String
+  title : String
+  source_descendants : Array[SessionEditDescendant]
+} derive(Eq, @debug.Debug)
+pub fn SessionEditPrepareReply::equal(Self, Self) -> Bool
+pub fn SessionEditPrepareReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionEditPrepareReply::not_equal(Self, Self) -> Bool
+pub fn SessionEditPrepareReply::to_json(Self) -> Json
+pub fn SessionEditPrepareReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionEditPrepareReply
+pub impl @json.FromJson for SessionEditPrepareReply
 
 pub(all) struct SessionEvent {
   sequence : Int

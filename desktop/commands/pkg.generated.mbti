@@ -247,7 +247,7 @@ pub let session_delete_check : Command[@protocol.SessionDeleteCheckPayload, @pro
 
 pub let session_edit_commit : Command[@protocol.SessionEditCommitPayload, @protocol.SessionDeleteReply]
 
-pub let session_edit_prepare : Command[@protocol.SessionEditPreparePayload, @protocol.SessionForkReply]
+pub let session_edit_prepare : Command[@protocol.SessionEditPreparePayload, @protocol.SessionEditPrepareReply]
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
 

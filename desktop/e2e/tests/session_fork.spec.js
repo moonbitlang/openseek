@@ -28,7 +28,9 @@ async function setup(page, minimal, child = false, events = history) {
       const title = request.params.source_title;
       replies.set(session, events.filter(e => request.params.through != null && e.sequence <= request.params.through));
       app.liveSessions.push({ id: session, title, updated_at_ms: 10 });
-      return { session, title };
+      return { session, title, ...(request.method === 'session.edit_prepare'
+        ? { source_descendants: child ? [{ session: 'session-1-sr-1', sequence: 2 }] : [] }
+        : {}) };
     }
     if (request.method === 'session.edit_commit') {
       app.liveSessions = app.liveSessions.filter(row => row.id !== request.params.session);
@@ -358,7 +360,7 @@ test('edit never skips an intervening user input without a forkable answer', asy
 
 for (const first of [false, true]) {
   test(`edited ${first ? 'first' : 'later'} message deletes the old chat only after its durable receipt`, async ({ page }, testInfo) => {
-    const app = await setup(page, true);
+    const app = await setup(page, true, true);
     await page.getByRole('button', { name: 'Edit message', exact: true }).nth(first ? 0 : 1).click();
     await page.locator('.message-edit-input').fill('Revised question');
     await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
@@ -375,7 +377,7 @@ for (const first of [false, true]) {
     await expect(page.locator('#transcript')).toContainText('Revised question');
     expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
     const cleanup = app.requests.find(r => r.method === 'session.edit_commit').params;
-    expect(cleanup).toMatchObject({ session: 'session-1', replacement: sent.session, submission_id: sent.submission_id, source_sequence: 8 });
+    expect(cleanup).toMatchObject({ session: 'session-1', replacement: sent.session, submission_id: sent.submission_id, source_sequence: 8, source_descendants: [{ session: 'session-1-sr-1', sequence: 2 }] });
     expect(cleanup.force).toBeUndefined();
     expect(app.pageErrors).toEqual([]);
     if (!first) await page.screenshot({ path: testInfo.outputPath('edited-replacement.png') });

@@ -497,6 +497,14 @@ async fn unarchive_session_commit(
 ) -> Unit {
   let family = manager.claim_session_family_move(session, archived=true)
   defer family.release()
+  manager.archive_commit_lock.acquire()
+  defer manager.archive_commit_lock.release()
+  let shared = @fsx.FileLock::acquire(
+    @session_store.archived_root(family.root).to_path(),
+  ) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
+  defer shared.release()
   move_session_family(family, to_archive=false, on_committed)
 }
 
@@ -545,6 +553,14 @@ async fn delete_archived_session_commit(
     selected~,
   )
   defer family.release()
+  manager.archive_commit_lock.acquire()
+  defer manager.archive_commit_lock.release()
+  let shared = @fsx.FileLock::acquire(
+    @session_store.archived_root(family.root).to_path(),
+  ) catch {
+    error => raise EngineError("could not lock the archived store: \{error}")
+  }
+  defer shared.release()
   family.delete_records(archived=true, on_committed, on_worktree_changed?)
   // Physical erasure happens after the commit: the records are already
   // invisible, so a failed or cancelled attempt here only defers their
@@ -628,15 +644,51 @@ pub async fn delete_session(
     // The store lock protects the replacement from concurrent deletion. The
     // family record locks also exclude ordinary writers through the rename.
     require_edited_receipt(family.root, edit)
+    guard family.members.length() == edit.source_descendants.length() + 1 &&
+      edit.source_descendants.all(baseline => {
+        baseline.session != session &&
+        baseline.sequence >= 0 &&
+        family.members.contains(baseline.session)
+      }) &&
+      family.members.all(session_id => {
+        session_id == session ||
+        edit.source_descendants
+        .filter(baseline => baseline.session == session_id)
+        .length() ==
+        1
+      }) else {
+      raise EngineError(
+        "the original conversation's subagents changed; it was kept",
+      )
+    }
     async fn lock_member(index : Int32) -> SessionDeleteReply {
       if index == family.members.length() {
+        guard @session_store.family_in(family.root, session) == family.members else {
+          raise EngineError(
+            "the original conversation's subagents changed; it was kept",
+          )
+        }
         return commit()
       }
       let session_id = family.members[index]
       @session_record.with_document(family.root, session_id, document => {
-        if session_id == session &&
-          session_max_sequence(document) != edit.source_sequence {
-          raise EngineError("the original conversation changed; it was kept")
+        let expected = if session_id == session {
+          edit.source_sequence
+        } else {
+          guard edit.source_descendants.search_by(baseline => {
+              baseline.session == session_id
+            })
+            is Some(index) else {
+            raise EngineError(
+              "the original conversation's subagents changed; it was kept",
+            )
+          }
+          edit.source_descendants[index].sequence
+        }
+        guard session_max_sequence(document) == expected else {
+          raise EngineError(
+            "the original conversation or a subagent changed; it was kept",
+          )
         }
         lock_member(index + 1)
       })
