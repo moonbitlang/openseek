@@ -103,9 +103,43 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
       })
       is None,
     )
+    // A child process can reach its first append after the final family scan.
+    // Both new children and grandchildren must wait for the parent's lease,
+    // then refuse to create an orphan if cleanup removed that parent.
+    let finished : Array[String] = []
+    let creators = [
+      for
+        (id, parent) in [
+          ("source-sr-2", "source"),
+          ("source-sr-1-sr-1", "source-sr-1"),
+        ] => {
+        group.spawn(() => {
+          let result : Result[Unit, String] = Ok(
+            ignore(
+              store.append(
+                Session(SessionId(id), system_prompt="child"),
+                User(UserMessage(Content([Text("delayed child prompt")]))),
+                parent=SessionId(parent),
+              ),
+            ),
+          ) catch {
+            error => Err("\{error}")
+          }
+          finished.push(id)
+          result
+        })
+      }
+    ]
+    @async.sleep(100)
+    assert_true(finished.is_empty())
     manager.archive_cleanup_lock.release()
     held = false
     assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Deleted)
+    for creator in creators {
+      assert_true(@async.with_timeout(3000, () => creator.wait()) is Err(_))
+    }
+    assert_false(store.exists(SessionId("source-sr-2")))
+    assert_false(store.exists(SessionId("source-sr-1-sr-1")))
   })
   assert_false(store.exists(SessionId("source")))
   assert_true(store.exists(SessionId("replacement")))

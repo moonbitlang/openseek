@@ -301,10 +301,15 @@ async fn run_general(
       )
       turn.session = Some(id.value())
       turn.started_after = session.last_sequence()
+      let parent = @openseek_protocol.split_child_session_id(id.value()).map(pair => {
+        @agent_session.SessionId(pair.0)
+      })
       run_task_turn(
         matches,
         session,
-        append_item=(session, item) => turn.record(store.append(session, item)),
+        append_item=(session, item) => {
+          turn.record(store.append(session, item, parent?))
+        },
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,
@@ -358,10 +363,13 @@ async fn run_preset(
       }
       // Named only once something is recorded: a preset refused for want of
       // a key, or the modelless `echo`, leaves no transcript to point at.
+      let parent = @openseek_protocol.split_child_session_id(id.value()).map(pair => {
+        @agent_session.SessionId(pair.0)
+      })
       (
         id.value(),
         (session, item) => {
-          let next = store.append(session, item)
+          let next = store.append(session, item, parent?)
           if turn.session is None {
             turn.session = Some(id.value())
             @emit.emit(

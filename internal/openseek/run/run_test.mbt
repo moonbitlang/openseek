@@ -177,6 +177,38 @@ async test "a single run exits successfully only when its turn completes" {
         steps: Some(1),
       })
     }
+    // General child runs use the same parent fence as preset children.
+    @async.with_task_group() <| group => {
+      guard scripted_provider(group, { "content": "done" }) is Some(url) else {
+        return
+      }
+      let store = @store.SessionStore("\{root}/child-store")
+      let parsed = @testkit.run_matches(
+        argv=[
+          "--max-steps",
+          "1",
+          "--session",
+          "parent-sr-1",
+          "--session-root",
+          store.root(),
+          "--dir",
+          "\{root}/child-workspace",
+          "--api-url",
+          url,
+          "task",
+        ],
+        env={ "DEEPSEEK": "test-key" },
+      )
+      try @run.run_task_command(parsed) catch {
+        _ => ()
+      } noraise {
+        _ => fail("a general child ran without its parent")
+      }
+      assert_false(store.exists(SessionId("parent-sr-1")))
+      store.create(Session(SessionId("parent"), system_prompt="parent"))
+      @run.run_task_command(parsed)
+      assert_true(store.exists(SessionId("parent-sr-1")))
+    }
     // A run that fails before its turn still says so, with no usage.
     let no_key = @testkit.run_matches(
       argv=[
