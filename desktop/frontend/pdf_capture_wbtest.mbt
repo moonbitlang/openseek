@@ -133,6 +133,31 @@ test "repeated identical screenshots get distinct identities and reject retired 
 }
 
 ///|
+test "capture requests preserve an existing screenshot with or without comment" {
+  for codex in [false, true] {
+    let (model, ctx, path) = pdf_capture_model(codex~)
+    let (_, model) = update_msg(test_dispatch(), captured(ctx, path), model)
+    guard model.file_panel.pdf_capture is Some(draft) else {
+      fail("missing screenshot")
+    }
+    for comment in ["", "Keep the captured region"] {
+      let (_, model) = update_msg(
+        test_dispatch(),
+        FileEditor(
+          @fileeditor.PdfCaptureFeedbackChanged(draft.preview, comment),
+        ),
+        model,
+      )
+      let msg = FileEditor(@fileeditor.PdfCaptureRequested)
+      let (_, first) = update_msg(test_dispatch(), msg, model)
+      let (_, again) = update_msg(test_dispatch(), msg, model)
+      assert_true(first == model)
+      assert_true(again == model)
+    }
+  }
+}
+
+///|
 test "capture requests preserve a pinned Office annotation without running browser effects" {
   for codex in [false, true] {
     let (model, ctx, path) = office_selection_model(codex~)

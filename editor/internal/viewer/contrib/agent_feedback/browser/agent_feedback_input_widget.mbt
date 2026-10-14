@@ -186,7 +186,7 @@ fn AgentFeedbackInputWidget::hook_events(
       @base_browser.element_contains(self.root, element) {
       return
     }
-    if !self.has_text() {
+    if !self.allow_empty_submit && !self.has_text() {
       (self.host.on_blur_empty)()
     }
   })

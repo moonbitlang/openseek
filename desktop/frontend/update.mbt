@@ -3288,9 +3288,10 @@ fn update_msg(
       }
     }
     FileEditor(@fileeditor.PdfCaptureRequested) => {
-      // A typed text annotation owns its source until submitted or cancelled.
-      // Do not hide that composer or its selection when capture is requested.
-      guard !model.file_panel.has_pinned_office_selection(file_ctx(model)) else {
+      // Text drafts and captured images own their source until submitted or
+      // cancelled. Do not discard either while starting a replacement.
+      guard !model.file_panel.has_pinned_office_selection(file_ctx(model)) &&
+        model.file_panel.pending_pdf_capture(file_ctx(model)) is None else {
         return (@cmd.none, model)
       }
       guard model.can_attach_pdf_capture() else {

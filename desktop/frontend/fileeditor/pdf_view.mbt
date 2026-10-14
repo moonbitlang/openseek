@@ -9,7 +9,8 @@ fn pdf_viewer_toolbar(
     return @html.nothing
   }
   let ready = document.status is PdfReady
-  let annotation_pending = state.has_pinned_office_selection(ctx)
+  let annotation_pending = state.has_pinned_office_selection(ctx) ||
+    state.pending_pdf_capture(ctx) is Some(_)
   let pages = document.pages.map(pages => pages.to_string()).unwrap_or("…")
   let controls = [
     @html.button(

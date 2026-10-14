@@ -61,9 +61,11 @@ pub fn FeedbackComposerWidget::FeedbackComposerWidget(
   container.append_child(widget.get_dom_node().as_node())
   // Selection opens the composer without moving focus. An outside click
   // must therefore dismiss an empty draft even if no focusout can fire.
-  // Match the editor's auto-hide policy: typed drafts stay pinned.
+  // Typed drafts and sources with an attachment stay pinned.
   let pointer_down : @rdom.Listener = event => {
-    guard input.anchor is Some(_) && !widget.has_text() else { return }
+    guard input.anchor is Some(_) && !allow_empty_submit && !widget.has_text() else {
+      return
+    }
     if event.target().to_element() is Some(target) &&
       @base_browser.element_contains(widget.get_dom_node(), target) {
       return

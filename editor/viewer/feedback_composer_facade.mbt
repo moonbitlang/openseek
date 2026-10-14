@@ -13,7 +13,8 @@ struct FeedbackComposer {
 /// its container or disposing these services. `on_submit` receives the text
 /// and whether to apply it immediately rather than queue it in Batch mode.
 /// Set `allow_empty_submit` when the source already contains an attachment,
-/// so the optional comment does not prevent submitting that attachment.
+/// so the optional comment does not prevent submitting that attachment or
+/// cause an outside click or focus change to discard it.
 /// `on_batch_change` reports user changes so the host can retain the choice
 /// across composer lifetimes.
 pub fn ViewerServices::create_feedback_composer(

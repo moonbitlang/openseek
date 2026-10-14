@@ -989,6 +989,50 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const [comment, action] of [['', 'batch'], ['Keep this screenshot', 'cancel']]) {
+  test(`PDF screenshot drafts survive outside pointer and focus changes until ${action}`, async ({ page }) => {
+    const app = await setup(page);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const b = await page.locator('.pdfViewer canvas').first().boundingBox();
+    const rect = { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 };
+    await captureRegion(page, rect, { confirm: false });
+    const feedback = page.locator('.pdf-capture-feedback');
+    const input = feedback.locator('textarea');
+    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
+    if (comment) await input.fill(comment);
+    // The unfocused, attachment-backed draft must survive a real outside click.
+    await page.locator('#task').click();
+    await page.locator('#task').fill('Existing composer text');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue(comment);
+    // Focus leaving the feedback uses a separate handler from pointerdown.
+    await input.focus();
+    await page.locator('#task').focus();
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue(comment);
+    await expect(camera).toBeDisabled();
+    await expect(feedback.locator('.feedback-source-selection')).toHaveCount(1);
+    await expect(page.locator('.composer-image')).toHaveCount(0);
+    if (action === 'batch') {
+      await feedback.getByRole('checkbox').check();
+      await feedback.locator('.agent-feedback-input-action').click();
+      await expect(page.locator('.composer-image img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+    } else {
+      await input.press('Escape');
+      await expect(page.locator('.composer-image')).toHaveCount(0);
+    }
+    await expect(feedback).toBeHidden();
+    await expect(camera).toBeEnabled();
+    await expect(page.locator('#task')).toHaveValue('Existing composer text');
+    await captureRegion(page, rect, { confirm: false });
+    await expect(input).toHaveValue('');
+    await input.press('Escape');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 test('PDF capture Batch persists across screenshot feedbacks', async ({ page }) => {
   const app = await setup(page);
   await enableImages(page);
