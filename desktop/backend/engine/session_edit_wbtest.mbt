@@ -215,3 +215,63 @@ async test "edit cleanup rechecks a replacement deleted by another host" {
   assert_true(first.record_guards.is_empty())
   assert_true(second.record_guards.is_empty())
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "editing refuses busy source and child slots before preparing either kind of copy" {
+  let manager = new_engine_manager("/bin/sh")
+  let sessions : Map[String, SessionSlot] = Map([])
+  manager.pump = Serving(sessions~)
+  let notifications : Array[String] = []
+  @async.with_task_group(group => {
+    let engine = start_fake_idle_engine(group, manager, sessions, "source")
+    for
+      phase in [
+        Running(run_id="active", compact_queued=false),
+        Compacting(last_run=None),
+      ] {
+      engine.phase = phase
+      for through in [None, Some(3)] {
+        let result : Result[@protocol.SessionForkReply, String] = Ok(
+          prepare_session_edit(
+            manager,
+            {
+              session: "source",
+              workspace: "/unused",
+              through,
+              model: "deepseek-flash",
+              source_title: "Original",
+            },
+            on_created=id => notifications.push(id),
+            on_worktree_changed=(_, _) => notifications.push("placement"),
+          ),
+        ) catch {
+          error => Err("\{error}")
+        }
+        guard result is Err(message) else { fail("accepted busy edit") }
+        assert_true(message.contains("busy"))
+      }
+      assert_false(engine.condemned)
+      assert_false(engine.phase is Idle(..))
+      assert_true(notifications.is_empty())
+    }
+    engine.phase = Idle(last_run=None)
+    manager.require_idle_edit_source("source")
+    let claim = slot_for(sessions, "source-sr-1-sr-2").claim(
+      sessions,
+      "source-sr-1-sr-2",
+      StartPending,
+    )
+    let refused = try {
+      manager.require_idle_edit_source("source")
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(refused)
+    claim.release(manager)
+    manager.require_idle_edit_source("source")
+    engine.close_and_wait()
+  })
+  assert_true(manager.record_guards.is_empty())
+}

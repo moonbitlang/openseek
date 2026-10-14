@@ -77,6 +77,7 @@ struct Input {
   // Disable every conversation while a request is pending; only its source
   // answer receives the spinner's terminal sequence below.
   fork_busy : Bool
+  edit_busy : Bool
   forking : Int32?
   editable_users : Array[Int32]
   // Where the reader left this conversation last time, read once by `init`.
@@ -120,6 +121,7 @@ pub fn Input::Input(
   active_session~ : String,
   can_fork~ : Bool = false,
   fork_busy~ : Bool = false,
+  edit_busy~ : Bool = false,
   forking? : Int32,
   editable_users~ : Array[Int32] = [],
   scroll~ : ScrollPosition = Pinned,
@@ -145,6 +147,7 @@ pub fn Input::Input(
     active_session,
     can_fork,
     fork_busy,
+    edit_busy,
     forking,
     editable_users,
     scroll,

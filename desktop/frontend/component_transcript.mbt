@@ -219,6 +219,9 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       .map(conv => conv.editable_messages().map(edit => edit.sequence))
       .unwrap_or([]),
     fork_busy=self.conversation_fork is Some(_),
+    edit_busy=conversation
+      .map(conv => self.message_edit_busy(conv))
+      .unwrap_or(false),
     forking?=conversation.bind(conversation => {
       self.conversation_fork.bind(pending => {
         if pending.source.matches_record(

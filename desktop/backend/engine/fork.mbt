@@ -17,6 +17,7 @@
 pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
+  require_idle~ : Bool = false,
   on_created~ : (String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
@@ -31,6 +32,9 @@ pub async fn fork_session(
   }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
+  if require_idle {
+    manager.require_idle_edit_source(payload.session)
+  }
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
   guard @pathx.Absolute::from_uri_path(payload.workspace) is Some(requested) &&

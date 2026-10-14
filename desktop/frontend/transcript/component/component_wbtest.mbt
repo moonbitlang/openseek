@@ -125,3 +125,37 @@ test "local pinned transitions are pure" {
     assert_true(held == typed)
   }
 }
+
+///|
+test "a run starting during inline editing keeps the draft and allows cancellation" {
+  let input = base_input()
+  let input = {
+    ..input,
+    can_fork: true,
+    editable_users: [1],
+    edit_busy: true,
+    items: [
+      {
+        identity: "s1",
+        item: {
+          kind: User(content=Content([Text("original")])),
+          sequence: Some(1),
+          ts: None,
+        },
+      },
+    ],
+  }
+  guard stream_blocks(input).get(0) is Some(block) else { fail("user block") }
+  let send : @cmd.Emit[(Int32, @composer.Draft)] = @cmd.Emit(_ => @cmd.none)
+  let draft = MessageEditor::EditorDraft({
+    task: "draft",
+    images: [],
+    mentions: [],
+  })
+  let (held, _) = draft.update(block, SendEdit, send, unpin=@cmd.none)
+  assert_true(held == draft)
+  let (closed, _) = draft.update(block, CancelEdit, send, unpin=@cmd.none)
+  assert_true(closed is EditorClosed)
+  let (blocked, _) = closed.update(block, BeginEdit, send, unpin=@cmd.none)
+  assert_true(blocked is EditorClosed)
+}

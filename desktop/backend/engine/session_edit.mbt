@@ -18,6 +18,7 @@ pub async fn prepare_session_edit(
         model: payload.model,
         source_title: payload.source_title,
       },
+      require_idle=true,
       on_created~,
       on_worktree_changed~,
     )
@@ -28,6 +29,7 @@ pub async fn prepare_session_edit(
   }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
+  manager.require_idle_edit_source(payload.session)
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
   let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
@@ -113,5 +115,48 @@ async fn require_edited_receipt(
     raise EngineError(
       "the edited message has not been saved; the original conversation was kept",
     )
+  }
+}
+
+///|
+/// Called while holding the workspace lifecycle lock, which excludes new
+/// start/compact claims until preparation has finished. Include child slots
+/// even before their first record is written, without stopping any engine.
+fn EngineManager::require_idle_edit_source(
+  self : EngineManager,
+  source : String,
+) -> Unit raise EngineError {
+  fn belongs(session : String) -> Bool {
+    let mut current = session
+    while current != source {
+      guard @wire.split_child_session_id(current) is Some((parent, _)) else {
+        return false
+      }
+      current = parent
+    }
+    true
+  }
+  for session, slot in self.serving() {
+    guard belongs(session) else { continue }
+    guard slot.pending is None &&
+      (
+        slot.engine is None ||
+        (
+          slot.engine is Some(engine) &&
+          engine.phase is Idle(..) &&
+          engine.queued_runs.is_empty()
+        )
+      ) else {
+      raise EngineError(
+        "this conversation or one of its subagents is busy; wait before editing",
+      )
+    }
+  }
+  for session, state in self.record_guards {
+    if belongs(session) && (state.active_ops > 0 || state.moving) {
+      raise EngineError(
+        "another operation is preparing this conversation; wait before editing",
+      )
+    }
   }
 }

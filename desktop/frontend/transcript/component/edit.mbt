@@ -2,6 +2,7 @@
 priv struct UserEditAction {
   sequence : Int32
   disabled : Bool
+  sending : Bool
 } derive(Eq)
 
 ///|
@@ -16,7 +17,11 @@ fn Input::user_edit_action(
     self.editable_users.contains(sequence) else {
     return None
   }
-  Some({ sequence, disabled: self.fork_busy, })
+  Some({
+    sequence,
+    disabled: self.fork_busy || self.edit_busy,
+    sending: self.fork_busy,
+  })
 }
 
 ///|
@@ -35,7 +40,19 @@ fn UserEditAction::render(
   @html.button(
     class="message-copy message-edit",
     type_="button",
-    title=label,
+    title=if self.disabled && !self.sending {
+      match locale {
+        SimplifiedChinese => "任务运行时无法编辑消息"
+        TraditionalChinese => "任務執行時無法編輯訊息"
+        English => "Messages cannot be edited while a task is running"
+        Japanese =>
+          "タスクの実行中はメッセージを編集できません"
+        Spanish =>
+          "No se pueden editar mensajes mientras hay una tarea en curso"
+      }
+    } else {
+      label
+    },
     disabled=self.disabled,
     attrs=@html.Attrs::build()
       .id("user-message-edit-trigger-\{self.sequence}")
@@ -78,7 +95,8 @@ fn MessageEditor::update(
   send : @cmd.Emit[(Int32, @composer.Draft)],
   unpin~ : @cmd.Cmd,
 ) -> (MessageEditor, @cmd.Cmd) {
-  guard block.user_edit() is Some(action) && !action.disabled else {
+  guard block.user_edit() is Some(action) &&
+    (!action.disabled || (msg is CancelEdit && !action.sending)) else {
     return (self, @cmd.none)
   }
   match msg {
@@ -223,7 +241,7 @@ fn MessageEditor::view(
           @html.button(
             type_="button",
             class="button secondary",
-            disabled=action.disabled,
+            disabled=action.sending,
             on_click=emit(CancelEdit),
             cancel_label,
           ),
@@ -232,7 +250,7 @@ fn MessageEditor::view(
             class="button primary",
             disabled=action.disabled || draft.is_blank(),
             on_click=emit(SendEdit),
-            if action.disabled {
+            if action.sending {
               sending_label
             } else {
               send_label

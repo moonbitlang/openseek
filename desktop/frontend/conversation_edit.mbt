@@ -32,6 +32,28 @@ fn Conversation::editable_messages(
 }
 
 ///|
+fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
+  self.conversations.any(conv => {
+    guard conv.device == source.device && conv.project() == source.project() else {
+      return false
+    }
+    let mut current = conv.session_id
+    while current != source.session_id {
+      guard @transcript.subrun_parent(current) is Some(parent) else {
+        return false
+      }
+      current = parent
+    }
+    conv.is_running() ||
+    !(conv.compaction is NotCompacting) ||
+    !conv.shell_commands.is_empty() ||
+    !conv.queued_inputs.is_empty() ||
+    !conv.pending_steers.is_empty() ||
+    conv.pending_semantic_submission is Some(_)
+  })
+}
+
+///|
 fn Model::edit_user_message(
   self : Model,
   emit : @cmd.Emit[Msg],
@@ -44,6 +66,7 @@ fn Model::edit_user_message(
     self.screen is Chat &&
     self.transcript_slot().map(value => value.key()) == Some(slot) &&
     self.active_conversation() is Some(conv) &&
+    !self.message_edit_busy(conv) &&
     self.conversation_selection() is Some(source) &&
     conv
     .editable_messages()
@@ -89,4 +112,28 @@ fn Model::send_edited_fork(
       ),
     ),
   )
+}
+
+///|
+test "message editing is blocked by active work in its own conversation family" {
+  let model = test_model()
+  let source = model.active()
+  assert_false(model.message_edit_busy(source))
+  for phase in [Requested, Queued, Compacting] {
+    let busy = model.replace_conversation({ ..source, compaction: phase, })
+    assert_true(busy.message_edit_busy(source))
+  }
+  let busy = model.replace_conversation({
+    ..source,
+    run: Starting(submission_id="pending"),
+  })
+  assert_true(busy.message_edit_busy(source))
+  let child = {
+    ..source,
+    session_id: source.session_id + "-sr-1-sr-2",
+    run: Starting(submission_id="child"),
+  }
+  assert_true(model.replace_conversation(child).message_edit_busy(source))
+  let unrelated = { ..child, session_id: source.session_id + "-sr-unrelated", }
+  assert_false(model.replace_conversation(unrelated).message_edit_busy(source))
 }

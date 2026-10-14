@@ -435,3 +435,42 @@ test('a snapshot recovers a missed edited receipt and preserves the composer dra
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('running and compacting chats disable editing without interrupting the run', async ({ page }, testInfo) => {
+  const app = await setup(page, true);
+  const edit = page.getByRole('button', { name: 'Edit message', exact: true }).nth(1);
+  await expect(edit).toBeEnabled();
+  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
+  await expect(edit).toBeDisabled();
+  await expect(edit).toHaveAttribute('title', 'Messages cannot be edited while a task is running');
+  await expect(page.getByRole('button', { name: 'Fork from here', exact: true }).first()).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('edit-disabled-running.png') });
+  app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
+  await expect(edit).toBeEnabled();
+  app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_started', from_sequence: 1, to_sequence: 8 } });
+  await expect(edit).toBeDisabled();
+  app.notify('agent.event', { session: 'session-1', event: { event: 'compaction_failed', error: 'Cancelled' } });
+  await expect(edit).toBeEnabled();
+  expect(app.requests.filter(r => ['agent.cancel', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a run starting during inline editing disables Send but keeps the draft and Cancel', async ({ page }) => {
+  const app = await setup(page, true);
+  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  const editor = page.locator('.message-editor');
+  await editor.locator('textarea').fill('Keep my edit');
+  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
+  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
+  await expect(editor.locator('textarea')).toBeDisabled();
+  app.notify('agent.finished', { session: 'session-1', run_id: 'busy-edit', status: 'finished', answer: 'Done', exit_code: 0 });
+  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await expect(editor.locator('textarea')).toHaveValue('Keep my edit');
+  app.notify('agent.started', { session: 'session-1', run_id: 'busy-edit-2', session_root: '/workspace/.openseek', model: 'deepseek-flash', max_steps: 1000 });
+  await expect(editor.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await editor.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  expect(app.requests.filter(r => ['agent.cancel', 'session.edit_prepare', 'session.edit_commit'].includes(r.method))).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
