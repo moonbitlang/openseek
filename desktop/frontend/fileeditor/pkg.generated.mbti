@@ -62,7 +62,7 @@ pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@
 
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
 
-pub fn pdf_capture_feedback_subscription(@cmd.Emit[Msg], PdfCapturePreview, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
+pub fn pdf_capture_feedback_subscription(@cmd.Emit[Msg], PdfCaptureDraft, batch~ : Bool, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
@@ -292,6 +292,7 @@ pub(all) enum Msg {
   PdfCaptureRequested
   PdfCaptureFinished(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, result~ : Result[@pdf_capture.Capture, String])
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
+  PdfCaptureBatchChanged(PdfCapturePreview, Bool)
   PdfCaptureDismissed(PdfCapturePreview)
   PdfPageChanged(String)
   PdfFitWidth
@@ -554,6 +555,7 @@ pub(all) struct State {
   office_selection : OfficeSelectionPreview?
   office_selection_comment : String?
   pdf_capture : PdfCaptureDraft?
+  pdf_capture_batch : Bool
   pdf_generation : Int
   explorer_mode : ExplorerMode
   search : @grep_search.State

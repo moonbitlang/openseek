@@ -33,10 +33,12 @@ fn pdf_capture_feedback_view(state : State, ctx : Ctx) -> @html.Html {
 ///|
 fn show_pdf_capture_feedback(
   emit : @cmd.Emit[Msg],
-  preview : PdfCapturePreview,
+  draft : PdfCaptureDraft,
+  batch~ : Bool,
   submit : (String, Bool) -> @cmd.Cmd,
   alive : Ref[Bool],
 ) -> @cmd.Cmd {
+  let preview = draft.preview
   @cmd.custom_cmd(kind=@cmd.after_render, scheduler => {
     guard alive.val else { return }
     dispose_pdf_capture_feedback()
@@ -64,6 +66,9 @@ fn show_pdf_capture_feedback(
       viewport~,
       layout_source=surface,
       allow_empty_submit=true,
+      on_batch_change=batch => {
+        scheduler.add(emit(PdfCaptureBatchChanged(preview, batch)))
+      },
       on_submit=(text, apply) => scheduler.add(submit(text, apply)),
       on_change=text => {
         scheduler.add(emit(PdfCaptureFeedbackChanged(preview, text)))
@@ -71,7 +76,13 @@ fn show_pdf_capture_feedback(
       on_cancel=() => scheduler.add(emit(PdfCaptureDismissed(preview))),
     )
     pdf_capture_feedback.val = Some({ input, })
-    input.show(anchor, selection_rects=rects, prefer_below=true)
+    input.show(
+      anchor,
+      selection_rects=rects,
+      prefer_below=true,
+      text=draft.comment,
+      batch~,
+    )
     surface.set_attribute("tabindex", "-1")
     @base_browser.focus_prevent_scroll(surface)
   })
@@ -125,7 +136,8 @@ fn pdf_capture_rects(
 priv suberror PdfFeedbackSubscription {
   PdfFeedbackSubscription(
     @cmd.Emit[Msg],
-    PdfCapturePreview,
+    PdfCaptureDraft,
+    Bool,
     (String, Bool) -> @cmd.Cmd
   )
 }
@@ -133,19 +145,22 @@ priv suberror PdfFeedbackSubscription {
 ///|
 pub fn pdf_capture_feedback_subscription(
   emit : @cmd.Emit[Msg],
-  preview : PdfCapturePreview,
+  draft : PdfCaptureDraft,
+  batch~ : Bool,
   submit : (String, Bool) -> @cmd.Cmd,
 ) -> @sub.Sub {
   @sub.custom_sub(
     "pdf-capture-feedback",
     @sub.Local,
-    PdfFeedbackSubscription(emit, preview, submit),
+    PdfFeedbackSubscription(emit, draft, batch, submit),
     (payload, scheduler) => {
-      guard payload is PdfFeedbackSubscription(emit, preview, submit) else {
+      guard payload is PdfFeedbackSubscription(emit, draft, batch, submit) else {
         return None
       }
       let alive = Ref(true)
-      scheduler.add(show_pdf_capture_feedback(emit, preview, submit, alive))
+      scheduler.add(
+        show_pdf_capture_feedback(emit, draft, batch~, submit, alive),
+      )
       Some({
         unload: _ => {
           alive.val = false

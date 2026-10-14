@@ -133,3 +133,48 @@ test "unsupported image model refuses PDF screenshots" {
   assert_true(rejected.composer_input().draft.images.is_empty())
   assert_true(rejected.file_panel.pdf_capture is None)
 }
+
+///|
+test "PDF feedback edits are pure and stale checkbox callbacks cannot change Batch" {
+  let (model, ctx, path) = pdf_capture_model()
+  let (_, model) = update_msg(test_dispatch(), captured(ctx, path), model)
+  guard model.file_panel.pdf_capture is Some(draft) else {
+    fail("missing capture")
+  }
+  let preview = draft.preview
+  for
+    msg in [
+      FileEditor(
+        @fileeditor.PdfCaptureFeedbackChanged(preview, "Keep this instruction"),
+      ),
+      FileEditor(@fileeditor.PdfCaptureBatchChanged(preview, true)),
+    ] {
+    let (_, first) = update_msg(test_dispatch(), msg, model)
+    let (_, again) = update_msg(test_dispatch(), msg, model)
+    assert_true(first.file_panel == again.file_panel)
+  }
+  let (_, batched) = update_msg(
+    test_dispatch(),
+    FileEditor(@fileeditor.PdfCaptureBatchChanged(preview, true)),
+    model,
+  )
+  assert_true(batched.file_panel.pdf_capture_batch)
+  assert_false(model.file_panel.pdf_capture_batch)
+  let stale = { ..preview, generation: preview.generation - 1, }
+  let (_, ignored) = update_msg(
+    test_dispatch(),
+    FileEditor(@fileeditor.PdfCaptureBatchChanged(stale, false)),
+    batched,
+  )
+  assert_true(ignored.file_panel.pdf_capture_batch)
+  let (_, dismissed) = update_msg(
+    test_dispatch(),
+    FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
+    batched,
+  )
+  assert_true(dismissed.file_panel.pdf_capture is None)
+  assert_true(dismissed.file_panel.pdf_capture_batch)
+  let (_, next) = update_msg(test_dispatch(), captured(ctx, path), dismissed)
+  assert_true(next.file_panel.pdf_capture_batch)
+  assert_true(next.file_panel.pdf_capture is Some({ comment: "", .. }))
+}

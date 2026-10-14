@@ -2551,6 +2551,13 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
+    PdfCaptureBatchChanged(preview, batch) =>
+      if state.pending_pdf_capture(ctx).map(draft => draft.preview) ==
+        Some(preview) {
+        (@cmd.none, { ..state, pdf_capture_batch: batch, })
+      } else {
+        (@cmd.none, state)
+      }
     PdfCaptureDismissed(preview) => state.dismiss_pdf_capture(ctx, preview)
     OfficeSelectionDismissed(preview) =>
       state.dismiss_office_selection(ctx, preview)

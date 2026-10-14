@@ -21,6 +21,7 @@ pub fn FeedbackComposerWidget::FeedbackComposerWidget(
   on_change~ : (String) -> Unit,
   on_cancel~ : () -> Unit,
   allow_empty_submit~ : Bool = false,
+  on_batch_change~ : (Bool) -> Unit = _ => (),
 ) -> FeedbackComposerWidget {
   let mut slot : FeedbackComposerWidget? = None
   let submit = apply => {
@@ -41,6 +42,7 @@ pub fn FeedbackComposerWidget::FeedbackComposerWidget(
     },
     on_change~,
     allow_empty_submit~,
+    on_batch_change~,
   )
   let selection_layer = @rdom.document().create_element("div")
   selection_layer.set_attribute("class", "feedback-source-selection-layer")
@@ -163,11 +165,13 @@ pub fn FeedbackComposerWidget::show(
   anchor : () -> @rdom.DOMRect?,
   prefer_below~ : Bool,
   selection_rects~ : () -> Array[@rdom.DOMRect],
+  text~ : String = "",
+  batch? : Bool,
 ) -> Unit {
   self.selection_rects = selection_rects
   self.anchor = Some(anchor)
   self.prefer_below = prefer_below
-  self.widget.clear_input()
+  self.widget.restore_input(text, batch?)
   self.widget.show()
   self.layout()
 }

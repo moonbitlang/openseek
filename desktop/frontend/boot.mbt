@@ -712,62 +712,78 @@ fn main {
       })
     // Mount the PDF feedback with the same direct composer delivery as text
     // replies. The component owns the live draft, including unsent typing.
-    let pdf_feedback = state
+    let pdf_feedback_input = state
       .map(model => {
-        model.file_panel
-        .pending_pdf_capture(file_ctx(model))
-        .map(draft => draft.preview)
+        (
+          model.file_panel.pending_pdf_capture(file_ctx(model)),
+          model.file_panel.pdf_capture_batch,
+        )
       })
-      .map2(quote_target, (preview, target) => (preview, target))
-      .switch_by(
-        slot => {
-          guard slot is (Some(preview), Some(target)) else {
-            return @rabbita.Val::constant(@html.nothing)
-          }
-          let (mounted, _) = @rabbita.create_state_with_init(
-            init=(_ : @cmd.Emit[Unit]) => ((), @cmd.none),
-            update=(_, _, _) => ((), @cmd.none),
-            subscriptions=(_, _) => {
-              @fileeditor.pdf_capture_feedback_subscription(
-                emit.map(msg => FileEditor(msg)),
-                preview,
-                (comment, send) => {
-                  let (deliver, identity) = match target {
-                    ChatComposer(identity) => (composer_quote, identity)
-                    CodexComposer(identity) => (codex_composer_quote, identity)
-                  }
-                  deliver({
-                    identity,
-                    quote: None,
-                    comment,
-                    send,
-                    images: [
-                      {
-                        name: @common.basename_or_authority(preview.path) +
-                        "-capture.png",
-                        url: preview.capture.url,
-                      },
-                    ],
-                    accepted: emit(
-                      FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
-                    ),
-                    declined: @cmd.none,
-                  })
-                },
-              )
-            },
-          )
-          mounted.map(_ => @html.nothing)
-        },
-        by=slot => {
-          match slot {
-            (Some(p), Some(_)) =>
-              "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:" +
-              p.capture.url
-            _ => "closed"
-          }
-        },
-      )
+      .map2(quote_target, (capture, target) => (capture.0, capture.1, target))
+    let pdf_feedback = pdf_feedback_input.switch_by(
+      slot => {
+        guard slot is (Some(_), _, Some(_)) else {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        let (mounted, _) = @rabbita.create_state_with_input(
+          input=pdf_feedback_input,
+          init=(_ : @cmd.Emit[(String, Bool)], _) => ((), @cmd.none),
+          // Read the current target when handling a submit. Archive events can
+          // change its identity while this screenshot and input stay mounted.
+          update=(_, slot, reply, _) => {
+            guard slot is (Some(draft), _, Some(target)) else {
+              return ((), @cmd.none)
+            }
+            let preview = draft.preview
+            let (comment, send) = reply
+            let (deliver, identity) = match target {
+              ChatComposer(identity) => (composer_quote, identity)
+              CodexComposer(identity) => (codex_composer_quote, identity)
+            }
+            (
+              (),
+              deliver({
+                identity,
+                quote: None,
+                comment,
+                send,
+                images: [
+                  {
+                    name: @common.basename_or_authority(preview.path) +
+                    "-capture.png",
+                    url: preview.capture.url,
+                  },
+                ],
+                accepted: emit(
+                  FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
+                ),
+                declined: @cmd.none,
+              }),
+            )
+          },
+          subscriptions=(_, slot, reply_emit) => {
+            guard slot is (Some(draft), batch, Some(_)) else {
+              return @sub.none
+            }
+            @fileeditor.pdf_capture_feedback_subscription(
+              emit.map(msg => FileEditor(msg)),
+              draft,
+              batch~,
+              (comment, send) => reply_emit((comment, send)),
+            )
+          },
+        )
+        mounted.map(_ => @html.nothing)
+      },
+      by=slot => {
+        match slot {
+          (Some({ preview: p, .. }), _, Some(_)) =>
+            "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:" +
+            p.capture.url
+          _ => "closed"
+        }
+      },
+    )
     let context_menu_html = @rabbita.Val::map3(
       context_menu_html,
       pdf_feedback,

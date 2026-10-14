@@ -914,3 +914,70 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('PDF capture Batch persists across screenshot feedbacks', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
+  const rect = { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 };
+  const feedback = page.locator('.pdf-capture-feedback');
+  await captureRegion(page, rect, { confirm: false });
+  await feedback.locator('textarea').fill('First change');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('textarea').press('Enter');
+  await expect(feedback).toBeHidden();
+  await captureRegion(page, rect, { confirm: false });
+  await expect(feedback.getByRole('checkbox')).toBeChecked();
+  await feedback.locator('textarea').fill('Second change');
+  await feedback.locator('textarea').press('Enter');
+  await expect(page.locator('.composer-image')).toHaveCount(2);
+  await expect(page.locator('#task')).toHaveValue(/First change[\s\S]*Second change/);
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('PDF capture opening then cancelling goal edit preserves screenshot comment', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
+  await captureRegion(page, { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 }, { confirm: false });
+  const input = page.locator('.pdf-capture-feedback textarea');
+  await input.fill('Do not lose this feedback');
+  await page.locator('.pdf-capture-feedback').getByRole('checkbox').check();
+  await page.getByTitle('Edit the standing goal', { exact: true }).click();
+  await expect(input).toBeHidden();
+  await page.locator('#goal-cancel').click();
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue('Do not lose this feedback');
+  await expect(page.locator('.pdf-capture-feedback').getByRole('checkbox')).toBeChecked();
+  await input.press('Enter');
+  await expect(page.locator('#task')).toHaveValue(/Do not lose this feedback/);
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('PDF capture archiving another conversation does not disable screenshot delivery', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
+  await captureRegion(page, { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 }, { confirm: false });
+  const feedback = page.locator('.pdf-capture-feedback');
+  await feedback.locator('textarea').fill('Keep this feedback deliverable');
+  app.archivedSessions.push({ id: 'session-2', title: 'Second fixture', updated_at_ms: 2 });
+  app.notify('session.changed', { change: 'archived', session: 'session-2', workspace: '/workspace' });
+  await expect(page.locator('.section-heading', { hasText: 'Archived chats (1)' })).toHaveCount(1);
+  await expect(feedback.locator('textarea')).toBeFocused();
+  await expect(feedback.locator('textarea')).toHaveValue('Keep this feedback deliverable');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('textarea').press('Enter');
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  await expect(page.locator('#task')).toHaveValue(/Keep this feedback deliverable/);
+  expect(app.pageErrors).toEqual([]);
+});

@@ -62,6 +62,7 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   host : AgentFeedbackInputWidgetHost,
   on_change~ : (String) -> Unit = _ => (),
   allow_empty_submit~ : Bool = false,
+  on_batch_change~ : (Bool) -> Unit = _ => (),
 ) -> AgentFeedbackInputWidget {
   let document = @rdom.document()
   let root = document.create_element("div")
@@ -108,6 +109,9 @@ pub fn AgentFeedbackInputWidget::AgentFeedbackInputWidget(
   widget.update_actions_enabled()
   widget.hook_events()
   textarea.add_event_listener("input", _ => on_change(widget.value()))
+  batch.add_event_listener("change", _ => {
+    on_batch_change(input_checkbox_checked(batch))
+  })
   widget
 }
 
@@ -433,5 +437,21 @@ extern "js" fn input_checkbox_checked(element : @rdom.Element) -> Bool = "(el) =
 pub fn AgentFeedbackInputWidget::resize(
   self : AgentFeedbackInputWidget,
 ) -> Unit {
+  self.auto_size()
+}
+
+///|
+/// Restore host-owned draft state without emitting user-change callbacks.
+pub fn AgentFeedbackInputWidget::restore_input(
+  self : AgentFeedbackInputWidget,
+  text : String,
+  batch? : Bool,
+) -> Unit {
+  input_set_textarea_value(self.textarea, text)
+  if batch is Some(batch) {
+    @js.Value::cast_from(self.batch).set_with_string("checked", batch)
+  }
+  self.refresh_labels()
+  self.update_actions_enabled()
   self.auto_size()
 }
