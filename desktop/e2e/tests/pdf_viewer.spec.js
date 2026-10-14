@@ -1515,3 +1515,84 @@ for (const restart of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+
+test('PDF capture rejects a DOM-only push button border', async ({ page }) => {
+  const app = await setup(page);
+  app.officeFiles['docs/report.pdf'] = formPdf({ kind: 'pushButton', appearance: false });
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const field = page.locator('.annotationLayer .buttonWidgetAnnotation.pushButton');
+  await expect(field).toBeVisible();
+  await expect(field).toHaveCSS('border-top-style', 'solid');
+  await expect(field).toHaveCSS('border-top-color', 'rgb(255, 0, 0)');
+  expect(await page.locator('.page[data-page-number="1"] canvas').evaluateAll(canvases => {
+    return canvases.reduce((count, canvas) => {
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 200 && pixels[i + 1] < 80 && pixels[i + 2] < 80 && pixels[i + 3] > 0) count++;
+      }
+      return count;
+    }, 0);
+  })).toBe(0);
+  const bounds = await field.boundingBox();
+  await captureRegion(page, bounds, { confirm: false });
+  await expect(page.getByText('This form or annotation cannot be captured. Select another region.', { exact: true })).toBeVisible();
+  await expect(page.locator('.composer-image')).toHaveCount(0);
+  await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
+  const pageBounds = await page.locator('.pdfViewer .canvasWrapper canvas').first().boundingBox();
+  await captureRegion(page, { x: pageBounds.x + 20, y: pageBounds.y + 20, width: 60, height: 40 });
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+for (const state of ['hidden', 'transparent', 'unpainted']) {
+  test(`PDF capture allows a ${state} DOM-only button`, async ({ page }) => {
+    const app = await setup(page);
+    app.officeFiles['docs/report.pdf'] = formPdf({ kind: 'pushButton', appearance: false });
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const field = page.locator('.annotationLayer .buttonWidgetAnnotation.pushButton');
+    await expect(field).toBeVisible();
+    const bounds = await field.boundingBox();
+    await field.evaluate((element, state) => {
+      if (state === 'hidden') element.style.visibility = 'hidden';
+      if (state === 'transparent') element.style.opacity = '0';
+      if (state === 'unpainted') element.style.borderColor = 'transparent';
+    }, state);
+    await captureRegion(page, bounds);
+    await expect(page.locator('.composer-image')).toHaveCount(1);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+for (const kind of ['pushButton', 'checkbox', 'radio', 'choice']) {
+  test(`PDF capture retains ${kind} bitmap appearances with interactive forms disabled`, async ({ page }) => {
+    const app = await setup(page);
+    app.officeFiles['docs/report.pdf'] = formPdf({ kind });
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    await expect(page.locator('.annotationLayer input, .annotationLayer select')).toHaveCount(0);
+    expect(await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.renderForms)).toBe(false);
+    const b = await page.locator('.pdfViewer .canvasWrapper canvas').first().boundingBox();
+    const scale = b.width / 612;
+    await captureRegion(page, { x: b.x + 70 * scale, y: b.y + (792 - 695) * scale, width: 245 * scale, height: 50 * scale });
+    const red = await page.locator('.composer-image img').evaluate(img => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      let red = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        if (pixels[i] > 200 && pixels[i + 1] < 80 && pixels[i + 2] < 80) red++;
+      }
+      return red;
+    });
+    expect(red).toBeGreaterThan(100);
+    expect(app.pageErrors).toEqual([]);
+  });
+}

@@ -41,17 +41,8 @@ fn collect_pieces(
       (canvas.get_with_string("height") : Double) <= 0 {
       continue
     }
-    // Editable forms and XFA are disabled by the viewer. Reject visible HTML
-    // fallbacks instead of silently omitting their content from the PNG.
-    for
-      element in browser_elements(
-        page, ".textWidgetAnnotation > div:not([hidden]), .annotationLayer .popup, .annotationLayer .mediaAnnotation, .xfaLayer",
-      ) {
-      if (browser_style(element).get_with_string("visibility") : String) ==
-        "visible" &&
-        browser_bounds(element).intersection(crop) is Some(_) {
-        return Err(unsupported)
-      }
+    if has_unsupported_annotation(page, crop) {
+      return Err(unsupported)
     }
     pieces.push({
       canvas,

@@ -23,22 +23,32 @@ export function annotationPdf(tagged, rotation = 0) {
 }
 
 // A read-only field is painted on a separate annotation canvas by PDF.js.
-export function formPdf({ readOnly = true, appearance = true, noRotate = false, note = false } = {}) {
+export function formPdf({ readOnly = true, appearance = true, noRotate = false, note = false, kind = 'text' } = {}) {
   const stream = 'q 1 0 0 rg 0 0 240 40 re f 0 0 0 rg BT /F1 20 Tf 10 10 Td (Stored field value) Tj ET Q';
+  const fields = {
+    text: `/FT /Tx /V (Stored field value) /Ff ${readOnly ? 1 : 0}`,
+    pushButton: '/FT /Btn /Ff 65536 /MK << /BC [1 0 0] >> /BS << /W 3 /S /S >> /A << /S /URI /URI (https://example.com) >>',
+    checkbox: '/FT /Btn /Ff 1 /V /Yes /AS /Yes',
+    radio: '/FT /Btn /Ff 32769 /V /Yes /AS /Yes',
+    choice: '/FT /Ch /Ff 1 /V (Stored field value) /Opt [(Stored field value)]',
+  };
+  const field = fields[kind];
+  if (!field) throw new Error(`Unknown form fixture: ${kind}`);
+  const normal = kind === 'checkbox' || kind === 'radio' ? '<< /Yes 7 0 R >>' : '7 0 R';
   return pdfFixture([
     '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] /DR << /Font << /F1 5 0 R >> >> /DA (/F1 20 Tf 0 g) >> >>',
     '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
     `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Annots [6 0 R ${note ? '8 0 R' : ''}] >>`,
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Type /Annot /Subtype /Widget /FT /Tx /T (name) /V (Stored field value) /Ff ${readOnly ? 1 : 0} /F ${noRotate ? 20 : 4} /Rect [72 650 312 690] /P 3 0 R /DA (/F1 20 Tf 0 g) ${appearance ? '/AP << /N 7 0 R >>' : ''} >>`,
+    `<< /Type /Annot /Subtype /Widget ${field} /T (name) /F ${noRotate ? 20 : 4} /Rect [72 650 312 690] /P 3 0 R /DA (/F1 20 Tf 0 g) ${appearance ? `/AP << /N ${normal} >>` : ''} >>`,
     `<< /Type /XObject /Subtype /Form /BBox [0 0 240 40] /Resources << /Font << /F1 5 0 R >> >> /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
     note === 'attachment'
       ? '<< /Type /Annot /Subtype /FileAttachment /Rect [350 650 380 680] /P 3 0 R /Name /Paperclip /FS 9 0 R /ca 0.5 /F 4 >>'
       : '<< /Type /Annot /Subtype /Text /Rect [350 650 380 680] /P 3 0 R /Name /Note /Contents (Review this note) /F 4 >>',
     '<< /Type /Filespec /F (demo.txt) /EF << /F 10 0 R >> >>',
     '<< /Type /EmbeddedFile /Length 4 >>\nstream\ndemo\nendstream',
-  ], `form:${readOnly}:${appearance}:${noRotate}:${note}`);
+  ], `form:${readOnly}:${appearance}:${noRotate}:${note}:${kind}`);
 }
 
 function pdfFixture(objects, sig) {
