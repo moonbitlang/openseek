@@ -1,22 +1,23 @@
 ///|
-/// Index rendered text once per page. Rectangles stay page-relative during scroll.
-/// This private browser object never escapes the capture command's lifetime.
+/// The page cache owns only PDF.js/DOM lifetimes. Text grouping and hit testing
+/// run in MoonBit; a ready page stores a closure over typed, page-relative data.
 extern "js" fn create_targets(
   surface_id : String,
   changed : () -> Unit,
+  index_page : (
+    FixedArray[@js.Value],
+    @js.Nullable[@js.Value],
+    @js.Value,
+    Double,
+  ) -> (Double, Double, @js.Value) -> @js.Nullable[@js.Value],
 ) -> @js.Value =
-  #| (surfaceId, changed) => {
+  #| (surfaceId, changed, indexPage) => {
   #|   const host = document.getElementById(surfaceId), session = host.__officeViewerPdf;
   #|   const pages = new Map();
   #|   let alive = true;
-  #|   const union = entries => {
-  #|     const x = Math.min(...entries.map(e => e.x)), y = Math.min(...entries.map(e => e.y));
-  #|     return { x, y, width: Math.max(...entries.map(e => e.x+e.width))-x,
-  #|       height: Math.max(...entries.map(e => e.y+e.height))-y };
-  #|   };
   #|   const prepare = page => {
   #|     if (pages.has(page)) return pages.get(page);
-  #|     const slot = { targets: [] };
+  #|     const slot = { at: null };
   #|     pages.set(page, slot);
   #|     const number = Number(page.dataset.pageNumber);
   #|     (async () => {
@@ -24,63 +25,9 @@ extern "js" fn create_targets(
   #|       if (!mapping) { if (pages.get(page) === slot) pages.delete(page); return; }
   #|       const tree = await mapping.data.page.getStructTree().catch(() => null);
   #|       if (!alive || !page.isConnected || pages.get(page) !== slot) return;
-  #|       const p = page.getBoundingClientRect();
-  #|       const entries = mapping.entries.filter(e => e.item.str.trim() && e.div.isConnected).map(e => {
-  #|         const b = e.div.getBoundingClientRect();
-  #|         const angle = Math.atan2(e.item.transform[1], e.item.transform[0]) + mapping.view.viewport.rotation*Math.PI/180;
-  #|         return { ...e, x: b.left-p.left, y: b.top-p.top, width: b.width, height: b.height,
-  #|           vertical: Math.abs(Math.sin(angle)) > Math.SQRT1_2 };
-  #|       }).filter(e => e.width > 0 && e.height > 0);
-  #|       const groups = [], assigned = new Set();
-  #|       // Use the smallest meaningful tagged block. A shared role name alone
-  #|       // cannot identify a paragraph: different paragraphs may have that role.
-  #|       const walk = node => {
-  #|         const ids = new Set(node.type === 'content' ? [node.id] : []);
-  #|         for (const child of node.children || []) for (const id of walk(child)) ids.add(id);
-  #|         if (/^(H[1-6]?|P|LI|Caption|TD|TH|BlockQuote)$/.test(node.role)) {
-  #|           const members = entries.filter(e => ids.has(e.markedId) && !assigned.has(e));
-  #|           if (members.length) { groups.push(members); members.forEach(e => assigned.add(e)); }
-  #|         }
-  #|         return ids;
-  #|       };
-  #|       if (tree) walk(tree);
-  #|       // Untagged PDFs expose text runs, not logical elements. Join only
-  #|       // nearby runs on the same visual line with matching font and size.
-  #|       const lines = [];
-  #|       for (const e of entries.filter(e => !assigned.has(e)).sort((a,b) =>
-  #|         a.vertical === b.vertical ? (a.vertical ? a.x-b.x || a.y-b.y : a.y-b.y || a.x-b.x) : Number(a.vertical)-Number(b.vertical))) {
-  #|         const size = e.vertical ? e.width : e.height;
-  #|         const cross = e.vertical ? e.x+e.width/2 : e.y+e.height/2;
-  #|         const along = e.vertical ? e.y : e.x;
-  #|         const line = lines.find(line => {
-  #|           const last = line.at(-1), lastSize = last.vertical ? last.width : last.height;
-  #|           const lastCross = last.vertical ? last.x+last.width/2 : last.y+last.height/2;
-  #|           const end = last.vertical ? last.y+last.height : last.x+last.width;
-  #|           return e.vertical === last.vertical && e.item.fontName === last.item.fontName &&
-  #|             size/lastSize >= 0.8 && size/lastSize <= 1.25 && Math.abs(cross-lastCross) <= size*0.25 &&
-  #|             along-end >= -size*0.25 && along-end <= size*1.5;
-  #|         });
-  #|         if (line) line.push(e); else lines.push([e]);
-  #|       }
-  #|       groups.push(...lines);
-  #|       slot.targets = groups.map(members => {
-  #|         const b = union(members), ordered = [...members].sort((a,b) => a.index-b.index);
-  #|         let text = '';
-  #|         ordered.forEach((e,i) => {
-  #|           if (i && text && !/\s$/.test(text) && !/^\s/.test(e.item.str)) {
-  #|             const prev = ordered[i-1], size = e.vertical ? e.width : e.height;
-  #|             const cross = e.vertical ? Math.abs(e.x-prev.x) : Math.abs(e.y-prev.y);
-  #|             const gap = e.vertical ? Math.max(e.y-prev.y-prev.height, prev.y-e.y-e.height, 0)
-  #|               : Math.max(e.x-prev.x-prev.width, prev.x-e.x-e.width, 0);
-  #|             if (cross > size/2) text += '\n';
-  #|             else if (gap > size*0.15) text += ' ';
-  #|           }
-  #|           text += e.item.str + (e.item.hasEOL ? '\n' : '');
-  #|         });
-  #|         const x = Math.max(0, b.x-2), y = Math.max(0, b.y-2);
-  #|         return { x, y, width: Math.min(p.width,b.x+b.width+2)-x,
-  #|           height: Math.min(p.height,b.y+b.height+2)-y, text: text.trim() };
-  #|       });
+  #|       const entries = mapping.entries.filter(e => e.div.isConnected).map(e =>
+  #|         ({ item: e.item, index: e.index, markedId: e.markedId, bounds: e.div.getBoundingClientRect() }));
+  #|       slot.at = indexPage(entries, tree, page.getBoundingClientRect(), mapping.view.viewport.rotation);
   #|       changed();
   #|     })().catch(() => { if (pages.get(page) === slot) pages.delete(page); });
   #|     return slot;
@@ -96,16 +43,86 @@ extern "js" fn create_targets(
   #|   }
   #|   return {
   #|     at(x,y) {
-  #|       // Let browser hit testing find the page, without measuring every page
-  #|       // of a long document on each pointer movement.
+  #|       // Browser hit testing locates the page without measuring a long
+  #|       // document on each pointer movement.
   #|       const page = document.elementFromPoint(x,y)?.closest('.page');
   #|       if (!page || !host.contains(page)) return null;
-  #|       const p = page.getBoundingClientRect();
-  #|       const candidates = prepare(page).targets.filter(b =>
-  #|         x >= p.left+b.x && x <= p.left+b.x+b.width && y >= p.top+b.y && y <= p.top+b.y+b.height);
-  #|       const target = candidates.sort((a,b) => a.width*a.height-b.width*b.height)[0];
-  #|       return target ? { ...target, x: p.left+target.x, y: p.top+target.y } : null;
+  #|       return prepare(page).at?.(x, y, page.getBoundingClientRect()) ?? null;
   #|     },
   #|     dispose() { alive = false; pages.clear(); session.bus.off('textlayerrendered', rendered); }
   #|   };
   #| }
+
+///|
+fn read_structure(value : @js.Value) -> @selection.Structure {
+  let kind : @js.Optional[String] = value.get_with_string("type")
+  let role : @js.Optional[String] = value.get_with_string("role")
+  let id : @js.Optional[String] = value.get_with_string("id")
+  let children : @js.Optional[FixedArray[@js.Value]] = value.get_with_string(
+    "children",
+  )
+  {
+    role: role.to_option(),
+    content_id: if kind.to_option() == Some("content") {
+      id.to_option()
+    } else {
+      None
+    },
+    children: children
+    .to_option()
+    .map(xs => xs.iter().map(read_structure).collect())
+    .unwrap_or([]),
+  }
+}
+
+///|
+fn index_page(
+  values : FixedArray[@js.Value],
+  tree : @js.Nullable[@js.Value],
+  bounds : @js.Value,
+  rotation : Double,
+) -> (Double, Double, @js.Value) -> @js.Nullable[@js.Value] {
+  let page = read_rect(bounds)
+  let entries = values
+    .iter()
+    .map(value => {
+      let item : @js.Value = value.get_with_string("item")
+      let transform : FixedArray[Double] = item.get_with_string("transform")
+      let marked : @js.Nullable[String] = value.get_with_string("markedId")
+      let entry : @selection.TextRun = {
+        bounds: read_rect(value.get_with_string("bounds")).translated({
+          x: -page.x,
+          y: -page.y,
+        }),
+        index: value.get_with_string("index"),
+        text: item.get_with_string("str"),
+        font: item.get_with_string("fontName"),
+        marked_id: marked.to_option(),
+        has_eol: item.get_with_string("hasEOL"),
+        vertical: @selection.vertical_text(transform[0], transform[1], rotation),
+      }
+      entry
+    })
+    .collect()
+  let targets = @selection.targets(
+    entries,
+    tree.to_option().map(read_structure),
+    page,
+  )
+  (x, y, bounds) => {
+    let page = read_rect(bounds)
+    let target = @selection.hit_target(targets, {
+      x: x - page.x,
+      y: y - page.y,
+    })
+    @js.Nullable::from_option(
+      target.map(target => {
+        let value = write_rect(
+          target.bounds.translated({ x: page.x, y: page.y, }),
+        )
+        value.set_with_string("text", target.text)
+        value
+      }),
+    )
+  }
+}

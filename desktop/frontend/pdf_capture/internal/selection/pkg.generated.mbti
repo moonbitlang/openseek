@@ -1,0 +1,114 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/pdf_capture/internal/selection"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn bitmap_placement(Array[LayerTransform], Rect, Point, Point, Rect, Double) -> BitmapPlacement
+
+pub fn drag_rect(Point, Point, selecting~ : Bool) -> Rect?
+
+pub fn hit_target(Array[Target], Point) -> Target?
+
+pub fn output_size(Rect, Array[Double]) -> Output?
+
+pub fn png_within_limit(String) -> Bool
+
+pub fn targets(Array[TextRun], Structure?, Rect) -> Array[Target]
+
+pub fn vertical_text(Double, Double, Double) -> Bool
+
+// Errors
+
+// Types and methods
+pub struct BitmapPlacement {
+  opacity : Double
+  linear : LinearTransform
+  origin : Point
+} derive(Eq, @debug.Debug)
+pub fn BitmapPlacement::equal(Self, Self) -> Bool
+pub fn BitmapPlacement::not_equal(Self, Self) -> Bool
+pub fn BitmapPlacement::to_repr(Self) -> @debug.Repr
+
+pub(all) struct LayerTransform {
+  linear : LinearTransform
+  opacity : Double
+}
+
+pub(all) struct LinearTransform {
+  a : Double
+  b : Double
+  c : Double
+  d : Double
+} derive(Eq, @debug.Debug)
+pub fn LinearTransform::equal(Self, Self) -> Bool
+pub fn LinearTransform::not_equal(Self, Self) -> Bool
+pub fn LinearTransform::to_repr(Self) -> @debug.Repr
+
+pub struct Output {
+  scale : Double
+  width : Double
+  height : Double
+} derive(Eq, @debug.Debug)
+pub fn Output::equal(Self, Self) -> Bool
+pub fn Output::not_equal(Self, Self) -> Bool
+pub fn Output::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Point {
+  x : Double
+  y : Double
+} derive(Eq, @debug.Debug)
+pub fn Point::equal(Self, Self) -> Bool
+pub fn Point::not_equal(Self, Self) -> Bool
+pub fn Point::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Rect {
+  x : Double
+  y : Double
+  width : Double
+  height : Double
+} derive(Eq, @debug.Debug)
+pub fn Rect::clamp_point(Self, Point) -> Point
+pub fn Rect::contains(Self, Point, inclusive~ : Bool) -> Bool
+pub fn Rect::equal(Self, Self) -> Bool
+pub fn Rect::intersection(Self, Self) -> Self?
+pub fn Rect::mapped(Self, from~ : Self, to~ : Self) -> Self
+pub fn Rect::not_equal(Self, Self) -> Bool
+pub fn Rect::to_repr(Self) -> @debug.Repr
+pub fn Rect::translated(Self, Point) -> Self
+
+pub(all) struct Structure {
+  role : String?
+  content_id : String?
+  children : Array[Structure]
+} derive(Eq, @debug.Debug)
+pub fn Structure::equal(Self, Self) -> Bool
+pub fn Structure::not_equal(Self, Self) -> Bool
+pub fn Structure::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Target {
+  bounds : Rect
+  text : String
+} derive(Eq, @debug.Debug)
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+pub fn Target::to_repr(Self) -> @debug.Repr
+
+pub(all) struct TextRun {
+  bounds : Rect
+  index : Int
+  text : String
+  font : String
+  marked_id : String?
+  has_eol : Bool
+  vertical : Bool
+} derive(Eq, @debug.Debug)
+pub fn TextRun::equal(Self, Self) -> Bool
+pub fn TextRun::not_equal(Self, Self) -> Bool
+pub fn TextRun::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits
