@@ -147,8 +147,35 @@ fn format_utc_minute(seconds : Int64) -> String {
 /// `sessions list | cut -f1` recovers the bare ids the old format printed.
 fn format_session_listing(listing : @store.SessionListing) -> String {
   let when = listing.last_active_unix_seconds().map_or("-", format_utc_minute)
-  let title = listing.title().unwrap_or_else(() => listing.first_prompt())
+  let title = listing
+    .title()
+    .unwrap_or_else(() => session_listing_preview(listing))
   "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(title)}"
+}
+
+///|
+fn session_listing_preview(listing : @store.SessionListing) -> String {
+  match listing.state() {
+    Reserved => "Unsent conversation"
+    Recorded(first_prompt~) => first_prompt.unwrap_or("")
+    Unreadable(error) => "Unreadable conversation: \{error}"
+  }
+}
+
+///|
+fn session_listing_state_json(listing : @store.SessionListing) -> Json {
+  match listing.state() {
+    Reserved => { "kind": "reserved" }
+    Recorded(first_prompt~) =>
+      {
+        "kind": "recorded",
+        "first_prompt": match first_prompt {
+          Some(prompt) => Json::string(prompt)
+          None => Json::null()
+        },
+      }
+    Unreadable(error) => { "kind": "unreadable", "error": error }
+  }
 }
 
 ///|
@@ -170,7 +197,7 @@ fn session_list_format(matches : @argparse.Matches) -> SessionListFormat raise {
 
 ///|
 /// The store's listings as JSON for machine consumers (e.g. the desktop
-/// client's sidebar): an array of `{id, title, updated_at_ms}`, most
+/// client's sidebar): an array of `{id, title, updated_at_ms, record_state}`, most
 /// recently active first. `title` is the untruncated first line of the first
 /// user prompt unless an explicit title sidecar overrides it;
 /// `updated_at_ms` is the session file mtime rounded down to milliseconds, or
@@ -188,8 +215,9 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
         "id": listing.id().value(),
         "title": listing
         .title()
-        .unwrap_or_else(() => session_title(listing.first_prompt())),
+        .unwrap_or_else(() => session_title(session_listing_preview(listing))),
         "updated_at_ms": updated_at_ms,
+        "record_state": session_listing_state_json(listing),
       }
     }
   ]

@@ -13,10 +13,19 @@ import {
 
 // Types and methods
 type SessionListing derive(@debug.Debug)
-pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
+pub fn SessionListing::state(Self) -> SessionListingState
 pub fn SessionListing::title(Self) -> String?
+
+pub enum SessionListingState {
+  Reserved
+  Recorded(first_prompt~ : String?)
+  Unreadable(String)
+} derive(Eq, @debug.Debug)
+pub fn SessionListingState::equal(Self, Self) -> Bool
+pub fn SessionListingState::not_equal(Self, Self) -> Bool
+pub fn SessionListingState::to_repr(Self) -> @debug.Repr
 
 type SessionStore derive(@debug.Debug)
 pub fn SessionStore::SessionStore(String) -> Self

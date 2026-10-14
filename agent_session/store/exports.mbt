@@ -24,6 +24,7 @@ pub async fn SessionStore::create(
       session_file_text(session),
       dirs=self.session_dir_chain(session.id()),
     )
+    self.clear_reservation(session.id())
     record_mark(self, session)
   })
 }
