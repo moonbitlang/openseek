@@ -23,7 +23,7 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
   store.create(replacement)
   let manager = new_engine_manager("openseek")
   manager.pump = Serving(sessions=Map([]))
-  let payload : @protocol.SessionEditCommitPayload = {
+  let payload : EditReplacement = {
     session: "source",
     workspace,
     replacement: "replacement",
@@ -48,53 +48,6 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     assert_true(store.exists(SessionId("source")))
     assert_true(notifications.is_empty())
   }
-  @async.with_task_group(group => {
-    // Pause deletion after validation but before its irreversible rename.
-    manager.archive_cleanup_lock.acquire()
-    let mut held = true
-    defer (if held { manager.archive_cleanup_lock.release() })
-    let cleanup = group.spawn(() => {
-      commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
-        _,
-        _,
-      ) => ())
-    })
-    let writer = @fs.open(
-      selected.root
-      .join("sessions")
-      .join("source")
-      .join("session.lock")
-      .to_string(),
-      mode=ReadWrite,
-    )
-    defer writer.close()
-    // Brief snapshot reads may also hold the lock. Wait for the sustained
-    // hold at the paused rename; without it this loop times out.
-    @async.with_timeout(3000, () => {
-      while @async.with_timeout_opt(100, () => {
-              writer.lock(Exclusive)
-              writer.unlock()
-            })
-            is Some(_) {
-        @async.sleep(1)
-      }
-    })
-    assert_true(
-      @async.with_timeout_opt(100, () => {
-        store.append(
-          source,
-          User(UserMessage(Content([Text("another host's message")]))),
-        )
-      })
-      is None,
-    )
-    manager.archive_cleanup_lock.release()
-    held = false
-    assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Deleted)
-  })
-  assert_false(store.exists(SessionId("source")))
-  assert_true(store.exists(SessionId("replacement")))
-  assert_eq(notifications, ["source"])
   assert_true(
     commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
       _,
@@ -102,7 +55,9 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     ) => ())
     is Deleted,
   )
-  assert_eq(notifications, ["source", "source"])
+  assert_false(store.exists(SessionId("source")))
+  assert_true(store.exists(SessionId("replacement")))
+  assert_eq(notifications, ["source"])
   assert_true(manager.record_guards.is_empty())
 }
 
@@ -155,7 +110,7 @@ async test "first-message replacement keeps its source's dirty checkout" {
   let listings = store.listings()
   guard listings.search_by(row => row.id().value() == prepared.session)
     is Some(index) else {
-    fail("reservation was not discoverable")
+    fail("unsent conversation was not discoverable")
   }
   assert_eq(listings[index].title(), Some("Original"))
   let empty = load_session(manager, {
@@ -216,145 +171,12 @@ async test "first-message replacement keeps its source's dirty checkout" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "edit cleanup rechecks a replacement deleted by another host" {
+async test "single edit waits for the submitted message before deleting its source" {
   ambient_env_test_lock.acquire()
   defer ambient_env_test_lock.release()
   let previous = @sys.get_env_var("HOME")
   defer restore_home_env(previous)
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-cross-host-"))
-  defer @fs.rmdir(dir, recursive=true)
-  let root = @pathx.Path(dir)
-  @sys.set_env_var("HOME", root.join("global").to_string())
-  let workspace = attach_run_workspace(root)
-  let selected = @session_store.ArchivedStore::for_workspace(workspace)
-  let store = @store.SessionStore(selected.root.to_string())
-  store.create(
-    @agent_session.Session(SessionId("source"), system_prompt="test")
-    .append(User(UserMessage(Content([Text("original")]))))
-    .append(Terminal(Finished("answer"))),
-  )
-  store.create(
-    @agent_session.Session(SessionId("replacement"), system_prompt="test").append(
-      User(UserMessage(Content([Text("edited")]), submission_id="edit-1")),
-    ),
-  )
-  let first = new_engine_manager("openseek")
-  first.pump = Serving(sessions=Map([]))
-  let second = new_engine_manager("openseek")
-  second.pump = Serving(sessions=Map([]))
-  let removed : Array[String] = []
-  @async.with_task_group(group => {
-    first.archive_commit_lock.acquire()
-    let mut locked = true
-    defer (if locked { first.archive_commit_lock.release() })
-    let cleanup = group.spawn(() => {
-      let result : Result[SessionDeleteReply, String] = Ok(
-        commit_session_edit(
-          first,
-          {
-            session: "source",
-            workspace,
-            replacement: "replacement",
-            submission_id: "edit-1",
-            source_sequence: 2,
-          },
-          (session, _) => removed.push(session),
-          on_worktree_changed=(_, _) => (),
-        ),
-      ) catch {
-        error => Err("\{error}")
-      }
-      result
-    })
-    // A owns a replacement read lease but is waiting for its commit lock.
-    // B has independent record guards, like another host.
-    @async.with_timeout(3000, () => {
-      while !(first.record_guards.get("replacement") is Some({ readers: 1, .. })) {
-        @async.sleep(1)
-      }
-    })
-    assert_true(
-      delete_session(second, "replacement", workspace, (_, _) => ()) is Deleted,
-    )
-    assert_false(store.exists(SessionId("replacement")))
-    first.archive_commit_lock.release()
-    locked = false
-    assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Err(_))
-  })
-  assert_true(store.exists(SessionId("source")))
-  assert_true(removed.is_empty())
-  assert_true(first.record_guards.is_empty())
-  assert_true(second.record_guards.is_empty())
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "editing refuses busy source and child slots before preparing either kind of copy" {
-  let manager = new_engine_manager("/bin/sh")
-  let sessions : Map[String, SessionSlot] = Map([])
-  manager.pump = Serving(sessions~)
-  let notifications : Array[String] = []
-  @async.with_task_group(group => {
-    let engine = start_fake_idle_engine(group, manager, sessions, "source")
-    for
-      phase in [
-        Running(run_id="active", compact_queued=false),
-        Compacting(last_run=None),
-      ] {
-      engine.phase = phase
-      for through in [None, Some(3)] {
-        let result : Result[@protocol.SessionForkReply, String] = Ok(
-          prepare_session_edit(
-            manager,
-            {
-              session: "source",
-              workspace: "/unused",
-              through,
-              model: "deepseek-flash",
-              source_title: "Original",
-            },
-            on_created=id => notifications.push(id),
-            on_worktree_changed=(_, _) => notifications.push("placement"),
-          ),
-        ) catch {
-          error => Err("\{error}")
-        }
-        guard result is Err(message) else { fail("accepted busy edit") }
-        assert_true(message.contains("busy"))
-      }
-      assert_false(engine.condemned)
-      assert_false(engine.phase is Idle(..))
-      assert_true(notifications.is_empty())
-    }
-    engine.phase = Idle(last_run=None)
-    manager.require_idle_edit_source("source")
-    let claim = slot_for(sessions, "source-sr-1-sr-2").claim(
-      sessions,
-      "source-sr-1-sr-2",
-      StartPending,
-    )
-    let refused = try {
-      manager.require_idle_edit_source("source")
-      false
-    } catch {
-      _ => true
-    }
-    assert_true(refused)
-    claim.release(manager)
-    manager.require_idle_edit_source("source")
-    engine.close_and_wait()
-  })
-  assert_true(manager.record_guards.is_empty())
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "edit retry waits for a competing deletion to roll back" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous = @sys.get_env_var("HOME")
-  defer restore_home_env(previous)
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-rollback-"))
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-single-edit-"))
   defer @fs.rmdir(dir, recursive=true)
   let root = @pathx.Path(dir)
   @sys.set_env_var("HOME", root.join("global").to_string())
@@ -365,142 +187,80 @@ async test "edit retry waits for a competing deletion to roll back" {
     .append(User(UserMessage(Content([Text("original")]))))
     .append(Terminal(Finished("answer")))
   store.create(source)
-  store.create(
-    @agent_session.Session(SessionId("replacement"), system_prompt="test").append(
-      User(
-        UserMessage(Content([Text("edited")]), submission_id="edit-rollback"),
-      ),
-    ),
-  )
-  let manager = new_engine_manager("openseek")
-  manager.pump = Serving(sessions=Map([]))
-  let notifications : Array[String] = []
-  @async.with_task_group(group => {
-    let shared = @fsx.FileLock::acquire(
-      @session_store.archived_root(selected.root).to_path(),
-    )
-    let mut held = true
-    defer (if held { shared.release() })
-    let live = selected.root.join("sessions").join("source")
-    let deleting = @session_store.deleting_root(selected.root).join("source")
-    @fsx.ensure_dir(@session_store.deleting_root(selected.root).to_path())
-    @fs.rename(live.to_string(), deleting.to_string())
-    let mut completed = false
-    let retry = group.spawn(() => {
-      let result : Result[SessionDeleteReply, String] = Ok(
-        commit_session_edit(
-          manager,
-          {
-            session: "source",
-            workspace,
-            replacement: "replacement",
-            submission_id: "edit-rollback",
-            source_sequence: 2,
-          },
-          (id, _) => notifications.push(id),
-          on_worktree_changed=(_, _) => (),
-        ),
-      ) catch {
-        error => Err("\{error}")
-      }
-      completed = true
-      result
-    })
-    @async.with_timeout(3000, () => {
-      while manager.record_guards.get("replacement") is None {
-        @async.sleep(1)
-      }
-    })
-    @async.sleep(100)
-    assert_false(completed)
-    assert_true(notifications.is_empty())
-    // A registry failure restored the original. Its newly committed message
-    // must be visible to the retry, rather than discarded as already deleted.
-    @fs.rename(deleting.to_string(), live.to_string())
-    let restored = store.append(
-      source,
-      User(UserMessage(Content([Text("after rollback")]))),
-    )
-    shared.release()
-    held = false
-    assert_true(@async.with_timeout(3000, () => retry.wait()) is Err(_))
-    assert_eq(store.load(SessionId("source")), restored)
-  })
-  assert_true(store.exists(SessionId("replacement")))
-  assert_true(notifications.is_empty())
-  assert_true(manager.record_guards.is_empty())
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "an unsent edit reservation can be archived loaded and restored" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous = @sys.get_env_var("HOME")
-  defer restore_home_env(previous)
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-archived-reservation-"))
-  defer @fs.rmdir(dir, recursive=true)
-  let root = @pathx.Path(dir)
-  @sys.set_env_var("HOME", root.join("global").to_string())
-  let workspace = attach_run_workspace(root)
-  let selected = @session_store.ArchivedStore::for_workspace(workspace)
-  let store = @store.SessionStore(selected.root.to_string())
-  let id : @agent_session.SessionId = SessionId("unsent")
-  store.reserve(id, "Edited conversation")
   let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
-  assert_true(archive_session_commit(manager, id.value(), (_, _) => ()) is None)
-  let archived = @store.SessionStore(
-    @session_store.archived_root(selected.root).to_string(),
-  )
-  assert_true(archived.is_reserved(id))
-  for hint in [Some(workspace), None] {
-    let reply = load_archived_session(manager, {
-      session: id.value(),
-      workspace: hint,
-    })
-    assert_eq(reply.session.id, Some(id.value()))
-    assert_eq(reply.session.events, Some([]))
-    assert_eq(reply.watermark, Some(0))
-    assert_false(store.exists(id))
+  let payload : @protocol.SessionEditPayload = {
+    session: "source",
+    workspace,
+    through: None,
+    model: "deepseek-flash",
+    source_title: "Original",
+    source_sequence: 2,
+    task: "edited",
+    images: [],
+    attachment_paths: [],
+    thinking: None,
+    max_steps: None,
   }
-  unarchive_session_commit(manager, id.value(), (_, _) => ())
-  assert_true(store.is_reserved(id))
-  ignore(
-    store.append(
-      Session(id, system_prompt="fresh prompt"),
-      User(UserMessage(Content([Text("edited")]))),
-    ),
-  )
-  assert_false(store.is_reserved(id))
-  assert_eq(store.load(id).system_prompt(), "fresh prompt")
-
-  // A missing or malformed archived log without a valid reservation is a
-  // read failure, never an empty conversation.
-  for broken in ["missing", "corrupt"] {
-    let broken_id : @agent_session.SessionId = SessionId(broken)
-    archived.reserve(broken_id, "Broken")
-    if broken == "missing" {
-      @fs.remove(
-        "\{archived.root()}/sessions/\{broken}/session-reservation.json",
-      )
-    } else {
-      @fs.write_file(
-        archived.session_file(broken_id),
-        "bad header\n",
-        create_mode=CreateOrTruncate,
-      )
-    }
-    try
-      load_archived_session(manager, {
-        session: broken,
-        workspace: Some(workspace),
-      })
-    catch {
-      _ => ()
-    } noraise {
-      _ => fail("unreadable archived session was treated as empty")
-    }
+  let created : Array[String] = []
+  let removed : Array[String] = []
+  // A failed submission surfaces its original error and leaves both identities.
+  try
+    edit_session(
+      manager,
+      payload,
+      start=_ => raise EngineError("start failed"),
+      on_created=id => created.push(id),
+      on_deleted=(id, _) => removed.push(id),
+      on_worktree_changed=(_, _) => (),
+    )
+  catch {
+    EngineError(message) => assert_eq(message, "start failed")
+    error => raise error
+  } noraise {
+    _ => fail("accepted a failed start")
   }
-  assert_true(manager.record_guards.is_empty())
+  assert_true(store.exists(SessionId("source")))
+  assert_eq(created.length(), 1)
+  assert_true(removed.is_empty())
+  @async.with_task_group(group => {
+    let reply = edit_session(
+      manager,
+      payload,
+      start=start => {
+        assert_eq(start.task, "edited")
+        ignore(
+          group.spawn(() => {
+            @async.sleep(40)
+            assert_true(store.exists(SessionId("source")))
+            assert_true(removed.is_empty())
+            ignore(
+              store.append(
+                Session(
+                  SessionId(start.session),
+                  system_prompt="configured prompt",
+                ),
+                User(
+                  UserMessage(
+                    Content([Text(start.task)]),
+                    submission_id?=start.submission_id,
+                  ),
+                ),
+              ),
+            )
+          }),
+        )
+      },
+      on_created=id => created.push(id),
+      on_deleted=(id, _) => removed.push(id),
+      on_worktree_changed=(_, _) => (),
+    )
+    assert_eq(created.length(), 2)
+    assert_eq(removed, ["source"])
+    assert_false(store.exists(SessionId("source")))
+    assert_eq(
+      store.load(SessionId(reply.session)).system_prompt(),
+      "configured prompt",
+    )
+  })
 }

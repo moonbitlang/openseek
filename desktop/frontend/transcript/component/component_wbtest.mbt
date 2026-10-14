@@ -30,6 +30,71 @@ fn pinned_model(input : Input) -> Model {
 }
 
 ///|
+test "transcript editor drafts stay immutable and cancel releases the row" {
+  let input = {
+    ..base_input(),
+    can_fork: true,
+    editable_users: [1],
+    items: [
+      {
+        identity: "s1",
+        item: {
+          kind: User(content=Content([Text("original")])),
+          sequence: Some(1),
+          ts: None,
+        },
+      },
+    ],
+  }
+  let blocks = stream_blocks(input).map(block => (input.locale, block))
+  let block = blocks[0].1
+  let key = block.branch_key()
+  let send : @cmd.Emit[(Int32, @composer.Draft)] = @cmd.Emit(_ => @cmd.none)
+  let empty = MessageEditors(Map([]))
+  let (opened, _) = empty.update(blocks, key, BeginEdit, send, unpin=@cmd.none)
+  let (typed, _) = opened.update(
+    blocks,
+    key,
+    EditText("draft"),
+    send,
+    unpin=@cmd.none,
+  )
+  let (again, _) = opened.update(
+    blocks,
+    key,
+    EditText("draft"),
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(typed == again)
+  assert_true(empty.for_block(block) is EditorClosed)
+  assert_true(opened.for_block(block) is EditorDraft({ task: "original", .. }))
+  let (sent, _) = typed.update(blocks, key, SendEdit, send, unpin=@cmd.none)
+  assert_true(sent == typed)
+  let busy = stream_blocks({ ..input, edit_busy: true, }).map(block => {
+    (input.locale, block)
+  })
+  let (held, _) = typed.update(
+    busy,
+    key,
+    EditText("lost"),
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(held == typed)
+  let (cancelled, _) = held.update(busy, key, CancelEdit, send, unpin=@cmd.none)
+  assert_true(cancelled.0.is_empty())
+  let (removed, _) = typed.update(
+    @vector.from_array([]),
+    key,
+    SendEdit,
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(removed.0.is_empty())
+}
+
+///|
 test "an overview click unpins and highlights inside the component" {
   let key = @transcript_overview.Durable(3)
   let input = base_input()

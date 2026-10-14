@@ -1,10 +1,108 @@
 ///|
-/// Later-message edits use the ordinary fork. A first-message edit reserves
+priv struct EditSource {
+  session : String
+  workspace : String
+  through : Int32?
+  model : String
+  source_title : String
+}
+
+///|
+struct EditReplacement {
+  session : String
+  workspace : String
+  replacement : String
+  submission_id : String
+  source_sequence : Int32
+}
+
+///|
+/// A single client operation. Errors propagate normally; there is no
+/// automatic resubmission or cleanup retry.
+pub async fn edit_session(
+  manager : EngineManager,
+  payload : @protocol.SessionEditPayload,
+  start~ : async (@protocol.StartPayload) -> Unit,
+  on_created~ : (String) -> Unit,
+  on_deleted~ : (String, String) -> Unit,
+  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+) -> @protocol.SessionForkReply {
+  guard payload.source_sequence > 0 &&
+    (!payload.task.is_blank() || !payload.images.is_empty()) else {
+    raise EngineError("invalid edited message")
+  }
+  let reply = prepare_session_edit(
+    manager,
+    {
+      session: payload.session,
+      workspace: payload.workspace,
+      through: payload.through,
+      model: payload.model,
+      source_title: payload.source_title,
+    },
+    on_created~,
+    on_worktree_changed~,
+  )
+  let submission_id = @uuid.mint()
+  start({
+    session: reply.session,
+    workspace: Some(payload.workspace),
+    task: payload.task,
+    images: payload.images,
+    model: Some(payload.model),
+    thinking: payload.thinking,
+    max_steps: payload.max_steps,
+    submission_id: Some(submission_id),
+  })
+  let replacement : EditReplacement = {
+    session: payload.session,
+    workspace: payload.workspace,
+    replacement: reply.session,
+    submission_id,
+    source_sequence: payload.source_sequence,
+  }
+  let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
+  // agent.start acknowledges queueing, not persistence. Wait only for this
+  // prompt's durable receipt before invoking the existing delete lifecycle.
+  @async.with_timeout(10000, () => {
+    while !edited_message_saved(selected.root, replacement) {
+      @async.sleep(20)
+    }
+  })
+  match
+    commit_session_edit(manager, replacement, on_deleted, on_worktree_changed~) {
+    Deleted => reply
+    Unconfirmed(_) =>
+      raise EngineError(
+        "the original chat was kept because deleting it would remove a worktree",
+      )
+  }
+}
+
+///|
+async fn edited_message_saved(
+  root : @pathx.Absolute,
+  payload : EditReplacement,
+) -> Bool {
+  let document = @session_record.read_document(root, payload.replacement) catch {
+    @session_record.Absent(_) => return false
+    error => raise error
+  }
+  document.events
+  .unwrap_or([])
+  .any(event => {
+    event.item is User(message) &&
+    message.submission_id == Some(payload.submission_id)
+  })
+}
+
+///|
+/// Later-message edits use the ordinary fork. A first-message edit creates
 /// an empty conversation in the same checkout; its first prompt creates the
 /// record. The source is never removed by preparation.
-pub async fn prepare_session_edit(
+async fn prepare_session_edit(
   manager : EngineManager,
-  payload : @protocol.SessionEditPreparePayload,
+  payload : EditSource,
   on_created~ : (String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
@@ -18,7 +116,6 @@ pub async fn prepare_session_edit(
         model: payload.model,
         source_title: payload.source_title,
       },
-      require_idle=true,
       on_created~,
       on_worktree_changed~,
     )
@@ -32,7 +129,6 @@ pub async fn prepare_session_edit(
   }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
-  manager.require_idle_edit_source(payload.session)
   let lease = manager.begin_record_read(payload.session)
   defer manager.end_record_read(payload.session, lease)
   let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
@@ -50,7 +146,16 @@ pub async fn prepare_session_edit(
       selected.workspace,
       session~,
       worktree_of=payload.session,
-      _ => store.reserve(id, payload.source_title),
+      _ => {
+        // Keep an unsent edit discoverable using the existing directory/title
+        // layout. The first prompt creates its JSONL through the normal path.
+        let directory = selected.root.join("sessions").join(session)
+        @fsx.ensure_dir(directory.to_path())
+        @fsx.write_text_atomic(
+          directory.join("session-title").to_path(),
+          payload.source_title.trim().to_owned(),
+        )
+      },
       record_exists=() => store.exists(id),
       worktrees => on_worktree_changed(payload.workspace, worktrees),
     )
@@ -60,12 +165,11 @@ pub async fn prepare_session_edit(
 }
 
 ///|
-/// The destination read lease prevents a concurrent delete from invalidating
-/// the receipt within this host. delete_session rechecks both records under
-/// the shared deletion lock after fencing source writers and its follower.
-pub async fn commit_session_edit(
+/// Reuse the existing move/delete lifecycle, including its writer admission
+/// and follower drain, after verifying the submitted message.
+async fn commit_session_edit(
   manager : EngineManager,
-  payload : @protocol.SessionEditCommitPayload,
+  payload : EditReplacement,
   on_committed : (String, String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
 ) -> SessionDeleteReply {
@@ -80,11 +184,6 @@ pub async fn commit_session_edit(
   }
   let lease = manager.begin_record_read(payload.replacement)
   defer manager.end_record_read(payload.replacement, lease)
-  let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
-  if edited_source_deleted(manager, selected.root, payload) {
-    on_committed(payload.session, payload.workspace)
-    return Deleted
-  }
   delete_session(
     manager,
     payload.session,
@@ -96,44 +195,9 @@ pub async fn commit_session_edit(
 }
 
 ///|
-/// A competing deletion can roll a condemned record back. The same store
-/// commit lock must cover proving absence, including a lost-reply retry.
-async fn edited_source_deleted(
-  manager : EngineManager,
-  root : @pathx.Absolute,
-  payload : @protocol.SessionEditCommitPayload,
-) -> Bool {
-  manager.archive_commit_lock.acquire()
-  defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(root).to_path(),
-  )
-  defer shared.release()
-  require_edited_receipt(root, payload)
-  ignore(@session_record.read_document(root, payload.session)) catch {
-    @session_record.Absent(_) => {
-      guard !@fsx.is_dir(root.join("sessions").join(payload.session).to_path()) &&
-        !@fsx.is_dir(
-          @session_store.archived_root(root)
-          .join("sessions")
-          .join(payload.session)
-          .to_path(),
-        ) else {
-        raise EngineError(
-          "the original record moved or is unreadable; it was kept",
-        )
-      }
-      return true
-    }
-    error => raise error
-  }
-  false
-}
-
-///|
 async fn require_edited_receipt(
   root : @pathx.Absolute,
-  payload : @protocol.SessionEditCommitPayload,
+  payload : EditReplacement,
 ) -> Unit {
   let destination = @session_record.read_document(root, payload.replacement)
   guard destination.events
@@ -145,48 +209,5 @@ async fn require_edited_receipt(
     raise EngineError(
       "the edited message has not been saved; the original conversation was kept",
     )
-  }
-}
-
-///|
-/// Called while holding the workspace lifecycle lock, which excludes new
-/// start/compact claims until preparation has finished. Include child slots
-/// even before their first record is written, without stopping any engine.
-fn EngineManager::require_idle_edit_source(
-  self : EngineManager,
-  source : String,
-) -> Unit raise EngineError {
-  fn belongs(session : String) -> Bool {
-    let mut current = session
-    while current != source {
-      guard @wire.split_child_session_id(current) is Some((parent, _)) else {
-        return false
-      }
-      current = parent
-    }
-    true
-  }
-  for session, slot in self.serving() {
-    guard belongs(session) else { continue }
-    guard slot.pending is None &&
-      (
-        slot.engine is None ||
-        (
-          slot.engine is Some(engine) &&
-          engine.phase is Idle(..) &&
-          engine.queued_runs.is_empty()
-        )
-      ) else {
-      raise EngineError(
-        "this conversation or one of its subagents is busy; wait before editing",
-      )
-    }
-  }
-  for session, state in self.record_guards {
-    if belongs(session) && (state.active_ops > 0 || state.moving) {
-      raise EngineError(
-        "another operation is preparing this conversation; wait before editing",
-      )
-    }
   }
 }

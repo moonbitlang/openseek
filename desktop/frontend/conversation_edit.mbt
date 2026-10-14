@@ -75,42 +75,41 @@ fn Model::edit_user_message(
     is Some(edit) else {
     return (@cmd.none, self)
   }
-  if edit.through is Some(through) {
-    self.request_fork(emit, slot, through, draft~)
-  } else {
-    let pending : ConversationFork = {
-      source,
-      source_title: self.selected_conversation_title(),
-      source_sequence: conv.durable_frontier(),
-      kind: FirstMessage(draft),
-      engine_model: conv.engine_model,
-      connection_generation: self.focused_connection_generation(),
-    }
-    (
-      fork_conversation(emit, pending),
-      { ..self, conversation_fork: Some(pending), },
-    )
+  let paths = draft.mentions
+    .iter()
+    .filter_map(mention => {
+      match mention.ref_ {
+        @mention_context.File(path~) if path.has_prefix(
+            ".openseek/attachments/",
+          ) => Some(path)
+        _ => None
+      }
+    })
+    .collect()
+  let payload : @protocol.SessionEditPayload = {
+    session: source.session,
+    workspace: source.workspace.path,
+    through: edit.through,
+    model: conv.engine_model.wire(),
+    source_title: self.selected_conversation_title(),
+    source_sequence: conv.durable_frontier(),
+    task: draft.prompt(),
+    images: draft.images.map(image => image.url),
+    attachment_paths: paths,
+    thinking: conv.engine_model.thinking(self.reasoning_for(conv.engine_model)),
+    max_steps: parsed_max_steps(self.max_steps),
   }
-}
-
-///|
-fn Model::send_edited_fork(
-  self : Model,
-  emit : @cmd.Emit[Msg],
-  pending : ConversationFork,
-  session : String,
-  draft : @composer.Draft,
-) -> @cmd.Cmd {
-  emit(
-    ComposerAction(
-      @composer.DraftSubmitted(
-        identity={
-          owner: { channel: pending.source.channel, session, },
-          archive_generation: self.composer_entry_retirements.length(),
-        },
-        draft~,
-      ),
-    ),
+  let pending : ConversationFork = {
+    source,
+    source_title: payload.source_title,
+    source_sequence: payload.source_sequence,
+    kind: EditedMessage(payload),
+    engine_model: conv.engine_model,
+    connection_generation: self.focused_connection_generation(),
+  }
+  (
+    fork_conversation(emit, pending),
+    { ..self, conversation_fork: Some(pending), },
   )
 }
 

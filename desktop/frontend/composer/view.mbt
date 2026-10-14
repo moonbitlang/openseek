@@ -527,19 +527,6 @@ pub fn ContextComponent::render(
           },
         ),
       ])
-    EditCleanupNotice(text~, retry~) =>
-      @html.div(
-        class="composer-context-row composer-notice error edit-cleanup-notice",
-        [
-          @html.span(class="composer-notice-text", text),
-          @html.button(
-            class="composer-notice-btn",
-            type_="button",
-            on_click=action_emit(EditCleanupRetried(identity~)),
-            retry,
-          ),
-        ],
-      )
     WorktreePlacementNotice =>
       @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", ui(locale, WaitingPlacement)),

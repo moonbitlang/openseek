@@ -869,7 +869,6 @@ priv struct Conversation {
   // just clears it. It deliberately outlives `run: Starting(..)`, because a
   // competing run replaces that phase and the refusal that competition causes
   // arrives after it.
-  edit_replacement : EditReplacement?
   pending_prompt : PendingPrompt?
   // A large semantic-search selection is being materialized for a submitted
   // prompt. This is separate from `mentions`: the user may change the visible
@@ -1987,11 +1986,6 @@ priv enum Msg {
   )
   ForkRequested(slot~ : String, through~ : Int32)
   ForkCompleted(ConversationFork, Result[@protocol.SessionForkReply, String])
-  EditCleanupCompleted(
-    @interop.ConversationKey,
-    EditReplacement,
-    Result[@protocol.SessionDeleteReply, String]
-  )
   // Open a row from the archived index. Its workspace is part of the row's
   // durable placement and selects the archived twin without restoring it.
   OpenArchivedSession(
@@ -2346,7 +2340,6 @@ priv enum DeviceMsg {
   // Together with `session.load` snapshots these are the transcript's only
   // durable sources; the live `agent.event` stream is lifecycle/stream state.
   PredictionReceived(session~ : String, prediction~ : @wire.PredictionRecord)
-  EditedReceiptsLoaded(session~ : String, ids~ : Array[String])
   SessionCommitted(
     session~ : String,
     sequence~ : Int32,
@@ -2674,7 +2667,6 @@ fn empty_conversation(
     queue_edit: None,
     pending_approval: None,
     pending_prompt: None,
-    edit_replacement: None,
     pending_semantic_submission: None,
     messages: [],
     watermark: 0,
@@ -3830,7 +3822,7 @@ fn Model::activate(
 /// one the list cannot reach does not save the draft, it strands it — the
 /// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
-  self.has_begun() || !self.draft_empty() || self.edit_replacement is Some(_)
+  self.has_begun() || !self.draft_empty()
 }
 
 ///|

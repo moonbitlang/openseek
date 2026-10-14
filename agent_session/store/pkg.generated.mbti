@@ -13,19 +13,10 @@ import {
 
 // Types and methods
 type SessionListing derive(@debug.Debug)
+pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
-pub fn SessionListing::state(Self) -> SessionListingState
 pub fn SessionListing::title(Self) -> String?
-
-pub enum SessionListingState {
-  Reserved
-  Recorded(first_prompt~ : String?)
-  Unreadable(String)
-} derive(Eq, @debug.Debug)
-pub fn SessionListingState::equal(Self, Self) -> Bool
-pub fn SessionListingState::not_equal(Self, Self) -> Bool
-pub fn SessionListingState::to_repr(Self) -> @debug.Repr
 
 type SessionStore derive(@debug.Debug)
 pub fn SessionStore::SessionStore(String) -> Self
@@ -34,14 +25,12 @@ pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : Stri
 pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit
 pub async fn SessionStore::exists(Self, @agent_session.SessionId) -> Bool
 pub async fn SessionStore::fork(Self, @agent_session.SessionId, @agent_session.SessionId, through? : Int, system_prompt~ : String) -> @agent_session.Session
-pub async fn SessionStore::is_reserved(Self, @agent_session.SessionId) -> Bool
 pub fn SessionStore::job_logs_dir(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::latest(Self) -> @agent_session.SessionId?
 pub async fn SessionStore::list(Self) -> Array[@agent_session.SessionId]
 pub async fn SessionStore::listings(Self) -> Array[SessionListing]
 pub async fn SessionStore::load(Self, @agent_session.SessionId) -> @agent_session.Session
 pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @openseek_protocol.PredictionRecord?
-pub async fn SessionStore::reserve(Self, @agent_session.SessionId, String) -> Unit
 pub fn SessionStore::root(Self) -> String
 pub async fn SessionStore::save_prediction(Self, @agent_session.Session, @openseek_protocol.PredictionRecord) -> Unit
 pub async fn SessionStore::scratch_dir(Self, @agent_session.SessionId) -> String

@@ -230,7 +230,7 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
             conversation.project(),
             conversation.record,
           ) {
-          if pending.kind is AfterAnswer(through~, ..) {
+          if pending.kind is AfterAnswer(through~) {
             Some(through)
           } else {
             None

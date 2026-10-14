@@ -1,7 +1,5 @@
 ///|
 priv enum DynamicMessage {
-  DEditCleanupFailed(String)
-  DRetryEditCleanup
   DTokens(String)
   DWorktreeArchiveHint(String, String)
   DStorageUnavailable(String)
@@ -17,21 +15,6 @@ priv enum DynamicMessage {
 ///|
 fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
   match (locale, message) {
-    (English, DEditCleanupFailed(message)) =>
-      "Edited message saved; original chat retained: \{message}"
-    (Spanish, DEditCleanupFailed(message)) =>
-      "Mensaje editado guardado; chat original conservado: \{message}"
-    (SimplifiedChinese, DEditCleanupFailed(message)) =>
-      "修改后的消息已保存，旧会话未删除：\{message}"
-    (TraditionalChinese, DEditCleanupFailed(message)) =>
-      "修改後的訊息已儲存，舊對話未刪除：\{message}"
-    (Japanese, DEditCleanupFailed(message)) =>
-      "編集したメッセージを保存しました。元のチャットは保持されています: \{message}"
-    (English, DRetryEditCleanup) => "Retry cleanup"
-    (Spanish, DRetryEditCleanup) => "Reintentar limpieza"
-    (SimplifiedChinese, DRetryEditCleanup) => "重试清理"
-    (TraditionalChinese, DRetryEditCleanup) => "重試清理"
-    (Japanese, DRetryEditCleanup) => "削除を再試行"
     (English, DTokens(p0)) => "\{p0} tokens"
     (Spanish, DTokens(p0)) => "\{p0} tokens"
     (SimplifiedChinese, DTokens(p0)) => "\{p0} 个词元"

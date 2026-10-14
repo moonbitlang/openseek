@@ -1,7 +1,7 @@
 ///|
 priv enum ConversationForkKind {
-  AfterAnswer(through~ : Int32, draft~ : @composer.Draft?)
-  FirstMessage(@composer.Draft)
+  AfterAnswer(through~ : Int32)
+  EditedMessage(@protocol.SessionEditPayload)
 } derive(Eq)
 
 ///|
@@ -29,7 +29,6 @@ fn Model::request_fork(
   emit : @cmd.Emit[Msg],
   slot : String,
   through : Int32,
-  draft? : @composer.Draft,
 ) -> (@cmd.Cmd, Model) {
   guard self.conversation_fork is None &&
     self.transcript_slot().map(value => value.key()) == Some(slot) &&
@@ -44,7 +43,7 @@ fn Model::request_fork(
     source,
     source_title: self.selected_conversation_title(),
     source_sequence: conv.durable_frontier(),
-    kind: AfterAnswer(through~, draft~),
+    kind: AfterAnswer(through~),
     engine_model: conv.engine_model,
     connection_generation: self.focused_connection_generation(),
   }
@@ -68,60 +67,12 @@ fn Model::finish_fork(
   match result {
     Err(message) => model.notify_error(emit, message)
     Ok(reply) => {
+      let should_open = model.screen is Chat &&
+        model.conversation_selection() == Some(pending.source)
       guard model.device_state(pending.source.channel) is Some(dev) &&
         dev.connection_generation == pending.connection_generation &&
         dev.projects.contains(pending.source.workspace) else {
         return (@cmd.none, model)
-      }
-      if pending.kind is FirstMessage(draft) {
-        let (rotate, model) = if model.screen is Chat &&
-          model.conversation_selection() == Some(pending.source) {
-          update_msg(
-            emit,
-            SessionRotated({
-              channel: pending.source.channel,
-              session: reply.session,
-            }),
-            model.with_active_project(Some(pending.source.workspace)),
-          )
-        } else {
-          let conv = empty_conversation(
-            pending.source.channel,
-            reply.session,
-            pending.source.workspace,
-            model=pending.engine_model,
-          )
-          (
-            @cmd.none,
-            model.replace_conversation({ ..conv, worktree_mode: false, }),
-          )
-        }
-        guard model.find_conversation(pending.source.channel, reply.session)
-          is Some(conv) else {
-          return (rotate, model)
-        }
-        let model = model.replace_conversation({
-          ..conv,
-          engine_model: pending.engine_model,
-          worktree_mode: false,
-          workspace: dev.conversation_workspace(
-            pending.source.workspace,
-            reply.session,
-            conv.workspace,
-          ),
-          edit_replacement: Some(EditReplacement(pending)),
-          task: draft.task,
-          mentions: draft.mentions,
-          images: draft.images,
-          composer_draft_present: true,
-        })
-        return (
-          @cmd.batch([
-            rotate,
-            model.send_edited_fork(emit, pending, reply.session, draft),
-          ]),
-          model,
-        )
       }
       let sessions = dev.sessions.filter(item => {
         item.id != reply.session || item.workspace != pending.source.workspace
@@ -140,11 +91,7 @@ fn Model::finish_fork(
           reply.session,
           pending.engine_model,
         )
-      // Seed the new owner before submitting its draft, including when the
-      // reader has navigated away while the fork was pending.
-      if pending.kind is AfterAnswer(draft=Some(draft), ..) {
-        // The host may announce the new session before replying to the fork.
-        // Preserve any transcript/run already opened from that announcement.
+      if pending.is_edit() {
         let conv = model
           .find_conversation(pending.source.channel, reply.session)
           .unwrap_or_else(() => {
@@ -162,35 +109,34 @@ fn Model::finish_fork(
             reply.session,
             conv.workspace,
           ),
-          task: draft.task,
-          mentions: draft.mentions,
-          images: draft.images,
-          composer_draft_present: true,
-          edit_replacement: Some(EditReplacement(pending)),
+          worktree_mode: false,
         })
+        model = {
+          ..model,
+          conversations: model.conversations.filter(conv => {
+            !pending.source.matches_record(
+              conv.device,
+              conv.session_id,
+              conv.project(),
+              conv.record,
+            )
+          }),
+        }
       }
       let save = save_conversation_model(
         conversation_model_key(pending.source.channel, reply.session),
         pending.engine_model,
       )
-      let submit = if pending.kind is AfterAnswer(draft=Some(draft), ..) {
-        model.send_edited_fork(emit, pending, reply.session, draft)
-      } else {
-        @cmd.none
-      }
       // A completed background request must not take the reader away from
       // another conversation or screen they chose while it was pending.
-      guard model.screen is Chat &&
-        model.conversation_selection() == Some(pending.source) else {
-        return (@cmd.batch([save, submit]), model)
-      }
+      guard should_open else { return (save, model) }
       let (open, model) = update_msg(
         emit,
         OpenSession(pending.source.channel, reply.session),
         model,
       )
       (
-        @cmd.batch([save, open, submit]),
+        @cmd.batch([save, open]),
         { ..model, fork_focus: model.selected_conversation, },
       )
     }
@@ -206,7 +152,13 @@ fn fork_conversation(
     @js.Promise::from_async(() => {
       let result : Result[@protocol.SessionForkReply, String] = try {
         let reply = match pending.kind {
-          AfterAnswer(through~, draft=None) =>
+          EditedMessage(payload) =>
+            @interop.bridge_request(
+              pending.source.channel,
+              @commands.session_edit,
+              payload,
+            )
+          AfterAnswer(through~) =>
             @interop.bridge_request(
               pending.source.channel,
               @commands.session_fork,
@@ -214,21 +166,6 @@ fn fork_conversation(
                 session: pending.source.session,
                 workspace: pending.source.workspace.path,
                 through,
-                model: pending.engine_model.wire(),
-                source_title: pending.source_title,
-              },
-            )
-          kind =>
-            @interop.bridge_request(
-              pending.source.channel,
-              @commands.session_edit_prepare,
-              {
-                session: pending.source.session,
-                workspace: pending.source.workspace.path,
-                through: match kind {
-                  AfterAnswer(through~, ..) => Some(through)
-                  FirstMessage(_) => None
-                },
                 model: pending.engine_model.wire(),
                 source_title: pending.source_title,
               },
@@ -342,34 +279,20 @@ test "fork and message editing are pure and preserve navigation" {
     guard requested.conversation_fork is Some(pending) else {
       fail("edit pending")
     }
-    if sequence == 1 {
-      assert_true(pending.kind is FirstMessage(_))
-    } else {
-      assert_true(pending.kind is AfterAnswer(through=4, draft=Some(_)))
-    }
+    assert_true(pending.kind is EditedMessage(_))
     let (_, done) = requested.finish_fork(emit, pending, result)
     let (_, again) = requested.finish_fork(emit, pending, result)
     guard done.find_conversation(source.device, "desktop-fork") is Some(created) &&
       again.find_conversation(source.device, "desktop-fork") is Some(repeated) else {
       fail("edit destination")
     }
-    assert_eq(
-      created.task,
-      if sequence == 1 {
-        "first revised"
-      } else {
-        "second revised"
-      },
-    )
+    assert_eq(created.task, "")
     assert_eq(created.task, repeated.task)
     assert_true(created.engine_model == source.engine_model)
-    assert_true(created.composer_draft_present)
+    assert_false(created.composer_draft_present)
     assert_true(done.conversation_fork is None)
     assert_true(
-      done
-      .find_conversation(source.device, source.session_id)
-      .map(conv => conv.task) ==
-      Some(source.task),
+      done.find_conversation(source.device, source.session_id) is None,
     )
     if sequence == 5 {
       let arrived = requested.replace_conversation({
@@ -455,4 +378,9 @@ test "the fork of a worktree conversation opens in the same worktree" {
     fail("the fork was not opened")
   }
   assert_true(fork.workspace == Worktree(project~, name="wt-1"))
+}
+
+///|
+fn ConversationFork::is_edit(self : ConversationFork) -> Bool {
+  self.kind is EditedMessage(_)
 }

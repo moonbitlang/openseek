@@ -167,7 +167,7 @@ async fn import_attachment_op(
 /// First-send worktree creation changes the execution directory. Carry only
 /// the message's imported originals into that checkout, retaining their
 /// relative references. Existing originals make retries idempotent.
-async fn stage_attachments_op(
+pub async fn stage_attachments_op(
   payload : @protocol.StageAttachmentsPayload,
 ) -> @protocol.EmptyReply {
   let root = attachment_workspace(payload.session, payload.workspace)

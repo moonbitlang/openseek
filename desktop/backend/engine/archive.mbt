@@ -586,7 +586,7 @@ pub async fn delete_session(
   on_committed : (String, String) -> Unit,
   worktree? : String,
   force~ : Bool = false,
-  edit_replacement? : @protocol.SessionEditCommitPayload,
+  edit_replacement? : EditReplacement,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> SessionDeleteReply {
   let session = session.trim().to_owned()

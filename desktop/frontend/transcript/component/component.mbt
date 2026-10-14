@@ -342,23 +342,24 @@ pub fn component(
   let blocks = input.map(input => {
     stream_blocks(input).map(block => (input.locale, block))
   })
-  let rendered = blocks.assoc_by(
-    (_, block) => {
+  let (editors, edit_emit) = message_editor_states(
+    blocks,
+    actions,
+    unpin=emit(Pinned(false)),
+  )
+  let rows = blocks.map2(editors, (blocks, editors) => {
+    blocks.map(pair => (pair.0, pair.1, editors.for_block(pair.1)))
+  })
+  let rendered = rows.assoc_by(
+    (key, row) => {
       let renders = Ref(0)
       let (changes, changes_emit) = message_changes_state(
-        block.map(pair => pair.1),
+        row.map(row => row.1),
         actions,
       )
-      let (editor, editor_emit) = message_editor_state(
-        block.map(pair => pair.1),
-        actions,
-        unpin=emit(Pinned(false)),
-      )
-      changes
-      .map2(editor, (changes, editor) => (changes, editor))
-      .map2(block, (row_state, pair) => {
-        let (changes, editor) = row_state
-        let (locale, block) = pair
+      let editor_emit = edit_emit.map(msg => (key, msg))
+      changes.map2(row, (changes, row) => {
+        let (locale, block, editor) = row
         renders.val += 1
         let html = @html.memo_by(
           block,

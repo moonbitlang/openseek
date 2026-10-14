@@ -308,28 +308,3 @@ async test "session fork command copies a session offline under the given id" {
     assert_eq(store.list().length(), 5)
   })
 }
-
-///|
-async test "session list json exposes reserved and unreadable states" {
-  @vfs.with_tmpdir(prefix="openseek-cli-session-reservation-", root => {
-    let store = @store.SessionStore(root)
-    store.reserve(SessionId("reserved"), "Unsent")
-    @fs.mkdir("\{root}/sessions/damaged", recursive=true)
-    guard session_list_json(store) is Array(entries) else {
-      fail("expected a JSON array")
-    }
-    assert_eq(entries.length(), 2)
-    for entry in entries {
-      match entry {
-        { "id": "reserved", "record_state": { "kind": "reserved", .. }, .. } =>
-          ()
-        {
-          "id": "damaged",
-          "record_state": { "kind": "unreadable", "error": String(error), .. },
-          ..
-        } => assert_false(error.is_empty())
-        _ => fail("listing lost its explicit record state")
-      }
-    }
-  })
-}

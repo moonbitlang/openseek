@@ -36,6 +36,8 @@ pub async fn read_ui_language(String?) -> @protocol.UiLanguagePreference
 
 pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
 
+pub async fn stage_attachments_op(@protocol.StageAttachmentsPayload) -> @protocol.EmptyReply
+
 pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
 
 pub async fn write_ui_language(String?, @protocol.UiLanguagePreference) -> @protocol.EmptyReply

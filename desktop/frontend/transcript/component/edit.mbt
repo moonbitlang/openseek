@@ -86,7 +86,7 @@ fn Block::user_edit(self : Block) -> UserEditAction? {
 }
 
 ///|
-/// Editing belongs to this keyed row. Typing never updates the root composer
+/// Editing belongs to this transcript. Typing never updates the root composer
 /// or forks a conversation; only the explicit Send action leaves this row.
 fn MessageEditor::update(
   self : MessageEditor,
@@ -135,16 +135,58 @@ fn MessageEditor::update(
 }
 
 ///|
-fn message_editor_state(
-  block : @rabbita.Val[Block],
+priv struct MessageEditors(Map[String, MessageEditor]) derive(Eq)
+
+///|
+fn MessageEditors::for_block(
+  self : MessageEditors,
+  block : Block,
+) -> MessageEditor {
+  self.0.get(block.branch_key()).unwrap_or(EditorClosed)
+}
+
+///|
+fn MessageEditors::update(
+  self : MessageEditors,
+  blocks : @vector.Vector[(@i18n.Locale, Block)],
+  key : String,
+  msg : MessageEditorMsg,
+  send : @cmd.Emit[(Int32, @composer.Draft)],
+  unpin~ : @cmd.Cmd,
+) -> (MessageEditors, @cmd.Cmd) {
+  let editors : Map[String, MessageEditor] = Map([])
+  let mut command = @cmd.none
+  for (_, block) in blocks {
+    let (editor, effect) = if block.branch_key() == key {
+      self.for_block(block).update(block, msg, send, unpin~)
+    } else {
+      (self.for_block(block), @cmd.none)
+    }
+    if editor is EditorDraft(_) {
+      editors[block.branch_key()] = editor
+    }
+    if block.branch_key() == key {
+      command = effect
+    }
+  }
+  (MessageEditors(editors), command)
+}
+
+///|
+/// Drafts have the conversation component's lifetime. Keep them upstream of
+/// assoc_by so a keystroke and a new busy input are projected together, before
+/// any row renders. Cancel drops its entry; each update also drops absent rows.
+fn message_editor_states(
+  blocks : @rabbita.Val[@vector.Vector[(@i18n.Locale, Block)]],
   actions : Actions,
   unpin~ : @cmd.Cmd,
-) -> (@rabbita.Val[MessageEditor], @cmd.Emit[MessageEditorMsg]) {
+) -> (@rabbita.Val[MessageEditors], @cmd.Emit[(String, MessageEditorMsg)]) {
   @rabbita.create_state_with_input(
-    input=block,
-    init=(_, _) => (EditorClosed, @cmd.none),
-    update=(state, block, msg, _) => {
-      state.update(block, msg, actions.edit_user, unpin~)
+    input=blocks,
+    init=(_, _) => (MessageEditors(Map([])), @cmd.none),
+    update=(state, blocks, message, _) => {
+      let (key, msg) = message
+      state.update(blocks, key, msg, actions.edit_user, unpin~)
     },
   )
 }

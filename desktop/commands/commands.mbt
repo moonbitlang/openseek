@@ -948,13 +948,7 @@ pub let session_fork : Command[
 ] = Command("session.fork")
 
 ///|
-pub let session_edit_prepare : Command[
-  @protocol.SessionEditPreparePayload,
+pub let session_edit : Command[
+  @protocol.SessionEditPayload,
   @protocol.SessionForkReply,
-] = Command("session.edit_prepare")
-
-///|
-pub let session_edit_commit : Command[
-  @protocol.SessionEditCommitPayload,
-  @protocol.SessionDeleteReply,
-] = Command("session.edit_commit")
+] = Command("session.edit")

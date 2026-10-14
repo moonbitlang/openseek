@@ -377,7 +377,6 @@ async fn persist_event(
       dirs=store.session_dir_chain(session.id()),
     )
   }
-  store.clear_reservation(session.id())
 }
 
 ///|
@@ -574,26 +573,16 @@ pub async fn SessionStore::fork(
 }
 
 ///|
-/// Listing state keeps an unsent reservation distinct from an unreadable log.
-/// A recorded session may have no user prompt within the bounded preview scan.
-pub enum SessionListingState {
-  Reserved
-  Recorded(first_prompt~ : String?)
-  Unreadable(String)
-} derive(Debug, Eq)
-
-///|
-pub extend SessionListingState with Debug::{to_repr}
-
-///|
-pub extend SessionListingState with Eq::{equal, not_equal}
-
-///|
-/// Lightweight metadata for a session directory, including failed reads.
+/// Human-facing metadata for one session directory.
+///
+/// A listing row is intentionally lighter than a loaded session. It can be
+/// built without replaying the full event log, so it is suitable for pickers
+/// and `--session-list`. A row can also represent a damaged directory: in that
+/// case timestamp may be `None` and first prompt may be empty.
 struct SessionListing {
   id : @agent_session.SessionId
   last_active_unix_seconds : Int64?
-  state : SessionListingState
+  first_prompt : String
   title : String?
 } derive(Debug)
 
@@ -620,9 +609,13 @@ pub fn SessionListing::last_active_unix_seconds(
 }
 
 ///|
-/// Return the record state and its preview or read diagnostic.
-pub fn SessionListing::state(self : SessionListing) -> SessionListingState {
-  self.state
+/// Return the first user prompt found near the start of the event log.
+///
+/// The value is a display label, not a validated session field. It is `""` when
+/// no user event is found within the scan limit, when the session file cannot
+/// be read, or when the session directory is damaged.
+pub fn SessionListing::first_prompt(self : SessionListing) -> String {
+  self.first_prompt
 }
 
 ///|
@@ -647,64 +640,6 @@ pub async fn SessionStore::title(
   let title = text.trim().to_owned()
   guard !title.is_empty() else { fail("session title must not be blank") }
   Some(title)
-}
-
-///|
-/// Reserve a discoverable empty session before its first prompt is written.
-/// An explicit marker makes the id visible as a reservation in listings;
-/// omitting a JSONL header lets the first run build its own configured prompt.
-/// An already recorded session must not be converted into a reservation.
-pub async fn SessionStore::reserve(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-  title : String,
-) -> Unit {
-  let title = title.trim().to_owned()
-  guard !title.is_empty() else { fail("session title must not be blank") }
-  ensure_session_dir(self, id)
-  with_session_lock(self, id, Exclusive, () => {
-    let recorded = try @fs.mtime(self.session_file_path(id)) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => None
-      error => raise error
-    } noraise {
-      stamp => Some(stamp)
-    }
-    guard recorded is None else {
-      fail("session \{id.value()} already has a durable record")
-    }
-    write_text_atomic(
-      self.title_path(id),
-      title,
-      dirs=self.session_dir_chain(id),
-    )
-    write_text_atomic(
-      self.reservation_path(id),
-      ({ "kind": "reserved", "version": 1 } : Json).stringify(),
-      dirs=self.session_dir_chain(id),
-    )
-  })
-}
-
-///|
-fn SessionStore::reservation_path(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> String raise {
-  "\{self.session_dir(id)}/session-reservation.json"
-}
-
-///|
-/// Best-effort housekeeping after the durable log commits, under its writer lock.
-/// A valid log takes precedence over a leftover marker. Cleanup failure must
-/// not report a committed append as failed or leave its caller on an old snapshot.
-async fn SessionStore::clear_reservation(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> Unit {
-  @fs.remove(self.reservation_path(id)) catch {
-    _ => return
-  }
-  sync_dir_best_effort(self.session_dir(id))
 }
 
 ///|
@@ -739,81 +674,36 @@ pub async fn SessionStore::set_title(
 let first_prompt_scan_limit : Int32 = 50
 
 ///|
-/// Scan a bounded preview, preserving read/parse errors separately from no prompt.
-async fn first_prompt_in_log(
-  path : String,
-  id : @agent_session.SessionId,
-) -> String? {
-  let file = @fs.open(path, mode=ReadOnly)
+/// The first user prompt recorded in the session file at `path`, or `""` when
+/// none is found within the scan limit (or the file cannot be read). Streams
+/// line by line instead of loading the session: a listing only needs a
+/// label, and long or compacted histories should not make `--session-list`
+/// deserialize every event ever appended.
+async fn first_prompt_in_log(path : String) -> String {
+  let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
-  guard file.read_until("\n") is Some(line) else {
-    fail("session file has no header")
-  }
-  guard @session_log.classify_header(@json.parse(line)) is Header(header) &&
-    header.id == id.value() else {
-    fail("invalid session header for \{id.value()}")
-  }
+  // The first line is the session header; the prompt scan starts after it.
+  let _ = file.read_until("\n") catch { _ => return "" }
   for _ in 0..<first_prompt_scan_limit {
-    guard file.read_until("\n") is Some(line) else { break }
+    let next = file.read_until("\n") catch { _ => return "" }
+    guard next is Some(line) else { break }
     if line.is_blank() {
       continue
     }
-    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line))
+    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+      _ => return ""
+    }
     if event.item() is User(message) {
       let content = message.content()
       let text = content.text()
-      return Some(
-        if text.is_blank() && !content.is_text_only() {
-          "[Image]"
-        } else {
-          text
-        },
-      )
-    }
-  }
-  None
-}
-
-///|
-async fn SessionStore::listing_state(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> (SessionListingState, (Int64, Int32)?) {
-  try {
-    let path = self.session_file_path(id)
-    // Only a missing log can be a reservation. Permission or I/O failures
-    // must not fall through to the marker, even if it is still present.
-    let stamp = @fs.mtime(path) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => {
-        let marker = @json.parse(
-          @fs.read_file(self.reservation_path(id)).text(),
-        )
-        guard marker is { "kind": "reserved", "version": 1, .. } else {
-          fail("invalid session reservation for \{id.value()}")
-        }
-        return (Reserved, None)
+      return if text.is_blank() && !content.is_text_only() {
+        "[Image]"
+      } else {
+        text
       }
-      error => raise error
     }
-    (Recorded(first_prompt=first_prompt_in_log(path, id)), Some(stamp))
-  } catch {
-    error => (Unreadable("\{error}"), None)
   }
-}
-
-///|
-/// Whether an existing record is an explicit unsent reservation. Missing,
-/// unreadable, or malformed records raise instead of masquerading as reserved.
-pub async fn SessionStore::is_reserved(
-  self : SessionStore,
-  id : @agent_session.SessionId,
-) -> Bool {
-  let (state, _) = self.listing_state(id)
-  match state {
-    Reserved => true
-    Recorded(..) => false
-    Unreadable(error) => fail(error)
-  }
+  ""
 }
 
 ///|
@@ -840,8 +730,8 @@ fn[T] stamped_newest_first(
 ///
 /// This scans each session directory for timestamps and a first prompt label,
 /// but it does not replay whole histories and does not require loadability.
-/// Reservations and damaged directories remain visible with explicit state,
-/// ordered after timestamped rows when no log timestamp exists. Use `latest` when the
+/// Damaged directories remain visible with `last_active_unix_seconds=None` and
+/// `first_prompt=""`, ordered after timestamped rows. Use `latest` when the
 /// caller needs the newest session that can actually be loaded.
 pub async fn SessionStore::listings(
   self : SessionStore,
@@ -849,22 +739,25 @@ pub async fn SessionStore::listings(
   let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
   for id in self.list() {
-    let (state, stamp) = self.listing_state(id)
-    guard stamp is Some((seconds, nanoseconds)) else {
-      unreadable.push({
-        id,
-        last_active_unix_seconds: None,
-        state,
-        title: self.title(id),
-      })
-      continue
+    let path = self.session_file_path(id) catch { _ => continue }
+    let stamp = @fs.mtime(path) catch {
+      _ => {
+        unreadable.push({
+          id,
+          last_active_unix_seconds: None,
+          first_prompt: "",
+          title: self.title(id),
+        })
+        continue
+      }
     }
+    let (seconds, nanoseconds) = stamp
     stamped.push(
       (
         {
           id,
           last_active_unix_seconds: Some(seconds),
-          state,
+          first_prompt: first_prompt_in_log(path),
           title: self.title(id),
         },
         seconds,

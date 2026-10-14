@@ -595,8 +595,7 @@ fn State::apply_composer_action(
     | @composer.QueuedInputEditRequested(..)
     | @composer.QueuedInputSteerRequested(..)
     | @composer.QueuedInputDeleteRequested(..)
-    | @composer.WorktreePlacementRetried(..)
-    | @composer.EditCleanupRetried(..) => (@cmd.none, self)
+    | @composer.WorktreePlacementRetried(..) => (@cmd.none, self)
   }
 }
 

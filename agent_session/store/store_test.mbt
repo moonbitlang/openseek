@@ -159,15 +159,12 @@ async test "listings order by recency and keep husk directories visible" {
   assert_eq(listings.length(), 3)
   assert_eq(listings[0].id().value(), "newer")
   assert_true(listings[0].last_active_unix_seconds() is Some(_))
-  assert_true(listings[0].state() is Recorded(first_prompt=None))
+  assert_eq(listings[0].first_prompt(), "")
   assert_eq(listings[1].id().value(), "older")
-  assert_true(
-    listings[1].state()
-    is Recorded(first_prompt=Some("  first\n prompt  here ")),
-  )
+  assert_eq(listings[1].first_prompt(), "  first\n prompt  here ")
   assert_eq(listings[2].id().value(), "husk")
   assert_true(listings[2].last_active_unix_seconds() is None)
-  assert_true(listings[2].state() is Unreadable(_))
+  assert_eq(listings[2].first_prompt(), "")
 }
 
 ///|
@@ -186,9 +183,7 @@ async test "an explicit session title overrides the first prompt without rewriti
   let listings = store.listings()
   assert_eq(listings.length(), 1)
   assert_eq(listings[0].title(), Some("Renamed conversation"))
-  assert_true(
-    listings[0].state() is Recorded(first_prompt=Some("original first prompt")),
-  )
+  assert_eq(listings[0].first_prompt(), "original first prompt")
   let loaded = store.load(id)
   guard loaded.events()[0].item() is User(message) else {
     fail("renaming changed the first durable event")
@@ -1190,107 +1185,5 @@ async test "image-only conversations have a nonempty listing preview" {
     system_prompt="system",
   ).append(User(UserMessage(Content([Image(image)]))))
   store.create(session)
-  assert_true(
-    store.listings()[0].state() is Recorded(first_prompt=Some("[Image]")),
-  )
-}
-
-///|
-async test "a reserved session is discoverable before its first prompt" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id : @agent_session.SessionId = SessionId("reserved")
-  store.reserve(id, "Edited conversation")
-  assert_true(store.exists(id))
-  assert_false(@fs.exists(store.session_file(id)))
-  guard store.listings() is [row] else { fail("reservation not listed") }
-  assert_eq(row.id(), id)
-  assert_eq(row.title(), Some("Edited conversation"))
-  assert_true(row.state() is Reserved)
-  // No copied header pins the old prompt or scratch directory.
-  let session = @agent_session.Session(
-    id,
-    system_prompt="fresh configured prompt",
-  )
-  ignore(store.append(session, User(UserMessage(Content([Text("edited")])))))
-  assert_eq(store.load(id).system_prompt(), "fresh configured prompt")
-  assert_eq(store.title(id), Some("Edited conversation"))
-  assert_true(
-    store.listings()[0].state() is Recorded(first_prompt=Some("edited")),
-  )
-  assert_false(
-    @fs.exists("\{store.root()}/sessions/reserved/session-reservation.json"),
-  )
-}
-
-///|
-async test "listing states distinguish reservations from missing and corrupt records" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  store.reserve(SessionId("reserved"), "Unsent")
-  @fs.mkdir("\{store.root()}/sessions/missing", recursive=true)
-  store.reserve(SessionId("corrupt"), "Corrupt")
-  // A leftover reservation marker must never hide an unreadable durable log.
-  @fs.write_file(
-    store.session_file(SessionId("corrupt")),
-    "not a header\n",
-    create_mode=CreateOrTruncate,
-  )
-  store.reserve(SessionId("io-error"), "Cannot read")
-  @fs.mkdir(store.session_file(SessionId("io-error")))
-  store.reserve(SessionId("bad-marker"), "Invalid reservation")
-  @fs.write_file(
-    "\{store.root()}/sessions/bad-marker/session-reservation.json",
-    "{}",
-    create_mode=CreateOrTruncate,
-  )
-  let rows = store.listings()
-  assert_eq(rows.length(), 5)
-  for row in rows {
-    if row.id().value() == "reserved" {
-      assert_true(row.state() is Reserved)
-    } else {
-      guard row.state() is Unreadable(error) else {
-        fail("damaged record classified as a reservation")
-      }
-      assert_false(error.is_empty())
-    }
-  }
-}
-
-///|
-async test "record creation consumes an explicit reservation" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id : @agent_session.SessionId = SessionId("reserved")
-  store.reserve(id, "Unsent")
-  store.create(Session(id, system_prompt="fresh configured prompt"))
-  assert_true(store.listings()[0].state() is Recorded(first_prompt=None))
-  assert_false(
-    @fs.exists("\{store.root()}/sessions/reserved/session-reservation.json"),
-  )
-  @fs.remove(store.session_file(id))
-  assert_true(store.listings()[0].state() is Unreadable(_))
-}
-
-///|
-async test "listing is read only and marker cleanup cannot fail a committed write" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id : @agent_session.SessionId = SessionId("recorded")
-  let session : @agent_session.Session = Session(id, system_prompt="system")
-  store.create(session)
-  let dir = "\{store.root()}/sessions/recorded"
-  @fs.remove("\{dir}/session.lock")
-  assert_true(store.listings()[0].state() is Recorded(first_prompt=None))
-  assert_false(@fs.exists("\{dir}/session.lock"))
-  // Removing a directory with the file-only remove operation fails. The log
-  // still determines the state, and a committed event must report success.
-  @fs.mkdir("\{dir}/session-reservation.json")
-  store.create(session)
-  let next = store.append(session, User(UserMessage(Content([Text("one")]))))
-  let next = store.append(next, User(UserMessage(Content([Text("two")]))))
-  assert_eq(store.load(id).last_sequence(), next.last_sequence())
-  assert_eq(next.last_sequence(), 2)
-  assert_true(store.listings()[0].state() is Recorded(first_prompt=Some("one")))
+  assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }

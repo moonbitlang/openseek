@@ -85,14 +85,6 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     // image: it is durable, so it stays in the transcript.
     @composer.SubrunDock(lanes=conv.visible_subruns()),
   ]
-  if conv.edit_replacement is Some({ state: Failed(_, message), .. }) {
-    context.push(
-      @composer.EditCleanupNotice(
-        text=dynamic_text(self.locale, DEditCleanupFailed(message)),
-        retry=dynamic_text(self.locale, DRetryEditCleanup),
-      ),
-    )
-  }
   // The BYOK reminder: readiness is otherwise folded silently into Send's
   // availability, and the top-bar status is owned by the run state — without
   // this notice a dismissed setup modal leaves a greyed Send with no
