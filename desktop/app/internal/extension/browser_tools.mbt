@@ -388,6 +388,23 @@ priv enum Navigation {
 }
 
 ///|
+/// The string a call gives for `key`, or `None` when it gives none. A value
+/// that is there and is not a string is not the same as none: the call is
+/// malformed, and acting on the rest of it would be acting on a guess.
+fn optional_text(
+  arguments : Json,
+  key : String,
+) -> String? raise @mcp.ToolError {
+  guard arguments is Object(fields) && fields.get(key) is Some(value) else {
+    return None
+  }
+  guard value is String(text) else {
+    raise ToolError("`\{key}` must be a string.")
+  }
+  Some(text)
+}
+
+///|
 /// The tab and destination a `browser_navigate` call names.
 fn navigation(arguments : Json) -> (Int32, Navigation) raise @mcp.ToolError {
   guard arguments is { "tab": Number(tab, ..), .. } &&
@@ -396,14 +413,8 @@ fn navigation(arguments : Json) -> (Int32, Navigation) raise @mcp.ToolError {
       "browser_navigate needs `tab`, the id of the tab to navigate.",
     )
   }
-  let url = match arguments {
-    { "url": String(url), .. } => Some(url)
-    _ => None
-  }
-  let action = match arguments {
-    { "action": String(action), .. } => Some(action)
-    _ => None
-  }
+  let url = optional_text(arguments, "url")
+  let action = optional_text(arguments, "action")
   let destination = match (url, action) {
     (Some(url), None) => To(url)
     (None, Some("back")) => Back
@@ -579,6 +590,18 @@ async test "browser_open and browser_navigate refuse what they cannot load or ca
     "exactly one of",
   )
   refused("browser_navigate", { "tab": 1, "action": "home" }, "not home")
+  // A field that is present and malformed is not read as absent: the valid
+  // half of such a call is not carried out.
+  refused(
+    "browser_navigate",
+    { "tab": 1, "url": 42, "action": "reload" },
+    "`url` must be a string",
+  )
+  refused(
+    "browser_navigate",
+    { "tab": 1, "url": "https://example.com/", "action": null },
+    "`action` must be a string",
+  )
   refused(
     "browser_navigate",
     { "tab": 1, "url": "about:blank" },
