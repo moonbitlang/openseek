@@ -802,6 +802,21 @@ async fn SessionStore::listing_state(
 }
 
 ///|
+/// Whether an existing record is an explicit unsent reservation. Missing,
+/// unreadable, or malformed records raise instead of masquerading as reserved.
+pub async fn SessionStore::is_reserved(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> Bool {
+  let (state, _) = self.listing_state(id)
+  match state {
+    Reserved => true
+    Recorded(..) => false
+    Unreadable(error) => fail(error)
+  }
+}
+
+///|
 /// Order stamped rows newest-first by `(seconds, nanoseconds)`, ignoring the
 /// row payload in tuple position 0.
 fn[T] stamped_newest_first(

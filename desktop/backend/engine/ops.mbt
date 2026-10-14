@@ -807,6 +807,17 @@ pub async fn load_archived_session(
     raise EngineError("no archived record for this conversation")
   }
   let document = @session_record.read_document(root, session) catch {
+    @session_record.Absent(detail) => {
+      let reserved = @store.SessionStore(root.to_string()).is_reserved(
+        SessionId(session),
+      ) catch {
+        error => raise EngineError("archived session load failed: \{error}")
+      }
+      if reserved {
+        return empty_session_reply(session)
+      }
+      raise EngineError("archived session load failed: \{detail}")
+    }
     error => raise EngineError("archived session load failed: \{error}")
   }
   {

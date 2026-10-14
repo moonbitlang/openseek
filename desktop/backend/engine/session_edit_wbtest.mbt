@@ -430,3 +430,77 @@ async test "edit retry waits for a competing deletion to roll back" {
   assert_true(notifications.is_empty())
   assert_true(manager.record_guards.is_empty())
 }
+
+///|
+#cfg(not(platform="windows"))
+async test "an unsent edit reservation can be archived loaded and restored" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-archived-reservation-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(dir)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let store = @store.SessionStore(selected.root.to_string())
+  let id : @agent_session.SessionId = SessionId("unsent")
+  store.reserve(id, "Edited conversation")
+  let manager = new_engine_manager("unused")
+  manager.pump = Serving(sessions=Map([]))
+  assert_true(archive_session_commit(manager, id.value(), (_, _) => ()) is None)
+  let archived = @store.SessionStore(
+    @session_store.archived_root(selected.root).to_string(),
+  )
+  assert_true(archived.is_reserved(id))
+  for hint in [Some(workspace), None] {
+    let reply = load_archived_session(manager, {
+      session: id.value(),
+      workspace: hint,
+    })
+    assert_eq(reply.session.id, Some(id.value()))
+    assert_eq(reply.session.events, Some([]))
+    assert_eq(reply.watermark, Some(0))
+    assert_false(store.exists(id))
+  }
+  unarchive_session_commit(manager, id.value(), (_, _) => ())
+  assert_true(store.is_reserved(id))
+  ignore(
+    store.append(
+      Session(id, system_prompt="fresh prompt"),
+      User(UserMessage(Content([Text("edited")]))),
+    ),
+  )
+  assert_false(store.is_reserved(id))
+  assert_eq(store.load(id).system_prompt(), "fresh prompt")
+
+  // A missing or malformed archived log without a valid reservation is a
+  // read failure, never an empty conversation.
+  for broken in ["missing", "corrupt"] {
+    let broken_id : @agent_session.SessionId = SessionId(broken)
+    archived.reserve(broken_id, "Broken")
+    if broken == "missing" {
+      @fs.remove(
+        "\{archived.root()}/sessions/\{broken}/session-reservation.json",
+      )
+    } else {
+      @fs.write_file(
+        archived.session_file(broken_id),
+        "bad header\n",
+        create_mode=CreateOrTruncate,
+      )
+    }
+    try
+      load_archived_session(manager, {
+        session: broken,
+        workspace: Some(workspace),
+      })
+    catch {
+      _ => ()
+    } noraise {
+      _ => fail("unreadable archived session was treated as empty")
+    }
+  }
+  assert_true(manager.record_guards.is_empty())
+}

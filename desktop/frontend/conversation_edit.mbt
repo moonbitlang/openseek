@@ -81,7 +81,7 @@ fn Model::edit_user_message(
     let pending : ConversationFork = {
       source,
       source_title: self.selected_conversation_title(),
-      source_sequence: conv.watermark,
+      source_sequence: conv.durable_frontier(),
       kind: FirstMessage(draft),
       engine_model: conv.engine_model,
       connection_generation: self.focused_connection_generation(),
@@ -136,4 +136,59 @@ test "message editing is blocked by active work in its own conversation family" 
   assert_true(model.replace_conversation(child).message_edit_busy(source))
   let unrelated = { ..child, session_id: source.session_id + "-sr-unrelated", }
   assert_false(model.replace_conversation(unrelated).message_edit_busy(source))
+}
+
+///|
+test "first and later message edits capture commits buffered during reload" {
+  let base = test_model()
+  let emit = test_dispatch()
+  let buffered : Array[BufferedCommit] = [
+    {
+      sequence: 7,
+      ts: None,
+      item: RuntimeNotice({ content: "saved notice", }),
+    },
+  ]
+  let states : Array[TranscriptSync] = [
+    Reloading(generation=1, attempt=1, reload_after_current=false, buffered~),
+    ReloadFailed(generation=1, buffered~),
+  ]
+  for sync in states {
+    let source = {
+      ..base.active(),
+      watermark: 5,
+      sync,
+      messages: [
+        {
+          kind: User(content=Content([Text("first")])),
+          sequence: Some(1),
+          ts: None,
+        },
+        { kind: Answer("done"), sequence: Some(4), ts: None, },
+        {
+          kind: User(content=Content([Text("later")])),
+          sequence: Some(5),
+          ts: None,
+        },
+      ],
+    }
+    let model = base.replace_conversation(source)
+    guard model.transcript_slot() is Some(slot) else { fail("missing slot") }
+    for sequence in [1, 5] {
+      let message = UserMessageEditRequested(slot=slot.key(), sequence~, draft={
+        task: "edited",
+        images: [],
+        mentions: [],
+      })
+      let (_, requested) = update_msg(emit, message, model)
+      let (_, repeated) = update_msg(emit, message, model)
+      assert_true(requested.conversation_fork == repeated.conversation_fork)
+      assert_true(model.conversation_fork is None)
+      guard requested.conversation_fork is Some(pending) else {
+        fail("edit not prepared")
+      }
+      assert_eq(pending.source_sequence, 7)
+      assert_eq(model.active().watermark, 5)
+    }
+  }
 }

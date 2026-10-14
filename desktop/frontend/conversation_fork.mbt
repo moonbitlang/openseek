@@ -43,7 +43,7 @@ fn Model::request_fork(
   let pending : ConversationFork = {
     source,
     source_title: self.selected_conversation_title(),
-    source_sequence: conv.watermark,
+    source_sequence: conv.durable_frontier(),
     kind: AfterAnswer(through~, draft~),
     engine_model: conv.engine_model,
     connection_generation: self.focused_connection_generation(),
