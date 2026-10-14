@@ -1,12 +1,9 @@
 # Host tools
 
-How the agents a desktop host runs use capabilities only the host has — the
-dock's browser tabs, to begin with. Two halves live here: the server the host
-runs, and the `seekmoon` command through which an engine reaches it as a
-stdio MCP server.
-
-The MCP client engines use for the user's own servers is the root module's
-`mcp/`; it is what connects to `seekmoon`, and shares no code with this.
+How agents connect to capabilities contributed by a desktop host. The host
+can run an HTTP MCP server; the engine connects directly using the root
+module's `mcp/streamhttp` client. This package supplies the server infrastructure;
+the host chooses which tools to register.
 
 It depends on async HTTP and core codecs, not on Proton, the engine, or any
 package that contributes tools. Dependencies point inward: a package that owns
@@ -25,35 +22,34 @@ app-lifetime owners.
 - `protocol.mbt` — JSON-RPC dispatch for `initialize`, `ping`, `tools/list`,
   and `tools/call`. Nothing else is offered.
 - `server.mbt` — the listener, the grants, and one task per request.
-- `stdio.mbt` — `seekmoon mcp`, as a function from a command line, an
-  environment, and a pair of streams to an exit status.
-- `client.mbt` — how the command sends one message to the server.
-- `cmd/seekmoon` — the executable around it.
 
-## The command
+## Configuration
 
-`seekmoon mcp` serves the host's tools to an MCP client over stdin and
-stdout. A user lists it in an MCP configuration like any other stdio server:
+For a host configured with tools, add an HTTP entry to `~/.openseek/mcp.json`:
 
 ```json
-{ "mcpServers": { "seekmoon": { "command": "seekmoon", "args": ["mcp"] } } }
+{
+  "mcpServers": {
+    "seekmoon": {
+      "url": "${OPENSEEK_DESKTOP_TOOLS_URL}",
+      "headers": {
+        "Authorization": "Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"
+      }
+    }
+  }
+}
 ```
 
-The engine that reads that file starts the process, which inherits the
-engine's environment and with it a grant (below). The tools reach the model
-as `mcp__seekmoon__<tool>`.
+OpenSeek expands the HTTP URL and header values from the engine's environment
+when it loads the configuration. Missing variables are errors, so a process
+that was not granted access cannot connect through this entry. The tools
+reach the model as `mcp__seekmoon__<tool>`; without an entry no tools are added.
+The old `seekmoon mcp` stdio relay and executable have been removed.
 
-The host's server already speaks MCP, so the command is a relay: each line
-from the client is POSTed to the host as it is, and the host's reply is
-written back as one line. Messages are relayed concurrently, so a slow tool
-call does not hold up a `ping` behind it. When the host cannot be reached a
-request is answered with an error and the command stays up; when its input
-ends it answers what it has already read and exits.
-
-`seekmoon mcp browser` offers only the groups it names, a tool's group being
-its name up to the first underscore. Every tool a server lists rides every
-request its client makes, and a client caps how many it will take, so a
-configuration can ask for less than everything.
+To offer a subset, add `"X-SeekMoon-Tool-Groups": "browser"` to the headers.
+Groups are comma-separated; a tool's group is its name before the first
+underscore (or the whole name if it has none). The host applies the filter to
+both `tools/list` and `tools/call`. Omitting the header offers every tool.
 
 ## Grants
 
@@ -76,7 +72,7 @@ passed on.
 
 Loopback binding limits reachability, not identity — a web page, including one
 an agent opened in the dock's browser, can reach this port. A request carrying
-an `Origin` header is refused outright, since `seekmoon` never sends one and a
+an `Origin` header is refused outright, since the native HTTP client sends none and a
 browser always does on a cross-origin POST; a request without a granted token
 is refused next. Processes already running as the user are not defended
 against, per `desktop/AGENTS.md`.

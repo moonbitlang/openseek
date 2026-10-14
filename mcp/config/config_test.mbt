@@ -69,3 +69,54 @@ test "decode defaults missing http headers" {
   }
   assert_eq(headers.length(), 0)
 }
+
+///|
+test "HTTP configuration resolves environment references once and keeps stdio literal" {
+  let env = { "HOST": "127.0.0.1", "PORT": "3210", "TOKEN": "secret-${OTHER}" }
+  let servers = @config.decode(
+    {
+      "mcpServers": {
+        "host": {
+          "url": "http://${HOST}:${PORT}/mcp",
+          "headers": {
+            "Authorization": "Bearer ${TOKEN}",
+            "X-Literal": "原样 $TOKEN",
+          },
+        },
+        "local": {
+          "command": "${COMMAND}",
+          "args": ["${ARG}"],
+          "env": { "TOKEN": "${TOKEN}" },
+        },
+      },
+    },
+    env~,
+  )
+  guard servers[0] is Http(url~, headers~, ..) else { fail("expected HTTP") }
+  assert_eq(url, "http://127.0.0.1:3210/mcp")
+  assert_eq(headers.get("Authorization"), Some("Bearer secret-${OTHER}"))
+  assert_eq(headers.get("X-Literal"), Some("原样 $TOKEN"))
+  assert_true(servers[1] is Stdio(command="${COMMAND}", args=["${ARG}"], ..))
+}
+
+///|
+test "HTTP environment references reject missing or malformed values" {
+  for value in ["${MISSING}", "${}", "${UNCLOSED"] {
+    for
+      entry in [
+        ({ "url": Json(value) } : Json),
+        (
+          {
+            "url": "http://localhost/mcp",
+            "headers": { "Authorization": Json(value) },
+          } : Json),
+      ] {
+      try @config.decode({ "mcpServers": { "host": entry } }) |> ignore catch {
+        @config.Invalid(_) => ()
+        error => raise error
+      } noraise {
+        _ => fail("an invalid environment reference was accepted")
+      }
+    }
+  }
+}

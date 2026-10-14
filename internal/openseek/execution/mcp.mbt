@@ -18,7 +18,7 @@ async fn[X] resolve_mcp_tools(
       return []
     }
   }
-  let servers = @mcpconfig.decode(@json.parse(text)) catch {
+  let servers = @mcpconfig.decode(@json.parse(text), env=@env.get_env_vars()) catch {
     error => {
       @emit.emit(McpConfigInvalid(path~, error="\{error}"))
       return []

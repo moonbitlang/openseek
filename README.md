@@ -265,6 +265,11 @@ or list its tools is logged and skipped — MCP never breaks a session. Tool
 results are size-capped, calls are bounded by a timeout, and tool names are
 sanitized to the provider's function-name rules.
 
+HTTP `url` and `headers` values support `${VAR}` references to the engine's
+environment, for example `"Authorization": "Bearer ${MCP_TOKEN}"`. Expansion
+is single-pass and missing variables are configuration errors. Stdio fields
+remain literal.
+
 Validate a configuration without starting a session:
 
 ```bash
