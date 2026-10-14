@@ -37,6 +37,7 @@ for (const mode of ['Line', 'Token', 'Tree']) {
     const changes = page.locator('#review-changes-body');
     const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
     await main.click();
+    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     await selectDiffMode(page, mode);
     const position = page.locator('.review-hunk-position');
     const next = page.getByRole('button', { name: 'Next change', exact: true });
@@ -66,11 +67,23 @@ for (const mode of ['Line', 'Token', 'Tree']) {
 }
 
 for (const mode of ['Token', 'Tree']) {
-  test(`${mode} each navigation click retains its target among short sections`, async ({ page }) => {
+  test(`${mode} each navigation click retains its target among short sections without Git refreshes`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const baseline = Array.from({ length: 12 }, (_, i) => `fn value_${i}() -> Int {\n  ${i}\n}\n`).join('\n');
     app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
     app.workingFiles['src/main.mbt'] = baseline.replace(/\n  (\d+)\n/g, '\n  100 + $1\n');
+    // Hold subsequent Git refresh responses after the initial review loads.
+    // Navigation must publish its own state, even when host polling stalls.
+    let pauseGitRefresh = false;
+    let heldGitRefreshes = 0;
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = request => {
+      if (pauseGitRefresh && request.method === 'git.changes') {
+        heldGitRefreshes++;
+        return new Promise(() => {});
+      }
+      return replyFor(request);
+    };
     await app.install();
     await app.goto();
     await app.openSession();
@@ -80,16 +93,19 @@ for (const mode of ['Token', 'Tree']) {
     const position = page.locator('.review-hunk-position');
     await settleReviewScroll(page);
     await expect(position).toHaveText('Change 1 of 12');
+    pauseGitRefresh = true;
+    await expect.poll(() => heldGitRefreshes).toBeGreaterThan(0);
     for (let i = 2; i <= 12; i++) {
       await page.getByRole('button', { name: 'Next change', exact: true }).click();
       await settleReviewScroll(page);
-      await expect(position).toHaveText(`Change ${i} of 12`);
+      await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
       await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
     }
     for (let i = 11; i >= 1; i--) {
       await page.getByRole('button', { name: 'Previous change', exact: true }).click();
       await settleReviewScroll(page);
-      await expect(position).toHaveText(`Change ${i} of 12`);
+      await expect(position).toHaveText(`Change ${i} of 12`, { timeout: 1500 });
+      await expect(page.locator('.semantic-diff-entry').nth(i - 1).locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: `100 + ${i - 1}` }).first()).toBeInViewport();
     }
     // Reading with the wheel must still update the active hunk after a reveal.
     await page.locator('#semantic-review-host').hover();

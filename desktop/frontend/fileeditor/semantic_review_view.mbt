@@ -1541,6 +1541,12 @@ fn reveal_semantic_review_section_change(
       arm_semantic_review_navigation_reveal(entry)
       reveal_semantic_review_item_start(entry.host)
       reveal_review_editor_hunk(entry.editor, index)
+      // The destination can already have this local hunk selected, so its
+      // active-hunk event need not fire. Publish the changed global section
+      // explicitly instead of waiting for an unrelated model reconciliation.
+      if state.semantic_review_input is Some(input) {
+        publish_current_semantic_review_active_hunk(input)
+      }
     },
     kind=@cmd.after_render,
   )
