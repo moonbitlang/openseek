@@ -40,7 +40,7 @@ pub struct MarketSkill {
   description : String
   author : String
   repository : String
-} derive(ToJson)
+}
 pub fn MarketSkill::to_json(Self) -> Json
 
 // Type aliases

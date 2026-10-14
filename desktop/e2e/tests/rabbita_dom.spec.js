@@ -2564,9 +2564,9 @@ test('skills search, detail navigation, and hand-written protections use the mou
 
   const rabbita = registry.locator('.skill-row').filter({ hasText: 'rabbita' });
   await rabbita.locator('.skill-summary').click();
-  await expect(page.getByRole('button', { name: '← Back to skills' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back to skills' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'rabbita', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '← Back to skills' }).click();
+  await page.getByRole('button', { name: 'Back to skills' }).click();
 
   await installed.locator('.skill-row').filter({ hasText: 'MoonBit' })
     .locator('.skill-summary').click();

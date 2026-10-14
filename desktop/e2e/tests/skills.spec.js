@@ -63,8 +63,11 @@ class SkillsHarness extends DesktopBrowserHarness {
 test('install and uninstall from the same catalog detail page', async ({ page }) => {
   const app = new SkillsHarness(page);
   await app.openDetails();
+  await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
+  await expect(page.locator('.skill-detail-meta')).toHaveText(installed.source);
   await page.getByRole('button', { name: 'Install skill', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toBeVisible();
+  await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
   await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.id)).toEqual([installed.id]);
@@ -133,7 +136,7 @@ for (const removing of [false, true]) {
     await expect(page.locator('.skill-detail-action')).toBeDisabled();
     await expect(page.locator('.skill-detail-action')).toHaveText(busyLabel);
     // Wait for the committed library state to render, rather than just for the request.
-    await page.getByRole('button', { name: '← Back to skills', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
     await expect(page.locator('.skill-row')).toHaveCount(removing ? 1 : 2);
     const listAction = page.locator('.skill-row button.skill-action');
     await expect(listAction).toBeDisabled();
@@ -168,7 +171,7 @@ for (const targetInstalled of [false, true]) {
     for (const cached of [false, true]) {
       await page.locator('.skill-detail-page').getByRole('button', { name: 'Uninstall', exact: true }).click();
       await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove wayfinder: permission denied');
-      await page.getByRole('button', { name: '← Back to skills', exact: true }).click();
+      await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
       await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
       await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
       await expect(page.locator('.skill-preview-markdown')).toBeVisible();
@@ -176,7 +179,7 @@ for (const targetInstalled of [false, true]) {
       // The second navigation exercises the cached branch without another read.
       expect(app.requests.filter(r => r.method === contentMethod)).toHaveLength(initialReads + 1);
       if (!cached) {
-        await page.getByRole('button', { name: '← Back to skills', exact: true }).click();
+        await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
         await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
       }
     }
@@ -203,7 +206,7 @@ for (const removing of [false, true]) {
     };
     await app.openDetails();
     const detail = page.locator('.skill-detail-page');
-    const back = page.getByRole('button', { name: '← Back to skills', exact: true });
+    const back = page.getByRole('button', { name: 'Back to skills', exact: true });
     await detail.getByRole('button', { name: actionName, exact: true }).click();
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();

@@ -33,9 +33,82 @@ fn management_header(
   model : Model,
   title : String,
 ) -> Array[@html.Html] {
-  @page_shell.header(
-    title,
-    shell_text(model.locale, ReturnToWorkLabel),
-    dispatch(ReturnToWork),
+  let return_label = shell_text(model.locale, ReturnToWorkLabel)
+  let return_action = dispatch(PageBack)
+  if model.screen is Skills {
+    model.skills.header(locale=model.locale, title, return_label, return_action)
+  } else {
+    @page_shell.header(title, return_label, return_action)
+  }
+}
+
+///|
+priv suberror ManagementNavigationSubscription {
+  ManagementNavigationSubscription(@cmd.Emit[Msg])
+}
+
+///|
+/// Escape returns one page level through the same message as the topbar.
+/// The shell mounts this subscription only while a management page is shown.
+fn management_navigation_subscription(emit : @cmd.Emit[Msg]) -> @sub.Sub {
+  @sub.custom_sub(
+    "management-page-return",
+    Global,
+    ManagementNavigationSubscription(emit),
+    management_navigation_sub_loader,
   )
+}
+
+///|
+fn management_navigation_sub_loader(
+  payload : Error,
+  scheduler : &Scheduler,
+) -> @sub.RunningSub? {
+  match payload {
+    ManagementNavigationSubscription(emit) => {
+      let mut emit = emit
+      let target = @dom.document().as_event_target()
+      // Bubbling gives inputs and transient controls first refusal on Escape.
+      let listener : @dom.Listener = event => {
+        guard !event.get_default_prevented() &&
+          event.to_keyboard_event() is Some(keyboard) &&
+          keyboard.key() == "Escape" &&
+          !keyboard.is_composing() &&
+          !keyboard.repeat() &&
+          !keyboard.ctrl_key() &&
+          !keyboard.meta_key() &&
+          !keyboard.alt_key() &&
+          !keyboard.shift_key() else {
+          return
+        }
+        guard @dom.document()
+          .query_selector("dialog[open], :popover-open")
+          .to_option()
+          is None else {
+          return
+        }
+        if event.target().to_element() is Some(element) &&
+          element.closest(
+            "[role=menu], [role=dialog], [role=listbox], .dock-menu",
+          )
+          is Some(_) {
+          return
+        }
+        event.prevent_default()
+        event.stop_propagation()
+        scheduler.add(emit(PageBack))
+      }
+      target.add_event_listener("keydown", listener)
+      Some({
+        unload: _ => target.remove_event_listener("keydown", listener),
+        update_tagger: payload => {
+          guard payload is ManagementNavigationSubscription(next) else {
+            return
+          }
+          emit = next
+        },
+      })
+    }
+    _ => None
+  }
 }

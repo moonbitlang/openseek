@@ -452,6 +452,9 @@ fn main {
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
         ]
+        if model.screen.work_screen() is None && !model.is_console_gated() {
+          subs.push(management_navigation_subscription(emit))
+        }
         // The project picker's Enter/Escape/paste surface, only while its
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(

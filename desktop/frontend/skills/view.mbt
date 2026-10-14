@@ -48,12 +48,8 @@ fn installed_row(
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  let info : Array[@html.Html] = [@html.div(class="skill-name", skill.name)]
-  if !skill.description.is_blank() {
-    info.push(@html.div(class="skill-desc", skill.description))
-  }
-  info.push(
-    @html.div(
+  let info : Array[@html.Html] = [
+    @html.span(
       class="skill-meta",
       if skill.source.is_empty() {
         ui(locale, HandWritten)
@@ -61,29 +57,37 @@ fn installed_row(
         skill.source
       },
     ),
-  )
-  let children : Array[@html.Html] = [
-    @html.div(class="skill-avatar", icon(icon_extensions)),
-    @html.div(
-      class="skill-info skill-summary",
-      on_click=emit(PreviewInstalled(skill)),
-      info,
+  ]
+  if !skill.description.is_blank() {
+    info.push(@html.span(class="skill-desc", skill.description))
+  }
+  let header : Array[@html.Html] = [
+    @html.button(
+      class="skill-summary",
+      attrs=@html.Attrs::build().aria_label(skill.name),
+      [
+        @html.span(class="skill-avatar", icon(icon_extensions)),
+        @html.span(class="skill-name", skill.name),
+      ],
     ),
   ]
   if skill.source.is_empty() {
-    children.push(
+    header.push(
       @html.div(class="skill-actions", [
         @html.span(class="skill-check ok", "✓"),
       ]),
     )
   } else {
     let pending = state.pending_action(skill.source)
-    children.push(
+    header.push(
       @html.div(class="skill-actions", [
         @html.button(
           class="button secondary skill-action",
           disabled=pending is Some(_),
-          on_click=emit(Uninstall(skill)),
+          attrs=@html.Attrs::build().on_click(event => {
+            event.stop_propagation()
+            emit(Uninstall(skill))
+          }),
           if pending is Some(action) {
             ui(locale, action.label())
           } else {
@@ -93,7 +97,10 @@ fn installed_row(
       ]),
     )
   }
-  @html.div(class="skill-row", children)
+  @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
+    @html.div(class="skill-header", header),
+    @html.div(class="skill-info", info),
+  ])
 }
 
 ///|
@@ -111,16 +118,10 @@ fn market_row(
   let source = source_label(item)
   let pending = state.pending_action(source)
   let installed = input.has_installed(source)
-  let info : Array[@html.Html] = [@html.div(class="skill-name", item.name)]
+  let info : Array[@html.Html] = [@html.span(class="skill-meta", source)]
   if !item.description.is_blank() {
-    info.push(@html.div(class="skill-desc", item.description))
+    info.push(@html.span(class="skill-desc", item.description))
   }
-  let meta = if item.author.is_empty() {
-    "v\{item.version}"
-  } else {
-    "v\{item.version} · \{item.author}"
-  }
-  info.push(@html.div(class="skill-meta", meta))
   let action = if installed {
     @html.div(class="skill-actions", [
       @html.span(class="skill-check ok", ui(locale, InstalledCheck)),
@@ -130,7 +131,10 @@ fn market_row(
       @html.button(
         class="button secondary skill-action",
         disabled=pending is Some(_),
-        on_click=emit(Install(item)),
+        attrs=@html.Attrs::build().on_click(event => {
+          event.stop_propagation()
+          emit(Install(item))
+        }),
         if pending is Some(action) {
           ui(locale, action.label())
         } else {
@@ -139,16 +143,26 @@ fn market_row(
       ),
     ])
   }
-  let children = [
-    @html.div(class="skill-avatar", icon(icon_extensions)),
-    @html.div(
-      class="skill-info skill-summary",
-      on_click=emit(PreviewMarket(item)),
-      info,
+  let header = [
+    @html.button(
+      class="skill-summary",
+      attrs=@html.Attrs::build().aria_label(item.name),
+      [
+        @html.span(class="skill-avatar", icon(icon_extensions)),
+        @html.span(class="skill-name", item.name),
+      ],
     ),
     action,
   ]
-  @html.div(class="skill-row", title=item.repository, children)
+  @html.div(
+    class="skill-row",
+    title=item.repository,
+    on_click=emit(PreviewMarket(item)),
+    [
+      @html.div(class="skill-header", header),
+      @html.div(class="skill-info", info),
+    ],
+  )
 }
 
 ///|
@@ -230,11 +244,6 @@ fn detail_shell(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   @page_shell.body(class="skills-page skill-detail-page", [
-    @html.button(
-      class="button secondary skill-back",
-      on_click=emit(BackToList),
-      ui(locale, Back),
-    ),
     @html.div(class="skill-detail-header", [
       @html.div(class="page-eyebrow", ui(locale, Details)),
       @html.h2(preview_name(target)),
@@ -275,12 +284,7 @@ fn preview_meta(
   target : PreviewTarget,
 ) -> String {
   match target {
-    Market(item) =>
-      if item.author.is_empty() {
-        "v\{item.version}"
-      } else {
-        "v\{item.version} · \{item.author}"
-      }
+    Market(item) => source_label(item)
     Installed(item) =>
       if item.source.is_empty() {
         ui(locale, HandWritten)
@@ -436,7 +440,12 @@ fn list_page(
       market_rows.push(@html.div(class="skills-empty danger", message))
     Ready(items) => {
       for item in items {
-        if matches(state.query, [item.name, item.description, item.author]) {
+        if matches(state.query, [
+            item.name,
+            item.description,
+            item.author,
+            source_label(item),
+          ]) {
           market_rows.push(market_row(locale~, state, input, item, emit))
         }
       }

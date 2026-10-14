@@ -60,8 +60,8 @@ pub(all) suberror SkillMarketError {
 /// One installable catalog entry: a published MoonBit package that shipped a
 /// skill archive next to its wasm entry point.
 pub struct MarketSkill {
-  // Registry entry name, `module_name` plus the subpackage path when the skill
-  // lives in one (e.g. "alice/alpha/cmd/run").
+  // Skill display name from registry metadata, matching SKILL.md frontmatter;
+  // the registry entry name is used when no usable metadata name is supplied.
   name : String
   module_name : String
   // Subpackage path relative to the module root; "" for a root skill.
@@ -70,7 +70,20 @@ pub struct MarketSkill {
   description : String
   author : String
   repository : String
-} derive(ToJson)
+}
+
+///|
+impl ToJson for MarketSkill with fn to_json(self) {
+  {
+    "name": self.name,
+    "module_name": self.module_name,
+    "package_path": self.package_path,
+    "version": self.version,
+    "description": self.description,
+    "author": self.author,
+    "repository": self.repository,
+  }
+}
 
 ///|
 /// Redirect hops one fetch will follow. The registry's download host hands
@@ -178,7 +191,7 @@ fn decode_catalog(json : Json) -> Array[MarketSkill] raise SkillMarketError {
       is {
         "module": String(module_name),
         "version": String(version),
-        "name": String(name),
+        "name": String(entry_name),
         ..
       } else {
       continue
@@ -192,6 +205,12 @@ fn decode_catalog(json : Json) -> Array[MarketSkill] raise SkillMarketError {
       !archive_url.is_empty() &&
       !archive_digest.is_empty() else {
       continue
+    }
+    let name = if item is { "metadata": { "name": String(name), .. }, .. } &&
+      !name.is_blank() {
+      name.trim().to_owned()
+    } else {
+      entry_name
     }
     let description = if item
       is { "metadata": { "description": String(description), .. }, .. } &&
@@ -376,7 +395,7 @@ test "catalog decoding keeps only entries that publish a skill archive" {
       "package": "cmd/run",
       "author": "alice",
       "repository": "https://github.com/alice/alpha",
-      "metadata": { "description": "Run alpha commands" },
+      "metadata": { "name": "alpha-run", "description": "Run alpha commands" },
       "archive_url": "https://download.example/skills/alice/alpha@0.2.0/cmd/run/skills.zip",
       "archive_digest": "sha256:abc",
     },
@@ -403,7 +422,7 @@ test "catalog decoding keeps only entries that publish a skill archive" {
   ]
   let skills = decode_catalog(json)
   guard skills is [skill] else { fail("expected exactly one catalog entry") }
-  assert_eq(skill.name, "alice/alpha/cmd/run")
+  assert_eq(skill.name, "alpha-run")
   assert_eq(skill.module_name, "alice/alpha")
   assert_eq(skill.package_path, "cmd/run")
   assert_eq(skill.version, "0.2.0")
@@ -422,9 +441,11 @@ test "catalog decoding fills optional fields from the module name" {
       "archive_url": "https://download.example/skills/alice/alpha@0.2.0/skills.zip",
       "archive_digest": "sha256:abc",
       "description": "Root skill",
+      "metadata": { "name": "  " },
     },
   ]
   guard decode_catalog(json) is [skill] else { fail("expected one entry") }
+  assert_eq(skill.name, "alice/alpha")
   assert_eq(skill.package_path, "")
   assert_eq(skill.author, "alice")
   assert_eq(skill.repository, "")

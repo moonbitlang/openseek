@@ -74,7 +74,7 @@ fn catalog_body(base : String, widget_digest : String) -> String {
       "package": "",
       "author": "acme",
       "repository": "https://example.com/acme/widget",
-      "metadata": { "description": "Build widgets fast." },
+      "metadata": { "name": "widget", "description": "Build widgets fast." },
       "archive_url": "\{base}/download/acme/widget@1.0.0/skills.zip",
       "archive_digest": widget_digest,
     },
@@ -278,7 +278,7 @@ async test "the catalog lists installable skills only" {
     guard fake_registry(group) is Some(base) else { return }
     let skills = @skillmarket.fetch_catalog(registry=base)
     guard skills is [skill] else { fail("expected one installable skill") }
-    assert_eq(skill.name, "acme/widget")
+    assert_eq(skill.name, "widget")
     assert_eq(skill.version, "1.0.0")
     assert_eq(skill.description, "Build widgets fast.")
   }

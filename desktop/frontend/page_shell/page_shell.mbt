@@ -1,6 +1,6 @@
 ///|
 /// Header contents for the persistent main topbar. The return arrow precedes
-/// the page title, independent of page-local navigation.
+/// the page title, returning one level in the current page's navigation.
 pub fn header(
   title : String,
   return_label : String,

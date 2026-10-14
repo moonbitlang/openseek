@@ -4041,8 +4041,15 @@ fn update_msg(
         @cmd.none,
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
       )
-    ReturnToWork =>
-      if model.screen.work_screen() is None {
+    PageBack =>
+      if model.screen is Skills &&
+        model.skills.back(
+          dispatch.map(msg => Skills(msg)),
+          model.skills_input(),
+        )
+        is Some((cmd, skills)) {
+        (cmd, { ..model, skills, })
+      } else if model.screen.work_screen() is None {
         (
           @cmd.none,
           {

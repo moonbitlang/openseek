@@ -1894,7 +1894,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
-  ReturnToWork
+  PageBack
   // The API-setup modal's "Not now" button and its backdrop click.
   DismissApiSetup
   // The composer's BYOK notice reopens the modal a dismissal closed.

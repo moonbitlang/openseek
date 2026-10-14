@@ -18,7 +18,7 @@ impl Show for SkillReplyError with fn output(self, logger) {
 ///|
 /// One installable entry of the registry catalog, as the host reports it.
 pub(all) struct MarketItem {
-  // Registry entry name, e.g. "moonbit-community/meta-skill".
+  // Skill display name, matching SKILL.md frontmatter when supplied.
   name : String
   module_name : String
   // Subpackage path relative to the module root; "" for a root skill.

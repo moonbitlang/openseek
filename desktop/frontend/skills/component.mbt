@@ -19,3 +19,20 @@ pub fn component(
     page(locale~, state, input, emit)
   })
 }
+
+///|
+/// The persistent header follows the page's current navigation level. Its
+/// return command is shared with the shell's keyboard navigation.
+pub fn State::header(
+  self : State,
+  locale~ : @i18n.Locale = English,
+  title : String,
+  return_label : String,
+  return_action : @cmd.Cmd,
+) -> Array[@html.Html] {
+  match self.preview {
+    Closed => @page_shell.header(title, return_label, return_action)
+    _ =>
+      @page_shell.header(ui(locale, Details), ui(locale, Back), return_action)
+  }
+}

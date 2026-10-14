@@ -163,6 +163,23 @@ pub fn State::with_library_error(self : State, message : String) -> State {
 }
 
 ///|
+/// Return from a detail to the list, restoring its scroll position. `None`
+/// means the page is already at the list and the shell owns the next return.
+pub fn State::back(
+  self : State,
+  emit : @cmd.Emit[Msg],
+  input : Input,
+) -> (@cmd.Cmd, State)? {
+  match self.preview {
+    Closed => None
+    _ => {
+      let (cmd, state, _) = self.handle(emit, BackToList, input)
+      Some((cmd, state))
+    }
+  }
+}
+
+///|
 pub fn State::handle(
   self : State,
   emit : @cmd.Emit[Msg],
