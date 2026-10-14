@@ -18,8 +18,6 @@ pub fn icon_arrow_down() -> @html.Html
 
 pub fn icon_arrow_left() -> @html.Html
 
-pub fn icon_arrow_small_right() -> @html.Html
-
 pub fn icon_arrow_up() -> @html.Html
 
 pub fn icon_book() -> @html.Html
@@ -71,6 +69,8 @@ pub fn icon_folder_opened() -> @html.Html
 pub fn icon_github() -> @html.Html
 
 pub fn icon_globe() -> @html.Html
+
+pub fn icon_indent() -> @html.Html
 
 pub fn icon_key() -> @html.Html
 

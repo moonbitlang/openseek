@@ -472,7 +472,7 @@ pub fn ContextComponent::render(
             [
               @html.span(
                 class="queued-input-icon",
-                @icons.icon(@icons.icon_arrow_small_right),
+                @icons.icon(@icons.icon_indent),
               ),
               @html.span(class="queued-input-text", item.content),
               ..trailing,
