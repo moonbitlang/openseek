@@ -322,14 +322,12 @@ class Build {
       const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/app/app.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
-      const built = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build`);
-      return join(built, "moonbitlang/openseek/openseek.exe");
+      return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
     }
     const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
     await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.app });
     await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.repo });
-    const built = join(this.repo, `_build/native/${profile}/build`);
-    return join(built, "moonbitlang/openseek/openseek.exe");
+    return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
   }
 
   async vendors() {
@@ -395,12 +393,11 @@ class Build {
       await chmod(join(root, "bin/openseek"), 0o755);
       await chmod(join(root, "bin/rg"), 0o755);
     } else {
-      // The engine is started by a host with no console.
       const path = join(root, "bin/openseek.exe");
       const bytes = Buffer.from(await readFile(path));
-      if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error(`${path} is not a PE executable`);
+      if (bytes[0] !== 0x4d || bytes[1] !== 0x5a) throw new Error(`${engine} is not a PE executable`);
       const pe = bytes.readUInt32LE(0x3c);
-      if (bytes.toString("ascii", pe, pe + 4) !== "PE\0\0" || bytes.readUInt16LE(pe + 20) < 70) throw new Error(`${path} has an invalid PE header`);
+      if (bytes.toString("ascii", pe, pe + 4) !== "PE\0\0" || bytes.readUInt16LE(pe + 20) < 70) throw new Error(`${engine} has an invalid PE header`);
       bytes.writeUInt16LE(2, pe + 24 + 68);
       await writeFile(path, bytes);
     }

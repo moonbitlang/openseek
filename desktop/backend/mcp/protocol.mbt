@@ -58,7 +58,6 @@ async fn Server::dispatch(
   self : Server,
   session : String,
   message : Json,
-  groups : Array[String],
 ) -> Json? {
   guard message is Object(fields) else {
     // JSON-RPC answers an unidentifiable request under a null id.
@@ -81,8 +80,8 @@ async fn Server::dispatch(
   let answer = match method_ {
     "initialize" => reply(id, self.initialize_result(params))
     "ping" => reply(id, Json::empty_object())
-    "tools/list" => reply(id, self.tool_list(groups))
-    "tools/call" => self.call_tool(session, id, params, groups)
+    "tools/list" => reply(id, self.tool_list())
+    "tools/call" => self.call_tool(session, id, params)
     _ => failure(id, MethodNotFound, "Method not found: \{method_}")
   }
   Some(answer)
@@ -103,9 +102,9 @@ fn Server::initialize_result(self : Server, params : Json) -> Json {
 }
 
 ///|
-fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
+fn Server::tool_list(self : Server) -> Json {
   let tools : Array[Json] = [
-    for _, tool in self.tools if offered(tool.name, groups) => {
+    for _, tool in self.tools => {
       {
         "name": Json(tool.name),
         "description": Json(tool.description),
@@ -125,12 +124,11 @@ async fn Server::call_tool(
   session : String,
   id : Json,
   params : Json,
-  groups : Array[String],
 ) -> Json {
   guard params is { "name": String(name), .. } else {
     return failure(id, InvalidParams, "tools/call needs a string `name`")
   }
-  guard self.tools.get(name) is Some(tool) && offered(name, groups) else {
+  guard self.tools.get(name) is Some(tool) else {
     return failure(id, InvalidParams, "Unknown tool: \{name}")
   }
   let arguments = match params {
@@ -162,15 +160,4 @@ async fn Server::call_tool(
     "content": [{ "type": "text", "text": Json(text) }],
     "isError": Json(is_error),
   })
-}
-
-///|
-/// A group is the prefix before the first underscore, or the whole name.
-fn offered(name : String, groups : Array[String]) -> Bool {
-  let group = if name.split_once("_") is Some((prefix, _)) {
-    prefix.to_owned()
-  } else {
-    name
-  }
-  groups.is_empty() || groups.contains(group)
 }
