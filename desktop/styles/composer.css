@@ -68,7 +68,9 @@
   overscroll-behavior: contain;
 }
 
-.composer-inner {
+/* The inline message editor shares the composer's field surface. */
+.composer-inner,
+.composer-surface {
   position: relative;
   container-type: inline-size;
   display: grid;
@@ -557,7 +559,8 @@
   outline-offset: 1px;
 }
 
-.composer textarea {
+.composer textarea,
+.composer-textarea {
   /* Grow with wrapped or explicit lines; once the cap is reached, keep the
      composer stable and scroll the textarea's contents instead. */
   field-sizing: content;

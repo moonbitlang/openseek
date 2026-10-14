@@ -74,4 +74,54 @@ test "local pinned transitions are pure" {
   assert_false(received.pinned)
   let (jumped, _) = grown.update(input, JumpToLatest, emit)
   assert_true(jumped.pinned)
+
+  let editing_input = {
+    ..input,
+    can_fork: true,
+    editable_users: [1],
+    items: [
+      {
+        identity: "s1",
+        item: {
+          kind: User(content=Content([Text("original")])),
+          sequence: Some(1),
+          ts: None,
+        },
+      },
+    ],
+  }
+  let blocks = stream_blocks(editing_input)
+  guard blocks.get(0) is Some(block) else { fail("user block") }
+  let send : @cmd.Emit[(Int32, @composer.Draft)] = @cmd.Emit(_ => @cmd.none)
+  let closed = MessageEditor::EditorClosed
+  let (opened, _) = closed.update(block, BeginEdit, send, unpin=@cmd.none)
+  let (repeated, _) = closed.update(block, BeginEdit, send, unpin=@cmd.none)
+  assert_true(opened == repeated)
+  assert_true(opened is EditorDraft({ task: "original", .. }))
+  let (typed, _) = opened.update(
+    block,
+    EditText("revised"),
+    send,
+    unpin=@cmd.none,
+  )
+  let (typed_again, _) = opened.update(
+    block,
+    EditText("revised"),
+    send,
+    unpin=@cmd.none,
+  )
+  assert_true(typed == typed_again)
+  assert_true(opened is EditorDraft({ task: "original", .. }))
+  let (sent, _) = typed.update(block, SendEdit, send, unpin=@cmd.none)
+  assert_true(sent == typed)
+  let (cancelled, _) = typed.update(block, CancelEdit, send, unpin=@cmd.none)
+  assert_true(cancelled is EditorClosed)
+  guard stream_blocks({ ..editing_input, fork_busy: true, }).get(0)
+    is Some(busy) else {
+    fail("busy block")
+  }
+  for msg in [BeginEdit, EditText("lost"), CancelEdit, SendEdit] {
+    let (held, _) = typed.update(busy, msg, send, unpin=@cmd.none)
+    assert_true(held == typed)
+  }
 }

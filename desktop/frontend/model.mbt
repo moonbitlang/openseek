@@ -1979,6 +1979,11 @@ priv enum Msg {
   // belongs to the same device as the transcript that names it — and the
   // component is built once, before any model exists to read a channel from.
   OpenSessionHere(String)
+  UserMessageEditRequested(
+    slot~ : String,
+    sequence~ : Int32,
+    draft~ : @composer.Draft
+  )
   ForkRequested(slot~ : String, through~ : Int32)
   ForkCompleted(ConversationFork, Result[@protocol.SessionForkReply, String])
   // Open a row from the archived index. Its workspace is part of the row's

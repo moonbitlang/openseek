@@ -2625,7 +2625,13 @@ fn update_msg(
           }
           let submit = match action {
             @composer.FollowupSubmitted(choice~, ..) => SendFollowup(choice)
-            _ => Send
+            _ =>
+              if original_focus == conv.device &&
+                original_session == conv.session_id {
+                Send
+              } else {
+                SendInBackground
+              }
           }
           let (command, submitted) = update_msg(dispatch, submit, target)
           (
@@ -5226,6 +5232,8 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    UserMessageEditRequested(slot~, sequence~, draft~) =>
+      model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
       model.request_fork(dispatch, slot, through)
     ForkCompleted(pending, result) =>

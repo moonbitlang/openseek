@@ -272,7 +272,7 @@ priv struct MinimalStream {
 
 ///|
 priv enum MinimalSection {
-  User(row~ : VisibleRow, anchor~ : String)
+  User(row~ : VisibleRow, anchor~ : String, edit~ : UserEditAction?)
   Process(Array[MinimalPart])
   // A context checkpoint is independently expandable, regardless of whether
   // its producer records it before or after the turn's terminal guidance.
@@ -343,12 +343,13 @@ fn MinimalStream::finish(
   for section in self.sections {
     match section {
       Checkpoint(part) => self.push_block(part)
-      User(row~, anchor~) =>
+      User(row~, anchor~, edit~) =>
         self.blocks.push({
           stream: self.stream,
           key: { value: "minimal-user\u{0}\{row.identity}", },
           content: Item(
             fork=None,
+            edit~,
             item=row.item,
             anchor=Some(anchor),
             step_label=None,
@@ -392,6 +393,7 @@ fn Input::minimal_blocks(self : Input) -> @vector.Vector[Block] {
         builder.sections.push(
           User(
             row~,
+            edit=self.user_edit_action(row.item),
             anchor=@transcript_overview.TurnKey::of(row.item, index~).anchor(),
           ),
         )

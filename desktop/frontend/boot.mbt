@@ -629,6 +629,10 @@ fn main {
           }),
           open_session: emit.map(session => OpenSessionHere(session)),
           fork: emit.map(through => ForkRequested(slot~, through~)),
+          edit_user: emit.map(request => {
+            let (sequence, draft) = request
+            UserMessageEditRequested(slot~, sequence~, draft~)
+          }),
           open_review_changes: emit.map(selection => {
             TranscriptReviewChangesOpened(slot~, selection~)
           }),

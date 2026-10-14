@@ -4,9 +4,11 @@ package "openseek_desktop/frontend/composer"
 import {
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
@@ -24,6 +26,8 @@ pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Acti
 pub fn dirty_paths_preview(Array[String], Int) -> String
 
 pub fn focus_message_end() -> @cmd.Cmd
+
+pub fn is_submit_shortcut(@dom.KeyboardEvent) -> Bool
 
 pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array[@mention_context.MentionRef]) -> Unit
 
@@ -107,6 +111,7 @@ pub(all) struct Draft {
   images : Array[Image]
 } derive(Eq, @debug.Debug)
 pub fn Draft::equal(Self, Self) -> Bool
+pub fn Draft::from_content(@deepseek.Content) -> Self?
 pub fn Draft::is_blank(Self) -> Bool
 pub fn Draft::is_empty(Self) -> Bool
 pub fn Draft::not_equal(Self, Self) -> Bool

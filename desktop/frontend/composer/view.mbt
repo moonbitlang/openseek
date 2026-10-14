@@ -1227,7 +1227,7 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
 /// Enter submits a composer unless Shift requests a newline or an IME is
 /// still composing text. Keeping this rule with the composer makes every
 /// caller use the same keyboard contract.
-fn is_submit_shortcut(event : @dom.KeyboardEvent) -> Bool {
+pub fn is_submit_shortcut(event : @dom.KeyboardEvent) -> Bool {
   event.key() == "Enter" && !event.shift_key() && !event.is_composing()
 }
 

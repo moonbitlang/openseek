@@ -78,6 +78,7 @@ struct Input {
   // answer receives the spinner's terminal sequence below.
   fork_busy : Bool
   forking : Int32?
+  editable_users : Array[Int32]
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
   // The registered project that owns this conversation, kept separate from
@@ -120,6 +121,7 @@ pub fn Input::Input(
   can_fork~ : Bool = false,
   fork_busy~ : Bool = false,
   forking? : Int32,
+  editable_users~ : Array[Int32] = [],
   scroll~ : ScrollPosition = Pinned,
   project_label? : String,
   current_project~ : @common.Uri?,
@@ -144,6 +146,7 @@ pub fn Input::Input(
     can_fork,
     fork_busy,
     forking,
+    editable_users,
     scroll,
     project_label,
     current_project,
@@ -171,6 +174,7 @@ pub(all) struct Actions {
   /// the child transcript it names.
   open_session : @cmd.Emit[String]
   fork : @cmd.Emit[Int32]
+  edit_user : @cmd.Emit[(Int32, @composer.Draft)]
   /// Start a fresh draft in another registered project.
   choose_project : @cmd.Emit[@common.Uri]
   /// Open the shell-owned folder picker to register another project.
@@ -342,7 +346,15 @@ pub fn component(
         block.map(pair => pair.1),
         actions,
       )
-      changes.map2(block, (changes, pair) => {
+      let (editor, editor_emit) = message_editor_state(
+        block.map(pair => pair.1),
+        actions,
+        unpin=emit(Pinned(false)),
+      )
+      changes
+      .map2(editor, (changes, editor) => (changes, editor))
+      .map2(block, (row_state, pair) => {
+        let (changes, editor) = row_state
         let (locale, block) = pair
         renders.val += 1
         let html = @html.memo_by(
@@ -352,6 +364,8 @@ pub fn component(
               locale~,
               actions,
               changes?=changes.control(block, changes_emit),
+              editor?=editor.view(block, locale~, editor_emit),
+              begin_edit=editor_emit(BeginEdit),
             )
           },
           by=_ => renders.val,

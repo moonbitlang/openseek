@@ -2055,3 +2055,32 @@
 @media (prefers-reduced-motion: reduce) {
   .message-fork-spinner { animation: none; }
 }
+
+/* Inline editing shares the composer surface, input, attachments, and action
+   buttons. Only its placement inside a transcript row is specific here. */
+.message-editor {
+  box-sizing: border-box;
+}
+.message-edit-input {
+  box-sizing: border-box;
+}
+.message-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.message-edit-attachments:empty {
+  display: none;
+}
+.message-edit-attachments {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 6px;
+}
+.message-edit-attachments .mention-chip {
+  max-width: 100%;
+  padding: 2px 8px;
+}
