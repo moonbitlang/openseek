@@ -18,6 +18,7 @@ priv enum UiMessage {
   PdfCaptureHint
   PdfCaptureFailed
   PdfCaptureTooLarge
+  PdfCaptureUnsupportedAnnotation
   PdfCaptureUnavailable
   PdfCapturePendingAnnotation
   PdfFitWidth
@@ -276,6 +277,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "No se pudo capturar la región. Espera a que termine de renderizarse el PDF e inténtalo de nuevo."
     (English, PdfCaptureTooLarge) =>
       "Screenshot is too large. Select a smaller region (maximum 5 MiB)."
+    (English, PdfCaptureUnsupportedAnnotation) =>
+      "This form or annotation cannot be captured. Select another region."
+    (SimplifiedChinese, PdfCaptureUnsupportedAnnotation) =>
+      "无法截取此表单或批注，请选择其他区域。"
+    (TraditionalChinese, PdfCaptureUnsupportedAnnotation) =>
+      "無法擷取此表單或註解，請選擇其他區域。"
+    (Japanese, PdfCaptureUnsupportedAnnotation) =>
+      "このフォームまたは注釈は撮影できません。別の範囲を選択してください。"
+    (Spanish, PdfCaptureUnsupportedAnnotation) =>
+      "No se puede capturar este formulario o anotación. Selecciona otra región."
     (SimplifiedChinese, PdfCaptureTooLarge) =>
       "截图过大，请缩小选区（最大 5 MiB）。"
     (TraditionalChinese, PdfCaptureTooLarge) =>

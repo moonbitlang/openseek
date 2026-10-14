@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
-import { annotationPdf } from './support/pdf_annotation_fixture.js';
+import { annotationPdf, formPdf } from './support/pdf_annotation_fixture.js';
 
 async function annotateSelection(preview) {
   await expect(preview.locator('textarea')).toBeVisible();
@@ -857,6 +857,81 @@ test.describe('PDF region screenshots', () => {
     expect(app.pageErrors).toEqual([]);
   });
 
+});
+
+for (const { rotation, partial = false, noRotate = false, hidden = false, note = false } of [
+  { rotation: 0 },
+  { rotation: 90 },
+  { rotation: 180, partial: true },
+  { rotation: 270, partial: true },
+  { rotation: 90, noRotate: true },
+  { rotation: 0, hidden: true },
+  { rotation: 0, note: true },
+  { rotation: 0, note: 'attachment' },
+]) {
+test(`PDF screenshots include form appearances (${rotation}, partial ${partial}, noRotate ${noRotate}, hidden ${hidden}, note ${note})`, async ({ page }) => {
+  const app = await setup(page);
+  app.officeFiles['docs/report.pdf'] = formPdf({ noRotate, note });
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const annotation = page.locator(note === 'attachment' ? '.annotationLayer .fileAttachmentAnnotation'
+    : note ? '.annotationLayer .textAnnotation' : '.annotationLayer .textWidgetAnnotation');
+  await expect(annotation).toBeVisible();
+  for (let angle = 0; angle < rotation; angle += 90) {
+    await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  }
+  if (note) await annotation.locator('img').evaluate(img => img.decode());
+  else await expect(annotation.locator('canvas')).toBeVisible();
+  if (note === 'attachment') await expect(annotation.locator('img')).toHaveCSS('filter', 'opacity(0.5)');
+  await annotation.scrollIntoViewIfNeeded();
+  const bounds = await annotation.boundingBox();
+  const rect = { x: Math.ceil(bounds.x + 2), y: Math.ceil(bounds.y + 2),
+    width: Math.floor(bounds.width * (partial ? 0.6 : 1) - 4), height: Math.floor(bounds.height - 4) };
+  if (hidden) await annotation.evaluate(el => { el.style.visibility = 'hidden'; });
+  const expected = await page.screenshot({ clip: rect, scale: 'css' });
+  await captureRegion(page, rect);
+  const pixels = await page.locator('.composer-image img').evaluate(async (img, expected) => {
+    const reference = new Image(); reference.src = `data:image/png;base64,${expected}`;
+    await reference.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = reference.naturalWidth; canvas.height = reference.naturalHeight;
+    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(reference, 0, 0);
+    const expectedData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let difference = 0, dark = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] < 100 && data[i + 1] < 100 && data[i + 2] < 100) dark++;
+      for (let channel = 0; channel < 3; channel++) difference += Math.abs(data[i + channel] - expectedData[i + channel]);
+    }
+    return { difference: difference / (canvas.width * canvas.height * 3), dark };
+  }, expected.toString('base64'));
+  if (hidden || note === 'attachment') expect(pixels.dark).toBe(0);
+  else expect(pixels.dark).toBeGreaterThan(20);
+  // SVG icons rasterize at different resolutions in CSS and the page bitmap.
+  expect(pixels.difference).toBeLessThan(note ? 8 : 5);
+  expect(app.pageErrors).toEqual([]);
+});
+}
+
+test('PDF capture rejects HTML-only form text without producing an incomplete image', async ({ page }) => {
+  const app = await setup(page);
+  app.officeFiles['docs/report.pdf'] = formPdf({ readOnly: false, appearance: false });
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const field = page.locator('.annotationLayer .textWidgetAnnotation');
+  await expect(field).toHaveText('Stored field value');
+  const bounds = await field.boundingBox();
+  await captureRegion(page, bounds, { confirm: false });
+  await expect(page.getByText('This form or annotation cannot be captured. Select another region.', { exact: true })).toBeVisible();
+  await expect(page.locator('.composer-image')).toHaveCount(0);
+  await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
+  const pageBounds = await page.locator('.pdfViewer canvas').first().boundingBox();
+  await captureRegion(page, { x: pageBounds.x + 20, y: pageBounds.y + 20, width: 60, height: 40 });
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  expect(app.pageErrors).toEqual([]);
 });
 
 test('PDF repeated capture starts keep the active selection', async ({ page }) => {

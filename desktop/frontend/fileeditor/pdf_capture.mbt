@@ -19,6 +19,7 @@ pub fn capture_pdf_region(
       hint=ui(ctx.locale, PdfCaptureHint),
       failure=ui(ctx.locale, PdfCaptureFailed),
       too_large=ui(ctx.locale, PdfCaptureTooLarge),
+      unsupported_annotation=ui(ctx.locale, PdfCaptureUnsupportedAnnotation),
       emit.map(result => {
         PdfCaptureFinished(
           owner=ctx.owner,

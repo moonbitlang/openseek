@@ -7,6 +7,7 @@ extern "js" fn start_region(
   hint : String,
   failure : String,
   too_large : String,
+  unsupported_annotation : String,
   done : (
     String,
     FixedArray[Int32],
@@ -21,7 +22,7 @@ extern "js" fn start_region(
   failed : (String) -> Unit,
   make_targets : (String, () -> Unit) -> @js.Value,
 ) -> Unit =
-  #| (surfaceId, hint, failure, tooLarge, done, failed, makeTargets) => {
+  #| (surfaceId, hint, failure, tooLarge, unsupportedAnnotation, done, failed, makeTargets) => {
   #|   const host = document.getElementById(surfaceId);
   #|   const session = host?.__officeViewerPdf;
   #|   const container = host?.querySelector('.pdf-container');
@@ -151,7 +152,14 @@ extern "js" fn start_region(
   #|         const width = Math.min(rect.x+rect.width, b.right)-x;
   #|         const height = Math.min(rect.y+rect.height, b.bottom)-y;
   #|         if (width > 0 && height > 0 && b.width > 0 && b.height > 0 && canvas.width > 0 && canvas.height > 0) {
-  #|           pieces.push({ canvas, b, x, y, width, height, page: Number(page.dataset.pageNumber), pageRect, viewport: view.viewport });
+  #|           // The viewer disables editable forms and XFA. Some documents still
+  #|           // use HTML-only field fallbacks or popups: never silently omit them.
+  #|           for (const element of page.querySelectorAll('.textWidgetAnnotation > div:not([hidden]), .annotationLayer .popup, .annotationLayer .mediaAnnotation, .xfaLayer')) {
+  #|             const r = element.getBoundingClientRect();
+  #|             if (r.width && r.height && getComputedStyle(element).visibility === 'visible' &&
+  #|                 r.right > x && r.left < x+width && r.bottom > y && r.top < y+height) { failed(unsupportedAnnotation); return; }
+  #|           }
+  #|           pieces.push({ canvas, annotations: page.querySelectorAll('.annotationLayer canvas, .annotationLayer img'), b, x, y, width, height, page: Number(page.dataset.pageNumber), pageRect, viewport: view.viewport });
   #|         }
   #|       }
   #|       if (!pieces.length) { failed(failure); return; }
@@ -168,6 +176,36 @@ extern "js" fn start_region(
   #|         const sx = p.canvas.width/p.b.width, sy = p.canvas.height/p.b.height;
   #|         ctx.drawImage(p.canvas, (p.x-p.b.left)*sx, (p.y-p.b.top)*sy, p.width*sx, p.height*sy,
   #|           (p.x-rect.x)*scale, (p.y-rect.y)*scale, p.width*scale, p.height*scale);
+  #|         // PDF.js paints read-only widgets and some rotated annotations on
+  #|         // separate canvases. Composite their displayed pixels, including
+  #|         // the layer rotation and any annotation-specific counter-rotation.
+  #|         for (const bitmap of p.annotations) {
+  #|           const b = bitmap.getBoundingClientRect(), style = getComputedStyle(bitmap);
+  #|           if (!b.width || !b.height || style.visibility !== 'visible') continue;
+  #|           if (b.right <= p.x || b.left >= p.x+p.width || b.bottom <= p.y || b.top >= p.y+p.height) continue;
+  #|           const pixelWidth = bitmap instanceof HTMLImageElement ? bitmap.naturalWidth : bitmap.width;
+  #|           const pixelHeight = bitmap instanceof HTMLImageElement ? bitmap.naturalHeight : bitmap.height;
+  #|           if (!pixelWidth || !pixelHeight) throw new Error('Annotation is still rendering');
+  #|           let matrix = new DOMMatrix(), opacity = 1;
+  #|           for (let node = bitmap; node; node = node.parentElement) {
+  #|             const css = getComputedStyle(node);
+  #|             if (css.transform !== 'none') matrix = new DOMMatrix(css.transform).multiply(matrix);
+  #|             opacity *= Number(css.opacity);
+  #|           }
+  #|           const w = parseFloat(style.width), h = parseFloat(style.height);
+  #|           const x = b.left-Math.min(0, matrix.a*w, matrix.c*h, matrix.a*w+matrix.c*h);
+  #|           const y = b.top-Math.min(0, matrix.b*w, matrix.d*h, matrix.b*w+matrix.d*h);
+  #|           matrix.scaleSelf(w/pixelWidth, h/pixelHeight);
+  #|           ctx.save();
+  #|           ctx.beginPath();
+  #|           ctx.rect((p.x-rect.x)*scale, (p.y-rect.y)*scale, p.width*scale, p.height*scale);
+  #|           ctx.clip();
+  #|           ctx.globalAlpha = opacity;
+  #|           ctx.filter = style.filter;
+  #|           ctx.setTransform(matrix.a*scale, matrix.b*scale, matrix.c*scale, matrix.d*scale, (x-rect.x)*scale, (y-rect.y)*scale);
+  #|           ctx.drawImage(bitmap, 0, 0);
+  #|           ctx.restore();
+  #|         }
   #|       }
   #|       const url = output.toDataURL('image/png');
   #|       if (!url.startsWith('data:image/png;base64,')) throw new Error('PNG export failed');
@@ -206,6 +244,7 @@ pub fn start(
   hint~ : String,
   failure~ : String,
   too_large~ : String,
+  unsupported_annotation~ : String,
   emit : @cmd.Emit[Result[Capture, String]],
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(kind=@cmd.after_render, scheduler => {
@@ -214,6 +253,7 @@ pub fn start(
       hint,
       failure,
       too_large,
+      unsupported_annotation,
       (url, pages, xs, ys, widths, heights, rotation, text, source) => {
         let source = @json.parse(source) catch {
           _ => {
