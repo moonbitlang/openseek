@@ -57,6 +57,7 @@ async fn collect_directory_listing(
   entries : Array[FileScanEntry],
   into : Array[String],
   read : async (@pathx.Absolute) -> Array[FileScanEntry],
+  ignored : Map[String, Unit],
 ) -> Unit {
   let mut processed = 0
   for entry in entries {
@@ -65,12 +66,23 @@ async fn collect_directory_listing(
       @async.pause()
     }
     let relative = relative_child(prefix, entry.name)
+    if ignored.contains(relative) ||
+      (entry.is_dir && ignored.contains("\{relative}/")) {
+      continue
+    }
     if entry.is_dir {
       if @file_search_policy.excludes_directory(relative) {
         continue
       }
       let child = dir.join(Relative(entry.name))
-      collect_directory_listing(child, relative, read(child), into, read)
+      collect_directory_listing(
+        child,
+        relative,
+        read(child),
+        into,
+        read,
+        ignored,
+      )
     } else {
       into.push(relative)
     }
@@ -81,9 +93,10 @@ async fn collect_directory_listing(
 async fn scan_directory_tree(
   root : @pathx.Absolute,
   read : async (@pathx.Absolute) -> Array[FileScanEntry],
+  ignored~ : Map[String, Unit] = Map([]),
 ) -> FileIndexSnapshot {
   let files : Array[String] = []
-  collect_directory_listing(root, "", read(root), files, read)
+  collect_directory_listing(root, "", read(root), files, read, ignored)
   { files, }
 }
 
@@ -92,7 +105,47 @@ async fn scan_workspace_files(root : @pathx.Absolute) -> FileIndexSnapshot {
   if !@fs.exists(root.to_string()) {
     return { files: [], }
   }
-  scan_directory_tree(root, read_sorted_directory)
+  let ignored = workspace_git_ignored_paths(root)
+  scan_directory_tree(root, read_sorted_directory, ignored~)
+}
+
+///|
+/// Ask Git for ignored untracked entries, collapsing entire excluded trees to
+/// directory paths so the walker never opens them. Git owns nested rules,
+/// negation, repository/global excludes, and the exception for tracked files.
+/// Outside a repository (or without Git), retain ordinary directory discovery.
+async fn workspace_git_ignored_paths(
+  root : @pathx.Absolute,
+) -> Map[String, Unit] {
+  let env = git_environment()
+  env["LC_ALL"] = "C"
+  let (code, stdout, stderr) = @processx.collect_output_no_stdin(
+    "git",
+    [
+      "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z",
+      "--", ".",
+    ],
+    cwd=root.to_string(),
+    extra_env=env,
+    inherit_env=false,
+  ) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => return Map([])
+    error => raise error
+  }
+  if code != 0 {
+    let detail = stderr.text()
+    if detail.contains("not a git repository") {
+      return Map([])
+    }
+    raise HostError("failed to read Git ignore rules: \{detail}")
+  }
+  let ignored : Map[String, Unit] = Map([])
+  for path in stdout.text().split("\u{0}") {
+    if !path.is_empty() {
+      ignored[path.to_owned()] = ()
+    }
+  }
+  ignored
 }
 
 ///|

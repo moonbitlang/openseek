@@ -4,6 +4,68 @@ fn test_scan_entry(name : String, is_dir : Bool) -> FileScanEntry {
 }
 
 ///|
+async test "file scan respects Git ignores and keeps tracked files" {
+  let root = @fs.tmpdir(prefix="openseek-search-ignore-")
+  defer git_test_cleanup(root)
+  git_test_run(root, ["init", "--quiet"])
+  @fs.mkdir("\{root}/toolchains")
+  @fs.mkdir("\{root}/src")
+  for
+    path in [
+      "toolchains/tracked.mbt", "toolchains/huge.bin", "src/keep.log", "src/drop.log",
+      "src/main.mbt", "local.tmp", "space name.log",
+    ] {
+    @fs.write_file("\{root}/\{path}", "", create_mode=CreateOrTruncate)
+  }
+  git_test_run(root, ["add", "toolchains/tracked.mbt"])
+  @fs.write_file(
+    "\{root}/.gitignore",
+    "toolchains/\n*.log\n",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{root}/src/.gitignore",
+    "!keep.log\n",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{root}/.git/info/exclude",
+    "local.tmp\n",
+    create_mode=CreateOrTruncate,
+  )
+  let absolute = @pathx.Path(root).resolve()
+  let snapshot = scan_workspace_files(absolute)
+  assert_eq(snapshot.files, [
+    ".gitignore", "src/.gitignore", "src/keep.log", "src/main.mbt", "toolchains/tracked.mbt",
+  ])
+  let nested = scan_workspace_files(absolute.join(Relative("src")))
+  assert_eq(nested.files, [".gitignore", "keep.log", "main.mbt"])
+}
+
+///|
+async test "file scan prunes ignored trees before reading them" {
+  let root = @pathx.Path("/virtual-ignored").resolve()
+  let snapshot = scan_directory_tree(
+    root,
+    dir => {
+      assert_eq(dir, root)
+      [test_scan_entry("toolchains", true), test_scan_entry("main.mbt", false)]
+    },
+    ignored={ "toolchains/": () },
+  )
+  assert_eq(snapshot.files, ["main.mbt"])
+}
+
+///|
+async test "file scan supports ordinary folders without Git" {
+  let root = @fs.tmpdir(prefix="openseek-search-no-git-")
+  defer git_test_cleanup(root)
+  @fs.write_file("\{root}/main.mbt", "", create_mode=CreateOrTruncate)
+  let snapshot = scan_workspace_files(@pathx.Path(root).resolve())
+  assert_eq(snapshot.files, ["main.mbt"])
+}
+
+///|
 async test "file scan keeps lexicographic DFS and skips ignored directories" {
   let root = @pathx.Path("/virtual-workspace").resolve()
   let src = root.join(Relative("src")).to_string()
