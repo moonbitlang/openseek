@@ -717,7 +717,6 @@
   position: fixed;
   z-index: 10000;
   cursor: crosshair;
-  touch-action: none;
   user-select: none;
   overflow: hidden;
   outline: 2px solid var(--accent, #3578e5);
@@ -732,6 +731,7 @@
 }
 
 .pdf-region-capturing, .pdf-region-capturing * { cursor: crosshair !important; }
+.pdf-region-capturing { touch-action: none; }
 .pdf-capture-feedback .feedback-source-selection {
   background: transparent;
   border: 1px solid var(--accent, #3578e5);

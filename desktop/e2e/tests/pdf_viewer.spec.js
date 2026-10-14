@@ -859,6 +859,69 @@ test.describe('PDF region screenshots', () => {
 
 });
 
+test('PDF repeated capture starts keep the active selection', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const button = page.getByRole('button', { name: 'Capture region', exact: true });
+  await button.dblclick();
+  await expect(page.locator('.pdf-region-capture')).toHaveCount(1);
+  const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
+  await page.mouse.move(bounds.x + 40, bounds.y + 40);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 220, bounds.y + 140, { steps: 5 });
+  await page.mouse.up();
+  const input = page.locator('.pdf-capture-feedback textarea');
+  await expect(input).toBeVisible();
+  await input.press('Escape');
+  await button.dblclick();
+  await expect(page.locator('.pdf-region-capture')).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test.describe('PDF touch capture', () => {
+  test.use({ hasTouch: true });
+
+  test('PDF touch drags capture a region and restore panning afterward', async ({ page }) => {
+    const app = await setup(page);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const container = page.locator('.pdf-container');
+    const before = await container.evaluate(el => el.scrollTop);
+    const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
+    const cdp = await page.context().newCDPSession(page);
+    const drag = async () => {
+      const x = Math.ceil(bounds.x + 100), y = Math.ceil(bounds.y + 250);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let step = 1; step <= 8; step++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: x + step * 10, y: y - step * 15 }] });
+      }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    };
+    const button = page.getByRole('button', { name: 'Capture region', exact: true });
+    await button.click();
+    await expect(page.locator('.pdf-region-capture')).toBeVisible();
+    await drag();
+    const input = page.locator('.pdf-capture-feedback textarea');
+    await expect(input).toBeVisible();
+    expect(await container.evaluate(el => el.scrollTop)).toBe(before);
+    await expect(container).toHaveCSS('touch-action', 'auto');
+    await input.press('Escape');
+    await button.click();
+    await expect(container).toHaveCSS('touch-action', 'none');
+    await page.keyboard.press('Escape');
+    await expect(container).toHaveCSS('touch-action', 'auto');
+    await drag();
+    await expect.poll(() => container.evaluate(el => el.scrollTop)).toBeGreaterThan(before + 50);
+    await cdp.detach();
+    expect(app.pageErrors).toEqual([]);
+  });
+});
+
 test('PDF capture mode keeps native scrolling and opens the shared feedback composer', async ({ page }) => {
   const app = await setup(page);
   await enableImages(page);

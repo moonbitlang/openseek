@@ -26,7 +26,7 @@ extern "js" fn start_region(
   #|   const session = host?.__officeViewerPdf;
   #|   const container = host?.querySelector('.pdf-container');
   #|   if (!host || !container || !session?.alive) { failed(failure); return; }
-  #|   if (host.__pdfRegionCapture) { host.__pdfRegionCapture(); return; }
+  #|   if (host.__pdfRegionCapture) return;
   #|   const bounds = container.getBoundingClientRect();
   #|   const left = Math.max(0, bounds.left), top = Math.max(0, bounds.top);
   #|   const right = Math.min(innerWidth, bounds.right), bottom = Math.min(innerHeight, bounds.bottom);
