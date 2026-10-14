@@ -12,6 +12,48 @@
 const BrowserPaneId = "browser-pane"
 
 ///|
+/// Open a new tab for either a user action or a host request. The caller
+/// chooses the conversation; an off-screen conversation keeps its tab parked.
+/// A blank tab has no native view until its first address is submitted.
+fn open_browser_tab(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  owner : @interop.ConversationKey?,
+  url? : String,
+  request? : String,
+) -> (@cmd.Cmd, Model) {
+  let (preview, id) = @preview.open_page(model.preview, url?)
+  let dock = if owner is Some(owner) {
+    @dock.open_browser_for(model.dock, owner, id)
+  } else {
+    @dock.open_browser(model.dock, id)
+  }
+  let on_screen = owner == model.dock.owner
+  let cmd = if url is Some(url) {
+    browser_open(
+      dispatch,
+      id,
+      url,
+      model.theme.is_dark(model.system_dark),
+      owner,
+      request?,
+    )
+  } else {
+    @cmd.none
+  }
+  (
+    cmd,
+    {
+      ..model,
+      preview,
+      dock,
+      right_panel_open: model.right_panel_open || (on_screen && url is Some(_)),
+      right_panel_menu_open: model.right_panel_menu_open && !on_screen,
+    },
+  )
+}
+
+///|
 /// One bridge-local native-window op. Geometry calls (`quiet=true`) fail
 /// silently — they are continuous best-effort placement, and a failure just
 /// means the view is gone or not yet created; the next sync pass reconverges.

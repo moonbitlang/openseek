@@ -5882,38 +5882,12 @@ fn update_msg(
       // Native views exist only in the desktop window, whose conversations
       // are all on the local channel.
       let owner : @interop.ConversationKey = { channel: Local, session, }
-      let (preview, id) = @preview.open_page(model.preview, url~)
-      // An agent working in the conversation on screen shows its page the
-      // way a followed link does. One working in another conversation
-      // leaves this screen alone: its tab waits in that conversation's
-      // strip, its view created hidden.
-      let on_screen = model.dock.owner == Some(owner)
-      (
-        browser_open(
-          dispatch,
-          id,
-          url,
-          model.theme.is_dark(model.system_dark),
-          Some(owner),
-          request~,
-        ),
-        {
-          ..model,
-          preview,
-          dock: @dock.open_browser_for(model.dock, owner, id),
-          right_panel_open: model.right_panel_open || on_screen,
-          right_panel_menu_open: model.right_panel_menu_open && !on_screen,
-        },
-      )
+      open_browser_tab(dispatch, model, Some(owner), url~, request~)
     }
     BrowserTabRequested => {
       let model = model.begin_editor_navigation()
-      let (preview, id) = @preview.open_page(model.preview)
-      let dock = @dock.open_browser(model.dock, id)
-      (
-        focus_browser_address(),
-        { ..model, preview, dock, right_panel_menu_open: false, },
-      )
+      let (cmd, model) = open_browser_tab(dispatch, model, model.dock.owner)
+      (@cmd.batch([cmd, focus_browser_address()]), model)
     }
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
     // The Workflows tab: opened like the explorer inventories, keeping the
@@ -6309,26 +6283,7 @@ fn update_msg(
               },
             )
           }
-          None => {
-            let (preview, id) = @preview.open_page(model.preview, url~)
-            let dock = @dock.open_browser(model.dock, id)
-            (
-              browser_open(
-                dispatch,
-                id,
-                url,
-                model.theme.is_dark(model.system_dark),
-                model.dock.owner,
-              ),
-              {
-                ..model,
-                preview,
-                dock,
-                right_panel_open: true,
-                right_panel_menu_open: false,
-              },
-            )
-          }
+          None => open_browser_tab(dispatch, model, model.dock.owner, url~)
         }
       } else {
         (open_external_link(dispatch, url), model)
@@ -21363,6 +21318,53 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
   // And the first conversation's strip is intact when it comes back.
   let back = @dock.sync(returned, on_screen)
   assert_true(@dock.active_browser(back) == Some(1))
+}
+
+///|
+test "user and agent tab creation share placement without sharing navigation priority" {
+  let dispatch = test_dispatch()
+  let model = desktop_model()
+  guard model.dock.owner is Some(owner) else {
+    fail("the test model shows a conversation")
+  }
+  let url = "https://example.com/shared"
+  let agent_open = BrowserOpenRequested(
+    request="r-shared",
+    session=owner.session,
+    url~,
+  )
+  let (_, agent) = update(dispatch, agent_open, model)
+  let (_, user) = update(dispatch, ExternalLinkClicked(url), model)
+  assert_true(agent.preview == user.preview)
+  assert_true(agent.dock == user.dock)
+  assert_true(agent.browser_pane == user.browser_pane)
+  assert_eq(agent.right_panel_open, user.right_panel_open)
+  assert_eq(agent.right_panel_menu_open, user.right_panel_menu_open)
+  assert_eq(
+    agent.file_panel.file_link_generation,
+    model.file_panel.file_link_generation,
+  )
+  assert_eq(
+    user.file_panel.file_link_generation,
+    model.file_panel.file_link_generation + 1,
+  )
+  // Re-evaluating each entry point must not allocate into the input model
+  // or execute its native-view commands during update.
+  for msg in [agent_open, ExternalLinkClicked(url), BrowserTabRequested] {
+    let (_, first) = update(dispatch, msg, model)
+    let (_, second) = update(dispatch, msg, model)
+    assert_true(first.preview == second.preview)
+    assert_true(first.dock == second.dock)
+    assert_true(first.browser_pane == second.browser_pane)
+    assert_eq(first.right_panel_open, second.right_panel_open)
+    assert_eq(first.right_panel_menu_open, second.right_panel_menu_open)
+  }
+  assert_true(model.preview.pages.is_empty())
+  // User links reuse a matching tab; an explicit MCP open still creates one.
+  let (_, reused) = update(dispatch, ExternalLinkClicked(url), user)
+  let (_, added) = update(dispatch, agent_open, user)
+  assert_eq(reused.dock.tabs.length(), 1)
+  assert_eq(added.dock.tabs.length(), 2)
 }
 
 ///|
