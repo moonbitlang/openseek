@@ -27,7 +27,7 @@ extern "js" fn create_targets(
   #|       const p = page.getBoundingClientRect();
   #|       const entries = mapping.entries.filter(e => e.item.str.trim() && e.div.isConnected).map(e => {
   #|         const b = e.div.getBoundingClientRect();
-  #|         const angle = Math.atan2(e.item.transform[1], e.item.transform[0]) + session.viewer.pagesRotation*Math.PI/180;
+  #|         const angle = Math.atan2(e.item.transform[1], e.item.transform[0]) + mapping.view.viewport.rotation*Math.PI/180;
   #|         return { ...e, x: b.left-p.left, y: b.top-p.top, width: b.width, height: b.height,
   #|           vertical: Math.abs(Math.sin(angle)) > Math.SQRT1_2 };
   #|       }).filter(e => e.width > 0 && e.height > 0);
@@ -70,7 +70,8 @@ extern "js" fn create_targets(
   #|           if (i && text && !/\s$/.test(text) && !/^\s/.test(e.item.str)) {
   #|             const prev = ordered[i-1], size = e.vertical ? e.width : e.height;
   #|             const cross = e.vertical ? Math.abs(e.x-prev.x) : Math.abs(e.y-prev.y);
-  #|             const gap = e.vertical ? e.y-prev.y-prev.height : e.x-prev.x-prev.width;
+  #|             const gap = e.vertical ? Math.max(e.y-prev.y-prev.height, prev.y-e.y-e.height, 0)
+  #|               : Math.max(e.x-prev.x-prev.width, prev.x-e.x-e.width, 0);
   #|             if (cross > size/2) text += '\n';
   #|             else if (gap > size*0.15) text += ' ';
   #|           }

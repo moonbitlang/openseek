@@ -1,6 +1,6 @@
 // Original PDF fixture: split heading, two-line paragraph and adjacent column.
 // Tagged and untagged versions have exactly the same painted content.
-export function annotationPdf(tagged) {
+export function annotationPdf(tagged, rotation = 0) {
   const line = (id, x, y, text) => `/P <</MCID ${id}>> BDC BT /F1 20 Tf ${x} ${y} Td (${text}) Tj ET EMC`;
   const stream = [line(0, 72, 710, 'Hello'), line(1, 137, 710, 'world'),
     line(2, 72, 670, 'First paragraph line'), line(3, 72, 640, 'Second paragraph line'),
@@ -8,7 +8,7 @@ export function annotationPdf(tagged) {
   const objects = [
     `<< /Type /Catalog /Pages 2 0 R ${tagged ? '/MarkInfo << /Marked true >> /StructTreeRoot 8 0 R' : ''} >>`,
     '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R ${tagged ? '/StructParents 0' : ''} >>`,
+    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 6 0 R /Rotate ${rotation} ${tagged ? '/StructParents 0' : ''} >>`,
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 7 0 R >>',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
     `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
@@ -29,5 +29,5 @@ export function annotationPdf(tagged) {
   pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
   pdf += offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
   pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
-  return { data_base64: Buffer.from(pdf).toString('base64'), media_type: 'application/pdf', sig: `annotation:${tagged}` };
+  return { data_base64: Buffer.from(pdf).toString('base64'), media_type: 'application/pdf', sig: `annotation:${tagged}:${rotation}` };
 }

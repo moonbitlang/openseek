@@ -919,10 +919,15 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await expect(page.locator('.mention-chip')).toContainText('Make the heading larger');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  for (let turn = 0; turn < 3; turn++) await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  for (const rotation of [180, 270, 0]) {
+    await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+    await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
+      host.__officeViewerPdf.viewer.pagesRotation)).toBe(rotation);
+  }
+  await page.locator('.pdf-container').evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
     host.__officeViewerPdf.viewer.getPageView(0).renderingState)).toBe(3);
-  await page.locator('.pdf-container').evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
+  await expect(page.locator('.pdfViewer canvas').first()).toBeVisible();
   await captureRegion(page, await captureRect(), { confirm: false });
   await feedback.locator('textarea').fill('Discard this comment');
   await feedback.locator('textarea').press('Escape');
@@ -1150,3 +1155,37 @@ test('PDF element hover follows scroll and works on a rotated zoomed second page
   expect(y1).toBeGreaterThan(720); expect(y1).toBeLessThan(738);
   expect(app.pageErrors).toEqual([]);
 });
+
+
+for (const tagged of [false, true]) {
+  for (const [intrinsic, rotation] of [[0, 90], [0, 180], [0, 270], [90, 0], [180, 0], [270, 0], [90, 180]]) {
+    test(`PDF split heading preserves grouping and spaces (${tagged ? 'tagged' : 'untagged'}, intrinsic ${intrinsic}, viewer ${rotation})`, async ({ page }) => {
+      const app = await setup(page);
+      app.officeFiles['docs/report.pdf'] = annotationPdf(tagged, intrinsic);
+      await enableImages(page);
+      await openFile(app, 'report.pdf');
+      await expectPdf(page);
+      for (let turn = 0; turn < rotation / 90; turn++) {
+        await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+      }
+      const hello = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Hello' }).first();
+      await hello.scrollIntoViewIfNeeded();
+      await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
+        host.__officeViewerPdf.viewer.getPageView(0).renderingState)).toBe(3);
+      await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+      await hoverPdfText(page, 'Hello');
+      const world = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'world' }).first().boundingBox();
+      const box = await page.locator('.pdf-region-capture-box').boundingBox();
+      expect(box.x).toBeLessThanOrEqual(world.x);
+      expect(box.y).toBeLessThanOrEqual(world.y);
+      expect(box.x + box.width).toBeGreaterThanOrEqual(world.x + world.width - 1);
+      expect(box.y + box.height).toBeGreaterThanOrEqual(world.y + world.height - 1);
+      await page.mouse.down(); await page.mouse.up();
+      const feedback = page.locator('.pdf-capture-feedback');
+      await feedback.getByRole('checkbox').check();
+      await feedback.locator('.agent-feedback-input-action').click();
+      await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', '/workspace/docs/report.pdf · p. 1\nHello world');
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}
