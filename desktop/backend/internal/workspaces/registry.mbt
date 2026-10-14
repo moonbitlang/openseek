@@ -51,8 +51,9 @@ fn workspaces_file() -> @pathx.Absolute? {
 /// `workspace_registry_lock` and before the registry is read: a list read
 /// before another process released this lock is exactly the stale snapshot
 /// whose write-back would erase that process's entry. Unlike a read, which
-/// degrades to "no workspaces", a mutation with nowhere to persist has to say
-/// so rather than succeed against nothing.
+/// finds no workspaces where there is no session root to hold a registry, a
+/// mutation with nowhere to persist has to say so rather than succeed against
+/// nothing.
 async fn lock_registry_file() -> @fsx.FileLock {
   guard workspaces_file() is Some(file) else {
     raise WorkspaceError("cannot determine a session root: HOME is unavailable")
@@ -88,26 +89,46 @@ priv struct Registry {
 }
 
 ///|
-/// The registry contents. A missing or malformed registry reads as "no
-/// workspaces, not initialized" — the same state a first launch sees, which
-/// is what a user with no usable registry should get. Entries canonicalize
-/// on read, so a registry written before symlink resolution (or edited by
-/// hand) collapses aliases of one physical directory into its first spelling.
+/// The registry contents. Only a registry that is not there reads as "no
+/// workspaces, not initialized" — the state a first launch sees. A registry
+/// that cannot be read, or that reads but is not the object this host writes,
+/// raises instead: every mutation is a read-modify-write over this result,
+/// so reading a failure as empty would let the next attach or detach save a
+/// list holding none of the user's workspaces, and reading it as
+/// uninitialized would attach the default workspace a second time. Entries
+/// canonicalize on read, so a registry written before symlink resolution (or
+/// edited by hand) collapses aliases of one physical directory into its
+/// first spelling.
 async fn read_registry_unlocked() -> Registry {
   let uninitialized : Registry = { workspaces: [], initialized: false, }
   guard workspaces_file() is Some(file) else { return uninitialized }
-  let text = @fsx.try_read_text(file.to_path()) catch {
-    _ => return uninitialized
+  let text = @fsx.read_text(file.to_path()) catch {
+    @os_error.OSError(_) as os_error if os_error.is_ENOENT() ||
+      os_error.is_ENOTDIR() => return uninitialized
+    error =>
+      raise WorkspaceError(
+        "could not read the workspace list at \{file}: \{error}",
+      )
   }
-  guard text is Some(text) else { return uninitialized }
-  let json = @json.parse(text) catch { _ => return uninitialized }
-  guard json is Object(fields) else { return uninitialized }
+  let json = @json.parse(text) catch {
+    error =>
+      raise WorkspaceError(
+        "the workspace list at \{file} is malformed: \{error}",
+      )
+  }
+  guard json is Object(fields) else {
+    raise WorkspaceError(
+      "the workspace list at \{file} is malformed: expected a JSON object",
+    )
+  }
   // A registry written before the default workspace existed carries no
   // marker and therefore reads as uninitialized — correct, since that user
   // has never been offered one.
   let initialized = fields.get("initialized") is Some(True)
   guard fields.get("workspaces") is Some(Array(items)) else {
-    return { workspaces: [], initialized, }
+    raise WorkspaceError(
+      "the workspace list at \{file} is malformed: \"workspaces\" must be an array",
+    )
   }
   let paths : Array[@pathx.Absolute] = []
   for item in items {
@@ -154,6 +175,16 @@ async fn write_registry(registry : Registry) -> Unit {
 }
 
 ///|
+/// `@fsx.is_dir` for a directory the registry is about to rely on, with a
+/// failed probe reported as this package's error. "Is not a directory" is an
+/// answer about the path; a probe that could not look has no answer to give.
+async fn inspected_is_dir(path : @pathx.Path) -> Bool {
+  @fsx.is_dir(path) catch {
+    error => raise WorkspaceError("could not inspect \{path}: \{error}")
+  }
+}
+
+///|
 const WorkspaceDirName = "OpenSeek"
 
 ///|
@@ -162,11 +193,13 @@ const WorkspaceDirName = "OpenSeek"
 /// app data, so it belongs where the user already looks for files. Where
 /// Documents is comes from the platform (`@userdirs.documents_dir`); when
 /// that folder does not exist (headless machines, say), the folder lives
-/// directly under the home directory.
+/// directly under the home directory. A Documents folder that cannot be
+/// inspected is not a missing one: it raises rather than quietly moving the
+/// default workspace to a second location.
 async fn default_workspace_dir() -> @pathx.Path? {
   guard @home.dir() is Some(home) else { return None }
   let parent : @pathx.Path = if @userdirs.documents_dir() is Some(documents) &&
-    @fsx.is_dir(documents) {
+    inspected_is_dir(documents) {
     documents
   } else {
     home
@@ -247,7 +280,7 @@ pub async fn add(
     raise WorkspaceError("workspace path contains control characters")
   }
   let dir = expanded_path(path)
-  guard @fsx.is_dir(dir.to_path()) else {
+  guard inspected_is_dir(dir.to_path()) else {
     raise WorkspaceError("\{dir.0} is not a directory")
   }
   // A worktree is not a workspace: registering a linked checkout would root
@@ -430,7 +463,7 @@ pub async fn register_task_directory(
   dir : @pathx.Absolute,
   on_committed? : (Array[@pathx.Absolute]) -> Unit raise,
 ) -> Unit {
-  guard @fsx.is_dir(dir.to_path()) else {
+  guard inspected_is_dir(dir.to_path()) else {
     raise WorkspaceError("Task working directory is unavailable")
   }
   let canonical = canonical_path(dir)
