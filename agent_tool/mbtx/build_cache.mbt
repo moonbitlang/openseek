@@ -1,23 +1,24 @@
 ///|
 /// Where a session keeps compiled snippets between calls.
 ///
-/// A wasm run is built in a persistent per-session directory rather than a
+/// A wasm run is built in a directory retained between calls rather than a
 /// fresh temp dir, so the dependency packages a snippet imports are compiled
 /// once per session instead of once per call — measured, that is the whole
 /// cost of a call: a cold build of the bundled read workflow is ~570ms, a
 /// warm one ~25ms when the source is unchanged and ~270ms when only the
 /// snippet body changed (the link step dominates that remainder).
 ///
-/// The cache needs an OWNER whose teardown reclaims it: a session's job dir or
-/// a read-only role's scratch lab. The lab wins because the kernel profile
-/// those roles run under re-allows exactly one writable subtree, and pointing
-/// the cache anywhere else would have `moon` denied at its first write. A
-/// standalone definition with neither has no later owner, so it keeps the
-/// per-call cold build rather than leak a cache directory.
+/// Prefer the job dir, whose owning task scope reclaims it. A main session
+/// also supplies persistent scratch for helper scripts and result files;
+/// putting compiler artifacts there would retain them across restarts and
+/// spend the Windows path budget on the workspace and session directory.
+/// Read-only roles supply only a scratch lab, so their cache stays inside
+/// that lab's writable subtree and follows its lifetime. A standalone
+/// definition with neither keeps the per-call cold build.
 fn build_cache_root(job_dir? : String, scratch_dir? : String) -> String? {
-  match (scratch_dir, job_dir) {
-    (Some(lab), _) => Some("\{lab}/mbtx-cache")
-    (None, Some(spill)) => Some("\{spill}/mbtx-cache")
+  match (job_dir, scratch_dir) {
+    (Some(spill), _) => Some("\{spill}/mbtx-cache")
+    (None, Some(lab)) => Some("\{lab}/mbtx-cache")
     (None, None) => None
   }
 }
@@ -144,10 +145,10 @@ async fn stage_source(path : String, source : String) -> Bool {
 }
 
 ///|
-test "cache root prefers the lab, then the job dir, then nothing" {
+test "cache root prefers the job dir, then the lab, then nothing" {
   assert_eq(
     build_cache_root(job_dir="/spill", scratch_dir="/lab"),
-    Some("/lab/mbtx-cache"),
+    Some("/spill/mbtx-cache"),
   )
   assert_eq(build_cache_root(job_dir="/spill"), Some("/spill/mbtx-cache"))
   assert_eq(build_cache_root(scratch_dir="/lab"), Some("/lab/mbtx-cache"))
