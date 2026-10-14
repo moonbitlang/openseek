@@ -696,6 +696,7 @@ test.describe('PDF region screenshots', () => {
     expect(await attachment.evaluate(img => [img.naturalWidth, img.naturalHeight])).toEqual([expected.width, expected.height]);
     expect(expected.width).toBeGreaterThan(rect.width);
     await expect(page.locator('#task')).toHaveValue('Explain this figure');
+    expect((await page.locator('.mention-chip').boundingBox()).height).toBeLessThan(40);
     expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
     await page.screenshot({ path: testInfo.outputPath('pdf-region-attachment.png') });
     await page.locator('#send').click();

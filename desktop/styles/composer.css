@@ -143,6 +143,7 @@
    always in the DOM and collapses to nothing when there are no chips */
 .mention-tray {
   display: flex;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 6px;
 }
