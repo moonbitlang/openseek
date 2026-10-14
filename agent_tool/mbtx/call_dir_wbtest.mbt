@@ -1,7 +1,7 @@
 ///|
-async test "call dirs get short names that are never shared" {
+async test "call dirs create short directory names under a missing parent" {
   @vfs.with_tmpdir(prefix="mbtx-call-dir-", owner => {
-    // The owner need not exist yet: a job dir is created with its first call.
+    // The helper also creates the parent when it does not exist yet.
     let parent = "\{owner}/jobs"
     let first = fresh_call_dir(parent, "snippet-")
     let second = fresh_call_dir(parent, "snippet-")

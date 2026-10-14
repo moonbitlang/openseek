@@ -172,7 +172,6 @@ test "cache keys: one shared snippet dir, named scripts keyed by resolved path" 
   assert_true(odd.has_prefix("named-a_b_c_d.mbtx-"))
   let long = cache_key(Some("/p/" + "a".repeat(60) + ".mbtx"))
   assert_true(long.has_prefix("named-" + "a".repeat(12) + "-"))
-  assert_false(long.contains("a".repeat(13)))
   // The key is one segment of every path the build writes, so its length is
   // bounded whatever the script is called: label, separator, 64-bit hex digest.
   assert_true(long.length() <= 35, msg=long)
