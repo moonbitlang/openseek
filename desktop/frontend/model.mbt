@@ -2353,6 +2353,11 @@ priv enum DeviceMsg {
     connection_generation~ : Int32,
     request_generation~ : Int32
   )
+  ProjectsLoadFailed(
+    message~ : String,
+    connection_generation~ : Int32,
+    request_generation~ : Int32
+  )
   // The host's canonical post-commit registry broadcast. Every client adopts
   // the same list in durable write order and invalidates older list replies.
   ProjectsChanged(Array[@common.Uri], chat_root~ : Result[@common.Uri, String]?)

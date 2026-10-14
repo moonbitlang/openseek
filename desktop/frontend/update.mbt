@@ -7238,6 +7238,18 @@ fn update_device_msg(
         paths,
       )
     }
+    ProjectsLoadFailed(message~, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.projects_request_generation else {
+        return (@cmd.none, model)
+      }
+      // A failed read preserves the last inventory and any independent add
+      // still waiting for its commit. Only mutation failures settle an add.
+      model.notify_error(
+        dispatch,
+        notice_text(model.locale, WorkspaceFailure(message)),
+      )
+    }
     ProjectsChanged(paths, chat_root~) => {
       // The post-commit broadcast is newer than every list request issued so
       // far. Advance the token before applying it, so an older list reply can
