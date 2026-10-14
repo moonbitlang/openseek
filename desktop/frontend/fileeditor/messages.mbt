@@ -243,15 +243,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, PdfCapture) => "區域截圖"
     (Japanese, PdfCapture) => "範囲を撮影"
     (Spanish, PdfCapture) => "Capturar región"
-    (English, PdfCaptureHint) => "Drag to attach a screenshot · Esc to cancel"
+    (English, PdfCaptureHint) =>
+      "Click text or drag a region to annotate · Esc to cancel"
     (SimplifiedChinese, PdfCaptureHint) =>
-      "拖动框选并添加图片附件 · Esc 取消"
+      "点击文字或拖动框选以批注 · Esc 取消"
     (TraditionalChinese, PdfCaptureHint) =>
-      "拖曳框選並加入圖片附件 · Esc 取消"
+      "點擊文字或拖曳框選以註解 · Esc 取消"
     (Japanese, PdfCaptureHint) =>
-      "ドラッグして画像を添付 · Esc でキャンセル"
+      "文字をクリック、または範囲をドラッグして注釈 · Esc でキャンセル"
     (Spanish, PdfCaptureHint) =>
-      "Arrastra para adjuntar una captura · Esc para cancelar"
+      "Haz clic en texto o arrastra una región para anotar · Esc para cancelar"
     (English, PdfCaptureFailed) =>
       "Could not capture this region. Wait for the PDF to finish rendering and try again."
     (SimplifiedChinese, PdfCaptureFailed) =>

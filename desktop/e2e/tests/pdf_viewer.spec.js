@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { pinchZoom } from './support/office_zoom.js';
+import { annotationPdf } from './support/pdf_annotation_fixture.js';
 
 async function annotateSelection(preview) {
   await expect(preview.locator('textarea')).toBeVisible();
@@ -728,7 +729,7 @@ test.describe('PDF region screenshots', () => {
     expect(app.pageErrors).toEqual([]);
   });
 
-  test('Escape, tiny selections and document switches retire the overlay', async ({ page }) => {
+  test('Escape and document switches retire capture while blank clicks keep it active', async ({ page }) => {
     const app = await setup(page);
     await enableImages(page);
     await openFile(app, 'report.pdf');
@@ -739,8 +740,9 @@ test.describe('PDF region screenshots', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
     const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
-    await captureRegion(page, { x: bounds.x + 50, y: bounds.y + 50, width: 1, height: 1 });
     await button.click();
+    await page.mouse.click(bounds.x + 50, bounds.y + 50);
+    await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
     await page.locator('.pdf-container').evaluate(el => { el.scrollTop += 100; });
     await expect(page.locator('.pdf-region-capture')).toBeVisible();
     await openFile(app, 'report.docx');
@@ -979,5 +981,123 @@ test('PDF capture archiving another conversation does not disable screenshot del
   await feedback.locator('textarea').press('Enter');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await expect(page.locator('#task')).toHaveValue(/Keep this feedback deliverable/);
+  expect(app.pageErrors).toEqual([]);
+});
+
+async function hoverPdfText(page, text) {
+  const span = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: text }).first();
+  await expect(span).toBeVisible();
+  await span.hover();
+  const b = await span.boundingBox();
+  await expect(page.locator('.pdf-region-capture-box')).toBeVisible();
+  return b;
+}
+
+test('PDF element hover and a slightly moving click attach text, page and screenshot', async ({ page }, testInfo) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  const b = await hoverPdfText(page, 'OpenSeek PDF preview');
+  const box = await page.locator('.pdf-region-capture-box').boundingBox();
+  expect(Math.abs(box.x - b.x)).toBeLessThanOrEqual(3);
+  expect(Math.abs(box.width - b.width)).toBeLessThanOrEqual(5);
+  await page.screenshot({ path: testInfo.outputPath('pdf-element-hover.png') });
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 2, b.y + b.height / 2 + 1);
+  await page.mouse.up();
+  const feedback = page.locator('.pdf-capture-feedback');
+  await expect(feedback.locator('textarea')).toBeVisible();
+  await feedback.locator('textarea').fill('Rename this heading');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('textarea').press('Enter');
+  await expect(page.locator('#task')).toHaveValue(/report\.pdf · p\. 1[\s\S]*OpenSeek PDF preview[\s\S]*Rename this heading/);
+  await expect(page.locator('.composer-image img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const tagged of [false, true]) {
+  test(`PDF element targets group ${tagged ? 'tagged paragraphs' : 'untagged lines'} without merging columns`, async ({ page }) => {
+    const app = await setup(page);
+    app.officeFiles['docs/report.pdf'] = annotationPdf(tagged);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const button = page.getByRole('button', { name: 'Capture region', exact: true });
+    await button.click();
+    const first = await hoverPdfText(page, 'Hello');
+    const last = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'world' }).first().boundingBox();
+    const box = await page.locator('.pdf-region-capture-box').boundingBox();
+    expect(box.x).toBeLessThanOrEqual(first.x);
+    expect(box.x + box.width).toBeGreaterThanOrEqual(last.x + last.width - 1);
+    const other = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Other column' }).first().boundingBox();
+    expect(box.x + box.width).toBeLessThan(other.x);
+    await hoverPdfText(page, 'First paragraph line');
+    const paragraph = await page.locator('.pdf-region-capture-box').boundingBox();
+    const second = await page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Second paragraph line' }).first().boundingBox();
+    if (tagged) expect(paragraph.y + paragraph.height).toBeGreaterThanOrEqual(second.y + second.height - 1);
+    else expect(paragraph.y + paragraph.height).toBeLessThan(second.y);
+    await page.mouse.down(); await page.mouse.up();
+    const feedback = page.locator('.pdf-capture-feedback');
+    await feedback.getByRole('checkbox').check();
+    await feedback.locator('.agent-feedback-input-action').click();
+    await expect(page.locator('#task')).toHaveValue(/First paragraph line/);
+    if (tagged) await expect(page.locator('#task')).toHaveValue(/Second paragraph line/);
+    else await expect(page.locator('#task')).not.toHaveValue(/Second paragraph line/);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+test('PDF element mode ignores blank clicks and dragging overrides a hovered target', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  const b = await hoverPdfText(page, 'OpenSeek PDF preview');
+  await page.mouse.click(b.x, b.y + 150);
+  await expect(page.locator('.pdf-region-capture')).toBeVisible();
+  await expect(page.locator('.pdf-region-capture-box')).toBeHidden();
+  await expect(page.locator('.pdf-capture-feedback')).toBeHidden();
+  await hoverPdfText(page, 'OpenSeek PDF preview');
+  await page.mouse.down();
+  await page.mouse.move(b.x + b.width / 2 + 140, b.y + b.height / 2 + 100, { steps: 8 });
+  await expect(page.locator('.pdf-region-capture-box')).toHaveAttribute('data-selection-kind', 'region');
+  await page.mouse.up();
+  const feedback = page.locator('.pdf-capture-feedback');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('.agent-feedback-input-action').click();
+  await expect(page.locator('#task')).toHaveValue('');
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('PDF element hover follows scroll and works on a rotated zoomed second page', async ({ page }) => {
+  const app = await setup(page);
+  await enableImages(page);
+  await openFile(app, 'report.pdf');
+  await expectPdf(page);
+  const button = page.getByRole('button', { name: 'Capture region', exact: true });
+  await button.click();
+  await hoverPdfText(page, 'OpenSeek PDF preview');
+  await page.mouse.wheel(0, 200);
+  await expect(page.locator('.pdf-region-capture-box')).toBeHidden();
+  await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
+  await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Next page', exact: true }).click();
+  await page.getByRole('button', { name: 'Fit page width', exact: true }).click();
+  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
+    host.__officeViewerPdf.viewer.getPageView(1).renderingState)).toBe(3);
+  const text = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: 'Second page selection' }).first();
+  await text.scrollIntoViewIfNeeded();
+  await button.click();
+  await hoverPdfText(page, 'Second page selection');
+  await page.mouse.down(); await page.mouse.up();
+  const feedback = page.locator('.pdf-capture-feedback');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('.agent-feedback-input-action').click();
+  await expect(page.locator('#task')).toHaveValue(/report\.pdf · p\. 2[\s\S]*Second page selection/);
+  await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.pageErrors).toEqual([]);
 });

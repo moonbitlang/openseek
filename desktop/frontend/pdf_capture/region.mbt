@@ -13,6 +13,7 @@ pub(all) struct Capture {
   url : String
   regions : Array[Region]
   rotation : Int32
+  text : String?
 } derive(Eq)
 
 ///|

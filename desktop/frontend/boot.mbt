@@ -744,7 +744,12 @@ fn main {
               (),
               deliver({
                 identity,
-                quote: None,
+                quote: preview.capture.text.map(text => {
+                  let pages = preview.capture.regions
+                    .map(region => region.page.to_string())
+                    .join(", ")
+                  "\{@common.basename_or_authority(preview.path)} · p. \{pages}\n\{text}"
+                }),
                 comment,
                 send,
                 images: [

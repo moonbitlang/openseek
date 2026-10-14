@@ -15,10 +15,12 @@ extern "js" fn start_region(
     FixedArray[Double],
     FixedArray[Double],
     Int32,
+    @js.Nullable[String],
   ) -> Unit,
   failed : (String) -> Unit,
+  make_targets : (String, () -> Unit) -> @js.Value,
 ) -> Unit =
-  #| (surfaceId, hint, failure, tooLarge, done, failed) => {
+  #| (surfaceId, hint, failure, tooLarge, done, failed, makeTargets) => {
   #|   const host = document.getElementById(surfaceId);
   #|   const session = host?.__officeViewerPdf;
   #|   const container = host?.querySelector('.pdf-container');
@@ -40,6 +42,7 @@ extern "js" fn start_region(
   #|   overlay.append(box);
   #|   let drag = null;
   #|   let lastPointer = null;
+  #|   const targets = makeTargets(surfaceId, () => { if (!abort.signal.aborted) hover(); });
   #|   const observer = new MutationObserver(() => {
   #|     if (!host.isConnected || host.__officeViewerPdf !== session || !container.getClientRects().length) cleanup();
   #|   });
@@ -51,6 +54,7 @@ extern "js" fn start_region(
   #|     abort.abort();
   #|     observer.disconnect();
   #|     resize.disconnect();
+  #|     targets.dispose();
   #|     overlay.remove();
   #|     container.classList.remove('pdf-region-capturing');
   #|     session.abort.signal.removeEventListener('abort', cleanup);
@@ -65,7 +69,7 @@ extern "js" fn start_region(
   #|   listen(container, 'contextmenu', event => { event.preventDefault(); cleanup(); });
   #|   // A change of geometry retires the selection rather than cropping old coordinates.
   #|   listen(container, 'scroll', () => {
-  #|     if (drag && lastPointer) paint(selection(point(lastPointer)));
+  #|     if (drag && lastPointer) move(lastPointer); else hover();
   #|   });
   #|   listen(window, 'resize', cleanup);
   #|   listen(window, 'blur', cleanup);
@@ -78,28 +82,58 @@ extern "js" fn start_region(
   #|     top: `${rect.y - container.scrollTop + bounds.top - top}px`,
   #|     width: `${rect.width}px`, height: `${rect.height}px`
   #|   });
+  #|   const inViewport = event => event.clientX >= left && event.clientX < Math.min(right, bounds.left+container.clientWidth) &&
+  #|     event.clientY >= top && event.clientY < Math.min(bottom, bounds.top+container.clientHeight);
+  #|   const contentRect = rect => ({ ...rect, x: rect.x-bounds.left+container.scrollLeft, y: rect.y-bounds.top+container.scrollTop });
+  #|   const hover = () => {
+  #|     if (drag) return;
+  #|     const target = lastPointer && inViewport(lastPointer) ? targets.at(lastPointer.clientX, lastPointer.clientY) : null;
+  #|     box.hidden = !target;
+  #|     box.dataset.selectionKind = 'element';
+  #|     if (target) paint(contentRect(target));
+  #|   };
+  #|   const move = event => {
+  #|     lastPointer = event;
+  #|     if (!drag) { hover(); return; }
+  #|     if (drag.pointerId !== event.pointerId) return;
+  #|     const end = point(event);
+  #|     if (Math.hypot(end.x-drag.x, end.y-drag.y) >= 4) drag.selecting = true;
+  #|     if (drag.selecting) {
+  #|       box.hidden = false;
+  #|       box.dataset.selectionKind = 'region';
+  #|       paint(selection(end));
+  #|     }
+  #|   };
   #|   listen(container, 'pointerdown', event => {
   #|     if (event.button !== 0 || !event.isPrimary) return;
-  #|     if (event.clientX >= bounds.left + container.clientWidth || event.clientY >= bounds.top + container.clientHeight) return;
+  #|     if (!inViewport(event)) return;
   #|     event.preventDefault(); event.stopPropagation();
-  #|     drag = { ...point(event), pointerId: event.pointerId };
   #|     lastPointer = event;
+  #|     hover();
+  #|     drag = { ...point(event), pointerId: event.pointerId, selecting: false,
+  #|       target: targets.at(event.clientX, event.clientY) };
   #|     container.setPointerCapture(event.pointerId);
-  #|     box.hidden = false;
-  #|     paint({ ...drag, width: 0, height: 0 });
   #|   }, { capture: true });
-  #|   listen(container, 'pointermove', event => {
-  #|     if (!drag || drag.pointerId !== event.pointerId) return;
-  #|     lastPointer = event;
-  #|     paint(selection(point(event)));
+  #|   listen(container, 'pointermove', move);
+  #|   listen(container, 'pointerleave', () => {
+  #|     if (!drag) { lastPointer = null; box.hidden = true; }
   #|   });
   #|   listen(container, 'pointercancel', cleanup);
-  #|   listen(container, 'lostpointercapture', cleanup);
+  #|   listen(container, 'lostpointercapture', () => { if (drag) cleanup(); });
+  #|   // Capture-mode clicks must not activate PDF links beneath the selection.
+  #|   listen(container, 'click', event => { event.preventDefault(); event.stopPropagation(); }, { capture: true });
   #|   listen(container, 'pointerup', event => {
   #|     if (!drag || drag.pointerId !== event.pointerId) return;
   #|     event.preventDefault(); event.stopPropagation();
-  #|     const selected = selection(point(event));
-  #|     const rect = { ...selected, x: selected.x - container.scrollLeft + bounds.left, y: selected.y - container.scrollTop + bounds.top };
+  #|     move(event);
+  #|     const selected = drag.selecting ? selection(point(event)) : null;
+  #|     const target = drag.target;
+  #|     const rect = selected ? { ...selected, x: selected.x - container.scrollLeft + bounds.left, y: selected.y - container.scrollTop + bounds.top } : target;
+  #|     const text = selected ? null : target?.text ?? null;
+  #|     drag = null;
+  #|     if (!rect) { hover(); return; }
+  #|     // Prevent the synthetic click even after successful capture disposes listeners.
+  #|     container.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); }, { capture: true, once: true, signal: session.abort.signal });
   #|     cleanup();
   #|     if (rect.width < 4 || rect.height < 4) return;
   #|     if (!session.alive || host.__officeViewerPdf !== session) return;
@@ -141,7 +175,7 @@ extern "js" fn start_region(
   #|         pieces.map(p => (p.x-p.pageRect.left)/p.pageRect.width),
   #|         pieces.map(p => (p.y-p.pageRect.top)/p.pageRect.height),
   #|         pieces.map(p => p.width/p.pageRect.width),
-  #|         pieces.map(p => p.height/p.pageRect.height), session.viewer.pagesRotation);
+  #|         pieces.map(p => p.height/p.pageRect.height), session.viewer.pagesRotation, text);
   #|     } catch (_) { failed(failure); }
   #|   }, { capture: true });
   #|   window.getSelection()?.removeAllRanges();
@@ -169,7 +203,7 @@ pub fn start(
       hint,
       failure,
       too_large,
-      (url, pages, xs, ys, widths, heights, rotation) => {
+      (url, pages, xs, ys, widths, heights, rotation, text) => {
         let regions = Array::makei(pages.length(), index => {
           page: pages[index],
           x: xs[index],
@@ -177,9 +211,12 @@ pub fn start(
           width: widths[index],
           height: heights[index],
         })
-        scheduler.add(emit(Ok({ url, regions, rotation, })))
+        scheduler.add(
+          emit(Ok({ url, regions, rotation, text: text.to_option(), })),
+        )
       },
       message => scheduler.add(emit(Err(message))),
+      create_targets,
     )
   })
 }

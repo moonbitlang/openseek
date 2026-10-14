@@ -51,6 +51,7 @@ fn captured(
       generation~,
       result=Ok({
         url: "data:image/png;base64,capture",
+        text: None,
         regions: [],
         rotation: 0,
       }),

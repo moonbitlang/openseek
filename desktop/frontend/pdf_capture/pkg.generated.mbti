@@ -17,6 +17,7 @@ pub(all) struct Capture {
   url : String
   regions : Array[Region]
   rotation : Int
+  text : String?
 } derive(Eq)
 pub fn Capture::equal(Self, Self) -> Bool
 pub fn Capture::not_equal(Self, Self) -> Bool
