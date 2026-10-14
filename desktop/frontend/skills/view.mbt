@@ -473,7 +473,7 @@ fn list_page(
         icon(icon_package),
         @html.h2(ui(locale, Registry)),
         @html.button(
-          class="button secondary skills-refresh",
+          class="button skills-refresh",
           disabled=catalog_loading,
           on_click=emit(RefreshCatalog),
           if catalog_loading {

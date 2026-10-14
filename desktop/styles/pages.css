@@ -785,6 +785,7 @@ h2 {
 }
 
 .skills-refresh {
+  --button-hover-background: var(--color-bg-subtle);
   margin-left: auto;
   white-space: nowrap;
 }
