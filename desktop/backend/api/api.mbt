@@ -501,6 +501,30 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_edit_prepare, payload => {
+      @engine.prepare_session_edit(
+        state.manager,
+        payload,
+        on_created=created => {
+          publish_session_changed(state, "created", created, payload.workspace)
+        },
+        on_worktree_changed=(workspace, worktrees) => {
+          publish_worktree_changed(state, workspace, worktrees)
+        },
+      )
+    }),
+    Endpoint(@commands.session_edit_commit, payload => {
+      @engine.commit_session_edit(
+        state.manager,
+        payload,
+        (deleted, workspace) => {
+          publish_session_changed(state, "deleted", deleted, workspace)
+        },
+        on_worktree_changed=(workspace, worktrees) => {
+          publish_worktree_changed(state, workspace, worktrees)
+        },
+      )
+    }),
     Endpoint(@commands.session_fork, payload => {
       @engine.fork_session(
         state.manager,

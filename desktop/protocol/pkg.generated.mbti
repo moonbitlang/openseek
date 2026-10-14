@@ -3039,6 +3039,36 @@ pub fn SessionDocument::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionDocument
 pub impl @json.FromJson for SessionDocument
 
+pub(all) struct SessionEditCommitPayload {
+  session : String
+  workspace : String
+  replacement : String
+  submission_id : String
+  source_sequence : Int
+} derive(Eq, @debug.Debug)
+pub fn SessionEditCommitPayload::equal(Self, Self) -> Bool
+pub fn SessionEditCommitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionEditCommitPayload::not_equal(Self, Self) -> Bool
+pub fn SessionEditCommitPayload::to_json(Self) -> Json
+pub fn SessionEditCommitPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionEditCommitPayload
+pub impl @json.FromJson for SessionEditCommitPayload
+
+pub(all) struct SessionEditPreparePayload {
+  session : String
+  workspace : String
+  through : Int?
+  model : String
+  source_title : String
+} derive(Eq, @debug.Debug)
+pub fn SessionEditPreparePayload::equal(Self, Self) -> Bool
+pub fn SessionEditPreparePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionEditPreparePayload::not_equal(Self, Self) -> Bool
+pub fn SessionEditPreparePayload::to_json(Self) -> Json
+pub fn SessionEditPreparePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionEditPreparePayload
+pub impl @json.FromJson for SessionEditPreparePayload
+
 pub(all) struct SessionEvent {
   sequence : Int
   ts : Double?

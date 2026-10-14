@@ -946,3 +946,15 @@ pub let session_fork : Command[
   @protocol.SessionForkPayload,
   @protocol.SessionForkReply,
 ] = Command("session.fork")
+
+///|
+pub let session_edit_prepare : Command[
+  @protocol.SessionEditPreparePayload,
+  @protocol.SessionForkReply,
+] = Command("session.edit_prepare")
+
+///|
+pub let session_edit_commit : Command[
+  @protocol.SessionEditCommitPayload,
+  @protocol.SessionDeleteReply,
+] = Command("session.edit_commit")

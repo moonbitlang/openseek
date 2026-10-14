@@ -1,0 +1,217 @@
+///|
+#cfg(not(platform="windows"))
+async test "edit cleanup requires its durable receipt and an unchanged source" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-cleanup-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(dir)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let store = @store.SessionStore(selected.root.to_string())
+  let source = @agent_session.Session(SessionId("source"), system_prompt="test")
+    .append(User(UserMessage(Content([Text("original")]))))
+    .append(Terminal(Finished("answer")))
+  store.create(source)
+  let replacement = @agent_session.Session(
+    SessionId("replacement"),
+    system_prompt="test",
+  ).append(User(UserMessage(Content([Text("edited")]), submission_id="edit-1")))
+  store.create(replacement)
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let payload : @protocol.SessionEditCommitPayload = {
+    session: "source",
+    workspace,
+    replacement: "replacement",
+    submission_id: "edit-1",
+    source_sequence: 2,
+  }
+  let notifications : Array[String] = []
+  for
+    invalid in [
+      { ..payload, submission_id: "wrong", },
+      { ..payload, source_sequence: 1, },
+    ] {
+    let result : Result[SessionDeleteReply, String] = Ok(
+      commit_session_edit(manager, invalid, (id, _) => notifications.push(id), on_worktree_changed=(
+        _,
+        _,
+      ) => ()),
+    ) catch {
+      error => Err("\{error}")
+    }
+    assert_true(result is Err(_))
+    assert_true(store.exists(SessionId("source")))
+    assert_true(notifications.is_empty())
+  }
+  assert_true(
+    commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
+      _,
+      _,
+    ) => ())
+    is Deleted,
+  )
+  assert_false(store.exists(SessionId("source")))
+  assert_true(store.exists(SessionId("replacement")))
+  assert_eq(notifications, ["source"])
+  assert_true(
+    commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
+      _,
+      _,
+    ) => ())
+    is Deleted,
+  )
+  assert_eq(notifications, ["source", "source"])
+  assert_true(manager.record_guards.is_empty())
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "first-message replacement keeps its source's dirty checkout" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let root = worktree_test_root("openseek-first-edit-")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  @fsx.ensure_dir(root.join("global").to_path())
+  let repo = root.join("repo")
+  prepare_git_repo(repo)
+  ignore(@workspaces.add(repo.to_string(), _ => ()))
+  let manager = new_engine_manager("openseek")
+  manager.pump = Serving(sessions=Map([]))
+  let created = @worktree.create(
+    manager.worktree_host(),
+    repo.to_string(),
+    @worktree.WorktreeOwner::openseek("original"),
+    _ => (),
+  )
+  let store = @store.SessionStore(@workspaces.store_root(repo).to_string())
+  store.create(
+    @agent_session.Session(SessionId("original"), system_prompt="test").append(
+      User(UserMessage(Content([Text("original")]))),
+    ),
+  )
+  let dirty = repo.join(".worktrees").join(created.name).join("unsaved.txt")
+  @fs.write_file(dirty.to_string(), b"keep me", create_mode=CreateOrTruncate)
+  let prepared = prepare_session_edit(
+    manager,
+    {
+      session: "original",
+      workspace: repo.resource_path(),
+      through: None,
+      model: "deepseek-flash",
+      source_title: "Original",
+    },
+    on_created=_ => (),
+    on_worktree_changed=(_, _) => (),
+  )
+  assert_false(store.exists(SessionId(prepared.session)))
+  // The ordinary first prompt creates the record inside the inherited tree.
+  store.create(
+    @agent_session.Session(SessionId(prepared.session), system_prompt="test").append(
+      User(UserMessage(Content([Text("edited")]), submission_id="first-edit")),
+    ),
+  )
+  assert_true(
+    commit_session_edit(
+      manager,
+      {
+        session: "original",
+        workspace: repo.resource_path(),
+        replacement: prepared.session,
+        submission_id: "first-edit",
+        source_sequence: 1,
+      },
+      (_, _) => (),
+      on_worktree_changed=(_, _) => (),
+    )
+    is Deleted,
+  )
+  assert_true(@fsx.exists(dirty.to_path()))
+  guard @worktree.list(repo.to_string()).worktrees is [kept] else {
+    fail("checkout")
+  }
+  assert_true(kept.present)
+  assert_false(store.exists(SessionId("original")))
+  assert_true(store.exists(SessionId(prepared.session)))
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "edit cleanup rechecks a replacement deleted by another host" {
+  ambient_env_test_lock.acquire()
+  defer ambient_env_test_lock.release()
+  let previous = @sys.get_env_var("HOME")
+  defer restore_home_env(previous)
+  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-cross-host-"))
+  defer @fs.rmdir(dir, recursive=true)
+  let root = @pathx.Path(dir)
+  @sys.set_env_var("HOME", root.join("global").to_string())
+  let workspace = attach_run_workspace(root)
+  let selected = @session_store.ArchivedStore::for_workspace(workspace)
+  let store = @store.SessionStore(selected.root.to_string())
+  store.create(
+    @agent_session.Session(SessionId("source"), system_prompt="test")
+    .append(User(UserMessage(Content([Text("original")]))))
+    .append(Terminal(Finished("answer"))),
+  )
+  store.create(
+    @agent_session.Session(SessionId("replacement"), system_prompt="test").append(
+      User(UserMessage(Content([Text("edited")]), submission_id="edit-1")),
+    ),
+  )
+  let first = new_engine_manager("openseek")
+  first.pump = Serving(sessions=Map([]))
+  let second = new_engine_manager("openseek")
+  second.pump = Serving(sessions=Map([]))
+  let removed : Array[String] = []
+  @async.with_task_group(group => {
+    first.archive_commit_lock.acquire()
+    let mut locked = true
+    defer (if locked { first.archive_commit_lock.release() })
+    let cleanup = group.spawn(() => {
+      let result : Result[SessionDeleteReply, String] = Ok(
+        commit_session_edit(
+          first,
+          {
+            session: "source",
+            workspace,
+            replacement: "replacement",
+            submission_id: "edit-1",
+            source_sequence: 2,
+          },
+          (session, _) => removed.push(session),
+          on_worktree_changed=(_, _) => (),
+        ),
+      ) catch {
+        error => Err("\{error}")
+      }
+      result
+    })
+    // A has read the receipt and claimed the source, but cannot acquire its
+    // commit lock yet. B has independent record guards, like another host.
+    @async.with_timeout(3000, () => {
+      while !(first.record_guards.get("source") is Some({ moving: true, .. }) &&
+            first.record_guards.get("replacement") is Some({ readers: 1, .. })) {
+        @async.sleep(1)
+      }
+    })
+    assert_true(
+      delete_session(second, "replacement", workspace, (_, _) => ()) is Deleted,
+    )
+    assert_false(store.exists(SessionId("replacement")))
+    first.archive_commit_lock.release()
+    locked = false
+    assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Err(_))
+  })
+  assert_true(store.exists(SessionId("source")))
+  assert_true(removed.is_empty())
+  assert_true(first.record_guards.is_empty())
+  assert_true(second.record_guards.is_empty())
+}

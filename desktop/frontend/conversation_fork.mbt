@@ -11,6 +11,7 @@ priv struct ConversationFork {
   kind : ConversationForkKind
   engine_model : EngineModel
   connection_generation : Int32
+  source_sequence : Int32
 } derive(Eq)
 
 ///|
@@ -42,6 +43,7 @@ fn Model::request_fork(
   let pending : ConversationFork = {
     source,
     source_title: self.selected_conversation_title(),
+    source_sequence: conv.watermark,
     kind: AfterAnswer(through~, draft~),
     engine_model: conv.engine_model,
     connection_generation: self.focused_connection_generation(),
@@ -91,10 +93,7 @@ fn Model::finish_fork(
           )
           (
             @cmd.none,
-            model.replace_conversation({
-              ..conv,
-              worktree_mode: dev.default_worktree_mode(pending.source.workspace),
-            }),
+            model.replace_conversation({ ..conv, worktree_mode: false, }),
           )
         }
         guard model.find_conversation(pending.source.channel, reply.session)
@@ -104,6 +103,13 @@ fn Model::finish_fork(
         let model = model.replace_conversation({
           ..conv,
           engine_model: pending.engine_model,
+          worktree_mode: false,
+          workspace: dev.conversation_workspace(
+            pending.source.workspace,
+            reply.session,
+            conv.workspace,
+          ),
+          edit_replacement: Some(EditReplacement(pending)),
           task: draft.task,
           mentions: draft.mentions,
           images: draft.images,
@@ -160,6 +166,7 @@ fn Model::finish_fork(
           mentions: draft.mentions,
           images: draft.images,
           composer_draft_present: true,
+          edit_replacement: Some(EditReplacement(pending)),
         })
       }
       let save = save_conversation_model(
@@ -196,30 +203,37 @@ fn fork_conversation(
   pending : ConversationFork,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
-    guard pending.kind is AfterAnswer(through~, ..) else {
-      scheduler.add(
-        emit(
-          ForkCompleted(
-            pending,
-            Ok({ session: generated_session_id(), title: pending.source_title, }),
-          ),
-        ),
-      )
-      return
-    }
     @js.Promise::from_async(() => {
       let result : Result[@protocol.SessionForkReply, String] = try {
-        let reply = @interop.bridge_request(
-          pending.source.channel,
-          @commands.session_fork,
-          {
-            session: pending.source.session,
-            workspace: pending.source.workspace.path,
-            through,
-            model: pending.engine_model.wire(),
-            source_title: pending.source_title,
-          },
-        )
+        let reply = match pending.kind {
+          AfterAnswer(through~, draft=None) =>
+            @interop.bridge_request(
+              pending.source.channel,
+              @commands.session_fork,
+              {
+                session: pending.source.session,
+                workspace: pending.source.workspace.path,
+                through,
+                model: pending.engine_model.wire(),
+                source_title: pending.source_title,
+              },
+            )
+          kind =>
+            @interop.bridge_request(
+              pending.source.channel,
+              @commands.session_edit_prepare,
+              {
+                session: pending.source.session,
+                workspace: pending.source.workspace.path,
+                through: match kind {
+                  AfterAnswer(through~, ..) => Some(through)
+                  FirstMessage(_) => None
+                },
+                model: pending.engine_model.wire(),
+                source_title: pending.source_title,
+              },
+            )
+        }
         Ok(reply)
       } catch {
         error => Err(@interop.bridge_error_text(error))

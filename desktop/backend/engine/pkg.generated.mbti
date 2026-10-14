@@ -24,11 +24,13 @@ pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.Work
 
 pub fn cancel_run(EngineManager, @protocol.CancelPayload) -> @protocol.CancelReply raise EngineError
 
+pub async fn commit_session_edit(EngineManager, @protocol.SessionEditCommitPayload, (String, String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
+
 pub async fn compact_run(EngineManager, @protocol.CompactPayload) -> @protocol.CompactReply
 
 pub async fn delete_archived_session(EngineManager, String, String, (String, String) -> Unit, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionsReply
 
-pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, worktree? : String, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
+pub async fn delete_session(EngineManager, String, String, (String, String) -> Unit, worktree? : String, force? : Bool, edit_replacement? : @protocol.SessionEditCommitPayload, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionDeleteReply
 
 pub async fn delete_session_check(EngineManager, String, String) -> @protocol.SessionDeleteCheckReply
 
@@ -55,6 +57,8 @@ pub async fn migrate_global_store() -> Int
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server) -> EngineActor
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
+
+pub async fn prepare_session_edit(EngineManager, @protocol.SessionEditPreparePayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionForkReply
 
 pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply raise EngineError
 

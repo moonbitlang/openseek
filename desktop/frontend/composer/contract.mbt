@@ -131,6 +131,7 @@ pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
   ApiSetupNotice(text~ : String)
+  EditCleanupNotice(text~ : String, retry~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
   PendingSteerPanel(items~ : Array[String])
@@ -321,6 +322,7 @@ pub(all) enum Action {
   QueuedInputSteerRequested(identity~ : Identity, id~ : String)
   QueuedInputDeleteRequested(identity~ : Identity, id~ : String)
   WorktreePlacementRetried(identity~ : Identity)
+  EditCleanupRetried(identity~ : Identity)
   MissingWorktreeRebuildRequested(identity~ : Identity)
   MissingWorktreeArchiveRequested(identity~ : Identity)
 }
@@ -365,6 +367,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | QueuedInputSteerRequested(identity~, ..)
     | QueuedInputDeleteRequested(identity~, ..)
     | WorktreePlacementRetried(identity~)
+    | EditCleanupRetried(identity~)
     | MissingWorktreeRebuildRequested(identity~)
     | MissingWorktreeArchiveRequested(identity~) => identity
   }

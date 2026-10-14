@@ -2452,6 +2452,7 @@ fn update_msg(
         | @composer.QueuedInputSteerRequested(..)
         | @composer.QueuedInputDeleteRequested(..)
         | @composer.WorktreePlacementRetried(..)
+        | @composer.EditCleanupRetried(..)
         | @composer.MissingWorktreeRebuildRequested(..)
         | @composer.MissingWorktreeArchiveRequested(..) => {
           let identity = action.identity()
@@ -2576,6 +2577,8 @@ fn update_msg(
                 },
               )
             }
+            @composer.EditCleanupRetried(..) =>
+              model.remove_edited_source(dispatch, identity.owner)
             @composer.WorktreePlacementRetried(..) =>
               update_msg(dispatch, RetryWorktreePlacement, model)
             @composer.MissingWorktreeRebuildRequested(..) =>
@@ -4491,6 +4494,9 @@ fn update_msg(
           mentions: [],
           composer_draft_present: false,
           run: Starting(submission_id~),
+          edit_replacement: conv.edit_replacement.map(edit => {
+            edit.submitting(submission_id)
+          }),
           // A turn starts from nothing observed. That includes the terminal
           // floor: the store may have advanced through an external CLI while
           // this page was idle, so only the real Started seam's causal
@@ -5236,6 +5242,8 @@ fn update_msg(
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
       model.request_fork(dispatch, slot, through)
+    EditCleanupCompleted(owner, pending, result) =>
+      model.finish_edit_cleanup(dispatch, owner, pending, result)
     ForkCompleted(pending, result) =>
       model.finish_fork(dispatch, pending, result)
     // A transcript link naming a session on the device already focused. It
@@ -8087,6 +8095,14 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
+    EditedReceiptsLoaded(session~, ids~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.edit_replacement is Some({ state: Waiting(id), .. }) &&
+        ids.contains(id) else {
+        return (@cmd.none, model)
+      }
+      model.remove_edited_source(dispatch, { channel, session, })
+    }
     SessionCommitted(session~, sequence~, ts~, item~, session_root~) => {
       // The commit names its own store — the exact durable identity rather
       // than a guess. Commits do not precede `agent.connected` (readiness
@@ -8215,6 +8231,10 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
+      let (cleanup, next) = next.observe_edited_message(
+        dispatch, channel, session, item,
+      )
+      let commit_cmd = @cmd.batch([commit_cmd, cleanup])
       // A live Started can overtake the store write and the BridgeReady list
       // request can therefore miss a newly-created session. Sequence one is
       // the first durable proof that the record exists; refresh the list so

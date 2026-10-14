@@ -1092,6 +1092,7 @@ fn open_session(
     session_id,
     workspace~,
     archived~,
+    on_receipts=ids => dispatch(EditedReceiptsLoaded(session=session_id, ids~)),
     on_loaded=view => {
       dispatch(
         SessionLoaded(
@@ -1139,6 +1140,7 @@ fn refresh_session(
     session_id,
     workspace~,
     archived~,
+    on_receipts=ids => dispatch(EditedReceiptsLoaded(session=session_id, ids~)),
     on_loaded=view => {
       dispatch(
         SessionRefreshed(
@@ -1164,6 +1166,7 @@ fn load_session_cmd(
   session_id : String,
   workspace~ : @common.Uri?,
   archived~ : Bool,
+  on_receipts~ : (Array[String]) -> @cmd.Cmd,
   on_loaded~ : (@transcript.SessionLoadView) -> @cmd.Cmd,
   on_failed~ : (String) -> @cmd.Cmd,
 ) -> @cmd.Cmd {
@@ -1193,6 +1196,20 @@ fn load_session_cmd(
         }
       }
       scheduler.add(on_loaded(@transcript.session_from_reply(reply)))
+      scheduler.add(
+        on_receipts(
+          reply.session.events
+          .unwrap_or([])
+          .iter()
+          .filter_map(event => {
+            match event.item {
+              User(message) => message.submission_id
+              _ => None
+            }
+          })
+          .collect(),
+        ),
+      )
     })
     |> ignore
   })

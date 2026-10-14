@@ -570,6 +570,7 @@ pub async fn delete_session(
   on_committed : (String, String) -> Unit,
   worktree? : String,
   force~ : Bool = false,
+  edit_replacement? : @protocol.SessionEditCommitPayload,
   on_worktree_changed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> SessionDeleteReply {
   let session = session.trim().to_owned()
@@ -591,6 +592,16 @@ pub async fn delete_session(
     error => raise EngineError("could not lock the archived store: \{error}")
   }
   defer shared.release()
+  if edit_replacement is Some(edit) {
+    // Validate both records inside the cross-host deletion lock. A local
+    // read lease alone cannot stop another Desktop from deleting the copy.
+    require_edited_receipt(family.root, edit)
+    let source = @session_record.read_document(family.root, session)
+    guard session_max_sequence(source) == edit.source_sequence else {
+      raise EngineError("the original conversation changed; it was kept")
+    }
+  }
+
   // Only the selected project's checkout may go: another project can hold a
   // conversation with the same id. And only the checkout the confirmation
   // named: one that appeared since — repaired by another client while the

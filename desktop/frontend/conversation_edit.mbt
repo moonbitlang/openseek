@@ -58,6 +58,7 @@ fn Model::edit_user_message(
     let pending : ConversationFork = {
       source,
       source_title: self.selected_conversation_title(),
+      source_sequence: conv.watermark,
       kind: FirstMessage(draft),
       engine_model: conv.engine_model,
       connection_generation: self.focused_connection_generation(),

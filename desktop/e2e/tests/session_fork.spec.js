@@ -23,12 +23,17 @@ async function setup(page, minimal, child = false, events = history) {
   const replies = new Map();
   const original = app.replyFor.bind(app);
   app.replyFor = request => {
-    if (request.method === 'session.fork') {
+    if (request.method === 'session.fork' || request.method === 'session.edit_prepare') {
       const session = 'fork-session';
       const title = request.params.source_title;
-      replies.set(session, events.filter(e => e.sequence <= request.params.through));
+      replies.set(session, events.filter(e => request.params.through != null && e.sequence <= request.params.through));
       app.liveSessions.push({ id: session, title, updated_at_ms: 10 });
       return { session, title };
+    }
+    if (request.method === 'session.edit_commit') {
+      app.liveSessions = app.liveSessions.filter(row => row.id !== request.params.session);
+      app.notify('session.changed', { change: 'deleted', session: request.params.session, workspace: '/workspace' });
+      return { kind: 'deleted' };
     }
     if (request.method === 'session.load') {
       // A newly created chat has no source history, including when the
@@ -149,7 +154,7 @@ for (const minimal of [false, true]) {
     await expect(page.locator('#transcript')).toContainText('Second answer.');
     await expect(page.locator('#transcript')).toContainText('Still working.');
     await expect(page.locator('#task')).toHaveValue('Keep my original draft');
-    expect(app.requests.filter(r => r.method === 'session.fork' || r.method === 'agent.start')).toHaveLength(0);
+    expect(app.requests.filter(r => r.method === 'session.edit_prepare' || r.method === 'agent.start')).toHaveLength(0);
     await input.fill('Try my revised approach.');
     await input.press('End');
     await input.press('Shift+Enter');
@@ -157,16 +162,16 @@ for (const minimal of [false, true]) {
     await expect(input).toHaveValue('Try my revised approach.\nx');
     await expect(input).toBeFocused();
     await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
-    expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(0);
+    expect(app.requests.filter(r => r.method === 'session.edit_prepare')).toHaveLength(0);
     await page.screenshot({ path: testInfo.outputPath(`inline-edit-${minimal ? 'minimal' : 'detailed'}.png`) });
-    app.rpcDelays.set('session.fork', 500);
+    app.rpcDelays.set('session.edit_prepare', 500);
     // Use the same Enter-to-send contract as the bottom composer.
     await input.press('Enter');
     await expect(input).toBeDisabled();
     await expect(page.locator('#transcript')).toContainText('Second answer.');
     await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
     await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
-    expect(app.requests.filter(r => r.method === 'session.fork').map(r => r.params.through)).toEqual([3]);
+    expect(app.requests.filter(r => r.method === 'session.edit_prepare').map(r => r.params.through)).toEqual([3]);
     const sent = app.requests.find(r => r.method === 'agent.start');
     expect(sent.params.session).toBe('fork-session');
     expect(sent.params.task).toBe('Try my revised approach.\nx');
@@ -184,7 +189,7 @@ for (const minimal of [false, true]) {
     await expect(editor.locator('textarea')).toHaveValue('Explore the first approach.');
     await expect(page.locator('#transcript')).toContainText('First answer.');
     await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
-    expect(app.requests.filter(r => r.method === 'session.fork' || r.method === 'agent.start')).toHaveLength(0);
+    expect(app.requests.filter(r => r.method === 'session.edit_prepare' || r.method === 'agent.start')).toHaveLength(0);
     await editor.locator('textarea').fill('Start with a different question.');
     await editor.getByRole('button', { name: 'Send', exact: true }).click();
     await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
@@ -257,7 +262,7 @@ test('cancel and Escape restore the original bubble without creating a conversat
     await expect(page.locator('.msg.user').filter({ hasText: 'Explore another approach.' })).toBeVisible();
     await expect(page.locator('#task')).toHaveValue('My separate draft');
   }
-  expect(app.requests.filter(r => r.method === 'session.fork' || r.method === 'agent.start')).toHaveLength(0);
+  expect(app.requests.filter(r => r.method === 'session.edit_prepare' || r.method === 'agent.start')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -285,13 +290,13 @@ test('expanding an older message keeps the reader in place while later answers s
   await expect(transcript).toContainText('New answer while editing');
   await expect(editor.locator('textarea')).toBeFocused();
   await expect.poll(async () => Math.abs((await editor.boundingBox()).y - before.y)).toBeLessThan(4);
-  expect(app.requests.filter(r => r.method === 'session.fork' || r.method === 'agent.start')).toHaveLength(0);
+  expect(app.requests.filter(r => r.method === 'session.edit_prepare' || r.method === 'agent.start')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
 });
 
 test('failed fork retains the edited text and later transcript for retry', async ({ page }) => {
   const app = await setup(page, true);
-  app.rpcErrors.set('session.fork', 'Fork temporarily unavailable');
+  app.rpcErrors.set('session.edit_prepare', 'Fork temporarily unavailable');
   await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
   const editor = page.locator('.message-editor');
   await editor.locator('textarea').fill('Retry this edited request');
@@ -301,7 +306,7 @@ test('failed fork retains the edited text and later transcript for retry', async
   await expect(editor.locator('textarea')).toBeEnabled();
   await expect(page.locator('#transcript')).toContainText('Second answer.');
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  app.rpcErrors.delete('session.fork');
+  app.rpcErrors.delete('session.edit_prepare');
   await editor.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
   expect(app.requests.find(r => r.method === 'agent.start').params.task).toBe('Retry this edited request');
@@ -310,7 +315,7 @@ test('failed fork retains the edited text and later transcript for retry', async
 
 test('Send completes in its fork after navigation without replacing the other composer', async ({ page }) => {
   const app = await setup(page, true);
-  app.rpcDelays.set('session.fork', 1200);
+  app.rpcDelays.set('session.edit_prepare', 1200);
   await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
   await page.locator('.message-editor textarea').fill('Edited in the source');
   await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
@@ -348,5 +353,85 @@ test('edit never skips an intervening user input without a forkable answer', asy
   const app = await setup(page, true, false, events);
   await expect(page.getByRole('button', { name: 'Edit message', exact: true })).toHaveCount(2);
   await expect(page.locator('.msg.user').filter({ hasText: 'Continue working.' }).getByRole('button', { name: 'Edit message' })).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const first of [false, true]) {
+  test(`edited ${first ? 'first' : 'later'} message deletes the old chat only after its durable receipt`, async ({ page }, testInfo) => {
+    const app = await setup(page, true);
+    await page.getByRole('button', { name: 'Edit message', exact: true }).nth(first ? 0 : 1).click();
+    await page.locator('.message-edit-input').fill('Revised question');
+    await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
+    await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+    const sent = app.requests.find(r => r.method === 'agent.start').params;
+    const original = page.locator('.conversation-row[title="session-1"]');
+    await expect(original).toHaveCount(1);
+    expect(app.requests.filter(r => r.method === 'session.edit_commit')).toHaveLength(0);
+    const seq = first ? 1 : 4;
+    const committed = event(seq, 'user', { content: sent.task, submission_id: sent.submission_id });
+    app.notify('session.event', { session: sent.session, session_root: '/workspace/.openseek', sequence: seq, event: committed });
+    await expect(original).toHaveCount(0);
+    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+    await expect(page.locator('#transcript')).toContainText('Revised question');
+    expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
+    const cleanup = app.requests.find(r => r.method === 'session.edit_commit').params;
+    expect(cleanup).toMatchObject({ session: 'session-1', replacement: sent.session, submission_id: sent.submission_id, source_sequence: 8 });
+    expect(cleanup.force).toBeUndefined();
+    expect(app.pageErrors).toEqual([]);
+    if (!first) await page.screenshot({ path: testInfo.outputPath('edited-replacement.png') });
+  });
+}
+
+test('cleanup failure retains both chats and retries without another fork or prompt', async ({ page }, testInfo) => {
+  const app = await setup(page, true);
+  app.rpcErrors.set('session.edit_commit', 'Original conversation is busy');
+  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const sent = app.requests.find(r => r.method === 'agent.start').params;
+  app.notify('session.event', { session: sent.session, session_root: '/workspace/.openseek', sequence: 4,
+    event: event(4, 'user', { content: sent.task, submission_id: sent.submission_id }) });
+  await expect(page.getByRole('button', { name: 'Retry cleanup', exact: true })).toBeVisible();
+  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(1);
+  await page.screenshot({ path: testInfo.outputPath('edited-cleanup-retry.png') });
+  app.rpcErrors.delete('session.edit_commit');
+  await page.getByRole('button', { name: 'Retry cleanup', exact: true }).click();
+  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
+  await expect(page.locator('.edit-cleanup-notice')).toHaveCount(0);
+  expect(app.requests.filter(r => r.method === 'session.edit_prepare')).toHaveLength(1);
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
+  expect(app.requests.filter(r => r.method === 'session.edit_commit')).toHaveLength(2);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a snapshot recovers a missed edited receipt and preserves the composer draft during cleanup', async ({ page }) => {
+  const app = await setup(page, true);
+  await page.getByRole('button', { name: 'Edit message', exact: true }).nth(1).click();
+  await page.locator('.message-edit-input').fill('Recovered edit');
+  await page.locator('.message-editor').getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const sent = app.requests.find(r => r.method === 'agent.start').params;
+  await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+  const originalReply = app.replyFor.bind(app);
+  app.replyFor = request => {
+    if (request.method === 'session.load' && request.params.session === sent.session) {
+      const events = [...history.slice(0, 3), event(4, 'user', { content: sent.task, submission_id: sent.submission_id })];
+      return { session: { version: 1, id: sent.session, events }, watermark: 4, prediction: null };
+    }
+    return originalReply(request);
+  };
+  app.rpcErrors.set('session.edit_commit', 'Original conversation is busy');
+  await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+  await page.locator('.conversation-row[title="fork-session"] button.conversation-open').click();
+  await expect(page.getByRole('button', { name: 'Retry cleanup', exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Recovered edit');
+  const composer = page.locator('.composer textarea');
+  await composer.fill('Keep this follow-up draft');
+  app.rpcErrors.delete('session.edit_commit');
+  await page.getByRole('button', { name: 'Retry cleanup', exact: true }).click();
+  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveCount(0);
+  await expect(composer).toHaveValue('Keep this follow-up draft');
+  expect(app.requests.filter(r => r.method === 'session.edit_prepare')).toHaveLength(1);
+  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
