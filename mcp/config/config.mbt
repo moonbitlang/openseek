@@ -41,23 +41,32 @@ impl Show for ConfigError with fn output(self, logger) {
 
 ///|
 /// Decode the parsed configuration into the list of configured servers. Raises
-/// `ConfigError` when the shape is wrong. An empty or absent `mcpServers` is not
-/// an error at this layer — the caller decides whether zero servers is expected.
-pub fn decode(json : Json) -> Array[McpServer] raise {
+/// `ConfigError` when the shape is wrong. An empty `mcpServers` is allowed —
+/// the caller decides whether zero servers is expected.
+/// HTTP URLs and header values may reference `${VAR}` in the supplied
+/// environment. Values are expanded once; missing variables are errors.
+pub fn decode(
+  json : Json,
+  env~ : Map[String, String] = Map([]),
+) -> Array[McpServer] raise {
   guard json is { "mcpServers": Object(servers), .. } else {
     raise Invalid("configuration is missing an `mcpServers` object")
   }
   [
-    for name, entry in servers => decode_server(name, entry)
+    for name, entry in servers => decode_server(name, entry, env)
   ]
 }
 
 ///|
 /// Decode one server entry keyed by `name`: `"url"` marks a Streamable HTTP
 /// server, `"command"` a stdio one; exactly one of the two must be present.
-fn decode_server(name : String, entry : Json) -> McpServer raise {
+fn decode_server(
+  name : String,
+  entry : Json,
+  env : Map[String, String],
+) -> McpServer raise {
   if entry is { "url": _, .. } {
-    return decode_http_server(name, entry)
+    return decode_http_server(name, entry, env)
   }
   guard entry is { "command": String(command), .. } else {
     raise Invalid(
@@ -89,7 +98,11 @@ fn decode_server(name : String, entry : Json) -> McpServer raise {
 ///|
 /// Decode a Streamable HTTP server entry (its `url` key is already known to be
 /// present).
-fn decode_http_server(name : String, entry : Json) -> McpServer raise {
+fn decode_http_server(
+  name : String,
+  entry : Json,
+  env : Map[String, String],
+) -> McpServer raise {
   guard entry is { "url": String(url), .. } else {
     raise Invalid("server `\{name}`: `url` must be a string")
   }
@@ -99,7 +112,35 @@ fn decode_http_server(name : String, entry : Json) -> McpServer raise {
     )
   }
   let headers = decode_string_map(name, entry, "headers")
+  let url = expand_env(name, url, env)
+  let headers = headers.map((_, value) => expand_env(name, value, env))
   Http(name~, url~, headers~)
+}
+
+///|
+fn expand_env(
+  name : String,
+  text : String,
+  env : Map[String, String],
+) -> String raise ConfigError {
+  let out = StringBuilder()
+  let mut rest = text[:]
+  while rest.split_once("${") is Some((prefix, tail)) {
+    out.write_stringview(prefix)
+    guard tail.split_once("}") is Some((variable, suffix)) &&
+      !variable.is_empty() else {
+      raise Invalid("server `\{name}`: malformed environment reference")
+    }
+    guard env.get(variable.to_owned()) is Some(value) else {
+      raise Invalid(
+        "server `\{name}`: environment variable `\{variable}` is not set",
+      )
+    }
+    out.write_string(value)
+    rest = suffix
+  }
+  out.write_stringview(rest)
+  out.to_string()
 }
 
 ///|

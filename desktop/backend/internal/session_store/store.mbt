@@ -71,17 +71,34 @@ pub fn safe_session_id(session : String) -> Bool {
 }
 
 ///|
+/// Whether a session record directory is at `record`. A record that is not
+/// there is `false`; a probe that could not look — permission, I/O, a
+/// symlink loop — raises, because "no store holds this conversation" is an
+/// answer callers act on: they refuse the run, skip its worktree, or treat
+/// the id as free to start a second history.
+async fn record_present(record : @pathx.Absolute) -> Bool {
+  @fsx.is_dir(record.to_path()) catch {
+    error =>
+      raise StoreError(
+        "could not inspect the session record at \{record}: \{error}",
+      )
+  }
+}
+
+///|
 /// The registered workspace owning `session`, found by where the session's
 /// durable record lives (`<workspace>/.openseek/sessions/<id>`). The record's
 /// location is the mapping — there is no separate index to fall out of date.
-/// `None` when no attached workspace holds the record.
+/// `None` when no attached workspace holds the record; raises when a store
+/// could not be inspected, since the stores after it cannot settle whether
+/// the unreadable one holds the record.
 pub async fn workspace_of(session : String) -> @pathx.Absolute? {
   guard safe_session_id(session) else { return None }
   for workspace in @workspaces.registered() {
     let record = @workspaces.store_root(workspace)
       .join("sessions")
       .join(session)
-    if @fsx.is_dir(record.to_path()) {
+    if record_present(record) {
       return Some(workspace)
     }
   }
@@ -134,7 +151,7 @@ pub async fn ArchivedStore::for_workspace(workspace : String) -> ArchivedStore {
 pub async fn archived_root_of(session : String) -> @pathx.Absolute? {
   guard !session.is_empty() else { return None }
   for root in known_roots() {
-    if @fsx.is_dir(archived_root(root).join("sessions").join(session).to_path()) {
+    if record_present(archived_root(root).join("sessions").join(session)) {
       return Some(root)
     }
   }
@@ -150,7 +167,7 @@ pub async fn archived_root_of(session : String) -> @pathx.Absolute? {
 pub async fn live_root_of(session : String) -> @pathx.Absolute? {
   guard !session.is_empty() else { return None }
   for root in known_roots() {
-    if @fsx.is_dir(root.join("sessions").join(session).to_path()) {
+    if record_present(root.join("sessions").join(session)) {
       return Some(root)
     }
   }
@@ -197,7 +214,7 @@ pub async fn family_in(
   for candidate in entries {
     if candidate != session &&
       is_descendant(candidate, session) &&
-      @fsx.is_dir(sessions_dir.join(candidate).to_path()) {
+      record_present(sessions_dir.join(candidate)) {
       family.push(candidate)
     }
   }

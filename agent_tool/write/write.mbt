@@ -166,13 +166,14 @@ async fn write_file(
   }
   let write_scope = @permission.authorize(
     [path],
+    target_path=path,
     tool_name="write",
     arguments={ "path": path, "content": input.content },
     file_state~,
     write_scope?,
     approval?,
     reason?=if source_overwrite {
-      Some("overwrite an existing source file with the supplied full contents")
+      Some("overwrite existing source file")
     } else {
       None
     },

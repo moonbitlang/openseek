@@ -250,7 +250,7 @@ async test "operation approval permits a validated full source replacement but n
     let tool = @write.definition(
       approval=ApprovalChannel(ask => {
         asks.val += 1
-        assert_true(ask.detail.contains("overwrite an existing source file"))
+        assert_eq(ask.detail, "\{path} (overwrite existing source file)")
         assert_true(ask.body is Some(body) && body.contains("template.mbt"))
         AllowedOnce
       }),

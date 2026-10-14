@@ -1451,10 +1451,10 @@ async fn engine_process_env(
   } else {
     env.remove("OPENSEEK_API_URL")
   }
-  // The host's tools reach an agent as the `seekmoon` command, which finds
-  // the host and proves which conversation it speaks for from the grant in
-  // its environment. Everything the engine runs inherits it, so a sub-run or
-  // a background job acts for the conversation that started it. A host
+  // The engine's MCP HTTP client finds the host and proves which conversation
+  // it speaks for from the grant in its environment. Everything the engine
+  // runs inherits it, so a sub-run or a background job acts for the conversation
+  // that started it. A host
   // without tools grants nothing, and must not pass on a grant this process
   // itself inherited from another host's agent.
   match host_mcp {

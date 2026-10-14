@@ -17,7 +17,21 @@ async fn EngineManager::sweep_archived_deletions_in(
   root : @pathx.Absolute,
 ) -> Unit {
   let deleting = @session_store.deleting_root(root)
-  guard @fsx.is_dir(deleting.to_path()) else { return }
+  // A store whose condemned directory cannot be inspected is logged and
+  // skipped like any other sweep failure: it must not stop the sweep of the
+  // stores after it.
+  let present = @fsx.is_dir(deleting.to_path()) catch {
+    error => {
+      @xlog.warn() <?
+        {
+          "event": "desktop_archived_delete_sweep_failed",
+          "path": deleting.to_string(),
+          "error": "\{error}",
+        }
+      return
+    }
+  }
+  guard present else { return }
   self.archive_cleanup_lock.acquire()
   defer self.archive_cleanup_lock.release()
   let entries = @fs.readdir(

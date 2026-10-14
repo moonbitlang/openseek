@@ -14,17 +14,30 @@ fn fetch_projects(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      // A host without the op just reads as "no projects attached".
       let reply = @interop.bridge_request(
         channel,
         @commands.workspace_list,
         @protocol.EmptyPayload::NoPayload,
       ) catch {
-        _ => return
+        error => WorkspaceError(@interop.bridge_error_text(error))
       }
       // Translate the existing wire name at the protocol boundary; frontend
       // state consistently calls this registered directory list projects.
-      guard reply is Workspaces(listed, chat_root~) else { return }
+      let (listed, chat_root) = match reply {
+        Workspaces(listed, chat_root~) => (listed, chat_root)
+        WorkspaceError(message) => {
+          scheduler.add(
+            dispatch(
+              ProjectsLoadFailed(
+                message~,
+                connection_generation~,
+                request_generation~,
+              ),
+            ),
+          )
+          return
+        }
+      }
       let projects : Array[@common.Uri] = []
       for path in listed {
         guard @resource.of_path(channel, path) is Some(resource) else { return }
@@ -765,6 +778,47 @@ test "confirming registers the browsed directory and closes the picker" {
     opened,
   )
   assert_true(early.project_picker is Some(_))
+}
+
+///|
+test "a project list failure preserves inventory and pending additions" {
+  let dispatch = test_dispatch()
+  let picked = @interop.ChannelId::Local.test_resource("/new-project")
+  let model = confirmed_add(dispatch, picked).with_dev(dev => {
+    ..dev,
+    connection_generation: 2,
+    projects_request_generation: 3,
+  })
+  assert_true(model.pending_project_adoption is Some(_))
+  let message = ProjectsLoadFailed(
+    message="workspace list is malformed",
+    connection_generation=2,
+    request_generation=3,
+  )
+  let (_, next) = update_dev(dispatch, message, model)
+  let (_, repeated) = update_dev(dispatch, message, model)
+  assert_true(next == repeated)
+  assert_eq(next.notifications.length(), 1)
+  assert_eq(
+    next.notifications[0].message,
+    "Workspace error: workspace list is malformed",
+  )
+  assert_true(next.dev() == model.dev())
+  assert_true(next.conversations == model.conversations)
+  assert_true(next.pending_project_adoption == model.pending_project_adoption)
+  // A superseded request or connection must not display an obsolete error.
+  for (connection_generation, request_generation) in [(1, 3), (2, 2)] {
+    let (_, stale) = update_dev(
+      dispatch,
+      ProjectsLoadFailed(
+        message="obsolete failure",
+        connection_generation~,
+        request_generation~,
+      ),
+      model,
+    )
+    assert_true(stale == model)
+  }
 }
 
 ///|

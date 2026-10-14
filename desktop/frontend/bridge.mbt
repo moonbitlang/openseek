@@ -615,7 +615,7 @@ fn fetch_runs(
             run_id: item.run_id,
             tool_name: item.tool_name,
             detail: item.detail,
-            body: item.body,
+            body: approval_display_body(item.tool_name, item.body),
             // Replayed to a page that never sent a decision for it, so the
             // card comes back answerable. A decision this page sent before it
             // reloaded either reached the engine — and the question is gone

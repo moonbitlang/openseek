@@ -93,12 +93,25 @@ fn request(id : Int32, method_ : String, params : Json) -> Json {
 ///|
 async test "the engine's own MCP client lists and calls this server's tools" {
   with_server(server => {
-    let grant = grant(server, "s-interop")
+    let servers = @mcpconfig.decode(
+      {
+        "mcpServers": {
+          "seekmoon": {
+            "url": "${OPENSEEK_DESKTOP_TOOLS_URL}",
+            "headers": {
+              "Authorization": "Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}",
+            },
+          },
+        },
+      },
+      env=server.grant("s-interop"),
+    )
+    guard servers[0] is Http(url~, headers~, ..) else { fail("expected HTTP") }
     @async.with_task_group(group => {
       let connection = @streamhttp.connect(
         group,
-        url=grant.url,
-        headers={ "Authorization": grant.authorization },
+        url~,
+        headers~,
         client_name="openseek",
         client_version="test",
       )
@@ -118,6 +131,47 @@ async test "the engine's own MCP client lists and calls this server's tools" {
       )
       assert_true(failed.is_error)
       assert_eq(failed.render_text(), "the page is gone; open it again")
+    })
+  })
+}
+
+///|
+async test "HTTP clients select tool groups for discovery and calls" {
+  with_server(server => {
+    let grant = grant(server, "s-filtered")
+    @async.with_task_group(group => {
+      let connection = @streamhttp.connect(
+        group,
+        url=grant.url,
+        headers={
+          "Authorization": grant.authorization,
+          "X-SeekMoon-Tool-Groups": "browser, broken",
+        },
+        client_name="openseek",
+        client_version="test",
+      )
+      defer connection.shutdown()
+      let client = connection.client()
+      assert_eq(client.list_tools().map(tool => tool.name), [
+        "broken", "browser_get_text",
+      ])
+      let result = client.call_tool(name="browser_get_text", arguments={
+        "tab": 3,
+      })
+      assert_eq(result.render_text(), "s-filtered {\"tab\":3}")
+      // Use a raw call to check the protocol error for an excluded tool.
+      let (response, body) = @http.post(
+        grant.url,
+        request(9, "tools/call", { "name": "echo" }).stringify(),
+        headers={
+          "Authorization": grant.authorization,
+          "X-SeekMoon-Tool-Groups": "browser, broken",
+        },
+      )
+      assert_eq(response.code, 200)
+      assert_true(
+        body.json() is { "error": { "code": Number(-32602, ..), .. }, .. },
+      )
     })
   })
 }

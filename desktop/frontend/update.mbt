@@ -1391,7 +1391,7 @@ fn apply_engine_event(
             run_id: event_run_id,
             tool_name,
             detail,
-            body,
+            body: approval_display_body(tool_name, body),
             answered: false,
           }),
         },
@@ -7223,6 +7223,18 @@ fn update_device_msg(
         channel,
         model.replace_device({ ..dev, chat_root, }),
         paths,
+      )
+    }
+    ProjectsLoadFailed(message~, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.projects_request_generation else {
+        return (@cmd.none, model)
+      }
+      // A failed read preserves the last inventory and any independent add
+      // still waiting for its commit. Only mutation failures settle an add.
+      model.notify_error(
+        dispatch,
+        notice_text(model.locale, WorkspaceFailure(message)),
       )
     }
     ProjectsChanged(paths, chat_root~) => {

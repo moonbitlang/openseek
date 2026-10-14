@@ -54,9 +54,16 @@ pub async fn write_bytes(path : @pathx.Path, content : Bytes) -> Unit {
 }
 
 ///|
+/// Whether `path` names a directory. Only a path that is not there reads as
+/// `false`: ENOENT, or ENOTDIR from a file-shaped ancestor. Every other
+/// failure — permission, I/O, a symlink loop, an over-long name — raises, so
+/// a caller cannot mistake "could not look" for "nothing there" and act on
+/// an absence nobody observed.
 pub async fn is_dir(path : @pathx.Path) -> Bool {
   try @fs.kind(path.to_string()) catch {
-    _ => false
+    @os_error.OSError(_) as os_error if os_error.is_ENOENT() ||
+      os_error.is_ENOTDIR() => false
+    error => raise error
   } noraise {
     kind => kind is Directory
   }

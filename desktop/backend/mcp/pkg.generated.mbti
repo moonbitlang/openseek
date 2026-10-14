@@ -1,18 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "openseek_desktop/backend/mcp"
 
-import {
-  "moonbitlang/async/io",
-}
-
 // Values
-pub const McpCommand : String = "mcp"
-
 pub const TokenEnv : String = "OPENSEEK_DESKTOP_TOOLS_TOKEN"
 
 pub const UrlEnv : String = "OPENSEEK_DESKTOP_TOOLS_URL"
-
-pub async fn serve_stdio(Array[String], Map[String, String], &@io.Reader, &@io.Writer) -> CliOutcome
 
 // Errors
 pub suberror ServerError {
@@ -30,12 +22,6 @@ pub fn ToolError::to_string(Self) -> String
 pub impl Show for ToolError
 
 // Types and methods
-pub(all) struct CliOutcome {
-  code : Int
-  stdout : String
-  stderr : String
-}
-
 type Server
 pub async fn Server::Server(Array[Tool], version~ : String) -> Self
 pub fn Server::grant(Self, String) -> Map[String, String] raise ServerError

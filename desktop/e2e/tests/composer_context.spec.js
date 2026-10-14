@@ -35,10 +35,23 @@ test('context rows align and approval disclosure preserves draft focus and actio
   }
   const notify = event => app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event });
   notify({ event: 'subrun_started', id: 'review-1', kind: 'review', label: 'Review API changes' });
-  notify({ event: 'approval_requested', id: 'approval-context', tool_name: 'mbtx',
-    detail: 'run the test suite', body: 'fn main { println("Run tests") }' });
+  const content = '///|\nfn main {\n  println("<script>你好</script>")\n}\n';
+  notify({ event: 'approval_requested', id: 'approval-context', tool_name: 'write',
+    detail: '/workspace/src/parser.mbt (overwrite existing source file)',
+    body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }, null, 2) });
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
+  await expect(approval.locator('summary')).toContainText('write /workspace/src/parser.mbt (overwrite existing source file)');
+  const source = approval.locator('.composer-approval-body');
+  await expect(source).toBeVisible();
+  expect(await source.textContent()).toBe(content);
+  await expect(source.locator('script')).toHaveCount(0);
+  await expect(source.locator('.mtk3').filter({ hasText: /^fn$/ })).toBeVisible();
+  await expect(source.locator('.mtk5')).toHaveText('"<script>你好</script>"');
+  expect(await source.locator('.mtk3').first().evaluate(el => getComputedStyle(el).color))
+    .not.toBe(await source.locator('.mtk5').first().evaluate(el => getComputedStyle(el).color));
+  await approval.locator('summary').click();
+  await composer.fill('Draft while collapsed');
   await expect(approval.locator('.composer-approval-body')).toBeHidden();
   await expectAlignedRows(page);
   await capture(page, testInfo, 'context-collapsed');
@@ -66,6 +79,70 @@ test('context rows align and approval disclosure preserves draft focus and actio
   await expect(composer).toHaveValue('Keep this draft');
   expect(app.pageErrors).toEqual([]);
 });
+
+test('replayed write approvals decode content and preserve unrecognized bodies', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  const content = 'fn main {\n  println("recovered")\n}\n';
+  const replyFor = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'agent.runs' ? {
+    runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'ds-flash', max_steps: 1000 }],
+    settled: [],
+    approvals: [{ id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
+      tool_name: 'write', detail: '/workspace/src/parser.mbt (overwrite existing source file)',
+      body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }) }],
+  } : replyFor(request);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const approval = page.locator('.composer-approval');
+  const source = approval.locator('.composer-approval-body');
+  await expect(source).toBeVisible();
+  expect(await source.textContent()).toBe(content);
+  for (const [tool_name, body, expected] of [
+    ['write', '{"content":""}', ''],
+    ['write', '{"content":null}', '{"content":null}'],
+    ['write', 'malformed {', 'malformed {'],
+    ['mbtx', content, content],
+  ]) {
+    app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event: {
+      event: 'approval_requested', id: 'approval-fallback', tool_name,
+      detail: 'Inspect operation', body,
+    } });
+    await expect.poll(() => source.textContent()).toBe(expected);
+  }
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const [name, content, allow] of [
+  ['many short lines', 'x\n'.repeat(10_000) + '<script>你好</script>\n', false],
+  ['one long line', 'x '.repeat(20_000) + '<script>你好</script>', true],
+]) {
+  test(`large write approval preserves ${name} without token nodes`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    await page.locator('#task').fill('Start a turn');
+    await page.locator('#send').click();
+    app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event: {
+      event: 'approval_requested', id: 'approval-large', tool_name: 'write',
+      detail: '/workspace/generated.mbt (overwrite existing source file)',
+      body: JSON.stringify({ path: '/workspace/generated.mbt', content }),
+    } });
+    const approval = page.locator('.composer-approval');
+    const source = approval.locator('.composer-approval-body');
+    await expect(source).toBeVisible();
+    expect(await source.textContent()).toBe(content);
+    expect(await source.locator('code').evaluate(el => ({
+      elements: el.childElementCount, nodes: el.childNodes.length,
+    }))).toEqual({ elements: 0, nodes: 1 });
+    await page.locator('#task').fill('Draft while inspecting large content');
+    expect(await source.textContent()).toBe(content);
+    await approval.getByRole('button', { name: allow ? 'Allow once' : 'Deny', exact: true }).click();
+    await expect.poll(() => app.requests.find(r => r.method === 'agent.approval')?.params.allow).toBe(allow);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
 
 test('Codex questions and approvals expand and retain their responses', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);

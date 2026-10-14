@@ -571,7 +571,14 @@ pub fn endpoints(
     }),
     Endpoint(@commands.workspace_list, _ => {
       let chat_root = Some(@host.chat_workspace_root())
-      match @engine.list_workspaces() {
+      // An unreadable registry travels inside the reply, like an attach
+      // refusal: the page then shows why it has no workspaces instead of an
+      // empty list it would take for a fresh install.
+      let reply = @engine.list_workspaces() catch {
+        @workspaces.WorkspaceError(message) => WorkspaceError(message)
+        error => raise error
+      }
+      match reply {
         Workspaces(paths, ..) => Workspaces(paths, chat_root~)
         WorkspaceError(message) => WorkspaceError(message)
       }
