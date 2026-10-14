@@ -1,9 +1,6 @@
-// The pump that owns every PTY child: spawned in the host services' task
-// group (like the LSP and watcher pumps), it consumes `open_terminal`
-// requests and runs one task per session. The connection owner shuts down the
-// terminal state before its group ends, waking this pump and closing every
-// session. Each PTY belongs to its session's task group, which releases the
-// handles and stops the child when that session ends.
+// The app-lifetime pump owns PTY tasks. Connection tasks only forward retained
+// output; disconnecting them leaves shells running within a bounded grace
+// period. The output window applies backpressure when no renderer drains it.
 
 ///|
 /// Read PTY output in chunks this large; a typical child burst fits in one.
@@ -11,18 +8,43 @@ const ReadChunkBytes = 16384
 
 ///|
 /// Run terminal sessions until the state shuts down or this task is cancelled,
-/// forwarding every session's pushes through `emit`.
-pub async fn run_terminal_pump(
-  state : TerminalState,
-  emit : async (TerminalPush) -> Unit,
-) -> Unit {
+/// retaining output until an attached client acknowledges it.
+pub async fn run_terminal_pump(state : TerminalState) -> Unit {
+  defer state.shutdown()
   @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => {
+      while !state.closed {
+        @async.sleep(state.grace_ms.min(1000))
+        let now = @async.now()
+        for (id, session) in state.sessions.to_array() {
+          if (
+              session.detached_at is Some(since) &&
+              now - since >= state.grace_ms.to_int64()
+            ) ||
+            (
+              session.exited is Some((_, since)) &&
+              (session.closing || now - since >= state.grace_ms.to_int64())
+            ) {
+            session.close()
+            state.sessions.remove(id)
+            if session.owner is Some(owner) {
+              owner.sessions.remove(id)
+            }
+          }
+        }
+      }
+    })
     for ;; {
       let request = state.requests.get() catch {
         TerminalPumpClosed => return
         error => raise error
       }
-      group.spawn_bg(allow_failure=true, () => run_session(state, request, emit))
+      if state.sessions.length() + state.opening >= 128 {
+        request.reply.put(Err("too many terminal sessions"))
+        continue
+      }
+      state.opening += 1
+      group.spawn_bg(allow_failure=true, () => run_session(state, request))
     }
   })
 }
@@ -43,14 +65,18 @@ async fn TerminalSession::close_when_requested(
 /// One session's lifetime: spawn the PTY child, answer the opener, then loop
 /// reading output until the child exits (or `close_terminal` requests it),
 /// pausing whenever the flow-control debt passes the high watermark.
-async fn run_session(
-  state : TerminalState,
-  request : OpenRequest,
-  emit : async (TerminalPush) -> Unit,
-) -> Unit {
+async fn run_session(state : TerminalState, request : OpenRequest) -> Unit {
+  let mut reserved = true
+  defer (if reserved { state.opening -= 1 })
+  defer request.reply.close(
+    error=TerminalError("terminal open did not complete"),
+    clear=false,
+  )
   let mut opened_pty : @pty.Pty? = None
   @async.with_task_group(group => {
-    if request.connection_generation != state.connection_generation {
+    if state.closed ||
+      request.client.closed ||
+      request.generation != request.client.generation {
       let message = if state.closed {
         "terminal service is closed"
       } else {
@@ -61,6 +87,10 @@ async fn run_session(
     }
     guard request.argv.get(0) is Some(file) else {
       request.reply.put(Err("terminal command must not be empty"))
+      return
+    }
+    if request.client.sessions.length() >= 32 {
+      request.reply.put(Err("too many terminal sessions"))
       return
     }
     let args = request.argv[1:].map(arg => arg.view())
@@ -92,7 +122,9 @@ async fn run_session(
     }
     // Spawning suspends, so a reconnect can invalidate the request while the
     // child is being created. Close it before publishing a stale session.
-    if request.connection_generation != state.connection_generation {
+    if state.closed ||
+      request.client.closed ||
+      request.generation != request.client.generation {
       let message = if state.closed {
         "terminal service is closed"
       } else {
@@ -102,15 +134,32 @@ async fn run_session(
       group.return_immediately(())
       return
     }
+    if request.client.sessions.length() >= 32 {
+      request.reply.put(Err("too many attached terminals"))
+      group.return_immediately(())
+      return
+    }
     let session : TerminalSession = {
       pty,
+      write_guard: Mutex(),
+      last_owner_key: request.client.key,
       output: { unacked: 0, chunks: Deque([]), next_sequence: 1, },
       cond: Cond(),
       close_requested: Queue(kind=Blocking(1)),
       closing: false,
+      retained: Deque([]),
+      owner: Some(request.client),
+      detached_at: None,
+      exited: None,
     }
+    state.opening -= 1
+    reserved = false
     state.sessions[request.id] = session
-    defer state.sessions.remove(request.id)
+    request.client.sessions[request.id] = {
+      session,
+      sent: 0,
+      exit_sent: false,
+    }
     opened_pty = Some(pty)
     request.reply.put(Ok(()))
     @xlog.debug() <?
@@ -139,8 +188,15 @@ async fn run_session(
         // Record the debt before emitting: the webview can acknowledge as soon
         // as it receives the event, including before this task resumes.
         let sequence = session.output.record(n)
-        emit(Output(id=request.id, sequence~, data=Bytes::from_array(buf[:n])))
-        while session.output.unacked >= HighWatermark && !session.closing {
+        session.retained.push_back((sequence, Bytes::from_array(buf[:n])))
+        if session.owner is Some(owner) {
+          owner.changed.broadcast()
+        }
+        while (
+                session.output.unacked >= HighWatermark ||
+                session.retained.length() >= 4096
+              ) &&
+              !session.closing {
           session.cond.wait()
         }
       }
@@ -159,7 +215,12 @@ async fn run_session(
   // now closed.
   let code = pty.wait() catch { _ => -1 }
   @xlog.debug() <? { "event": "terminal_exit", "id": request.id, "code": code }
-  emit(Exited(id=request.id, code~))
+  if state.sessions.get(request.id) is Some(session) {
+    session.exited = Some((code, @async.now()))
+    if session.owner is Some(owner) {
+      owner.changed.broadcast()
+    }
+  }
 }
 
 ///|

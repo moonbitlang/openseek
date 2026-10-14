@@ -7,12 +7,17 @@
 async test "a default session launches a live platform shell" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes : @async.Queue[@terminal.TerminalPush] = Queue(kind=Unbounded)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
-    let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
+    let id = @terminal.open_terminal(state, client, cwd=".", cols=80, rows=24)
     // "Still running after its first output" is the property under test. The
     // timeout is generous because a real POSIX login shell runs the user's
     // profile (a slow one is not a failure); an early exit fails through the
@@ -34,7 +39,7 @@ async test "a default session launches a live platform shell" {
         }
       }
     })
-    @terminal.close_terminal(state, id~)
+    @terminal.close_terminal(client, id~)
     // Windows keeps ConPTY's output pipe open after cmd.exe alone is killed.
     // Requiring `Exited` proves terminal close also cancels the pending pipe
     // read, allowing the session to reach its final PTY cleanup.
@@ -54,14 +59,20 @@ async test "a default session launches a live platform shell" {
 async test "a session whose cwd does not exist fails while opening" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes : @async.Queue[@terminal.TerminalPush] = Queue(kind=Unbounded)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
     let failed = try {
       let _ = @terminal.open_terminal(
         state,
+        client,
         cwd="/nonexistent/openseek-terminal-test",
         cols=80,
         rows=24,

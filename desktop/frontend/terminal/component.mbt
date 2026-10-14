@@ -5,8 +5,7 @@ struct Input {
   ctx : Ctx
   live_channels : Array[@interop.ChannelId]
   // Stays true while a channel reconnects; only a device-less (signed-out)
-  // console closes the panel. `live_channels` separately retires the dead PTY
-  // generation.
+  // console closes the panel. `live_channels` drives detach and reattachment.
   has_devices : Bool
 } derive(Eq)
 
@@ -22,7 +21,7 @@ pub fn Input::Input(
 ///|
 /// A signed-out console has no devices. Close the panel at that ownership
 /// boundary, but preserve the user's visibility choice while retained devices
-/// reconnect; their old PTYs are still retired through `live_channels`
+/// reconnect; their PTYs and emulators survive through `live_channels`
 /// reconciliation.
 fn State::close_without_devices(self : State, has_devices : Bool) -> State {
   if has_devices {
@@ -50,6 +49,35 @@ pub fn State::reconcile(
       state = next
     }
   }
+  if !input.has_devices {
+    for tab in state.tabs {
+      if tab.abandoned(dispatch) is Some(report) {
+        commands.push(report)
+      }
+      commands.push(dispose_tab(tab.key))
+    }
+    state = { ..State::empty(), open: false, }
+  }
+  let tabs = state.tabs.map(tab => {
+    if tab.status is TabDisconnected &&
+      !self.live_channels.contains(tab.workspace.channel()) &&
+      input.live_channels.contains(tab.workspace.channel()) &&
+      tab.id is Some(id) {
+      commands.push(
+        reattach_session(
+          dispatch,
+          tab.workspace.channel(),
+          tab.key,
+          id,
+          tab.connection_generation,
+        ),
+      )
+      { ..tab, status: TabAttaching, }
+    } else {
+      tab
+    }
+  })
+  state = { ..state, tabs, }
   state = state.close_without_devices(input.has_devices)
   let (state, sync_command) = sync(dispatch, state, input.ctx)
   commands.push(sync_command)

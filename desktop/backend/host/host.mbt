@@ -1,6 +1,6 @@
 // Transport-agnostic host operations: file browsing, language services,
-// skills, self-update, app launching, and connection-owned filesystem/PTY
-// state. Typed payloads enter here only after an Endpoint has decoded them.
+// skills, self-update, app launching, connection-owned filesystem state, and
+// host-owned PTYs. Typed payloads enter here only after an Endpoint has decoded them.
 
 ///|
 /// A host-side failure with a user-facing message. Ops raise it; the
@@ -46,18 +46,18 @@ struct HostState {
   /// The host's bundled files; `None` when it was started with none, and
   /// every tool then comes from PATH.
   resources : @resources.Resources?
+  terminals : @terminal.TerminalState
 }
 
 ///|
-/// State owned by one client connection. A desktop page and each remote
-/// WebSocket create separate values, so filesystem watches and PTY sessions
-/// cannot leak into another client.
+/// State owned by one client connection. Filesystem watches are private to
+/// the transport; terminals are attachments to the host-owned PTY service.
 struct HostConnection {
   fs_watch : FsWatchActor
   file_search : FileSearchService
   text_search : TextSearchService
   semantic_search : SemanticSearchService
-  terminal : @terminal.TerminalState
+  terminal : @terminal.TerminalClient
 }
 
 ///|
@@ -67,7 +67,7 @@ pub fn HostConnection::HostConnection() -> HostConnection {
     file_search: FileSearchService(),
     text_search: TextSearchService(),
     semantic_search: SemanticSearchService(),
-    terminal: @terminal.new_terminal_state(),
+    terminal: TerminalClient(),
   }
 }
 
@@ -91,17 +91,19 @@ pub fn new_host_state(
     moon: MoonCliState(engine, runtime_dir?),
     updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
+    terminals: @terminal.new_terminal_state(),
   }
 }
 
 ///|
 /// The background tasks behind the host ops, spawned into the caller's
 /// app-lifetime task group: the moon-check diagnostics forwarder and the
-/// self-update pump with its startup leftover sweep. These are shared by
+/// self-update pump with its startup leftover sweep, and the terminal service.
+/// These are shared by
 /// every connection;
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
-/// Every background task is best-effort: a language-service hiccup degrades
-/// that feature, never the connection.
+/// Language-service and update failures degrade only those features; the
+/// terminal service remains a required part of the host's task group.
 pub fn[G] spawn_host_pumps(
   group : @async.TaskGroup[G],
   state : HostState,
@@ -119,10 +121,11 @@ pub fn[G] spawn_host_pumps(
     })
   })
   group.spawn_bg(allow_failure=true, () => state.updates.run(emit))
+  group.spawn_bg(() => @terminal.run_terminal_pump(state.terminals))
 }
 
 ///|
-/// Run the filesystem watcher and PTY pump owned by this connection. Their
+/// Run the filesystem watcher and terminal output delivery for this connection. Their
 /// notifications return only to the same transport instead of entering the
 /// process-wide hub.
 pub async fn HostConnection::run(
@@ -131,11 +134,10 @@ pub async fn HostConnection::run(
   emit_progress : async (@protocol.Notification) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
-    // Closing the request queue is the terminal pump's normal connection-end
-    // signal. It must not be tied to the page-reload session sweep below.
-    defer self.terminal.shutdown()
-    group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(self.terminal, push => {
+    // Losing the transport detaches terminals while the host pump keeps them.
+    defer self.terminal.detach()
+    group.spawn_bg(() => {
+      self.terminal.run(push => {
         match push {
           Output(id~, sequence~, data~) => {
             let payload : TerminalOutputPayload = {
@@ -191,8 +193,8 @@ pub async fn HostConnection::run(
 
 ///|
 /// A desktop page reload cannot reclaim its old emulator instances. Retire
-/// those PTYs before attaching the new page; WebSocket-owned sessions are
-/// cancelled automatically with their connection task group.
+/// those PTYs before attaching the new page. Network disconnects instead
+/// detach sessions for later reattachment within the grace period.
 pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
   @terminal.close_all_terminals(self.terminal)
 }
@@ -277,6 +279,17 @@ pub fn endpoints(
     }),
     Endpoint(@commands.terminal_open, payload => {
       terminal_open_op(state, connection.terminal, payload)
+    }),
+    @endpoint.Endpoint::sync(@commands.terminal_attach, payload => {
+      let attached = @terminal.attach_terminal(
+        state.terminals,
+        connection.terminal,
+        id=payload.id,
+        sequence=payload.sequence,
+      ) catch {
+        TerminalError(message) => raise HostError(message)
+      }
+      { attached, }
     }),
     Endpoint(@commands.terminal_input, payload => {
       terminal_input_op(connection.terminal, payload)

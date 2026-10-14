@@ -112,76 +112,105 @@ test "a later terminal acknowledgement advances the output window" {
 ///|
 priv struct TerminalSession {
   pty : @pty.Pty
+  write_guard : @async.Mutex
+  mut last_owner_key : Int64
   output : TerminalOutputWindow
-  /// Wakes the session's read loop when acknowledgements drain the debt or
-  /// the session starts closing.
+  retained : @deque.Deque[(Int32, Bytes)]
   cond : @cond_var.Cond
-  /// Carries the one shutdown request to the session task. Process
-  /// cancellation is async, so the synchronous host op only signals here.
   close_requested : @async.Queue[Unit]
   mut closing : Bool
+  mut owner : TerminalClient?
+  mut detached_at : Int64?
+  mut exited : (Int32, Int64)?
+}
+
+///|
+priv struct TerminalDelivery {
+  session : TerminalSession
+  mut sent : Int32
+  mut exit_sent : Bool
+}
+
+///|
+/// A transport's attachment to host-owned terminals. Its teardown detaches
+/// shells; it never owns the tasks running those shells.
+struct TerminalClient {
+  key : Int64
+  sessions : Map[String, TerminalDelivery]
+  changed : @cond_var.Cond
+  mut closed : Bool
+  mut generation : Int32
+}
+
+///|
+let next_client_key : Ref[Int64] = Ref(0)
+
+///|
+pub fn TerminalClient::TerminalClient() -> TerminalClient {
+  next_client_key.val += 1
+  {
+    key: next_client_key.val,
+    sessions: Map([]),
+    changed: Cond(),
+    closed: false,
+    generation: 0,
+  }
 }
 
 ///|
 priv struct OpenRequest {
   id : String
-  /// The page connection that submitted this request. A later connect
-  /// handshake invalidates it even if the pump has already dequeued it.
-  connection_generation : Int32
+  client : TerminalClient
+  generation : Int32
   argv : Array[String]
-  /// The directory passed directly to the PTY process spawn.
   cwd : String
   cols : Int32
   rows : Int32
-  /// Spawn outcome for the waiting `open_terminal` call.
   reply : @async.Queue[Result[Unit, String]]
 }
 
 ///|
-/// The terminal subsystem's shared state: the pump's mailbox of pending
-/// spawns, the table of live sessions, and the current page connection.
+/// Host-lifetime owner. Terminal ids are unguessable capabilities, returned
+/// only on an authenticated command channel; ordinary operations still require
+/// an attachment on that channel. A new channel must explicitly attach.
 struct TerminalState {
   requests : @async.Queue[OpenRequest]
   sessions : Map[String, TerminalSession]
-  /// Once closed, this state cannot serve another connection. Page reconnects
-  /// use `close_all_terminals` instead and leave the pump available.
+  grace_ms : Int32
   mut closed : Bool
-  /// Incremented by the connect handshake so opens from an older page cannot
-  /// publish a session after that page has gone away.
-  mut connection_generation : Int32
+  mut opening : Int32
 }
 
 ///|
-pub fn new_terminal_state() -> TerminalState {
+pub fn new_terminal_state(grace_ms~ : Int32 = 300_000) -> TerminalState {
   {
-    requests: Queue(kind=Unbounded),
+    requests: Queue(kind=Blocking(16)),
     sessions: Map([]),
+    grace_ms: grace_ms.max(1),
     closed: false,
-    connection_generation: 0,
+    opening: 0,
   }
 }
 
 ///|
-/// Open a terminal session in `cwd` and return its id once the child is
-/// running. Without `command`, POSIX launches `$SHELL -l` and Windows launches
-/// `%COMSPEC%`; with it, that argv runs directly in the session's PTY instead.
-/// Requires `run_terminal_pump` to be running (the host services' task
-/// group), otherwise the call waits until it is. A permanently shut down state
-/// rejects the request instead of leaving its caller parked.
 pub async fn open_terminal(
   state : TerminalState,
+  client : TerminalClient,
   cwd~ : String,
   cols~ : Int32,
   rows~ : Int32,
   command? : Array[String],
 ) -> String {
-  guard !state.closed else { raise TerminalError("terminal service is closed") }
+  guard !state.closed && !client.closed else {
+    raise TerminalError("terminal service is closed")
+  }
   let argv = session_argv(command?)
   let id = @uuid.mint()
   let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
   state.requests.put({
     id,
-    connection_generation: state.connection_generation,
+    client,
+    generation: client.generation,
     argv,
     cwd,
     cols,
@@ -198,14 +227,74 @@ pub async fn open_terminal(
 }
 
 ///|
-/// Write user input (already encoded as terminal input bytes) to a session.
-pub async fn write_terminal(
+fn TerminalClient::session(
+  self : TerminalClient,
+  id : String,
+) -> TerminalSession raise TerminalError {
+  guard !self.closed &&
+    self.sessions.get(id) is Some(delivery) &&
+    delivery.session.owner is Some(owner) &&
+    owner.key == self.key else {
+    raise TerminalError("terminal is not attached to this connection")
+  }
+  delivery.session
+}
+
+///|
+/// Reattach a surviving PTY, retaining the frontend's existing emulator.
+/// `sequence` is the last chunk already accepted by that emulator. A missing
+/// session (expiry or host restart) is distinct from an invalid cursor/owner.
+pub fn attach_terminal(
   state : TerminalState,
+  client : TerminalClient,
+  id~ : String,
+  sequence~ : Int32,
+) -> Bool raise TerminalError {
+  guard !state.closed && !client.closed else {
+    raise TerminalError("terminal service is closed")
+  }
+  guard state.sessions.get(id) is Some(session) && !session.closing else {
+    return false
+  }
+  if client.key < session.last_owner_key {
+    raise TerminalError("a newer connection already owns this terminal")
+  }
+  let first = session.output.next_sequence - session.retained.length()
+  guard sequence >= first - 1 && sequence < session.output.next_sequence else {
+    raise TerminalError("terminal output cursor is outside the retained window")
+  }
+  if client.sessions.length() >= 32 && !client.sessions.contains(id) {
+    raise TerminalError("too many attached terminals")
+  }
+  // A half-open socket may not have noticed network loss yet. A newer
+  // authenticated connection holding the capability can take over; stale
+  // requests from the old connection cannot move the session back.
+  if session.owner is Some(owner) && owner.key != client.key {
+    owner.sessions.remove(id)
+    owner.changed.broadcast()
+  }
+  session.last_owner_key = client.key
+  session.owner = Some(client)
+  session.detached_at = None
+  client.sessions[id] = { session, sent: sequence, exit_sent: false, }
+  ack_terminal(client, id~, sequence~)
+  client.changed.broadcast()
+  true
+}
+
+///|
+pub async fn write_terminal(
+  client : TerminalClient,
   id~ : String,
   data : Bytes,
 ) -> Unit {
-  guard state.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
+  let session = client.session(id)
+  session.write_guard.acquire()
+  defer session.write_guard.release()
+  // Ownership can change while waiting for a write from the old connection.
+  ignore(client.session(id))
+  guard !session.closing && session.exited is None else {
+    raise TerminalError("terminal has exited")
   }
   session.pty.write(data) catch {
     error => raise TerminalError(@debug.render(Repr(error)))
@@ -213,75 +302,128 @@ pub async fn write_terminal(
 }
 
 ///|
-/// Propagate a webview-side viewport change to the PTY.
 pub fn resize_terminal(
-  state : TerminalState,
+  client : TerminalClient,
   id~ : String,
   cols~ : Int32,
   rows~ : Int32,
 ) -> Unit raise {
-  guard state.sessions.get(id) is Some(session) else {
-    raise TerminalError("terminal \{id} is not open")
-  }
+  let session = client.session(id)
   session.pty.resize(cols~, rows~) catch {
     error => raise TerminalError("terminal resize failed: \{error}")
   }
 }
 
 ///|
-/// Acknowledge every output chunk through the latest sequence the webview has
-/// rendered. A later acknowledgement covers an earlier request that failed to
-/// reach the host; duplicates and out-of-order older requests remain no-ops.
 pub fn ack_terminal(
-  state : TerminalState,
+  client : TerminalClient,
   id~ : String,
   sequence~ : Int32,
 ) -> Unit {
-  guard state.sessions.get(id) is Some(session) else { return }
-  if session.output.acknowledge_through(sequence) {
-    session.cond.signal()
+  let session = client.session(id) catch { _ => return }
+  if sequence >= session.output.next_sequence {
+    return
   }
-}
-
-///|
-/// Request a session's shutdown. Its owning task group cancels the PTY wait and
-/// output tasks together; the PTY then closes its controlling handle, allows a
-/// bounded graceful exit, and releases its native resources before `Exited`.
-/// Unknown ids are a no-op (already exited).
-pub fn close_terminal(state : TerminalState, id~ : String) -> Unit {
-  guard state.sessions.get(id) is Some(session) else { return }
-  guard !session.closing else { return }
-  session.closing = true
+  ignore(session.output.acknowledge_through(sequence))
+  while session.retained.front() is Some((seq, _)) && seq <= sequence {
+    ignore(session.retained.pop_front())
+  }
   session.cond.broadcast()
-  // A full or closed queue means the only shutdown request is already being
-  // handled, so repeated close operations remain harmless.
-  ignore(session.close_requested.try_put(()) catch { _ => false })
 }
 
 ///|
-/// Retire every live session and invalidate every open requested by an older
-/// page. A freshly (re)loaded page cannot reclaim the old page's terminal
-/// tabs, including requests the pump has not published as sessions yet.
-pub fn close_all_terminals(state : TerminalState) -> Unit {
-  // Incrementing before the live-session sweep also covers requests that the
-  // pump dequeued but whose PTY spawn has not completed.
-  state.connection_generation += 1
-  // Materialized: teardown mutates the table as sessions unwind.
-  for id in state.sessions.keys().to_array() {
-    close_terminal(state, id~)
+fn TerminalSession::close(self : TerminalSession) -> Unit {
+  if !self.closing {
+    self.closing = true
+    self.cond.broadcast()
+    ignore(self.close_requested.try_put(()) catch { _ => false })
   }
 }
 
 ///|
-/// Permanently stop this connection's terminal subsystem. Pending open calls
-/// are rejected before the request queue closes, so neither they nor an idle
-/// pump remain parked. Repeated shutdown calls are harmless.
+pub fn close_terminal(client : TerminalClient, id~ : String) -> Unit {
+  let session = client.session(id) catch { _ => return }
+  session.close()
+  if session.exited is Some(_) {
+    client.sessions.remove(id)
+  }
+}
+
+///|
+/// Explicit page replacement closes that page's terminals. Network loss uses
+/// detach instead. Invalidate queued spawns as well as materialized sessions.
+pub fn close_all_terminals(client : TerminalClient) -> Unit {
+  client.generation += 1
+  for delivery in client.sessions.values().to_array() {
+    delivery.session.close()
+  }
+}
+
+///|
+pub fn TerminalClient::detach(self : TerminalClient) -> Unit {
+  if self.closed {
+    return
+  }
+  self.closed = true
+  self.generation += 1
+  for delivery in self.sessions.values() {
+    let session = delivery.session
+    if session.owner is Some(owner) && owner.key == self.key {
+      session.owner = None
+      session.detached_at = Some(@async.now())
+    }
+  }
+  self.sessions.clear()
+  self.changed.broadcast()
+}
+
+///|
+/// Forward retained output in sequence order. Only this connection task may
+/// suspend on the transport; a lost/slow socket cannot cancel a PTY reader.
+pub async fn TerminalClient::run(
+  self : TerminalClient,
+  emit : async (TerminalPush) -> Unit,
+) -> Unit {
+  defer self.detach()
+  while !self.closed {
+    let mut progressed = false
+    for (id, delivery) in self.sessions.to_array() {
+      let session = delivery.session
+      guard session.owner is Some(owner) && owner.key == self.key else {
+        continue
+      }
+      if session.retained.iter().find_first(chunk => chunk.0 > delivery.sent)
+        is Some((sequence, data)) {
+        delivery.sent = sequence
+        emit(Output(id~, sequence~, data~))
+        // A transport emitter may only enqueue, without suspending. Let its
+        // writer drain between replay records instead of overflowing a healthy
+        // socket's bounded queue in one uninterrupted replay loop.
+        @async.pause()
+        progressed = true
+      } else if !delivery.exit_sent && session.exited is Some((code, _)) {
+        delivery.exit_sent = true
+        emit(Exited(id~, code~))
+        @async.pause()
+        progressed = true
+      }
+    }
+    if !progressed && !self.closed {
+      self.changed.wait()
+    }
+  }
+}
+
+///|
 pub fn TerminalState::shutdown(self : TerminalState) -> Unit {
   guard !self.closed else { return }
   self.closed = true
-  close_all_terminals(self)
-  // A request still in this queue has an opener blocked on its private reply.
-  // Close that reply explicitly before removing the pump's only route to it.
+  for session in self.sessions.values() {
+    session.close()
+    if session.owner is Some(owner) {
+      owner.detach()
+    }
+  }
   while (self.requests.try_get() catch { _ => None }) is Some(request) {
     request.reply.close(
       error=TerminalError("terminal service is closed"),

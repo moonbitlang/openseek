@@ -9,8 +9,8 @@
 // A tab never migrates: it is bound at creation to the conversation and
 // workspace it was opened for, and a restart after its shell exits reuses
 // that binding. Sessions end when their child exits, when the user closes
-// the tab or restarts it, or when its owning connection disconnects (the host
-// tears that connection's task group down).
+// the tab, or when a disconnected session expires on the host. Network loss
+// preserves the emulator and session id for reattachment.
 //
 // A command tab runs one `!` command from the composer instead of a shell.
 // It is an ordinary session in every other respect — the user can watch it,
@@ -52,6 +52,7 @@ fn open_new_tab(
     status: TabOpening,
     command,
     input: InputQueue::empty(),
+    connection_generation: 0,
   }
   let state = { ..state, tabs: state.tabs + [tab], }
   let mount = @cmd.batch([
@@ -120,7 +121,7 @@ fn Tab::awaits_session(self : Tab, checkout_ready : Bool) -> Bool {
 /// and for a command tab that already reported.
 fn Tab::abandoned(self : Tab, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd? {
   guard self.command is Some(command) &&
-    self.status is (TabOpening | TabRunning) else {
+    self.status is (TabOpening | TabRunning | TabDisconnected | TabAttaching) else {
     return None
   }
   Some(report_command(dispatch, self.key, command.shell, None))
@@ -332,7 +333,10 @@ fn update(
         guard state.tab_by_key(key) is Some(tab) &&
           tab.workspace.channel() == channel &&
           tab.status is TabOpening else {
-          return (drop_pending(id), state)
+          return (
+            @cmd.batch([send_close(channel, id), drop_pending(id)]),
+            state,
+          )
         }
         match tab.command {
           // A quick command (`true`, `ls`) is exactly this race. Its output
@@ -341,6 +345,7 @@ fn update(
           Some(command) =>
             (
               @cmd.batch([
+                send_close(channel, id),
                 flush_pending(key, id),
                 report_command(dispatch, key, command.shell, exit_code_of(code)),
               ]),
@@ -348,6 +353,7 @@ fn update(
             )
           None => {
             let (cmds, state) = drop_tab(state, ctx, key)
+            cmds.push(send_close(channel, id))
             cmds.push(drop_pending(id))
             (@cmd.batch(cmds), state)
           }
@@ -372,7 +378,7 @@ fn update(
       match state.tab_by_key(key) {
         // Nothing ran, so there is no screen worth keeping: the tab goes and
         // the command is handed back.
-        Some({ command: Some(command), .. }) => {
+        Some({ command: Some(command), status: TabOpening, .. }) => {
           let (cmds, state) = retire_command_tab(state, ctx, key)
           cmds.push(dispatch(CommandNotStarted(shell=command.shell, message~)))
           (@cmd.batch(cmds), state)
@@ -404,6 +410,62 @@ fn update(
         state
       }
       (cmd, state.replace_tab(tab))
+    }
+    Reattached(channel~, id~, key~, generation~, result~) => {
+      // Closing a tab can race attachment on the new connection. Retire the
+      // accepted attachment when its tab is gone, just like a late open.
+      if state.tab_by_key(key) is None {
+        return (
+          if result is Ok(true) {
+            send_close(channel, id)
+          } else {
+            @cmd.none
+          },
+          state,
+        )
+      }
+      guard state.tab_by_key(key) is Some(tab) &&
+        tab.status is TabAttaching &&
+        tab.id == Some(id) &&
+        tab.workspace.channel() == channel &&
+        tab.connection_generation == generation else {
+        return (@cmd.none, state)
+      }
+      let status = match result {
+        Ok(true) => TabRunning
+        Ok(false) =>
+          TabFailed(
+            message="The terminal session expired or the host restarted. Close it and open a new one.",
+          )
+        Err(ConnectionLost) => TabDisconnected
+        Err(WriteFailed(message)) =>
+          TabFailed(message="Could not reconnect to the terminal: " + message)
+      }
+      let tab = {
+        ..tab,
+        status,
+        input: if status is TabRunning {
+          InputQueue::empty()
+        } else {
+          tab.input
+        },
+      }
+      let command = if status is TabFailed(..) && tab.command is Some(command) {
+        report_command(dispatch, key, command.shell, None)
+      } else {
+        @cmd.none
+      }
+      (
+        @cmd.batch([
+          command,
+          if status is TabRunning {
+            refit_tab(tab.workspace.channel(), key, tab.id)
+          } else {
+            @cmd.none
+          },
+        ]),
+        state.replace_tab(tab),
+      )
     }
     InputSettled(key~, id~, token~, result~) =>
       finish_input(dispatch, state, key, id, token, result)
@@ -453,13 +515,22 @@ fn update(
         // its session id spent, until the report has read its screen.
         Some({ command: Some(command), .. } as tab) =>
           (
-            report_command(dispatch, tab.key, command.shell, exit_code_of(code)),
+            @cmd.batch([
+              send_close(channel, id),
+              report_command(
+                dispatch,
+                tab.key,
+                command.shell,
+                exit_code_of(code),
+              ),
+            ]),
             state.replace_tab({ ..tab, id: None, status: TabExited(code~), }),
           )
         // The shell ended (Ctrl+D, `exit`, or a crash): its tab retires,
         // and the visible group's last tab takes the panel with it.
         Some(tab) => {
           let (cmds, state) = drop_tab(state, ctx, tab.key)
+          cmds.push(send_close(channel, id))
           (@cmd.batch(cmds), state)
         }
         None =>
@@ -499,42 +570,51 @@ fn update(
 }
 
 ///|
-/// Retire all tabs owned by one dead connection. The host tears down that
-/// connection's PTYs before the browser dials again; UUID identities make
-/// delayed lifecycle messages unable to match replacement tabs.
+/// Keep the emulator and PTY identity while the transport reconnects. Input
+/// with uncertain delivery, including its unsent tail, is never replayed.
 fn disconnect(
   dispatch : @cmd.Emit[Msg],
   state : State,
   channel : @interop.ChannelId,
 ) -> (@cmd.Cmd, State) {
   let commands : Array[@cmd.Cmd] = [term_host.clear_pending(channel)]
-  let retired_keys : Array[String] = []
-  for tab in state.tabs {
-    if tab.workspace.channel() == channel {
-      retired_keys.push(tab.key)
-      if tab.abandoned(dispatch) is Some(report) {
-        commands.push(report)
-      }
-      commands.push(dispose_tab(tab.key))
+  let tabs = state.tabs.map(tab => {
+    if tab.workspace.channel() != channel {
+      return tab
     }
-  }
-  let shown = match state.shown {
-    Some(key) if retired_keys.contains(key) => None
-    shown => shown
-  }
+    if tab.id is Some(_) &&
+      tab.status is (TabRunning | TabAttaching | TabDisconnected) {
+      {
+        ..tab,
+        status: TabDisconnected,
+        connection_generation: tab.connection_generation + 1,
+        input: { ..InputQueue::empty(), failure: Some(Reconnecting), },
+      }
+    } else if tab.status is TabOpening {
+      if tab.command is Some(command) {
+        commands.push(report_command(dispatch, tab.key, command.shell, None))
+      }
+      {
+        ..tab,
+        status: TabFailed(
+          message="Connection lost while opening the terminal. Close it and open a new one.",
+        ),
+        input: InputQueue::empty(),
+      }
+    } else {
+      tab
+    }
+  })
   (
     @cmd.batch(commands),
     {
       ..state,
-      interrupted_channels: if !retired_keys.is_empty() &&
-        !state.interrupted_channels.contains(channel) {
-        state.interrupted_channels + [channel]
-      } else {
+      tabs,
+      interrupted_channels: if state.interrupted_channels.contains(channel) {
         state.interrupted_channels
+      } else {
+        state.interrupted_channels + [channel]
       },
-      tabs: state.tabs.filter(tab => tab.workspace.channel() != channel),
-      active: state.active.filter(entry => entry.0.channel() != channel),
-      shown,
       exited_before_open: state.exited_before_open.filter(owner => {
         owner.0 != channel
       }),

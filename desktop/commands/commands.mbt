@@ -946,3 +946,9 @@ pub let session_fork : Command[
   @protocol.SessionForkPayload,
   @protocol.SessionForkReply,
 ] = Command("session.fork")
+
+///|
+pub let terminal_attach : Command[
+  @protocol.TerminalAttachPayload,
+  @protocol.TerminalAttachReply,
+] = Command("terminal.attach")

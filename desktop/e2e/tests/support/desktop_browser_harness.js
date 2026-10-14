@@ -671,6 +671,8 @@ export class DesktopBrowserHarness {
         return { accepted: true };
       case 'agent.steer':
         return { steered: true, run_id: request.params?.run_id };
+      case 'terminal.attach':
+        return { attached: true };
       case 'terminal.open':
         // One id per session, in open order, so a spec can address the PTY
         // it expects (`terminal-1` is the first one this page opened).

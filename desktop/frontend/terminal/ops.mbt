@@ -154,3 +154,54 @@ fn send_close(channel : @interop.ChannelId, id : String) -> @cmd.Cmd {
     |> ignore
   })
 }
+
+///|
+fn reattach_session(
+  dispatch : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  key : String,
+  id : String,
+  generation : Int32,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    guard term_host.entries.get(key) is Some(entry) else { return }
+    let sequence = entry.received
+    @js.Promise::from_async(() => {
+      let result = try {
+        let reply = @interop.bridge_request(
+          channel,
+          @commands.terminal_attach,
+          { id, sequence, },
+        )
+        Ok(reply.attached)
+      } catch {
+        error =>
+          if @interop.bridge_connection_lost(channel, error) {
+            Err(ConnectionLost)
+          } else {
+            Err(WriteFailed(@interop.bridge_error_text(error)))
+          }
+      }
+      scheduler.add(
+        dispatch(Reattached(channel~, id~, key~, generation~, result~)),
+      )
+    })
+    |> ignore
+  })
+}
+
+///|
+fn refit_tab(
+  channel : @interop.ChannelId,
+  key : String,
+  id : String?,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    guard id is Some(id) && term_host.entries.get(key) is Some(entry) else {
+      return
+    }
+    let cols : Int32 = entry.term.get_with_string("cols")
+    let rows : Int32 = entry.term.get_with_string("rows")
+    scheduler.add(send_resize(channel, id, cols, rows))
+  })
+}

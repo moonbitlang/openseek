@@ -51,7 +51,7 @@ priv struct TerminalExitPayload {
 ///|
 async fn terminal_open_op(
   state : HostState,
-  terminals : @terminal.TerminalState,
+  terminals : @terminal.TerminalClient,
   payload : TerminalOpenPayload,
 ) -> TerminalOpenReply {
   guard @work_dir.resolve_in_workspace(
@@ -93,6 +93,7 @@ async fn terminal_open_op(
       raise HostError("terminal command must not be empty")
     }
     let id = @terminal.open_terminal(
+      state.terminals,
       terminals,
       cwd=root.to_string(),
       cols=payload.cols,
@@ -110,6 +111,7 @@ async fn terminal_open_op(
     windows~,
   )
   let id = @terminal.open_terminal(
+    state.terminals,
     terminals,
     cwd=root.to_string(),
     cols=payload.cols,
@@ -223,7 +225,7 @@ test "a ! command runs under the user's shell with the toolchain first on PATH" 
 
 ///|
 async fn terminal_input_op(
-  terminals : @terminal.TerminalState,
+  terminals : @terminal.TerminalClient,
   payload : TerminalInputPayload,
 ) -> Unit {
   @terminal.write_terminal(terminals, id=payload.id, payload.bytes()) catch {
@@ -234,7 +236,7 @@ async fn terminal_input_op(
 
 ///|
 fn terminal_resize_op(
-  terminals : @terminal.TerminalState,
+  terminals : @terminal.TerminalClient,
   payload : TerminalResizePayload,
 ) -> Unit raise {
   @terminal.resize_terminal(
@@ -250,7 +252,7 @@ fn terminal_resize_op(
 
 ///|
 fn terminal_ack_op(
-  terminals : @terminal.TerminalState,
+  terminals : @terminal.TerminalClient,
   payload : TerminalAckPayload,
 ) -> Unit {
   @terminal.ack_terminal(terminals, id=payload.id, sequence=payload.sequence)
@@ -258,7 +260,7 @@ fn terminal_ack_op(
 
 ///|
 fn terminal_close_op(
-  terminals : @terminal.TerminalState,
+  terminals : @terminal.TerminalClient,
   payload : TerminalClosePayload,
 ) -> Unit {
   @terminal.close_terminal(terminals, id=payload.id)

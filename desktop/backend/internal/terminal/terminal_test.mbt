@@ -13,10 +13,18 @@ fn new_push_queue() -> @async.Queue[@terminal.TerminalPush] {
 /// `None` when it opened, or when it failed some other way.
 async fn open_refusal(
   state : @terminal.TerminalState,
+  client : @terminal.TerminalClient,
   command? : Array[String],
 ) -> String? {
   try {
-    let _ = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command?)
+    let _ = @terminal.open_terminal(
+      state,
+      client,
+      cwd=".",
+      cols=80,
+      rows=24,
+      command?,
+    )
     None
   } catch {
     @terminal.TerminalError(message) => Some(message)
@@ -56,18 +64,28 @@ async fn wait_for_exit(pushes : @async.Queue[@terminal.TerminalPush]) -> Unit {
 async test "terminal session round-trips output and reports exit" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
-    let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
-      "/bin/cat",
-    ])
-    @terminal.write_terminal(state, id~, @utf8.encode("ping\n"))
+    let id = @terminal.open_terminal(
+      state,
+      client,
+      cwd="/tmp",
+      cols=80,
+      rows=24,
+      command=["/bin/cat"],
+    )
+    @terminal.write_terminal(client, id~, @utf8.encode("ping\n"))
     @async.with_timeout(5000, () => wait_for_output(pushes, "ping"))
-    @terminal.resize_terminal(state, id~, cols=100, rows=30)
-    @terminal.close_terminal(state, id~)
+    @terminal.resize_terminal(client, id~, cols=100, rows=30)
+    @terminal.close_terminal(client, id~)
     @async.with_timeout(5000, () => wait_for_exit(pushes))
   })
 }
@@ -77,13 +95,18 @@ async test "terminal session round-trips output and reports exit" {
 async test "terminal session runs in the requested directory" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
     ignore(
-      @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+      @terminal.open_terminal(state, client, cwd="/tmp", cols=80, rows=24, command=[
         "/bin/sh", "-c", "pwd",
       ]),
     )
@@ -99,13 +122,18 @@ async test "terminal session runs in the requested directory" {
 async test "a missing program fails while opening the session" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
     let missing = ["openseek-terminal-test-program-that-does-not-exist"]
-    let failed = open_refusal(state, command=missing) is Some(_)
+    let failed = open_refusal(state, client, command=missing) is Some(_)
     assert_true(failed)
   })
 }
@@ -113,7 +141,9 @@ async test "a missing program fails while opening the session" {
 ///|
 async test "an empty command is rejected before spawning" {
   let state = @terminal.new_terminal_state()
-  let failed = open_refusal(state, command=[]) is Some(_)
+  let client = @terminal.TerminalClient()
+  defer client.detach()
+  let failed = open_refusal(state, client, command=[]) is Some(_)
   assert_true(failed)
 }
 
@@ -124,9 +154,16 @@ async test "shutdown wakes an idle terminal pump" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {
       let state = @terminal.new_terminal_state()
+      let client = @terminal.TerminalClient()
+      defer client.detach()
       let pushes = new_push_queue()
       group.spawn_bg(allow_failure=true, () => {
-        @terminal.run_terminal_pump(state, push => pushes.put(push))
+        @async.with_task_group(pumps => {
+          pumps.spawn_bg(no_wait=true, () => {
+            client.run(push => pushes.put(push))
+          })
+          @terminal.run_terminal_pump(state)
+        })
       })
       @async.pause()
       state.shutdown()
@@ -140,15 +177,18 @@ async test "shutdown wakes an idle terminal pump" {
 async test "shutdown rejects pending and later terminal opens" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     let pending_rejected : @async.Queue[Bool] = Queue(kind=Blocking(1))
     group.spawn_bg(allow_failure=true, () => {
-      let rejected = open_refusal(state) is Some("terminal service is closed")
+      let rejected = open_refusal(state, client)
+        is Some("terminal service is closed")
       pending_rejected.put(rejected)
     })
     @async.pause()
     state.shutdown()
     assert_true(@async.with_timeout(5000, () => pending_rejected.get()))
-    let later_rejected = open_refusal(state)
+    let later_rejected = open_refusal(state, client)
       is Some("terminal service is closed")
     assert_true(later_rejected)
   })
@@ -161,14 +201,31 @@ async test "shutdown rejects pending and later terminal opens" {
 async test "close_all_terminals retires every live session" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
-    let first = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
-    let second = @terminal.open_terminal(state, cwd=".", cols=80, rows=24)
-    @terminal.close_all_terminals(state)
+    let first = @terminal.open_terminal(
+      state,
+      client,
+      cwd=".",
+      cols=80,
+      rows=24,
+    )
+    let second = @terminal.open_terminal(
+      state,
+      client,
+      cwd=".",
+      cols=80,
+      rows=24,
+    )
+    @terminal.close_all_terminals(client)
     let exited : Array[String] = []
     @async.with_timeout(5000, () => {
       while exited.length() < 2 {
@@ -191,20 +248,25 @@ async test "close_all_terminals retires every live session" {
 async test "close_all_terminals cancels queued opens from an older page" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     let cancelled : @async.Queue[Bool] = Queue(kind=Blocking(1))
     group.spawn_bg(allow_failure=true, () => {
-      let was_cancelled = open_refusal(state)
+      let was_cancelled = open_refusal(state, client)
         is Some("terminal open was cancelled by reconnect")
       cancelled.put(was_cancelled)
     })
     // Let the opener enqueue its request and block on the reply before the
     // reconnect sweep advances the page connection.
     @async.pause()
-    @terminal.close_all_terminals(state)
+    @terminal.close_all_terminals(client)
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
     let was_cancelled = @async.with_timeout(5000, () => cancelled.get())
     assert_true(was_cancelled)
@@ -240,12 +302,17 @@ async test "close_all_terminals cancels queued opens from an older page" {
 async test "a cumulative acknowledgement resumes terminal output" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
-    let id = @terminal.open_terminal(state, cwd=".", cols=80, rows=24, command=[
+    let id = @terminal.open_terminal(state, client, cwd=".", cols=80, rows=24, command=[
       "/usr/bin/yes", "flow-control",
     ])
     let chunks : Array[(Int32, Int32)] = []
@@ -268,22 +335,23 @@ async test "a cumulative acknowledgement resumes terminal output" {
     guard chunks.last() is Some(last) else {
       fail("terminal produced no output chunks")
     }
-    @terminal.ack_terminal(state, id~, sequence=last.0)
+    @terminal.ack_terminal(client, id~, sequence=last.0)
     let resumed = @async.with_timeout_opt(5000, () => pushes.get())
     assert_true(resumed is Some(Output(id=output_id, ..)) && output_id == id)
-    @terminal.close_terminal(state, id~)
+    @terminal.close_terminal(client, id~)
     @async.with_timeout(5000, () => wait_for_exit(pushes))
   })
 }
 
 ///|
 test "ops on unknown terminal ids degrade cleanly" {
-  let state = @terminal.new_terminal_state()
+  let client = @terminal.TerminalClient()
+  defer client.detach()
   // ack and close are fire-and-forget: an id that already exited is fine.
-  @terminal.ack_terminal(state, id="missing-terminal", sequence=1)
-  @terminal.close_terminal(state, id="missing-terminal")
+  @terminal.ack_terminal(client, id="missing-terminal", sequence=1)
+  @terminal.close_terminal(client, id="missing-terminal")
   let failed = try {
-    @terminal.resize_terminal(state, id="missing-terminal", cols=80, rows=24)
+    @terminal.resize_terminal(client, id="missing-terminal", cols=80, rows=24)
     false
   } catch {
     @terminal.TerminalError(_) => true
@@ -309,13 +377,18 @@ async fn exit_code(pushes : @async.Queue[@terminal.TerminalPush]) -> Int32 {
 async test "a command session reports the command's exit code" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
     ignore(
-      @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
+      @terminal.open_terminal(state, client, cwd="/tmp", cols=80, rows=24, command=[
         "/bin/sh", "-c", "echo out; exit 3",
       ]),
     )
@@ -331,16 +404,26 @@ async test "a command session reports the command's exit code" {
 async test "Ctrl+C typed into a command session interrupts the command" {
   @async.with_task_group(group => {
     let state = @terminal.new_terminal_state()
+    let client = @terminal.TerminalClient()
+    defer client.detach()
     defer state.shutdown()
     let pushes = new_push_queue()
     group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(state, push => pushes.put(push))
+      @async.with_task_group(pumps => {
+        pumps.spawn_bg(no_wait=true, () => client.run(push => pushes.put(push)))
+        @terminal.run_terminal_pump(state)
+      })
     })
-    let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
-      "/bin/sh", "-c", "echo ready; sleep 30",
-    ])
+    let id = @terminal.open_terminal(
+      state,
+      client,
+      cwd="/tmp",
+      cols=80,
+      rows=24,
+      command=["/bin/sh", "-c", "echo ready; sleep 30"],
+    )
     @async.with_timeout(5000, () => wait_for_output(pushes, "ready"))
-    @terminal.write_terminal(state, id~, b"\x03")
+    @terminal.write_terminal(client, id~, b"\x03")
     // A signal death is reported as a negative status, never as a code the
     // command chose.
     assert_true(@async.with_timeout(5000, () => exit_code(pushes)) < 0)

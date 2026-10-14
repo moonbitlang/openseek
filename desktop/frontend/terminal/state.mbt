@@ -32,6 +32,8 @@ priv enum TabStatus {
   /// `terminal_open` is in flight.
   TabOpening
   TabRunning
+  TabDisconnected
+  TabAttaching
   /// Opening or driving the session failed.
   TabFailed(message~ : String)
   /// A command tab whose command ended and whose result is being read from
@@ -65,6 +67,7 @@ priv struct Tab {
   /// `None` for an ordinary shell tab.
   command : TabCommand?
   input : InputQueue
+  connection_generation : Int32
 } derive(Eq)
 
 ///|
@@ -91,11 +94,10 @@ struct State {
   /// model state lets `sync` refresh existing xterm instances exactly once
   /// when the application switches between light and dark mode.
   synced_dark_mode : Bool?
-  /// Root-owned input snapshot used to retire dead channels. Keeping it
+  /// Root-owned input snapshot used to suspend disconnected channels. Keeping it
   /// beside the tabs makes input reconciliation a normal state transition.
   live_channels : Array[@interop.ChannelId]
-  /// A lost connection had terminals. Warn until new input acknowledges
-  /// that recovery creates a fresh shell, without replaying old input.
+  /// Show a recovery notice until fresh input after a connection interruption.
   interrupted_channels : Array[@interop.ChannelId]
 } derive(Eq)
 
@@ -138,8 +140,7 @@ pub struct Ctx {
   placement : @interop.CheckoutPlacement?
   dark_mode : Bool
   /// False from the first WebSocket loss until that channel reports ready
-  /// again. The old connection's PTYs are already gone, so `sync` must not
-  /// create their replacements on the dead transport.
+  /// again. Suspend input while retaining the PTY ids and emulators.
   connected : Bool
 } derive(Eq)
 
@@ -274,6 +275,13 @@ pub(all) enum Msg {
   /// reaches the PTY as exactly one byte instead of being UTF-8 re-encoded.
   BinaryInput(key~ : String, data~ : String)
   /// One write settled. The batch and PTY identity fence stale replies.
+  Reattached(
+    channel~ : @interop.ChannelId,
+    id~ : String,
+    key~ : String,
+    generation~ : Int32,
+    result~ : Result[Bool, InputWriteFailure]
+  )
   InputSettled(
     key~ : String,
     id~ : String,
@@ -287,7 +295,7 @@ pub(all) enum Msg {
   ViewportResized(key~ : String, cols~ : Int32, rows~ : Int32)
   /// A command tab's `!` command ended. `exit_code` is `None` when it did not
   /// exit on its own account — the user closed its tab, its connection
-  /// dropped, or a signal killed it — and `output` is the plain text the
+  /// expired, or a signal killed it — and `output` is the plain text the
   /// emulator showed, capped to its tail (`truncated`). The main frontend
   /// takes the result; the panel then retires the tab.
   CommandFinished(

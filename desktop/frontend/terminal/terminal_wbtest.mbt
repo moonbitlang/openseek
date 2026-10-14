@@ -144,7 +144,7 @@ test "terminal UUIDs route independently of the focused device" {
 }
 
 ///|
-test "a disconnected channel retires only its terminal tabs" {
+test "a disconnected channel preserves its shells and leaves other channels running" {
   let local_channel : @interop.ChannelId = @interop.ChannelId::Local
   let remote : @interop.ChannelId = Remote("device-1")
   guard @resource.of_path(local_channel, "/local") is Some(local_workspace) &&
@@ -165,6 +165,7 @@ test "a disconnected channel retires only its terminal tabs" {
         status: TabRunning,
         command: None,
         input: InputQueue::empty(),
+        connection_generation: 0,
       },
       {
         key: "tab-remote",
@@ -176,6 +177,7 @@ test "a disconnected channel retires only its terminal tabs" {
         status: TabRunning,
         command: None,
         input: InputQueue::empty(),
+        connection_generation: 0,
       },
     ],
     active: [
@@ -192,13 +194,15 @@ test "a disconnected channel retires only its terminal tabs" {
     interrupted_channels: [],
   }
   let (_, disconnected) = disconnect(@cmd.Emit(_ => @cmd.none), state, remote)
-  inspect(disconnected.tabs.length(), content="1")
+  assert_eq(disconnected.tabs.length(), 2)
+  assert_true(disconnected.tabs[1].status is TabDisconnected)
+  assert_eq(disconnected.tabs[1].id, Some("terminal-remote"))
   assert_true(
     disconnected.tabs[0].workspace
     is Project(@interop.ChannelId::Local, resource) &&
     resource.path == "/local",
   )
-  assert_true(disconnected.shown is None)
+  assert_eq(disconnected.shown, Some("tab-remote"))
   assert_true(
     disconnected.exited_before_open == [(local_channel, "exited-local", 0)],
   )

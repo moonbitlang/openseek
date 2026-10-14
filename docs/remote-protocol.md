@@ -26,9 +26,10 @@ it:
 - `RelayActor` owns the control connection and creates one `WsClientActor`
   for each relayed client.
 - Every Proton or WebSocket client owns a separate `HostConnection`, whose
-  `FsWatchActor` serves only that client's `fs.watch` state and whose
-  terminal state owns only that client's PTYs; filesystem and terminal
-  notifications return only to the owning client.
+  `FsWatchActor` serves only that client's `fs.watch` state. Its terminal
+  client forwards output only from PTYs currently attached to that connection.
+- `HostState` owns the terminal service and its PTYs across connection loss;
+  detached sessions remain available for reattachment during the grace period.
 - `DesktopBridgeActor` owns the current Proton page attachment and forwards
   the shared catalog notifications to it.
 
@@ -569,28 +570,46 @@ cap is reached. A connection teardown cancels every process it owns. Installed
 builds resolve only their packaged ripgrep; a `PATH` fallback is permitted
 solely for a detected development layout.
 
-### terminal.* — connection-scoped PTYs
+### terminal.* — host-owned, reconnectable PTYs
 
-Each client connection owns an independent set of PTYs. Terminal ids are
-unique only within that connection, output returns only to that connection,
-and closing the desktop page or browser WebSocket tears down all of its PTYs.
-A reconnect therefore starts with no terminal sessions; clients must discard
-their old ids and open replacements after `BridgeReady`.
+The host's app-lifetime terminal service owns PTYs; each connection owns only
+its current attachments. Output goes exclusively to the attached connection.
+On network loss the shell and its pending output survive for five minutes.
+After `BridgeReady`, a client retaining its emulator calls `terminal.attach`
+with the original id and the last output sequence already accepted by that
+emulator. The host replays later chunks in order and resumes normal delivery.
+The frontend deduplicates replayed output and preserves its screen, scrollback,
+shell variables, working directory, and running programs. No pending or
+uncertain input is replayed.
+
+Terminal ids are unguessable capabilities returned by `terminal.open` over an
+authenticated command channel. A different connection must explicitly attach
+before ordinary input, resize, acknowledgement, or close operations can act on
+that terminal. A newer connection holding that capability can take over before the old
+socket detects a network failure. Connection generations prevent an older
+connection from taking it back, and ordinary operations on the old attachment
+are rejected. Invalid output cursors are errors; `{attached:false}` means the
+session is gone (expired, closed, or host restarted). A missing session leaves
+the old screen visible with an error, without silently creating a new shell.
+This protocol does not restore terminals across a page reload or host restart.
+An explicit page replacement closes that page's sessions; closing the host
+terminates every PTY. Closing a tab while offline stops local use immediately;
+its unreachable PTY is reclaimed when the disconnect grace period expires.
 
 PTY bytes stay byte-transparent over JSON. Output is always base64. Text input
 uses `data`; byte-oriented xterm input uses `data_base64`, and exactly one of
-the two fields must be present. Each output chunk occupies the host's bounded
-flow-control window until the client acknowledges it. An acknowledgement for
-`sequence` also acknowledges every earlier outstanding sequence for that
-terminal, so a later acknowledgement covers an earlier request that did not
-reach the host. Duplicate acknowledgements and sequences older than the
-already-applied frontier are safe no-ops. An acknowledgement from a dead
-connection must not be replayed after reconnect because the new connection
-has an independent terminal-id namespace.
+the two fields must be present. Acknowledgements are cumulative. Retained output
+uses the existing 256 KiB high watermark (plus at most one 16 KiB read) and a
+4096-record limit. When it fills, reading pauses and the PTY supplies
+backpressure; output is never silently truncated. A disconnected program may
+therefore block on output until reattachment. The host admits at most 128 live
+or retained sessions and a client at most 32 attachments. An exit occurring
+while disconnected is retained with its remaining output for reattachment.
 
 | method | params | result |
 |---|---|---|
 | `terminal.open` | `{session, workspace?, cols, rows, command?}` — resolves the conversation's workspace on the host — a session no attached workspace owns is refused rather than given a directory. With `command` (one shell command line: a composer `!` command) the session runs that instead of the interactive login shell — `$SHELL -c` on POSIX, PowerShell on Windows, with the packaged tools first on the path — and ends when it does; `terminal.exit` then carries the command's exit code, negative when a signal ended it | `{id}` |
+| `terminal.attach` | `{id, sequence}` — sequence 0 means no output received yet | `{attached}` |
 | `terminal.input` | `{id, data}` \| `{id, data_base64}` | `{}` |
 | `terminal.resize` | `{id, cols, rows}` | `{}` |
 | `terminal.ack` | `{id, sequence}` | `{}` |

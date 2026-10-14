@@ -2,21 +2,23 @@
 package "openseek_desktop/backend/internal/terminal"
 
 // Values
-pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int) -> Unit
+pub fn ack_terminal(TerminalClient, id~ : String, sequence~ : Int) -> Unit
 
-pub fn close_all_terminals(TerminalState) -> Unit
+pub fn attach_terminal(TerminalState, TerminalClient, id~ : String, sequence~ : Int) -> Bool raise TerminalError
 
-pub fn close_terminal(TerminalState, id~ : String) -> Unit
+pub fn close_all_terminals(TerminalClient) -> Unit
 
-pub fn new_terminal_state() -> TerminalState
+pub fn close_terminal(TerminalClient, id~ : String) -> Unit
 
-pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
+pub fn new_terminal_state(grace_ms? : Int) -> TerminalState
 
-pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int, rows~ : Int) -> Unit raise
+pub async fn open_terminal(TerminalState, TerminalClient, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
 
-pub async fn run_terminal_pump(TerminalState, async (TerminalPush) -> Unit) -> Unit
+pub fn resize_terminal(TerminalClient, id~ : String, cols~ : Int, rows~ : Int) -> Unit raise
 
-pub async fn write_terminal(TerminalState, id~ : String, Bytes) -> Unit
+pub async fn run_terminal_pump(TerminalState) -> Unit
+
+pub async fn write_terminal(TerminalClient, id~ : String, Bytes) -> Unit
 
 // Errors
 pub suberror TerminalError {
@@ -24,6 +26,11 @@ pub suberror TerminalError {
 }
 
 // Types and methods
+type TerminalClient
+pub fn TerminalClient::TerminalClient() -> Self
+pub fn TerminalClient::detach(Self) -> Unit
+pub async fn TerminalClient::run(Self, async (TerminalPush) -> Unit) -> Unit
+
 pub(all) enum TerminalPush {
   Output(id~ : String, sequence~ : Int, data~ : Bytes)
   Exited(id~ : String, code~ : Int)

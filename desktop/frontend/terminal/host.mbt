@@ -16,6 +16,8 @@ priv struct TermEntry {
   term : @js.Value
   fit : @js.Value
   element : @js.Value
+  mut rendered : Int32
+  mut received : Int32
 }
 
 ///|
@@ -276,7 +278,13 @@ fn mount_tab(
         let _ : @js.Value = term.apply_with_string("onResize", [
           @js.Value::cast_from(on_resize),
         ])
-        term_host.entries[key] = { term, fit, element, }
+        term_host.entries[key] = {
+          term,
+          fit,
+          element,
+          received: 0,
+          rendered: 0,
+        }
         if !term_host.resize_wired {
           term_host.resize_wired = true
           // The panel's area changes without any window resize — the editor
@@ -425,7 +433,19 @@ fn TermHost::write_now(
     scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
     return
   }
+  // A reconnect may replay a rendered chunk whose acknowledgement was lost.
+  // Keep the same emulator and discard duplicates before xterm parses them.
+  if sequence <= entry.received {
+    if sequence <= entry.rendered {
+      scheduler.add(
+        TerminalAck::{ channel, id, sequence: entry.rendered, }.send(),
+      )
+    }
+    return
+  }
+  entry.received = sequence
   let done = (_ : @js.Value) => {
+    entry.rendered = entry.rendered.max(sequence)
     scheduler.add(TerminalAck::{ channel, id, sequence, }.send())
   }
   let _ : @js.Value = module_.apply_with_string("writeBase64", [
@@ -462,11 +482,11 @@ pub fn output(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     match term_host.owners.get(id) {
-      Some((owner_channel, key)) =>
+      Some((owner_channel, key)) if owner_channel == channel =>
         scheduler.add(
           term_host.write_to_tab(owner_channel, key, id, sequence, data),
         )
-      None =>
+      _ =>
         if term_host.opening_channels.contains(channel) {
           let (pending_channel, chunks) = match term_host.pending.get(id) {
             Some(pending) => pending
@@ -513,9 +533,8 @@ fn drop_pending(id : String) -> @cmd.Cmd {
 }
 
 ///|
-/// Forget pre-open output owned by a dead WebSocket. Its host-side PTYs and
-/// flow-control window disappeared with that connection, so these chunks need
-/// neither rendering nor acknowledgement on the replacement connection.
+/// Forget unclaimed pre-open output from a dead WebSocket. Known tabs retain
+/// their emulator and cursor; the host replays any missing output on attach.
 fn TermHost::clear_pending(
   self : TermHost,
   channel : @interop.ChannelId,

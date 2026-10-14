@@ -226,7 +226,8 @@ test "connection loss recovers with fresh input only in either callback order" {
         Input(ctx=down, live_channels=[], has_devices=true),
       ).0
     assert_true(state.open)
-    assert_true(state.tabs.is_empty())
+    assert_eq(state.tabs.length(), 1)
+    assert_true(state.tabs[0].status is TabDisconnected)
     assert_true(state.interrupted_channels.contains(remote))
     if !reply_first {
       assert_true(update(emit, failure, state, down).1 == state)
@@ -236,11 +237,13 @@ test "connection loss recovers with fresh input only in either callback order" {
         Input(ctx~, live_channels=[remote], has_devices=true),
       ).0
     assert_eq(state.tabs.length(), 1)
-    let replacement_key = state.tabs[0].key
-    assert_true(replacement_key != key)
+    assert_eq(state.tabs[0].key, key)
+    assert_eq(state.tabs[0].id, Some("old"))
+    assert_true(state.tabs[0].status is TabAttaching)
+    let generation = state.tabs[0].connection_generation
     state = update(
         emit,
-        Opened(channel=remote, key=replacement_key, id="new"),
+        Reattached(channel=remote, id="old", key~, generation~, result=Ok(true)),
         state,
         ctx,
       ).1
@@ -250,17 +253,52 @@ test "connection loss recovers with fresh input only in either callback order" {
     assert_true(
       finish_input(emit, state, key, "old", batch.token, Ok(())).1 == state,
     )
-    state = update(
-        emit,
-        UserInput(key=replacement_key, data="fresh\n"),
-        state,
-        ctx,
-      ).1
+    state = update(emit, UserInput(key~, data="fresh\n"), state, ctx).1
     guard state.tabs[0].input.active is Some(fresh) else {
       fail("new input remained paused")
     }
     assert_eq(fresh.chunk.data, "fresh\n")
     assert_false(state.interrupted_channels.contains(remote))
     assert_false(messages.any(msg => msg is InputFailed(..)))
+    // A second interruption fences the first attach reply, even for the same
+    // tab and PTY, and applying reconciliation twice cannot duplicate work.
+    let disconnected = state.reconcile(
+        emit,
+        Input(ctx=down, live_channels=[], has_devices=true),
+      ).0
+    let reconnecting = disconnected.reconcile(
+        emit,
+        Input(ctx~, live_channels=[remote], has_devices=true),
+      ).0
+    assert_true(
+      reconnecting.reconcile(
+        emit,
+        Input(ctx~, live_channels=[remote], has_devices=true),
+      ).0 ==
+      reconnecting,
+    )
+    assert_true(
+      update(
+        emit,
+        Reattached(channel=remote, id="old", key~, generation~, result=Ok(true)),
+        reconnecting,
+        ctx,
+      ).1 ==
+      reconnecting,
+    )
+    let missing = update(
+        emit,
+        Reattached(
+          channel=remote,
+          id="old",
+          key~,
+          generation=reconnecting.tabs[0].connection_generation,
+          result=Ok(false),
+        ),
+        reconnecting,
+        ctx,
+      ).1
+    assert_true(missing.tabs[0].status is TabFailed(..))
+    assert_eq(missing.tabs[0].id, Some("old"))
   }
 }

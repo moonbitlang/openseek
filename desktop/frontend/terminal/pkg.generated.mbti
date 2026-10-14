@@ -64,6 +64,7 @@ pub(all) enum Msg {
   UserInput(key~ : String, data~ : String)
   LinkActivated(url~ : String)
   BinaryInput(key~ : String, data~ : String)
+  Reattached(channel~ : @interop.ChannelId, id~ : String, key~ : String, generation~ : Int, result~ : Result[Bool, InputWriteFailure])
   InputSettled(key~ : String, id~ : String, token~ : String, result~ : Result[Unit, InputWriteFailure])
   InputFailed(message~ : String)
   ViewportResized(key~ : String, cols~ : Int, rows~ : Int)

@@ -283,6 +283,8 @@ pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.Un
 
 pub let terminal_ack : Command[@protocol.TerminalAckPayload, @protocol.EmptyReply]
 
+pub let terminal_attach : Command[@protocol.TerminalAttachPayload, @protocol.TerminalAttachReply]
+
 pub let terminal_close : Command[@protocol.TerminalClosePayload, @protocol.EmptyReply]
 
 pub let terminal_input : Command[@protocol.TerminalInputPayload, @protocol.EmptyReply]

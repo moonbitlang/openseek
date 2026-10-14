@@ -3515,6 +3515,29 @@ pub fn TerminalAckPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for TerminalAckPayload
 pub impl @json.FromJson for TerminalAckPayload
 
+pub(all) struct TerminalAttachPayload {
+  id : String
+  sequence : Int
+} derive(Eq, @debug.Debug)
+pub fn TerminalAttachPayload::equal(Self, Self) -> Bool
+pub fn TerminalAttachPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TerminalAttachPayload::not_equal(Self, Self) -> Bool
+pub fn TerminalAttachPayload::to_json(Self) -> Json
+pub fn TerminalAttachPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalAttachPayload
+pub impl @json.FromJson for TerminalAttachPayload
+
+pub(all) struct TerminalAttachReply {
+  attached : Bool
+} derive(Eq, @debug.Debug)
+pub fn TerminalAttachReply::equal(Self, Self) -> Bool
+pub fn TerminalAttachReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn TerminalAttachReply::not_equal(Self, Self) -> Bool
+pub fn TerminalAttachReply::to_json(Self) -> Json
+pub fn TerminalAttachReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for TerminalAttachReply
+pub impl @json.FromJson for TerminalAttachReply
+
 pub(all) struct TerminalClosePayload {
   id : String
 } derive(Eq, @debug.Debug)

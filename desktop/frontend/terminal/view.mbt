@@ -18,6 +18,7 @@ fn tab_view(
   let title = match tab.status {
     TabOpening => "starting…"
     TabRunning => label
+    TabDisconnected | TabAttaching => label + " (reconnecting…)"
     TabFailed(message~) => message
     TabExited(code~) => "\{label} (exit \{code})"
   }
@@ -89,11 +90,18 @@ fn panel_view(
     items.push(
       @html.span(
         class="terminal-status",
-        "Reconnecting… A new shell will open; previous input will not be replayed.",
+        "Reconnecting to the existing shell…",
       ),
     )
   } else if active is Some(tab) {
     match tab.status {
+      TabDisconnected | TabAttaching =>
+        items.push(
+          @html.span(
+            class="terminal-status",
+            "Reconnecting to the existing shell…",
+          ),
+        )
       TabOpening =>
         items.push(@html.span(class="terminal-status", "starting…"))
       TabFailed(message~) =>
@@ -118,7 +126,7 @@ fn panel_view(
               items.push(
                 @html.span(
                   class="terminal-status",
-                  "Reconnected with a new shell; previous input was not replayed.",
+                  "Reconnected to the existing shell; previous input was not replayed.",
                 ),
               )
             }
