@@ -39,6 +39,7 @@ priv struct Hub {
   // frontend recovers the whole turn except the question holding it up, and
   // the only way out is to cancel the run.
   pending_approvals : Map[String, @protocol.PendingApprovalPayload]
+  mut approval_generation : Int32
 }
 
 ///|
@@ -48,6 +49,7 @@ fn Hub::Hub() -> Hub {
     active_starts: Map([]),
     settlements: Map([]),
     pending_approvals: Map([]),
+    approval_generation: 0,
   }
 }
 
@@ -143,7 +145,12 @@ fn Hub::track_approval(
   payload : @protocol.AgentEventPayload,
 ) -> Unit {
   match payload.event {
-    ApprovalRequested(id~, tool_name~, detail~, body~) =>
+    ApprovalRequested(id~, tool_name~, detail~, body~) => {
+      if self.pending_approvals.get(payload.session) is Some(existing) &&
+        existing.id == id &&
+        existing.run_id == payload.run_id {
+        return
+      }
       self.pending_approvals[payload.session] = {
         id,
         session: payload.session,
@@ -151,7 +158,10 @@ fn Hub::track_approval(
         tool_name,
         detail,
         body,
+        answered: false,
       }
+      self.publish_approvals()
+    }
     // Settled by whoever answered it, including this host's own client. The
     // question is gone for every client at once, which is why the resolution
     // is broadcast rather than sent to the answerer alone.
@@ -160,8 +170,10 @@ fn Hub::track_approval(
     // question into the same slot retires nothing.
     ApprovalResolved(id~, ..) =>
       if self.pending_approvals.get(payload.session) is Some(standing) &&
-        standing.id == id {
+        standing.id == id &&
+        standing.run_id == payload.run_id {
         self.pending_approvals.remove(payload.session)
+        self.publish_approvals()
       }
     _ => ()
   }
@@ -170,9 +182,13 @@ fn Hub::track_approval(
 ///|
 /// Drop every question belonging to `run_id`.
 fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
+  let before = self.pending_approvals.length()
   self.pending_approvals.retain((_, approval) => {
     !(approval.run_id is Some(owner) && owner == run_id)
   })
+  if self.pending_approvals.length() != before {
+    self.publish_approvals()
+  }
 }
 
 ///|
@@ -208,7 +224,7 @@ fn Hub::runs(
   // stopped RIGHT NOW that anyone looking at that session should be able to
   // answer.
   let approvals = self.pending_approvals.values().to_array()
-  { runs, settled, approvals, }
+  { runs, settled, approvals, approval_generation: self.approval_generation, }
 }
 
 ///|
@@ -239,7 +255,10 @@ fn Hub::engine_connected(
   // A question belongs to the engine process that asked it: the reply queue
   // it was blocking on died with that process, so replaying it would offer an
   // answer with nowhere to go.
-  self.pending_approvals.clear()
+  if !self.pending_approvals.is_empty() {
+    self.pending_approvals.clear()
+    self.publish_approvals()
+  }
   self.publish(AgentConnected(payload))
 }
 
@@ -557,7 +576,7 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
   let legacy : @protocol.RunsReply = @json.from_json(
     runs_endpoint.invoke(Json::empty_object()),
   )
-  guard legacy is { runs: [], settled: [], approvals: [], } else {
+  guard legacy is { runs: [], settled: [], approvals: [], .. } else {
     fail("legacy agent.runs request changed shape")
   }
   let replay : @protocol.RunsReply = @json.from_json(
@@ -571,4 +590,41 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
     fail("agent.runs did not decode the known selector")
   }
   assert_eq(settlement.run_id, "r-api")
+}
+
+///|
+fn Hub::approval_snapshot(self : Hub) -> @protocol.ApprovalSnapshot {
+  {
+    generation: self.approval_generation,
+    approvals: self.pending_approvals.values().to_array(),
+  }
+}
+
+///|
+fn Hub::publish_approvals(self : Hub) -> Unit {
+  self.approval_generation += 1
+  self.publish(AgentApprovals(self.approval_snapshot()))
+}
+
+///|
+/// Matching and submission share one non-suspending actor turn. A second
+/// window observes the first accepted answer before it can enqueue another.
+fn Hub::answer_approval(
+  self : Hub,
+  payload : @protocol.ApprovalPayload,
+  send : (@protocol.ApprovalPayload) -> @protocol.ApprovalReply,
+) -> @protocol.ApprovalReply {
+  guard payload.run_id is Some(run_id) else { return { delivered: false, } }
+  for session, pending in self.pending_approvals {
+    if pending.id == payload.id && pending.run_id == Some(run_id) {
+      guard !pending.answered else { return { delivered: false, } }
+      let reply = send(payload)
+      if reply.delivered {
+        self.pending_approvals[session] = { ..pending, answered: true, }
+        self.publish_approvals()
+      }
+      return reply
+    }
+  }
+  { delivered: false, }
 }

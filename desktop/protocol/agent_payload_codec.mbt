@@ -202,7 +202,8 @@ pub impl ToJson for OpenSeekThinking with fn to_json(self) {
 ///
 /// `run_id` is optional and accepts missing or null. It fences the same race a
 /// steer's does — a decision taken slowly must not settle a question in a
-/// later run — and a caller that does not know the run simply does not fence.
+/// later run. The service refuses an unscoped answer; optionality represents
+/// a caller that lacks that identity, never permission to answer any run.
 pub impl FromJson for ApprovalPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "agent.approval payload")
   {
@@ -267,7 +268,11 @@ pub impl FromJson for RunsReply with fn from_json(json, path) {
       @json.from_json(raw, path=path.add_key("approvals").add_index(index)),
     )
   }
-  { runs, settled, approvals, }
+  let approval_generation = object.required_int("approval_generation")
+  guard approval_generation >= 0 else {
+    raise JsonDecodeError((path, "negative approval generation"))
+  }
+  { runs, settled, approvals, approval_generation, }
 }
 
 ///|
@@ -276,6 +281,7 @@ pub impl ToJson for RunsReply with fn to_json(self) {
     "runs": Json(self.runs.map(run => run.to_json())),
     "settled": Json(self.settled.map(entry => entry.to_json())),
     "approvals": Json(self.approvals.map(approval => approval.to_json())),
+    "approval_generation": self.approval_generation,
   }
 }
 
@@ -288,6 +294,7 @@ pub impl ToJson for RunsReply with fn to_json(self) {
 pub impl FromJson for PendingApprovalPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "pending approval")
   {
+    answered: object.required_bool("answered"),
     id: object.required_string("id"),
     session: object.required_string("session"),
     run_id: object.optional_string("run_id"),
@@ -300,6 +307,7 @@ pub impl FromJson for PendingApprovalPayload with fn from_json(json, path) {
 ///|
 pub impl ToJson for PendingApprovalPayload with fn to_json(self) {
   let fields : Map[String, Json] = {
+    "answered": self.answered,
     "id": Json(self.id),
     "session": Json(self.session),
     "tool_name": Json(self.tool_name),

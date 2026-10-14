@@ -36,9 +36,11 @@ test('context rows align and approval disclosure preserves draft focus and actio
   const notify = event => app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event });
   notify({ event: 'subrun_started', id: 'review-1', kind: 'review', label: 'Review API changes' });
   const content = '///|\nfn main {\n  println("<script>你好</script>")\n}\n';
-  notify({ event: 'approval_requested', id: 'approval-context', tool_name: 'write',
+  app.notify('agent.approvals', { generation: 1, approvals: [{
+    session: 'session-1', run_id: 'run-e2e', answered: false,
+    id: 'approval-context', tool_name: 'write',
     detail: '/workspace/src/parser.mbt (overwrite existing source file)',
-    body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }, null, 2) });
+    body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }, null, 2) }] });
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
   await expect(approval.locator('summary')).toContainText('write /workspace/src/parser.mbt (overwrite existing source file)');
@@ -86,8 +88,8 @@ test('replayed write approvals decode content and preserve unrecognized bodies',
   const replyFor = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'agent.runs' ? {
     runs: [{ run_id: 'run-e2e', session: 'session-1', model: 'ds-flash', max_steps: 1000 }],
-    settled: [],
-    approvals: [{ id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
+    settled: [], approval_generation: 1,
+    approvals: [{ answered: false, id: 'approval-replay', session: 'session-1', run_id: 'run-e2e',
       tool_name: 'write', detail: '/workspace/src/parser.mbt (overwrite existing source file)',
       body: JSON.stringify({ path: '/workspace/src/parser.mbt', content }) }],
   } : replyFor(request);
@@ -98,16 +100,17 @@ test('replayed write approvals decode content and preserve unrecognized bodies',
   const source = approval.locator('.composer-approval-body');
   await expect(source).toBeVisible();
   expect(await source.textContent()).toBe(content);
+  let generation = 1;
   for (const [tool_name, body, expected] of [
     ['write', '{"content":""}', ''],
     ['write', '{"content":null}', '{"content":null}'],
     ['write', 'malformed {', 'malformed {'],
     ['mbtx', content, content],
   ]) {
-    app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event: {
-      event: 'approval_requested', id: 'approval-fallback', tool_name,
+    app.notify('agent.approvals', { generation: ++generation, approvals: [{
+      session: 'session-1', run_id: 'run-e2e', answered: false, id: 'approval-fallback', tool_name,
       detail: 'Inspect operation', body,
-    } });
+    }] });
     await expect.poll(() => source.textContent()).toBe(expected);
   }
   expect(app.pageErrors).toEqual([]);
@@ -124,11 +127,11 @@ for (const [name, content, allow] of [
     await app.openSession();
     await page.locator('#task').fill('Start a turn');
     await page.locator('#send').click();
-    app.notify('agent.event', { session: 'session-1', run_id: 'run-e2e', event: {
-      event: 'approval_requested', id: 'approval-large', tool_name: 'write',
+    app.notify('agent.approvals', { generation: 1, approvals: [{
+      session: 'session-1', run_id: 'run-e2e', answered: false, id: 'approval-large', tool_name: 'write',
       detail: '/workspace/generated.mbt (overwrite existing source file)',
       body: JSON.stringify({ path: '/workspace/generated.mbt', content }),
-    } });
+    }] });
     const approval = page.locator('.composer-approval');
     const source = approval.locator('.composer-approval-body');
     await expect(source).toBeVisible();

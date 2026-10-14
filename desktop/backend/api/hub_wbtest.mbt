@@ -187,3 +187,105 @@ test "engine prediction is broadcast to both local and relay subscribers" {
   assert_eq(desktop_client.try_next(), None)
   assert_eq(remote.try_next(), None)
 }
+
+///|
+test "a resolution from an older run cannot retire a reused approval id" {
+  let hub = Hub::Hub()
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("new-run"),
+      ApprovalRequested(
+        id="ap-reused",
+        tool_name="mbtx",
+        detail="demo",
+        body=None,
+      ),
+    ),
+  )
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("old-run"),
+      ApprovalResolved(id="ap-reused", outcome="allowed_once"),
+    ),
+  )
+  guard hub.runs().approvals is [pending] else {
+    fail("stale resolution removed the current run's question")
+  }
+  assert_eq(pending.run_id, Some("new-run"))
+}
+
+///|
+async test "approval snapshot subscription and reply claim share one ordered state" {
+  let hub = Hub::Hub()
+  let stream = hub.subscribe()
+  let ask = approval_event(
+    "s1",
+    Some("r1"),
+    ApprovalRequested(id="ap-1", tool_name="mbtx", detail="demo", body=None),
+  )
+  hub.publish(ask)
+  let captured = hub.approval_snapshot()
+  assert_eq(captured.generation, 1)
+  assert_false(captured.approvals[0].answered)
+  assert_true(stream.next() is AgentApprovals({ generation: 1, .. }))
+  assert_true(stream.next() is AgentEvent(_))
+  let sends = Ref(0)
+  let send = (_ : @protocol.ApprovalPayload) => {
+    sends.val += 1
+    @protocol.ApprovalReply::{ delivered: true, }
+  }
+  assert_false(
+    hub.answer_approval({ id: "ap-1", run_id: None, allow: true, }, send).delivered,
+  )
+  assert_false(
+    hub.answer_approval(
+      { id: "ap-1", run_id: Some("old-run"), allow: true, },
+      send,
+    ).delivered,
+  )
+  assert_false(
+    hub.answer_approval({ id: "ap-1", run_id: Some("r1"), allow: true, }, _ => {
+      delivered: false,
+    }).delivered,
+  )
+  assert_eq(hub.approval_snapshot().generation, 1)
+  assert_true(
+    hub.answer_approval({ id: "ap-1", run_id: Some("r1"), allow: false, }, send).delivered,
+  )
+  assert_false(
+    hub.answer_approval({ id: "ap-1", run_id: Some("r1"), allow: true, }, send).delivered,
+  )
+  assert_eq(sends.val, 1)
+  assert_true(
+    stream.next()
+    is AgentApprovals({ generation: 2, approvals: [{ answered: true, .. }], }),
+  )
+  // A repeated engine announcement cannot unlock the already claimed request.
+  hub.publish(ask)
+  assert_eq(hub.approval_snapshot().generation, 2)
+  assert_true(hub.approval_snapshot().approvals[0].answered)
+  assert_false(captured.approvals[0].answered)
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("old-run"),
+      ApprovalResolved(id="ap-1", outcome="cancelled"),
+    ),
+  )
+  assert_eq(hub.approval_snapshot().approvals.length(), 1)
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("r1"),
+      ApprovalResolved(id="ap-1", outcome="declined"),
+    ),
+  )
+  assert_eq(hub.approval_snapshot().generation, 3)
+  assert_true(hub.approval_snapshot().approvals.is_empty())
+  assert_false(
+    hub.answer_approval({ id: "ap-1", run_id: Some("r1"), allow: true, }, send).delivered,
+  )
+  assert_eq(sends.val, 1)
+}

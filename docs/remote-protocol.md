@@ -825,3 +825,19 @@ changed and why:
   public identifier, ownership is enforced at the relay, APIs moved under
   `/v1`, and the browser WS left the page namespace
   (`/d/<device>/api/v1/ws` → `/v1/devices/<device>/ws`).
+
+### OpenSeek approval recovery
+
+`agent.runs` carries `approvals` and `approval_generation` from one synchronous
+host snapshot. Every row includes `answered`: true means the host accepted an
+answer for delivery, while the engine has not yet resolved the question. The
+`agent.approvals` notification carries `{generation, approvals}` from the same
+state owner. Clients subscribe before requesting the snapshot, cache notifications
+until conversations exist, and reject lower generations. Connection replacement
+starts a fresh client generation scope; retired replies cannot update it.
+
+The versioned snapshot is authoritative for approval UI; raw approval events in
+`agent.event` are retained for engine diagnostics. `agent.approval` is accepted
+once only when both `id` and `run_id` name a current, unanswered question. Missing
+run identity, stale identity, or an already accepted answer returns
+`delivered: false`. A refused writer submission leaves the question answerable.

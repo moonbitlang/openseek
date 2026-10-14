@@ -465,7 +465,9 @@ pub fn endpoints(
     // on the engine — what the decision releases is reported by the run's own
     // events.
     @endpoint.Endpoint::sync(@commands.agent_approval, payload => {
-      @engine.approve_run(state.manager, payload)
+      state.hub.answer_approval(payload, payload => {
+        @engine.approve_run(state.manager, payload)
+      })
     }),
     @endpoint.Endpoint::sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)

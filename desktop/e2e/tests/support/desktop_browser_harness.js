@@ -579,7 +579,7 @@ export class DesktopBrowserHarness {
           watermark: this.sessionEvents.at(-1)?.sequence || 0,
         };
       case 'agent.runs':
-        return { runs: [], settled: [], approvals: [] };
+        return { runs: [], settled: [], approvals: [], approval_generation: 0 };
       case 'workspace.list':
         return { workspaces: [...this.workspaces], chat_root: this.chatRoot };
       case 'workspace.add': {

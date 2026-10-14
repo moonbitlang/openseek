@@ -250,8 +250,9 @@ test "an approval reply requires its one field" {
 /// reading it as empty loses live state silently: a tool left waiting on an
 /// approval with no card to answer it, and no deadline behind the question.
 test "the runs snapshot requires each of its sections" {
-  for missing in ["runs", "settled", "approvals"] {
+  for missing in ["runs", "settled", "approvals", "approval_generation"] {
     let fields : Map[String, Json] = {
+      "approval_generation": 0,
       "runs": Json(([] : Array[Json])),
       "settled": Json(([] : Array[Json])),
       "approvals": Json(([] : Array[Json])),
@@ -267,6 +268,7 @@ test "the runs snapshot requires each of its sections" {
   // An empty section is an empty array, which is what a host with nothing in
   // flight sends.
   let empty : @protocol.RunsReply = @json.from_json({
+    "approval_generation": 0,
     "runs": [],
     "settled": [],
     "approvals": [],
@@ -387,4 +389,53 @@ test "terminal.open carries an optional command and omits absent fields" {
     _ => None
   }
   assert_true(missing_rows is None)
+}
+
+///|
+test "approval snapshots preserve accepted replies and reject malformed revisions" {
+  let row : Json = {
+    "id": "ap-1",
+    "session": "s1",
+    "run_id": "r1",
+    "tool_name": "mbtx",
+    "detail": "demo",
+    "answered": true,
+  }
+  let snapshot : @protocol.ApprovalSnapshot = @json.from_json({
+    "generation": 2,
+    "approvals": [row],
+  })
+  assert_true(snapshot.approvals[0].answered)
+  let roundtrip : @protocol.ApprovalSnapshot = @json.from_json(
+    snapshot.to_json(),
+  )
+  assert_eq(snapshot, roundtrip)
+  assert_true(
+    @protocol.Notification::from_wire("agent.approvals", snapshot.to_json())
+    is Some(AgentApprovals(_)),
+  )
+  for
+    invalid in [
+      ({ "approvals": [] } : Json),
+      { "generation": -1, "approvals": [] },
+      { "generation": null, "approvals": [] },
+      { "generation": 0 },
+      { "generation": 0, "approvals": null },
+      {
+        "generation": 1,
+        "approvals": [
+          {
+            "id": "ap-1",
+            "session": "s1",
+            "tool_name": "mbtx",
+            "detail": "demo",
+          },
+        ],
+      },
+    ] {
+    let decoded : @protocol.ApprovalSnapshot? = Some(@json.from_json(invalid)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
 }

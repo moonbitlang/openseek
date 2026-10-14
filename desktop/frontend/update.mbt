@@ -4575,6 +4575,16 @@ fn update_msg(
         pending.id == id else {
         return (@cmd.none, model)
       }
+      if model.device_state(channel) is Some(device) &&
+        device.approval_snapshot is Some(snapshot) &&
+        snapshot.approvals.any(item => {
+          item.session == session &&
+          item.approval.id == id &&
+          item.approval.run_id == pending.run_id &&
+          item.approval.answered
+        }) {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         model.replace_conversation({
@@ -6603,6 +6613,7 @@ fn update_device_msg(
           {
             ..conv.clear_streams().forget_awaiting_inputs(),
             compaction: NotCompacting,
+            pending_approval: None,
           }
         } else {
           conv
@@ -6613,6 +6624,7 @@ fn update_device_msg(
         bridge: Connected,
         reconnect_failures: 0,
         connection_generation,
+        approval_snapshot: None,
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -8481,6 +8493,7 @@ fn update_device_msg(
       }
     }
     RunsLoaded(
+      approval_generation~,
       runs~,
       settled~,
       approvals~,
@@ -8605,85 +8618,46 @@ fn update_device_msg(
         next,
       )
       commands.push(settled_cmd)
-      // Standing questions land last, once every conversation in this snapshot
-      // has the run phase the snapshot gives it.
-      //
-      // Two passes, because they answer two different questions of two
-      // different sets. Seeding asks what the reply says exists, so it iterates
-      // the REPLY — a fresh page captures an empty frontier (`BridgeReady`
-      // issues this alongside `session.list`, before any conversation exists),
-      // and iterating the frontier would drop every question on the one path
-      // the replay was built for. Retiring asks what this page was showing that
-      // the reply lacks, which only the frontier knows.
-      let captured_by_session : Map[String, RunSnapshotFrontier] = Map([])
-      for row in frontier {
-        captured_by_session[row.session] = row
-      }
-      let mut seeded = settled
-      for recovered in approvals {
-        guard seeded.find_conversation(channel, recovered.session) is Some(conv) else {
-          continue
-        }
-        let showing = conv.pending_approval.map(pending => pending.id)
-        // Unchanged since the request went out — a session absent from the
-        // frontier captured nothing, so it must be showing nothing now.
-        // Anything else is newer truth than the reply, live events having
-        // landed meanwhile.
-        let captured = match captured_by_session.get(recovered.session) {
-          Some(row) => row.pending_approval_id
-          None => None
-        }
-        guard showing == captured else { continue }
-        // And the question must belong to the run this conversation has open.
-        // The check above compares two endpoints, so it cannot see a value
-        // that changed and changed back: with nothing captured, one question
-        // asked and resolved in flight, and its run replaced by a successor,
-        // both endpoints read `None` and this dead question would be seeded
-        // onto the new run — where answering it is rejected and the failure
-        // handler puts the buttons back, leaving a prompt that can never be
-        // dismissed. A question only exists inside a turn, so a conversation
-        // with no open run has none to restore.
-        guard conv.run is Open(run_id~, ..) &&
-          recovered.approval.run_id is Some(approval_run_id) &&
-          approval_run_id == run_id else {
-          continue
-        }
-        // Already on screen unchanged: leave it, answered flag and all. This
-        // resync runs on every reconnect, not only after a reload, so handing
-        // the buttons back to a card the user has already answered would be
-        // one question with two decisions.
-        if showing is Some(id) && id == recovered.approval.id {
-          continue
-        }
-        seeded = seeded.replace_conversation({
-          ..conv,
-          pending_approval: Some(recovered.approval),
-        })
-      }
-      // Retire: a question this page was showing that the reply lacks was
-      // answered while the page was away — by another client, or by the run
-      // ending. Its `approval_resolved` is gone for good (reconnect is resync;
-      // transients are not replayed), so nothing else will ever take that card
-      // down, and pressing it sends a decision the engine's desk discards.
-      //
-      for captured in frontier {
-        guard captured.pending_approval_id is Some(captured_id) else {
-          continue
-        }
-        if approvals.any(item => item.approval.id == captured_id) {
-          continue
-        }
-        guard seeded.find_conversation(channel, captured.session) is Some(conv) else {
-          continue
-        }
-        if conv.pending_approval is Some(current) && current.id == captured_id {
-          seeded = seeded.replace_conversation({
-            ..conv,
-            pending_approval: None,
-          })
-        }
-      }
+      let seeded = settled.with_approval_snapshot(channel, {
+        generation: approval_generation,
+        approvals,
+      })
       (@cmd.batch(commands), seeded)
+    }
+    ApprovalsChanged(snapshot) => {
+      if dev.approval_snapshot is Some(previous) &&
+        snapshot.generation <= previous.generation {
+        return (@cmd.none, model)
+      }
+      let commands : Array[@cmd.Cmd] = []
+      for recovered in snapshot.approvals {
+        let pending = recovered.approval
+        let already_known = dev.approval_snapshot.map_or(false, previous => {
+          previous.approvals.any(item => {
+            item.session == recovered.session &&
+            item.approval.id == pending.id &&
+            item.approval.run_id == pending.run_id
+          })
+        })
+        if !already_known &&
+          !pending.answered &&
+          model.find_conversation(channel, recovered.session) is Some(_) {
+          if approval_system_notification(
+              channel,
+              pending.run_id,
+              ApprovalRequested(
+                id=pending.id,
+                tool_name=pending.tool_name,
+                detail=pending.detail,
+                body=pending.body,
+              ),
+            )
+            is Some(notification) {
+            commands.push(notification.command(locale=model.locale))
+          }
+        }
+      }
+      (@cmd.batch(commands), model.with_approval_snapshot(channel, snapshot))
     }
     RunsSettled(live~, frontier~) => {
       // A conversation still showing an open run the host no longer has: the
@@ -13221,13 +13195,11 @@ test "runs settled closes runs the host no longer has, sparing live and starting
         session: "desktop-test",
         state: SnapshotOpen(run_id="r7"),
         initial_ids: [],
-        pending_approval_id: None,
       },
       {
         session: "desktop-stale",
         state: SnapshotOpen(run_id="r9"),
         initial_ids: [],
-        pending_approval_id: None,
       },
     ]),
     model,
@@ -13286,6 +13258,7 @@ test "reconnect recovers a Finished notification dropped behind a slow page" {
   let (_, recovered) = update_dev(
     dispatch,
     RunsLoaded(
+      approval_generation=0,
       runs=[],
       settled=[
         {
@@ -13405,6 +13378,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
   let dispatch = test_dispatch()
   let (_, generation_one) = update_dev(dispatch, BridgeReady, test_model())
   let stale = RunsLoaded(
+    approval_generation=0,
     runs=[
       {
         run_id: "old-run",
@@ -13427,6 +13401,7 @@ test "a stale runs snapshot cannot replay a foreign run after BridgeReady" {
   let (_, current) = update_dev(
     dispatch,
     RunsLoaded(
+      approval_generation=0,
       runs=[],
       settled=[],
       approvals=[],
@@ -13468,6 +13443,7 @@ test "a settlement captured for an older Starting owner cannot close its success
   let (_, unchanged) = update_dev(
     dispatch,
     RunsLoaded(
+      approval_generation=0,
       runs=[],
       settled=[
         {
@@ -13513,6 +13489,7 @@ test "an older positive runs row cannot replace a newer Started" {
   let (_, stale) = update_dev(
     dispatch,
     RunsLoaded(
+      approval_generation=0,
       runs=[
         {
           run_id: "r7",
@@ -13548,6 +13525,7 @@ test "an older positive runs row cannot resurrect a finished run" {
   let (_, stale) = update_dev(
     dispatch,
     RunsLoaded(
+      approval_generation=0,
       runs=[
         {
           run_id: "r7",
@@ -22355,4 +22333,48 @@ fn Model::test_resolve_editor(self : Model, path : String) -> Model {
     self,
   )
   model
+}
+
+///|
+/// Cache live state even before session.list/agent.runs creates its conversation.
+/// Older replies can still restore run metadata, but cannot revive a question
+/// whose later generation already disappeared from the host's live snapshot.
+fn Model::with_approval_snapshot(
+  self : Model,
+  channel : @interop.ChannelId,
+  incoming : ApprovalMirror,
+) -> Model {
+  guard self.device_state(channel) is Some(dev) else { return self }
+  let snapshot = match dev.approval_snapshot {
+    Some(previous) if previous.generation > incoming.generation => previous
+    _ => incoming
+  }
+  let model = self.replace_device({ ..dev, approval_snapshot: Some(snapshot), })
+  {
+    ..model,
+    conversations: model.conversations.map(conv => {
+      if conv.device != channel {
+        return conv
+      }
+      let pending = snapshot.approvals
+        .iter()
+        .find_first(item => {
+          item.session == conv.session_id &&
+          conv.run is Open(run_id~, ..) &&
+          item.approval.run_id == Some(run_id)
+        })
+        .map(item => {
+          let answered_here = conv.pending_approval.map_or(false, previous => {
+            previous.id == item.approval.id &&
+            previous.run_id == item.approval.run_id &&
+            previous.answered
+          })
+          {
+            ..item.approval,
+            answered: item.approval.answered || answered_here,
+          }
+        })
+      { ..conv, pending_approval: pending, }
+    }),
+  }
 }

@@ -208,6 +208,8 @@ pub impl FromJson for RunSettlementPayload with fn from_json(json, path) {
 /// still knows, which is why this rides the same snapshot `agent.runs` already
 /// uses to tell a rejoining client what is in flight.
 pub(all) struct PendingApprovalPayload {
+  /// The host accepted an answer for delivery; engine resolution is still pending.
+  answered : Bool
   /// The id the decision must carry back. Reused verbatim on replay: a
   /// rejoining client answers the same question, not a new one.
   id : String
@@ -221,10 +223,11 @@ pub(all) struct PendingApprovalPayload {
 
 ///|
 pub(all) struct RunsReply {
+  approval_generation : Int32
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
-  /// Questions still waiting for an answer. Empty for a host with none, and
-  /// for every engine that never asks.
+  /// Unresolved questions, including accepted answers awaiting engine resolution.
+  /// Empty for a host with none, and for every engine that never asks.
   approvals : Array[PendingApprovalPayload]
 } derive(Debug, Eq)
 

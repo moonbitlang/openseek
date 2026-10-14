@@ -1617,7 +1617,7 @@ test('a floating reply takes a comment of several lines', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-test('approval card sends its decision through the browser transport', async ({ page }) => {
+test('approval card mirrors host claims and sends an unclaimed decision', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1630,25 +1630,34 @@ test('approval card sends its decision through the browser transport', async ({ 
     model: 'deepseek-v4-pro',
     max_steps: 1000,
   });
-  app.notify('agent.event', {
-    run_id: 'run-1',
-    session: 'session-1',
-    event: {
-      event: 'approval_requested',
-      id: 'approval-1',
-      tool_name: 'mbtx',
-      detail: 'run this snippet with no sandbox policy',
-      body: 'fn main { @myshell.Cmd("npm", ["ci"]) }',
-    },
-  });
+  const pending = {
+    run_id: 'run-1', session: 'session-1', answered: false,
+    id: 'approval-1', tool_name: 'mbtx',
+    detail: 'run this snippet with no sandbox policy',
+    body: 'fn main { @myshell.Cmd("npm", ["ci"]) }',
+  };
+  app.notify('agent.approvals', { generation: 1, approvals: [pending] });
 
   const approval = page.locator('.composer-approval');
   await expect(approval).toBeVisible();
+  await approval.screenshot({ path: testInfo.outputPath('approval-awaiting-answer.png') });
+  // A different client answered: this page must stop offering either decision.
+  app.notify('agent.approvals', { generation: 2, approvals: [{ ...pending, answered: true }] });
+  await expect(approval.locator('.composer-approval-state')).toBeVisible();
+  await expect(approval.getByRole('button')).toHaveCount(0);
+  await approval.screenshot({ path: testInfo.outputPath('approval-answer-submitted.png') });
+  app.notify('agent.approvals', { generation: 3, approvals: [] });
+  await expect(approval).toHaveCount(0);
+
+  // A subsequent, unclaimed question is still answerable through the bridge.
+  app.notify('agent.approvals', { generation: 4, approvals: [{ ...pending, id: 'approval-2' }] });
   await approval.getByRole('button', { name: 'Allow once' }).click();
   await expect.poll(() => app.requests.some(request =>
     request.method === 'agent.approval' &&
-    request.params?.id === 'approval-1' &&
+    request.params?.run_id === 'run-1' &&
+    request.params?.id === 'approval-2' &&
     request.params?.allow === true)).toBe(true);
+  await expect(approval.locator('.composer-approval-state')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 

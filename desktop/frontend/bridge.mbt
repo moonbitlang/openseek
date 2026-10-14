@@ -181,6 +181,13 @@ fn device_msg(
     // The payload's stage says how much of the host is up; every stage asks
     // this client for the same resync, so the signal alone is the message.
     AgentConnected(_) => Some(BridgeReady)
+    AgentApprovals(payload) =>
+      Some(
+        ApprovalsChanged({
+          generation: payload.generation,
+          approvals: recover_approvals(payload.approvals),
+        }),
+      )
     AgentStarted(payload) => started_msg(channel, payload)
     AgentEvent(payload) => engine_msg(payload)
     AgentError(payload) => error_msg(payload)
@@ -606,31 +613,13 @@ fn fetch_runs(
       // Standing questions come back unfiltered: unlike a settlement, which is
       // history only its owner wants, a blocked turn is stopped right now and
       // whoever is looking at that session should be able to unblock it.
-      let recovered_approvals : Array[RecoveredApproval] = []
-      for item in reply.approvals {
-        recovered_approvals.push({
-          session: item.session,
-          approval: {
-            id: item.id,
-            run_id: item.run_id,
-            tool_name: item.tool_name,
-            detail: item.detail,
-            body: approval_display_body(item.tool_name, item.body),
-            // Replayed to a page that never sent a decision for it, so the
-            // card comes back answerable. A decision this page sent before it
-            // reloaded either reached the engine — and the question is gone
-            // from the host, so there is nothing here to replay — or it did
-            // not, and offering it again is the point.
-            answered: false,
-          },
-        })
-      }
       scheduler.add(
         dispatch(
           RunsLoaded(
             runs=recovered,
             settled=recovered_settlements,
-            approvals=recovered_approvals,
+            approvals=recover_approvals(reply.approvals),
+            approval_generation=reply.approval_generation,
             live~,
             frontier~,
             connection_generation~,
@@ -799,6 +788,10 @@ fn session_event_msg(
 ///|
 fn engine_msg(payload : @protocol.AgentEventPayload) -> DeviceMsg? {
   guard !payload.session.is_empty() else { return None }
+  // Versioned ownership snapshots are authoritative for permission questions.
+  if payload.event is (ApprovalRequested(..) | ApprovalResolved(..)) {
+    return None
+  }
   if payload.event is @wire.JobChanged(..) {
     return Some(JobsChanged(payload.session))
   }
@@ -1827,5 +1820,22 @@ fn reveal_file(
       }
     })
     |> ignore
+  })
+}
+
+///|
+fn recover_approvals(
+  items : Array[@protocol.PendingApprovalPayload],
+) -> Array[RecoveredApproval] {
+  items.map(item => {
+    session: item.session,
+    approval: {
+      id: item.id,
+      run_id: item.run_id,
+      tool_name: item.tool_name,
+      detail: item.detail,
+      body: approval_display_body(item.tool_name, item.body),
+      answered: item.answered,
+    },
   })
 }

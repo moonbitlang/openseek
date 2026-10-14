@@ -10,6 +10,11 @@
 /// `internal/commands`; this package only binds them to native handlers.
 
 ///|
+let approvals_event : @proton_contract.Event[@protocol.ApprovalSnapshot] = @commands.extension_contract.event(
+  @protocol.NotificationKind::AgentApprovals.wire_name(),
+)
+
+///|
 let connected_event : @proton_contract.Event[@protocol.ConnectedPayload] = @commands.extension_contract.event(
   @protocol.NotificationKind::AgentConnected.wire_name(),
 )
@@ -233,6 +238,7 @@ async fn PageEventTarget::emit(
   // Matching the closed enum keeps each Proton descriptor paired with the
   // payload type that belongs to that event.
   match notification {
+    Hub(AgentApprovals(payload)) => self.events.emit(approvals_event, payload)
     Hub(AgentConnected(payload)) => self.events.emit(connected_event, payload)
     Hub(AgentStarted(payload)) => self.events.emit(started_event, payload)
     Hub(AgentEvent(payload)) => self.events.emit(agent_event, payload)

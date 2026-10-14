@@ -595,7 +595,7 @@ priv struct RecoveredSettlement {
 priv struct RecoveredApproval {
   session : String
   approval : PendingApproval
-}
+} derive(Eq)
 
 ///|
 /// The exact per-session lifecycle state at the instant an `agent.runs`
@@ -616,12 +616,6 @@ priv struct RunSnapshotFrontier {
   // Their submission id is still an exact owner and must survive the
   // lifecycle's transition to SnapshotIdle for reconnect settlement lookup.
   initial_ids : Array[String]
-  // The permission question this page was showing when the request began, if
-  // any. A snapshot that does not list it proves it was answered while this
-  // page was away — but only for THIS id: a question asked after the request
-  // went out is not in the reply either, and clearing that one would take a
-  // live card off screen and leave the turn blocked with nothing to press.
-  pending_approval_id : String?
 }
 
 ///|
@@ -1225,10 +1219,17 @@ priv struct ArchiveOverride {
 ///|
 
 ///|
+priv struct ApprovalMirror {
+  generation : Int32
+  approvals : Array[RecoveredApproval]
+} derive(Eq)
+
+///|
 /// Everything that exists once per connected device channel. The app holds
 /// one entry per channel in `Model::devices` — exactly one today (the page's
 /// own host); the multi-device console renders one sidebar group per entry.
 priv struct DeviceState {
+  approval_snapshot : ApprovalMirror?
   // The channel this state mirrors.
   channel : @interop.ChannelId
   // Whether the channel's host bridge is up; see `BridgeState`.
@@ -1300,6 +1301,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_attempt: 0,
     reconnect_failures: 0,
     connection_generation: 0,
+    approval_snapshot: None,
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -2203,6 +2205,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  ApprovalsChanged(ApprovalMirror)
   BridgeReady
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
@@ -2487,6 +2490,7 @@ priv enum DeviceMsg {
   // generation; dispatching its rows separately would let a stale reply
   // resurrect a run after a later BridgeReady already resynced it away.
   RunsLoaded(
+    approval_generation~ : Int32,
     runs~ : Array[RecoveredRun],
     settled~ : Array[RecoveredSettlement],
     // Permission questions the host's engines are still blocked on. A card
@@ -3163,12 +3167,7 @@ fn Model::run_snapshot_frontier(
     if conv.pending_prompt is Some(pending) {
       initial_ids.push(pending.submission_id)
     }
-    {
-      session: conv.session_id,
-      state,
-      initial_ids,
-      pending_approval_id: conv.pending_approval.map(pending => pending.id),
-    }
+    { session: conv.session_id, state, initial_ids, }
   })
 }
 

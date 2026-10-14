@@ -127,6 +127,18 @@ pub fn ApprovalReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ApprovalReply
 pub impl @json.FromJson for ApprovalReply
 
+pub(all) struct ApprovalSnapshot {
+  generation : Int
+  approvals : Array[PendingApprovalPayload]
+} derive(Eq, @debug.Debug)
+pub fn ApprovalSnapshot::equal(Self, Self) -> Bool
+pub fn ApprovalSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ApprovalSnapshot::not_equal(Self, Self) -> Bool
+pub fn ApprovalSnapshot::to_json(Self) -> Json
+pub fn ApprovalSnapshot::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ApprovalSnapshot
+pub impl @json.FromJson for ApprovalSnapshot
+
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String
   dirty_paths : Array[String]
@@ -2220,6 +2232,7 @@ pub impl ToJson for MoonPackageGraphReply
 pub impl @json.FromJson for MoonPackageGraphReply
 
 pub(all) enum Notification {
+  AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
   AgentStarted(StartedPayload)
   AgentEvent(AgentEventPayload)
@@ -2258,6 +2271,7 @@ pub fn Notification::to_repr(Self) -> @debug.Repr
 pub fn Notification::wire_name(Self) -> String
 
 pub(all) enum NotificationKind {
+  AgentApprovals
   AgentConnected
   AgentStarted
   AgentEvent
@@ -2416,6 +2430,7 @@ pub fn PatternRepairStatus::not_equal(Self, Self) -> Bool
 pub fn PatternRepairStatus::to_repr(Self) -> @debug.Repr
 
 pub(all) struct PendingApprovalPayload {
+  answered : Bool
   id : String
   session : String
   run_id : String?
@@ -2600,6 +2615,7 @@ pub impl ToJson for RunsPayload
 pub impl @json.FromJson for RunsPayload
 
 pub(all) struct RunsReply {
+  approval_generation : Int
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   approvals : Array[PendingApprovalPayload]

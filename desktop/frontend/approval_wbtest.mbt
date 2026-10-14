@@ -9,7 +9,11 @@ fn fold_engine(
   conv : Conversation,
   event : @transcript.EngineEvent,
 ) -> Conversation {
-  let (_, next) = apply_engine_event(conv, event, Some("r-test"))
+  let run_id = match conv.run {
+    Open(run_id~, ..) => Some(run_id)
+    _ => None
+  }
+  let (_, next) = apply_engine_event(conv, event, run_id)
   next
 }
 
@@ -35,7 +39,7 @@ test "a permission question becomes the conversation's pending approval" {
   assert_false(pending.answered)
   // It belongs to the run it was asked in, so a slow decision cannot settle a
   // question in a later one.
-  assert_eq(pending.run_id, Some("r-test"))
+  assert_eq(pending.run_id, Some("r7"))
   assert_eq(
     test_model().replace_conversation(conv).notification_badge_count(),
     1,
@@ -301,6 +305,7 @@ fn runs_loaded_with_approvals(
   FromDevice(
     @interop.ChannelId::Local,
     RunsLoaded(
+      approval_generation=0,
       runs=[],
       settled=[],
       approvals~,
@@ -447,6 +452,7 @@ test "a resync leaves a question asked after the request went out" {
       ),
     ),
   )
+  let racing = observe_approval_snapshot(racing, 1)
   let (_, resynced) = update(test_dispatch(), resync, racing)
   guard resynced.active_conversation() is Some(after) else {
     fail("expected the conversation")
@@ -499,6 +505,7 @@ test "a stale snapshot does not overwrite a newer question" {
       ),
     ),
   )
+  let moved_on = observe_approval_snapshot(moved_on, 1)
   let (_, resynced) = update(test_dispatch(), resync, moved_on)
   guard resynced.active_conversation() is Some(conv) else {
     fail("expected the conversation")
@@ -540,6 +547,7 @@ test "a question from a finished run is not seeded onto its successor" {
     run: Open(run_id="r-successor", stage=Opened),
     pending_approval: None,
   })
+  let moved_on = observe_approval_snapshot(moved_on, 1)
   let (_, resynced) = update(test_dispatch(), resync, moved_on)
   guard resynced.active_conversation() is Some(after) else {
     fail("expected the conversation")
@@ -566,6 +574,7 @@ test "a session missing from the frontier still gets its question" {
     FromDevice(
       @interop.ChannelId::Local,
       RunsLoaded(
+        approval_generation=0,
         runs=[],
         settled=[],
         approvals=[
@@ -616,6 +625,7 @@ test "a question survives a run handoff inside one snapshot" {
     FromDevice(
       @interop.ChannelId::Local,
       RunsLoaded(
+        approval_generation=0,
         runs=[
           {
             run_id: "r-successor",
@@ -653,7 +663,6 @@ test "a question survives a run handoff inside one snapshot" {
             session: asked.session_id,
             state: SnapshotOpen(run_id~),
             initial_ids: [],
-            pending_approval_id: Some("ap-1"),
           },
         ],
         connection_generation=0,
@@ -735,4 +744,112 @@ test "a finished run leaves a question belonging to another run" {
   }
   assert_true(after.pending_approval is Some(_))
   assert_eq(ended.notification_badge_count(), 1)
+}
+
+///|
+test "versioned approval snapshots close the same-run ABA recovery gap" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected running fixture") }
+  let model = test_model().replace_conversation(conv)
+  let pending : RecoveredApproval = {
+    session: conv.session_id,
+    approval: {
+      id: "ap-aba",
+      run_id: Some(run_id),
+      tool_name: "mbtx",
+      detail: "demo",
+      body: None,
+      answered: false,
+    },
+  }
+  let (_, asked) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation: 1, approvals: [pending], }),
+    model,
+  )
+  let (_, resolved) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation: 2, approvals: [], }),
+    asked,
+  )
+  let (_, delayed) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(model, [pending]),
+    resolved,
+  )
+  assert_true(delayed.active().pending_approval is None)
+  guard delayed.focused_device()
+    is Some({ approval_snapshot: Some(snapshot), .. }) else {
+    fail("expected approval cache")
+  }
+  assert_eq(snapshot.generation, 2)
+  // Cache a live question that arrives before any conversation is materialized.
+  let empty = { ..model, conversations: [], }
+  let (_, early) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation: 3, approvals: [pending], }),
+    empty,
+  )
+  let materialized = early.replace_conversation(conv)
+  let (_, restored) = update(
+    test_dispatch(),
+    runs_loaded_with_approvals(model, []),
+    materialized,
+  )
+  assert_true(restored.active().pending_approval is Some({ id: "ap-aba", .. }))
+}
+
+///|
+test "host claimed approval stays answered after a losing window receives refusal" {
+  let conv = running_conversation()
+  guard conv.run is Open(run_id~, ..) else { fail("expected running fixture") }
+  let model = test_model().replace_conversation(conv)
+  let pending : RecoveredApproval = {
+    session: conv.session_id,
+    approval: {
+      id: "ap-claim",
+      run_id: Some(run_id),
+      tool_name: "mbtx",
+      detail: "demo",
+      body: None,
+      answered: true,
+    },
+  }
+  let (_, claimed) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation: 2, approvals: [pending], }),
+    model,
+  )
+  let (_, refused) = update(
+    test_dispatch(),
+    ApprovalAnswerFailed(channel=Local, session=conv.session_id, id="ap-claim"),
+    claimed,
+  )
+  assert_true(refused.active().pending_approval is Some({ answered: true, .. }))
+  let (_, reconnecting) = update_dev(test_dispatch(), BridgeReady, refused)
+  assert_true(reconnecting.active().pending_approval is None)
+  let (_, recovered) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation: 1, approvals: [pending], }),
+    reconnecting,
+  )
+  assert_true(
+    recovered.active().pending_approval is Some({ answered: true, .. }),
+  )
+}
+
+///|
+fn observe_approval_snapshot(model : Model, generation : Int32) -> Model {
+  let approvals : Array[RecoveredApproval] = []
+  for conv in model.conversations {
+    if conv.pending_approval is Some(approval) {
+      approvals.push({ session: conv.session_id, approval, })
+    }
+  }
+  let (_, next) = update_dev(
+    test_dispatch(),
+    ApprovalsChanged({ generation, approvals, }),
+    model,
+  )
+  next
 }
