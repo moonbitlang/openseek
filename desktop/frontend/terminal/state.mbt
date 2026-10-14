@@ -70,6 +70,8 @@ priv struct Tab {
 ///|
 struct State {
   open : Bool
+  /// Remember the panel size preference even while hidden.
+  maximized : Bool
   tabs : Array[Tab]
   /// The remembered active tab per workspace group, as an association list
   /// (small; a workspace rarely has more than a handful of tabs).
@@ -101,6 +103,7 @@ struct State {
 pub fn State::empty() -> State {
   {
     open: false,
+    maximized: false,
     tabs: [],
     active: [],
     shown: None,
@@ -115,6 +118,11 @@ pub fn State::empty() -> State {
 /// Whether the shell grid should reserve the terminal row.
 pub fn State::is_open(self : State) -> Bool {
   self.open
+}
+
+///|
+pub fn State::is_maximized(self : State) -> Bool {
+  self.maximized
 }
 
 ///|
@@ -241,6 +249,7 @@ pub(all) enum CommandStart {
 pub(all) enum Msg {
   /// Show/hide the panel (every shell keeps running while hidden).
   ToggleTerminal
+  ToggleMaximized
   /// `terminal_exit` event: the shell ended, so its tab retires.
   SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int32)
   /// Open one more terminal in the active conversation's workspace.

@@ -8,11 +8,23 @@ priv enum UiMessage {
   WaitingPlacement
   MissingWorktree
   HideTerminal
+  MaximizeTerminal
+  RestoreTerminal
 }
 
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, MaximizeTerminal) => "Maximize terminal"
+    (Spanish, MaximizeTerminal) => "Maximizar terminal"
+    (SimplifiedChinese, MaximizeTerminal) => "最大化终端"
+    (TraditionalChinese, MaximizeTerminal) => "最大化終端"
+    (Japanese, MaximizeTerminal) => "ターミナルを最大化"
+    (English, RestoreTerminal) => "Restore terminal size"
+    (Spanish, RestoreTerminal) => "Restaurar tamaño de terminal"
+    (SimplifiedChinese, RestoreTerminal) => "还原终端大小"
+    (TraditionalChinese, RestoreTerminal) => "還原終端大小"
+    (Japanese, RestoreTerminal) => "ターミナルのサイズを元に戻す"
     (English, CloseTerminal) => "Close terminal"
     (Spanish, CloseTerminal) => "Cerrar terminal"
     (SimplifiedChinese, CloseTerminal) => "关闭终端"

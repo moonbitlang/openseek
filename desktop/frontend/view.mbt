@@ -2108,6 +2108,9 @@ fn view(
   }
   if terminal_panel_visible {
     content_class += " terminal-open"
+    if model.terminal.is_maximized() {
+      content_class += " terminal-maximized"
+    }
   }
   let page_content = [
     @html.div(

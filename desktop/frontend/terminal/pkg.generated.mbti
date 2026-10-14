@@ -52,6 +52,7 @@ pub fn InputWriteFailure::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ToggleTerminal
+  ToggleMaximized
   SessionExited(channel~ : @interop.ChannelId, id~ : String, code~ : Int)
   NewTerminal
   CloseActiveTerminal
@@ -75,6 +76,7 @@ type State derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(Self, @cmd.Emit[Msg], Msg, Input) -> (@cmd.Cmd, Self)
+pub fn State::is_maximized(Self) -> Bool
 pub fn State::is_open(Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::reconcile(Self, @cmd.Emit[Msg], Input) -> (Self, @cmd.Cmd)

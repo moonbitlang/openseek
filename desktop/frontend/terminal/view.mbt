@@ -136,6 +136,42 @@ fn panel_view(
       ),
     )
   }
+  let maximize_label = ui(
+    locale,
+    if state.maximized {
+      RestoreTerminal
+    } else {
+      MaximizeTerminal
+    },
+  )
+  items.push(
+    @html.button(
+      class="terminal-maximize",
+      title=maximize_label,
+      attrs=@html.Attrs::build()
+        .aria_label(maximize_label)
+        .aria_pressed(state.maximized.to_string()),
+      on_click=dispatch(ToggleMaximized),
+      @svg.svg(
+        width=16,
+        height=16,
+        view_box="0 0 16 16",
+        attrs=@svg.Attrs::build()
+          .fill("none")
+          .stroke("currentColor")
+          .stroke_linecap("round"),
+        [
+          @svg.path(
+            d=if state.maximized {
+              "M2.5 6H6V2.5M13.5 6H10V2.5M13.5 10H10v3.5M2.5 10H6v3.5"
+            } else {
+              "M6 2.5H2.5V6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"
+            },
+          ),
+        ],
+      ),
+    ),
+  )
   items.push(
     @html.button(
       class="terminal-close",

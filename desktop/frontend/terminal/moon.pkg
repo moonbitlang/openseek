@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/encoding/utf8",
   "openseek_desktop/frontend/i18n",
+  "moonbit-community/rabbita/svg",
   "moonbit-community/rabbita",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/dom",

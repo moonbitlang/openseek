@@ -40,6 +40,17 @@
   transform: translateY(-50%);
   cursor: row-resize;
 }
+/* Keep the conversation and its header mounted, retaining scroll position
+   and draft input. The saved --terminal-height remains untouched. */
+.content.terminal-maximized {
+  grid-template-rows: var(--topbar-height) minmax(0, 1fr);
+}
+.content.terminal-maximized > main > :not(.topbar) {
+  visibility: hidden;
+}
+.content.terminal-maximized .terminal-resize-handle {
+  display: none;
+}
 .terminal-resize-handle:hover,
 html.is-resizing-terminal .terminal-resize-handle {
   background: var(--color-accent-soft);
@@ -126,8 +137,9 @@ html.is-resizing-terminal * {
 .terminal-status.terminal-error {
   color: var(--color-danger);
 }
+.terminal-maximize,
 .terminal-close {
-  margin-left: auto;
+  flex-shrink: 0;
   border: 0;
   background: none;
   color: var(--color-text-muted);
@@ -135,6 +147,12 @@ html.is-resizing-terminal * {
     var(--font-family-sans);
   cursor: pointer;
 }
+.terminal-maximize {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+.terminal-maximize:hover,
 .terminal-close:hover {
   color: var(--color-text-primary);
 }

@@ -225,6 +225,12 @@ fn update(
 ) -> (@cmd.Cmd, State) {
   let checkout_ready = ctx.placement is Some(placement) && placement.is_ready()
   match msg {
+    ToggleMaximized =>
+      if state.open {
+        (@cmd.none, { ..state, maximized: !state.maximized, })
+      } else {
+        (@cmd.none, state)
+      }
     ToggleTerminal =>
       if state.open {
         // Hide only — every shell keeps running for the panel's return.

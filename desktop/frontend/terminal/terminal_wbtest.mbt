@@ -153,6 +153,7 @@ test "a disconnected channel retires only its terminal tabs" {
   }
   let state : State = {
     open: true,
+    maximized: false,
     tabs: [
       {
         key: "tab-local",
