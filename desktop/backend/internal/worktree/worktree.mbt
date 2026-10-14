@@ -680,7 +680,7 @@ pub async fn add_session_to_worktree(
   }
   let row = entries[index]
   let checkout = worktree_dir(workspace, row.name)
-  let present = @fsx.is_dir(checkout.to_path()) catch { _ => false }
+  let present = @fsx.is_dir(checkout.to_path())
   guard present else { raise WorktreeError(missing_checkout_refusal(row.name)) }
   entries[index] = { ..row, sessions: [..row.sessions, session], }
   write_worktrees(workspace, entries)
