@@ -779,8 +779,7 @@ fn main {
       by=slot => {
         match slot {
           (Some({ preview: p, .. }), _, Some(_)) =>
-            "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:" +
-            p.capture.url
+            "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:\{p.id}"
           _ => "closed"
         }
       },

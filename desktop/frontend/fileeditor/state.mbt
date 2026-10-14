@@ -469,10 +469,12 @@ pub(all) struct State {
   office_selection : OfficeSelectionPreview?
   // None when no draft exists; Some("") is an open, empty draft.
   office_selection_comment : String?
-  // Monotonic across document reloads and owner changes, so late PDF runtime
-  // callbacks cannot settle a later load of the same path and signature.
   pdf_capture : PdfCaptureDraft?
   pdf_capture_batch : Bool
+  // Feedback identity is independent of the image contents and draft text.
+  pdf_capture_id : Int64
+  // Monotonic across document reloads and owner changes, so late PDF runtime
+  // callbacks cannot settle a later load of the same path and signature.
   pdf_generation : Int32
   // The explorer's Files/Changes/Search selection. The selection survives a
   // conversation switch; checkout-derived inventories do not (see `sync`).
@@ -663,6 +665,7 @@ pub fn State::empty() -> State {
     office_selection_comment: None,
     pdf_capture: None,
     pdf_capture_batch: false,
+    pdf_capture_id: 0L,
     pdf_generation: 0,
     explorer_mode: ExplorerFiles,
     search: @grep_search.State::empty(),

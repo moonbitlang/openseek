@@ -19,6 +19,7 @@ priv enum UiMessage {
   PdfCaptureFailed
   PdfCaptureTooLarge
   PdfCaptureUnavailable
+  PdfCapturePendingAnnotation
   PdfFitWidth
   PdfRotate
   PdfSearching
@@ -245,6 +246,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (Spanish, PdfCapture) => "Capturar región"
     (English, PdfCaptureHint) =>
       "Click text or drag a region to annotate · Esc to cancel"
+    (English, PdfCapturePendingAnnotation) =>
+      "Submit or cancel the current annotation before capturing a region."
+    (SimplifiedChinese, PdfCapturePendingAnnotation) =>
+      "请先提交或取消当前批注，再进行区域截图。"
+    (TraditionalChinese, PdfCapturePendingAnnotation) =>
+      "請先提交或取消目前的註解，再擷取區域。"
+    (Japanese, PdfCapturePendingAnnotation) =>
+      "範囲を撮影する前に、現在の注釈を送信またはキャンセルしてください。"
+    (Spanish, PdfCapturePendingAnnotation) =>
+      "Envía o cancela la anotación actual antes de capturar una región."
     (SimplifiedChinese, PdfCaptureHint) =>
       "点击文字或拖动框选以批注 · Esc 取消"
     (TraditionalChinese, PdfCaptureHint) =>

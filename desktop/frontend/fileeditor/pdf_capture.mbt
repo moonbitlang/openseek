@@ -40,6 +40,7 @@ pub fn capture_unavailable_message(locale : @i18n.Locale) -> String {
 
 ///|
 pub(all) struct PdfCapturePreview {
+  id : Int64
   owner : @interop.ConversationKey
   epoch : Int32
   path : @common.Uri

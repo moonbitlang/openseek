@@ -414,6 +414,53 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
 });
 
 
+for (const action of ['cancel', 'batch']) {
+  test(`PDF capture preserves a typed text annotation until ${action}`, async ({ page }) => {
+    const app = await setup(page);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
+    const select = () => text.evaluate(element => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      document.dispatchEvent(new Event('selectionchange'));
+    });
+    const preview = page.locator('.office-selection-preview');
+    const input = preview.locator('textarea[data-agent-feedback-input]');
+    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
+    await select();
+    await expect(input).toBeVisible();
+    await expect(camera).toBeEnabled();
+    await input.fill('Keep my annotation');
+    await expect(camera).toBeDisabled();
+    await expect(camera).toHaveAttribute('title', 'Submit or cancel the current annotation before capturing a region.');
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue('Keep my annotation');
+    await expect(preview.locator('.feedback-source-selection')).toHaveCount(1);
+    if (action === 'cancel') {
+      await input.press('Escape');
+    } else {
+      await preview.getByRole('checkbox').check();
+      await input.press('Enter');
+      await expect(page.locator('.mention-chip')).toContainText('Keep my annotation');
+    }
+    await expect(camera).toBeEnabled();
+    await camera.click();
+    await expect(page.locator('.pdf-region-capture')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
+    await select();
+    await expect(input).toBeVisible();
+    await input.fill('Next annotation');
+    await expect(input).toHaveValue('Next annotation');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 for (const theme of ['light', 'dark']) {
 test(`PDF annotation matches Markdown and code styling and anchors beside the selected text (${theme})`, async ({ page }, testInfo) => {
   await page.emulateMedia({ colorScheme: theme });

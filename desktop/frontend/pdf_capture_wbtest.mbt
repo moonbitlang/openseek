@@ -74,6 +74,8 @@ test "PDF region capture offers feedback without changing either composer and is
     assert_true(requested.file_panel.docs == model.file_panel.docs)
     let (_, first) = update_msg(test_dispatch(), captured(ctx, path), model)
     let (_, again) = update_msg(test_dispatch(), captured(ctx, path), model)
+    assert_eq(first.file_panel.pdf_capture_id, 1L)
+    assert_true(first.file_panel == again.file_panel)
     let input = if codex {
       first.codex_composer_input()
     } else {
@@ -98,6 +100,61 @@ test "PDF region capture offers feedback without changing either composer and is
         model.composer_input()
       }).draft.task,
     )
+  }
+}
+
+///|
+test "repeated identical screenshots get distinct identities and reject retired callbacks" {
+  let (model, ctx, path) = pdf_capture_model()
+  let (_, first) = update_msg(test_dispatch(), captured(ctx, path), model)
+  guard first.file_panel.pdf_capture is Some(old) else {
+    fail("missing capture")
+  }
+  let (_, second) = update_msg(test_dispatch(), captured(ctx, path), first)
+  assert_eq(second.file_panel.pdf_capture_id, 2L)
+  guard second.file_panel.pdf_capture is Some(current) else {
+    fail("missing second capture")
+  }
+  assert_true(old.preview.id != current.preview.id)
+  let (_, unchanged) = update_msg(
+    test_dispatch(),
+    FileEditor(@fileeditor.PdfCaptureDismissed(old.preview)),
+    second,
+  )
+  assert_true(unchanged.file_panel == second.file_panel)
+  let (_, edited) = update_msg(
+    test_dispatch(),
+    FileEditor(
+      @fileeditor.PdfCaptureFeedbackChanged(current.preview, "Keep this"),
+    ),
+    second,
+  )
+  assert_eq(edited.file_panel.pdf_capture_id, 2L)
+}
+
+///|
+test "capture requests preserve a pinned Office annotation without running browser effects" {
+  for codex in [false, true] {
+    let (model, ctx, path) = office_selection_model(codex~)
+    let (_, pending) = update_msg(
+      test_dispatch(),
+      root_office_selection(ctx, path, "Selected text"),
+      model,
+    )
+    guard pending.file_panel.pending_office_selection(file_ctx(pending))
+      is Some(preview) else {
+      fail("missing Office selection")
+    }
+    let (_, drafting) = update_msg(
+      test_dispatch(),
+      FileEditor(@fileeditor.OfficeFeedbackChanged(preview, "Keep this draft")),
+      pending,
+    )
+    let msg = FileEditor(@fileeditor.PdfCaptureRequested)
+    let (_, first) = update_msg(test_dispatch(), msg, drafting)
+    let (_, again) = update_msg(test_dispatch(), msg, drafting)
+    assert_true(first == drafting)
+    assert_true(again == drafting)
   }
 }
 

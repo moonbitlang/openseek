@@ -3288,6 +3288,11 @@ fn update_msg(
       }
     }
     FileEditor(@fileeditor.PdfCaptureRequested) => {
+      // A typed text annotation owns its source until submitted or cancelled.
+      // Do not hide that composer or its selection when capture is requested.
+      guard !model.file_panel.has_pinned_office_selection(file_ctx(model)) else {
+        return (@cmd.none, model)
+      }
       guard model.can_attach_pdf_capture() else {
         return model.notify_error(
           dispatch,
@@ -3332,6 +3337,7 @@ fn update_msg(
         Err(message) => return model.notify_error(dispatch, message)
       }
       let preview : @fileeditor.PdfCapturePreview = {
+        id: model.file_panel.pdf_capture_id + 1L,
         owner,
         epoch,
         path,
@@ -3346,6 +3352,7 @@ fn update_msg(
           file_panel: {
             ..model.file_panel,
             pdf_capture: Some({ preview, comment: "", }),
+            pdf_capture_id: preview.id,
           },
         },
       )

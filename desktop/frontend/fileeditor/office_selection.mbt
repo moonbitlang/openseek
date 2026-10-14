@@ -75,6 +75,13 @@ pub fn State::pending_office_selection(
 }
 
 ///|
+pub fn State::has_pinned_office_selection(self : State, ctx : Ctx) -> Bool {
+  self.pending_office_selection(ctx) is Some(_) &&
+  self.office_selection_comment is Some(comment) &&
+  !comment.trim().is_empty()
+}
+
+///|
 pub fn State::offer_office_selection(
   self : State,
   ctx : Ctx,
@@ -87,9 +94,7 @@ pub fn State::offer_office_selection(
     return Ok(self)
   }
   // A typed draft pins its original source until submission or cancellation.
-  if self.pending_office_selection(ctx) is Some(_) &&
-    self.office_selection_comment is Some(comment) &&
-    !comment.trim().is_empty() {
+  if self.has_pinned_office_selection(ctx) {
     return Ok(self)
   }
   let (sig, pdf_generation) = match self.docs.get(path) {
