@@ -1,5 +1,5 @@
 // Browser resources are scoped to one mounted PDF session. Only commands and
-// plain PNG data cross this package boundary.
+// serializable capture data cross this package boundary.
 
 ///|
 extern "js" fn start_region(
@@ -16,6 +16,7 @@ extern "js" fn start_region(
     FixedArray[Double],
     Int32,
     @js.Nullable[String],
+    String,
   ) -> Unit,
   failed : (String) -> Unit,
   make_targets : (String, () -> Unit) -> @js.Value,
@@ -150,7 +151,7 @@ extern "js" fn start_region(
   #|         const width = Math.min(rect.x+rect.width, b.right)-x;
   #|         const height = Math.min(rect.y+rect.height, b.bottom)-y;
   #|         if (width > 0 && height > 0 && b.width > 0 && b.height > 0 && canvas.width > 0 && canvas.height > 0) {
-  #|           pieces.push({ canvas, b, x, y, width, height, page: Number(page.dataset.pageNumber), pageRect });
+  #|           pieces.push({ canvas, b, x, y, width, height, page: Number(page.dataset.pageNumber), pageRect, viewport: view.viewport });
   #|         }
   #|       }
   #|       if (!pieces.length) { failed(failure); return; }
@@ -171,11 +172,21 @@ extern "js" fn start_region(
   #|       const url = output.toDataURL('image/png');
   #|       if (!url.startsWith('data:image/png;base64,')) throw new Error('PNG export failed');
   #|       if ((url.length-22)*3/4 > 5*1024*1024) { failed(tooLarge); return; }
+  #|       const source = JSON.stringify({
+  #|         document: session.identity,
+  #|         regions: pieces.map(p => {
+  #|           const v = p.viewport;
+  #|           const a = v.convertToPdfPoint((p.x-p.b.left)*v.width/p.b.width, (p.y-p.b.top)*v.height/p.b.height);
+  #|           const b = v.convertToPdfPoint((p.x+p.width-p.b.left)*v.width/p.b.width, (p.y+p.height-p.b.top)*v.height/p.b.height);
+  #|           return { page: p.page, geometry: { space: 'pdf-page-user-space', unit: 'user-unit',
+  #|             bbox: [Math.min(a[0],b[0]), Math.min(a[1],b[1]), Math.max(a[0],b[0]), Math.max(a[1],b[1])] } };
+  #|         })
+  #|       });
   #|       done(url, pieces.map(p => p.page),
   #|         pieces.map(p => (p.x-p.pageRect.left)/p.pageRect.width),
   #|         pieces.map(p => (p.y-p.pageRect.top)/p.pageRect.height),
   #|         pieces.map(p => p.width/p.pageRect.width),
-  #|         pieces.map(p => p.height/p.pageRect.height), session.viewer.pagesRotation, text);
+  #|         pieces.map(p => p.height/p.pageRect.height), session.viewer.pagesRotation, text, source);
   #|     } catch (_) { failed(failure); }
   #|   }, { capture: true });
   #|   window.getSelection()?.removeAllRanges();
@@ -203,7 +214,13 @@ pub fn start(
       hint,
       failure,
       too_large,
-      (url, pages, xs, ys, widths, heights, rotation, text) => {
+      (url, pages, xs, ys, widths, heights, rotation, text, source) => {
+        let source = @json.parse(source) catch {
+          _ => {
+            scheduler.add(emit(Err(failure)))
+            return
+          }
+        }
         let regions = Array::makei(pages.length(), index => {
           page: pages[index],
           x: xs[index],
@@ -212,7 +229,7 @@ pub fn start(
           height: heights[index],
         })
         scheduler.add(
-          emit(Ok({ url, regions, rotation, text: text.to_option(), })),
+          emit(Ok({ url, source, regions, rotation, text: text.to_option(), })),
         )
       },
       message => scheduler.add(emit(Err(message))),

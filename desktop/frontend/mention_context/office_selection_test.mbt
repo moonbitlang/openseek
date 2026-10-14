@@ -81,3 +81,34 @@ test "Office display handles malformed input and truncates whole Unicode charact
   )
   assert_true(@mention_context.office_selection_title(selection).contains(text))
 }
+
+///|
+test "PDF region chips have page labels without inventing extracted text" {
+  let materialized = display_selection(
+    { "kind": "pdf-region", "pages": [1, 2] },
+    { "file": "/docs/slides.pdf" },
+  )
+  guard @mention_context.office_selection_summary(materialized) is Some(summary) else {
+    fail("missing region summary")
+  }
+  assert_true(summary.text is None)
+  assert_eq(
+    @mention_context.office_selection_label(materialized),
+    "slides.pdf · pp. 1–2",
+  )
+  assert_eq(
+    @mention_context.office_selection_title(materialized),
+    "/docs/slides.pdf · pp. 1–2",
+  )
+  for text in [Json::null(), Json::number(42)] {
+    assert_true(
+      @mention_context.office_selection_summary(
+        display_selection(
+          { "kind": "pdf-region", "pages": [1], "text": text },
+          { "file": "/docs/slides.pdf" },
+        ),
+      )
+      is None,
+    )
+  }
+}

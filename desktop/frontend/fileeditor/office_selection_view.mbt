@@ -10,7 +10,10 @@ fn office_selection_preview_view(state : State, ctx : Ctx) -> @html.Html {
       "office-selection-preview editor-shell hidden"
     },
     title=preview
-      .map(value => value.summary.heading() + "\n" + value.summary.text)
+      .map(value => {
+        value.summary.heading() +
+        value.summary.text.map(text => "\n" + text).unwrap_or("")
+      })
       .unwrap_or(""),
     attrs=@html.Attrs::build().data_set(
       "theme",

@@ -59,7 +59,7 @@ test "a new Office range updates only its pending preview; cancel consumes the c
     .unwrap()
   let first_preview = first.pending_office_selection(ctx).unwrap()
   assert_eq(first.office_selection_comment, Some(""))
-  assert_eq(first_preview.summary.text, "First passage")
+  assert_eq(first_preview.summary.text, Some("First passage"))
   let second = first
     .offer_office_selection(
       ctx,
@@ -67,7 +67,7 @@ test "a new Office range updates only its pending preview; cancel consumes the c
     )
     .unwrap()
   let second_preview = second.pending_office_selection(ctx).unwrap()
-  assert_eq(second_preview.summary.text, "Second passage")
+  assert_eq(second_preview.summary.text, Some("Second passage"))
   let (_, unchanged) = second.dismiss_office_selection(ctx, first_preview)
   assert_true(unchanged == second)
   let (_, dismissed) = second.dismiss_office_selection(ctx, second_preview)
@@ -153,7 +153,7 @@ test "Excel preview retains the sheet range and selected cell contents" {
     .unwrap()
   let preview = state.pending_office_selection(ctx).unwrap()
   assert_eq(preview.summary.heading(), "budget.xlsx · Data!B4:C4")
-  assert_eq(preview.summary.text, "Revenue\t100")
+  assert_eq(preview.summary.text, Some("Revenue\t100"))
 }
 
 ///|
@@ -214,7 +214,7 @@ test "PDF preview uses the selected text and range and expires with its runtime"
   let pending = ready.offer_office_selection(ctx, raw.stringify()).unwrap()
   let preview = pending.pending_office_selection(ctx).unwrap()
   assert_eq(preview.summary.heading(), "report.pdf · p. 2")
-  assert_eq(preview.summary.text, "Second")
+  assert_eq(preview.summary.text, Some("Second"))
   assert_true(preview.materialized.contains("office.pdf.text-range.v1"))
   let reloaded = pending.with_pdf_document(path, {
     ..document,

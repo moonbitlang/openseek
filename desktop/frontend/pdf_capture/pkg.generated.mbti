@@ -15,6 +15,7 @@ pub fn start(String, hint~ : String, failure~ : String, too_large~ : String, @cm
 // Types and methods
 pub(all) struct Capture {
   url : String
+  source : Json
   regions : Array[Region]
   rotation : Int
   text : String?

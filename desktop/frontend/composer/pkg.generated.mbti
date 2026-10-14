@@ -305,9 +305,8 @@ pub fn QueuedInputState::not_equal(Self, Self) -> Bool
 
 pub(all) struct QuoteReply {
   identity : Identity
-  quote : String?
+  content : ReplyContent
   images : Array[Image]
-  comment : String
   send : Bool
   accepted : @cmd.Cmd
   declined : @cmd.Cmd
@@ -321,6 +320,11 @@ pub(all) struct ReasoningSelect {
   open : Bool
   title : String
 } derive(Eq)
+
+pub(all) enum ReplyContent {
+  Text(quote~ : String?, comment~ : String)
+  OfficeSelection(String)
+}
 
 pub(all) struct RunHeartbeat {
   stage : RunStage

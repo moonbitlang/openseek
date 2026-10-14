@@ -744,13 +744,9 @@ fn main {
               (),
               deliver({
                 identity,
-                quote: preview.capture.text.map(text => {
-                  let pages = preview.capture.regions
-                    .map(region => region.page.to_string())
-                    .join(", ")
-                  "\{@common.basename_or_authority(preview.path)} · p. \{pages}\n\{text}"
-                }),
-                comment,
+                content: @composer.OfficeSelection(
+                  preview.materialized_selection(comment),
+                ),
                 send,
                 images: [
                   {
@@ -802,9 +798,11 @@ fn main {
           }
           quote({
             identity,
-            quote: Some(reply.quote),
+            content: @composer.Text(
+              quote=Some(reply.quote),
+              comment=reply.comment,
+            ),
             images: [],
-            comment: reply.comment,
             send: reply.send,
             accepted: reply.accepted,
             declined: reply.declined,

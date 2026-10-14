@@ -868,6 +868,24 @@ for (const codex of [false, true]) {
     expect(request).toContain('data:image/png;base64,');
     expect(request).toContain('Keep my existing draft');
     expect(request).toContain('把这部分改成中文，并加上标题');
+    const params = app.requests.find(r => r.method === method).params;
+    const prompt = codex ? params.input.filter(item => item.type === 'text').map(item => item.text).join('\n') : params.task;
+    const selections = [...prompt.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
+    expect(selections).toHaveLength(1);
+    const selection = selections[0];
+    expect(selection.schema).toBe('office.selection.materialized.v1');
+    expect(selection.comment).toBe('把这部分改成中文，并加上标题');
+    expect(selection.selection).toEqual({ format: 'pdf', kind: 'pdf-region', pages: [1] });
+    expect(selection.source.file).toBe('/workspace/docs/report.pdf');
+    expect(selection.source.capture.document.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(selection.source.capture.regions).toHaveLength(1);
+    const { page: number, geometry } = selection.source.capture.regions[0];
+    expect(number).toBe(1);
+    expect(geometry.space).toBe('pdf-page-user-space');
+    expect(geometry.bbox).toHaveLength(4);
+    expect(geometry.bbox.every(Number.isFinite)).toBe(true);
+    expect(geometry.bbox[2]).toBeGreaterThan(geometry.bbox[0]);
+    expect(geometry.bbox[3]).toBeGreaterThan(geometry.bbox[1]);
     await expect(feedback).toBeHidden();
     expect(app.pageErrors).toEqual([]);
   });
@@ -896,7 +914,8 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await expect(feedback.locator('textarea')).toBeVisible();
   await feedback.getByRole('checkbox').check();
   await feedback.locator('textarea').press('Enter');
-  await expect(page.locator('#task')).toHaveValue('Existing draft\n\nMake the heading larger\n\n');
+  await expect(page.locator('#task')).toHaveValue('Existing draft');
+  await expect(page.locator('.mention-chip')).toContainText('Make the heading larger');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
   for (let turn = 0; turn < 3; turn++) await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
@@ -935,8 +954,15 @@ test('PDF capture Batch persists across screenshot feedbacks', async ({ page }) 
   await feedback.locator('textarea').fill('Second change');
   await feedback.locator('textarea').press('Enter');
   await expect(page.locator('.composer-image')).toHaveCount(2);
-  await expect(page.locator('#task')).toHaveValue(/First change[\s\S]*Second change/);
+  await expect(page.locator('.mention-chip')).toHaveText([/First change/, /Second change/]);
+  await expect(page.locator('#task')).toHaveValue('');
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const params = app.requests.find(r => r.method === 'agent.start').params;
+  const selections = [...params.task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
+  expect(selections.map(selection => selection.comment)).toEqual(['First change', 'Second change']);
+  expect(JSON.stringify(params).match(/data:image\/png;base64,/g)).toHaveLength(2);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -957,7 +983,7 @@ test('PDF capture opening then cancelling goal edit preserves screenshot comment
   await expect(input).toHaveValue('Do not lose this feedback');
   await expect(page.locator('.pdf-capture-feedback').getByRole('checkbox')).toBeChecked();
   await input.press('Enter');
-  await expect(page.locator('#task')).toHaveValue(/Do not lose this feedback/);
+  await expect(page.locator('.mention-chip')).toContainText('Do not lose this feedback');
   await expect(page.locator('.composer-image')).toHaveCount(1);
   expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
   expect(app.pageErrors).toEqual([]);
@@ -980,7 +1006,7 @@ test('PDF capture archiving another conversation does not disable screenshot del
   await feedback.getByRole('checkbox').check();
   await feedback.locator('textarea').press('Enter');
   await expect(page.locator('.composer-image')).toHaveCount(1);
-  await expect(page.locator('#task')).toHaveValue(/Keep this feedback deliverable/);
+  await expect(page.locator('.mention-chip')).toContainText('Keep this feedback deliverable');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1012,8 +1038,17 @@ test('PDF element hover and a slightly moving click attach text, page and screen
   await feedback.locator('textarea').fill('Rename this heading');
   await feedback.getByRole('checkbox').check();
   await feedback.locator('textarea').press('Enter');
-  await expect(page.locator('#task')).toHaveValue(/report\.pdf · p\. 1[\s\S]*OpenSeek PDF preview[\s\S]*Rename this heading/);
-  await expect(page.locator('.composer-image img')).toHaveAttribute('src', /^data:image\/png;base64,/);
+  await expect(page.locator('#task')).toHaveValue('');
+  await expect(page.locator('.mention-chip')).toContainText('report.pdf · p. 1');
+  await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', /OpenSeek PDF preview[\s\S]*Rename this heading/);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const params = app.requests.find(r => r.method === 'agent.start').params;
+  const selection = JSON.parse(params.task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
+  expect(selection.selection.text).toBe('OpenSeek PDF preview');
+  expect(selection.comment).toBe('Rename this heading');
+  expect(selection.source.file).toBe('/workspace/docs/report.pdf');
+  expect(JSON.stringify(params)).toContain('data:image/png;base64,');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1042,9 +1077,9 @@ for (const tagged of [false, true]) {
     const feedback = page.locator('.pdf-capture-feedback');
     await feedback.getByRole('checkbox').check();
     await feedback.locator('.agent-feedback-input-action').click();
-    await expect(page.locator('#task')).toHaveValue(/First paragraph line/);
-    if (tagged) await expect(page.locator('#task')).toHaveValue(/Second paragraph line/);
-    else await expect(page.locator('#task')).not.toHaveValue(/Second paragraph line/);
+    await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', /First paragraph line/);
+    if (tagged) await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', /Second paragraph line/);
+    else await expect(page.locator('.mention-chip [title]').first()).not.toHaveAttribute('title', /Second paragraph line/);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -1097,7 +1132,20 @@ test('PDF element hover follows scroll and works on a rotated zoomed second page
   const feedback = page.locator('.pdf-capture-feedback');
   await feedback.getByRole('checkbox').check();
   await feedback.locator('.agent-feedback-input-action').click();
-  await expect(page.locator('#task')).toHaveValue(/report\.pdf · p\. 2[\s\S]*Second page selection/);
+  await expect(page.locator('.mention-chip')).toContainText('report.pdf · p. 2');
+  await expect(page.locator('.mention-chip')).toContainText('Second page selection');
   await expect(page.locator('.composer-image')).toHaveCount(1);
+  await page.locator('#send').click();
+  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+  const params = app.requests.find(r => r.method === 'agent.start').params;
+  const selection = JSON.parse(params.task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
+  const region = selection.source.capture.regions[0];
+  expect(region.page).toBe(2);
+  // PDF text is placed at (72, 710) at 20pt; rotation must not swap its axes.
+  const [x0, y0, x1, y1] = region.geometry.bbox;
+  expect(x0).toBeGreaterThan(68); expect(x0).toBeLessThan(74);
+  expect(y0).toBeGreaterThan(702); expect(y0).toBeLessThan(712);
+  expect(x1).toBeGreaterThan(240); expect(x1).toBeLessThan(320);
+  expect(y1).toBeGreaterThan(720); expect(y1).toBeLessThan(738);
   expect(app.pageErrors).toEqual([]);
 });

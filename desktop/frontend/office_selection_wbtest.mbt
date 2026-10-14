@@ -263,7 +263,7 @@ test "Office feedback pins its source and retains the annotation on both convers
       assert_eq(reselected.file_panel.office_selection_comment, Some(""))
       assert_eq(
         reselected.file_panel.office_selection.unwrap().summary.text,
-        "Replacement passage",
+        Some("Replacement passage"),
       )
     }
     let (_, pinned) = update(

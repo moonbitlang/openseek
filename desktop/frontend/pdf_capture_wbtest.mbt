@@ -52,6 +52,7 @@ fn captured(
       result=Ok({
         url: "data:image/png;base64,capture",
         text: None,
+        source: { "document": { "sha256": "fixture" }, "regions": [] },
         regions: [],
         rotation: 0,
       }),

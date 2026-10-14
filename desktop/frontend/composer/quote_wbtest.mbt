@@ -37,9 +37,8 @@ fn Model::quoted(
     input,
     QuoteReplied({
       identity,
-      quote: Some("quoted"),
+      content: Text(quote=Some("quoted"), comment="why?"),
       images: [],
-      comment: "why?",
       send,
       accepted: @cmd.none,
       declined: @cmd.none,
@@ -160,8 +159,7 @@ test "image feedback preserves local typing and uses ordinary submission" {
       input,
       QuoteReplied({
         identity: input.identity,
-        quote: None,
-        comment: "Change this heading",
+        content: Text(quote=None, comment="Change this heading"),
         images: [image],
         send,
         accepted: @cmd.none,
@@ -191,8 +189,7 @@ test "a model which lost image support declines screenshot feedback" {
     input,
     QuoteReplied({
       identity: input.identity,
-      quote: None,
-      comment: "change",
+      content: Text(quote=None, comment="change"),
       images: [{ name: "capture.png", url: "data:image/png;base64,image", }],
       send: true,
       accepted: @cmd.none,
@@ -204,4 +201,75 @@ test "a model which lost image support declines screenshot feedback" {
   assert_eq(next.draft.task, "keep")
   assert_true(next.draft.images.is_empty())
   assert_true(next.pending_submission is None)
+}
+
+///|
+test "Office feedback batches mentions and images atomically with the live draft" {
+  let payload : Json = {
+    "schema": "office.selection.materialized.v1",
+    "selection": { "kind": "pdf-region", "pages": [2] },
+    "source": { "file": "/docs/slides.pdf" },
+    "comment": "Change this </office_selection> & heading\nNext line",
+  }
+  let materialized = payload.stringify()
+  let base = Input::fixture("")
+  let input = {
+    ..base,
+    presentation: { ..base.presentation, images_enabled: true, },
+  }
+  let image : Image = {
+    name: "region.png",
+    url: "data:image/png;base64,image",
+  }
+  let reply : QuoteReply = {
+    identity: input.identity,
+    content: OfficeSelection(materialized),
+    images: [image],
+    send: false,
+    accepted: @cmd.none,
+    declined: @cmd.none,
+  }
+  let typed = Model(input).update(
+      input,
+      TextChanged("unsent local typing"),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0
+  let batched = typed.update(
+      input,
+      QuoteReplied(reply),
+      Msg::test_emit(),
+      Action::test_emit(),
+    ).0
+  let draft = batched.active(input).draft
+  assert_eq(draft.task, "unsent local typing")
+  assert_true(draft.images == [image])
+  assert_eq(draft.mentions.length(), 1)
+  assert_true(
+    draft.mentions[0].ref_
+    is @mention_context.OfficeSelection(materialized=value) &&
+    value == materialized,
+  )
+  let encoded = draft.prompt()
+  assert_true(encoded.contains("<office_selection>"))
+  guard @mention_context.parse(encoded) is Some(parsed) else {
+    fail("structured reply did not round trip")
+  }
+  assert_true(parsed.mentions == draft.mentions.map(mention => mention.ref_))
+  let submitted = batched.update(
+    input,
+    QuoteReplied({
+      ..reply,
+      content: OfficeSelection("second selection"),
+      send: true,
+    }),
+    Msg::test_emit(),
+    Action::test_emit(),
+  ).0.active(input)
+  guard submitted.pending_submission is Some(PromptSubmission(combined, ..)) else {
+    fail("not submitted")
+  }
+  assert_eq(combined.task, "unsent local typing")
+  assert_eq(combined.mentions.length(), 2)
+  assert_true(combined.images == [image, image])
 }

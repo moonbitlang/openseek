@@ -89,7 +89,7 @@ pub fn MentionRef::to_repr(Self) -> @debug.Repr
 
 pub(all) struct OfficeSelectionSummary {
   file : String
-  text : String
+  text : String?
   location : String?
 } derive(Eq)
 pub fn OfficeSelectionSummary::equal(Self, Self) -> Bool

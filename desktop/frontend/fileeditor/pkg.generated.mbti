@@ -410,6 +410,7 @@ pub(all) struct PdfCapturePreview {
   capture : @pdf_capture.Capture
 } derive(Eq)
 pub fn PdfCapturePreview::equal(Self, Self) -> Bool
+pub fn PdfCapturePreview::materialized_selection(Self, String) -> String
 pub fn PdfCapturePreview::not_equal(Self, Self) -> Bool
 
 pub(all) struct PdfDocument {

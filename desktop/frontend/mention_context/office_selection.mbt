@@ -3,7 +3,7 @@
 /// the agent context so its source anchors and document identity stay intact.
 pub(all) struct OfficeSelectionSummary {
   file : String
-  text : String
+  text : String?
   location : String?
 } derive(Eq)
 
@@ -43,9 +43,18 @@ pub fn office_selection_summary(
       "selection": selection,
       "source": source,
       ..
-    } &&
-    selection is { "text": String(text), .. } else {
+    } else {
     return None
+  }
+  let text = match selection {
+    { "text": String(text), .. } => Some(text)
+    { "kind": String("pdf-region"), .. } => {
+      guard selection is Object(fields) && fields.get("text") is None else {
+        return None
+      }
+      None
+    }
+    _ => return None
   }
   let file = match source {
     { "file": String(file), .. } => file
@@ -125,10 +134,14 @@ pub fn office_selection_label(materialized : String) -> String {
   guard office_selection_summary(materialized) is Some(summary) else {
     return "Office selection"
   }
-  let excerpt = selection_excerpt(
-    office_selection_comment(materialized).unwrap_or(summary.text),
-    64,
-  )
+  let content = match office_selection_comment(materialized) {
+    Some(text) => Some(text)
+    None => summary.text
+  }
+  let excerpt = match content {
+    Some(text) => selection_excerpt(text, 64)
+    None => return summary.heading()
+  }
   if excerpt.is_empty() {
     summary.heading()
   } else {
@@ -145,7 +158,8 @@ pub fn office_selection_title(materialized : String) -> String {
   let comment = office_selection_comment(materialized)
     .map(text => "\n\n" + text)
     .unwrap_or("")
-  "\{summary.file}\{location}\n\{summary.text}\{comment}"
+  let text = summary.text.map(text => "\n" + text).unwrap_or("")
+  "\{summary.file}\{location}\{text}\{comment}"
 }
 
 ///|

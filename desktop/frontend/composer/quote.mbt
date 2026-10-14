@@ -1,4 +1,4 @@
-// Replies that quote text selected elsewhere on screen. A reply is a message:
+// Replies to selected text or Office content. A reply is part of a message:
 // the component adds it to the prompt draft itself and, when asked, submits
 // that draft through its ordinary submit, so a draft keeps one writer and one
 // sender.
@@ -10,9 +10,8 @@ const MessageInputId : String = "task"
 /// A reply with selected text or captured images, addressed to one composer.
 pub(all) struct QuoteReply {
   identity : Identity
-  quote : String?
+  content : ReplyContent
   images : Array[Image]
-  comment : String
   // Submit the message once the reply is in it; otherwise it waits there.
   send : Bool
   // The composer runs one of these. It declines a reply it is not the
@@ -20,6 +19,13 @@ pub(all) struct QuoteReply {
   // caller then still holds what was typed.
   accepted : @cmd.Cmd
   declined : @cmd.Cmd
+}
+
+///|
+/// Office feedback already carries its comment in the structured selection.
+pub(all) enum ReplyContent {
+  Text(quote~ : String?, comment~ : String)
+  OfficeSelection(String)
 }
 
 ///|
@@ -97,10 +103,12 @@ fn Model::quote_replied(
     (reply.images.is_empty() || input.presentation.images_enabled) else {
     return (self, reply.declined)
   }
-  let insertion = match reply.quote {
-    Some(quote) => quote_insertion(entry.draft.task, quote, reply.comment)
-    None => {
-      let comment = reply.comment.trim().to_owned()
+  let insertion = match reply.content {
+    OfficeSelection(_) => ""
+    Text(quote=Some(quote), comment~) =>
+      quote_insertion(entry.draft.task, quote, comment)
+    Text(quote=None, comment~) => {
+      let comment = comment.trim().to_owned()
       if comment.is_empty() {
         ""
       } else {
@@ -111,15 +119,16 @@ fn Model::quote_replied(
     }
   }
   let task = entry.draft.task + insertion
+  let draft = match reply.content {
+    OfficeSelection(materialized) =>
+      entry.draft.with_office_selection(Some(materialized))
+    Text(..) => entry.draft
+  }
   let (model, changed) = self.commit_entry_change(
     entry,
     {
       ..entry,
-      draft: {
-        ..entry.draft,
-        task,
-        images: [..entry.draft.images, ..reply.images],
-      },
+      draft: { ..draft, task, images: [..entry.draft.images, ..reply.images], },
       completion: None,
       pending_submission: None,
     },

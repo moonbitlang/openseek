@@ -99,3 +99,39 @@ pub extend PdfCapturePreview with Eq::{equal, not_equal}
 
 ///|
 pub extend PdfCaptureDraft with Eq::{equal, not_equal}
+
+///|
+/// Use the shared Office mention envelope for screenshot feedback. Region
+/// geometry has no text-range reference that office.read can resolve.
+pub fn PdfCapturePreview::materialized_selection(
+  self : PdfCapturePreview,
+  comment : String,
+) -> String {
+  let selection : Map[String, Json] = {
+    "format": "pdf",
+    "kind": "pdf-region",
+    "pages": Json::array(
+      self.capture.regions.map(region => Json::number(region.page.to_double())),
+    ),
+  }
+  match self.capture.text {
+    Some(text) => selection.set("text", Json::string(text))
+    None => ()
+  }
+  let payload : Map[String, Json] = {
+    "schema": "office.selection.materialized.v1",
+    "mode": "full",
+    "selection": Json::object(selection),
+    "source": {
+      "file": self.path.path,
+      "format": "pdf",
+      "capture": self.capture.source,
+      "readable": false,
+      "reason": "Visual region; inspect the attached screenshot or render these PDF page coordinates.",
+    },
+  }
+  if !comment.trim().is_empty() {
+    payload.set("comment", Json::string(comment.trim().to_owned()))
+  }
+  Json::object(payload).stringify()
+}

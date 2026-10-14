@@ -11,6 +11,8 @@ pub(all) struct Region {
 ///|
 pub(all) struct Capture {
   url : String
+  // PDF identity and geometry in unrotated PDF user space, independent of zoom.
+  source : Json
   regions : Array[Region]
   rotation : Int32
   text : String?
