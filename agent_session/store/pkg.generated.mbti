@@ -20,7 +20,7 @@ pub fn SessionListing::title(Self) -> String?
 
 type SessionStore derive(@debug.Debug)
 pub fn SessionStore::SessionStore(String) -> Self
-pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem, parent? : @agent_session.SessionId) -> @agent_session.Session
+pub async fn SessionStore::append(Self, @agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session
 pub async fn SessionStore::compact(Self, @agent_session.Session, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> @agent_session.Session
 pub async fn SessionStore::create(Self, @agent_session.Session) -> Unit
 pub async fn SessionStore::exists(Self, @agent_session.SessionId) -> Bool

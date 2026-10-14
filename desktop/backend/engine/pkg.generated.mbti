@@ -58,7 +58,7 @@ pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Ser
 
 pub async fn pattern_repair_environment(EngineManager, model~ : String) -> PatternRepairEnvironment
 
-pub async fn prepare_session_edit(EngineManager, @protocol.SessionEditPreparePayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionEditPrepareReply
+pub async fn prepare_session_edit(EngineManager, @protocol.SessionEditPreparePayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionForkReply
 
 pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply raise EngineError
 

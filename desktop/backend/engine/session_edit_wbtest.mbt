@@ -16,11 +16,6 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     .append(User(UserMessage(Content([Text("original")]))))
     .append(Terminal(Finished("answer")))
   store.create(source)
-  let child = @agent_session.Session(
-    SessionId("source-sr-1"),
-    system_prompt="child",
-  ).append(User(UserMessage(Content([Text("child prompt")]))))
-  store.create(child)
   let replacement = @agent_session.Session(
     SessionId("replacement"),
     system_prompt="test",
@@ -34,7 +29,6 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     replacement: "replacement",
     submission_id: "edit-1",
     source_sequence: 2,
-    source_descendants: [{ session: "source-sr-1", sequence: 1, }],
   }
   let notifications : Array[String] = []
   for
@@ -94,56 +88,13 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
       })
       is None,
     )
-    assert_true(
-      @async.with_timeout_opt(100, () => {
-        store.append(
-          child,
-          User(UserMessage(Content([Text("another host's child event")]))),
-        )
-      })
-      is None,
-    )
-    // A child process can reach its first append after the final family scan.
-    // Both new children and grandchildren must wait for the parent's lease,
-    // then refuse to create an orphan if cleanup removed that parent.
-    let finished : Array[String] = []
-    let creators = [
-      for
-        (id, parent) in [
-          ("source-sr-2", "source"),
-          ("source-sr-1-sr-1", "source-sr-1"),
-        ] => {
-        group.spawn(() => {
-          let result : Result[Unit, String] = Ok(
-            ignore(
-              store.append(
-                Session(SessionId(id), system_prompt="child"),
-                User(UserMessage(Content([Text("delayed child prompt")]))),
-                parent=SessionId(parent),
-              ),
-            ),
-          ) catch {
-            error => Err("\{error}")
-          }
-          finished.push(id)
-          result
-        })
-      }
-    ]
-    @async.sleep(100)
-    assert_true(finished.is_empty())
     manager.archive_cleanup_lock.release()
     held = false
     assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Deleted)
-    for creator in creators {
-      assert_true(@async.with_timeout(3000, () => creator.wait()) is Err(_))
-    }
-    assert_false(store.exists(SessionId("source-sr-2")))
-    assert_false(store.exists(SessionId("source-sr-1-sr-1")))
   })
   assert_false(store.exists(SessionId("source")))
   assert_true(store.exists(SessionId("replacement")))
-  assert_eq(notifications, ["source-sr-1", "source"])
+  assert_eq(notifications, ["source"])
   assert_true(
     commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
       _,
@@ -151,7 +102,7 @@ async test "edit cleanup requires its durable receipt and an unchanged source" {
     ) => ())
     is Deleted,
   )
-  assert_eq(notifications, ["source-sr-1", "source", "source"])
+  assert_eq(notifications, ["source", "source"])
   assert_true(manager.record_guards.is_empty())
 }
 
@@ -248,7 +199,6 @@ async test "first-message replacement keeps its source's dirty checkout" {
         replacement: prepared.session,
         submission_id: "first-edit",
         source_sequence: 1,
-        source_descendants: prepared.source_descendants,
       },
       (_, _) => (),
       on_worktree_changed=(_, _) => (),
@@ -307,7 +257,6 @@ async test "edit cleanup rechecks a replacement deleted by another host" {
             replacement: "replacement",
             submission_id: "edit-1",
             source_sequence: 2,
-            source_descendants: [],
           },
           (session, _) => removed.push(session),
           on_worktree_changed=(_, _) => (),
@@ -354,7 +303,7 @@ async test "editing refuses busy source and child slots before preparing either 
       ] {
       engine.phase = phase
       for through in [None, Some(3)] {
-        let result : Result[@protocol.SessionEditPrepareReply, String] = Ok(
+        let result : Result[@protocol.SessionForkReply, String] = Ok(
           prepare_session_edit(
             manager,
             {
@@ -395,104 +344,6 @@ async test "editing refuses busy source and child slots before preparing either 
     manager.require_idle_edit_source("source")
     engine.close_and_wait()
   })
-  assert_true(manager.record_guards.is_empty())
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "edit cleanup preserves a descendant changed after preparation" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous = @sys.get_env_var("HOME")
-  defer restore_home_env(previous)
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-child-baseline-"))
-  defer @fs.rmdir(dir, recursive=true)
-  let root = @pathx.Path(dir)
-  @sys.set_env_var("HOME", root.join("global").to_string())
-  let workspace = attach_run_workspace(root)
-  let selected = @session_store.ArchivedStore::for_workspace(workspace)
-  let store = @store.SessionStore(selected.root.to_string())
-  let source = @agent_session.Session(SessionId("source"), system_prompt="test")
-    .append(User(UserMessage(Content([Text("original")]))))
-    .append(Terminal(Finished("answer")))
-  let child = @agent_session.Session(
-    SessionId("source-sr-1"),
-    system_prompt="child",
-  ).append(User(UserMessage(Content([Text("subtask")]))))
-  store.create(source)
-  store.create(child)
-  let manager = new_engine_manager("openseek")
-  manager.pump = Serving(sessions=Map([]))
-  let prepared = prepare_session_edit(
-    manager,
-    {
-      session: "source",
-      workspace,
-      through: None,
-      model: "deepseek-flash",
-      source_title: "Original",
-    },
-    on_created=_ => (),
-    on_worktree_changed=(_, _) => (),
-  )
-  assert_eq(prepared.source_descendants, [
-    { session: "source-sr-1", sequence: 1, },
-  ])
-  ignore(
-    store.append(
-      Session(SessionId(prepared.session), system_prompt="fresh"),
-      User(UserMessage(Content([Text("edited")]), submission_id="edit-child")),
-    ),
-  )
-  let payload : @protocol.SessionEditCommitPayload = {
-    session: "source",
-    workspace,
-    replacement: prepared.session,
-    submission_id: "edit-child",
-    source_sequence: 2,
-    source_descendants: prepared.source_descendants,
-  }
-  let changed = store.append(child, Terminal(Finished("new child work")))
-  let notifications : Array[String] = []
-  async fn refused(payload : @protocol.SessionEditCommitPayload) -> Unit {
-    let result : Result[SessionDeleteReply, String] = Ok(
-      commit_session_edit(manager, payload, (id, _) => notifications.push(id), on_worktree_changed=(
-        _,
-        _,
-      ) => ()),
-    ) catch {
-      error => Err("\{error}")
-    }
-    assert_true(result is Err(_))
-    assert_true(store.exists(SessionId("source")))
-    assert_true(store.exists(SessionId(prepared.session)))
-    assert_true(notifications.is_empty())
-  }
-  refused(payload)
-  assert_eq(store.load(SessionId("source-sr-1")), changed)
-  // A child created after preparation also invalidates the family baseline.
-  store.create(
-    @agent_session.Session(SessionId("source-sr-2"), system_prompt="child").append(
-      User(UserMessage(Content([Text("new child")]))),
-    ),
-  )
-  let current = {
-    ..payload,
-    source_descendants: [{ session: "source-sr-1", sequence: 2, }],
-  }
-  refused(current)
-  assert_true(store.exists(SessionId("source-sr-2")))
-  // Independently moved descendants must not silently disappear from the set.
-  ignore(archive_session(manager, "source-sr-1", (_, _) => ()))
-  refused(current)
-  assert_true(
-    @fsx.is_dir(
-      @session_store.archived_root(selected.root)
-      .join("sessions")
-      .join("source-sr-1")
-      .to_path(),
-    ),
-  )
   assert_true(manager.record_guards.is_empty())
 }
 
@@ -545,7 +396,6 @@ async test "edit retry waits for a competing deletion to roll back" {
             replacement: "replacement",
             submission_id: "edit-rollback",
             source_sequence: 2,
-            source_descendants: [],
           },
           (id, _) => notifications.push(id),
           on_worktree_changed=(_, _) => (),
@@ -579,85 +429,4 @@ async test "edit retry waits for a competing deletion to roll back" {
   assert_true(store.exists(SessionId("replacement")))
   assert_true(notifications.is_empty())
   assert_true(manager.record_guards.is_empty())
-}
-
-///|
-#cfg(not(platform="windows"))
-async test "edit cleanup rechecks descendants restored while waiting for its commit lock" {
-  ambient_env_test_lock.acquire()
-  defer ambient_env_test_lock.release()
-  let previous = @sys.get_env_var("HOME")
-  defer restore_home_env(previous)
-  let dir = @fs.realpath(@fs.tmpdir(prefix="openseek-edit-restore-race-"))
-  defer @fs.rmdir(dir, recursive=true)
-  let root = @pathx.Path(dir)
-  @sys.set_env_var("HOME", root.join("global").to_string())
-  let workspace = attach_run_workspace(root)
-  let selected = @session_store.ArchivedStore::for_workspace(workspace)
-  let store = @store.SessionStore(selected.root.to_string())
-  store.create(
-    @agent_session.Session(SessionId("source"), system_prompt="test")
-    .append(User(UserMessage(Content([Text("original")]))))
-    .append(Terminal(Finished("answer"))),
-  )
-  store.create(
-    @agent_session.Session(SessionId("source-sr-1"), system_prompt="child").append(
-      User(UserMessage(Content([Text("child work")]))),
-    ),
-  )
-  store.create(
-    @agent_session.Session(SessionId("replacement"), system_prompt="test").append(
-      User(UserMessage(Content([Text("edited")]), submission_id="edit-restore")),
-    ),
-  )
-  let first = new_engine_manager("openseek")
-  first.pump = Serving(sessions=Map([]))
-  let second = new_engine_manager("openseek")
-  second.pump = Serving(sessions=Map([]))
-  ignore(archive_session(second, "source-sr-1", (_, _) => ()))
-  let payload : @protocol.SessionEditCommitPayload = {
-    session: "source",
-    workspace,
-    replacement: "replacement",
-    submission_id: "edit-restore",
-    source_sequence: 2,
-    source_descendants: [],
-  }
-  let notifications : Array[String] = []
-  @async.with_task_group(group => {
-    first.archive_commit_lock.acquire()
-    let mut held = true
-    defer (if held { first.archive_commit_lock.release() })
-    let cleanup = group.spawn(() => {
-      let result : Result[SessionDeleteReply, String] = Ok(
-        delete_session(
-          first,
-          "source",
-          workspace,
-          (id, _) => notifications.push(id),
-          edit_replacement=payload,
-        ),
-      ) catch {
-        error => Err("\{error}")
-      }
-      result
-    })
-    @async.with_timeout(3000, () => {
-      while !(first.record_guards.get("source") is Some({ moving: true, .. })) {
-        @async.sleep(1)
-      }
-    })
-    // The parent's family was already claimed without this archived child.
-    // An independent host restores it before A can take the store lock.
-    ignore(unarchive_session(second, "source-sr-1", (_, _) => ()))
-    first.archive_commit_lock.release()
-    held = false
-    assert_true(@async.with_timeout(3000, () => cleanup.wait()) is Err(_))
-  })
-  assert_true(store.exists(SessionId("source")))
-  assert_true(store.exists(SessionId("source-sr-1")))
-  assert_true(store.exists(SessionId("replacement")))
-  assert_true(notifications.is_empty())
-  assert_true(first.record_guards.is_empty())
-  assert_true(second.record_guards.is_empty())
 }

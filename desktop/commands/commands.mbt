@@ -950,7 +950,7 @@ pub let session_fork : Command[
 ///|
 pub let session_edit_prepare : Command[
   @protocol.SessionEditPreparePayload,
-  @protocol.SessionEditPrepareReply,
+  @protocol.SessionForkReply,
 ] = Command("session.edit_prepare")
 
 ///|

@@ -19,22 +19,14 @@ test "edit payloads preserve receipt identity and explicit first-message absence
     replacement: "replacement",
     submission_id: "receipt-1",
     source_sequence: 8,
-    source_descendants: [{ session: "source-sr-1", sequence: 3, }],
   }
   assert_eq(@json.from_json(cleanup.to_json()), cleanup)
-  let prepared : @protocol.SessionEditPrepareReply = {
-    session: "replacement",
-    title: "Original",
-    source_descendants: cleanup.source_descendants,
-  }
-  assert_eq(@json.from_json(prepared.to_json()), prepared)
   let malformed : Array[Json] = [
     {
       "session": "source",
       "workspace": "/work",
       "replacement": "copy",
       "source_sequence": 8,
-      "source_descendants": [],
     },
     {
       "session": "source",
@@ -42,7 +34,6 @@ test "edit payloads preserve receipt identity and explicit first-message absence
       "replacement": "copy",
       "submission_id": null,
       "source_sequence": 8,
-      "source_descendants": [],
     },
     {
       "session": "source",
@@ -50,22 +41,6 @@ test "edit payloads preserve receipt identity and explicit first-message absence
       "replacement": "copy",
       "submission_id": "receipt",
       "source_sequence": "8",
-      "source_descendants": [],
-    },
-    {
-      "session": "source",
-      "workspace": "/work",
-      "replacement": "copy",
-      "submission_id": "receipt",
-      "source_sequence": 8,
-    },
-    {
-      "session": "source",
-      "workspace": "/work",
-      "replacement": "copy",
-      "submission_id": "receipt",
-      "source_sequence": 8,
-      "source_descendants": [{ "session": "source-sr-1", "sequence": "3" }],
     },
   ]
   for invalid in malformed {

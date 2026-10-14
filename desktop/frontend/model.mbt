@@ -1986,10 +1986,7 @@ priv enum Msg {
     draft~ : @composer.Draft
   )
   ForkRequested(slot~ : String, through~ : Int32)
-  ForkCompleted(
-    ConversationFork,
-    Result[@protocol.SessionEditPrepareReply, String]
-  )
+  ForkCompleted(ConversationFork, Result[@protocol.SessionForkReply, String])
   EditCleanupCompleted(
     @interop.ConversationKey,
     EditReplacement,

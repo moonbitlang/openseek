@@ -10,19 +10,16 @@ priv enum EditReplacementState {
 priv struct EditReplacement {
   source : ConversationSelection
   source_sequence : Int32
-  source_descendants : Array[@protocol.SessionEditDescendant]
   state : EditReplacementState
 } derive(Eq)
 
 ///|
 fn EditReplacement::EditReplacement(
   pending : ConversationFork,
-  source_descendants : Array[@protocol.SessionEditDescendant],
 ) -> EditReplacement {
   {
     source: pending.source,
     source_sequence: pending.source_sequence,
-    source_descendants,
     state: Unsubmitted,
   }
 }
@@ -79,7 +76,6 @@ fn Model::remove_edited_source(
           workspace: edit.source.workspace.path,
           replacement: owner.session,
           source_sequence: edit.source_sequence,
-          source_descendants: edit.source_descendants,
           submission_id: id,
         }),
       ) catch {
@@ -137,7 +133,6 @@ test "edited cleanup waits for the exact receipt and retries only deletion" {
   let pending : EditReplacement = {
     source,
     source_sequence: 8,
-    source_descendants: [{ session: "source-sr-1", sequence: 3, }],
     state: Waiting("edit-1"),
   }
   let conv = {
@@ -227,7 +222,6 @@ test "a first-message replacement retains its late receipt across navigation" {
     edit_replacement: Some({
       source,
       source_sequence: 2,
-      source_descendants: [],
       state: Waiting("late-edit"),
     }),
   }

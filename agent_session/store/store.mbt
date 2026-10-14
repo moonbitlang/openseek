@@ -442,50 +442,8 @@ async fn ensure_dir_exists(dir : String, attempts~ : Int32 = 4) -> Unit {
 async fn ensure_session_dir(
   store : SessionStore,
   id : @agent_session.SessionId,
-  parent? : @agent_session.SessionId,
 ) -> Unit {
-  if parent is Some(parent) {
-    guard @protocol.split_child_session_id(id.value()) is Some((name, _)) &&
-      name == parent.value() else {
-      fail("session \{id.value()} is not a child of \{parent.value()}")
-    }
-  }
-  if @fs.exists(store.session_dir(id)) {
-    return
-  }
-  match parent {
-    Some(parent) =>
-      with_parent_creation_lock(store, parent, () => {
-        ensure_dir_exists(store.session_dir(id))
-      })
-    None => ensure_dir_exists(store.session_dir(id))
-  }
-}
-
-///|
-/// Child ids are structural: `<parent>-sr-N`. A first child directory must
-/// not appear after edited-session cleanup's final family scan. The parent's
-/// record lease spans that scan and rename, so use its exclusive side only
-/// for directory creation, before acquiring the child's own writer lock.
-/// OpenExisting and the check after locking prevent a delayed child from
-/// recreating a directory below a parent that cleanup has already removed.
-async fn[T] with_parent_creation_lock(
-  store : SessionStore,
-  parent : @agent_session.SessionId,
-  body : async () -> T,
-) -> T {
-  let lock = @fs.open(
-    store.lock_path(parent),
-    mode=ReadWrite,
-    create_mode=OpenExisting,
-  )
-  defer lock.close()
-  lock.lock(Exclusive)
-  defer lock.unlock()
-  guard @fs.exists(store.session_dir(parent)) else {
-    fail("parent session \{parent.value()} no longer exists")
-  }
-  body()
+  ensure_dir_exists(store.session_dir(id))
 }
 
 ///|
@@ -924,19 +882,12 @@ pub async fn SessionStore::load(
 /// the first event together; and when a crash left the durable tail
 /// unterminated, the append rewrites the file atomically instead, repairing
 /// the tail as it persists the new event. The input session is unchanged.
-///
-/// Sub-run launchers pass `parent` to require the structural parent to remain
-/// live during first directory creation. This takes the parent's exclusive
-/// record lock, so a concurrent family deletion either sees the child or
-/// finishes first and prevents its creation. Generic store clients may omit
-/// it, including importers working with standalone records.
 pub async fn SessionStore::append(
   self : SessionStore,
   session : @agent_session.Session,
   item : @agent_session.SessionItem,
-  parent? : @agent_session.SessionId,
 ) -> @agent_session.Session {
-  ensure_session_dir(self, session.id(), parent?)
+  ensure_session_dir(self, session.id())
   with_session_lock(self, session.id(), Exclusive, () => {
     let repair_tail = ensure_session_is_current(self, session)
     let (next, event) = session.append_event(

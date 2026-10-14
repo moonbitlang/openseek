@@ -7,14 +7,9 @@ pub async fn prepare_session_edit(
   payload : @protocol.SessionEditPreparePayload,
   on_created~ : (String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
-) -> @protocol.SessionEditPrepareReply {
-  guard @session_store.safe_session_id(payload.session) &&
-    @wire.split_child_session_id(payload.session) is None else {
-    raise EngineError("invalid source conversation")
-  }
-  let source_descendants = capture_edit_descendants(manager, payload)
+) -> @protocol.SessionForkReply {
   if payload.through is Some(through) {
-    let fork = fork_session(
+    return fork_session(
       manager,
       {
         session: payload.session,
@@ -27,7 +22,6 @@ pub async fn prepare_session_edit(
       on_created~,
       on_worktree_changed~,
     )
-    return { session: fork.session, title: fork.title, source_descendants, }
   }
   guard @session_store.safe_session_id(payload.session) &&
     @wire.split_child_session_id(payload.session) is None else {
@@ -62,39 +56,7 @@ pub async fn prepare_session_edit(
     )
   }
   on_created(session)
-  { session, title: payload.source_title, source_descendants, }
-}
-
-///|
-/// Capture every descendant before preparation can create the replacement.
-/// A later append, new child, or independently moved child must refuse cleanup.
-async fn capture_edit_descendants(
-  manager : EngineManager,
-  payload : @protocol.SessionEditPreparePayload,
-) -> Array[@protocol.SessionEditDescendant] {
-  manager.workspace_lifecycle_lock.acquire()
-  defer manager.workspace_lifecycle_lock.release()
-  manager.require_idle_edit_source(payload.session)
-  let lease = manager.begin_record_read(payload.session)
-  defer manager.end_record_read(payload.session, lease)
-  let selected = @session_store.ArchivedStore::for_workspace(payload.workspace)
-  manager.archive_commit_lock.acquire()
-  defer manager.archive_commit_lock.release()
-  let shared = @fsx.FileLock::acquire(
-    @session_store.archived_root(selected.root).to_path(),
-  )
-  defer shared.release()
-  ignore(@session_record.read_document(selected.root, payload.session))
-  let descendants : Array[@protocol.SessionEditDescendant] = []
-  for session_id in @session_store.family_in(selected.root, payload.session) {
-    guard session_id != payload.session else { continue }
-    let document = @session_record.read_document(selected.root, session_id)
-    descendants.push({
-      session: session_id,
-      sequence: session_max_sequence(document),
-    })
-  }
-  descendants
+  { session, title: payload.source_title, }
 }
 
 ///|

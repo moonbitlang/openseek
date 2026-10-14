@@ -642,58 +642,14 @@ pub async fn delete_session(
   }
   let result = if edit_replacement is Some(edit) {
     // The store lock protects the replacement from concurrent deletion. The
-    // family record locks also exclude ordinary writers through the rename.
+    // source record lock also excludes ordinary writers through the rename.
     require_edited_receipt(family.root, edit)
-    guard family.members.length() == edit.source_descendants.length() + 1 &&
-      edit.source_descendants.all(baseline => {
-        baseline.session != session &&
-        baseline.sequence >= 0 &&
-        family.members.contains(baseline.session)
-      }) &&
-      family.members.all(session_id => {
-        session_id == session ||
-        edit.source_descendants
-        .filter(baseline => baseline.session == session_id)
-        .length() ==
-        1
-      }) else {
-      raise EngineError(
-        "the original conversation's subagents changed; it was kept",
-      )
-    }
-    async fn lock_member(index : Int32) -> SessionDeleteReply {
-      if index == family.members.length() {
-        guard @session_store.family_in(family.root, session) == family.members else {
-          raise EngineError(
-            "the original conversation's subagents changed; it was kept",
-          )
-        }
-        return commit()
+    @session_record.with_document(family.root, session, source => {
+      guard session_max_sequence(source) == edit.source_sequence else {
+        raise EngineError("the original conversation changed; it was kept")
       }
-      let session_id = family.members[index]
-      @session_record.with_document(family.root, session_id, document => {
-        let expected = if session_id == session {
-          edit.source_sequence
-        } else {
-          guard edit.source_descendants.search_by(baseline => {
-              baseline.session == session_id
-            })
-            is Some(index) else {
-            raise EngineError(
-              "the original conversation's subagents changed; it was kept",
-            )
-          }
-          edit.source_descendants[index].sequence
-        }
-        guard session_max_sequence(document) == expected else {
-          raise EngineError(
-            "the original conversation or a subagent changed; it was kept",
-          )
-        }
-        lock_member(index + 1)
-      })
-    }
-    lock_member(0)
+      commit()
+    })
   } else {
     commit()
   }

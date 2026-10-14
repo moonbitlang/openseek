@@ -70,20 +70,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       invocation = Some(request)
       // A run launched by a parent does not delegate further.
       let delegated = mode == Managed
-      // A caller-chosen id may look like a child id. Only managed launches
-      // carry parent ownership; ordinary text/batch runs keep arbitrary ids.
-      let parent = if delegated {
-        match reserved_session(matches) {
-          Some(id) =>
-            @openseek_protocol.split_child_session_id(id.trim().to_owned()).map(pair => {
-                @agent_session.SessionId(pair.0)
-              },
-            )
-          None => None
-        }
-      } else {
-        None
-      }
       if @options.review_gate_enabled(matches) {
         if delegated {
           fail(
@@ -129,7 +115,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
               workspace_root~,
               review_deadline_ms~,
               approval_policy~,
-              parent~,
               delegate=!delegated,
             )
           Preset(kind~, name~, input~) => {
@@ -147,7 +132,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
                 input~,
                 requested_max_steps=request.requested_max_steps,
                 workspace_root~,
-                parent~,
               ) {
               Rejected(reason) => fail(reason)
               Ran(report=submitted) => report = submitted
@@ -236,7 +220,6 @@ async fn run_general(
   review_deadline_ms~ : Int32?,
   approval_policy~ : @execution.ApprovalPolicy,
   delegate~ : Bool,
-  parent~ : @agent_session.SessionId?,
 ) -> Unit {
   let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
@@ -321,9 +304,7 @@ async fn run_general(
       run_task_turn(
         matches,
         session,
-        append_item=(session, item) => {
-          turn.record(store.append(session, item, parent?))
-        },
+        append_item=(session, item) => turn.record(store.append(session, item)),
         job_log_dir=store.job_logs_dir(id),
         session_scratch_dir=store.scratch_dir(id),
         api_key~,
@@ -360,7 +341,6 @@ async fn run_preset(
   input~ : Json,
   requested_max_steps~ : Int32?,
   workspace_root~ : String,
-  parent~ : @agent_session.SessionId?,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)
   let (session_id, append_item) : (
@@ -381,7 +361,7 @@ async fn run_preset(
       (
         id.value(),
         (session, item) => {
-          let next = store.append(session, item, parent?)
+          let next = store.append(session, item)
           if turn.session is None {
             turn.session = Some(id.value())
             @emit.emit(

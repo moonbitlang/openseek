@@ -57,40 +57,6 @@ async test "store writes the header record on the first line" {
 }
 
 ///|
-async test "child append requires its named live parent without restricting standalone records" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let child = @agent_session.Session(
-    SessionId("parent-sr-1"),
-    system_prompt="child",
-  )
-  let item : @agent_session.SessionItem = User(
-    UserMessage(Content([Text("task")])),
-  )
-  try store.append(child, item, parent=SessionId("parent")) catch {
-    _ => ()
-  } noraise {
-    _ => fail("a missing parent must prevent child creation")
-  }
-  assert_false(store.exists(child.id()))
-  store.create(Session(SessionId("parent"), system_prompt="parent"))
-  try store.append(child, item, parent=SessionId("other")) catch {
-    _ => ()
-  } noraise {
-    _ => fail("a mismatched parent must prevent child creation")
-  }
-  assert_false(store.exists(child.id()))
-  let written = store.append(child, item, parent=SessionId("parent"))
-  assert_eq(store.load(child.id()), written)
-  // Store imports and standalone clients do not opt into parent ownership.
-  let standalone = store.append(
-    Session(SessionId("standalone-sr-1"), system_prompt="standalone"),
-    item,
-  )
-  assert_eq(store.load(standalone.id()), standalone)
-}
-
-///|
 async test "store creates different sessions concurrently under one root" {
   let store = new_store()
   defer @fs.rmdir(store.root(), recursive=true)

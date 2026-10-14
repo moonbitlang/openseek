@@ -59,7 +59,7 @@ fn Model::finish_fork(
   self : Model,
   emit : @cmd.Emit[Msg],
   pending : ConversationFork,
-  result : Result[@protocol.SessionEditPrepareReply, String],
+  result : Result[@protocol.SessionForkReply, String],
 ) -> (@cmd.Cmd, Model) {
   guard self.conversation_fork == Some(pending) else {
     return (@cmd.none, self)
@@ -109,9 +109,7 @@ fn Model::finish_fork(
             reply.session,
             conv.workspace,
           ),
-          edit_replacement: Some(
-            EditReplacement(pending, reply.source_descendants),
-          ),
+          edit_replacement: Some(EditReplacement(pending)),
           task: draft.task,
           mentions: draft.mentions,
           images: draft.images,
@@ -168,9 +166,7 @@ fn Model::finish_fork(
           mentions: draft.mentions,
           images: draft.images,
           composer_draft_present: true,
-          edit_replacement: Some(
-            EditReplacement(pending, reply.source_descendants),
-          ),
+          edit_replacement: Some(EditReplacement(pending)),
         })
       }
       let save = save_conversation_model(
@@ -208,10 +204,10 @@ fn fork_conversation(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.SessionEditPrepareReply, String] = try {
-        let reply : @protocol.SessionEditPrepareReply = match pending.kind {
-          AfterAnswer(through~, draft=None) => {
-            let fork = @interop.bridge_request(
+      let result : Result[@protocol.SessionForkReply, String] = try {
+        let reply = match pending.kind {
+          AfterAnswer(through~, draft=None) =>
+            @interop.bridge_request(
               pending.source.channel,
               @commands.session_fork,
               {
@@ -222,12 +218,6 @@ fn fork_conversation(
                 source_title: pending.source_title,
               },
             )
-            {
-              session: fork.session,
-              title: fork.title,
-              source_descendants: [],
-            }
-          }
           kind =>
             @interop.bridge_request(
               pending.source.channel,
@@ -298,10 +288,9 @@ test "fork and message editing are pure and preserve navigation" {
   assert_true(repeat.conversation_fork == requested.conversation_fork)
   // E2E covers chat-to-chat navigation. Also preserve a non-chat page.
   let away = { ..requested, screen: Settings, }
-  let result : Result[@protocol.SessionEditPrepareReply, String] = Ok({
+  let result : Result[@protocol.SessionForkReply, String] = Ok({
     session: "desktop-fork",
     title: pending.source_title,
-    source_descendants: [{ session: "desktop-test-sr-1", sequence: 3, }],
   })
   let (_, done) = away.finish_fork(emit, pending, result)
   let (_, done_again) = away.finish_fork(emit, pending, result)
@@ -374,9 +363,6 @@ test "fork and message editing are pure and preserve navigation" {
     )
     assert_eq(created.task, repeated.task)
     assert_true(created.engine_model == source.engine_model)
-    assert_eq(created.edit_replacement.unwrap().source_descendants, [
-      { session: "desktop-test-sr-1", sequence: 3, },
-    ])
     assert_true(created.composer_draft_present)
     assert_true(done.conversation_fork is None)
     assert_true(
@@ -463,11 +449,7 @@ test "the fork of a worktree conversation opens in the same worktree" {
   let (_, done) = requested.finish_fork(
     emit,
     pending,
-    Ok({
-      session: "desktop-fork",
-      title: pending.source_title,
-      source_descendants: [],
-    }),
+    Ok({ session: "desktop-fork", title: pending.source_title, }),
   )
   guard done.find_conversation(channel, "desktop-fork") is Some(fork) else {
     fail("the fork was not opened")
