@@ -325,15 +325,6 @@ async fn[T] BrowserViews::with_page(
 }
 
 ///|
-/// One tab the page has been asked to open and has not answered for yet.
-priv struct OpenRequest {
-  // What the page was asked, to ask again of a page that replaces it.
-  asked : Json
-  // Where the id the page gives the tab is delivered.
-  opened : @async.Queue[Int32]
-}
-
-///|
 /// Deliver the id of a tab the page opened because it was asked to. Part of
 /// every `browser.open`; an open nobody asked for, or one whose asker has
 /// stopped waiting, delivers nothing.
@@ -346,7 +337,7 @@ fn BrowserViews::answer_open(
     return
   }
   // The queue is unbounded and never closed, so this cannot refuse.
-  (waiting.opened.try_put(payload.id) catch { _ => false }) |> ignore
+  (waiting.try_put(payload.id) catch { _ => false }) |> ignore
 }
 
 ///|
@@ -369,15 +360,14 @@ async fn BrowserViews::open_tab(
   ignore(self.attached_window())
   let request = @uuid.mint()
   let opened : @async.Queue[Int32] = Queue(kind=Unbounded)
-  let asked : Json = {
+  self.opening[request] = opened
+  defer self.opening.remove(request)
+  notify({
     "kind": "open_requested",
     "request": Json(request),
     "session": Json(session),
     "url": Json(url),
-  }
-  self.opening[request] = { asked, opened, }
-  defer self.opening.remove(request)
-  notify(asked)
+  })
   guard @async.with_timeout_opt(OpenTimeoutMs, () => opened.get()) is Some(id) else {
     raise @mcp.ToolError(
       "SeekMoon did not open the tab within \{OpenTimeoutMs / 1000} seconds.",
@@ -525,32 +515,6 @@ async test "a tab's conversation is forgotten with the tab" {
   // page's tabs may be left to name a new one's.
   views.close_all()
   assert_true(views.owners.is_empty())
-}
-
-///|
-async test "a page that connects is asked what its predecessor left unanswered" {
-  let views = BrowserViews()
-  let heard : Array[Json] = []
-  views.page_attached(asked => heard.push(asked))
-  // Nothing is pending when the first page connects.
-  views.page_is_connected()
-  assert_true(heard.is_empty())
-  // A request put to a page that reloaded before answering is put again to
-  // the page that takes its place, and only that one: an answered request
-  // is no longer waiting.
-  let waiting : Json = { "kind": "open_requested", "request": "r-waiting" }
-  let answered : Json = { "kind": "open_requested", "request": "r-answered" }
-  views.opening["r-waiting"] = {
-    asked: waiting,
-    opened: Queue(kind=Unbounded),
-  }
-  views.opening["r-answered"] = {
-    asked: answered,
-    opened: Queue(kind=Unbounded),
-  }
-  views.opening.remove("r-answered")
-  views.page_is_connected()
-  assert_eq(heard, [waiting])
 }
 
 ///|
@@ -704,7 +668,7 @@ test "a page's account of its document is read whole or not at all" {
 async test "the page's open delivers its tab's id to the tool that asked for it" {
   let views = BrowserViews()
   let opened : @async.Queue[Int32] = Queue(kind=Unbounded)
-  views.opening["r-1"] = { asked: { "request": "r-1" }, opened, }
+  views.opening["r-1"] = opened
   let payload : @protocol.BrowserOpenPayload = {
     id: 5,
     url: "https://example.com/",
