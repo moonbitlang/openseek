@@ -1,4 +1,102 @@
 ///|
+fn maximized_terminal_for_task_status() -> @terminal.State {
+  let emit : @cmd.Emit[@terminal.Msg] = @cmd.Emit(_ => @cmd.none)
+  let input = @terminal.Input(
+    ctx=@terminal.Ctx(
+      channel=Local,
+      session="desktop-test",
+      placement=Some(@interop.Scratch(root=None)),
+      dark_mode=false,
+      connected=false,
+    ),
+    live_channels=[],
+    has_devices=true,
+  )
+  let (_, open) = @terminal.State::empty().handle(
+    emit,
+    @terminal.ToggleTerminal,
+    input,
+  )
+  open.handle(emit, @terminal.ToggleMaximized, input).1
+}
+
+///|
+test "OpenSeek completion behind a maximized terminal stays unread until revealed" {
+  let dispatch = test_dispatch()
+  let model = {
+    ..running_model(),
+    window_focused: true,
+    terminal: maximized_terminal_for_task_status(),
+  }
+  let (_, completed) = update_dev(
+    dispatch,
+    Finished(run_id="r7", status="finished", answer=Some("done")),
+    model,
+  )
+  assert_true(completed.active().unseen_finish)
+  for msg in [@terminal.ToggleMaximized, @terminal.ToggleTerminal] {
+    let (_, revealed) = update(dispatch, Terminal(msg), completed)
+    assert_false(revealed.active().unseen_finish)
+    assert_true(revealed.transcript_is_visible())
+  }
+}
+
+///|
+test "Codex outcomes behind a maximized terminal stay unread until revealed" {
+  let dispatch = test_dispatch()
+  let context : @codex.SidebarContext = {
+    channel: Local,
+    selected: true,
+    registered_projects: ["/workspace"],
+  }
+  for
+    outcome in [
+      ("completed", @conversation.CompletedMark),
+      ("failed", @conversation.FailedMark),
+    ] {
+    let (wire_status, expected) = outcome
+    let model = {
+      ..test_model(),
+      screen: Codex,
+      window_focused: true,
+      terminal: maximized_terminal_for_task_status(),
+      codex: @codex.State::from_thread_snapshot({
+        "thread": {
+          "id": "task-a",
+          "cwd": "/workspace",
+          "projectRoot": "/workspace",
+          "status": { "type": "active" },
+          "turns": [{ "id": "turn-a", "status": "inProgress", "items": [] }],
+        },
+      }),
+    }
+    let (_, completed) = update(
+      dispatch,
+      Codex(
+        channel=Local,
+        @codex.Msg::notification(
+          "turn/completed",
+          {
+            "threadId": "task-a",
+            "turn": { "id": "turn-a", "status": wire_status, "items": [] },
+          },
+          1,
+        ),
+      ),
+      model,
+    )
+    let rows = completed.codex.project_conversations(context, "/workspace")
+    assert_eq(rows[0].input.run_mark, expected)
+    for msg in [@terminal.ToggleMaximized, @terminal.ToggleTerminal] {
+      let (_, revealed) = update(dispatch, Terminal(msg), completed)
+      let rows = revealed.codex.project_conversations(context, "/workspace")
+      assert_true(rows[0].input.run_mark is @conversation.NoRunMark)
+      assert_true(revealed.transcript_is_visible())
+    }
+  }
+}
+
+///|
 test "Codex outcomes remain unread while the editor covers the transcript" {
   let dispatch = test_dispatch()
   let context : @codex.SidebarContext = {

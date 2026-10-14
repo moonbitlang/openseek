@@ -3667,6 +3667,7 @@ fn Model::file_panel_visible(self : Model) -> Bool {
 fn Model::transcript_is_visible(self : Model) -> Bool {
   self.window_focused &&
   (self.screen is Chat || self.screen is Codex) &&
+  !(self.terminal_panel_visible() && self.terminal.is_maximized()) &&
   !(self.file_panel_visible() && (self.right_panel_expanded || self.narrow))
 }
 
