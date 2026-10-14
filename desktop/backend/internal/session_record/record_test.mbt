@@ -304,3 +304,27 @@ async test "with_document excludes a writer until its consuming callback finishe
   @async.with_timeout(1000, () => writer.lock(Exclusive))
   writer.unlock()
 }
+
+///|
+async test "with_document refuses a missing lock before consuming a snapshot" {
+  let (root, path) = record_fixture("no-edit-lock")
+  write_record(path, header_line("no-edit-lock") + event_line(1, "one"))
+  // Plain readers still accept this record, but a consumer must not commit
+  // destructive work when it cannot exclude an arriving writer.
+  assert_eq(
+    @session_record.read_document(root, "no-edit-lock").events
+    .unwrap_or([])
+    .length(),
+    1,
+  )
+  let mut called = false
+  let refused = try {
+    @session_record.with_document(root, "no-edit-lock", _ => called = true)
+    false
+  } catch {
+    @session_record.Unreadable(_) => true
+    error => raise error
+  }
+  assert_true(refused)
+  assert_false(called)
+}

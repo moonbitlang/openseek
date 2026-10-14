@@ -104,9 +104,11 @@ fn lock_path(root : @pathx.Absolute, session : String) -> @pathx.Path {
 async fn[T] with_shared_record_lock(
   path : @pathx.Path,
   body : async () -> T,
+  required~ : Bool = false,
 ) -> T {
   let lock = @fs.open(path.to_string(), mode=ReadOnly, create_mode=OpenExisting) catch {
-    @os_error.OSError(_) as error if error.is_ENOENT() => return body()
+    @os_error.OSError(_) as error if error.is_ENOENT() && !required =>
+      return body()
     error => raise Unreadable("cannot take the session record's lock: \{error}")
   }
   defer lock.close()
@@ -216,23 +218,31 @@ pub async fn read_document(
   root : @pathx.Absolute,
   session : String,
 ) -> @protocol.SessionDocument {
-  with_document(root, session, document => document)
+  let tail = Tail(root, session)
+  ignore(tail.poll())
+  tail.document()
 }
 
 ///|
 /// Keep ordinary record writers excluded while consuming a committed snapshot.
 /// The callback may rename the record directory; its lock remains held until
 /// the callback returns, so validation and the rename share one snapshot.
+/// Unlike a plain read, this requires an existing lock file: a consuming
+/// callback must never perform its side effects without excluding writers.
 pub async fn[T] with_document(
   root : @pathx.Absolute,
   session : String,
   body : async (@protocol.SessionDocument) -> T,
 ) -> T {
   let tail = Tail(root, session)
-  with_shared_record_lock(tail.lock, () => {
-    ignore(tail.read_forward())
-    body(tail.document())
-  })
+  with_shared_record_lock(
+    tail.lock,
+    () => {
+      ignore(tail.read_forward())
+      body(tail.document())
+    },
+    required=true,
+  )
 }
 
 ///|
