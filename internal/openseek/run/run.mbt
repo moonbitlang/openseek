@@ -70,6 +70,20 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
       invocation = Some(request)
       // A run launched by a parent does not delegate further.
       let delegated = mode == Managed
+      // A caller-chosen id may look like a child id. Only managed launches
+      // carry parent ownership; ordinary text/batch runs keep arbitrary ids.
+      let parent = if delegated {
+        match reserved_session(matches) {
+          Some(id) =>
+            @openseek_protocol.split_child_session_id(id.trim().to_owned()).map(pair => {
+                @agent_session.SessionId(pair.0)
+              },
+            )
+          None => None
+        }
+      } else {
+        None
+      }
       if @options.review_gate_enabled(matches) {
         if delegated {
           fail(
@@ -115,6 +129,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
               workspace_root~,
               review_deadline_ms~,
               approval_policy~,
+              parent~,
               delegate=!delegated,
             )
           Preset(kind~, name~, input~) => {
@@ -132,6 +147,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
                 input~,
                 requested_max_steps=request.requested_max_steps,
                 workspace_root~,
+                parent~,
               ) {
               Rejected(reason) => fail(reason)
               Ran(report=submitted) => report = submitted
@@ -220,6 +236,7 @@ async fn run_general(
   review_deadline_ms~ : Int32?,
   approval_policy~ : @execution.ApprovalPolicy,
   delegate~ : Bool,
+  parent~ : @agent_session.SessionId?,
 ) -> Unit {
   let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
@@ -301,9 +318,6 @@ async fn run_general(
       )
       turn.session = Some(id.value())
       turn.started_after = session.last_sequence()
-      let parent = @openseek_protocol.split_child_session_id(id.value()).map(pair => {
-        @agent_session.SessionId(pair.0)
-      })
       run_task_turn(
         matches,
         session,
@@ -346,6 +360,7 @@ async fn run_preset(
   input~ : Json,
   requested_max_steps~ : Int32?,
   workspace_root~ : String,
+  parent~ : @agent_session.SessionId?,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)
   let (session_id, append_item) : (
@@ -363,9 +378,6 @@ async fn run_preset(
       }
       // Named only once something is recorded: a preset refused for want of
       // a key, or the modelless `echo`, leaves no transcript to point at.
-      let parent = @openseek_protocol.split_child_session_id(id.value()).map(pair => {
-        @agent_session.SessionId(pair.0)
-      })
       (
         id.value(),
         (session, item) => {

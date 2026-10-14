@@ -149,6 +149,40 @@ exit 1
 {"version":1,"status":"failed","reason":"stdin closed before a request arrived"}
 ```
 
+## Child-Shaped IDs Only Require Parents in Managed Runs
+
+Ordinary batch runs keep caller-chosen IDs, including `report-sr-1`, for both
+general agents and presets. Managed subruns with that ID require `report`
+before their first event. The closed model endpoint makes ordinary runs fail
+only after recording their prompt; managed runs fail on the missing parent
+without creating a child directory.
+
+```mooncram
+$ sh <<'EOF'
+> d=$(mktemp -d)
+> for kind in general explore; do
+>   case "$kind" in general) input='{"task":"probe"}' ;; explore) input='{"query":"probe"}' ;; esac
+>   request=$(printf '{"version":1,"kind":"%s","input":%s}' "$kind" "$input")
+>   for mode in batch managed; do
+>     store="$d/$kind-$mode"
+>     run() { env -u WORKFLOW_HOST openseek.exe run --input-format json --session report-sr-1 --session-root "$store" --dir "$d/ws" --api-key test --api-url http://127.0.0.1:9/chat/completions --retry-attempts 1 "$@" > "$d/log" 2>&1; }
+>     if test "$mode" = managed; then
+>       (printf '%s\n' "$request"; sleep 1) | run --cancel-on-stdin-eof
+>       if test ! -d "$store/sessions/report-sr-1" && grep -q 'report/session.lock' "$d/log"; then echo "$kind managed: missing parent refused"; else cat "$d/log"; exit 1; fi
+>     else
+>       printf '%s\n' "$request" | run
+>       if test -s "$store/sessions/report-sr-1/openseek_session-report-sr-1.jsonl" && test ! -d "$store/sessions/report"; then echo "$kind batch: independent record created"; else cat "$d/log"; exit 1; fi
+>     fi
+>   done
+> done
+> rm -rf "$d"
+> EOF
+general batch: independent record created
+general managed: missing parent refused
+explore batch: independent record created
+explore managed: missing parent refused
+```
+
 ## A Delegated Run Takes Only What Its Launch Grants
 
 A parent may be a sandboxed snippet whose sandbox admits the engine by an argv
