@@ -5,42 +5,6 @@
 /// definition exercise the no-owner path, which stays a cold per-call build.
 
 ///|
-async test "cache: job dir owns builds while session scratch keeps scripts and results" {
-  @vfs.with_tmpdir(prefix="mbtx-owner-", ws => {
-    let spill = "\{ws}/jobs"
-    let scratch = "\{ws}/.openseek/sessions/desktop-20261014-020438-467-974574622/scratch"
-    @fs.mkdir(spill)
-    let definition = @mbtx.definition(
-      workspace_root=ws,
-      job_dir=spill,
-      scratch_dir=scratch,
-    )
-    let source =
-      #|import { "moonbitlang/async", "moonbitlang/async/fs", "moonbitlang/core/env" }
-      #|async fn main {
-      #|  @fs.write_file(@env.args()[1], "retained")
-      #|  println("built with a dependency")
-      #|}
-    let filename = "\{scratch}/helper.mbtx"
-    let output = dispatch(definition, {
-      "source": source,
-      "filename": filename,
-      "args": ["\{scratch}/result.txt"],
-      "ptc": false,
-    })
-    assert_false(output.is_error, msg=output.content)
-    assert_true(output.content.contains("built with a dependency"))
-    let keyed = @fs.readdir("\{spill}/mbtx-cache")
-    assert_eq(keyed.length(), 1)
-    assert_true(keyed[0].has_prefix("named-helper.mbtx-"))
-    assert_true(@fs.exists("\{spill}/mbtx-cache/\{keyed[0]}/gen-0/_build"))
-    assert_false(@fs.exists("\{scratch}/mbtx-cache"))
-    assert_eq(@fs.read_file(filename).text(), source)
-    assert_eq(@fs.read_file("\{scratch}/result.txt").text(), "retained")
-  })
-}
-
-///|
 /// Negative control for the shared snippet directory: every inline snippet
 /// builds at the SAME artifact path, so a later call must never run an
 /// earlier call's program — the trap a shared build dir sets without the

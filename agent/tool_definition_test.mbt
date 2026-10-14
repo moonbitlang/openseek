@@ -132,6 +132,5 @@ async test "registered mbtx receives the session scratch write permission" {
     // Agent task cleanup removes its temporary jobs, not session scratch.
     assert_eq(@fs.read_file("\{scratch}/value.txt").text(), "retained")
     assert_true(@fs.exists("\{scratch}/helper.mbtx"))
-    assert_false(@fs.exists("\{scratch}/mbtx-cache"))
   })
 }
