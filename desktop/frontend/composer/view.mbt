@@ -88,7 +88,7 @@ fn ModelSelect::render(
     change: action_emit.map(value => ModelSelected(identity~, value~, draft~)),
     title: self.title,
     aria_label: ui(locale, ModelLabel),
-    presentation: Composer("✦", false),
+    presentation: Composer(@html.text("✦"), false),
   }.render()
 }
 
@@ -132,7 +132,7 @@ fn ReasoningSelect::render(
     change: action_emit.map(value => ReasoningSelected(identity~, value~)),
     title: self.title,
     aria_label: ui(locale, ReasoningEffort),
-    presentation: Composer("◐", true),
+    presentation: Composer(@html.text("◐"), true),
   }.render()
 }
 
@@ -470,7 +470,10 @@ pub fn ContextComponent::render(
             class="composer-context-row queued-input-row",
             title=item.content,
             [
-              @html.span(class="queued-input-icon", "↳"),
+              @html.span(
+                class="queued-input-icon",
+                @icons.icon(@icons.icon_arrow_small_right),
+              ),
               @html.span(class="queued-input-text", item.content),
               ..trailing,
             ],

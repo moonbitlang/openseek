@@ -465,7 +465,7 @@ fn Entry::followup_menu(
       change: emit.map(value => FollowupSelected(value)),
       title: ui(locale, FollowupHint),
       aria_label: ui(locale, FollowupAction),
-      presentation: Composer("↳", true),
+      presentation: Composer(@icons.icon(@icons.icon_arrow_small_right), true),
     }.render(),
   )
 }

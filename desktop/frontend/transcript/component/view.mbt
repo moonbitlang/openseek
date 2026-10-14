@@ -278,7 +278,10 @@ fn subrun_chip(
       type_="button",
       title=dynamic_text(locale, DOpenSubagent(child.to_string())),
       on_click=open(child),
-      "↳ subagent transcript",
+      [
+        @icons.icon(@icons.icon_arrow_small_right),
+        @html.text("subagent transcript"),
+      ],
     ),
   ])
 }

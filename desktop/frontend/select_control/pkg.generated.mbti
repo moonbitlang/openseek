@@ -32,7 +32,7 @@ pub(all) struct Group {
 }
 
 pub(all) enum Presentation {
-  Composer(String, Bool)
+  Composer(@html.Html, Bool)
   Setting
 }
 

@@ -19,7 +19,7 @@ pub(all) struct Group {
 /// behavior, focus restoration, and accessibility; only their trigger geometry
 /// and popup sizing differ.
 pub(all) enum Presentation {
-  Composer(String, Bool)
+  Composer(@html.Html, Bool)
   Setting
 }
 
