@@ -31,11 +31,14 @@ async test "language and semantic tools execute the explicit host toolchain" {
     "version=fixture",
     create_mode=CreateOrTruncate,
   )
-  let source = @moonbit.bundled_source(
-    platform="linux-x64",
-    host_platform="Linux-x86_64",
-    seed_dir=seed.to_string(),
-  )
+  guard @moonbit.bundled_source(
+      platform="linux-x64",
+      host_platform="Linux-x86_64",
+      seed_dir=seed.to_string(),
+    )
+    is Some(source) else {
+    fail("test fixture seed marker is missing")
+  }
   let state = new_host_state(
     "unbundled-engine",
     runtime_dir=runtime.to_path(),

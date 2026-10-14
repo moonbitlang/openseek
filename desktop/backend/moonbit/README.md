@@ -19,8 +19,9 @@ assets. `moonbit` has three policies:
   external installations only when no seed was found.
 - `External`: search absolute PATH entries, then `~/.moon/bin`.
 - `Bundled`: prepare an explicitly selected seed. Use `bundled_source` to
-  validate its absolute directory, nonempty version marker, and platform
-  against the working host before constructing the API. Explicit seeds support
+  validate its absolute directory, version marker, and platform against the
+  working host before constructing the API. Handle `None` as an absent or empty
+  marker; invalid selections and filesystem errors still propagate as errors. Explicit seeds support
   `linux-x64`, `linux-arm64`, and `macos-arm64`; desktop discovery retains its
   existing Windows support.
 

@@ -177,7 +177,7 @@ async test "explicit seed selection checks platform and fails without fallback" 
       let (platform, host_platform) = pair
       assert_true(
         bundled_source(platform~, host_platform~, seed_dir=seed.to_string())
-        is Bundled(_),
+        is Some(Bundled(_)),
       )
     }
     rejected(() => {
@@ -207,15 +207,41 @@ async test "explicit seed selection checks platform and fails without fallback" 
         ),
       )
     })
-    let selected = bundled_source(
-      platform="linux-x64",
-      host_platform="Linux-x86_64",
-      seed_dir=seed.to_string(),
-    )
+    guard bundled_source(
+        platform="linux-x64",
+        host_platform="Linux-x86_64",
+        seed_dir=seed.to_string(),
+      )
+      is Some(selected) else {
+      fail("test fixture seed marker is missing")
+    }
     // No runtime means preparation cannot succeed. Never fall back to the
     // running test machine's otherwise available MoonBit installation.
     rejected(() => ignore(resolve_toolchain("unused", source=selected)))
-    @fs.remove(seed.join(MoonbitSeedVersionFile).to_string())
+    let marker = seed.join(MoonbitSeedVersionFile).to_string()
+    @fs.remove(marker)
+    assert_true(
+      bundled_source(
+        platform="linux-x64",
+        host_platform="Linux-x86_64",
+        seed_dir=seed.to_string(),
+      )
+      is None,
+    )
+    for content in ["", " \n\t"] {
+      @fs.write_file(marker, content, create_mode=CreateOrTruncate)
+      assert_true(
+        bundled_source(
+          platform="linux-x64",
+          host_platform="Linux-x86_64",
+          seed_dir=seed.to_string(),
+        )
+        is None,
+      )
+    }
+    // A directory at the marker path is an I/O error, not a missing seed.
+    @fs.remove(marker)
+    @fs.mkdir(marker)
     rejected(() => {
       ignore(
         bundled_source(

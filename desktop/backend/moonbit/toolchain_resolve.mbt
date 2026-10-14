@@ -9,11 +9,13 @@ pub(all) enum ToolchainSource {
 
 ///|
 /// Validate the selected seed before starting work with this toolchain.
+/// None means its version marker is absent or empty. Invalid platform/path
+/// selections and filesystem errors propagate separately.
 pub async fn bundled_source(
   platform~ : String,
   seed_dir~ : String,
   host_platform~ : String,
-) -> ToolchainSource {
+) -> ToolchainSource? {
   let expected = match platform {
     "linux-x64" => "Linux-x86_64"
     "linux-arm64" => "Linux-aarch64"
@@ -28,10 +30,8 @@ pub async fn bundled_source(
   guard @pathx.Path(seed_dir).to_absolute() is Some(directory) else {
     fail("MoonBit seed directory must be absolute")
   }
-  guard bundled_moonbit_seed_version(directory) is Some(_) else {
-    fail("MoonBit seed version stamp is missing or empty: \{seed_dir}")
-  }
-  Bundled(platform~, seed_dir=directory)
+  guard bundled_moonbit_seed_version(directory) is Some(_) else { return None }
+  Some(Bundled(platform~, seed_dir=directory))
 }
 
 ///|
