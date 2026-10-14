@@ -982,6 +982,7 @@ pub(all) enum Msg {
   )
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
   PdfCaptureBatchChanged(PdfCapturePreview, Bool)
+  PdfCaptureSubmissionDeclined(PdfCapturePreview)
   PdfCaptureDismissed(PdfCapturePreview)
   PdfPageChanged(String)
   PdfFitWidth

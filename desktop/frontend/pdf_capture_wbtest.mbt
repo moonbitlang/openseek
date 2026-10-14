@@ -206,7 +206,7 @@ test "retired PDF capture and a closed panel cannot add an image" {
 }
 
 ///|
-test "unsupported image model refuses PDF screenshots" {
+test "unsupported image model refuses PDF screenshots and explains declined feedback without losing drafts" {
   let (model, ctx, path) = pdf_capture_model()
   guard model.active_conversation() is Some(conv) else {
     fail("missing conversation")
@@ -216,6 +216,41 @@ test "unsupported image model refuses PDF screenshots" {
   let (_, rejected) = update_msg(test_dispatch(), captured(ctx, path), model)
   assert_true(rejected.composer_input().draft.images.is_empty())
   assert_true(rejected.file_panel.pdf_capture is None)
+  let (model, ctx, path) = pdf_capture_model()
+  let (_, pending) = update_msg(test_dispatch(), captured(ctx, path), model)
+  guard pending.file_panel.pdf_capture is Some(draft) else {
+    fail("missing screenshot")
+  }
+  let (_, pending) = update_msg(
+    test_dispatch(),
+    FileEditor(
+      @fileeditor.PdfCaptureFeedbackChanged(draft.preview, "Keep this"),
+    ),
+    pending,
+  )
+  guard pending.active_conversation() is Some(conv) else {
+    fail("missing conversation")
+  }
+  let pending = pending.replace_conversation({ ..conv, engine_model: DsPro, })
+  let msg = FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(draft.preview))
+  // Commands remain inert without a browser; equal inputs give equal models.
+  let (_, first) = update_msg(test_dispatch(), msg, pending)
+  let (_, again) = update_msg(test_dispatch(), msg, pending)
+  assert_true(first == again)
+  assert_true(first.file_panel == pending.file_panel)
+  assert_true(first.composer_input().draft == pending.composer_input().draft)
+  assert_eq(first.notifications.length(), 1)
+  assert_eq(
+    first.notifications[0].message,
+    @fileeditor.capture_submission_declined_message(pending.locale),
+  )
+  let stale = { ..draft.preview, generation: draft.preview.generation - 1, }
+  let (_, unchanged) = update_msg(
+    test_dispatch(),
+    FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(stale)),
+    pending,
+  )
+  assert_true(unchanged == pending)
 }
 
 ///|

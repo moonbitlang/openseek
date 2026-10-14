@@ -1025,6 +1025,52 @@ test('PDF capture mode keeps native scrolling and opens the shared feedback comp
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const batch of [false, true]) {
+  test(`PDF capture submission after losing image support preserves feedback and explains recovery (${batch ? 'Batch' : 'Apply'})`, async ({ page }, testInfo) => {
+    const app = await setup(page);
+    await enableImages(page);
+    await openFile(app, 'report.pdf');
+    await expectPdf(page);
+    await page.locator('#task').fill('Keep my existing draft');
+    const b = await page.locator('.pdfViewer canvas').first().boundingBox();
+    await captureRegion(page, { x: Math.ceil(b.x + 35), y: Math.ceil(b.y + 30), width: 240, height: 120 }, { confirm: false });
+    const feedback = page.locator('.pdf-capture-feedback');
+    const input = feedback.locator('textarea');
+    const comment = batch ? '' : 'Keep this screenshot comment';
+    await input.fill(comment);
+    await feedback.getByRole('checkbox').setChecked(batch);
+    await page.getByRole('button', { name: 'Model', exact: true }).click();
+    await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
+    await expect(input).toBeVisible();
+    await expect(input).toHaveValue(comment);
+    await feedback.locator('.agent-feedback-input-action').click();
+    await expect(page.getByText('Could not add the screenshot. Use an image-capable model and a regular message prompt, then try again.', { exact: true })).toBeVisible();
+    await expect(input).toHaveValue(comment);
+    await expect(feedback.locator('.feedback-source-selection')).toHaveCount(1);
+    await expect(page.locator('#task')).toHaveValue('Keep my existing draft');
+    await expect(page.locator('.composer-image')).toHaveCount(0);
+    expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
+    if (!batch) await page.screenshot({ path: testInfo.outputPath('pdf-capture-capability-feedback.png'), animations: 'disabled' });
+    await enableImages(page);
+    await expect(input).toHaveValue(comment);
+    await expect(feedback.getByRole('checkbox')).toBeChecked({ checked: batch });
+    await feedback.locator('.agent-feedback-input-action').click();
+    await expect(feedback).toBeHidden();
+    if (batch) {
+      await expect(page.locator('.composer-image')).toHaveCount(1);
+      await page.locator('#send').click();
+    }
+    await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
+    const request = app.requests.find(r => r.method === 'agent.start');
+    expect(JSON.stringify(request.params)).toContain('data:image/png;base64,');
+    expect(request.params.task).toContain('Keep my existing draft');
+    const selection = JSON.parse(request.params.task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
+    expect(selection.selection).toEqual({ format: 'pdf', kind: 'pdf-region', pages: [1] });
+    if (comment) expect(selection.comment).toBe(comment);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 for (const codex of [false, true]) {
   test(`PDF capture feedback sends the image and instruction with existing ${codex ? 'Codex' : 'OpenSeek'} typing`, async ({ page }, testInfo) => {
     const app = await setup(page, { codex });

@@ -20,6 +20,7 @@ priv enum UiMessage {
   PdfCaptureTooLarge
   PdfCaptureUnsupportedAnnotation
   PdfCaptureUnavailable
+  PdfCaptureSubmissionFailed
   PdfCapturePendingAnnotation
   PdfFitWidth
   PdfRotate
@@ -305,6 +306,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "画像対応モデルの会話でスクリーンショットを添付してください。"
     (Spanish, PdfCaptureUnavailable) =>
       "Para adjuntar una captura, abre una conversación con un modelo que admita imágenes."
+    (English, PdfCaptureSubmissionFailed) =>
+      "Could not add the screenshot. Use an image-capable model and a regular message prompt, then try again."
+    (SimplifiedChinese, PdfCaptureSubmissionFailed) =>
+      "无法添加截图。请切换到支持图片的模型，在普通消息输入框中重试。"
+    (TraditionalChinese, PdfCaptureSubmissionFailed) =>
+      "無法加入截圖。請切換至支援圖片的模型，在一般訊息輸入框中重試。"
+    (Japanese, PdfCaptureSubmissionFailed) =>
+      "スクリーンショットを追加できませんでした。画像対応モデルに切り替え、通常のメッセージ入力で再試行してください。"
+    (Spanish, PdfCaptureSubmissionFailed) =>
+      "No se pudo añadir la captura. Usa un modelo que admita imágenes y una entrada de mensaje normal, e inténtalo de nuevo."
     (English, PdfFitWidth) => "Fit page width"
     (SimplifiedChinese, PdfFitWidth) => "适应页宽"
     (TraditionalChinese, PdfFitWidth) => "符合頁面寬度"

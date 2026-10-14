@@ -3358,6 +3358,18 @@ fn update_msg(
         },
       )
     }
+    FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(preview)) => {
+      guard model.file_panel
+        .pending_pdf_capture(file_ctx(model))
+        .map(draft => draft.preview) ==
+        Some(preview) else {
+        return (@cmd.none, model)
+      }
+      model.notify_error(
+        dispatch,
+        @fileeditor.capture_submission_declined_message(model.locale),
+      )
+    }
     FileEditor(@fileeditor.OfficeSelectionConfirmed(preview)) =>
       confirm_office_selection(
         model,

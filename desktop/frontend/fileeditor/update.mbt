@@ -2543,6 +2543,7 @@ fn update_inner(
     | PdfSelectionChanged(..)
     | PdfCaptureRequested
     | PdfCaptureFinished(..)
+    | PdfCaptureSubmissionDeclined(_)
     | OfficeSelectionConfirmed(_) => (@cmd.none, state)
     PdfCaptureFeedbackChanged(preview, comment) =>
       if state.pending_pdf_capture(ctx).map(draft => draft.preview) ==

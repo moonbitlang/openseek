@@ -758,7 +758,9 @@ fn main {
                 accepted: emit(
                   FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
                 ),
-                declined: @cmd.none,
+                declined: emit(
+                  FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(preview)),
+                ),
               }),
             )
           },

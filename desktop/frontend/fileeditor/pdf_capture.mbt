@@ -40,6 +40,11 @@ pub fn capture_unavailable_message(locale : @i18n.Locale) -> String {
 }
 
 ///|
+pub fn capture_submission_declined_message(locale : @i18n.Locale) -> String {
+  ui(locale, PdfCaptureSubmissionFailed)
+}
+
+///|
 pub(all) struct PdfCapturePreview {
   id : Int64
   owner : @interop.ConversationKey

@@ -42,6 +42,8 @@ pub fn breadcrumb_view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Ctx, revea
 
 pub fn capture_pdf_region(@cmd.Emit[Msg], State, Ctx) -> @cmd.Cmd
 
+pub fn capture_submission_declined_message(@i18n.Locale) -> String
+
 pub fn capture_unavailable_message(@i18n.Locale) -> String
 
 pub fn close_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, next~ : @common.Uri?, was_active~ : Bool) -> (@cmd.Cmd, State)
@@ -293,6 +295,7 @@ pub(all) enum Msg {
   PdfCaptureFinished(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, result~ : Result[@pdf_capture.Capture, String])
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
   PdfCaptureBatchChanged(PdfCapturePreview, Bool)
+  PdfCaptureSubmissionDeclined(PdfCapturePreview)
   PdfCaptureDismissed(PdfCapturePreview)
   PdfPageChanged(String)
   PdfFitWidth
