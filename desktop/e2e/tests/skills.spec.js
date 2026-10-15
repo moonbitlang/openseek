@@ -52,11 +52,18 @@ class SkillsHarness extends DesktopBrowserHarness {
     await this.install();
     await this.goto();
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
-    const summaries = this.page.locator('.skill-summary');
-    // Installed rows render above the catalog, and each list arrives by its
-    // own RPC. Until both have, first() and last() can name the same row.
-    await expect(summaries).toHaveCount(expectedRows);
-    await (fromCatalog ? summaries.last() : summaries.first()).click();
+    const installedGroup = this.page.locator('.settings-group').filter({
+      has: this.page.getByRole('heading', { name: 'Installed', exact: true }),
+    });
+    const availableGroup = this.page.locator('.settings-group').filter({
+      has: this.page.getByRole('heading', { name: 'Available', exact: true }),
+    });
+    await expect(availableGroup).toBeVisible();
+    await expect(installedGroup.locator('.skill-row')).toHaveCount(this.installedSkills.length);
+    await expect(availableGroup.getByText('Loading the skill catalog…', { exact: true })).toHaveCount(0);
+    await expect(this.page.locator('.skill-summary')).toHaveCount(expectedRows);
+    const group = fromCatalog || this.installedSkills.length === 0 ? availableGroup : installedGroup;
+    await group.locator('.skill-summary').first().click();
     await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
   }
 }
