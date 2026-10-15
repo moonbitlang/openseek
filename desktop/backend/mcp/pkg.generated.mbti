@@ -33,7 +33,6 @@ pub(all) struct Tool {
   name : String
   description : String
   input_schema : Json
-  waits_for_user : Bool
   call : async (ToolCall) -> String
 }
 

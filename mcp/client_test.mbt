@@ -137,53 +137,6 @@ async test "initialize completes the handshake and returns server identity" {
 }
 
 ///|
-async test "human-wait tool metadata is explicit and propagates to its call" {
-  @async.with_task_group(group => {
-    let requests : Array[Json] = []
-    let client = fake_client(group, request => {
-      requests.push(request)
-      match method_of(request) {
-        "tools/list" =>
-          Some(
-            success(request, {
-              "tools": [
-                { "name": "ordinary", "inputSchema": { "type": "object" } },
-                {
-                  "name": "session",
-                  "_meta": { "io.seekmoon/waitsForUser": true },
-                },
-              ],
-            }),
-          )
-        "tools/call" => Some(success(request, { "content": [] }))
-        _ => None
-      }
-    })
-    let listed = client.list_tools()
-    assert_false(listed[0].waits_for_user)
-    assert_true(listed[1].waits_for_user)
-    ignore(client.call_tool(name="ordinary", arguments={}))
-    ignore(
-      client.call_tool(
-        name="session",
-        arguments={ "action": "send" },
-        waits_for_user=true,
-      ),
-    )
-    let calls = requests.filter(request => method_of(request) == "tools/call")
-    assert_true(calls[0] is { "params": { "name": "ordinary", .. }, .. })
-    assert_false(calls[0] is { "params": { "_meta": _, .. }, .. })
-    assert_true(
-      calls[1]
-      is {
-        "params": { "_meta": { "io.seekmoon/waitsForUser": true, .. }, .. },
-        ..
-      },
-    )
-  })
-}
-
-///|
 async test "initialize accepts a supported older protocol version" {
   @async.with_task_group(group => {
     let reply = answers("initialize", request => {

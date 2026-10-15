@@ -50,6 +50,129 @@ async test "timely approval waits for delivery beyond the approval timeout" {
 }
 
 ///|
+async test "delivery timeout or caller cancellation transfers one final receipt without resubmitting" {
+  for caller_timeout in [false, true] {
+    for delivery_fails in [false, true] {
+      let service = @session_messages.Service()
+      let (message, _) = service.request("sender", "target", "Hello", "slow")
+      let started : @async.Queue[Unit] = Queue(kind=Blocking(1))
+      let finish : @async.Queue[Unit] = Queue(kind=Blocking(1))
+      let notices : @async.Queue[String] = Queue(kind=Blocking(1))
+      let deliveries : Array[String] = []
+      let errors : Array[String] = []
+      @async.with_timeout(1000, () => {
+        @async.with_task_group(group => {
+          group.spawn_bg(no_wait=true, () => {
+            service.run(
+              (target, text, _) => {
+                deliveries.push(target)
+                if target == "target" {
+                  started.put(())
+                  finish.get()
+                  if delivery_fails {
+                    fail("target stopped accepting input")
+                  }
+                } else {
+                  assert_eq(target, "sender")
+                  notices.put(text)
+                }
+              },
+              (_, error) => errors.push(error),
+            )
+          })
+          assert_true(service.decide(message.id, true))
+          started.get()
+          if caller_timeout {
+            // An outer tool deadline cancels only its waiter. The host task
+            // is still blocked in the original delivery, not a replacement.
+            assert_true(
+              @async.with_timeout_opt(1, () => service.wait(message)) is None,
+            )
+          } else {
+            assert_true(
+              service.wait(message, delivery_wait_ms=1)
+              is { "status": "delivering", "feedback": "pending", .. },
+            )
+          }
+          assert_true(
+            message.status()
+            is { "status": "delivering", "feedback": "pending", .. },
+          )
+          let (duplicate, fresh) = service.request(
+            "sender", "target", "Hello", "slow",
+          )
+          assert_false(fresh)
+          assert_eq(duplicate.id, message.id)
+          service.detach("sender")
+          finish.put(())
+          let notice = notices.get()
+          if delivery_fails {
+            assert_true(
+              @message_context.parse(notice)
+              is Some(DeliveryResult(status="failed", error=Some(_), ..)),
+            )
+          } else {
+            assert_true(
+              @message_context.parse(notice)
+              is Some(DeliveryResult(status="sent", error=None, ..)),
+            )
+          }
+          service.detach("sender")
+          @async.pause()
+          assert_true(message.status() is { "feedback": "notified", .. })
+        })
+      })
+      assert_eq(deliveries, ["target", "sender"])
+      assert_true(errors.is_empty())
+    }
+  }
+}
+
+///|
+async test "completion near the delivery deadline has exactly one feedback owner" {
+  for delay in [0, 1, 2] {
+    let service = @session_messages.Service()
+    let (message, _) = service.request("sender", "target", "Hello", "race")
+    let deliveries : Array[String] = []
+    let notices : @async.Queue[Unit] = Queue(kind=Blocking(1))
+    let errors : Array[String] = []
+    @async.with_timeout(1000, () => {
+      @async.with_task_group(group => {
+        group.spawn_bg(no_wait=true, () => {
+          service.run(
+            (target, _, _) => {
+              deliveries.push(target)
+              if target == "target" {
+                @async.sleep(delay)
+              } else {
+                assert_eq(target, "sender")
+                notices.put(())
+              }
+            },
+            (_, error) => errors.push(error),
+          )
+        })
+        assert_true(service.decide(message.id, true))
+        let result = service.wait(message, delivery_wait_ms=1)
+        if result is { "feedback": "tool_result", .. } {
+          assert_true(result is { "status": "sent", .. })
+          service.detach("sender")
+          @async.pause()
+          assert_eq(deliveries, ["target"])
+        } else {
+          assert_true(result is { "feedback": "pending", .. })
+          notices.get()
+          @async.pause()
+          assert_true(message.status() is { "feedback": "notified", .. })
+          assert_eq(deliveries, ["target", "sender"])
+        }
+      })
+    })
+    assert_true(errors.is_empty())
+  }
+}
+
+///|
 async test "timeout retains approval and actively delivers the final result to the sender" {
   let service = @session_messages.Service()
   let (message, _) = service.request(

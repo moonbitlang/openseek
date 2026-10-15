@@ -6,6 +6,12 @@
 const MessageApprovalWaitMs : Int32 = 30000
 
 ///|
+/// Bound delivery acknowledgement separately from approval. Together these
+/// waits finish before the MCP bridge's ordinary 120-second call deadline,
+/// so a late result is never mistaken for a reply to a caller that timed out.
+const MessageDeliveryWaitMs : Int32 = 30000
+
+///|
 priv enum MessageOutcome {
   Sent
   Rejected
@@ -180,12 +186,14 @@ pub fn Message::status(self : Message) -> Json {
 }
 
 ///|
-/// Cancellation of a waiter, including a lost HTTP caller, does not revoke
-/// the approval. It switches completion reporting to the sender's context.
+/// Wait briefly for approval and then for delivery. Either deadline or waiter
+/// cancellation transfers completion reporting to the sender's context without
+/// revoking approval or cancelling the host-owned delivery.
 pub async fn Service::wait(
   self : Service,
   entry : Message,
   wait_ms~ : Int32 = MessageApprovalWaitMs,
+  delivery_wait_ms~ : Int32 = MessageDeliveryWaitMs,
 ) -> Json {
   let mut returned = false
   defer (if !returned && entry.feedback is Attached {
@@ -199,22 +207,24 @@ pub async fn Service::wait(
       }
     }),
   )
-  // Read the phase again after timeout teardown: a decision racing the timer
-  // must either be returned here or reported later, never lost between them.
-  if entry.phase is AwaitingApproval {
-    if entry.feedback is Attached {
+  if entry.phase is (Approved | Delivering) {
+    ignore(
+      @async.with_timeout_opt(delivery_wait_ms, () => {
+        while !(entry.phase is Completed(_)) {
+          entry.changed.wait()
+        }
+      }),
+    )
+  }
+  // Re-read after timeout teardown, then choose one feedback owner without
+  // suspending. Completion racing either deadline is returned or notified.
+  if entry.feedback is Attached {
+    if entry.phase is Completed(_) {
+      entry.feedback = Returned
+    } else {
       entry.feedback = Detached
       self.changed.broadcast()
     }
-  } else {
-    // Timely approval keeps this call synchronous until actual delivery is
-    // confirmed. The MCP human-wait policy protects this from tool deadlines.
-    while !(entry.phase is Completed(_)) {
-      entry.changed.wait()
-    }
-  }
-  if entry.phase is Completed(_) && entry.feedback is Attached {
-    entry.feedback = Returned
   }
   returned = true
   entry.status()

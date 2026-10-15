@@ -102,16 +102,8 @@ pub async fn McpClient::call_tool(
   self : McpClient,
   name~ : String,
   arguments~ : Json,
-  waits_for_user~ : Bool = false,
 ) -> CallToolResult {
-  let fields : Map[String, Json] = {
-    "name": Json(name),
-    "arguments": arguments,
-  }
-  if waits_for_user {
-    fields["_meta"] = { "io.seekmoon/waitsForUser": true }
-  }
-  let params = Json(fields)
+  let params : Json = { "name": Json(name), "arguments": arguments }
   let result = self.rpc.request(method_="tools/call", params~)
   decode_call_result(result)
 }

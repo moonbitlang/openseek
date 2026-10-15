@@ -28,9 +28,6 @@ pub struct McpTool {
   /// The tool's JSON Schema for arguments, forwarded to the model unchanged.
   /// Defaults to an open object schema when the server omits `inputSchema`.
   input_schema : Json
-  /// SeekMoon extension: this call may wait for a human decision and its
-  /// resulting operation. Cancellation still ends the client's wait.
-  waits_for_user : Bool
 } derive(Eq, Debug)
 
 ///|
@@ -115,9 +112,7 @@ fn decode_tool(entry : Json) -> McpTool raise {
     { "inputSchema": schema, .. } => schema
     _ => { "type": "object" }
   }
-  let waits_for_user = entry
-    is { "_meta": { "io.seekmoon/waitsForUser": true, .. }, .. }
-  { name, description, input_schema, waits_for_user, }
+  { name, description, input_schema, }
 }
 
 ///|

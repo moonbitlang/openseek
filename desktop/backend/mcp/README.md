@@ -83,12 +83,6 @@ One megabyte per request body, ten seconds to deliver a request, and 150
 seconds per tool handler. Every reply is a single `application/json` body:
 there is no SSE stream and no server-initiated request.
 
-Tools explicitly marked `waits_for_user` advertise the SeekMoon extension
-`_meta: {"io.seekmoon/waitsForUser": true}`. OpenSeek preserves it on the
-call and exempts that call from the ordinary bridge, HTTP exchange, and host
-handler execution deadlines. Cancellation and host shutdown still apply.
-This flag describes waiting; it grants no permission to execute an action.
-
 ## Cross-conversation messages
 
 The backend registers `session` alongside the window's browser tools. Include
@@ -114,11 +108,17 @@ sender's approval card. Approval may steer a running conversation or start a
 turn in an idle one. It authorizes delivery of this message, not arbitrary
 actions by its recipient.
 
-The call waits 30 seconds for approval. A timely approval keeps it waiting for
-the target's durable user-message commit, then returns `sent`. If still
-unanswered at the deadline, it returns `pending_approval` with an `id`, and the
-same approval remains actionable. `status` reads the current outcome; `cancel`
-withdraws an unapproved request. Neither action creates another delivery.
+The call waits 30 seconds for approval. After a timely approval it waits up to
+30 more seconds for the target's durable user-message commit. A confirmed
+commit returns `sent`; if delivery is still in progress, it returns `delivering`
+and transfers the final result to background notification. An unanswered
+approval returns `pending_approval` with an `id` and remains actionable. Both
+waits are bounded below the ordinary MCP deadlines: 120 seconds for the agent
+bridge and 150 seconds for the HTTP exchange and host handler. Cancelling or
+timing out a waiter also transfers its final result to background notification;
+it does not cancel the host-owned message delivery. `status` reads the current
+outcome; `cancel` withdraws an unapproved request. Neither action creates another
+delivery.
 After a background decision, the host actively delivers the final result to
 the sender's agent context, steering its current turn or starting a new one.
 Rejections and delivery failures are reported too. A result-notification
@@ -143,7 +143,8 @@ target, and send an exact test message. The source chat shows a `session.send`
 approval with the destination and message.
 
 - Approve within 30 seconds: the tool returns `sent` after the target records
-  the input. The target may be busy, so acknowledgement can take longer.
+  the input. If acknowledgement takes more than another 30 seconds, the tool
+  returns `delivering`; the sender receives the final result asynchronously.
 - Leave it unanswered for more than 30 seconds: the tool returns
   `pending_approval`. Approve the same card later; the target receives the
   message and the sender receives an active final-result notification.
