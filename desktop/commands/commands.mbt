@@ -641,12 +641,6 @@ pub let skills_uninstall : Command[
 ] = Command("skills.uninstall")
 
 ///|
-pub let skills_update : Command[
-  @protocol.UpdateSkillPayload,
-  @protocol.UpdateSkillReply,
-] = Command("skills.update")
-
-///|
 pub let update_check : Command[
   @protocol.EmptyPayload,
   @protocol.CheckUpdateReply,

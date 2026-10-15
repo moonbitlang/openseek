@@ -21,22 +21,6 @@ const TrashDirectory = ".trash"
 let library_lock : @async.Mutex = Mutex()
 
 ///|
-/// A client can uninstall and reinstall the same version during an update's
-/// download. Provenance alone cannot distinguish that replacement, so each
-/// committed mutation advances this target's process-local revision.
-let library_revisions : Map[String, Int32] = Map([])
-
-///|
-fn SkillLibrary::revision(self : SkillLibrary, id : String) -> Int32 {
-  library_revisions.get(self.target(id).to_string()).unwrap_or(0)
-}
-
-///|
-fn SkillLibrary::changed(self : SkillLibrary, id : String) -> Unit {
-  library_revisions[self.target(id).to_string()] = self.revision(id) + 1
-}
-
-///|
 /// Paths and recovery rules for one skills library. The hidden directories
 /// themselves encode state; no separate transaction record is needed.
 priv struct SkillLibrary {
@@ -196,7 +180,6 @@ async fn SkillLibrary::activate(
         raise SkillMarketError("cannot activate skill \{id}: \{move_error}")
       }
     }
-    self.changed(id)
     if on_committed is Some(callback) {
       callback()
     }
@@ -227,7 +210,6 @@ async fn SkillLibrary::move_to_trash(
       error =>
         raise SkillMarketError("failed to uninstall skill \{id}: \{error}")
     }
-    self.changed(id)
     if on_committed is Some(callback) {
       callback()
     }

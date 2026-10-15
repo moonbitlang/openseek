@@ -196,14 +196,27 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  let prepared = prepare_skill(
-    id=slug,
-    module_name~,
-    version~,
-    package_path~,
-    entry~,
-    source~,
-  )
+  let skill = skill_files(fetch_archive(entry, source), entry)
+  let text = @utf8.decode(skill.skill_md) catch {
+    _ =>
+      raise SkillMarketError(
+        "the archive for \{entry} holds an unreadable SKILL.md",
+      )
+  }
+  let (name, description) = parse_frontmatter(text, slug)
+  let installed = {
+    id: slug,
+    name,
+    description,
+    source: source_label(module_name, version, package_path),
+    registry: Some({ module_name, package_path, version, }),
+  }
+  let provenance : Json = {
+    "module": module_name,
+    "version": version,
+    "package": package_path,
+    "digest": source.digest,
+  }
   library_lock.acquire()
   defer library_lock.release()
   let library : SkillLibrary = { root: library_dir, }
@@ -215,9 +228,9 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  library.stage(slug, prepared.files, prepared.provenance)
+  library.stage(slug, skill.files, provenance.stringify())
   library.activate(slug, on_committed?)
-  prepared.installed
+  installed
 }
 
 ///|

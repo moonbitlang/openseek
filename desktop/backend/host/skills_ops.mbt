@@ -88,26 +88,6 @@ fn @skillmarket.InstalledSkill::to_protocol(
 }
 
 ///|
-async fn update_skill_op(
-  payload : @protocol.UpdateSkillPayload,
-  on_committed : () -> Unit,
-) -> @protocol.UpdateSkillReply {
-  let result = @skillmarket.update_skill(
-    payload.id,
-    target_version=payload.target_version,
-    on_committed~,
-  ) catch {
-    @skillmarket.SkillMarketError(message) => return SkillUpdateError(message)
-    error => return SkillUpdateError("\{error}")
-  }
-  match result {
-    Updated(skill) => SkillUpdated(skill.to_protocol())
-    AlreadyCurrent(skill) => SkillAlreadyCurrent(skill.to_protocol())
-    InstallationChanged => SkillInstallationChanged
-  }
-}
-
-///|
 async fn installed_skills_op() -> InstalledSkillsReply {
   let skills = @skillmarket.installed_skills() catch {
     @skillmarket.SkillMarketError(message) =>

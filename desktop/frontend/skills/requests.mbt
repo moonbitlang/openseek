@@ -1,5 +1,5 @@
 // The page's host transport: browsing the mooncakes.io registry and changing
-// the engine's global skills library. All three are plain request/reply calls
+// the engine's global skills library. These are plain request/reply calls
 // on the engine-host bridge, and each settles as one `Msg`.
 
 ///|
@@ -147,14 +147,14 @@ fn fetch_installed_content(
 }
 
 ///|
-/// Install one catalog entry into the global skills library. Settles with an
-/// `ActionDone` either way, carrying the operation that started the request.
+/// Install a catalog entry, including replacing an installed registry skill.
+/// The caller supplies the operation label retained until the reply settles.
 fn install(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
   item : MarketItem,
+  action : PendingSkillAction,
 ) -> @cmd.Cmd {
-  let action = PendingSkillAction::Installing(source=source_label(item))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(channel, @commands.skills_install, {
@@ -221,43 +221,6 @@ fn uninstall(
         SkillUninstallError(message) => Some(message)
       }
       scheduler.add(emit(ActionDone(channel~, action~, error~)))
-    })
-    |> ignore
-  })
-}
-
-///|
-fn update_skill(
-  emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  item : InstalledItem,
-  version : String,
-) -> @cmd.Cmd {
-  let action = PendingSkillAction::Updating(
-    source=item.source,
-    id=item.id,
-    version~,
-  )
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.skills_update, {
-        id: item.id,
-        target_version: version,
-      }) catch {
-        error => {
-          scheduler.add(
-            emit(
-              ActionDone(
-                channel~,
-                action~,
-                error=Some(@interop.bridge_error_text(error)),
-              ),
-            ),
-          )
-          return
-        }
-      }
-      scheduler.add(emit(UpdateDone(channel~, action~, reply~)))
     })
     |> ignore
   })

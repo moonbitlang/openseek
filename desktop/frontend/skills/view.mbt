@@ -5,7 +5,6 @@
 /// The list aggregates notices; a detail shows only its skill's operation
 /// failures. Library loading errors apply to either view.
 fn notice_views(
-  locale : @i18n.Locale,
   state : State,
   input : Input,
   target : PreviewTarget?,
@@ -14,7 +13,7 @@ fn notice_views(
   for notice in state.notices {
     let message = match notice {
       LibraryLoadFailed(message) => message
-      SkillActionFailed(operation~, ..) | InstallationChanged(operation~) => {
+      SkillActionFailed(operation~, message~) => {
         guard operation.channel == input.channel else { continue }
         if target is Some(target) {
           let identity = match target {
@@ -22,10 +21,6 @@ fn notice_views(
             Installed(item) => item.identity()
           }
           guard identity == Some(operation.identity) else { continue }
-        }
-        let message = match notice {
-          SkillActionFailed(message~, ..) => message
-          _ => ui(locale, InstallationChanged)
         }
         if target is None {
           "\{operation.action.source()}: \{message}"
@@ -236,7 +231,7 @@ fn detail_shell(
       @html.h2(preview_name(target)),
       @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       detail_action(locale~, target, state, input, emit),
-      @html.div(notice_views(locale, state, input, Some(target))),
+      @html.div(notice_views(state, input, Some(target))),
     ]),
     @html.div(class="skill-detail-card", [
       @html.div(class="skill-file-bar", [
@@ -406,7 +401,7 @@ fn list_page(
       ],
     ),
   ]
-  for notice in notice_views(locale, state, input, None) {
+  for notice in notice_views(state, input, None) {
     sections.push(notice)
   }
   let installed_rows : Array[@html.Html] = []
@@ -529,7 +524,7 @@ fn installed_actions(
         attrs=@html.Attrs::build().on_click(event => {
           event.stop_propagation()
           if candidate is Some(target) {
-            emit(Update(item, target))
+            emit(Update(target))
           } else {
             @cmd.none
           }

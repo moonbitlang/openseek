@@ -18,8 +18,6 @@ pub async fn read_skill_content(String, library_dir? : @pathx.Path) -> String
 
 pub async fn uninstall_skill(String, library_dir? : @pathx.Path, on_committed? : () -> Unit) -> Unit
 
-pub async fn update_skill(String, target_version~ : String, registry? : String, library_dir? : @pathx.Path, on_committed? : () -> Unit) -> SkillUpdateResult
-
 // Errors
 pub(all) suberror SkillMarketError {
   SkillMarketError(String)
@@ -49,12 +47,6 @@ pub struct RegistrySkillSource {
   module_name : String
   package_path : String
   version : String
-}
-
-pub enum SkillUpdateResult {
-  Updated(InstalledSkill)
-  AlreadyCurrent(InstalledSkill)
-  InstallationChanged
 }
 
 // Type aliases

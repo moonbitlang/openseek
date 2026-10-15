@@ -32,7 +32,6 @@ struct State {
 ///|
 priv enum Notice {
   SkillActionFailed(operation~ : PendingOperation, message~ : String)
-  InstallationChanged(operation~ : PendingOperation)
   LibraryLoadFailed(String)
 } derive(Eq)
 
@@ -50,7 +49,7 @@ fn Notice::belongs_to(
   identity : (String, String),
 ) -> Bool {
   match self {
-    SkillActionFailed(operation~, ..) | InstallationChanged(operation~) =>
+    SkillActionFailed(operation~, ..) =>
       operation.channel == channel && operation.identity == identity
     LibraryLoadFailed(_) => false
   }
@@ -60,7 +59,7 @@ fn Notice::belongs_to(
 pub(all) enum PendingSkillAction {
   Installing(source~ : String)
   Uninstalling(source~ : String, id~ : String)
-  Updating(source~ : String, id~ : String, version~ : String)
+  Updating(source~ : String)
 } derive(Eq)
 
 ///|
@@ -69,7 +68,7 @@ pub extend PendingSkillAction with Eq::{equal, not_equal}
 ///|
 fn PendingSkillAction::source(self : PendingSkillAction) -> String {
   match self {
-    Installing(source~) | Uninstalling(source~, ..) | Updating(source~, ..) =>
+    Installing(source~) | Uninstalling(source~, ..) | Updating(source~) =>
       source
   }
 }
@@ -166,12 +165,7 @@ pub(all) enum Msg {
   Install(MarketItem)
   // Capture the source alongside the library id before the entry disappears.
   Uninstall(InstalledItem)
-  Update(InstalledItem, MarketItem)
-  UpdateDone(
-    channel~ : @interop.ChannelId,
-    action~ : PendingSkillAction,
-    reply~ : @protocol.UpdateSkillReply
-  )
+  Update(MarketItem)
   // A skill operation settled: `action` is the operation to release, and
   // an `error` becomes a notice for that skill (a success reports the
   // library change to the root instead).
@@ -417,13 +411,20 @@ pub fn State::handle(
       guard channel == input.channel else { return (@cmd.none, self, None) }
       (@cmd.none, { ..self, catalog: Failed(message), }, None)
     }
-    Install(item) =>
+    Install(item) | Update(item) => {
+      let source = source_label(item)
+      let action : PendingSkillAction = if msg is Update(_) {
+        Updating(source~)
+      } else {
+        Installing(source~)
+      }
       self.start_action(
         input.channel,
         item.identity(),
-        Installing(source=source_label(item)),
-        install(emit, input.channel, item),
+        action,
+        install(emit, input.channel, item, action),
       )
+    }
     Uninstall(item) => {
       guard item.identity() is Some(identity) else {
         return (@cmd.none, self, None)
@@ -435,50 +436,6 @@ pub fn State::handle(
         uninstall(emit, input.channel, item),
       )
     }
-    Update(item, target) => {
-      guard item.registry is Some(registry) &&
-        target.identity() == (registry.module_name, registry.package_path) &&
-        target.version != registry.version else {
-        return (@cmd.none, self, None)
-      }
-      self.start_action(
-        input.channel,
-        target.identity(),
-        Updating(source=item.source, id=item.id, version=target.version),
-        update_skill(emit, input.channel, item, target.version),
-      )
-    }
-    UpdateDone(channel~, action~, reply~) =>
-      match reply {
-        SkillUpdated(_) | SkillAlreadyCurrent(_) =>
-          self.handle(emit, ActionDone(channel~, action~, error=None), input)
-        SkillUpdateError(message) =>
-          self.handle(
-            emit,
-            ActionDone(channel~, action~, error=Some(message)),
-            input,
-          )
-        SkillInstallationChanged => {
-          let operation = self.busy
-            .iter()
-            .find_first(operation => {
-              operation.channel == channel && operation.action == action
-            })
-          let (_, settled, _) = self.handle(
-            emit,
-            ActionDone(channel~, action~, error=None),
-            input,
-          )
-          guard channel == input.channel && operation is Some(operation) else {
-            return (@cmd.none, settled, None)
-          }
-          let notices = settled.notices.filter(notice => {
-            !notice.belongs_to(channel, operation.identity)
-          })
-          notices.push(InstallationChanged(operation~))
-          (@cmd.none, { ..settled, notices, }, Some(LibraryChanged(channel~)))
-        }
-      }
     ActionDone(channel~, action~, error~) => {
       let operation = self.busy
         .iter()

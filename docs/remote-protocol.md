@@ -675,22 +675,17 @@ these are ordinary command replies, with no transport-level wrapper.
 | `skills.installed_content` | `{id}` | `{content}` — the installed SKILL.md |
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
 | `skills.uninstall` | `{id}` | `{removed}` |
-| `skills.update` | `{id, target_version}` | `{status: "updated", installed}` or `{status: "current", installed}` or `{status: "changed"}` |
 
 Installed entries include an optional `registry: {module_name, package_path, version}`
 identifying the installed registry skill and its installed version. Root packages use `package_path: ""`;
 non-registry skills omit `registry`.
 
-`skills.update` uses the installation's recorded module/package and the exact
-requested target version. `current` means that exact version is already
-installed, without rewriting it; `changed` means the registry installation is
-absent or was changed by another operation while the update was prepared, so
-clients refresh the library and let the user retry. The trusted registry
-guarantees monotonically increasing published versions, so clients treat
-versions as opaque strings and use equality to detect an available update.
-Operational failures return `{error}`. Archive preparation leaves the live
-entry untouched; a successful update replaces its complete directory and
-provenance through the existing recoverable installation transaction.
+The Installed update action reuses `skills.install` with the catalog's module,
+package, and displayed version. The trusted registry guarantees that published
+versions do not move backwards, so clients treat versions as opaque strings:
+equal means no update; different means an update is available. The existing
+install operation replaces the complete directory and provenance through its
+recoverable transaction.
 
 Notification:
 

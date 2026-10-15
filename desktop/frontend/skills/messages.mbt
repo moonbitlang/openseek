@@ -6,7 +6,6 @@ priv enum UiMessage {
   Removing
   Updating
   UpdateTo(String)
-  InstallationChanged
   Uninstall
   NotInstalled
   Installing
@@ -47,16 +46,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, UpdateTo(version)) => "更新至 \{version}"
     (TraditionalChinese, UpdateTo(version)) => "更新至 \{version}"
     (Japanese, UpdateTo(version)) => "\{version} に更新"
-    (English, InstallationChanged) =>
-      "This installation changed while updating. Check its current version and try again."
-    (Spanish, InstallationChanged) =>
-      "La instalación cambió durante la actualización. Comprueba la versión actual e inténtalo de nuevo."
-    (SimplifiedChinese, InstallationChanged) =>
-      "安装记录在更新期间发生变化，请检查当前版本后重试。"
-    (TraditionalChinese, InstallationChanged) =>
-      "安裝記錄在更新期間發生變更，請檢查目前版本後重試。"
-    (Japanese, InstallationChanged) =>
-      "更新中にインストール状態が変更されました。現在のバージョンを確認して再試行してください。"
     (English, HandWritten) => "hand-written"
     (Spanish, HandWritten) => "escrita a mano"
     (SimplifiedChinese, HandWritten) => "手动编写"
