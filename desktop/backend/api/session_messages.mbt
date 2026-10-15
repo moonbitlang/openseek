@@ -16,14 +16,10 @@ async fn ApiState::run_session_messages(self : ApiState) -> Unit {
     (session, text, id) => self.deliver_session_input(session, text, id),
     (session, message) => {
       self.publish(
-        AgentError({
-          run_id: self.hub.active_starts
-          .values()
-          .find_first(run => run.session == session)
-          .map(run => run.run_id),
-          message: Some(message),
-          exit_code: None,
-          diagnostics: None,
+        AgentEvent({
+          run_id: None,
+          session,
+          event: SessionError(error=message),
         }),
       )
     },

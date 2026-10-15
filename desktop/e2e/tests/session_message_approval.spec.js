@@ -124,3 +124,44 @@ test('received messages and delivery results render tagged context live and afte
   await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const running of [false, true]) {
+  test(`delivery feedback failures remain session-scoped with an ${running ? 'active' : 'idle'} sender`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
+    const replyFor = app.replyFor.bind(app);
+    app.replyFor = request => {
+      const reply = replyFor(request);
+      if (request.method === 'session.load') {
+        reply.session.id = request.params.session;
+      }
+      return reply;
+    };
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    if (running) {
+      await page.locator('#task').fill('Continue the task');
+      await page.locator('#send').click();
+      await expect(page.locator('#stop')).toBeVisible();
+    }
+    await page.locator('.conversation-row[title="session-2"]').click();
+    await expect(page.locator('main > .topbar h1')).toHaveText('Another conversation');
+    const status = page.locator('main > .topbar .run-status');
+    const before = await status.textContent();
+    app.notify('agent.event', {
+      session: 'session-1', run_id: null,
+      event: { event: 'session_error', error: 'Could not deliver message result: the sender is unavailable' },
+    });
+    await expect(page.getByText('the engine could not save an item to this session: Could not deliver message result: the sender is unavailable', { exact: true })).toBeVisible();
+    await expect(status).toHaveText(before);
+    await expect(page.locator('#stop')).toBeHidden();
+    await page.locator('.conversation-row[title="session-1"]').click();
+    if (running) {
+      await expect(page.locator('#stop')).toBeVisible();
+    } else {
+      await expect(page.locator('#stop')).toBeHidden();
+    }
+    expect(app.pageErrors).toEqual([]);
+  });
+}

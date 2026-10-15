@@ -1,15 +1,67 @@
 ///|
+pub(all) enum MessageReceipt {
+  Applied
+  Dropped
+  Closed
+}
+
+///|
+pub struct MessageSubmission {
+  run_id : String
+  steering : Bool
+  priv receipt : @message_receipts.Receipt[MessageReceipt]
+}
+
+///|
+pub fn MessageSubmission::close(self : MessageSubmission) -> Unit {
+  self.receipt.close()
+}
+
+///|
+pub fn MessageSubmission::result(self : MessageSubmission) -> MessageReceipt? {
+  self.receipt.result()
+}
+
+///|
+fn ServeEngine::watch_message(
+  self : ServeEngine,
+  run_id : String,
+  id : String,
+  steering~ : Bool,
+  notify : (MessageReceipt) -> Unit,
+) -> MessageSubmission {
+  { run_id, steering, receipt: self.message_receipts.watch(id, notify), }
+}
+
+///|
+/// These commands are still in the host queue: no bytes from them reached
+/// stdin, so retrying them cannot duplicate a committed input.
+fn ServeEngine::drop_unwritten_message(
+  self : ServeEngine,
+  command : @wire.Command,
+) -> Unit {
+  match command {
+    Prompt(submission_id=Some(id), ..) | Steer(submission_id=Some(id), ..) =>
+      self.message_receipts.settle(id, Dropped)
+    _ => ()
+  }
+}
+
+///|
 /// Submit host-owned input to an existing conversation. A live process keeps
 /// its model/configuration; a reclaimed process is resumed with host defaults.
 /// None means compaction is in progress: retry after its lifecycle event.
 /// Some is admission only; the caller confirms the durable User submission id.
+/// The receipt observer outlives turn-finished and settles on the exact steer
+/// receipt, a definitely unwritten command, or the engine consumer's exit.
 pub async fn submit_session_message(
   manager : EngineManager,
   sink : EventSink,
   session : String,
   text : String,
   submission_id : String,
-) -> String? {
+  notify : (MessageReceipt) -> Unit,
+) -> MessageSubmission? {
   guard !text.is_blank() &&
     normalize_submission_id(Some(submission_id)) is Some(_) else {
     raise EngineError("message text and a valid submission id are required")
@@ -32,7 +84,9 @@ pub async fn submit_session_message(
           guard reply.steered else {
             raise EngineError("conversation stopped accepting messages")
           }
-          return Some(run_id)
+          return Some(
+            live.watch_message(run_id, submission_id, steering=true, notify),
+          )
         }
         Idle(..) => {
           let run_id = mint_run_id()
@@ -57,7 +111,9 @@ pub async fn submit_session_message(
               session_root: live.session_root.map(root => root.resource_path()),
             }),
           )
-          return Some(run_id)
+          return Some(
+            live.watch_message(run_id, submission_id, steering=false, notify),
+          )
         }
       }
     }
@@ -72,5 +128,9 @@ pub async fn submit_session_message(
     thinking: None,
     max_steps: None,
   })
-  Some(reply.run_id)
+  guard manager.serving().get(session) is Some(slot) &&
+    slot.live() is Some(live) else {
+    raise EngineError("conversation stopped before delivery could be observed")
+  }
+  Some(live.watch_message(reply.run_id, submission_id, steering=false, notify))
 }

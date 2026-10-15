@@ -77,7 +77,7 @@ pub fn steer_run(EngineManager, @protocol.SteerPayload) -> @protocol.SteerReply
 
 pub async fn stop_job(EngineManager, @protocol.JobTarget) -> @protocol.JobStopReply
 
-pub async fn submit_session_message(EngineManager, EventSink, String, String, String) -> String?
+pub async fn submit_session_message(EngineManager, EventSink, String, String, String, (MessageReceipt) -> Unit) -> MessageSubmission?
 
 pub async fn unarchive_session(EngineManager, String, (String, String) -> Unit) -> @protocol.SessionsReply
 
@@ -118,6 +118,20 @@ type EngineManager
 pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
 
 pub(all) struct EventSink((EngineEvent) -> Unit)
+
+pub(all) enum MessageReceipt {
+  Applied
+  Dropped
+  Closed
+}
+
+pub struct MessageSubmission {
+  run_id : String
+  steering : Bool
+  // private fields
+}
+pub fn MessageSubmission::close(Self) -> Unit
+pub fn MessageSubmission::result(Self) -> MessageReceipt?
 
 pub(all) enum PatternRepairEnvironment {
   Ready(Map[String, String])

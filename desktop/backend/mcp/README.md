@@ -126,7 +126,7 @@ failure stays visible in status and is reported to the frontend.
 
 Host message approvals survive tool cancellation, turn completion and frontend
 reconnection. They are process-lifetime state: closing the host discards
-outstanding requests. The card says so. Engine-owned approvals retain their
+outstanding requests. Engine-owned approvals retain their
 existing turn-bound lifetime and have priority when both need attention.
 
 ### Try it in the development app

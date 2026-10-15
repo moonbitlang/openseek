@@ -11,6 +11,7 @@ import {
   "moonbitlang/openseek_protocol/command_context",
   "moonbitlang/jsonl",
   "openseek_desktop/backend/internal/env",
+  "openseek_desktop/backend/internal/message_receipts",
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/internal/home",
   "openseek_desktop/backend/moonbit",

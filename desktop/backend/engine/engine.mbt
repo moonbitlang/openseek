@@ -64,6 +64,7 @@ priv struct ServeEngine {
   // gone, so a start joins its close barrier instead of racing it.
   mut condemned : Bool
   steer_runs : SteerRunTracker
+  message_receipts : @message_receipts.Receipts[MessageReceipt]
   job_requests : Map[String, @async.Queue[@wire.Event]]
   queued_runs : Array[QueuedRun]
   // When this engine last did, or was asked to do, anything: its spawn, a
@@ -286,6 +287,7 @@ fn ServeEngine::settle_turn_commands(
     guard next is Some(queued) else { break }
     if ends_with_turn(queued.command) {
       queued.settle(Some(EngineError(reason)))
+      self.drop_unwritten_message(queued.command)
     } else {
       survivors.push(queued)
     }
@@ -296,6 +298,7 @@ fn ServeEngine::settle_turn_commands(
     // delivered, which is exactly what its sender needs to hear.
     if !(self.commands.try_put(queued) catch { _ => false }) {
       queued.settle(Some(EngineError(reason)))
+      self.drop_unwritten_message(queued.command)
     }
   }
 }
@@ -309,6 +312,7 @@ fn ServeEngine::settle_queued(self : ServeEngine, reason : String) -> Unit {
     let next = self.commands.try_get() catch { _ => break }
     guard next is Some(queued) else { break }
     queued.settle(Some(EngineError(reason)))
+    self.drop_unwritten_message(queued.command)
   }
 }
 
@@ -1642,6 +1646,7 @@ async fn[G] start_serve_engine(
     pending_failure: None,
     condemned: false,
     steer_runs: SteerRunTracker(),
+    message_receipts: Receipts(),
     queued_runs: [],
     job_requests: Map([]),
     last_activity_ms: engine_clock_ms(),
@@ -1690,6 +1695,7 @@ async fn ServeEngine::run(
   reader : @process.ReadFromProcess,
   stderr_task : @async.Task[String],
 ) -> Unit {
+  defer self.message_receipts.close(Closed)
   let code = self.consume(manager, reader) catch {
     error => {
       @xlog.error() <?
@@ -2001,6 +2007,12 @@ async fn ServeEngine::consume(
           engine.discard_commands(
             "the engine finished its turn before this command was written",
           )
+        }
+        if wire_event
+          is Some(SteerApplied(kind="prompt", submission_id=Some(id), ..)) {
+          engine.message_receipts.settle(id, Applied)
+        } else if wire_event is Some(SteerDropped(submission_id=Some(id), ..)) {
+          engine.message_receipts.settle(id, Dropped)
         }
         let run_id = engine.steer_runs.route_event(
           event?=wire_event,
@@ -2343,6 +2355,7 @@ fn test_serve_engine(
     pending_failure: None,
     condemned,
     steer_runs: SteerRunTracker(),
+    message_receipts: Receipts(),
     queued_runs: [],
     job_requests: Map([]),
     last_activity_ms,
@@ -2653,9 +2666,13 @@ async test "a run's close spares the commands queued to outlive its turn" {
     // Arrival order: a steer and a cancel aimed at the open turn, with the
     // queued compaction and a goal between them.
     let steer_ack : @async.Queue[EngineError?] = Queue(kind=Blocking(1))
+    let message_receipt = engine.message_receipts.watch("message-steer", _ => ())
     assert_true(
       engine.submit(
-        @protocol.steer(Content([Text("keep going")])),
+        @protocol.steer(
+          Content([Text("keep going")]),
+          submission_id="message-steer",
+        ),
         failure_reason="steer",
         ack=steer_ack,
       ),
@@ -2671,6 +2688,7 @@ async test "a run's close spares the commands queued to outlive its turn" {
     )
     assert_true(engine.submit(@protocol.cancel(), failure_reason="cancel"))
     engine.settle_turn_commands("the turn ended")
+    assert_true(message_receipt.result() is Some(Dropped))
 
     // The turn-scoped pair is answered; the engine stays usable.
     guard steer_ack.try_get() is Some(Some(_)) else {

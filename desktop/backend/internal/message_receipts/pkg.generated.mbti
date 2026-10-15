@@ -1,0 +1,21 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/message_receipts"
+
+// Values
+
+// Errors
+
+// Types and methods
+type Receipt[T]
+pub fn[T] Receipt::close(Self[T]) -> Unit
+pub fn[T] Receipt::result(Self[T]) -> T?
+
+type Receipts[T]
+pub fn[T] Receipts::Receipts() -> Self[T]
+pub fn[T] Receipts::close(Self[T], T) -> Unit
+pub fn[T] Receipts::settle(Self[T], String, T) -> Unit
+pub fn[T] Receipts::watch(Self[T], String, (T) -> Unit) -> Receipt[T]
+
+// Type aliases
+
+// Traits

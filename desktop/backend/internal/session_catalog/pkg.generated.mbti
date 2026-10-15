@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "openseek_desktop/backend/session_catalog"
+package "openseek_desktop/backend/internal/session_catalog"
 
 import {
   "moonbitlang/core/json",
