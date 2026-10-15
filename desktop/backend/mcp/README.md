@@ -25,7 +25,10 @@ app-lifetime owners.
 
 ## Configuration
 
-For a host configured with tools, add an HTTP entry to `~/.openseek/mcp.json`:
+Engines started by a host configured with tools connect automatically, for both
+conversations and scheduled runs. The engine launcher writes `host-mcp.json`
+in the runtime directory (or the global store directory when no runtime directory
+was supplied) and passes it as the first `--mcp-config` argument. It contains:
 
 ```json
 {
@@ -43,10 +46,16 @@ For a host configured with tools, add an HTTP entry to `~/.openseek/mcp.json`:
 OpenSeek expands the HTTP URL and header values from the engine's environment
 when it loads the configuration. Missing variables are errors, so a process
 that was not granted access cannot connect through this entry. The tools
-reach the model as `mcp__seekmoon__<tool>`; without an entry no tools are added.
+reach the model as `mcp__seekmoon__<tool>` automatically.
+
+The user's `~/.openseek/mcp.json`, or the `OPENSEEK_MCP_CONFIG` fallback when that
+file is absent, follows the host defaults as another `--mcp-config` argument.
+Later entries replace whole same-named servers before any connection starts.
+A user can therefore override `seekmoon` to customize its headers. A broken
+user file is reported without preventing the host defaults from loading.
 The old `seekmoon mcp` stdio relay and executable have been removed.
 
-To offer a subset, add `"X-SeekMoon-Tool-Groups": "browser"` to the headers.
+To offer a subset, override the entry in `~/.openseek/mcp.json` and add `"X-SeekMoon-Tool-Groups": "browser"` to the headers.
 Groups are comma-separated; a tool's group is its name before the first
 underscore (or the whole name if it has none). The host applies the filter to
 both `tools/list` and `tools/call`. Omitting the header offers every tool.
@@ -62,7 +71,8 @@ conversation — a `serve` engine and a scheduled run alike.
 The token is how a handler knows who is calling: `ToolCall.session` comes from
 the token, never from arguments the model wrote. Everything an engine runs
 inherits its environment, so a sub-run or a background job acts for the
-conversation that started it. Nothing is written to disk.
+conversation that started it. Neither the address nor the token is written to disk;
+the generated config contains only environment-variable placeholders.
 
 A host that offers no tools removes both variables from the engines it starts,
 so a grant it inherited — a host launched from another host's agent — is not

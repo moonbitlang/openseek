@@ -25,6 +25,7 @@ priv struct ServeEngine {
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
   spec_key : String
+  mcp_generation : Int64
   engine_name : String
   supports_images : Bool
   model : String
@@ -722,11 +723,16 @@ struct EngineManager {
   // runs. Every engine started while it is set is granted access to it
   // through its environment (see `engine_process_env`).
   host_mcp : @mcp.Server?
-  // The MCP configuration error already forwarded to pages. Every
+  // The MCP configuration errors already forwarded to pages, keyed by file. Every
   // conversation's engine reports the same broken file, and a person needs
   // to hear it once; it is forgotten when a configuration loads, or when
   // there is no file any more.
-  mut mcp_error : String?
+  mut mcp_errors : Map[String, String]
+  // Launch order and the newest launch that actually reported MCP state.
+  // A newer process may fail before loading MCP; until it reports, older
+  // engines still provide useful errors.
+  mut mcp_generation : Int64
+  mut mcp_report_generation : Int64
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1086,7 +1092,9 @@ fn new_engine_manager(
     runtime_dir,
     host_mcp,
     moonbit,
-    mcp_error: None,
+    mcp_errors: Map([]),
+    mcp_generation: 0,
+    mcp_report_generation: 0,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     archive_commit_lock: Mutex(),
@@ -1498,7 +1506,12 @@ async fn engine_process_env(
 }
 
 ///|
-fn engine_process_args(config : RunConfig) -> Array[String] {
+async fn engine_process_args(
+  config : RunConfig,
+  runtime_dir? : @pathx.Path,
+  env~ : Map[String, String] = Map([]),
+  host_mcp~ : Bool = false,
+) -> Array[String] {
   // Desktop engines always run in durable-session mode. Passing placement
   // explicitly keeps it out of the ambient environment inherited by tools.
   // Attach values so a leading `-` remains part of the value.
@@ -1506,11 +1519,7 @@ fn engine_process_args(config : RunConfig) -> Array[String] {
   if config.session_root is Some(root) {
     args.push("--session-root=\{root.to_string()}")
   }
-  // The engine reads this file itself and connects its servers once, when
-  // it starts.
-  if config.mcp_config is Some(mcp) {
-    args.push("--mcp-config=\{mcp.path.to_string()}")
-  }
+  args.append(engine_mcp_args(config.mcp_config, runtime_dir, env, host_mcp~))
   args.append(["--dir", ".", "--approval", "ask"])
   args
 }
@@ -1569,17 +1578,17 @@ async fn[G] start_serve_engine(
     source=manager.moonbit,
   )
   let program = config.engine
-  // An engine with no MCP configuration to load has nothing wrong with it
-  // any more, so the error remembered from one that had is forgotten.
-  if !mcp_configured(config, env) {
-    manager.mcp_error = None
-  }
   // `--approval ask` is the host declaring that it CAN answer a permission
   // question: the engine's own default is never, because an engine cannot tell
   // a controller with a person behind it from a script reading its stdout.
   // Saying so here is what makes the escalation argument exist for this
   // session's model at all.
-  let args = engine_process_args(config)
+  let args = engine_process_args(
+    config,
+    runtime_dir?=manager.runtime_dir,
+    env~,
+    host_mcp=manager.host_mcp is Some(_),
+  )
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {
@@ -1624,10 +1633,21 @@ async fn[G] start_serve_engine(
       "session_key": config.session,
       "pid": process.pid,
     }
+  // The pump serializes launches. Order reports by these launches, not by
+  // RunConfig's earlier revision read: that digest only decides engine reuse.
+  // The child receives paths and rereads their current contents at startup,
+  // so a request carrying an old digest does not load that old file content.
+  manager.mcp_generation += 1
+  // No registration event arrives when this launch has no configuration.
+  if manager.host_mcp is None && !mcp_configured(config, env) {
+    manager.mcp_errors.clear()
+    manager.mcp_report_generation = manager.mcp_generation
+  }
   let engine : ServeEngine = {
     session_key: config.session,
     session_root: config.session_root,
     spec_key: engine_fingerprint(config),
+    mcp_generation: manager.mcp_generation,
     engine_name: config.engine,
     model: config.model,
     supports_images: config.supports_images(),
@@ -1801,6 +1821,7 @@ async fn ServeEngine::consume(
 ) -> Int32 {
   let engine = self
   let sink = self.sink
+  let mcp_errors : Map[String, String] = Map([])
   // The read end belongs to this task for its whole life, so every way out —
   // EOF, a stream this host cannot read, cancellation — closes it here.
   defer reader.close()
@@ -1825,15 +1846,27 @@ async fn ServeEngine::consume(
         manager.kick_follower(engine.session_key)
         let wire_event = @wire.parse(json)
         match wire_event {
-          // One report per error, not one per conversation.
-          Some(McpConfigUnreadable(error~, ..) | McpConfigInvalid(error~, ..)) => {
-            if manager.mcp_error == Some(error) {
+          // Partial success still reports registration. Remember failures by
+          // source path until a later engine successfully loads that file.
+          Some(
+            McpConfigUnreadable(path~, error~)
+            | McpConfigInvalid(path~, error~)
+          ) => {
+            if engine.mcp_generation < manager.mcp_report_generation {
               continue
             }
-            manager.mcp_error = Some(error)
+            manager.mcp_report_generation = engine.mcp_generation
+            mcp_errors[path] = error
+            if manager.mcp_errors.get(path) == Some(error) {
+              continue
+            }
+            manager.mcp_errors[path] = error
           }
-          // A configuration that loaded ends whatever was wrong before it.
-          Some(McpToolsRegistered(..)) => manager.mcp_error = None
+          Some(McpToolsRegistered(..)) =>
+            if engine.mcp_generation >= manager.mcp_report_generation {
+              manager.mcp_report_generation = engine.mcp_generation
+              manager.mcp_errors = mcp_errors
+            }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
               emit(
@@ -2336,11 +2369,13 @@ fn test_serve_engine(
   follower? : SessionFollower,
   condemned~ : Bool = false,
   last_activity_ms~ : Int64 = engine_clock_ms(),
+  mcp_generation~ : Int64 = 0,
 ) -> ServeEngine {
   {
     session_key: session,
     session_root,
     spec_key: "test",
+    mcp_generation,
     engine_name: "openseek",
     model: "test",
     supports_images: true,
@@ -3092,6 +3127,36 @@ async test "native engine env has one authoritative bundled moon path" {
       ],
     )
   }
+  // Automatic host config is first; explicit user files and the environment
+  // fallback remain effective overrides. No grant value is written to disk.
+  let host_path = runtime.join("host-mcp.json").resolve().to_string()
+  let automatic = engine_process_args(
+    config,
+    runtime_dir=runtime,
+    env=granted,
+    host_mcp=true,
+  )
+  assert_true(automatic.contains("--mcp-config=\{host_path}"))
+  let host_text = @fsx.read_text(Path(host_path))
+  assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_URL}"))
+  assert_true(host_text.contains("${OPENSEEK_DESKTOP_TOOLS_TOKEN}"))
+  assert_false(host_text.contains(server.url()))
+  assert_false(host_text.contains(granted[@mcp.TokenEnv]))
+  let fallback = { "OPENSEEK_MCP_CONFIG": "/fallback/mcp.json" }
+  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=true), [
+    "--mcp-config=\{host_path}",
+    "--mcp-config=/fallback/mcp.json",
+  ])
+  assert_eq(
+    engine_mcp_args(
+      Some({ path: mcp_path, revision: McpConfigRevision::of_text("{}"), }),
+      Some(runtime),
+      fallback,
+      host_mcp=true,
+    ),
+    ["--mcp-config=\{host_path}", "--mcp-config=\{mcp_path.to_string()}"],
+  )
+  assert_eq(engine_mcp_args(None, Some(runtime), fallback, host_mcp=false), [])
   let moon_bin = moon_home.join("bin").to_string()
   let expected_path = if ambient_path is Some(path) && !path.is_empty() {
     "\{moon_bin}\{@env.path_sep}\{path}"
