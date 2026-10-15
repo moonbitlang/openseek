@@ -131,7 +131,7 @@ async fn[G] Schedules::run_cli(
   let env = engine_process_env(
     config,
     self.manager.runtime_dir,
-    host_mcp?=self.manager.host_mcp,
+    host_mcp?=self.manager.mcp.server,
     source=self.manager.moonbit,
   )
   let args = ["run", "--session=\{run.session}", "--dir=.", "--approval=never"]
@@ -144,7 +144,7 @@ async fn[G] Schedules::run_cli(
       resolved_mcp_config(),
       self.manager.runtime_dir,
       env,
-      host_mcp=self.manager.host_mcp is Some(_),
+      host_mcp=self.manager.mcp.server is Some(_),
     ),
   )
   args.append(["--", spec.task])

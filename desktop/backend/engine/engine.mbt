@@ -719,19 +719,7 @@ struct EngineManager {
   engine : String
   moonbit : @moonbit.ToolchainSource
   runtime_dir : @pathx.Path?
-  // The host's own tool server, when this host offers tools to the agents it
-  // runs. Every engine started while it is set is granted access to it
-  // through its environment (see `engine_process_env`).
-  host_mcp : @mcp.Server?
-  // The MCP configuration errors already forwarded to pages, keyed by file. Every
-  // conversation's engine reports the same broken file, and a person needs
-  // to hear it once; it is forgotten when a configuration loads, or when
-  // there is no file any more.
-  mut mcp_errors : Map[String, String]
-  // The latest launched engine owns shared MCP error reporting. Its UUID
-  // remains current even if it exits before loading MCP; older engines do
-  // not take reporting ownership back.
-  mut mcp_engine_id : String?
+  mcp : McpState
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1089,10 +1077,8 @@ fn new_engine_manager(
   {
     engine,
     runtime_dir,
-    host_mcp,
     moonbit,
-    mcp_errors: Map([]),
-    mcp_engine_id: None,
+    mcp: { server: host_mcp, current_engine_id: None, errors: Map([]), },
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     archive_commit_lock: Mutex(),
@@ -1572,7 +1558,7 @@ async fn[G] start_serve_engine(
   let env = engine_process_env(
     config,
     manager.runtime_dir,
-    host_mcp?=manager.host_mcp,
+    host_mcp?=manager.mcp.server,
     source=manager.moonbit,
   )
   let program = config.engine
@@ -1585,7 +1571,7 @@ async fn[G] start_serve_engine(
     config,
     runtime_dir?=manager.runtime_dir,
     env~,
-    host_mcp=manager.host_mcp is Some(_),
+    host_mcp=manager.mcp.server is Some(_),
   )
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
@@ -1632,10 +1618,10 @@ async fn[G] start_serve_engine(
       "session_key": config.session,
       "pid": process.pid,
     }
-  manager.mcp_engine_id = Some(engine_id)
+  manager.mcp.current_engine_id = Some(engine_id)
   // No registration event arrives when this launch has no configuration.
-  if manager.host_mcp is None && !mcp_configured(config, env) {
-    manager.mcp_errors.clear()
+  if manager.mcp.server is None && !mcp_configured(config, env) {
+    manager.mcp.errors.clear()
   }
   let engine : ServeEngine = {
     session_key: config.session,
@@ -1846,18 +1832,18 @@ async fn ServeEngine::consume(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if manager.mcp_engine_id != Some(engine.id) {
+            if manager.mcp.current_engine_id != Some(engine.id) {
               continue
             }
             mcp_errors[path] = error
-            if manager.mcp_errors.get(path) == Some(error) {
+            if manager.mcp.errors.get(path) == Some(error) {
               continue
             }
-            manager.mcp_errors[path] = error
+            manager.mcp.errors[path] = error
           }
           Some(McpToolsRegistered(..)) =>
-            if manager.mcp_engine_id == Some(engine.id) {
-              manager.mcp_errors = mcp_errors
+            if manager.mcp.current_engine_id == Some(engine.id) {
+              manager.mcp.errors = mcp_errors
             }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {

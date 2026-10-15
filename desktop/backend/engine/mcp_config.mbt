@@ -15,6 +15,19 @@
 // moment goes unnoticed, until the file changes again.
 
 ///|
+/// Host MCP state shared by the engines managed by this Desktop host.
+priv struct McpState {
+  // Engines receive access to this server through their environment.
+  server : @mcp.Server?
+  // The latest launch owns error reporting even if it exits before loading
+  // MCP; older engines never take ownership back.
+  mut current_engine_id : String?
+  // Errors already forwarded to pages, keyed by source file. Successful
+  // configuration loading forgets repaired files without repeating failures.
+  mut errors : Map[String, String]
+}
+
+///|
 /// Where the desktop looks for the user's MCP server configuration, or
 /// `None` when the host has no home directory to look in. The user writes
 /// the file by hand; the host only reads it.
@@ -219,7 +232,7 @@ async test "a broken MCP configuration is reported once, not once per conversati
         no_wait=true,
       )
       let engine_id = @uuid.mint()
-      manager.mcp_engine_id = Some(engine_id)
+      manager.mcp.current_engine_id = Some(engine_id)
       let engine = test_serve_engine(
         session,
         writer,
@@ -260,7 +273,7 @@ async test "a broken MCP configuration is reported once, not once per conversati
     @debug.assert_eq(reported(), ["bad", "worse"])
     // Once a configuration has loaded, the same mistake made again is news.
     start("s-5", None, "")
-    assert_true(manager.mcp_errors.is_empty())
+    assert_true(manager.mcp.errors.is_empty())
     start("s-6", Some("worse"), "")
     @debug.assert_eq(reported(), ["bad", "worse", "worse"])
     // Two files can fail with identical text; each gets one report even when
@@ -276,14 +289,14 @@ async test "a broken MCP configuration is reported once, not once per conversati
     // neither notify again nor restore its obsolete error snapshot.
     let older = launch("s-old", Some("worse"), "worse", true)
     start("s-repaired", None, "")
-    assert_true(manager.mcp_errors.is_empty())
+    assert_true(manager.mcp.errors.is_empty())
     older.writer.write("resume\n")
     @async.with_timeout(10000, () => {
       while !finished("s-old") {
         @async.sleep(20)
       }
     })
-    assert_true(manager.mcp_errors.is_empty())
+    assert_true(manager.mcp.errors.is_empty())
     @debug.assert_eq(reported(), ["bad", "worse", "worse", "worse", "worse"])
     start("s-regressed", Some("worse"), "")
     @debug.assert_eq(reported(), [
@@ -292,15 +305,15 @@ async test "a broken MCP configuration is reported once, not once per conversati
     // A new launch immediately takes ownership, even if it then exits
     // without any MCP events. Late reports cannot revive the old owner.
     let reporter = launch("s-reporter", None, "", true)
-    manager.mcp_engine_id = Some(@uuid.mint())
+    manager.mcp.current_engine_id = Some(@uuid.mint())
     reporter.writer.write("resume\n")
     @async.with_timeout(10000, () => {
       while !finished("s-reporter") {
         @async.sleep(20)
       }
     })
-    assert_eq(manager.mcp_errors.get(source), Some("worse"))
-    assert_eq(manager.mcp_errors.get("\{source}.late"), None)
+    assert_eq(manager.mcp.errors.get(source), Some("worse"))
+    assert_eq(manager.mcp.errors.get("\{source}.late"), None)
     @debug.assert_eq(reported(), [
       "bad", "worse", "worse", "worse", "worse", "worse",
     ])
