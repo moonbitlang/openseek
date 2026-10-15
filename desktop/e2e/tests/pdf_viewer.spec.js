@@ -1128,6 +1128,9 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await enableImages(page);
   await openFile(app, 'report.pdf');
   await expectPdf(page);
+  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
+    host.__officeViewerPdf.viewer.currentScaleValue)).not.toBe('page-width');
   await page.locator('#task').fill('Existing draft');
   const captureRect = async () => {
     const b = await page.locator('.pdfViewer canvas').first().boundingBox();
@@ -1138,12 +1141,13 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   await feedback.locator('textarea').fill('Make the heading larger');
   await page.getByRole('button', { name: 'Rotate clockwise', exact: true }).click();
   await expect(feedback.locator('textarea')).toHaveValue('Make the heading larger');
-  await expect(feedback.locator('.feedback-source-selection')).toHaveCount(1);
-  // At manual zoom, rotation can move this top-left region beyond the right edge.
+  // Rotation can move this region beyond the right edge at manual zoom.
+  // Offscreen selection fragments are clipped, so reveal it before checking.
   await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
     host.__officeViewerPdf.viewer.pagesRotation)).toBe(90);
   await page.locator('.pdf-container').evaluate(el => { el.scrollLeft = el.scrollWidth; });
   await expect(feedback.locator('textarea')).toBeVisible();
+  await expect(feedback.locator('.feedback-source-selection')).toHaveCount(1);
   await feedback.getByRole('checkbox').check();
   await feedback.locator('textarea').press('Enter');
   await expect(page.locator('#task')).toHaveValue('Existing draft');
