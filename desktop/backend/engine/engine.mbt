@@ -25,7 +25,7 @@ priv struct ServeEngine {
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
   spec_key : String
-  mcp_generation : Int64
+  id : String
   engine_name : String
   supports_images : Bool
   model : String
@@ -728,11 +728,10 @@ struct EngineManager {
   // to hear it once; it is forgotten when a configuration loads, or when
   // there is no file any more.
   mut mcp_errors : Map[String, String]
-  // Launch order and the newest launch that actually reported MCP state.
-  // A newer process may fail before loading MCP; until it reports, older
-  // engines still provide useful errors.
-  mut mcp_generation : Int64
-  mut mcp_report_generation : Int64
+  // The latest launched engine owns shared MCP error reporting. Its UUID
+  // remains current even if it exits before loading MCP; older engines do
+  // not take reporting ownership back.
+  mut mcp_engine_id : String?
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1093,8 +1092,7 @@ fn new_engine_manager(
     host_mcp,
     moonbit,
     mcp_errors: Map([]),
-    mcp_generation: 0,
-    mcp_report_generation: 0,
+    mcp_engine_id: None,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     archive_commit_lock: Mutex(),
@@ -1602,6 +1600,7 @@ async fn[G] start_serve_engine(
       "path_prefix": first_path_entry(path_env_value(env)),
       "inherit_env": false,
     }
+  let engine_id = @uuid.mint()
   let process = @process.spawn(
     group,
     program,
@@ -1633,21 +1632,16 @@ async fn[G] start_serve_engine(
       "session_key": config.session,
       "pid": process.pid,
     }
-  // The pump serializes launches. Order reports by these launches, not by
-  // RunConfig's earlier revision read: that digest only decides engine reuse.
-  // The child receives paths and rereads their current contents at startup,
-  // so a request carrying an old digest does not load that old file content.
-  manager.mcp_generation += 1
+  manager.mcp_engine_id = Some(engine_id)
   // No registration event arrives when this launch has no configuration.
   if manager.host_mcp is None && !mcp_configured(config, env) {
     manager.mcp_errors.clear()
-    manager.mcp_report_generation = manager.mcp_generation
   }
   let engine : ServeEngine = {
     session_key: config.session,
     session_root: config.session_root,
     spec_key: engine_fingerprint(config),
-    mcp_generation: manager.mcp_generation,
+    id: engine_id,
     engine_name: config.engine,
     model: config.model,
     supports_images: config.supports_images(),
@@ -1852,10 +1846,9 @@ async fn ServeEngine::consume(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if engine.mcp_generation < manager.mcp_report_generation {
+            if manager.mcp_engine_id != Some(engine.id) {
               continue
             }
-            manager.mcp_report_generation = engine.mcp_generation
             mcp_errors[path] = error
             if manager.mcp_errors.get(path) == Some(error) {
               continue
@@ -1863,8 +1856,7 @@ async fn ServeEngine::consume(
             manager.mcp_errors[path] = error
           }
           Some(McpToolsRegistered(..)) =>
-            if engine.mcp_generation >= manager.mcp_report_generation {
-              manager.mcp_report_generation = engine.mcp_generation
+            if manager.mcp_engine_id == Some(engine.id) {
               manager.mcp_errors = mcp_errors
             }
           Some(PredictionResult(source_sequence~, outcome~)) => {
@@ -2369,13 +2361,13 @@ fn test_serve_engine(
   follower? : SessionFollower,
   condemned~ : Bool = false,
   last_activity_ms~ : Int64 = engine_clock_ms(),
-  mcp_generation~ : Int64 = 0,
+  id~ : String = "test",
 ) -> ServeEngine {
   {
     session_key: session,
     session_root,
     spec_key: "test",
-    mcp_generation,
+    id,
     engine_name: "openseek",
     model: "test",
     supports_images: true,
