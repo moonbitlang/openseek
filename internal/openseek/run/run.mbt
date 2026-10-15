@@ -118,7 +118,7 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
               delegate=!delegated,
             )
           Preset(kind~, name~, input~) => {
-            if @options.mcp_config_path(matches) is Some(_) {
+            if !@options.mcp_config_paths(matches).is_empty() {
               @emit.emit(
                 McpConfigIgnored(reason="presets use their own tools only"),
               )

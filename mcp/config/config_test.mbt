@@ -120,3 +120,30 @@ test "HTTP environment references reject missing or malformed values" {
     }
   }
 }
+
+///|
+test "later configurations replace whole servers before connection" {
+  let first = @config.decode({
+    "mcpServers": {
+      "seekmoon": { "command": "must-not-start", "args": ["old"] },
+    },
+  })
+  let second = @config.decode({
+    "mcpServers": {
+      "seekmoon": {
+        "url": "http://localhost/mcp",
+        "headers": { "X-SeekMoon-Tool-Groups": "browser" },
+      },
+      "extra": { "command": "extra" },
+    },
+  })
+  let merged = @config.merge([first, [], second])
+  assert_eq(merged.length(), 2)
+  assert_true(
+    merged[0] is Http(name="seekmoon", url="http://localhost/mcp", headers~) &&
+    headers.get("X-SeekMoon-Tool-Groups") == Some("browser"),
+  )
+  assert_true(merged[1] is Stdio(name="extra", ..))
+  assert_eq(@config.merge([first, first]), first)
+  assert_eq(@config.merge([]), [])
+}

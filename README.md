@@ -256,6 +256,15 @@ standard shape — an existing Claude/Cursor-style `mcp.json` works as-is:
 }
 ```
 
+Repeat the option to load multiple files, for example
+`--mcp-config host.json --mcp-config user.json`. Files merge in argument order;
+a later server with the same name replaces the entire earlier entry before
+any connections are opened. Explicit options replace the single-file
+`OPENSEEK_MCP_CONFIG` fallback. Empty values are ignored; `--mcp-config=` alone
+disables MCP. During `run` and `serve`, an unreadable or invalid file is reported
+and skipped while other files still load. The `mcp` validation command exits
+nonzero if any file cannot be loaded.
+
 A `command` entry is launched as a stdio subprocess (in the agent's workspace,
 inheriting the environment plus any `env` overrides); a `url` entry speaks the
 Streamable HTTP transport. Each server's tools join the agent's registry as

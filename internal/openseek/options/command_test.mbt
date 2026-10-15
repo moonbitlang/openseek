@@ -53,3 +53,24 @@ test "sessions list needs no api key or task" {
   assert_eq(@cli.value(parsed, "format"), "text")
   assert_eq(@cli.value(parsed, "session-root"), ".openseek")
 }
+
+///|
+test "MCP configs append in order and explicit arguments replace the env fallback" {
+  for subcommand in ["run", "serve", "mcp"] {
+    let env = { "OPENSEEK_MCP_CONFIG": "fallback.json" }
+    let cases : Array[(Array[String], Array[String])] = [
+      ([], ["fallback.json"]),
+      (["--mcp-config", "a.json", "--mcp-config=b.json"], ["a.json", "b.json"]),
+      (["--mcp-config="], []),
+      (["--mcp-config=", "--mcp-config=b.json"], ["b.json"]),
+      (["--mcp-config=a.json", "--mcp-config="], ["a.json"]),
+    ]
+    for (args, expected) in cases {
+      guard @options.root_command().parse(argv=[subcommand, ..args], env~).subcommand
+        is Some((_, matches)) else {
+        fail("expected subcommand")
+      }
+      assert_eq(@options.mcp_config_paths(matches), expected)
+    }
+  }
+}

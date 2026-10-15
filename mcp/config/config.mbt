@@ -176,3 +176,23 @@ pub extend McpServer with Debug::{to_repr}
 #doc(hidden)
 #deprecated
 pub extend McpServer with Eq::{equal, not_equal}
+
+///|
+/// Merge decoded configurations in order. A later entry replaces the whole
+/// server with the same name, retaining its original position in the list.
+/// Merge before connecting so overridden servers are never started.
+pub fn merge(configs : Array[Array[McpServer]]) -> Array[McpServer] {
+  let servers : Array[McpServer] = []
+  let positions : Map[String, Int32] = Map([])
+  for config in configs {
+    for server in config {
+      if positions.get(server.name()) is Some(index) {
+        servers[index] = server
+      } else {
+        positions[server.name()] = servers.length()
+        servers.push(server)
+      }
+    }
+  }
+  servers
+}

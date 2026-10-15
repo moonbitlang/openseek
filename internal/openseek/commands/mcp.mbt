@@ -7,7 +7,8 @@
 /// validation gate. Stdout carries only the summary, so the command never opens
 /// the event sink and an event the tool build reports is dropped.
 pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
-  guard @options.mcp_config_path(matches) is Some(path) else {
+  let paths = @options.mcp_config_paths(matches)
+  guard !paths.is_empty() else {
     fail(
       "no MCP configuration: pass --mcp-config <file> (or OPENSEEK_MCP_CONFIG)",
     )
@@ -15,21 +16,29 @@ pub async fn run_mcp_command(matches : @argparse.Matches) -> Unit {
   let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
   // The path is CLI input: guard it like every other displayed string (a
   // longer cap than the metadata's, so real paths stay identifiable).
-  let shown_path = @cli.terminal_safe_line(path, limit=200)
-  // Failure text reaches the terminal via stderr, and both the path and the
-  // decoder's error can embed configuration strings: keep them terminal-safe.
-  let text = @fs.read_file(path).text() catch {
-    error =>
-      fail(
-        "cannot read \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
-      )
+  let configs : Array[Array[@mcpconfig.McpServer]] = []
+  for path in paths {
+    let shown_path = @cli.terminal_safe_line(path, limit=200)
+    // This command is a validation gate: a bad file exits nonzero, unlike
+    // run/serve, which report the file and continue with the remaining ones.
+    let text = @fs.read_file(path).text() catch {
+      error =>
+        fail(
+          "cannot read \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
+        )
+    }
+    let servers = @mcpconfig.decode(@json.parse(text), env=@env.get_env_vars()) catch {
+      error =>
+        fail(
+          "invalid MCP configuration in \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
+        )
+    }
+    configs.push(servers)
   }
-  let servers = @mcpconfig.decode(@json.parse(text), env=@env.get_env_vars()) catch {
-    error =>
-      fail(
-        "invalid MCP configuration in \{shown_path}: \{@cli.terminal_safe_line("\{error}", limit=200)}",
-      )
-  }
+  let servers = @mcpconfig.merge(configs)
+  let shown_path = paths
+    .map(path => @cli.terminal_safe_line(path, limit=200))
+    .join(", ")
   if servers.is_empty() {
     println("\{shown_path}: no servers configured")
     return

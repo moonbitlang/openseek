@@ -162,9 +162,12 @@ Uninstall button.
 
 The agent can use tools from [MCP](https://modelcontextprotocol.io) servers
 listed in `~/.openseek/mcp.json`, the `{"mcpServers": {...}}` shape described
-in the repository README. The file is created and edited by hand. When no
-file exists the host passes nothing, so an `OPENSEEK_MCP_CONFIG` inherited
-from the launching environment still applies.
+in the repository README. The user file is created and edited by hand. The host
+also automatically supplies its own tools through a generated `host-mcp.json`
+in its runtime directory. The user file follows this default configuration,
+so a same-named server in the user file replaces the default entry. When no
+user file exists, `OPENSEEK_MCP_CONFIG` from the launching environment still
+applies after the host defaults.
 
 An engine connects its servers once, when it starts — one set of server
 processes per conversation. The host therefore reads the file before each
@@ -195,7 +198,9 @@ dock's browser. An agent works with the Browser tabs of its own conversation:
 `browser_tabs` lists them, `browser_open` opens a new one on an address, and
 `browser_navigate` loads an address in one, steps back or forward in its
 history, or reloads it. The engine connects directly to the host over MCP
-Streamable HTTP. Add this to `~/.openseek/mcp.json`:
+Streamable HTTP and registers these tools automatically, including for scheduled
+runs. No user configuration is required. To customize the host entry, put an
+override like this in `~/.openseek/mcp.json`:
 
 ```json
 {
@@ -212,9 +217,9 @@ Streamable HTTP. Add this to `~/.openseek/mcp.json`:
 
 The tools reach the agent as `mcp__seekmoon__<tool>`. The host supplies the
 address and conversation token in the engine's environment; no relay process
-or credentials on disk are needed. Without the entry no tools are added.
-Outside a desktop-launched engine the variables are absent, so loading this
-configuration fails and no MCP tools are registered. To offer only browser
+or credentials on disk are needed. The generated configuration stores only the
+placeholders shown above. Outside a desktop-launched engine the variables are
+absent, so this entry cannot load. To offer only browser
 tools, add
 `"X-SeekMoon-Tool-Groups": "browser"` to `headers`; multiple groups are comma
 separated. Replace older `"command": "seekmoon", "args": ["mcp"]` entries

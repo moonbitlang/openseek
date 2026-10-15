@@ -25,6 +25,8 @@ import {
 
 import {
   "moonbitlang/openseek/internal/openseek/testkit",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
 } for "test"
 
 warnings = "+unnecessary_annotation"
