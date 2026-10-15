@@ -2,28 +2,25 @@
 
 ## Frontend And Host Compatibility
 
-- The desktop frontend and host are versioned and shipped together. Do not
-  support a current frontend talking to an older desktop host.
-- Evolve desktop protocol payloads, the frontend, and the host in lockstep. Do
-  not make fields optional, hide controls, or add capability detection solely
-  for compatibility with a pre-change host unless the user explicitly asks for
-  it.
+- The desktop frontend and host are versioned and shipped together. Target a
+  matching frontend and host version, and evolve protocol payloads and both
+  implementations in the same change. Support for mixed versions is a separate
+  product requirement when explicitly requested.
 
 ## Module Boundary
 
-- `desktop/backend` is a library and must never depend on Proton, directly or
-  through another module, so that it can be hosted by a process with no window
-  toolkit. Code that needs Proton belongs in `desktop/app`; when shared code
-  needs a fact only Proton knows, the window host passes it in as a value
-  (`@resources.Resources`).
-- `desktop/app` is a thin host of the backend. What any host of the backend
-  must do belongs in `desktop/backend` (`ApiState::start_services`), not in
-  the window host's entry point.
+- `desktop/backend` is a library whose direct and transitive dependencies are
+  independent of Proton and window toolkits. Code that needs Proton belongs in
+  `desktop/app`; when shared code needs a fact only Proton knows, the window
+  host passes it in as a value (`@resources.Resources`).
+- `desktop/app` is a thin host of the backend. Put services required by every
+  backend host in `desktop/backend` (`ApiState::start_services`); keep window
+  initialization in the app's entry point.
 - Packages the window host imports sit at the top of `desktop/backend`; the
   rest stay under `desktop/backend/internal`. Moon allows an `internal` import
   only inside one module, so moving a package out of `internal` is what
-  exposes it to another module — do that deliberately, not to reach one
-  helper.
+  exposes it to another module. Make that move when the task requires a public
+  host-facing package contract.
 
 ## Development Builds
 
@@ -33,11 +30,9 @@
   `seekmoon/web` for the frontend, the per-user runtime dir for state — and
   differs only by its identity suffix and the development-only behavior gated
   on it.
-- The unpackaged launch — `just desktop-dev` / `package/dev`, `proton dev`,
-  `desktop-dev.html`, `@development.Layout`, `desktop/target/dev-state` — is
-  deprecated and no longer supported. Do not design for it, review against it,
-  or fix issues that only reproduce under it; code that exists only to serve
-  it may be removed.
+- For behavior that depends on the Desktop host or packaging, reproduce and
+  validate it in the packaged development app. Unpackaged launch paths are
+  historical; their removal belongs to a task that includes that cleanup.
 
 ## UI Pull Requests
 
@@ -45,8 +40,8 @@
   description showing the affected UI from the changed build. Include
   before-and-after comparisons when useful, and a short recording when the
   change is best demonstrated through interaction.
-- Upload UI screenshots and recordings as PR attachments; do not commit them
-  to Git. Keep local captures outside the repository or in an ignored directory.
+- Upload UI screenshots and recordings as PR attachments. Keep local captures
+  outside the repository or in an ignored directory.
 - Prefer demo data when capturing screenshots or recordings. Before uploading,
   remove or redact personal information, real conversations, private project
   names and paths, credentials, and other sensitive content, including content
@@ -57,70 +52,51 @@
 
 ## Child Processes
 
-- For a one-shot command that collects stdout and stderr but must not read
-  input, use `@processx.collect_output_no_stdin` from
-  `desktop/backend/internal/processx` instead of `@process.collect_output`.
+- For a one-shot command that collects stdout and stderr and expects EOF on
+  stdin, use `@processx.collect_output_no_stdin` from
+  `desktop/backend/internal/processx`.
 - `collect_output_no_stdin` gives the child a valid stdin handle that is
   already at EOF and always suppresses creation of a console window. Both are
   required for Windows GUI builds: inheriting a missing standard-input handle
   makes process creation fail, while launching a console application without
   suppression flashes a visible console window.
-- Do not use it for interactive commands, long-lived protocol processes, or
-  commands that receive a real stdin pipe, file, or PTY.
+- Interactive commands and long-lived protocol processes use their owning
+  lifecycle APIs and the stdin pipe, file, or PTY required by their protocol.
 
 ## JSON Protocol Codecs
 
-- Never use `derive(FromJson)`, `derive(ToJson)`, or a combined
-  `derive(FromJson, ToJson)` anywhere under `desktop/`.
-- Every type crossing a JSON boundary must provide explicit `FromJson` and
-  `ToJson` implementations. The decoder must deliberately specify the behavior
-  of required, missing, `null`, malformed, and unknown fields; the encoder must
-  deliberately specify which optional fields are omitted.
-- When modifying an existing Desktop protocol type that still derives either
-  JSON trait, replace that derived codec with explicit implementations in the
-  same change.
+- When adding a JSON type or changing its JSON contract under `desktop/`, write
+  explicit `FromJson` and/or `ToJson` implementations for the serialization
+  directions it uses. Update the affected codecs in the same change.
+- A decoder defines the treatment of required, missing, `null`, malformed, and
+  unknown fields. An encoder defines which optional fields are omitted. Follow
+  the owning protocol's field semantics and error behavior.
+
+## Command Validation
+
+- Use typed requests and responses to check payload shape and expose schema
+  drift. Enforce the affected command's documented product constraints.
+- For additional guards against user mistakes or concurrent operations,
+  identify the supported UI actions that reach the state, the defined
+  constraint they would violate, and the expected UI result. Include multiple
+  browser clients and hosts when those actions can reach the same data.
+  Implement the guard within the requested feature's scope.
 
 ## Desktop Trust And Security Model
 
-- A frontend connected and authenticated to a Desktop instance is trusted with
-  the authority of the local user. This includes the Proton renderer, an
-  authenticated relay frontend, and code the user runs in that frontend's
-  DevTools.
-- The connected frontend can already invoke Desktop terminal and shell
-  operations. Letting the same frontend select a working directory or send an
-  app-server execution-policy field is therefore not, by itself, a privilege
-  escalation or a Desktop security-boundary violation.
-- The security boundary is before a frontend obtains an authenticated Desktop
-  command channel. Unauthenticated network peers, unrelated web origins,
-  repository content, model output, and other displayed data are not trusted
-  principals and must not acquire command authority merely by being processed
-  or rendered.
-- Continue validating command payloads for type safety, protocol correctness,
-  product invariants, and protection against accidental destructive actions.
-  Workspace and path checks may enforce product scope, but they do not sandbox
-  a trusted frontend that can already spawn a shell.
-- Prefer typed request and response models at Desktop command boundaries. They
-  document the protocol, reject malformed data, and expose schema drift during
-  development; do not justify them as a privilege boundary against the trusted
-  frontend.
-- A security finding must name the less-trusted principal and the new capability
-  it gains. Do not report a privilege escalation solely because a trusted
-  frontend can craft fields that the normal UI does not expose.
-- The local user and whatever they choose to run are one principal. A branch
-  the user checked out and built, its hooks and build scripts, any process
-  running under their account, a development build, and the DevTools console
-  all already act with the user's authority. A finding whose attacker is "a
-  branch the developer checked out", "a file in the checkout", or "a process
-  on the developer's machine" names no less-trusted principal and is not a
-  security finding.
-- "Repository content is untrusted" means the host must not grant command
-  authority to content it processes as data — rendered Markdown, diffs, file
-  previews, tool output, model output. It does not apply to code the user
-  runs on purpose; checking out and building a branch is running its code.
-- Release and development builds share this one model. A development build
-  differs in the surfaces it exposes, not in who is trusted: a development-only
-  surface such as the loopback console is judged by the same two-principal
-  test. Loopback binding limits reachability, not identity — a web page from
-  another origin can reach loopback — so such a surface fences web origins
-  with a launch token, a session cookie, and an `Origin` check, and does not
-  need to defend against processes already running as the user.
+- The local user, processes running as that user, and authenticated Desktop
+  frontends share the user's command authority, including terminal and shell
+  access. This covers the Proton renderer, authenticated relay clients, and
+  code the user deliberately builds or executes. Workspace and path checks
+  express product scope within that authority.
+- Authenticate frontends before granting a Desktop command channel. Keep
+  unauthenticated peers, unrelated web origins, and content processed as data
+  outside that authority. Rendered Markdown, diffs, file previews, tool output,
+  and model output remain data, including when they originate in a checkout.
+  Distinguish deliberate code execution from displaying or parsing a file.
+- A security finding identifies the less-trusted principal, the boundary it
+  crosses, and the new capability it gains. Evaluate these boundaries
+  independently of which controls the normal UI exposes.
+- Release and development builds use the same trust model. For the development
+  loopback console, preserve the launch token, session cookie, and `Origin`
+  check that fence web origins; loopback binding controls reachability only.
