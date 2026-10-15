@@ -104,6 +104,29 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       assert_true(initialized.contains("/selected"))
       assert_true(initialized.contains("/extra"))
       assert_false(initialized.contains("/overridden"))
+      // Failed inputs alone must not publish a successful registration.
+      // In particular, retain the original single-file event contract.
+      for paths in [[broken], [broken, missing]] {
+        let failed_tools = @execution.build_extra_tools(
+          AgentTaskScope(group),
+          model=Deepseek(V4Pro),
+          api_key="test",
+          api_url=base,
+          workspace_root=directory,
+          mcp_config_paths=paths,
+        )
+        assert_eq(failed_tools.length(), 0)
+        let mut failures = 0
+        while @emit.poll_line() is Some(line) {
+          let event = @json.parse(line)
+          assert_false(event is { "event": "mcp_tools_registered", .. })
+          if event
+            is { "event": "mcp_config_invalid" | "mcp_config_unreadable", .. } {
+            failures += 1
+          }
+        }
+        assert_eq(failures, paths.length())
+      }
     })
   })
 }

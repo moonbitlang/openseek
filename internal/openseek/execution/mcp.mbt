@@ -28,6 +28,9 @@ async fn[X] resolve_mcp_tools(
     }
     configs.push(servers)
   }
+  // Preserve the single-file failure contract: no registration event when
+  // every input failed to load. A valid empty config still registers normally.
+  guard !configs.is_empty() else { return [] }
   let servers = @mcpconfig.merge(configs)
   let tools = @mcptools.build(
     scope,
