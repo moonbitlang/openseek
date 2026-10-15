@@ -40,6 +40,7 @@ pub(all) struct Input {
 ///|
 pub(all) struct Actions {
   update : @cmd.Cmd
+  open_search : @cmd.Cmd
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
@@ -319,6 +320,10 @@ pub fn component(
             actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code),
           ],
         ),
+      ]),
+      @html.button(class="sidebar-search", on_click=actions.open_search, [
+        @icons.icon(@icons.icon_search),
+        @html.span(@messages.text(input.locale, SearchConversations)),
       ]),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),

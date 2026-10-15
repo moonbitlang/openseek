@@ -625,6 +625,11 @@ dialog.workspace-settings-dialog {
 /* ---------- unified file / workspace-symbol Quick Open ---------- */
 /* Codex-style command palette geometry with OpenSeek's own surface tokens.
    It sits above toasts and ordinary modals but below the disconnected screen. */
+.quick-open-backdrop,
+.session-search-dialog {
+  --quick-open-top: clamp(64px, calc(50vh - 220px), 160px);
+}
+
 .quick-open-backdrop {
   position: fixed;
   inset: 0;
@@ -632,7 +637,7 @@ dialog.workspace-settings-dialog {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: clamp(64px, calc(50vh - 220px), 160px) 16px 16px;
+  padding: var(--quick-open-top) 16px 16px;
   /* Quick Open uses the shared backdrop hue at a softer opacity than modal
      surfaces, without introducing another one-use theme token. */
   background: color-mix(in srgb, var(--color-backdrop) 40%, transparent);
@@ -804,4 +809,75 @@ dialog.workspace-settings-dialog {
 }
 .quick-open-kind.codicon-symbol-misc::before {
   content: "\eb63";
+}
+
+/* Native session search shares the Quick Open surface and result styles. */
+dialog.session-search-dialog {
+  top: var(--quick-open-top);
+  bottom: auto;
+  margin: 0 auto;
+  padding: 0;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - var(--quick-open-top) - 16px);
+}
+
+.session-search-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-search-dialog::backdrop {
+  background: color-mix(in srgb, var(--color-backdrop) 40%, transparent);
+}
+
+.session-search-header,
+.session-search-footer {
+  flex-shrink: 0;
+}
+
+.session-search-input-wrap {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.session-search-results.quick-open-list {
+  min-height: 0;
+  /* Six 42px rows plus the list's vertical padding. */
+  max-height: 266px;
+  padding-top: 7px;
+}
+
+.session-search-result,
+.session-search-archive {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.session-search-result-title {
+  max-width: 76%;
+}
+
+.session-search-result strong {
+  color: var(--color-text-primary);
+  font-weight: 750;
+}
+
+.session-search-footer {
+  padding: 6px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.session-search-errors {
+  padding: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.session-search-errors p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

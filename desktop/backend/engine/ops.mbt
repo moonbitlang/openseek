@@ -612,10 +612,10 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 /// in-project store, in registration order. A group whose listing fails
 /// reports the failure in its `error` field rather than failing the whole
 /// reply.
-pub async fn list_sessions(manager : EngineManager) -> SessionsReply {
+pub async fn list_sessions() -> SessionsReply {
   let groups : Array[SessionGroup] = []
   for path in @workspaces.registered() {
-    groups.push(session_group(manager, path, @workspaces.store_root(path)))
+    groups.push(session_group(path, @workspaces.store_root(path)))
   }
   { groups, }
 }
@@ -654,7 +654,6 @@ pub async fn rename_session(
 
 ///|
 async fn session_group(
-  manager : EngineManager,
   workspace : @pathx.Absolute,
   root : @pathx.Absolute,
 ) -> SessionGroup {
@@ -666,20 +665,49 @@ async fn session_group(
     { workspace, name, session_root: root, sessions: [], error, }
   }
 
-  let output = engine_stdout(manager, [
-    "sessions", "list", "--session-root", native_root, "--format", "json",
-  ]) catch {
-    EngineError(detail) => return failed("session list failed: \{detail}")
+  let sessions : Array[@protocol.SessionListEntry] = try {
+    let store = @store.SessionStore(native_root)
+    [
+      for listing in store.listings() => {
+        let updated_at_ms = try {
+          let (seconds, nanoseconds) = @fs.mtime(
+            store.session_file(listing.id()),
+          )
+          Some(
+            (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double(),
+          )
+        } catch {
+          _ => None
+        }
+        {
+          id: listing.id().value(),
+          title: Some(
+            listing
+            .title()
+            .unwrap_or_else(() => listing_prompt_title(listing.first_prompt())),
+          ),
+          updated_at_ms,
+        }
+      }
+    ]
+  } catch {
     error => return failed("session list failed: \{error}")
   }
-  let sessions_json = @json.parse(output) catch {
-    _ => return failed("engine returned a malformed session list")
-  }
-  guard sessions_json is Array(_) else {
-    return failed("engine returned a malformed session list")
-  }
-  let sessions = @protocol.SessionListEntry::array_from_wire(sessions_json)
   { workspace, name, session_root: root, sessions, error: "", }
+}
+
+///|
+// Keep the CLI's display-label convention when no explicit title is stored.
+fn listing_prompt_title(first_prompt : String) -> String {
+  let first_prompt = match @command_context.parse(first_prompt) {
+    Some(shell) => "$ \{shell.command}"
+    None => first_prompt
+  }
+  let content = first_prompt.trim()
+  match content.split_once("\n") {
+    Some((line, _)) => line.trim().to_owned()
+    None => content.to_owned()
+  }
 }
 
 ///|

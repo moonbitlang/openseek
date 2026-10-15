@@ -2181,6 +2181,10 @@ fn view(
     workspace_settings_html,
     // Keep the dialog before conditional overlays: replacing its DOM node
     // would lose showModal state during resize or a notification.
+    model.session_search.view(
+      model.locale,
+      dispatch.map(msg => SessionSearch(msg)),
+    ),
     model.export_dialog.view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),

@@ -30,8 +30,9 @@
     padding-inline-end: var(--panel-toggle-inline-inset);
   }
 
-  .quick-open-backdrop {
-    padding: 16px;
+  .quick-open-backdrop,
+  .session-search-dialog {
+    --quick-open-top: 16px;
   }
   .quick-open-list {
     max-height: calc(100vh - 116px);

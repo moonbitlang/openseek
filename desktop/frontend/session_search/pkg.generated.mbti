@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/session_search"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Model derive(Eq)
+pub fn Model::Model() -> Self
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::is_open(Self) -> Bool
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self, Selection?)
+pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
+
+pub(all) enum Msg {
+  Open(@interop.ChannelId)
+  Close
+  Changed(String)
+  ToggleArchived
+  Due(Int)
+  Loaded(Int, Result[@protocol.SessionSearchReply, String])
+  Move(Int)
+  Pick(Int)
+}
+
+pub(all) struct Selection {
+  channel : @interop.ChannelId
+  hit : @protocol.SessionSearchHit
+}
+
+// Type aliases
+
+// Traits

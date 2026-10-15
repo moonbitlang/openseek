@@ -19,7 +19,7 @@ pub fn approve_run(EngineManager, @protocol.ApprovalPayload) -> @protocol.Approv
 
 pub async fn archive_session(EngineManager, String, (String, String) -> Unit, force? : Bool, on_worktree_changed? : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.ArchiveReply
 
-pub async fn archived_sessions(EngineManager) -> @protocol.SessionsReply
+pub async fn archived_sessions() -> @protocol.SessionsReply
 
 pub async fn attach_workspace(String, (Array[String]) -> Unit) -> @protocol.WorkspacesReply
 
@@ -45,7 +45,7 @@ pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalRep
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
 
-pub async fn list_sessions(EngineManager) -> @protocol.SessionsReply
+pub async fn list_sessions() -> @protocol.SessionsReply
 
 pub async fn list_workspaces() -> @protocol.WorkspacesReply
 
@@ -66,6 +66,8 @@ pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobR
 pub async fn remote_server_base(EngineManager) -> String?
 
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
+
+pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
 
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 

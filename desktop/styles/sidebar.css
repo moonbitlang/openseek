@@ -9,8 +9,8 @@ aside {
      The header keeps its own, wider inset for the icon buttons. */
   --sidebar-inset: 12px;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -53,7 +53,6 @@ html.is-resizing .sidebar-resize-handle {
   justify-content: flex-end;
   height: var(--topbar-height);
   padding-inline: var(--sidebar-toggle-reserved-width) var(--sidebar-inset);
-  border-bottom: 1px solid var(--color-separator);
 }
 
 /* A two-segment switch between the Chats list and the Projects list,
@@ -1209,6 +1208,7 @@ button.row-twisty:hover {
   display: grid;
   gap: calc(1em / 14);
   min-width: 0;
+  margin-top: 14px;
   padding: 0 var(--sidebar-inset);
 }
 
@@ -1252,3 +1252,26 @@ button.row-twisty:hover {
     }
   }
 }
+
+.sidebar-search {
+  --icon-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  height: 26px;
+  margin: 9px 10px 12px;
+  width: calc(100% - 20px);
+  padding: 0 9px;
+  border: 1px solid var(--color-separator);
+  border-radius: 7px;
+  background: var(--color-bg-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  line-height: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-search:hover { background: var(--color-bg-subtle); }
+.sidebar-search:focus-visible { outline: 2px solid var(--color-focus-ring); outline-offset: 2px; }

@@ -328,6 +328,7 @@ Notifications:
 | method | params | result |
 |---|---|---|
 | `session.list` | `{}` | the session index |
+| `session.search` | `{query, include_archived}` | `{hits: [{session, workspace, title, archived, updated_at_ms?}], errors: [string], has_more}` — literal title search across registered workspaces on this host; trims query whitespace, ignores ASCII case, and excludes session IDs and conversation bodies. Empty queries return no hits. Includes archived records only when requested, orders newest first, returns at most 100 hits and reports partial store failures in `errors`. |
 | `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
 | `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
 | `session.list_archived` | `{}` | the archived index |

@@ -952,3 +952,9 @@ pub let session_edit : Command[
   @protocol.SessionEditPayload,
   @protocol.SessionForkReply,
 ] = Command("session.edit")
+
+///|
+pub let session_search : Command[
+  @protocol.SessionSearchPayload,
+  @protocol.SessionSearchReply,
+] = Command("session.search")

@@ -2,7 +2,7 @@
 // (`<root>/sessions/<id>` → `<root>/archived/sessions/<id>`), so `sessions
 // list` no longer sees it; unarchiving moves it back. The archived store
 // keeps the engine's own layout, so listing archived conversations — titles
-// included — is one more `sessions list` against `<root>/archived`. Files in
+// included — reads the same store API against `<root>/archived`. Files in
 // the conversation's workspace are never touched: archiving hides the
 // conversation, not the user's work. Deleting a live conversation skips the
 // archived twin: its record goes straight to the store's condemned directory.
@@ -372,12 +372,11 @@ async fn move_session_family(
 ///|
 /// The archived conversations, one group per session store — the same reply
 /// shape as `list_sessions`, listing each store's `archived` twin instead.
-pub async fn archived_sessions(manager : EngineManager) -> SessionsReply {
+pub async fn archived_sessions() -> SessionsReply {
   let groups : Array[SessionGroup] = []
   for path in @workspaces.registered() {
     groups.push(
       session_group(
-        manager,
         path,
         @session_store.archived_root(@workspaces.store_root(path)),
       ),
@@ -422,7 +421,7 @@ pub async fn archive_session(
   // Listing is intentionally outside the record-move lease. Once the
   // irreversible rename is durably published, a slow/cancelled list reply
   // must not hold the conversation unavailable or suppress session.changed.
-  Archived(archived_sessions(manager))
+  Archived(archived_sessions())
 }
 
 ///|
@@ -486,7 +485,7 @@ pub async fn unarchive_session(
     raise EngineError("invalid session id")
   }
   unarchive_session_commit(manager, session, on_committed)
-  archived_sessions(manager)
+  archived_sessions()
 }
 
 ///|
@@ -532,7 +531,7 @@ pub async fn delete_archived_session(
   )
   // Like archive/unarchive, listing happens after the finite commit section:
   // cancellation of a slow reply cannot undo or conceal the published delete.
-  archived_sessions(manager)
+  archived_sessions()
 }
 
 ///|
@@ -866,8 +865,6 @@ async test "archive publishes its move before a cancelled listing reply" {
   let dir = @fs.tmpdir(prefix="openseek-archive-commit-")
   defer @fs.rmdir(dir, recursive=true)
   let root : @pathx.Path = Path(dir)
-  let marker = dir + "/listing-started"
-  let engine = dir + "/engine.sh"
   // The listing this test cancels is per registered workspace, so the
   // conversation needs a real attached one; the env root now only locates the
   // registry that `attach_run_workspace` writes.
@@ -875,25 +872,22 @@ async test "archive publishes its move before a cancelled listing reply" {
   ignore(attach_run_workspace(root))
   let store = root.join("ws/.openseek")
   @fsx.ensure_dir(store.join("sessions/s-commit"))
-  @fs.write_file(
-    engine,
-    "#!/bin/sh\nprintf '' > '\{marker}'\nsleep 30\nprintf '%s' '{\"sessions\":[]}'\n",
-    create_mode=CreateOrTruncate,
-  )
-  assert_eq(@process.run("chmod", ["+x", engine]), 0)
-  let manager = new_engine_manager(engine)
+  let manager = new_engine_manager("unused")
   manager.pump = Serving(sessions=Map([]))
   let committed = Ref(false)
   @async.with_task_group(group => {
+    let pending : Ref[@async.Task[Unit]?] = Ref(None)
     let request = group.spawn(() => {
       ignore(
-        archive_session(manager, "  s-commit  ", (_, _) => committed.val = true),
+        archive_session(manager, "  s-commit  ", (_, _) => {
+          committed.val = true
+          // Cancel at the commit notification, before the listing can reply.
+          // spawn returns the handle before this async operation runs.
+          pending.val.unwrap().cancel()
+        }),
       )
     })
-    while !@fsx.exists(Path(marker)) {
-      @async.sleep(1)
-    }
-    request.cancel()
+    pending.val = Some(request)
     let cancelled = try {
       request.wait()
       false

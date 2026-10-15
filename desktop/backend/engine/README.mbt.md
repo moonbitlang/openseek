@@ -333,7 +333,7 @@ group.spawn_bg(() => actor.run(sink, on_failed))
 // Request handlers then collaborate through the manager:
 let reply = @engine.start_run(sink, manager, payload)
 let _ = @engine.cancel_run(manager, { run_id, session, .. })
-let sessions = @engine.list_sessions(manager)
+let sessions = @engine.list_sessions()
 let archive = @engine.archive_session(manager, session, notify)
 ```
 

@@ -477,16 +477,17 @@ pub fn endpoints(
     @endpoint.Endpoint::sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
     }),
-    Endpoint(@commands.session_list, _ => @engine.list_sessions(state.manager)),
+    Endpoint(@commands.session_search, payload => {
+      @engine.search_sessions(payload)
+    }),
+    Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_load, payload => {
       @engine.load_session(state.manager, payload)
     }),
     Endpoint(@commands.session_load_archived, payload => {
       @engine.load_archived_session(state.manager, payload)
     }),
-    Endpoint(@commands.session_list_archived, _ => {
-      @engine.archived_sessions(state.manager)
-    }),
+    Endpoint(@commands.session_list_archived, _ => @engine.archived_sessions()),
     Endpoint(@commands.session_archive, payload => {
       let session = payload.canonical_session()
       // The callback runs inside the rename's cancellation shield. Every

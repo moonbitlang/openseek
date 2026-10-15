@@ -30,6 +30,7 @@ pub fn Account::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   update : @cmd.Cmd
+  open_search : @cmd.Cmd
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd

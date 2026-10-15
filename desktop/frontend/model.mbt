@@ -1456,6 +1456,7 @@ priv struct Model {
   // decides it through `settle_api_setup` — the one place that opens it —
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
+  session_search : @session_search.Model
   export_dialog : @export_dialog.Model
   workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
@@ -2008,6 +2009,8 @@ priv enum Msg {
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
   OpenExport(@protocol.SessionExportPayload)
+  SessionSearch(@session_search.Msg)
+  OpenSessionSearch
   ExportDialog(@export_dialog.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
@@ -2839,6 +2842,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     tree_layout: RightSidebar,
     update_ux: UpdateUnknown,
     api_setup_open: false,
+    session_search: @session_search.Model(),
     export_dialog: @export_dialog.Model(),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,

@@ -3223,6 +3223,46 @@ pub fn SessionRuntimeNotice::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionRuntimeNotice
 pub impl @json.FromJson for SessionRuntimeNotice
 
+pub(all) struct SessionSearchHit {
+  session : String
+  workspace : String
+  title : String
+  archived : Bool
+  updated_at_ms : Double?
+} derive(Eq, @debug.Debug)
+pub fn SessionSearchHit::equal(Self, Self) -> Bool
+pub fn SessionSearchHit::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSearchHit::not_equal(Self, Self) -> Bool
+pub fn SessionSearchHit::to_json(Self) -> Json
+pub fn SessionSearchHit::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSearchHit
+pub impl @json.FromJson for SessionSearchHit
+
+pub(all) struct SessionSearchPayload {
+  query : String
+  include_archived : Bool
+} derive(Eq, @debug.Debug)
+pub fn SessionSearchPayload::equal(Self, Self) -> Bool
+pub fn SessionSearchPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSearchPayload::not_equal(Self, Self) -> Bool
+pub fn SessionSearchPayload::to_json(Self) -> Json
+pub fn SessionSearchPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSearchPayload
+pub impl @json.FromJson for SessionSearchPayload
+
+pub(all) struct SessionSearchReply {
+  hits : Array[SessionSearchHit]
+  errors : Array[String]
+  has_more : Bool
+} derive(Eq, @debug.Debug)
+pub fn SessionSearchReply::equal(Self, Self) -> Bool
+pub fn SessionSearchReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSearchReply::not_equal(Self, Self) -> Bool
+pub fn SessionSearchReply::to_json(Self) -> Json
+pub fn SessionSearchReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSearchReply
+pub impl @json.FromJson for SessionSearchReply
+
 pub(all) enum SessionShareReply {
   Shared(url~ : String)
   SignInRequired

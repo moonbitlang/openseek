@@ -3,6 +3,7 @@
 ///|
 /// Shared chrome for sidebar sections and projects; never user-authored titles.
 pub(all) enum Message {
+  SearchConversations
   Chats
   Projects
   NewChat
@@ -36,6 +37,11 @@ pub(all) enum Message {
 /// Translate sidebar chrome without changing stable component identities.
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, SearchConversations) => "Search"
+    (SimplifiedChinese, SearchConversations) => "搜索"
+    (TraditionalChinese, SearchConversations) => "搜尋"
+    (Japanese, SearchConversations) => "検索"
+    (Spanish, SearchConversations) => "Buscar"
     (English, Chats) => "Chats"
     (Spanish, Chats) => "Conversaciones"
     (SimplifiedChinese, Chats) => "对话"
