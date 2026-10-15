@@ -107,7 +107,9 @@ environment settings remain available.
    access to both GitHub and cli.moonbitlang.com.
 3. Dispatch **CLI release** on main. The build stages package the matching
    resources, stamp the CLI's embedded release manifest, and compile
-   the native executable. Generated `installation/release.mbt` is build output
+   the native executable in a CLI-only workspace with checkout-local protocol,
+   tools SDK, and editor dependencies. Desktop/Proton prebuilds are excluded.
+   Generated `installation/release.mbt` is build output
    and must not be committed.
 4. Publication validates both architecture artifacts, creates `cli-release.json`
    and `SHA256SUMS`, uploads everything to a draft Release, and only then makes it

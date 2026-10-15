@@ -56,6 +56,9 @@ jobs:
           echo "id=cli-v$version" >> "$GITHUB_OUTPUT"
       - name: Test installer and release contracts
         run: |
+          # Keep checkout-local CLI dependencies without Desktop's unrelated
+          # Proton prebuild (which also does not support Linux arm64).
+          node -e 'require("fs").writeFileSync("moon.work", "members = [\".\", \"./protocol\", \"./tools_sdk\", \"./editor\"]\n")'
           moon update
           moon test installation --target native
           node --test scripts/cli-release/release.test.mjs
