@@ -3,7 +3,7 @@
 /// and its idempotency key, even while the live conversation changes. The
 /// form writer's generated boundary doubles as the idempotency key.
 struct Snapshot {
-  key : String
+  headers : @http.Headers
   body : Bytes
 }
 
@@ -12,7 +12,6 @@ struct Snapshot {
 pub(all) suberror ShareError {
   EmptyTitle
   EntropyUnavailable
-  Oversized
 }
 
 ///|
@@ -23,8 +22,6 @@ pub impl Show for ShareError with fn output(self, logger) {
       EmptyTitle => "The conversation title must not be empty."
       EntropyUnavailable =>
         "Could not create a secure share request. Please try again."
-      Oversized =>
-        "This export exceeds the 20 MiB share limit. Use Download instead."
     },
   )
 }
@@ -34,7 +31,6 @@ pub extend ShareError with Show::{to_string, output}
 
 ///|
 /// All fields are UTF-8 multipart bodies, never interpolated into headers.
-/// The limit includes framing, matching POST /v1/shares on openseek-api.
 pub async fn Snapshot::Snapshot(
   title~ : String,
   html~ : String,
@@ -46,33 +42,33 @@ pub async fn Snapshot::Snapshot(
   // surrogate pairs whole. The HTML and JSON retain the complete records.
   let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
-  let mut key = ""
-  let reader = @io.MemoryReader(target => {
-    let form = @multipart.FormWriter(target) catch {
-      _ => raise EntropyUnavailable
-    }
-    key = form.boundary()
-    form.write_field("title", title)
-    form.write_part(
-      headers={
-        "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",
-        "Content-Type": "text/html; charset=utf-8",
-      },
-      target => target.write(html),
-    )
-    form.write_part(
-      headers={
-        "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
-        "Content-Type": "application/json; charset=utf-8",
-      },
-      target => target.write(json),
-    )
-    form.finish()
-  })
-  defer reader.close()
-  let body = reader.read_all().binary()
-  guard body.length() <= 20 * 1024 * 1024 else { raise Oversized }
-  { key, body, }
+  let writer = BodyWriter::{ buffer: @buffer.Buffer(), }
+  let form = @multipart.FormWriter(writer) catch {
+    _ => raise EntropyUnavailable
+  }
+  form.write_field("title", title)
+  form.write_part(
+    headers={
+      "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",
+      "Content-Type": "text/html; charset=utf-8",
+    },
+    target => target.write(html),
+  )
+  form.write_part(
+    headers={
+      "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
+      "Content-Type": "application/json; charset=utf-8",
+    },
+    target => target.write(json),
+  )
+  form.finish()
+  {
+    headers: {
+      "Idempotency-Key": form.boundary(),
+      "Content-Type": form.content_type(),
+    },
+    body: writer.buffer.to_bytes(),
+  }
 }
 
 ///|
@@ -104,11 +100,13 @@ async fn Snapshot::send(
   server_url~ : String,
   token~ : String,
 ) -> @protocol.SessionShareReply {
-  let (response, body) = @http.post("\{server_url}/v1/shares", self.body, headers={
-    "Authorization": "Bearer \{token}",
-    "Idempotency-Key": self.key,
-    "Content-Type": "multipart/form-data; boundary=\{self.key}",
-  })
+  let headers = self.headers.copy()
+  headers["Authorization"] = "Bearer \{token}"
+  let (response, body) = @http.post(
+    "\{server_url}/v1/shares",
+    self.body,
+    headers~,
+  )
   if response.code == 401 {
     return @protocol.SignInRequired
   }
@@ -139,4 +137,15 @@ async fn Snapshot::send(
     { "url": String(url), .. } => @protocol.Shared(url~)
     _ => @protocol.Failed(message=invalid)
   }
+}
+
+///|
+priv struct BodyWriter {
+  buffer : @buffer.Buffer
+}
+
+///|
+impl @io.Writer for BodyWriter with fn write_once(self, bytes, offset~, len~) {
+  self.buffer.write_bytes(bytes[offset:offset + len])
+  len
 }

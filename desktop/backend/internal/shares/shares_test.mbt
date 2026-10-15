@@ -83,11 +83,12 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
 }
 
 ///|
-/// Publish a small snapshot against a server that answers every request with
+/// Publish a snapshot against a server that answers every request with
 /// `code` and `body`, plus a redirect target that must never be followed.
 async fn reply_for(
   code : Int32,
   body : String,
+  html~ : String = "<html>test</html>",
 ) -> (String, @protocol.SessionShareReply) {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
@@ -104,11 +105,10 @@ async fn reply_for(
       connection.write_string(body)
       connection.end_response()
     })
-    let reply = @shares.Snapshot(
-      title="Test",
-      html="<html>test</html>",
-      json="{}",
-    ).publish(server_url=origin, token="odt_test")
+    let reply = @shares.Snapshot(title="Test", html~, json="{}").publish(
+      server_url=origin,
+      token="odt_test",
+    )
     receiver.wait()
     (origin, reply)
   })
@@ -151,27 +151,20 @@ async test "upload maps server replies without following redirects" {
 }
 
 ///|
-async test "upload limits count UTF-8 bytes and multipart overhead" {
-  try
-    @shares.Snapshot(
-      title="Test",
-      html="x".repeat(11 * 1024 * 1024),
-      json="x".repeat(10 * 1024 * 1024),
-    )
-  catch {
-    @shares.Oversized => ()
-    error => raise error
-  } noraise {
-    _ => fail("files that only together exceed the limit must be refused")
-  }
-  try
-    @shares.Snapshot(title="Test", html="x".repeat(20 * 1024 * 1024), json="{}")
-  catch {
-    @shares.Oversized => ()
-    error => raise error
-  } noraise {
-    _ => fail("multipart framing must count toward the limit")
-  }
+async test "upload size limits are enforced by the server" {
+  let (_, reply) = reply_for(
+    413,
+    "{\"error\":\"share upload exceeds 20 MiB\"}",
+    html="x".repeat(21 * 1024 * 1024),
+  )
+  assert_eq(
+    reply,
+    Failed(message="Sharing failed (HTTP 413): share upload exceeds 20 MiB"),
+  )
+}
+
+///|
+async test "a blank title is refused before upload" {
   try @shares.Snapshot(title="  ", html="html", json="{}") catch {
     @shares.EmptyTitle => ()
     error => raise error
