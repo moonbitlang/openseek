@@ -83,13 +83,7 @@ async fn download(
   destination : String,
   on_progress : async (Int32, Int32?) -> Unit,
 ) -> Unit {
-  // Force an identity response so Content-Length describes the exact bytes
-  // written to the archive, even if an intermediary normally compresses it.
-  let (response, client) = @http.get_stream(url, headers={
-    "Accept-Encoding": "identity",
-  }) catch {
-    error => raise UpdateError("update download failed: \{error}")
-  }
+  let (response, client) = download_response(url)
   defer client.close()
   guard response.code == 200 else {
     raise UpdateError("update download returned HTTP \{response.code}")
@@ -129,6 +123,70 @@ async fn download(
   if downloaded_bytes != reported_bytes {
     on_progress(downloaded_bytes, total_bytes)
   }
+}
+
+///|
+/// Follow the release host's redirects before opening the archive. Close each
+/// intermediate response without buffering its body; progress describes only
+/// the final package. Five hops bound a misconfigured redirect loop.
+async fn download_response(url : String) -> (@http.Response, @http.Client) {
+  let mut current = url
+  for hop in 0..<6 {
+    // Content-Length must describe the bytes written to the archive.
+    let (response, client) = @http.get_stream(current, headers={
+      "Accept-Encoding": "identity",
+    }) catch {
+      error => raise UpdateError("update download failed: \{error}")
+    }
+    if response.code is (301 | 302 | 303 | 307 | 308) {
+      defer client.close()
+      guard hop < 5 else {
+        raise UpdateError("update download redirected too many times")
+      }
+      guard response.headers.get("Location") is Some(location) else {
+        raise UpdateError("update download redirect has no Location header")
+      }
+      current = download_redirect_target(current, location)
+    } else {
+      return (response, client)
+    }
+  }
+  raise UpdateError("update download redirected too many times")
+}
+
+///|
+/// Release hosts use absolute or origin-relative locations. Keep HTTPS when
+/// resolving an origin-relative location, and reject a TLS downgrade just as
+/// the skill archive downloader does.
+fn download_redirect_target(
+  current : String,
+  location : String,
+) -> String raise UpdateError {
+  let location = location.trim().to_owned()
+  let target = if location.has_prefix("http://") ||
+    location.has_prefix("https://") {
+    location
+  } else {
+    guard current.split_once("://") is Some((scheme, rest)) else {
+      raise UpdateError("update download sent an unsupported redirect")
+    }
+    if location.has_prefix("//") {
+      "\{scheme}:\{location}"
+    } else if location.has_prefix("/") {
+      let host = if rest.split_once("/") is Some((host, _)) {
+        host
+      } else {
+        rest
+      }
+      "\{scheme}://\{host}\{location}"
+    } else {
+      raise UpdateError("update download sent an unsupported redirect")
+    }
+  }
+  guard !(current.has_prefix("https://") && target.has_prefix("http://")) else {
+    raise UpdateError("update download redirected to an insecure address")
+  }
+  target
 }
 
 ///|
