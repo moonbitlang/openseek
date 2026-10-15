@@ -17,10 +17,8 @@ priv enum Outgoing {
 
 ///|
 /// The outbound queue and hub subscription that make one remote client.
-/// Opening them also installs the readiness frame: because the fresh bounded
-/// outbound queue is empty, that `put` cannot suspend, so no hub publisher
-/// can run between subscribe and readiness. Forwarders may only start after
-/// this returns.
+/// Readiness is queued before registration, so every directly published
+/// notification follows the connection's resync boundary.
 priv struct ClientSubscription {
   out : @async.Queue[Outgoing]
   notifications : @broadcast.Subscription[@protocol.Notification]
@@ -29,8 +27,8 @@ priv struct ClientSubscription {
 ///|
 /// One client's WebSocket actor: a relay data socket this host dials
 /// (`run`) or a development console socket it accepted (`serve`). Its
-/// subscription, outbound queue, writer, notification forwarder, pinger, and
-/// request tasks cannot outlive the socket.
+/// subscription, outbound queue, writer, pinger, and request tasks cannot
+/// outlive the socket.
 priv struct WsClientActor {
   state : @api.ApiState
   host_connection : @host.HostConnection
@@ -44,14 +42,33 @@ fn WsClientActor::WsClientActor(state : @api.ApiState) -> WsClientActor {
 ///|
 async fn WsClientActor::open_subscription(
   self : WsClientActor,
+  on_overflow~ : () -> Unit,
 ) -> ClientSubscription {
   let out : @async.Queue[Outgoing] = Queue(kind=Blocking(OutboundQueueCapacity))
-  let notifications = self.state.subscribe()
-  // Readiness doubles as the resync hint: the client treats
-  // `agent.connected` as "state may have changed, reload". Queue it before
-  // any notification forwarder exists, making it this subscription's first
-  // outbound frame even if the hub publishes immediately after subscribe.
+  // Install the readiness frame before the hub can write into this inbox.
   out.put(Notify(AgentConnected({ stage: Accepted, })))
+  let notifications = self.state.subscribe(
+    out,
+    map=notification => {
+      if notification_for_client(notification) is Some(notification) {
+        Some(Notify(notification))
+      } else {
+        None
+      }
+    },
+    on_lag=subscription => {
+      @xlog.warn(category="transport") <?
+        { "event": "hub_subscription_lagged", "transport": "remote" }
+      subscription.close()
+      out.close(
+        error=SlowClient("client not draining outbound frames"),
+        clear=true,
+      )
+      // Closing the queue alone cannot interrupt a writer blocked inside a
+      // socket write. The owner also closes the transport immediately.
+      on_overflow()
+    },
+  )
   { out, notifications, }
 }
 
@@ -75,7 +92,7 @@ priv enum Inbound {
 
 ///|
 /// The client stopped draining and its outbound queue stood full; raising
-/// this out of the notification pump is how the connection gets torn down.
+/// this in the writer or a request task tears down the connection.
 priv suberror SlowClient {
   SlowClient(String)
 }
@@ -86,9 +103,8 @@ const PingIntervalMs = 30_000
 ///|
 /// How many outbound frames may queue before writers suspend. This is also
 /// the slow-client limit: a socket that stalls long enough to fill it gets
-/// the connection torn down (the pump must not block on a full queue — a
-/// pump parked in `put` would never get back to its subscription to notice
-/// that it lagged).
+/// the connection torn down. The hub closes this client's queue on overflow
+/// without waiting for the socket or blocking other clients.
 const OutboundQueueCapacity = 64
 
 ///|
@@ -106,7 +122,7 @@ const InboundFrameMaxBytes : Int32 = 32 * 1024 * 1024
 ///|
 /// Enforce one outbound bound for notifications and responses. A producer
 /// must never park behind a stalled socket: raising from any request task or
-/// the notification pump tears down the task group and reconnects cleanly.
+/// the writer tears down the task group and reconnects cleanly.
 fn enqueue_outgoing(
   out : @async.Queue[Outgoing],
   item : Outgoing,
@@ -157,9 +173,10 @@ async fn WsClientActor::serve(
   self : WsClientActor,
   conn : @websocket.Conn,
 ) -> Unit {
-  let subscription = self.open_subscription()
+  let subscription = self.open_subscription(on_overflow=() => conn.close())
+  defer subscription.notifications.close()
   let out = subscription.out
-  let notifications = subscription.notifications
+  defer out.close(clear=true)
   let request_permits : @semaphore.Semaphore = Semaphore(
     InflightRequestCapacity,
     initial_value=InflightRequestCapacity,
@@ -181,31 +198,6 @@ async fn WsClientActor::serve(
         notification => enqueue_outgoing(out, Notify(notification)),
         notification => enqueue_outgoing(out, Notify(notification)),
       )
-    })
-    group.spawn_bg(() => {
-      // Tears the connection down either way it ends — the client
-      // reconnects into a resync: this subscription lagging behind the hub's
-      // log (`next` raises), or the outbound queue standing full (the socket
-      // has stalled for `OutboundQueueCapacity` frames, and the protocol
-      // promises a disconnect over a silent gap in the stream).
-      for ;; {
-        let notification = notifications.next() catch {
-          @broadcast.Lagged(missed~) as lagged => {
-            @xlog.warn(category="transport") <?
-              {
-                "event": "hub_subscription_lagged",
-                "transport": "remote",
-                "missed": missed,
-              }
-            raise lagged
-          }
-          error => raise error
-        }
-        guard notification_for_client(notification) is Some(notification) else {
-          continue
-        }
-        enqueue_outgoing(out, Notify(notification))
-      }
     })
     group.spawn_bg(() => {
       // Protocol-level keepalive: a dead middlebox connection surfaces as a
@@ -429,7 +421,8 @@ fn error_envelope(id : Json, code : Int32, message : String) -> Json {
 ///|
 async test "readiness precedes the first forwarded hub notification" {
   let state = @api.ApiState(engine="unused")
-  let subscription = WsClientActor(state).open_subscription()
+  let subscription = WsClientActor(state).open_subscription(on_overflow=() => ())
+  defer subscription.notifications.close()
   state.publish(
     SessionEvent({
       session: "session-1",
@@ -442,8 +435,6 @@ async test "readiness precedes the first forwarded hub notification" {
       session_root: "/sessions/global",
     }),
   )
-  let notification = subscription.notifications.next()
-  assert_true(subscription.out.try_put(Notify(notification)))
   guard subscription.out.get() is Notify(readiness) else {
     fail("expected readiness notification")
   }
@@ -455,7 +446,7 @@ async test "readiness precedes the first forwarded hub notification" {
 }
 
 ///|
-test "a full outbound queue rejects responses instead of blocking tasks" {
+async test "a full outbound queue rejects responses and retires its subscription" {
   let out : @async.Queue[Outgoing] = Queue(kind=Blocking(1))
   enqueue_outgoing(out, Response(Json::null()))
   try enqueue_outgoing(out, Response(Json::null())) catch {
@@ -464,6 +455,25 @@ test "a full outbound queue rejects responses instead of blocking tasks" {
   } noraise {
     _ => fail("a full outbound queue accepted another response")
   }
+  let state = @api.ApiState(engine="unused")
+  let mut disconnected = false
+  let subscription = WsClientActor(state).open_subscription(on_overflow=() => {
+    disconnected = true
+  })
+  defer subscription.notifications.close()
+  // Readiness already occupies one slot. Overflow must wake the writer with
+  // a connection failure, without escaping into the hub publisher.
+  for _ in 0..<OutboundQueueCapacity {
+    state.publish(AgentConnected({ stage: Serving, }))
+  }
+  assert_true(disconnected)
+  try subscription.out.get() catch {
+    SlowClient(_) => ()
+    error => raise error
+  } noraise {
+    _ => fail("overflow did not close the stalled client's outbound queue")
+  }
+  state.publish(AgentConnected({ stage: Serving, }))
 }
 
 ///|

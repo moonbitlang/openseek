@@ -32,7 +32,15 @@ async test "share refusal retires the captured login and preserves a newer one" 
       Current | Retired => current
     }
     let state = @api.ApiState(engine="unused-test-engine", auth=store)
-    let notifications = state.subscribe()
+    let notifications : @async.Queue[@protocol.Notification] = Queue(
+      kind=Blocking(8),
+    )
+    let subscription = state.subscribe(
+      notifications,
+      map=value => Some(value),
+      on_lag=sub => sub.close(),
+    )
+    defer subscription.close()
     let share = SessionShare::{
       state,
       payload: {
@@ -72,7 +80,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
         assert_true(store.signed_in())
         assert_true(store.status().connected)
         assert_true(store.desired_connector() == Some(current))
-        assert_true(notifications.try_next() is None)
+        assert_true(notifications.try_get() is None)
       } else {
         assert_true(reply is SignInRequired)
         // auth.connect checks this flag before starting browser sign-in.
@@ -80,7 +88,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
         assert_false(store.status().connected)
         assert_true(store.desired_connector() is None)
         assert_true(store.wakeups().try_get() is Some(_))
-        assert_true(notifications.try_next() is Some(AuthChanged(_)))
+        assert_true(notifications.try_get() is Some(AuthChanged(_)))
         assert_false(@auth.AuthStore::load(runtime_dir=dir).signed_in())
       }
     })

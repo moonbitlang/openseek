@@ -325,16 +325,17 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
 }
 
 ///|
-/// Open a notification subscription: a cursor into the hub's bounded log
-/// that yields, through `next`, every notification published from now on.
-/// Nothing is registered, so dropping it is the whole of unsubscribing. A
-/// subscriber that stops draining lags: `next` raises `@broadcast.Lagged`
-/// once the log has rolled past it and resumes at the oldest retained
-/// notification; the transport turns the lag into its resync boundary.
-pub fn ApiState::subscribe(
+/// Register a transport-owned inbox for future notifications. Publication
+/// maps and offers directly to that inbox without suspending. Overflow pauses
+/// this subscription and invokes `on_lag`; the transport must reconnect or
+/// resume at its resync boundary. Close the handle when the transport exits.
+pub fn[T] ApiState::subscribe(
   self : ApiState,
+  inbox : @async.Queue[T],
+  map~ : (@protocol.Notification) -> T?,
+  on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit,
 ) -> @broadcast.Subscription[@protocol.Notification] {
-  self.hub.subscribe()
+  self.hub.subscribe(inbox, map~, on_lag~)
 }
 
 ///|

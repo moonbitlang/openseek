@@ -170,8 +170,20 @@ test "questions from two engines are kept and retired independently" {
 ///|
 test "engine prediction is broadcast to both local and relay subscribers" {
   let hub = Hub::Hub()
-  let desktop_client = hub.subscribe()
-  let remote = hub.subscribe()
+  let desktop_client : @async.Queue[@protocol.Notification] = Queue(
+    kind=Blocking(4),
+  )
+  let remote : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(4))
+  let desktop_subscription = hub.subscribe(
+    desktop_client,
+    map=value => Some(value),
+    on_lag=sub => sub.close(),
+  )
+  defer desktop_subscription.close()
+  let remote_subscription = hub.subscribe(remote, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer remote_subscription.close()
   let payload : @protocol.PredictionReadyPayload = {
     session: "s",
     prediction: {
@@ -182,10 +194,10 @@ test "engine prediction is broadcast to both local and relay subscribers" {
   let sink = hub.sink()
   sink(PredictionReady(payload))
   let expected = Some(@protocol.Notification::AgentPrediction(payload))
-  assert_eq(desktop_client.try_next(), expected)
-  assert_eq(remote.try_next(), expected)
-  assert_eq(desktop_client.try_next(), None)
-  assert_eq(remote.try_next(), None)
+  assert_eq(desktop_client.try_get(), expected)
+  assert_eq(remote.try_get(), expected)
+  assert_eq(desktop_client.try_get(), None)
+  assert_eq(remote.try_get(), None)
 }
 
 ///|
@@ -219,7 +231,11 @@ test "a resolution from an older run cannot retire a reused approval id" {
 ///|
 async test "approval snapshot subscription and reply claim share one ordered state" {
   let hub = Hub::Hub()
-  let stream = hub.subscribe()
+  let stream : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(16))
+  let subscription = hub.subscribe(stream, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer subscription.close()
   let ask = approval_event(
     "s1",
     Some("r1"),
@@ -229,8 +245,8 @@ async test "approval snapshot subscription and reply claim share one ordered sta
   let captured = hub.approval_snapshot()
   assert_eq(captured.generation, 1)
   assert_false(captured.approvals[0].answered)
-  assert_true(stream.next() is AgentApprovals({ generation: 1, .. }))
-  assert_true(stream.next() is AgentEvent(_))
+  assert_true(stream.get() is AgentApprovals({ generation: 1, .. }))
+  assert_true(stream.get() is AgentEvent(_))
   let sends = Ref(0)
   let send = (_ : @protocol.ApprovalPayload) => {
     sends.val += 1
@@ -259,7 +275,7 @@ async test "approval snapshot subscription and reply claim share one ordered sta
   )
   assert_eq(sends.val, 1)
   assert_true(
-    stream.next()
+    stream.get()
     is AgentApprovals({ generation: 2, approvals: [{ answered: true, .. }], }),
   )
   // A repeated engine announcement cannot unlock the already claimed request.

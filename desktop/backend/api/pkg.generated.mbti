@@ -3,6 +3,7 @@ package "openseek_desktop/backend/api"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/aqueue",
   "openseek_desktop/backend/auth",
   "openseek_desktop/backend/broadcast",
   "openseek_desktop/backend/codex",
@@ -28,7 +29,7 @@ pub fn ApiState::manager(Self) -> @engine.EngineManager
 pub fn ApiState::publish(Self, @protocol.Notification) -> Unit
 pub fn ApiState::sink(Self) -> @engine.EventSink
 pub async fn[G] ApiState::start_services(Self, @async.TaskGroup[G]) -> Unit
-pub fn ApiState::subscribe(Self) -> @broadcast.Subscription[@protocol.Notification]
+pub fn[T] ApiState::subscribe(Self, @aqueue.Queue[T], map~ : (@protocol.Notification) -> T?, on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit) -> @broadcast.Subscription[@protocol.Notification]
 
 // Type aliases
 

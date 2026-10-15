@@ -36,6 +36,22 @@ Closing the Proton application cancels these owners together. A request may
 post work to them, but cancelling or reloading that request cannot orphan a
 socket, subprocess, or watcher.
 
+The host's notification hub publishes directly into each transport's bounded
+inbox. Registration supplies the destination and its notification mapping;
+the owner unregisters on exit, including cancellation. Desktop control,
+browser, filesystem, and terminal producers use the same window inbox, while
+remote responses and notifications share their connection's outbound queue.
+No notification-reader task races these sources or forwards hub events.
+
+Publication never waits for a client. A full inbox pauses that subscription
+and signals overflow once, while other subscriptions continue receiving.
+Desktop retains a 4,096-message inbox and queues one recovery marker after
+the accepted prefix. Consuming that marker resumes hub delivery before
+emitting `agent.connected`, so snapshot requests cannot race a paused
+subscription. A remote client's 64-frame outbound queue closes its socket on
+overflow, including when the writer is blocked in a send; reconnect starts a
+new subscription and resync. Paused subscriptions do not replay missed events.
+
 ## Transport
 
 All HTTP lives at the relay. Browser releases are versioned alongside Desktop

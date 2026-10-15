@@ -1,17 +1,7 @@
-// The fan-out point between the engine's EventSink and every connected
-// client. Notifications are appended to one bounded broadcast log that every
-// subscriber reads through its own cursor. A subscriber that falls further
-// behind than the log retains has lagged: its next read says so instead of
-// handing over a stream with a hole in it, and the transport applies the
-// protocol's reconnect-equals-resync contract (docs/remote-protocol.md) —
-// the client rebuilds state through `session.list` + `agent.runs`.
-
-///|
-/// How many notifications the log retains behind its head. Generous — the
-/// desktop webview and a healthy browser drain far faster than the engine
-/// produces — so a subscriber this far behind is a wedged connection, and
-/// the protocol's answer to a wedged connection is to resync it.
-const NotificationLogCapacity = 4096
+// The fan-out point between the engine's EventSink and connected clients.
+// Notifications go directly to each transport's bounded inbox. A full inbox
+// pauses that subscription until its transport reconnects or resyncs through
+// session.list and agent.runs (docs/remote-protocol.md).
 
 ///|
 /// The hub is owned by `ApiState`; transports reach it through
@@ -45,7 +35,7 @@ priv struct Hub {
 ///|
 fn Hub::Hub() -> Hub {
   {
-    notifications: Channel(capacity=NotificationLogCapacity),
+    notifications: Channel(),
     active_starts: Map([]),
     settlements: Map([]),
     pending_approvals: Map([]),
@@ -110,9 +100,8 @@ fn Hub::record_finished(
 
 ///|
 /// Record the notification's effect on the live-run tables, then append it
-/// to the log. Publishing never suspends, so the order every subscriber sees
-/// is the publish order. The hub keeps no list of subscribers: one that has
-/// fallen behind learns so on its own next read.
+/// to every active inbox. Publishing never suspends; a slow destination
+/// pauses independently and its transport establishes a resync boundary.
 fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
   match notification {
     AgentStarted(payload) => self.active_starts[payload.run_id] = payload
@@ -192,13 +181,14 @@ fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
 }
 
 ///|
-/// A cursor at the log's head: it yields every notification published from
-/// now on. The hub keeps no record of it, so dropping it is the whole of
-/// unsubscribing.
-fn Hub::subscribe(
+/// Register a transport-owned inbox for direct notification delivery.
+fn[T] Hub::subscribe(
   self : Hub,
+  inbox : @async.Queue[T],
+  map~ : (@protocol.Notification) -> T?,
+  on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit,
 ) -> @broadcast.Subscription[@protocol.Notification] {
-  self.notifications.subscribe()
+  self.notifications.subscribe(inbox, map~, on_lag~)
 }
 
 ///|
@@ -306,7 +296,11 @@ fn Hub::sink(
 ///|
 test "a real engine connection retires old active runs before readiness" {
   let hub = Hub::Hub()
-  let subscriber = hub.subscribe()
+  let inbox : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(8))
+  let subscriber = hub.subscribe(inbox, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer subscriber.close()
   hub.publish(
     AgentStarted(@json.from_json({ "run_id": "r-old", "session": "s-old" })),
   )
@@ -317,20 +311,25 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }
-  guard subscriber.try_next() is Some(started) else {
+  guard inbox.try_get() is Some(started) else {
     fail("missing started notification")
   }
   assert_eq(started.wire_name(), "agent.started")
-  guard subscriber.try_next() is Some(connected) else {
+  guard inbox.try_get() is Some(connected) else {
     fail("missing connected notification")
   }
   assert_eq(connected.wire_name(), "agent.connected")
 }
 
 ///|
-test "a lagged subscriber learns what it missed and can still replay the finish" {
+test "an overflowing inbox can still recover the missed finish from runs" {
   let hub = Hub::Hub()
-  let subscriber = hub.subscribe()
+  let inbox : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(1))
+  let mut lagged = false
+  let subscriber = hub.subscribe(inbox, map=value => Some(value), on_lag=_ => {
+    lagged = true
+  })
+  defer subscriber.close()
   hub.publish(
     AgentStarted(
       @json.from_json({
@@ -340,12 +339,6 @@ test "a lagged subscriber learns what it missed and can still replay the finish"
       }),
     ),
   )
-  // Let the log roll past the subscriber without draining it. The terminal
-  // notification is the first one to push the start out of the window,
-  // reproducing a renderer that fell behind during a long, high-volume turn.
-  for _ in 1..<NotificationLogCapacity {
-    hub.publish(AgentConnected({ stage: Serving, }))
-  }
   hub.publish(
     AgentFinished(
       @json.from_json({
@@ -355,20 +348,9 @@ test "a lagged subscriber learns what it missed and can still replay the finish"
       }),
     ),
   )
-  // The read reports exactly what was overwritten — the start — and resumes
-  // at the oldest retained notification. Whether that partial stream is
-  // worth rendering is the transport's decision; the finish itself is
-  // recoverable through `agent.runs` either way.
-  let missed = try subscriber.try_next() catch {
-    Lagged(missed~) => Some(missed)
-  } noraise {
-    _ => None
-  }
-  assert_eq(missed, Some(1))
-  guard subscriber.try_next() is Some(retained) else {
-    fail("the retained window was not readable after the lag")
-  }
-  assert_eq(retained.wire_name(), "agent.connected")
+  assert_true(lagged)
+  assert_true(inbox.try_get() is Some(AgentStarted(_)))
+  assert_true(inbox.try_get() is None)
   guard hub.runs(known=[
       {
         session: "s-overflow",

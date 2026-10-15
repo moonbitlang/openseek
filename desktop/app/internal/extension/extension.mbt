@@ -295,12 +295,15 @@ async fn PageEventTarget::emit(
 priv enum BridgeInput {
   Control(BridgeControl)
   Deliver(PageNotification)
-  // The hub's log rolled past this subscription's cursor: at least one
-  // notification is gone for good, so only the ordinary BridgeReady resync
-  // can restore truthful state. The actor has already skipped the retained
-  // remainder, which is no longer a complete stream.
-  SubscriptionLagged
+  // The inbox filled. Hub delivery stays paused until this marker reaches
+  // the consumer, which resumes the subscription before triggering resync.
+  SubscriptionLagged(@broadcast.Subscription[@protocol.Notification])
 }
+
+///|
+/// Preserve the former hub log's burst allowance now that notifications go
+/// straight into the window inbox instead of waiting in that shared log.
+const BridgeInboxCapacity = 4096
 
 ///|
 /// The desktop window's bridge actor. It owns the hub subscription and the
@@ -311,11 +314,9 @@ struct DesktopBridgeActor {
   // The desktop page owns one filesystem watcher independently of every
   // remote WebSocket connection.
   host_connection : @host.HostConnection
-  controls : @async.Queue[BridgeControl]
-  // Window-local browser view events that must reach this page without
-  // touching the process-wide hub — a relay client has no native views, so
-  // it must never see them.
-  browser_events : @async.Queue[Json]
+  // All producers write directly to this window-owned mailbox. Local
+  // control, browser, filesystem and terminal events never enter the hub.
+  inbox : @async.Queue[BridgeInput]
 }
 
 ///|
@@ -325,11 +326,7 @@ pub fn DesktopBridgeActor::DesktopBridgeActor(
   {
     state,
     host_connection: HostConnection(),
-    // A page normally attaches once. A small bounded queue still permits a
-    // reload to overlap the old page without allowing abandoned requests to
-    // accumulate forever.
-    controls: Queue(kind=Blocking(8)),
-    browser_events: Queue(kind=Blocking(64)),
+    inbox: Queue(kind=Blocking(BridgeInboxCapacity)),
   }
 }
 
@@ -342,21 +339,21 @@ pub async fn DesktopBridgeActor::notify_browser_event(
   self : DesktopBridgeActor,
   params : Json,
 ) -> Unit {
-  self.browser_events.put(params)
+  self.inbox.put(Deliver(BrowserEvent(params)))
 }
 
 ///|
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(
   self : DesktopBridgeActor,
 ) -> Unit {
-  self.controls.put(WindowChromeChanged)
+  self.inbox.put(Control(WindowChromeChanged))
 }
 
 ///|
 pub async fn DesktopBridgeActor::notify_system_appearance_changed(
   self : DesktopBridgeActor,
 ) -> Unit {
-  self.controls.put(SystemAppearanceChanged)
+  self.inbox.put(Control(SystemAppearanceChanged))
 }
 
 ///|
@@ -428,7 +425,7 @@ async fn DesktopBridgeActor::connect(
   // instances, so its PTYs must not survive the new attachment.
   self.host_connection.close_terminals()
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  self.controls.put(PageConnected(context, reply))
+  self.inbox.put(Control(PageConnected(context, reply)))
   reply.get()
   Acknowledged
 }
@@ -440,7 +437,7 @@ pub async fn DesktopBridgeActor::window_ready(
   self : DesktopBridgeActor,
   events : @proton.WindowEventEmitter,
 ) -> Unit {
-  self.controls.put(WindowReady(events))
+  self.inbox.put(Control(WindowReady(events)))
 }
 
 ///|
@@ -448,33 +445,27 @@ pub async fn DesktopBridgeActor::window_ready(
 pub async fn DesktopBridgeActor::window_closed(
   self : DesktopBridgeActor,
 ) -> Unit {
-  self.controls.put(WindowClosed)
+  self.inbox.put(Control(WindowClosed))
 }
 
 ///|
-/// The next hub notification, or the lag that stands in for the ones this
-/// subscription missed. Remote clients reconnect their socket over a lag;
-/// the desktop bridge is process-local with no socket supervisor, so it
-/// reports the lag as input and resyncs the page instead of ending its
-/// app-lifetime actor. The notifications the log still retains are skipped
-/// too: once one is missing, rendering the rest only paints stale state
-/// before the resync replaces it.
-async fn next_hub_input(
-  notifications : @broadcast.Subscription[@protocol.Notification],
-) -> BridgeInput {
-  Deliver(Hub(notifications.next())) catch {
-    @broadcast.Lagged(missed~) => {
+/// Register the window inbox directly with the hub. Overflow schedules at
+/// most one recovery marker: the subscription is paused before this handler
+/// runs, and stays paused until the actor consumes the marker. Only recovery
+/// waits for mailbox space; ordinary hub publication always stays synchronous.
+fn DesktopBridgeActor::subscribe(
+  self : DesktopBridgeActor,
+  group : @async.TaskGroup[Unit],
+) -> @broadcast.Subscription[@protocol.Notification] {
+  self.state.subscribe(
+    self.inbox,
+    map=notification => Some(Deliver(Hub(notification))),
+    on_lag=subscription => {
       @xlog.warn(category="transport") <?
-        {
-          "event": "hub_subscription_lagged",
-          "transport": "desktop",
-          "missed": missed,
-        }
-      notifications.skip_to_head()
-      SubscriptionLagged
-    }
-    error => raise error
-  }
+        { "event": "hub_subscription_lagged", "transport": "desktop" }
+      group.spawn_bg(() => self.inbox.put(SubscriptionLagged(subscription)))
+    },
+  )
 }
 
 ///|
@@ -483,85 +474,81 @@ async fn next_hub_input(
 /// through its request-scoped sender; later notifications use the window-owned
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
-  let notifications = self.state.subscribe()
-  let host_notifications : @async.Queue[@protocol.Notification] = Queue(
-    kind=Blocking(64),
-  )
   @async.with_task_group(group => {
-    // The watcher and its queue belong to this bridge connection. Its events
+    let subscription = self.subscribe(group)
+    defer subscription.close()
+    // The watcher and the inbox belong to this bridge connection. Its events
     // never enter the process-wide hub, so a remote client's watch cannot
     // trigger desktop file refreshes (or vice versa).
     group.spawn_bg(allow_failure=true, () => {
       self.host_connection.run(
-        notification => host_notifications.put(notification),
+        notification => self.inbox.put(Deliver(Hub(notification))),
         notification => {
           // Progress is disposable. Do not let a slow renderer or a full
           // connection queue stall moongrep's stdout reader and its final reply.
-          ignore(host_notifications.try_put(notification) catch { _ => false })
+          ignore(
+            self.inbox.try_put(Deliver(Hub(notification))) catch {
+              _ => false
+            },
+          )
         },
       )
     })
     let mut connected = false
     let mut target : PageEventTarget? = None
     let pending : Array[PageNotification] = []
-    @event_mux.run(
-      [
-        () => Control(self.controls.get()),
-        () => next_hub_input(notifications),
-        () => Deliver(Hub(host_notifications.get())),
-        () => Deliver(BrowserEvent(self.browser_events.get())),
-      ],
-      input => {
-        match input {
-          Control(control) =>
-            match control {
-              PageConnected(context, reply) => {
-                // Serialize readiness before subsequent delivery so the
-                // frontend can use it as the resync boundary.
-                context.emit(connected_event, { stage: Accepted, })
-                connected = true
-                reply.put(())
-              }
-              WindowReady(events) => {
-                let next_target = PageEventTarget::{ events, }
-                target = Some(next_target)
-                if connected {
-                  for notification in pending {
-                    next_target.emit(notification)
-                  }
-                }
-                pending.clear()
-              }
-              WindowClosed => {
-                connected = false
-                target = None
-                pending.clear()
-              }
-              WindowChromeChanged =>
-                deliver_to_page(connected, target, pending, WindowChromeChanged)
-              SystemAppearanceChanged =>
-                deliver_to_page(
-                  connected,
-                  target,
-                  pending,
-                  SystemAppearanceChanged,
-                )
+    for ;; {
+      match self.inbox.get() {
+        Control(control) =>
+          match control {
+            PageConnected(context, reply) => {
+              // Serialize readiness before subsequent delivery so the
+              // frontend can use it as the resync boundary.
+              context.emit(connected_event, { stage: Accepted, })
+              connected = true
+              reply.put(())
             }
-          Deliver(notification) =>
-            deliver_to_page(connected, target, pending, notification)
-          // Readiness is the frontend's resync boundary. The subscription
-          // already sits at the log's head, so every notification published
-          // from here on queues behind this boundary.
-          SubscriptionLagged =>
-            deliver_to_page(
-              connected,
-              target,
-              pending,
-              Hub(AgentConnected({ stage: Accepted, })),
-            )
+            WindowReady(events) => {
+              let next_target = PageEventTarget::{ events, }
+              target = Some(next_target)
+              if connected {
+                for notification in pending {
+                  next_target.emit(notification)
+                }
+              }
+              pending.clear()
+            }
+            WindowClosed => {
+              connected = false
+              target = None
+              pending.clear()
+            }
+            WindowChromeChanged =>
+              deliver_to_page(connected, target, pending, WindowChromeChanged)
+            SystemAppearanceChanged =>
+              deliver_to_page(
+                connected,
+                target,
+                pending,
+                SystemAppearanceChanged,
+              )
+          }
+        Deliver(notification) =>
+          deliver_to_page(connected, target, pending, notification)
+        SubscriptionLagged(subscription) => {
+          // Resume before emitting readiness: snapshot requests made by the
+          // frontend cannot race a still-paused subscription. Every later
+          // publication is queued behind this boundary.
+          subscription.resume_delivery()
+          deliver_to_page(
+            connected,
+            target,
+            pending,
+            Hub(AgentConnected({ stage: Accepted, })),
+          )
         }
-      },
-    )
+      }
+    }
   })
 }
 
@@ -584,17 +571,34 @@ async fn deliver_to_page(
 }
 
 ///|
-async test "a lagged hub subscription becomes a reconnect boundary" {
-  let channel : @broadcast.Channel[@protocol.Notification] = Channel(capacity=1)
-  let notifications = channel.subscribe()
-  channel.publish(AgentConnected({ stage: Serving, }))
-  channel.publish(AgentConnected({ stage: Serving, }))
-  assert_true(next_hub_input(notifications) is SubscriptionLagged)
-  // The retained Serving notification was skipped with the lag; the same
-  // subscription keeps serving from the head.
-  channel.publish(AgentConnected({ stage: Accepted, }))
-  assert_true(
-    next_hub_input(notifications)
-    is Deliver(Hub(AgentConnected({ stage: Accepted, }))),
-  )
+async test "a full inbox preserves local events before the hub resync boundary" {
+  @async.with_timeout(1000, () => {
+    @async.with_task_group(group => {
+      let state = @api.ApiState(engine="unused")
+      let bridge = DesktopBridgeActor(state)
+      let subscription = bridge.subscribe(group)
+      defer subscription.close()
+      for value in 0..<BridgeInboxCapacity {
+        bridge.notify_browser_event(Json(value))
+      }
+      state.publish(AgentConnected({ stage: Serving, }))
+      // Further publications must not schedule extra recovery tasks/markers.
+      state.publish(AgentConnected({ stage: Serving, }))
+      for value in 0..<BridgeInboxCapacity {
+        assert_true(
+          bridge.inbox.get() is Deliver(BrowserEvent(actual)) &&
+          actual == Json(value),
+        )
+      }
+      guard bridge.inbox.get() is SubscriptionLagged(paused) else {
+        fail("missing resync boundary after the full inbox")
+      }
+      paused.resume_delivery()
+      state.publish(AgentConnected({ stage: Accepted, }))
+      assert_true(
+        bridge.inbox.get() is Deliver(Hub(AgentConnected({ stage: Accepted, }))),
+      )
+      assert_true(bridge.inbox.try_get() is None)
+    })
+  })
 }
