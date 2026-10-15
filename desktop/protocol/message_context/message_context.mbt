@@ -22,25 +22,39 @@ pub extend Context with @debug.Debug::{to_repr}
 
 ///|
 fn attribute(text : String) -> String {
-  text
-  .replace_all(old="&", new="&amp;")
-  .replace_all(old="\"", new="&quot;")
-  .replace_all(old="<", new="&lt;")
-  .replace_all(old=">", new="&gt;")
-  .replace_all(old="\r", new="&#13;")
-  .replace_all(old="\n", new="&#10;")
+  let output = StringBuilder()
+  for char in text {
+    match char {
+      '&' => output.write_string("&amp;")
+      '"' => output.write_string("&quot;")
+      '<' => output.write_string("&lt;")
+      '>' => output.write_string("&gt;")
+      '\r' => output.write_string("&#13;")
+      '\n' => output.write_string("&#10;")
+      _ => output.write_char(char)
+    }
+  }
+  output.to_string()
 }
 
 ///|
 fn decode_attribute(text : StringView) -> String {
-  text
-  .to_owned()
-  .replace_all(old="&quot;", new="\"")
-  .replace_all(old="&lt;", new="<")
-  .replace_all(old="&gt;", new=">")
-  .replace_all(old="&#13;", new="\r")
-  .replace_all(old="&#10;", new="\n")
-  .replace_all(old="&amp;", new="&")
+  let output = StringBuilder()
+  for rest = text {
+    let (char, tail) = match rest {
+      [.. "&quot;", .. tail] => ('"', tail)
+      [.. "&lt;", .. tail] => ('<', tail)
+      [.. "&gt;", .. tail] => ('>', tail)
+      [.. "&#13;", .. tail] => ('\r', tail)
+      [.. "&#10;", .. tail] => ('\n', tail)
+      [.. "&amp;", .. tail] => ('&', tail)
+      [char, .. tail] => (char, tail)
+      [] => break
+    }
+    output.write_char(char)
+    continue tail
+  }
+  output.to_string()
 }
 
 ///|
