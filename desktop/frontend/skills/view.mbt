@@ -520,9 +520,7 @@ fn installed_actions(
           emit(Update(target))
         }),
         {
-          guard pending is Some(Updating(..)) else {
-            candidate.map_or("", target => ui(locale, UpdateTo(target.version)))
-          }
+          guard pending is Some(Updating(..)) else { ui(locale, Update) }
           ui(locale, Updating)
         },
       ),

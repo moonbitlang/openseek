@@ -5,7 +5,7 @@ priv enum UiMessage {
   HandWritten
   Removing
   Updating
-  UpdateTo(String)
+  Update
   Uninstall
   NotInstalled
   Installing
@@ -41,11 +41,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Updating) => "正在更新…"
     (TraditionalChinese, Updating) => "正在更新…"
     (Japanese, Updating) => "更新中…"
-    (English, UpdateTo(version)) => "Update to \{version}"
-    (Spanish, UpdateTo(version)) => "Actualizar a \{version}"
-    (SimplifiedChinese, UpdateTo(version)) => "更新至 \{version}"
-    (TraditionalChinese, UpdateTo(version)) => "更新至 \{version}"
-    (Japanese, UpdateTo(version)) => "\{version} に更新"
+    (English, Update) => "Update"
+    (Spanish, Update) => "Actualizar"
+    (SimplifiedChinese, Update) => "更新"
+    (TraditionalChinese, Update) => "更新"
+    (Japanese, Update) => "更新"
     (English, HandWritten) => "hand-written"
     (Spanish, HandWritten) => "escrita a mano"
     (SimplifiedChinese, HandWritten) => "手动编写"
