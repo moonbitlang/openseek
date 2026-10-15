@@ -98,7 +98,7 @@ async fn ApiState::call_session_tool(
   call : @mcp.ToolCall,
 ) -> Json {
   match session_tool_request(call.arguments) {
-    List(page) => page.page(@engine.list_sessions(self.manager))
+    List(page) => page.page(@engine.list_sessions())
     Read(session) =>
       @engine.load_session(self.manager, { session, workspace: None, }).to_json()
     Send(target~, text~, request_id~) => {
