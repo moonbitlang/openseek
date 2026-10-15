@@ -676,12 +676,9 @@ these are ordinary command replies, with no transport-level wrapper.
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
 | `skills.uninstall` | `{id}` | `{removed}` |
 
-Installed entries contain `{id, name, description, source, registry?}`. Registry
-installs include `registry: {module_name, package_path}` from their installation
-metadata; a root package has `package_path: ""`. Hand-written skills omit
-`registry`; an absent or `null` registry decodes as none, while a present object
-requires both string fields. `source` remains the display label, including its
-version.
+Installed entries include an optional `registry: {module_name, package_path}`
+identifying the installed registry skill. Root packages use `package_path: ""`;
+non-registry skills omit `registry`.
 
 Notification:
 
