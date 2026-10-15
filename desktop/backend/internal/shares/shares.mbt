@@ -1,8 +1,7 @@
 ///|
 /// One immutable upload: a retry must retain both the rendered conversation
 /// and its idempotency key, even while the live conversation changes. The
-/// 64-character hex key doubles as the multipart boundary, which RFC 2046
-/// section 5.1.1 limits to 70 characters.
+/// form writer's generated boundary doubles as the idempotency key.
 struct Snapshot {
   key : String
   body : Bytes
@@ -47,13 +46,13 @@ pub async fn Snapshot::Snapshot(
   // surrogate pairs whole. The HTML and JSON retain the complete records.
   let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
-  guard @entropy.random_hex(32) is Some(key) else { raise EntropyUnavailable }
+  let mut key = ""
   let reader = @io.MemoryReader(target => {
-    let form = @multipart.Writer(target, boundary=key)
-    form.write_part(
-      headers={ "Content-Disposition": "form-data; name=\"title\"" },
-      target => target.write(title),
-    )
+    let form = @multipart.FormWriter(target) catch {
+      _ => raise EntropyUnavailable
+    }
+    key = form.boundary()
+    form.write_field("title", title)
     form.write_part(
       headers={
         "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",

@@ -20,7 +20,20 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         assert_eq(request.path, "/v1/shares")
         assert_eq(request.headers.get("Authorization"), Some("Bearer odt_test"))
         let request_key = request.headers.get("Idempotency-Key")
-        assert_true(request_key is Some(value) && value.length() == 64)
+        assert_true(
+          request_key is Some(value) &&
+          value.length() > 0 &&
+          value.length() <= 128 &&
+          value
+          .iter()
+          .all(c => {
+            (c >= 'a' && c <= 'z') ||
+            (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') ||
+            c == '-' ||
+            c == '_'
+          }),
+        )
         guard request.headers.get("Content-Type") is Some(content_type) &&
           content_type.split_once("boundary=") is Some((_, boundary)) else {
           fail("multipart boundary is required")
