@@ -259,6 +259,12 @@ pub let session_load : Command[@protocol.LoadSessionPayload, @protocol.LoadSessi
 
 pub let session_load_archived : Command[@protocol.LoadSessionPayload, @protocol.LoadSessionReply]
 
+pub let session_pr_detail : Command[@protocol.SessionPrBinding, @protocol.SessionPrDetailReply]
+
+pub let session_pr_list : Command[@protocol.SessionPrChangedPayload, @protocol.SessionPrBindings]
+
+pub let session_pr_remove : Command[@protocol.SessionPrRemovePayload, @protocol.SessionPrBindings]
+
 pub let session_rename : Command[@protocol.SessionRenamePayload, @protocol.EmptyReply]
 
 pub let session_search : Command[@protocol.SessionSearchPayload, @protocol.SessionSearchReply]

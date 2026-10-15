@@ -1296,3 +1296,45 @@
 .shell-command-state {
   color: var(--color-text-muted);
 }
+
+/* Persistent PR/branch associations above the composer. */
+.session-pr-bindings { display: flex; flex-direction: column; gap: 6px; }
+.session-pr-bindings:empty { display: none; }
+.session-pr-row {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  min-height: 40px; box-sizing: border-box; padding: 7px 10px;
+  border-radius: 10px; font-size: 14px; line-height: 20px;
+  color: light-dark(#8b8a85, #aaa9a4);
+  background: light-dark(#f0f0ee, #292a2c);
+}
+.session-pr-link { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; text-decoration: none; color: inherit; }
+.session-pr-icon { display: flex; flex: none; margin-right: -6px; }
+.session-pr-number, .session-pr-repo { flex: none; white-space: nowrap; }
+.session-pr-repo { max-width: 24%; overflow: hidden; text-overflow: ellipsis; }
+.session-pr-branch { font-family: var(--font-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-pr-row.merged { color: light-dark(#9568ed, #b596f5); background: light-dark(#e5ddf5, #3c3055); }
+.session-pr-row.merged .session-pr-repo { opacity: .7; }
+.session-pr-row.closed .session-pr-icon { color: #ff4343; }
+.session-pr-state { flex: none; margin: 0 3px; white-space: nowrap; }
+.session-pr-badge { border: 1px solid light-dark(#dcdcd9, #48494b); border-radius: 7px; box-shadow: 0 1px 2px #00000012; background: transparent; padding: 1px 7px; line-height: 20px; white-space: nowrap; }
+.session-pr-diff { display: flex; gap: 5px; flex: none; font-variant-numeric: tabular-nums; }
+.session-pr-diff .added { color: light-dark(#18a33d, #52c978); }
+.session-pr-diff .removed { color: light-dark(#e6205b, #fa7096); }
+.session-pr-check-control { position: relative; flex: none; }
+.session-pr-checks { display: flex; align-items: center; gap: 5px; font: inherit; line-height: 20px; color: var(--color-text-primary); cursor: pointer; }
+.session-pr-checks > .icon { color: light-dark(#8b8a85, #aaa9a4); }
+.session-pr-check-dot { width: 6px; height: 6px; border-radius: 50%; background: #19a244; }
+.session-pr-checks.failed .session-pr-check-dot { background: #e6205b; }
+.session-pr-checks.pending .session-pr-check-dot { background: #c28c20; }
+.session-pr-check-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 20; padding: 8px 10px; min-width: 160px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-bg-surface); box-shadow: 0 3px 12px #0002; }
+.session-pr-check-menu a { color: var(--color-text-primary); font-size: 12px; text-decoration: none; }
+.session-pr-error { color: var(--color-danger); font-size: 11px; }
+.session-pr-remove { display: flex; align-items: center; justify-content: center; flex: none; width: 22px; height: 24px; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 3px; }
+.session-pr-remove:hover { color: var(--color-text-primary); }
+.session-pr-toggle { align-self: flex-start; padding: 0 6px; border: 0; background: transparent; color: var(--color-text-primary); font: inherit; font-size: 13px; line-height: 24px; cursor: pointer; }
+@media (max-width: 520px) {
+  .session-pr-row { font-size: 12px; gap: 4px; padding-inline: 8px; }
+  .session-pr-link { gap: 8px; }
+  .session-pr-repo { display: none; }
+  .session-pr-diff { display: none; }
+}

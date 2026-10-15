@@ -163,3 +163,39 @@ approval with the destination and message.
 
 These tools are offered to the OpenSeek engine; Codex-backed chats are not
 message targets for this implementation.
+
+## Session PR and branch associations
+
+The backend adds two tools to hosts that provide this server:
+
+- `session_pr_list({})` returns `{ "bindings": [{ "url": "https://…" }] }`.
+- `session_pr_bind({ "bindings": [...] })` atomically replaces the **entire**
+  current-session list. Read the list first and retain the entries you still
+  want. Omitted entries are removed; an explicit empty array clears it.
+
+For example:
+
+```json
+{
+  "bindings": [
+    { "url": "https://github.com/example/project/pull/42" },
+    { "url": "https://github.com/example/project/tree/feature/example" }
+  ]
+}
+```
+
+Each entry contains only a URL. The host trims surrounding whitespace and
+trailing slashes and keeps the first occurrence of duplicate URLs. It checks
+basic HTTPS URL syntax, without querying the remote or checking out code.
+A malformed entry rejects the whole replacement. The session comes from the
+MCP grant, never from a tool argument. URLs for unpublished local branches
+are not supported.
+
+The list lives beside the session transcript in `pr-bindings.json`, and moves
+with that session when archived/restored/deleted. The composer refreshes on
+changes and separately resolves GitHub PR status; lookup failures keep the
+association visible. PR and branch rows merge when the resolved head URL
+identifies the same branch. Removing a row only removes its associations.
+
+These tools belong to the `session` group. If the configuration filters groups
+with `X-SeekMoon-Tool-Groups`, include `session` (for example `browser,session`).

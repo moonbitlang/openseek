@@ -229,6 +229,8 @@ fn device_msg(
         }),
       )
     SessionChanged(payload) => session_changed_msg(channel, payload)
+    SessionPrChanged(payload) =>
+      Some(PrBindingsChanged(session=payload.session))
     WorkspaceChanged(payload) => {
       let paths : Array[@common.Uri] = []
       // The wire contract still calls registered projects `workspaces`.

@@ -800,6 +800,10 @@ export class DesktopBrowserHarness {
         this.workspaceSettings[patch.workspace] = snapshot;
         return { ...snapshot };
       }
+      case 'session.pr_list':
+        return { bindings: [] };
+      case 'session.pr_detail':
+        return {};
       case 'git.branch':
         return {};
       case 'github.checkout_status':

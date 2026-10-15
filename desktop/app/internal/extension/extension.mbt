@@ -60,6 +60,13 @@ let workflow_entry : @proton_contract.Event[@protocol.WorkflowEntryPayload] = @c
 )
 
 ///|
+let session_pr_changed_event : @proton_contract.Event[
+  @protocol.SessionPrChangedPayload,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionPrChanged.wire_name(),
+)
+
+///|
 let session_changed_event : @proton_contract.Event[
   @protocol.SessionChangedPayload,
 ] = @commands.extension_contract.event(
@@ -258,6 +265,8 @@ async fn PageEventTarget::emit(
       self.events.emit(worktree_changed_event, payload)
     Hub(SettingsChanged(payload)) =>
       self.events.emit(settings_changed_event, payload)
+    Hub(SessionPrChanged(payload)) =>
+      self.events.emit(session_pr_changed_event, payload)
     Hub(SkillsChanged) => self.events.emit(skills_changed_event, NoPayload)
     Hub(UpdateDownloadProgress(payload)) =>
       self.events.emit(update_progress_event, payload)

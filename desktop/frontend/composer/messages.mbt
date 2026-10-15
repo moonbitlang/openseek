@@ -2,6 +2,12 @@
 
 ///|
 priv enum UiMessage {
+  PrMerged
+  PrClosed
+  PrDraft
+  PrCollapse
+  PrExpand
+  PrStatusUnavailable
   CommandsLabel
   SkillsLabel
   SymbolsLabel
@@ -123,6 +129,36 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PrMerged) => "Merged"
+    (Spanish, PrMerged) => "Fusionada"
+    (SimplifiedChinese, PrMerged) => "已合并"
+    (TraditionalChinese, PrMerged) => "已合併"
+    (Japanese, PrMerged) => "マージ済み"
+    (English, PrClosed) => "Closed"
+    (Spanish, PrClosed) => "Cerrada"
+    (SimplifiedChinese, PrClosed) => "已关闭"
+    (TraditionalChinese, PrClosed) => "已關閉"
+    (Japanese, PrClosed) => "クローズ済み"
+    (English, PrDraft) => "Draft"
+    (Spanish, PrDraft) => "Borrador"
+    (SimplifiedChinese, PrDraft) => "草稿"
+    (TraditionalChinese, PrDraft) => "草稿"
+    (Japanese, PrDraft) => "ドラフト"
+    (English, PrCollapse) => "Collapse"
+    (Spanish, PrCollapse) => "Contraer"
+    (SimplifiedChinese, PrCollapse) => "收起"
+    (TraditionalChinese, PrCollapse) => "收起"
+    (Japanese, PrCollapse) => "折りたたむ"
+    (English, PrExpand) => "Show bindings"
+    (Spanish, PrExpand) => "Mostrar vínculos"
+    (SimplifiedChinese, PrExpand) => "展开绑定列表"
+    (TraditionalChinese, PrExpand) => "展開綁定列表"
+    (Japanese, PrExpand) => "関連付けを表示"
+    (English, PrStatusUnavailable) => "Status unavailable"
+    (Spanish, PrStatusUnavailable) => "Estado no disponible"
+    (SimplifiedChinese, PrStatusUnavailable) => "状态获取失败"
+    (TraditionalChinese, PrStatusUnavailable) => "無法取得狀態"
+    (Japanese, PrStatusUnavailable) => "状態を取得できません"
     (English, CommandsLabel) => "Commands"
     (Spanish, CommandsLabel) => "Comandos"
     (SimplifiedChinese, CommandsLabel) => "命令"

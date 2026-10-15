@@ -41,7 +41,7 @@ pub async fn[G] ApiState::start_services(
   // Engines are granted this server from their first spawn, so it serves
   // from the same moment they can exist.
   if self.host_mcp is Some(server) {
-    server.add_tools(self.session_tools())
+    server.add_tools(self.session_tools() + self.session_pr_tools())
     @xlog.info() <?
       { "event": "desktop_host_tools_serving", "url": server.url() }
     group.spawn_bg(allow_failure=true, () => server.run())

@@ -1,10 +1,10 @@
-// The composer's git chip and the popover behind it: ask the host for the
+// Checkout metadata used by branch bindings and diff baselines: ask the host for the
 // branch of a conversation's workspace through the `git.branch` method, and
 // for that branch's GitHub pull request through `git.pull_request`. Probed
 // when a run starts (the workspace is created lazily on the first one), when a
 // stored session opens, and when a run finishes (the agent may have created
 // the repository, switched branches, or opened a pull request mid-turn). Any
-// failure just reads as "nothing to show" — the chip hides.
+// failed checkout probe leaves no current metadata to display.
 
 ///|
 /// This branch's whole line delta, measured locally: from where it left the
@@ -152,39 +152,6 @@ fn PullRequest::composer_pull_request(
 }
 
 ///|
-fn DiffStat::composer_changes(self : DiffStat) -> @composer.GitChanges {
-  @composer.GitChanges(
-    added=self.added,
-    removed=self.removed,
-    files=self.files,
-    partial=self.partial,
-    base?=self.base,
-  )
-}
-
-///|
-fn Conversation::git_presentation(
-  self : Conversation,
-) -> @composer.GitPresentation? {
-  guard self.shows_git_chip() && self.branch is Some(branch) else {
-    return None
-  }
-  let probe = self.settled_probe()
-  Some(
-    @composer.GitPresentation(
-      branch~,
-      changes?=self.diffstat.map(stat => stat.composer_changes()),
-      pull_request?=probe.bind(current => {
-        current.pull_request.map(pull_request => {
-          pull_request.composer_pull_request()
-        })
-      }),
-      compare_url?=probe.bind(current => current.compare_url),
-    ),
-  )
-}
-
-///|
 /// Whether the composer has a git chip for this conversation at all — it needs
 /// a branch, and `Some("")` is how the host says the workspace is not a
 /// repository. `update` fences the popover on this too: an open popover with
@@ -284,9 +251,18 @@ fn probe_branch(
     .settled_probe()
     .bind(probe => probe.pull_request)
     .map(pull_request => pull_request.base)
+  let model = model.replace_conversation({
+    ..conv,
+    branch_generation: generation,
+    pr_bindings: { ..conv.pr_bindings, generation, },
+  })
+  let bindings_cmd = fetch_pr_bindings(dispatch, channel, session, generation)
   (
-    fetch_branch(dispatch, channel, session, cwd, generation~, base_hint?),
-    model.replace_conversation({ ..conv, branch_generation: generation, }),
+    @cmd.batch([
+      fetch_branch(dispatch, channel, session, cwd, generation~, base_hint?),
+      bindings_cmd,
+    ]),
+    model,
   )
 }
 

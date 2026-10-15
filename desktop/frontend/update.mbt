@@ -2447,6 +2447,9 @@ fn update_msg(
         | @composer.PermissionMenuToggled(..)
         | @composer.PermissionMenuDismissed(..)
         | @composer.PermissionSelected(..)
+        | @composer.PrBindingRemoved(..)
+        | @composer.PrBindingsToggled(..)
+        | @composer.PrChecksToggled(..)
         | @composer.GitDetailsToggled(..)
         | @composer.WorktreeModeToggled(..)
         | @composer.ApiSetupRequested(..)
@@ -2480,6 +2483,37 @@ fn update_msg(
               update_msg(dispatch, OpenSeekEffortPicked(value), model)
             @composer.ApprovalAnswered(allow~, ..) =>
               update_msg(dispatch, ApprovalAnswered(allow~), model)
+            @composer.PrBindingRemoved(urls~, ..) =>
+              (
+                remove_pr_bindings(dispatch, conv.device, conv.session_id, urls),
+                model,
+              )
+            @composer.PrBindingsToggled(..) =>
+              (
+                @cmd.none,
+                model.replace_conversation({
+                  ..conv,
+                  pr_bindings: {
+                    ..conv.pr_bindings,
+                    collapsed: !conv.pr_bindings.collapsed,
+                  },
+                }),
+              )
+            @composer.PrChecksToggled(url~, ..) =>
+              (
+                @cmd.none,
+                model.replace_conversation({
+                  ..conv,
+                  pr_bindings: {
+                    ..conv.pr_bindings,
+                    checks_url: if conv.pr_bindings.checks_url == Some(url) {
+                      None
+                    } else {
+                      Some(url)
+                    },
+                  },
+                }),
+              )
             @composer.GitDetailsToggled(..) =>
               update_msg(dispatch, ToggleGitDetails, model)
             @composer.WorktreeModeToggled(..) =>
@@ -6880,6 +6914,13 @@ fn update_device_msg(
       guard channel == model.focused else {
         return (@cmd.batch(commands), model)
       }
+      let (pr_cmd, model) = probe_pr_bindings(
+        dispatch,
+        model,
+        channel,
+        model.active_session,
+      )
+      commands.push(pr_cmd)
       (
         @cmd.batch(commands),
         {
@@ -8391,6 +8432,103 @@ fn update_device_msg(
         (commit_cmd, next)
       }
     }
+    PrBindingsChanged(session~) =>
+      probe_pr_bindings(dispatch, model, channel, session)
+    PrBindingsLoaded(session~, generation~, result~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.pr_bindings.generation == generation else {
+        return (@cmd.none, model)
+      }
+      match result {
+        Err(message) =>
+          (
+            @cmd.none,
+            model.replace_conversation({
+              ..conv,
+              pr_bindings: { ..conv.pr_bindings, error: Some(message), },
+            }),
+          )
+        Ok(snapshot) => {
+          let commands = snapshot.bindings.map(binding => {
+            fetch_pr_detail(
+              dispatch,
+              channel,
+              session,
+              binding,
+              generation~,
+              checkout=false,
+            )
+          })
+          let details : Map[String, SessionPrCache] = Map([])
+          for binding in snapshot.bindings {
+            if conv.pr_bindings.details.get(binding.url) is Some(detail) {
+              details[binding.url] = detail
+            }
+          }
+          let state = {
+            ..conv.pr_bindings,
+            bindings: snapshot.bindings,
+            details,
+            error: None,
+          }
+          let conv = { ..conv, pr_bindings: state, }
+          commands.push(fetch_checkout_pr_detail(dispatch, channel, conv))
+          (@cmd.batch(commands), model.replace_conversation(conv))
+        }
+      }
+    }
+    PrBindingDetailLoaded(session~, generation~, url~, result~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.pr_bindings.generation == generation &&
+        conv.pr_bindings.bindings.any(binding => binding.url == url) else {
+        return (@cmd.none, model)
+      }
+      let details = conv.pr_bindings.details.copy()
+      details[url] = match result {
+        Ok(detail) => { detail, error: None, }
+        Err(message) =>
+          {
+            detail: details.get(url).bind(previous => previous.detail),
+            error: Some(message),
+          }
+      }
+      (
+        @cmd.none,
+        model.replace_conversation({
+          ..conv,
+          pr_bindings: { ..conv.pr_bindings, details, },
+        }),
+      )
+    }
+    PrCheckoutDetailLoaded(session~, generation~, url~, result~) => {
+      guard model.find_conversation(channel, session) is Some(conv) &&
+        conv.pull_request_generation == generation else {
+        return (@cmd.none, model)
+      }
+      let checkout = match result {
+        Ok(detail) => detail.map(detail => (url, detail))
+        Err(_) => conv.pr_bindings.checkout
+      }
+      (
+        @cmd.none,
+        model.replace_conversation({
+          ..conv,
+          pr_bindings: { ..conv.pr_bindings, checkout, },
+        }),
+      )
+    }
+    PrBindingRemoveFailed(session~, message~) => {
+      guard model.find_conversation(channel, session) is Some(conv) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        model.replace_conversation({
+          ..conv,
+          pr_bindings: { ..conv.pr_bindings, error: Some(message), },
+        }),
+      )
+    }
     BranchLoaded(session~, branch~, diffstat~, generation~, base_hint~) => {
       guard model.find_conversation(channel, session) is Some(conv) else {
         return (@cmd.none, model)
@@ -8463,6 +8601,9 @@ fn update_device_msg(
         compare_url,
       }
       let conv = { ..conv, pull_request: Some(settled), }
+      let checkout_detail_cmd = fetch_checkout_pr_detail(
+        dispatch, channel, conv,
+      )
       // A refresh arrived while this lookup was in flight: its answer predates
       // that refresh, so run one more against the branch now checked out.
       if stale && conv.branch is Some(current) && !current.is_empty() {
@@ -8478,15 +8619,16 @@ fn update_device_msg(
       guard conv.settled_probe() is Some(probe) &&
         probe.pull_request is Some(answer) &&
         conv.diffstat_hint != Some(answer.base) else {
-        return (@cmd.none, model)
+        return (checkout_detail_cmd, model)
       }
-      probe_branch(
+      let (branch_cmd, model) = probe_branch(
         dispatch,
         model,
         channel,
         session,
         model.conversation_root(conv),
       )
+      (@cmd.batch([checkout_detail_cmd, branch_cmd]), model)
     }
     Started(
       run_id~,

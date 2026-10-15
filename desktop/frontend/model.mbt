@@ -839,6 +839,7 @@ priv struct Conversation {
   // The newest pull-request lookup, counted the same way and for the same
   // reason. It sits out here rather than in the probe because clearing the
   // probe must not rewind it — see `Conversation::forget_pull_request`.
+  pr_bindings : SessionPrState
   pull_request_generation : Int32
   // Everything belonging to the turn in flight; see `RunState`.
   turn : RunState
@@ -2487,6 +2488,25 @@ priv enum DeviceMsg {
   // `generation` is the probe that asked; an older one's answer is discarded.
   // `base_hint` is the baseline that probe was given, carried back rather than
   // remembered: it says what the diffstat in the same message measures from.
+  PrBindingsChanged(session~ : String)
+  PrBindingsLoaded(
+    session~ : String,
+    generation~ : Int32,
+    result~ : Result[@protocol.SessionPrBindings, String]
+  )
+  PrBindingDetailLoaded(
+    session~ : String,
+    generation~ : Int32,
+    url~ : String,
+    result~ : Result[@protocol.SessionPrDetail?, String]
+  )
+  PrCheckoutDetailLoaded(
+    session~ : String,
+    generation~ : Int32,
+    url~ : String,
+    result~ : Result[@protocol.SessionPrDetail?, String]
+  )
+  PrBindingRemoveFailed(session~ : String, message~ : String)
   BranchLoaded(
     session~ : String,
     branch~ : String?,
@@ -2667,6 +2687,7 @@ fn empty_conversation(
     diffstat_hint: None,
     branch_generation: 0,
     pull_request: None,
+    pr_bindings: SessionPrState::empty(),
     pull_request_generation: 0,
     turn: RunState::empty(),
     pending_steers: [],

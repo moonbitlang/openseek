@@ -2263,6 +2263,7 @@ pub(all) enum Notification {
   WorkspaceSettingsChanged(WorkspaceSettingsPayload)
   WorktreeChanged(WorktreeChangedPayload)
   SettingsChanged(SettingsStatusPayload)
+  SessionPrChanged(SessionPrChangedPayload)
   SkillsChanged
   UpdateDownloadProgress(UpdateDownloadProgressPayload)
   UpdateDownloaded(UpdateDownloadedPayload)
@@ -2302,6 +2303,7 @@ pub(all) enum NotificationKind {
   WorkspaceSettingsChanged
   WorktreeChanged
   SettingsChanged
+  SessionPrChanged
   SkillsChanged
   UpdateDownloadProgress
   UpdateDownloaded
@@ -3198,6 +3200,76 @@ pub fn SessionPayload::to_json(Self) -> Json
 pub fn SessionPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionPayload
 pub impl @json.FromJson for SessionPayload
+
+pub struct SessionPrBinding {
+  url : String
+} derive(Eq, @debug.Debug)
+pub fn SessionPrBinding::equal(Self, Self) -> Bool
+pub fn SessionPrBinding::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrBinding::not_equal(Self, Self) -> Bool
+pub fn SessionPrBinding::to_json(Self) -> Json
+pub fn SessionPrBinding::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPrBinding
+pub impl @json.FromJson for SessionPrBinding
+
+pub struct SessionPrBindings {
+  bindings : Array[SessionPrBinding]
+} derive(Eq, @debug.Debug)
+pub fn SessionPrBindings::empty() -> Self
+pub fn SessionPrBindings::equal(Self, Self) -> Bool
+pub fn SessionPrBindings::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrBindings::not_equal(Self, Self) -> Bool
+pub fn SessionPrBindings::to_json(Self) -> Json
+pub fn SessionPrBindings::to_repr(Self) -> @debug.Repr
+pub fn SessionPrBindings::without(Self, String) -> Self
+pub impl ToJson for SessionPrBindings
+pub impl @json.FromJson for SessionPrBindings
+
+pub(all) struct SessionPrChangedPayload {
+  session : String
+} derive(Eq, @debug.Debug)
+pub fn SessionPrChangedPayload::equal(Self, Self) -> Bool
+pub fn SessionPrChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrChangedPayload::not_equal(Self, Self) -> Bool
+pub fn SessionPrChangedPayload::to_json(Self) -> Json
+pub fn SessionPrChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPrChangedPayload
+pub impl @json.FromJson for SessionPrChangedPayload
+
+pub(all) struct SessionPrDetail {
+  pull_request : GitPullRequest
+  head_url : String?
+} derive(Eq, @debug.Debug)
+pub fn SessionPrDetail::equal(Self, Self) -> Bool
+pub fn SessionPrDetail::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrDetail::not_equal(Self, Self) -> Bool
+pub fn SessionPrDetail::to_json(Self) -> Json
+pub fn SessionPrDetail::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPrDetail
+pub impl @json.FromJson for SessionPrDetail
+
+pub(all) struct SessionPrDetailReply {
+  detail : SessionPrDetail?
+} derive(Eq, @debug.Debug)
+pub fn SessionPrDetailReply::equal(Self, Self) -> Bool
+pub fn SessionPrDetailReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrDetailReply::not_equal(Self, Self) -> Bool
+pub fn SessionPrDetailReply::to_json(Self) -> Json
+pub fn SessionPrDetailReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPrDetailReply
+pub impl @json.FromJson for SessionPrDetailReply
+
+pub(all) struct SessionPrRemovePayload {
+  session : String
+  url : String
+} derive(Eq, @debug.Debug)
+pub fn SessionPrRemovePayload::equal(Self, Self) -> Bool
+pub fn SessionPrRemovePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionPrRemovePayload::not_equal(Self, Self) -> Bool
+pub fn SessionPrRemovePayload::to_json(Self) -> Json
+pub fn SessionPrRemovePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionPrRemovePayload
+pub impl @json.FromJson for SessionPrRemovePayload
 
 pub(all) struct SessionRenamePayload {
   session : String

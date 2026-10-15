@@ -562,6 +562,14 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_pr_list, payload => {
+      @engine.session_pr_list(state.manager, payload.session)
+    }),
+    Endpoint(@commands.session_pr_remove, payload => {
+      state.save_session_pr(payload.session, bindings => {
+        bindings.without(payload.url)
+      })
+    }),
     Endpoint(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)
       publish_session_changed(
