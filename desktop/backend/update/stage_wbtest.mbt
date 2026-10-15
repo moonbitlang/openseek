@@ -112,13 +112,7 @@ async test "package download follows HTTP 302 redirects" {
 async test "package download reports redirect and final response failures" {
   @async.with_timeout(5000) <| () => {
     @async.with_task_group() <| group => {
-      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
-        error if "\{error}".contains("Operation not permitted") => {
-          println("local TCP bind unavailable; skipping test: \{error}")
-          return
-        }
-        error => raise error
-      }
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       defer server.close()
       let mut loop_requests = 0
       group.spawn_bg(no_wait=true) <| () => {
