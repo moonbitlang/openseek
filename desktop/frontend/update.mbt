@@ -4381,7 +4381,7 @@ fn update_msg(
         model.skills_input(),
       )
       let model = { ..model, skills, }
-      // A settled install or uninstall changed the library the root owns;
+      // A settled skill operation changed the library the root owns;
       // what the page shows must come from disk, not from a client-side
       // guess.
       guard outcome is Some(@skills.LibraryChanged(channel~)) else {
@@ -6599,7 +6599,11 @@ fn update_device_msg(
   match msg {
     InstalledSkillsLoaded(items) =>
       if channel == model.focused {
-        (@cmd.none, { ..model, installed_skills: items, })
+        let (cmd, skills) = model.skills.sync_library(
+          dispatch.map(msg => Skills(msg)),
+          { channel, installed: items, },
+        )
+        (cmd, { ..model, installed_skills: items, skills, })
       } else {
         (@cmd.none, model)
       }
@@ -18452,7 +18456,11 @@ test "installed skills replies are scoped to their source device" {
       name: "old",
       description: "",
       source: "old/source@1.0.0",
-      registry: Some({ module_name: "old/source", package_path: "", }),
+      registry: Some({
+        module_name: "old/source",
+        package_path: "",
+        version: "1.0.0",
+      }),
     },
   ]
   let (_, ignored) = update(
@@ -18467,7 +18475,11 @@ test "installed skills replies are scoped to their source device" {
       name: "new",
       description: "",
       source: "new/source@1.0.0",
-      registry: Some({ module_name: "new/source", package_path: "", }),
+      registry: Some({
+        module_name: "new/source",
+        package_path: "",
+        version: "1.0.0",
+      }),
     },
   ]
   let (_, applied) = update(

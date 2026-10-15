@@ -675,16 +675,28 @@ these are ordinary command replies, with no transport-level wrapper.
 | `skills.installed_content` | `{id}` | `{content}` — the installed SKILL.md |
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
 | `skills.uninstall` | `{id}` | `{removed}` |
+| `skills.update` | `{id, target_version}` | `{status: "updated", installed}` or `{status: "current", installed}` or `{status: "changed"}` |
 
-Installed entries include an optional `registry: {module_name, package_path}`
-identifying the installed registry skill. Root packages use `package_path: ""`;
+Installed entries include an optional `registry: {module_name, package_path, version}`
+identifying the installed registry skill and its installed version. Root packages use `package_path: ""`;
 non-registry skills omit `registry`.
+
+`skills.update` uses the installation's recorded module/package and the exact
+requested target version. `current` means that exact version is already
+installed, without rewriting it; `changed` means the registry installation is
+absent or was changed by another operation while the update was prepared, so
+clients refresh the library and let the user retry. The trusted registry
+guarantees monotonically increasing published versions, so clients treat
+versions as opaque strings and use equality to detect an available update.
+Operational failures return `{error}`. Archive preparation leaves the live
+entry untouched; a successful update replaces its complete directory and
+provenance through the existing recoverable installation transaction.
 
 Notification:
 
 | method | params |
 |---|---|
-| `skills.changed` | `{}` — broadcast after an install or uninstall commits; every client re-reads `skills.installed`, including clients that did not make the request |
+| `skills.changed` | `{}` — broadcast after an install, update, or uninstall commits; every client re-reads `skills.installed`, including clients that did not make the request |
 
 ### auth.* — remote-access sign-in
 

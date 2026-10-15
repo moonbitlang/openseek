@@ -1227,7 +1227,7 @@ pub(all) struct InstalledSkill {
   name : String
   description : String
   source : String
-  registry : RegistrySkillIdentity?
+  registry : RegistrySkillSource?
 } derive(Debug, Eq)
 
 ///|

@@ -186,11 +186,10 @@ test "a result from another device settles without a local outcome" {
     ]),
     input(),
   )
-  let (_, busy, _) = ready.handle(
-    emit(),
-    @skills.Install(market_item()),
-    input(),
-  )
+  let (_, busy, _) = ready.handle(emit(), @skills.Install(market_item()), {
+    channel: other_device(),
+    installed: [],
+  })
   let (_, settled, outcome) = busy.handle(
     emit(),
     @skills.ActionDone(
@@ -214,7 +213,11 @@ test "uninstall is keyed by the library id and deduplicated" {
       name: "widget",
       description: "",
       source: "acme/widget@1.0.0",
-      registry: Some({ module_name: "acme/widget", package_path: "", }),
+      registry: Some({
+        module_name: "acme/widget",
+        package_path: "",
+        version: "1.0.0",
+      }),
     },
   ]
   let (_, busy, _) = @skills.State::empty().handle(
@@ -291,7 +294,11 @@ test "installed skill replies decode, with name falling back to id" {
         name: "widget",
         description: "Build widgets fast.",
         source: "acme/widget@1.0.0",
-        registry: Some({ module_name: "acme/widget", package_path: "", }),
+        registry: Some({
+          module_name: "acme/widget",
+          package_path: "",
+          version: "1.0.0",
+        }),
       },
       { id: "handmade", name: "", description: "", source: "", registry: None, },
       { id: "", name: "no-id", description: "", source: "", registry: None, },
@@ -314,7 +321,11 @@ test "an install blocks uninstall after a library refresh until completion" {
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",
-    registry: Some({ module_name: "acme/widget", package_path: "", }),
+    registry: Some({
+      module_name: "acme/widget",
+      package_path: "",
+      version: "1.0.0",
+    }),
   }
   let initial = @skills.State::empty()
   let (_, busy, _) = initial.handle(
@@ -354,7 +365,11 @@ test "an uninstall retains its source after removal and releases only itself" {
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",
-    registry: Some({ module_name: "acme/widget", package_path: "", }),
+    registry: Some({
+      module_name: "acme/widget",
+      package_path: "",
+      version: "1.0.0",
+    }),
   }
   let initial = @skills.State::empty()
   let before = input(installed=[skill])
@@ -421,7 +436,11 @@ test "detail navigation preserves library errors without mutating state" {
     name: "widget",
     description: "",
     source: "acme/widget@1.0.0",
-    registry: Some({ module_name: "acme/widget", package_path: "", }),
+    registry: Some({
+      module_name: "acme/widget",
+      package_path: "",
+      version: "1.0.0",
+    }),
   }
   let clean = @skills.State::empty()
   let failed = clean.with_library_error("library unreadable")

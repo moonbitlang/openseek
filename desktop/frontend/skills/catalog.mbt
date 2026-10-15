@@ -40,7 +40,7 @@ pub(all) struct InstalledItem {
   // `module@version[/package]` for registry installs; "" for a skill the
   // user wrote by hand (which the app never uninstalls).
   source : String
-  registry : @protocol.RegistrySkillIdentity?
+  registry : @protocol.RegistrySkillSource?
 } derive(Eq)
 
 ///|
@@ -118,3 +118,13 @@ pub extend InstalledItem with Eq::{equal, not_equal}
 
 ///|
 pub extend MarketItem with Eq::{equal, not_equal}
+
+///|
+fn MarketItem::identity(self : MarketItem) -> (String, String) {
+  (self.module_name, self.package_path)
+}
+
+///|
+fn InstalledItem::identity(self : InstalledItem) -> (String, String)? {
+  self.registry.map(source => (source.module_name, source.package_path))
+}

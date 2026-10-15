@@ -395,6 +395,12 @@ h2 {
   margin-bottom: 4px;
 }
 
+.skills-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .skills-header h1 {
   font-size: calc(var(--font-size-base) + 12px);
   letter-spacing: -0.02em;

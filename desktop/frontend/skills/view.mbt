@@ -4,25 +4,35 @@
 ///|
 /// The list aggregates notices; a detail shows only its skill's operation
 /// failures. Library loading errors apply to either view.
-fn notice_views(state : State, target : PreviewTarget?) -> Array[@html.Html] {
+fn notice_views(
+  locale : @i18n.Locale,
+  state : State,
+  input : Input,
+  target : PreviewTarget?,
+) -> Array[@html.Html] {
   let nodes : Array[@html.Html] = []
   for notice in state.notices {
     let message = match notice {
       LibraryLoadFailed(message) => message
-      SkillActionFailed(action~, message~) =>
-        match target {
-          Some(target) => {
-            let source = match target {
-              Market(item) => source_label(item)
-              Installed(item) => item.source
-            }
-            if !notice.belongs_to(source) {
-              continue
-            }
-            message
+      SkillActionFailed(operation~, ..) | InstallationChanged(operation~) => {
+        guard operation.channel == input.channel else { continue }
+        if target is Some(target) {
+          let identity = match target {
+            Market(item) => Some(item.identity())
+            Installed(item) => item.identity()
           }
-          None => "\{action.source()}: \{message}"
+          guard identity == Some(operation.identity) else { continue }
         }
+        let message = match notice {
+          SkillActionFailed(message~, ..) => message
+          _ => ui(locale, InstallationChanged)
+        }
+        if target is None {
+          "\{operation.action.source()}: \{message}"
+        } else {
+          message
+        }
+      }
     }
     nodes.push(@html.div(class="skills-notice danger", message))
   }
@@ -34,17 +44,19 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
   match self {
     Installing(..) => Installing
     Uninstalling(..) => Removing
+    Updating(..) => Updating
   }
 }
 
 ///|
 /// One local-library row: name, description, and — for registry installs
-/// only — the source tag and the uninstall button. Hand-written skills are
+/// only — the source tag and update/uninstall actions. Hand-written skills are
 /// listed so the user sees everything the engine advertises, but the app
 /// never offers to delete them.
 fn installed_row(
   locale~ : @i18n.Locale = English,
   state : State,
+  channel : @interop.ChannelId,
   skill : InstalledItem,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
@@ -78,23 +90,8 @@ fn installed_row(
       ]),
     )
   } else {
-    let pending = state.pending_action(skill.source)
     header.push(
-      @html.div(class="skill-actions", [
-        @html.button(
-          class="button secondary skill-action",
-          disabled=pending is Some(_),
-          attrs=@html.Attrs::build().on_click(event => {
-            event.stop_propagation()
-            emit(Uninstall(skill))
-          }),
-          if pending is Some(action) {
-            ui(locale, action.label())
-          } else {
-            ui(locale, Uninstall)
-          },
-        ),
-      ]),
+      installed_actions(locale, state, channel, skill, emit, "skill-action"),
     )
   }
   @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
@@ -108,11 +105,12 @@ fn installed_row(
 fn market_row(
   locale~ : @i18n.Locale = English,
   state : State,
+  channel : @interop.ChannelId,
   item : MarketItem,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let source = source_label(item)
-  let pending = state.pending_action(source)
+  let pending = state.pending_action(channel, item.identity())
   let info : Array[@html.Html] = [@html.span(class="skill-meta", source)]
   if !item.description.is_blank() {
     info.push(@html.span(class="skill-desc", item.description))
@@ -238,7 +236,7 @@ fn detail_shell(
       @html.h2(preview_name(target)),
       @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
       detail_action(locale~, target, state, input, emit),
-      @html.div(notice_views(state, Some(target))),
+      @html.div(notice_views(locale, state, input, Some(target))),
     ]),
     @html.div(class="skill-detail-card", [
       @html.div(class="skill-file-bar", [
@@ -298,7 +296,7 @@ fn detail_action(
   }
   match target {
     Market(item) => {
-      let pending = state.pending_action(source_label(item))
+      let pending = state.pending_action(input.channel, item.identity())
       @html.button(
         class="button primary skill-detail-action",
         disabled=pending is Some(_),
@@ -311,19 +309,16 @@ fn detail_action(
       )
     }
     Installed(item) =>
-      if item.source.is_empty() {
+      if item.registry is None {
         @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
       } else {
-        let pending = state.pending_action(item.source)
-        @html.button(
-          class="button secondary skill-detail-action",
-          disabled=pending is Some(_),
-          on_click=emit(Uninstall(item)),
-          if pending is Some(action) {
-            ui(locale, action.label())
-          } else {
-            ui(locale, Uninstall)
-          },
+        installed_actions(
+          locale,
+          state,
+          input.channel,
+          item,
+          emit,
+          "skill-detail-action",
         )
       }
   }
@@ -339,7 +334,7 @@ fn detail_action_target(
     Market(item) => Some(preview_target_for_market(input.installed, item))
     Installed(item) => {
       for installed in input.installed {
-        if installed.id == item.id && installed.source == item.source {
+        if installed.id == item.id {
           return Some(Installed(installed))
         }
       }
@@ -375,9 +370,25 @@ fn list_page(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
+  let catalog_loading = match state.catalog {
+    Loading(channel~) => channel == input.channel
+    _ => false
+  }
   let sections : Array[@html.Html] = [
     @html.div(class="skills-header", [
-      @html.div(class="page-eyebrow", ui(locale, Library)),
+      @html.div(class="skills-heading", [
+        @html.div(class="page-eyebrow", ui(locale, Library)),
+        @html.button(
+          class="button skills-refresh",
+          disabled=catalog_loading,
+          on_click=emit(RefreshCatalog),
+          if catalog_loading {
+            ui(locale, Refreshing)
+          } else {
+            ui(locale, Refresh)
+          },
+        ),
+      ]),
       @html.div(class="skills-subtitle", ui(locale, Description)),
     ]),
     @html.div(
@@ -395,13 +406,15 @@ fn list_page(
       ],
     ),
   ]
-  for notice in notice_views(state, None) {
+  for notice in notice_views(locale, state, input, None) {
     sections.push(notice)
   }
   let installed_rows : Array[@html.Html] = []
   for skill in input.installed {
     if matches(state.query, [skill.name, skill.description, skill.source]) {
-      installed_rows.push(installed_row(locale~, state, skill, emit))
+      installed_rows.push(
+        installed_row(locale~, state, input.channel, skill, emit),
+      )
     }
   }
   if installed_rows.is_empty() {
@@ -439,7 +452,9 @@ fn list_page(
             item.author,
             source_label(item),
           ]) {
-          market_rows.push(market_row(locale~, state, item, emit))
+          market_rows.push(
+            market_row(locale~, state, input.channel, item, emit),
+          )
         }
       }
       if market_rows.is_empty() {
@@ -456,25 +471,11 @@ fn list_page(
       }
     }
   }
-  let catalog_loading = match state.catalog {
-    Loading(channel~) => channel == input.channel
-    _ => false
-  }
   sections.push(
     @html.div(class="settings-group", [
       @html.div(class="settings-group-head", [
         icon(icon_package),
         @html.h2(ui(locale, Registry)),
-        @html.button(
-          class="button skills-refresh",
-          disabled=catalog_loading,
-          on_click=emit(RefreshCatalog),
-          if catalog_loading {
-            ui(locale, Refreshing)
-          } else {
-            ui(locale, Refresh)
-          },
-        ),
       ]),
       @html.div(class="settings-group-card", market_rows),
     ]),
@@ -498,8 +499,62 @@ fn page(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
+  if state.preview_channel != Some(input.channel) {
+    return list_page(locale~, state, input, emit)
+  }
   match state.preview {
     Closed => list_page(locale~, state, input, emit)
     _ => detail_page(locale~, state, input, emit)
   }
+}
+
+///|
+fn installed_actions(
+  locale : @i18n.Locale,
+  state : State,
+  channel : @interop.ChannelId,
+  item : InstalledItem,
+  emit : @cmd.Emit[Msg],
+  button_class : String,
+) -> @html.Html {
+  guard item.identity() is Some(identity) else { return @html.nothing }
+  let pending = state.pending_action(channel, identity)
+  let candidate = state.update_candidate(item)
+  let buttons : Array[@html.Html] = []
+  if candidate is Some(_) || pending is Some(Updating(..)) {
+    buttons.push(
+      @html.button(
+        class="button primary \{button_class}",
+        disabled=pending is Some(_),
+        attrs=@html.Attrs::build().on_click(event => {
+          event.stop_propagation()
+          if candidate is Some(target) {
+            emit(Update(item, target))
+          } else {
+            @cmd.none
+          }
+        }),
+        if pending is Some(Updating(..)) {
+          ui(locale, Updating)
+        } else {
+          candidate.map_or("", target => ui(locale, UpdateTo(target.version)))
+        },
+      ),
+    )
+  }
+  buttons.push(
+    @html.button(
+      class="button secondary \{button_class}",
+      disabled=pending is Some(_),
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        emit(Uninstall(item))
+      }),
+      match pending {
+        Some(Updating(..)) | None => ui(locale, Uninstall)
+        Some(action) => ui(locale, action.label())
+      },
+    ),
+  )
+  @html.div(class="skill-actions", buttons)
 }

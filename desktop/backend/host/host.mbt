@@ -322,6 +322,9 @@ pub fn endpoints(
     Endpoint(@commands.skills_install, payload => {
       install_skill_op(payload, on_skills_changed)
     }),
+    Endpoint(@commands.skills_update, payload => {
+      update_skill_op(payload, on_skills_changed)
+    }),
     Endpoint(@commands.skills_uninstall, payload => {
       uninstall_skill_op(payload, on_skills_changed)
     }),

@@ -13,10 +13,11 @@
 const SidecarFile = ".mooncakes.json"
 
 ///|
-/// Registry coordinates identifying a skill independently of its version.
-pub struct RegistrySkillIdentity {
+/// Registry coordinates and version recorded for an installed skill.
+pub struct RegistrySkillSource {
   module_name : String
   package_path : String
+  version : String
 }
 
 ///|
@@ -30,13 +31,13 @@ pub struct InstalledSkill {
   // `module@version[/package]` recorded at install time; "" for a skill the
   // user wrote by hand (which this package will never touch).
   source : String
-  registry : RegistrySkillIdentity?
+  registry : RegistrySkillSource?
 }
 
 ///|
 priv struct InstalledSource {
   label : String
-  registry : RegistrySkillIdentity
+  registry : RegistrySkillSource
 }
 
 ///|
@@ -154,7 +155,7 @@ fn decode_sidecar(text : String) -> InstalledSource? {
   }
   Some({
     label: source_label(module_name, version, package_path),
-    registry: { module_name, package_path, },
+    registry: { module_name, package_path, version, },
   })
 }
 
@@ -195,27 +196,14 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  let skill = skill_files(fetch_archive(entry, source), entry)
-  let text = @utf8.decode(skill.skill_md) catch {
-    _ =>
-      raise SkillMarketError(
-        "the archive for \{entry} holds an unreadable SKILL.md",
-      )
-  }
-  let (name, description) = parse_frontmatter(text, slug)
-  let installed = {
-    id: slug,
-    name,
-    description,
-    source: source_label(module_name, version, package_path),
-    registry: Some({ module_name, package_path, }),
-  }
-  let provenance : Json = {
-    "module": module_name,
-    "version": version,
-    "package": package_path,
-    "digest": source.digest,
-  }
+  let prepared = prepare_skill(
+    id=slug,
+    module_name~,
+    version~,
+    package_path~,
+    entry~,
+    source~,
+  )
   library_lock.acquire()
   defer library_lock.release()
   let library : SkillLibrary = { root: library_dir, }
@@ -227,9 +215,9 @@ pub async fn install_skill(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
-  library.stage(slug, skill.files, provenance.stringify())
+  library.stage(slug, prepared.files, prepared.provenance)
   library.activate(slug, on_committed?)
-  installed
+  prepared.installed
 }
 
 ///|
@@ -293,6 +281,10 @@ pub async fn read_skill_content(
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
+  library_lock.acquire()
+  defer library_lock.release()
+  let library : SkillLibrary = { root: library_dir, }
+  library.recover()
   let directory_file = library_dir.join(id).join("SKILL.md")
   let flat_file = library_dir.join("\{id}.md")
   let path = if @fsx.exists(directory_file) {

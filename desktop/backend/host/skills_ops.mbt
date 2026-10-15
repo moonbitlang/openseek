@@ -82,7 +82,28 @@ fn @skillmarket.InstalledSkill::to_protocol(
     registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
+      version: registry.version,
     }),
+  }
+}
+
+///|
+async fn update_skill_op(
+  payload : @protocol.UpdateSkillPayload,
+  on_committed : () -> Unit,
+) -> @protocol.UpdateSkillReply {
+  let result = @skillmarket.update_skill(
+    payload.id,
+    target_version=payload.target_version,
+    on_committed~,
+  ) catch {
+    @skillmarket.SkillMarketError(message) => return SkillUpdateError(message)
+    error => return SkillUpdateError("\{error}")
+  }
+  match result {
+    Updated(skill) => SkillUpdated(skill.to_protocol())
+    AlreadyCurrent(skill) => SkillAlreadyCurrent(skill.to_protocol())
+    InstallationChanged => SkillInstallationChanged
   }
 }
 

@@ -30,7 +30,7 @@ fn Input::installed_registry_skills(self : Input) -> Set[(String, String)] {
 ///|
 /// What the page asks the root to do once an action settles. The library is
 /// not the page's to refresh: it belongs to the root's focused-host mirror,
-/// so a successful install or uninstall reports the change and lets the root
+/// so a successful install, update, or uninstall reports the change and lets the root
 /// re-read it from disk.
 pub enum Outcome {
   LibraryChanged(channel~ : @interop.ChannelId)

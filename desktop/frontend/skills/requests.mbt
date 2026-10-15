@@ -81,6 +81,7 @@ fn fetch_content(
               scheduler.add(
                 emit(
                   PreviewFailed(
+                    channel~,
                     request~,
                     target~,
                     message=@interop.bridge_error_text(error),
@@ -90,7 +91,7 @@ fn fetch_content(
               return
             }
           }
-          scheduler.add(emit(preview_reply(request, target, reply)))
+          scheduler.add(emit(preview_reply(channel, request, target, reply)))
         }
         Installed(item) => {
           let reply = @interop.bridge_request(
@@ -102,6 +103,7 @@ fn fetch_content(
               scheduler.add(
                 emit(
                   PreviewFailed(
+                    channel~,
                     request~,
                     target~,
                     message=@interop.bridge_error_text(error),
@@ -111,7 +113,7 @@ fn fetch_content(
               return
             }
           }
-          scheduler.add(emit(preview_reply(request, target, reply)))
+          scheduler.add(emit(preview_reply(channel, request, target, reply)))
         }
       }
     })
@@ -121,13 +123,16 @@ fn fetch_content(
 
 ///|
 fn preview_reply(
+  channel : @interop.ChannelId,
   request : Int32,
   target : PreviewTarget,
   reply : @protocol.SkillContentReply,
 ) -> Msg {
   match reply {
-    SkillContent(content) => PreviewLoaded(request~, target~, content~)
-    SkillContentError(message) => PreviewFailed(request~, target~, message~)
+    SkillContent(content) =>
+      PreviewLoaded(channel~, request~, target~, content~)
+    SkillContentError(message) =>
+      PreviewFailed(channel~, request~, target~, message~)
   }
 }
 
@@ -216,6 +221,43 @@ fn uninstall(
         SkillUninstallError(message) => Some(message)
       }
       scheduler.add(emit(ActionDone(channel~, action~, error~)))
+    })
+    |> ignore
+  })
+}
+
+///|
+fn update_skill(
+  emit : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  item : InstalledItem,
+  version : String,
+) -> @cmd.Cmd {
+  let action = PendingSkillAction::Updating(
+    source=item.source,
+    id=item.id,
+    version~,
+  )
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let reply = @interop.bridge_request(channel, @commands.skills_update, {
+        id: item.id,
+        target_version: version,
+      }) catch {
+        error => {
+          scheduler.add(
+            emit(
+              ActionDone(
+                channel~,
+                action~,
+                error=Some(@interop.bridge_error_text(error)),
+              ),
+            ),
+          )
+          return
+        }
+      }
+      scheduler.add(emit(UpdateDone(channel~, action~, reply~)))
     })
     |> ignore
   })

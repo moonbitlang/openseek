@@ -654,7 +654,7 @@ export class DesktopBrowserHarness {
           name: 'Rabbita',
           description: 'Elm-style browser UI',
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
-          registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita' },
+          registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita', version: '0.15.4' },
         };
         if (!this.installedSkills.some(skill => skill.id === installed.id)) {
           this.installedSkills.push(installed);
