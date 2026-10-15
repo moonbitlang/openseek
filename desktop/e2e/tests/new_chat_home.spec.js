@@ -50,7 +50,8 @@ test('both agents share the first screen and Codex can choose its project in the
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aCfoAAAAASUVORK5CYII=';
   const imageURL = `data:image/png;base64,${png}`;
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
 

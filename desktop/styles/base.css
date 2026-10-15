@@ -159,7 +159,8 @@ samp,
 }
 
 /* Action menus and selects share visual treatment, not value-selection state. */
-.menu-surface {
+.menu-surface,
+.action-menu[data-action-menu-surface^="composer-add:"] {
   padding: 5px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -184,7 +185,8 @@ samp,
   font-weight: 600;
 }
 
-.menu-option {
+.menu-option,
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
@@ -204,11 +206,13 @@ samp,
 }
 
 .menu-option:hover,
-.menu-option.selected {
+.menu-option.selected,
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item:not(:disabled):hover {
   background: var(--color-bg-subtle);
 }
 
-.menu-option:focus-visible {
+.menu-option:focus-visible,
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item:focus-visible {
   outline: 1px solid var(--color-focus-ring);
   outline-offset: -1px;
 }

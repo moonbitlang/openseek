@@ -1579,8 +1579,11 @@ priv struct Model {
   // those still running in the background, and those visited and kept for an
   // instant switch back. Copy-on-write, like the transcript arrays.
   conversations : Array[Conversation]
-  // The in-app folder picker behind "Add a project"; None while closed.
+  // One shared host folder picker for project creation or composer references.
   project_picker : @project_picker.State?
+  // None selects the project flow; Some scopes a path reference to its draft.
+  folder_reference : FolderReference?
+  composer_menu_open : Bool
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
   chat_creation : (@interop.ChannelId, Int32, Int32)?
@@ -2032,6 +2035,7 @@ priv enum Msg {
   // One picker-package message: navigation, a listing reply, a failure, or
   // a confirm/close. The shell intercepts the confirm's picked directory.
   ProjectPicker(@project_picker.Msg)
+  ComposerMenuChanged(Screen, Bool)
   // Detach a project from one device: only the registry entry goes
   // away — the directory and the sessions inside it stay, so re-adding
   // restores them.
@@ -2805,6 +2809,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     transcript_scroll: @sorted_map.new(),
     conversations: [],
     project_picker: None,
+    folder_reference: None,
+    composer_menu_open: false,
     pending_project_adoption: None,
     chat_creation: None,
     chat_creation_sequence: 0,

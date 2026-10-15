@@ -25,6 +25,7 @@ fn Input::fixture(task : String) -> Input {
     active_file: None,
     file_index: FileIndexReady(epoch=0, truncated=false),
     presentation: {
+      folder_references_enabled: false,
       images_enabled: false,
       context: [],
       status: [],

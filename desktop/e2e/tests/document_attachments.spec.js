@@ -17,7 +17,8 @@ async function open(page) {
 
 async function select(page, files = pdf) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
   await (await chooser).setFiles(files);
   await expect(page.locator('.composer-attachment-confirm')).toBeVisible();
 }

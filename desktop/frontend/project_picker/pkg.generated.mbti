@@ -12,7 +12,7 @@ import {
 // Values
 pub fn subscriptions(State?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
+pub fn view(locale? : @i18n.Locale, purpose? : Purpose, @cmd.Emit[Msg], State) -> @html.Html
 
 // Errors
 
@@ -48,6 +48,11 @@ pub fn Msg::not_equal(Self, Self) -> Bool
 pub enum Outcome {
   Picked(@interop.ChannelId, String)
   Failed(String)
+}
+
+pub(all) enum Purpose {
+  AddProject
+  ReferenceFolder
 }
 
 type State derive(Eq)

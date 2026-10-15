@@ -849,7 +849,8 @@
 /* Container units keep the top-layer menu sized to a chat column narrowed by
    the editor panel. Shared anchor positioning prefers below and flips when
    needed. */
-.composer-picker-menu {
+.composer-picker-menu,
+.action-menu[data-action-menu-surface^="composer-add:"] {
   width: max-content;
   min-width: min(170px, calc(100cqi - 20px));
   max-width: min(340px, calc(100cqi - 20px));
@@ -1304,4 +1305,22 @@
 
 .shell-command-state {
   color: var(--color-text-muted);
+}
+
+/* The add menu shares select-control surfaces and rows, with a leading icon
+   instead of a trailing selection check. Its action-menu behavior is unchanged. */
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item {
+  grid-template-columns: 16px minmax(0, 1fr);
+  font-size: var(--font-size-sm);
+}
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item:focus-visible {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item:not(:disabled):hover {
+  color: var(--color-text-primary);
+}
+.action-menu[data-action-menu-surface^="composer-add:"] > .action-menu-item:disabled {
+  cursor: default;
+  opacity: 0.55;
 }

@@ -261,6 +261,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     active_file: self.active_workspace_file(),
     file_index,
     presentation: {
+      folder_references_enabled: self.is_desktop &&
+      self.focused == @interop.Local,
       images_enabled: conv.engine_model is DsFlash &&
       self.api_provider is (Deepseek | Custom),
       context,
@@ -345,16 +347,18 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
     },
   })
-  if self.codex_project_adoption_pending() {
-    {
-      ..input,
-      presentation: {
-        ..input.presentation,
-        primary_action: @composer.Send(available=false),
+  {
+    ..input,
+    presentation: {
+      ..input.presentation,
+      folder_references_enabled: self.is_desktop &&
+      self.focused == @interop.Local,
+      primary_action: if self.codex_project_adoption_pending() {
+        @composer.Send(available=false)
+      } else {
+        input.presentation.primary_action
       },
-    }
-  } else {
-    input
+    },
   }
 }
 
@@ -388,6 +392,7 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     file_index: self.composer_file_index(),
     presentation: {
       images_enabled: false,
+      folder_references_enabled: false,
       context: [],
       status: [],
       placeholder: "",

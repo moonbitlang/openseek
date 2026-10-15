@@ -20,7 +20,8 @@ for (const outcome of ['accepted', 'rpc-error', 'rejected']) {
     await expect(composer).toHaveValue('Original queued message');
     await composer.fill('Edited queued message');
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
     await (await chooser).setFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: readFileSync(new URL('../fixtures/office/two-pages.pdf', import.meta.url)) });
     await page.getByRole('button', { name: 'Upload to workspace', exact: true }).click();
     const mention = page.locator('.mention-chip').filter({ hasText: 'notes.pdf', hasNotText: 'Context added during save' });

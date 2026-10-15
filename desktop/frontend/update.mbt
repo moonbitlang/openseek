@@ -1660,6 +1660,7 @@ fn desired_browser_view(model : Model) -> Int32? {
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.dock_tab_menu_open &&
+    !model.composer_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -1815,6 +1816,7 @@ fn update(
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
   let model = model.restore_message_approvals()
+  let model = model.reconcile_folder_reference()
   let model = {
     ..model,
     management_return: if model.screen.work_screen() is Some(_) {
@@ -1853,6 +1855,7 @@ fn update(
       ..model,
       composer_context_generation: previous.composer_context_generation + 1,
       select_menu: None,
+      composer_menu_open: false,
     }
   } else {
     model
@@ -2341,6 +2344,15 @@ fn update_msg(
     // edit broadcast. Revisions order concurrent clients and RPC replies;
     // while this page has optimistic writes, keep only the newest status and
     // apply it once the last write settles.
+    ComposerMenuChanged(screen, open) =>
+      if model.screen == screen {
+        (@cmd.none, { ..model, composer_menu_open: open, })
+      } else {
+        (@cmd.none, model)
+      }
+    CodexComposerAction(@composer.FolderReferenceRequested(identity~, root~))
+    | ComposerAction(@composer.FolderReferenceRequested(identity~, root~)) =>
+      open_folder_reference(dispatch, model, identity, root)
     CodexComposerAction(action) =>
       match action {
         @composer.DraftSubmitted(..) if model.codex_project_adoption_pending() =>
@@ -2435,6 +2447,7 @@ fn update_msg(
       }
     ComposerAction(action) =>
       match action {
+        @composer.FolderReferenceRequested(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
@@ -4973,7 +4986,8 @@ fn update_msg(
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
-      guard model.device_state(channel) is Some(_) &&
+      guard model.project_picker is None &&
+        model.device_state(channel) is Some(_) &&
         model.can_pick_project(channel) else {
         return (@cmd.none, model)
       }
@@ -4997,6 +5011,7 @@ fn update_msg(
           chat_creation: None,
           quick_open,
           project_picker: Some(picker),
+          folder_reference: None,
         },
       )
     }
@@ -5031,6 +5046,12 @@ fn update_msg(
             // navigates (and validates) first. The pending adoption later
             // focuses the project the add committed.
             Some(@project_picker.Outcome::Picked(channel, path)) => {
+              if model.folder_reference is Some(reference) {
+                return (
+                  cmd,
+                  model.add_folder_reference(reference, channel, path),
+                )
+              }
               let (add_cmd, next) = adopt_picked_directory(
                 dispatch, channel, path, model,
               )

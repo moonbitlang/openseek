@@ -26,6 +26,7 @@ pub(all) struct Definition {
 ///|
 priv enum Anchor {
   Button
+  LeadingButton
   Pointer(Int32, Int32)
 } derive(Eq)
 
@@ -106,6 +107,7 @@ fn dispatch_open(open : Open) -> @cmd.Cmd {
     detail["target"] = open.target
     match open.anchor {
       Button => detail["anchor"] = "button"
+      LeadingButton => detail["anchor"] = "leading-button"
       Pointer(x, y) => {
         detail["anchor"] = "pointer"
         detail["x"] = x
@@ -124,9 +126,10 @@ fn dispatch_open(open : Open) -> @cmd.Cmd {
 }
 
 ///|
-/// Build an ellipsis trigger for a stable target. The menu component owns
-/// toggle state, positioning, and focus.
-pub fn button_attrs(target : String) -> @html.Attrs {
+/// Build a button trigger for a stable target. `leading` aligns its left edge;
+/// existing trailing triggers retain right-edge alignment. The menu component
+/// owns toggle state, positioning, and focus.
+pub fn button_attrs(target : String, leading~ : Bool = false) -> @html.Attrs {
   @html.Attrs::build()
   .id(trigger_id(target))
   .data_set("action-menu-owner", target)
@@ -136,7 +139,11 @@ pub fn button_attrs(target : String) -> @html.Attrs {
     event.stop_propagation()
     dispatch_open({
       target,
-      anchor: Button,
+      anchor: if leading {
+        LeadingButton
+      } else {
+        Button
+      },
       restore_focus_id: focused_element_id(),
     })
   })
@@ -191,6 +198,7 @@ fn parse_open(event : @dom.Event) -> Open? {
   guard target.is_string() && anchor.is_string() else { return None }
   let anchor = match anchor.cast() {
     "button" => Button
+    "leading-button" => LeadingButton
     "pointer" => {
       let x : @js.Value = detail.get_with_string("x")
       let y : @js.Value = detail.get_with_string("y")
@@ -286,7 +294,7 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
       let gap = 2.0
       let (wanted_left, wanted_top) = match anchor {
         Pointer(x, y) => (x.to_double(), y.to_double())
-        Button => {
+        Button | LeadingButton => {
           guard @dom.document()
             .get_element_by_id(trigger_id(target))
             .to_option()
@@ -301,7 +309,14 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
           } else {
             trigger_rect.get_top() - menu_height - gap
           }
-          (trigger_rect.get_right() - menu_width, top)
+          (
+            if anchor is LeadingButton {
+              trigger_rect.get_left()
+            } else {
+              trigger_rect.get_right() - menu_width
+            },
+            top,
+          )
         }
       }
       let margin = 4.0
@@ -716,7 +731,7 @@ pub fn[Input : Eq] component(
     update=(state, input, msg, _) => {
       match msg {
         Open(next) => {
-          if next.anchor is Button &&
+          if (next.anchor is Button || next.anchor is LeadingButton) &&
             state.menu is Some(current) &&
             current.target == next.target {
             return (

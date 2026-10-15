@@ -681,12 +681,14 @@ fn main {
       state.map(model => model.locale),
       composer_input,
       emit.map(action => ComposerAction(action)),
+      on_menu_change=emit.map(open => ComposerMenuChanged(Chat, open)),
     )
     let codex_composer_input = state.map(model => model.codex_composer_input())
     let (codex_composer_html, codex_composer_quote) = @composer.component(
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
+      on_menu_change=emit.map(open => ComposerMenuChanged(Codex, open)),
     )
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(

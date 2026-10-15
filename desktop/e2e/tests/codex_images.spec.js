@@ -29,12 +29,13 @@ class CodexImagesHarness extends DesktopBrowserHarness {
     // the model switch to install the Codex draft before dispatching files.
     await expect(this.page.locator('#task')).toHaveAttribute('placeholder',
       'Ask Codex to inspect, edit, or explain this workspace.');
-    await expect(this.page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+    await expect(this.page.getByRole('button', { name: 'Add attachments', exact: true })).toBeVisible();
   }
 
   async select(files) {
     const chooser = this.page.waitForEvent('filechooser');
-    await this.page.getByRole('button', { name: 'Attach files', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+    await this.page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
     await (await chooser).setFiles(files);
   }
 
@@ -98,7 +99,7 @@ test('paste and drop preserve image bytes, allow removal and steer a running tas
   startReply.resolve();
   await expect(page.locator('#task')).toHaveAttribute('placeholder',
     'Steer the running task — your message joins it at the next step.');
-  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add attachments', exact: true })).toBeVisible();
   expect(await app.transfer('paste')).toBe(true);
   await expect(page.locator('.composer-image')).toHaveCount(1);
   await page.locator('#send').click();
@@ -179,7 +180,8 @@ test('canceling the file picker removes its input and permits another selection'
   const app = new CodexImagesHarness(page);
   await app.openCodex();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
+  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
   const input = (await chooser).element();
   await input.evaluate(element => element.dispatchEvent(new Event('cancel')));
   await expect(page.locator('input[type="file"]')).toHaveCount(0);

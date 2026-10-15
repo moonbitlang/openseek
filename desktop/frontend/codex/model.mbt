@@ -3681,3 +3681,20 @@ test "draft project distinguishes no project from malformed paths" {
   }
   assert_true(confirmed_invalid.draft_project(channel) is Err(_))
 }
+
+///|
+/// Add a host path to the current draft without copying its contents.
+pub fn State::with_path_reference(self : State, path : String) -> State {
+  let draft : @composer.Draft = {
+    task: self.draft,
+    mentions: self.mentions,
+    images: self.images,
+  }
+  {
+    ..self,
+    mentions: draft.with_mention({
+      ref_: @mention_context.File(path~),
+      range: None,
+    }).mentions,
+  }
+}
