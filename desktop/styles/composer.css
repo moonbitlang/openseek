@@ -1312,9 +1312,10 @@
 .session-pr-number, .session-pr-repo { flex: none; white-space: nowrap; }
 .session-pr-repo { max-width: 24%; overflow: hidden; text-overflow: ellipsis; }
 .session-pr-branch { font-family: var(--font-family-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-pr-row.open { color: light-dark(#1a7f37, #75d993); background: light-dark(#e0f0e3, #233d2b); }
 .session-pr-row.merged { color: light-dark(#9568ed, #b596f5); background: light-dark(#e5ddf5, #3c3055); }
 .session-pr-row.merged .session-pr-repo { opacity: .7; }
-.session-pr-row.closed .session-pr-icon { color: #ff4343; }
+.session-pr-row.closed { color: light-dark(#cf222e, #ff9b9b); background: light-dark(#fbe3e5, #4d292d); }
 .session-pr-state { flex: none; margin: 0 3px; white-space: nowrap; }
 .session-pr-badge { border: 1px solid light-dark(#dcdcd9, #48494b); border-radius: 7px; box-shadow: 0 1px 2px #00000012; background: transparent; padding: 1px 7px; line-height: 20px; white-space: nowrap; }
 .session-pr-diff { display: flex; gap: 5px; flex: none; font-variant-numeric: tabular-nums; }

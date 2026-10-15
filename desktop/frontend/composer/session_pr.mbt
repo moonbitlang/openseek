@@ -26,6 +26,7 @@ fn render_session_prs(
       break
     }
     let tone = match row.pull_request {
+      Some(pr) if pr.state == "open" && pr.draft => "draft"
       Some(pr) => pr.state
       None => "branch"
     }

@@ -246,7 +246,9 @@ must already have a durable record to save bindings. Unpublished local
 branches cannot be bound by name.
 
 The binding list appears above the OpenSeek composer, with PR number,
-repository, branch, diff totals, status and expandable CI details. It replaces
+repository, branch, diff totals, status and expandable CI details. Open PRs
+use green rows, drafts remain gray, merged PRs use purple, and closed PRs use
+red. It replaces
 the former checkout PR chip: an unbound checkout PR is not displayed on its
 own. The list can be collapsed, and removing a row removes its associations
 without closing a PR or deleting a branch. GitHub details use the host's

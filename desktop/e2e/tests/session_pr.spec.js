@@ -95,7 +95,7 @@ test('binding rows follow the reference layout and unbound checkout PRs stay hid
   const app = new DesktopBrowserHarness(page);
   const samples = [
     { number: 1944, branch: 'claude/desktop-mcp-capabilities-a03b87', state: 'open', additions: 2474, deletions: 71 },
-    { number: 1970, branch: 'claude/serve-mcp-snapshot', state: 'open', additions: 981, deletions: 68 },
+    { number: 1970, branch: 'claude/serve-mcp-snapshot', state: 'open', draft: true, additions: 981, deletions: 68 },
     { number: 1942, branch: 'claude/desktop-mcp-config', state: 'merged', additions: 50, deletions: 386 },
     { number: 1943, branch: 'claude/mcp-status-json', state: 'closed', additions: 261, deletions: 1 },
   ].map(item => ({ ...pr, ...item, url: `https://github.com/example/openseek/pull/${item.number}`, checks: { passed: 3, failed: 0, pending: 0 } }));
@@ -138,6 +138,11 @@ test('binding rows follow the reference layout and unbound checkout PRs stay hid
   expect(layout.bordered).toBe('1px');
   await expect(merged).toHaveCSS('background-color', 'rgb(229, 221, 245)');
   await page.locator('.session-pr-bindings').screenshot({ path: testInfo.outputPath('session-pr-reference.png') });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.locator('.session-pr-bindings').screenshot({ path: testInfo.outputPath('session-pr-dark.png') });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await rows.first().locator('.session-pr-checks').click();
   await expect(page.locator('.session-pr-check-menu a')).toHaveAttribute('href', samples[0].url + '/checks');
   await rows.first().locator('.session-pr-checks').click();
