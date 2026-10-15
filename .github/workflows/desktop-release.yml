@@ -395,7 +395,7 @@ jobs:
           compression-level: 0
           retention-days: 1
 
-  # The one job that holds the OSS credentials and the deploy token. It builds
+  # The one job that holds storage credentials and the deploy token. It builds
   # nothing: every archive arrives from a build job above.
   release-publish:
     name: Publish
@@ -403,9 +403,15 @@ jobs:
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     env:
       OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
       RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+      OPENSEEK_S3_BUCKET: ${{ vars.OPENSEEK_S3_BUCKET }}
+      OPENSEEK_S3_REGION: ${{ vars.OPENSEEK_S3_REGION }}
 
     steps:
       - name: Checkout main
@@ -421,6 +427,15 @@ jobs:
       - name: Stamp release version
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+
+      - name: Configure S3 credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.OPENSEEK_RELEASE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.OPENSEEK_S3_REGION }}
+
+      - name: Check AWS CLI
+        run: aws --version
 
       # The release script uploads artifacts to OSS with ossutil 2.x, pinned
       # and installed from the official distribution.
@@ -455,7 +470,7 @@ jobs:
       # Upload artifacts before publication. Until API publish succeeds, a
       # retry may replace nondeterministic rebuilds; a published Browser
       # version restores the exact OSS bytes instead.
-      - name: Upload release to OSS
+      - name: Upload release to OSS and S3
         shell: bash
         env:
           OPENSEEK_DEPLOY_TOKEN: ${{ secrets.OPENSEEK_DEPLOY_TOKEN }}

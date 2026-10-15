@@ -108,6 +108,8 @@ test("verify distinguishes missing Location, non-redirects, and wrong destinatio
     } else if (request.url === "/console/") {
       response.writeHead(status, headers);
       response.end();
+    } else if (request.url.startsWith("/v0.1.9/")) {
+      response.end(bytes);
     } else {
       response.writeHead(404);
       response.end();
@@ -199,6 +201,7 @@ for (const scenario of [
       }
       return { size: "123", sha256, crc64: "1" };
     });
+    t.mock.method(release, "headS3Object", () => ({ size: "123", sha256 }));
     let published;
     t.mock.method(release, "fetchJson", async (path, options) => {
       if (path === "/desktop/releases/v0.1.9/publish") {
@@ -235,6 +238,7 @@ for (const scenario of [
 test("rollback does not hide OSS failures by falling back to ZIP", async t => {
   const release = new Release();
   const error = new Error("OSS access denied");
+  t.mock.method(release, "headS3Object", () => ({ size: "123", sha256: "a".repeat(64) }));
   const head = t.mock.method(release, "headObject", (_version, artifact) => {
     if (artifact.platform === "windows-x64") throw error;
     return { size: "123", sha256: "a".repeat(64), crc64: "1" };
@@ -245,7 +249,7 @@ test("rollback does not hide OSS failures by falling back to ZIP", async t => {
   assert.equal(head.mock.calls.some(call => call.arguments[1].file === "SeekMoon-windows-x64.zip"), false);
 });
 
-test("upload sends the Windows installer to OSS as an executable download", async t => {
+test("upload sends identical Windows installers and metadata to OSS and S3", async t => {
   const release = new Release();
   release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-upload-"));
   t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
@@ -256,16 +260,114 @@ test("upload sends the Windows installer to OSS as an executable download", asyn
   }
   t.mock.method(release, "moduleVersion", async () => "0.1.9");
   t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
+  t.mock.method(release, "s3", () => ({ bucket: "mirror", region: "us-west-2", prefix: "releases" }));
+  t.mock.method(release, "headS3Object", () => ({ size: String(bytes.length), sha256 }));
   t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
   t.mock.method(release, "verifyServed", async () => ({ sha256 }));
   t.mock.method(release, "fetchJson", async () => ({ sha256 }));
   t.mock.method(release, "unpackBrowser", async () => {});
   const commands = t.mock.method(release, "commandRun", () => {});
   await release.upload("v0.1.9");
-  assert.equal(commands.mock.callCount(), 4);
-  const [program, args] = commands.mock.calls.at(-1).arguments;
+  assert.equal(commands.mock.callCount(), 8);
+  const [program, args] = commands.mock.calls.at(-2).arguments;
   assert.equal(program, "ossutil");
   assert.equal(args[args.indexOf("--content-type") + 1], "application/octet-stream");
   assert.equal(args.at(-2), join(release.dist, "SeekMoon-windows-x64-setup.exe"));
   assert.equal(args.at(-1), "oss://test/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
+  const [s3Program, s3Args] = commands.mock.calls.at(-1).arguments;
+  assert.equal(s3Program, "aws");
+  assert.equal(s3Args[2], join(release.dist, "SeekMoon-windows-x64-setup.exe"));
+  assert.equal(s3Args[3], "s3://mirror/releases/v0.1.9/SeekMoon-windows-x64-setup.exe");
+  assert.equal(s3Args[s3Args.indexOf("--metadata") + 1], `sha256=${sha256}`);
+  assert.equal(s3Args[s3Args.indexOf("--content-type") + 1], "application/octet-stream");
+  assert.equal(s3Args[s3Args.indexOf("--cache-control") + 1], "public, max-age=31536000, immutable");
 });
+
+test("publish refuses missing, inaccessible or mismatching S3 objects before API publication", async t => {
+  const release = new Release();
+  const expected = { size: "123", sha256: "a".repeat(64), crc64: "1" };
+  t.mock.method(release, "moduleVersion", async () => "0.1.9");
+  t.mock.method(release, "localArtifact", async () => expected);
+  t.mock.method(release, "headObject", () => expected);
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not publish"));
+  const head = t.mock.method(release, "headS3Object", () => ({ size: "123", sha256: "b".repeat(64) }));
+  await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), /S3 object does not match/);
+  head.mock.mockImplementation(() => ({ size: "1", sha256: expected.sha256 }));
+  await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), /S3 object does not match/);
+  for (const error of [new Error("S3 404"), new Error("S3 access denied")]) {
+    head.mock.mockImplementation(() => { throw error; });
+    await assert.rejects(release.publish("v0.1.9", { fromCheckout: true }), actual => actual === error);
+  }
+  assert.equal(request.mock.callCount(), 0);
+});
+
+test("published retry restores OSS bytes before mirroring S3", async t => {
+  const release = new Release();
+  t.mock.method(release, "moduleVersion", async () => "0.1.9");
+  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
+  t.mock.method(release, "s3", () => ({}));
+  t.mock.method(release, "fetch", async () => new Response(null, { status: 200 }));
+  const restored = new Set();
+  t.mock.method(release, "commandRun", (program, args) => {
+    assert.equal(program, "ossutil");
+    assert.match(args.at(-2), /^oss:\/\//);
+    restored.add(args.at(-1));
+  });
+  const canonical = { size: 123, sha256: "a".repeat(64) };
+  t.mock.method(release, "localArtifact", async artifact => {
+    assert.ok(restored.has(join(release.dist, artifact.file)));
+    return canonical;
+  });
+  t.mock.method(release, "verifyServed", async (_version, _artifact, local) => assert.equal(local, canonical));
+  const mirror = t.mock.method(release, "uploadS3", (_version, _artifact, local) => assert.equal(local, canonical));
+  t.mock.method(release, "unpackBrowser", async () => {});
+  t.mock.method(release, "fetchJson", async () => assert.fail("must not replace the published Browser"));
+  await release.upload("v0.1.9");
+  assert.equal(mirror.mock.callCount(), 4);
+});
+
+test("S3 upload failure stops before staging the Browser on the API", async t => {
+  const release = new Release();
+  t.mock.method(release, "moduleVersion", async () => "0.1.9");
+  t.mock.method(release, "oss", () => ({ bucket: "test", region: "test", prefix: "releases" }));
+  t.mock.method(release, "s3", () => ({}));
+  t.mock.method(release, "fetch", async () => new Response(null, { status: 404 }));
+  t.mock.method(release, "commandRun", () => {});
+  t.mock.method(release, "localArtifact", async () => ({ size: 123, sha256: "a".repeat(64), path: "fixture" }));
+  t.mock.method(release, "verifyServed", async () => {});
+  t.mock.method(release, "uploadS3", () => { throw new Error("S3 unavailable"); });
+  const request = t.mock.method(release, "fetchJson", async () => assert.fail("must not stage Browser"));
+  await assert.rejects(release.upload("v0.1.9"), /S3 unavailable/);
+  assert.equal(request.mock.callCount(), 0);
+});
+
+for (const provider of ["oss", "amz"]) {
+  test(`public verification follows redirects and hashes ${provider} downloads`, async t => {
+    const release = new Release();
+    release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-download-"));
+    t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
+    const bytes = Buffer.from("canonical release bytes");
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    let corrupt = false;
+    const url = await server(t, (request, response) => {
+      if (request.url === "/redirect") {
+        response.writeHead(302, { location: "/object" });
+        response.end();
+      } else {
+        response.writeHead(200, { "content-length": bytes.length, [`x-${provider}-meta-sha256`]: sha256 });
+        response.end(request.method === "HEAD" ? undefined : corrupt ? Buffer.alloc(bytes.length) : bytes);
+      }
+    });
+    const manifest = { platforms: {} };
+    for (const [platform, file] of Object.entries({
+      "macos-arm64": "SeekMoon.app.zip", "macos-arm64-dmg": "SeekMoon.dmg",
+      browser: "SeekMoon.browser.tar.gz", "windows-x64": "SeekMoon-windows-x64-setup.exe",
+    })) {
+      await fs.writeFile(join(release.dist, file), bytes);
+      manifest.platforms[platform] = { url: `${url}/redirect`, sha256 };
+    }
+    await release.verifyDownloads(manifest);
+    corrupt = true;
+    await assert.rejects(release.verifyDownloads(manifest), /download digest mismatch/);
+  });
+}

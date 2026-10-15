@@ -1,13 +1,13 @@
 // Stamp, upload, and publish Desktop releases.
 //
 //   node scripts/release.mjs stamp X.Y.Z       stamp the version every packager builds from
-//   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS
+//   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS and S3
 //   node scripts/release.mjs publish [vX.Y.Z]  make the uploaded version live
 //   node scripts/release.mjs verify [vX.Y.Z]   check the live release through its public URLs
 //   node scripts/release.mjs rollback vX.Y.Z   republish an existing version
 //   node scripts/release.mjs status            list API-owned release state
 //
-// OSS stores the artifacts only. openseek-api generates and atomically
+// OSS and S3 store identical artifacts. openseek-api generates and atomically
 // replaces latest.json from the filenames and SHA-256 digests it is told
 // about, so a release becomes visible once every file is in place, and
 // rolling back is publishing an older version again.
@@ -16,7 +16,10 @@
 // OPENSEEK_API_ORIGIN, and OPENSEEK_DEPLOY_TOKEN, plus ossutil 2.x with its
 // OSS_ACCESS_KEY_ID and OSS_ACCESS_KEY_SECRET. The standard API origins select
 // their OSS prefixes; other deployments set OPENSEEK_OSS_PREFIX. verify needs
-// only OPENSEEK_API_ORIGIN and the checkout's archives in dist/.
+// only OPENSEEK_API_ORIGIN and the checkout's archives in dist/. S3 uploads
+// and publication also require OPENSEEK_S3_BUCKET, OPENSEEK_S3_REGION and
+// AWS CLI v2 credentials (GitHub OIDC in CI). OPENSEEK_S3_PREFIX overrides
+// the same channel prefix used by OSS.
 
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -83,6 +86,45 @@ export class Release {
     const prefix = process.env.OPENSEEK_OSS_PREFIX?.replace(/^\/+|\/+$/g, "") || OssPrefixes[origin];
     if (!prefix) throw new Error(`no OSS prefix mapped for ${origin}; set OPENSEEK_OSS_PREFIX`);
     return { bucket: this.env("OPENSEEK_OSS_BUCKET"), region: this.env("OPENSEEK_OSS_REGION"), prefix };
+  }
+
+  s3() {
+    const prefix = process.env.OPENSEEK_S3_PREFIX?.replace(/^\/+|\/+$/g, "") || this.oss().prefix;
+    return { bucket: this.env("OPENSEEK_S3_BUCKET"), region: this.env("OPENSEEK_S3_REGION"), prefix };
+  }
+
+  s3Key(version, artifact) {
+    return `${this.s3().prefix}/${version}/${artifact.file}`;
+  }
+
+  headS3Object(version, artifact) {
+    const s3 = this.s3();
+    const result = spawnSync("aws", ["s3api", "head-object", "--region", s3.region,
+      "--bucket", s3.bucket, "--key", this.s3Key(version, artifact), "--output", "json", "--no-cli-pager"],
+    { cwd: this.desktop, encoding: "utf8" });
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(`S3 head-object failed for ${artifact.platform} ${version}: ${result.stdout}${result.stderr}`);
+    }
+    const object = JSON.parse(result.stdout);
+    return { size: String(object.ContentLength), sha256: object.Metadata?.sha256 };
+  }
+
+  verifyS3(version, artifact, expected) {
+    const served = this.headS3Object(version, artifact);
+    if (served.size !== String(expected.size) || served.sha256 !== expected.sha256) {
+      throw new Error(`S3 object does not match the released artifact: ${artifact.platform}`);
+    }
+  }
+
+  uploadS3(version, artifact, local) {
+    const s3 = this.s3();
+    this.commandRun("aws", ["s3", "cp", local.path, `s3://${s3.bucket}/${this.s3Key(version, artifact)}`,
+      "--region", s3.region, "--content-type", artifact.contentType,
+      "--cache-control", "public, max-age=31536000, immutable",
+      "--metadata", `sha256=${local.sha256}`, "--checksum-algorithm", "SHA256", "--only-show-errors"]);
+    this.verifyS3(version, artifact, local);
+    console.log(`${artifact.platform} verified in S3`);
   }
 
   async moduleVersion() {
@@ -223,6 +265,7 @@ export class Release {
   async upload(version) {
     await this.checkoutVersion(version);
     const oss = this.oss();
+    this.s3(); // Require both destinations before uploading any artifacts.
     // A published Browser directory is the API-owned per-version seal. If a
     // previous attempt reached API publish but the job failed afterwards, its
     // OSS bytes must be reused instead of overwritten by a fresh rebuild.
@@ -233,7 +276,9 @@ export class Release {
       for (const artifact of Artifacts) {
         this.commandRun("ossutil", ["cp", "--force", "--region", oss.region,
           this.ossUrl(version, artifact), join(this.dist, artifact.file)]);
-        await this.verifyServed(version, artifact, await this.localArtifact(artifact));
+        const local = await this.localArtifact(artifact);
+        await this.verifyServed(version, artifact, local);
+        this.uploadS3(version, artifact, local);
         console.log(`${artifact.platform} restored: ${this.ossUrl(version, artifact)}`);
       }
       await this.unpackBrowser();
@@ -258,12 +303,13 @@ export class Release {
       // Verify against OSS directly. Accessing the CDN before publication can
       // cache provisional bytes under the immutable version URL.
       await this.verifyServed(version, artifact, local);
+      this.uploadS3(version, artifact, local);
       digests[artifact.platform] = local.sha256;
       console.log(`${artifact.platform} verified in OSS`);
     }
 
     // `/console/` remains on the API origin, so only the much smaller Browser
-    // archive is uploaded twice. Desktop packages exist only in OSS.
+    // archive is also uploaded to the API. Desktop packages live in OSS and S3.
     const recorded = await this.fetchJson(`/desktop/releases/${version}/${Browser.file}?platform=browser`, {
       method: "PUT", body: await readFile(join(this.dist, Browser.file)),
     });
@@ -301,6 +347,7 @@ export class Release {
       }
       const local = fromCheckout ? await this.localArtifact(artifact) : undefined;
       const served = await this.verifyServed(version, artifact, local);
+      this.verifyS3(version, artifact, served);
       platforms[artifact.platform] = { file: artifact.file, sha256: served.sha256 };
     }
 
@@ -344,23 +391,7 @@ export class Release {
     }
     this.verifyManifest(manifest, version, platforms);
 
-    // HEAD through the public URL, so whatever fronts OSS is checked too. The
-    // size must be the object's own, not that of a transfer encoding.
-    for (const artifact of Artifacts) {
-      const { url } = manifest.platforms[artifact.platform];
-      const local = platforms[artifact.platform];
-      const response = await fetch(url, { method: "HEAD", headers: { "accept-encoding": "identity" } });
-      if (!response.ok) throw new Error(`HEAD ${url} failed: HTTP ${response.status}`);
-      const served = {
-        size: response.headers.get("content-length"),
-        sha256: response.headers.get("x-oss-meta-sha256"),
-        crc64: response.headers.get("x-oss-hash-crc64ecma"),
-      };
-      if (served.size !== String(local.size) || served.sha256 !== local.sha256 || !served.crc64) {
-        throw new Error(`${url} does not serve the released ${artifact.platform} archive`);
-      }
-      console.log(`${artifact.platform} ok: ${url}`);
-    }
+    await this.verifyDownloads(manifest);
 
     // The API must have selected this version's Browser bundle for `/console/`
     // and serve the files that the archive in dist/ contains.
@@ -402,6 +433,36 @@ export class Release {
     ].join("\n");
     console.log(summary);
     if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summary);
+  }
+
+  async verifyDownloads(manifest) {
+    // Follow public redirects through either CDN. Check the actual streamed
+    // bytes as well as metadata, so a successful HEAD alone cannot pass.
+    for (const artifact of Artifacts) {
+      const { url } = manifest.platforms[artifact.platform];
+      const local = await this.localArtifact(artifact);
+      const response = await fetch(url, { method: "HEAD", headers: { "accept-encoding": "identity" } });
+      if (!response.ok) throw new Error(`HEAD ${url} failed: HTTP ${response.status}`);
+      const served = {
+        size: response.headers.get("content-length"),
+        sha256: response.headers.get("x-amz-meta-sha256") ?? response.headers.get("x-oss-meta-sha256"),
+      };
+      if (served.size !== String(local.size) || served.sha256 !== local.sha256) {
+        throw new Error(`${url} does not serve the released ${artifact.platform} archive`);
+      }
+      const download = await fetch(url, { headers: { "accept-encoding": "identity" } });
+      if (!download.ok) throw new Error(`GET ${url} failed: HTTP ${download.status}`);
+      const hash = createHash("sha256");
+      let size = 0;
+      for await (const chunk of download.body) {
+        hash.update(chunk);
+        size += chunk.length;
+      }
+      if (size !== local.size || hash.digest("hex") !== local.sha256) {
+        throw new Error(`download digest mismatch: ${url}`);
+      }
+      console.log(`${artifact.platform} ok: ${url}`);
+    }
   }
 
   async status() {
