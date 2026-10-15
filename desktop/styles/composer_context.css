@@ -171,6 +171,25 @@
   margin: 0;
 }
 
+.composer-context-detail.followup-content {
+  display: block;
+  margin: 0 14px 14px;
+  padding: 8px 10px;
+  max-height: 220px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.composer-context :is(.pending-steer-icon, .queued-input-icon) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+
 .composer-context .codex-request-title {
   flex: 1;
   min-width: 0;

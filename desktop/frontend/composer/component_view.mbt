@@ -269,16 +269,30 @@ fn Entry::view(
   let goal_mode = input.goal.draft is Some(_)
   let shell_command = input.shell_command(self.draft)
   let actions = self.action_buttons(locale~, emit, action_emit, input)
-  let context : Array[@html.Html] = []
+  // Notices can appear ahead of open disclosures. Key their parent panels as
+  // well as their rows so inserting a notice preserves native DOM state.
+  let context : Map[String, @html.Html] = Map([])
   for component in input.presentation.context {
-    context.push(component.render(locale~, self.identity(), action_emit))
+    let key = match component {
+      ConnectionBanner(..) => "connection"
+      SubrunDock(..) => "subruns"
+      ApiSetupNotice(..) => "api-setup"
+      ApprovalRequest(_) => "approval"
+      CodexRequests(..) => "codex-requests"
+      PendingSteerPanel(..) => "steers"
+      ShellCommandsRunning(..) => "shell-commands"
+      QueuedInputPanel(..) => "queue"
+      CompactionNotice(..) => "compaction"
+      WorktreePlacementNotice => "worktree-placement"
+      MissingWorktreeNoticeComponent(_) => "missing-worktree"
+    }
+    context[key] = component.render(locale~, self.identity(), action_emit)
   }
   // Closest to the textarea: the turn's own liveness is what the person
   // waiting is watching for, and the wait is spent looking here rather than
-  // at the top bar. Both rows are permanent slots, so neither can shift the
-  // other's child index as a run starts and ends.
-  context.push(running_row(locale~, input.run, clock_ms~))
-  context.push(input.goal.view(locale~, self.identity(), action_emit))
+  // at the top bar.
+  context["running"] = running_row(locale~, input.run, clock_ms~)
+  context["goal"] = input.goal.view(locale~, self.identity(), action_emit)
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
@@ -310,24 +324,20 @@ fn Entry::view(
     )
   }
   if self.image_reads > 0 {
-    context.push(
-      @html.div(
-        class="composer-context-row composer-image-notice",
-        ui(locale, ReadingImages),
-      ),
+    context["image-reading"] = @html.div(
+      class="composer-context-row composer-image-notice",
+      ui(locale, ReadingImages),
     )
   }
   if self.image_error is Some(message) {
-    context.push(
-      @html.div(
-        class="composer-context-row composer-image-notice error",
-        attrs=@html.Attrs::build().role("alert"),
-        message,
-      ),
+    context["image-error"] = @html.div(
+      class="composer-context-row composer-image-notice error",
+      attrs=@html.Attrs::build().role("alert"),
+      message,
     )
   }
-  for confirmation in self.attachment_confirmations(locale, emit) {
-    context.push(confirmation)
+  for index, confirmation in self.attachment_confirmations(locale, emit) {
+    context["attachment-\{index}"] = confirmation
   }
   View::{
     allow_images: input.presentation.images_enabled,

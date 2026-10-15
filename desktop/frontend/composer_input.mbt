@@ -121,8 +121,9 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     context.push(
       @composer.PendingSteerPanel(
         items=steering.map(steer => {
-          user_display_text(steer.content) +
-          (if steer.images.is_empty() { "" } else { " [Image]" })
+          id: steer.submission_id,
+          content: user_display_text(steer.content) +
+          (if steer.images.is_empty() { "" } else { " [Image]" }),
         }),
       ),
     )

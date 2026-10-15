@@ -99,6 +99,12 @@ pub(all) struct ApprovalNotice {
 } derive(Eq)
 
 ///|
+pub(all) struct PendingSteerInput {
+  id : String
+  content : String
+} derive(Eq)
+
+///|
 pub(all) enum QueuedInputState {
   Queueing
   Queued(editing~ : Bool, interactive~ : Bool)
@@ -133,7 +139,7 @@ pub(all) enum ContextComponent {
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
-  PendingSteerPanel(items~ : Array[String])
+  PendingSteerPanel(items~ : Array[PendingSteerInput])
   // `!` commands submitted from this composer that are still running on the
   // host, oldest first. Each settles when its result reaches the engine.
   ShellCommandsRunning(commands~ : Array[String])
@@ -374,6 +380,9 @@ pub fn Action::identity(self : Action) -> Identity {
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend ApprovalNotice with Eq::{equal, not_equal}
+
+///|
+pub extend PendingSteerInput with Eq::{equal, not_equal}
 
 ///|
 pub extend QueuedInputState with Eq::{equal, not_equal}

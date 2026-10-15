@@ -96,7 +96,7 @@ pub(all) enum ContextComponent {
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
-  PendingSteerPanel(items~ : Array[String])
+  PendingSteerPanel(items~ : Array[PendingSteerInput])
   ShellCommandsRunning(commands~ : Array[String])
   QueuedInputPanel(items~ : Array[QueuedInput], enabled~ : Bool)
   CompactionNotice(queued~ : Bool)
@@ -269,6 +269,13 @@ pub(all) struct ModelSelect {
   open : Bool
   title : String
 } derive(Eq)
+
+pub(all) struct PendingSteerInput {
+  id : String
+  content : String
+} derive(Eq)
+pub fn PendingSteerInput::equal(Self, Self) -> Bool
+pub fn PendingSteerInput::not_equal(Self, Self) -> Bool
 
 pub(all) struct PermissionControl {
   mode : @protocol.CodexPermissionMode

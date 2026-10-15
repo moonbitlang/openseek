@@ -370,24 +370,30 @@ pub fn ContextComponent::render(
       @html.div(class="codex-pending", rendered)
     }
     PendingSteerPanel(items~) => {
-      let rows : Array[@html.Html] = []
-      for shown in items {
-        rows.push(
-          @html.div(
-            class="composer-context-row pending-steer-row",
-            title=shown,
-            [
-              @html.span(class="pending-steer-icon", "⤷"),
-              @html.span(class="pending-steer-text", shown),
+      let rows : Map[String, @html.Html] = Map([])
+      for item in items {
+        rows[item.id] = @html.details(
+          class="composer-context-row pending-steer-row composer-context-disclosure",
+          [
+            @html.summary(class="composer-context-summary", [
+              @html.span(
+                class="pending-steer-icon",
+                @icons.icon(@icons.icon_indent),
+              ),
+              @html.span(class="pending-steer-text", item.content),
               @html.span(class="pending-steer-state", ui(locale, SteerLabel)),
-            ],
-          ),
+            ]),
+            @html.div(
+              class="composer-context-detail followup-content",
+              item.content,
+            ),
+          ],
         )
       }
       @html.div(class="pending-steers", rows)
     }
     QueuedInputPanel(items~, enabled~) => {
-      let rows : Array[@html.Html] = []
+      let rows : Map[String, @html.Html] = Map([])
       for item in items {
         let trailing : Array[@html.Html] = []
         match item.state {
@@ -465,19 +471,25 @@ pub fn ContextComponent::render(
             }
           }
         }
-        rows.push(
-          @html.div(
-            class="composer-context-row queued-input-row",
-            title=item.content,
-            [
-              @html.span(
-                class="queued-input-icon",
-                @icons.icon(@icons.icon_indent),
-              ),
-              @html.span(class="queued-input-text", item.content),
-              ..trailing,
-            ],
-          ),
+        rows[item.id] = @html.details(
+          class="composer-context-row queued-input-row composer-context-disclosure",
+          [
+            @html.summary(
+              class="composer-context-summary",
+              [
+                @html.span(
+                  class="queued-input-icon",
+                  @icons.icon(@icons.icon_indent),
+                ),
+                @html.span(class="queued-input-text", item.content),
+                ..trailing,
+              ],
+            ),
+            @html.div(
+              class="composer-context-detail followup-content",
+              item.content,
+            ),
+          ],
         )
       }
       @html.div(class="queued-inputs", rows)
@@ -852,7 +864,7 @@ fn MentionChip::render(
 priv struct View {
   images : @cmd.Emit[@image_input.Event]?
   allow_images : Bool
-  before_inner : Array[@html.Html]
+  before_inner : Map[String, @html.Html]
   mentions : Array[@html.Html]
   value : String
   // The draft is a `!` shell command: the input wears the shell-mode chip
