@@ -163,7 +163,7 @@ async test "an unreadable MCP configuration is carried, not treated as absent" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "a broken MCP configuration is reported once, not once per conversation" {
+async test "MCP configs reuse valid host defaults and report broken files once" {
   let manager = new_engine_manager("/bin/sh")
   let emitted : Array[EngineEvent] = []
   let sink = EventSink(event => emitted.push(event))
@@ -187,6 +187,24 @@ async test "a broken MCP configuration is reported once, not once per conversati
   }
 
   @async.with_task_group(group => {
+    let runtime = @pathx.Path(@fs.tmpdir(prefix="openseek-host-config-reuse-"))
+    group.add_defer(() => {
+      @async.protect_from_cancel(() => {
+        @fs.chmod(runtime.to_string(), 0o700)
+        @fs.rmdir(runtime.to_string(), recursive=true)
+      })
+    })
+    let args = engine_mcp_args(None, Some(runtime), {}, host_mcp=true)
+    let host_path = runtime.join("host-mcp.json")
+    let template = @fsx.read_text(host_path)
+    // A valid default remains usable when its directory becomes read-only.
+    @fs.chmod(runtime.to_string(), 0o500)
+    assert_eq(engine_mcp_args(None, Some(runtime), {}, host_mcp=true), args)
+    @fs.chmod(runtime.to_string(), 0o700)
+    // A changed template is still regenerated when writing is possible.
+    @fsx.write_text(host_path, "stale configuration")
+    assert_eq(engine_mcp_args(None, Some(runtime), {}, host_mcp=true), args)
+    assert_eq(@fsx.read_text(host_path), template)
     // Stands in for a serve engine pointed at the user's configuration. With
     // an error to report it says it could not decode the file; with none it
     // says the configuration loaded. Then it says one more thing, so the
@@ -364,12 +382,14 @@ async fn engine_mcp_args(
       }
     }
     let path = directory.join("host-mcp.json").resolve()
-    @fsx.ensure_dir(path.to_path().dirname())
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
     let text =
       #|{"mcpServers":{"seekmoon":{"url":"${OPENSEEK_DESKTOP_TOOLS_URL}","headers":{"Authorization":"Bearer ${OPENSEEK_DESKTOP_TOOLS_TOKEN}"}}}}
-    @fsx.write_text_atomic(path.to_path(), text)
+    if @fsx.read_text_if_exists(path.to_path()) != Some(text) {
+      @fsx.ensure_dir(path.to_path().dirname())
+      @fsx.write_text_atomic(path.to_path(), text)
+    }
     args.push("--mcp-config=\{path.to_string()}")
   }
   if config is Some(mcp) {
