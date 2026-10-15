@@ -221,7 +221,7 @@ pub fn component(
         },
         on_click=actions.open_skills,
         [
-          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_extensions)),
+          @html.span(class="sidebar-icon", @icons.icon(@icons.icon_package)),
           @html.span(
             class="sidebar-label",
             @messages.text(input.locale, Skills),
