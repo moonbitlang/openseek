@@ -281,8 +281,12 @@ test('expanding an older message keeps the reader in place while later answers s
   await transcript.evaluate(node => { node.scrollTop = 0; });
   const target = page.locator('.msg.user').filter({ hasText: 'Explore another approach.' });
   await expect(target).toBeInViewport();
+  const edit = target.getByRole('button', { name: 'Edit message', exact: true });
+  // Settle the entry animation and Playwright's scroll-into-view before
+  // measuring: click() can otherwise move the reader before editing begins.
+  await edit.click({ trial: true });
   const before = await target.boundingBox();
-  await target.getByRole('button', { name: 'Edit message', exact: true }).click();
+  await edit.click();
   const editor = page.locator('.message-editor');
   await expect(editor.locator('textarea')).toBeFocused();
   await expect.poll(async () => Math.abs((await editor.boundingBox()).y - before.y)).toBeLessThan(4);
