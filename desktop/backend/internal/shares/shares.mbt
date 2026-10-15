@@ -32,10 +32,25 @@ pub async fn publish(
   // Preserve the API's title limit without truncating the exported records.
   let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
-  let headers : Ref[@http.Headers?] = Ref(None)
+  let mut headers : @http.Headers? = None
   let attempt = async fn() {
     @async.with_timeout(timeout_ms, () => {
-      send(title~, files, server_url~, token~, headers)
+      let connection = @http.Client(server_url)
+      defer connection.close()
+      let request_headers = match headers {
+        Some(headers) => headers
+        None => {
+          let form = @multipart.FormWriter(connection)
+          let generated : @http.Headers = {
+            "Authorization": "Bearer \{token}",
+            "Idempotency-Key": form.boundary(),
+            "Content-Type": form.content_type(),
+          }
+          headers = Some(generated)
+          generated
+        }
+      }
+      send(connection, title~, files, server_url~, headers=request_headers)
     })
   }
   attempt() catch {
@@ -54,29 +69,13 @@ pub async fn publish(
 
 ///|
 async fn send(
+  connection : @http.Client,
   title~ : String,
   files : @engine.ConversationExport,
   server_url~ : String,
-  token~ : String,
-  headers : Ref[@http.Headers?],
+  headers~ : @http.Headers,
 ) -> @protocol.SessionShareReply {
-  let connection = @http.Client(server_url)
-  defer connection.close()
-  let headers = match headers.val {
-    Some(headers) => headers
-    None => {
-      let form = @multipart.FormWriter(connection)
-      let generated : @http.Headers = {
-        "Idempotency-Key": form.boundary(),
-        "Content-Type": form.content_type(),
-      }
-      headers.val = Some(generated)
-      generated
-    }
-  }
-  let authenticated = headers.copy()
-  authenticated["Authorization"] = "Bearer \{token}"
-  connection.request(Post, "/v1/shares", extra_headers=authenticated)
+  connection.request(Post, "/v1/shares", extra_headers=headers)
   // FormWriter chooses the boundary once; Writer lets retries reuse it on a
   // fresh connection without retaining the encoded request body.
   let form = @multipart.Writer(connection, boundary=headers["Idempotency-Key"])
