@@ -348,6 +348,9 @@ Notifications:
 | `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
 | `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
 | `session.list_archived` | `{}` | the archived index |
+| `session.pr_list` | `{session}` | `{bindings: [{url}]}` — the saved PR and remote branch associations for the live OpenSeek session; no metadata lookup. An absent sidecar or a session with no live durable record returns an empty list; read/parse failures are errors |
+| `session.pr_remove` | `{session, url}` | `{bindings: [{url}]}` — removes this exact URL from the latest saved list and returns the remainder. Requires a live durable record; does not close the PR, delete the branch, or change the checkout |
+| `session.pr_detail` | `{url}` | `{detail?: {pull_request, head_url?}}` — display metadata for a PR URL, independent of session membership. `pull_request` has the same shape as in `git.pull_request`; `head_url` identifies the head repository's remote branch, including forks. A URL without PR enrichment returns `{}`; missing `gh`, authentication/remote failures, timeout and invalid metadata use the command error channel |
 | `session.rename` | `{session, workspace, title}` — all fields are required; `workspace` must name the registered store that owns the live record, and `title` must be non-blank | `{}` — atomically writes display metadata beside the append-only transcript, so a running conversation can be renamed without rewriting its history |
 | `session.edit` | `{session, workspace, through?, model, source_title, source_sequence, task, images, attachment_paths, thinking?, max_steps?}` | `{session, title}` — edits in a fork/new conversation, submits the message, then deletes the unchanged source after the message is saved |
 | `session.fork` | `{session, workspace, through, model, source_title}` — `workspace` must name the registered store that owns the live record; `through` is the `sequence` of the turn-ending event to copy up to; `model` is the model the fork's system prompt is written for; `source_title` is the title the client shows for the original | `{session, title}` — the new conversation's id, minted by the host, and its title. Runs the engine's `sessions fork`, which copies the conversation's own record up to `through` and gives the fork the system prompt a new conversation started in that directory would get. The fork works wherever the original works: a fork of a worktree conversation is bound to the same worktree (a `worktree.changed` broadcast lists it in that row's `sessions`) and shares its checkout, which goes with the last conversation holding it. A fork whose record was written is a fork that was made: the reply reports it even when the engine failed afterwards, and a request cancelled after that point still leaves the fork bound to its worktree, titled, and announced by `session.changed`. Subagent descendant transcripts, job logs, and scratch files are not copied. Refused for a `through` that is not the end of a turn, a subagent transcript, a worktree conversation whose checkout is gone, and a conversation that is archived or moving |
@@ -365,7 +368,36 @@ Notifications:
 | method | params |
 |---|---|
 | `session.event` | `{session, sequence, session_root, event: {sequence, ts, item}}` — one durably **committed** store event, `event` verbatim as `session.load` carries it in `events`. `session_root` is the durable store root the commit was read from: session ids are not globally unique across stores, so the durable identity is `(session_root, session)` and a client must never merge same-id records from different stores; see *The durable transcript* below |
+| `session.pr_changed` | `{session}` — broadcast to connected clients of the writing host after a binding replacement or removal is saved. Re-read `session.pr_list`; this notification carries neither the new list nor PR metadata |
 | `session.changed` | `{change: "archived" \| "unarchived" \| "deleted" \| "renamed" \| "created", session, workspace}` — broadcast to every client (the requester included) when a record moves between stores, is permanently deleted, changes display title, or is created by `session.fork` (`session` is then the new fork); `workspace` is the owning project path, so same-ID records in other project stores remain untouched. A family operation emits one fact for the parent and each descendant subagent record. Recipients apply each store-qualified fact immediately, keep placement facts authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
+
+#### Session PR associations
+
+The `session.pr_*` commands above serve authenticated Desktop frontends. The
+agent-facing [host MCP tools](../desktop/backend/mcp/README.md#session-pr-and-branch-associations)
+are `session_pr_list({})` and `session_pr_bind({bindings: [{url}]})`; their
+session identity comes from the bearer grant, never from tool arguments.
+There is no frontend `session.pr_bind` command. MCP bind replaces the whole
+list, while the frontend remove command edits the latest saved list so a stale
+client cannot erase unrelated additions. Full replacements are serialized,
+but do not perform version checks: the last committed replacement wins.
+
+Bindings are URL-only entries in `pr-bindings.json` beside the transcript.
+Saving normalizes surrounding whitespace and trailing slashes, keeps the
+first occurrence of duplicates, and validates basic HTTPS syntax without
+remote lookup or checkout changes. Malformed entries reject the entire
+replacement. Archive/restore moves the sidecar with the session; writes share
+the archive lock and revalidate the live record before committing.
+
+Clients refresh the list when opening or reconnecting to a conversation and
+on `session.pr_changed`, then request details separately. Correlate replies
+with their requested URL and refresh generation, discard superseded replies,
+and keep saved bindings and cached details on lookup errors. An empty detail
+reply means no enrichment and clears that URL's cached metadata. Merge a
+bound PR and branch only when the resolved `head_url` exactly matches the
+bound branch URL, rather than matching branch names across repositories.
+Removing a merged row removes each of its bound URLs. The OpenSeek composer
+renders this list instead of a separate checkout PR chip.
 
 #### The durable transcript: snapshots + commits
 

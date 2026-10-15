@@ -171,7 +171,8 @@ The backend adds two tools to hosts that provide this server:
 - `session_pr_list({})` returns `{ "bindings": [{ "url": "https://…" }] }`.
 - `session_pr_bind({ "bindings": [...] })` atomically replaces the **entire**
   current-session list. Read the list first and retain the entries you still
-  want. Omitted entries are removed; an explicit empty array clears it.
+  want. Omitted entries are removed; an explicit empty array clears it. It
+  returns the same `{ "bindings": [...] }` shape with the saved entries.
 
 For example:
 
@@ -191,11 +192,20 @@ A malformed entry rejects the whole replacement. The session comes from the
 MCP grant, never from a tool argument. URLs for unpublished local branches
 are not supported.
 
+Saving requires an existing live session record; a stale grant cannot recreate
+an archived or deleted session. Listing a session with no live record or no
+sidecar returns an empty list, while read/parse failures remain tool errors.
+Concurrent replacements are serialized, with the last committed list winning;
+the read-then-bind workflow is not a version-checked update.
+
 The list lives beside the session transcript in `pr-bindings.json`, and moves
 with that session when archived/restored/deleted. The composer refreshes on
 changes and separately resolves GitHub PR status; lookup failures keep the
 association visible. PR and branch rows merge when the resolved head URL
 identifies the same branch. Removing a row only removes its associations.
+The [Desktop session protocol](../../../docs/remote-protocol.md#session-pr-associations)
+documents the separate frontend list/remove/detail commands and the
+`session.pr_changed` notification emitted after a save.
 
 These tools belong to the `session` group. If the configuration filters groups
 with `X-SeekMoon-Tool-Groups`, include `session` (for example `browser,session`).
