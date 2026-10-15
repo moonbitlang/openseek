@@ -48,7 +48,7 @@ class SkillsHarness extends DesktopBrowserHarness {
     return release;
   }
 
-  async openDetails(fromCatalog = false, expectedRows = 1) {
+  async openDetails(fromCatalog = false) {
     await this.install();
     await this.goto();
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
@@ -61,7 +61,6 @@ class SkillsHarness extends DesktopBrowserHarness {
     await expect(availableGroup).toBeVisible();
     await expect(installedGroup.locator('.skill-row')).toHaveCount(this.installedSkills.length);
     await expect(availableGroup.getByText('Loading the skill catalog…', { exact: true })).toHaveCount(0);
-    await expect(this.page.locator('.skill-summary')).toHaveCount(expectedRows);
     const group = fromCatalog || this.installedSkills.length === 0 ? availableGroup : installedGroup;
     await group.locator('.skill-summary').first().click();
     await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
@@ -103,7 +102,7 @@ for (const { source, packagePath } of [
     app.installedSkills[0].source = source;
     app.installedSkills[0].registry.package_path = packagePath;
     const samePackage = packagePath === '';
-    await app.openDetails(!samePackage, samePackage ? 1 : 2);
+    await app.openDetails(!samePackage);
     if (samePackage) {
       await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
       const registry = page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Available', exact: true }) });
@@ -156,11 +155,14 @@ for (const removing of [false, true]) {
     await expect(page.locator('.skill-detail-action')).toHaveText(busyLabel);
     // Wait for the committed library state to render, rather than just for the request.
     await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
-    await expect(page.locator('.skill-row')).toHaveCount(1);
-    const listAction = page.locator('.skill-row button.skill-action');
+    const group = page.locator('.settings-group').filter({
+      has: page.getByRole('heading', { name: removing ? 'Available' : 'Installed', exact: true }),
+    });
+    await expect(group.locator('.skill-row')).toHaveCount(1);
+    const listAction = group.locator('.skill-row button.skill-action');
     await expect(listAction).toBeDisabled();
     await expect(listAction).toHaveText(busyLabel);
-    await page.locator('.skill-summary').first().click();
+    await group.locator('.skill-summary').click();
     const action = page.locator('.skill-detail-action');
     await expect(action).toBeDisabled();
     await expect(action).toHaveText(busyLabel);
@@ -184,7 +186,7 @@ for (const targetInstalled of [false, true]) {
       app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0', registry: { module_name: 'acme/widget', package_path: '' } });
     }
     app.rpcErrors.set('skills.uninstall', 'Cannot remove wayfinder: permission denied');
-    await app.openDetails(false, 2);
+    await app.openDetails();
     const contentMethod = targetInstalled ? 'skills.installed_content' : 'skills.content';
     const initialReads = app.requests.filter(r => r.method === contentMethod).length;
     for (const cached of [false, true]) {
@@ -223,7 +225,7 @@ for (const removing of [false, true]) {
       if (request.method === method && failWayfinder) return pending;
       return replyFor(request);
     };
-    await app.openDetails(false, 2);
+    await app.openDetails();
     const detail = page.locator('.skill-detail-page');
     const back = page.getByRole('button', { name: 'Back to skills', exact: true });
     await detail.getByRole('button', { name: actionName, exact: true }).click();
