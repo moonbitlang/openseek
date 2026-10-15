@@ -106,7 +106,7 @@ pub fn Service::decide(self : Service, id : String, allow : Bool) -> Bool {
   } else if self.would_wait_cycle(entry) {
     Completed(
       Failed(
-        "The two conversations would wait on each other's message delivery. No message was submitted; retry after the other send finishes.",
+        "The two conversations would wait on each other's message delivery. No message was submitted.",
       ),
     )
   } else {

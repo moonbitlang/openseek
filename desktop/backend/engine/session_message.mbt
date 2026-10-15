@@ -35,7 +35,7 @@ fn ServeEngine::watch_message(
 
 ///|
 /// These commands are still in the host queue: no bytes from them reached
-/// stdin, so retrying them cannot duplicate a committed input.
+/// stdin. Report them as dropped input to the waiting sender.
 fn ServeEngine::drop_unwritten_message(
   self : ServeEngine,
   command : @wire.Command,
@@ -50,8 +50,8 @@ fn ServeEngine::drop_unwritten_message(
 ///|
 /// Submit host-owned input to an existing conversation. A live process keeps
 /// its model/configuration; a reclaimed process is resumed with host defaults.
-/// None means compaction is in progress: retry after its lifecycle event.
-/// Some is admission only; the caller confirms the durable User submission id.
+/// Reject input while compaction is in progress. A returned submission is
+/// admission only; the caller confirms the durable User submission id.
 /// The receipt observer outlives turn-finished and settles on the exact steer
 /// receipt, a definitely unwritten command, or the engine consumer's exit.
 pub async fn submit_session_message(
@@ -61,7 +61,7 @@ pub async fn submit_session_message(
   text : String,
   submission_id : String,
   notify : (MessageReceipt) -> Unit,
-) -> MessageSubmission? {
+) -> MessageSubmission {
   guard !text.is_blank() &&
     normalize_submission_id(Some(submission_id)) is Some(_) else {
     raise EngineError("message text and a valid submission id are required")
@@ -73,7 +73,10 @@ pub async fn submit_session_message(
     }
     if slot.live() is Some(live) {
       match live.phase {
-        Compacting(..) => return None
+        Compacting(..) =>
+          raise EngineError(
+            "conversation is compacting; message was not submitted",
+          )
         Running(run_id~, ..) => {
           let reply = steer_run(manager, {
             text,
@@ -84,8 +87,11 @@ pub async fn submit_session_message(
           guard reply.steered else {
             raise EngineError("conversation stopped accepting messages")
           }
-          return Some(
-            live.watch_message(run_id, submission_id, steering=true, notify),
+          return live.watch_message(
+            run_id,
+            submission_id,
+            steering=true,
+            notify,
           )
         }
         Idle(..) => {
@@ -111,8 +117,11 @@ pub async fn submit_session_message(
               session_root: live.session_root.map(root => root.resource_path()),
             }),
           )
-          return Some(
-            live.watch_message(run_id, submission_id, steering=false, notify),
+          return live.watch_message(
+            run_id,
+            submission_id,
+            steering=false,
+            notify,
           )
         }
       }
@@ -132,5 +141,5 @@ pub async fn submit_session_message(
     slot.live() is Some(live) else {
     raise EngineError("conversation stopped before delivery could be observed")
   }
-  Some(live.watch_message(reply.run_id, submission_id, steering=false, notify))
+  live.watch_message(reply.run_id, submission_id, steering=false, notify)
 }

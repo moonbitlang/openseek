@@ -4,16 +4,13 @@ test "a trailing receipt survives turn completion and settles only once" {
   let outcomes = []
   let first = receipts.watch("message", outcome => outcomes.push(outcome))
   // A turn ending does not close the engine's receipt owner. A drop may trail
-  // that terminal; only that exact drop permits resubmitting the message.
+  // that terminal and must remain observable as a delivery failure.
   assert_eq(first.result(), None)
   receipts.settle("message", "dropped")
   assert_eq(first.result(), Some("dropped"))
   receipts.settle("message", "applied")
   assert_eq(outcomes, ["dropped"])
-  let retry = receipts.watch("message", outcome => outcomes.push(outcome))
   first.close()
-  receipts.settle("message", "applied")
-  assert_eq(retry.result(), Some("applied"))
 }
 
 ///|

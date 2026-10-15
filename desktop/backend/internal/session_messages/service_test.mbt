@@ -119,18 +119,20 @@ async test "rejection and withdrawal never deliver the proposed message" {
 }
 
 ///|
-async test "delivery failure is actively reported as failure rather than success" {
+async test "delivery failure is reported once and duplicate requests retain the failure" {
   let service = @session_messages.Service()
   let (message, _) = service.request("sender", "target", "Hello", "fail")
   let notices : @async.Queue[String] = Queue(kind=Blocking(1))
+  let deliveries : Array[String] = []
   let errors : Array[String] = []
   @async.with_timeout(1000, () => {
     @async.with_task_group(group => {
       group.spawn_bg(no_wait=true, () => {
         service.run(
           (target, text, _) => {
+            deliveries.push(target)
             if target == "target" {
-              fail("target was archived")
+              fail("message was not delivered: the engine dropped the input")
             }
             assert_eq(target, "sender")
             notices.put(text)
@@ -145,11 +147,19 @@ async test "delivery failure is actively reported as failure rather than success
         @message_context.parse(notice)
         is Some(DeliveryResult(status="failed", error=Some(_), ..)),
       )
-      assert_true(notice.contains("target was archived"))
+      assert_true(notice.contains("the engine dropped the input"))
       assert_true(message.status() is { "status": "failed", .. })
+      let (duplicate, fresh) = service.request(
+        "sender", "target", "Hello", "fail",
+      )
+      assert_false(fresh)
+      assert_eq(duplicate.id, message.id)
+      assert_true(service.wait(duplicate) is { "status": "failed", .. })
+      assert_false(service.decide(message.id, true))
     })
   })
   assert_true(errors.is_empty())
+  assert_eq(deliveries, ["target", "sender"])
 }
 
 ///|

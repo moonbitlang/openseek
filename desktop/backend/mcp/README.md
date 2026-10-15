@@ -124,6 +124,10 @@ the sender's agent context, steering its current turn or starting a new one.
 Rejections and delivery failures are reported too. A result-notification
 failure stays visible in status and is reported to the frontend.
 
+Each delivery is submitted once. A dropped steer, an unwritten command, or a
+conversation that is compacting reports failure; the host does not resubmit
+the message. Reusing the same `request_id` returns that recorded outcome.
+
 Host message approvals survive tool cancellation, turn completion and frontend
 reconnection. They are process-lifetime state: closing the host discards
 outstanding requests. Engine-owned approvals retain their
