@@ -1,10 +1,12 @@
 import {
+  "moonbitlang/openseek/env" @exe,
   "moonbitlang/async",
   "moonbitlang/async/fs",
   "moonbitlang/async/os_error",
   "moonbitlang/async/process",
   "moonbitlang/async/stdio",
   "moonbitlang/core/env",
+  "moonbitlang/x/path",
   "moonbitlang/core/json",
   "moonbitlang/x/crypto",
 }

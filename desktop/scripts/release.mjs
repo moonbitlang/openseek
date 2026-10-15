@@ -1,4 +1,4 @@
-// Stamp, upload, and publish Desktop releases.
+// Stamp, upload, and publish Desktop and CLI releases.
 //
 //   node scripts/release.mjs stamp X.Y.Z       stamp the version every packager builds from
 //   node scripts/release.mjs upload [vX.Y.Z]   upload the checkout's artifacts to OSS and S3
@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Everything one release ships, in upload order. `file` is both the name in
 // dist/ and the immutable download name under the version directory; `label`
 // names the download in the release summary.
-const Artifacts = [
+export const Artifacts = [
   { platform: "macos-arm64", label: "Updater ZIP", file: "SeekMoon.app.zip", contentType: "application/zip" },
   { platform: "macos-arm64-dmg", label: "Installer DMG", file: "SeekMoon.dmg", contentType: "application/x-apple-diskimage" },
   // Also uploaded to the API: `/console/` serves it from the API origin.
@@ -40,12 +40,21 @@ const Artifacts = [
   // Rollbacks preserve older ZIP downloads or releases without Windows.
   { platform: "windows-x64", label: "Windows installer", file: "SeekMoon-windows-x64-setup.exe", contentType: "application/octet-stream",
     optionalOnRollback: true, rollbackFiles: ["SeekMoon-windows-x64.zip"] },
+  ...["linux-x64", "linux-arm64", "macos-arm64", "windows-x64"].flatMap(platform => [
+    { platform: `cli-${platform}`, label: `CLI (${platform})`,
+      file: `openseek-${platform}${platform === "windows-x64" ? ".exe" : ""}`,
+      contentType: "application/octet-stream", optionalOnRollback: true },
+    { platform: `cli-deps-${platform}`, label: `CLI dependencies (${platform})`,
+      file: `openseek-deps-${platform}.tar.gz`, contentType: "application/gzip", optionalOnRollback: true },
+  ]),
+  { platform: "cli-checksums", label: "CLI checksums", file: "SHA256SUMS", contentType: "text/plain", optionalOnRollback: true },
 ];
 const Browser = Artifacts.find(artifact => artifact.platform === "browser");
 
-// The Desktop modules released under one version, relative to `desktop/`,
+// The CLI and Desktop modules released under one version, relative to `desktop/`,
 // each with the sibling modules its manifest pins.
 const StampedModules = [
+  { path: "../moon.mod", pins: [] },
   { path: "moon.mod", pins: [] },
   { path: "backend/moon.mod", pins: ["openseek_desktop"] },
   { path: "app/moon.mod", pins: ["openseek_desktop", "openseek_desktop/backend"] },
@@ -227,7 +236,7 @@ export class Release {
     if (!/^\d+\.\d+\.\d+$/.test(version)) {
       throw new Error(`release version must be three dot-separated numbers: ${version}`);
     }
-    // The Desktop modules are released together. Keep their versions and the
+    // CLI and Desktop are released together. Keep their versions and the
     // workspace dependency pins between them on the same value.
     for (const { path, pins } of StampedModules) {
       const modulePath = join(this.desktop, path);
@@ -240,6 +249,13 @@ export class Release {
         module = module.replace(pinned, `"${pin}@${version}"`);
       }
       await writeFile(modulePath, module);
+    }
+    // All checkout-local consumers must resolve the stamped root module.
+    for (const path of ["backend/moon.mod", "frontend/moon.mod", "../inspect/moon.mod", "../cmd/viz_app/moon.mod"]) {
+      const modulePath = join(this.desktop, path);
+      const module = await readFile(modulePath, "utf8");
+      if (!/"moonbitlang\/openseek@[^"]+"/.test(module)) throw new Error(`${path} has no openseek dependency`);
+      await writeFile(modulePath, module.replace(/"moonbitlang\/openseek@[^"]+"/, `"moonbitlang/openseek@${version}"`));
     }
     const configPath = join(this.desktop, "proton.project.json");
     const config = JSON.parse(await readFile(configPath, "utf8"));

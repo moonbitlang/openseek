@@ -1,198 +1,270 @@
 ///|
-async fn fixture(root : String) -> (Release, String) {
-  let payload = root + "/payload"
-  for directory in ["bin", "share/doc/moonbit", "share/workflow"] {
-    @fs.mkdir(payload + "/" + directory, recursive=true, allow_exist=true)
-  }
-  for file in required_files() {
-    if file.has_prefix("toolchain/") {
-      continue
-    }
-    let executable = file == "bin/rg"
-    @fs.write_file(
-      payload + "/" + file,
-      if executable {
-        "#!/bin/sh\nprintf 'fixture-sdk\\n'\n"
-      } else {
-        "resource"
-      },
-      permission=if executable { 0o755 } else { 0o644 },
-    )
-  }
-  let archive = root + "/fixture.tar.gz"
-  ignore(command("tar", ["-czf", archive, "-C", payload, "."]))
-  (
-    {
-      id: "fixture",
-      platform: "linux-x64",
-      url: "https://example.invalid/runtime.tar.gz",
-      sha256: checksum(archive),
-      moonbit_version: "fixture-sdk",
-    },
-    archive,
-  )
+async fn executable(path : String, text : String) -> Unit {
+  @fs.write_file(path, "#!/bin/sh\nprintf '\{text}\\n'\n", permission=0o755)
 }
 
 ///|
-async fn fixture_toolchain(destination : String, _version : String) -> Unit {
-  @fs.mkdir(destination + "/bin", recursive=true)
-  @fs.mkdir(destination + "/lib/core", recursive=true)
+async fn fixture_toolchain(destination : String) -> Unit {
+  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  @fs.mkdir(destination + "/lib/core", recursive=true, allow_exist=true)
   for name in ["moon", "moonc", "moonrun", "moonx"] {
-    @fs.write_file(
-      destination + "/bin/" + name,
-      "#!/bin/sh\nprintf 'fixture-sdk\\n'\n",
-      permission=0o755,
+    executable(destination + "/bin/" + name, "existing-sdk")
+  }
+}
+
+///|
+async fn fixture_bundle(destination : String) -> Unit {
+  @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
+  executable(destination + "/bin/rg", "fixture-rg")
+  for directory in ["doc/moonbit/language", "doc/moonbit/toolchain", "workflow"] {
+    @fs.mkdir(
+      destination + "/share/" + directory,
+      recursive=true,
+      allow_exist=true,
     )
   }
+  for file in resource_files() {
+    @fs.write_file(destination + "/share/" + file, "resource")
+  }
+  @fs.mkdir(destination + "/licenses", allow_exist=true)
+  @fs.write_file(destination + "/licenses/LICENSE", "fixture license")
 }
 
 ///|
-async test "setup publishes a verified runtime and reuses it without downloading" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
-    return
-  }
-  let root = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(root, recursive=true)
-  let (info, archive) = fixture(root)
-  let installs = Ref(0)
-  let toolchain : async (String, String) -> Unit = (destination, version) => {
-    installs.val += 1
-    fixture_toolchain(destination, version)
-  }
-  let downloads = Ref(0)
-  let fetch : async (String, String) -> Unit = (_url, target) => {
-    downloads.val += 1
-    ignore(command("cp", [archive, target]))
-  }
-  let (installed, reused) = install(
-    info,
-    root + "/runtime",
-    _ => (),
-    download=fetch,
-    toolchain~,
-  )
-  assert_false(reused)
-  assert_eq(
-    @fs.read_file(installed + "/share/doc/moonbit/index.md").text(),
-    "resource",
-  )
-  let (again, reused) = install(
-    info,
-    root + "/runtime",
-    _ => (),
-    download=fetch,
-    toolchain~,
-  )
-  assert_true(reused)
-  assert_eq(again, installed)
-  assert_eq(downloads.val, 1)
-  assert_eq(installs.val, 1)
-  assert_eq(@fs.readdir(root + "/runtime", include_hidden=true).length(), 2)
+async fn isolated_available(program : String, args : Array[String]) -> Bool {
+  program.contains("/") && usable(program, args)
 }
 
 ///|
-async test "bad download never publishes and retry succeeds without replacing another runtime" {
+async test "setup installs missing dependencies and reuses them offline" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return
   }
-  let root = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(root, recursive=true)
-  let (info, archive) = fixture(root)
-  let base = root + "/runtime"
-  @fs.mkdir(base + "/existing", recursive=true)
-  @fs.write_file(base + "/existing/marker", "keep")
-  let result = try {
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
+  assert_false(
     install(
-      info,
-      base,
+      home,
+      home + "/bootstrap.wasm",
       _ => (),
-      download=(_url, target) => @fs.write_file(target, "truncated"),
+      available=isolated_available,
+      bundle=fixture_bundle,
+      cli=path => executable(path, "fixture-cli"),
       toolchain=fixture_toolchain,
+    ),
+  )
+  assert_true(usable(home + "/.moon/bin/moon", ["version"]))
+  assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
+  assert_true(usable(home + "/.openseek/bin/rg", ["--version"]))
+  assert_true(resources_available(home + "/.openseek/share"))
+  assert_eq(
+    @fs.read_file(home + "/.openseek/share/licenses/LICENSE").text(),
+    "fixture license",
+  )
+  assert_true(
+    install(
+      home,
+      home + "/bootstrap.wasm",
+      _ => (),
+      available=isolated_available,
+      bundle=_ => fail("must not download"),
+      cli=_ => fail("must not download CLI"),
+      toolchain=_ => fail("must not reinstall SDK"),
+    ),
+  )
+}
+
+///|
+async test "setup reuses PATH tools and preserves existing resource files" {
+  if @env.get_env_var("OS") == Some("Windows_NT") {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
+  @fs.mkdir(home + "/.openseek/share/doc/moonbit", recursive=true)
+  @fs.write_file(
+    home + "/.openseek/share/doc/moonbit/index.md",
+    "user documentation",
+  )
+  executable(home + "/bootstrap", "bootstrap-cli")
+  assert_false(
+    install(
+      home,
+      home + "/bootstrap",
+      _ => (),
+      available=(program, args) => {
+        if ["moon", "moonc", "moonrun", "moonx", "rg"].contains(program) {
+          true
+        } else {
+          isolated_available(program, args)
+        }
+      },
+      bundle=fixture_bundle,
+      cli=_ => fail("must copy the current CLI"),
+      toolchain=_ => fail("working SDK must be reused"),
+    ),
+  )
+  assert_false(@fs.exists(home + "/.moon"))
+  assert_false(@fs.exists(home + "/.openseek/bin/rg"))
+  assert_eq(
+    command(home + "/.openseek/bin/openseek", ["--help"]),
+    "bootstrap-cli\n",
+  )
+  assert_eq(
+    @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
+    "user documentation",
+  )
+  assert_true(resources_available(home + "/.openseek/share"))
+}
+
+///|
+async test "setup repairs only an unusable tool without replacing working dependencies" {
+  if @env.get_env_var("OS") == Some("Windows_NT") {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
+  fixture_toolchain(home + "/.moon")
+  fixture_bundle(home + "/.openseek")
+  executable(home + "/.openseek/bin/openseek", "keep-cli")
+  @fs.write_file(
+    home + "/.openseek/bin/rg",
+    "#!/bin/sh\nexit 1\n",
+    permission=0o644,
+  )
+  @fs.write_file(home + "/.moon/credentials", "keep")
+  @fs.write_file(home + "/.openseek/share/doc/moonbit/index.md", "keep-docs")
+  assert_false(
+    install(
+      home,
+      home + "/bootstrap",
+      _ => (),
+      available=isolated_available,
+      bundle=fixture_bundle,
+      cli=path => executable(path, "fixture-cli"),
+      toolchain=_ => fail("SDK must not be replaced"),
+    ),
+  )
+  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
+  assert_eq(command(home + "/.openseek/bin/openseek", ["--help"]), "keep-cli\n")
+  assert_eq(@fs.kind(home + "/.moon/lib/core"), Directory)
+  assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
+  assert_eq(
+    @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
+    "keep-docs",
+  )
+}
+
+///|
+async test "corrupt bundle is rejected before extraction" {
+  let destination = @fs.tmpdir(prefix="openseek-bundle-test-")
+  defer @fs.rmdir(destination, recursive=true)
+  let error = try {
+    extract_bundle(
+      { url: "https://example.invalid/bundle.tar.gz", sha256: "a".repeat(64), },
+      destination,
+      download=(_url, path) => @fs.write_file(path, "corrupt"),
+    )
+    "accepted"
+  } catch {
+    error => "\{error}"
+  }
+  assert_true(error.contains("checksum mismatch"))
+}
+
+///|
+async test "failed SDK installation remains retryable without a completion stamp" {
+  if @env.get_env_var("OS") == Some("Windows_NT") {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
+  let error = try {
+    install(
+      home,
+      home + "/bootstrap",
+      _ => (),
+      available=isolated_available,
+      bundle=_ => fail("SDK failure must stop setup"),
+      cli=path => executable(path, "fixture-cli"),
+      toolchain=destination => {
+        fixture_toolchain(destination)
+        @fs.rmdir(destination + "/lib/core", recursive=true)
+        @fs.write_file(destination + "/credentials", "keep")
+        fail("installer failed")
+      },
     )
     |> ignore
     "accepted"
   } catch {
     error => "\{error}"
   }
-  assert_true(result.contains("checksum mismatch"))
-  assert_false(@fs.exists(base + "/" + info.sha256))
+  assert_true(error.contains("installer failed"))
   assert_false(
-    @fs.readdir(base, include_hidden=true).any(name => {
-      name.has_prefix(".setup-")
-    }),
+    install(
+      home,
+      home + "/bootstrap",
+      _ => (),
+      available=isolated_available,
+      bundle=fixture_bundle,
+      cli=path => executable(path, "fixture-cli"),
+      toolchain=fixture_toolchain,
+    ),
   )
-  let (_, reused) = install(
-    info,
-    base,
-    _ => (),
-    download=(_url, target) => ignore(command("cp", [archive, target])),
-    toolchain=fixture_toolchain,
-  )
-  assert_false(reused)
-  assert_eq(@fs.read_file(base + "/existing/marker").text(), "keep")
+  assert_eq(@fs.kind(home + "/.moon/lib/core"), Directory)
+  assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
 }
 
 ///|
-async test "concurrent setup callers share one completed installation" {
+async test "concurrent setup checks installed files again after taking the lock" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return
   }
-  let root = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(root, recursive=true)
-  let (info, archive) = fixture(root)
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
   let downloads = Ref(0)
-  let fetch : async (String, String) -> Unit = (_url, target) => {
-    downloads.val += 1
-    ignore(command("cp", [archive, target]))
+  let setup : async () -> Bool = () => {
+    install(
+      home,
+      home + "/bootstrap",
+      _ => (),
+      available=isolated_available,
+      bundle=destination => {
+        downloads.val += 1
+        fixture_bundle(destination)
+      },
+      cli=path => executable(path, "fixture-cli"),
+      toolchain=fixture_toolchain,
+    )
   }
   @async.with_task_group(group => {
-    let first = group.spawn(() => {
-      install(
-        info,
-        root + "/runtime",
-        _ => (),
-        download=fetch,
-        toolchain=fixture_toolchain,
-      )
-    })
-    let second = group.spawn(() => {
-      install(
-        info,
-        root + "/runtime",
-        _ => (),
-        download=fetch,
-        toolchain=fixture_toolchain,
-      )
-    })
-    let (a, reused_a) = first.wait()
-    let (b, reused_b) = second.wait()
-    assert_eq(a, b)
-    assert_true(reused_a != reused_b)
+    let first = group.spawn(setup)
+    let second = group.spawn(setup)
+    assert_true(first.wait() != second.wait())
   })
   assert_eq(downloads.val, 1)
 }
 
 ///|
-test "release metadata requires a supported platform HTTPS and an exact checksum" {
-  let valid : Json = {
-    "id": "cli-v1",
-    "platform": "linux-x64",
-    "url": "https://example.invalid/runtime",
-    "sha256": "a".repeat(64),
-    "moonbit_version": "fixture-sdk",
-  }
-  assert_eq(decode_release(valid.stringify()).id, "cli-v1")
+test "bundle checksum selects the exact platform asset and rejects invalid or missing entries" {
+  let filename = "openseek-deps-linux-x64.tar.gz"
+  let digest = "a".repeat(64)
+  let sums = "b".repeat(64) +
+    "  openseek-deps-linux-arm64.tar.gz\n" +
+    digest +
+    "  " +
+    filename +
+    "\n"
+  assert_eq(bundle_checksum(sums, filename), digest)
   for
-    (key, value) in [
-      ("platform", "macos"),
-      ("url", "http://example.invalid/runtime"),
-      ("sha256", "abc"),
+    source in [
+      "",
+      "bad  " + filename,
+      "z".repeat(64) + "  " + filename,
+      digest + "  " + filename + ".old",
     ] {
-    guard valid is Object(fields) else { fail("object expected") }
-    let changed = fields.copy()
-    changed[key] = Json(value)
     let refused = try {
-      decode_release(Json(changed).stringify()) |> ignore
+      bundle_checksum(source, filename) |> ignore
       false
     } catch {
       _ => true
@@ -202,40 +274,117 @@ test "release metadata requires a supported platform HTTPS and an exact checksum
 }
 
 ///|
-async test "failed official installer leaves no completed runtime and can retry" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
-    return
-  }
-  let root = @fs.tmpdir(prefix="openseek-setup-test-")
-  defer @fs.rmdir(root, recursive=true)
-  let (info, archive) = fixture(root)
-  let base = root + "/runtime"
-  let fetch : async (String, String) -> Unit = (_url, target) => {
-    ignore(command("cp", [archive, target]))
+test "setup selects every official native toolchain platform" {
+  for
+    (host, platform) in [
+      ("Linux x86_64", "linux-x64"),
+      ("Linux aarch64", "linux-arm64"),
+      ("Darwin arm64", "macos-arm64"),
+      ("Windows AMD64", "windows-x64"),
+      // The official installer supplies the x64 toolchain on ARM64 Windows.
+      ("Windows ARM64", "windows-x64"),
+    ] {
+    assert_eq(host_platform(host), platform)
   }
   let refused = try {
-    install(info, base, _ => (), download=fetch, toolchain=(
-      destination,
-      _version,
-    ) => {
-      @fs.mkdir(destination, recursive=true)
-      @fs.write_file(destination + "/partial", "interrupted installer")
-      fail("installer failed")
-    })
-    |> ignore
+    host_platform("Windows x86") |> ignore
     false
   } catch {
     _ => true
   }
   assert_true(refused)
-  assert_false(@fs.exists(base + "/" + info.sha256))
-  assert_eq(@fs.readdir(base, include_hidden=true), ["setup.lock"])
-  let (_, reused) = install(
-    info,
-    base,
-    _ => (),
-    download=fetch,
-    toolchain=fixture_toolchain,
+}
+
+///|
+async test "missing CLI downloads separately without fetching an available dependency bundle" {
+  if is_windows() {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-cli-test-")
+  defer @fs.rmdir(home, recursive=true)
+  fixture_toolchain(home + "/.moon")
+  fixture_bundle(home + "/.openseek")
+  assert_false(@fs.exists(home + "/.openseek/bin/openseek"))
+  assert_false(
+    install(
+      home,
+      home + "/bootstrap.wasm",
+      _ => (),
+      available=isolated_available,
+      bundle=_ => fail("must reuse installed dependencies"),
+      toolchain=_ => fail("must reuse installed SDK"),
+      cli=path => executable(path, "downloaded-cli"),
+    ),
   )
-  assert_false(reused)
+  assert_eq(
+    command(home + "/.openseek/bin/openseek", ["--help"]),
+    "downloaded-cli\n",
+  )
+}
+
+///|
+test "setup selects CLI and dependencies from the shared release manifest" {
+  let digest = "a".repeat(64)
+  let base = "https://downloads.example.com/openseek/staging/desktop/releases/v0.2.0/"
+  let manifest : Json = {
+    "version": "0.2.0",
+    "platforms": {
+      "macos-arm64": { "url": base + "SeekMoon.app.zip", "sha256": digest },
+      "cli-macos-arm64": {
+        "url": base + "openseek-macos-arm64",
+        "sha256": digest,
+      },
+      "cli-deps-macos-arm64": {
+        "url": base + "openseek-deps-macos-arm64.tar.gz",
+        "sha256": digest,
+      },
+    },
+  }
+  for
+    (key, filename) in [
+      ("cli-macos-arm64", "openseek-macos-arm64"),
+      ("cli-deps-macos-arm64", "openseek-deps-macos-arm64.tar.gz"),
+    ] {
+    let artifact = manifest_artifact(manifest, key)
+    assert_eq(artifact.url, base + filename)
+    assert_eq(artifact.sha256, digest)
+  }
+}
+
+///|
+test "setup rejects absent or malformed release artifacts before downloading" {
+  let manifests : Array[Json] = [
+    { "platforms": {} },
+    { "platforms": { "cli-linux-x64": { "url": "https://example.com/cli" } } },
+    {
+      "platforms": {
+        "cli-linux-x64": {
+          "url": "http://example.com/cli",
+          "sha256": "a".repeat(64),
+        },
+      },
+    },
+    {
+      "platforms": {
+        "cli-linux-x64": { "url": "https://example.com/cli", "sha256": "a" },
+      },
+    },
+    {
+      "platforms": {
+        "cli-linux-x64": {
+          "url": "https://example.com/cli",
+          "sha256": "z".repeat(64),
+        },
+      },
+    },
+  ]
+  for manifest in manifests {
+    let rejected = try {
+      manifest_artifact(manifest, "cli-linux-x64") |> ignore
+      false
+    } catch {
+      _ => true
+    }
+    assert_true(rejected)
+  }
 }

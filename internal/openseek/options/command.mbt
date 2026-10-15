@@ -75,7 +75,7 @@ pub fn root_command() -> @argparse.Command {
     subcommands=[
       Command(
         "setup",
-        about="Install this CLI release's MoonBit toolchain, ripgrep and resources in your user directory.",
+        about="Install missing dependencies in ~/.moon and ~/.openseek; reuse available tools.",
         flags=[
           FlagArg(
             "json",
@@ -85,9 +85,9 @@ pub fn root_command() -> @argparse.Command {
         ],
         options=[
           OptionArg(
-            "runtime-url",
-            long="runtime-url",
-            about="Download the exact pinned runtime from an HTTPS mirror; its checksum must still match.",
+            "bundle-url",
+            long="bundle-url",
+            about="Download the installation bundle and SHA256SUMS from an HTTPS mirror.",
           ),
         ],
       ),

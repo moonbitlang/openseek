@@ -1,8 +1,9 @@
 name: Desktop release
 
-run-name: Desktop ${{ github.event_name == 'schedule' && 'stable' || inputs.channel }} v${{ github.event_name == 'schedule' && 'daily' || inputs.version }} by @${{ github.actor }}
+run-name: Desktop ${{ github.event_name == 'schedule' && 'stable' || inputs.channel || 'CLI checks' }} v${{ github.event_name == 'schedule' && 'daily' || inputs.version }} by @${{ github.actor }}
 
 on:
+  pull_request:
   # Runs once a day at 14:00 in Asia/Shanghai.
   schedule:
     - cron: "0 6 * * *"
@@ -24,8 +25,8 @@ on:
 # A release must finish as one upload/publish transaction. A second dispatch
 # waits instead of cancelling a run that may already have uploaded its archive.
 concurrency:
-  group: desktop-${{ github.event_name == 'schedule' && 'stable' || inputs.channel }}-release
-  cancel-in-progress: false
+  group: desktop-${{ github.event_name == 'pull_request' && github.ref || (github.event_name == 'schedule' && 'stable' || inputs.channel) }}-release
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   actions: read
@@ -34,6 +35,7 @@ permissions:
 jobs:
   release-needed:
     name: Check for updates
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
       OPENSEEK_API_ORIGIN: ${{ (github.event_name != 'schedule' && inputs.channel == 'staging') && 'https://openseek-api-staging.moonbitlang.cn' || 'https://openseek-api.moonbitlang.cn' }}
@@ -118,6 +120,90 @@ jobs:
           echo "version=$release_version" >> "$GITHUB_OUTPUT"
           echo "Releasing v$release_version." >> "$GITHUB_STEP_SUMMARY"
 
+  release-cli:
+    name: native CLI (${{ matrix.platform }})
+    needs: release-needed
+    if: >-
+      !cancelled() && (github.event_name == 'pull_request' ||
+      (github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'))
+    env:
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-22.04
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: windows-x64
+            runner: windows-latest
+            extension: .exe
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Stamp the shared release version
+        if: github.event_name != 'pull_request'
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install the pinned Windows toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:MOONBIT_INSTALL_VERSION = (Get-Content desktop/.moonbit-version -Raw).Trim()
+          Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
+          "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
+      - name: Install the pinned build toolchain
+        if: runner.os != 'Windows'
+        run: |
+          version="$(cat desktop/.moonbit-version)"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Test installer and release contracts
+        run: |
+          # Keep checkout-local CLI dependencies without Desktop's unrelated
+          # Proton prebuild (which also does not support Linux arm64).
+          node -e 'require("fs").writeFileSync("moon.work", "members = [\".\", \"./protocol\", \"./tools_sdk\", \"./editor\"]\n")'
+          moon update
+          moon test installation --target native
+          node --test desktop/scripts/release.test.mjs
+      - name: Build the standalone native CLI
+        run: |
+          moon build . --target native --release
+          mkdir -p dist/cli
+          cp _build/native/release/build/moonbitlang/openseek/openseek.exe 'dist/cli/openseek-${{ matrix.platform }}${{ matrix.extension }}'
+          chmod +x 'dist/cli/openseek-${{ matrix.platform }}${{ matrix.extension }}'
+      - name: Package the CLI and resources
+        run: |
+          node desktop/scripts/cli/prepare.mjs \
+            --platform '${{ matrix.platform }}' --output dist/cli
+      - name: Validate clean-home setup and the installed CLI
+        run: >-
+          python desktop/scripts/cli/smoke.py
+          'dist/cli/openseek-${{ matrix.platform }}${{ matrix.extension }}' dist/cli '${{ matrix.platform }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-cli-${{ matrix.platform }}-build
+          path: dist/cli/*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   release-macos:
     name: Build, sign, and notarize macOS
     needs: release-needed
@@ -158,8 +244,7 @@ jobs:
           path: desktop/target/moonbit/cache
           key: moonbit-seed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('desktop/.moonbit-version') }}
 
-      # Stamp only this runner's checkout. The three Desktop module manifests
-      # and Proton's package.version must agree before packaging.
+      # Stamp this runner's CLI and Desktop modules with the shared release version.
       - name: Stamp release version
         shell: bash
         run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
@@ -399,7 +484,7 @@ jobs:
   # nothing: every archive arrives from a build job above.
   release-publish:
     name: Publish
-    needs: [release-needed, release-windows, release-macos]
+    needs: [release-needed, release-windows, release-macos, release-cli]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -467,6 +552,20 @@ jobs:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
           path: desktop/dist
 
+      - name: Collect CLI binaries and dependencies
+        uses: actions/download-artifact@v4
+        with:
+          pattern: OpenSeek-cli-*-build
+          path: desktop/dist
+          merge-multiple: true
+
+      - name: Verify CLI artifacts and combine checksums
+        working-directory: desktop/dist
+        run: |
+          cat SHA256SUMS-linux-x64 SHA256SUMS-linux-arm64 SHA256SUMS-macos-arm64 SHA256SUMS-windows-x64 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          rm SHA256SUMS-*
+
       # Upload artifacts before publication. Until API publish succeeds, a
       # retry may replace nondeterministic rebuilds; a published Browser
       # version restores the exact OSS bytes instead.
@@ -503,6 +602,18 @@ jobs:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}
           overwrite: true
           path: desktop/dist/SeekMoon-windows-x64-setup.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload CLI release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSeek-cli-v${{ needs.release-needed.outputs.version }}
+          overwrite: true
+          path: |
+            desktop/dist/openseek-*
+            desktop/dist/SHA256SUMS
           if-no-files-found: error
           compression-level: 0
           retention-days: 14

@@ -2,11 +2,7 @@
 package "moonbitlang/openseek/installation"
 
 // Values
-pub async fn configure() -> Unit
-
-pub async fn runtime_directory() -> String?
-
-pub async fn setup(json~ : Bool, runtime_url? : String) -> Unit
+pub async fn setup(json~ : Bool, bundle_url? : String) -> Unit
 
 // Errors
 

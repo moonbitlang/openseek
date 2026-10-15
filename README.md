@@ -11,11 +11,28 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
-The standalone Linux native CLI can prepare its own MoonBit toolchain, ripgrep,
-and documentation with `openseek setup`. See
-[`docs/cli-release.md`](docs/cli-release.md) for binary downloads, setup output,
-system prerequisites, and the release workflow. This installation path does not
-require an existing MoonBit installation.
+Native binaries for Linux x64/arm64, macOS arm64 and Windows x64 are published
+with Desktop. In the [release manifest](https://openseek-api.moonbitlang.cn/desktop/releases/latest.json),
+`platforms["cli-<platform>"]` provides each binary's URL and SHA-256.
+Download and verify the matching binary, then run:
+
+```sh
+chmod +x ./openseek-linux-x64   # use your platform's filename
+./openseek-linux-x64 setup
+export PATH="$HOME/.openseek/bin:$HOME/.moon/bin:$PATH"
+```
+
+On Windows, run `.\openseek-windows-x64.exe setup` and add
+`%USERPROFILE%\.openseek\bin` and `%USERPROFILE%\.moon\bin` to PATH.
+Setup installs missing MoonBit tools in `~/.moon`, CLI/rg in `~/.openseek/bin`,
+and documentation/workflows in `~/.openseek/share`; usable tools and existing
+resources are reused. It needs curl, tar, and Bash (Unix) or PowerShell (Windows).
+Linux binaries require glibc 2.35+. Other commands do not require setup.
+
+`setup --json` emits JSON Lines. `--bundle-url <https-url>` selects a dependency
+archive mirror, which must also serve `SHA256SUMS` and any missing native CLI.
+For staging, set `OPENSEEK_API_ORIGIN=https://openseek-api-staging.moonbitlang.cn`.
+CLI releases use the existing **Desktop release** workflow's version and channel.
 
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,

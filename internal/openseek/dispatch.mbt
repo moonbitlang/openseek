@@ -21,14 +21,11 @@ pub async fn dispatch() -> Unit {
   if name is ("run" | "serve") {
     @options.export_retry_overrides(m)
   }
-  if name is ("run" | "serve" | "mcp") {
-    @installation.configure()
-  }
   match name {
     "setup" =>
       @installation.setup(
         json=m.flags.get("json").unwrap_or(false),
-        runtime_url?=match m.values.get("runtime-url") {
+        bundle_url?=match m.values.get("bundle-url") {
           Some([value, ..]) => Some(value)
           _ => None
         },
