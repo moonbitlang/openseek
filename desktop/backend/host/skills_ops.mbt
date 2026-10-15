@@ -67,19 +67,19 @@ async fn install_skill_op(
     @skillmarket.SkillMarketError(message) => return SkillInstallError(message)
     error => return SkillInstallError("\{error}")
   }
-  SkillInstalled(installed_skill_to_protocol(installed))
+  SkillInstalled(installed.to_protocol())
 }
 
 ///|
-fn installed_skill_to_protocol(
-  installed : @skillmarket.InstalledSkill,
+fn @skillmarket.InstalledSkill::to_protocol(
+  self : @skillmarket.InstalledSkill,
 ) -> @protocol.InstalledSkill {
   {
-    id: installed.id,
-    name: installed.name,
-    description: installed.description,
-    source: installed.source,
-    registry: installed.registry.map(registry => {
+    id: self.id,
+    name: self.name,
+    description: self.description,
+    source: self.source,
+    registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
     }),
@@ -93,7 +93,7 @@ async fn installed_skills_op() -> InstalledSkillsReply {
       return InstalledSkillsError(message)
     error => return InstalledSkillsError("\{error}")
   }
-  InstalledSkills([ for skill in skills => installed_skill_to_protocol(skill) ])
+  InstalledSkills([ for skill in skills => skill.to_protocol() ])
 }
 
 ///|
