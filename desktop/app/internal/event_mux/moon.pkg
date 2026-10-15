@@ -1,0 +1,9 @@
+import {
+  "moonbitlang/async",
+}
+
+supported_targets = "+native"
+
+import {
+  "openseek_desktop/backend/broadcast",
+} for "test"

@@ -478,25 +478,6 @@ async fn next_hub_input(
 }
 
 ///|
-/// Prefer pending lifecycle/control work over another notification. Once neither
-/// lane is ready, race their blocking reads; `any` cancels the losing read.
-async fn DesktopBridgeActor::next_input(
-  self : DesktopBridgeActor,
-  notifications : @broadcast.Subscription[@protocol.Notification],
-  host_notifications : @async.Queue[@protocol.Notification],
-) -> BridgeInput {
-  if self.controls.try_get() is Some(control) {
-    return Control(control)
-  }
-  @async.any([
-    () => Control(self.controls.get()),
-    () => next_hub_input(notifications),
-    () => Deliver(Hub(host_notifications.get())),
-    () => Deliver(BrowserEvent(self.browser_events.get())),
-  ])
-}
-
-///|
 /// Own the window notification subscription and forward notifications to
 /// the latest attached page. The connect request emits its own readiness event
 /// through its request-scoped sender; later notifications use the window-owned
@@ -523,56 +504,64 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
     let mut connected = false
     let mut target : PageEventTarget? = None
     let pending : Array[PageNotification] = []
-    for ;; {
-      match self.next_input(notifications, host_notifications) {
-        Control(control) =>
-          match control {
-            PageConnected(context, reply) => {
-              // Serialize readiness before subsequent delivery so the
-              // frontend can use it as the resync boundary.
-              context.emit(connected_event, { stage: Accepted, })
-              connected = true
-              reply.put(())
-            }
-            WindowReady(events) => {
-              let next_target = PageEventTarget::{ events, }
-              target = Some(next_target)
-              if connected {
-                for notification in pending {
-                  next_target.emit(notification)
-                }
+    @event_mux.run(
+      [
+        () => Control(self.controls.get()),
+        () => next_hub_input(notifications),
+        () => Deliver(Hub(host_notifications.get())),
+        () => Deliver(BrowserEvent(self.browser_events.get())),
+      ],
+      input => {
+        match input {
+          Control(control) =>
+            match control {
+              PageConnected(context, reply) => {
+                // Serialize readiness before subsequent delivery so the
+                // frontend can use it as the resync boundary.
+                context.emit(connected_event, { stage: Accepted, })
+                connected = true
+                reply.put(())
               }
-              pending.clear()
+              WindowReady(events) => {
+                let next_target = PageEventTarget::{ events, }
+                target = Some(next_target)
+                if connected {
+                  for notification in pending {
+                    next_target.emit(notification)
+                  }
+                }
+                pending.clear()
+              }
+              WindowClosed => {
+                connected = false
+                target = None
+                pending.clear()
+              }
+              WindowChromeChanged =>
+                deliver_to_page(connected, target, pending, WindowChromeChanged)
+              SystemAppearanceChanged =>
+                deliver_to_page(
+                  connected,
+                  target,
+                  pending,
+                  SystemAppearanceChanged,
+                )
             }
-            WindowClosed => {
-              connected = false
-              target = None
-              pending.clear()
-            }
-            WindowChromeChanged =>
-              deliver_to_page(connected, target, pending, WindowChromeChanged)
-            SystemAppearanceChanged =>
-              deliver_to_page(
-                connected,
-                target,
-                pending,
-                SystemAppearanceChanged,
-              )
-          }
-        Deliver(notification) =>
-          deliver_to_page(connected, target, pending, notification)
-        // Readiness is the frontend's resync boundary. The subscription
-        // already sits at the log's head, so every notification published
-        // from here on queues behind this boundary.
-        SubscriptionLagged =>
-          deliver_to_page(
-            connected,
-            target,
-            pending,
-            Hub(AgentConnected({ stage: Accepted, })),
-          )
-      }
-    }
+          Deliver(notification) =>
+            deliver_to_page(connected, target, pending, notification)
+          // Readiness is the frontend's resync boundary. The subscription
+          // already sits at the log's head, so every notification published
+          // from here on queues behind this boundary.
+          SubscriptionLagged =>
+            deliver_to_page(
+              connected,
+              target,
+              pending,
+              Hub(AgentConnected({ stage: Accepted, })),
+            )
+        }
+      },
+    )
   })
 }
 

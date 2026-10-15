@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/app/internal/event_mux",
   "openseek_desktop/app/internal/cdp",
   "moonbit-community/proton",
   "moonbit-community/proton/extension" @proton_extension,
