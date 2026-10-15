@@ -40,7 +40,7 @@ pub(all) struct InstalledItem {
   // `module@version[/package]` for registry installs; "" for a skill the
   // user wrote by hand (which the app never uninstalls).
   source : String
-  registry : @protocol.RegistrySkillSource?
+  registry : @protocol.RegistrySkillIdentity?
 } derive(Eq)
 
 ///|

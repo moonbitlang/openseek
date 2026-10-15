@@ -18456,11 +18456,7 @@ test "installed skills replies are scoped to their source device" {
       name: "old",
       description: "",
       source: "old/source@1.0.0",
-      registry: Some({
-        module_name: "old/source",
-        package_path: "",
-        version: "1.0.0",
-      }),
+      registry: Some({ module_name: "old/source", package_path: "", }),
     },
   ]
   let (_, ignored) = update(
@@ -18475,11 +18471,7 @@ test "installed skills replies are scoped to their source device" {
       name: "new",
       description: "",
       source: "new/source@1.0.0",
-      registry: Some({
-        module_name: "new/source",
-        package_path: "",
-        version: "1.0.0",
-      }),
+      registry: Some({ module_name: "new/source", package_path: "", }),
     },
   ]
   let (_, applied) = update(

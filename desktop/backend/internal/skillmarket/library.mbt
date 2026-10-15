@@ -13,11 +13,10 @@
 const SidecarFile = ".mooncakes.json"
 
 ///|
-/// Registry coordinates and version recorded for an installed skill.
-pub struct RegistrySkillSource {
+/// Registry coordinates identifying a skill independently of its version.
+pub struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-  version : String
 }
 
 ///|
@@ -31,13 +30,13 @@ pub struct InstalledSkill {
   // `module@version[/package]` recorded at install time; "" for a skill the
   // user wrote by hand (which this package will never touch).
   source : String
-  registry : RegistrySkillSource?
+  registry : RegistrySkillIdentity?
 }
 
 ///|
 priv struct InstalledSource {
   label : String
-  registry : RegistrySkillSource
+  registry : RegistrySkillIdentity
 }
 
 ///|
@@ -155,7 +154,7 @@ fn decode_sidecar(text : String) -> InstalledSource? {
   }
   Some({
     label: source_label(module_name, version, package_path),
-    registry: { module_name, package_path, version, },
+    registry: { module_name, package_path, },
   })
 }
 
@@ -209,7 +208,7 @@ pub async fn install_skill(
     name,
     description,
     source: source_label(module_name, version, package_path),
-    registry: Some({ module_name, package_path, version, }),
+    registry: Some({ module_name, package_path, }),
   }
   let provenance : Json = {
     "module": module_name,

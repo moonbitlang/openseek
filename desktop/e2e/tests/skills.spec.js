@@ -8,7 +8,7 @@ const market = {
 const installed = {
   id: 'yoorkin-wayfinder', name: 'wayfinder', description: market.description,
   source: 'Yoorkin/wayfinder@0.1.0',
-  registry: { module_name: 'Yoorkin/wayfinder', package_path: '', version: '0.1.0' },
+  registry: { module_name: 'Yoorkin/wayfinder', package_path: '' },
 };
 
 class SkillsHarness extends DesktopBrowserHarness {
@@ -93,15 +93,14 @@ test('removed skill without a catalog entry cannot be uninstalled again', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const { source, packagePath, version } of [
-  { source: 'Yoorkin/wayfinder@0.0.9', packagePath: '', version: '0.0.9' },
-  { source: 'Yoorkin/wayfinder@0.1.0/other', packagePath: 'other', version: '0.1.0' },
+for (const { source, packagePath } of [
+  { source: 'Yoorkin/wayfinder@0.0.9', packagePath: '' },
+  { source: 'Yoorkin/wayfinder@0.1.0/other', packagePath: 'other' },
 ]) {
   test(`catalog excludes installed packages regardless of version: ${source}`, async ({ page }) => {
     const app = new SkillsHarness(page, true);
     app.installedSkills[0].source = source;
     app.installedSkills[0].registry.package_path = packagePath;
-    app.installedSkills[0].registry.version = version;
     const samePackage = packagePath === '';
     await app.openDetails(!samePackage);
     if (samePackage) {
@@ -184,7 +183,7 @@ for (const targetInstalled of [false, true]) {
     const other = { ...market, name: 'widget', module_name: 'acme/widget' };
     app.catalogSkills.push(other);
     if (targetInstalled) {
-      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0', registry: { module_name: 'acme/widget', package_path: '', version: '0.1.0' } });
+      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0', registry: { module_name: 'acme/widget', package_path: '' } });
     }
     app.rpcErrors.set('skills.uninstall', 'Cannot remove wayfinder: permission denied');
     await app.openDetails();

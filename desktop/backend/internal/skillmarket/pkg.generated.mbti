@@ -29,7 +29,7 @@ pub struct InstalledSkill {
   name : String
   description : String
   source : String
-  registry : RegistrySkillSource?
+  registry : RegistrySkillIdentity?
 }
 
 pub struct MarketSkill {
@@ -43,10 +43,9 @@ pub struct MarketSkill {
 }
 pub fn MarketSkill::to_json(Self) -> Json
 
-pub struct RegistrySkillSource {
+pub struct RegistrySkillIdentity {
   module_name : String
   package_path : String
-  version : String
 }
 
 // Type aliases

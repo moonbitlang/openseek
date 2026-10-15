@@ -82,7 +82,6 @@ fn @skillmarket.InstalledSkill::to_protocol(
     registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
-      version: registry.version,
     }),
   }
 }

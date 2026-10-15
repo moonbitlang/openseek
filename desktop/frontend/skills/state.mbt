@@ -119,7 +119,7 @@ fn State::update_candidate(self : State, item : InstalledItem) -> MarketItem? {
   guard self.catalog is Ready(items) else { return None }
   for candidate in items {
     if candidate.identity() == (registry.module_name, registry.package_path) &&
-      candidate.version != registry.version {
+      source_label(candidate) != item.source {
       return Some(candidate)
     }
   }
