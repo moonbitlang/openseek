@@ -21,7 +21,18 @@ pub async fn dispatch() -> Unit {
   if name is ("run" | "serve") {
     @options.export_retry_overrides(m)
   }
+  if name is ("run" | "serve" | "mcp") {
+    @installation.configure()
+  }
   match name {
+    "setup" =>
+      @installation.setup(
+        json=m.flags.get("json").unwrap_or(false),
+        runtime_url?=match m.values.get("runtime-url") {
+          Some([value, ..]) => Some(value)
+          _ => None
+        },
+      )
     "run" => @run.run_task_command(m)
     "serve" => @serve.run_serve_command(m)
     "mcp" => @commands.run_mcp_command(m)

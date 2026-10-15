@@ -74,3 +74,26 @@ test "MCP configs append in order and explicit arguments replace the env fallbac
     }
   }
 }
+
+///|
+test "setup accepts unattended output and a checksum-pinned mirror without model credentials" {
+  let plain = @options.root_command().parse(argv=["setup"], env=Map([]))
+  guard plain.subcommand is Some(("setup", plain)) else {
+    fail("setup expected")
+  }
+  assert_false(plain.flags.get("json").unwrap_or(false))
+  let automated = @options.root_command().parse(
+    argv=[
+      "setup", "--json", "--runtime-url", "https://mirror.example/runtime.tar.gz",
+    ],
+    env=Map([]),
+  )
+  guard automated.subcommand is Some(("setup", automated)) else {
+    fail("setup expected")
+  }
+  assert_true(automated.flags.get("json").unwrap_or(false))
+  assert_eq(
+    automated.values.get("runtime-url"),
+    Some(["https://mirror.example/runtime.tar.gz"]),
+  )
+}

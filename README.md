@@ -11,6 +11,12 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
+The standalone Linux native CLI can prepare its own MoonBit toolchain, ripgrep,
+and documentation with `openseek setup`. See
+[`docs/cli-release.md`](docs/cli-release.md) for binary downloads, setup output,
+system prerequisites, and the release workflow. This installation path does not
+require an existing MoonBit installation.
+
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,
 so the engine runs with no clone and no build:

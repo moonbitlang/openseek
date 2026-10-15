@@ -1,13 +1,16 @@
 ///|
 /// Locate this program's bundled resources at `../share` relative to its
 /// real executable directory, following launcher symlinks. Native programs and
-/// file-backed Wasm modules use the same installation layout; neither cwd nor
-/// environment selects resources.
+/// file-backed Wasm modules use the same installation layout. Published native
+/// CLIs first select the versioned user runtime installed by `openseek setup`.
 ///
 /// A missing directory means this installation has no bundled resources.
 /// Other filesystem failures, an invalid layout, and executable lookup errors
 /// propagate so callers do not misreport inaccessible resources as absent.
 pub async fn directory() -> String? {
+  if @installation.runtime_directory() is Some(root) {
+    return Some(root + "/share")
+  }
   // Some platforms preserve the launcher's symlink spelling. Resolve the
   // executable itself before taking its parent, so links in PATH do not
   // redirect resource lookup to an unrelated installation.

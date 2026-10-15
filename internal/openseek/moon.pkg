@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/installation",
   "moonbitlang/openseek/cli",
   "moonbitlang/async/stdio",
   "moonbitlang/x/sys",

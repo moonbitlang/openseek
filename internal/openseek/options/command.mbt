@@ -74,6 +74,24 @@ pub fn root_command() -> @argparse.Command {
     options=@cli.agent_shared_options(global=true),
     subcommands=[
       Command(
+        "setup",
+        about="Install this CLI release's MoonBit toolchain, ripgrep and resources in your user directory.",
+        flags=[
+          FlagArg(
+            "json",
+            long="json",
+            about="Write JSON Lines progress and the final result to stdout.",
+          ),
+        ],
+        options=[
+          OptionArg(
+            "runtime-url",
+            long="runtime-url",
+            about="Download the exact pinned runtime from an HTTPS mirror; its checksum must still match.",
+          ),
+        ],
+      ),
+      Command(
         "run",
         about="Run one task headlessly; print its answer on stdout and its progress on stderr.",
         options=[
