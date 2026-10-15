@@ -2,11 +2,6 @@
 async test "upload authenticates to issuer and retries the exact snapshot after a lost response" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let snapshot = @shares.Snapshot(
-    title="中文 \"title\"",
-    html="<html>snapshot</html>",
-    json="{\"snapshot\":true}",
-  )
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let mut key : String? = None
@@ -73,7 +68,10 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         }
       }
     })
-    let reply = snapshot.publish(
+    let reply = @shares.publish(
+      title="中文 \"title\"",
+      html=() => ["<html>", "snapshot", "</html>"].iter(),
+      json=() => Iter::singleton("{\"snapshot\":true}"),
       server_url="http://127.0.0.1:\{server.addr.port()}",
       token="odt_test",
     )
@@ -105,7 +103,10 @@ async fn reply_for(
       connection.write_string(body)
       connection.end_response()
     })
-    let reply = @shares.Snapshot(title="Test", html~, json="{}").publish(
+    let reply = @shares.publish(
+      title="Test",
+      html=() => Iter::singleton(html),
+      json=() => Iter::singleton("{}"),
       server_url=origin,
       token="odt_test",
     )
@@ -165,7 +166,15 @@ async test "upload size limits are enforced by the server" {
 
 ///|
 async test "a blank title is refused before upload" {
-  try @shares.Snapshot(title="  ", html="html", json="{}") catch {
+  try
+    @shares.publish(
+      title="  ",
+      html=() => Iter::singleton("html"),
+      json=() => Iter::singleton("{}"),
+      server_url="not-a-url",
+      token="test-token",
+    )
+  catch {
     @shares.EmptyTitle => ()
     error => raise error
   } noraise {
@@ -178,9 +187,14 @@ async test "setup and refused connections retain definite failures" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   let origin = "http://127.0.0.1:\{server.addr.port()}"
   server.close()
-  let snapshot = @shares.Snapshot(title="Test", html="<html/>", json="{}")
   for server_url in ["not-a-url", origin] {
-    let reply = snapshot.publish(server_url~, token="test-token")
+    let reply = @shares.publish(
+      title="Test",
+      html=() => Iter::singleton("<html/>"),
+      json=() => Iter::singleton("{}"),
+      server_url~,
+      token="test-token",
+    )
     guard reply is Failed(message~) else { fail("expected connection failure") }
     assert_true(message.has_prefix("The share request failed:"))
     assert_false(message.contains("test-token"))
@@ -192,7 +206,6 @@ async test "a lost response followed by a refused retry reports the connection f
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
   let origin = "http://127.0.0.1:\{server.addr.port()}"
-  let snapshot = @shares.Snapshot(title="Test", html="<html/>", json="{}")
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let (connection, _) = server.accept()
@@ -203,9 +216,158 @@ async test "a lost response followed by a refused retry reports the connection f
       // response so the retry fails definitively, without resolving attempt one.
       server.close()
     })
-    let reply = snapshot.publish(server_url=origin, token="test-token")
+    let reply = @shares.publish(
+      title="Test",
+      html=() => Iter::singleton("<html/>"),
+      json=() => Iter::singleton("{}"),
+      server_url=origin,
+      token="test-token",
+    )
     guard reply is Failed(message~) else { fail("expected connection failure") }
     assert_true(message.has_prefix("The share request failed:"))
     receiver.wait()
+  })
+}
+
+///|
+async test "upload timeouts are actionable and external cancellation propagates" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => {
+      // The accept loop owns the listener: closing it here, when the group
+      // cancels this task, is what lets the loop terminate.
+      defer server.close()
+      for ;; {
+        let (connection, _) = server.accept()
+        group.spawn_bg(no_wait=true, () => {
+          defer connection.close()
+          ignore(connection.read_request())
+          connection.skip_request_body()
+          @async.sleep(60_000)
+        })
+      }
+    })
+    let reply = @shares.publish(
+      title="Test",
+      html=() => Iter::singleton("<html/>"),
+      json=() => Iter::singleton("{}"),
+      server_url="http://127.0.0.1:\{server.addr.port()}",
+      token="test-token",
+      timeout_ms=100,
+    )
+    guard reply is Failed(message~) else { fail("expected upload timeout") }
+    assert_true(message.contains("timed out"))
+    let cancelled = @async.with_timeout_opt(100, () => {
+      @shares.publish(
+        title="Test",
+        html=() => Iter::singleton("<html/>"),
+        json=() => Iter::singleton("{}"),
+        server_url="http://127.0.0.1:\{server.addr.port()}",
+        token="test-token",
+      )
+    })
+    assert_true(cancelled is None)
+  })
+}
+
+///|
+async test "long titles are bounded without truncating streamed conversation files" {
+  for
+    (title, expected) in [
+      ("a".repeat(341), "a".repeat(341)),
+      ("a".repeat(1025), "a".repeat(341)),
+      ("中".repeat(342), "中".repeat(341)),
+      ("😀".repeat(257), "😀".repeat(170)),
+      ("a".repeat(340) + "😀", "a".repeat(340)),
+    ] {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    defer server.close()
+    @async.with_task_group(group => {
+      let receiver = group.spawn(() => {
+        let (connection, _) = server.accept()
+        defer connection.close()
+        ignore(connection.read_request())
+        let body = connection.read_all().text()
+        assert_true(body.contains("name=\"title\"\r\n\r\n\{expected}\r\n"))
+        assert_true(@utf8.encode(expected).length() <= 1024)
+        assert_true(body.contains("<html>\{title}</html>"))
+        assert_true(body.contains("{\"prompt\":\"\{title}\"}"))
+        connection.send_response(201, "Created")
+        connection.write_string("{\"url\":\"https://shares.test/a\"}")
+        connection.end_response()
+      })
+      let reply = @shares.publish(
+        title~,
+        html=() => ["<html>", title, "</html>"].iter(),
+        json=() => ["{\"prompt\":\"", title, "\"}"].iter(),
+        server_url="http://127.0.0.1:\{server.addr.port()}",
+        token="test-token",
+      )
+      assert_true(reply is Shared(..))
+      receiver.wait()
+    })
+  }
+}
+
+///|
+async test "streaming obeys socket backpressure and cancellation stops the source" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let arrived : @async.Queue[Unit] = Queue(kind=Blocking(1))
+  let release : @async.Queue[Unit] = Queue(kind=Blocking(1))
+  let chunk = "x".repeat(4096)
+  let mut produced = 0
+  let mut opened = 0
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      let request = connection.read_request()
+      assert_eq(request.headers.get("Transfer-Encoding"), Some("chunked"))
+      ignore(connection.read_exactly(1024))
+      arrived.put(())
+      release.get()
+      // A cancelled chunked request has no final chunk. Draining must fail
+      // when the client closes its connection rather than hang indefinitely.
+      try connection.skip_request_body() catch {
+        _ => ()
+      } noraise {
+        _ => fail("cancelled upload unexpectedly completed")
+      }
+    })
+    let sender = group.spawn(() => {
+      @shares.publish(
+        title="Test",
+        html=() => {
+          opened += 1
+          Iter::new(() => {
+            if produced >= 100_000 {
+              return None
+            }
+            produced += 1
+            Some(chunk)
+          })
+        },
+        json=() => Iter::singleton("{}"),
+        server_url="http://127.0.0.1:\{server.addr.port()}",
+        token="test-token",
+      )
+    })
+    arrived.get()
+    @async.sleep(50)
+    assert_true(produced > 0 && produced < 100_000)
+    sender.cancel()
+    try sender.wait() catch {
+      @async.WaitedTaskAlreadyCancelled => ()
+      error => raise error
+    } noraise {
+      _ => fail("upload should be cancelled")
+    }
+    let stopped = produced
+    @async.sleep(10)
+    assert_eq(produced, stopped)
+    assert_eq(opened, 1)
+    release.put(())
+    @async.with_timeout(5000, () => receiver.wait())
   })
 }

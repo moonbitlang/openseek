@@ -95,18 +95,16 @@ async fn SessionExport::sessions(
 }
 
 ///|
-/// One current or archived OpenSeek conversation rendered as the standalone
-/// HTML visualizer plus its embedded dataset. The supplied shell and bundle
-/// are the host build's packaged `viz_app` assets, so the document carries the
-/// parser that matches this application.
-pub struct ConversationExport {
-  html : String
-  json : String
+/// One captured conversation and the assets used to stream its export.
+/// Raw records are retained once; HTML and JSON are generated on demand.
+struct ConversationExport {
+  exporter : @viz_export.StandaloneExport
+  sessions : Array[@viz_export.Session]
 }
 
 ///|
-/// Read the records once so both files describe the same conversation even
-/// when another turn is running while the user exports it.
+/// Read the records once so both files and every retry describe the same
+/// conversation, even while another turn is running.
 pub async fn ConversationExport::capture(
   manager : EngineManager,
   payload : @protocol.SessionExportPayload,
@@ -116,6 +114,21 @@ pub async fn ConversationExport::capture(
   let request = SessionExport::SessionExport(manager, payload)
   let sessions = request.sessions()
   let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
-  let json = exporter.json(sessions)
-  { html: exporter.render_json(json), json, }
+  // Validate the packaged shell before opening a save dialog or an upload.
+  ignore(exporter.html_chunks(sessions))
+  { exporter, sessions, }
+}
+
+///|
+/// Open a fresh HTML stream over the captured records.
+pub fn ConversationExport::html(
+  self : ConversationExport,
+) -> Iter[String] raise {
+  self.exporter.html_chunks(self.sessions)
+}
+
+///|
+/// Open a fresh JSON stream over the captured records.
+pub fn ConversationExport::json(self : ConversationExport) -> Iter[String] {
+  self.exporter.json_chunks(self.sessions)
 }

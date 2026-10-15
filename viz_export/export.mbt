@@ -12,6 +12,7 @@ struct Session {
   last_active : Double?
   first_prompt : String
   events : String
+  events_bytes : Int32
 }
 
 ///|
@@ -26,7 +27,17 @@ pub fn Session::Session(
   first_prompt~ : String,
   events~ : String,
 ) -> Session {
-  { key, id, root, root_label, is_marker, last_active, first_prompt, events, }
+  {
+    key,
+    id,
+    root,
+    root_label,
+    is_marker,
+    last_active,
+    first_prompt,
+    events,
+    events_bytes: utf8_length(events),
+  }
 }
 
 ///|
@@ -50,7 +61,7 @@ fn Session::envelope_json(self : Session) -> Json {
   {
     "found": true,
     "events": self.events,
-    "events_bytes": Json(@utf8.encode(self.events).length().to_double()),
+    "events_bytes": Json(self.events_bytes.to_double()),
   }
 }
 

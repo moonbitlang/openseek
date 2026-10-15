@@ -50,11 +50,6 @@ async test "share refusal retires the captured login and preserves a newer one" 
         archived: false,
       },
     }
-    let snapshot = @shares.Snapshot(
-      title="Test",
-      html="<html>test</html>",
-      json="{}",
-    )
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
         let (connection, _) = server.accept()
@@ -73,7 +68,11 @@ async test "share refusal retires the captured login and preserves a newer one" 
         connection.write_string("{}")
         connection.end_response()
       })
-      let reply = share.upload(snapshot, config)
+      let reply = share.upload(
+        html=() => Iter::singleton("<html>test</html>"),
+        json=() => Iter::singleton("{}"),
+        config,
+      )
       receiver.wait()
       if login is Stale {
         assert_true(reply is Failed(..))

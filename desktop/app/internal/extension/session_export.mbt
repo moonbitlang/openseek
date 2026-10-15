@@ -1,5 +1,5 @@
 ///|
-/// The native save-dialog operation for one already-rendered export.
+/// The native save-dialog operation for one captured export.
 priv struct SessionExportDialog {
   session : String
 }
@@ -29,8 +29,8 @@ async fn SessionExportDialog::destination(
 }
 
 ///|
-/// Render at click time, then ask for a destination and write only after the
-/// user confirms it. Rendering first keeps record locks out of the time the
+/// Capture at click time, then ask for a destination and write only after the
+/// user confirms it. Capturing first keeps record locks out of the time the
 /// native dialog is open. Opening is best-effort after the durable write: its
 /// failure is returned separately so the UI never reports a saved export as
 /// failed.
@@ -53,7 +53,13 @@ async fn export_session(
   }
   // The native dialog has already confirmed replacement for this exact path.
   // `CreateNew` would incorrectly reject an overwrite the user approved.
-  @fs.write_file(path, files.html, create_mode=CreateOrTruncate) catch {
+  try {
+    let file = @fs.open(path, mode=WriteOnly, create_mode=CreateOrTruncate)
+    defer file.close()
+    for chunk in files.html() {
+      file.write(chunk)
+    }
+  } catch {
     error =>
       raise @host.HostError("could not save the conversation export: \{error}")
   }
