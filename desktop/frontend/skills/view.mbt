@@ -66,7 +66,7 @@ fn installed_row(
       class="skill-summary",
       attrs=@html.Attrs::build().aria_label(skill.name),
       [
-        @html.span(class="skill-avatar", icon(icon_package)),
+        @html.span(class="skill-avatar", icon(icon_extensions)),
         @html.span(class="skill-name", skill.name),
       ],
     ),
@@ -417,7 +417,7 @@ fn list_page(
     )
   }
   sections.push(
-    @settings.group(icon_package, ui(locale, InstalledLabel), installed_rows),
+    @settings.group(icon_extensions, ui(locale, InstalledLabel), installed_rows),
   )
   let market_rows : Array[@html.Html] = []
   match state.catalog {

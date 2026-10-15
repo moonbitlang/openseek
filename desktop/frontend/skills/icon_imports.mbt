@@ -2,4 +2,4 @@
 // the shell package or duplicating SVG markup.
 
 ///|
-using @icons {icon, icon_package, icon_search}
+using @icons {icon, icon_extensions, icon_package, icon_search}
