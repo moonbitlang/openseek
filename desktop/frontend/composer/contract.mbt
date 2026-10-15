@@ -94,6 +94,8 @@ pub(all) enum PrimaryAction {
 pub(all) struct ApprovalNotice {
   tool_name : String
   detail : String
+  // A session.send question uses detail as the target id; its title is UI data.
+  target_label : String?
   body : String?
   answered : Bool
 } derive(Eq)

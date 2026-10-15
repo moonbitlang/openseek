@@ -2,6 +2,7 @@ import {
   "moonbitlang/async",
   "moonbitlang/async/cond_var",
   "openseek_desktop/backend/uuid",
+  "openseek_desktop/protocol/message_context",
 }
 
 supported_targets = "+native"

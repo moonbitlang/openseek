@@ -78,11 +78,21 @@ async test "timeout retains approval and actively delivers the final result to t
       let (target, body, id) = deliveries.get()
       assert_eq(target, "target")
       assert_eq(id, message.id)
-      assert_true(body.contains("Read-only work"))
+      assert_eq(
+        body,
+        @message_context.Message(
+          source_session="sender",
+          message_id=message.id,
+          text="Read-only work",
+        ).encode(),
+      )
       let (recipient, result, receipt) = deliveries.get()
       assert_eq(recipient, "sender")
       assert_eq(receipt, "\{message.id}-result")
-      assert_true(result.contains("\"status\":\"sent\""))
+      assert_true(
+        @message_context.parse(result)
+        is Some(DeliveryResult(status="sent", error=None, ..)),
+      )
     })
   })
   assert_true(errors.is_empty())
@@ -131,7 +141,10 @@ async test "delivery failure is actively reported as failure rather than success
       ignore(service.wait(message, wait_ms=1))
       assert_true(service.decide(message.id, true))
       let notice = notices.get()
-      assert_true(notice.contains("\"status\":\"failed\""))
+      assert_true(
+        @message_context.parse(notice)
+        is Some(DeliveryResult(status="failed", error=Some(_), ..)),
+      )
       assert_true(notice.contains("target was archived"))
       assert_true(message.status() is { "status": "failed", .. })
     })

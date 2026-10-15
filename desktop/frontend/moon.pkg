@@ -28,6 +28,7 @@ import {
   "openseek_desktop/uri",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/protocol",
+  "openseek_desktop/protocol/message_context",
   "openseek_desktop/commands",
   "openseek_desktop/frontend/bridge",
   "openseek_desktop/frontend/action_menu",

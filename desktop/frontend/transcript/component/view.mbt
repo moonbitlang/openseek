@@ -753,6 +753,9 @@ fn user_text_nodes(
   on_jump? : (@mention_context.Target) -> @cmd.Cmd,
   changes? : @review_changes.Control,
 ) -> Array[@html.Html] {
+  if @message_context.parse(content) is Some(context) {
+    return [message_context_view(locale~, context)]
+  }
   if @command_context.parse(content) is Some(shell) {
     return [shell_command_view(locale~, shell)]
   }
@@ -908,7 +911,16 @@ fn user_message_view(
   if editor is Some(editor) {
     return @html.div(class="msg user", id?=anchor, [editor])
   }
-  let body : Array[@html.Html] = [speaker_label(ui(locale, YouLabel))]
+  let context = if content.0 is [Text(text)] {
+    @message_context.parse(text)
+  } else {
+    None
+  }
+  let body : Array[@html.Html] = if context is Some(_) {
+    []
+  } else {
+    [speaker_label(ui(locale, YouLabel))]
+  }
   for part in content.0 {
     match part {
       Text(text) =>
@@ -934,7 +946,11 @@ fn user_message_view(
       )
     }
   }
-  let text = content.text()
+  let text = if context is Some(Message(text~, ..)) {
+    text
+  } else {
+    content.text()
+  }
   if !text.is_empty() {
     actions.push(
       @markdown.copy_button(

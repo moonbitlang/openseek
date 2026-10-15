@@ -261,6 +261,7 @@ fn ApprovalNotice::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
+  let is_message = self.tool_name == "session.send"
   let actions : Array[@html.Html] = if self.answered {
     [@html.span(class="composer-approval-state", ui(locale, SendingLabel))]
   } else {
@@ -268,16 +269,16 @@ fn ApprovalNotice::render(
       @html.button(
         class="composer-approval-action composer-approval-deny",
         type_="button",
-        title=ui(locale, RefuseHint),
+        title=ui(locale, if is_message { CancelLabel } else { RefuseHint }),
         on_click=action_emit(ApprovalAnswered(identity~, allow=false)),
-        ui(locale, DenyLabel),
+        ui(locale, if is_message { CancelLabel } else { DenyLabel }),
       ),
       @html.button(
         class="composer-approval-action composer-approval-allow",
         type_="button",
-        title=ui(locale, AllowOnceHint),
+        title=ui(locale, if is_message { SendLabel } else { AllowOnceHint }),
         on_click=action_emit(ApprovalAnswered(identity~, allow=true)),
-        ui(locale, AllowOnce),
+        ui(locale, if is_message { SendLabel } else { AllowOnce }),
       ),
     ]
   }
@@ -285,11 +286,22 @@ fn ApprovalNotice::render(
     class="composer-approval-question",
     [
       @html.span(class="composer-notice-icon", @icons.icon(@icons.icon_key)),
-      @html.span(class="composer-notice-text", [
-        // A tool name is code, not a decorative text pill.
-        @html.code(class="composer-approval-tool", self.tool_name),
-        @html.span(" \{self.detail}"),
-      ]),
+      if is_message {
+        let target = self.target_label.unwrap_or(self.detail)
+        let label = match locale {
+          English => "Send to “\{target}”"
+          SimplifiedChinese => "发送给「\{target}」"
+          TraditionalChinese => "傳送給「\{target}」"
+          Japanese => "「\{target}」に送信"
+          Spanish => "Enviar a «\{target}»"
+        }
+        @html.span(class="composer-notice-text", title=self.detail, label)
+      } else {
+        @html.span(class="composer-notice-text", [
+          @html.code(class="composer-approval-tool", self.tool_name),
+          @html.span(" \{self.detail}"),
+        ])
+      },
       ..actions,
     ],
   )
@@ -303,15 +315,21 @@ fn ApprovalNotice::render(
         // approvals keep their exact text in one text node, including newlines.
         // The length guard also bounds the work of counting source lines.
         @html.div(class="composer-context-detail", [
-          @html.pre(class="composer-approval-body", [
-            if self.tool_name != "session.send" &&
-              body.length() <= 32_768 &&
-              body.split("\n").take(501).count() <= 500 {
-              @syntax_html.moonbit_source_code(body)
-            } else {
-              @html.code(body)
-            },
-          ]),
+          if is_message {
+            @html.div(
+              class="composer-approval-body composer-approval-message",
+              body,
+            )
+          } else {
+            @html.pre(class="composer-approval-body", [
+              if body.length() <= 32_768 &&
+                body.split("\n").take(501).count() <= 500 {
+                @syntax_html.moonbit_source_code(body)
+              } else {
+                @html.code(body)
+              },
+            ])
+          },
         ]),
       ],
     )

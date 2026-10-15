@@ -134,7 +134,7 @@ async fn ApiState::call_session_tool(
         session: entry.sender,
         run_id: None,
         tool_name: "session.send",
-        detail: "Send to OpenSeek chat \{target}. This can steer its current task or start a new turn. A background result can also resume this chat. Approval remains pending until answered or the app closes.",
+        detail: target,
         body: Some(text),
         answered: false,
       }

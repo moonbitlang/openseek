@@ -78,6 +78,7 @@ pub fn Action::identity(Self) -> Identity
 pub(all) struct ApprovalNotice {
   tool_name : String
   detail : String
+  target_label : String?
   body : String?
   answered : Bool
 } derive(Eq)

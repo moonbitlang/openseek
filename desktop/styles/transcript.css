@@ -486,6 +486,15 @@
   border-radius: 20px;
   background: light-dark(#eaf3fd, #1c3e70);
 }
+.session-message-source {
+  margin-bottom: 6px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+}
+.session-message-source:only-child {
+  margin-bottom: 0;
+}
 
 /* In the accessibility tree, out of the layout: speaker names and the
    like, which the redesign says visually through alignment and fill. */

@@ -25,6 +25,7 @@ import {
   "moonbitlang/editor/viewer/browser/diagram_viewport",
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
+  "openseek_desktop/protocol/message_context",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/markdown",

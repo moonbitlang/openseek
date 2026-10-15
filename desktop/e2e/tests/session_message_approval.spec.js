@@ -3,11 +3,15 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 test('message approvals survive idle reload and turn completion, and advance independently', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
+  app.liveSessions.push(
+    { id: 'target-first', title: 'Test B', updated_at_ms: 0 },
+    { id: 'target-second', title: 'Test C', updated_at_ms: 0 },
+  );
   const body = 'Benchmark is running. Continue read-only work.\n<script>plain text</script>';
   let generation = 1;
   let approvals = ['first', 'second'].map(id => ({
     id: `message-${id}`, session: 'session-1', run_id: null,
-    tool_name: 'session.send', detail: `Send to target-${id}; may start or steer its task`,
+    tool_name: 'session.send', detail: `target-${id}`,
     body, answered: false,
   }));
   const replyFor = app.replyFor.bind(app);
@@ -27,13 +31,16 @@ test('message approvals survive idle reload and turn completion, and advance ind
   await app.goto();
   await app.openSession();
   const card = page.locator('.composer-approval');
-  await expect(card).toContainText('target-first');
+  await expect(card).toContainText('Send to “Test B”');
+  await expect(card.locator('.composer-notice-text')).toHaveAttribute('title', 'target-first');
+  await expect(card).not.toContainText('session.send');
+  await expect(card.locator('.composer-approval-message')).toHaveCSS('font-family', await page.locator('body').evaluate(node => getComputedStyle(node).fontFamily));
   expect(await card.locator('.composer-approval-body').textContent()).toBe(body);
   await expect(card.locator('script')).toHaveCount(0);
 
   await page.reload();
   await app.openSession();
-  await expect(card).toContainText('target-first');
+  await expect(card).toContainText('Send to “Test B”');
   await page.locator('#task').fill('Continue the current task');
   await page.locator('#send').click();
   app.notify('agent.event', {
@@ -41,14 +48,14 @@ test('message approvals survive idle reload and turn completion, and advance ind
     event: { event: 'agent_finished', answer: 'Done' },
   });
   app.notify('agent.finished', { run_id: 'run-e2e', status: 'finished', answer: 'Done' });
-  await expect(card).toContainText('target-first');
+  await expect(card).toContainText('Send to “Test B”');
   const screenshot = testInfo.outputPath('pending-message-after-turn.png');
   await card.screenshot({ path: screenshot });
   await testInfo.attach('Message approval after turn completion', { path: screenshot, contentType: 'image/png' });
 
-  await card.getByRole('button', { name: 'Allow once', exact: true }).click();
-  await expect(card).toContainText('target-second');
-  await card.getByRole('button', { name: 'Deny', exact: true }).click();
+  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(card).toContainText('Send to “Test C”');
+  await card.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(card).toHaveCount(0);
   expect(app.requests.filter(item => item.method === 'agent.approval').map(item => ({
     id: item.params.id, allow: item.params.allow,
@@ -68,7 +75,7 @@ test('a running engine approval takes priority over a background message approva
   await page.locator('#send').click();
   const message = {
     id: 'msg-background', session: 'session-1', run_id: null,
-    tool_name: 'session.send', detail: 'Send to another conversation', body: 'Exact message', answered: false,
+    tool_name: 'session.send', detail: 'target-chat', body: 'Exact message', answered: false,
   };
   const engine = {
     id: 'engine-approval', session: 'session-1', run_id: 'run-e2e',
@@ -77,10 +84,43 @@ test('a running engine approval takes priority over a background message approva
   app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
   const card = page.locator('.composer-approval');
   await expect(card).toContainText('mbtx');
+  await expect(card.getByRole('button', { name: 'Allow once', exact: true })).toBeVisible();
   // Replaying a snapshot must not mutate it or duplicate either question.
   app.notify('agent.approvals', { generation: 1, approvals: [engine, message] });
   await expect(card).toHaveCount(1);
   app.notify('agent.approvals', { generation: 2, approvals: [message] });
-  await expect(card).toContainText('session.send');
+  await expect(card).toContainText('Send to “target-chat”');
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('received messages and delivery results render tagged context live and after reload', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  const text = '这是跨会话审批测试，请确认收到。\n`inline code` <script>plain text</script>';
+  const message = `<agent_message source_session="chat-A" message_id="msg-1">\n${text}\n</agent_message>`;
+  const result = '<session_message_result message_id="msg-2" request_id="request-2" target="chat-B" status="sent">\n\n</session_message_result>';
+  const event = (sequence, content) => ({ sequence, ts: 1792050660000, item: { kind: 'user', payload: { content } } });
+  app.sessionEvents = [event(1, message)];
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+  const received = page.locator('.session-message').first();
+  await expect(received.locator('.session-message-source')).toHaveText('Message from another conversation');
+  await expect(received.locator('.session-message-source')).toHaveAttribute('title', 'chat-A');
+  await expect(received.locator('.msg-content')).toHaveText(text.replaceAll('`', ''));
+  await expect(received.locator('script')).toHaveCount(0);
+  await expect(page.locator('#stream')).not.toContainText('source_session=');
+  await expect(page.locator('#stream')).not.toContainText('user approved');
+  const next = event(2, result);
+  app.sessionEvents.push(next);
+  app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
+  await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
+  const screenshot = testInfo.outputPath('received-session-message.png');
+  await page.locator('#stream').screenshot({ path: screenshot });
+  await testInfo.attach('Received session message', { path: screenshot, contentType: 'image/png' });
+  await page.reload();
+  await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+  await expect(page.locator('.session-message')).toHaveCount(2);
+  await expect(received.locator('.msg-content')).toHaveText(text.replaceAll('`', ''));
+  await expect(page.locator('.session-message-source').last()).toHaveText('Message sent');
   expect(app.pageErrors).toEqual([]);
 });

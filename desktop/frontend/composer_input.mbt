@@ -109,6 +109,14 @@ fn Model::composer_input(self : Model) -> @composer.Input {
       @composer.ApprovalRequest({
         tool_name: pending.tool_name,
         detail: pending.detail,
+        target_label: if pending.tool_name == "session.send" &&
+          self.focused_device() is Some(device) &&
+          device.sessions.iter().find_first(item => item.id == pending.detail)
+          is Some(item) {
+          item.title
+        } else {
+          None
+        },
         body: pending.body,
         answered: pending.answered,
       }),

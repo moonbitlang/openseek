@@ -401,6 +401,9 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.composer-approval-message {
+  font-family: inherit;
+}
 /* The decisions wear the composer chip's shape, not a dialog button's: no
    border, a plain fill that lifts on hover. The chips they match sit one row
    below this card, which is the comparison a reader actually makes.

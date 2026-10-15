@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/protocol/message_context"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn parse(String) -> Context?
+
+// Errors
+
+// Types and methods
+pub(all) enum Context {
+  Message(source_session~ : String, message_id~ : String, text~ : String)
+  DeliveryResult(message_id~ : String, request_id~ : String, target~ : String, status~ : String, error~ : String?)
+} derive(Eq, @debug.Debug)
+pub fn Context::encode(Self) -> String
+pub fn Context::equal(Self, Self) -> Bool
+pub fn Context::not_equal(Self, Self) -> Bool
+pub fn Context::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

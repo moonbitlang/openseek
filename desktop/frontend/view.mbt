@@ -761,6 +761,9 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
 /// engine receives. A `!` command's `<user_shell_command>` envelope shows as
 /// its `$ command` line.
 fn user_display_text(text : String) -> String {
+  if @message_context.parse(text) is Some(Message(text~, ..)) {
+    return text
+  }
   if @command_context.parse(text) is Some(shell) {
     return "$ \{shell.command}"
   }
@@ -774,7 +777,8 @@ fn user_display_text(text : String) -> String {
 /// shorter editable form: its one-line label would drop the output, so it
 /// stays the whole envelope.
 fn editable_text(text : String) -> String {
-  if @command_context.parse(text) is Some(_) {
+  if @command_context.parse(text) is Some(_) ||
+    @message_context.parse(text) is Some(_) {
     text
   } else {
     user_display_text(text)
