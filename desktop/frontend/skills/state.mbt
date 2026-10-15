@@ -80,9 +80,10 @@ fn State::pending_action(
   identity : (String, String),
 ) -> PendingSkillAction? {
   for operation in self.busy {
-    if operation.channel == channel && operation.identity == identity {
-      return Some(operation.action)
+    guard operation.channel == channel && operation.identity == identity else {
+      continue
     }
+    return Some(operation.action)
   }
   None
 }
@@ -95,7 +96,7 @@ fn State::start_action(
   action : PendingSkillAction,
   cmd : @cmd.Cmd,
 ) -> (@cmd.Cmd, State, Outcome?) {
-  if self.pending_action(channel, identity) is Some(_) {
+  guard self.pending_action(channel, identity) is None else {
     return (@cmd.none, self, None)
   }
   let busy = self.busy.copy()
@@ -118,10 +119,11 @@ fn State::update_candidate(self : State, item : InstalledItem) -> MarketItem? {
   guard item.registry is Some(registry) else { return None }
   guard self.catalog is Ready(items) else { return None }
   for candidate in items {
-    if candidate.identity() == (registry.module_name, registry.package_path) &&
-      source_label(candidate) != item.source {
-      return Some(candidate)
+    guard candidate.identity() == (registry.module_name, registry.package_path) &&
+      source_label(candidate) != item.source else {
+      continue
     }
+    return Some(candidate)
   }
   None
 }
@@ -413,10 +415,9 @@ pub fn State::handle(
     }
     Install(item) | Update(item) => {
       let source = source_label(item)
-      let action : PendingSkillAction = if msg is Update(_) {
+      let action : PendingSkillAction = {
+        guard msg is Update(_) else { Installing(source~) }
         Updating(source~)
-      } else {
-        Installing(source~)
       }
       self.start_action(
         input.channel,
@@ -492,9 +493,8 @@ fn preview_target_for_market(
   item : MarketItem,
 ) -> PreviewTarget {
   for skill in installed {
-    if skill.identity() == Some(item.identity()) {
-      return Installed(skill)
-    }
+    guard skill.identity() == Some(item.identity()) else { continue }
+    return Installed(skill)
   }
   Market(item)
 }

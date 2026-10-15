@@ -15,18 +15,15 @@ fn notice_views(
       LibraryLoadFailed(message) => message
       SkillActionFailed(operation~, message~) => {
         guard operation.channel == input.channel else { continue }
-        if target is Some(target) {
-          let identity = match target {
-            Market(item) => Some(item.identity())
-            Installed(item) => item.identity()
-          }
-          guard identity == Some(operation.identity) else { continue }
-        }
-        if target is None {
+        guard target is Some(target) else {
           "\{operation.action.source()}: \{message}"
-        } else {
-          message
         }
+        let identity = match target {
+          Market(item) => Some(item.identity())
+          Installed(item) => item.identity()
+        }
+        guard identity == Some(operation.identity) else { continue }
+        message
       }
     }
     nodes.push(@html.div(class="skills-notice danger", message))
@@ -78,17 +75,16 @@ fn installed_row(
       ],
     ),
   ]
-  if skill.source.is_empty() {
-    header.push(
-      @html.div(class="skill-actions", [
-        @html.span(class="skill-check ok", "✓"),
-      ]),
-    )
-  } else {
-    header.push(
-      installed_actions(locale, state, channel, skill, emit, "skill-action"),
-    )
-  }
+  header.push(
+    {
+      guard !skill.source.is_empty() else {
+        @html.div(class="skill-actions", [
+          @html.span(class="skill-check ok", "✓"),
+        ])
+      }
+      installed_actions(locale, state, channel, skill, emit, "skill-action")
+    },
+  )
   @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
     @html.div(class="skill-header", header),
     @html.div(class="skill-info", info),
@@ -303,19 +299,19 @@ fn detail_action(
         },
       )
     }
-    Installed(item) =>
-      if item.registry is None {
-        @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
-      } else {
-        installed_actions(
-          locale,
-          state,
-          input.channel,
-          item,
-          emit,
-          "skill-detail-action",
-        )
+    Installed(item) => {
+      guard item.registry is Some(_) else {
+        return @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
       }
+      installed_actions(
+        locale,
+        state,
+        input.channel,
+        item,
+        emit,
+        "skill-detail-action",
+      )
+    }
   }
 }
 
@@ -329,18 +325,15 @@ fn detail_action_target(
     Market(item) => Some(preview_target_for_market(input.installed, item))
     Installed(item) => {
       for installed in input.installed {
-        if installed.id == item.id {
-          return Some(Installed(installed))
-        }
+        guard installed.id == item.id else { continue }
+        return Some(Installed(installed))
       }
       // Keep the same detail page usable after uninstall, when its version
       // still exists in the catalog. Never send an id from a removed snapshot.
-      if state.catalog is Ready(items) {
-        for market in items {
-          if source_label(market) == item.source {
-            return Some(Market(market))
-          }
-        }
+      guard state.catalog is Ready(items) else { return None }
+      for market in items {
+        guard source_label(market) == item.source else { continue }
+        return Some(Market(market))
       }
       None
     }
@@ -406,11 +399,12 @@ fn list_page(
   }
   let installed_rows : Array[@html.Html] = []
   for skill in input.installed {
-    if matches(state.query, [skill.name, skill.description, skill.source]) {
-      installed_rows.push(
-        installed_row(locale~, state, input.channel, skill, emit),
-      )
+    guard matches(state.query, [skill.name, skill.description, skill.source]) else {
+      continue
     }
+    installed_rows.push(
+      installed_row(locale~, state, input.channel, skill, emit),
+    )
   }
   if installed_rows.is_empty() {
     installed_rows.push(
@@ -441,16 +435,15 @@ fn list_page(
         !installed.contains((item.module_name, item.package_path))
       })
       for item in available {
-        if matches(state.query, [
-            item.name,
-            item.description,
-            item.author,
-            source_label(item),
-          ]) {
-          market_rows.push(
-            market_row(locale~, state, input.channel, item, emit),
-          )
+        guard matches(state.query, [
+          item.name,
+          item.description,
+          item.author,
+          source_label(item),
+        ]) else {
+          continue
         }
+        market_rows.push(market_row(locale~, state, input.channel, item, emit))
       }
       if market_rows.is_empty() {
         market_rows.push(
@@ -494,7 +487,7 @@ fn page(
   input : Input,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  if state.preview_channel != Some(input.channel) {
+  guard state.preview_channel == Some(input.channel) else {
     return list_page(locale~, state, input, emit)
   }
   match state.preview {
@@ -523,16 +516,14 @@ fn installed_actions(
         disabled=pending is Some(_),
         attrs=@html.Attrs::build().on_click(event => {
           event.stop_propagation()
-          if candidate is Some(target) {
-            emit(Update(target))
-          } else {
-            @cmd.none
-          }
+          guard candidate is Some(target) else { return @cmd.none }
+          emit(Update(target))
         }),
-        if pending is Some(Updating(..)) {
+        {
+          guard pending is Some(Updating(..)) else {
+            candidate.map_or("", target => ui(locale, UpdateTo(target.version)))
+          }
           ui(locale, Updating)
-        } else {
-          candidate.map_or("", target => ui(locale, UpdateTo(target.version)))
         },
       ),
     )

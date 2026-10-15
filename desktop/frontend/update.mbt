@@ -6597,16 +6597,14 @@ fn update_device_msg(
     return (@cmd.none, model)
   }
   match msg {
-    InstalledSkillsLoaded(items) =>
-      if channel == model.focused {
-        let (cmd, skills) = model.skills.sync_library(
-          dispatch.map(msg => Skills(msg)),
-          { channel, installed: items, },
-        )
-        (cmd, { ..model, installed_skills: items, skills, })
-      } else {
-        (@cmd.none, model)
-      }
+    InstalledSkillsLoaded(items) => {
+      guard channel == model.focused else { return (@cmd.none, model) }
+      let (cmd, skills) = model.skills.sync_library(
+        dispatch.map(msg => Skills(msg)),
+        { channel, installed: items, },
+      )
+      (cmd, { ..model, installed_skills: items, skills, })
+    }
     InstalledSkillsFailed(message) =>
       if channel == model.focused {
         (
