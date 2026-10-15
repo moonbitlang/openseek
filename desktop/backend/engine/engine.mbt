@@ -25,6 +25,7 @@ priv struct ServeEngine {
   // Fingerprint of the config this process was spawned with; a prompt whose
   // config differs cannot reuse it.
   spec_key : String
+  mcp_generation : Int64
   engine_name : String
   supports_images : Bool
   model : String
@@ -727,6 +728,9 @@ struct EngineManager {
   // to hear it once; it is forgotten when a configuration loads, or when
   // there is no file any more.
   mut mcp_errors : Map[String, String]
+  // Only the newest launch may change the shared error snapshot. Older
+  // engines can finish connecting after a configuration edit and repair.
+  mut mcp_generation : Int64
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1087,6 +1091,7 @@ fn new_engine_manager(
     host_mcp,
     moonbit,
     mcp_errors: Map([]),
+    mcp_generation: 0,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     archive_commit_lock: Mutex(),
@@ -1570,11 +1575,6 @@ async fn[G] start_serve_engine(
     source=manager.moonbit,
   )
   let program = config.engine
-  // An engine with no MCP configuration to load has nothing wrong with it
-  // any more, so the error remembered from one that had is forgotten.
-  if manager.host_mcp is None && !mcp_configured(config, env) {
-    manager.mcp_errors.clear()
-  }
   // `--approval ask` is the host declaring that it CAN answer a permission
   // question: the engine's own default is never, because an engine cannot tell
   // a controller with a person behind it from a script reading its stdout.
@@ -1630,10 +1630,16 @@ async fn[G] start_serve_engine(
       "session_key": config.session,
       "pid": process.pid,
     }
+  manager.mcp_generation += 1
+  // No registration event arrives when this launch has no configuration.
+  if manager.host_mcp is None && !mcp_configured(config, env) {
+    manager.mcp_errors.clear()
+  }
   let engine : ServeEngine = {
     session_key: config.session,
     session_root: config.session_root,
     spec_key: engine_fingerprint(config),
+    mcp_generation: manager.mcp_generation,
     engine_name: config.engine,
     model: config.model,
     supports_images: config.supports_images(),
@@ -1838,13 +1844,19 @@ async fn ServeEngine::consume(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
+            if engine.mcp_generation != manager.mcp_generation {
+              continue
+            }
             mcp_errors[path] = error
             if manager.mcp_errors.get(path) == Some(error) {
               continue
             }
             manager.mcp_errors[path] = error
           }
-          Some(McpToolsRegistered(..)) => manager.mcp_errors = mcp_errors
+          Some(McpToolsRegistered(..)) =>
+            if engine.mcp_generation == manager.mcp_generation {
+              manager.mcp_errors = mcp_errors
+            }
           Some(PredictionResult(source_sequence~, outcome~)) => {
             if outcome is Completed(..) {
               emit(
@@ -2347,11 +2359,13 @@ fn test_serve_engine(
   follower? : SessionFollower,
   condemned~ : Bool = false,
   last_activity_ms~ : Int64 = engine_clock_ms(),
+  mcp_generation~ : Int64 = 0,
 ) -> ServeEngine {
   {
     session_key: session,
     session_root,
     spec_key: "test",
+    mcp_generation,
     engine_name: "openseek",
     model: "test",
     supports_images: true,

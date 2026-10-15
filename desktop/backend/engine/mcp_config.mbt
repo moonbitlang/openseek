@@ -178,17 +178,23 @@ async test "a broken MCP configuration is reported once, not once per conversati
     // an error to report it says it could not decode the file; with none it
     // says the configuration loaded. Then it says one more thing, so the
     // test knows it has been heard.
-    async fn start(
+    async fn launch(
       session : String,
       error : String?,
       second_error : String,
-    ) -> Unit {
+      delayed : Bool,
+    ) -> ServeEngine {
       let script =
         #|if [ -n "$2" ]; then
         #|  printf '{"event":"mcp_config_invalid","path":"%s","error":"%s"}\n' "$3" "$2"
         #|fi
         #|if [ -n "$4" ]; then
         #|  printf '{"event":"mcp_config_invalid","path":"%s.other","error":"%s"}\n' "$3" "$4"
+        #|fi
+        #|if [ "$5" = "true" ]; then
+        #|  printf '{"event":"mcp_connect_failed","server":"%s-paused","error":"marker"}\n' "$1"
+        #|  read -r resume
+        #|  printf '{"event":"mcp_config_invalid","path":"%s.late","error":"late"}\n' "$3"
         #|fi
         #|printf '{"event":"mcp_tools_registered","servers":1,"tools":0,"names":[]}\n'
         #|printf '{"event":"mcp_connect_failed","server":"%s","error":"marker"}\n' "$1"
@@ -198,26 +204,46 @@ async test "a broken MCP configuration is reported once, not once per conversati
       let process = @process.spawn(
         group,
         "/bin/sh",
-        ["-c", script, "sh", session, error.unwrap_or(""), source, second_error],
+        [
+          "-c",
+          script,
+          "sh",
+          session,
+          error.unwrap_or(""),
+          source,
+          second_error,
+          delayed.to_string(),
+        ],
         stdin=child_stdin,
         stdout=child_stdout,
         no_wait=true,
       )
+      manager.mcp_generation += 1
       let engine = test_serve_engine(
         session,
         writer,
         process,
         sink,
         phase=Idle(last_run=None),
+        mcp_generation=manager.mcp_generation,
       )
       group.spawn_bg(no_wait=true, allow_failure=true, () => {
         ignore(engine.consume(manager, reader))
       })
       @async.with_timeout(10000, () => {
-        while !finished(session) {
+        while !finished(if delayed { "\{session}-paused" } else { session }) {
           @async.sleep(20)
         }
       })
+      engine
+    }
+
+    async fn start(
+      session : String,
+      error : String?,
+      second_error : String,
+    ) -> Unit {
+      ignore(launch(session, error, second_error, false))
     }
 
     // Two conversations start engines on the same broken file. A person
@@ -244,6 +270,24 @@ async test "a broken MCP configuration is reported once, not once per conversati
     start("s-9", Some("worse"), "")
     start("s-10", Some("worse"), "worse")
     @debug.assert_eq(reported(), ["bad", "worse", "worse", "worse", "worse"])
+    // An older engine has read the broken file but is still connecting when
+    // a newer launch loads the repair. Its late errors and registration must
+    // neither notify again nor restore its obsolete error snapshot.
+    let older = launch("s-old", Some("worse"), "worse", true)
+    start("s-repaired", None, "")
+    assert_true(manager.mcp_errors.is_empty())
+    older.writer.write("resume\n")
+    @async.with_timeout(10000, () => {
+      while !finished("s-old") {
+        @async.sleep(20)
+      }
+    })
+    assert_true(manager.mcp_errors.is_empty())
+    @debug.assert_eq(reported(), ["bad", "worse", "worse", "worse", "worse"])
+    start("s-regressed", Some("worse"), "")
+    @debug.assert_eq(reported(), [
+      "bad", "worse", "worse", "worse", "worse", "worse",
+    ])
   })
 }
 
