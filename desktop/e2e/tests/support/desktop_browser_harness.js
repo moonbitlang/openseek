@@ -802,7 +802,7 @@ export class DesktopBrowserHarness {
       }
       case 'session.pr_list':
         return { bindings: [] };
-      case 'session.pr_detail':
+      case 'git.pr_detail':
         return {};
       case 'git.branch':
         return {};

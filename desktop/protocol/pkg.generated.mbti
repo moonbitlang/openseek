@@ -1299,6 +1299,28 @@ pub fn GitOriginalFileReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GitOriginalFileReply
 pub impl @json.FromJson for GitOriginalFileReply
 
+pub(all) struct GitPrDetailPayload {
+  url : String
+} derive(Eq, @debug.Debug)
+pub fn GitPrDetailPayload::equal(Self, Self) -> Bool
+pub fn GitPrDetailPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GitPrDetailPayload::not_equal(Self, Self) -> Bool
+pub fn GitPrDetailPayload::to_json(Self) -> Json
+pub fn GitPrDetailPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GitPrDetailPayload
+pub impl @json.FromJson for GitPrDetailPayload
+
+pub(all) struct GitPrDetailReply {
+  pull_request : GitPullRequest?
+} derive(Eq, @debug.Debug)
+pub fn GitPrDetailReply::equal(Self, Self) -> Bool
+pub fn GitPrDetailReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn GitPrDetailReply::not_equal(Self, Self) -> Bool
+pub fn GitPrDetailReply::to_json(Self) -> Json
+pub fn GitPrDetailReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for GitPrDetailReply
+pub impl @json.FromJson for GitPrDetailReply
+
 pub(all) struct GitPullRequest {
   number : Int
   title : String
@@ -1310,6 +1332,7 @@ pub(all) struct GitPullRequest {
   deletions : Int
   changed_files : Int
   checks : GitChecks?
+  head_url : String?
 } derive(Eq, @debug.Debug)
 pub fn GitPullRequest::equal(Self, Self) -> Bool
 pub fn GitPullRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3235,29 +3258,6 @@ pub fn SessionPrChangedPayload::to_json(Self) -> Json
 pub fn SessionPrChangedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionPrChangedPayload
 pub impl @json.FromJson for SessionPrChangedPayload
-
-pub(all) struct SessionPrDetail {
-  pull_request : GitPullRequest
-  head_url : String?
-} derive(Eq, @debug.Debug)
-pub fn SessionPrDetail::equal(Self, Self) -> Bool
-pub fn SessionPrDetail::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionPrDetail::not_equal(Self, Self) -> Bool
-pub fn SessionPrDetail::to_json(Self) -> Json
-pub fn SessionPrDetail::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SessionPrDetail
-pub impl @json.FromJson for SessionPrDetail
-
-pub(all) struct SessionPrDetailReply {
-  detail : SessionPrDetail?
-} derive(Eq, @debug.Debug)
-pub fn SessionPrDetailReply::equal(Self, Self) -> Bool
-pub fn SessionPrDetailReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionPrDetailReply::not_equal(Self, Self) -> Bool
-pub fn SessionPrDetailReply::to_json(Self) -> Json
-pub fn SessionPrDetailReply::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SessionPrDetailReply
-pub impl @json.FromJson for SessionPrDetailReply
 
 pub(all) struct SessionPrRemovePayload {
   session : String

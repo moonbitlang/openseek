@@ -201,10 +201,13 @@ the read-then-bind workflow is not a version-checked update.
 The list lives beside the session transcript in `pr-bindings.json`, and moves
 with that session when archived/restored/deleted. The composer refreshes on
 changes and separately resolves GitHub PR status; lookup failures keep the
-association visible. PR and branch rows merge when the resolved head URL
-identifies the same branch. Removing a row only removes its associations.
+association visible. The composer also automatically shows the current
+checkout PR or local branch and diff, independently of MCP. This automatic row is not
+part of `session_pr_list`; clearing bindings leaves it visible. Removing a
+current row removes only its explicit bindings. PR and branch rows merge
+when the resolved head URL identifies the same branch.
 The [Desktop session protocol](../../../docs/remote-protocol.md#session-pr-associations)
-documents the separate frontend list/remove/detail commands and the
+documents frontend list/remove commands, `git.pr_detail` enrichment, and the
 `session.pr_changed` notification emitted after a save.
 
 These tools belong to the `session` group. If the configuration filters groups

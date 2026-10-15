@@ -2,7 +2,6 @@
 priv struct SessionPrState {
   bindings : Array[@protocol.SessionPrBinding]
   details : Map[String, SessionPrCache]
-  checkout : (String, @protocol.SessionPrDetail)?
   collapsed : Bool
   checks_url : String?
   generation : Int32
@@ -13,7 +12,7 @@ priv struct SessionPrState {
 /// Last successful metadata can survive a failed refresh. Neither the
 /// request URL nor the lookup error is part of the host's PR metadata.
 priv struct SessionPrCache {
-  detail : @protocol.SessionPrDetail?
+  detail : @protocol.GitPullRequest?
   error : String?
 } derive(Eq)
 
@@ -22,7 +21,6 @@ fn SessionPrState::empty() -> SessionPrState {
   {
     bindings: [],
     details: {},
-    checkout: None,
     collapsed: false,
     checks_url: None,
     generation: 0,
@@ -79,21 +77,18 @@ fn fetch_pr_detail(
   session : String,
   binding : @protocol.SessionPrBinding,
   generation~ : Int32,
-  checkout~ : Bool,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result : Result[@protocol.SessionPrDetail?, String] = Ok(
-        @interop.bridge_request(channel, @commands.session_pr_detail, binding).detail,
+      let result : Result[@protocol.GitPullRequest?, String] = Ok(
+        @interop.bridge_request(channel, @commands.git_pr_detail, {
+          url: binding.url,
+        }).pull_request,
       ) catch {
         error => Err(error.to_string())
       }
       let url = binding.url
-      let msg = if checkout {
-        PrCheckoutDetailLoaded(session~, generation~, url~, result~)
-      } else {
-        PrBindingDetailLoaded(session~, generation~, url~, result~)
-      }
+      let msg = PrBindingDetailLoaded(session~, generation~, url~, result~)
       scheduler.add(emit(FromDevice(channel, msg)))
     })
     |> ignore
@@ -136,23 +131,17 @@ fn remove_pr_bindings(
 }
 
 ///|
-/// A PR and its exact head URL share one row. Repository identity is in the
-/// URL, so equal branch names in different repositories never collapse.
+/// Project checkout facts and explicit associations into one list. Automatic
+/// membership is never saved: changing branches replaces it immediately.
 fn Conversation::session_pr_rows(
   self : Conversation,
 ) -> Array[@composer.SessionPrRow] {
-  let current_pr = self
-    .settled_probe()
-    .bind(probe => probe.pull_request)
-    .map(pr => pr.url)
-  let checkout = self.pr_bindings.checkout
-    .filter(entry => Some(entry.0) == current_pr)
-    .map(entry => entry.1)
-  let current_head = match checkout.bind(detail => detail.head_url) {
+  let probe = self.settled_probe()
+  let current_pr = probe.bind(probe => probe.pull_request)
+  let current_head = match current_pr.bind(pr => pr.head_url) {
     Some(url) => Some(url)
     None =>
-      self
-      .settled_probe()
+      probe
       .bind(probe => probe.compare_url)
       .bind(url => {
         match url.split("/compare/").collect() {
@@ -168,44 +157,110 @@ fn Conversation::session_pr_rows(
   }
   let details = self.pr_bindings.details
   let bindings = self.pr_bindings.bindings
+  // A PR can be created and bound after the checkout probe answered with
+  // only a published branch. Its exact head URL is sufficient evidence to
+  // enrich that same row without waiting for another checkout probe.
+  let bound_current = match current_head {
+    Some(head) =>
+      bindings
+      .iter()
+      .filter_map(binding => details.get(binding.url))
+      .find_first(cache => cache.detail.bind(pr => pr.head_url) == Some(head))
+    None => None
+  }
+  let current_error = if current_pr is None {
+    bound_current.bind(cache => cache.error)
+  } else {
+    None
+  }
+  let current_pr = match current_pr {
+    Some(pr) => Some(pr)
+    None => bound_current.bind(cache => cache.detail)
+  }
   let rows : Array[@composer.SessionPrRow] = []
+  let consumed : Set[String] = Set([])
+  if self.branch is Some(branch) && !branch.is_empty() {
+    let urls = bindings
+      .filter(binding => {
+        Some(binding.url) == current_pr.map(pr => pr.url) ||
+        Some(binding.url) == current_head ||
+        (
+          current_pr is Some(pr) &&
+          details
+          .get(binding.url)
+          .bind(cache => cache.detail)
+          .map(detail => detail.url) ==
+          Some(pr.url)
+        )
+      })
+      .map(binding => binding.url)
+    for url in urls {
+      consumed.add(url)
+    }
+    rows.push({
+      url: match current_pr {
+        Some(pr) => Some(pr.url)
+        None => current_head
+      },
+      urls,
+      current: true,
+      branch: Some(branch),
+      pull_request: current_pr,
+      changes: self.diffstat.map(stat => {
+        added: stat.added,
+        removed: stat.removed,
+        files: stat.files,
+        base: stat.base,
+        partial: stat.partial,
+      }),
+      error: current_error,
+    })
+  }
   for binding in bindings {
-    // The PR row below owns this branch binding too, regardless of order.
+    if consumed.contains(binding.url) {
+      continue
+    }
+    // Prefer the PR over its branch URL, irrespective of saved order.
     if bindings.any(other => {
+        !consumed.contains(other.url) &&
         other.url != binding.url &&
         details
         .get(other.url)
         .bind(cache => cache.detail)
-        .bind(detail => detail.head_url) ==
+        .bind(pr => pr.head_url) ==
         Some(binding.url)
       }) {
       continue
     }
     let cache = details.get(binding.url)
-    let detail = cache.bind(cache => cache.detail)
-    let head = detail.bind(detail => detail.head_url)
+    let pr = cache.bind(cache => cache.detail)
     let urls = bindings
-      .filter(item => item.url == binding.url || Some(item.url) == head)
+      .filter(item => {
+        !consumed.contains(item.url) &&
+        (
+          item.url == binding.url ||
+          Some(item.url) == pr.bind(pr => pr.head_url) ||
+          (
+            pr is Some(pr) &&
+            details
+            .get(item.url)
+            .bind(cache => cache.detail)
+            .map(other => other.url) ==
+            Some(pr.url)
+          )
+        )
+      })
       .map(item => item.url)
-    let current = current_pr == Some(binding.url) ||
-      current_head == Some(binding.url)
-    let pr = detail.map(detail => detail.pull_request)
-    let pr = if pr is Some(_) {
-      pr
-    } else if current {
-      checkout.map(detail => detail.pull_request)
-    } else {
-      None
+    for url in urls {
+      consumed.add(url)
     }
     rows.push({
-      url: binding.url,
+      url: Some(binding.url),
       urls,
+      current: false,
+      branch: None,
       pull_request: pr,
-      head_url: if head is Some(_) {
-        head
-      } else {
-        current_head.filter(_ => current)
-      },
+      changes: None,
       error: cache.bind(cache => cache.error),
     })
   }
@@ -245,7 +300,7 @@ test "session PR updates are pure and fence replies superseded by a notification
   let (_, kept) = update_msg(emit, stale, newer)
   assert_eq(kept.active().pr_bindings.bindings.length(), 1)
   let url = snapshot.bindings[0].url
-  let result : Result[@protocol.SessionPrDetail?, String] = Err("offline")
+  let result : Result[@protocol.GitPullRequest?, String] = Err("offline")
   for
     msg in [
       FromDevice(
@@ -253,15 +308,6 @@ test "session PR updates are pure and fence replies superseded by a notification
         PrBindingDetailLoaded(
           session="desktop-test",
           generation~,
-          url~,
-          result~,
-        ),
-      ),
-      FromDevice(
-        Local,
-        PrCheckoutDetailLoaded(
-          session="desktop-test",
-          generation=loaded1.active().pull_request_generation,
           url~,
           result~,
         ),
@@ -296,8 +342,8 @@ test "PR and exact branch URLs merge without confusing another repository" {
       { "url": "https://github.com/o/r/pull/1" },
     ],
   })
-  let detail : @protocol.SessionPrDetail = {
-    pull_request: test_session_pr(),
+  let detail : @protocol.GitPullRequest = {
+    ..test_session_pr(),
     head_url: Some("https://github.com/o/r/tree/topic"),
   }
   let conv = {
@@ -317,33 +363,6 @@ test "PR and exact branch URLs merge without confusing another repository" {
 }
 
 ///|
-/// Only branch associations need another lookup to prove that the current
-/// PR belongs to their exact repository. Ordinary chats pay no extra gh call.
-fn fetch_checkout_pr_detail(
-  emit : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  conv : Conversation,
-) -> @cmd.Cmd {
-  guard conv.pr_bindings.bindings.any(binding => binding.url.contains("/tree/")) &&
-    conv.settled_probe().bind(probe => probe.pull_request) is Some(pr) else {
-    return @cmd.none
-  }
-  try {
-    let binding : @protocol.SessionPrBinding = @json.from_json({ "url": pr.url })
-    fetch_pr_detail(
-      emit,
-      channel,
-      conv.session_id,
-      binding,
-      generation=conv.pull_request_generation,
-      checkout=true,
-    )
-  } catch {
-    _ => @cmd.none
-  }
-}
-
-///|
 fn test_session_pr() -> @protocol.GitPullRequest {
   {
     number: 1,
@@ -356,6 +375,7 @@ fn test_session_pr() -> @protocol.GitPullRequest {
     deletions: 0,
     changed_files: 1,
     checks: None,
+    head_url: None,
   }
 }
 
@@ -377,8 +397,8 @@ test "PR lookup keeps request identity and cached metadata through failure and r
     ),
     model,
   )
-  let detail : @protocol.SessionPrDetail = {
-    pull_request: test_session_pr(),
+  let detail : @protocol.GitPullRequest = {
+    ..test_session_pr(),
     head_url: Some("https://github.com/fork/r/tree/topic"),
   }
   fn reply(result) {
@@ -392,15 +412,13 @@ test "PR lookup keeps request identity and cached metadata through failure and r
     ready.active().pr_bindings.details.get(url)
     is Some({ detail: Some(_), error: None, }),
   )
-  assert_true(
-    ready.active().pr_bindings.details.get(detail.pull_request.url) is None,
-  )
+  assert_true(ready.active().pr_bindings.details.get(detail.url) is None)
   let (_, failed) = update_msg(emit, reply(Err("offline")), ready)
   let rows = failed.active().session_pr_rows()
   assert_eq(rows.length(), 1)
-  assert_eq(rows[0].url, url)
-  assert_true(rows[0].pull_request == Some(detail.pull_request))
-  assert_true(rows[0].head_url == detail.head_url)
+  assert_eq(rows[0].url, Some(url))
+  assert_true(rows[0].pull_request == Some(detail))
+  assert_true(rows[0].pull_request.bind(pr => pr.head_url) == detail.head_url)
   assert_true(rows[0].error == Some("offline"))
   assert_true(ready.active().session_pr_rows()[0].error is None)
   let (_, recovered) = update_msg(emit, reply(Ok(Some(detail))), failed)
@@ -442,4 +460,121 @@ test "binding panel toggles are pure and fenced by composer identity" {
     retired,
   )
   assert_true(ignored.active().pr_bindings == retired.active().pr_bindings)
+}
+
+///|
+test "automatic checkout rows survive unbinding and follow branch changes" {
+  let pr = {
+    ..test_session_pr(),
+    head_url: Some("https://github.com/fork/r/tree/topic"),
+  }
+  let bindings : @protocol.SessionPrBindings = @json.from_json({
+    "bindings": [
+      { "url": pr.url },
+      { "url": "https://github.com/fork/r/tree/topic" },
+      { "url": "https://github.com/other/r/tree/topic" },
+    ],
+  })
+  let conv = {
+    ..test_model().active(),
+    branch: Some("topic"),
+    pull_request: Some({
+      branch: "topic",
+      probing: false,
+      stale: false,
+      pull_request: Some(pr),
+      compare_url: None,
+    }),
+    pr_bindings: { ..SessionPrState::empty(), bindings: bindings.bindings, },
+  }
+  let rows = conv.session_pr_rows()
+  assert_eq(rows.length(), 2)
+  assert_true(rows[0].current)
+  assert_eq(rows[0].urls.length(), 2)
+  assert_true(rows[0].pull_request == Some(pr))
+  assert_false(rows[1].current)
+  let unbound = { ..conv, pr_bindings: SessionPrState::empty(), }
+  let rows = unbound.session_pr_rows()
+  assert_eq(rows.length(), 1)
+  assert_true(rows[0].current && rows[0].urls.is_empty())
+  // A stale PR response cannot label a new checkout; local data remains useful
+  // without GitHub, a published branch, or an enabled host MCP entry.
+  let switched = {
+    ..unbound,
+    branch: Some("local/new"),
+    diffstat: Some({
+      added: 8,
+      removed: 2,
+      files: 1,
+      base: None,
+      partial: true,
+    }),
+  }
+  let rows = switched.session_pr_rows()
+  assert_eq(rows.length(), 1)
+  assert_eq(rows[0].branch, Some("local/new"))
+  assert_true(rows[0].url is None && rows[0].pull_request is None)
+  assert_true(rows[0].changes is Some({ added: 8, partial: true, .. }))
+  assert_eq({ ..switched, branch: Some(""), }.session_pr_rows().length(), 0)
+  assert_eq({ ..switched, branch: None, }.session_pr_rows().length(), 0)
+}
+
+///|
+test "a published checkout branch merges only its exact remote binding" {
+  let bindings : @protocol.SessionPrBindings = @json.from_json({
+    "bindings": [
+      { "url": "https://github.com/o/r/tree/topic" },
+      { "url": "https://github.com/fork/r/tree/topic" },
+    ],
+  })
+  let conv = {
+    ..test_model().active(),
+    branch: Some("topic"),
+    pull_request: Some({
+      branch: "topic",
+      probing: false,
+      stale: false,
+      pull_request: None,
+      compare_url: Some("https://github.com/o/r/compare/topic?expand=1"),
+    }),
+    pr_bindings: { ..SessionPrState::empty(), bindings: bindings.bindings, },
+  }
+  let rows = conv.session_pr_rows()
+  assert_eq(rows.length(), 2)
+  assert_eq(rows[0].urls, ["https://github.com/o/r/tree/topic"])
+  assert_eq(rows[1].urls, ["https://github.com/fork/r/tree/topic"])
+}
+
+///|
+test "a newly bound PR enriches the already discovered branch before the next checkout probe" {
+  let head = "https://github.com/o/r/tree/topic"
+  let pr = { ..test_session_pr(), head_url: Some(head), }
+  let bindings : @protocol.SessionPrBindings = @json.from_json({
+    "bindings": [{ "url": head }, { "url": pr.url }],
+  })
+  let conv = {
+    ..test_model().active(),
+    branch: Some("topic"),
+    pull_request: Some({
+      branch: "topic",
+      probing: false,
+      stale: false,
+      pull_request: None,
+      compare_url: Some("https://github.com/o/r/compare/topic?expand=1"),
+    }),
+    pr_bindings: {
+      ..SessionPrState::empty(),
+      bindings: bindings.bindings,
+      details: Map::from_array([(pr.url, { detail: Some(pr), error: None, })]),
+    },
+  }
+  let rows = conv.session_pr_rows()
+  assert_eq(rows.length(), 1)
+  assert_true(rows[0].current && rows[0].pull_request == Some(pr))
+  assert_eq(rows[0].urls, [head, pr.url])
+  let unbound = { ..conv, pr_bindings: SessionPrState::empty(), }.session_pr_rows()
+  assert_eq(unbound.length(), 1)
+  assert_true(unbound[0].pull_request is None)
+  assert_eq(unbound[0].url, Some(head))
+  assert_true(unbound[0].urls.is_empty())
 }

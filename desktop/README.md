@@ -245,14 +245,21 @@ without checking remote existence or changing the checkout. A conversation
 must already have a durable record to save bindings. Unpublished local
 branches cannot be bound by name.
 
-The binding list appears above the OpenSeek composer, with PR number,
+A unified list appears above the OpenSeek composer, with PR number,
 repository, branch, diff totals, status and expandable CI details. Open PRs
 use green rows, drafts remain gray, merged PRs use purple, and closed PRs use
-red. It replaces
-the former checkout PR chip: an unbound checkout PR is not displayed on its
-own. The list can be collapsed, and removing a row removes its associations
-without closing a PR or deleting a branch. GitHub details use the host's
-authenticated `gh` CLI; a failed lookup keeps the binding and any previously
+red. The first row automatically shows the current checkout's PR, or its local
+branch and diff totals when no PR is available, even with MCP disabled and
+no explicit bindings. Unpublished branches do not need a URL. The former
+checkout PR chip is removed; checkout information appears only in this list.
+An exact PR URL or repository-qualified head branch URL merges an explicit
+binding into the current row. Equal branch names alone never merge.
+
+The list can be collapsed. Removing a row removes its explicit associations
+without closing a PR or deleting a branch; the automatic current row remains
+and has no remove button when unbound. Likewise, `{"bindings": []}` clears only
+explicit associations. GitHub details use the host's authenticated `gh` CLI;
+a failed lookup keeps the binding and any previously
 loaded details visible. An explicitly bound PR and its exact head-branch URL
 share one row, including when that head belongs to a fork.
 

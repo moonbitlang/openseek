@@ -179,6 +179,8 @@ pub let git_history : Command[@protocol.GitHistoryPayload, @protocol.GitHistoryR
 
 pub let git_original_file : Command[@protocol.GitOriginalFilePayload, @protocol.GitOriginalFileReply]
 
+pub let git_pr_detail : Command[@protocol.GitPrDetailPayload, @protocol.GitPrDetailReply]
+
 pub let git_pull_request : Command[@protocol.GitPullRequestPayload, @protocol.GitPullRequestReply]
 
 pub let github_checkout : Command[@protocol.GithubCheckoutPayload, @protocol.GithubCheckoutReply]
@@ -258,8 +260,6 @@ pub let session_list_archived : Command[@protocol.EmptyPayload, @protocol.Sessio
 pub let session_load : Command[@protocol.LoadSessionPayload, @protocol.LoadSessionReply]
 
 pub let session_load_archived : Command[@protocol.LoadSessionPayload, @protocol.LoadSessionReply]
-
-pub let session_pr_detail : Command[@protocol.SessionPrBinding, @protocol.SessionPrDetailReply]
 
 pub let session_pr_list : Command[@protocol.SessionPrChangedPayload, @protocol.SessionPrBindings]
 

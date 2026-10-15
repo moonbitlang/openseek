@@ -464,17 +464,11 @@ fn main {
             emit.map(msg => ProjectPicker(msg)),
           ),
         )
-        // Click-away dismissal, one listener per menu and only while that menu
-        // is open: a document-wide listener should not outlive what it serves.
-        if model.git_details_open ||
-          (model.screen is Codex && model.codex.git_details_open()) {
-          let close = if model.screen is Codex {
-            emit.map((_ : Unit) => {
-              Codex(channel=model.focused, @codex.Msg::close_git_details())
-            })
-          } else {
-            emit.map((_ : Unit) => CloseGitDetails)
-          }
+        // Click-away dismissal only while the Codex git menu is open.
+        if model.screen is Codex && model.codex.git_details_open() {
+          let close = emit.map((_ : Unit) => {
+            Codex(channel=model.focused, @codex.Msg::close_git_details())
+          })
           subs.push(
             @dismiss.on_outside_click(
               "composer-git-dismiss",

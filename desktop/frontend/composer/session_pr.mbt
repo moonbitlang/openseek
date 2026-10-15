@@ -1,9 +1,11 @@
 ///|
 pub(all) struct SessionPrRow {
-  url : String
+  url : String?
   urls : Array[String]
   pull_request : @protocol.GitPullRequest?
-  head_url : String?
+  current : Bool
+  branch : String?
+  changes : @protocol.GitDiffStat?
   error : String?
 } derive(Eq)
 
@@ -30,14 +32,18 @@ fn render_session_prs(
       Some(pr) => pr.state
       None => "branch"
     }
-    let (number, repo, branch) = match row.url.split("/").collect() {
-      ["https:", "", _, _, repo, "pull", number] =>
-        (Some(number.to_owned()), Some(repo.to_owned()), None)
-      ["https:", "", _, _, repo, "tree", .. branch] =>
-        (None, Some(repo.to_owned()), Some(branch.join("/")))
-      _ => (None, None, None)
+    let (number, repo, branch) = match row.url {
+      None => (None, None, None)
+      Some(url) =>
+        match url.split("/").collect() {
+          ["https:", "", _, _, repo, "pull", number] =>
+            (Some(number.to_owned()), Some(repo.to_owned()), None)
+          ["https:", "", _, _, repo, "tree", .. branch] =>
+            (None, Some(repo.to_owned()), Some(branch.join("/")))
+          _ => (None, None, None)
+        }
     }
-    let branch = match row.head_url {
+    let branch = match row.pull_request.bind(pr => pr.head_url) {
       Some(url) =>
         match url.split("/tree/").collect() {
           [_, branch] => Some(branch.to_owned())
@@ -45,10 +51,18 @@ fn render_session_prs(
         }
       None => branch
     }
+    let branch = match row.branch {
+      Some(branch) => Some(branch)
+      None => branch
+    }
     let label : Array[@html.Html] = [
       @html.span(
         class="session-pr-icon",
-        title=if tone == "closed" { ui(locale, PrClosed) } else { row.url },
+        title?=if tone == "closed" {
+          Some(ui(locale, PrClosed))
+        } else {
+          row.url
+        },
         @icons.icon(
           match tone {
             "merged" => @icons.icon_pull_request_merged
@@ -66,19 +80,28 @@ fn render_session_prs(
     }
     if branch is Some(branch) {
       label.push(@html.span(class="session-pr-branch", branch))
-    } else if repo is None {
-      label.push(@html.span(class="session-pr-branch", row.url))
+    } else if repo is None && row.url is Some(url) {
+      label.push(@html.span(class="session-pr-branch", url))
     }
     let content : Array[@html.Html] = [
-      @html.a(
-        class="session-pr-link",
-        href=row.url,
-        title=row.url,
-        target=Blank,
-        rel="noopener noreferrer",
-        label,
-      ),
+      match row.url {
+        Some(url) =>
+          @html.a(
+            class="session-pr-link",
+            href=url,
+            title=url,
+            target=Blank,
+            rel="noopener noreferrer",
+            label,
+          )
+        None => @html.div(class="session-pr-link", label)
+      },
     ]
+    if row.current {
+      content.push(
+        @html.span(class="session-pr-current", ui(locale, PrCurrent)),
+      )
+    }
     if row.pull_request is Some(pr) {
       if pr.state == "merged" {
         content.push(@html.span(class="session-pr-state", ui(locale, PrMerged)))
@@ -106,13 +129,13 @@ fn render_session_prs(
               type_="button",
               title=checks.summary(locale~),
               attrs=@html.Attrs::build().aria_expanded(
-                if checks_url == Some(row.url) {
+                if checks_url == Some(pr.url) {
                   "true"
                 } else {
                   "false"
                 },
               ),
-              on_click=emit(PrChecksToggled(identity~, url=row.url)),
+              on_click=emit(PrChecksToggled(identity~, url=pr.url)),
               [
                 @html.span(class="session-pr-check-dot", @html.nothing),
                 @html.span("CI"),
@@ -120,7 +143,7 @@ fn render_session_prs(
               ],
             ),
           ]
-          if checks_url == Some(row.url) {
+          if checks_url == Some(pr.url) {
             checks_content.push(
               @html.div(class="session-pr-check-menu", [
                 @html.a(
@@ -138,6 +161,19 @@ fn render_session_prs(
         }
       }
     }
+    if row.pull_request is None && row.changes is Some(changes) {
+      content.push(
+        @html.span(class="session-pr-diff session-pr-badge", [
+          @html.span(class="added", "+" + pr_count(changes.added)),
+          @html.span(class="removed", "−" + pr_count(changes.removed)),
+        ]),
+      )
+      if changes.partial {
+        content.push(
+          @html.span(class="session-pr-partial", ui(locale, PrPartial)),
+        )
+      }
+    }
     if row.error is Some(message) {
       content.push(
         @html.span(
@@ -147,15 +183,17 @@ fn render_session_prs(
         ),
       )
     }
-    content.push(
-      @html.button(
-        class="session-pr-remove",
-        type_="button",
-        title=ui(locale, RemoveLabel),
-        on_click=emit(PrBindingRemoved(identity~, urls=row.urls)),
-        @icons.icon(@icons.icon_close),
-      ),
-    )
+    if !row.urls.is_empty() {
+      content.push(
+        @html.button(
+          class="session-pr-remove",
+          type_="button",
+          title=ui(locale, RemoveLabel),
+          on_click=emit(PrBindingRemoved(identity~, urls=row.urls)),
+          @icons.icon(@icons.icon_close),
+        ),
+      )
+    }
     children.push(@html.div(class="session-pr-row " + tone, content))
   }
   if rows.length() > 1 || (collapsed && !rows.is_empty()) {

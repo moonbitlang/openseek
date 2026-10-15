@@ -972,7 +972,7 @@ pub let session_pr_remove : Command[
 ] = Command("session.pr_remove")
 
 ///|
-pub let session_pr_detail : Command[
-  @protocol.SessionPrBinding,
-  @protocol.SessionPrDetailReply,
-] = Command("session.pr_detail")
+pub let git_pr_detail : Command[
+  @protocol.GitPrDetailPayload,
+  @protocol.GitPrDetailReply,
+] = Command("git.pr_detail")

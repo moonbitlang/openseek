@@ -376,10 +376,12 @@ pub fn RunningSubmit::not_equal(Self, Self) -> Bool
 pub fn RunningSubmit::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SessionPrRow {
-  url : String
+  url : String?
   urls : Array[String]
   pull_request : @protocol.GitPullRequest?
-  head_url : String?
+  current : Bool
+  branch : String?
+  changes : @protocol.GitDiffStat?
   error : String?
 } derive(Eq)
 pub fn SessionPrRow::equal(Self, Self) -> Bool

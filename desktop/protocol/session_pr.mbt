@@ -11,22 +11,7 @@ pub impl FromJson for SessionPrBinding with fn from_json(json, path) {
   guard object.fields.length() == 1 else {
     raise JsonDecodeError((path, "a binding contains only url"))
   }
-  let url = object.required_string("url").trim().trim_end(chars="/").to_owned()
-  let parts = url.split("/").collect()
-  guard parts is ["https:", "", authority, .. rest] &&
-    !authority.is_empty() &&
-    !authority.contains("@") &&
-    !authority.contains("?") &&
-    !authority.contains("#") &&
-    !rest.is_empty() &&
-    rest.any(part => !part.is_empty()) &&
-    !url.contains("\\") &&
-    !url.iter().any(c => c <= ' ' || c == '\u007f') else {
-    raise JsonDecodeError(
-      (path.add_key("url"), "expected an HTTPS pull request or branch URL"),
-    )
-  }
-  { url, }
+  { url: normalize_pr_url(object.required_string("url"), path), }
 }
 
 ///|
@@ -73,64 +58,6 @@ pub fn SessionPrBindings::without(
   url : String,
 ) -> SessionPrBindings {
   { bindings: self.bindings.filter(item => item.url != url), }
-}
-
-///|
-/// Display-only metadata for a resolved PR. Request identity and lookup
-/// failures belong to the caller, not the metadata.
-pub(all) struct SessionPrDetail {
-  pull_request : GitPullRequest
-  head_url : String?
-} derive(Eq, Debug)
-
-///|
-pub impl FromJson for SessionPrDetail with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "session PR detail")
-  {
-    pull_request: @json.from_json(
-      object.required_json("pull_request"),
-      path=path.add_key("pull_request"),
-    ),
-    head_url: object.optional_string("head_url"),
-  }
-}
-
-///|
-pub impl ToJson for SessionPrDetail with fn to_json(self) {
-  let fields : Map[String, Json] = {
-    "pull_request": self.pull_request.to_json(),
-  }
-  if self.head_url is Some(value) {
-    fields["head_url"] = Json(value)
-  }
-  Json(fields)
-}
-
-///|
-/// Commands use object replies; an absent detail means this URL has no PR
-/// enrichment. Lookup failures travel through the command error channel.
-pub(all) struct SessionPrDetailReply {
-  detail : SessionPrDetail?
-} derive(Eq, Debug)
-
-///|
-pub impl FromJson for SessionPrDetailReply with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "session PR detail reply")
-  {
-    detail: match object.optional_json("detail") {
-      Some(value) => Some(@json.from_json(value, path=path.add_key("detail")))
-      None => None
-    },
-  }
-}
-
-///|
-pub impl ToJson for SessionPrDetailReply with fn to_json(self) {
-  let fields : Map[String, Json] = Map([])
-  if self.detail is Some(detail) {
-    fields["detail"] = detail.to_json()
-  }
-  Json(fields)
 }
 
 ///|
@@ -196,18 +123,6 @@ pub extend SessionPrBindings with ToJson::{to_json}
 pub extend SessionPrBindings with FromJson::{from_json}
 
 ///|
-pub extend SessionPrDetail with Eq::{equal, not_equal}
-
-///|
-pub extend SessionPrDetail with Debug::{to_repr}
-
-///|
-pub extend SessionPrDetail with ToJson::{to_json}
-
-///|
-pub extend SessionPrDetail with FromJson::{from_json}
-
-///|
 pub extend SessionPrRemovePayload with Eq::{equal, not_equal}
 
 ///|
@@ -230,15 +145,3 @@ pub extend SessionPrChangedPayload with ToJson::{to_json}
 
 ///|
 pub extend SessionPrChangedPayload with FromJson::{from_json}
-
-///|
-pub extend SessionPrDetailReply with Eq::{equal, not_equal}
-
-///|
-pub extend SessionPrDetailReply with Debug::{to_repr}
-
-///|
-pub extend SessionPrDetailReply with ToJson::{to_json}
-
-///|
-pub extend SessionPrDetailReply with FromJson::{from_json}

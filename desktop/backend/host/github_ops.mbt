@@ -24,7 +24,7 @@ const PullRequestCandidates : Int32 = 5
 /// request from a fork's that happens to share the branch name.
 /// `baseRefName` is not rendered either: it is what the diffstat measures
 /// from, and the only exact answer to that question anywhere.
-const PullRequestFields : String = "number,title,state,url,baseRefName,isDraft,additions,deletions,changedFiles,statusCheckRollup,isCrossRepository"
+const PullRequestFields : String = "number,title,state,url,baseRefName,isDraft,additions,deletions,changedFiles,statusCheckRollup,isCrossRepository,headRefName,headRepository"
 
 ///|
 #cfg(platform="windows")
@@ -219,6 +219,17 @@ fn parse_pull_request(json : Json) -> GitPullRequest? {
     Some(String("CLOSED")) => "closed"
     _ => return None
   }
+  let head_url = match json {
+    {
+      "headRefName": String(branch),
+      "headRepository": { "nameWithOwner": String(repo), .. },
+      ..
+    } => {
+      let identity = github_review_identity(url) catch { _ => return None }
+      Some("https://\{identity.host}/\{repo}/tree/\{encode_url_path(branch)}")
+    }
+    _ => None
+  }
   Some({
     number,
     title,
@@ -229,6 +240,7 @@ fn parse_pull_request(json : Json) -> GitPullRequest? {
     additions,
     deletions,
     changed_files,
+    head_url,
     checks: parse_checks(fields.get("statusCheckRollup")),
   })
 }

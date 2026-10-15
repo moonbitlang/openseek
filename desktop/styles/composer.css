@@ -1339,3 +1339,5 @@
   .session-pr-repo { display: none; }
   .session-pr-diff { display: none; }
 }
+
+.session-pr-current, .session-pr-partial { font-size: .85em; opacity: .8; flex-shrink: 0; }

@@ -3,6 +3,8 @@
 ///|
 priv enum UiMessage {
   PrMerged
+  PrCurrent
+  PrPartial
   PrClosed
   PrDraft
   PrCollapse
@@ -129,6 +131,16 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PrCurrent) => "Current"
+    (Spanish, PrCurrent) => "Actual"
+    (SimplifiedChinese, PrCurrent) => "当前"
+    (TraditionalChinese, PrCurrent) => "目前"
+    (Japanese, PrCurrent) => "現在"
+    (English, PrPartial) => "Partial count"
+    (Spanish, PrPartial) => "Recuento parcial"
+    (SimplifiedChinese, PrPartial) => "部分统计"
+    (TraditionalChinese, PrPartial) => "部分統計"
+    (Japanese, PrPartial) => "一部のみ集計"
     (English, PrMerged) => "Merged"
     (Spanish, PrMerged) => "Fusionada"
     (SimplifiedChinese, PrMerged) => "已合并"

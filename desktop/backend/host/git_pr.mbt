@@ -1,10 +1,10 @@
 ///|
 /// Optional enrichment of a saved URL. Saving the association never reaches
 /// this path and never waits for GitHub or requires a local checkout.
-async fn session_pr_detail(
-  binding : @protocol.SessionPrBinding,
-) -> @protocol.SessionPrDetail? {
-  let identity = github_review_identity(binding.url) catch { _ => return None }
+async fn git_pr_detail(
+  payload : @protocol.GitPrDetailPayload,
+) -> @protocol.GitPullRequest? {
+  let identity = github_review_identity(payload.url) catch { _ => return None }
   guard resolve_gh() is Some(gh) else {
     raise HostError("Install GitHub CLI (gh) and sign in to load PR status.")
   }
@@ -16,7 +16,7 @@ async fn session_pr_detail(
       "--repo",
       "https://\{identity.host}/\{identity.owner}/\{identity.repo}",
       "--json",
-      PullRequestFields + ",headRefName,headRepository",
+      PullRequestFields,
     ])
   })
   guard result is Some(raw) else {
@@ -25,14 +25,5 @@ async fn session_pr_detail(
   guard parse_pull_request(raw) is Some(pull_request) else {
     raise HostError("GitHub returned invalid PR status.")
   }
-  let head_url = match raw {
-    {
-      "headRefName": String(branch),
-      "headRepository": { "nameWithOwner": String(repo), .. },
-      ..
-    } =>
-      Some("https://\{identity.host}/\{repo}/tree/\{encode_url_path(branch)}")
-    _ => None
-  }
-  Some({ pull_request, head_url, })
+  Some(pull_request)
 }

@@ -1628,12 +1628,6 @@ priv struct Model {
   // outstanding replies a number the new one accepts. Kept whole while the
   // frontend runs, it can only ever be spent.
   git_request_generation : Int32
-  // Whether the composer's git chip has its details popover open. Global UI
-  // for the focused conversation like `quick_open`, not conversation state:
-  // only one composer is on screen, and a popover left open across a switch
-  // would describe the wrong checkout — which `update` fences, since a
-  // keyboard switch produces no click for the dismissal listener to see.
-  git_details_open : Bool
   // The right panel's dock: the mixed tab strip's membership, order, active
   // tab, and per-conversation parked strips. Owned by the `dock` package;
   // the projection (open files, active file, panel visibility) feeds
@@ -2102,11 +2096,6 @@ priv enum Msg {
   RevealFile(String)
   // The host chooses the viewer; the frontend retains the navigation context.
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
-  // Open or close the composer git chip's details popover.
-  ToggleGitDetails
-  // Clicks away from a transient menu, one per menu. Each is separate from
-  // its toggle on purpose: a dismissal must never reopen what it closed.
-  CloseGitDetails
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
@@ -2498,13 +2487,7 @@ priv enum DeviceMsg {
     session~ : String,
     generation~ : Int32,
     url~ : String,
-    result~ : Result[@protocol.SessionPrDetail?, String]
-  )
-  PrCheckoutDetailLoaded(
-    session~ : String,
-    generation~ : Int32,
-    url~ : String,
-    result~ : Result[@protocol.SessionPrDetail?, String]
+    result~ : Result[@protocol.GitPullRequest?, String]
   )
   PrBindingRemoveFailed(session~ : String, message~ : String)
   BranchLoaded(
@@ -2526,7 +2509,7 @@ priv enum DeviceMsg {
     branch~ : String,
     generation~ : Int32,
     queried~ : String?,
-    pull_request~ : PullRequest?,
+    pull_request~ : @protocol.GitPullRequest?,
     compare_url~ : String?
   )
   // The host accepted a prompt: `session` routes the event to its
@@ -2849,7 +2832,6 @@ fn initial_model(desktop~ : Bool) -> Model {
     composer_entry_retirements: [],
     quick_open: @quick_open.State::empty(),
     git_request_generation: 0,
-    git_details_open: false,
     dock: @dock.State::empty(),
     file_panel: @fileeditor.State::empty(),
     pending_review_context: None,
