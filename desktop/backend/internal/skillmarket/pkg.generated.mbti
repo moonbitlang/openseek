@@ -29,8 +29,8 @@ pub struct InstalledSkill {
   name : String
   description : String
   source : String
-} derive(ToJson)
-pub fn InstalledSkill::to_json(Self) -> Json
+  registry : RegistrySkillIdentity?
+}
 
 pub struct MarketSkill {
   name : String
@@ -42,6 +42,11 @@ pub struct MarketSkill {
   repository : String
 }
 pub fn MarketSkill::to_json(Self) -> Json
+
+pub struct RegistrySkillIdentity {
+  module_name : String
+  package_path : String
+}
 
 // Type aliases
 

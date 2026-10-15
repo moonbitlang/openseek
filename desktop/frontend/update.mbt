@@ -18447,7 +18447,13 @@ test "installed skills replies are scoped to their source device" {
     installed_skills: [],
   }
   let old_host : Array[@skills.InstalledItem] = [
-    { id: "old", name: "old", description: "", source: "old/source@1.0.0", },
+    {
+      id: "old",
+      name: "old",
+      description: "",
+      source: "old/source@1.0.0",
+      registry: Some({ module_name: "old/source", package_path: "", }),
+    },
   ]
   let (_, ignored) = update(
     dispatch,
@@ -18456,7 +18462,13 @@ test "installed skills replies are scoped to their source device" {
   )
   assert_eq(ignored.installed_skills.length(), 0)
   let new_host : Array[@skills.InstalledItem] = [
-    { id: "new", name: "new", description: "", source: "new/source@1.0.0", },
+    {
+      id: "new",
+      name: "new",
+      description: "",
+      source: "new/source@1.0.0",
+      registry: Some({ module_name: "new/source", package_path: "", }),
+    },
   ]
   let (_, applied) = update(
     dispatch,

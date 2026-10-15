@@ -6,7 +6,6 @@ priv enum UiMessage {
   Removing
   Uninstall
   NotInstalled
-  InstalledCheck
   Installing
   Install
   LoadingDocument
@@ -55,11 +54,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, NotInstalled) => "未安装"
     (TraditionalChinese, NotInstalled) => "未安裝"
     (Japanese, NotInstalled) => "未インストール"
-    (English, InstalledCheck) => "✓ Installed"
-    (Spanish, InstalledCheck) => "✓ Instalada"
-    (SimplifiedChinese, InstalledCheck) => "✓ 已安装"
-    (TraditionalChinese, InstalledCheck) => "✓ 已安裝"
-    (Japanese, InstalledCheck) => "✓ インストール済み"
     (English, Installing) => "Installing…"
     (Spanish, Installing) => "Instalando…"
     (SimplifiedChinese, Installing) => "正在安装…"
@@ -160,29 +154,26 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, LoadingCatalog) => "正在加载技能目录…"
     (TraditionalChinese, LoadingCatalog) => "正在載入技能目錄…"
     (Japanese, LoadingCatalog) => "スキルカタログを読み込み中…"
-    (English, EmptyRegistry) => "The registry lists no installable skills yet."
-    (Spanish, EmptyRegistry) =>
-      "El registro aún no contiene habilidades instalables."
-    (SimplifiedChinese, EmptyRegistry) =>
-      "注册表中尚无可安装的技能。"
-    (TraditionalChinese, EmptyRegistry) =>
-      "登錄檔中尚無可安裝的技能。"
+    (English, EmptyRegistry) => "No skills available to install."
+    (Spanish, EmptyRegistry) => "No hay habilidades disponibles para instalar."
+    (SimplifiedChinese, EmptyRegistry) => "暂无可安装的技能。"
+    (TraditionalChinese, EmptyRegistry) => "暫無可安裝的技能。"
     (Japanese, EmptyRegistry) =>
-      "レジストリにはまだインストール可能なスキルがありません。"
-    (English, NoRegistryMatch) => "No registry skill matches the search."
+      "インストール可能なスキルはありません。"
+    (English, NoRegistryMatch) => "No available skill matches the search."
     (Spanish, NoRegistryMatch) =>
-      "Ninguna habilidad del registro coincide con la búsqueda."
+      "Ninguna habilidad disponible coincide con la búsqueda."
     (SimplifiedChinese, NoRegistryMatch) =>
-      "注册表中未找到匹配的技能。"
+      "未找到匹配的可安装技能。"
     (TraditionalChinese, NoRegistryMatch) =>
-      "登錄檔中未找到匹配的技能。"
+      "未找到匹配的可安裝技能。"
     (Japanese, NoRegistryMatch) =>
-      "レジストリに一致するスキルがありません。"
-    (English, Registry) => "Mooncakes registry"
-    (Spanish, Registry) => "Registro de Mooncakes"
-    (SimplifiedChinese, Registry) => "Mooncakes 注册表"
-    (TraditionalChinese, Registry) => "Mooncakes 登錄檔"
-    (Japanese, Registry) => "Mooncakes レジストリ"
+      "一致するインストール可能なスキルがありません。"
+    (English, Registry) => "Available"
+    (Spanish, Registry) => "Disponibles"
+    (SimplifiedChinese, Registry) => "可安装"
+    (TraditionalChinese, Registry) => "可安裝"
+    (Japanese, Registry) => "インストール可能"
     (English, Refreshing) => "Refreshing…"
     (Spanish, Refreshing) => "Actualizando…"
     (SimplifiedChinese, Refreshing) => "正在刷新…"

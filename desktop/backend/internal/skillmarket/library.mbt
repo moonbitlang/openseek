@@ -13,6 +13,13 @@
 const SidecarFile = ".mooncakes.json"
 
 ///|
+/// Registry coordinates identifying a skill independently of its version.
+pub struct RegistrySkillIdentity {
+  module_name : String
+  package_path : String
+}
+
+///|
 /// One entry of the local skills library.
 pub struct InstalledSkill {
   // The library entry (directory or file stem) — the key uninstall takes.
@@ -23,7 +30,14 @@ pub struct InstalledSkill {
   // `module@version[/package]` recorded at install time; "" for a skill the
   // user wrote by hand (which this package will never touch).
   source : String
-} derive(ToJson)
+  registry : RegistrySkillIdentity?
+}
+
+///|
+priv struct InstalledSource {
+  label : String
+  registry : RegistrySkillIdentity
+}
 
 ///|
 /// Where the library lives: `OPENSEEK_GLOBAL_SKILLS_DIR`, else the user's
@@ -127,18 +141,21 @@ fn source_label(
 }
 
 ///|
-fn decode_sidecar(text : String) -> String {
-  let json = @json.parse(text) catch { _ => return "" }
+fn decode_sidecar(text : String) -> InstalledSource? {
+  let json = @json.parse(text) catch { _ => return None }
   guard json
     is { "module": String(module_name), "version": String(version), .. } else {
-    return ""
+    return None
   }
   let package_path = if json is { "package": String(package_path), .. } {
     package_path
   } else {
     ""
   }
-  source_label(module_name, version, package_path)
+  Some({
+    label: source_label(module_name, version, package_path),
+    registry: { module_name, package_path, },
+  })
 }
 
 ///|
@@ -191,6 +208,7 @@ pub async fn install_skill(
     name,
     description,
     source: source_label(module_name, version, package_path),
+    registry: Some({ module_name, package_path, }),
   }
   let provenance : Json = {
     "module": module_name,
@@ -239,19 +257,25 @@ pub async fn installed_skills(
       guard @fsx.try_read_text(path) is Some(text) else { continue }
       let id = id.to_owned()
       let (name, description) = parse_frontmatter(text, id)
-      skills.push({ id, name, description, source: "", })
+      skills.push({ id, name, description, source: "", registry: None, })
     } else {
       guard @fsx.try_read_text(path.join("SKILL.md")) is Some(text) else {
         continue
       }
       let (name, description) = parse_frontmatter(text, entry)
-      let source = if @fsx.try_read_text(path.join(SidecarFile))
+      let installed_source = if @fsx.try_read_text(path.join(SidecarFile))
         is Some(sidecar) {
         decode_sidecar(sidecar)
       } else {
-        ""
+        None
       }
-      skills.push({ id: entry, name, description, source, })
+      skills.push({
+        id: entry,
+        name,
+        description,
+        source: installed_source.map_or("", source => source.label),
+        registry: installed_source.map(source => source.registry),
+      })
     }
   }
   // Sort like the engine's discovery does: readdir order is platform-defined,
@@ -313,6 +337,3 @@ pub async fn uninstall_skill(
   }
   library.move_to_trash(id, on_committed?)
 }
-
-///|
-pub extend InstalledSkill with ToJson::{to_json}

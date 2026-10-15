@@ -617,15 +617,18 @@ test "sidecar decoding renders the install source" {
   assert_eq(
     decode_sidecar(
       "{\"module\":\"alice/alpha\",\"version\":\"0.2.0\",\"package\":\"cmd/run\",\"digest\":\"sha256:abc\"}",
-    ),
+    ).map_or("", source => source.label),
     "alice/alpha@0.2.0/cmd/run",
   )
   assert_eq(
-    decode_sidecar("{\"module\":\"alice/alpha\",\"version\":\"0.2.0\"}"),
+    decode_sidecar("{\"module\":\"alice/alpha\",\"version\":\"0.2.0\"}").map_or(
+      "",
+      source => source.label,
+    ),
     "alice/alpha@0.2.0",
   )
-  assert_eq(decode_sidecar("not json"), "")
-  assert_eq(decode_sidecar("{\"version\":\"0.2.0\"}"), "")
+  assert_true(decode_sidecar("not json") is None)
+  assert_true(decode_sidecar("{\"version\":\"0.2.0\"}") is None)
 }
 
 ///|

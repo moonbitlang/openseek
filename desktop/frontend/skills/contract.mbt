@@ -15,11 +15,16 @@ pub(all) struct Input {
 } derive(Eq)
 
 ///|
-/// Whether a catalog entry (identified by its source label) is already in
-/// the local library — at that exact version; an older install keeps the
-/// Install button alive as the upgrade path.
-fn Input::has_installed(self : Input, source : String) -> Bool {
-  self.installed.any(skill => skill.source == source)
+/// Index installed registry coordinates once for catalog filtering.
+/// Hand-written skills have no registry identity and do not enter the set.
+fn Input::installed_registry_skills(self : Input) -> Set[(String, String)] {
+  let installed : Set[(String, String)] = Set([])
+  for skill in self.installed {
+    if skill.registry is Some(registry) {
+      installed.add((registry.module_name, registry.package_path))
+    }
+  }
+  installed
 }
 
 ///|

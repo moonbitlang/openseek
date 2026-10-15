@@ -104,45 +104,34 @@ fn installed_row(
 }
 
 ///|
-/// One catalog row. The action button morphs: already installed at this
-/// exact version reads as a disabled ui(locale, InstalledLabel) (an older install keeps
-/// the button alive as the upgrade path), an install in flight reads as
-/// ui(locale, Installing).
+/// One uninstalled catalog row, with its install action or pending operation.
 fn market_row(
   locale~ : @i18n.Locale = English,
   state : State,
-  input : Input,
   item : MarketItem,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let source = source_label(item)
   let pending = state.pending_action(source)
-  let installed = input.has_installed(source)
   let info : Array[@html.Html] = [@html.span(class="skill-meta", source)]
   if !item.description.is_blank() {
     info.push(@html.span(class="skill-desc", item.description))
   }
-  let action = if installed {
-    @html.div(class="skill-actions", [
-      @html.span(class="skill-check ok", ui(locale, InstalledCheck)),
-    ])
-  } else {
-    @html.div(class="skill-actions", [
-      @html.button(
-        class="button secondary skill-action",
-        disabled=pending is Some(_),
-        attrs=@html.Attrs::build().on_click(event => {
-          event.stop_propagation()
-          emit(Install(item))
-        }),
-        if pending is Some(action) {
-          ui(locale, action.label())
-        } else {
-          ui(locale, Install)
-        },
-      ),
-    ])
-  }
+  let action = @html.div(class="skill-actions", [
+    @html.button(
+      class="button secondary skill-action",
+      disabled=pending is Some(_),
+      attrs=@html.Attrs::build().on_click(event => {
+        event.stop_propagation()
+        emit(Install(item))
+      }),
+      if pending is Some(action) {
+        ui(locale, action.label())
+      } else {
+        ui(locale, Install)
+      },
+    ),
+  ])
   let header = [
     @html.button(
       class="skill-summary",
@@ -439,21 +428,25 @@ fn list_page(
     Failed(message) =>
       market_rows.push(@html.div(class="skills-empty danger", message))
     Ready(items) => {
-      for item in items {
+      let installed = input.installed_registry_skills()
+      let available = items.filter(item => {
+        !installed.contains((item.module_name, item.package_path))
+      })
+      for item in available {
         if matches(state.query, [
             item.name,
             item.description,
             item.author,
             source_label(item),
           ]) {
-          market_rows.push(market_row(locale~, state, input, item, emit))
+          market_rows.push(market_row(locale~, state, item, emit))
         }
       }
       if market_rows.is_empty() {
         market_rows.push(
           @html.div(
             class="skills-empty",
-            if items.is_empty() {
+            if available.is_empty() {
               ui(locale, EmptyRegistry)
             } else {
               ui(locale, NoRegistryMatch)

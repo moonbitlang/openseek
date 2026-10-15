@@ -1811,6 +1811,7 @@ pub(all) struct InstalledSkill {
   name : String
   description : String
   source : String
+  registry : RegistrySkillIdentity?
 } derive(Eq, @debug.Debug)
 pub fn InstalledSkill::equal(Self, Self) -> Bool
 pub fn InstalledSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2590,6 +2591,18 @@ pub fn ReadFileReply::to_json(Self) -> Json
 pub fn ReadFileReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ReadFileReply
 pub impl @json.FromJson for ReadFileReply
+
+pub(all) struct RegistrySkillIdentity {
+  module_name : String
+  package_path : String
+} derive(Eq, @debug.Debug)
+pub fn RegistrySkillIdentity::equal(Self, Self) -> Bool
+pub fn RegistrySkillIdentity::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RegistrySkillIdentity::not_equal(Self, Self) -> Bool
+pub fn RegistrySkillIdentity::to_json(Self) -> Json
+pub fn RegistrySkillIdentity::to_repr(Self) -> @debug.Repr
+pub impl ToJson for RegistrySkillIdentity
+pub impl @json.FromJson for RegistrySkillIdentity
 
 pub(all) enum RevealPathReply {
   Revealed

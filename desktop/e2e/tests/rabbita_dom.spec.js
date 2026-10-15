@@ -2524,7 +2524,7 @@ test('skills installs a catalog entry and refreshes the installed library', asyn
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Skills' })).toBeVisible();
   const registry = page.locator('.settings-group').filter({
-    has: page.getByRole('heading', { name: 'Mooncakes registry' }),
+    has: page.getByRole('heading', { name: 'Available' }),
   });
   const rabbita = registry.locator('.skill-row').filter({ hasText: /Rabbita/i });
   await rabbita.getByRole('button', { name: 'Install' }).click();
@@ -2536,7 +2536,7 @@ test('skills installs a catalog entry and refreshes the installed library', asyn
     has: page.getByRole('heading', { name: 'Installed' }),
   });
   await expect(installed.locator('.skill-row').filter({ hasText: 'Rabbita' })).toBeVisible();
-  await expect(rabbita).toContainText('Installed');
+  await expect(rabbita).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -2552,7 +2552,7 @@ test('skills search, detail navigation, and hand-written protections use the mou
     has: page.getByRole('heading', { name: 'Installed' }),
   });
   const registry = page.locator('.settings-group').filter({
-    has: page.getByRole('heading', { name: 'Mooncakes registry' }),
+    has: page.getByRole('heading', { name: 'Available' }),
   });
   await expect(installed).toContainText('No installed skill matches the search.');
   await expect(registry.locator('.skill-row')).toContainText('rabbita');

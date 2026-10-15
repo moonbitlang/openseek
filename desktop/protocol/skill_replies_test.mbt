@@ -51,6 +51,7 @@ test "InstallSkillReply owns its success and error wire shapes" {
     name: "test",
     description: "test",
     source: "acme/test@1.0.0",
+    registry: Some({ module_name: "acme/test", package_path: "", }),
   })
   let decoded : @protocol.InstallSkillReply = @json.from_json(success.to_json())
   assert_eq(decoded, success)

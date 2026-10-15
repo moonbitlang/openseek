@@ -83,6 +83,7 @@ fn State::installed_codex_skills(self : State) -> Array[@skills.InstalledItem] {
     name: skill.name,
     description: skill.description,
     source: "codex",
+    registry: None,
   })
 }
 

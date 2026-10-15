@@ -72,6 +72,10 @@ async fn install_skill_op(
     name: installed.name,
     description: installed.description,
     source: installed.source,
+    registry: installed.registry.map(registry => {
+      module_name: registry.module_name,
+      package_path: registry.package_path,
+    }),
   })
 }
 
@@ -90,6 +94,10 @@ async fn installed_skills_op() -> InstalledSkillsReply {
           name: skill.name,
           description: skill.description,
           source: skill.source,
+          registry: skill.registry.map(registry => {
+            module_name: registry.module_name,
+            package_path: registry.package_path,
+          }),
         }
       }
     ],

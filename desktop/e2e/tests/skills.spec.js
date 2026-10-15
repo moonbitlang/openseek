@@ -8,6 +8,7 @@ const market = {
 const installed = {
   id: 'yoorkin-wayfinder', name: 'wayfinder', description: market.description,
   source: 'Yoorkin/wayfinder@0.1.0',
+  registry: { module_name: 'Yoorkin/wayfinder', package_path: '' },
 };
 
 class SkillsHarness extends DesktopBrowserHarness {
@@ -47,14 +48,14 @@ class SkillsHarness extends DesktopBrowserHarness {
     return release;
   }
 
-  async openDetails(fromCatalog = false) {
+  async openDetails(fromCatalog = false, expectedRows = 1) {
     await this.install();
     await this.goto();
     await this.page.getByRole('button', { name: 'Skills', exact: true }).click();
     const summaries = this.page.locator('.skill-summary');
     // Installed rows render above the catalog, and each list arrives by its
     // own RPC. Until both have, first() and last() can name the same row.
-    await expect(summaries).toHaveCount(this.installedSkills.length + this.catalogSkills.length);
+    await expect(summaries).toHaveCount(expectedRows);
     await (fromCatalog ? summaries.last() : summaries.first()).click();
     await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
   }
@@ -86,13 +87,24 @@ test('removed skill without a catalog entry cannot be uninstalled again', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const source of ['Yoorkin/wayfinder@0.0.9', 'Yoorkin/wayfinder@0.1.0/other']) {
-  test(`catalog detail keeps install available for a different source: ${source}`, async ({ page }) => {
+for (const { source, packagePath } of [
+  { source: 'Yoorkin/wayfinder@0.0.9', packagePath: '' },
+  { source: 'Yoorkin/wayfinder@0.1.0/other', packagePath: 'other' },
+]) {
+  test(`catalog excludes installed packages regardless of version: ${source}`, async ({ page }) => {
     const app = new SkillsHarness(page, true);
     app.installedSkills[0].source = source;
-    await app.openDetails(true);
-    await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toHaveCount(0);
+    app.installedSkills[0].registry.package_path = packagePath;
+    const samePackage = packagePath === '';
+    await app.openDetails(!samePackage, samePackage ? 1 : 2);
+    if (samePackage) {
+      await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
+      const registry = page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Available', exact: true }) });
+      await expect(registry.locator('.skill-row')).toHaveCount(0);
+    } else {
+      await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toHaveCount(0);
+    }
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -137,7 +149,7 @@ for (const removing of [false, true]) {
     await expect(page.locator('.skill-detail-action')).toHaveText(busyLabel);
     // Wait for the committed library state to render, rather than just for the request.
     await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
-    await expect(page.locator('.skill-row')).toHaveCount(removing ? 1 : 2);
+    await expect(page.locator('.skill-row')).toHaveCount(1);
     const listAction = page.locator('.skill-row button.skill-action');
     await expect(listAction).toBeDisabled();
     await expect(listAction).toHaveText(busyLabel);
@@ -162,10 +174,10 @@ for (const targetInstalled of [false, true]) {
     const other = { ...market, name: 'widget', module_name: 'acme/widget' };
     app.catalogSkills.push(other);
     if (targetInstalled) {
-      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0' });
+      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0', registry: { module_name: 'acme/widget', package_path: '' } });
     }
     app.rpcErrors.set('skills.uninstall', 'Cannot remove wayfinder: permission denied');
-    await app.openDetails();
+    await app.openDetails(false, 2);
     const contentMethod = targetInstalled ? 'skills.installed_content' : 'skills.content';
     const initialReads = app.requests.filter(r => r.method === contentMethod).length;
     for (const cached of [false, true]) {
@@ -204,7 +216,7 @@ for (const removing of [false, true]) {
       if (request.method === method && failWayfinder) return pending;
       return replyFor(request);
     };
-    await app.openDetails();
+    await app.openDetails(false, 2);
     const detail = page.locator('.skill-detail-page');
     const back = page.getByRole('button', { name: 'Back to skills', exact: true });
     await detail.getByRole('button', { name: actionName, exact: true }).click();
