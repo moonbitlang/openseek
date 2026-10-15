@@ -23,7 +23,9 @@ fn export_files(events~ : String = "test") -> @engine.ConversationExport raise {
 async test "upload authenticates to issuer and retries the exact snapshot after a lost response" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
-  let files = export_files(events="snapshot")
+  let files = export_files(
+    events="a".repeat(4095) + "😀".repeat(4097) + "中\"\\\n</script>",
+  )
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let mut key : String? = None
@@ -65,11 +67,11 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         assert_true(
           text.contains("name=\"html\"; filename=\"conversation.html\""),
         )
-        assert_true(text.contains(files.html().join("")))
+        assert_true(text.contains(files.html))
         assert_true(
           text.contains("name=\"json\"; filename=\"conversation.json\""),
         )
-        assert_true(text.contains(files.json().join("")))
+        assert_true(text.contains(files.json))
         assert_true(text.contains("Content-Type: text/html; charset=utf-8\r\n"))
         assert_true(
           text.contains("Content-Type: application/json; charset=utf-8\r\n"),
@@ -306,8 +308,8 @@ async test "long titles are bounded without truncating streamed conversation fil
         let body = connection.read_all().text()
         assert_true(body.contains("name=\"title\"\r\n\r\n\{expected}\r\n"))
         assert_true(@utf8.encode(expected).length() <= 1024)
-        assert_true(body.contains(files.html().join("")))
-        assert_true(body.contains(files.json().join("")))
+        assert_true(body.contains(files.html))
+        assert_true(body.contains(files.json))
         connection.send_response(201, "Created")
         connection.write_string("{\"url\":\"https://shares.test/a\"}")
         connection.end_response()

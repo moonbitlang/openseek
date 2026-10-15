@@ -4,6 +4,7 @@ import {
   "openseek_desktop/backend/engine",
   "moonbitlang/async",
   "moonbitlang/async/http",
+  "moonbitlang/async/io",
 }
 
 import {

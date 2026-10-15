@@ -91,11 +91,12 @@ pub(all) suberror EngineError {
 pub fn EngineError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-type ConversationExport
+pub struct ConversationExport {
+  html : String
+  json : String
+}
 pub fn ConversationExport::ConversationExport(@viz_export.StandaloneExport, Array[@viz_export.Session]) -> Self raise
 pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
-pub fn ConversationExport::html(Self) -> Iter[String] raise
-pub fn ConversationExport::json(Self) -> Iter[String]
 
 type EditReplacement
 

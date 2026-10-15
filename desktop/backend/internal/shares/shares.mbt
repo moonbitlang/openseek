@@ -18,8 +18,8 @@ pub impl Show for ShareError with fn output(self, logger) {
 pub extend ShareError with Show::{to_string, output}
 
 ///|
-/// Stream a captured export to its issuer. Each attempt opens fresh HTML and
-/// JSON iterators over the same records. A lost response or transport
+/// Stream already-rendered export files to their issuer. Each attempt reads
+/// the same HTML and JSON strings. A lost response or transport
 /// failure is retried once with the same multipart boundary and idempotency key.
 /// Cancellation closes the active connection and does not start a retry.
 pub async fn publish(
@@ -89,22 +89,14 @@ async fn send(
       "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",
       "Content-Type": "text/html; charset=utf-8",
     },
-    target => {
-      for chunk in files.html() {
-        target.write(chunk)
-      }
-    },
+    target => write_text(target, files.html),
   )
   form.write_part(
     headers={
       "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
       "Content-Type": "application/json; charset=utf-8",
     },
-    target => {
-      for chunk in files.json() {
-        target.write(chunk)
-      }
-    },
+    target => write_text(target, files.json),
   )
   form.finish()
   let response = connection.end_request()
@@ -138,5 +130,17 @@ async fn send(
   } noraise {
     { "url": String(url), .. } => @protocol.Shared(url~)
     _ => @protocol.Failed(message=invalid)
+  }
+}
+
+///|
+// Encode bounded slices, keeping surrogate pairs whole. The existing export
+// strings are retained for retries, without buffering another multipart body.
+async fn write_text(target : &@io.Writer, text : String) -> Unit {
+  let mut offset = 0
+  while offset < text.length() {
+    let chunk = text[offset:(offset + 4096).min(text.length())]
+    target.write(chunk)
+    offset += chunk.length()
   }
 }

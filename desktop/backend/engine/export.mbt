@@ -95,16 +95,18 @@ async fn SessionExport::sessions(
 }
 
 ///|
-/// One captured conversation and the assets used to stream its export.
-/// Raw records are retained once; HTML and JSON are generated on demand.
-struct ConversationExport {
-  exporter : @viz_export.StandaloneExport
-  sessions : Array[@viz_export.Session]
+/// One current or archived OpenSeek conversation rendered as the standalone
+/// HTML visualizer plus its embedded dataset. The supplied shell and bundle
+/// are the host build's packaged `viz_app` assets, so the document carries the
+/// parser that matches this application.
+pub struct ConversationExport {
+  html : String
+  json : String
 }
 
 ///|
-/// Read the records once so both files and every retry describe the same
-/// conversation, even while another turn is running.
+/// Read the records once so both files describe the same conversation even
+/// when another turn is running while the user exports it.
 pub async fn ConversationExport::capture(
   manager : EngineManager,
   payload : @protocol.SessionExportPayload,
@@ -118,27 +120,12 @@ pub async fn ConversationExport::capture(
 }
 
 ///|
-/// Bind captured records to their rendering assets. Own the session selection
-/// so later changes to the caller's array cannot change a replayed export.
+/// Render the captured records once, sharing the serialized dataset between
+/// the standalone HTML and the downloadable JSON.
 pub fn ConversationExport::ConversationExport(
   exporter : @viz_export.StandaloneExport,
   sessions : Array[@viz_export.Session],
 ) -> ConversationExport raise {
-  // Validate the packaged shell before opening a save dialog or an upload.
-  ignore(exporter.html_chunks(sessions))
-  { exporter, sessions: sessions.copy(), }
-}
-
-///|
-/// Open a fresh HTML stream over the captured records.
-pub fn ConversationExport::html(
-  self : ConversationExport,
-) -> Iter[String] raise {
-  self.exporter.html_chunks(self.sessions)
-}
-
-///|
-/// Open a fresh JSON stream over the captured records.
-pub fn ConversationExport::json(self : ConversationExport) -> Iter[String] {
-  self.exporter.json_chunks(self.sessions)
+  let json = exporter.json(sessions)
+  { html: exporter.render_json(json), json, }
 }
