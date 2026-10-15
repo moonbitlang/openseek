@@ -23,18 +23,21 @@ fn test_tools() -> Array[@mcp.Tool] {
     {
       name: "echo",
       description: "Echo the caller and its arguments.",
+      waits_for_user: false,
       input_schema: { "type": "object" },
       call: call => "\{call.session} \{call.arguments.stringify()}",
     },
     {
       name: "broken",
       description: "Always fails.",
+      waits_for_user: false,
       input_schema: { "type": "object" },
       call: _ => raise @mcp.ToolError("the page is gone; open it again"),
     },
     {
       name: "browser_get_text",
       description: "Read a tab's text.",
+      waits_for_user: false,
       input_schema: {
         "type": "object",
         "properties": {
@@ -57,6 +60,51 @@ async fn with_server(body : async (@mcp.Server) -> Unit) -> Unit {
   @async.with_task_group(group => {
     group.spawn_bg(no_wait=true, () => server.run())
     body(server)
+  })
+}
+
+///|
+async test "backend tools register atomically and advertise human-paced calls" {
+  let server = @mcp.Server([], version="test")
+  let tool : @mcp.Tool = {
+    name: "session",
+    description: "Approve a message",
+    waits_for_user: true,
+    input_schema: { "type": "object" },
+    call: call => "approved for \{call.session}",
+  }
+  server.add_tools([tool])
+  try server.add_tools([{ ..tool, name: "extra", }, tool]) catch {
+    _ => ()
+  } noraise {
+    _ => fail("duplicate tool registration must fail atomically")
+  }
+  @async.with_task_group(group => {
+    group.spawn_bg(no_wait=true, () => server.run())
+    let env = server.grant("sender")
+    guard env.get(@mcp.UrlEnv) is Some(url) &&
+      env.get(@mcp.TokenEnv) is Some(token) else {
+      fail("missing grant")
+    }
+    let connection = @streamhttp.connect(
+      group,
+      url~,
+      headers={ "Authorization": "Bearer \{token}" },
+      client_name="openseek",
+      client_version="test",
+    )
+    defer connection.shutdown()
+    let client = connection.client()
+    let tools = client.list_tools()
+    assert_eq(tools.length(), 1)
+    assert_eq(tools[0].name, "session")
+    assert_true(tools[0].waits_for_user)
+    let result = client.call_tool(
+      name="session",
+      arguments={},
+      waits_for_user=true,
+    )
+    assert_eq(result.render_text(), "approved for sender")
   })
 }
 

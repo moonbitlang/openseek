@@ -1,0 +1,6 @@
+import {
+  "openseek_desktop/protocol",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "+native"

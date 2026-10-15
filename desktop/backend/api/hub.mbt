@@ -29,6 +29,9 @@ priv struct Hub {
   // frontend recovers the whole turn except the question holding it up, and
   // the only way out is to cancel the run.
   pending_approvals : Map[String, @protocol.PendingApprovalPayload]
+  // Host-owned questions survive the originating turn. They are keyed by
+  // request id; several messages can be awaiting approval in one chat.
+  message_approvals : Map[String, @protocol.PendingApprovalPayload]
   mut approval_generation : Int32
 }
 
@@ -39,6 +42,7 @@ fn Hub::Hub() -> Hub {
     active_starts: Map([]),
     settlements: Map([]),
     pending_approvals: Map([]),
+    message_approvals: Map([]),
     approval_generation: 0,
   }
 }
@@ -213,7 +217,7 @@ fn Hub::runs(
   // client only wants for runs it owns, while a standing question is a turn
   // stopped RIGHT NOW that anyone looking at that session should be able to
   // answer.
-  let approvals = self.pending_approvals.values().to_array()
+  let approvals = self.approval_snapshot().approvals
   { runs, settled, approvals, approval_generation: self.approval_generation, }
 }
 
@@ -578,7 +582,10 @@ async test "agent.runs keeps old requests compatible and decodes known selectors
 fn Hub::approval_snapshot(self : Hub) -> @protocol.ApprovalSnapshot {
   {
     generation: self.approval_generation,
-    approvals: self.pending_approvals.values().to_array(),
+    approvals: [
+      ..self.pending_approvals.values().to_array(),
+      ..self.message_approvals.values().to_array(),
+    ],
   }
 }
 

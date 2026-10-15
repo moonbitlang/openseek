@@ -86,6 +86,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
     {
       name: "browser_tabs",
       description: "List the browser tabs open beside this conversation in SeekMoon: each tab's id, URL, title, and whether it is the one currently shown to the user.",
+      waits_for_user: false,
       input_schema: {
         "type": "object",
         "properties": {},
@@ -96,6 +97,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
     {
       name: "browser_open",
       description: "Open a new browser tab beside this conversation in SeekMoon and load an address in it. The user sees the tab. Answers with the tab once its page has loaded.",
+      waits_for_user: false,
       input_schema: {
         "type": "object",
         "properties": {
@@ -112,6 +114,7 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
     {
       name: "browser_navigate",
       description: "Take one of this conversation's browser tabs somewhere else: load an address in it, go back or forward in its history, or reload it. Give exactly one of `url` and `action`. Answers with the tab once its page has loaded.",
+      waits_for_user: false,
       input_schema: {
         "type": "object",
         "properties": {

@@ -316,9 +316,21 @@ async fn HttpTransport::run_post(
     }
     self.deliver(inbound)
   }
-  let bounded = @async.with_timeout_opt(ExchangeTimeoutMs, () => {
-    self.exchange(message, deliver, answered=() => answered)
-  }) catch {
+  let bounded = try {
+    if message
+      is {
+        "method": "tools/call",
+        "params": { "_meta": { "io.seekmoon/waitsForUser": true, .. }, .. },
+        ..
+      } {
+      self.exchange(message, deliver, answered=() => answered)
+      Some(())
+    } else {
+      @async.with_timeout_opt(ExchangeTimeoutMs, () => {
+        self.exchange(message, deliver, answered=() => answered)
+      })
+    }
+  } catch {
     error => {
       // Fail the pending request fast (the exchange is dead); a notification
       // has nothing to answer.

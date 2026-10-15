@@ -39,6 +39,7 @@ struct ApiState {
   // grants every engine it starts access to it, and `start_services` serves
   // it.
   host_mcp : @mcp.Server?
+  messages : @session_messages.Service
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
   on_finished : ((@protocol.FinishedPayload) -> Unit)?
@@ -307,6 +308,7 @@ pub fn ApiState::ApiState(
     app_version,
     console_url,
     host_mcp,
+    messages: Service(),
     on_finished,
   }
 }
@@ -321,7 +323,14 @@ pub fn ApiState::auth_store(self : ApiState) -> @auth.AuthStore {
 /// The engine event sink: fan out to every subscriber, and hand finished
 /// runs to the notification hook.
 pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
-  self.hub.sink(on_finished?=self.on_finished)
+  self.hub.sink(on_finished=payload => {
+    if self.hub.active_starts.get(payload.run_id) is Some(run) {
+      self.messages.detach(run.session)
+    }
+    if self.on_finished is Some(notify) {
+      notify(payload)
+    }
+  })
 }
 
 ///|
@@ -471,6 +480,11 @@ pub fn endpoints(
     // on the engine — what the decision releases is reported by the run's own
     // events.
     @endpoint.Endpoint::sync(@commands.agent_approval, payload => {
+      if payload.run_id is None {
+        return {
+          delivered: state.answer_session_message(payload.id, payload.allow),
+        }
+      }
       state.hub.answer_approval(payload, payload => {
         @engine.approve_run(state.manager, payload)
       })

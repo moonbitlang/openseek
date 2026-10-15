@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/cond_var",
+  "openseek_desktop/backend/uuid",
+}
+
+supported_targets = "+native"

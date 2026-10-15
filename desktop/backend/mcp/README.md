@@ -82,3 +82,69 @@ against, per `desktop/AGENTS.md`.
 One megabyte per request body, ten seconds to deliver a request, and 150
 seconds per tool handler. Every reply is a single `application/json` body:
 there is no SSE stream and no server-initiated request.
+
+Tools explicitly marked `waits_for_user` advertise the SeekMoon extension
+`_meta: {"io.seekmoon/waitsForUser": true}`. OpenSeek preserves it on the
+call and exempts that call from the ordinary bridge, HTTP exchange, and host
+handler execution deadlines. Cancellation and host shutdown still apply.
+This flag describes waiting; it grants no permission to execute an action.
+
+## Cross-conversation messages
+
+The backend registers `session` alongside the window's browser tools. Include
+`session` in `X-SeekMoon-Tool-Groups` if a configured client filters groups.
+Its actions are `list`, `read`, `send`, `status`, and `cancel`. These operate on
+OpenSeek conversations attached to this host, not Codex threads or independent
+CLI processes.
+
+`list` returns a flat `sessions` array containing only `id`, `title` (or
+`null`), and `workspace`, plus `next_offset` (`null` at the end). Pass the
+returned offset to the next `list` call. `limit` defaults to 20 and allows
+1–50; a serialized size budget may end a page earlier. Offsets refer to the
+current inventory, so concurrent additions/removals can change pagination.
+Listing failures use the tool error channel. There is no title/ID search
+parameter; inspect the pages, and ask the user to choose or create a chat if
+the intended one is absent. The sidebar keeps its existing grouped format.
+
+`send` takes `target`, the exact `text`, and a caller-generated `request_id`.
+The sender comes from the bearer grant. Identical retries of that request id
+recover the original request; changing the target or text requires a new id
+and another approval. The user reviews the destination and full message in the
+sender's approval card. Approval may steer a running conversation or start a
+turn in an idle one. It authorizes delivery of this message, not arbitrary
+actions by its recipient.
+
+The call waits 30 seconds for approval. A timely approval keeps it waiting for
+the target's durable user-message commit, then returns `sent`. If still
+unanswered at the deadline, it returns `pending_approval` with an `id`, and the
+same approval remains actionable. `status` reads the current outcome; `cancel`
+withdraws an unapproved request. Neither action creates another delivery.
+After a background decision, the host actively delivers the final result to
+the sender's agent context, steering its current turn or starting a new one.
+Rejections and delivery failures are reported too. A result-notification
+failure stays visible in status and is reported to the frontend.
+
+Host message approvals survive tool cancellation, turn completion and frontend
+reconnection. They are process-lifetime state: closing the host discards
+outstanding requests. The card says so. Engine-owned approvals retain their
+existing turn-bound lifetime and have priority when both need attention.
+
+### Try it in the development app
+
+Configure the HTTP `seekmoon` entry above (replace an old stdio entry of the
+same name), then start a new OpenSeek turn so its engine reloads the MCP
+configuration. Use two saved OpenSeek chats on the same host. In the sender,
+ask the agent to use `mcp__seekmoon__session` to list chats, find the intended
+target, and send an exact test message. The source chat shows a `session.send`
+approval with the destination and message.
+
+- Approve within 30 seconds: the tool returns `sent` after the target records
+  the input. The target may be busy, so acknowledgement can take longer.
+- Leave it unanswered for more than 30 seconds: the tool returns
+  `pending_approval`. Approve the same card later; the target receives the
+  message and the sender receives an active final-result notification.
+- Deny the card: the target receives nothing and the sender receives
+  `rejected`, synchronously or as a background result.
+
+These tools are offered to the OpenSeek engine; Codex-backed chats are not
+message targets for this implementation.

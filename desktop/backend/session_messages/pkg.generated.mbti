@@ -1,0 +1,37 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/session_messages"
+
+// Values
+
+// Errors
+pub suberror MessageError {
+  MessageError(String)
+}
+pub fn MessageError::output(Self, &Logger) -> Unit
+pub fn MessageError::to_string(Self) -> String
+pub impl Show for MessageError
+
+// Types and methods
+pub struct Message {
+  id : String
+  sender : String
+  target : String
+  text : String
+  request_id : String
+  // private fields
+}
+pub fn Message::status(Self) -> Json
+
+type Service
+pub fn Service::Service() -> Self
+pub fn Service::cancel(Self, String, String) -> Unit raise MessageError
+pub fn Service::decide(Self, String, Bool) -> Bool
+pub fn Service::detach(Self, String) -> Unit
+pub fn Service::get(Self, String, String) -> Message raise MessageError
+pub fn Service::request(Self, String, String, String, String) -> (Message, Bool) raise
+pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
+pub async fn Service::wait(Self, Message, wait_ms? : Int) -> Json
+
+// Type aliases
+
+// Traits

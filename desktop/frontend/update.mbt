@@ -1814,6 +1814,7 @@ fn update(
 ) -> (@cmd.Cmd, Model) {
   let previous = model
   let (cmd, model) = update_msg(dispatch, msg, model)
+  let model = model.restore_message_approvals()
   let model = {
     ..model,
     management_return: if model.screen.work_screen() is Some(_) {
@@ -22919,8 +22920,13 @@ fn Model::with_approval_snapshot(
         .iter()
         .find_first(item => {
           item.session == conv.session_id &&
-          conv.run is Open(run_id~, ..) &&
-          item.approval.run_id == Some(run_id)
+          (
+            item.approval.run_id is None ||
+            (
+              conv.run is Open(run_id~, ..) &&
+              item.approval.run_id == Some(run_id)
+            )
+          )
         })
         .map(item => {
           let answered_here = conv.pending_approval.map_or(false, previous => {

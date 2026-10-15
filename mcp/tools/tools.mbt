@@ -266,7 +266,10 @@ fn bridge_tool(
     name=tool_name(server, tool.name),
     description~,
     schema=JsonSchema(schema),
-    execute=Async(args => call_tool(client, tool.name, args)),
+    can_request_approval=tool.waits_for_user,
+    execute=Async(args => {
+      call_tool(client, tool.name, args, waits_for_user=tool.waits_for_user)
+    }),
   )
 }
 
@@ -278,10 +281,17 @@ async fn call_tool(
   client : @mcp.McpClient,
   tool : String,
   args : Json,
+  waits_for_user~ : Bool,
 ) -> @agent_tool.ToolAction {
-  let outcome = @async.with_timeout_opt(CallTimeoutMs, () => {
-    client.call_tool(name=tool, arguments=args)
-  }) catch {
+  let outcome = try {
+    if waits_for_user {
+      Some(client.call_tool(name=tool, arguments=args, waits_for_user=true))
+    } else {
+      @async.with_timeout_opt(CallTimeoutMs, () => {
+        client.call_tool(name=tool, arguments=args)
+      })
+    }
+  } catch {
     error => {
       // The assembled text carries server-supplied strings (the tool name and
       // error message): cap the whole response so it cannot bypass the

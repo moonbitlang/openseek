@@ -106,11 +106,15 @@ fn Server::initialize_result(self : Server, params : Json) -> Json {
 fn Server::tool_list(self : Server, groups : Array[String]) -> Json {
   let tools : Array[Json] = [
     for _, tool in self.tools if offered(tool.name, groups) => {
-      {
+      let fields : Map[String, Json] = {
         "name": Json(tool.name),
         "description": Json(tool.description),
         "inputSchema": tool.input_schema,
       }
+      if tool.waits_for_user {
+        fields["_meta"] = { "io.seekmoon/waitsForUser": true }
+      }
+      Json(fields)
     }
   ]
   { "tools": Json(tools) }
@@ -137,14 +141,19 @@ async fn Server::call_tool(
     { "arguments": arguments, .. } => arguments
     _ => Json::empty_object()
   }
-  let outcome : (String, Bool)? = @async.with_timeout_opt(CallTimeoutMs, () => {
+  async fn invoke() -> (String, Bool) {
     try (tool.call)({ session, arguments, }) catch {
       error if @async.is_being_cancelled() => raise error
       error => ("\{error}", true)
     } noraise {
       text => (text, false)
     }
-  })
+  }
+  let outcome = if tool.waits_for_user {
+    Some(invoke())
+  } else {
+    @async.with_timeout_opt(CallTimeoutMs, invoke)
+  }
   let (text, is_error) = match outcome {
     Some(outcome) => outcome
     None => ("\{name} timed out after \{CallTimeoutMs / 1000}s", true)

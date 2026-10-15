@@ -89,6 +89,25 @@ pub fn Server::url(self : Server) -> String {
 }
 
 ///|
+/// Register backend-owned tools after constructing the engine manager, before
+/// serving requests. Validate the whole batch before changing the catalog.
+pub fn Server::add_tools(
+  self : Server,
+  tools : Array[Tool],
+) -> Unit raise ServerError {
+  let names : Map[String, Unit] = Map([])
+  for tool in tools {
+    if self.tools.contains(tool.name) || names.contains(tool.name) {
+      raise ServerError("duplicate host tool: \{tool.name}")
+    }
+    names[tool.name] = ()
+  }
+  for tool in tools {
+    self.tools[tool.name] = tool
+  }
+}
+
+///|
 /// The environment that lets a process call this server as `session`: where
 /// it is, and the conversation's bearer token. The host puts it on every
 /// engine it starts for that conversation, so what that engine starts

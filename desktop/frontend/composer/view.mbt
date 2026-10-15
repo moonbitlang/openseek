@@ -304,7 +304,8 @@ fn ApprovalNotice::render(
         // The length guard also bounds the work of counting source lines.
         @html.div(class="composer-context-detail", [
           @html.pre(class="composer-approval-body", [
-            if body.length() <= 32_768 &&
+            if self.tool_name != "session.send" &&
+              body.length() <= 32_768 &&
               body.split("\n").take(501).count() <= 500 {
               @syntax_html.moonbit_source_code(body)
             } else {

@@ -24,6 +24,7 @@ pub impl Show for ToolError
 // Types and methods
 type Server
 pub async fn Server::Server(Array[Tool], version~ : String) -> Self
+pub fn Server::add_tools(Self, Array[Tool]) -> Unit raise ServerError
 pub fn Server::grant(Self, String) -> Map[String, String] raise ServerError
 pub async fn Server::run(Self) -> Unit
 pub fn Server::url(Self) -> String
@@ -32,6 +33,7 @@ pub(all) struct Tool {
   name : String
   description : String
   input_schema : Json
+  waits_for_user : Bool
   call : async (ToolCall) -> String
 }
 

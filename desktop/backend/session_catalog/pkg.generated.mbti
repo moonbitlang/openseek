@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/session_catalog"
+
+import {
+  "moonbitlang/core/json",
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct ListPage {
+  offset : Int
+  limit : Int
+}
+pub fn ListPage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ListPage::page(Self, @protocol.SessionsReply) -> Json raise
+pub impl @json.FromJson for ListPage
+
+// Type aliases
+
+// Traits

@@ -20,6 +20,9 @@ pub(all) struct Tool {
   description : String
   // The JSON Schema of `arguments`, sent as `inputSchema`.
   input_schema : Json
+  // Human-paced calls retain cancellation but do not inherit the ordinary
+  // execution deadline. The server advertises the same policy to the agent.
+  waits_for_user : Bool
   // Returns the text the model reads. Raising makes the call a tool-level
   // failure (`isError`), which the model also reads and can react to.
   call : async (ToolCall) -> String
