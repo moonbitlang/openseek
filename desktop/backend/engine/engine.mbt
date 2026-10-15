@@ -1630,6 +1630,10 @@ async fn[G] start_serve_engine(
       "session_key": config.session,
       "pid": process.pid,
     }
+  // The pump serializes launches. Order reports by these launches, not by
+  // RunConfig's earlier revision read: that digest only decides engine reuse.
+  // The child receives paths and rereads their current contents at startup,
+  // so a request carrying an old digest does not load that old file content.
   manager.mcp_generation += 1
   // No registration event arrives when this launch has no configuration.
   if manager.host_mcp is None && !mcp_configured(config, env) {
