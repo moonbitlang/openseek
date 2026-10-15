@@ -114,9 +114,19 @@ pub async fn ConversationExport::capture(
   let request = SessionExport::SessionExport(manager, payload)
   let sessions = request.sessions()
   let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
+  ConversationExport(exporter, sessions)
+}
+
+///|
+/// Bind captured records to their rendering assets. Own the session selection
+/// so later changes to the caller's array cannot change a replayed export.
+pub fn ConversationExport::ConversationExport(
+  exporter : @viz_export.StandaloneExport,
+  sessions : Array[@viz_export.Session],
+) -> ConversationExport raise {
   // Validate the packaged shell before opening a save dialog or an upload.
   ignore(exporter.html_chunks(sessions))
-  { exporter, sessions, }
+  { exporter, sessions: sessions.copy(), }
 }
 
 ///|

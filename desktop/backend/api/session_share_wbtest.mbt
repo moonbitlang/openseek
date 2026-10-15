@@ -69,8 +69,12 @@ async test "share refusal retires the captured login and preserves a newer one" 
         connection.end_response()
       })
       let reply = share.upload(
-        html=() => Iter::singleton("<html>test</html>"),
-        json=() => Iter::singleton("{}"),
+        ConversationExport(
+          StandaloneExport(
+            "<html><script src=\"/viz_app.js\"></script></html>", "bundle",
+          ),
+          [],
+        ),
         config,
       )
       receiver.wait()

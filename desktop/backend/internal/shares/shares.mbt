@@ -18,14 +18,13 @@ pub impl Show for ShareError with fn output(self, logger) {
 pub extend ShareError with Show::{to_string, output}
 
 ///|
-/// Stream a captured export to its issuer. Callbacks must return a fresh stream
-/// over the same immutable records on every call. A lost response or transport
+/// Stream a captured export to its issuer. Each attempt opens fresh HTML and
+/// JSON iterators over the same records. A lost response or transport
 /// failure is retried once with the same multipart boundary and idempotency key.
 /// Cancellation closes the active connection and does not start a retry.
 pub async fn publish(
   title~ : String,
-  html~ : () -> Iter[String] raise,
-  json~ : () -> Iter[String] raise,
+  files : @engine.ConversationExport,
   server_url~ : String,
   token~ : String,
   timeout_ms~ : Int32 = 240_000,
@@ -36,7 +35,7 @@ pub async fn publish(
   let headers : Ref[@http.Headers?] = Ref(None)
   let attempt = async fn() {
     @async.with_timeout(timeout_ms, () => {
-      send(title~, html~, json~, server_url~, token~, headers)
+      send(title~, files, server_url~, token~, headers)
     })
   }
   attempt() catch {
@@ -56,8 +55,7 @@ pub async fn publish(
 ///|
 async fn send(
   title~ : String,
-  html~ : () -> Iter[String] raise,
-  json~ : () -> Iter[String] raise,
+  files : @engine.ConversationExport,
   server_url~ : String,
   token~ : String,
   headers : Ref[@http.Headers?],
@@ -92,7 +90,7 @@ async fn send(
       "Content-Type": "text/html; charset=utf-8",
     },
     target => {
-      for chunk in html() {
+      for chunk in files.html() {
         target.write(chunk)
       }
     },
@@ -103,7 +101,7 @@ async fn send(
       "Content-Type": "application/json; charset=utf-8",
     },
     target => {
-      for chunk in json() {
+      for chunk in files.json() {
         target.write(chunk)
       }
     },

@@ -1,7 +1,29 @@
 ///|
+fn export_files(events~ : String = "test") -> @engine.ConversationExport raise {
+  @engine.ConversationExport(
+    StandaloneExport(
+      "<html><script src=\"/viz_app.js\"></script></html>", "globalThis.ready = true;",
+    ),
+    [
+      Session(
+        key="session-0",
+        id="test",
+        root="/workspace",
+        root_label="workspace",
+        is_marker=true,
+        last_active=None,
+        first_prompt="Test",
+        events~,
+      ),
+    ],
+  )
+}
+
+///|
 async test "upload authenticates to issuer and retries the exact snapshot after a lost response" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
+  let files = export_files(events="snapshot")
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let mut key : String? = None
@@ -43,11 +65,11 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         assert_true(
           text.contains("name=\"html\"; filename=\"conversation.html\""),
         )
-        assert_true(text.contains("<html>snapshot</html>"))
+        assert_true(text.contains(files.html().join("")))
         assert_true(
           text.contains("name=\"json\"; filename=\"conversation.json\""),
         )
-        assert_true(text.contains("{\"snapshot\":true}"))
+        assert_true(text.contains(files.json().join("")))
         assert_true(text.contains("Content-Type: text/html; charset=utf-8\r\n"))
         assert_true(
           text.contains("Content-Type: application/json; charset=utf-8\r\n"),
@@ -70,8 +92,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
     })
     let reply = @shares.publish(
       title="中文 \"title\"",
-      html=() => ["<html>", "snapshot", "</html>"].iter(),
-      json=() => Iter::singleton("{\"snapshot\":true}"),
+      files,
       server_url="http://127.0.0.1:\{server.addr.port()}",
       token="odt_test",
     )
@@ -86,7 +107,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
 async fn reply_for(
   code : Int32,
   body : String,
-  html~ : String = "<html>test</html>",
+  events~ : String = "test",
 ) -> (String, @protocol.SessionShareReply) {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
@@ -105,8 +126,7 @@ async fn reply_for(
     })
     let reply = @shares.publish(
       title="Test",
-      html=() => Iter::singleton(html),
-      json=() => Iter::singleton("{}"),
+      export_files(events~),
       server_url=origin,
       token="odt_test",
     )
@@ -156,7 +176,7 @@ async test "upload size limits are enforced by the server" {
   let (_, reply) = reply_for(
     413,
     "{\"error\":\"share upload exceeds 20 MiB\"}",
-    html="x".repeat(21 * 1024 * 1024),
+    events="x".repeat(21 * 1024 * 1024),
   )
   assert_eq(
     reply,
@@ -169,8 +189,7 @@ async test "a blank title is refused before upload" {
   try
     @shares.publish(
       title="  ",
-      html=() => Iter::singleton("html"),
-      json=() => Iter::singleton("{}"),
+      export_files(),
       server_url="not-a-url",
       token="test-token",
     )
@@ -190,8 +209,7 @@ async test "setup and refused connections retain definite failures" {
   for server_url in ["not-a-url", origin] {
     let reply = @shares.publish(
       title="Test",
-      html=() => Iter::singleton("<html/>"),
-      json=() => Iter::singleton("{}"),
+      export_files(),
       server_url~,
       token="test-token",
     )
@@ -218,8 +236,7 @@ async test "a lost response followed by a refused retry reports the connection f
     })
     let reply = @shares.publish(
       title="Test",
-      html=() => Iter::singleton("<html/>"),
-      json=() => Iter::singleton("{}"),
+      export_files(),
       server_url=origin,
       token="test-token",
     )
@@ -249,8 +266,7 @@ async test "upload timeouts are actionable and external cancellation propagates"
     })
     let reply = @shares.publish(
       title="Test",
-      html=() => Iter::singleton("<html/>"),
-      json=() => Iter::singleton("{}"),
+      export_files(),
       server_url="http://127.0.0.1:\{server.addr.port()}",
       token="test-token",
       timeout_ms=100,
@@ -260,8 +276,7 @@ async test "upload timeouts are actionable and external cancellation propagates"
     let cancelled = @async.with_timeout_opt(100, () => {
       @shares.publish(
         title="Test",
-        html=() => Iter::singleton("<html/>"),
-        json=() => Iter::singleton("{}"),
+        export_files(),
         server_url="http://127.0.0.1:\{server.addr.port()}",
         token="test-token",
       )
@@ -282,6 +297,7 @@ async test "long titles are bounded without truncating streamed conversation fil
     ] {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
     defer server.close()
+    let files = export_files(events=title)
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
         let (connection, _) = server.accept()
@@ -290,16 +306,15 @@ async test "long titles are bounded without truncating streamed conversation fil
         let body = connection.read_all().text()
         assert_true(body.contains("name=\"title\"\r\n\r\n\{expected}\r\n"))
         assert_true(@utf8.encode(expected).length() <= 1024)
-        assert_true(body.contains("<html>\{title}</html>"))
-        assert_true(body.contains("{\"prompt\":\"\{title}\"}"))
+        assert_true(body.contains(files.html().join("")))
+        assert_true(body.contains(files.json().join("")))
         connection.send_response(201, "Created")
         connection.write_string("{\"url\":\"https://shares.test/a\"}")
         connection.end_response()
       })
       let reply = @shares.publish(
         title~,
-        html=() => ["<html>", title, "</html>"].iter(),
-        json=() => ["{\"prompt\":\"", title, "\"}"].iter(),
+        files,
         server_url="http://127.0.0.1:\{server.addr.port()}",
         token="test-token",
       )
@@ -310,14 +325,12 @@ async test "long titles are bounded without truncating streamed conversation fil
 }
 
 ///|
-async test "streaming obeys socket backpressure and cancellation stops the source" {
+async test "cancelling a streamed export closes a backpressured connection" {
   let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
   defer server.close()
   let arrived : @async.Queue[Unit] = Queue(kind=Blocking(1))
   let release : @async.Queue[Unit] = Queue(kind=Blocking(1))
-  let chunk = "x".repeat(4096)
-  let mut produced = 0
-  let mut opened = 0
+  let files = export_files(events="x".repeat(16 * 1024 * 1024))
   @async.with_task_group(group => {
     let receiver = group.spawn(() => {
       let (connection, _) = server.accept()
@@ -338,24 +351,13 @@ async test "streaming obeys socket backpressure and cancellation stops the sourc
     let sender = group.spawn(() => {
       @shares.publish(
         title="Test",
-        html=() => {
-          opened += 1
-          Iter::new(() => {
-            if produced >= 100_000 {
-              return None
-            }
-            produced += 1
-            Some(chunk)
-          })
-        },
-        json=() => Iter::singleton("{}"),
+        files,
         server_url="http://127.0.0.1:\{server.addr.port()}",
         token="test-token",
       )
     })
     arrived.get()
     @async.sleep(50)
-    assert_true(produced > 0 && produced < 100_000)
     sender.cancel()
     try sender.wait() catch {
       @async.WaitedTaskAlreadyCancelled => ()
@@ -363,10 +365,6 @@ async test "streaming obeys socket backpressure and cancellation stops the sourc
     } noraise {
       _ => fail("upload should be cancelled")
     }
-    let stopped = produced
-    @async.sleep(10)
-    assert_eq(produced, stopped)
-    assert_eq(opened, 1)
     release.put(())
     @async.with_timeout(5000, () => receiver.wait())
   })

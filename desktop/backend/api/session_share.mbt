@@ -28,7 +28,7 @@ async fn SessionShare::publish(
       shell,
       bundle,
     )
-    self.upload(html=() => files.html(), json=() => files.json(), config)
+    self.upload(files, config)
   } catch {
     error if @async.is_being_cancelled() => raise error
     @shares.EmptyTitle as refusal => Failed(message="\{refusal}")
@@ -48,14 +48,12 @@ async fn SessionShare::publish(
 /// the captured config first so a late response cannot clear a newer login.
 async fn SessionShare::upload(
   self : SessionShare,
-  html~ : () -> Iter[String] raise,
-  json~ : () -> Iter[String] raise,
+  files : @engine.ConversationExport,
   config : @auth.ConnectorConfig,
 ) -> @protocol.SessionShareReply {
   let reply = @shares.publish(
     title=self.payload.title,
-    html~,
-    json~,
+    files,
     server_url=@auth.origin_from_relay_url(config.relay_url),
     token=config.device_token,
   )

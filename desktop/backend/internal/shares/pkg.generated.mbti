@@ -2,11 +2,12 @@
 package "openseek_desktop/backend/internal/shares"
 
 import {
+  "openseek_desktop/backend/engine",
   "openseek_desktop/protocol",
 }
 
 // Values
-pub async fn publish(title~ : String, html~ : () -> Iter[String] raise, json~ : () -> Iter[String] raise, server_url~ : String, token~ : String, timeout_ms? : Int) -> @protocol.SessionShareReply
+pub async fn publish(title~ : String, @engine.ConversationExport, server_url~ : String, token~ : String, timeout_ms? : Int) -> @protocol.SessionShareReply
 
 // Errors
 pub(all) suberror ShareError {
