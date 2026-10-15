@@ -728,9 +728,11 @@ struct EngineManager {
   // to hear it once; it is forgotten when a configuration loads, or when
   // there is no file any more.
   mut mcp_errors : Map[String, String]
-  // Only the newest launch may change the shared error snapshot. Older
-  // engines can finish connecting after a configuration edit and repair.
+  // Launch order and the newest launch that actually reported MCP state.
+  // A newer process may fail before loading MCP; until it reports, older
+  // engines still provide useful errors.
   mut mcp_generation : Int64
+  mut mcp_report_generation : Int64
   // Serializes the short placement/slot-claim phase of every operation that
   // can create or move a workspace-backed record with workspace detach.
   // Once a claim is visible, detach refuses it; once a run/compaction is
@@ -1092,6 +1094,7 @@ fn new_engine_manager(
     moonbit,
     mcp_errors: Map([]),
     mcp_generation: 0,
+    mcp_report_generation: 0,
     workspace_lifecycle_lock: Mutex(),
     archive_cleanup_lock: Mutex(),
     archive_commit_lock: Mutex(),
@@ -1638,6 +1641,7 @@ async fn[G] start_serve_engine(
   // No registration event arrives when this launch has no configuration.
   if manager.host_mcp is None && !mcp_configured(config, env) {
     manager.mcp_errors.clear()
+    manager.mcp_report_generation = manager.mcp_generation
   }
   let engine : ServeEngine = {
     session_key: config.session,
@@ -1848,9 +1852,10 @@ async fn ServeEngine::consume(
             McpConfigUnreadable(path~, error~)
             | McpConfigInvalid(path~, error~)
           ) => {
-            if engine.mcp_generation != manager.mcp_generation {
+            if engine.mcp_generation < manager.mcp_report_generation {
               continue
             }
+            manager.mcp_report_generation = engine.mcp_generation
             mcp_errors[path] = error
             if manager.mcp_errors.get(path) == Some(error) {
               continue
@@ -1858,7 +1863,8 @@ async fn ServeEngine::consume(
             manager.mcp_errors[path] = error
           }
           Some(McpToolsRegistered(..)) =>
-            if engine.mcp_generation == manager.mcp_generation {
+            if engine.mcp_generation >= manager.mcp_report_generation {
+              manager.mcp_report_generation = engine.mcp_generation
               manager.mcp_errors = mcp_errors
             }
           Some(PredictionResult(source_sequence~, outcome~)) => {

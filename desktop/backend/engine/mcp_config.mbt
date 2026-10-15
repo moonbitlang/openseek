@@ -288,6 +288,20 @@ async test "a broken MCP configuration is reported once, not once per conversati
     @debug.assert_eq(reported(), [
       "bad", "worse", "worse", "worse", "worse", "worse",
     ])
+    // A newer process can die before sending any MCP state. Merely
+    // allocating its launch generation must not silence this live reporter.
+    let reporter = launch("s-reporter", None, "", true)
+    manager.mcp_generation += 1
+    reporter.writer.write("resume\n")
+    @async.with_timeout(10000, () => {
+      while !finished("s-reporter") {
+        @async.sleep(20)
+      }
+    })
+    assert_eq(manager.mcp_errors.get("\{source}.late"), Some("late"))
+    @debug.assert_eq(reported(), [
+      "bad", "worse", "worse", "worse", "worse", "worse", "late",
+    ])
   })
 }
 
