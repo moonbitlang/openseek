@@ -76,24 +76,17 @@ test "MCP configs append in order and explicit arguments replace the env fallbac
 }
 
 ///|
-test "setup accepts unattended output and an HTTPS mirror without model credentials" {
-  let plain = @options.root_command().parse(argv=["setup"], env=Map([]))
-  guard plain.subcommand is Some(("setup", plain)) else {
-    fail("setup expected")
+test "setup requires no model credentials and has no installation options" {
+  let parsed = @options.root_command().parse(argv=["setup"], env=Map([]))
+  assert_true(parsed.subcommand is Some(("setup", _)))
+  for option in ["--json", "--bundle-url"] {
+    let error = try {
+      @options.root_command().parse(argv=["setup", option], env=Map([]))
+      |> ignore
+      "accepted"
+    } catch {
+      error => "\{error}"
+    }
+    assert_true(error.contains("unexpected argument"))
   }
-  assert_false(plain.flags.get("json").unwrap_or(false))
-  let automated = @options.root_command().parse(
-    argv=[
-      "setup", "--json", "--bundle-url", "https://mirror.example/bundle.tar.gz",
-    ],
-    env=Map([]),
-  )
-  guard automated.subcommand is Some(("setup", automated)) else {
-    fail("setup expected")
-  }
-  assert_true(automated.flags.get("json").unwrap_or(false))
-  assert_eq(
-    automated.values.get("bundle-url"),
-    Some(["https://mirror.example/bundle.tar.gz"]),
-  )
 }

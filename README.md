@@ -11,28 +11,27 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
-Native binaries for Linux x64/arm64, macOS arm64 and Windows x64 are published
-with Desktop. In the [release manifest](https://openseek-api.moonbitlang.cn/desktop/releases/latest.json),
-`platforms["cli-<platform>"]` provides each binary's URL and SHA-256.
-Download and verify the matching binary, then run:
+Native archives for Linux x64/arm64, macOS arm64 and Windows x64 are
+published by the **CLI release** workflow on the
+[GitHub Releases page](https://github.com/moonbitlang/openseek/releases).
+Each archive contains `bin/openseek` (`openseek.exe` on Windows), rg, and
+`share` documentation/workflows. Download your platform's archive and verify
+it against the release's `SHA256SUMS`, then extract the whole archive:
 
 ```sh
-chmod +x ./openseek-linux-x64   # use your platform's filename
-./openseek-linux-x64 setup
+tar -xzf openseek-linux-x64.tar.gz
+./openseek-linux-x64/bin/openseek setup
 export PATH="$HOME/.openseek/bin:$HOME/.moon/bin:$PATH"
 ```
 
-On Windows, run `.\openseek-windows-x64.exe setup` and add
+On Windows, extract `openseek-windows-x64.tar.gz`, run
+`.\openseek-windows-x64\bin\openseek.exe setup`, and add
 `%USERPROFILE%\.openseek\bin` and `%USERPROFILE%\.moon\bin` to PATH.
-Setup installs missing MoonBit tools in `~/.moon`, CLI/rg in `~/.openseek/bin`,
-and documentation/workflows in `~/.openseek/share`; usable tools and existing
-resources are reused. It needs curl, tar, and Bash (Unix) or PowerShell (Windows).
-Linux binaries require glibc 2.35+. Other commands do not require setup.
-
-`setup --json` emits JSON Lines. `--bundle-url <https-url>` selects a dependency
-archive mirror, which must also serve `SHA256SUMS` and any missing native CLI.
-For staging, set `OPENSEEK_API_ORIGIN=https://openseek-api-staging.moonbitlang.cn`.
-CLI releases use the existing **Desktop release** workflow's version and channel.
+Setup copies the CLI/rg and resources into `~/.openseek` and calls the official
+MoonBit installer if the toolchain is missing. Working tools and existing
+resource files are reused. Installing MoonBit needs curl, network access, and
+Bash (Unix) or PowerShell (Windows). Linux binaries require glibc 2.35+.
+Git and Codex remain user-installed. Other commands do not require setup.
 
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,

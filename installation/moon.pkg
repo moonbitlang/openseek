@@ -7,8 +7,6 @@ import {
   "moonbitlang/async/stdio",
   "moonbitlang/core/env",
   "moonbitlang/x/path",
-  "moonbitlang/core/json",
-  "moonbitlang/x/crypto",
 }
 
 supported_targets = "+native+wasm"

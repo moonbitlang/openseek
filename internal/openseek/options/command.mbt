@@ -76,20 +76,6 @@ pub fn root_command() -> @argparse.Command {
       Command(
         "setup",
         about="Install missing dependencies in ~/.moon and ~/.openseek; reuse available tools.",
-        flags=[
-          FlagArg(
-            "json",
-            long="json",
-            about="Write JSON Lines progress and the final result to stdout.",
-          ),
-        ],
-        options=[
-          OptionArg(
-            "bundle-url",
-            long="bundle-url",
-            about="Download the installation bundle and SHA256SUMS from an HTTPS mirror.",
-          ),
-        ],
       ),
       Command(
         "run",

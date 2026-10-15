@@ -1,4 +1,12 @@
 ///|
+#cfg(target="native")
+let native_distribution : Bool = true
+
+///|
+#cfg(not(target="native"))
+let native_distribution : Bool = false
+
+///|
 fn is_windows() -> Bool {
   @env.get_env_var("OS") == Some("Windows_NT")
 }
@@ -125,12 +133,10 @@ async fn copy_missing(source : String, destination : String) -> Unit {
 async fn install(
   home : String,
   source_cli : String,
-  progress : async (String) -> Unit,
   available~ : async (String, Array[String]) -> Bool,
-  bundle~ : async (String) -> Unit,
   toolchain~ : async (String) -> Unit,
-  cli~ : async (String) -> Unit,
 ) -> Bool {
+  let source = @path.Path(source_cli).dirname().dirname().to_string()
   let root = home + "/.openseek"
   let bin = root + "/bin"
   @fs.mkdir(bin, recursive=true, allow_exist=true)
@@ -142,57 +148,38 @@ async fn install(
   )
   defer lock.close()
   @async.with_timeout(1200000, () => lock.lock(Exclusive))
-  progress("check_dependencies")
-  let needs_moonbit = !moonbit_available(home, available)
   let cli_name = executable_name("openseek")
   let rg_name = executable_name("rg")
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
   let needs_rg = !available(bin + "/" + rg_name, ["--version"]) &&
     !available("rg", ["--version"])
   let needs_resources = !resources_available(root + "/share")
+  // Validate the extracted distribution before changing the user's toolchain.
+  if needs_rg && !available(source + "/bin/" + rg_name, ["--version"]) {
+    fail(
+      "Extract the complete OpenSeek archive before running setup: missing rg",
+    )
+  }
+  if needs_resources && !resources_available(source + "/share") {
+    fail(
+      "Extract the complete OpenSeek archive before running setup: missing share",
+    )
+  }
+  let needs_moonbit = !moonbit_available(home, available)
   if needs_moonbit {
-    progress("install_moonbit")
     toolchain(home + "/.moon")
     guard moonbit_available(home, available) else {
       fail("MoonBit installation is not usable")
     }
   }
-  let copy_cli = needs_cli && available(source_cli, ["--help"])
-  if needs_rg || needs_resources {
-    let stage = @fs.tmpdir(prefix="openseek-setup-")
-    defer @fs.rmdir(stage, recursive=true)
-    progress("download")
-    bundle(stage)
-    if needs_rg {
-      guard available(stage + "/bin/" + rg_name, ["--version"]) else {
-        fail("downloaded rg is not usable")
-      }
-    }
-    if needs_resources {
-      guard resources_available(stage + "/share") else {
-        fail("downloaded resources are incomplete")
-      }
-    }
-    if needs_rg {
-      copy_file(stage + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
-    }
-    if needs_resources {
-      copy_missing(stage + "/share", root + "/share")
-    }
-    copy_missing(stage + "/licenses", root + "/share/licenses")
+  if needs_rg {
+    copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
   }
-  if copy_cli {
+  if needs_resources {
+    copy_missing(source + "/share", root + "/share")
+  }
+  if needs_cli {
     copy_file(source_cli, bin + "/" + cli_name, executable=true)
-  } else if needs_cli {
-    let stage = @fs.tmpdir(prefix="openseek-cli-")
-    defer @fs.rmdir(stage, recursive=true)
-    let path = stage + "/" + cli_name
-    progress("download_cli")
-    cli(path)
-    guard available(path, ["--help"]) else {
-      fail("downloaded openseek is not usable")
-    }
-    copy_file(path, bin + "/" + cli_name, executable=true)
   }
   !(needs_moonbit || needs_cli || needs_rg || needs_resources)
 }
@@ -256,66 +243,31 @@ async fn install_moonbit(destination : String) -> Unit {
 }
 
 ///|
-/// Install missing dependencies; reuse working tools without changing other commands.
-pub async fn setup(json~ : Bool, bundle_url? : String) -> Unit {
-  async fn event(stage : String) -> Unit {
-    if json {
-      @stdio.stdout.write(
-        ({ "event": "progress", "stage": stage } : Json).stringify() + "\n",
-      )
+/// Install the extracted native distribution and any missing MoonBit tools.
+pub async fn setup() -> Unit {
+  guard native_distribution else {
+    fail("setup requires the native OpenSeek binary distribution")
+  }
+  let home = if is_windows() {
+    @env.get_env_var("USERPROFILE")
+  } else {
+    @env.get_env_var("HOME")
+  }
+  guard home is Some(home) && @path.Path(home).is_absolute() else {
+    fail("HOME (USERPROFILE on Windows) must name an absolute directory")
+  }
+  let reused = install(
+    home,
+    @exe.current_exe(),
+    available=usable,
+    toolchain=install_moonbit,
+  )
+  @stdio.stdout.write(
+    (if reused {
+      "Dependencies are ready. "
     } else {
-      @stdio.stderr.write("openseek setup: \{stage}\n")
-    }
-  }
-  let result = try {
-    let home = if is_windows() {
-      @env.get_env_var("USERPROFILE")
-    } else {
-      @env.get_env_var("HOME")
-    }
-    guard home is Some(home) && @path.Path(home).is_absolute() else {
-      fail("HOME (USERPROFILE on Windows) must name an absolute directory")
-    }
-    let manifest : Ref[Json?] = Ref(None)
-    let reused = install(
-      home,
-      @exe.current_exe(),
-      event,
-      available=usable,
-      bundle=destination => download_bundle(destination, bundle_url, manifest),
-      toolchain=install_moonbit,
-      cli=destination => download_cli(destination, bundle_url, manifest),
-    )
-    Ok((home, reused))
-  } catch {
-    error => Err(error)
-  }
-  match result {
-    Ok((home, reused)) =>
-      if json {
-        @stdio.stdout.write(
-          (
-            {
-              "event": "ready",
-              "bin_dir": home + "/.openseek/bin",
-              "share_dir": home + "/.openseek/share",
-              "reused": reused,
-            } : Json).stringify() +
-          "\n",
-        )
-      } else {
-        @stdio.stdout.write(
-          "Dependencies are ready. Add \{home}/.moon/bin and \{home}/.openseek/bin to PATH.\n",
-        )
-      }
-    Err(error) => {
-      if json {
-        @stdio.stdout.write(
-          ({ "event": "error", "message": "\{error}" } : Json).stringify() +
-          "\n",
-        )
-      }
-      raise error
-    }
-  }
+      "Installation complete. "
+    }) +
+    "Add \{home}/.moon/bin and \{home}/.openseek/bin to PATH.\n",
+  )
 }
