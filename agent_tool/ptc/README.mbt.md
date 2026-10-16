@@ -47,6 +47,9 @@ PTC-enabled tools and their argument shapes:
 - `write`, e.g. `{ "path": "note.txt", "content": "hello" }`
 - `remove`, e.g. `{ "path": "note.txt", "reason": "remove obsolete notes" }`
 - `web_search`, e.g. `{ "query": query }`, when registered
+- Registered MCP tools, using their exact exposed `mcp__...` names (including
+  any collision suffix) and the same arguments as direct calls. PTC invokes
+  the same MCP proxy and preserves its text result and error flag.
 
 SDK 0.1.0 also ships `@tools.edit` and friends as thin wrappers; 0.2.0 removes
 them in favor of `call`, so new scripts should use `call` directly.
