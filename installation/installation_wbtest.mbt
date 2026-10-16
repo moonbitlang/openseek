@@ -89,6 +89,34 @@ async test "setup installs missing dependencies and reuses them offline" {
 }
 
 ///|
+async test "setup resolves a launcher symlink outside the extracted distribution" {
+  if is_windows() {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-setup-test-")
+  defer @fs.rmdir(home, recursive=true)
+  let source_cli = fixture_distribution(home)
+  let launcher = home + "/launchers/openseek"
+  @fs.mkdir(home + "/launchers")
+  @fs.symlink(target=source_cli, launcher)
+  install(
+    home,
+    launcher,
+    available=isolated_available,
+    toolchain=fixture_toolchain,
+  )
+  assert_eq(
+    command(home + "/.openseek/bin/openseek", ["--help"]),
+    "bootstrap-cli\n",
+  )
+  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
+  assert_eq(
+    @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
+    "resource",
+  )
+}
+
+///|
 async test "setup reuses PATH MoonBit but replaces rg and the complete resource tree" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return

@@ -100,6 +100,7 @@ async fn install(
   available~ : async (String, Array[String]) -> Bool,
   toolchain~ : async (String) -> Unit,
 ) -> Unit {
+  let source_cli = @fs.realpath(source_cli)
   let source = @path.Path(source_cli).dirname().dirname().to_string()
   let root = home + "/.openseek"
   let bin = root + "/bin"
