@@ -283,7 +283,7 @@ test "blank new entries gain a stable draft identity only after content" {
 ///|
 test "expired draft replaces its entry with a fresh new page" {
   let dispatch = test_dispatch()
-  let expired : @navigation.Location = {
+  let expired : @routes.Location = {
     device: "local",
     target: ChatDraft("expired"),
   }
@@ -329,7 +329,7 @@ test "expired draft replaces its entry with a fresh new page" {
 
 ///|
 test "navigation write policy distinguishes foreground visits and background identity updates" {
-  let location : @navigation.Location = { device: "local", target: Settings, }
+  let location : @routes.Location = { device: "local", target: Settings, }
   let observed : NavigationObservation = {
     location: Some(location),
     user_visit: false,

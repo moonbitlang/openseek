@@ -1,7 +1,7 @@
 ///|
-fn Model::navigation_location(self : Model) -> @navigation.Location? {
+fn Model::navigation_location(self : Model) -> @routes.Location? {
   guard self.console.page_device is Some(device) else { return None }
-  let target : @navigation.Target = match self.screen {
+  let target : @routes.Target = match self.screen {
     Settings => Settings
     Schedules => Schedules
     Skills =>
@@ -37,7 +37,7 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
 }
 
 ///|
-fn navigation_screen(target : @navigation.Target) -> Screen {
+fn navigation_screen(target : @routes.Target) -> Screen {
   match target {
     Chat | ChatNew | Session(_) | ChatDraft(_) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
@@ -52,7 +52,7 @@ fn navigation_screen(target : @navigation.Target) -> Screen {
 /// Leaving that owner for a different work destination cancels its adoption.
 fn Model::project_adoption_at(
   self : Model,
-  location : @navigation.Location,
+  location : @routes.Location,
 ) -> ProjectAdoption? {
   guard self.pending_project_adoption is Some(pending) &&
     pending.channel == self.focused &&

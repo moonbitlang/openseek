@@ -235,13 +235,19 @@ async fn LocalConsole::handle(
       let destination = query_param(query, "return_to").map(value => {
         @uri.decode_component(value)
       })
-      let target = if destination is Some(path) &&
-        path.has_prefix("/device/\{LocalConsoleDevice}/") &&
-        !path.contains("\\") &&
-        !path.iter().any(ch => ch.is_control()) {
-        path
+      let fallback : @routes.Location = {
+        device: LocalConsoleDevice,
+        target: Chat,
+      }
+      let target = if destination is Some(destination) {
+        let (path, query) = split_path_query(destination)
+        match @routes.parse(path) {
+          Ok(location) if location.device == LocalConsoleDevice =>
+            location.path() + (if query.is_empty() { "" } else { "?" + query })
+          _ => fallback.path()
+        }
       } else {
-        "/device/\{LocalConsoleDevice}/chat"
+        fallback.path()
       }
       respond_redirect(conn, target)
     }
@@ -390,6 +396,12 @@ async fn respond_redirect(
   conn : @http.ServerConnection,
   location : String,
 ) -> Unit {
+  // The route codec owns pathname validity. This HTTP boundary also protects
+  // the query text retained in a login return address from header injection.
+  guard !location.iter().any(ch => ch.is_control()) else {
+    respond_status(conn, 400, "Bad Request")
+    return
+  }
   conn.send_response(302, "Found", extra_headers={
     "Location": location,
     "Content-Length": "0",
