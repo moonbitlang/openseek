@@ -362,7 +362,12 @@ async test "list sessions by id" {
 ```
 
 `listings` keeps damaged session directories visible so users can find and clean
-them up. `latest` uses loadability as the resume gate.
+them up. A row's `first_prompt()` returns `None` when no user event was found
+within the 50-event-line scan limit, and `Some("")` when the first user event
+has empty text. Read or parse failures raise the original error when accessing
+that row's prompt; they do not prevent other rows from being listed. Display
+callers choose their fallback label explicitly. `latest` uses loadability as
+the resume gate.
 
 ## File Path Helpers
 

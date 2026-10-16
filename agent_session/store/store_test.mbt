@@ -159,12 +159,16 @@ async test "listings order by recency and keep husk directories visible" {
   assert_eq(listings.length(), 3)
   assert_eq(listings[0].id().value(), "newer")
   assert_true(listings[0].last_active_unix_seconds() is Some(_))
-  assert_eq(listings[0].first_prompt(), "")
+  assert_eq(listings[0].first_prompt(), None)
   assert_eq(listings[1].id().value(), "older")
-  assert_eq(listings[1].first_prompt(), "  first\n prompt  here ")
+  assert_eq(listings[1].first_prompt(), Some("  first\n prompt  here "))
   assert_eq(listings[2].id().value(), "husk")
   assert_true(listings[2].last_active_unix_seconds() is None)
-  assert_eq(listings[2].first_prompt(), "")
+  try listings[2].first_prompt() catch {
+    _ => ()
+  } noraise {
+    _ => fail("missing transcript must report an error")
+  }
 }
 
 ///|
@@ -183,7 +187,7 @@ async test "an explicit session title overrides the first prompt without rewriti
   let listings = store.listings()
   assert_eq(listings.length(), 1)
   assert_eq(listings[0].title(), Some("Renamed conversation"))
-  assert_eq(listings[0].first_prompt(), "original first prompt")
+  assert_eq(listings[0].first_prompt(), Some("original first prompt"))
   let loaded = store.load(id)
   guard loaded.events()[0].item() is User(message) else {
     fail("renaming changed the first durable event")
@@ -1185,7 +1189,7 @@ async test "image-only conversations have a nonempty listing preview" {
     system_prompt="system",
   ).append(User(UserMessage(Content([Image(image)]))))
   store.create(session)
-  assert_eq(store.listings()[0].first_prompt(), "[Image]")
+  assert_eq(store.listings()[0].first_prompt(), Some("[Image]"))
 }
 
 ///|
@@ -1204,7 +1208,7 @@ async test "listing extracts text without decoding image payloads" {
     ) +
     "\n",
   )
-  assert_eq(store.listings()[0].first_prompt(), "Before after")
+  assert_eq(store.listings()[0].first_prompt(), Some("Before after"))
   try store.load(id) catch {
     _ => ()
   } noraise {
@@ -1222,21 +1226,25 @@ async test "reused listings observe external rewrites renames and recreation" {
     User(UserMessage(Content([Text("Before")]))),
   )
   writer.create(original)
-  assert_eq(reader.listings()[0].first_prompt(), "Before")
-  assert_eq(reader.listings()[0].first_prompt(), "Before")
+  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
+  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
   // Same-length text written through another store must invalidate the cache.
   writer.create(
     @agent_session.Session(id, system_prompt="system").append(
       User(UserMessage(Content([Text("After!")]))),
     ),
   )
-  assert_eq(reader.listings()[0].first_prompt(), "After!")
+  assert_eq(reader.listings()[0].first_prompt(), Some("After!"))
   writer.set_title(id, "New title")
   assert_eq(reader.listings()[0].title(), Some("New title"))
   @fs.remove(writer.session_file(id))
-  assert_eq(reader.listings()[0].first_prompt(), "")
+  try reader.listings()[0].first_prompt() catch {
+    _ => ()
+  } noraise {
+    _ => fail("missing transcript must report an error")
+  }
   writer.create(original)
-  assert_eq(reader.listings()[0].first_prompt(), "Before")
+  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
   @fs.rmdir("\{reader.root()}/sessions/changing", recursive=true)
   assert_eq(reader.listings().length(), 0)
   writer.create(
@@ -1244,5 +1252,70 @@ async test "reused listings observe external rewrites renames and recreation" {
       User(UserMessage(Content([Text("Recreated")]))),
     ),
   )
-  assert_eq(reader.listings()[0].first_prompt(), "Recreated")
+  assert_eq(reader.listings()[0].first_prompt(), Some("Recreated"))
+}
+
+///|
+async test "listing distinguishes absent empty and unreadable prompts" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let id = @agent_session.SessionId("prompt-states")
+  let empty = @agent_session.Session(id, system_prompt="system")
+  store.create(empty)
+  assert_eq(store.listings()[0].first_prompt(), None)
+  store.create(empty.append(User(UserMessage(Content([Text("")])))))
+  // Empty text remains a found prompt on both cold and cached reads.
+  assert_eq(store.listings()[0].first_prompt(), Some(""))
+  assert_eq(store.listings()[0].first_prompt(), Some(""))
+  store.create(empty)
+  append_raw(store, id.value(), "{\n")
+  let malformed = store.listings()[0]
+  try malformed.first_prompt() catch {
+    @json.ParseError::InvalidEof => ()
+    error => raise error
+  } noraise {
+    _ => fail("invalid JSON must report its parse error")
+  }
+  store.create(empty)
+  append_raw(store, id.value(), "{}\n")
+  try store.listings()[0].first_prompt() catch {
+    @json.JsonDecodeError(_) => ()
+    error => raise error
+  } noraise {
+    _ => fail("invalid event must report its decode error")
+  }
+  store.create(empty)
+  append_raw(
+    store,
+    id.value(),
+    (
+      #|{"item":{"kind":"user","payload":{"content":42}}}
+    ) +
+    "\n",
+  )
+  try store.listings()[0].first_prompt() catch {
+    Failure(message) =>
+      assert_true(message.contains("expected content string or array"))
+    error => raise error
+  } noraise {
+    _ => fail("invalid user content must report an error")
+  }
+  // Failed reads are not cached: repairing the transcript restores its label.
+  store.create(empty.append(User(UserMessage(Content([Text("repaired")])))))
+  assert_eq(store.listings()[0].first_prompt(), Some("repaired"))
+}
+
+///|
+async test "listing scan limit reports absence rather than empty text" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
+  let mut session = @agent_session.Session(
+    SessionId("scan-limit"),
+    system_prompt="system",
+  )
+  for _ in 0..<50 {
+    session = session.append(Terminal(Finished("done")))
+  }
+  store.create(session.append(User(UserMessage(Content([Text("past limit")])))))
+  assert_eq(store.listings()[0].first_prompt(), None)
 }

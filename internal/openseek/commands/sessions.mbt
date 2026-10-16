@@ -147,7 +147,9 @@ fn format_utc_minute(seconds : Int64) -> String {
 /// `sessions list | cut -f1` recovers the bare ids the old format printed.
 fn format_session_listing(listing : @store.SessionListing) -> String {
   let when = listing.last_active_unix_seconds().map_or("-", format_utc_minute)
-  let title = listing.title().unwrap_or_else(() => listing.first_prompt())
+  let title = listing
+    .title()
+    .unwrap_or_else(() => listing_prompt_label(listing))
   "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(title)}"
 }
 
@@ -188,7 +190,7 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
         "id": listing.id().value(),
         "title": listing
         .title()
-        .unwrap_or_else(() => session_title(listing.first_prompt())),
+        .unwrap_or_else(() => session_title(listing_prompt_label(listing))),
         "updated_at_ms": updated_at_ms,
       }
     }
@@ -237,4 +239,12 @@ fn required_positive_int(input : String, label : String) -> Int32 raise {
     fail("\{label} is required")
   }
   @cli.parse_positive_int("\{trimmed}", label)
+}
+
+///|
+/// Keep damaged rows visible in CLI and JSON listings. Only this display
+/// boundary substitutes an empty label for missing or unreadable prompts.
+fn listing_prompt_label(listing : @store.SessionListing) -> String {
+  let prompt = listing.first_prompt() catch { _ => return "" }
+  prompt.unwrap_or("")
 }

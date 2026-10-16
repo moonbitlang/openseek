@@ -590,7 +590,7 @@ pub async fn SessionStore::fork(
 struct SessionListing {
   id : @agent_session.SessionId
   last_active_unix_seconds : Int64?
-  first_prompt : String
+  first_prompt : Result[String?, Error]
   title : String?
 } derive(Debug)
 
@@ -619,11 +619,15 @@ pub fn SessionListing::last_active_unix_seconds(
 ///|
 /// Return the first user prompt found near the start of the event log.
 ///
-/// The value is a display label, not a validated session field. It is `""` when
-/// no user event is found within the scan limit, when the session file cannot
-/// be read, or when the session directory is damaged.
-pub fn SessionListing::first_prompt(self : SessionListing) -> String {
-  self.first_prompt
+/// `None` means no user event was found within the scan limit. `Some("")`
+/// means the first user event has empty text. Read and parse failures raise
+/// the original error; callers can choose a display fallback for damaged rows.
+/// This is display metadata, not a full session loadability check.
+pub fn SessionListing::first_prompt(self : SessionListing) -> String? raise {
+  match self.first_prompt {
+    Ok(text) => text
+    Err(error) => raise error
+  }
 }
 
 ///|
@@ -682,37 +686,35 @@ pub async fn SessionStore::set_title(
 let first_prompt_scan_limit : Int32 = 50
 
 ///|
-/// The first user prompt recorded in the session file at `path`, or `""` when
-/// none is found within the scan limit (or the file cannot be read). Streams
-/// line by line instead of loading the session: a listing only needs a
+/// The first user prompt recorded in the session file at `path`, or `None`
+/// when none is found within the scan limit. Read and parse failures raise.
+/// Streams line by line instead of loading the session: a listing only needs a
 /// label, and long or compacted histories should not make `--session-list`
 /// deserialize every event ever appended.
-async fn first_prompt_in_log(path : String) -> String {
-  let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
+async fn first_prompt_in_log(path : String) -> String? {
+  let file = @fs.open(path, mode=ReadOnly)
   defer file.close()
   // The first line is the session header; the prompt scan starts after it.
-  let _ = file.read_until("\n") catch { _ => return "" }
+  let _ = file.read_until("\n")
   for _ in 0..<first_prompt_scan_limit {
-    let next = file.read_until("\n") catch { _ => return "" }
+    let next = file.read_until("\n")
     guard next is Some(line) else { break }
     if line.is_blank() {
       continue
     }
-    let event = @json.parse(line) catch { _ => return "" }
+    let event = @json.parse(line)
     if event
       is {
         "item": { "kind": "user", "payload": { "content": content, .. }, .. },
         ..
       } {
-      return listing_content_text(content) catch { _ => "" }
+      return Some(listing_content_text(content))
     } else {
       // Preserve the scan's stopping rule for malformed non-user events.
-      let _ : @agent_session.SessionEvent = @json.from_json(event) catch {
-        _ => return ""
-      }
+      let _ : @agent_session.SessionEvent = @json.from_json(event)
     }
   }
-  ""
+  None
 }
 
 ///|
@@ -754,18 +756,19 @@ async fn SessionStore::listing_prompt(
   self : SessionStore,
   path : String,
   mtime : (Int64, Int32),
-) -> String {
+) -> String? {
   let ctime = Some(@fs.ctime(path)) catch { _ => None }
   if ctime is Some(ctime) &&
     self.listing_prompts.get(path) is Some(cached) &&
     cached.mtime == mtime &&
     cached.ctime == ctime {
-    return cached.text
+    return Some(cached.text)
   }
   self.listing_prompts.remove(path)
   let text = first_prompt_in_log(path)
-  // Do not cache unreadable/missing prompts or a read that raced a writer.
-  if !text.is_empty() && ctime is Some(ctime) {
+  // Cache found prompts, including empty text, but not absence, errors, or
+  // reads that raced a writer.
+  if text is Some(text) && ctime is Some(ctime) {
     let unchanged = try
       @fs.mtime(path) == mtime && @fs.ctime(path) == ctime
     catch {
@@ -803,7 +806,7 @@ fn[T] stamped_newest_first(
 /// This scans each session directory for timestamps and a first prompt label,
 /// but it does not replay whole histories and does not require loadability.
 /// Damaged directories remain visible with `last_active_unix_seconds=None` and
-/// `first_prompt=""`, ordered after timestamped rows. Use `latest` when the
+/// a raising `first_prompt()`, ordered after timestamped rows. Use `latest` when the
 /// caller needs the newest session that can actually be loaded.
 pub async fn SessionStore::listings(
   self : SessionStore,
@@ -816,11 +819,11 @@ pub async fn SessionStore::listings(
     let path = self.session_file_path(id) catch { _ => continue }
     paths.add(path)
     let stamp = @fs.mtime(path) catch {
-      _ => {
+      error => {
         unreadable.push({
           id,
           last_active_unix_seconds: None,
-          first_prompt: "",
+          first_prompt: Err(error),
           title: self.title(id),
         })
         continue
@@ -832,7 +835,11 @@ pub async fn SessionStore::listings(
         {
           id,
           last_active_unix_seconds: Some(seconds),
-          first_prompt: self.listing_prompt(path, stamp),
+          first_prompt: try self.listing_prompt(path, stamp) catch {
+            error => Err(error)
+          } noraise {
+            text => Ok(text)
+          },
           title: self.title(id),
         },
         seconds,

@@ -714,7 +714,13 @@ async fn session_group(
           title: Some(
             listing
             .title()
-            .unwrap_or_else(() => listing_prompt_title(listing.first_prompt())),
+            .unwrap_or_else(() => {
+              // A damaged transcript must not hide the rest of the sidebar.
+              let prompt = listing.first_prompt() catch {
+                _ => return listing_prompt_title("")
+              }
+              listing_prompt_title(prompt.unwrap_or(""))
+            }),
           ),
           updated_at_ms,
         }
