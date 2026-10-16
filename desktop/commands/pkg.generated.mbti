@@ -11,6 +11,8 @@ pub const CloseFocusedMenuCommand : String = "app.close_focused"
 
 pub const ExtensionId : String = "openseek-desktop"
 
+pub let account_session : Command[@protocol.EmptyPayload, @protocol.AccountSessionReply]
+
 pub let agent_approval : Command[@protocol.ApprovalPayload, @protocol.ApprovalReply]
 
 pub let agent_cancel : Command[@protocol.CancelPayload, @protocol.CancelReply]
@@ -230,6 +232,8 @@ pub let moonide_definition : Command[@protocol.MoonIdeNavigationPayload, @protoc
 pub let moonide_references : Command[@protocol.MoonIdeNavigationPayload, @protocol.MoonIdeNavigationReply]
 
 pub let pattern_repair : Command[@protocol.PatternRepairPayload, @protocol.PatternRepairReply]
+
+pub let remote_access_set : Command[@protocol.RemoteAccessPayload, @protocol.AuthStatusPayload]
 
 pub let schedules_action : Command[@protocol.ScheduleActionPayload, @protocol.SchedulesReply]
 

@@ -7,6 +7,12 @@ const officeFixture = name =>
 export class DesktopBrowserHarness {
   constructor(page) {
     this.page = page;
+    this.ticketStatus = 200;
+    this.pauseTicket = null;
+    this.ticketRequests = [];
+    this.issuedTickets = new Map();
+    this.socketTickets = [];
+    this.socketURLs = [];
     this.socket = null;
     this.requests = [];
     this.pageErrors = [];
@@ -502,11 +508,20 @@ export class DesktopBrowserHarness {
   async install() {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
 
-    await this.page.route('**/v1/auth/me', route => route.fulfill({
+    await this.page.route('**/v2/devices/*/connect-ticket', async route => {
+      const request = { url: route.request().url(), headers: await route.request().allHeaders() };
+      this.ticketRequests.push(request);
+      if (this.pauseTicket) await this.pauseTicket;
+      const ticket = `wst_fixture-${this.ticketRequests.length}`;
+      if (this.ticketStatus === 200) this.issuedTickets.set(ticket, request);
+      await route.fulfill({ status: this.ticketStatus, contentType: 'application/json', body: JSON.stringify({ ticket, expires_in: 60 }) });
+    });
+    await this.page.route('**/v2/auth/session', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'ts_fixture-account', user: { user_id: '123', login: 'octocat', avatar_url: '' } }) }));
+    await this.page.route('**/v2/auth/me', route => route.fulfill({
       contentType: 'application/json',
-      body: JSON.stringify({ login: 'octocat', avatar_url: '' }),
+      body: JSON.stringify({ user_id: '123', login: 'octocat', avatar_url: '' }),
     }));
-    await this.page.route('**/v1/devices', route => route.fulfill({
+    await this.page.route('**/v2/devices', route => route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         devices: [
@@ -523,7 +538,12 @@ export class DesktopBrowserHarness {
     // The product browser bundle normally talks to a selected Desktop host.
     // This route replaces only that transport and leaves Rabbita, the views,
     // browser layout, DOM events, and focus behavior running unchanged.
-    await this.page.routeWebSocket('**/v1/devices/device-a/ws', socket => {
+    await this.page.routeWebSocket('**/v2/devices/device-a/ws?*', socket => {
+      const ticket = new URL(socket.url()).searchParams.get('ticket');
+      if (!this.issuedTickets.has(ticket)) throw new Error('WebSocket requires a freshly issued account ticket');
+      this.issuedTickets.delete(ticket);
+      this.socketTickets.push(ticket);
+      this.socketURLs.push(socket.url());
       this.socket = socket;
       socket.onMessage(async message => {
         const request = JSON.parse(message.toString());

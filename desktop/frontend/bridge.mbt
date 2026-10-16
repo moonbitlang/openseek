@@ -336,6 +336,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
       dispatch(FromDevice(channel, ChannelDown(websocket_epoch~)))
+    @bridge.Event::AccountUnauthorized(channel~, websocket_epoch~, token~) =>
+      dispatch(DeviceAccountExpired(channel, websocket_epoch, token))
     @bridge.Event::SystemAppearanceChanged => fetch_system_appearance(dispatch)
     @bridge.Event::BrowserEvent(payload~) =>
       if browser_event_msg(payload) is Some(msg) {
@@ -360,19 +362,23 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
 fn DeviceState::bridge_subscription(
   self : DeviceState,
   dispatch : @cmd.Emit[Msg],
+  account : @protocol.AccountSession?,
 ) -> @sub.Sub {
   let bridge_dispatch : @cmd.Emit[@bridge.Event] = event => {
     bridge_event(dispatch, event)
   }
   match self.channel {
     Local => @bridge.local_connection(bridge_dispatch)
-    Remote(device) =>
+    Remote(device) => {
+      guard account is Some(_) || device == "host" else { return @sub.none }
       @bridge.remote_connection(
         device_id=device,
         websocket_epoch=self.websocket_epoch,
         reconnect_attempt=self.reconnect_attempt,
         dispatch=bridge_dispatch,
+        account~,
       )
+    }
   }
 }
 
@@ -384,7 +390,9 @@ fn Model::bridge_subscriptions(
   self : Model,
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
+  @sub.batch(
+    self.devices.map(dev => dev.bridge_subscription(dispatch, self.account)),
+  )
 }
 
 ///|

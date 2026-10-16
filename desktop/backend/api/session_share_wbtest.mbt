@@ -2,12 +2,8 @@
 async test "share progress is scoped to the requesting endpoint catalog" {
   let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-progress-"))
   defer @fs.rmdir(dir.to_string(), recursive=true)
-  @fs.write_file(
-    dir.join("auth.json").to_string(),
-    "{\"server_url\":\"http://127.0.0.1:1\",\"device_token\":\"test-token\",\"device\":{\"id\":\"device\",\"name\":\"Test\"},\"user\":{\"login\":\"test\",\"avatar_url\":\"\"}}",
-  )
+  @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
   let store = @auth.AuthStore::load(runtime_dir=dir)
-  ignore(store.mark_registered("device"))
   let state = ApiState(engine="unused-test-engine", auth=store)
   let hub : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(8))
   let subscription = state.subscribe(hub, map=value => Some(value), on_lag=sub => {
@@ -62,11 +58,11 @@ async test "share progress is scoped to the requesting endpoint catalog" {
 ///|
 /// The login the upload captured, relative to the store when HTTP 401 arrives.
 priv enum Login {
-  // The persisted login, still connected: the refusal must retire it.
+  // The persisted account: the refusal must retire it.
   Current
   // A newer login replaced it during the upload: nothing may be cleared.
   Stale
-  // The relay actor already retired it for its own refusal.
+  // Another authenticated request already retired this same account.
   Retired
 }
 
@@ -78,18 +74,14 @@ async test "share refusal retires the captured login and preserves a newer one" 
     let origin = "http://127.0.0.1:\{server.addr.port()}"
     let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-auth-"))
     defer @fs.rmdir(dir.to_string(), recursive=true)
-    @fs.write_file(
-      dir.join("auth.json").to_string(),
-      "{\"server_url\":\"\{origin}\",\"device_token\":\"current-token\",\"device\":{\"id\":\"device\",\"name\":\"Test\"},\"user\":{\"login\":\"test\",\"avatar_url\":\"\"}}",
-    )
+    @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
     let store = @auth.AuthStore::load(runtime_dir=dir)
     assert_true(store.signed_in())
-    ignore(store.mark_registered("device"))
-    guard store.desired_connector() is Some(current) else {
+    guard store.account() is Some(current) else {
       fail("fixture did not load login")
     }
-    let config = match login {
-      Stale => { ..current, device_token: "old-token", }
+    let account = match login {
+      Stale => { ..current, token: "ts_old", }
       Current | Retired => current
     }
     let state = ApiState(engine="unused-test-engine", auth=store)
@@ -118,11 +110,11 @@ async test "share refusal retires the captured login and preserves a newer one" 
         let request = connection.read_request()
         assert_eq(
           request.headers.get("Authorization"),
-          Some("Bearer \{config.device_token}"),
+          Some("Bearer \{account.token}"),
         )
         connection.skip_request_body()
         if login is Retired {
-          store.handle_refusal()
+          store.expire_account(current.token)
           assert_true(store.desired_connector() is None)
         }
         connection.send_response(401, "Unauthorized")
@@ -136,14 +128,15 @@ async test "share refusal retires the captured login and preserves a newer one" 
           ),
           [],
         ),
-        config,
+        account,
+        server_url=origin,
       )
       receiver.wait()
       if login is Stale {
         assert_true(reply is Failed(..))
         assert_true(store.signed_in())
-        assert_true(store.status().connected)
-        assert_true(store.desired_connector() == Some(current))
+        assert_false(store.status().connected)
+        assert_true(store.account() == Some(current))
         assert_true(notifications.try_get() is None)
       } else {
         assert_true(reply is SignInRequired)
@@ -157,4 +150,17 @@ async test "share refusal retires the captured login and preserves a newer one" 
       }
     })
   }
+}
+
+///|
+fn share_account_fixture() -> String {
+  let fixture : Json = {
+    "version": 2,
+    "server_url": @auth.AccountOrigin,
+    "account": {
+      "token": "ts_current",
+      "user": { "user_id": "123", "login": "test", "avatar_url": "" },
+    },
+  }
+  fixture.stringify()
 }

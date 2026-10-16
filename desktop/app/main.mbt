@@ -76,13 +76,10 @@ async fn main {
       .map(p => p.to_string())
       .unwrap_or("(unavailable: no isolated home)"),
     }
-  // The relay sign-in store: a persisted session from auth.json, unless the
-  // environment override pins the connector config directly (development).
-  // A development build persists nothing: it shares the runtime dir with the
-  // shipped application, and one auth.json is one device token, so both hosts
-  // would register as the same relay device and keep replacing each other.
-  // Each development launch instead starts signed out, and Connect registers
-  // a device of its own.
+  // Account state and optional remote permission. Dev deliberately starts
+  // signed out on each launch: its runtime directory is shared with the
+  // shipped application, so it must not restore or overwrite that auth.json.
+  // The environment override is independent and controls only the relay.
   let auth = @auth.AuthStore::load(
     runtime_dir?=if development { None } else { runtime_dir },
     env_override?=relay_settings(matches),
@@ -276,8 +273,8 @@ async fn main {
         // no page may attach to a host that has not.
         state.start_services(group)
         group.spawn_bg(allow_failure=true, () => bridge.run())
-        // The relay actor registers this host whenever a sign-in (or the
-        // environment override) says so, and idles otherwise.
+        // The relay actor registers this host only when remote access (or the
+        // environment override) is enabled, and idles otherwise.
         group.spawn_bg(allow_failure=true, () => relay.run())
         if console is Some(console) {
           // The same directory and document the window loads.

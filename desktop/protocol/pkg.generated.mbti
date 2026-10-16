@@ -25,6 +25,39 @@ pub fn steer(@openseek_protocol.Content, submission_id? : String) -> @openseek_p
 // Errors
 
 // Types and methods
+pub(all) struct AccountSession {
+  token : String
+  user : AccountUser
+} derive(Eq)
+pub fn AccountSession::equal(Self, Self) -> Bool
+pub fn AccountSession::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountSession::not_equal(Self, Self) -> Bool
+pub fn AccountSession::to_json(Self) -> Json
+pub impl ToJson for AccountSession
+pub impl @json.FromJson for AccountSession
+
+pub(all) struct AccountSessionReply {
+  session : AccountSession?
+} derive(Eq)
+pub fn AccountSessionReply::equal(Self, Self) -> Bool
+pub fn AccountSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountSessionReply::not_equal(Self, Self) -> Bool
+pub fn AccountSessionReply::to_json(Self) -> Json
+pub impl ToJson for AccountSessionReply
+pub impl @json.FromJson for AccountSessionReply
+
+pub(all) struct AccountUser {
+  user_id : String
+  login : String
+  avatar_url : String
+} derive(Eq)
+pub fn AccountUser::equal(Self, Self) -> Bool
+pub fn AccountUser::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountUser::not_equal(Self, Self) -> Bool
+pub fn AccountUser::to_json(Self) -> Json
+pub impl ToJson for AccountUser
+pub impl @json.FromJson for AccountUser
+
 pub(all) struct AgentErrorPayload {
   run_id : String?
   message : String?
@@ -2631,6 +2664,16 @@ pub fn RegistrySkillIdentity::to_json(Self) -> Json
 pub fn RegistrySkillIdentity::to_repr(Self) -> @debug.Repr
 pub impl ToJson for RegistrySkillIdentity
 pub impl @json.FromJson for RegistrySkillIdentity
+
+pub(all) struct RemoteAccessPayload {
+  enabled : Bool
+} derive(Eq)
+pub fn RemoteAccessPayload::equal(Self, Self) -> Bool
+pub fn RemoteAccessPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RemoteAccessPayload::not_equal(Self, Self) -> Bool
+pub fn RemoteAccessPayload::to_json(Self) -> Json
+pub impl ToJson for RemoteAccessPayload
+pub impl @json.FromJson for RemoteAccessPayload
 
 pub(all) enum RevealPathReply {
   Revealed

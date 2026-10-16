@@ -2186,11 +2186,14 @@ fn update_msg(
       // subscriptions own their transcript and terminal DOM lifetimes.
       let device = if model.is_desktop {
         rotate_session(dispatch, model.focused, model.navigation.revision)
-      } else {
+      } else if @interop.page_query_param("device") == Some("host") {
         fetch_console_me(dispatch)
+      } else {
+        @cmd.none
       }
       (
         @cmd.batch([
+          fetch_account(dispatch, model.is_desktop, model.account_epoch),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),
           watch_color_scheme(dispatch, model.is_desktop),
@@ -2199,6 +2202,13 @@ fn update_msg(
         ]),
         model,
       )
+    }
+    Console(SignOutClicked) => sign_out_account(dispatch, model)
+    Console(SignOutDone(token~)) => {
+      guard token == model.account.map(account => account.token) else {
+        return (@cmd.none, model)
+      }
+      expire_account(dispatch, model)
     }
     Console(msg) => update_console_msg(dispatch, msg, model)
     LanguageLoaded(preference, languages) => {
@@ -3954,40 +3964,30 @@ fn update_msg(
         @cmd.none,
         { ..model, notifications: model.notifications.filter(t => t.id != id), },
       )
-    RemoteStatusLoaded(status) =>
-      (@cmd.none, { ..model, remote_access: Some(status), })
-    RemoteConnectClicked =>
-      // The flow blocks on a browser round-trip; a second click while one
-      // is pending would start a second loopback flow just to be refused.
-      if model.remote_connecting {
-        (@cmd.none, model)
-      } else {
-        (
-          connect_remote(dispatch),
-          { ..model, remote_connecting: true, remote_error: None, },
-        )
+    AccountLoaded(epoch, result) =>
+      account_loaded(dispatch, model, epoch, result)
+    DeviceAccountExpired(channel, epoch, token) => {
+      guard model.account.map(account => account.token) == Some(token) &&
+        model.device_state(channel) is Some(device) &&
+        device.websocket_epoch == epoch else {
+        return (@cmd.none, model)
       }
-    RemoteConnectFinished(status) =>
+      expire_account(dispatch, model)
+    }
+    RemoteStatusLoaded(status) =>
       (
-        @cmd.none,
-        {
-          ..model,
-          remote_access: Some(status),
-          remote_connecting: false,
-          remote_error: None,
+        if model.is_desktop && !model.remote_connecting {
+          fetch_account(dispatch, true, model.account_epoch)
+        } else {
+          @cmd.none
         },
+        { ..model, remote_access: Some(status), },
       )
-    RemoteConnectFailed(message) =>
-      (
-        @cmd.none,
-        { ..model, remote_connecting: false, remote_error: Some(message), },
-      )
-    RemoteCancelClicked =>
-      // Fire-and-forget: the connect that is being cancelled reports back
-      // through its own reply, which is what clears the pending state.
-      (cancel_remote(dispatch), model)
-    RemoteDisconnectClicked =>
-      (disconnect_remote(dispatch), { ..model, remote_error: None, })
+    RemoteAccessSet(enabled) =>
+      (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
+    RemoteConnectClicked => begin_account_login(dispatch, model)
+    RemoteCancelClicked => (cancel_remote(dispatch), model)
+    RemoteDisconnectClicked => sign_out_account(dispatch, model)
     RemoteDisconnectFailed(message) =>
       (@cmd.none, { ..model, remote_error: Some(message), })
     AppInfoLoaded(version~, console_url~) =>
@@ -21385,11 +21385,8 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
 test "remote access walks connect states and dedups clicks" {
   let dispatch = test_dispatch()
   let signed_out : RemoteAccess = {
-    server_url: Some("https://relay.example"),
     connected: false,
     managed_by_env: false,
-    user_login: None,
-    device_name: None,
     device_url: None,
   }
   let (_, seeded) = update(
@@ -21397,27 +21394,26 @@ test "remote access walks connect states and dedups clicks" {
     RemoteStatusLoaded(signed_out),
     test_model(),
   )
-  assert_true(seeded.remote_access is Some({ user_login: None, .. }))
+  assert_true(
+    seeded.remote_access is Some({ connected: false, device_url: None, .. }),
+  )
   let (_, connecting) = update(dispatch, RemoteConnectClicked, seeded)
   assert_true(connecting.remote_connecting)
   // A second click while the browser round-trip is pending is a no-op.
   let (second_cmd, second) = update(dispatch, RemoteConnectClicked, connecting)
   assert_true(second.remote_connecting)
   ignore(second_cmd)
-  let (_, failed) = update(dispatch, RemoteConnectFailed("nope"), connecting)
+  let (_, failed) = update(
+    dispatch,
+    AccountLoaded(connecting.account_epoch, Err("nope")),
+    connecting,
+  )
   assert_false(failed.remote_connecting)
   assert_true(failed.remote_error is Some("nope"))
-  let signed_in : RemoteAccess = {
-    ..signed_out,
-    user_login: Some("octocat"),
-    connected: true,
-  }
-  let (_, done) = update(dispatch, RemoteConnectFinished(signed_in), connecting)
-  assert_false(done.remote_connecting)
-  assert_true(
-    done.remote_access
-    is Some({ user_login: Some("octocat"), connected: true, .. }),
-  )
+  let signed_in : RemoteAccess = { ..signed_out, connected: true, }
+  let (_, done) = update(dispatch, RemoteStatusLoaded(signed_in), connecting)
+  assert_true(done.remote_connecting)
+  assert_true(done.remote_access is Some({ connected: true, .. }))
   // A broadcast keeps the mirror fresh without touching the pending flag.
   let (_, broadcast) = update(
     dispatch,
@@ -21441,7 +21437,6 @@ test "auth status payloads decode by shape" {
     }),
   })
   assert_true(status.connected)
-  assert_true(status.user_login is Some("octocat"))
   assert_true(status.device_url is Some("https://relay.example/d/d_abc/"))
   let signed_out = RemoteAccess::from_status({
     connected: false,
@@ -21450,7 +21445,8 @@ test "auth status payloads decode by shape" {
     user: None,
     device: None,
   })
-  assert_true(signed_out.user_login is None)
+  assert_false(signed_out.connected)
+  assert_true(signed_out.device_url is None)
 }
 
 ///|

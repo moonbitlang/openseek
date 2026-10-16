@@ -87,7 +87,7 @@ async fn send(
   attempt~ : Int32,
   on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
-  connection.request(Post, "/v1/shares", extra_headers=headers)
+  connection.request(Post, "/v2/shares", extra_headers=headers)
   // FormWriter chooses the boundary once; Writer lets retries reuse it on a
   // fresh connection without retaining the encoded request body.
   let form = @multipart.Writer(connection, boundary=headers["Idempotency-Key"])
@@ -137,7 +137,7 @@ async fn send(
   if response.code == 404 {
     // A device login can still point at a deployment without share routes.
     return @protocol.Failed(
-      message="The signed-in server does not provide sharing at \{server_url}/v1/shares (HTTP 404). Sign in to a server with sharing enabled.",
+      message="The signed-in server does not provide sharing at \{server_url}/v2/shares (HTTP 404). Sign in to a server with sharing enabled.",
     )
   }
   guard response.code is (200 | 201) else {

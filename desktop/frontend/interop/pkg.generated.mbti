@@ -55,7 +55,7 @@ pub fn viewport_width() -> Int?
 
 pub fn ws_close(ChannelId) -> Unit
 
-pub fn ws_connect(String, on_notification~ : (@protocol.Notification) -> Unit, on_down~ : () -> Unit) -> Unit
+pub fn ws_connect(String, ticket? : String, on_notification~ : (@protocol.Notification) -> Unit, on_down~ : () -> Unit) -> Unit
 
 // Errors
 

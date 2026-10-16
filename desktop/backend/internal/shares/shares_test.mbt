@@ -36,7 +36,7 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         let request = connection.read_request()
         let uploaded = connection.read_all().binary()
         assert_true(request.meth is Post)
-        assert_eq(request.path, "/v1/shares")
+        assert_eq(request.path, "/v2/shares")
         assert_eq(request.headers.get("Authorization"), Some("Bearer odt_test"))
         let request_key = request.headers.get("Idempotency-Key")
         assert_true(
@@ -200,7 +200,7 @@ async test "upload maps server replies without following redirects" {
   assert_eq(
     reply,
     Failed(
-      message="The signed-in server does not provide sharing at \{origin}/v1/shares (HTTP 404). Sign in to a server with sharing enabled.",
+      message="The signed-in server does not provide sharing at \{origin}/v2/shares (HTTP 404). Sign in to a server with sharing enabled.",
     ),
   )
 }

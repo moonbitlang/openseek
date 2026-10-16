@@ -8,6 +8,8 @@ import {
 }
 
 // Values
+pub const AccountOrigin : String = "https://openseek-api.moonbitlang.cn"
+
 pub fn device_url(String, String, app_version~ : String) -> String
 
 pub fn origin_from_relay_url(String) -> String
@@ -24,16 +26,19 @@ pub impl Show for AuthError
 
 // Types and methods
 type AuthStore
+pub fn AuthStore::account(Self) -> @protocol.AccountSession?
 pub fn AuthStore::cancel_sign_in(Self) -> Bool
 pub fn AuthStore::desired_connector(Self) -> ConnectorConfig?
 pub fn AuthStore::empty(app_version? : String) -> Self
-pub async fn AuthStore::handle_refusal(Self) -> Unit
+pub async fn AuthStore::expire_account(Self, String) -> Unit
+pub async fn AuthStore::handle_refusal(Self, expected? : ConnectorConfig) -> Unit
 pub async fn AuthStore::load(runtime_dir? : @pathx.Path, env_override? : ConnectorConfig, app_version? : String) -> Self
 pub fn AuthStore::managed_by_env(Self) -> Bool
 pub fn AuthStore::mark_dropped(Self) -> Bool
 pub fn AuthStore::mark_registered(Self, String) -> Bool
 pub fn AuthStore::poke(Self) -> Unit
 pub fn AuthStore::session_server(Self) -> String?
+pub async fn AuthStore::set_remote(Self, Bool) -> Unit
 pub async fn AuthStore::sign_in(Self, server_url~ : String) -> Unit
 pub async fn AuthStore::sign_out(Self) -> Unit
 pub fn AuthStore::signed_in(Self) -> Bool

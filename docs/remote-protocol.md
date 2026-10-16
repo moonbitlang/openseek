@@ -55,7 +55,8 @@ new subscription and resync. Paused subscriptions do not replay missed events.
 ## Transport
 
 All HTTP lives at the relay. Browser releases are versioned alongside Desktop
-releases; JSON/WS APIs live under `/v1`:
+releases. Public account, device, and share management APIs use `/v2`.
+The host control tunnel and the private local Dev console retain `/v1`:
 
 | Route | What |
 |---|---|
@@ -63,13 +64,14 @@ releases; JSON/WS APIs live under `/v1`:
 | `GET /console/releases/v<version>/index.html` | One published Browser bundle. `?device=<id>` is required and fixes the page/tab to that device; optional `?workspace=<path>` selects where its first conversation lands. Packaged Desktop links here with its installed version |
 | `GET /d/<device>/…` | Retired: `302` to `/console/?device=<device>` with the original query appended, so old deep links keep their device target |
 | `GET /healthz` | Relay liveness probe, `200 ok` |
-| `/v1/auth/*`, `/v1/devices…` | The relay's own auth and device APIs (see Authentication) |
+| `/v2/auth/account/*`, `/v2/auth/session`, `/v2/auth/login` | Account sign-in and browser session recovery (see Authentication) |
+| `/v2/auth/me`, `/v2/auth/logout`, `/v2/devices…` | Account and device APIs, including `POST /v2/devices` registration |
 
 Everything else — commands, queries, and host-pushed events — travels over
-`GET /v1/devices/<device>/ws`, upgraded from the same origin the bundle was
+`GET /v2/devices/<device>/ws`, upgraded from the same origin the bundle was
 served from and spliced through to the host. A browser page takes its one
 `<device>` from the required `?device=` query and verifies it against
-`GET /v1/devices`; other roster devices need their own page/tab. Frames are
+`GET /v2/devices`; other roster devices need their own page/tab. Frames are
 JSON text, shaped as **JSON-RPC 2.0**:
 
 ```jsonc
@@ -144,31 +146,43 @@ Auth terminates **at the relay**; the JSON-RPC wire above carries no
 credentials and is unchanged by it. Device ids are stable database ids,
 not secrets — the barrier is ownership:
 
-- **Browsers** sign in with GitHub OAuth at the relay (`/v1/auth/login` →
-  callback → `session` cookie, HttpOnly/SameSite=Lax, 7-day sliding).
-  The data WebSocket upgrade on `/v1/devices/<device>/ws` requires a
-  session whose user **owns** that device; anything else is 401/404.
-- **Hosts** register over the control WebSocket with an `odt_` **device
-  token** issued by the relay at sign-in time. The relay stores only a
-  keyed hash; revoking a device invalidates the token and disconnects any
-  live tunnel.
-- **Desktop sign-in** is loopback OAuth with PKCE (RFC 8252 shape): the
-  host starts a one-shot listener on `127.0.0.1:<random>`, opens the
-  system browser at `<server>/v1/auth/desktop/start?state&code_challenge&
-  port&name`, the signed-in user clicks **Allow** once, the browser
-  bounces a one-time code to the listener, and the host swaps it (plus
-  its PKCE verifier; the challenge is standard S256 — the unpadded
-  base64url of `sha256(verifier)`, RFC 7636) at
-  `POST /v1/auth/desktop/exchange` for `{device_token, device, user}` —
-  the exchange **is** device registration. The host persists the token
-  (`auth.json` in its runtime dir, 0600); a development build (`.dev`
-  identity) persists nothing, since it shares that runtime dir with the
-  shipped application and one token is one relay device, so every launch
-  starts signed out and Connect registers a device of its own. Development
-  overrides:
-  `OPENSEEK_DEVICE_TOKEN` + `OPENSEEK_RELAY_URL` pin the connector config
-  directly (bypassing sign-in), and `OPENSEEK_SERVER_URL` points the
-  sign-in flow at an ad-hoc server regardless of the settings' selection.
+- **Accounts** use one `ts_` session for shares and account-level
+  device operations, issued by `https://openseek-api.moonbitlang.cn`.
+  `GET /v2/auth/me` and `POST /v2/auth/logout` select an explicit Bearer
+  before cookies; an invalid Bearer never falls back to a cookie. Existing
+  v1 endpoints retain their legacy contract for older clients. The configured
+  GitHub callback stays at `/v1/auth/callback`; it is not a client management
+  API. Explicit sign-in always allows GitHub account selection. Restoring an
+  existing credential does not open a browser. Network and service failures
+  preserve the credential; an authenticated request's 401 retires it.
+- **Desktop sign-in** uses a one-shot `127.0.0.1:<port>` listener and S256
+  PKCE. `GET /v2/auth/account/start?state&code_challenge&code_challenge_method=S256&port`
+  returns an independent `ac_` code to `/cb?code&state`.
+  `POST /v2/auth/account/exchange` with `{code,code_verifier}` returns
+  `{token,user:{user_id,login,avatar_url}}`. It does not register a device.
+  The host saves version-2 `auth.json` atomically with mode 0600. A packaged
+  Dev build deliberately does not persist auth because it shares the runtime
+  directory with the shipped app. Old device-only files require explicit sign-in.
+- **Browsers** log in through `/v2/auth/login?prompt=select_account&return_to=…`.
+  Same-origin `POST /v2/auth/session` obtains the existing browser account
+  credential for Bearer requests.
+  The frontend restores that credential from browser storage.
+  Each connection or reconnection requests a fresh ticket with
+  `POST /v2/devices/<device>/connect-ticket` and the current account Bearer.
+  The result `{ticket,expires_in:60}` authorizes exactly one
+  `/v2/devices/<device>/ws?ticket=<encoded ticket>` upgrade. Explicit ticket
+  failure never falls back to cookie identity; long-lived tokens never enter
+  the WebSocket URL. Retired subscriptions discard late ticket responses.
+- **Remote access** is independently enabled with account-authenticated
+  `POST /v2/devices` (`{name,hostname?}`), returning
+  `{device_token,device:{id,name}}`. Only the `odt_` device token registers
+  the host control tunnel. Disabling remote access revokes that device and
+  preserves the account (`DELETE /v2/devices/<id>`). Device lists use
+  `GET /v2/devices`. Desktop logout also retires its account session;
+  browser logout never disables the computer it was viewing.
+  `OPENSEEK_DEVICE_TOKEN` plus `OPENSEEK_RELAY_URL` retain their explicit
+  debug override: this connection is environment-managed, has no ordinary
+  switch, and survives account logout. It never authenticates shares.
 - **Development console** (`.dev` builds only): the host also serves its
   own frontend bundle on `http://127.0.0.1:27183/` (an ephemeral port when
   that one is taken) and answers
@@ -711,19 +725,25 @@ Notification:
 |---|---|
 | `skills.changed` | `{}` — broadcast after an install, update, or uninstall commits; every client re-reads `skills.installed`, including clients that did not make the request |
 
-### auth.* — remote-access sign-in
+### auth.* — account and independent remote access
 
-Desktop-window-only by client convention (same footing as `update.*`):
-these drive the host's own relay registration, which a remote client has
-no business operating. A browser signs in with the relay directly
-(cookie), never through these ops.
+The account and remote controls share one Settings panel. The desktop uses
+its local native account; a browser uses its own saved account, never a remote
+computer's credential. Account changes retire the previous account's requests,
+browser host connections and their drafts before loading replacements.
 
 | method | params | result |
 |---|---|---|
-| `auth.status` | `{}` | the status shape below |
-| `auth.connect` | `{}` | the status shape — resolves only when the loopback flow finishes (browser round-trip included), so it can take minutes; errors are the JSON-RPC error response. While signed in it runs no browser flow (an exchange mints a new device row) and only makes sure the connector runs. Refused only when the environment override manages the connector — the relay lives on the SeekMoon origin and no longer depends on the chat provider |
-| `auth.disconnect` | `{}` | the status shape — deletes the local token, best-effort revokes the device at the relay, and stops the connector. Refused in override mode |
-| `auth.cancel` | `{}` | the status shape — aborts an in-flight `auth.connect` (whose own call then fails with "the sign-in was cancelled"); a no-op when nothing is in flight |
+| `account.session` | `{}` | `{session?:{token,user:{user_id,login,avatar_url}}}`; native-window-only, never broadcast or served over a device channel |
+| `auth.status` | `{}` | the presentation-only status shape below |
+| `auth.connect` | `{}` | account sign-in through the fixed issuer; returns status without registering a device or enabling a tunnel. An existing account is reused |
+| `auth.disconnect` | `{}` | retires this desktop client's account and ordinary remote registration; the environment-managed debug connector is unaffected |
+| `auth.cancel` | `{}` | aborts this window's pending account sign-in; no-op otherwise |
+| `remote.access_set` | `{enabled}` | enables or revokes this host's device permission while keeping its account; ordinary UI is desktop-only, environment override refuses this operation |
+| `session.share` | `{generation,source:{session,workspace,title,archived}}` | publishes through this host's signed-in account, independently of device registration; retains the existing connection-scoped progress notifications |
+
+Sharing uses the account Bearer against `/v2/shares`; public share URLs remain
+under `/v1/shares/<id>`. A late rejection cannot retire a newer account.
 
 The status shape, also the params of every `auth.changed` notification:
 
@@ -737,7 +757,7 @@ The status shape, also the params of every `auth.changed` notification:
   "connected": false,            // control WS currently registered
   "managed_by_env": true,        // present only under the OPENSEEK_RELAY_URL override
   "user":   {"login": "…", "avatar_url": "…"},   // absent when signed out
-  "device": {"id": "d_…", "name": "…", "url": "…/console/releases/v0.1.16/index.html?device=d_…"}  // absent when signed out
+  "device": {"id": "d_…", "name": "…", "url": "…/console/releases/v0.1.16/index.html?device=d_…"}  // absent when ordinary remote access is disabled
 }
 ```
 
@@ -794,9 +814,9 @@ browser                    relay (public)                  host (desktop app)
   │                           │   register{device_token,name}  │
   │                           ├── registered{device:"d_…"} ───►│
   │                           │                                │
-  ├─② wss://relay/v1/devices─►│                                │
+  ├─② wss://relay/v2/devices─►│                                │
   │        /d_…/ws            ├──── ③ open{stream:"s1"} ──────►│
-  │   (session cookie)        │                                │
+  │   (one-use ticket)        │                                │
   │                           │◄── ④ data WS: /v1/tunnel/s1 ───┤ one per browser client
   │                           │                                │
   │◄════ ⑤ relay splices ② and ④ frame-for-frame ════════════►│
@@ -808,8 +828,8 @@ Control-channel frames (JSON text over the `/v1/tunnel` WebSocket):
 |---|---|---|
 | `register` | host → relay | `{device_token, name}` — sent once after connecting |
 | `registered` | relay → host | `{device}` — the stable public id; reconnects with the same token reuse it |
-| `fail` | relay → host | `{message}` — registration rejected. A bad or revoked token is terminal: the host stops retrying, surfaces it (`auth.changed`), and waits for a new sign-in |
-| `open` | relay → host | `{stream}` — a client connected to `/v1/devices/<device>/ws`; the host dials `GET /v1/tunnel/<stream>` (upgrade) back |
+| `fail` | relay → host | `{message}` — registration rejected. A bad or revoked device token is terminal for that remote registration: the host stops retrying and surfaces it (`auth.changed`), preserving the account |
+| `open` | relay → host | `{stream}` — a client connected to `/v2/devices/<device>/ws`; the host dials `GET /v1/tunnel/<stream>` (upgrade) back |
 
 The data WebSocket (④) carries client protocol frames untouched. On the
 host side each data connection is served by the same JSON-RPC dispatch the
@@ -829,10 +849,11 @@ changed and why:
 
 - **The host process runs no server.** v1 embedded an HTTP gateway in the
   desktop and pointed the window at `http://127.0.0.1:<port>/`. v2 keeps
-  the original desktop architecture — window on `proton://app/`, in-process
+  the original desktop architecture — local asset window (`https://proton.localhost/`
+  in the current Proton runtime), in-process
   bridge — and adds remote access as a pure outbound feature: dial the
   relay, register, serve each spliced WebSocket. No port, no static file
-  server, no CORS, and the window regains bridge-only capabilities
+  server for host commands, and the window retains native bridge capabilities
   (notification-click focus).
 - **One transport for the wire instead of three.** v1 ran fetch for
   commands, SSE for events, and a bespoke HTTP-over-WebSocket frame

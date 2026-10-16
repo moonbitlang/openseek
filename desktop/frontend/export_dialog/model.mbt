@@ -197,3 +197,25 @@ pub extend Model with @debug.Debug::{to_repr}
 pub fn Model::is_open(self : Model) -> Bool {
   self.content is Some(_)
 }
+
+///|
+/// Login returns to confirmation; an account change retires every pending
+/// export reply and published link from the old account.
+pub fn Model::account_changed(
+  self : Model,
+  result : Result[Unit, String],
+) -> (@cmd.Cmd, Model) {
+  if self.content is Some({ operation: SigningIn, .. }) {
+    self.update(_ => @cmd.none, SignedIn(generation=self.generation, result))
+  } else if result is Ok(_) &&
+    self.content is Some({ operation: SignInRequired, .. }) {
+    (@cmd.none, { ..self, generation: self.generation + 1, })
+  } else if result is Ok(_) {
+    (
+      @dialog.close(DialogId),
+      { generation: self.generation + 1, content: None, },
+    )
+  } else {
+    (@cmd.none, self)
+  }
+}

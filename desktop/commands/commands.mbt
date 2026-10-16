@@ -970,3 +970,16 @@ pub let user_questions_answer : Command[
   @protocol.UserQuestionAnswer,
   @protocol.UserQuestionSnapshot,
 ] = Command("user_questions.answer")
+
+///|
+/// Window-only access to this client's credential; never a device broadcast.
+pub let account_session : Command[
+  @protocol.EmptyPayload,
+  @protocol.AccountSessionReply,
+] = Command("account.session")
+
+///|
+pub let remote_access_set : Command[
+  @protocol.RemoteAccessPayload,
+  @protocol.AuthStatusPayload,
+] = Command("remote.access_set")

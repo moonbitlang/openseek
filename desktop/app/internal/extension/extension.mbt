@@ -398,6 +398,9 @@ pub fn openseek_capability(
     WindowEndpoint(@commands.shell_open_external, (_, payload) => {
       open_external(payload, allow_file=true)
     }),
+    WindowEndpoint(@commands.account_session, (_, _) => {
+      session: state.auth_store().account(),
+    }),
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)
     }),

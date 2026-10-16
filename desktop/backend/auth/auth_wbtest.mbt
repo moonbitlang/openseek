@@ -7,12 +7,12 @@
 /// is the only field any of them varies, so it stays an explicit argument.
 fn sample_session(avatar~ : String) -> AuthSession {
   {
-    server_url: "https://relay.example",
-    device_token: "odt_secret",
-    device_id: "d_abc",
-    device_name: "My Mac",
-    user_login: "octocat",
-    user_avatar_url: avatar,
+    server_url: AccountOrigin,
+    account: {
+      token: "ts_secret",
+      user: { user_id: "123", login: "octocat", avatar_url: avatar, },
+    },
+    device: Some({ token: "odt_secret", id: "d_abc", name: "My Mac", }),
   }
 }
 
@@ -38,10 +38,9 @@ test "start url carries every parameter, name percent-encoded" {
       oauth_state="st123",
       challenge="ch456",
       port=49152,
-      name="My Mac (work)",
     ),
     content=(
-      #|https://relay.example/v1/auth/desktop/start?state=st123&code_challenge=ch456&code_challenge_method=S256&port=49152&name=My%20Mac%20%28work%29
+      #|https://relay.example/v2/auth/account/start?state=st123&code_challenge=ch456&code_challenge_method=S256&port=49152
     ),
   )
 }
@@ -77,8 +76,8 @@ test "auth.json codec round-trips and reads corruption as signed out" {
   guard session_from_json(json) is Some(reloaded) else {
     fail("round-trip lost the session")
   }
-  assert_true(reloaded.device_token == "odt_secret")
-  assert_true(reloaded.server_url == "https://relay.example")
+  assert_true(reloaded.account.token == "ts_secret")
+  assert_true(reloaded.server_url == AccountOrigin)
   assert_true(session_from_json(Json::null()) is None)
   assert_true(session_from_json({ "server_url": "x" }) is None)
 }
@@ -89,10 +88,26 @@ async test "auth.json persists 0600 and deletes cleanly" {
   let body = () => {
     let session = sample_session(avatar="")
     save_session_file(dir, session)
+    if !(@async.platform is Windows) {
+      let args = if @async.platform is MacOS {
+        ["-f", "%Lp", auth_file(dir).to_string()]
+      } else {
+        ["-c", "%a", auth_file(dir).to_string()]
+      }
+      let (code, output, _) = @processx.collect_output_no_stdin("stat", args)
+      assert_eq(code, 0)
+      assert_eq(output.text().trim().to_owned(), "600")
+    }
+    let restored = AuthStore::load(runtime_dir=dir)
+    assert_true(restored.account() == Some(session.account))
+    assert_true(
+      restored.desired_connector() is Some({ device_token: "odt_secret", .. }),
+    )
+    assert_true(AuthStore::load().account() is None)
     guard load_session_file(dir) is Some(reloaded) else {
       fail("persisted session did not load")
     }
-    assert_true(reloaded.device_id == "d_abc")
+    assert_true(reloaded.device is Some({ id: "d_abc", .. }))
     delete_session_file(dir)
     assert_true(load_session_file(dir) is None)
   }
@@ -105,7 +120,7 @@ async test "session commit persists before memory and wakes each local transitio
   let session = sample_session(avatar="")
   let store = AuthStore::empty()
   store.commit_session(session)
-  assert_true(store.session_server() is Some("https://relay.example"))
+  assert_true(store.session_server() == Some(AccountOrigin))
   assert_true(store.wakeups().try_get() is Some(_))
   store.connected = true
   store.clear_local_session()
@@ -118,12 +133,8 @@ async test "session commit persists before memory and wakes each local transitio
   let unavailable = root.join("missing")
   let failing = AuthStore::load(runtime_dir=unavailable)
   failing.session = Some({
+    ..sample_session(avatar=""),
     server_url: "https://old.example",
-    device_token: "old_secret",
-    device_id: "d_old",
-    device_name: "Old Mac",
-    user_login: "octocat",
-    user_avatar_url: "",
   })
   failing.connected = true
   try failing.commit_session(session) catch {
@@ -147,7 +158,7 @@ test "store transitions dedup their auth.changed edges" {
   guard store.desired_connector() is Some(config) else {
     fail("signed-in store offered no connector config")
   }
-  assert_true(config.relay_url == "wss://relay.example/v1/tunnel")
+  assert_true(config.relay_url == "wss://openseek-api.moonbitlang.cn/v1/tunnel")
   // Registration flips once; a repeat is not a visible change.
   assert_true(store.mark_registered("d_abc"))
   assert_false(store.mark_registered("d_abc"))
@@ -156,12 +167,12 @@ test "store transitions dedup their auth.changed edges" {
 }
 
 ///|
-async test "a terminal refusal clears a session but only parks an override" {
+async test "a device refusal preserves the account and parks its connector" {
   let store = AuthStore::empty()
   store.session = Some(sample_session(avatar=""))
   store.connected = true
   store.handle_refusal()
-  assert_true(store.session is None)
+  assert_true(store.account() is Some({ token: "ts_secret", .. }))
   assert_false(store.connected)
   assert_true(store.desired_connector() is None)
   let override_store : AuthStore = {
@@ -177,6 +188,8 @@ async test "a terminal refusal clears a session but only parks an override" {
     connected: false,
     override_device: None,
     rejected: false,
+    persist_mutex: Mutex(),
+    remote_generation: 0,
     sign_in_active: false,
     sign_in_abort: Queue(kind=DiscardOldest(1)),
   }
@@ -201,7 +214,7 @@ test "status shapes" {
   store.connected = true
   let status = store.status()
   assert_true(status.connected)
-  assert_eq(status.server_url, Some("https://relay.example"))
+  assert_eq(status.server_url, Some(AccountOrigin))
   assert_eq(
     status.user,
     Some({ login: "octocat", avatar_url: "https://avatars.example/1", }),
@@ -211,7 +224,7 @@ test "status shapes" {
     Some({
       id: "d_abc",
       name: "My Mac",
-      url: "https://relay.example/console/releases/v0.1.16/index.html?device=d_abc",
+      url: "https://openseek-api.moonbitlang.cn/console/releases/v0.1.16/index.html?device=d_abc",
     }),
   )
   // The transport encoding must not accidentally disclose the stored token.
@@ -236,21 +249,12 @@ async test "the loopback listener takes the matching redirect and ignores strays
     let (code, conn) = waiter.wait()
     defer conn.close()
     assert_true(code == "one-time")
-    respond_html(
-      conn,
-      200,
-      "OK",
-      sign_in_done_page(
-        device_url("https://relay.example", "d_abc", app_version="development"),
-      ),
-    )
+    respond_html(conn, 200, "OK", sign_in_done_page())
     let (granted, granted_data) = browser.wait()
     assert_true(granted.code == 200)
     let granted_page = granted_data.text()
-    // Registration supplies the device id before the browser is released.
-    assert_true(
-      granted_page.contains("url=https://relay.example/console/?device=d_abc"),
-    )
+    assert_true(granted_page.contains("Return to SeekMoon"))
+    assert_false(granted_page.contains("?device="))
     // The loopback page is self-contained, but its palette stays on the same
     // semantic contract as the app instead of reviving the retired short names.
     assert_true(granted_page.contains("--color-bg-canvas"))
@@ -268,4 +272,76 @@ test "cancel only lands on a live sign-in" {
   assert_false(store.cancel_sign_in())
   store.sign_in_active = true
   assert_true(store.cancel_sign_in())
+}
+
+///|
+async test "account login has no device permission and rejects old credentials" {
+  let session = { ..sample_session(avatar=""), device: None, }
+  let store = AuthStore::empty()
+  store.commit_session(session)
+  assert_true(store.signed_in())
+  assert_true(store.account() is Some({ user: { user_id: "123", .. }, .. }))
+  assert_true(store.desired_connector() is None)
+  assert_true(store.status().device is None)
+  assert_false(store.status().to_json().stringify().contains("ts_secret"))
+  assert_true(
+    session_from_json({ "version": 1, "device_token": "odt_old" }) is None,
+  )
+  store.expire_account("ts_stale")
+  assert_true(store.signed_in())
+}
+
+///|
+async test "environment relay survives account login and local sign-out without becoming account authority" {
+  let config : ConnectorConfig = {
+    relay_url: "ws://127.0.0.1:8080/v1/tunnel",
+    device_token: "odt_debug",
+    device_name: "Debug",
+  }
+  let store = AuthStore::load(env_override=config)
+  store.mark_registered("debug-device") |> ignore
+  store.commit_session({ ..sample_session(avatar=""), device: None, })
+  assert_true(store.account() is Some({ token: "ts_secret", .. }))
+  assert_true(store.desired_connector() == Some(config))
+  assert_true(store.status().connected)
+  assert_true(store.wakeups().try_get() is None)
+  store.clear_local_session()
+  assert_true(store.account() is None)
+  assert_true(store.desired_connector() == Some(config))
+  assert_true(store.status().connected)
+  assert_true(store.wakeups().try_get() is None)
+}
+
+///|
+async test "account code exchange uses v2 without registering a device" {
+  let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+  defer server.close()
+  let origin = "http://127.0.0.1:\{server.addr.port()}"
+  @async.with_task_group(group => {
+    let receiver = group.spawn(() => {
+      let (connection, _) = server.accept()
+      defer connection.close()
+      let request = connection.read_request()
+      assert_true(request.meth is Post)
+      assert_eq(request.path, "/v2/auth/account/exchange")
+      assert_eq(@json.parse(connection.read_all().text()), {
+        "code": "ac_fixture",
+        "code_verifier": "verifier",
+      })
+      connection.send_response(200, "OK")
+      connection.write_string(
+        "{\"token\":\"ts_fixture\",\"user\":{\"user_id\":\"123\",\"login\":\"octocat\",\"avatar_url\":\"\"}}",
+      )
+      connection.end_response()
+    })
+    let session = exchange_code(
+      server_url=origin + "/",
+      code="ac_fixture",
+      verifier="verifier",
+    )
+    assert_eq(session.server_url, origin)
+    assert_eq(session.account.token, "ts_fixture")
+    assert_true(session.device is None)
+    receiver.wait()
+  })
 }

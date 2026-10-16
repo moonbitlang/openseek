@@ -25,32 +25,28 @@ fn pkce_challenge(verifier : String) -> String {
 }
 
 ///|
-/// The consent-page URL the system browser opens. Every interpolated value
-/// except `name` is locally generated hex; the device name is
-/// percent-encoded.
+/// The canonical account entry; state and S256 challenge are locally generated.
 fn start_url(
   server_url~ : String,
   oauth_state~ : String,
   challenge~ : String,
   port~ : Int32,
-  name~ : String,
 ) -> String {
   let origin = match server_url.strip_suffix("/") {
     Some(origin) => origin
     None => server_url
   }
-  "\{origin}/v1/auth/desktop/start" +
+  "\{origin}/v2/auth/account/start" +
   "?state=\{oauth_state}" +
   "&code_challenge=\{challenge}" +
   "&code_challenge_method=S256" +
-  "&port=\{port}" +
-  "&name=\{@uri.encode_component(name)}"
+  "&port=\{port}"
 }
 
 ///|
 /// What one request to the loopback listener means.
 priv enum Callback {
-  // The consent redirect, state verified: the one-time code.
+  // The account redirect, state verified: the one-time code.
   Granted(String)
   // The browser reported a denial (`error` query parameter).
   Denied(String)

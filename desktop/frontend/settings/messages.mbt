@@ -310,15 +310,15 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (TraditionalChinese, CheckingSignIn) => "正在檢查登入狀態…"
     (Japanese, CheckingSignIn) => "ログイン状態を確認中…"
     (English, EnvironmentRelay) =>
-      "Configured through the environment (OPENSEEK_RELAY_URL); sign-in is disabled."
+      "Managed by the environment (OPENSEEK_RELAY_URL). Signing out does not close this debug connection."
     (Spanish, EnvironmentRelay) =>
-      "Configurado mediante el entorno (OPENSEEK_RELAY_URL); el inicio de sesión está deshabilitado."
+      "Gestionado por el entorno (OPENSEEK_RELAY_URL). Cerrar sesión no cierra esta conexión de depuración."
     (SimplifiedChinese, EnvironmentRelay) =>
-      "已通过环境变量 OPENSEEK_RELAY_URL 配置，登录功能已禁用。"
+      "由环境变量 OPENSEEK_RELAY_URL 管理。退出账号不会关闭此调试连接。"
     (TraditionalChinese, EnvironmentRelay) =>
-      "已透過環境變數 OPENSEEK_RELAY_URL 配置，登入功能已禁用。"
+      "由環境變數 OPENSEEK_RELAY_URL 管理。登出帳號不會關閉此偵錯連線。"
     (Japanese, EnvironmentRelay) =>
-      "環境変数 OPENSEEK_RELAY_URL で設定済みのため、ログインは無効です。"
+      "環境変数 OPENSEEK_RELAY_URL で管理されています。ログアウトしてもこのデバッグ接続は閉じません。"
     (English, OnlineRelay) => "online — reachable from your browser"
     (Spanish, OnlineRelay) => "en línea — accesible desde el navegador"
     (SimplifiedChinese, OnlineRelay) => "在线，可通过浏览器访问"

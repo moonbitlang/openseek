@@ -1680,6 +1680,8 @@ priv struct Model {
   update_ux : UpdateUx
   // The host's relay sign-in mirror (`auth.status` reply / `auth.changed`
   // broadcast), None until the first reply. Desktop-window-only UI.
+  account : @protocol.AccountSession?
+  account_epoch : Int32
   remote_access : RemoteAccess?
   // An `auth.connect` waiting on the user's browser round-trip.
   remote_connecting : Bool
@@ -1688,16 +1690,11 @@ priv struct Model {
 } derive(Eq)
 
 ///|
-/// One `auth.status`/`auth.changed` payload, decoded: who this host is
-/// signed in as and whether its relay registration is live. A mirror of
-/// the wire shape (docs/remote-protocol.md `auth.*`) — signed out is
-/// `user_login: None`.
+/// Presentation of this host's independent remote registration.
+/// The current client account is held separately in `Model.account`.
 priv struct RemoteAccess {
-  server_url : String?
   connected : Bool
   managed_by_env : Bool
-  user_login : String?
-  device_name : String?
   device_url : String?
 } derive(Eq)
 
@@ -1861,13 +1858,14 @@ priv enum Msg {
   CheckForUpdates
   // An `auth.status` reply or `auth.changed` broadcast: the host's relay
   // sign-in state moved.
+  AccountLoaded(Int32, Result[@protocol.AccountSession?, String])
+  DeviceAccountExpired(@interop.ChannelId, Int32, String)
+  RemoteAccessSet(Bool)
   RemoteStatusLoaded(RemoteAccess)
   // The Remote access Connect button; the flow blocks on a browser
   // round-trip, so the section shows an in-progress state until a
   // finished/failed message settles it.
   RemoteConnectClicked
-  RemoteConnectFinished(RemoteAccess)
-  RemoteConnectFailed(String)
   // The Cancel beside a waiting Connect: fires `auth.cancel`; the pending
   // connect settles the section through its own failure reply.
   RemoteCancelClicked
@@ -2865,6 +2863,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     export_dialog: @export_dialog.Model(),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,
+    account: None,
+    account_epoch: 0,
     remote_access: None,
     remote_connecting: false,
     remote_error: None,

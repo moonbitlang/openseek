@@ -8,7 +8,7 @@
 // (`local_console_state`) and never asks the relay anything.
 
 ///|
-/// Who the relay says we are (`/v1/auth/me`).
+/// Who the relay says we are (`/v2/auth/me`), or the local Dev launch session.
 priv enum ConsoleAuth {
   // The check is in flight (or failed — `notice` carries the failure and
   // the gate card offers a retry).
@@ -27,7 +27,7 @@ priv enum RosterSync {
 } derive(Eq)
 
 ///|
-/// One device as `/v1/devices` reports it. Roster metadata stays separate
+/// One device as `/v2/devices` (or the local Dev roster) reports it. Roster metadata stays separate
 /// from `DeviceState`: state exists only for channels this page connected,
 /// while the roster also names offline devices.
 priv struct DeviceMeta {
@@ -46,7 +46,7 @@ priv struct ConsoleState {
   // only to verify and describe its one query-selected device.
   roster : Array[DeviceMeta]
   roster_sync : RosterSync
-  // The newest `/v1/devices` request. Replies carry this generation so a
+  // The newest device-roster request. Replies carry this generation so a
   // slower pre-mutation snapshot cannot overwrite a newer roster.
   roster_request_generation : Int32
   // The required `?device=` from the page's own query. It remains for the
@@ -123,9 +123,11 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
 
 ///|
 /// The same-origin OAuth entry that restores this browser page afterwards.
+/// The local Dev console retains its private launch-cookie login route.
 /// Encoding the complete return target keeps its path and query as one value.
 fn ConsoleState::login_url(self : ConsoleState) -> String {
-  "/v1/auth/login?return_to=\{@uri.encode_component(self.login_return_to)}"
+  let version = if self.page_device == Some("host") { "v1" } else { "v2" }
+  "/\{version}/auth/login?prompt=select_account&return_to=\{@uri.encode_component(self.login_return_to)}"
 }
 
 ///|
@@ -137,7 +139,20 @@ test "browser sign-in returns to the same versioned console URL" {
   )
   assert_eq(
     console.login_url(),
-    "/v1/auth/login?return_to=%2Fconsole%2Freleases%2Fv0.1.16%2Findex.html%3Fdevice%3Dd_abc%26workspace%3D%252Fws%252Fproj",
+    "/v2/auth/login?prompt=select_account&return_to=%2Fconsole%2Freleases%2Fv0.1.16%2Findex.html%3Fdevice%3Dd_abc%26workspace%3D%252Fws%252Fproj",
+  )
+}
+
+///|
+test "local Dev sign-in retains its private v1 launch-cookie route" {
+  let console = empty_console_state(
+    Some("host"),
+    None,
+    login_return_to="/?device=host&token=fixture",
+  )
+  assert_eq(
+    console.login_url(),
+    "/v1/auth/login?prompt=select_account&return_to=%2F%3Fdevice%3Dhost%26token%3Dfixture",
   )
 }
 
@@ -148,14 +163,15 @@ priv enum ConsoleMsg {
   MeLoaded(login~ : String, avatar~ : String)
   MeUnauthorized
   MeFailed(String)
-  // `/v1/devices` settled.
+  // The device roster settled.
   RosterLoaded(Array[DeviceMeta], generation~ : Int32)
+  RosterUnauthorized(generation~ : Int32, token~ : String?)
   RosterFailed(message~ : String, generation~ : Int32)
   // The gate card's retry / the account row's refresh — re-runs the load.
   RefreshClicked
   SignOutClicked
-  SignOutFailed(String)
-  SignOutDone
+  SignOutFailed(String, token~ : String?)
+  SignOutDone(token~ : String?)
 }
 
 ///|
@@ -168,7 +184,11 @@ fn update_console_msg(
     MeLoaded(login~, avatar~) => {
       let generation = model.console.roster_request_generation + 1
       (
-        fetch_console_roster(dispatch, generation),
+        fetch_console_roster(
+          dispatch,
+          generation,
+          token?=model.account.map(account => account.token),
+        ),
         {
           ..model,
           console: {
@@ -181,7 +201,7 @@ fn update_console_msg(
         },
       )
     }
-    MeUnauthorized => console_signed_out(model)
+    MeUnauthorized => console_signed_out(dispatch, model)
     MeFailed(message) =>
       (
         @cmd.none,
@@ -195,6 +215,13 @@ fn update_console_msg(
         return (@cmd.none, model)
       }
       apply_roster(dispatch, model, metas)
+    }
+    RosterUnauthorized(generation~, token~) => {
+      guard generation == model.console.roster_request_generation &&
+        model.account.map(account => account.token) == token else {
+        return (@cmd.none, model)
+      }
+      expire_account(dispatch, model)
     }
     RosterFailed(message~, generation~) => {
       guard model.console.auth is AuthSignedIn(..) &&
@@ -211,7 +238,7 @@ fn update_console_msg(
     }
     RefreshClicked =>
       (
-        fetch_console_me(dispatch),
+        fetch_account(dispatch, false, model.account_epoch),
         {
           ..model,
           console: {
@@ -228,7 +255,10 @@ fn update_console_msg(
         { ..model, console: { ..model.console, busy: true, notice: None, }, },
       )
     }
-    SignOutFailed(message) =>
+    SignOutFailed(message, token~) => {
+      guard token == model.account.map(account => account.token) else {
+        return (@cmd.none, model)
+      }
       (
         @cmd.none,
         {
@@ -236,12 +266,18 @@ fn update_console_msg(
           console: { ..model.console, busy: false, notice: Some(message), },
         },
       )
-    SignOutDone => console_signed_out(model)
+    }
+    SignOutDone(token~) => {
+      guard token == model.account.map(account => account.token) else {
+        return (@cmd.none, model)
+      }
+      console_signed_out(dispatch, model)
+    }
   }
 }
 
 ///|
-/// Fold one `/v1/devices` reply into the model. Only `page_device` may own a
+/// Fold one device-roster reply into the model. Only `page_device` may own a
 /// channel: every other roster entry stays metadata, and a missing, revoked,
 /// or offline target never falls through to another device. A retired target
 /// loses its state here; if the same relay id is later re-added, its fresh
@@ -337,7 +373,7 @@ fn apply_roster(
 
 ///|
 /// Test-only: a browser-console-shaped model, as `initial_model()` builds
-/// in a browser before `/v1/auth/me` answers.
+/// in a browser before `/v2/auth/me` answers.
 fn console_test_model() -> Model {
   {
     ..initial_model(desktop=false),
@@ -755,7 +791,7 @@ test "sign-out tears every channel down and returns to the gate" {
     Console(RosterLoaded(console_test_roster(), generation=1)),
     signed,
   )
-  let (_, out) = update(dispatch, Console(SignOutDone), listed)
+  let (_, out) = update(dispatch, Console(SignOutDone(token=None)), listed)
   assert_true(out.console.auth is AuthSignedOut)
   assert_false(out.console.busy)
   inspect(out.devices.length(), content="0")
@@ -775,12 +811,12 @@ test "a failed sign-out re-enables the account actions" {
   let (_, signing_out) = update(dispatch, Console(SignOutClicked), signed)
   let (_, failed_once) = update(
     dispatch,
-    Console(SignOutFailed("boom")),
+    Console(SignOutFailed("boom", token=None)),
     signing_out,
   )
   let (_, failed_twice) = update(
     dispatch,
-    Console(SignOutFailed("boom")),
+    Console(SignOutFailed("boom", token=None)),
     signing_out,
   )
   assert_false(failed_once.console.busy)
@@ -810,11 +846,23 @@ test "a roster failure reports without leaving the signed-in frame" {
 /// and the account layer returns to the gate card. `booted` stays true —
 /// the page-lifetime watchers survive; a fresh sign-in refocuses and
 /// re-rotates through `apply_roster`.
-fn console_signed_out(model : Model) -> (@cmd.Cmd, Model) {
+fn console_signed_out(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (@cmd.Cmd, Model) {
+  let (retire_command, model) = focus_channel(dispatch, model, Local)
+  let retirements = model.composer_entry_retirements.copy()
+  for conversation in model.conversations {
+    retirements.push({
+      channel: conversation.device,
+      session: conversation.session_id,
+    })
+  }
   (
-    @cmd.none,
+    retire_command,
     {
       ..model,
+      composer_entry_retirements: retirements,
       devices: [],
       focused: @interop.ChannelId::Local,
       active_session: "",
@@ -830,4 +878,160 @@ fn console_signed_out(model : Model) -> (@cmd.Cmd, Model) {
       },
     },
   )
+}
+
+///|
+test "a roster 401 belongs to its request generation and captured account" {
+  let model = {
+    ..console_test_model(),
+    account: Some({
+      token: "ts_B",
+      user: { user_id: "B", login: "bob", avatar_url: "", },
+    }),
+    console: {
+      ..console_test_model().console,
+      auth: AuthSignedIn(login="bob", avatar=""),
+      roster_request_generation: 2,
+    },
+  }
+  for (generation, token) in [(1, "ts_A"), (2, "ts_A"), (1, "ts_B")] {
+    let (_, unchanged) = update(
+      test_dispatch(),
+      Console(RosterUnauthorized(generation~, token=Some(token))),
+      model,
+    )
+    assert_true(unchanged.account == model.account)
+    assert_true(unchanged.console.auth == model.console.auth)
+    assert_true(unchanged.devices == model.devices)
+  }
+  let (_, expired) = update(
+    test_dispatch(),
+    Console(RosterUnauthorized(generation=2, token=Some("ts_B"))),
+    model,
+  )
+  assert_true(expired.account is None)
+  assert_true(expired.console.auth is AuthSignedOut)
+}
+
+///|
+test "account changes retire focused host mirrors before the new roster answers" {
+  let dispatch = test_dispatch()
+  let channel = @interop.ChannelId::Remote("d_on")
+  let root = channel.test_project()
+  let (_, signed) = update(
+    dispatch,
+    Console(MeLoaded(login="alice", avatar="")),
+    console_test_model(),
+  )
+  let (_, listed) = update(
+    dispatch,
+    Console(RosterLoaded(console_test_roster(), generation=1)),
+    signed,
+  )
+  let (_, codex) = @codex.update(
+    @cmd.Emit(_ => @cmd.none),
+    @codex.Msg::start_draft("draft", "/work", draft={
+      task: "old account draft",
+      mentions: [],
+      images: [],
+    }),
+    listed.codex,
+    channel,
+    _ => @cmd.none,
+  )
+  let old = {
+    ..listed,
+    account: Some({
+      token: "ts_A",
+      user: { user_id: "A", login: "alice", avatar_url: "", },
+    }),
+    custom_api_url: "https://old.example/chat",
+    deepseek_key_saved: true,
+    host_settings_revision: 7,
+    installed_skills: [
+      {
+        id: "old",
+        name: "old",
+        description: "",
+        source: "old/source@1.0.0",
+        registry: None,
+      },
+    ],
+    codex,
+    file_panel: {
+      ..listed.file_panel,
+      watching: Some({
+        owner: { channel, session: "s1", },
+        root,
+        files: [],
+        directories: [],
+        recursive: false,
+      }),
+      watch_generation: 3,
+    },
+  }
+  let account : @protocol.AccountSession = {
+    token: "ts_B",
+    user: { user_id: "B", login: "bob", avatar_url: "", },
+  }
+  let (_, pending) = account_loaded(
+    dispatch,
+    old,
+    old.account_epoch,
+    Ok(Some(account)),
+  )
+  assert_true(pending.account == Some(account))
+  assert_true(pending.focused == Local)
+  assert_true(pending.devices.is_empty() && pending.conversations.is_empty())
+  assert_eq(pending.host_settings_revision, -1)
+  assert_eq(pending.custom_api_url, "")
+  assert_false(pending.deepseek_key_saved)
+  assert_true(pending.installed_skills.is_empty())
+  assert_eq(pending.codex.draft_text(), "")
+  assert_true(pending.file_panel.watching is None)
+  assert_eq(pending.file_panel.watch_generation, 4)
+  let (_, failed) = update(
+    dispatch,
+    Console(
+      RosterFailed(
+        message="HTTP 503",
+        generation=pending.console.roster_request_generation,
+      ),
+    ),
+    pending,
+  )
+  assert_true(failed.account == Some(account))
+  assert_eq(failed.host_settings_revision, -1)
+  assert_true(failed.installed_skills.is_empty())
+  assert_true(failed.file_panel.watching is None)
+  // Refreshing the same credential does not discard host configuration.
+  let (_, refreshed) = account_loaded(
+    dispatch,
+    old,
+    old.account_epoch,
+    Ok(old.account),
+  )
+  assert_eq(refreshed.host_settings_revision, 7)
+  assert_eq(refreshed.codex.draft_text(), "old account draft")
+}
+
+///|
+test "a late browser logout result cannot clear a newer account" {
+  let account : @protocol.AccountSession = {
+    token: "ts_B",
+    user: { user_id: "B", login: "bob", avatar_url: "", },
+  }
+  let model = { ..console_test_model(), account: Some(account), }
+  let (_, unchanged) = update(
+    test_dispatch(),
+    Console(SignOutDone(token=Some("ts_A"))),
+    model,
+  )
+  assert_true(unchanged.account == Some(account))
+  let (_, unchanged) = update(
+    test_dispatch(),
+    Console(SignOutFailed("old failure", token=Some("ts_A"))),
+    model,
+  )
+  assert_true(unchanged.console.notice is None)
 }
