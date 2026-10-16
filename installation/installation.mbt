@@ -66,17 +66,6 @@ async fn moonbit_available(
   home : String,
   available : async (String, Array[String]) -> Bool,
 ) -> Bool {
-  // The official installer extracts the binaries before downloading core.
-  // Version commands alone must not mark an interrupted SDK as usable.
-  if available(home + "/.moon/bin/" + executable_name("moon"), ["version"]) {
-    let core = @fs.kind(home + "/.moon/lib/core") catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => return false
-      error => raise error
-    }
-    if core != Directory {
-      return false
-    }
-  }
   for
     (name, args) in [
       ("moon", ["version"]),
@@ -135,7 +124,7 @@ async fn install(
   source_cli : String,
   available~ : async (String, Array[String]) -> Bool,
   toolchain~ : async (String) -> Unit,
-) -> Bool {
+) -> Unit {
   let source = @path.Path(source_cli).dirname().dirname().to_string()
   let root = home + "/.openseek"
   let bin = root + "/bin"
@@ -151,11 +140,9 @@ async fn install(
   let cli_name = executable_name("openseek")
   let rg_name = executable_name("rg")
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
-  let needs_rg = !available(bin + "/" + rg_name, ["--version"]) &&
-    !available("rg", ["--version"])
   let needs_resources = !resources_available(root + "/share")
   // Validate the extracted distribution before changing the user's toolchain.
-  if needs_rg && !available(source + "/bin/" + rg_name, ["--version"]) {
+  if !@fs.exists(source + "/bin/" + rg_name) {
     fail(
       "Extract the complete OpenSeek archive before running setup: missing rg",
     )
@@ -168,20 +155,14 @@ async fn install(
   let needs_moonbit = !moonbit_available(home, available)
   if needs_moonbit {
     toolchain(home + "/.moon")
-    guard moonbit_available(home, available) else {
-      fail("MoonBit installation is not usable")
-    }
   }
-  if needs_rg {
-    copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
-  }
+  copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
   if needs_resources {
     copy_missing(source + "/share", root + "/share")
   }
   if needs_cli {
     copy_file(source_cli, bin + "/" + cli_name, executable=true)
   }
-  !(needs_moonbit || needs_cli || needs_rg || needs_resources)
 }
 
 ///|
@@ -256,18 +237,8 @@ pub async fn setup() -> Unit {
   guard home is Some(home) && @path.Path(home).is_absolute() else {
     fail("HOME (USERPROFILE on Windows) must name an absolute directory")
   }
-  let reused = install(
-    home,
-    @exe.current_exe(),
-    available=usable,
-    toolchain=install_moonbit,
-  )
+  install(home, @exe.current_exe(), available=usable, toolchain=install_moonbit)
   @stdio.stdout.write(
-    (if reused {
-      "Dependencies are ready. "
-    } else {
-      "Installation complete. "
-    }) +
-    "Add \{home}/.moon/bin and \{home}/.openseek/bin to PATH.\n",
+    "Installation complete. Add \{home}/.moon/bin and \{home}/.openseek/bin to PATH.\n",
   )
 }

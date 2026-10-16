@@ -33,10 +33,11 @@ export PATH="$HOME/.openseek/bin:$HOME/.moon/bin:$PATH"
 On Windows, extract `openseek-windows-x64.tar.gz`, run
 `.\openseek-windows-x64\bin\openseek.exe setup`, and add
 `%USERPROFILE%\.openseek\bin` and `%USERPROFILE%\.moon\bin` to PATH.
-Setup copies the CLI/rg and resources into `~/.openseek` and calls the official
-MoonBit installer if the toolchain is missing. Working tools and existing
-resource files are reused. Installing MoonBit needs curl, network access, and
-Bash (Unix) or PowerShell (Windows). Linux binaries require glibc 2.35+.
+Setup installs the bundled rg, copies missing CLI/resource files into
+`~/.openseek`, and calls the official MoonBit installer if the toolchain is
+missing. The installer's exit status determines success. Existing MoonBit
+tools and resource files are reused. Installing MoonBit needs curl, network
+access, and Bash (Unix) or PowerShell (Windows). Linux binaries require glibc 2.35+.
 Git and Codex remain user-installed. Other commands do not require setup.
 
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a

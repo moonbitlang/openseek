@@ -25,7 +25,7 @@ Usage: openseek [options] <command>
 DeepSeek-backed MoonBit coding agent (headless automation CLI).
 
 Commands:
-  setup     Install missing dependencies in ~/.moon and ~/.openseek; reuse available tools.
+  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
   run       Run one task headlessly; print its answer on stdout and its progress on stderr.
   serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
   mcp       List configured MCP servers and the tools they expose.

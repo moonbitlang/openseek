@@ -6,7 +6,6 @@ async fn executable(path : String, text : String) -> Unit {
 ///|
 async fn fixture_toolchain(destination : String) -> Unit {
   @fs.mkdir(destination + "/bin", recursive=true, allow_exist=true)
-  @fs.mkdir(destination + "/lib/core", recursive=true, allow_exist=true)
   for name in ["moon", "moonc", "moonrun", "moonx"] {
     executable(destination + "/bin/" + name, "existing-sdk")
   }
@@ -52,13 +51,11 @@ async test "setup installs missing dependencies and reuses them offline" {
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
   defer @fs.rmdir(home, recursive=true)
   let source_cli = fixture_distribution(home)
-  assert_false(
-    install(
-      home,
-      source_cli,
-      available=isolated_available,
-      toolchain=fixture_toolchain,
-    ),
+  install(
+    home,
+    source_cli,
+    available=isolated_available,
+    toolchain=fixture_toolchain,
   )
   assert_true(usable(home + "/.moon/bin/moon", ["version"]))
   assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
@@ -69,15 +66,17 @@ async test "setup installs missing dependencies and reuses them offline" {
     "fixture license",
   )
   @fs.rmdir(home + "/download", recursive=true)
-  assert_true(
-    install(home, source_cli, available=isolated_available, toolchain=_ => {
-      fail("must not reinstall SDK")
-    }),
+  install(
+    home,
+    home + "/.openseek/bin/openseek",
+    available=isolated_available,
+    toolchain=_ => fail("must not reinstall SDK"),
   )
+  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
 }
 
 ///|
-async test "setup reuses PATH tools and preserves existing resource files" {
+async test "setup reuses PATH MoonBit but installs bundled rg and preserves resources" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return
   }
@@ -89,22 +88,20 @@ async test "setup reuses PATH tools and preserves existing resource files" {
     home + "/.openseek/share/doc/moonbit/index.md",
     "user documentation",
   )
-  assert_false(
-    install(
-      home,
-      source_cli,
-      available=(program, args) => {
-        if ["moon", "moonc", "moonrun", "moonx", "rg"].contains(program) {
-          true
-        } else {
-          isolated_available(program, args)
-        }
-      },
-      toolchain=_ => fail("working SDK must be reused"),
-    ),
+  install(
+    home,
+    source_cli,
+    available=(program, args) => {
+      if ["moon", "moonc", "moonrun", "moonx", "rg"].contains(program) {
+        true
+      } else {
+        isolated_available(program, args)
+      }
+    },
+    toolchain=_ => fail("working SDK must be reused"),
   )
   assert_false(@fs.exists(home + "/.moon"))
-  assert_false(@fs.exists(home + "/.openseek/bin/rg"))
+  assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(
     command(home + "/.openseek/bin/openseek", ["--help"]),
     "bootstrap-cli\n",
@@ -117,7 +114,7 @@ async test "setup reuses PATH tools and preserves existing resource files" {
 }
 
 ///|
-async test "setup repairs only an unusable tool without replacing working dependencies" {
+async test "setup replaces working rg without replacing MoonBit CLI or resources" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return
   }
@@ -127,21 +124,14 @@ async test "setup repairs only an unusable tool without replacing working depend
   fixture_toolchain(home + "/.moon")
   fixture_bundle(home + "/.openseek")
   executable(home + "/.openseek/bin/openseek", "keep-cli")
-  @fs.write_file(
-    home + "/.openseek/bin/rg",
-    "#!/bin/sh\nexit 1\n",
-    permission=0o644,
-  )
+  executable(home + "/.openseek/bin/rg", "old-rg")
   @fs.write_file(home + "/.moon/credentials", "keep")
   @fs.write_file(home + "/.openseek/share/doc/moonbit/index.md", "keep-docs")
-  assert_false(
-    install(home, source_cli, available=isolated_available, toolchain=_ => {
-      fail("SDK must not be replaced")
-    }),
-  )
+  install(home, source_cli, available=isolated_available, toolchain=_ => {
+    fail("SDK must not be replaced")
+  })
   assert_eq(command(home + "/.openseek/bin/rg", ["--version"]), "fixture-rg\n")
   assert_eq(command(home + "/.openseek/bin/openseek", ["--help"]), "keep-cli\n")
-  assert_eq(@fs.kind(home + "/.moon/lib/core"), Directory)
   assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
   assert_eq(
     @fs.read_file(home + "/.openseek/share/doc/moonbit/index.md").text(),
@@ -150,35 +140,33 @@ async test "setup repairs only an unusable tool without replacing working depend
 }
 
 ///|
-async test "failed SDK installation remains retryable without a completion stamp" {
+async test "setup propagates installer failure and trusts successful return" {
   if @env.get_env_var("OS") == Some("Windows_NT") {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
   defer @fs.rmdir(home, recursive=true)
   let source_cli = fixture_distribution(home)
+  let available : async (String, Array[String]) -> Bool = (program, args) => {
+    if program.has_suffix("/openseek") {
+      isolated_available(program, args)
+    } else {
+      false
+    }
+  }
   let error = try {
-    install(home, source_cli, available=isolated_available, toolchain=destination => {
-      fixture_toolchain(destination)
-      @fs.rmdir(destination + "/lib/core", recursive=true)
+    install(home, source_cli, available~, toolchain=destination => {
+      @fs.mkdir(destination, recursive=true)
       @fs.write_file(destination + "/credentials", "keep")
       fail("installer failed")
     })
-    |> ignore
     "accepted"
   } catch {
     error => "\{error}"
   }
   assert_true(error.contains("installer failed"))
-  assert_false(
-    install(
-      home,
-      source_cli,
-      available=isolated_available,
-      toolchain=fixture_toolchain,
-    ),
-  )
-  assert_eq(@fs.kind(home + "/.moon/lib/core"), Directory)
+  install(home, source_cli, available~, toolchain=fixture_toolchain)
+  assert_true(usable(home + "/.openseek/bin/openseek", ["--help"]))
   assert_eq(@fs.read_file(home + "/.moon/credentials").text(), "keep")
 }
 
@@ -191,7 +179,7 @@ async test "concurrent setup checks installed files again after taking the lock"
   defer @fs.rmdir(home, recursive=true)
   let source_cli = fixture_distribution(home)
   let installations = Ref(0)
-  let setup : async () -> Bool = () => {
+  let setup : async () -> Unit = () => {
     install(home, source_cli, available=isolated_available, toolchain=destination => {
       installations.val += 1
       fixture_toolchain(destination)
@@ -200,7 +188,8 @@ async test "concurrent setup checks installed files again after taking the lock"
   @async.with_task_group(group => {
     let first = group.spawn(setup)
     let second = group.spawn(setup)
-    assert_true(first.wait() != second.wait())
+    first.wait()
+    second.wait()
   })
   assert_eq(installations.val, 1)
 }
@@ -218,7 +207,6 @@ async test "an incomplete extracted distribution fails before installing MoonBit
     install(home, source_cli, available=isolated_available, toolchain=_ => {
       fail("must validate the archive before installing MoonBit")
     })
-    |> ignore
     "accepted"
   } catch {
     error => "\{error}"

@@ -75,7 +75,7 @@ pub fn root_command() -> @argparse.Command {
     subcommands=[
       Command(
         "setup",
-        about="Install missing dependencies in ~/.moon and ~/.openseek; reuse available tools.",
+        about="Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.",
       ),
       Command(
         "run",
