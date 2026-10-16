@@ -34,6 +34,10 @@ async test "discovery reads flat files and SKILL.md directories, sorted" {
     // A non-skill directory and a stray file are ignored.
     @fs.mkdir("\{dir}/not-a-skill", recursive=true)
     write_skill("\{dir}/notes.txt", "not markdown")
+    // Disabled entries remain installed, one level below the discovery root.
+    @fs.mkdir("\{dir}/.disabled/hidden", recursive=true)
+    write_skill("\{dir}/.disabled/hidden/SKILL.md", "Disabled directory skill.")
+    write_skill("\{dir}/.disabled/hidden-flat.md", "Disabled flat skill.")
     let skills = @agent_skill.discover_skills(dir)
     assert_eq(skills.length(), 4)
     let prompt = @agent_skill.skills_prompt_section(skills).unwrap()

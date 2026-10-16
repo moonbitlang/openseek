@@ -27,8 +27,6 @@ struct State {
   preview_cache : Map[(@interop.ChannelId, String), String]
   preview_channel : @interop.ChannelId?
   list_scroll_top : Double
-  // UI preview only; the host does not support enabling/disabling skills yet.
-  ui_disabled : Set[(@interop.ChannelId, String)]
 } derive(Eq)
 
 ///|
@@ -40,15 +38,23 @@ priv enum Notice {
 ///|
 priv struct PendingOperation {
   channel : @interop.ChannelId
-  identity : (String, String)
+  identity : PendingTarget
   action : PendingSkillAction
+} derive(Eq)
+
+///|
+/// Installation and enablement are independent operations. Registry actions
+/// follow the package identity; switches follow the installed library entry.
+priv enum PendingTarget {
+  Registry((String, String))
+  LibraryEntry(String)
 } derive(Eq)
 
 ///|
 fn Notice::belongs_to(
   self : Notice,
   channel : @interop.ChannelId,
-  identity : (String, String),
+  identity : PendingTarget,
 ) -> Bool {
   match self {
     SkillActionFailed(operation~, ..) =>
@@ -62,6 +68,7 @@ pub(all) enum PendingSkillAction {
   Installing(source~ : String)
   Uninstalling(source~ : String, id~ : String)
   Updating(source~ : String)
+  SettingEnabled(source~ : String, id~ : String, enabled~ : Bool)
 } derive(Eq)
 
 ///|
@@ -70,7 +77,10 @@ pub extend PendingSkillAction with Eq::{equal, not_equal}
 ///|
 fn PendingSkillAction::source(self : PendingSkillAction) -> String {
   match self {
-    Installing(source~) | Uninstalling(source~, ..) | Updating(source~) =>
+    Installing(source~)
+    | Uninstalling(source~, ..)
+    | Updating(source~)
+    | SettingEnabled(source~, ..) =>
       source
   }
 }
@@ -82,7 +92,8 @@ fn State::pending_action(
   identity : (String, String),
 ) -> PendingSkillAction? {
   for operation in self.busy {
-    guard operation.channel == channel && operation.identity == identity else {
+    guard operation.channel == channel &&
+      operation.identity == PendingTarget::Registry(identity) else {
       continue
     }
     return Some(operation.action)
@@ -91,23 +102,28 @@ fn State::pending_action(
 }
 
 ///|
-fn State::skill_enabled(
+fn State::pending_enabled(
   self : State,
   channel : @interop.ChannelId,
   id : String,
 ) -> Bool {
-  !self.ui_disabled.contains((channel, id))
+  self.busy.iter().any(operation => {
+    operation.channel == channel &&
+    operation.identity == PendingTarget::LibraryEntry(id)
+  })
 }
 
 ///|
 fn State::start_action(
   self : State,
   channel : @interop.ChannelId,
-  identity : (String, String),
+  identity : PendingTarget,
   action : PendingSkillAction,
   cmd : @cmd.Cmd,
 ) -> (@cmd.Cmd, State, Outcome?) {
-  guard self.pending_action(channel, identity) is None else {
+  guard !self.busy.iter().any(operation => {
+    operation.channel == channel && operation.identity == identity
+  }) else {
     return (@cmd.none, self, None)
   }
   let busy = self.busy.copy()
@@ -166,7 +182,6 @@ pub fn State::empty() -> State {
     preview_cache: Map([]),
     preview_channel: None,
     list_scroll_top: 0.0,
-    ui_disabled: Set([]),
   }
 }
 
@@ -427,14 +442,21 @@ pub fn State::handle(
       (@cmd.none, { ..self, catalog: Failed(message), }, None)
     }
     ToggleEnabled(id) => {
-      let ui_disabled = self.ui_disabled.copy()
-      let key = (input.channel, id)
-      if ui_disabled.contains(key) {
-        ui_disabled.remove(key)
-      } else {
-        ui_disabled.add(key)
+      guard input.installed.iter().find_first(item => item.id == id)
+        is Some(item) else {
+        return (@cmd.none, self, None)
       }
-      (@cmd.none, { ..self, ui_disabled, }, None)
+      let action = SettingEnabled(
+        source=if item.source.is_empty() { item.name } else { item.source },
+        id~,
+        enabled=!item.enabled,
+      )
+      self.start_action(
+        input.channel,
+        PendingTarget::LibraryEntry(id),
+        action,
+        set_enabled(emit, input.channel, item, action),
+      )
     }
     Install(item) | Update(item) => {
       let source = source_label(item)
@@ -444,7 +466,7 @@ pub fn State::handle(
       }
       self.start_action(
         input.channel,
-        item.identity(),
+        PendingTarget::Registry(item.identity()),
         action,
         install(emit, input.channel, item, action),
       )
@@ -455,7 +477,7 @@ pub fn State::handle(
       }
       self.start_action(
         input.channel,
-        identity,
+        PendingTarget::Registry(identity),
         Uninstalling(source=item.source, id=item.id),
         uninstall(emit, input.channel, item),
       )

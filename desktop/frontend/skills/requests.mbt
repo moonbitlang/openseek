@@ -225,3 +225,39 @@ fn uninstall(
     |> ignore
   })
 }
+
+///|
+fn set_enabled(
+  emit : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  item : InstalledItem,
+  action : PendingSkillAction,
+) -> @cmd.Cmd {
+  @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let reply = @interop.bridge_request(channel, @commands.skills_set_enabled, {
+        id: item.id,
+        enabled: !item.enabled,
+      }) catch {
+        error => {
+          scheduler.add(
+            emit(
+              ActionDone(
+                channel~,
+                action~,
+                error=Some(@interop.bridge_error_text(error)),
+              ),
+            ),
+          )
+          return
+        }
+      }
+      let error = match reply {
+        SkillEnabledSet => None
+        SkillEnabledError(message) => Some(message)
+      }
+      scheduler.add(emit(ActionDone(channel~, action~, error~)))
+    })
+    |> ignore
+  })
+}

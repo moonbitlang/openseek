@@ -64,6 +64,7 @@ export class DesktopBrowserHarness {
         name: 'MoonBit',
         description: 'Authoritative MoonBit guidance',
         source: '',
+        enabled: true,
       },
     ];
     this.codexRequiresAuth = false;
@@ -657,6 +658,7 @@ export class DesktopBrowserHarness {
           description: 'Elm-style browser UI',
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
           registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita' },
+          enabled: true,
         };
         if (!this.installedSkills.some(skill => skill.id === installed.id)) {
           this.installedSkills.push(installed);
@@ -668,6 +670,12 @@ export class DesktopBrowserHarness {
           skill => skill.id !== request.params?.id,
         );
         return { removed: true };
+      case 'skills.set_enabled': {
+        const skill = this.installedSkills.find(skill => skill.id === request.params.id);
+        if (!skill) return { error: 'Skill is no longer installed' };
+        skill.enabled = request.params.enabled;
+        return { ok: true };
+      }
       case 'agent.start':
         return { run_id: 'run-e2e', status: 'accepted', exit_code: 0 };
       case 'agent.queue':

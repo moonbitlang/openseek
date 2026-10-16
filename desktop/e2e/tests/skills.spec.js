@@ -9,6 +9,7 @@ const installed = {
   id: 'yoorkin-wayfinder', name: 'wayfinder', description: market.description,
   source: 'Yoorkin/wayfinder@0.1.0',
   registry: { module_name: 'Yoorkin/wayfinder', package_path: '' },
+  enabled: true,
 };
 
 class SkillsHarness extends DesktopBrowserHarness {
@@ -24,9 +25,16 @@ class SkillsHarness extends DesktopBrowserHarness {
       case 'skills.content':
       case 'skills.installed_content':
         return { kind: 'content', content: '# Wayfinder\n\nPlan uncertain work.', absolute: '', sig: '' };
-      case 'skills.install':
-        this.installedSkills = [structuredClone(installed)];
-        return { installed };
+      case 'skills.install': {
+        const previous = this.installedSkills.find(skill => skill.id === installed.id);
+        const updated = {
+          ...structuredClone(installed),
+          source: `${request.params.module_name}@${request.params.version}`,
+          enabled: previous?.enabled ?? true,
+        };
+        this.installedSkills = [updated];
+        return { installed: updated };
+      }
       case 'skills.uninstall':
         if (request.params.id !== installed.id) throw new Error('Wrong library id');
         this.installedSkills = [];
@@ -260,6 +268,74 @@ for (const removing of [false, true]) {
     await back.click();
     await expect(page.locator('.skills-notice')).toHaveCount(1);
     await expect(page.locator('.skills-notice')).toContainText('Widget install failed');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+test('skill enablement comes from the host and survives list/detail navigation and reload', async ({ page }) => {
+  const app = new SkillsHarness(page, true);
+  await app.openDetails();
+  const toggle = page.getByRole('switch');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
+    .toEqual([{ id: installed.id, enabled: false }]);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await page.reload();
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  expect(app.installedSkills[0].enabled).toBe(true);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a failed handwritten skill move preserves its state and can be retried', async ({ page }) => {
+  const app = new SkillsHarness(page, true);
+  app.installedSkills[0] = { ...installed, id: 'My notes', source: '', registry: undefined };
+  app.rpcErrors.set('skills.set_enabled', 'Cannot move skill: permission denied');
+  await app.openDetails();
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
+  const toggle = page.getByRole('switch');
+  await toggle.click();
+  await expect(page.locator('.skill-detail-page .skills-notice')).toHaveText('Cannot move skill: permission denied');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(toggle).toBeEnabled();
+  app.rpcErrors.delete('skills.set_enabled');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('.skill-detail-page .skills-notice')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+for (const enabled of [true, false]) {
+  test(`enablement remains independent while updating an initially ${enabled ? 'enabled' : 'disabled'} skill`, async ({ page }) => {
+    const app = new SkillsHarness(page, true);
+    app.installedSkills[0].enabled = enabled;
+    app.catalogSkills[0].version = '0.1.1';
+    const replyFor = app.replyFor.bind(app);
+    let release;
+    const update = new Promise(resolve => { release = resolve; });
+    app.replyFor = request => request.method === 'skills.install'
+      ? update.then(() => replyFor(request))
+      : replyFor(request);
+    await app.openDetails();
+    await page.getByRole('button', { name: 'Manage skill', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Update to 0.1.1', exact: true }).click();
+    const management = page.locator('.skill-detail-action');
+    await expect(management).toBeDisabled();
+    const toggle = page.getByRole('switch');
+    await expect(toggle).toBeEnabled();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', String(!enabled));
+    await expect(management).toBeDisabled();
+    release();
+    await expect(management).toBeEnabled();
+    await expect(page.locator('.skill-detail-meta')).toHaveText('Yoorkin/wayfinder@0.1.1');
+    await expect(toggle).toHaveAttribute('aria-checked', String(!enabled));
+    expect(app.installedSkills[0].enabled).toBe(!enabled);
     expect(app.pageErrors).toEqual([]);
   });
 }

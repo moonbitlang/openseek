@@ -18,11 +18,15 @@ fn notice_views(
         guard target is Some(target) else {
           "\{operation.action.source()}: \{message}"
         }
-        let identity = match target {
-          Market(item) => Some(item.identity())
-          Installed(item) => item.identity()
+        let belongs = match operation.identity {
+          Registry(identity) =>
+            match target {
+              Market(item) => item.identity() == identity
+              Installed(item) => item.identity() == Some(identity)
+            }
+          LibraryEntry(id) => target is Installed(item) && item.id == id
         }
-        guard identity == Some(operation.identity) else { continue }
+        guard belongs else { continue }
         message
       }
     }
@@ -37,14 +41,15 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
     Installing(..) => Installing
     Uninstalling(..) => Removing
     Updating(..) => Updating
+    SettingEnabled(enabled~, ..) => if enabled { Enabled } else { Disabled }
   }
 }
 
 ///|
 /// One local-library row: name, description, and — for registry installs
 /// only — the source tag and management menu. Hand-written skills are
-/// listed so the user sees everything the engine advertises, but the app
-/// never offers to delete them.
+/// listed alongside registry installs, including disabled entries, but the
+/// app never offers to delete them.
 fn installed_row(
   locale~ : @i18n.Locale = English,
   state : State,
@@ -504,13 +509,14 @@ fn installed_actions(
   emit : @cmd.Emit[Msg],
   button_class : String,
 ) -> @html.Html {
-  let enabled = state.skill_enabled(channel, item.id)
+  let enabled = item.enabled
   let label = ui(locale, if enabled { Enabled } else { Disabled })
   let buttons : Array[@html.Html] = [
     @html.button(
       class="skill-enable-switch",
       type_="button",
       title=label,
+      disabled=state.pending_enabled(channel, item.id),
       on_click=emit(ToggleEnabled(item.id)),
       attrs=@html.Attrs::build()
         .role("switch")

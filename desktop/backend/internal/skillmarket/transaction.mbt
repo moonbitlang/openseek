@@ -14,6 +14,9 @@ const BackupDirectory = ".backup"
 const TrashDirectory = ".trash"
 
 ///|
+const DisabledDirectory = ".disabled"
+
+///|
 /// One process-wide boundary for every view of the skills directory. Writers
 /// hold it while recovering leftovers, staging, and switching the live entry;
 /// readers hold it through their complete directory snapshot, so no client can
@@ -25,6 +28,45 @@ let library_lock : @async.Mutex = Mutex()
 /// themselves encode state; no separate transaction record is needed.
 priv struct SkillLibrary {
   root : @pathx.Path
+}
+
+///|
+priv struct SkillLocation {
+  library : SkillLibrary
+  enabled : Bool
+}
+
+///|
+fn SkillLibrary::disabled(self : SkillLibrary) -> SkillLibrary {
+  { root: self.root.join(DisabledDirectory), }
+}
+
+///|
+async fn SkillLibrary::contains(self : SkillLibrary, id : String) -> Bool {
+  @fsx.exists(self.target(id)) || @fsx.exists(self.root.join("\{id}.md"))
+}
+
+///|
+/// Resolve an entry at commit time: an enable/disable request may have moved
+/// it while an update was downloading. New installs default to enabled.
+async fn SkillLibrary::locate(self : SkillLibrary, id : String) -> SkillLocation {
+  let disabled = self.disabled()
+  let enabled_exists = self.contains(id)
+  let disabled_exists = disabled.contains(id)
+  guard !(enabled_exists && disabled_exists) else {
+    raise SkillMarketError("skill \{id} exists in both enabled and disabled libraries")
+  }
+  if disabled_exists {
+    { library: disabled, enabled: false, }
+  } else {
+    { library: self, enabled: true, }
+  }
+}
+
+///|
+async fn SkillLibrary::recover_all(self : SkillLibrary) -> Unit {
+  self.recover()
+  self.disabled().recover()
 }
 
 ///|

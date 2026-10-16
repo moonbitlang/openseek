@@ -16,6 +16,8 @@ pub async fn installed_skills(library_dir? : @pathx.Path) -> Array[InstalledSkil
 
 pub async fn read_skill_content(String, library_dir? : @pathx.Path) -> String
 
+pub async fn set_skill_enabled(String, enabled~ : Bool, library_dir? : @pathx.Path, on_committed? : () -> Unit) -> Unit
+
 pub async fn uninstall_skill(String, library_dir? : @pathx.Path, on_committed? : () -> Unit) -> Unit
 
 // Errors
@@ -30,6 +32,7 @@ pub struct InstalledSkill {
   description : String
   source : String
   registry : RegistrySkillIdentity?
+  enabled : Bool
 }
 
 pub struct MarketSkill {
