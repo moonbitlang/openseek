@@ -189,7 +189,7 @@ async fn cancel_running_semantic_search(
 ///|
 async fn SemanticSearchService::run(
   self : SemanticSearchService,
-  emit : async (@protocol.Notification) -> Unit,
+  emit : async (@protocol.HostNotification) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
     let running : Map[String, RunningSemanticSearch] = Map([])
@@ -582,7 +582,7 @@ fn bounded_semantic_error_message(message : String) -> String {
 /// fail the search: progress stops silently and the client still receives
 /// everything in `SearchSemanticReply`.
 async fn publish_semantic_progress(
-  emit : async (@protocol.Notification) -> Unit,
+  emit : async (@protocol.HostNotification) -> Unit,
   root : String,
   session_key : String,
   generation : Int32,
@@ -613,7 +613,7 @@ async fn run_semantic_search(
   command : SemanticProvider?,
   root : @pathx.Absolute,
   payload : SearchSemanticPayload,
-  emit : async (@protocol.Notification) -> Unit,
+  emit : async (@protocol.HostNotification) -> Unit,
 ) -> SearchSemanticReply {
   let reply_root = root.resource_path()
   let native_root = root.to_string()

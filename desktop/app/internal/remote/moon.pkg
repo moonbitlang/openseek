@@ -1,0 +1,22 @@
+import {
+  "openseek_desktop/backend/remote" @transport,
+  "openseek_desktop/app/internal/api",
+  "openseek_desktop/backend/auth",
+  "openseek_desktop/backend/entropy",
+  "openseek_desktop/app/internal/host",
+  "openseek_desktop/backend/platform",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/tunnel",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/encoding/utf8",
+  "tonyfettes/xlog",
+}
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native"

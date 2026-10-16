@@ -82,6 +82,23 @@ async test "Codex home failure prevents spawning and can recover on a later requ
 }
 
 ///|
+async test "remote configuration requires and prepares the actor's isolated home" {
+  let root = @fs.tmpdir(prefix="codex-config-home-")
+  defer @fs.rmdir(root, recursive=true)
+  let actor = @codex.Actor(
+    CodexSettings(command="unused", home=Some(Path(root + "/isolated"))),
+  )
+  assert_eq(actor.prepare_config_home().to_string(), root + "/isolated")
+  assert_true(@fs.kind(root + "/isolated") is Directory)
+  let inherited = @codex.Actor(CodexSettings(command="unused", home=None))
+  try inherited.prepare_config_home() catch {
+    error => assert_true(error.to_string().contains("no isolated Codex home"))
+  } noraise {
+    _ => fail("inherited home must not be used")
+  }
+}
+
+///|
 async test "Desktop requires an isolated home instead of inheriting one" {
   @async.with_timeout(5000, () => {
     @async.with_task_group(group => {

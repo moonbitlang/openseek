@@ -1,6 +1,12 @@
 import {
   "moonbitlang/core/debug",
-  "openseek_desktop/backend/auth",
+  "openseek_desktop/backend/internal/log" @xlog,
+  "moonbitlang/core/encoding/utf8",
+  "openseek_desktop/backend/internal/lifecycle",
+  "openseek_desktop/backend/remote" @transport,
+  "openseek_desktop/backend/runtime",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
   "openseek_desktop/backend/broadcast",
   "openseek_desktop/commands",
   "openseek_desktop/backend/codex",
@@ -9,7 +15,6 @@ import {
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/internal/session_messages",
-  "openseek_desktop/backend/internal/shares",
   "openseek_desktop/backend/internal/user_questions",
   "openseek_desktop/backend/internal/session_catalog",
   "openseek_desktop/backend/pathx",
@@ -19,20 +24,17 @@ import {
   "openseek_desktop/backend/internal/worktree",
   "moonbitlang/async",
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
 }
 
 import {
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/async/fs",
-  "moonbitlang/async/http",
-  "moonbitlang/async/socket",
 } for "wbtest"
+
+warnings = "-missing_doc-unused_default_value-unused_optional_argument+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+
+supported_targets = "+native+wasm"
 
 import {
   "moonbitlang/async/fs",
 } for "test"
-
-warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
-
-supported_targets = "+native"

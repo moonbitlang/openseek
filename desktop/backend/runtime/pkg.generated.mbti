@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/runtime"
+
+import {
+  "moonbitlang/async",
+}
+
+// Values
+
+// Errors
+pub suberror UnsupportedRuntime {
+  UnsupportedRuntime(String)
+}
+
+// Types and methods
+pub(all) struct HostRuntime {
+  spawn_pty : async (@async.TaskGroup[Unit], String, Array[String], String, Int, Int) -> Pty
+}
+pub fn HostRuntime::without_terminal() -> Self
+
+pub(all) struct Pty {
+  pid : Int
+  read : async (FixedArray[Byte]) -> Int
+  write : async (Bytes) -> Unit
+  resize : (Int, Int) -> Unit raise
+  wait : async () -> Int
+}
+
+// Type aliases
+
+// Traits

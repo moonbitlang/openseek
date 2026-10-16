@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/shares"
+
+import {
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn publish(title~ : String, @engine.ConversationExport, server_url~ : String, token~ : String, timeout_ms? : Int, on_progress? : async (@protocol.ShareProgress) -> Unit) -> @protocol.SessionShareReply
+
+pub async fn publish_content(title~ : String, @protocol.SessionExportContent, server_url~ : String, token~ : String, timeout_ms? : Int, on_progress? : async (@protocol.ShareProgress) -> Unit) -> @protocol.SessionShareReply
+
+// Errors
+pub(all) suberror ShareError {
+  EmptyTitle
+}
+pub fn ShareError::output(Self, &Logger) -> Unit
+pub fn ShareError::to_string(Self) -> String
+pub impl Show for ShareError
+
+// Types and methods
+
+// Type aliases
+
+// Traits

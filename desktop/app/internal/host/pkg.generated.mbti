@@ -1,0 +1,65 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/app/internal/host"
+
+import {
+  "moonbitlang/async",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/backend/resources",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn app_bundle_path(String) -> String?
+
+pub async fn chat_workspace_root() -> @protocol.ChatWorkspaceRoot
+
+pub fn endpoints(HostState, HostConnection, @engine.EngineManager, () -> Unit) -> Array[@endpoint.Endpoint]
+
+pub async fn frontend_entry_path(@resources.Resources) -> String
+
+pub fn new_host_state(String, runtime_dir? : @pathx.Path, executable? : String, app_version? : String) -> HostState
+
+pub async fn open_codex_config(@pathx.Path?) -> Unit
+
+pub async fn open_path_preview(@protocol.OpenPathPayload) -> @protocol.OpenPathReply
+
+pub async fn prepared_runtime_dir(String) -> @pathx.Path?
+
+pub async fn read_github_drafts(String?, @protocol.GithubDraftsKey) -> @protocol.GithubDrafts
+
+pub async fn resources(@resources.Resources) -> @openseek_desktop/backend/host.HostResources
+
+pub fn[G] spawn_host_pumps(@async.TaskGroup[G], HostState, async (@protocol.Notification) -> Unit) -> Unit
+
+pub async fn ssh_installer_bootstrap(@resources.Resources) -> String
+
+pub fn viz_assets(@resources.Resources?) -> @openseek_desktop/backend/host.VizAssets raise
+
+pub async fn write_github_drafts(String?, @protocol.GithubDrafts) -> @protocol.EmptyReply
+
+// Errors
+
+// Types and methods
+type HostConnection
+pub fn HostConnection::HostConnection() -> Self
+pub fn HostConnection::close_terminals(Self) -> Unit
+pub fn HostConnection::from_shared(@openseek_desktop/backend/host.HostConnection) -> Self
+pub async fn HostConnection::run(Self, async (@protocol.Notification) -> Unit, async (@protocol.Notification) -> Unit) -> Unit
+pub fn HostConnection::shared(Self) -> @openseek_desktop/backend/host.HostConnection
+
+type HostState
+
+type PackagedTools
+pub fn PackagedTools::apply_to_process_env(Self) -> Unit
+pub async fn PackagedTools::resolve(@resources.Resources?) -> Self?
+
+// Type aliases
+pub using @openseek_desktop/backend/host {type HostError}
+
+pub using @openseek_desktop/backend/host {type PayloadError}
+
+pub using @openseek_desktop/backend/host {type VizAssets}
+
+// Traits

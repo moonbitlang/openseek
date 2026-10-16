@@ -1,28 +1,24 @@
 import {
-  "moonbitlang/openseek_protocol" @wire,
-  "openseek_desktop/backend/api",
-  "openseek_desktop/backend/auth",
-  "openseek_desktop/backend/broadcast",
-  "openseek_desktop/backend/engine",
-  "openseek_desktop/backend/endpoint",
-  "openseek_desktop/backend/entropy",
-  "openseek_desktop/backend/host",
-  "openseek_desktop/backend/platform",
-  "openseek_desktop/protocol",
-  "openseek_desktop/backend/tunnel",
-  "moonbitlang/async",
-  "moonbitlang/async/fs",
-  "moonbitlang/async/http",
+  "openseek_desktop/backend/internal/lifecycle",
+  "moonbitlang/openseek_protocol/host_control",
   "moonbitlang/async/io",
-  "moonbitlang/async/os_error",
-  "moonbitlang/async/semaphore",
-  "moonbitlang/async/socket",
-  "moonbitlang/async/websocket",
   "moonbitlang/core/encoding/utf8",
+  "openseek_desktop/backend/broadcast",
+  "openseek_desktop/backend/host",
+  "openseek_desktop/backend/engine",
+  "openseek_desktop/protocol",
+  "moonbitlang/openseek_protocol" @wire,
+  "moonbitlang/async",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/async/websocket",
   "moonbitlang/core/json",
-  "tonyfettes/xlog",
 }
 
-warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+warnings = "-missing_doc-unused_default_value-unused_optional_argument+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
-supported_targets = "+native"
+supported_targets = "+native+wasm"
+
+import {
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
+} for "wbtest"

@@ -2,7 +2,13 @@
 // Only Documents is consulted today.
 
 ///|
-extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_dir"
+let windows_documents : Ref[(() -> @pathx.Path?)?] = Ref(None)
+
+///|
+/// Install the native platform authority before creating workspaces.
+pub fn install_windows_documents(provider : () -> @pathx.Path?) -> Unit {
+  windows_documents.val = Some(provider)
+}
 
 ///|
 /// The user's Documents folder — where it is supposed to be, not whether it
@@ -16,9 +22,10 @@ extern "C" fn known_folder_documents() -> Bytes = "openseek_desktop_documents_di
 /// Windows, where the native stub returns empty bytes.
 pub async fn documents_dir() -> @pathx.Path? {
   if @async.platform is Windows {
-    let path = known_folder_documents()
-    guard path.length() > 0 else { return None }
-    Some(@utf8.decode_lossy(path))
+    match windows_documents.val {
+      Some(provider) => provider()
+      None => None
+    }
   } else {
     guard @home.dir() is Some(home) else { return None }
     if xdg_documents_override(home) is Some(dir) {

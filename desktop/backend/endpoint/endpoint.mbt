@@ -1,22 +1,20 @@
 // Type erasure happens here, after a concrete Command[Payload, Reply] has
 // been paired with a handler of exactly Payload -> Reply. The retained
-// closure speaks JSON, so every transport — the desktop window's Proton
-// bridge, remote JSON-RPC, the loopback console — consumes the same endpoint
-// list, and this package names no transport. A payload that does not decode
+// invoker lets every transport consume the same endpoint list. A payload that does not decode
 // raises the decoder's own error, which the JSON-RPC transport maps to its
 // invalid-params code.
 
 ///|
-/// A command after its payload and reply types have been safely paired. The
-/// generic types remain captured inside `invoke`; users of the registry only
-/// need the stable name.
+/// A host command after its payload and reply types have been safely
+/// paired. The generic types remain captured inside `invoke`;
+/// users of the registry only need the stable name.
 priv enum Invoker {
   Async(async (Json) -> Json)
   Sync((Json) -> Json raise)
 }
 
 ///|
-/// A command every client may issue, invoked by name with a JSON payload.
+/// A command invoked by name after transport authentication.
 struct Endpoint {
   name : String
   invoke : Invoker

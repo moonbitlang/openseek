@@ -8,6 +8,8 @@ import {
 // Values
 pub async fn documents_dir() -> @pathx.Path?
 
+pub fn install_windows_documents(() -> @pathx.Path?) -> Unit
+
 // Errors
 
 // Types and methods

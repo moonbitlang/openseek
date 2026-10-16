@@ -177,6 +177,7 @@ async fn[G] Schedules::run_cli(
         None => None
       },
     )
+    let journal_record = @journal.before("schedule.spawn", subject=run.id)
     let process = @process.spawn(
       group,
       config.engine,
@@ -192,6 +193,7 @@ async fn[G] Schedules::run_cli(
       // Leave time for their kill/reap barriers before killing the CLI.
       cancel_handler=@process.graceful_cancel(timeout=10000),
     )
+    @journal.spawned(journal_record, process.pid)
     self.processes[run.id] = process
     if self.stopped.contains(run.id) {
       process.cancel()

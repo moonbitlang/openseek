@@ -36,10 +36,13 @@ type Actor
 pub fn Actor::Actor(CodexSettings) -> Self
 pub async fn Actor::call(Self, method_~ : String, params~ : Json) -> Json
 pub fn Actor::config_home(Self) -> @pathx.Path?
+pub fn Actor::has_active_work(Self) -> Bool
+pub async fn Actor::prepare_config_home(Self) -> @pathx.Path
 pub async fn Actor::requests(Self) -> Json
 pub async fn Actor::respond(Self, request_id~ : Json, response_token~ : String, result~ : Json) -> Json
 pub async fn Actor::run(Self, (String, Json) -> Unit) -> Unit
 pub fn Actor::status(Self) -> Json
+pub async fn Actor::terminal_login_command(Self) -> (String, Bool)
 
 pub struct CodexSettings {
   command : String

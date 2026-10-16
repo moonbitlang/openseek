@@ -197,6 +197,9 @@ const WorkspaceDirName = "OpenSeek"
 /// inspected is not a missing one: it raises rather than quietly moving the
 /// default workspace to a second location.
 async fn default_workspace_dir() -> @pathx.Path? {
+  if headless_store.val is Some(root) {
+    return Some(root.join("workspace").to_path())
+  }
   guard @home.dir() is Some(home) else { return None }
   let parent : @pathx.Path = if @userdirs.documents_dir() is Some(documents) &&
     inspected_is_dir(documents) {

@@ -1,0 +1,36 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/log"
+
+// Values
+#callsite(autofill(loc))
+pub fn debug(category? : String, loc~ : SourceLoc) -> Event?
+
+#callsite(autofill(loc))
+pub fn error(category? : String, loc~ : SourceLoc) -> Event?
+
+#callsite(autofill(loc))
+pub fn info(category? : String, loc~ : SourceLoc) -> Event?
+
+pub fn install((Level, String?, SourceLoc, Json) -> Unit) -> Unit
+
+#callsite(autofill(loc))
+pub fn warn(category? : String, loc~ : SourceLoc) -> Event?
+
+// Errors
+
+// Types and methods
+type Event
+pub fn Event::write_object_begin(Self) -> Unit
+pub fn Event::write_object_end(Self) -> Unit
+pub fn[T : ToJson] Event::write_object_field(Self, String, T) -> Unit
+
+pub(all) enum Level {
+  Debug
+  Info
+  Warn
+  Error
+}
+
+// Type aliases
+
+// Traits

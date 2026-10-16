@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/app/internal/terminal"
+
+// Values
+pub fn ack_terminal(@openseek_desktop/backend/terminal.TerminalState, id~ : String, sequence~ : Int) -> Unit
+
+pub fn close_all_terminals(@openseek_desktop/backend/terminal.TerminalState) -> Unit
+
+pub fn close_terminal(@openseek_desktop/backend/terminal.TerminalState, id~ : String) -> Unit
+
+pub fn new_terminal_state() -> @openseek_desktop/backend/terminal.TerminalState
+
+pub async fn open_terminal(@openseek_desktop/backend/terminal.TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
+
+pub fn resize_terminal(@openseek_desktop/backend/terminal.TerminalState, id~ : String, cols~ : Int, rows~ : Int) -> Unit raise
+
+pub async fn run_terminal_pump(@openseek_desktop/backend/terminal.TerminalState, async (@openseek_desktop/backend/terminal.TerminalPush) -> Unit) -> Unit
+
+pub async fn write_terminal(@openseek_desktop/backend/terminal.TerminalState, id~ : String, Bytes) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @openseek_desktop/backend/terminal {type TerminalError}
+
+pub using @openseek_desktop/backend/terminal {type TerminalPush}
+
+pub using @openseek_desktop/backend/terminal {type TerminalState}
+
+// Traits

@@ -1,7 +1,5 @@
-// The native endpoint catalog behind both Desktop transports. Each entry
-// pairs one typed command descriptor with its typed operation once; Proton
-// binds the captured types directly, while remote JSON-RPC invokes the JSON
-// closure retained by the same endpoint.
+// The working-host endpoint catalog shared by embedded desktop and headless
+// transports. Each typed command is paired with one business handler here.
 
 ///|
 /// Everything the methods operate on: the app-lifetime engine actor and its
@@ -10,7 +8,7 @@
 /// process; each transport connection supplies its own `HostConnection` when
 /// dispatching filesystem watch methods.
 struct ApiState {
-  // One Codex app-server process for this Desktop process. It is independent
+  // One Codex app-server process for this working host. It is independent
   // of the OpenSeek engine actor and owns Codex account/thread state through
   // Codex's own data directory.
   codex : @codex.Actor
@@ -27,17 +25,11 @@ struct ApiState {
   manager : @engine.EngineManager
   host : @host.HostState
   hub : Hub
-  // The host's relay sign-in state, shared with the relay actor.
-  auth : @auth.AuthStore
-  // Installed package version read from Proton's generated package manifest.
-  app_version : String
-  // A development build's console entry URL (`internal/remote` serves the
-  // frontend on loopback for the system browser); a release build has none.
-  console_url : String?
-  // The server through which the agents this backend runs call tools their
-  // host contributes; none when the host offers no tools. The engine actor
-  // grants every engine it starts access to it, and `start_services` serves
-  // it.
+  config : HostConfig
+  runtime : @runtime.HostRuntime
+  admission : @lifecycle.Admission
+  upgrade_activity : Map[Int32, () -> Bool]
+  mut next_connection : Int32
   host_mcp : @mcp.Server?
   questions : @user_questions.Service
   messages : @session_messages.Service
@@ -265,50 +257,39 @@ async fn CodexWorkspaceBinding::authorize(self : CodexWorkspaceBinding) -> Unit 
 }
 
 ///|
-/// `engine` is the engine executable; `executable` is the host's own
-/// binary, which self-update uses to locate the running .app bundle (absent
-/// or non-bundle layouts only lose the in-app install, never the
-/// announcement).
+/// Construct one working host from explicit configuration and OS capabilities.
 pub fn ApiState::ApiState(
-  engine~ : String,
-  codex~ : @codex.CodexSettings = @codex.CodexSettings::default(),
-  runtime_dir? : @pathx.Path,
-  executable? : String,
-  auth? : @auth.AuthStore,
-  app_version~ : String = "development",
-  console_url? : String,
-  resources~ : @host.HostResources = @host.HostResources::from_path(),
+  config : HostConfig,
+  runtime : @runtime.HostRuntime,
   host_mcp? : @mcp.Server,
+  on_notification? : (@protocol.HostNotification) -> Unit,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
 ) -> ApiState {
   let engine_actor = @engine.new_engine_actor(
-    engine,
-    runtime_dir?,
+    config.engine_executable,
+    runtime_dir=config.data_dir,
+    moonbit=config.resources.moonbit,
     host_mcp?,
-    moonbit=resources.moonbit,
   )
   {
-    codex: Actor(codex),
+    codex: Actor(config.codex),
     codex_projects: ProjectCatalog(),
     codex_draft_threads: CodexDraftThreads(),
     engine: engine_actor,
     manager: engine_actor.manager(),
-    schedules: Schedules(engine_actor.manager(), runtime_dir),
+    schedules: Schedules(engine_actor.manager(), Some(config.data_dir)),
     host: @host.new_host_state(
-      engine,
-      runtime_dir?,
-      executable?,
-      app_version~,
-      resources~,
+      config.engine_executable,
+      runtime_dir=config.data_dir,
+      resources=config.resources,
     ),
-    hub: Hub(),
-    auth: match auth {
-      Some(store) => store
-      None => @auth.AuthStore::empty(app_version~)
-    },
-    app_version,
-    console_url,
+    hub: Hub(on_notification?),
+    config,
     host_mcp,
+    runtime,
+    admission: Admission(),
+    upgrade_activity: Map([]),
+    next_connection: 0,
     messages: Service(),
     questions: Service(),
     on_finished,
@@ -316,14 +297,20 @@ pub fn ApiState::ApiState(
 }
 
 ///|
-/// The sign-in store used by the relay actor running beside this dispatcher.
-pub fn ApiState::auth_store(self : ApiState) -> @auth.AuthStore {
-  self.auth
+/// The app-lifetime owner of the Codex app-server child process.
+pub fn ApiState::codex_actor(self : ApiState) -> @codex.Actor {
+  self.codex
 }
 
 ///|
-/// The engine event sink: fan out to every subscriber, and hand finished
-/// runs to the notification hook.
+/// The app-lifetime engine actor. Its `run` task owns all serve processes and
+/// per-session follower children.
+pub fn ApiState::engine_actor(self : ApiState) -> @engine.EngineActor {
+  self.engine
+}
+
+///|
+/// The engine event sink publishes into the service-owned event hub.
 pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
   self.hub.sink(on_finished=payload => {
     if self.hub.active_starts.get(payload.run_id) is Some(run) {
@@ -344,9 +331,9 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
 pub fn[T] ApiState::subscribe(
   self : ApiState,
   inbox : @async.Queue[T],
-  map~ : (@protocol.Notification) -> T?,
-  on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit,
-) -> @broadcast.Subscription[@protocol.Notification] {
+  map~ : (@protocol.HostNotification) -> T?,
+  on_lag~ : (@broadcast.Subscription[@protocol.HostNotification]) -> Unit,
+) -> @broadcast.Subscription[@protocol.HostNotification] {
   self.hub.subscribe(inbox, map~, on_lag~)
 }
 
@@ -356,7 +343,7 @@ pub fn[T] ApiState::subscribe(
 /// bypass the hub and return only to their owning connection.
 pub fn ApiState::publish(
   self : ApiState,
-  notification : @protocol.Notification,
+  notification : @protocol.HostNotification,
 ) -> Unit {
   self.hub.publish(notification)
 }
@@ -377,29 +364,16 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.
-/// Share progress returns to this catalog's connection, never the shared hub.
 pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
-  on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
-    @endpoint.Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload: payload.source, }.publish(on_progress=progress => {
-        on_share_progress({ generation: payload.generation, progress, }) catch {
-          _ => ()
-        }
-      })
-    }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
         state.codex.status(),
       )
       reply
-    }),
-    @endpoint.Endpoint::codex(@commands.codex_config_open, _ => {
-      @host.open_codex_config(state.codex.config_home())
-      Acknowledged
     }),
     @endpoint.Endpoint::codex(@commands.codex_draft_open, payload => {
       state.open_codex_draft(payload)
@@ -433,6 +407,14 @@ pub fn endpoints(
     }),
     @endpoint.Endpoint::codex(@commands.codex_skills_list, payload => {
       state.codex_skills_list(payload)
+    }),
+    @endpoint.Endpoint::codex(@commands.codex_config_prepare, _ => {
+      let home = state.codex.prepare_config_home()
+      let path = @host.ensure_codex_config(Some(home))
+      let terminal_login = Ok(state.codex.terminal_login_command()) catch {
+        error => Err(error.to_string())
+      }
+      { path, terminal_login, }
     }),
     state.codex_endpoint(@commands.codex_account_read),
     state.codex_endpoint(@commands.codex_account_login_start),
@@ -513,10 +495,13 @@ pub fn endpoints(
     @endpoint.Endpoint::sync(@commands.agent_runs, payload => {
       state.hub.runs(known?=payload.known)
     }),
+    Endpoint(@commands.session_export_content, payload => {
+      state.export_content(payload)
+    }),
+    Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_search, payload => {
       @engine.search_sessions(payload)
     }),
-    Endpoint(@commands.session_list, _ => @engine.list_sessions()),
     Endpoint(@commands.session_load, payload => {
       @engine.load_session(state.manager, payload)
     }),
@@ -641,10 +626,6 @@ pub fn endpoints(
       state.schedules.action(payload)
     }),
     Endpoint(@commands.settings_get, _ => @engine.settings_status(state.manager)),
-    @endpoint.Endpoint::sync(@commands.app_info, _ => {
-      version: state.app_version,
-      console_url: state.console_url,
-    }),
     Endpoint(@commands.settings_set, payload => {
       // The store commit and its broadcast are one finite cancellation-
       // shielded linearization point. `update_settings` invokes the callback
@@ -659,9 +640,6 @@ pub fn endpoints(
           // must learn about the committed revision too.
           on_committed=status => state.hub.publish(SettingsChanged(status)),
         )
-        // Credentials belong to the server that issued them. Clear stale
-        // credentials before this request can complete or be cancelled.
-        sign_out_after_server_switch(state)
         status
       })
     }),
@@ -788,17 +766,12 @@ pub fn endpoints(
         },
       )
     }),
-    Endpoint(@commands.auth_status, _ => auth_status(state)),
-    Endpoint(@commands.auth_connect, _ => auth_connect(state)),
-    Endpoint(@commands.auth_disconnect, _ => auth_disconnect(state)),
-    Endpoint(@commands.auth_cancel, _ => auth_cancel(state)),
   ]
-  for
-    endpoint in @host.endpoints(state.host, connection, state.manager, () => {
+  endpoints.append(
+    @host.endpoints(state.host, connection, state.manager, () => {
       state.publish(SkillsChanged)
-    }) {
-    endpoints.push(endpoint)
-  }
+    }),
+  )
   endpoints
 }
 
@@ -819,7 +792,7 @@ fn[Payload : FromJson + ToJson, Reply : FromJson + ToJson] ApiState::codex_endpo
 
 ///|
 test "remote endpoint catalog has one entry per command name" {
-  let state = ApiState::ApiState(engine="unused")
+  let state = test_service()
   let connection = @host.HostConnection()
   let names : Array[String] = []
   for endpoint in endpoints(state, connection) {
@@ -829,7 +802,7 @@ test "remote endpoint catalog has one entry per command name" {
     }
     names.push(name)
   }
-  assert_true(names.contains("codex.config.open"))
+  assert_false(names.contains("codex.config.open"))
   assert_true(names.contains("codex.draft.open"))
   assert_true(names.contains("codex.draft.close"))
   assert_true(names.contains("codex.file.search"))
@@ -845,13 +818,13 @@ test "remote endpoint catalog has one entry per command name" {
   assert_true(names.contains("session.delete_check"))
   assert_true(names.contains("workspace.settings_get"))
   assert_true(names.contains("workspace.settings_set"))
-  assert_true(names.contains("app.info"))
+  assert_false(names.contains("app.info"))
   assert_true(names.contains("git.changes"))
   assert_true(names.contains("git.history"))
   assert_true(names.contains("git.commit_changes"))
   assert_true(names.contains("git.pull_request"))
   assert_true(names.contains("git.original_file"))
-  assert_true(names.contains("terminal.close"))
+  assert_false(names.contains("terminal.close"))
   assert_true(names.contains("fs.search_files"))
   assert_true(names.contains("fs.cancel_search_files"))
   assert_true(names.contains("fs.clear_file_search_cache"))
@@ -1378,7 +1351,7 @@ fn publish_worktree_changed(
 }
 
 ///|
-async fn ApiState::run_schedules(self : ApiState) -> Unit {
+pub async fn ApiState::run_schedules(self : ApiState) -> Unit {
   let chat_root = Some(@host.chat_workspace_root())
   self.schedules.run(
     sink=self.sink(),
@@ -1389,4 +1362,13 @@ async fn ApiState::run_schedules(self : ApiState) -> Unit {
       publish_session_changed(self, "created", run.session, run.workspace)
     },
   )
+}
+
+///|
+pub fn ApiState::subscribe_with(
+  self : ApiState,
+  offer~ : (@protocol.HostNotification) -> Bool raise,
+  on_lag~ : (@broadcast.Subscription[@protocol.HostNotification]) -> Unit,
+) -> @broadcast.Subscription[@protocol.HostNotification] {
+  self.hub.notifications.subscribe_with(offer~, on_lag~)
 }

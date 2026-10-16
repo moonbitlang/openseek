@@ -1,6 +1,6 @@
-# Desktop Engine Host
+# Working Host Engine
 
-`openseek_desktop/backend/engine` is the desktop host's engine layer: it owns
+`openseek_desktop/backend/engine` is the working host's engine layer: it owns
 one persistent `openseek serve` process per conversation, feeds those processes
 prompts over stdin, consumes their JSONL event streams, and tails each
 conversation's durable record so committed transcript events reach every
@@ -8,7 +8,7 @@ connected client. It also owns the operations built around those processes —
 session listing and loading, archiving, host-owned endpoint settings, and the
 one-time global-store migration.
 
-The package sits between the extension API layer and the engine executable:
+The package sits between the backend API endpoint layer and the engine executable:
 
 ```mermaid
 flowchart LR
@@ -17,9 +17,9 @@ flowchart LR
     remote["Remote browser pages"]
   end
 
-  subgraph host["Desktop host process"]
-    api["internal/api\nextension ops + hub"]
-    engine["internal/engine\nEngineActor / EngineManager"]
+  subgraph host["Embedded or headless host process"]
+    api["backend/api\nApiState + hub"]
+    engine["backend/engine\nEngineActor / EngineManager"]
     follower["SessionFollower\n(one per live session)"]
   end
 
@@ -55,13 +55,12 @@ flowchart LR
 | `ops.mbt` | The operations behind the extension ops: `start_run`, `cancel_run`, `steer_run`, `approve_run`, `compact_run`, `goal_run`, session/workspace queries. |
 | `archive.mbt` | Moving a conversation's record between the live and archived stores, and sweeping condemned records under `archived/deleting`. |
 | `config.mbt` | Turning a `start` payload into the validated `RunConfig` a serve process is spawned with. |
-| `command.mbt` | Locating the engine executable across packaged and development layouts. |
 | `settings.mbt` | Host-owned endpoint settings (`engine-settings.json`): provider, credentials, versioned atomic saves. |
 | `migrate_global_store.mbt` | One-time relocation of legacy global-store conversations into the default workspace's store. |
 
 ## Process model
 
-`EngineActor::run` is an app-lifetime task. Each of its generations opens one
+`HostService::run` owns `EngineActor::run` for the service lifetime. Each of its generations opens one
 structured task group that owns *every* child: serve processes, their stdin
 writer and stdout consumer tasks, and the follower actors. Stopping the pump
 tears all of them down wholesale; a failed generation is reported and
@@ -75,7 +74,7 @@ directly on the shared `EngineManager` state.
 
 ```mermaid
 flowchart TB
-  actor["EngineActor::run\n(app lifetime, restarts on failure)"]
+  actor["EngineActor::run\n(service lifetime, restarts on failure)"]
   pump["pump loop\nPumpState::Serving{sessions}"]
   queue[/"commands: Queue[SpawnEngine]"/]
   ops["request tasks\n(start_run, compact_run, ...)"]

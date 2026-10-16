@@ -64,8 +64,6 @@ pub fn queue_run(EngineManager, @protocol.QueuePayload) -> @protocol.QueueReply 
 
 pub async fn read_job(EngineManager, @protocol.JobReadPayload) -> @protocol.JobReadReply
 
-pub async fn remote_server_base(EngineManager) -> String?
-
 pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Unit
 
 pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
@@ -96,7 +94,7 @@ pub struct ConversationExport {
   json : String
 }
 pub fn ConversationExport::ConversationExport(@viz_export.StandaloneExport, Array[@viz_export.Session]) -> Self raise
-pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
+pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String, max_record_bytes? : Int) -> Self
 
 type EditReplacement
 
@@ -117,6 +115,8 @@ pub(all) enum EngineEvent {
 }
 
 type EngineManager
+pub fn EngineManager::has_active_work(Self) -> Bool
+pub fn EngineManager::is_serving(Self) -> Bool
 pub fn EngineManager::worktree_host(Self) -> @worktree.WorktreeHost
 
 pub(all) struct EventSink((EngineEvent) -> Unit)
@@ -150,12 +150,15 @@ pub struct Schedules {
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
   stopped : Map[String, Unit]
+  // private fields
 }
 pub fn Schedules::Schedules(EngineManager, @pathx.Path?) -> Self
 pub async fn Schedules::action(Self, @protocol.ScheduleActionPayload) -> @protocol.SchedulesReply
+pub fn Schedules::has_active_work(Self) -> Bool
 pub async fn Schedules::list(Self) -> @protocol.SchedulesReply
 pub async fn Schedules::run(Self, on_run_changed~ : (@protocol.ScheduleRun) -> Unit, sink~ : EventSink, on_workspaces~ : (Array[String]) -> Unit) -> Unit
 pub async fn Schedules::save(Self, @protocol.ScheduleSavePayload) -> @protocol.SchedulesReply
+pub fn Schedules::stop_admission(Self) -> Unit
 
 pub(all) struct SettingsPatch {
   provider : String?

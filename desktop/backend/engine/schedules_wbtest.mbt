@@ -559,3 +559,20 @@ test "scheduled run status reads the turn outcome whatever the exit code" {
     Failed("CLI exited without a completed session; see the run log"),
   )
 }
+
+///|
+async test "drain does not claim due schedules and retains active work visibility" {
+  let folder = @fs.tmpdir(prefix="schedules-drain-")
+  defer @fs.rmdir(folder, recursive=true)
+  let schedules = Schedules(new_engine_manager("unused"), Some(Path(folder)))
+  schedules.state = Some({
+    entries: [schedule_fixture("due", 1L, Once(1L))],
+    runs: [],
+  })
+  schedules.stop_admission()
+  assert_eq(schedules.take_due(at=2L).length(), 0)
+  assert_false(schedules.has_active_work())
+  schedules.claiming = 1
+  assert_true(schedules.has_active_work())
+  schedules.claiming = 0
+}

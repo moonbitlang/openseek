@@ -5,4 +5,4 @@ import {
   "openseek_desktop/protocol/message_context",
 }
 
-supported_targets = "+native"
+supported_targets = "+native+wasm"

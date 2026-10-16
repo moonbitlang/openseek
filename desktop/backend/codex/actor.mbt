@@ -125,6 +125,14 @@ priv enum ActorStep {
 }
 
 ///|
+/// The token names one question, including across host/actor restarts that
+/// reuse JSON-RPC ids and reset the snapshot generation.
+priv struct OwnedReverseRequest {
+  request : @jsonrpc.PeerRequest
+  response_token : String
+}
+
+///|
 /// The actor owns membership and the monotonic snapshot/live-event generation.
 priv struct ReverseRequestRegistry {
   mut requests : Map[String, OwnedReverseRequest]
@@ -224,6 +232,10 @@ struct Actor {
   wake : @async.Queue[Unit]
   mut state : ConnectionState
   reverse_requests : ReverseRequestRegistry
+  active_turns : Set[String]
+  settled_turns : Set[String]
+  mut pending_starts : Int32
+  mut unknown_start : Bool
 }
 
 ///|
@@ -241,6 +253,10 @@ pub fn Actor::Actor(settings : CodexSettings) -> Actor {
     wake: Queue(kind=Blocking(ActorWakeCapacity)),
     state: Starting,
     reverse_requests: ReverseRequestRegistry(),
+    active_turns: Set([]),
+    settled_turns: Set([]),
+    pending_starts: 0,
+    unknown_start: false,
   }
 }
 
@@ -269,10 +285,27 @@ pub async fn Actor::call(
   params~ : Json,
 ) -> Json {
   let reply : @async.Queue[Result[Json, CodexError]] = Queue(kind=Blocking(1))
+  let starts_work = method_ == "turn/start" || method_ == "review/start"
+  if starts_work {
+    self.pending_starts += 1
+  }
+  defer {
+    if starts_work {
+      self.pending_starts -= 1
+    }
+    if self.pending_starts == 0 {
+      self.settled_turns.clear()
+    }
+  }
   self.inputs.put(Call(method_, params, reply))
   self.signal()
   match reply.get() {
-    Ok(value) => value
+    Ok(value) => {
+      if starts_work {
+        self.track_started_reply(value)
+      }
+      value
+    }
     Err(error) => raise error
   }
 }
@@ -364,6 +397,11 @@ async fn[G] Actor::run_connection(
   pending : ActorInput?,
   emit : (String, Json) -> Unit,
 ) -> Unit {
+  defer {
+    self.active_turns.clear()
+    self.settled_turns.clear()
+    self.unknown_start = false
+  }
   self.state = Starting
   // A reconnect invalidates every request owned by the previous JSON-RPC
   // peer. Advancing the same lifetime generation also lets the next empty
@@ -382,6 +420,7 @@ async fn[G] Actor::run_connection(
     home=self.settings.home,
     version="0.1.0",
     notification_handler=(method_, params) => {
+      self.track_turn_event(method_, params)
       if !(events.try_put(Notification(method_, params)) catch { _ => false }) {
         // Losing a completion notification is not recoverable from deltas.
         // Close the event lane; the actor reconnects and the UI resyncs from
@@ -625,9 +664,41 @@ pub extend CodexError with Debug::{to_repr}
 pub extend CodexError with Show::{output, to_string}
 
 ///|
-/// The token names one question, including across host/actor restarts that
-/// reuse JSON-RPC ids and reset the snapshot generation.
-priv struct OwnedReverseRequest {
-  request : @jsonrpc.PeerRequest
-  response_token : String
+pub fn Actor::has_active_work(self : Actor) -> Bool {
+  self.pending_starts > 0 || self.unknown_start || !self.active_turns.is_empty()
+}
+
+///|
+fn Actor::track_started_reply(self : Actor, value : Json) -> Unit {
+  if value is { "turn": { "id": String(id), .. }, .. } {
+    if !self.settled_turns.contains(id) &&
+      !(value
+      is {
+        "turn": { "status": "completed" | "failed" | "interrupted", .. },
+        ..
+      }) {
+      self.active_turns.add(id)
+    }
+  } else {
+    self.unknown_start = true
+  }
+}
+
+///|
+fn Actor::track_turn_event(
+  self : Actor,
+  method_ : String,
+  params : Json,
+) -> Unit {
+  if params is { "turn": { "id": String(id), .. }, .. } {
+    if method_ == "turn/started" {
+      self.active_turns.add(id)
+    }
+    if method_ == "turn/completed" {
+      self.active_turns.remove(id)
+      if self.pending_starts > 0 {
+        self.settled_turns.add(id)
+      }
+    }
+  }
 }

@@ -55,3 +55,13 @@ async fn prepare_home_directory(home : @pathx.Path) -> Unit {
       )
   }
 }
+
+///|
+/// Settings must use the same isolated home as the service's Codex actor.
+pub async fn Actor::prepare_config_home(self : Actor) -> @pathx.Path {
+  guard self.settings.home is Some(home) else {
+    raise CodexError::Unavailable("This service has no isolated Codex home")
+  }
+  prepare_home_directory(home)
+  home
+}

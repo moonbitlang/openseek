@@ -1,4 +1,15 @@
 ///|
+/// The selected host route owns the source; dialogs and share credentials
+/// stay on this desktop. Both actions capture the same bounded remote export.
+async fn capture_session_export(
+  state : @api.DesktopState,
+  payload : @protocol.SessionExportPayload,
+) -> @protocol.SessionExportContent {
+  let files = state.service().export_session(payload)
+  { html: files.html, json: files.json, }
+}
+
+///|
 /// The native save-dialog operation for one already-rendered export.
 priv struct SessionExportDialog {
   session : String
@@ -19,12 +30,15 @@ async fn SessionExportDialog::destination(
   context : @proton.CommandContext,
 ) -> String? {
   guard context.window() is Some(window) else {
-    raise @host.HostError(
+    raise @host.HostError::HostError(
       "could not open the save dialog: window is unavailable",
     )
   }
   window.save_file(Some("Export conversation"), Some("\{self.session}.html")) catch {
-    error => raise @host.HostError("could not open the save dialog: \{error}")
+    error =>
+      raise @host.HostError::HostError(
+        "could not open the save dialog: \{error}",
+      )
   }
 }
 
@@ -36,27 +50,22 @@ async fn SessionExportDialog::destination(
 /// failed.
 async fn export_session(
   context : @proton.CommandContext,
-  state : @api.ApiState,
+  state : @api.DesktopState,
   payload : @protocol.SessionExportPayload,
 ) -> @protocol.SessionExportReply {
-  let assets = state.host_state().viz_assets()
-  let (shell, bundle) = assets.read()
-  let files = @engine.ConversationExport::capture(
-    state.manager(),
-    payload,
-    shell,
-    bundle,
-  )
+  let html = capture_session_export(state, payload).html
   let dialog = SessionExportDialog(payload.session)
   guard dialog.destination(context) is Some(path) else {
     return { path: None, opened: false, }
   }
   // The native dialog has already confirmed replacement for this exact path.
   // `CreateNew` would incorrectly reject an overwrite the user approved.
-  @fs.write_file(path, files.html, create_mode=CreateOrTruncate) catch {
+  @fs.write_file(path, html, create_mode=CreateOrTruncate) catch {
     error =>
-      raise @host.HostError("could not save the conversation export: \{error}")
+      raise @host.HostError::HostError(
+        "could not save the conversation export: \{error}",
+      )
   }
-  let open_code = @platform.open_path(path) catch { _ => -1 }
-  { path: Some(path), opened: open_code == 0, }
+  let opened = (@platform.open_path(path) == 0) catch { _ => false }
+  { path: Some(path), opened, }
 }

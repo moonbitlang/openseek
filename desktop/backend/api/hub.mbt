@@ -7,7 +7,8 @@
 /// The hub is owned by `ApiState`; transports reach it through
 /// `ApiState::subscribe`.
 priv struct Hub {
-  notifications : @broadcast.Channel[@protocol.Notification]
+  on_notification : ((@protocol.HostNotification) -> Unit)?
+  notifications : @broadcast.Channel[@protocol.HostNotification]
   // The typed `agent.started` payload of every run still in flight, keyed by run
   // id — the source for `agent.runs`, which is how a client that joins (or
   // reconnects) mid-run learns the run's identity. Insertion order is
@@ -36,8 +37,9 @@ priv struct Hub {
 }
 
 ///|
-fn Hub::Hub() -> Hub {
+fn Hub::Hub(on_notification? : (@protocol.HostNotification) -> Unit) -> Hub {
   {
+    on_notification,
     notifications: Channel(),
     active_starts: Map([]),
     settlements: Map([]),
@@ -106,7 +108,7 @@ fn Hub::record_finished(
 /// Record the notification's effect on the live-run tables, then append it
 /// to every active inbox. Publishing never suspends; a slow destination
 /// pauses independently and its transport establishes a resync boundary.
-fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
+fn Hub::publish(self : Hub, notification : @protocol.HostNotification) -> Unit {
   match notification {
     AgentStarted(payload) => self.active_starts[payload.run_id] = payload
     // Error is diagnostic, not a lifecycle boundary: the engine publishes
@@ -125,6 +127,9 @@ fn Hub::publish(self : Hub, notification : @protocol.Notification) -> Unit {
     _ => ()
   }
   self.notifications.publish(notification)
+  if self.on_notification is Some(consume) {
+    consume(notification)
+  }
 }
 
 ///|
@@ -189,9 +194,9 @@ fn Hub::forget_run_approvals(self : Hub, run_id : String) -> Unit {
 fn[T] Hub::subscribe(
   self : Hub,
   inbox : @async.Queue[T],
-  map~ : (@protocol.Notification) -> T?,
-  on_lag~ : (@broadcast.Subscription[@protocol.Notification]) -> Unit,
-) -> @broadcast.Subscription[@protocol.Notification] {
+  map~ : (@protocol.HostNotification) -> T?,
+  on_lag~ : (@broadcast.Subscription[@protocol.HostNotification]) -> Unit,
+) -> @broadcast.Subscription[@protocol.HostNotification] {
   self.notifications.subscribe(inbox, map~, on_lag~)
 }
 
@@ -258,8 +263,8 @@ fn Hub::engine_connected(
 
 ///|
 /// The hub as the engine package's event sink, mapping engine events onto
-/// the catalog's `agent.*` notifications. `on_finished` additionally hands
-/// finished runs to the embedding host — the desktop's system notification.
+/// the catalog's `agent.*` notifications. Embedders consume typed notifications
+/// at the hub boundary; the service does not invoke OS notification APIs.
 fn Hub::sink(
   self : Hub,
   on_finished? : (@protocol.FinishedPayload) -> Unit,
@@ -300,7 +305,7 @@ fn Hub::sink(
 ///|
 test "a real engine connection retires old active runs before readiness" {
   let hub = Hub::Hub()
-  let inbox : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(8))
+  let inbox : @async.Queue[@protocol.HostNotification] = Queue(kind=Blocking(8))
   let subscriber = hub.subscribe(inbox, map=value => Some(value), on_lag=sub => {
     sub.close()
   })
@@ -328,7 +333,7 @@ test "a real engine connection retires old active runs before readiness" {
 ///|
 test "an overflowing inbox can still recover the missed finish from runs" {
   let hub = Hub::Hub()
-  let inbox : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(1))
+  let inbox : @async.Queue[@protocol.HostNotification] = Queue(kind=Blocking(1))
   let mut lagged = false
   let subscriber = hub.subscribe(inbox, map=value => Some(value), on_lag=_ => {
     lagged = true
@@ -535,7 +540,7 @@ test "a duplicate finish never downgrades a settlement" {
 
 ///|
 async test "agent.runs keeps old requests compatible and decodes known selectors" {
-  let state = ApiState::ApiState(engine="unused")
+  let state = test_service()
   let connection = @host.HostConnection()
   state.hub.publish(
     AgentStarted(

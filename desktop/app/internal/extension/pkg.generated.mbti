@@ -3,8 +3,8 @@ package "openseek_desktop/app/internal/extension"
 
 import {
   "moonbit-community/proton",
+  "openseek_desktop/app/internal/api",
   "openseek_desktop/app/internal/cdp",
-  "openseek_desktop/backend/api",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/protocol",
 }
@@ -18,7 +18,7 @@ pub fn localized_menu(String) -> @proton.MenuBar
 
 pub async fn open_external(@protocol.ExternalLinkPayload, allow_file? : Bool) -> @protocol.OpenExternalReply
 
-pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
+pub fn openseek_capability(@api.DesktopState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
 pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
 
@@ -33,7 +33,7 @@ pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
 pub async fn[T] BrowserViews::with_cdp(Self, Int, async (@cdp.Connection) -> T) -> T
 
 type DesktopBridgeActor
-pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState) -> Self
+pub fn DesktopBridgeActor::DesktopBridgeActor(@api.DesktopState) -> Self
 pub async fn DesktopBridgeActor::notify_browser_event(Self, Json) -> Unit
 pub async fn DesktopBridgeActor::notify_system_appearance_changed(Self) -> Unit
 pub async fn DesktopBridgeActor::notify_window_chrome_changed(Self) -> Unit

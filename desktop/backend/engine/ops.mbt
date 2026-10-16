@@ -74,6 +74,8 @@ pub async fn start_run(
   if need_spawn {
     request_spawn(manager, claim, config)
   }
+  let run_id = mint_run_id()
+  ignore(@journal.before("agent.run", subject=run_id))
   claim.require_current(manager)
   guard slot.live() is Some(live) else {
     raise EngineError("engine failed to start")
@@ -93,7 +95,6 @@ pub async fn start_run(
       )
     Idle(..) => ()
   }
-  let run_id = mint_run_id()
   // The normalized tag rides the wire command so the engine records it on the
   // durable User item this prompt appends. That is what lets a client
   // recognize its own prompt in the record — the host itself never reads it

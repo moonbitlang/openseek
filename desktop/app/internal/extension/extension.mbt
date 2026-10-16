@@ -328,7 +328,7 @@ const BridgeInboxCapacity = 4096
 /// current page attachment for the app's lifetime; extension ops only send
 /// it messages and never retain resource-owning request tasks.
 struct DesktopBridgeActor {
-  state : @api.ApiState
+  state : @api.DesktopState
   // The desktop page owns one filesystem watcher independently of every
   // remote WebSocket connection.
   host_connection : @host.HostConnection
@@ -339,11 +339,11 @@ struct DesktopBridgeActor {
 
 ///|
 pub fn DesktopBridgeActor::DesktopBridgeActor(
-  state : @api.ApiState,
+  state : @api.DesktopState,
 ) -> DesktopBridgeActor {
   {
     state,
-    host_connection: HostConnection(),
+    host_connection: state.new_connection(),
     inbox: Queue(kind=Blocking(BridgeInboxCapacity)),
   }
 }
@@ -376,7 +376,7 @@ pub async fn DesktopBridgeActor::notify_system_appearance_changed(
 
 ///|
 pub fn openseek_capability(
-  state : @api.ApiState,
+  state : @api.DesktopState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
@@ -578,7 +578,10 @@ async fn deliver_to_page(
 async test "a full inbox preserves local events before the hub resync boundary" {
   @async.with_timeout(1000, () => {
     @async.with_task_group(group => {
-      let state = @api.ApiState(engine="unused")
+      let state = @api.DesktopState(
+        engine="unused",
+        runtime_dir=Path("/unused-test-host"),
+      )
       let bridge = DesktopBridgeActor(state)
       let subscription = bridge.subscribe(group)
       defer subscription.close()

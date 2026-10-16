@@ -1,0 +1,17 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/native_runtime"
+
+import {
+  "openseek_desktop/backend/runtime",
+}
+
+// Values
+pub fn native() -> @runtime.HostRuntime
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits

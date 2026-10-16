@@ -10,7 +10,7 @@ import {
 // Values
 pub async fn read_document(@pathx.Absolute, String) -> @protocol.SessionDocument
 
-pub async fn read_text(@pathx.Absolute, String) -> String
+pub async fn read_text(@pathx.Absolute, String, max_bytes? : Int) -> String
 
 pub fn record_path(@pathx.Absolute, String) -> @pathx.Path
 
