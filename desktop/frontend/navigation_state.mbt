@@ -2,6 +2,8 @@
 priv enum NavigationMsg {
   Back
   Forward
+  Browser(@navigation_browser.Snapshot)
+  Link(@url.UrlRequest)
   Retry
   SessionReady(@interop.ConversationKey, revision~ : Int32)
   CodexDraftReady(cwd~ : String, id~ : String, revision~ : Int32)
@@ -13,6 +15,7 @@ priv enum NavigationPhase {
   Active
   Missing
   PreparingNew
+  Invalid
   Failed(String)
 } derive(Eq)
 
@@ -23,6 +26,7 @@ priv struct AppNavigation {
   history : @navigation.History
   can_back : Bool
   can_forward : Bool
+  browser_ready : Bool
   sessions : Result[Unit, String]?
   archived : Result[Unit, String]?
   skills : Result[Unit, String]?
@@ -38,6 +42,7 @@ fn AppNavigation::empty() -> AppNavigation {
     history: @navigation.History::empty(),
     can_back: false,
     can_forward: false,
+    browser_ready: false,
     sessions: None,
     archived: None,
     skills: None,

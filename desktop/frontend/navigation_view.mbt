@@ -28,6 +28,7 @@ fn navigation_notice(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html? {
     Active => return None
     Waiting | PreparingNew => shell_text(model.locale, NavigationLoading)
     Missing => shell_text(model.locale, NavigationMissing)
+    Invalid => shell_text(model.locale, NavigationInvalid)
     Failed(message) => message
   }
   Some(

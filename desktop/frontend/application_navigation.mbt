@@ -37,7 +37,7 @@ fn reconcile_navigation(
     observation.write(
       next.navigation,
       previous.navigation.revision,
-      desktop=next.is_desktop || message is FromDevice(_, BridgeReady),
+      desktop=next.is_desktop,
     ) {
     Keep => ()
     Push(location) | Replace(location) as write => {
