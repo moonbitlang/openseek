@@ -49,12 +49,17 @@ async fn SkillLibrary::contains(self : SkillLibrary, id : String) -> Bool {
 ///|
 /// Resolve an entry at commit time: an enable/disable request may have moved
 /// it while an update was downloading. New installs default to enabled.
-async fn SkillLibrary::locate(self : SkillLibrary, id : String) -> SkillLocation {
+async fn SkillLibrary::locate(
+  self : SkillLibrary,
+  id : String,
+) -> SkillLocation {
   let disabled = self.disabled()
   let enabled_exists = self.contains(id)
   let disabled_exists = disabled.contains(id)
   guard !(enabled_exists && disabled_exists) else {
-    raise SkillMarketError("skill \{id} exists in both enabled and disabled libraries")
+    raise SkillMarketError(
+      "skill \{id} exists in both enabled and disabled libraries",
+    )
   }
   if disabled_exists {
     { library: disabled, enabled: false, }

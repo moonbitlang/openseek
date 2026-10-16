@@ -118,9 +118,20 @@ test "SkillContentReply owns its success and error wire shapes" {
 
 ///|
 test "enablement payload requires an explicit boolean and preserves false" {
-  let payload : @protocol.SetSkillEnabledPayload = @json.from_json({ "id": "notes", "enabled": false, "future": true })
+  let payload : @protocol.SetSkillEnabledPayload = @json.from_json({
+    "id": "notes",
+    "enabled": false,
+    "future": true,
+  })
   assert_eq(payload.to_json(), { "id": "notes", "enabled": false })
-  for malformed in [Json::null(), {}, { "id": "notes" }, { "id": "notes", "enabled": null }, { "id": "notes", "enabled": "false" }] {
+  for
+    malformed in [
+      Json::null(),
+      {},
+      { "id": "notes" },
+      { "id": "notes", "enabled": null },
+      { "id": "notes", "enabled": "false" },
+    ] {
     try {
       let _ : @protocol.SetSkillEnabledPayload = @json.from_json(malformed)
     } catch {
@@ -129,8 +140,14 @@ test "enablement payload requires an explicit boolean and preserves false" {
       _ => fail("enablement requires an explicit desired state")
     }
   }
-  for reply in [@protocol.SetSkillEnabledReply::SkillEnabledSet, SkillEnabledError("Cannot move skill")] {
-    let decoded : @protocol.SetSkillEnabledReply = @json.from_json(reply.to_json())
+  for
+    reply in [
+      @protocol.SetSkillEnabledReply::SkillEnabledSet,
+      SkillEnabledError("Cannot move skill"),
+    ] {
+    let decoded : @protocol.SetSkillEnabledReply = @json.from_json(
+      reply.to_json(),
+    )
     assert_eq(decoded, reply)
   }
 }

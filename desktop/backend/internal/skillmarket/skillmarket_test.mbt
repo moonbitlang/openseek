@@ -709,20 +709,33 @@ async test "disabled registry skills retain their content, update state and unin
     )
     assert_true(first.enabled)
     let mut changes = 0
-    @skillmarket.set_skill_enabled("acme-widget", enabled=false, library_dir=lib, on_committed=() => {
-      changes += 1
-    })
+    @skillmarket.set_skill_enabled(
+      "acme-widget",
+      enabled=false,
+      library_dir=lib,
+      on_committed=() => changes += 1,
+    )
     // Repeating the desired state is harmless and makes no second move.
-    @skillmarket.set_skill_enabled("acme-widget", enabled=false, library_dir=lib)
+    @skillmarket.set_skill_enabled(
+      "acme-widget",
+      enabled=false,
+      library_dir=lib,
+    )
     assert_eq(changes, 1)
     assert_false(@fs.exists("\{lib}/acme-widget"))
-    assert_eq(@fs.read_file("\{lib}/.disabled/acme-widget/reference/usage.md").binary(), reference_body)
+    assert_eq(
+      @fs.read_file("\{lib}/.disabled/acme-widget/reference/usage.md").binary(),
+      reference_body,
+    )
     guard @skillmarket.installed_skills(library_dir=lib) is [disabled] else {
       fail("disabled skill must remain in the installed library")
     }
     assert_false(disabled.enabled)
     assert_eq(disabled.source, first.source)
-    assert_eq(@skillmarket.read_skill_content("acme-widget", library_dir=lib), @utf8.decode(skill_body))
+    assert_eq(
+      @skillmarket.read_skill_content("acme-widget", library_dir=lib),
+      @utf8.decode(skill_body),
+    )
     let updated = @skillmarket.install_skill(
       module_name="acme/widget",
       version="2.0.0",
@@ -732,12 +745,22 @@ async test "disabled registry skills retain their content, update state and unin
     )
     assert_false(updated.enabled)
     assert_false(@fs.exists("\{lib}/acme-widget"))
-    assert_eq(@fs.read_file("\{lib}/.disabled/acme-widget/SKILL.md").binary(), skill_body_v2)
+    assert_eq(
+      @fs.read_file("\{lib}/.disabled/acme-widget/SKILL.md").binary(),
+      skill_body_v2,
+    )
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget/reference/usage.md"))
     @skillmarket.set_skill_enabled("acme-widget", enabled=true, library_dir=lib)
-    assert_eq(@fs.read_file("\{lib}/acme-widget/SKILL.md").binary(), skill_body_v2)
+    assert_eq(
+      @fs.read_file("\{lib}/acme-widget/SKILL.md").binary(),
+      skill_body_v2,
+    )
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget"))
-    @skillmarket.set_skill_enabled("acme-widget", enabled=false, library_dir=lib)
+    @skillmarket.set_skill_enabled(
+      "acme-widget",
+      enabled=false,
+      library_dir=lib,
+    )
     @skillmarket.uninstall_skill("acme-widget", library_dir=lib)
     assert_true(@skillmarket.installed_skills(library_dir=lib).is_empty())
     assert_false(@fs.exists("\{lib}/.disabled/acme-widget"))
@@ -748,17 +771,34 @@ async test "disabled registry skills retain their content, update state and unin
 async test "hand-written directory and flat skills can move without rewriting their files" {
   let lib = @fs.tmpdir(prefix="skillmarket-handwritten-")
   @fs.mkdir("\{lib}/node.js/reference", recursive=true)
-  @fs.write_file("\{lib}/node.js/SKILL.md", "Directory skill", create_mode=CreateOrTruncate)
-  @fs.write_file("\{lib}/node.js/reference/notes.txt", "Companion", create_mode=CreateOrTruncate)
-  @fs.write_file("\{lib}/My notes.md", "Flat skill", create_mode=CreateOrTruncate)
+  @fs.write_file(
+    "\{lib}/node.js/SKILL.md",
+    "Directory skill",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{lib}/node.js/reference/notes.txt",
+    "Companion",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{lib}/My notes.md",
+    "Flat skill",
+    create_mode=CreateOrTruncate,
+  )
   for (id, text) in [("node.js", "Directory skill"), ("My notes", "Flat skill")] {
     @skillmarket.set_skill_enabled(id, enabled=false, library_dir=lib)
     assert_eq(@skillmarket.read_skill_content(id, library_dir=lib), text)
   }
   let disabled = @skillmarket.installed_skills(library_dir=lib)
   assert_eq(disabled.length(), 2)
-  assert_true(disabled.iter().all(skill => !skill.enabled && skill.registry is None))
-  assert_eq(@fs.read_file("\{lib}/.disabled/node.js/reference/notes.txt").text(), "Companion")
+  assert_true(
+    disabled.iter().all(skill => !skill.enabled && skill.registry is None),
+  )
+  assert_eq(
+    @fs.read_file("\{lib}/.disabled/node.js/reference/notes.txt").text(),
+    "Companion",
+  )
   for id in ["node.js", "My notes"] {
     @skillmarket.set_skill_enabled(id, enabled=true, library_dir=lib)
   }
@@ -770,12 +810,21 @@ async test "hand-written directory and flat skills can move without rewriting th
 async test "enabling refuses a conflicting entry without replacing either skill" {
   let lib = @fs.tmpdir(prefix="skillmarket-conflict-")
   @fs.mkdir("\{lib}/.disabled", recursive=true)
-  @fs.write_file("\{lib}/notes.md", "Enabled notes", create_mode=CreateOrTruncate)
-  @fs.write_file("\{lib}/.disabled/notes.md", "Disabled notes", create_mode=CreateOrTruncate)
-  try {
+  @fs.write_file(
+    "\{lib}/notes.md",
+    "Enabled notes",
+    create_mode=CreateOrTruncate,
+  )
+  @fs.write_file(
+    "\{lib}/.disabled/notes.md",
+    "Disabled notes",
+    create_mode=CreateOrTruncate,
+  )
+  try
     @skillmarket.set_skill_enabled("notes", enabled=true, library_dir=lib)
-  } catch {
-    @skillmarket.SkillMarketError(message) => assert_true(message.contains("both enabled and disabled"))
+  catch {
+    @skillmarket.SkillMarketError(message) =>
+      assert_true(message.contains("both enabled and disabled"))
     error => raise error
   } noraise {
     _ => fail("a conflicting skill must not be overwritten")
@@ -788,15 +837,26 @@ async test "enabling refuses a conflicting entry without replacing either skill"
 async test "an interrupted disabled update recovers inside the disabled library" {
   let lib = @fs.tmpdir(prefix="skillmarket-recover-disabled-")
   @fs.mkdir("\{lib}/.disabled/.backup/widget", recursive=true)
-  @fs.write_file("\{lib}/.disabled/.backup/widget/SKILL.md", "Previous version", create_mode=CreateOrTruncate)
+  @fs.write_file(
+    "\{lib}/.disabled/.backup/widget/SKILL.md",
+    "Previous version",
+    create_mode=CreateOrTruncate,
+  )
   @fs.mkdir("\{lib}/.disabled/.staging/widget", recursive=true)
-  @fs.write_file("\{lib}/.disabled/.staging/widget/SKILL.md", "Incomplete", create_mode=CreateOrTruncate)
+  @fs.write_file(
+    "\{lib}/.disabled/.staging/widget/SKILL.md",
+    "Incomplete",
+    create_mode=CreateOrTruncate,
+  )
   guard @skillmarket.installed_skills(library_dir=lib) is [skill] else {
     fail("the disabled backup must be restored")
   }
   assert_false(skill.enabled)
   assert_false(@fs.exists("\{lib}/widget"))
-  assert_eq(@fs.read_file("\{lib}/.disabled/widget/SKILL.md").text(), "Previous version")
+  assert_eq(
+    @fs.read_file("\{lib}/.disabled/widget/SKILL.md").text(),
+    "Previous version",
+  )
   assert_false(@fs.exists("\{lib}/.disabled/.backup/widget"))
   assert_false(@fs.exists("\{lib}/.disabled/.staging/widget"))
 }
@@ -805,22 +865,61 @@ async test "an interrupted disabled update recovers inside the disabled library"
 async test "an update commits to the current location after an in-flight enablement change" {
   @async.with_task_group() <| group => {
     for initially_enabled in [true, false] {
-      let gate : ArchiveGate = { arrived: Queue(kind=Blocking(1)), release: Queue(kind=Blocking(1)), }
-      guard fake_registry(group, archive_gate=gate) is Some(base) else { return }
+      let gate : ArchiveGate = {
+        arrived: Queue(kind=Blocking(1)),
+        release: Queue(kind=Blocking(1)),
+      }
+      guard fake_registry(group, archive_gate=gate) is Some(base) else {
+        return
+      }
       let lib = @fs.tmpdir(prefix="skillmarket-update-switch-")
-      ignore(@skillmarket.install_skill(module_name="acme/widget", version="1.0.0", package_path="", registry=base, library_dir=lib))
-      @skillmarket.set_skill_enabled("acme-widget", enabled=initially_enabled, library_dir=lib)
-      let finished : @async.Queue[@skillmarket.InstalledSkill] = Queue(kind=Blocking(1))
+      ignore(
+        @skillmarket.install_skill(
+          module_name="acme/widget",
+          version="1.0.0",
+          package_path="",
+          registry=base,
+          library_dir=lib,
+        ),
+      )
+      @skillmarket.set_skill_enabled(
+        "acme-widget",
+        enabled=initially_enabled,
+        library_dir=lib,
+      )
+      let finished : @async.Queue[@skillmarket.InstalledSkill] = Queue(
+        kind=Blocking(1),
+      )
       group.spawn_bg() <| () => {
-        finished.put(@skillmarket.install_skill(module_name="acme/widget", version="2.0.0", package_path="", registry=base, library_dir=lib))
+        finished.put(
+          @skillmarket.install_skill(
+            module_name="acme/widget",
+            version="2.0.0",
+            package_path="",
+            registry=base,
+            library_dir=lib,
+          ),
+        )
       }
       gate.arrived.get()
-      @skillmarket.set_skill_enabled("acme-widget", enabled=!initially_enabled, library_dir=lib)
+      @skillmarket.set_skill_enabled(
+        "acme-widget",
+        enabled=!initially_enabled,
+        library_dir=lib,
+      )
       gate.release.put(())
       let updated = finished.get()
       assert_eq(updated.enabled, !initially_enabled)
-      let current = if updated.enabled { "\{lib}/acme-widget" } else { "\{lib}/.disabled/acme-widget" }
-      let other = if updated.enabled { "\{lib}/.disabled/acme-widget" } else { "\{lib}/acme-widget" }
+      let current = if updated.enabled {
+        "\{lib}/acme-widget"
+      } else {
+        "\{lib}/.disabled/acme-widget"
+      }
+      let other = if updated.enabled {
+        "\{lib}/.disabled/acme-widget"
+      } else {
+        "\{lib}/acme-widget"
+      }
       assert_eq(@fs.read_file("\{current}/SKILL.md").binary(), skill_body_v2)
       assert_false(@fs.exists(other))
       assert_eq(@skillmarket.installed_skills(library_dir=lib).length(), 1)

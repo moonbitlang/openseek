@@ -80,8 +80,7 @@ fn PendingSkillAction::source(self : PendingSkillAction) -> String {
     Installing(source~)
     | Uninstalling(source~, ..)
     | Updating(source~)
-    | SettingEnabled(source~, ..) =>
-      source
+    | SettingEnabled(source~, ..) => source
   }
 }
 
@@ -107,7 +106,9 @@ fn State::pending_enabled(
   channel : @interop.ChannelId,
   id : String,
 ) -> Bool {
-  self.busy.iter().any(operation => {
+  self.busy
+  .iter()
+  .any(operation => {
     operation.channel == channel &&
     operation.identity == PendingTarget::LibraryEntry(id)
   })
@@ -121,9 +122,11 @@ fn State::start_action(
   action : PendingSkillAction,
   cmd : @cmd.Cmd,
 ) -> (@cmd.Cmd, State, Outcome?) {
-  guard !self.busy.iter().any(operation => {
-    operation.channel == channel && operation.identity == identity
-  }) else {
+  guard !self.busy
+    .iter()
+    .any(operation => {
+      operation.channel == channel && operation.identity == identity
+    }) else {
     return (@cmd.none, self, None)
   }
   let busy = self.busy.copy()

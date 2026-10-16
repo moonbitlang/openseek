@@ -388,8 +388,22 @@ test "installed skill replies decode, with name falling back to id" {
         registry: Some({ module_name: "acme/widget", package_path: "", }),
         enabled: true,
       },
-      { id: "handmade", name: "", description: "", source: "", registry: None, enabled: true, },
-      { id: "", name: "no-id", description: "", source: "", registry: None, enabled: true, },
+      {
+        id: "handmade",
+        name: "",
+        description: "",
+        source: "",
+        registry: None,
+        enabled: true,
+      },
+      {
+        id: "",
+        name: "no-id",
+        description: "",
+        source: "",
+        registry: None,
+        enabled: true,
+      },
     ]),
   )
   guard items is [widget, handmade] else {

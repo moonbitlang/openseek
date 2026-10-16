@@ -235,10 +235,11 @@ fn set_enabled(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(channel, @commands.skills_set_enabled, {
-        id: item.id,
-        enabled: !item.enabled,
-      }) catch {
+      let reply = @interop.bridge_request(
+        channel,
+        @commands.skills_set_enabled,
+        { id: item.id, enabled: !item.enabled, },
+      ) catch {
         error => {
           scheduler.add(
             emit(

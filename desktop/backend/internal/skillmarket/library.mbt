@@ -278,7 +278,14 @@ async fn SkillLibrary::list_entries(
       guard @fsx.try_read_text(path) is Some(text) else { continue }
       let id = id.to_owned()
       let (name, description) = parse_frontmatter(text, id)
-      skills.push({ id, name, description, source: "", registry: None, enabled, })
+      skills.push({
+        id,
+        name,
+        description,
+        source: "",
+        registry: None,
+        enabled,
+      })
     } else {
       guard @fsx.try_read_text(path.join("SKILL.md")) is Some(text) else {
         continue
