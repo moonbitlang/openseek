@@ -236,9 +236,7 @@ fn set_enabled(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
-        channel,
-        @commands.skills_set_enabled,
-        payload,
+        channel, @commands.skills_set_enabled, payload,
       ) catch {
         error => {
           scheduler.add(
