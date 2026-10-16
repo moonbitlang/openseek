@@ -19,9 +19,10 @@ fn pick_attachments(
   input : Input,
   emit : @cmd.Emit[@image_input.Event],
 ) -> @cmd.Cmd {
+  guard input.identity.owner.host() is Some(host) else { return @cmd.none }
   // Native selection exposes an exact path. The browser File API deliberately
   // hides it, so browser/remote selections must upload their actual bytes.
-  if input.identity.owner.channel != @interop.Local ||
+  if host.channel != @interop.Local ||
     input.root is None ||
     @interop.openseek_api() is None {
     return @image_input.pick(
@@ -33,7 +34,7 @@ fn pick_attachments(
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply : @protocol.PickAttachmentReply = @interop.bridge_request(
-        input.identity.owner.channel,
+        host.channel,
         @commands.host_pick_attachment,
         @protocol.NoPayload,
       ) catch {
@@ -58,13 +59,14 @@ fn prepare_attachment(
   request : AttachmentRequest,
   emit : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
+  guard identity.owner.host() is Some(host) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply : @protocol.PrepareAttachmentReply = @interop.bridge_request(
-        identity.owner.channel,
+        host.channel,
         @commands.fs_prepare_attachment,
         {
-          session: identity.owner.session,
+          session: host.session,
           workspace: request.root.path,
           source: request.source,
         },
@@ -97,13 +99,14 @@ fn import_attachment(
   request : AttachmentRequest,
   emit : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
+  guard identity.owner.host() is Some(host) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply : @protocol.ImportAttachmentReply = @interop.bridge_request(
-        identity.owner.channel,
+        host.channel,
         @commands.fs_import_attachment,
         {
-          session: identity.owner.session,
+          session: host.session,
           workspace: request.root.path,
           source: request.source,
         },

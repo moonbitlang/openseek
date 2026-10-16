@@ -29,7 +29,7 @@ priv struct Completion {
 /// Results from the last workspace-symbol request. Owner, root, and query are
 /// all part of the cache identity so navigation cannot reuse stale rows.
 priv struct SymbolCache {
-  owner : @interop.ConversationKey?
+  owner : @interop.ConversationIdentity?
   root : @common.Uri?
   query : String
   items : Array[CompletionItem]
@@ -251,7 +251,7 @@ fn Input::completion(
   self : Input,
   text : String,
   symbols : SymbolCache,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   files~ : Array[@files.Match] = [],
   files_loading~ : Bool = false,
 ) -> Completion? {
@@ -296,6 +296,7 @@ fn Input::completion(
       }
     }
     Symbols => {
+      guard owner.host() is Some(_) && self.root is Some(_) else { return None }
       let items = symbols.items.filter(item => {
         trigger.matches([item.label, item.detail])
       })
@@ -311,6 +312,7 @@ fn Input::completion(
       })
     }
     Files => {
+      guard owner.host() is Some(_) && self.root is Some(_) else { return None }
       let items = files.map(file => CompletionItem::{
         label: file.name,
         detail: file.path.0,

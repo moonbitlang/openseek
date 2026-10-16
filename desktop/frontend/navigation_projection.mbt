@@ -1,6 +1,10 @@
 ///|
 fn Model::navigation_location(self : Model) -> @navigation.Location? {
-  guard self.console.page_device is Some(device) else { return None }
+  let device = self.console.page_device
+  if self.screen is Chat &&
+    self.cloud.creating_at(self.chat_navigation_generation) {
+    return None
+  }
   let target : @navigation.Target = match self.screen {
     Settings => Settings
     Schedules => Schedules
@@ -12,7 +16,9 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
       }
     Codex => self.codex.navigation_target()
     Chat =>
-      if self.selected_conversation is Some(selection) &&
+      if self.cloud_identity() is Some(@interop.Cloud(account~, session~)) {
+        CloudSession(account~, session~)
+      } else if self.host_selection() is Some(selection) &&
         self.loading_conversation is Some(_) {
         Session(selection.session)
       } else if self.active_conversation() is Some(conv) {
@@ -33,13 +39,17 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
         ChatNew
       }
   }
-  Some({ device, target, })
+  match target {
+    CloudSession(..) => Some({ device: None, target, })
+    Settings => Some({ device, target, })
+    _ => if device is Some(_) { Some({ device, target, }) } else { None }
+  }
 }
 
 ///|
 fn navigation_screen(target : @navigation.Target) -> Screen {
   match target {
-    Chat | ChatNew | Session(_) | ChatDraft(_) => Chat
+    Chat | ChatNew | Session(_) | ChatDraft(_) | CloudSession(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
     Settings => Settings
     Skills | InstalledSkill(_) | MarketSkill(_) => Skills
@@ -56,7 +66,8 @@ fn Model::project_adoption_at(
 ) -> ProjectAdoption? {
   guard self.pending_project_adoption is Some(pending) &&
     pending.channel == self.focused &&
-    Some(location.device) == self.console.page_device &&
+    location.device is Some(device) &&
+    Some(device) == self.console.page_device &&
     pending.codex_draft is Some(id) else {
     return None
   }

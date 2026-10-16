@@ -5,19 +5,26 @@
 /// overview state, and `None` disposes the current one. It derives from the
 /// same `console_gate` and `chat_column` the view places the column from, so
 /// the component exists exactly while its DOM does.
-priv struct TranscriptSlot {
-  source : @transcript_component.Source
-  channel : @interop.ChannelId
-  // The Codex page shows a transcript even before a task is selected.
-  session : String?
+priv enum TranscriptSlot {
+  HostTranscript(
+    source~ : @transcript_component.Source,
+    channel~ : @interop.ChannelId,
+    session~ : String?
+  )
+  CloudTranscriptSlot(@interop.ConversationIdentity)
 } derive(Eq)
 
 ///|
 fn TranscriptSlot::key(self : TranscriptSlot) -> String {
-  let key = self.source.wire() + "\u{0}" + self.channel.uri_authority()
-  match self.session {
-    Some(session) => key + "\u{0}" + session
-    None => key
+  match self {
+    CloudTranscriptSlot(identity) => "openseek\u{0}" + identity.key()
+    HostTranscript(source~, channel~, session~) => {
+      let key = source.wire() + "\u{0}" + channel.uri_authority()
+      match session {
+        Some(session) => key + "\u{0}" + session
+        None => key
+      }
+    }
   }
 }
 
@@ -44,12 +51,32 @@ priv enum ChatColumn {
   Loading
   Onboarding
   Transcript(slot~ : TranscriptSlot, conversation~ : Conversation)
+  CloudTranscript(slot~ : TranscriptSlot)
 }
 
 ///|
 fn Model::chat_column(self : Model) -> ChatColumn {
+  if self.cloud.creating_at(self.chat_navigation_generation) {
+    return Loading
+  }
+  if self.cloud_identity() is Some(owner) {
+    guard self.cloud_conversation() is Some(conversation) else {
+      return if self.cloud.notice is Some(message) {
+        LoadFailed(message~)
+      } else {
+        Loading
+      }
+    }
+    if conversation.loading && conversation.records.is_empty() {
+      return Loading
+    }
+    if conversation.history_required && conversation.notice is Some(message) {
+      return LoadFailed(message~)
+    }
+    return CloudTranscript(slot=CloudTranscriptSlot(owner))
+  }
   if self.conversation_load_failure is Some(failure) &&
-    self.selected_conversation is Some(selected) &&
+    self.host_selection() is Some(selected) &&
     selected == failure.target {
     return LoadFailed(message=failure.message)
   }
@@ -60,11 +87,11 @@ fn Model::chat_column(self : Model) -> ChatColumn {
     None => Onboarding
     Some(conversation) =>
       Transcript(
-        slot={
-          source: OpenSeek,
-          channel: self.focused,
-          session: Some(self.active_session),
-        },
+        slot=HostTranscript(
+          source=OpenSeek,
+          channel=self.focused,
+          session=Some(self.active_session),
+        ),
         conversation~,
       )
   }
@@ -72,17 +99,19 @@ fn Model::chat_column(self : Model) -> ChatColumn {
 
 ///|
 fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
-  guard !self.is_console_gated() else { return None }
+  guard self.cloud_selected() || !self.is_console_gated() else { return None }
   match self.screen {
     Codex =>
-      Some({
-        source: Codex,
-        channel: self.focused,
-        session: self.codex.active_id(),
-      })
+      Some(
+        HostTranscript(
+          source=Codex,
+          channel=self.focused,
+          session=self.codex.active_id(),
+        ),
+      )
     Chat =>
       match self.chat_column() {
-        Transcript(slot~, ..) => Some(slot)
+        Transcript(slot~, ..) | CloudTranscript(slot~) => Some(slot)
         LoadFailed(..) | Loading | Onboarding => None
       }
     Skills | Schedules | Settings => None
@@ -186,6 +215,32 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
 
 ///|
 fn Model::transcript_input(self : Model) -> @transcript_component.Input {
+  if self.screen is Chat &&
+    self.cloud_identity() is Some(owner) &&
+    self.cloud_conversation() is Some(conversation) {
+    return @transcript_component.Input(
+      locale=self.locale,
+      dark_mode=self.theme.is_dark(self.system_dark),
+      minimal=self.minimal_transcript_effective(),
+      source=OpenSeek,
+      identity=owner.key(),
+      active_session=owner.session(),
+      scroll=self.remembered_scroll(),
+      current_project=None,
+      projects=[],
+      can_choose_project=false,
+      project_menu_open=false,
+      project_query="",
+      root=None,
+      items=@transcript_component.VisibleRow::history(conversation.items()),
+      streaming_response=conversation.streaming_response,
+      // Deltas do not change the committed-event count, so the live bubble
+      // keeps one identity until a semantic response/step boundary.
+      streaming_identity=conversation.task.unwrap_or("idle") +
+        ":" +
+        conversation.events.length().to_string(),
+    )
+  }
   let content = self.transcript_content()
   let can_choose_project = self.can_choose_new_chat_project()
   let conversation = if self.screen is Chat {

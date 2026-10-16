@@ -1404,15 +1404,6 @@ fn DeviceState::is_chat_workspace(
 }
 
 ///|
-fn Model::chat_creation_pending(self : Model) -> Bool {
-  guard self.chat_creation is Some((channel, _, connection)) &&
-    self.device_state(channel) is Some(dev) else {
-    return false
-  }
-  dev.connection_generation == connection && dev.bridge is Connected
-}
-
-///|
 fn Model::can_pick_project(self : Model, channel : @interop.ChannelId) -> Bool {
   channel != self.focused ||
   !self.codex_work_selected() ||
@@ -1459,35 +1450,4 @@ fn adopt_picked_directory(
       }),
     },
   )
-}
-
-///|
-fn create_chat_workspace(
-  dispatch : @cmd.Emit[Msg],
-  channel : @interop.ChannelId,
-  generation~ : Int32,
-) -> @cmd.Cmd {
-  @cmd.custom_cmd(scheduler => {
-    @js.Promise::from_async(() => {
-      let result : Result[String, String] = try {
-        match
-          @interop.bridge_request(
-            channel,
-            @commands.fs_create_unnamed_workspace,
-            @protocol.EmptyPayload::NoPayload,
-          ) {
-          Listing(path~, ..) => Ok(path)
-          BrowseError(message) => Err(message)
-          Drives(_) =>
-            Err("the host returned a drive list instead of a workspace")
-        }
-      } catch {
-        error => Err(@interop.bridge_error_text(error))
-      }
-      scheduler.add(
-        dispatch(ChatWorkspaceCreated(channel~, generation~, result~)),
-      )
-    })
-    |> ignore
-  })
 }

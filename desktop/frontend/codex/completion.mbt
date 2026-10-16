@@ -204,7 +204,10 @@ fn State::composer_identity(
   channel : @interop.ChannelId,
 ) -> @composer.Identity {
   {
-    owner: { channel, session: self.active_id().unwrap_or("codex.none"), },
+    owner: @interop.Host({
+      channel,
+      session: self.active_id().unwrap_or("codex.none"),
+    }),
     archive_generation: self.composer_retirements.length(),
   }
 }
@@ -227,7 +230,7 @@ pub fn State::accepts_composer_identity(
   // Other conversations retain their cached entries across this migration.
   // Only a retirement of this owner invalidates its older editor actions.
   for index in identity.archive_generation..<self.composer_retirements.length() {
-    if self.composer_retirements[index] == identity.owner {
+    if @interop.Host(self.composer_retirements[index]) == identity.owner {
       return false
     }
   }
@@ -249,7 +252,10 @@ test "retiring another draft preserves a cached Codex conversation's actions" {
   assert_true(after.accepts_composer_identity(identity, @interop.Local))
   let retired = {
     ..after,
-    composer_retirements: [..after.composer_retirements, identity.owner],
+    composer_retirements: [
+      ..after.composer_retirements,
+      identity.owner.host().unwrap(),
+    ],
   }
   assert_false(retired.accepts_composer_identity(identity, @interop.Local))
   assert_true(
@@ -420,7 +426,7 @@ pub fn State::composer_input(
     context_generation: 0,
     turn_id: active_turn,
     submission_sequence: self.submission_sequence,
-    retirements: self.composer_retirements,
+    retirements: self.composer_retirements.map(key => @interop.Host(key)),
     prediction_source: None,
     prediction: None,
     file_candidates: context.file_candidates,
@@ -687,7 +693,7 @@ test "Codex projects app-server facts into the shared composer contract" {
     active_file: None,
     file_index: @composer.FileIndexReady(epoch=1, truncated=false),
   })
-  assert_eq(input.identity.owner.session, "thread-shared-composer")
+  assert_eq(input.identity.owner.session(), "thread-shared-composer")
   assert_eq(input.slash_commands.length(), 2)
   assert_eq(input.file_candidates, [@pathx.Relative("src/main.mbt")])
   guard input.root is Some(root) else {

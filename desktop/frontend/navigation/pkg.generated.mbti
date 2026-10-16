@@ -19,7 +19,7 @@ pub fn History::promote(Self, Location, Location) -> Self
 pub fn History::visit(Self, Location, replace~ : Bool) -> Self
 
 pub(all) struct Location {
-  device : String
+  device : String?
   target : Target
 } derive(Eq)
 pub fn Location::equal(Self, Self) -> Bool
@@ -30,6 +30,7 @@ pub(all) enum Target {
   ChatNew
   Session(String)
   ChatDraft(String)
+  CloudSession(account~ : String, session~ : String)
   Codex
   CodexNew
   Thread(String)

@@ -18,6 +18,7 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | OpenSchedules
     | OpenSkills
     | OpenCodex
+    | OpenCloudConversation(..)
     | OpenSession(_, _)
     | OpenSessionHere(_)
     | OpenArchivedSession(_, ..)
@@ -26,8 +27,7 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | NotificationClicked(..)
     | QuickOpen(_)
     | SchedulePage(_)
-    | ProjectPicker(_)
-    | ChatWorkspaceCreated(..) => true
+    | ProjectPicker(_) => true
     Skills(PreviewInstalled(_) | PreviewMarket(_) | BackToList) => true
     _ => false
   }
@@ -91,7 +91,12 @@ fn observe_navigation(
     old_codex is CodexDraft(_) &&
     new_codex is Thread(_) &&
     next.console.page_device is Some(device) {
-    Some(({ device, target: old_codex, }, { device, target: new_codex, }))
+    Some(
+      (
+        { device: Some(device), target: old_codex, },
+        { device: Some(device), target: new_codex, },
+      ),
+    )
   } else {
     None
   }
@@ -108,7 +113,12 @@ fn observe_navigation(
     .conversation_selection()
     .map(selection => (selection.channel, selection.session)) ==
     Some((pending.source.channel, reply.session))
+  let cloud_opened = message is CloudAction(_) &&
+    next.cloud_selected() &&
+    next.cloud_identity() is Some(_) &&
+    next.cloud_identity() != previous.cloud_identity()
   let explicit = message.is_navigation_visit() ||
+    cloud_opened ||
     fork_opened ||
     (message is SessionRotated(_) && previous.navigation.new_chat_requested)
   let durable : Array[(@navigation.Location, @navigation.Location)] = []
@@ -119,8 +129,8 @@ fn observe_navigation(
         !old.has_begun() {
         durable.push(
           (
-            { device, target: ChatDraft(conv.session_id), },
-            { device, target: Session(conv.session_id), },
+            { device: Some(device), target: ChatDraft(conv.session_id), },
+            { device: Some(device), target: Session(conv.session_id), },
           ),
         )
       }
@@ -128,7 +138,7 @@ fn observe_navigation(
   }
   {
     location: next.navigation_location(),
-    user_visit: message.is_navigation_visit(),
+    user_visit: message.is_navigation_visit() || cloud_opened,
     session_rotated: message is SessionRotated(_),
     explicit,
     repeat_visit: message

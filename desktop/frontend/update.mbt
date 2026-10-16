@@ -559,6 +559,10 @@ fn adopt_projects(
     loading_conversation,
   })
   commands.push(refresh_cmd)
+  if model.cloud_identity() is Some(_) ||
+    model.cloud.creating_at(model.chat_navigation_generation) {
+    return (@cmd.batch(commands), next)
+  }
   if selected_detached {
     // The detached OpenSeek selection may be hidden behind a Codex draft.
     // Clear that stale selection without changing the visible engine.
@@ -732,7 +736,7 @@ fn retry_session_snapshot(
         {
           ..next,
           loading_conversation: None,
-          conversation_load_failure: match next.selected_conversation {
+          conversation_load_failure: match next.host_selection() {
             Some(target) if blocking_failure &&
               target.channel == channel &&
               target.session == session => Some({ target, message, })
@@ -1649,6 +1653,7 @@ fn covering_overlay(model : Model) -> Bool {
 /// custom select, the composer's Git popover, and every `covering_overlay` —
 /// must hide the view rather than fight it.
 fn desired_browser_view(model : Model) -> Int32? {
+  guard !model.cloud_selected() else { return None }
   let conversation_screen = model.screen is Chat || model.screen is Codex
   let git_details_open = match model.screen {
     Chat => model.git_details_open
@@ -1813,6 +1818,31 @@ fn update(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   let previous = model
+  let navigates = match msg {
+    OpenCloudConversation(..)
+    | OpenSession(_, _)
+    | OpenArchivedSession(_, ..)
+    | OpenSessionHere(_)
+    | NewChat
+    | NewChatIn(_, _)
+    | CloudAction(@cloud.Create)
+    | CodexOpenThread(_)
+    | OpenCodex
+    | OpenSetup
+    | OpenSkills
+    | OpenSchedules
+    | Navigation(Back | Forward)
+    | SidebarModeSelected(_) => true
+    _ => false
+  }
+  let model = if navigates {
+    {
+      ..model,
+      chat_navigation_generation: model.chat_navigation_generation + 1,
+    }
+  } else {
+    model
+  }
   let (cmd, model) = update_msg(dispatch, msg, model)
   let model = model.restore_message_approvals()
   let model = {
@@ -1847,7 +1877,9 @@ fn update(
     model,
     msg is Init,
   )
-  let composer_context_changed = model.active_session != previous.active_session ||
+  let composer_context_changed = model.selected_conversation !=
+    previous.selected_conversation ||
+    model.active_session != previous.active_session ||
     model.focused != previous.focused ||
     model.screen != previous.screen
   let model = if composer_context_changed {
@@ -2194,6 +2226,7 @@ fn update_msg(
       (
         @cmd.batch([
           fetch_account(dispatch, model.is_desktop, model.account_epoch),
+          @cmd.custom_cmd(_ => @cloud.discard_legacy_credential()),
           device,
           load_saved_settings(is_desktop=model.is_desktop, dispatch),
           watch_color_scheme(dispatch, model.is_desktop),
@@ -2202,6 +2235,24 @@ fn update_msg(
         ]),
         model,
       )
+    }
+    CloudAction(message) => update_cloud(dispatch, message, model)
+    OpenCloudConversation(account~, session~) => {
+      guard model.cloud.user_id == Some(account) else {
+        return (@cmd.none, model)
+      }
+      update_cloud(dispatch, @cloud.Open(session), {
+        ..model,
+        screen: Chat,
+        selected_conversation: Some(CloudSelection(account~, session~)),
+        api_setup_open: false,
+        loading_conversation: None,
+        pending_project_adoption: None,
+        project_picker: None,
+        sidebar_mode: @sidebar.ChatMode,
+        select_menu: None,
+        sidebar_open: model.sidebar_open && !model.narrow,
+      })
     }
     Console(SignOutClicked) => sign_out_account(dispatch, model)
     Console(SignOutDone(token~)) => {
@@ -2446,7 +2497,21 @@ fn update_msg(
           (command, { ..model, codex, })
         }
       }
-    ComposerAction(action) =>
+    ComposerAction(action) => {
+      if action.identity().owner is @interop.Cloud(..) {
+        guard model.accepts_composer_action(action.identity()) else {
+          return (@cmd.none, model)
+        }
+        match action {
+          @composer.DraftSubmitted(identity~, draft~) =>
+            return update_cloud(
+              dispatch,
+              @cloud.Submit(identity.owner, draft),
+              model,
+            )
+          _ => return (@cmd.none, model)
+        }
+      }
       match action {
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
@@ -2909,6 +2974,7 @@ fn update_msg(
           )
         }
       }
+    }
     JumpToMention(index) => {
       guard model.active_conversation() is Some(conv) else {
         return (@cmd.none, model)
@@ -3685,6 +3751,18 @@ fn update_msg(
       guard ModelChoice::parse(value) is Some(choice) else {
         return (@cmd.none, model)
       }
+      let switches = match choice {
+        CodexModel(_) | CodexUnavailablePick => model.screen is Chat
+        OpenSeekModel(_) => model.screen is Codex
+      }
+      let model = if switches {
+        {
+          ..model,
+          chat_navigation_generation: model.chat_navigation_generation + 1,
+        }
+      } else {
+        model
+      }
       let model = { ..model, select_menu: None, }
       match choice {
         OpenSeekModel(engine_model) =>
@@ -3820,7 +3898,10 @@ fn update_msg(
                 }),
                 composer_entry_retirements: [
                   ..model.composer_entry_retirements,
-                  { channel: conv.device, session: conv.session_id, },
+                  @interop.Host({
+                    channel: conv.device,
+                    session: conv.session_id,
+                  }),
                 ],
                 sidebar_open: model.sidebar_open && !model.narrow,
               },
@@ -3985,7 +4066,7 @@ fn update_msg(
       )
     RemoteAccessSet(enabled) =>
       (set_remote_access(dispatch, enabled), { ..model, remote_error: None, })
-    RemoteConnectClicked => begin_account_login(dispatch, model)
+    RemoteConnectClicked => begin_account_login(dispatch, model, create=false)
     RemoteCancelClicked => (cancel_remote(dispatch), model)
     RemoteDisconnectClicked => sign_out_account(dispatch, model)
     RemoteDisconnectFailed(message) =>
@@ -4212,12 +4293,14 @@ fn update_msg(
         { ..model, api_setup_open: false, api_setup_dismissed: true, },
       )
     OpenApiSetup =>
-      // Reopening cancels the dismissal — otherwise the next settled
-      // snapshot would close the modal the user just asked for.
-      (
-        @cmd.none,
-        { ..model, api_setup_open: true, api_setup_dismissed: false, },
-      )
+      if model.cloud_selected() {
+        (@cmd.none, model)
+      } else {
+        (
+          @cmd.none,
+          { ..model, api_setup_open: true, api_setup_dismissed: false, },
+        )
+      }
     OpenCodexConfig =>
       (open_codex_config(locale=model.locale, dispatch, model.focused), model)
     CodexConfigOpenFailed(message) => model.notify_error(dispatch, message)
@@ -4766,6 +4849,62 @@ fn update_msg(
         }),
       )
     }
+    NewChatRequested => {
+      let target = if model.codex_work_selected() {
+        model.codex
+        .active_placement(model.focused)
+        .bind(p => p.project_root())
+        .map(project => (model.focused, project))
+      } else {
+        model
+        .conversation_selection()
+        .map(selection => (selection.channel, selection.workspace))
+      }
+      let mode : @sidebar.Mode = if !model.codex_work_selected() &&
+        model.cloud_identity() is Some(_) {
+        ChatMode
+      } else if target is Some((channel, project)) {
+        if model
+          .device_state(channel)
+          .map_or(false, dev => dev.is_chat_workspace(project)) {
+          ChatMode
+        } else {
+          WorkMode
+        }
+      } else {
+        model.sidebar_mode
+      }
+      if mode is @sidebar.WorkMode {
+        match target {
+          Some((channel, project)) =>
+            update(dispatch, NewChatIn(channel, Some(project)), model)
+          None => update(dispatch, NewChat, model)
+        }
+      } else {
+        update(dispatch, CloudAction(@cloud.Create), model)
+      }
+    }
+    TranscriptLinkOpened(slot~, path~) => {
+      guard model.transcript_slot().map(current => current.key()) == Some(slot) else {
+        return (@cmd.none, model)
+      }
+      update_msg(dispatch, OpenFile(path), model)
+    }
+    TranscriptLocationOpened(slot~, target) => {
+      guard !model.cloud_selected() &&
+        model.transcript_slot().map(current => current.key()) == Some(slot) else {
+        return (@cmd.none, model)
+      }
+      update_msg(
+        dispatch,
+        JumpToLocation(
+          path=target.file,
+          range=target.range,
+          annotation=target.annotation,
+        ),
+        model,
+      )
+    }
     NewChat => {
       if model.at_blank_new_page() {
         return (@cmd.none, model)
@@ -4775,11 +4914,8 @@ fn update_msg(
       // running in the background and stays one sidebar click away. It lands
       // in the active workspace — the one the on-screen conversation uses —
       // and starts with whichever agent the model chip was last picked from.
-      if model.focused_device() is Some(dev) &&
-        dev.active_project is Some(project) &&
-        dev.is_chat_workspace(project) {
-        update(dispatch, CreateChat(model.focused), model)
-      } else if model.default_agent is CodexAgent {
+      let model = { ..model, selected_conversation: None, }
+      if model.default_agent is CodexAgent {
         new_codex_chat(
           dispatch,
           model,
@@ -4821,7 +4957,7 @@ fn update_msg(
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       let model = {
         ..model.with_active_project(workspace),
-        chat_creation: None,
+        selected_conversation: None,
         loading_conversation: None,
       }
       let (start_cmd, model) = if use_codex {
@@ -4974,6 +5110,7 @@ fn update_msg(
     // backdrop: that second message must not drop the delete's own answer.
     CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
     SessionRotated(owner) => {
+      guard model.cloud_identity() is None else { return (@cmd.none, model) }
       // A delayed rotation is owned by the channel that requested it. A focus
       // switch overtakes it; activating the old owner's id here would yank the
       // user back to the host they already left.
@@ -5020,49 +5157,6 @@ fn update_msg(
         },
       )
     }
-    CreateChat(channel) => {
-      guard !model.chat_creation_pending() &&
-        model.pending_project_adoption is None else {
-        return (@cmd.none, model)
-      }
-      guard model.device_state(channel) is Some(dev) && dev.bridge is Connected else {
-        return (@cmd.none, model)
-      }
-      let generation = model.chat_creation_sequence + 1
-      let (focus_cmd, model) = focus_channel(dispatch, model, channel)
-      (
-        @cmd.batch([
-          focus_cmd,
-          create_chat_workspace(dispatch, channel, generation~),
-        ]),
-        {
-          ..model,
-          project_picker: None,
-          chat_creation: Some((channel, generation, dev.connection_generation)),
-          chat_creation_sequence: generation,
-        },
-      )
-    }
-    ChatWorkspaceCreated(channel~, generation~, result~) => {
-      guard model.chat_creation is Some((owner, expected, connection)) &&
-        owner == channel &&
-        expected == generation else {
-        return (@cmd.none, model)
-      }
-      let model = { ..model, chat_creation: None, }
-      guard model.device_state(channel) is Some(dev) &&
-        dev.connection_generation == connection else {
-        return (@cmd.none, model)
-      }
-      match result {
-        Ok(path) => adopt_picked_directory(dispatch, channel, path, model)
-        Err(message) =>
-          model.notify_error(
-            dispatch,
-            notice_text(model.locale, CreateChat(message.to_string())),
-          )
-      }
-    }
     PickProject(channel) => {
       // Focus moves for the surrounding UI, while the picker itself keeps
       // `channel` as its owner through every later navigation and confirm.
@@ -5087,7 +5181,6 @@ fn update_msg(
           ..model,
           // A newer project choice supersedes any outstanding chat allocation.
           // Its directory may still be created, but its reply must not adopt it.
-          chat_creation: None,
           quick_open,
           project_picker: Some(picker),
         },
@@ -5412,7 +5505,10 @@ fn update_msg(
         model.conversation_by_run(Local, run_id)
       }
       if conv is Some(conv) {
-        update_msg(dispatch, OpenSession(conv.device, conv.session_id), model)
+        update_msg(dispatch, OpenSession(conv.device, conv.session_id), {
+          ..model,
+          chat_navigation_generation: model.chat_navigation_generation + 1,
+        })
       } else {
         (@cmd.none, model)
       }
@@ -5447,15 +5543,22 @@ fn update_msg(
         }
         let model = {
           ..model,
-          selected_conversation: Some(target),
+          selected_conversation: Some(HostSelection(target)),
           conversation_load_failure: None,
           screen: Chat,
         }
         let (cmd, model) = open_session_on(dispatch, channel, model, session_id)
         (@cmd.batch([focus_cmd, cmd]), model)
       }
-    RetrySelectedConversation =>
-      match model.selected_conversation {
+    RetrySelectedConversation => {
+      if model.selected_conversation is Some(CloudSelection(account~, session~)) {
+        return update_msg(
+          dispatch,
+          OpenCloudConversation(account~, session~),
+          model,
+        )
+      }
+      match model.host_selection() {
         Some(selection) if selection.record is LiveRecord =>
           update_msg(
             dispatch,
@@ -5474,6 +5577,7 @@ fn update_msg(
           )
         _ => (@cmd.none, model)
       }
+    }
     OpenArchivedSession(channel, session~, workspace~) => {
       guard !session.is_empty() && model.device_state(channel) is Some(dev) else {
         return (@cmd.none, model)
@@ -5489,12 +5593,9 @@ fn update_msg(
       let (focus_cmd, model) = focus_channel(dispatch, model, channel)
       let model = {
         ..model,
-        selected_conversation: Some({
-          channel,
-          session,
-          workspace,
-          record: ArchivedRecord,
-        }),
+        selected_conversation: Some(
+          HostSelection({ channel, session, workspace, record: ArchivedRecord, }),
+        ),
         conversation_load_failure: None,
         screen: Chat,
       }
@@ -5563,7 +5664,21 @@ fn update_msg(
         )
       }
     }
-    OpenFile(path) => request_open_path(dispatch, model, path, None)
+    OpenFile(path) => {
+      if model.cloud_selected() {
+        return (
+          if path.has_prefix("https://") ||
+            path.has_prefix("http://") ||
+            path.has_prefix("mailto:") {
+            open_external_link(dispatch, path)
+          } else {
+            @cmd.none
+          },
+          model,
+        )
+      }
+      request_open_path(dispatch, model, path, None)
+    }
     RevealFile(path) => {
       guard model.is_desktop &&
         model.active_checkout() is Some(active) &&
@@ -6533,9 +6648,19 @@ fn update_msg(
         (cmd, model)
       }
     }
+    OpenCloudExport => {
+      guard model.cloud_identity() is Some(identity) else {
+        return (@cmd.none, model)
+      }
+      let (command, export_dialog) = model.export_dialog.open_cloud(
+        session=identity.session(),
+        title=model.cloud_title(),
+      )
+      (command, { ..model, export_dialog, })
+    }
     ExportDialog(msg) => {
       let (login, model) = if msg is @export_dialog.SignIn {
-        begin_account_login(dispatch, model)
+        begin_account_login(dispatch, model, create=false)
       } else {
         (@cmd.none, model)
       }
@@ -8219,7 +8344,7 @@ fn update_device_msg(
         let next = model
           .replace_device({ ..dev, sessions, archived, })
           .with_archive_override(channel, key, ArchiveLive)
-        let next = match next.selected_conversation {
+        let next = match next.host_selection() {
           Some(selected) if selected.matches_record(
               channel,
               key.session,
@@ -8228,7 +8353,9 @@ fn update_device_msg(
             ) =>
             {
               ..next,
-              selected_conversation: Some({ ..selected, record: LiveRecord, }),
+              selected_conversation: Some(
+                HostSelection({ ..selected, record: LiveRecord, }),
+              ),
             }
           _ => next
         }
@@ -11633,7 +11760,7 @@ test "a sub-run child opens through its parent before the store lists it" {
   let (_, next) = update(dispatch, OpenSessionHere("desktop-test-sr-2"), model)
   // The click selects the child and starts its first load; the view switches
   // when the snapshot lands, as for any session opened from the sidebar.
-  guard next.selected_conversation is Some(selection) else {
+  guard next.host_selection() is Some(selection) else {
     fail("expected the child to be selected")
   }
   inspect(selection.session, content="desktop-test-sr-2")
@@ -15097,7 +15224,7 @@ test "model switches transfer one draft and retire the old owner actions" {
   assert_true(switched.screen is Codex)
   assert_true(switched.default_agent is CodexAgent)
   assert_true(switched.active_conversation() is None)
-  assert_true(switched.codex.active_id() == Some(identity.owner.session))
+  assert_true(switched.codex.active_id() == Some(identity.owner.session()))
   assert_true(switched.codex_composer_input().draft == draft)
   assert_true(switched.codex == repeated.codex)
   assert_true(
@@ -15123,7 +15250,7 @@ test "model switches transfer one draft and retire the old owner actions" {
   assert_true(back.composer_input() == back_repeated.composer_input())
   assert_true(back.codex == back_repeated.codex)
   assert_true(back.active().worktree_mode)
-  assert_eq(back.active_session, identity.owner.session)
+  assert_eq(back.active_session, identity.owner.session())
   assert_true(back.conversation_for_composer_action(identity) is None)
   assert_true(
     !back.codex.accepts_composer_identity(codex_identity, back.focused),
@@ -15190,7 +15317,10 @@ test "Codex composer retirements stay monotonic across device focus" {
   let retirements = remote_retired.codex_composer_input().retirements
   assert_eq(retirements.length(), 2)
   assert_true(retirements[0] == old_retirements[0])
-  assert_true(retirements[1] == { channel: remote, session: "remote-draft", })
+  assert_true(
+    retirements[1] ==
+    @interop.Host({ channel: remote, session: "remote-draft", }),
+  )
   let (_, returned) = focus_channel(dispatch, remote_retired, source)
   let (_, reopened) = update(
     dispatch,
@@ -18774,7 +18904,10 @@ test "only synchronous file-open messages suppress panel reactivation" {
     channel: Local,
     session: "desktop-test",
   }
-  let identity : ComposerActionIdentity = { owner, archive_generation: 0, }
+  let identity : ComposerActionIdentity = {
+    owner: @interop.Host(owner),
+    archive_generation: 0,
+  }
   assert_false(JumpToMention(0).opens_file_before_panel_reconciliation())
   assert_false(
     ComposerAction(
@@ -19030,7 +19163,7 @@ test "resolved transcript files and directories stay in the right panel" {
   })
   let mention_msg = ComposerAction(
     @composer.MentionOpened(
-      identity={ owner: target_owner, archive_generation: 0, },
+      identity={ owner: @interop.Host(target_owner), archive_generation: 0, },
       mention={ ref_: File(path="report"), range: None, },
     ),
   )
@@ -22536,7 +22669,7 @@ test "full-screen modals hide the native view and closing restores it" {
   // Setup API owns the whole screen too. The browser is a native view above
   // the HTML shell, so opening the modal must hide it; dismissing the modal
   // then re-measures and restores the active Browser tab.
-  let (_, setup) = update(dispatch, ProviderChanged("custom"), restored)
+  let (_, setup) = update(dispatch, OpenApiSetup, restored)
   assert_true(setup.api_setup_open)
   assert_true(setup.browser_pane.shown is None)
   let (_, setup_closed) = update(dispatch, DismissApiSetup, setup)

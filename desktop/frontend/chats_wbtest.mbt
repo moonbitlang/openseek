@@ -1,63 +1,5 @@
 ///|
-test "one-click chat creation blocks repeats and adopts only its matching reply" {
-  let dispatch = test_dispatch()
-  let (_, creating) = update(dispatch, CreateChat(Local), test_model())
-  assert_true(creating.project_picker is None)
-  guard creating.chat_creation is Some((channel, generation, _)) else {
-    fail("expected a pending chat creation")
-  }
-  let (_, duplicate) = update(dispatch, CreateChat(Local), creating)
-  assert_eq(duplicate.chat_creation, creating.chat_creation)
-  let path = "/app-data/workspaces/Unnamed workspace"
-  let (_, stale) = update(
-    dispatch,
-    ChatWorkspaceCreated(channel~, generation=generation - 1, result=Ok(path)),
-    creating,
-  )
-  assert_true(stale.pending_project_adoption is None)
-  assert_eq(stale.chat_creation, creating.chat_creation)
-  let (_, received) = update(
-    dispatch,
-    ChatWorkspaceCreated(channel~, generation~, result=Ok(path)),
-    creating,
-  )
-  assert_true(received.chat_creation is None)
-  assert_true(
-    received.pending_project_adoption is Some(pending) &&
-    pending.requested == path,
-  )
-}
-
-///|
-test "chat creation failure and a dead connection cannot steal project selection" {
-  let dispatch = test_dispatch()
-  let (_, creating) = update(dispatch, CreateChat(Local), test_model())
-  guard creating.chat_creation is Some((channel, generation, _)) else {
-    fail("expected pending creation")
-  }
-  let (_, failed) = update(
-    dispatch,
-    ChatWorkspaceCreated(channel~, generation~, result=Err("disk full")),
-    creating,
-  )
-  assert_true(failed.chat_creation is None)
-  assert_true(failed.pending_project_adoption is None)
-  assert_eq(failed.active_session, creating.active_session)
-  let reconnected = creating.with_dev(dev => {
-    ..dev,
-    connection_generation: dev.connection_generation + 1,
-  })
-  let (_, stale) = update(
-    dispatch,
-    ChatWorkspaceCreated(channel~, generation~, result=Ok("/app/old")),
-    reconnected,
-  )
-  assert_true(stale.pending_project_adoption is None)
-  assert_true(!stale.chat_creation_pending())
-}
-
-///|
-test "managed chats are flat and user named workspaces remain projects" {
+test "managed local chats remain accessible and user named workspaces remain projects" {
   let channel = @interop.ChannelId::Local
   let root = channel.test_resource("/app-data/workspaces")
   let managed = channel.test_resource("/app-data/workspaces/Unnamed workspace")
@@ -70,6 +12,15 @@ test "managed chats are flat and user named workspaces remain projects" {
     projects: [named, managed, prefix_sibling],
     chat_root: Some(Ok(root)),
     active_project: Some(managed),
+    archived: [
+      {
+        id: "archived-local",
+        title: Some("Archived local chat"),
+        workspace: managed,
+        workspace_name: "Unnamed workspace",
+        updated_at_ms: Some(1),
+      },
+    ],
   })
   let model = model.replace_conversation({
     ..model.active(),
@@ -85,17 +36,56 @@ test "managed chats are flat and user named workspaces remain projects" {
     model.sidebar_component_sections(model.dev()).map(section => section.label)
   }
   let work = { ..model, sidebar_mode: WorkMode, }
-  assert_eq(labels(work), ["Projects", "Archived chats"])
+  assert_eq(labels(work), ["Projects", "Archived chats (1)"])
   assert_eq(work.sidebar_component_sections(work.dev())[0].entries.length(), 2)
   let chat = { ..model, sidebar_mode: ChatMode, }
-  assert_eq(labels(chat), ["Chats", "Archived chats"])
-  let chats = chat.sidebar_component_sections(chat.dev())[0]
-  assert_eq(chats.activation, Some(model.active_session))
+  assert_eq(labels(chat), ["Cloud", "Local", "Archived chats (1)"])
+  let chats = chat.sidebar_component_sections(chat.dev())[1]
+  assert_eq(chats.activation, Some(chat.active_session))
   assert_true(
-    chats.entries is [@section.Conversation(row)] &&
-    row.label == "New chat" &&
-    !row.nested &&
-    row.active,
+    chats.entries is [@section.Conversation({ id, nested: false, .. })] &&
+    id.source() is @conversation.OpenSeekLive,
+  )
+  assert_true(
+    chat.sidebar_component_sections(chat.dev())[2].entries
+    is [@section.Conversation({ id, .. })] &&
+    id.source() is @conversation.OpenSeekArchived,
+  )
+  assert_true(chat.account is None)
+}
+
+///|
+test "existing managed Codex chats reuse their original rows and activation" {
+  let root = @interop.ChannelId::Local.test_resource("/app-data/workspaces")
+  let managed = @interop.ChannelId::Local.test_resource(
+    "/app-data/workspaces/codex-chat",
+  )
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    projects: [managed],
+    chat_root: Some(Ok(root)),
+  })
+  let model = {
+    ..model,
+    screen: Codex,
+    sidebar_mode: ChatMode,
+    conversations: [],
+    codex: @codex.State::from_thread_snapshot({
+      "thread": {
+        "id": "local-codex",
+        "name": "Existing Codex chat",
+        "cwd": managed.path,
+        "projectRoot": managed.path,
+        "turns": [],
+      },
+    }),
+  }
+  let chats = model.sidebar_component_sections(model.dev())[1]
+  assert_eq(chats.activation, Some("local-codex"))
+  assert_true(
+    chats.entries
+    is [@section.Conversation({ id, nested: false, active: true, .. })] &&
+    id.source() is @conversation.CodexLive,
   )
 }
 
@@ -219,51 +209,4 @@ test "failed chat metadata preserves ordinary project snapshots and reports its 
     removed,
   )
   assert_true(recovered.sidebar_component_input().notices.is_empty())
-}
-
-///|
-test "a newer project confirmation wins over an older chat allocation" {
-  let dispatch = test_dispatch()
-  let (_, creating) = update(dispatch, CreateChat(Local), test_model())
-  guard creating.chat_creation is Some((channel, generation, _)) else {
-    fail("expected pending chat allocation")
-  }
-  let (_, opened) = update(dispatch, PickProject(Local), creating)
-  assert_true(opened.chat_creation is None)
-  let (_, confirmed) = adopt_picked_directory(
-    dispatch,
-    Local,
-    "/user/newer-project",
-    opened,
-  )
-  let (_, late) = update(
-    dispatch,
-    ChatWorkspaceCreated(
-      channel~,
-      generation~,
-      result=Ok("/app-data/workspaces/old-chat"),
-    ),
-    confirmed,
-  )
-  assert_true(
-    late.pending_project_adoption is Some(pending) &&
-    pending.requested == "/user/newer-project",
-  )
-  let project = @interop.ChannelId::Local.test_resource("/user/newer-project")
-  let (_, selected) = update(
-    dispatch,
-    NewChatIn(Local, Some(project)),
-    creating,
-  )
-  let (_, late) = update(
-    dispatch,
-    ChatWorkspaceCreated(
-      channel~,
-      generation~,
-      result=Ok("/app-data/workspaces/old-chat"),
-    ),
-    selected,
-  )
-  assert_true(late.pending_project_adoption is None)
-  assert_eq(late.dev().active_project, Some(project))
 }

@@ -5,9 +5,11 @@
 pub(all) enum Message {
   SearchConversations
   Chats
+  Cloud
+  Local
+  CloudSignInHint
   Projects
   NewChat
-  CreatingChat
   AddProject
   ArchivedChats(Int32)
   ShowMore
@@ -47,6 +49,23 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Chats) => "对话"
     (TraditionalChinese, Chats) => "對話"
     (Japanese, Chats) => "チャット"
+    (English, Cloud) => "Cloud"
+    (Spanish, Cloud) => "Nube"
+    (SimplifiedChinese, Cloud) => "云端"
+    (TraditionalChinese, Cloud) => "雲端"
+    (Japanese, Cloud) => "クラウド"
+    (English, Local) => "Local"
+    (Spanish, Local) => "Local"
+    (SimplifiedChinese, Local) => "本地"
+    (TraditionalChinese, Local) => "本機"
+    (Japanese, Local) => "ローカル"
+    (English, CloudSignInHint) => "Sign in to view Cloud conversations"
+    (Spanish, CloudSignInHint) =>
+      "Inicia sesión para ver tus conversaciones en la nube"
+    (SimplifiedChinese, CloudSignInHint) => "登录后查看云端对话"
+    (TraditionalChinese, CloudSignInHint) => "登入後查看雲端對話"
+    (Japanese, CloudSignInHint) =>
+      "ログインしてクラウドの会話を表示"
     (English, Projects) => "Projects"
     (Spanish, Projects) => "Proyectos"
     (SimplifiedChinese, Projects) => "项目"
@@ -57,11 +76,6 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, NewChat) => "新建对话"
     (TraditionalChinese, NewChat) => "新建對話"
     (Japanese, NewChat) => "新しいチャット"
-    (English, CreatingChat) => "Creating chat…"
-    (Spanish, CreatingChat) => "Creando conversación…"
-    (SimplifiedChinese, CreatingChat) => "正在创建对话…"
-    (TraditionalChinese, CreatingChat) => "正在建立對話…"
-    (Japanese, CreatingChat) => "チャットを作成中…"
     (English, AddProject) => "Add a project"
     (Spanish, AddProject) => "Añadir un proyecto"
     (SimplifiedChinese, AddProject) => "添加项目"

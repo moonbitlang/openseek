@@ -92,7 +92,10 @@ test "a reply sent now submits the draft past an open completion menu" {
 test "a reply addressed to another conversation is declined" {
   let input = Input::fixture("draft")
   let other : Identity = {
-    owner: { channel: @interop.ChannelId::Local, session: "another", },
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Local,
+      session: "another",
+    }),
     archive_generation: 0,
   }
   let entry = Model(input).quoted(input, other, send=true).active(input)

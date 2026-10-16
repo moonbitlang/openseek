@@ -1,10 +1,11 @@
 # Desktop conversation export
 
-For a saved local or remote Work conversation, **Export conversation** opens a modal
+For a saved local, remote Work, or Cloud conversation, **Export conversation** opens a modal
 with **Download** and **Share**. The modal captures the selected conversation,
 workspace and archive placement; changing the active conversation cannot redirect
 an outstanding export. Both actions use the existing standalone HTML visualizer. Work includes its
-recorded tool inputs/outputs and direct subruns.
+recorded tool inputs/outputs and direct subruns; Cloud uses its committed visible
+message projection, including tool inputs/results and terminal status.
 
 Desktop Download uses the native save dialog, then opens the saved file.
 Browsers download the standalone HTML directly. Cancelling the
@@ -18,7 +19,8 @@ Remote Work first obtains a single upload grant with the client's account,
 then sends only that grant, key and source metadata to the selected host's
 `session.share`. The host captures once and uploads HTML and JSON through
 native HTTP; no full client account token is given to the remote host.
-The frontend does not download snapshots to upload.
+Cloud calls its server-side `/share` operation, which exports and uploads the
+captured visible messages. The frontend does not download snapshots to upload.
 
 The API accepts publication at `/v2/shares`; public links remain under
 `/v1/shares/<id>`. An account 401 requests sign-in; a grant 403 preserves the
@@ -35,7 +37,7 @@ does not reopen it. A failed or
 lost internal upload attempt is retried once with identical content and the same idempotency
 key, so a retry can never create a second share. If that retry also fails, the
 modal shows the server's error text when it sent one, or the transport failure
-otherwise. A disconnected outer RPC request is not automatically
+otherwise. A disconnected outer RPC/Cloud request is not automatically
 resubmitted; another explicit Share click starts a new capture with a new key. The full multipart request
 must fit the server's 20 MiB limit. Share titles are trimmed and capped at 1024
 UTF-8 bytes on a Unicode character boundary; this metadata limit never
@@ -46,7 +48,7 @@ truncates the HTML or JSON conversation.
 `session.export` is the window-only local save operation and requires
 `{session, workspace, title, archived}`. `session.snapshot` captures those same
 source fields for remote/browser downloads. `session.snapshot_save` saves a
-client-rendered download through the window.
+client-rendered Cloud download through the window.
 
 `session.share` is available to both transports and requires
 `{generation,source,idempotency_key,authorization}`. Only the native window

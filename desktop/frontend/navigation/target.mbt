@@ -6,6 +6,7 @@ pub(all) enum Target {
   ChatNew
   Session(String)
   ChatDraft(String)
+  CloudSession(account~ : String, session~ : String)
   Codex
   CodexNew
   Thread(String)
@@ -19,7 +20,7 @@ pub(all) enum Target {
 
 ///|
 pub(all) struct Location {
-  device : String
+  device : String?
   target : Target
 } derive(Eq)
 

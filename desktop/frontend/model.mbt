@@ -1396,7 +1396,16 @@ priv struct ConversationLoadFailure {
 } derive(Eq)
 
 ///|
+priv enum ChatSelection {
+  HostSelection(ConversationSelection)
+  CloudSelection(account~ : String, session~ : String)
+} derive(Eq)
+
+///|
 priv struct Model {
+  cloud : @cloud.State
+  chat_navigation_generation : Int32
+
   // Connected device channels in stable order: the desktop window's one
   // Local host, or a browser console's roster devices — empty there until
   // the roster loads (`apply_roster`).
@@ -1553,7 +1562,7 @@ priv struct Model {
   fork_focus : ConversationSelection?
   // Immediate sidebar intent. The loaded `active_session` remains separate so
   // an older async snapshot cannot steal highlight or expose stale content.
-  selected_conversation : ConversationSelection?
+  selected_conversation : ChatSelection?
   conversation_load_failure : ConversationLoadFailure?
   // The conversation on screen; always present in `conversations` once the
   // startup session rotation lands.
@@ -1587,8 +1596,6 @@ priv struct Model {
   project_picker : @project_picker.State?
   // A confirmed add waiting for its registry snapshot; None otherwise.
   pending_project_adoption : ProjectAdoption?
-  chat_creation : (@interop.ChannelId, Int32, Int32)?
-  chat_creation_sequence : Int32
   screen : Screen
   // Which work surface management pages cover; independent of back history.
   management_return : WorkScreen?
@@ -1621,7 +1628,7 @@ priv struct Model {
   // Every newly observed archive appends its exact owner. The composer consumes
   // this page-lifetime log in order, so a background session cannot regain an
   // old component-local draft when the same session id is later unarchived.
-  composer_entry_retirements : Array[@interop.ConversationKey]
+  composer_entry_retirements : Array[@interop.ConversationIdentity]
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. Owned by the `quick_open` package: this shell only opens it, fences
@@ -1682,6 +1689,7 @@ priv struct Model {
   // broadcast), None until the first reply. Desktop-window-only UI.
   account : @protocol.AccountSession?
   account_epoch : Int32
+  account_login_create : Int32?
   remote_access : RemoteAccess?
   // An `auth.connect` waiting on the user's browser round-trip.
   remote_connecting : Bool
@@ -1795,6 +1803,8 @@ priv enum Msg {
   )
   // Deliberate actions emitted by the component-local input composer. Raw
   // keystrokes never enter this root message loop.
+  CloudAction(@cloud.Msg)
+  OpenCloudConversation(account~ : String, session~ : String)
   ComposerAction(@composer.Action)
   // Codex renders a second instance of the same composer component. Keep its
   // action route distinct so an identical thread/session-shaped id can never
@@ -1977,6 +1987,9 @@ priv enum Msg {
     id~ : String
   )
   NewChat
+  NewChatRequested
+  TranscriptLinkOpened(slot~ : String, path~ : String)
+  TranscriptLocationOpened(slot~ : String, @mention_context.Target)
   // The channel is captured when rotation is requested, so a focus move can
   // fence the delayed id instead of activating it on the newly focused host.
   SessionRotated(@interop.ConversationKey)
@@ -2017,9 +2030,10 @@ priv enum Msg {
   HostActionFailed(String)
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
-  OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   SessionSearch(@session_search.Msg)
   OpenSessionSearch
+  OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
+  OpenCloudExport
   ExportDialog(@export_dialog.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
@@ -2028,12 +2042,6 @@ priv enum Msg {
   // Open the in-app folder picker against one device's host (browsing starts
   // at that host's home directory), selecting its channel first if needed.
   PickProject(@interop.ChannelId)
-  CreateChat(@interop.ChannelId)
-  ChatWorkspaceCreated(
-    channel~ : @interop.ChannelId,
-    generation~ : Int32,
-    result~ : Result[String, String]
-  )
   // The Cmd/Ctrl+O chord: open the folder picker for the focused device. A
   // no-op while the picker is already open, so a repeat chord cannot yank
   // the listing back to the home directory mid-navigation.
@@ -2754,6 +2762,8 @@ fn initial_model(desktop~ : Bool) -> Model {
     // The desktop window owns its host outright, so its one channel is in
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
+    cloud: @cloud.State::empty(),
+    chat_navigation_generation: 0,
     devices: if desktop {
       [
         {
@@ -2822,8 +2832,6 @@ fn initial_model(desktop~ : Bool) -> Model {
     conversations: [],
     project_picker: None,
     pending_project_adoption: None,
-    chat_creation: None,
-    chat_creation_sequence: 0,
     archive_confirm: None,
     delete_confirm: None,
     delete_pending: None,
@@ -2865,6 +2873,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     api_setup_dismissed: false,
     account: None,
     account_epoch: 0,
+    account_login_create: None,
     remote_access: None,
     remote_connecting: false,
     remote_error: None,
@@ -3107,8 +3116,8 @@ fn Model::api_setup_banner_visible(self : Model) -> Bool {
 /// The one rule for the API-setup modal, applied whenever the settings
 /// mirror settles: a usable endpoint retires the modal and re-arms the
 /// announcement for the next break; an explicit "Not now" holds until then;
-/// the Settings page stays modal-free (its guide already says what is
-/// missing); otherwise an unusable endpoint keeps the modal up — the key is
+/// Settings and Cloud stay modal-free; otherwise an unusable endpoint keeps
+/// the modal up — the key is
 /// the one thing SeekMoon cannot run without, so a dismissible toast is not
 /// loud enough.
 fn Model::settle_api_setup(self : Model) -> Model {
@@ -3122,7 +3131,9 @@ fn Model::settle_api_setup(self : Model) -> Model {
   let select_menu = if self.api_setup_open { None } else { self.select_menu }
   if self.api_ready() {
     { ..self, api_setup_open: false, api_setup_dismissed: false, select_menu, }
-  } else if self.api_setup_dismissed || self.screen is Settings {
+  } else if self.api_setup_dismissed ||
+    self.screen is Settings ||
+    self.cloud_selected() {
     { ..self, api_setup_open: false, select_menu, }
   } else {
     { ..self, api_setup_open: true, }
@@ -3425,7 +3436,9 @@ fn Model::with_archive_override(
     return model
   }
   let composer_entry_retirements = model.composer_entry_retirements.copy()
-  composer_entry_retirements.push({ channel, session: key.session, })
+  composer_entry_retirements.push(
+    @interop.Host({ channel, session: key.session, }),
+  )
   { ..model, composer_entry_retirements, }
 }
 
@@ -3515,6 +3528,7 @@ fn remembered_with(
 /// screen has a workspace — the view forks here, and the onboarding branch is
 /// the only place with no conversation to render.
 fn Model::active_conversation(self : Model) -> Conversation? {
+  guard !self.cloud_selected() else { return None }
   self.find_conversation(self.focused, self.active_session)
 }
 
@@ -3525,7 +3539,7 @@ fn Model::active_conversation(self : Model) -> Conversation? {
 /// to choose independently between `selected_conversation` and
 /// `active_session`.
 fn Model::conversation_selection(self : Model) -> ConversationSelection? {
-  match self.selected_conversation {
+  match self.host_selection() {
     Some(selected) => Some(selected)
     None =>
       self
@@ -3551,12 +3565,9 @@ fn Model::conversation_for_composer_action(
   self : Model,
   identity : ComposerActionIdentity,
 ) -> Conversation? {
-  let owner = identity.owner
-  for
-    index in identity.archive_generation..<self.composer_entry_retirements.length() {
-    if self.composer_entry_retirements[index] == owner {
-      return None
-    }
+  guard self.accepts_composer_action(identity) &&
+    identity.owner.host() is Some(owner) else {
+    return None
   }
   self.find_conversation(owner.channel, owner.session)
 }
@@ -3698,6 +3709,7 @@ fn Model::conversation_by_pending_steer(
 /// the current task supplies the identity and checkout needed by the host.
 /// Rendering and read acknowledgment must agree on whether it covers a chat.
 fn Model::file_panel_visible(self : Model) -> Bool {
+  !self.cloud_selected() &&
   self.right_panel_open &&
   (
     self.screen is Chat ||
@@ -3812,14 +3824,16 @@ fn Model::activate(
     .iter()
     .find_first(conv => conv.device == channel && conv.session_id == session_id)
     .map(conv => {
-      channel,
-      session: session_id,
-      workspace: conv.project(),
-      record: if conv.is_archived_read_only() {
-        ArchivedRecord
-      } else {
-        LiveRecord
-      },
+      HostSelection({
+        channel,
+        session: session_id,
+        workspace: conv.project(),
+        record: if conv.is_archived_read_only() {
+          ArchivedRecord
+        } else {
+          LiveRecord
+        },
+      })
     }),
     conversation_load_failure: None,
     conversations,

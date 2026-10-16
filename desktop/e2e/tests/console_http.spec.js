@@ -18,7 +18,7 @@ for (const endpoint of ['auth/me', 'devices']) {
     await app.install();
     await page.route(`**/v2/${endpoint}`, route => route.fulfill({ status: 500, body: 'unavailable' }));
     await page.goto('/dist/browser/index.html?device=device-a');
-    await expect(page.getByText(/answered HTTP 500/)).toBeVisible();
+    await expect(page.getByRole('main').getByText(/answered HTTP 500/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
     expect(app.pageErrors).toEqual([]);
   });

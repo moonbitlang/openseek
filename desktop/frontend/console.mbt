@@ -368,6 +368,11 @@ fn apply_roster(
     (@cmd.none, reconciled)
   }
   commands.push(focus_cmd)
+  let reconciled = if model.cloud_identity() is Some(_) {
+    { ..reconciled, selected_conversation: model.selected_conversation, }
+  } else {
+    reconciled
+  }
   (@cmd.batch(commands), reconciled)
 }
 
@@ -853,10 +858,12 @@ fn console_signed_out(
   let (retire_command, model) = focus_channel(dispatch, model, Local)
   let retirements = model.composer_entry_retirements.copy()
   for conversation in model.conversations {
-    retirements.push({
-      channel: conversation.device,
-      session: conversation.session_id,
-    })
+    retirements.push(
+      @interop.Host({
+        channel: conversation.device,
+        session: conversation.session_id,
+      }),
+    )
   }
   (
     retire_command,

@@ -191,7 +191,7 @@ pub fn component(
     for index, notice in input.notices {
       rows["notice:\{index}"] = @html.div(
         class="conversation-row placeholder",
-        [@html.span(class="sidebar-label", notice)],
+        [@html.span(class="sidebar-label sidebar-notice", title=notice, notice)],
       )
     }
     for group in section_rows {

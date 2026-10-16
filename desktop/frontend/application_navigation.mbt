@@ -62,8 +62,7 @@ fn reconcile_navigation(
     match location.target {
       Session(id) | ChatDraft(id) =>
         if next.find_conversation(next.focused, id) is None &&
-          next.selected_conversation.map(selection => selection.session) !=
-          Some(id) {
+          next.host_selection().map(selection => selection.session) != Some(id) {
           next = { ..next, navigation: { ..next.navigation, phase: Waiting, }, }
         }
       _ => ()
@@ -74,6 +73,10 @@ fn reconcile_navigation(
     !next.codex.composing_draft() &&
     next.codex.can_start_thread() {
     next = { ..next, navigation: { ..next.navigation, phase: Waiting, }, }
+  }
+  if next.screen is Chat &&
+    next.cloud.creating_at(next.chat_navigation_generation) {
+    return (@cmd.batch(commands), next)
   }
   let (activate, next) = activate_navigation(dispatch, next)
   commands.push(activate)

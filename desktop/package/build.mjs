@@ -272,6 +272,7 @@ class Build {
       cwd: this.desktop,
     });
     await this.webAssets();
+    await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
     if (browser) {
       // The console bundle openseek-api serves: the same document and
       // frontend.js the packaged app loads, so the e2e suite can drive one
@@ -295,9 +296,11 @@ class Build {
         await cp(this.frontendBundle(profile), join(output, "frontend.js"));
       }
       await this.sharedWeb(output);
+      await mkdir(join(output, "viz"), { recursive: true });
+      await cp(join(this.repo, "web/index.html"), join(output, "viz/index.html"));
+      await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(output, "viz/viz_app.js"));
       return;
     }
-    await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
   }
 
   // The unminified MoonBit output of the frontend executable.
