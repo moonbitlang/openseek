@@ -77,6 +77,7 @@ pub(all) enum Msg {
   Install(MarketItem)
   Uninstall(InstalledItem)
   Update(MarketItem)
+  ToggleEnabled(String)
   ActionDone(channel~ : @interop.ChannelId, action~ : PendingSkillAction, error~ : String?)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
@@ -96,6 +97,7 @@ pub(all) enum PendingSkillAction {
   Installing(source~ : String)
   Uninstalling(source~ : String, id~ : String)
   Updating(source~ : String)
+  SettingEnabled(source~ : String, id~ : String, enabled~ : Bool)
 } derive(Eq)
 pub fn PendingSkillAction::equal(Self, Self) -> Bool
 pub fn PendingSkillAction::not_equal(Self, Self) -> Bool

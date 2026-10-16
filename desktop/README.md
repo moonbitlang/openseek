@@ -153,10 +153,17 @@ advertises the library in the system prompt of every **new** session — so
 installed skills apply to new chats, and to the CLI/TUI as well, since the
 library is shared.
 
+Installed skills can be disabled without uninstalling them. Disabling moves
+the complete entry to `skills/.disabled/`; enabling moves it back. Disabled
+entries remain visible in the Skills page, but are omitted from the engine's
+skill discovery and the composer's skill completion. Updates replace the
+entry in its current location, preserving its enabled state. Existing chats
+keep their saved system prompt; toggling does not refresh that prompt.
+
 The panel also lists what is already in the library. Hand-written skills are
-shown but never touched: installs refuse to overwrite a same-named entry that
-has no provenance marker, and only entries the app itself installed get an
-Uninstall button.
+shown and can be enabled or disabled, including flat `.md` files. Installs
+refuse to overwrite a same-named entry that has no provenance marker, and
+only entries the app itself installed can be updated or uninstalled.
 
 ## MCP servers
 
