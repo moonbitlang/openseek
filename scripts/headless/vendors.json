@@ -1,0 +1,38 @@
+{
+  "moonbit_version": "0.10.15+943464bfa",
+  "core": {
+    "file": "core.tar.gz",
+    "url": "https://cli.moonbitlang.com/cores/core-0.10.15%2B943464bfa.tar.gz",
+    "sha256": "96d30f4dbcc6a9e1736ef26fbdd0e8fb0e97cb01d50e55d2a0072208b8061ae5"
+  },
+  "platforms": {
+    "linux-x64": {
+      "machine": 62,
+      "sdk": {
+        "file": "moonbit-linux-x86_64.tar.gz",
+        "url": "https://cli.moonbitlang.com/binaries/0.10.15%2B943464bfa/moonbit-linux-x86_64.tar.gz",
+        "sha256": "24b93a5409d2a4fb8e3d1b84b473f27b63476cef4418094764df96cb26b03c09"
+      },
+      "ripgrep": {
+        "file": "ripgrep-15.1.0-x86_64-unknown-linux-musl.tar.gz",
+        "directory": "ripgrep-15.1.0-x86_64-unknown-linux-musl",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "1c9297be4a084eea7ecaedf93eb03d058d6faae29bbc57ecdaf5063921491599"
+      }
+    },
+    "linux-arm64": {
+      "machine": 183,
+      "sdk": {
+        "file": "moonbit-linux-aarch64.tar.gz",
+        "url": "https://cli.moonbitlang.com/binaries/0.10.15%2B943464bfa/moonbit-linux-aarch64.tar.gz",
+        "sha256": "27551288b9552db1426d186403645bb40308a3f5e525054d0a2860283ae118bf"
+      },
+      "ripgrep": {
+        "file": "ripgrep-15.1.0-aarch64-unknown-linux-gnu.tar.gz",
+        "directory": "ripgrep-15.1.0-aarch64-unknown-linux-gnu",
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.1.0/ripgrep-15.1.0-aarch64-unknown-linux-gnu.tar.gz",
+        "sha256": "2b661c6ef508e902f388e9098d9c4c5aca72c87b55922d94abdba830b4dc885e"
+      }
+    }
+  }
+}

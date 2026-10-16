@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/headless_installer"
+
+import {
+  "moonbitlang/openseek_protocol/host_control",
+}
+
+// Values
+pub async fn activate(Installation, destination~ : String, data_dir~ : String, expected_server_id? : String, ssh? : String) -> Activation
+
+pub async fn discover(String) -> (String, String, String)
+
+pub async fn install(destination~ : String, directory~ : String, bootstrap~ : String, ssh? : String, root? : String, progress? : (String) -> Unit) -> Installation
+
+// Errors
+pub suberror InstallError {
+  InstallError(String, String)
+}
+pub fn InstallError::output(Self, &Logger) -> Unit
+pub fn InstallError::to_string(Self) -> String
+pub impl Show for InstallError
+
+// Types and methods
+pub(all) enum Activation {
+  Ready(@host_control.Identity)
+  Busy(instance_id~ : String, running_build_id~ : String, upgrade_record~ : String)
+}
+
+pub(all) struct Installation {
+  build_id : String
+  platform : String
+  manifest_sha256 : String
+  launcher : String
+  home : String
+  reused : Bool
+}
+
+// Type aliases
+
+// Traits
