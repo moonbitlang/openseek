@@ -337,12 +337,18 @@ async test "Ctrl+C typed into a command session interrupts the command" {
       @terminal.run_terminal_pump(state, push => pushes.put(push))
     })
     let id = @terminal.open_terminal(state, cwd="/tmp", cols=80, rows=24, command=[
-      "/bin/sh", "-c", "echo ready; sleep 30",
+      "/bin/cat",
     ])
-    @async.with_timeout(5000, () => wait_for_output(pushes, "ready"))
+    // Wait for both the terminal echo and cat's reply before interrupting.
+    // A shell printing "ready" before spawning sleep leaves a signal-delivery
+    // race, and the shell may translate its child's SIGINT into exit code 130.
+    @terminal.write_terminal(state, id~, b"ready\n")
+    @async.with_timeout(5000, () => {
+      wait_for_output(pushes, "ready\r\nready\r\n")
+    })
     @terminal.write_terminal(state, id~, b"\x03")
-    // A signal death is reported as a negative status, never as a code the
-    // command chose.
-    assert_true(@async.with_timeout(5000, () => exit_code(pushes)) < 0)
+    // SIGINT is reported as -2, not a shell-translated exit code or SIGKILL
+    // from the session's cleanup path.
+    assert_eq(@async.with_timeout(5000, () => exit_code(pushes)), -2)
   })
 }
