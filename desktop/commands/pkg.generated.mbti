@@ -269,6 +269,10 @@ pub let session_search : Command[@protocol.SessionSearchPayload, @protocol.Sessi
 
 pub let session_share : Command[@protocol.SessionSharePayload, @protocol.SessionShareReply]
 
+pub let session_snapshot : Command[@protocol.SessionExportPayload, @protocol.SessionSnapshot]
+
+pub let session_snapshot_save : Command[@protocol.SnapshotSavePayload, @protocol.SessionExportReply]
+
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 
 pub let settings_get : Command[@protocol.EmptyPayload, @protocol.SettingsStatusPayload]

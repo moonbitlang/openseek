@@ -99,13 +99,27 @@ pub let session_load_archived : Command[
 ] = Command("session.load_archived")
 
 ///|
+/// Read-only export capture, also usable through the selected device channel.
+pub let session_snapshot : Command[
+  @protocol.SessionExportPayload,
+  @protocol.SessionSnapshot,
+] = Command("session.snapshot")
+
+///|
+/// Save a client-rendered snapshot through the native window's dialog.
+pub let session_snapshot_save : Command[
+  @protocol.SnapshotSavePayload,
+  @protocol.SessionExportReply,
+] = Command("session.snapshot_save")
+
+///|
 pub let session_export : Command[
   @protocol.SessionExportPayload,
   @protocol.SessionExportReply,
 ] = Command("session.export")
 
 ///|
-/// Upload the same standalone HTML as Download using this desktop's login.
+/// Publish the owning host's snapshot using window account or remote grant authority.
 pub let session_share : Command[
   @protocol.SessionSharePayload,
   @protocol.SessionShareReply,

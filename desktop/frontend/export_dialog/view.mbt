@@ -180,46 +180,32 @@ fn share_progress_view(
   locale : @i18n.Locale,
   progress : @protocol.ShareProgress,
 ) -> @html.Html {
-  let (label, percent) = match progress {
-    Preparing => (ui(locale, PreparingConversation), None)
+  let label = match progress {
+    Preparing => ui(locale, PreparingConversation)
     Connecting(attempt~) =>
-      (
-        ui(locale, if attempt > 1 { RetryingShare } else { ConnectingShare }),
-        None,
+      ui(locale, if attempt > 1 { RetryingShare } else { ConnectingShare })
+    Uploading(attempt~) =>
+      ui(
+        locale,
+        if attempt > 1 {
+          RetryingShare
+        } else {
+          UploadingConversation
+        },
       )
-    Uploading(attempt~, percent~) =>
-      (
-        "\{ui(locale, if attempt > 1 { RetryingShare } else { UploadingConversation })} \{percent}%",
-        Some(percent),
-      )
-    Waiting(..) => (ui(locale, WaitingForShare), Some(100))
-  }
-  let attrs = @html.Attrs::build()
-    .role("progressbar")
-    .aria_label(label)
-    .aria_valuemin("0")
-    .aria_valuemax("100")
-  let attrs = if percent is Some(value) {
-    attrs.aria_valuenow("\{value}")
-  } else {
-    attrs
+    Waiting(attempt~) =>
+      if attempt > 1 {
+        "\{ui(locale, RetryingShare)} \{ui(locale, WaitingForShare)}"
+      } else {
+        ui(locale, WaitingForShare)
+      }
   }
   @html.div(class="export-progress", [
     @html.span(label),
-    @html.div(class="update-progress-track", attrs~, [
-      @html.div(
-        class=if percent is Some(_) {
-          "update-progress-fill"
-        } else {
-          "update-progress-fill indeterminate"
-        },
-        style=if percent is Some(value) {
-          ["--progress-width: \{value}%"]
-        } else {
-          []
-        },
-        "",
-      ),
-    ]),
+    @html.div(
+      class="update-progress-track",
+      attrs=@html.Attrs::build().role("progressbar").aria_label(label),
+      [@html.div(class="update-progress-fill indeterminate", "")],
+    ),
   ])
 }

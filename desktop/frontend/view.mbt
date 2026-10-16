@@ -1704,19 +1704,15 @@ fn conversation_header(
   if !model.narrow {
     items.push(model.detail_toggle(dispatch))
   }
-  // Export is a native-window operation and the visualizer consumes durable
-  // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do
-  // not offer a button that their host cannot fulfill.
-  if !model.narrow &&
-    model.is_desktop &&
-    conv.device is Local &&
-    !conv.messages.is_empty() {
+  // The owning host captures durable Work records; the current client
+  // downloads or publishes the snapshot with its own account.
+  if !conv.messages.is_empty() {
     items.push(
       @html.button(
         class="panel-toggle",
         title=shell_text(model.locale, ExportConversation),
         on_click=dispatch(
-          OpenExport({
+          OpenExport(conv.device, {
             session: conv.session_id,
             workspace: workspace.path,
             title: model.selected_conversation_title(),

@@ -13,13 +13,13 @@ async test "share progress is scoped to the requesting endpoint catalog" {
   let first : Array[@protocol.SessionShareProgress] = []
   let second : Array[@protocol.SessionShareProgress] = []
   let catalogs = [
-    endpoints(state, HostConnection(), on_share_progress=payload => {
+    endpoints(state, HostConnection(), local_share=true, on_share_progress=payload => {
       first.push(payload)
     }),
-    endpoints(state, HostConnection(), on_share_progress=payload => {
+    endpoints(state, HostConnection(), local_share=true, on_share_progress=payload => {
       second.push(payload)
     }),
-    endpoints(state, HostConnection(), on_share_progress=_ => {
+    endpoints(state, HostConnection(), local_share=true, on_share_progress=_ => {
       raise @host.HostError("notification failed")
     }),
   ]
@@ -32,6 +32,8 @@ async test "share progress is scoped to the requesting endpoint catalog" {
     }
     let payload : @protocol.SessionSharePayload = {
       generation: index + 1,
+      idempotency_key: "a".repeat(64),
+      authorization: LocalAccount(user_id="123"),
       source: {
         session: "test",
         workspace: dir.to_string(),
@@ -96,11 +98,17 @@ async test "share refusal retires the captured login and preserves a newer one" 
     defer subscription.close()
     let share = SessionShare::{
       state,
+      local_account: true,
       payload: {
-        session: "test",
-        workspace: ".",
-        title: "Test",
-        archived: false,
+        generation: 1,
+        idempotency_key: "a".repeat(64),
+        authorization: LocalAccount(user_id="123"),
+        source: {
+          session: "test",
+          workspace: ".",
+          title: "Test",
+          archived: false,
+        },
       },
     }
     @async.with_task_group(group => {
@@ -128,7 +136,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
           ),
           [],
         ),
-        account,
+        Account(account),
         server_url=origin,
       )
       receiver.wait()
@@ -163,4 +171,95 @@ fn share_account_fixture() -> String {
     },
   }
   fixture.stringify()
+}
+
+///|
+async test "remote grants never retire the host account even when the upload is rejected" {
+  for code in [401, 403] {
+    let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+    defer server.close()
+    let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-grant-"))
+    defer @fs.rmdir(dir.to_string(), recursive=true)
+    @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+    let store = @auth.AuthStore::load(runtime_dir=dir)
+    let original = store.account()
+    let share = SessionShare::{
+      state: ApiState(engine="unused-test-engine", auth=store),
+      local_account: false,
+      payload: {
+        generation: 1,
+        idempotency_key: "b".repeat(64),
+        authorization: UploadGrant(upload_token="sug_fixture"),
+        source: {
+          session: "test",
+          workspace: ".",
+          title: "Test",
+          archived: false,
+        },
+      },
+    }
+    @async.with_task_group(group => {
+      let receiver = group.spawn(() => {
+        let (connection, _) = server.accept()
+        defer connection.close()
+        let request = connection.read_request()
+        assert_eq(
+          request.headers.get("Authorization"),
+          Some("Bearer sug_fixture"),
+        )
+        assert_eq(request.headers.get("Idempotency-Key"), Some("b".repeat(64)))
+        connection.skip_request_body()
+        connection.send_response(code, "Rejected")
+        connection.write_string("{\"error\":\"invalid_upload_grant\"}")
+        connection.end_response()
+      })
+      let reply = share.upload(
+        ConversationExport(
+          StandaloneExport("<script src=\"/viz_app.js\"></script>", "bundle"),
+          [],
+        ),
+        Grant("sug_fixture"),
+        server_url="http://127.0.0.1:\{server.addr.port()}",
+      )
+      receiver.wait()
+      assert_true(reply is Failed(_))
+      assert_true(store.account() == original)
+      assert_true(@auth.AuthStore::load(runtime_dir=dir).account() == original)
+    })
+  }
+}
+
+///|
+async test "remote share calls cannot select the host account" {
+  let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-authority-"))
+  defer @fs.rmdir(dir.to_string(), recursive=true)
+  @fs.write_file(dir.join("auth.json").to_string(), share_account_fixture())
+  let store = @auth.AuthStore::load(runtime_dir=dir)
+  let state = ApiState(engine="unused-test-engine", auth=store)
+  let original = store.account()
+  for (local_share, user_id) in [(false, "123"), (true, "other-account")] {
+    let catalog = endpoints(state, HostConnection(), local_share~)
+    guard catalog
+      .iter()
+      .find_first(endpoint => endpoint.name() == "session.share")
+      is Some(endpoint) else {
+      fail("missing share endpoint")
+    }
+    let request : @protocol.SessionSharePayload = {
+      generation: 1,
+      idempotency_key: "c".repeat(64),
+      authorization: LocalAccount(user_id~),
+      source: {
+        session: "test",
+        workspace: ".",
+        title: "Test",
+        archived: false,
+      },
+    }
+    let reply : @protocol.SessionShareReply = @json.from_json(
+      endpoint.invoke(request.to_json()),
+    )
+    assert_true(reply is Failed(_))
+    assert_true(store.account() == original)
+  }
 }

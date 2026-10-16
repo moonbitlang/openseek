@@ -27,24 +27,16 @@ test "share reply requires tagged and typed outcomes" {
 }
 
 ///|
-test "share progress and request round trip with request identity" {
-  let request : @protocol.SessionSharePayload = {
-    generation: 7,
-    source: { session: "a", workspace: "/w", title: "A", archived: false, },
-  }
-  let decoded : @protocol.SessionSharePayload = @json.from_json(
-    request.to_json(),
-  )
-  assert_true(decoded == request)
-  json_inspect(@protocol.Uploading(attempt=1, percent=42).to_json(), content=[
+test "share phases round trip with request identity" {
+  json_inspect(@protocol.Uploading(attempt=1).to_json(), content=[
     "Uploading",
-    { "attempt": 1, "percent": 42 },
+    { "attempt": 1 },
   ])
   for
     progress in [
       @protocol.Preparing,
       Connecting(attempt=1),
-      Uploading(attempt=1, percent=42),
+      Uploading(attempt=1),
       Waiting(attempt=2),
     ] {
     let payload : @protocol.SessionShareProgress = { generation: 7, progress, }
@@ -66,11 +58,8 @@ test "share progress codecs reject missing null and malformed fields" {
       { "generation": "7", "progress": "Preparing" },
       { "generation": 7, "progress": null },
       { "generation": 7, "progress": "Unknown" },
-      { "generation": 7, "progress": ["Uploading", { "attempt": 1 }] },
-      {
-        "generation": 7,
-        "progress": ["Uploading", { "attempt": 1, "percent": null }],
-      },
+      { "generation": 7, "progress": ["Uploading", {}] },
+      { "generation": 7, "progress": ["Uploading", { "attempt": null }] },
       { "generation": 7, "progress": ["Connecting", { "attempt": "1" }] },
     ] {
     try (@json.from_json(invalid) : @protocol.SessionShareProgress) catch {
@@ -79,24 +68,45 @@ test "share progress codecs reject missing null and malformed fields" {
       _ => fail("invalid progress must not decode")
     }
   }
-  for
-    invalid in [
-      Json::null(),
-      {},
-      { "generation": 1, "source": null },
-      { "generation": null, "source": {} },
-      { "generation": 1, "source": {} },
-    ] {
-    try (@json.from_json(invalid) : @protocol.SessionSharePayload) catch {
-      JsonDecodeError(_) => ()
-    } noraise {
-      _ => fail("invalid request must not decode")
-    }
-  }
   let progress : @protocol.SessionShareProgress = @json.from_json({
     "generation": 7,
-    "progress": ["Uploading", { "attempt": 1, "percent": 42, "future": true }],
+    "progress": ["Uploading", { "attempt": 1, "future": true }],
     "future": true,
   })
-  assert_true(progress.progress is Uploading(attempt=1, percent=42))
+  assert_true(progress.progress is Uploading(attempt=1))
+}
+
+///|
+test "share request requires explicit authority and rejects account tokens as upload grants" {
+  for
+    authorization in [
+      @protocol.LocalAccount(user_id="user-1"),
+      UploadGrant(upload_token="sug_fixture"),
+    ] {
+    let request : @protocol.SessionSharePayload = {
+      generation: 3,
+      idempotency_key: "a".repeat(64),
+      authorization,
+      source: {
+        session: "session",
+        workspace: "/workspace",
+        title: "Title",
+        archived: false,
+      },
+    }
+    let decoded : @protocol.SessionSharePayload = @json.from_json(
+      request.to_json(),
+    )
+    assert_true(decoded == request)
+  }
+  for token in ["ts_account", "odt_device", ""] {
+    let result : Result[@protocol.ShareAuthorization, Error] = try
+      @json.from_json({ "kind": "upload_grant", "upload_token": token })
+    catch {
+      error => Err(error)
+    } noraise {
+      authorization => Ok(authorization)
+    }
+    assert_true(result is Err(_))
+  }
 }

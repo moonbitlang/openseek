@@ -136,3 +136,63 @@ pub extend RemoteAccessPayload with FromJson::{from_json}
 
 ///|
 pub extend RemoteAccessPayload with ToJson::{to_json}
+
+///|
+/// Immutable standalone files captured together before sharing or downloading.
+pub(all) struct SessionSnapshot {
+  html : String
+  json : String
+} derive(Eq)
+
+///|
+pub impl FromJson for SessionSnapshot with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session snapshot")
+  {
+    html: object.required_string("html"),
+    json: object.required_string("json"),
+  }
+}
+
+///|
+pub impl ToJson for SessionSnapshot with fn to_json(self) {
+  { "html": self.html, "json": self.json }
+}
+
+///|
+pub extend SessionSnapshot with Eq::{equal, not_equal}
+
+///|
+pub extend SessionSnapshot with FromJson::{from_json}
+
+///|
+pub extend SessionSnapshot with ToJson::{to_json}
+
+///|
+/// Window-only save request. The destination is always selected by the user.
+pub(all) struct SnapshotSavePayload {
+  session : String
+  html : String
+} derive(Eq)
+
+///|
+pub impl FromJson for SnapshotSavePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "snapshot save payload")
+  {
+    session: object.required_string("session"),
+    html: object.required_string("html"),
+  }
+}
+
+///|
+pub impl ToJson for SnapshotSavePayload with fn to_json(self) {
+  { "session": self.session, "html": self.html }
+}
+
+///|
+pub extend SnapshotSavePayload with Eq::{equal, not_equal}
+
+///|
+pub extend SnapshotSavePayload with FromJson::{from_json}
+
+///|
+pub extend SnapshotSavePayload with ToJson::{to_json}

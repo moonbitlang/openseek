@@ -6445,8 +6445,8 @@ fn update_msg(
       (cmd, { ..model, terminal, })
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
-    OpenExport(source) => {
-      let (cmd, export_dialog) = model.export_dialog.open(source)
+    OpenExport(channel, source) => {
+      let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })
     }
     OpenSessionSearch =>
@@ -6514,12 +6514,25 @@ fn update_msg(
       }
     }
     ExportDialog(msg) => {
+      let (login, model) = if msg is @export_dialog.SignIn {
+        begin_account_login(dispatch, model)
+      } else {
+        (@cmd.none, model)
+      }
+      let expired = model.export_dialog.account_expired(msg)
       let (cmd, export_dialog) = model.export_dialog.update(
-        locale=model.locale,
         dispatch.map(next => ExportDialog(next)),
         msg,
+        account?=model.account,
+        desktop=model.is_desktop,
+        sign_in=login,
       )
-      (cmd, { ..model, export_dialog, })
+      let next = { ..model, export_dialog, }
+      if expired && model.account is Some(_) {
+        let (logout, next) = expire_account(dispatch, next)
+        return (@cmd.batch([cmd, logout]), next)
+      }
+      (cmd, next)
     }
     ExternalLinkClicked(url) =>
       // Web links open in the dock's Browser tabs by default — the

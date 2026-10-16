@@ -2017,7 +2017,7 @@ priv enum Msg {
   HostActionFailed(String)
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
-  OpenExport(@protocol.SessionExportPayload)
+  OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   SessionSearch(@session_search.Msg)
   OpenSessionSearch
   ExportDialog(@export_dialog.Msg)

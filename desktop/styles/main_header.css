@@ -65,6 +65,7 @@ main {
 
 .topbar-title {
   margin: 0;
+  margin-inline-end: auto;
   font-weight: inherit;
   min-width: 0;
   max-width: 52%;
@@ -102,7 +103,6 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  margin-left: auto;
   font-size: var(--font-size-sm);
   color: var(--color-text-faint);
   white-space: nowrap;

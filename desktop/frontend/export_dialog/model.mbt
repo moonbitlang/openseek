@@ -2,16 +2,21 @@
 const DialogId = "conversation-export-dialog"
 
 ///|
-/// Each opening captures its source. Openings and uploads advance a generation
-/// so late progress or replies cannot overwrite another request.
+/// Each opening captures its source and advances a generation. Late replies
+/// from a dismissed dialog cannot overwrite a later conversation's dialog.
 struct Model {
   generation : Int32
   content : Content?
 } derive(Eq, Debug)
 
 ///|
+priv enum Source {
+  Host(@interop.ChannelId, @protocol.SessionExportPayload)
+} derive(Eq, Debug)
+
+///|
 priv struct Content {
-  source : @protocol.SessionExportPayload
+  source : Source
   operation : Operation
   // A completed link survives subsequent downloads and their errors.
   publication : Publication?
@@ -50,20 +55,21 @@ pub(all) enum Msg {
   SignIn
   Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
   Progress(@protocol.SessionShareProgress)
+  HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
   Published(generation~ : Int32, @protocol.SessionShareReply)
   SignedIn(generation~ : Int32, Result[Unit, String])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
 ///|
-/// The request a reply belongs to; user actions always target the current one.
+/// The opening a reply belongs to; user actions always target the current one.
 fn Msg::generation(self : Msg) -> Int32? {
   match self {
     Downloaded(generation~, _)
     | Published(generation~, _)
     | SignedIn(generation~, _)
     | ClipboardFinished(generation~, _) => Some(generation)
-    Progress(payload) => Some(payload.generation)
+    Progress(payload) | HostProgress(_, payload) => Some(payload.generation)
     Close | Download | Share | SignIn => None
   }
 }
@@ -77,12 +83,17 @@ pub fn Model::Model() -> Model {
 pub fn Model::open(
   self : Model,
   source : @protocol.SessionExportPayload,
+  channel~ : @interop.ChannelId = Local,
 ) -> (@cmd.Cmd, Model) {
   (
     @dialog.show(DialogId),
     {
       generation: self.generation + 1,
-      content: Some({ source, operation: Ready, publication: None, }),
+      content: Some({
+        source: Host(channel, source),
+        operation: Ready,
+        publication: None,
+      }),
     },
   )
 }
@@ -99,14 +110,24 @@ fn Model::showing(self : Model, content : Content) -> Model {
 
 ///|
 pub fn Model::update(
-  locale~ : @i18n.Locale = English,
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,
+  account? : @protocol.AccountSession,
+  desktop~ : Bool = true,
+  sign_in~ : @cmd.Cmd = @cmd.none,
 ) -> (@cmd.Cmd, Model) {
   guard self.content is Some(content) else { return (@cmd.none, self) }
   if msg.generation() is Some(generation) && generation != self.generation {
     return (@cmd.none, self)
+  }
+  let msg = match msg {
+    HostProgress(channel, payload) =>
+      match content.source {
+        Host(owner, _) if owner == channel => Progress(payload)
+        _ => return (@cmd.none, self)
+      }
+    _ => msg
   }
   let busy = content.operation.busy()
   match msg {
@@ -114,7 +135,7 @@ pub fn Model::update(
       // A browser sign-in this dialog started must not outlive it: the host
       // refuses a second auth.connect while one is still waiting.
       let close = @dialog.close(DialogId)
-      let cmd = if content.operation is SigningIn {
+      let cmd = if desktop && content.operation is SigningIn {
         @cmd.batch([close, cancel_sign_in()])
       } else {
         close
@@ -123,21 +144,35 @@ pub fn Model::update(
     }
     Download if !busy =>
       (
-        self.download(locale~, emit, content.source),
+        self.download(emit, content.source, desktop~),
         self.showing({ ..content, operation: Downloading, }),
       )
-    Share if !busy && content.publication is None => {
-      let next = { ..self, generation: self.generation + 1, }
-      (
-        next.share(locale~, emit, content.source),
-        next.showing({ ..content, operation: Sharing(Preparing), }),
-      )
-    }
+    Share if !busy && content.publication is None =>
+      if content.source is Host(Remote("host"), _) {
+        (
+          @cmd.none,
+          self.showing({
+            ..content,
+            operation: Failed(
+              "Sharing is unavailable in the local debug console. Use SeekMoonDev.app or the hosted browser console. You can still download this conversation.",
+            ),
+          }),
+        )
+      } else {
+        match account {
+          Some(account) => {
+            let next = { ..self, generation: self.generation + 1, }
+            (
+              next.share(emit, content.source, account, desktop~),
+              next.showing({ ..content, operation: Sharing(Preparing), }),
+            )
+          }
+          None =>
+            (@cmd.none, self.showing({ ..content, operation: SignInRequired, }))
+        }
+      }
     SignIn if content.operation is (SignInRequired | SignInFailed(_)) =>
-      (
-        self.sign_in(locale~, emit),
-        self.showing({ ..content, operation: SigningIn, }),
-      )
+      (sign_in, self.showing({ ..content, operation: SigningIn, }))
     Downloaded(result, ..) if content.operation is Downloading => {
       let operation = match result {
         Ok({ path: Some(path), opened, }) => Saved(path~, opened~)
@@ -208,7 +243,7 @@ pub fn Model::account_changed(
   if self.content is Some({ operation: SigningIn, .. }) {
     self.update(_ => @cmd.none, SignedIn(generation=self.generation, result))
   } else if result is Ok(_) &&
-    self.content is Some({ operation: SignInRequired, .. }) {
+    self.content is Some({ source: Host(_, _), operation: SignInRequired, .. }) {
     (@cmd.none, { ..self, generation: self.generation + 1, })
   } else if result is Ok(_) {
     (
@@ -218,4 +253,11 @@ pub fn Model::account_changed(
   } else {
     (@cmd.none, self)
   }
+}
+
+///|
+pub fn Model::account_expired(self : Model, msg : Msg) -> Bool {
+  self.content is Some({ operation: Sharing(_) | Downloading, .. }) &&
+  msg is Published(generation~, @protocol.SignInRequired) &&
+  generation == self.generation
 }
