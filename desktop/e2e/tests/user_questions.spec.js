@@ -28,6 +28,44 @@ function setup(page) {
   return { app, snapshot };
 }
 
+test('live questions occupy visible space between the transcript and composer', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  app.notify('user_questions.changed', { generation: 1, requests: [{
+    id: 'live-question', session: 'session-1', questions: [{
+      id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'],
+    }],
+  }] });
+  const card = page.locator('.user-question-card');
+  await expect(card).toContainText('Which approach should we use?');
+  const region = page.locator('.user-question-region');
+  await expect.poll(() => region.evaluate(el => el.clientHeight)).toBeGreaterThan(0);
+  await expect(card).toBeInViewport({ ratio: 1 });
+  const regionBox = await region.boundingBox();
+  const transcriptBox = await page.locator('.transcript').boundingBox();
+  const composerBox = await page.locator('.composer').boundingBox();
+  expect(regionBox.y).toBeGreaterThanOrEqual(transcriptBox.y + transcriptBox.height - 1);
+  expect(regionBox.y + regionBox.height).toBeLessThanOrEqual(composerBox.y + 1);
+  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('live-question.png'), animations: 'disabled' });
+  app.notify('user_questions.changed', { generation: 2, requests: [{
+    id: 'long-question', session: 'session-1', questions: [{
+      id: 'many', title: 'Choose an option', options: Array.from({ length: 30 }, (_, i) => `Option ${i + 1}`),
+    }],
+  }] });
+  await expect(card).toContainText('Choose an option');
+  expect(await region.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(page.viewportSize().height / 2);
+  expect(await region.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+  await card.getByRole('button', { name: 'Option 30', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Option 30', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  app.notify('user_questions.changed', { generation: 3, requests: [] });
+  await expect(region).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('questions survive reload and a finished turn, accept choices and text, and queue independently of approvals', async ({ page }, testInfo) => {
   const { app, snapshot } = setup(page);
   await app.install();
@@ -214,7 +252,7 @@ test('six questions page independently, retain drafts, and send all answers once
 });
 
 for (const theme of ['light', 'dark']) {
-  test(`question controls follow ${theme} appearance and font settings without clipping`, async ({ page }, testInfo) => {
+  test(`question controls follow ${theme} appearance and font settings without clipping`, async ({ page, browserName }, testInfo) => {
     await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
     const { app } = setup(page);
     await app.install();
@@ -239,7 +277,8 @@ for (const theme of ['light', 'dark']) {
         const digit = card.locator('.user-question-number').first();
         const digitBox = await digit.boundingBox();
         expect(digitBox.height).toBeGreaterThanOrEqual(await digit.evaluate(el => parseFloat(getComputedStyle(el).lineHeight)));
-        await input.press('Tab');
+        // macOS WebKit uses Option-Tab to include buttons in keyboard traversal.
+        await input.press(browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         const next = card.getByRole('button', { name: 'Next', exact: true });
         await expect(next).toBeFocused();
         await expect(next).toHaveCSS('outline-style', 'solid');

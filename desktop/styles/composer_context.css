@@ -242,6 +242,9 @@
 /* Information requests are independent from permission approval notices. */
 .user-question-region {
   flex: 0 0 auto;
+  /* WebKit can collapse a stretched, scrollable auto grid row to zero.
+     Size from the card while retaining the viewport cap and scrolling. */
+  height: fit-content;
   min-height: 0;
   max-height: 50vh;
   overflow-y: auto;
