@@ -61,7 +61,7 @@ The host control tunnel and the private local Dev console retain `/v1`:
 | Route | What |
 |---|---|
 | `GET /console/` | The server-selected Browser release |
-| `GET /console/releases/v<version>/index.html` | One published Browser bundle. Device consoles require `?device=<id>` to fix the page/tab to that device; optional `?workspace=<path>` selects where its first conversation lands. Cloud chats use the same console without requiring a device. Packaged Desktop links here with its installed version |
+| `GET /console/releases/v<version>/index.html` | One published Browser bundle. `?device=<id>` is required and fixes the page/tab to that device; optional `?workspace=<path>` selects where its first conversation lands. Packaged Desktop links here with its installed version |
 | `GET /d/<device>/…` | Retired: `302` to `/console/?device=<device>` with the original query appended, so old deep links keep their device target |
 | `GET /healthz` | Relay liveness probe, `200 ok` |
 | `/v2/auth/account/*`, `/v2/auth/session`, `/v2/auth/login` | Account sign-in and browser session recovery (see Authentication) |
@@ -146,7 +146,7 @@ Auth terminates **at the relay**; the JSON-RPC wire above carries no
 credentials and is unchanged by it. Device ids are stable database ids,
 not secrets — the barrier is ownership:
 
-- **Accounts** use one `ts_` session for Cloud, shares, and account-level
+- **Accounts** use one `ts_` session for shares and account-level
   device operations, issued by `https://openseek-api.moonbitlang.cn`.
   `GET /v2/auth/me` and `POST /v2/auth/logout` select an explicit Bearer
   before cookies; an invalid Bearer never falls back to a cookie. Existing
@@ -162,11 +162,10 @@ not secrets — the barrier is ownership:
   `{token,user:{user_id,login,avatar_url}}`. It does not register a device.
   The host saves version-2 `auth.json` atomically with mode 0600. A packaged
   Dev build deliberately does not persist auth because it shares the runtime
-  directory with the shipped app. Old device-only files and independent
-  Cloud credentials require explicit sign-in instead of being merged.
+  directory with the shipped app. Old device-only files require explicit sign-in.
 - **Browsers** log in through `/v2/auth/login?prompt=select_account&return_to=…`.
   Same-origin `POST /v2/auth/session` obtains the existing browser account
-  credential for Bearer requests; it does not mint a separate Cloud token.
+  credential for Bearer requests.
   The frontend restores that credential from browser storage.
   Each connection or reconnection requests a fresh ticket with
   `POST /v2/devices/<device>/connect-ticket` and the current account Bearer.
@@ -183,7 +182,7 @@ not secrets — the barrier is ownership:
   browser logout never disables the computer it was viewing.
   `OPENSEEK_DEVICE_TOKEN` plus `OPENSEEK_RELAY_URL` retain their explicit
   debug override: this connection is environment-managed, has no ordinary
-  switch, and survives account logout. It never authenticates Cloud or shares.
+  switch, and survives account logout. It never authenticates shares.
 - **Development console** (`.dev` builds only): the host also serves its
   own frontend bundle on `http://127.0.0.1:27183/` (an ephemeral port when
   that one is taken) and answers
@@ -728,17 +727,10 @@ Notification:
 
 ### auth.* — account and independent remote access
 
-Chat and Work keep their existing shared list, transcript, and composer.
-Cloud requests use the current client's account Bearer directly against
-`https://cloud.moonbitlang.cn`; there is no Cloud login, exchange, credential
-store, or `cloud.authorize` bridge command. Normal messages send only `content`,
-using the server's default model credential. Client reader disposal closes SSE
-without cancelling an already-running server task.
-
 The account and remote controls share one Settings panel. The desktop uses
 its local native account; a browser uses its own saved account, never a remote
 computer's credential. Account changes retire the previous account's requests,
-Cloud history, drafts, and browser host connections before loading replacements.
+browser host connections and their drafts before loading replacements.
 
 | method | params | result |
 |---|---|---|
