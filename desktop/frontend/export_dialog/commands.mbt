@@ -31,7 +31,7 @@ fn Model::share(
   request(
     emit,
     @commands.session_share,
-    source,
+    { source, generation, },
     failure=match locale {
       SimplifiedChinese => "分享失败"
       TraditionalChinese => "分享失敗"

@@ -42,6 +42,11 @@ class ExportHarness extends DesktopBrowserHarness {
           return () => callbacks.delete(callback);
         },
       };
+      window.emitShareProgress = payload => {
+        for (const callback of listeners.get('openseek.session.share_progress') || []) {
+          callback({ payload });
+        }
+      };
       window.__MoonBit__ = {
         getTitlebarArea: async () => null,
         app: events,
@@ -204,5 +209,48 @@ test('closing an upload ignores its late reply and narrow dialogs fit the viewpo
   const box = await dialog.boundingBox();
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(390);
+  expect(app.pageErrors).toEqual([]);
+});
+
+
+test('share reports upload progress, waiting and retry without accepting stale events', async ({ page }, testInfo) => {
+  const app = new ExportHarness(page);
+  let finish;
+  app.pendingShare = new Promise(resolve => { finish = resolve; });
+  await app.openDesktop();
+  const dialog = await app.openExport();
+  await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+  await expect(dialog).toContainText('Preparing conversation');
+  await expect.poll(() => app.count('session.share')).toBe(1);
+  const generation = app.requests.find(request => request.method === 'session.share').params.generation;
+  const progress = async (value, id = generation) => {
+    await page.evaluate(payload => window.emitShareProgress(payload), { generation: id, progress: value });
+  };
+  await progress({ $tag: 'unused' }, generation - 1); // malformed events cannot break rendering
+  await progress(['Uploading', { attempt: 1, percent: 42 }]);
+  await expect(dialog).toContainText('42%');
+  await expect(dialog.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+  await progress(['Waiting', { attempt: 1 }]);
+  await expect(dialog).toContainText('Waiting for server response');
+  await expect(dialog.getByRole('button', { name: 'Sharing…' })).toBeDisabled();
+  await progress(['Connecting', { attempt: 2 }]);
+  await expect(dialog).toContainText('Retrying upload');
+  await expect(dialog.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  await progress(['Uploading', { attempt: 2, percent: 0 }]);
+  await expect(dialog.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await progress(['Uploading', { attempt: 2, percent: 56 }]);
+  await expect(dialog).toContainText('56%');
+  await expect.poll(async () => {
+    const track = await dialog.getByRole('progressbar').boundingBox();
+    const fill = await dialog.locator('.update-progress-fill').boundingBox();
+    return Math.round(fill.width / track.width * 100);
+  }).toBe(56);
+  await dialog.screenshot({ path: testInfo.outputPath('share-progress.png'), animations: 'disabled' });
+  await progress(['Uploading', { attempt: 1, percent: 99 }], generation - 1);
+  await expect(dialog.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '56');
+  finish();
+  await expect(dialog.getByRole('textbox', { name: 'Share link' })).toBeVisible();
+  await progress(['Uploading', { attempt: 2, percent: 99 }]);
+  await expect(dialog.getByRole('progressbar')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

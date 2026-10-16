@@ -2268,6 +2268,7 @@ pub(all) enum Notification {
   AgentFinished(FinishedPayload)
   AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
+  SessionShareProgress(SessionShareProgress)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
   SessionChanged(SessionChangedPayload)
@@ -2308,6 +2309,7 @@ pub(all) enum NotificationKind {
   AgentFinished
   AgentPrediction
   SessionEvent
+  SessionShareProgress
   SubrunProgress
   WorkflowEntry
   SessionChanged
@@ -3289,6 +3291,30 @@ pub fn SessionSearchReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionSearchReply
 pub impl @json.FromJson for SessionSearchReply
 
+pub(all) struct SessionSharePayload {
+  source : SessionExportPayload
+  generation : Int
+} derive(Eq, @debug.Debug)
+pub fn SessionSharePayload::equal(Self, Self) -> Bool
+pub fn SessionSharePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSharePayload::not_equal(Self, Self) -> Bool
+pub fn SessionSharePayload::to_json(Self) -> Json
+pub fn SessionSharePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSharePayload
+pub impl @json.FromJson for SessionSharePayload
+
+pub(all) struct SessionShareProgress {
+  generation : Int
+  progress : ShareProgress
+} derive(Eq, @debug.Debug)
+pub fn SessionShareProgress::equal(Self, Self) -> Bool
+pub fn SessionShareProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionShareProgress::not_equal(Self, Self) -> Bool
+pub fn SessionShareProgress::to_json(Self) -> Json
+pub fn SessionShareProgress::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionShareProgress
+pub impl @json.FromJson for SessionShareProgress
+
 pub(all) enum SessionShareReply {
   Shared(url~ : String)
   SignInRequired
@@ -3415,6 +3441,20 @@ pub fn SettingsStatusPayload::to_json(Self) -> Json
 pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
+
+pub(all) enum ShareProgress {
+  Preparing
+  Connecting(attempt~ : Int)
+  Uploading(attempt~ : Int, percent~ : Int)
+  Waiting(attempt~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn ShareProgress::equal(Self, Self) -> Bool
+pub fn ShareProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ShareProgress::not_equal(Self, Self) -> Bool
+pub fn ShareProgress::to_json(Self) -> Json
+pub fn ShareProgress::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ShareProgress
+pub impl @json.FromJson for ShareProgress
 
 pub(all) enum SkillContentReply {
   SkillContent(String)

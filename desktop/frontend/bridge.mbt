@@ -15,6 +15,12 @@ fn notification_msg(
   notification : @protocol.Notification,
 ) -> Msg? {
   match notification {
+    SessionShareProgress(payload) =>
+      if channel is Local {
+        Some(ExportDialog(Progress(payload)))
+      } else {
+        None
+      }
     AuthChanged(payload) =>
       // The desktop window's own relay registration (Settings → Remote
       // access). A remote device's auth changes are its host's business,
@@ -379,6 +385,22 @@ fn Model::bridge_subscriptions(
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
   @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
+}
+
+///|
+test "share progress only updates the local export dialog" {
+  let payload : @protocol.SessionShareProgress = {
+    generation: 3,
+    progress: Uploading(attempt=1, percent=56),
+  }
+  assert_true(
+    notification_msg(Local, SessionShareProgress(payload))
+    is Some(ExportDialog(Progress(_))),
+  )
+  assert_true(
+    notification_msg(Remote("other-device"), SessionShareProgress(payload))
+    is None,
+  )
 }
 
 ///|

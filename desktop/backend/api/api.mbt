@@ -377,13 +377,19 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.
+/// Share progress returns to this catalog's connection, never the shared hub.
 pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
+  on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
     @endpoint.Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload, }.publish()
+      SessionShare::{ state, payload: payload.source, }.publish(on_progress=progress => {
+        on_share_progress({ generation: payload.generation, progress, }) catch {
+          _ => ()
+        }
+      })
     }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(

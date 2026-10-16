@@ -28,13 +28,15 @@ pub async fn publish(
   server_url~ : String,
   token~ : String,
   timeout_ms~ : Int32 = 240_000,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
   // Preserve the API's title limit without truncating the exported records.
   let title = title.trim()[:1024 / 3].to_owned()
   guard !title.is_empty() else { raise EmptyTitle }
   let mut headers : @http.Headers? = None
-  let attempt = async fn() {
+  let attempt = async fn(attempt : Int32) {
     @async.with_timeout(timeout_ms, () => {
+      on_progress(Connecting(attempt~))
       let connection = @http.Client(server_url)
       defer connection.close()
       let request_headers = match headers {
@@ -50,13 +52,21 @@ pub async fn publish(
           generated
         }
       }
-      send(connection, title~, files, server_url~, headers=request_headers)
+      send(
+        connection,
+        title~,
+        files,
+        server_url~,
+        headers=request_headers,
+        attempt~,
+        on_progress~,
+      )
     })
   }
-  attempt() catch {
+  attempt(1) catch {
     @multipart.MultipartError(_) as error => raise error
     _ =>
-      attempt() catch {
+      attempt(2) catch {
         @multipart.MultipartError(_) as error => raise error
         @async.TimeoutError =>
           @protocol.Failed(
@@ -74,11 +84,30 @@ async fn send(
   files : @engine.ConversationExport,
   server_url~ : String,
   headers~ : @http.Headers,
+  attempt~ : Int32,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   connection.request(Post, "/v1/shares", extra_headers=headers)
   // FormWriter chooses the boundary once; Writer lets retries reuse it on a
   // fresh connection without retaining the encoded request body.
   let form = @multipart.Writer(connection, boundary=headers["Idempotency-Key"])
+  let total = files.html.length().to_int64() + files.json.length().to_int64()
+  let mut written = 0L
+  let mut last_percent = 0
+  on_progress(Uploading(attempt~, percent=0))
+  let advance = async fn(units : Int32) {
+    written += units.to_int64()
+    let percent = if total == 0L {
+      100
+    } else {
+      (written * 100L / total).to_int()
+    }
+    if percent > last_percent {
+      connection.flush()
+      last_percent = percent
+      on_progress(Uploading(attempt~, percent~))
+    }
+  }
   form.write_part(
     headers={ "Content-Disposition": "form-data; name=\"title\"" },
     target => target.write(title),
@@ -88,16 +117,18 @@ async fn send(
       "Content-Disposition": "form-data; name=\"html\"; filename=\"conversation.html\"",
       "Content-Type": "text/html; charset=utf-8",
     },
-    target => write_text(target, files.html),
+    target => write_text(target, files.html, advance),
   )
   form.write_part(
     headers={
       "Content-Disposition": "form-data; name=\"json\"; filename=\"conversation.json\"",
       "Content-Type": "application/json; charset=utf-8",
     },
-    target => write_text(target, files.json),
+    target => write_text(target, files.json, advance),
   )
   form.finish()
+  connection.flush()
+  on_progress(Waiting(attempt~))
   let response = connection.end_request()
   let body = connection.read_all()
   if response.code == 401 {
@@ -135,11 +166,16 @@ async fn send(
 ///|
 // Encode bounded slices, keeping surrogate pairs whole. The existing export
 // strings are retained for retries, without buffering another multipart body.
-async fn write_text(target : &@io.Writer, text : String) -> Unit {
+async fn write_text(
+  target : &@io.Writer,
+  text : String,
+  advance : async (Int32) -> Unit,
+) -> Unit {
   let mut offset = 0
   while offset < text.length() {
     let chunk = text[offset:(offset + 4096).min(text.length())]
     target.write(chunk)
     offset += chunk.length()
+    advance(chunk.length())
   }
 }

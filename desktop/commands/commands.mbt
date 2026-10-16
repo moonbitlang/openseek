@@ -107,7 +107,7 @@ pub let session_export : Command[
 ///|
 /// Upload the same standalone HTML as Download using this desktop's login.
 pub let session_share : Command[
-  @protocol.SessionExportPayload,
+  @protocol.SessionSharePayload,
   @protocol.SessionShareReply,
 ] = Command("session.share")
 

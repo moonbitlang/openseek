@@ -9,6 +9,7 @@ priv struct SessionShare {
 ///|
 async fn SessionShare::publish(
   self : SessionShare,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let store = self.state.auth_store()
   guard store.desired_connector() is Some(config) else {
@@ -21,6 +22,7 @@ async fn SessionShare::publish(
     }
   }
   try {
+    on_progress(Preparing)
     let (shell, bundle) = self.state.host_state().viz_assets().read()
     let files = @engine.ConversationExport::capture(
       self.state.manager(),
@@ -28,7 +30,7 @@ async fn SessionShare::publish(
       shell,
       bundle,
     )
-    self.upload(files, config)
+    self.upload(files, config, on_progress~)
   } catch {
     error if @async.is_being_cancelled() => raise error
     @shares.EmptyTitle as refusal => Failed(message="\{refusal}")
@@ -50,8 +52,10 @@ async fn SessionShare::upload(
   self : SessionShare,
   files : @engine.ConversationExport,
   config : @auth.ConnectorConfig,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
   let reply = @shares.publish(
+    on_progress~,
     title=self.payload.title,
     files,
     server_url=@auth.origin_from_relay_url(config.relay_url),

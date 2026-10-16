@@ -92,13 +92,45 @@ async test "upload authenticates to issuer and retries the exact snapshot after 
         }
       }
     })
+    let progress : Array[@protocol.ShareProgress] = []
     let reply = @shares.publish(
+      on_progress=value => progress.push(value),
       title="中文 \"title\"",
       files,
       server_url="http://127.0.0.1:\{server.addr.port()}",
       token="odt_test",
     )
     assert_true(reply is Shared(url="http://shares.test/v1/shares/a"))
+    let mut attempt = 0
+    let mut percent = -1
+    let mut waiting = false
+    for value in progress {
+      match value {
+        Connecting(attempt=next) => {
+          assert_eq(next, attempt + 1)
+          if attempt > 0 {
+            assert_true(waiting)
+          }
+          attempt = next
+          percent = -1
+          waiting = false
+        }
+        Uploading(attempt=actual, percent=next) => {
+          assert_eq(actual, attempt)
+          assert_true(next > percent && next <= 100)
+          assert_false(waiting)
+          percent = next
+        }
+        Waiting(attempt=actual) => {
+          assert_eq(actual, attempt)
+          assert_eq(percent, 100)
+          waiting = true
+        }
+        Preparing => fail("capture progress belongs to the caller")
+      }
+    }
+    assert_eq(attempt, 2)
+    assert_true(waiting)
     receiver.wait()
   })
 }

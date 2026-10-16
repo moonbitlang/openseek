@@ -30,6 +30,28 @@ test "desktop notifications round-trip at the wire edge" {
 }
 
 ///|
+test "share progress round-trips through the shared notification catalog" {
+  let payload : @protocol.SessionShareProgress = {
+    generation: 7,
+    progress: Uploading(attempt=2, percent=56),
+  }
+  let notification = @protocol.Notification::SessionShareProgress(payload)
+  assert_eq(notification.wire_name(), "session.share_progress")
+  assert_eq(
+    @protocol.Notification::from_wire(
+      notification.wire_name(),
+      notification.params(),
+    ),
+    Some(notification),
+  )
+  assert_true(@protocol.NotificationKind::all().contains(notification.kind()))
+  assert_eq(
+    @protocol.Notification::from_wire("session.share_progress", {}),
+    None,
+  )
+}
+
+///|
 test "malformed agent errors remain visible notifications" {
   let cases : Array[Json] = [{}, { "message": 42 }]
   for params in cases {

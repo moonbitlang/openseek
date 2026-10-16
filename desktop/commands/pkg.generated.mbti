@@ -263,7 +263,7 @@ pub let session_rename : Command[@protocol.SessionRenamePayload, @protocol.Empty
 
 pub let session_search : Command[@protocol.SessionSearchPayload, @protocol.SessionSearchReply]
 
-pub let session_share : Command[@protocol.SessionExportPayload, @protocol.SessionShareReply]
+pub let session_share : Command[@protocol.SessionSharePayload, @protocol.SessionShareReply]
 
 pub let session_unarchive : Command[@protocol.SessionPayload, @protocol.SessionsReply]
 

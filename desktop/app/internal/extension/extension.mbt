@@ -22,6 +22,13 @@ let approvals_event : @proton_contract.Event[@protocol.ApprovalSnapshot] = @comm
 )
 
 ///|
+let share_progress_event : @proton_contract.Event[
+  @protocol.SessionShareProgress,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionShareProgress.wire_name(),
+)
+
+///|
 let connected_event : @proton_contract.Event[@protocol.ConnectedPayload] = @commands.extension_contract.event(
   @protocol.NotificationKind::AgentConnected.wire_name(),
 )
@@ -290,6 +297,8 @@ async fn PageEventTarget::emit(
     Hub(TerminalExit(payload)) => self.events.emit(terminal_exit_event, payload)
     Hub(SemanticSearchProgress(payload)) =>
       self.events.emit(semantic_search_progress_event, payload)
+    Hub(SessionShareProgress(payload)) =>
+      self.events.emit(share_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
     WindowChromeChanged => self.events.emit(window_chrome_changed, NoPayload)
     SystemAppearanceChanged =>
@@ -371,7 +380,9 @@ pub fn openseek_capability(
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
-  let endpoints = @api.endpoints(state, bridge.host_connection)
+  let endpoints = @api.endpoints(state, bridge.host_connection, on_share_progress=payload => {
+    bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
+  })
   let window_only = [
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)

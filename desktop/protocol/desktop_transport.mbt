@@ -15,6 +15,7 @@ pub(all) enum NotificationKind {
   AgentFinished
   AgentPrediction
   SessionEvent
+  SessionShareProgress
   SubrunProgress
   WorkflowEntry
   SessionChanged
@@ -51,6 +52,7 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
     AgentFinished => "agent.finished"
     AgentPrediction => "agent.prediction"
     SessionEvent => "session.event"
+    SessionShareProgress => "session.share_progress"
     SubrunProgress => "subrun.progress"
     WorkflowEntry => "workflow.entry"
     SessionChanged => "session.changed"
@@ -88,6 +90,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
     AgentFinished,
     AgentPrediction,
     SessionEvent,
+    SessionShareProgress,
     SubrunProgress,
     WorkflowEntry,
     SessionChanged,
@@ -126,6 +129,7 @@ pub(all) enum Notification {
   AgentFinished(FinishedPayload)
   AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
+  SessionShareProgress(SessionShareProgress)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
   SessionChanged(SessionChangedPayload)
@@ -177,6 +181,10 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       Some(AgentFinished(@json.from_json(params) catch { _ => return None }))
     "session.event" =>
       Some(SessionEvent(@json.from_json(params) catch { _ => return None }))
+    "session.share_progress" =>
+      Some(
+        SessionShareProgress(@json.from_json(params) catch { _ => return None }),
+      )
     "subrun.progress" =>
       Some(SubrunProgress(@json.from_json(params) catch { _ => return None }))
     "workflow.entry" =>
@@ -252,6 +260,7 @@ pub fn Notification::kind(self : Notification) -> NotificationKind {
     AgentFinished(_) => AgentFinished
     AgentPrediction(_) => AgentPrediction
     SessionEvent(_) => SessionEvent
+    SessionShareProgress(_) => SessionShareProgress
     SubrunProgress(_) => SubrunProgress
     WorkflowEntry(_) => WorkflowEntry
     SessionChanged(_) => SessionChanged
@@ -295,6 +304,7 @@ pub fn Notification::params(self : Notification) -> Json {
     AgentFinished(payload) => ToJson::to_json(payload)
     AgentPrediction(payload) => ToJson::to_json(payload)
     SessionEvent(payload) => ToJson::to_json(payload)
+    SessionShareProgress(payload) => ToJson::to_json(payload)
     SubrunProgress(payload) => ToJson::to_json(payload)
     WorkflowEntry(payload) => ToJson::to_json(payload)
     SessionChanged(payload) => ToJson::to_json(payload)

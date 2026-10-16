@@ -56,10 +56,13 @@ async test "shared endpoints report signed-out sharing" {
   let state = @api.ApiState(engine="unused-test-engine")
   let share : @protocol.SessionShareReply = @json.from_json(
     invoke_shared(state, "session.share", {
-      "session": "share-test",
-      "workspace": dir,
-      "title": "Shared session",
-      "archived": false,
+      "source": {
+        "session": "share-test",
+        "workspace": dir,
+        "title": "Shared session",
+        "archived": false,
+      },
+      "generation": 1,
     }),
   )
   assert_true(share is SignInRequired)
