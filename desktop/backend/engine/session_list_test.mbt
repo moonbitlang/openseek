@@ -118,4 +118,38 @@ async test "live and archived listings read stores without an engine executable"
   let blank = @engine.search_sessions({ query: "  ", include_archived: true, })
   assert_eq(blank.hits.length(), 0)
   assert_eq(blank.errors.length(), 0)
+  // The sidebar and search reuse store instances. Other writers, including
+  // CLI sessions and archive moves, must remain visible after a warm search.
+  store.set_title(SessionId("renamed"), "Updated title")
+  assert_eq(
+    @engine.search_sessions({ query: "explicit", include_archived: false, }).hits.length(),
+    0,
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "updated title", include_archived: false, }).hits.length(),
+    1,
+  )
+  store.create(
+    @agent_session.Session(SessionId("prompt"), system_prompt="").append(
+      User(UserMessage(Content([Text("Rewritten prompt")]))),
+    ),
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    1,
+  )
+  @fs.rename(
+    workspace + "/.openseek/sessions/prompt",
+    workspace + "/.openseek/archived/sessions/prompt",
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    0,
+  )
+  let moved = @engine.search_sessions({
+    query: "rewritten",
+    include_archived: true,
+  })
+  assert_eq(moved.hits.length(), 1)
+  assert_true(moved.hits[0].archived)
 }

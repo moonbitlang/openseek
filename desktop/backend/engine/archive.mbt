@@ -373,16 +373,7 @@ async fn move_session_family(
 /// The archived conversations, one group per session store — the same reply
 /// shape as `list_sessions`, listing each store's `archived` twin instead.
 pub async fn archived_sessions() -> SessionsReply {
-  let groups : Array[SessionGroup] = []
-  for path in @workspaces.registered() {
-    groups.push(
-      session_group(
-        path,
-        @session_store.archived_root(@workspaces.store_root(path)),
-      ),
-    )
-  }
-  { groups, }
+  session_listing_groups(archived=true)
 }
 
 ///|

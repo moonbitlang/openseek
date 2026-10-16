@@ -613,9 +613,37 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 /// reports the failure in its `error` field rather than failing the whole
 /// reply.
 pub async fn list_sessions() -> SessionsReply {
+  session_listing_groups(archived=false)
+}
+
+///|
+// Sidebar refreshes warm the same prompt metadata used by title search.
+// Stores own fingerprint-checked caches; detached stores are released below.
+let listing_stores : Map[String, @store.SessionStore] = Map([])
+
+///|
+async fn session_listing_groups(archived~ : Bool) -> SessionsReply {
+  let workspaces = @workspaces.registered()
+  let roots : Set[String] = Set([])
+  for workspace in workspaces {
+    let root = @workspaces.store_root(workspace)
+    roots.add(root.to_string())
+    roots.add(@session_store.archived_root(root).to_string())
+  }
+  listing_stores.retain((root, _) => roots.contains(root))
   let groups : Array[SessionGroup] = []
-  for path in @workspaces.registered() {
-    groups.push(session_group(path, @workspaces.store_root(path)))
+  for workspace in workspaces {
+    let root = @workspaces.store_root(workspace)
+    groups.push(
+      session_group(
+        workspace,
+        if archived {
+          @session_store.archived_root(root)
+        } else {
+          root
+        },
+      ),
+    )
   }
   { groups, }
 }
@@ -666,7 +694,9 @@ async fn session_group(
   }
 
   let sessions : Array[@protocol.SessionListEntry] = try {
-    let store = @store.SessionStore(native_root)
+    let store = listing_stores.get_or_init(native_root, () => {
+      SessionStore(native_root)
+    })
     [
       for listing in store.listings() => {
         let updated_at_ms = try {

@@ -38,6 +38,14 @@ struct SessionStore {
   // file on the common append path. Never required for correctness — a
   // missing or mismatching mark falls back to the full comparison.
   marks : Map[String, DurableMark]
+  listing_prompts : Map[String, ListingPrompt]
+} derive(Debug)
+
+///|
+priv struct ListingPrompt {
+  mtime : (Int64, Int32)
+  ctime : (Int64, Int32)
+  text : String
 } derive(Debug)
 
 ///|
@@ -70,7 +78,7 @@ priv struct FileFingerprint {
 /// treat a missing `root/sessions` directory as an empty store where that makes
 /// sense.
 pub fn SessionStore::SessionStore(root : String) -> SessionStore {
-  { root, marks: Map([]), }
+  { root, marks: Map([]), listing_prompts: Map([]), }
 }
 
 ///|
@@ -690,20 +698,84 @@ async fn first_prompt_in_log(path : String) -> String {
     if line.is_blank() {
       continue
     }
-    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
-      _ => return ""
-    }
-    if event.item() is User(message) {
-      let content = message.content()
-      let text = content.text()
-      return if text.is_blank() && !content.is_text_only() {
-        "[Image]"
-      } else {
-        text
+    let event = @json.parse(line) catch { _ => return "" }
+    if event
+      is {
+        "item": { "kind": "user", "payload": { "content": content, .. }, .. },
+        ..
+      } {
+      return listing_content_text(content) catch { _ => "" }
+    } else {
+      // Preserve the scan's stopping rule for malformed non-user events.
+      let _ : @agent_session.SessionEvent = @json.from_json(event) catch {
+        _ => return ""
       }
     }
   }
   ""
+}
+
+///|
+/// A picker needs the text and whether an image is present, never its bytes.
+/// Full session loading owns Base64 decoding and image validation. Doing that
+/// work here made every title search decode and re-encode every first-turn
+/// attachment, even though none of those bytes contribute to the title.
+fn listing_content_text(content : Json) -> String raise {
+  if content is String(text) {
+    return text
+  }
+  guard content is Array(parts) else {
+    fail("expected content string or array")
+  }
+  let texts : Array[String] = []
+  let mut has_image = false
+  for part in parts {
+    match part {
+      { "type": "text", "text": String(text), .. } => texts.push(text)
+      { "type": "image", "media_type": String(_), "data": String(_), .. } =>
+        has_image = true
+      _ => fail("invalid content part")
+    }
+  }
+  let text = texts.join("")
+  if text.is_blank() && has_image {
+    "[Image]"
+  } else {
+    text
+  }
+}
+
+///|
+/// Repeated listings reuse only unchanged prompt text. Read title sidecars
+/// separately on every listing so renames are immediately visible. Use the
+/// mtime and ctime together to notice external rewrites even when a writer
+/// preserves the original mtime. A cache hit needs no transcript open/read.
+async fn SessionStore::listing_prompt(
+  self : SessionStore,
+  path : String,
+  mtime : (Int64, Int32),
+) -> String {
+  let ctime = Some(@fs.ctime(path)) catch { _ => None }
+  if ctime is Some(ctime) &&
+    self.listing_prompts.get(path) is Some(cached) &&
+    cached.mtime == mtime &&
+    cached.ctime == ctime {
+    return cached.text
+  }
+  self.listing_prompts.remove(path)
+  let text = first_prompt_in_log(path)
+  // Do not cache unreadable/missing prompts or a read that raced a writer.
+  if !text.is_empty() && ctime is Some(ctime) {
+    let unchanged = try
+      @fs.mtime(path) == mtime && @fs.ctime(path) == ctime
+    catch {
+      _ => false
+    }
+    if unchanged {
+      self.listing_prompts[path] = { mtime, ctime, text, }
+    }
+  }
+  text
 }
 
 ///|
@@ -738,8 +810,11 @@ pub async fn SessionStore::listings(
 ) -> Array[SessionListing] {
   let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
-  for id in self.list() {
+  let ids = self.list()
+  let paths : Set[String] = Set([])
+  for id in ids {
     let path = self.session_file_path(id) catch { _ => continue }
+    paths.add(path)
     let stamp = @fs.mtime(path) catch {
       _ => {
         unreadable.push({
@@ -757,7 +832,7 @@ pub async fn SessionStore::listings(
         {
           id,
           last_active_unix_seconds: Some(seconds),
-          first_prompt: first_prompt_in_log(path),
+          first_prompt: self.listing_prompt(path, stamp),
           title: self.title(id),
         },
         seconds,
@@ -765,6 +840,7 @@ pub async fn SessionStore::listings(
       ),
     )
   }
+  self.listing_prompts.retain((path, _) => paths.contains(path))
   // Most recently active first.
   stamped.sort_by(stamped_newest_first)
   [ for entry in stamped => entry.0 ]..append(unreadable)
