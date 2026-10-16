@@ -385,6 +385,7 @@ class Build {
     await cp(engine, join(root, `bin/openseek${suffix}`));
     // OpenSeek locates resources relative to its own executable.
     await stageResources(join(this.repo, "share"), join(root, "share"));
+    await cp(join(this.repo, "scripts/headless/remote-install.py"), join(root, "remote-install.py"));
     await cp(join(vendors.rg, `rg${suffix}`), join(root, `bin/rg${suffix}`));
     await cp(join(vendors.rg, "LICENSE-MIT"), join(root, "licenses/ripgrep/LICENSE-MIT"));
     await cp(join(vendors.rg, "UNLICENSE"), join(root, "licenses/ripgrep/UNLICENSE"));

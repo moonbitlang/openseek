@@ -252,11 +252,28 @@ pub async fn[T] with_document(
 /// parser must see exactly what the live `/api/sessions/<key>` endpoint would
 /// serve. The shared store lock spans the whole read, so the returned text
 /// cannot include an append whose durability sync has not completed.
-pub async fn read_text(root : @pathx.Absolute, session : String) -> String {
+pub async fn read_text(
+  root : @pathx.Absolute,
+  session : String,
+  max_bytes? : Int32,
+) -> String {
   let path = record_path(root, session)
   let lock = lock_path(root, session)
   with_shared_record_lock(lock, () => {
-    @fs.read_file(path.to_string()).text() catch {
+    try {
+      if max_bytes is Some(limit) {
+        let file = @fs.open(path.to_string(), mode=ReadOnly)
+        defer file.close()
+        let size = file.size()
+        guard limit >= 0 && size <= limit.to_int64() else {
+          raise Unreadable("session record exceeds the export size limit")
+        }
+        // Hold the same shared record lock and read only the measured cut.
+        @utf8.decode(file.read_exactly_at(size.to_int(), position=0))
+      } else {
+        @fs.read_file(path.to_string()).text()
+      }
+    } catch {
       @os_error.OSError(_) as error if error.is_ENOENT() =>
         raise Absent("no durable record at \{path}")
       error => raise Unreadable("cannot read the session record: \{error}")

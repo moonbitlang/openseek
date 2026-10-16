@@ -28,6 +28,8 @@ pub struct Schedules {
   mut state : @protocol.SchedulesReply?
   processes : Map[String, @process.Process]
   stopped : Map[String, Unit]
+  priv mut accepting : Bool
+  priv mut claiming : Int32
 }
 
 ///|
@@ -43,6 +45,8 @@ pub fn Schedules::Schedules(
     state: None,
     processes: Map([]),
     stopped: Map([]),
+    accepting: true,
+    claiming: 0,
   }
 }
 
@@ -354,6 +358,10 @@ async fn Schedules::take_due(
   self : Schedules,
   at? : Int64,
 ) -> Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] {
+  self.claiming += 1
+  defer {
+    self.claiming -= 1
+  }
   @async.protect_from_cancel(() => {
     self.lock.acquire()
     defer self.lock.release()
@@ -361,6 +369,7 @@ async fn Schedules::take_due(
     // until the store is free.
     guard self.owns() else { return [] }
     let state = self.load()
+    guard self.accepting else { return [] }
     let now = at.unwrap_or_else(schedule_now)
     let entries = state.entries.copy()
     let runs = state.runs.copy()
@@ -424,6 +433,7 @@ async fn Schedules::take_due(
         status: Running,
         log_path: self.directory().join("\{id}.log").to_string(),
       }
+      ignore(@journal.before("schedule.admit", subject=run.id))
       runs.push(run)
       launches.push((entry, run))
       active += 1
@@ -433,4 +443,16 @@ async fn Schedules::take_due(
     }
     launches
   })
+}
+
+///|
+pub fn Schedules::stop_admission(self : Schedules) -> Unit {
+  self.accepting = false
+}
+
+///|
+pub fn Schedules::has_active_work(self : Schedules) -> Bool {
+  self.claiming > 0 ||
+  !self.processes.is_empty() ||
+  (self.state is Some(state) && state.runs.any(run => run.status is Running))
 }

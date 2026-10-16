@@ -1,0 +1,5 @@
+import {
+  "moonbitlang/core/json",
+}
+
+warnings = "+test_unqualified_package"

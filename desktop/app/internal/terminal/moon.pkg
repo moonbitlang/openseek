@@ -1,0 +1,11 @@
+import {
+  "openseek_desktop/backend/terminal" @shared,
+  "openseek_desktop/backend/native_runtime" @host_runtime,
+}
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/core/encoding/utf8",
+} for "test"
+
+supported_targets = "+native"

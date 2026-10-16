@@ -99,6 +99,12 @@ pub let session_load_archived : Command[
 ] = Command("session.load_archived")
 
 ///|
+pub let session_export_content : Command[
+  @protocol.SessionExportPayload,
+  @protocol.SessionExportContent,
+] = Command("session.export_content")
+
+///|
 pub let session_export : Command[
   @protocol.SessionExportPayload,
   @protocol.SessionExportReply,
@@ -928,6 +934,40 @@ pub let host_open_path_preview : Command[
   @protocol.OpenPathPayload,
   @protocol.OpenPathReply,
 ] = Command("host.open_path_preview")
+
+///|
+/// Local desktop profile management; never part of the working-host catalog.
+pub let ssh_profiles : Command[@protocol.EmptyPayload, @protocol.SshProfiles] = Command(
+  "ssh.profiles",
+)
+
+///|
+pub let ssh_save : Command[@protocol.SshProfileWrite, @protocol.SshProfile] = Command(
+  "ssh.save",
+)
+
+///|
+pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply] = Command(
+  "ssh.request",
+)
+
+///|
+pub let fs_resolve_reference : Command[
+  @protocol.OpenPathPayload,
+  @protocol.ResolveReferenceReply,
+] = Command("fs.resolve_reference")
+
+///|
+pub let fs_preview_content : Command[
+  @protocol.ReadFilePayload,
+  @protocol.FilePreviewContent,
+] = Command("fs.preview_content")
+
+///|
+pub let codex_config_prepare : Command[
+  @protocol.EmptyPayload,
+  @protocol.CodexCommandReply[@protocol.CodexConfigReply],
+] = Command("codex.config.prepare")
 
 ///|
 pub let browser_pick_element : Command[

@@ -37,8 +37,6 @@ struct BrowserViews {
 }
 
 ///|
-/// Configure remote debugging before CEF starts, then attach the native window
-/// through window_ready when Proton creates it.
 pub async fn BrowserViews::BrowserViews() -> BrowserViews {
   let debug_port = prepare_debugging()
   {
@@ -549,7 +547,10 @@ fn window_endpoints(views : BrowserViews) -> Array[WindowEndpoint] {
 
 ///|
 async test "native window ops are absent from the relay method catalog" {
-  let state = @api.ApiState(engine="unused")
+  let state = @api.DesktopState(
+    engine="unused",
+    runtime_dir=Path("/unused-test-host"),
+  )
   let connection = @host.HostConnection()
   let catalog = @api.endpoints(state, connection)
   let window_only = window_endpoints(BrowserViews())

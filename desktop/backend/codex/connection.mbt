@@ -86,6 +86,7 @@ pub async fn[X] connect(
     errdefer stdout_reader.close()
     let (stderr_reader, child_stderr) = @process.read_from_process()
     errdefer stderr_reader.close()
+    let journal_record = @journal.before("codex.spawn")
     let process = @process.spawn(
       group,
       executable,
@@ -99,6 +100,8 @@ pub async fn[X] connect(
       cancel_handler=@process.graceful_cancel(timeout=1000),
       no_wait=true,
     )
+    errdefer process.cancel()
+    @journal.spawned(journal_record, process.pid)
     (stdin_writer, stdout_reader, stderr_reader, process)
   } catch {
     error =>

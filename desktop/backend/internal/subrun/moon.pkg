@@ -10,9 +10,9 @@ import {
 }
 
 import {
-  "openseek_desktop/backend/internal/fsx",
+  "openseek_desktop/backend/fsx",
 } for "wbtest"
 
-warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+warnings = "-missing_doc-unused_default_value-unused_optional_argument+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
-supported_targets = "+native"
+supported_targets = "+native+wasm"

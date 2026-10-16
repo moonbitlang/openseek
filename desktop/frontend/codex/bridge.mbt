@@ -142,23 +142,23 @@ pub fn State::refresh(
   let (catalog, next) = self.refresh_catalog(dispatch, channel)
   (
     @cmd.batch([
-      CodexStatusReply.request(
+      CodexStatusReply(self.activity.connection_epoch, self.status_revision).request(
         dispatch,
         channel,
         @commands.codex_status,
-        @protocol.NoPayload,
+        @protocol.EmptyPayload::NoPayload,
       ),
-      CodexAccountReply.request(
+      CodexAccountReply(self.auth_context()).request(
         dispatch,
         channel,
         @commands.codex_account_read,
         { refresh_token: false, },
       ),
-      CodexRequestsReply.request(
+      CodexRequestsReply(self.activity.connection_epoch).request(
         dispatch,
         channel,
         @commands.codex_server_request_list,
-        @protocol.NoPayload,
+        @protocol.EmptyPayload::NoPayload,
       ),
       CodexModelsReply.request(dispatch, channel, @commands.codex_model_list, {
         limit: 100,
@@ -297,7 +297,7 @@ fn CodexDraftThreadRequest::run(
                 draft_id: self.draft_id,
               })
             catch {
-              _ => @protocol.Acknowledged
+              _ => @protocol.EmptyReply::Acknowledged
             } noraise {
               value => value
             },
@@ -620,8 +620,8 @@ fn State::start_turn_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            @protocol.WorktreeCreateResult::WorktreeCreatedReply(reply) => reply
+            @protocol.WorktreeCreateResult::WorktreeCreateError(message) => {
               scheduler.add(
                 dispatch(
                   Failed(
@@ -942,8 +942,8 @@ fn State::repair_worktree(
         }
       }
       let reply = match result {
-        @protocol.WorktreeCreatedReply(reply) => reply
-        @protocol.WorktreeCreateError(message) => {
+        @protocol.WorktreeCreateResult::WorktreeCreatedReply(reply) => reply
+        @protocol.WorktreeCreateResult::WorktreeCreateError(message) => {
           scheduler.add(
             dispatch(
               Failed(
@@ -978,11 +978,11 @@ fn State::repair_worktree(
 
 ///|
 fn State::login(
-  _self : State,
+  self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
-  CodexLoginReply.request(
+  CodexLoginReply(self.auth_context()).request(
     dispatch,
     channel,
     @commands.codex_account_login_start,
@@ -1000,15 +1000,15 @@ fn State::login(
 
 ///|
 fn State::logout(
-  _self : State,
+  self : State,
   dispatch : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
-  CodexLogoutReply.request(
+  CodexLogoutReply(self.auth_context()).request(
     dispatch,
     channel,
     @commands.codex_account_logout,
-    @protocol.NoPayload,
+    @protocol.EmptyPayload::NoPayload,
   )
 }
 
@@ -1019,7 +1019,7 @@ fn State::cancel_login(
   channel : @interop.ChannelId,
 ) -> @cmd.Cmd {
   guard self.login_id is Some(login_id) else { return @cmd.none }
-  CodexCancelLoginReply(login_id).request(
+  CodexCancelLoginReply(login_id, self.auth_context()).request(
     dispatch,
     channel,
     @commands.codex_account_login_cancel,
@@ -1050,7 +1050,7 @@ fn State::respond(
   let reply = if request.method_ == "item/tool/requestUserInput" {
     CodexQuestionReply(request.response_token)
   } else {
-    CodexApprovalReply
+    CodexApprovalReply(self.activity.connection_epoch)
   }
   reply.request(dispatch, channel, @commands.codex_server_request_respond, {
     request_id: request.request_id,

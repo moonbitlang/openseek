@@ -343,7 +343,12 @@ async fn ServeEngine::write_commands(self : ServeEngine) -> Unit {
   let mut failure : String? = None
   for ;; {
     let command = self.commands.get() catch { _ => break }
-    self.writer.write(command.command.to_jsonl()) catch {
+    try {
+      // Covers promoted queued turns as well as direct starts. The durable
+      // intent precedes the only write into the real engine process.
+      ignore(@journal.before("agent.command", subject?=self.phase.latest_run()))
+      self.writer.write(command.command.to_jsonl())
+    } catch {
       error => {
         let reason = "\{command.failure_reason}: \{error}"
         command.settle(Some(EngineError(reason)))
@@ -1586,6 +1591,7 @@ async fn[G] start_serve_engine(
       "path_prefix": first_path_entry(path_env_value(env)),
       "inherit_env": false,
     }
+  let journal_record = @journal.before("engine.spawn", subject=config.session)
   let engine_id = @uuid.mint()
   let process = @process.spawn(
     group,
@@ -1611,6 +1617,8 @@ async fn[G] start_serve_engine(
     }),
     no_wait=true,
   )
+  errdefer process.cancel()
+  @journal.spawned(journal_record, process.pid)
   @xlog.info() <?
     {
       "event": "desktop_engine_spawned",
@@ -3142,6 +3150,25 @@ async test "native engine env has one authoritative bundled moon path" {
     moon_bin
   }
   assert_eq(env["PATH"], expected_path)
+  // A headless selection outside the engine tree must override desktop
+  // discovery for the same engine executable, including scheduled CLI envs.
+  let remote_seed = root.join("explicit seed")
+  let remote_home = runtime.join("toolchains/moonbit/linux-arm64")
+  prepare_fake_moonbit_seed(remote_seed, version="remote-test")
+  prepare_fake_bundled_moonbit_home(remote_home, version="remote-test")
+  guard @moonbit.bundled_source(
+      platform="linux-arm64",
+      seed_dir=remote_seed.resolve().to_string(),
+      host_platform="Linux-aarch64",
+    )
+    is Some(source) else {
+    fail("fixture seed is missing")
+  }
+  let remote_env = engine_process_env(config, Some(runtime), source~)
+  assert_eq(
+    first_path_entry(path_env_value(remote_env)),
+    remote_home.resolve().join("bin").to_string(),
+  )
 }
 
 ///|
@@ -3405,4 +3432,33 @@ async test "cancelled spawn requester holds its claim until pump ack" {
     assert_true(cancelled)
     assert_false(claim.active)
   })
+}
+
+///|
+/// Includes pending slot claims and compaction, not merely user-visible turns.
+/// Idle serve processes are joined when the service group is cancelled.
+pub fn EngineManager::has_active_work(self : EngineManager) -> Bool {
+  if self.record_guards
+    .values()
+    .any(record => record.active_ops > 0 || record.moving) {
+    return true
+  }
+  match self.pump {
+    Stopped => false
+    Serving(sessions~) =>
+      sessions
+      .values()
+      .any(slot => {
+        slot.pending is Some(_) ||
+        (
+          slot.engine is Some(engine) &&
+          (!(engine.phase is Idle(..)) || !engine.queued_runs.is_empty())
+        )
+      })
+  }
+}
+
+///|
+pub fn EngineManager::is_serving(self : EngineManager) -> Bool {
+  self.pump is Serving(..)
 }

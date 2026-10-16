@@ -60,6 +60,7 @@ fn SessionExport::includes(self : SessionExport, candidate : String) -> Bool {
 /// are read; the native save dialog opens after this method returns.
 async fn SessionExport::sessions(
   self : SessionExport,
+  max_record_bytes? : Int32,
 ) -> Array[@viz_export.Session] {
   let record_guard = self.manager.begin_record_read(self.session)
   defer self.manager.end_record_read(self.session, record_guard)
@@ -67,12 +68,20 @@ async fn SessionExport::sessions(
     error => raise EngineError("session export failed: \{error}")
   }
   let sessions : Array[@viz_export.Session] = []
+  let mut remaining = max_record_bytes
   for entry_id in family {
     if !self.includes(entry_id) {
       continue
     }
-    let events = @session_record.read_text(self.root, entry_id) catch {
+    let events = @session_record.read_text(
+      self.root,
+      entry_id,
+      max_bytes?=remaining,
+    ) catch {
       error => raise EngineError("session export failed: \{error}")
+    }
+    if remaining is Some(budget) {
+      remaining = Some(budget - @utf8.encode(events).length())
     }
     let key = "session-\{sessions.length()}"
     sessions.push(
@@ -112,9 +121,10 @@ pub async fn ConversationExport::capture(
   payload : @protocol.SessionExportPayload,
   shell_html : String,
   bundle_js : String,
+  max_record_bytes? : Int32,
 ) -> ConversationExport {
   let request = SessionExport::SessionExport(manager, payload)
-  let sessions = request.sessions()
+  let sessions = request.sessions(max_record_bytes?)
   let exporter = @viz_export.StandaloneExport(shell_html, bundle_js)
   ConversationExport(exporter, sessions)
 }

@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/journal"
+
+// Values
+pub async fn atomic_json(String, Json) -> Unit
+
+pub async fn before(String, subject? : String) -> String?
+
+pub async fn is_cleared(String) -> Bool
+
+pub async fn read_json(String) -> Json?
+
+pub async fn returned(String?, Json) -> Unit
+
+pub async fn spawned(String?, Int) -> Unit
+
+// Errors
+
+// Types and methods
+pub struct Journal {
+  // private fields
+}
+pub async fn Journal::acknowledge(Self, String, Bool) -> Unit
+pub async fn Journal::clean(Self) -> Unit
+pub fn Journal::diagnostics(Self) -> Json
+pub fn Journal::needs_recovery(Self) -> Bool
+pub async fn Journal::open(data_dir~ : String, instance_id~ : String, build_id~ : String) -> Self
+
+// Type aliases
+
+// Traits

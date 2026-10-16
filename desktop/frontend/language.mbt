@@ -63,7 +63,7 @@ fn load_language(is_desktop~ : Bool, dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
         let saved = @interop.bridge_request_in_order(
           Local,
           @commands.app_language_get,
-          @protocol.NoPayload,
+          @protocol.EmptyPayload::NoPayload,
         ) catch {
           error => {
             scheduler.add(

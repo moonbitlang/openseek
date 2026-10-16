@@ -4,7 +4,7 @@ fn approval_event(
   session : String,
   run_id : String?,
   event : @wire.Event,
-) -> @protocol.Notification {
+) -> @protocol.HostNotification {
   AgentEvent({ run_id, session, event, })
 }
 
@@ -168,70 +168,11 @@ test "questions from two engines are kept and retired independently" {
 }
 
 ///|
-test "engine prediction is broadcast to both local and relay subscribers" {
-  let hub = Hub::Hub()
-  let desktop_client : @async.Queue[@protocol.Notification] = Queue(
-    kind=Blocking(4),
-  )
-  let remote : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(4))
-  let desktop_subscription = hub.subscribe(
-    desktop_client,
-    map=value => Some(value),
-    on_lag=sub => sub.close(),
-  )
-  defer desktop_subscription.close()
-  let remote_subscription = hub.subscribe(remote, map=value => Some(value), on_lag=sub => {
-    sub.close()
-  })
-  defer remote_subscription.close()
-  let payload : @protocol.PredictionReadyPayload = {
-    session: "s",
-    prediction: {
-      source_sequence: 2,
-      outcome: Completed(text=Some("Commit"), input_tokens=1, output_tokens=2),
-    },
-  }
-  let sink = hub.sink()
-  sink(PredictionReady(payload))
-  let expected = Some(@protocol.Notification::AgentPrediction(payload))
-  assert_eq(desktop_client.try_get(), expected)
-  assert_eq(remote.try_get(), expected)
-  assert_eq(desktop_client.try_get(), None)
-  assert_eq(remote.try_get(), None)
-}
-
-///|
-test "a resolution from an older run cannot retire a reused approval id" {
-  let hub = Hub::Hub()
-  hub.publish(
-    approval_event(
-      "s1",
-      Some("new-run"),
-      ApprovalRequested(
-        id="ap-reused",
-        tool_name="mbtx",
-        detail="demo",
-        body=None,
-      ),
-    ),
-  )
-  hub.publish(
-    approval_event(
-      "s1",
-      Some("old-run"),
-      ApprovalResolved(id="ap-reused", outcome="allowed_once"),
-    ),
-  )
-  guard hub.runs().approvals is [pending] else {
-    fail("stale resolution removed the current run's question")
-  }
-  assert_eq(pending.run_id, Some("new-run"))
-}
-
-///|
 async test "approval snapshot subscription and reply claim share one ordered state" {
   let hub = Hub::Hub()
-  let stream : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(16))
+  let stream : @async.Queue[@protocol.HostNotification] = Queue(
+    kind=Blocking(16),
+  )
   let subscription = hub.subscribe(stream, map=value => Some(value), on_lag=sub => {
     sub.close()
   })
@@ -304,4 +245,67 @@ async test "approval snapshot subscription and reply claim share one ordered sta
     hub.answer_approval({ id: "ap-1", run_id: Some("r1"), allow: true, }, send).delivered,
   )
   assert_eq(sends.val, 1)
+}
+
+///|
+test "engine prediction is broadcast to both local and relay subscribers" {
+  let hub = Hub::Hub()
+  let desktop_client : @async.Queue[@protocol.HostNotification] = Queue(
+    kind=Blocking(4),
+  )
+  let desktop_client_sub = hub.subscribe(
+    desktop_client,
+    map=value => Some(value),
+    on_lag=sub => sub.close(),
+  )
+  defer desktop_client_sub.close()
+  let remote : @async.Queue[@protocol.HostNotification] = Queue(
+    kind=Blocking(4),
+  )
+  let remote_sub = hub.subscribe(remote, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer remote_sub.close()
+  let payload : @protocol.PredictionReadyPayload = {
+    session: "s",
+    prediction: {
+      source_sequence: 2,
+      outcome: Completed(text=Some("Commit"), input_tokens=1, output_tokens=2),
+    },
+  }
+  let sink = hub.sink()
+  sink(PredictionReady(payload))
+  let expected = Some(@protocol.HostNotification::AgentPrediction(payload))
+  assert_eq(desktop_client.try_get(), expected)
+  assert_eq(remote.try_get(), expected)
+  assert_eq(desktop_client.try_get(), None)
+  assert_eq(remote.try_get(), None)
+}
+
+///|
+test "a resolution from an older run cannot retire a reused approval id" {
+  let hub = Hub::Hub()
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("new-run"),
+      ApprovalRequested(
+        id="ap-reused",
+        tool_name="mbtx",
+        detail="demo",
+        body=None,
+      ),
+    ),
+  )
+  hub.publish(
+    approval_event(
+      "s1",
+      Some("old-run"),
+      ApprovalResolved(id="ap-reused", outcome="allowed_once"),
+    ),
+  )
+  guard hub.runs().approvals is [pending] else {
+    fail("stale resolution removed the current run's question")
+  }
+  assert_eq(pending.run_id, Some("new-run"))
 }

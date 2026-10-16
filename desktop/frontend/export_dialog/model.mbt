@@ -5,6 +5,7 @@ const DialogId = "conversation-export-dialog"
 /// Each opening captures its source. Openings and uploads advance a generation
 /// so late progress or replies cannot overwrite another request.
 struct Model {
+  channel : @interop.ChannelId
   generation : Int32
   content : Content?
 } derive(Eq, Debug)
@@ -70,17 +71,19 @@ fn Msg::generation(self : Msg) -> Int32? {
 
 ///|
 pub fn Model::Model() -> Model {
-  { generation: 0, content: None, }
+  { channel: Local, generation: 0, content: None, }
 }
 
 ///|
 pub fn Model::open(
   self : Model,
   source : @protocol.SessionExportPayload,
+  channel~ : @interop.ChannelId = Local,
 ) -> (@cmd.Cmd, Model) {
   (
     @dialog.show(DialogId),
     {
+      channel,
       generation: self.generation + 1,
       content: Some({ source, operation: Ready, publication: None, }),
     },

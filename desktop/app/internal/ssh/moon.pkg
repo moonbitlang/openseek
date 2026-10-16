@@ -1,0 +1,24 @@
+import {
+  "openseek_desktop/app/internal/terminal",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/headless_installer",
+  "moonbitlang/openseek_protocol/host_control",
+  "moonbitlang/async/process",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/encoding/base64",
+  "openseek_desktop/backend/filekind",
+  "openseek_desktop/commands",
+  "openseek_desktop/backend/host_client",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+  "openseek_desktop/backend/uuid",
+  "openseek_desktop/backend/fsx",
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/protocol",
+}
+
+supported_targets = "+native"
+
+warnings = "+test_unqualified_package+unnecessary_annotation+unqualified_local_using"

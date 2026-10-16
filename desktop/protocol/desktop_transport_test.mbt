@@ -1,13 +1,13 @@
 ///|
 test "desktop notifications round-trip at the wire edge" {
-  let event = @protocol.Notification::from_wire("terminal.exit", {
+  let event = @protocol.HostNotification::from_wire("terminal.exit", {
     "id": "terminal-1",
     "code": 0,
   })
   guard event is Some(event) else { fail("known notification was rejected") }
   assert_eq(event.wire_name(), "terminal.exit")
   assert_eq(event.params(), { "id": "terminal-1", "code": 0 })
-  let settings = @protocol.Notification::from_wire(
+  let settings = @protocol.HostNotification::from_wire(
     "workspace.settings_changed",
     {
       "workspace": "/home/u/proj",
@@ -26,7 +26,7 @@ test "desktop notifications round-trip at the wire edge" {
     "checkout_submodules": false,
     "submodule_checkout_timeout_seconds": 30,
   })
-  assert_eq(@protocol.Notification::from_wire("future.event", {}), None)
+  assert_eq(@protocol.HostNotification::from_wire("future.event", {}), None)
 }
 
 ///|
@@ -55,7 +55,7 @@ test "share progress round-trips through the shared notification catalog" {
 test "malformed agent errors remain visible notifications" {
   let cases : Array[Json] = [{}, { "message": 42 }]
   for params in cases {
-    guard @protocol.Notification::from_wire("agent.error", params)
+    guard @protocol.HostNotification::from_wire("agent.error", params)
       is Some(AgentError(payload)) else {
       fail("malformed agent error was dropped")
     }
@@ -85,7 +85,7 @@ test "semantic search progress notifications round-trip at the wire edge" {
     "match_count": 1,
     "file_count": 1,
   }
-  guard @protocol.Notification::from_wire("semantic.search_progress", wire)
+  guard @protocol.HostNotification::from_wire("semantic.search_progress", wire)
     is Some(SemanticSearchProgress(payload)) else {
     fail("known notification was rejected")
   }
@@ -97,7 +97,7 @@ test "semantic search progress notifications round-trip at the wire edge" {
   assert_eq(payload.matches.length(), 1)
   assert_eq(payload.matches[0].path, "src/main.mbt")
   assert_eq(
-    @protocol.Notification::SemanticSearchProgress(payload).params(),
+    @protocol.HostNotification::SemanticSearchProgress(payload).params(),
     wire,
   )
 }
@@ -121,7 +121,7 @@ test "a workflow entry round-trips at the wire edge" {
   // `cost_usd` is absent, not null: an optional field that is not there
   // decodes as None, and encodes back to nothing — the round trip below
   // pins that the params come back exactly as sent.
-  guard @protocol.Notification::from_wire("workflow.entry", params)
+  guard @protocol.HostNotification::from_wire("workflow.entry", params)
     is Some(event) else {
     fail("known notification was rejected")
   }

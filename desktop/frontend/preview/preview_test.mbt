@@ -275,3 +275,24 @@ test "address bar accepts file URLs for arbitrary browser documents" {
   assert_true(@preview.normalize_url("file:") is None)
   assert_true(@preview.normalize_url("proton://app/") is None)
 }
+
+///|
+test "remote URL policy uses the browser's canonical loopback address" {
+  for
+    url in [
+      "http://localhost:3000/", "http://LOCALHOST./", "http://dev.localhost/", "http://%6cocalhost/",
+      "http://127.1/", "http://2130706433/", "http://0x7f000001/", "http://0177.0.0.1/",
+      "http://127.99.2.3/", "http://[0:0:0:0:0:0:0:1]/", "http://[::ffff:127.0.0.1]/",
+      "http://0.0.0.0/", "http://[::]/",
+    ] {
+    assert_true(@preview.is_machine_local_url(url))
+  }
+  for
+    url in [
+      "https://example.com/", "https://localhost.example.com/", "https://127.com/",
+      "https://127.0.0.1.example.com/", "https://localhost@example.com/", "file:///tmp/report.pdf",
+      "mailto:someone@localhost", "not a URL",
+    ] {
+    assert_false(@preview.is_machine_local_url(url))
+  }
+}

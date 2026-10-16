@@ -2,7 +2,7 @@
 
 The wire protocol between a browser client and an OpenSeek **host process**
 — the desktop app's native process, which owns the engine and the host ops.
-The host runs no server: at startup it dials out to a **relay** and
+For browser access the desktop host dials out to a **relay** and
 registers; browsers reach it through the relay, which serves the frontend
 bundle and splices WebSockets without understanding a byte of the protocol.
 
@@ -36,6 +36,54 @@ Closing the Proton application cancels these owners together. A request may
 post work to them, but cancelling or reloading that request cannot orphan a
 socket, subprocess, or watcher.
 
+## Headless SSH transport
+
+The standalone `app-server` runs the same `backend/api.ApiState` without Proton. Its
+loopback TCP listener accepts HTTP Upgrade at `/host`. The native
+HostClient connects to a local loopback port forwarded by `ssh -N -L` to the
+remote loopback port. OpenSSH forwards bytes without parsing WebSocket or answering pings. The daemon owns Agent/Codex work and durable
+followers; each connection owns its watches. Closing SSH leaves accepted service
+work running. Headless SSH hosts omit `terminal.*`; server-owned PTYs belong only to embedded
+desktop/relay hosts.
+
+The first RPC is `server.initialize` with an exact `build_id` and
+`protocol_version: 1`. It returns `server_id`, `instance_id`, build/protocol,
+platform, home, data directory and status. The native client compares this with
+its preceding bootstrap result and an optional saved server identity. There is
+no relay login exchange or application token on this transport. OpenSSH handles
+remote login authentication and tunnel encryption; loopback processes on both
+machines are trusted. Browser Origin headers are rejected.
+
+`server.status`, `server.shutdown`, `server.recovery` and `server.recover` control
+lifecycle. Draining rejects new persistent mutations but allows reads while
+accepted work settles within one shared grace budget. An unclean instance's
+journal forces RecoveryRequired, where business operations are refused until
+external tools have been checked, recovery explicitly acknowledged and the
+service restarted. OS process inspection is unavailable; the controller cannot
+verify live children or automatically clear records after reboot. Explicit
+acknowledgement is the caller's confirmation that external tools were inspected.
+
+Both endpoints require matching pongs on an independent watchdog (10-second
+pings, 60-second budget). Business queues are bounded; overflow disconnects and
+requires a durable-state reload. Mutations are not automatically replayed after
+an uncertain response. See [CLI lifecycle](../desktop/backend/cli/README.md) and
+[native HostClient](../desktop/backend/host_client/README.md) for limits and invocation.
+
+The desktop wraps working-host requests in a profile ID and connection epoch.
+A window keeps its host binding; old-epoch requests are Unsent and responses
+crossing a replaced connection are Unknown. A changed pinned server identity
+stops retry, while a new instance of the same server triggers normal durable
+resynchronization. Approvals use their own instance/generation fences.
+
+OS operations stay local: remote file downloads/previews explicitly read bounded
+content from the host before invoking desktop facilities. Remote paths are not
+passed to a local opener. Codex browser login owns a private SSH callback tunnel
+and remote login ID; account state and CODEX_HOME belong to the selected host.
+Native package preparation verifies the selected artifact and identity before
+committing a profile. Busy activation keeps the current service and profile;
+reopening a window after upgrade adopts the new build. See
+[desktop usage](../desktop/README.md#remote-ssh) and
+[installation and recovery](../scripts/headless/README.md).
 The host's notification hub publishes directly into each transport's bounded
 inbox. Registration supplies the destination and its notification mapping;
 the owner unregisters on exit, including cancellation. Desktop control,
@@ -54,7 +102,7 @@ new subscription and resync. Paused subscriptions do not replay missed events.
 
 ## Transport
 
-All HTTP lives at the relay. Browser releases are versioned alongside Desktop
+For the browser transport, HTTP lives at the relay. Browser releases are versioned alongside Desktop
 releases; JSON/WS APIs live under `/v1`:
 
 | Route | What |
@@ -550,6 +598,7 @@ picker-specific starting-point behavior.
 
 | method | params | result |
 |---|---|---|
+| `fs.resolve_reference` | `{session, cwd?, path}` (`cwd` is an absolute URI path; position suffixes are parsed on the working host) | `{kind: "text", path, line?, column?}` \| `{kind: "directory", path}` (checkout-relative) \| `{kind: "binary", path}` \| `{kind: "refused", message}`; read-only, never opens an OS application |
 | `fs.read_file` | `{path, root?}` (`path` is absolute without `root`; otherwise `root` is absolute and `path` is relative to it) | `{kind: "content", content, absolute, sig}` \| `{kind: "binary_content", data_base64, media_type}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
 | `fs.read_directory` | `{path}` (absolute directory) | `{entries: [{name, is_dir}]}`, directories first |
 | `fs.search_files` | `{path, cache_key, query, max_results, generation}` (`path` absolute root) | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query returning root-relative paths; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |
@@ -592,7 +641,17 @@ solely for a detected development layout.
 
 ### terminal.* — connection-scoped PTYs
 
-Each client connection owns an independent set of PTYs. Terminal ids are
+These methods are available on embedded desktop/relay hosts only. Headless SSH
+services do not register them and return method-not-found. In a native SSH
+window the same frontend operations are bound locally to independent `ssh -tt`
+processes. Each terminal opens its own SSH connection using the selected alias;
+sshd owns the remote PTY. Window-local output and ACKs bypass the app-server
+channel and epoch, so app-server reconnect does not retire terminal tabs.
+The frontend passes the resolved checkout path rather than asking app-server to
+resolve a session. Missing paths are refused without a local-directory fallback.
+Page reload and window/tab close still retire these local SSH processes.
+
+For embedded desktop and relay hosts, each client connection owns an independent set of PTYs. Terminal ids are
 unique only within that connection, output returns only to that connection,
 and closing the desktop page or browser WebSocket tears down all of its PTYs.
 A reconnect therefore starts with no terminal sessions; clients must discard
@@ -862,6 +921,17 @@ changed and why:
   `/v1`, and the browser WS left the page namespace
   (`/d/<device>/api/v1/ws` → `/v1/devices/<device>/ws`).
 
+### Codex reverse-request ownership
+
+`codex.server_request` and each row of `codex.server_request.list` include a
+`response_token` minted for that exact request. `codex.server_request.respond`
+requires both `request_id` and the nonblank `response_token`, plus `result`.
+The host claims the request synchronously before writing the answer. A duplicate
+response or an old token for a reused JSON-RPC id is rejected without consuming
+the current request. Tokens survive client reconnect through the request snapshot
+and change for every new request, including after an actor or host restart.
+Snapshot/live ordering continues to use the actor's monotonic `generation`.
+
 ### OpenSeek approval recovery
 
 `agent.runs` carries `approvals` and `approval_generation` from one synchronous
@@ -878,6 +948,21 @@ once only when both `id` and `run_id` name a current, unanswered question. Missi
 run identity, stale identity, or an already accepted answer returns
 `delivered: false`. A refused writer submission leaves the question answerable.
 
+### Working-host conversation export
+
+`session.export_content` takes the existing `SessionExportPayload` and returns
+required `html` and `json` strings rendered on that working host. Neither a local
+save destination nor a share credential crosses this API. It is a read operation
+and remains available while draining. Capture includes the parent and its direct
+subruns, with a shared 4 MiB UTF-8 record budget. The JSON-encoded result is capped
+at 24 MiB so escaping cannot exceed the transport frame limit. Oversized or
+unreadable records fail the operation; they never become empty exports.
+
+Headless launchers set `OPENSEEK_HOST_VIZ_DIR` (or pass `--viz-dir`) to the
+absolute directory containing the matching `index.html` and `viz_app.js`.
+Daemon start forwards this explicit resource selection to the detached service.
+Without it, content export reports unavailable assets; it never reads desktop
+resources or downloads a substitute.
 ### User questions
 
 The host MCP tool `ask_user` requests information in the calling conversation,

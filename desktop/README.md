@@ -20,11 +20,17 @@ executable that hosts it:
 
 Inside them:
 
+- `backend/api/` — the shared embedded/headless service, with process-owned
+  actors and connection-owned watches. `ApiState::start_services` supplies the
+  common embedded startup; the daemon owns the headless lifecycle.
+- `backend/host_client/`, `backend/cli/`, `backend/headless_installer/` — SSH
+  connection, durable daemon lifecycle, and verified package preparation.
+- `app/internal/ssh/` — desktop host profiles, reconnect state, and window routing.
 - `backend/engine/` — the native process owner: manages persistent
   engines, streaming, conversation storage, and workspace directories.
 - `app/internal/extension/` — IPC command registration and bundled frontend asset lookup.
 - `backend/internal/skillmarket/` — the mooncakes.io skill registry client and local skills-library manager.
-- `backend/internal/env/` — process-environment reads (blank means unset).
+- `backend/env/` — process-environment reads (blank means unset).
 - `backend/internal/home/` — the user's home directory and `~` expansion.
 - `backend/internal/userdirs/` — platform-specific Documents directory lookup.
 - `backend/broadcast/` — native event fan-out to connected windows.
@@ -38,6 +44,69 @@ Inside them:
 The native `backend` and JS `frontend` modules both depend on the root
 `desktop` module. They do not depend on each other; backend packaging builds
 the frontend workspace member separately and consumes its generated bundle.
+
+## Remote SSH
+
+Use **Add project** to choose Local, a saved SSH host, or **Add remote**.
+Local and remote projects appear together in the same window. **Save and
+continue** discovers an existing managed package on the SSH destination and
+returns to its directory picker. Cancelling returns to the originating picker
+and directory; switching locations restores each location's last directory.
+Saved remote projects remain in the sidebar while disconnected, with an
+explicit unavailable state and Retry instead of a stale directory listing.
+
+For a fresh host, expand **Advanced** and choose **Prepare from local package**.
+Supply a local headless package and a dedicated absolute remote data directory.
+Preparation verifies, uploads and activates the package, then saves the host
+only after it is Ready. Advanced settings also accept an existing absolute
+launcher path and exact build ID. Profiles can be managed from **SSH hosts**
+in Settings.
+The current preparation workflow uses local development artifacts; it does not
+download or publish a release. The working host needs Linux, glibc 2.35+,
+Python 3.8+, getconf, `/usr/bin/base64`, an executable login shell and key-based
+SSH access. OpenSSH config, known-host checking and ProxyJump/ProxyCommand remain
+in effect. Agent forwarding is disabled. Worktree/subtask operations also require
+Git with `worktree list --porcelain -z`; an unsupported Git is refused before
+creation. See [building and installing headless packages](../scripts/headless/README.md)
+for complete artifact and resource requirements.
+
+Models, tools, workspaces, Git, search, LSP, session history and
+schedules run on the selected host. Desktop windows, clipboard, browsers and
+native panels stay local. A remote download explicitly saves a local copy;
+remote paths are never interpreted as local paths. Project host badges and connection status show where work runs. Closing the window or application leaves accepted Agent
+work and daemon schedules running. Integrated terminals use a separate
+`ssh -tt` connection per tab, owned by the local window. The remote sshd
+allocates the PTY; the headless app-server does not provide terminal endpoints.
+Terminal input, resizing and output continue across app-server reconnections.
+Closing a tab, reloading the page or closing its window releases its SSH process.
+Terminals start in the selected checkout, including worktrees and resolved scratch
+workspaces. File and language state resynchronize independently.
+
+In remote Settings, endpoint/API-key changes affect that working host; local
+credentials are not silently copied. Codex requires a separately installed CLI
+on the remote service's PATH or an explicitly configured absolute executable.
+Its account uses the host data directory's isolated CODEX_HOME. **Show remote
+config and login** displays the configuration path and a command for that CLI.
+Start `/bin/sh` in a remote terminal before running the command. Device-code
+login requires account support; the browser sign-in action manages its callback
+tunnel, while manual browser login requires the displayed port forwarding.
+Click **Refresh** after terminal login. See [Codex integration](../docs/codex-app-server.md).
+
+**Update from package** installs a selected package and switches only an idle
+service. Finish or cancel active work before retrying Busy.
+After successful activation, the corresponding host connection adopts the new profile. Cancelling
+preparation after activation begins can leave the switch completed: inspect
+status and upgrade records before retrying. Reconnecting does not refresh an
+already running service's environment or change its selected Codex CLI.
+
+On connection failure, inspect the displayed SSH diagnostic and check the same
+alias with system SSH. A changed saved server identity requires investigation;
+the client does not silently accept the replacement. An Unknown mutation result
+must be reconciled with durable history before another submission. After an
+unclean daemon exit, inspect recovery records and external tools before explicit
+acknowledgement and restart; missing SSH connectivity is not evidence that work
+stopped. See [HostClient diagnostics](backend/host_client/README.md) and
+[daemon status/recovery commands](backend/cli/README.md).
 
 ## Sessions and streaming
 

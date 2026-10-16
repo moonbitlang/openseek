@@ -1,6 +1,6 @@
 ///|
 /// One run-scoped agent event as `notification_for_client` sees it.
-fn client_frame(event : @wire.Event) -> @protocol.Notification? {
+fn client_frame(event : @wire.Event) -> @protocol.HostNotification? {
   notification_for_client(
     AgentEvent({ run_id: None, session: "session-1", event, }),
   )
@@ -8,8 +8,8 @@ fn client_frame(event : @wire.Event) -> @protocol.Notification? {
 
 ///|
 fn expect_notification(
-  value : @protocol.Notification?,
-) -> @protocol.Notification raise {
+  value : @protocol.HostNotification?,
+) -> @protocol.HostNotification raise {
   guard value is Some(notification) else { fail("expected a notification") }
   notification
 }

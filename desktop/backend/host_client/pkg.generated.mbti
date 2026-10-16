@@ -1,0 +1,77 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/host_client"
+
+import {
+  "moonbitlang/openseek_protocol/host_control",
+}
+
+// Values
+pub fn terminal_args(destination~ : String, cwd~ : String, command? : String) -> Array[String] raise
+
+pub async fn[T] with_client(SshHost, async (Client) -> T) -> T
+
+// Errors
+pub suberror HostClientError {
+  HostClientError(String)
+  IdentityChanged(String)
+}
+pub fn HostClientError::output(Self, &Logger) -> Unit
+pub fn HostClientError::to_string(Self) -> String
+pub impl Show for HostClientError
+
+pub suberror RequestError {
+  Unsent(String)
+  Refused(String)
+  Unknown(String)
+}
+pub fn RequestError::output(Self, &Logger) -> Unit
+pub fn RequestError::to_string(Self) -> String
+pub impl Show for RequestError
+
+// Types and methods
+pub struct Client {
+  identity : @host_control.Identity
+  // private fields
+}
+pub async fn Client::next_notification(Self) -> Json
+pub async fn Client::request(Self, String, Json) -> Json
+
+pub struct Connection {
+  host : Host
+  // private fields
+}
+pub fn Connection::Connection(Host) -> Self
+pub fn Connection::invalidate(Self, epoch~ : Int) -> Unit
+pub async fn Connection::request(Self, epoch~ : Int, String, Json) -> Json
+pub async fn Connection::run(Self, emit~ : (ConnectionEvent) -> Bool) -> Unit
+
+pub(all) enum ConnectionEvent {
+  Connecting(epoch~ : Int)
+  Connected(epoch~ : Int, identity~ : @host_control.Identity)
+  Notification(epoch~ : Int, value~ : Json)
+  Disconnected(epoch~ : Int, message~ : String, retry_ms~ : Int)
+  IdentityBlocked(epoch~ : Int, message~ : String)
+}
+pub fn ConnectionEvent::to_json(Self) -> Json
+pub impl ToJson for ConnectionEvent
+
+pub struct Host {
+  id : String
+  config : SshHost
+  // private fields
+}
+pub fn Host::Host(id~ : String, SshHost) -> Self raise
+pub fn Host::server_id(Self) -> String?
+
+pub(all) struct SshHost {
+  ssh : String
+  destination : String
+  launcher : String
+  data_dir : String
+  build_id : String
+  expected_server_id : String?
+}
+
+// Type aliases
+
+// Traits

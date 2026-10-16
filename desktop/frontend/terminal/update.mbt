@@ -48,7 +48,13 @@ fn open_new_tab(
     workspace: group,
     workspace_label: workspace_label(ctx),
     session: ctx.session,
-    workspace_path: ctx.placement.bind(placement => placement.project_root()),
+    workspace_path: ctx.placement.bind(placement => {
+      if @interop.is_native_ssh(ctx.channel) {
+        placement.checkout_root()
+      } else {
+        placement.project_root()
+      }
+    }),
     status: TabOpening,
     command,
     input: InputQueue::empty(),

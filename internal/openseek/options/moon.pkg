@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/backend/cli" @host_cli,
   "moonbitlang/core/argparse",
   "moonbitlang/openseek/cli",
   "moonbitlang/openseek/deepseek",

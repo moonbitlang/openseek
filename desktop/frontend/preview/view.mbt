@@ -93,6 +93,7 @@ pub fn toolbar_view(
     ),
     @html.input(
       input_type=@html.InputType::Text,
+      read_only=page.source is Some(_),
       value=page.input,
       placeholder=ui(locale, EnterUrl),
       on_input=actions.input,

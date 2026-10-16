@@ -332,6 +332,8 @@ fn bridge_event(dispatch : @cmd.Emit[Msg], event : @bridge.Event) -> @cmd.Cmd {
             @cmd.none
           }
       }
+    @bridge.Event::Connecting(channel~) =>
+      dispatch(FromDevice(channel, BridgeConnecting))
     @bridge.Event::Unavailable(channel~, message~) =>
       dispatch(FromDevice(channel, BridgeUnavailable(message)))
     @bridge.Event::ChannelDown(channel~, websocket_epoch~) =>
@@ -364,6 +366,9 @@ fn DeviceState::bridge_subscription(
   let bridge_dispatch : @cmd.Emit[@bridge.Event] = event => {
     bridge_event(dispatch, event)
   }
+  if @interop.is_native_ssh(self.channel) {
+    return @bridge.local_connection(bridge_dispatch)
+  }
   match self.channel {
     Local => @bridge.local_connection(bridge_dispatch)
     Remote(device) =>
@@ -384,7 +389,11 @@ fn Model::bridge_subscriptions(
   self : Model,
   dispatch : @cmd.Emit[Msg],
 ) -> @sub.Sub {
-  @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
+  if self.is_desktop {
+    @bridge.local_connection(event => bridge_event(dispatch, event))
+  } else {
+    @sub.batch(self.devices.map(dev => dev.bridge_subscription(dispatch)))
+  }
 }
 
 ///|
@@ -1792,16 +1801,35 @@ fn open_file(
   guard @resource.belongs_to(cwd, channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let command = if preview_browser && channel is Local {
-        @commands.host_open_path_preview
-      } else {
-        @commands.host_open_path
-      }
-      let reply = @interop.bridge_request(channel, command, {
+      let payload : @protocol.OpenPathPayload = {
         session: context.owner.session,
         cwd: Some(cwd.path),
         path,
-      }) catch {
+      }
+      let reply = try {
+        if @interop.is_native_ssh(channel) {
+          let epoch = @interop.current_ssh_epoch(channel)
+          if epoch is None {
+            @protocol.OpenPathReply::Refused("SSH connection is unavailable")
+          } else {
+            let reply : @protocol.OpenPathReply = @interop.bridge_request(
+              channel, @commands.host_open_path_preview, payload,
+            )
+            if @interop.current_ssh_epoch(channel) == epoch {
+              reply
+            } else {
+              Refused("SSH preview reply belongs to a retired connection")
+            }
+          }
+        } else {
+          let command = if preview_browser && channel is Local {
+            @commands.host_open_path_preview
+          } else {
+            @commands.host_open_path
+          }
+          @interop.bridge_request(channel, command, payload)
+        }
+      } catch {
         error =>
           @protocol.OpenPathReply::Refused(@interop.bridge_error_text(error))
       }

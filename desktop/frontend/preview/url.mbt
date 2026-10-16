@@ -173,3 +173,20 @@ pub fn normalize_url(input : String) -> String? {
     None
   }
 }
+
+///|
+/// URLs emitted by a remote workspace cannot address this desktop's network.
+/// Use the browser parser here: numeric IPv4 aliases, escaped host names and
+/// IPv6 spelling must resolve exactly as they would during navigation.
+pub extern "js" fn is_machine_local_url(url : String) -> Bool =
+  #| (url) => {
+  #|   try {
+  #|     const parsed = new URL(url);
+  #|     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+  #|     const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+  #|     return host === "localhost" || host.endsWith(".localhost") ||
+  #|       host === "0.0.0.0" || /^127\.\d+\.\d+\.\d+$/.test(host) ||
+  #|       host === "[::]" || host === "[::1]" ||
+  #|       /^\[::ffff:7f[0-9a-f]{2}:[0-9a-f]{1,4}\]$/.test(host);
+  #|   } catch (_) { return false; }
+  #| }

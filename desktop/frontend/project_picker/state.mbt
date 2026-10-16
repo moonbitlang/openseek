@@ -42,6 +42,29 @@ pub extend State with Eq::{equal, not_equal}
 ///|
 /// The fence expected by the current host reply. Exposed with the otherwise
 /// opaque state so black-box adapters can drive the state machine directly.
+pub fn State::channel(self : State) -> @interop.ChannelId {
+  self.channel
+}
+
+///|
+pub fn State::pause(self : State) -> State {
+  { ..self, loading: true, generation: fresh_request_generation(), }
+}
+
+///|
+pub fn State::refresh(self : State, emit : @cmd.Emit[Msg]) -> (@cmd.Cmd, State) {
+  let generation = fresh_request_generation()
+  let path = match self.location {
+    Some(Directory(path)) => path
+    _ => ""
+  }
+  (
+    browse(emit, self.channel, path, generation~),
+    { ..self, loading: true, generation, },
+  )
+}
+
+///|
 pub fn State::request_generation(self : State) -> Int32 {
   self.generation
 }

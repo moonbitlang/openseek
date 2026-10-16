@@ -2,31 +2,42 @@
 package "openseek_desktop/backend/remote"
 
 import {
-  "moonbitlang/async/http",
-  "openseek_desktop/backend/api",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/json",
+  "moonbitlang/openseek_protocol/host_control",
+  "openseek_desktop/protocol",
 }
 
 // Values
-pub const LocalConsoleDevice : String = "host"
+pub async fn heartbeat(@websocket.Conn) -> Unit
 
 // Errors
 
 // Types and methods
-pub struct LocalConsole {
-  server : @http.Server
-  token : String
-  cookie_name : String
-  name : String
-}
-pub async fn LocalConsole::bind(port~ : Int) -> Self
-pub fn LocalConsole::entry_url(Self) -> String
-pub fn LocalConsole::origin(Self) -> String
-pub fn LocalConsole::port(Self) -> Int
-pub async fn LocalConsole::run(Self, @api.ApiState, root~ : String, entry~ : String) -> Unit
+type Client
+pub fn Client::Client(Array[RequestHandler], ((Notification) -> Bool raise, () -> Unit) -> () -> Unit, async (async (Notification) -> Unit, async (Notification) -> Unit) -> Unit) -> Self
+pub async fn Client::serve(Self, @websocket.Conn, make_endpoints? : (async (Notification) -> Unit) -> Array[RequestHandler]) -> Unit
+pub async fn Client::serve_initialized(Self, @websocket.Conn, identity~ : @host_control.Identity, on_response_sent? : (String) -> Unit) -> Unit
 
-type RelayActor
-pub fn RelayActor::RelayActor(@api.ApiState, announce~ : (String) -> Unit) -> Self
-pub async fn RelayActor::run(Self) -> Unit
+pub(all) struct Endpoint {
+  port : Int
+  instance_id : String
+} derive(ToJson, @json.FromJson)
+pub fn Endpoint::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Endpoint::to_json(Self) -> Json
+pub fn Endpoint::validate(Self) -> Unit raise
+
+pub(all) enum Notification {
+  Host(@protocol.HostNotification)
+  Other(String, Json)
+}
+pub fn Notification::from_host(@protocol.HostNotification) -> Self
+pub fn Notification::other(String, Json) -> Self
+
+pub(all) struct RequestHandler {
+  name : String
+  invoke : async (Json) -> Json
+}
 
 // Type aliases
 

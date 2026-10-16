@@ -14,6 +14,7 @@ import {
   "openseek_desktop/frontend/sidebar/conversation",
   "openseek_desktop/frontend/sidebar/section",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -42,6 +43,15 @@ pub(all) struct ComposerContext {
   file_index : @composer.FileIndex
 }
 
+pub(all) enum ConfigView {
+  ConfigIdle
+  ConfigLoading
+  ConfigReady(@protocol.CodexConfigReply)
+  ConfigFailed(String)
+} derive(Eq)
+pub fn ConfigView::equal(Self, Self) -> Bool
+pub fn ConfigView::not_equal(Self, Self) -> Bool
+
 type Msg
 pub fn Msg::abandon_draft() -> Self
 pub fn Msg::archive_thread(String) -> Self
@@ -56,7 +66,9 @@ pub fn Msg::logout() -> Self
 pub fn Msg::model_changed(String) -> Self
 pub fn Msg::notification(String, Json, Int) -> Self
 pub fn Msg::open_thread(String) -> Self
+pub fn Msg::prepare_config() -> Self
 pub fn Msg::refresh() -> Self
+pub fn Msg::refresh_account() -> Self
 pub fn Msg::server_request(String, Json, String, Json, Int) -> Self
 pub fn Msg::start_draft(String, String, draft? : @composer.Draft, worktree? : Bool) -> Self
 pub fn Msg::status_changed(Json) -> Self
@@ -84,10 +96,13 @@ pub fn State::account_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::active_id(Self) -> String?
 pub fn State::active_placement(Self, @interop.ChannelId) -> @interop.CheckoutPlacement?
 pub fn State::archived_sidebar_entries(locale? : @i18n.Locale, Self, @interop.ChannelId) -> Array[@section.Entry]
+pub fn State::authentication_error(Self) -> String?
+pub fn State::bridge_reconnected(Self) -> Self
 pub fn State::can_add_project(Self) -> Bool
 pub fn State::can_start_thread(Self) -> Bool
 pub fn State::composer_input(locale? : @i18n.Locale, Self, ComposerContext) -> @composer.Input
 pub fn State::composing_draft(Self) -> Bool
+pub fn State::config_view(Self) -> ConfigView
 pub fn State::connection_label(Self, locale? : @i18n.Locale) -> String
 pub fn State::draft_project(Self, @interop.ChannelId) -> Result[@common.Uri?, String]
 pub fn State::draft_text(Self) -> String

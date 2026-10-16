@@ -10,6 +10,7 @@ pub enum Event {
     channel~ : @interop.ChannelId,
     notification~ : @protocol.Notification
   )
+  Connecting(channel~ : @interop.ChannelId)
   Unavailable(channel~ : @interop.ChannelId, message~ : String)
   ChannelDown(channel~ : @interop.ChannelId, websocket_epoch~ : Int32)
   SystemAppearanceChanged

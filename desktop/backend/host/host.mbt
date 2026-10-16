@@ -1,5 +1,5 @@
 // Transport-agnostic host operations: file browsing, language services,
-// skills, self-update, app launching, and connection-owned filesystem/PTY
+// skills, and connection-owned filesystem/PTY
 // state. Typed payloads enter here only after an Endpoint has decoded them.
 
 ///|
@@ -35,14 +35,13 @@ impl Show for PayloadError with fn output(self, logger) {
 ///|
 /// The host ops' process-wide state: the moon-CLI state behind the language
 /// services (hover, check diagnostics, symbol search), the engine identity
-/// the Moon IDE navigation ops resolve their `moon` from, and the
-/// self-update staging state. Filesystem watches are connection-owned below,
+/// the Moon IDE navigation ops resolve their `moon` from, and explicit tool
+/// resources. Filesystem watches are connection-owned below,
 /// because two clients may watch different workspaces at the same time.
 struct HostState {
   engine : String
   runtime_dir : @pathx.Path?
   moon : MoonCliState
-  updates : SelfUpdate
   resources : HostResources
 }
 
@@ -55,47 +54,42 @@ struct HostConnection {
   file_search : FileSearchService
   text_search : TextSearchService
   semantic_search : SemanticSearchService
-  terminal : @terminal.TerminalState
+  terminal : @terminal.TerminalState?
 }
 
 ///|
-pub fn HostConnection::HostConnection() -> HostConnection {
+/// Omitting the runtime creates a connection without terminal state or endpoints.
+pub fn HostConnection::HostConnection(
+  runtime? : @runtime.HostRuntime,
+) -> HostConnection {
   {
     fs_watch: FsWatchActor(),
     file_search: FileSearchService(),
     text_search: TextSearchService(),
     semantic_search: SemanticSearchService(),
-    terminal: @terminal.new_terminal_state(),
+    terminal: runtime.map(runtime => @terminal.new_terminal_state(runtime~)),
   }
 }
 
 ///|
-/// `engine` is the engine executable; `resources` selects the tools and assets
-/// this working host uses; `executable` is the host's own binary, which
-/// only self-update needs, because replacing the running application is the
-/// one job whose meaning depends on this exact process. Absent paths retain
-/// external-tool defaults but disable installed-only work. Desktop callers
-/// pass `desktop_resources`; other embedders provide explicit paths.
+/// Construct work-machine state with executable, persistent-data and resource
+/// paths already selected by the embedding host.
 pub fn new_host_state(
   engine : String,
   runtime_dir? : @pathx.Path,
-  executable? : String,
-  app_version~ : String = "development",
   resources~ : HostResources = HostResources::from_path(),
 ) -> HostState {
   {
     engine,
     runtime_dir,
     moon: MoonCliState(engine, runtime_dir?, source=resources.moonbit),
-    updates: SelfUpdate(runtime_dir, executable, app_version~),
     resources,
   }
 }
 
 ///|
 /// The background tasks behind the host ops, spawned into the caller's
-/// app-lifetime task group: the moon-check diagnostics forwarder and the
-/// self-update pump with its startup leftover sweep. These are shared by
+/// service-lifetime task group. Diagnostics are shared by
 /// every connection;
 /// connection-owned filesystem watcher tasks start in `HostConnection::run`.
 /// Every background task is best-effort: a language-service hiccup degrades
@@ -103,7 +97,7 @@ pub fn new_host_state(
 pub fn[G] spawn_host_pumps(
   group : @async.TaskGroup[G],
   state : HostState,
-  emit : async (@protocol.Notification) -> Unit,
+  emit : async (@protocol.HostNotification) -> Unit,
 ) -> Unit {
   group.spawn_bg(allow_failure=true, () => {
     state.moon.forward_diagnostics(push => {
@@ -116,46 +110,47 @@ pub fn[G] spawn_host_pumps(
       )
     })
   })
-  group.spawn_bg(allow_failure=true, () => state.updates.run(emit))
 }
 
 ///|
-/// Run the filesystem watcher and PTY pump owned by this connection. Their
+/// Run the filesystem watcher and, when installed, the terminal pump. Their
 /// notifications return only to the same transport instead of entering the
 /// process-wide hub.
 pub async fn HostConnection::run(
   self : HostConnection,
-  emit : async (@protocol.Notification) -> Unit,
-  emit_progress : async (@protocol.Notification) -> Unit,
+  emit : async (@protocol.HostNotification) -> Unit,
+  emit_progress : async (@protocol.HostNotification) -> Unit,
 ) -> Unit {
   @async.with_task_group(group => {
     // Closing the request queue is the terminal pump's normal connection-end
     // signal. It must not be tied to the page-reload session sweep below.
-    defer self.terminal.shutdown()
-    group.spawn_bg(allow_failure=true, () => {
-      @terminal.run_terminal_pump(self.terminal, push => {
-        match push {
-          Output(id~, sequence~, data~) => {
-            let payload : TerminalOutputPayload = {
-              id,
-              sequence,
-              data: @base64.encode(data),
+    defer (if self.terminal is Some(terminal) { terminal.shutdown() })
+    if self.terminal is Some(terminal) {
+      group.spawn_bg(() => {
+        @terminal.run_terminal_pump(terminal, push => {
+          match push {
+            Output(id~, sequence~, data~) => {
+              let payload : TerminalOutputPayload = {
+                id,
+                sequence,
+                data: @base64.encode(data),
+              }
+              emit(
+                TerminalOutput({
+                  id: payload.id,
+                  sequence: payload.sequence,
+                  data: payload.data,
+                }),
+              )
             }
-            emit(
-              TerminalOutput({
-                id: payload.id,
-                sequence: payload.sequence,
-                data: payload.data,
-              }),
-            )
+            Exited(id~, code~) => {
+              let payload : TerminalExitPayload = { id, code, }
+              emit(TerminalExit({ id: payload.id, code: payload.code, }))
+            }
           }
-          Exited(id~, code~) => {
-            let payload : TerminalExitPayload = { id, code, }
-            emit(TerminalExit({ id: payload.id, code: payload.code, }))
-          }
-        }
+        })
       })
-    })
+    }
     group.spawn_bg(() => self.file_search.run())
     group.spawn_bg(() => self.text_search.run())
     group.spawn_bg(() => self.semantic_search.run(emit_progress))
@@ -192,7 +187,9 @@ pub async fn HostConnection::run(
 /// those PTYs before attaching the new page; WebSocket-owned sessions are
 /// cancelled automatically with their connection task group.
 pub fn HostConnection::close_terminals(self : HostConnection) -> Unit {
-  @terminal.close_all_terminals(self.terminal)
+  if self.terminal is Some(terminal) {
+    @terminal.close_all_terminals(terminal)
+  }
 }
 
 ///|
@@ -206,7 +203,7 @@ pub fn endpoints(
   manager : @engine.EngineManager,
   on_skills_changed : () -> Unit,
 ) -> Array[@endpoint.Endpoint] {
-  [
+  let endpoints : Array[@endpoint.Endpoint] = [
     Endpoint(@commands.github_drafts_get, payload => {
       read_github_drafts(state.runtime_dir.map(dir => dir.to_string()), payload)
     }),
@@ -222,7 +219,11 @@ pub fn endpoints(
     Endpoint(@commands.app_language_set, payload => {
       write_ui_language(state.runtime_dir.map(dir => dir.to_string()), payload)
     }),
+    Endpoint(@commands.fs_resolve_reference, payload => {
+      resolve_reference_op(payload)
+    }),
     Endpoint(@commands.fs_read_file, payload => read_file_op(payload)),
+    Endpoint(@commands.fs_preview_content, payload => preview_file_op(payload)),
     Endpoint(@commands.fs_prepare_attachment, payload => {
       prepare_attachment_op(payload)
     }),
@@ -243,7 +244,7 @@ pub fn endpoints(
       cancel_search_files_op(connection.file_search, payload)
     }),
     Endpoint(@commands.fs_search_text, payload => {
-      search_text_op(state.resources.ripgrep, connection.text_search, payload)
+      search_text_op(connection.text_search, payload, state.resources.ripgrep)
     }),
     Endpoint(@commands.fs_cancel_search_text, payload => {
       cancel_search_text_op(connection.text_search, payload)
@@ -292,25 +293,6 @@ pub fn endpoints(
     Endpoint(@commands.fs_create_directory, payload => {
       create_directory_op(payload)
     }),
-    Endpoint(@commands.terminal_open, payload => {
-      terminal_open_op(state, connection.terminal, payload)
-    }),
-    Endpoint(@commands.terminal_input, payload => {
-      terminal_input_op(connection.terminal, payload)
-      Acknowledged
-    }),
-    @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
-      terminal_resize_op(connection.terminal, payload)
-      Acknowledged
-    }),
-    @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
-      terminal_ack_op(connection.terminal, payload)
-      Acknowledged
-    }),
-    @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
-      terminal_close_op(connection.terminal, payload)
-      Acknowledged
-    }),
     Endpoint(@commands.moon_package_graph, payload => {
       moon_package_graph_op(state.moon, payload)
     }),
@@ -340,11 +322,6 @@ pub fn endpoints(
     Endpoint(@commands.skills_uninstall, payload => {
       uninstall_skill_op(payload, on_skills_changed)
     }),
-    Endpoint(@commands.update_check, _ => state.updates.check()),
-    @endpoint.Endpoint::sync(@commands.update_download, _ => {
-      state.updates.start_download()
-    }),
-    Endpoint(@commands.update_apply, _ => state.updates.apply()),
     Endpoint(@commands.git_branch, payload => git_branch_op(payload)),
     Endpoint(@commands.git_pull_request, payload => git_pull_request_op(payload)),
     Endpoint(@commands.github_list, payload => github_list_op(payload)),
@@ -370,9 +347,31 @@ pub fn endpoints(
     Endpoint(@commands.git_original_file, payload => {
       git_original_file_op(payload)
     }),
-    Endpoint(@commands.host_open_path, payload => open_path_op(payload)),
-    Endpoint(@commands.host_reveal_path, payload => reveal_path_op(payload)),
   ]
+  if connection.terminal is Some(terminal) {
+    endpoints.append([
+      Endpoint(@commands.terminal_open, payload => {
+        terminal_open_op(state, terminal, payload)
+      }),
+      Endpoint(@commands.terminal_input, payload => {
+        terminal_input_op(terminal, payload)
+        Acknowledged
+      }),
+      @endpoint.Endpoint::sync(@commands.terminal_resize, payload => {
+        terminal_resize_op(terminal, payload)
+        Acknowledged
+      }),
+      @endpoint.Endpoint::sync(@commands.terminal_ack, payload => {
+        terminal_ack_op(terminal, payload)
+        Acknowledged
+      }),
+      @endpoint.Endpoint::sync(@commands.terminal_close, payload => {
+        terminal_close_op(terminal, payload)
+        Acknowledged
+      }),
+    ])
+  }
+  endpoints
 }
 
 ///|

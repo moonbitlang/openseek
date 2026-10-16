@@ -36,7 +36,7 @@ fn close_focused(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let focused = @interop.bridge_request(
         @interop.ChannelId::Local,
         @commands.app_focused_browser,
-        @protocol.NoPayload,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(

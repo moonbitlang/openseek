@@ -41,14 +41,27 @@ pub fn[T, U] Channel::subscribe(
   map~ : (T) -> U?,
   on_lag~ : (Subscription[T]) -> Unit,
 ) -> Subscription[T] {
+  self.subscribe_with(
+    offer=value => {
+      guard map(value) is Some(message) else { return true }
+      inbox.try_put(message)
+    },
+    on_lag~,
+  )
+}
+
+///|
+/// Register a synchronous transport sink; false means full, errors mean closed.
+pub fn[T] Channel::subscribe_with(
+  self : Channel[T],
+  offer~ : (T) -> Bool raise,
+  on_lag~ : (Subscription[T]) -> Unit,
+) -> Subscription[T] {
   let id = self.next_id
   self.next_id += 1
   self.receivers[id] = {
     offer: value => {
-      guard map(value) is Some(message) else { return Accepted }
-      // Queue.try_put only raises when the destination has been closed.
-      // A closed transport no longer participates in this broadcast.
-      let accepted = inbox.try_put(message) catch { _ => return Closed }
+      let accepted = offer(value) catch { _ => return Closed }
       if accepted {
         Accepted
       } else {

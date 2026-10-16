@@ -19,7 +19,7 @@ pub async fn read_ui_language(
 fn validate_ui_language(language : String?) -> Unit raise {
   match language {
     None | Some("system" | "en" | "zh-Hans" | "zh-Hant" | "ja" | "es") => ()
-    Some(_) => raise HostError("Unknown UI language preference")
+    Some(_) => raise HostError::HostError("Unknown UI language preference")
   }
 }
 
@@ -30,7 +30,7 @@ pub async fn write_ui_language(
 ) -> @protocol.EmptyReply {
   validate_ui_language(preference.language)
   guard runtime_dir is Some(dir) else {
-    raise HostError("UI preference storage is unavailable")
+    raise HostError::HostError("UI preference storage is unavailable")
   }
   let path : @pathx.Path = dir
   // Each writer has its own temporary file, including multiple desktop instances.

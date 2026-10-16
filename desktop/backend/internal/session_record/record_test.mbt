@@ -282,6 +282,34 @@ async test "read_document answers with the whole record at once" {
 }
 
 ///|
+async test "bounded export reads count UTF-8 bytes and preserve absence errors" {
+  let (root, path) = record_fixture("s-bounded-export")
+  defer @fs.rmdir(root.to_string(), recursive=true)
+  write_record(path, "中文")
+  assert_eq(
+    @session_record.read_text(root, "s-bounded-export", max_bytes=6),
+    "中文",
+  )
+  try {
+    ignore(@session_record.read_text(root, "s-bounded-export", max_bytes=5))
+    fail("oversized record was accepted")
+  } catch {
+    @session_record.Unreadable(_) => ()
+    error => raise error
+  }
+  // A refused capture releases its shared lock and does not change the file.
+  assert_eq(@session_record.read_text(root, "s-bounded-export"), "中文")
+  @fs.remove(path.to_string())
+  try {
+    ignore(@session_record.read_text(root, "s-bounded-export", max_bytes=6))
+    fail("missing record became an empty export")
+  } catch {
+    @session_record.Absent(_) => ()
+    error => raise error
+  }
+}
+
+///|
 async test "with_document excludes a writer until its consuming callback finishes" {
   let (root, path) = record_fixture("locked-edit")
   write_record(path, header_line("locked-edit") + event_line(1, "one"))

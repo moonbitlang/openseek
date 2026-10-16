@@ -72,7 +72,7 @@ fn CodexPermissionPicker::choose(
   self : CodexPermissionPicker,
   mode : @protocol.CodexPermissionMode,
 ) -> CodexPermissionPicker {
-  if mode is @protocol.FullAccess {
+  if mode is @protocol.CodexPermissionMode::FullAccess {
     CodexPermissionConfirmingFullAccess(self.mode())
   } else {
     CodexPermissionClosed(mode)
@@ -85,7 +85,7 @@ fn CodexPermissionPicker::confirm_full_access(
 ) -> CodexPermissionPicker {
   match self {
     CodexPermissionConfirmingFullAccess(_) =>
-      CodexPermissionClosed(@protocol.FullAccess)
+      CodexPermissionClosed(@protocol.CodexPermissionMode::FullAccess)
     _ => self
   }
 }
@@ -310,12 +310,20 @@ priv enum CodexThreadSnapshotOrigin {
 }
 
 ///|
+/// Authentication replies belong to both a transport and a login lifecycle.
+priv struct CodexAuthContext {
+  connection_epoch : Int32
+  generation : Int32
+}
+
+///|
 /// The typed operation associated with one app-server reply.
 priv enum CodexReplyKind {
-  CodexStatusReply
-  CodexRequestsReply
-  CodexAccountReply
+  CodexStatusReply(Int32, Int32)
+  CodexRequestsReply(Int32)
+  CodexAccountReply(CodexAuthContext)
   CodexModelsReply
+  CodexConfigReply(Int32)
   CodexThreadsReply(CodexCatalogReplyContext)
   CodexThreadReply(String, CodexActivityFrontier)
   CodexResumeReply(String)
@@ -327,15 +335,15 @@ priv enum CodexReplyKind {
   CodexTurnSteerReply(String)
   CodexWorktreeTurnReply(String, CodexWorktree)
   CodexWorktreeRepairReply(String, CodexWorktree)
-  CodexLoginReply
+  CodexLoginReply(CodexAuthContext)
   CodexArchiveReply(String)
   CodexUnarchiveReply(String)
   CodexCompactReply(String, String)
   CodexReviewReply(String, String)
   CodexInterruptReply
-  CodexCancelLoginReply(String)
-  CodexLogoutReply
-  CodexApprovalReply
+  CodexCancelLoginReply(String, CodexAuthContext)
+  CodexLogoutReply(CodexAuthContext)
+  CodexApprovalReply(Int32)
   CodexQuestionReply(String)
 }
 
@@ -414,6 +422,8 @@ enum Msg {
   CancelArchiveDiscard
   ResumeSucceeded(String)
   Stop
+  PrepareConfig
+  RefreshAccount
   Login
   CancelLogin
   Logout
@@ -598,6 +608,10 @@ pub fn Msg::server_request(
 struct State {
   connection : CodexConnection
   account : CodexAccount
+  auth_generation : Int32
+  auth_error : String?
+  config : ConfigView
+  settled_login_id : String?
   login_id : String?
   auth_url : String?
   models : Array[CodexModelOption]
@@ -658,6 +672,8 @@ struct State {
   // reverse-request events. Older snapshots/events are ignored instead of
   // erasing a request that arrived while the snapshot was in flight.
   request_generation : Int32
+  // A live status overtakes an older status read even within the same epoch.
+  status_revision : Int32
   loading : Bool
   foreground : CodexForeground?
   notice : String
@@ -668,6 +684,10 @@ pub fn State::State(loading~ : Bool = false) -> State {
   {
     connection: CodexStarting,
     account: CodexAccountUnknown,
+    auth_generation: 0,
+    auth_error: None,
+    config: ConfigIdle,
+    settled_login_id: None,
     login_id: None,
     auth_url: None,
     models: [],
@@ -675,7 +695,9 @@ pub fn State::State(loading~ : Bool = false) -> State {
     selected_effort: "",
     // Match Codex App's assisted workflow: the workspace sandbox remains in
     // force, while eligible boundary requests go to the reviewer agent.
-    permission_picker: CodexPermissionClosed(@protocol.AutoReview),
+    permission_picker: CodexPermissionClosed(
+      @protocol.CodexPermissionMode::AutoReview,
+    ),
     threads: [],
     archived_threads: [],
     activity: CodexActivityLedger::empty(),
@@ -701,6 +723,7 @@ pub fn State::State(loading~ : Bool = false) -> State {
     archive_confirm: None,
     pending_requests: [],
     request_generation: 0,
+    status_revision: 0,
     loading,
     foreground: None,
     notice: "",
@@ -977,6 +1000,18 @@ fn State::accepts_thread_reply(self : State, requested_thread : String) -> Bool 
 /// so an overtaken draft/turn reply is inert rather than partly applied.
 fn State::accepts_reply(self : State, kind : CodexReplyKind) -> Bool {
   match kind {
+    CodexConfigReply(epoch) => epoch == self.activity.connection_epoch
+    CodexAccountReply(context)
+    | CodexLoginReply(context)
+    | CodexCancelLoginReply(_, context)
+    | CodexLogoutReply(context) =>
+      context.connection_epoch == self.activity.connection_epoch &&
+      context.generation == self.auth_generation
+    CodexStatusReply(epoch, revision) =>
+      epoch == self.activity.connection_epoch &&
+      revision == self.status_revision
+    CodexRequestsReply(epoch) | CodexApprovalReply(epoch) =>
+      epoch == self.activity.connection_epoch
     CodexThreadsReply(context) =>
       if context.archived {
         context.generation == self.archived_catalog_generation
@@ -1016,20 +1051,21 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     | CodexTurnSteerReply(id)
     | CodexWorktreeTurnReply(id, _) => Some(CodexTurnForeground(id))
     CodexWorktreeRepairReply(id, _) => Some(CodexWorktreeRepairForeground(id))
-    CodexLoginReply => Some(CodexLoginForeground)
-    CodexCancelLoginReply(id) => Some(CodexCancelLoginForeground(id))
-    CodexLogoutReply => Some(CodexLogoutForeground)
+    CodexLoginReply(_) => Some(CodexLoginForeground)
+    CodexCancelLoginReply(id, _) => Some(CodexCancelLoginForeground(id))
+    CodexLogoutReply(_) => Some(CodexLogoutForeground)
     CodexArchiveReply(id) => Some(CodexArchiveForeground(id))
     CodexUnarchiveReply(id) => Some(CodexUnarchiveForeground(id))
     CodexCompactReply(thread_id, _) => Some(CodexCompactForeground(thread_id))
     CodexReviewReply(thread_id, _) => Some(CodexReviewForeground(thread_id))
-    CodexStatusReply
-    | CodexRequestsReply
-    | CodexAccountReply
+    CodexStatusReply(_, _)
+    | CodexConfigReply(_)
+    | CodexRequestsReply(_)
+    | CodexAccountReply(_)
     | CodexModelsReply
     | CodexThreadsReply(_)
     | CodexInterruptReply
-    | CodexApprovalReply
+    | CodexApprovalReply(_)
     | CodexQuestionReply(_) => None
   }
 }
@@ -1551,6 +1587,23 @@ fn CodexThreadRow::branch(fields : Map[String, Json]) -> String? {
 }
 
 ///|
+/// Retire reads and approval drafts before the shell starts host recovery.
+/// Actor generations only order messages within one working-host lifetime.
+pub fn State::bridge_reconnected(self : State) -> State {
+  let next = self.finish_auth(None, self.auth_error)
+  {
+    ..next,
+    connection: CodexStarting,
+    notice: self.notice,
+    activity: self.activity.disconnected(),
+    config: ConfigIdle,
+    pending_requests: [],
+    request_generation: 0,
+    status_revision: self.status_revision + 1,
+  }
+}
+
+///|
 fn State::with_status(self : State, value : Json) -> State {
   let connection = match value {
     Object(fields) =>
@@ -1567,8 +1620,13 @@ fn State::with_status(self : State, value : Json) -> State {
       }
     _ => CodexUnavailable("Malformed status reply")
   }
+  let next = if self.connection is CodexReady && !(connection is CodexReady) {
+    self.bridge_reconnected()
+  } else {
+    self
+  }
   {
-    ..self
+    ..next
     // A fresh device mirror starts in a bootstrap loading state without a
     // foreground owner. The first status proves that bootstrap completed;
     // status refreshes during a real foreground operation leave its lock.
@@ -1579,14 +1637,6 @@ fn State::with_status(self : State, value : Json) -> State {
       self.loading
     },
     connection,
-    // A disconnect ends running work owned by that process.
-    // Advance the connection epoch only on the ready-to-disconnected edge so
-    // repeated starting/unavailable reports do not invalidate fresh requests.
-    activity: if self.connection is CodexReady && !(connection is CodexReady) {
-      self.activity.disconnected()
-    } else {
-      self.activity
-    },
   }
 }
 
@@ -1604,9 +1654,9 @@ fn State::with_account(self : State, value : Json) -> State {
       )
     _ => CodexSignedOut(requires_auth)
   }
-  // A fresh account snapshot settles both successful and cancelled login
-  // attempts. Do not leave an obsolete browser URL actionable afterward.
-  { ..self, account, login_id: None, auth_url: None, notice: "", }
+  // Account observations do not own the browser login lifecycle. A query
+  // started earlier or another window's account event cannot remove Cancel.
+  { ..self, account, }
 }
 
 ///|
@@ -3218,7 +3268,7 @@ test "Codex request replies preserve structured values" {
 }
 
 ///|
-test "Codex account snapshots settle browser login state" {
+test "Codex account snapshots preserve an active browser login until it settles" {
   let state = {
     ..State(),
     login_id: Some("login-1"),
@@ -3228,9 +3278,12 @@ test "Codex account snapshots settle browser login state" {
     "account": { "type": "chatgpt", "planType": "pro" },
     "requiresOpenaiAuth": true,
   })
-  assert_eq(settled.login_id, None)
-  assert_eq(settled.auth_url, None)
+  assert_eq(settled.login_id, state.login_id)
+  assert_eq(settled.auth_url, state.auth_url)
   assert_true(settled.account is CodexSignedIn(..))
+  let finished = settled.finish_auth(Some("login-1"), None)
+  assert_eq(finished.login_id, None)
+  assert_eq(finished.auth_url, None)
 }
 
 ///|
@@ -3646,6 +3699,160 @@ fn CodexItem::user_content(self : CodexItem) -> @deepseek.Content {
   }
   flush_text()
   @deepseek.Content(content)
+}
+
+///|
+test "Codex same-id replacement does not inherit draft answers or old card actions" {
+  let initial = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  })
+  let params : Json = {
+    "threadId": "thread-1",
+    "questions": [{ "id": "scope" }],
+  }
+  let old = initial
+    .with_pending_request(
+      "old-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      1,
+    )
+    .with_request_answer("old-token", "scope", "old answer")
+  assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
+  let snapshot = old.with_requests({
+    "generation": 1,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "old-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(
+    snapshot.pending_requests[0].answers.get("scope"),
+    Some("old answer"),
+  )
+  let fresh = snapshot
+    .with_pending_request(
+      "new-token",
+      Json(7),
+      "item/tool/requestUserInput",
+      params,
+      3,
+    )
+    .with_request_answer("old-token", "scope", "late edit")
+  assert_eq(fresh.pending_requests.length(), 1)
+  assert_eq(fresh.pending_requests[0].response_token, "new-token")
+  assert_true(fresh.pending_requests[0].answers.is_empty())
+  let recovered = old.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_eq(recovered.pending_requests[0].response_token, "new-token")
+  assert_true(recovered.pending_requests[0].answers.is_empty())
+  let resolved = recovered.with_notification(
+    "serverRequest/resolved",
+    { "requestId": 7 },
+    4,
+  )
+  let stale = resolved.with_requests({
+    "generation": 3,
+    "data": [
+      {
+        "request_id": 7,
+        "response_token": "new-token",
+        "method": "item/tool/requestUserInput",
+        "params": params,
+      },
+    ],
+  })
+  assert_true(stale.pending_requests.is_empty())
+}
+
+///|
+fn State::auth_context(self : State) -> CodexAuthContext {
+  {
+    connection_epoch: self.activity.connection_epoch,
+    generation: self.auth_generation,
+  }
+}
+
+///|
+fn State::begin_auth(self : State) -> State {
+  {
+    ..self,
+    auth_generation: self.auth_generation + 1,
+    auth_error: None,
+    settled_login_id: None,
+  }
+}
+
+///|
+fn State::finish_auth(self : State, id : String?, message : String?) -> State {
+  let owns_foreground = self.foreground is Some(CodexLoginForeground) ||
+    self.foreground is Some(CodexCancelLoginForeground(_)) ||
+    self.foreground is Some(CodexLogoutForeground)
+  {
+    ..self,
+    auth_generation: self.auth_generation + 1,
+    settled_login_id: id,
+    auth_error: message,
+    login_id: None,
+    auth_url: None,
+    notice: message.unwrap_or(""),
+    loading: if owns_foreground {
+      false
+    } else {
+      self.loading
+    },
+    foreground: if owns_foreground {
+      None
+    } else {
+      self.foreground
+    },
+  }
+}
+
+///|
+/// Authentication errors remain visible where the user starts sign-in.
+pub fn State::authentication_error(self : State) -> String? {
+  self.auth_error
+}
+
+///|
+pub(all) enum ConfigView {
+  ConfigIdle
+  ConfigLoading
+  ConfigReady(@protocol.CodexConfigReply)
+  ConfigFailed(String)
+} derive(Eq)
+
+///|
+pub fn State::config_view(self : State) -> ConfigView {
+  self.config
+}
+
+///|
+pub fn Msg::prepare_config() -> Msg {
+  PrepareConfig
+}
+
+///|
+pub extend ConfigView with Eq::{equal, not_equal}
+
+///|
+pub fn Msg::refresh_account() -> Msg {
+  RefreshAccount
 }
 
 ///|

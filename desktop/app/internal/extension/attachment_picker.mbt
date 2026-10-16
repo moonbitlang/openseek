@@ -5,7 +5,7 @@ async fn pick_attachment(
   context : @proton.CommandContext,
 ) -> @protocol.PickAttachmentReply {
   guard context.window() is Some(window) else {
-    raise @host.HostError(
+    raise @host.HostError::HostError(
       "could not open the attachment picker: window is unavailable",
     )
   }
@@ -14,7 +14,9 @@ async fn pick_attachment(
   }
   guard @pathx.Path(path).to_absolute().bind(path => path.to_uri_path())
     is Some(path) else {
-    raise @host.HostError("the selected attachment path cannot be represented")
+    raise @host.HostError::HostError(
+      "the selected attachment path cannot be represented",
+    )
   }
   { path: Some(path), }
 }

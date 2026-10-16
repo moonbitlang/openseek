@@ -26,6 +26,11 @@ pub(all) enum Message {
   Configuration
   OpenConfig
   ConfigDescription
+  RemoteCodexConfigAction
+  RemoteCodexConfigDescription
+  RemoteCodexTerminalLoginInstructions
+  RemoteCodexTerminalBrowserInstructions
+  RemoteCodexSignOut
   RemoteControl
   CheckingSignIn
   EnvironmentRelay
@@ -284,6 +289,55 @@ pub fn text(locale : @i18n.Locale, message : Message) -> String {
     (SimplifiedChinese, Configuration) => "配置"
     (TraditionalChinese, Configuration) => "配置"
     (Japanese, Configuration) => "構成"
+    (English, RemoteCodexConfigAction) => "Show remote config and login"
+    (SimplifiedChinese, RemoteCodexConfigAction) =>
+      "显示远端配置与登录命令"
+    (TraditionalChinese, RemoteCodexConfigAction) =>
+      "顯示遠端設定與登入命令"
+    (Japanese, RemoteCodexConfigAction) =>
+      "リモート設定とログインコマンドを表示"
+    (Spanish, RemoteCodexConfigAction) =>
+      "Mostrar configuración y acceso remotos"
+    (English, RemoteCodexConfigDescription) =>
+      "config.toml belongs to this SSH host's isolated Codex home. Show its path, then edit it in a remote terminal. Manual editing here is not supported. Restart the remote service to apply changes; reconnecting this window does not restart it."
+    (SimplifiedChinese, RemoteCodexConfigDescription) =>
+      "config.toml 位于当前 SSH 主机的隔离 Codex 目录。显示路径后，请在远端终端编辑；此处暂不支持手动编辑。修改后需重启远端服务，重新连接窗口不会重启服务。"
+    (TraditionalChinese, RemoteCodexConfigDescription) =>
+      "config.toml 位於目前 SSH 主機的獨立 Codex 目錄。顯示路徑後，請在遠端終端編輯；此處尚不支援手動編輯。修改後需重新啟動遠端服務，重新連線視窗不會重啟服務。"
+    (Japanese, RemoteCodexConfigDescription) =>
+      "config.toml は、この SSH ホストの独立した Codex ディレクトリにあります。パスを表示し、リモート端末で編集してください。ここでの手動編集は未対応です。変更の適用にはリモートサービスの再起動が必要です。ウィンドウの再接続では再起動されません。"
+    (Spanish, RemoteCodexConfigDescription) =>
+      "config.toml está en el directorio aislado de Codex de este host SSH. Muestra la ruta y edítalo en un terminal remoto. La edición manual aquí no está disponible. Reinicia el servicio remoto para aplicar los cambios; reconectar la ventana no lo reinicia."
+    (English, RemoteCodexTerminalLoginInstructions) =>
+      "Start /bin/sh in a terminal on this SSH host, then run this command to sign in to its isolated Codex account. Device-code login must be enabled for your account. After signing in, refresh the account status here."
+    (SimplifiedChinese, RemoteCodexTerminalLoginInstructions) =>
+      "请先在此 SSH 主机的终端启动 /bin/sh，再执行以下命令，登录该主机的隔离 Codex 账户。账户需已启用设备码登录。完成后，在此刷新账户状态。"
+    (TraditionalChinese, RemoteCodexTerminalLoginInstructions) =>
+      "請先在此 SSH 主機的終端啟動 /bin/sh，再執行以下命令，登入該主機的獨立 Codex 帳戶。帳戶需已啟用裝置碼登入。完成後，在此重新整理帳戶狀態。"
+    (Japanese, RemoteCodexTerminalLoginInstructions) =>
+      "この SSH ホストの端末で /bin/sh を起動してから次のコマンドを実行し、独立した Codex アカウントにログインしてください。アカウントでデバイスコードログインを有効にする必要があります。完了後、ここでアカウント状態を更新してください。"
+    (Spanish, RemoteCodexTerminalLoginInstructions) =>
+      "Inicia /bin/sh en un terminal de este host SSH y ejecuta este comando para acceder a su cuenta aislada de Codex. Tu cuenta debe tener habilitado el acceso con código de dispositivo. Después, actualiza aquí el estado de la cuenta."
+    (English, RemoteCodexTerminalBrowserInstructions) =>
+      "This CLI uses browser login. Start /bin/sh in a remote terminal. Before running this command, forward local port 1455 to 127.0.0.1:1455 on this SSH host; the browser sign-in button above handles that automatically. After signing in, refresh the account status here."
+    (SimplifiedChinese, RemoteCodexTerminalBrowserInstructions) =>
+      "此 CLI 使用浏览器登录。请先在远端终端启动 /bin/sh。执行以下命令前，需将本机 1455 端口转发到此 SSH 主机的 127.0.0.1:1455；上方浏览器登录按钮会自动处理转发。完成后，在此刷新账户状态。"
+    (TraditionalChinese, RemoteCodexTerminalBrowserInstructions) =>
+      "此 CLI 使用瀏覽器登入。請先在遠端終端啟動 /bin/sh。執行以下命令前，需將本機 1455 連接埠轉送至此 SSH 主機的 127.0.0.1:1455；上方瀏覽器登入按鈕會自動處理轉送。完成後，在此重新整理帳戶狀態。"
+    (Japanese, RemoteCodexTerminalBrowserInstructions) =>
+      "この CLI はブラウザログインを使用します。リモート端末で /bin/sh を起動してください。実行する前にローカルのポート 1455 をこの SSH ホストの 127.0.0.1:1455 に転送してください。上のブラウザログインボタンなら自動で転送します。完了後、ここでアカウント状態を更新してください。"
+    (Spanish, RemoteCodexTerminalBrowserInstructions) =>
+      "Este CLI usa acceso por navegador. Inicia /bin/sh en el terminal remoto. Antes de ejecutar el comando, reenvía el puerto local 1455 a 127.0.0.1:1455 de este host SSH; el botón de acceso por navegador lo hace automáticamente. Después, actualiza aquí el estado de la cuenta."
+    (English, RemoteCodexSignOut) =>
+      "Signing out removes the ChatGPT credentials used by Codex on this SSH host."
+    (SimplifiedChinese, RemoteCodexSignOut) =>
+      "退出登录将移除此 SSH 主机上的 Codex 所使用的 ChatGPT 凭据。"
+    (TraditionalChinese, RemoteCodexSignOut) =>
+      "退出登入將移除此 SSH 主機上 Codex 使用的 ChatGPT 憑據。"
+    (Japanese, RemoteCodexSignOut) =>
+      "ログアウトすると、この SSH ホストの Codex が使用する ChatGPT の認証情報が削除されます。"
+    (Spanish, RemoteCodexSignOut) =>
+      "Al cerrar sesión se eliminan las credenciales de ChatGPT que usa Codex en este host SSH."
     (English, OpenConfig) => "Open config.toml"
     (Spanish, OpenConfig) => "Abrir config.toml"
     (SimplifiedChinese, OpenConfig) => "打开 config.toml"

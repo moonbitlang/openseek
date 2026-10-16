@@ -63,6 +63,7 @@ OpenSeek does not expose an arbitrary app-server proxy. The Desktop catalog is
 limited to:
 
 - account read, ChatGPT login start/cancel, and logout;
+- isolated configuration preparation and remote terminal login instructions;
 - model list;
 - thread start, resume, read, list, rename, archive, unarchive, and compact;
 - turn start, steer, and interrupt;
@@ -147,15 +148,18 @@ sharing the CLI's `~/.codex`:
 - macOS: `~/Library/Application Support/SeekMoon/codex`
 - Windows: `%LOCALAPPDATA%\SeekMoon\codex`
 - Linux and other POSIX: `$XDG_DATA_HOME/SeekMoon/codex` (fallback `~/.local/share/SeekMoon/codex`)
-- development (unbundled Moon host): `<checkout>/desktop/target/dev-state/codex`
+- development packaged app: the platform runtime directory above
+- SSH working host: `<app-server data-dir>/codex`
 
-The directory is created at startup and restricted to its owner with mode
-`0700` on POSIX hosts. The spawn sets `CODEX_HOME` explicitly, so it wins over
+The directory is prepared before every Codex spawn and restricted to its owner
+with mode `0700` on POSIX hosts. The spawn sets `CODEX_HOME` explicitly, so it wins over
 any value the login-shell environment inherited; every process the app-server
 later starts inherits the same home, so nested codex calls, sandbox approvals,
-and tool runs agree with the app-server on auth and config. If the home cannot
-be determined or created, the Desktop logs a warning and falls back to the
-inherited environment — the pre-isolation behavior.
+and tool runs agree with the app-server on auth and config. If creation, directory
+validation, or permission setup fails, Codex reports
+unavailable without spawning a child or falling back to the inherited home.
+Other working-host features continue. After the directory is repaired, the next
+Codex request retries preparation.
 
 Isolation is deliberate, and its costs are accepted:
 
@@ -173,6 +177,28 @@ Because the home lives under the app's per-user runtime directory, clearing
 that directory removes every Codex artifact the Desktop ever created — the
 CLI's `~/.codex` is never part of that scope.
 
+For an SSH host, **Show remote config and login** prepares the remote
+`config.toml` and displays a terminal command for that service's actual Codex
+executable and isolated `CODEX_HOME`. The default executable is resolved against
+the service's startup PATH; an explicit `--codex-command` never falls back to a
+different installation. The capability probe runs only `login --help`, with a
+five-second deadline and a 64 KiB output limit. Missing or broken CLI help is a
+separate diagnostic, so the configuration path remains available.
+
+If the CLI advertises `--device-auth`, the command selects device authorization;
+the account or workspace must also enable that option. Otherwise the command
+uses browser login and the UI explains the required local port 1455 to remote
+`127.0.0.1:1455` forwarding. The normal browser sign-in button manages that
+tunnel automatically. See the [Codex authentication guide](https://learn.chatgpt.com/docs/auth).
+Connect to the host over SSH from a separate system terminal, then start
+`/bin/sh` before running the displayed POSIX
+command, including when the terminal normally uses fish, csh or Nushell. Then
+click **Refresh** in
+the remote account status row. The refresh requests the service's account
+state with `refreshToken: true` and retires older account replies; it does not
+interrupt a pending browser login. A terminal's success message alone does not
+mark the UI signed in.
+
 ## Workspace panels
 
 App-server supplies each thread's working directory as `thread.cwd`; it does
@@ -184,8 +210,9 @@ the panels to the newly selected OpenSeek or Codex conversation.
 
 The file panel stays disabled until the selected Codex thread has a non-empty
 cwd. OpenSeek does not guess a filesystem directory from a Codex thread id.
-The terminal can still open a scratch shell for an active thread whose cwd is
-absent.
+On embedded desktop/relay hosts, the terminal can still open a scratch shell
+for an active thread whose cwd is absent. SSH hosts provide the Files panel
+but no integrated terminal; manual login commands run in an external SSH session.
 
 After a file read succeeds, the editor reconstructs the exact root from the
 host-returned absolute file and the requested relative path. Diagnostics,

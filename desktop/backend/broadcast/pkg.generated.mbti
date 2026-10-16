@@ -14,6 +14,7 @@ type Channel[T]
 pub fn[T] Channel::Channel() -> Self[T]
 pub fn[T] Channel::publish(Self[T], T) -> Unit
 pub fn[T, U] Channel::subscribe(Self[T], @aqueue.Queue[U], map~ : (T) -> U?, on_lag~ : (Subscription[T]) -> Unit) -> Subscription[T]
+pub fn[T] Channel::subscribe_with(Self[T], offer~ : (T) -> Bool raise, on_lag~ : (Subscription[T]) -> Unit) -> Subscription[T]
 
 type Subscription[T]
 pub fn[T] Subscription::close(Self[T]) -> Unit

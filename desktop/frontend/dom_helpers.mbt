@@ -167,7 +167,7 @@ fn fetch_system_appearance(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       let appearance = @interop.bridge_request_in_order(
         @interop.ChannelId::Local,
         @commands.app_system_appearance,
-        @protocol.NoPayload,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         error => {
           scheduler.add(

@@ -35,30 +35,31 @@ pub fn Model::view(
         ui(locale, ExportDescription),
       ),
     )
-    children.push(
-      @html.div(class="modal-actions", [
-        @html.button(
-          class="button secondary",
-          disabled=busy,
-          on_click=emit(Download),
-          if content.operation is Downloading {
-            ui(locale, SavingLabel)
-          } else {
-            ui(locale, DownloadLabel)
-          },
-        ),
-        @html.button(
-          class="button primary",
-          disabled=busy || content.publication is Some(_),
-          on_click=emit(Share),
-          if content.operation is Sharing(_) {
-            ui(locale, SharingLabel)
-          } else {
-            ui(locale, ShareLabel)
-          },
-        ),
-      ]),
+    let actions = [
+      @html.button(
+        class="button secondary",
+        disabled=busy,
+        on_click=emit(Download),
+        if content.operation is Downloading {
+          ui(locale, SavingLabel)
+        } else {
+          ui(locale, DownloadLabel)
+        },
+      ),
+    ]
+    actions.push(
+      @html.button(
+        class="button primary",
+        disabled=busy || content.publication is Some(_),
+        on_click=emit(Share),
+        if content.operation is Sharing(_) {
+          ui(locale, SharingLabel)
+        } else {
+          ui(locale, ShareLabel)
+        },
+      ),
     )
+    children.push(@html.div(class="modal-actions", actions))
     let status = match content.operation {
       Ready => @html.nothing
       Downloading => @html.span(ui(locale, ChooseSavePath))

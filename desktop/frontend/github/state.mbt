@@ -194,7 +194,12 @@ fn request(
 fn request_visible(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
   let mut state = state
   let commands : Array[@cmd.Cmd] = []
-  for kind in [@protocol.CreatedByMe, @protocol.AllOpen, @protocol.Issues] {
+  for
+    kind in [
+      @protocol.GithubListKind::CreatedByMe,
+      @protocol.GithubListKind::AllOpen,
+      @protocol.GithubListKind::Issues,
+    ] {
     let group = state.group(kind)
     if group.expanded &&
       (kind is Issues || state.pulls_expanded) &&

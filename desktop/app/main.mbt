@@ -35,7 +35,6 @@ async fn main {
   // The user's login shell supplies the base environment, then installed
   // tools take precedence. Both the OpenSeek engine and Codex app-server are
   // created below and therefore pass this packaged `rg` to agent tool calls.
-  // Proton knows where this host's files are; everything below is told.
   let resources : @resources.Resources = {
     dir: @proton.resource_dir(),
     packaged: @proton.is_packaged(),
@@ -44,7 +43,7 @@ async fn main {
     tools.apply_to_process_env()
   }
   let frontend_entry = @host.frontend_entry_path(resources)
-  let engine = @engine.engine_command(resources)
+  let engine = @engine_locator.engine_command(resources)
   let app = @proton.asset("SeekMoon", frontend_entry, width=1120, height=760)
   let app_version = app.version() catch { _ => "development" }
   @xlog.info() <? { "message": "host process start" }
@@ -59,10 +58,11 @@ async fn main {
   let app = app.load_config()
   let development = is_development(app)
   let runtime_dir = @host.prepared_runtime_dir(executable)
-  let codex_home = match runtime_dir {
-    Some(dir) => Some(@codex.home_dir(dir))
-    None => None
+  guard runtime_dir is Some(service_dir) else {
+    raise @working_host.HostError("Cannot prepare SeekMoon data directory")
   }
+  let ssh_store = @ssh.Store(service_dir.to_string())
+  let codex_home = Some(@codex.home_dir(service_dir))
   // Keep isolation failure local to Codex and retry preparation on its next request.
   let codex = @codex.CodexSettings(
     command=@codex.command(),
@@ -109,18 +109,19 @@ async fn main {
     @extension.browser_tools(views),
     version=app_version,
   )
-  let state = @api.ApiState(
+  let state = @api.DesktopState(
+    runtime=@host_runtime.native(),
     engine~,
     codex~,
-    runtime_dir?,
+    runtime_dir=service_dir,
+    resources=@host.resources(resources),
     executable~,
     auth~,
     app_version~,
     console_url?=console.map(console => console.entry_url()),
-    resources=@host.desktop_resources(resources),
     host_mcp~,
   )
-  let bridge = @extension.DesktopBridgeActor(state)
+  let bridge = @extension.DesktopBridgeActor(state, ssh_store~)
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }
@@ -272,8 +273,7 @@ async fn main {
     let app = app.app_lifecycle(
       on_start=_ => {
         is_primary = true
-        // Before the bridge: it prepares the workspace registry first, and
-        // no page may attach to a host that has not.
+        // Prepare the local workspace registry before the bridge accepts pages.
         state.start_services(group)
         group.spawn_bg(allow_failure=true, () => bridge.run())
         // The relay actor registers this host whenever a sign-in (or the

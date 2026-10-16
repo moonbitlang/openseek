@@ -1,0 +1,67 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/app/internal/ssh"
+
+import {
+  "moonbitlang/core/json",
+  "openseek_desktop/backend/endpoint",
+  "openseek_desktop/backend/host_client",
+  "openseek_desktop/commands",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn[T] with_callback_tunnel(ssh~ : String, destination~ : String, async () -> T) -> T
+
+// Errors
+pub suberror SshError {
+  SshError(String)
+  ProfileIdentityChanged(String)
+}
+pub fn SshError::output(Self, &Logger) -> Unit
+pub fn SshError::to_string(Self) -> String
+pub impl Show for SshError
+
+// Types and methods
+pub struct Preparation {
+  mut job : PreparationJob?
+}
+pub fn Preparation::Preparation() -> Self
+pub fn Preparation::begin(Self, @protocol.SshPreparationRequest) -> @protocol.SshPreparationToken raise
+pub async fn Preparation::cancel(Self, @protocol.SshPreparationToken) -> Unit
+pub async fn Preparation::close(Self) -> Unit
+pub async fn Preparation::execute(Self, @protocol.SshPreparationToken, async (@protocol.SshPreparationRequest, (String) -> Unit) -> @protocol.SshProfile) -> @protocol.SshProfile
+pub fn Preparation::progress(Self, @protocol.SshPreparationToken) -> @protocol.SshPreparationProgress
+
+type PreparationJob
+
+type PreviewCache
+
+pub struct Route {
+  profile : @protocol.SshProfile
+  // private fields
+}
+pub fn Route::Route(Store, @protocol.SshProfile, Array[String], ssh? : String) -> Self raise
+pub fn Route::close_terminals(Self) -> Unit
+pub async fn Route::preview_file(Self, String) -> String
+pub async fn Route::request(Self, @protocol.SshRequest) -> @protocol.SshReply
+pub async fn[Payload : ToJson, Reply : @json.FromJson] Route::request_current(Self, @commands.Command[Payload, Reply], Payload) -> Reply
+pub async fn Route::run(Self, emit~ : async (@host_client.ConnectionEvent) -> Unit) -> Unit
+pub async fn Route::run_terminals(Self, async (@protocol.Notification) -> Unit) -> Unit
+pub fn Route::terminal_endpoints(Self) -> Array[@endpoint.Endpoint]
+
+pub struct Store {
+  directory : String
+}
+pub fn Store::Store(String) -> Self
+pub async fn Store::add(Self, @protocol.SshAdd) -> @protocol.SshProfile
+pub async fn Store::cache_projects(Self, @protocol.SshProjectCatalog) -> Unit
+pub async fn Store::cached_projects(Self, String) -> Array[String]?
+pub async fn Store::get(Self, String) -> @protocol.SshProfile
+pub async fn Store::list(Self) -> @protocol.SshProfiles
+pub async fn Store::pin(Self, @protocol.SshProfile, String) -> Unit
+pub async fn Store::prepare(Self, @protocol.SshPreparationRequest, String, (String) -> Unit) -> @protocol.SshProfile
+pub async fn Store::save(Self, @protocol.SshProfileWrite) -> @protocol.SshProfile
+
+// Type aliases
+
+// Traits

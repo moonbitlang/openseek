@@ -16,6 +16,9 @@ pub fn global_store_root(payload_root? : @pathx.Path) -> @pathx.Absolute? {
 
 ///|
 fn home_session_root() -> @pathx.Absolute? {
+  if headless_store.val is Some(root) {
+    return Some(root)
+  }
   guard @home.dir() is Some(home) else { return None }
   // HOME remains unclassified input, but resolving the derived store here
   // establishes the guarantee consumed by the session subsystem.
@@ -24,3 +27,18 @@ fn home_session_root() -> @pathx.Absolute? {
 
 // Tests for resolving explicit durable-session roots before the host shares
 // them with engine processes and one-shot session queries.
+
+///|
+let headless_store : Ref[@pathx.Absolute?] = Ref(None)
+
+///|
+/// Install the process's headless registry namespace before starting any host
+/// task. Workspace-local transcripts still remain in their selected project.
+pub fn configure_headless_store(
+  root : @pathx.Absolute,
+) -> Unit raise WorkspaceError {
+  guard headless_store.val is None else {
+    raise WorkspaceError("headless registry is already configured")
+  }
+  headless_store.val = Some(root)
+}

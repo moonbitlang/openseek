@@ -1221,15 +1221,15 @@ priv struct ArchiveOverride {
 ///|
 
 ///|
+/// Everything that exists once per connected device channel. The app holds
+/// one entry per channel in `Model::devices` — exactly one today (the page's
+/// own host); the multi-device console renders one sidebar group per entry.
 priv struct ApprovalMirror {
   generation : Int32
   approvals : Array[RecoveredApproval]
 } derive(Eq)
 
 ///|
-/// Everything that exists once per connected device channel. The app holds
-/// one entry per channel in `Model::devices` — exactly one today (the page's
-/// own host); the multi-device console renders one sidebar group per entry.
 priv struct DeviceState {
   questions : @user_questions.Model
   approval_snapshot : ApprovalMirror?
@@ -1397,6 +1397,7 @@ priv struct ConversationLoadFailure {
 
 ///|
 priv struct Model {
+  ssh_ui : SshUi
   // Connected device channels in stable order: the desktop window's one
   // Local host, or a browser console's roster devices — empty there until
   // the roster loads (`apply_roster`).
@@ -1774,6 +1775,7 @@ priv struct HostSettings {
 
 ///|
 priv enum Msg {
+  Ssh(SshMsg)
   Init
   // The browser console's account layer (relay session, device roster),
   // routed through `update_console_msg`.
@@ -2241,8 +2243,8 @@ priv enum Msg {
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
   QuestionsChanged(@protocol.UserQuestionSnapshot)
-  ApprovalsChanged(ApprovalMirror)
   BridgeReady
+  BridgeConnecting
   BridgeUnavailable(String)
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
@@ -2540,6 +2542,7 @@ priv enum DeviceMsg {
   // frontier must be accepted or rejected together at one connection
   // generation; dispatching its rows separately would let a stale reply
   // resurrect a run after a later BridgeReady already resynced it away.
+  ApprovalsChanged(ApprovalMirror)
   RunsLoaded(
     approval_generation~ : Int32,
     runs~ : Array[RecoveredRun],
@@ -2721,7 +2724,7 @@ fn initial_model(desktop~ : Bool) -> Model {
   // relay's redirect off retired `/d/<id>/` routes). An optional
   // `?workspace=` places that device's first conversation.
   let page_device = if desktop {
-    Some(@interop.LocalDeviceId)
+    Some(@interop.ChannelId::Local.device_id())
   } else {
     @interop.page_query_param("device")
   }
@@ -2756,18 +2759,14 @@ fn initial_model(desktop~ : Bool) -> Model {
     // The desktop window owns its host outright, so its one channel is in
     // place from the start; a browser page starts empty and fills `devices`
     // from the fetched roster (`apply_roster`).
+    ssh_ui: SshUi::empty(),
     devices: if desktop {
-      [
-        {
-          ..empty_device_state(@interop.ChannelId::Local),
-          active_project: preselect_project,
-        },
-      ]
+      [{ ..empty_device_state(Local), active_project: preselect_project, }]
     } else {
       []
     },
     websocket_epoch: 0,
-    focused: @interop.ChannelId::Local,
+    focused: Local,
     default_model: DsFlash,
     default_agent: OpenSeekAgent,
     conversation_models: [],
@@ -4311,7 +4310,7 @@ fn Conversation::apply_commit(
   let changed = @transcript.apply_session_item(messages, item, ts?, sequence~)
   // A `[goal]` marker commit is the durable confirmation of a goal
   // set/clear/block — the only writer of the mirror the banner renders.
-  let goal_marker = if item is @protocol.RuntimeNotice(notice) {
+  let goal_marker = if item is @protocol.SessionItem::RuntimeNotice(notice) {
     @transcript.goal_marker(notice.content)
   } else {
     None

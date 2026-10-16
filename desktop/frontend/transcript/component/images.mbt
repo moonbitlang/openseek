@@ -234,8 +234,9 @@ fn ImageOwner::read_image(
       let result = match reply {
         @protocol.BinaryContent(data_base64~, media_type~, ..) =>
           ImageReadReady("data:\{media_type};base64,\{data_base64}")
-        @protocol.Binary | @protocol.Oversized | @protocol.Content(..) =>
-          ImageReadUnavailable
+        @protocol.ReadFileReply::Binary
+        | @protocol.ReadFileReply::Oversized
+        | @protocol.ReadFileReply::Content(..) => ImageReadUnavailable
       }
       scheduler.add(emit(ImageResolved(self, path, result)))
     })

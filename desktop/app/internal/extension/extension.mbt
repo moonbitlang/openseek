@@ -222,6 +222,7 @@ let system_appearance_changed : @proton_contract.Event[@protocol.EmptyPayload] =
 ///|
 priv enum BridgeControl {
   PageConnected(@proton.CommandContext, @async.Queue[Unit])
+  AttachRemote(@protocol.SshProfile, @async.Queue[Result[Unit, String]])
   WindowReady(@proton.WindowEventEmitter)
   WindowClosed
   WindowChromeChanged
@@ -234,6 +235,7 @@ priv enum BridgeControl {
 /// a Proton descriptor but deliberately no place in the wire catalog.
 priv enum PageNotification {
   Hub(@protocol.Notification)
+  Ssh(Json)
   BrowserEvent(Json)
   WindowChromeChanged
   SystemAppearanceChanged
@@ -252,6 +254,7 @@ async fn PageEventTarget::emit(
   // Matching the closed enum keeps each Proton descriptor paired with the
   // payload type that belongs to that event.
   match notification {
+    Ssh(value) => self.events.emit(ssh_event, value)
     Hub(UserQuestions(payload)) =>
       self.events.emit(user_questions_event, payload)
     Hub(AgentApprovals(payload)) => self.events.emit(approvals_event, payload)
@@ -326,9 +329,15 @@ const BridgeInboxCapacity = 4096
 ///|
 /// The desktop window's bridge actor. It owns the hub subscription and the
 /// current page attachment for the app's lifetime; extension ops only send
-/// it messages and never retain resource-owning request tasks.
+/// it messages. Preparation keeps a cancellation handle only while the owning
+/// request is awaited; window close joins that request's resource cleanup.
 struct DesktopBridgeActor {
-  state : @api.ApiState
+  state : @api.DesktopState
+  preparation : @ssh.Preparation
+  ssh_store : @ssh.Store?
+  routes : Map[String, @ssh.Route]
+  mut page_generation : Int32
+  host_methods : Set[String]
   // The desktop page owns one filesystem watcher independently of every
   // remote WebSocket connection.
   host_connection : @host.HostConnection
@@ -339,11 +348,22 @@ struct DesktopBridgeActor {
 
 ///|
 pub fn DesktopBridgeActor::DesktopBridgeActor(
-  state : @api.ApiState,
+  state : @api.DesktopState,
+  ssh_store? : @ssh.Store,
 ) -> DesktopBridgeActor {
+  let host_connection = state.new_connection()
+  let names = @backend_api.endpoints(state.service(), host_connection.shared()).map(endpoint => {
+      endpoint.name()
+    },
+  )
   {
     state,
-    host_connection: HostConnection(),
+    ssh_store,
+    preparation: Preparation(),
+    routes: Map([]),
+    page_generation: 0,
+    host_methods: Set::from_array(names),
+    host_connection,
     inbox: Queue(kind=Blocking(BridgeInboxCapacity)),
   }
 }
@@ -376,7 +396,7 @@ pub async fn DesktopBridgeActor::notify_system_appearance_changed(
 
 ///|
 pub fn openseek_capability(
-  state : @api.ApiState,
+  state : @api.DesktopState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
@@ -384,6 +404,71 @@ pub fn openseek_capability(
     bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
   })
   let window_only = [
+    WindowEndpoint(@commands.ssh_profiles, (_, _) => {
+      bridge.profile_store().list()
+    }),
+    WindowEndpoint(@commands.ssh_cached_projects, (_, payload) => {
+      bridge.profile_store().cached_projects(payload.id)
+    }),
+    WindowEndpoint(@commands.ssh_cache_projects, (_, payload) => {
+      bridge.profile_store().cache_projects(payload)
+      Acknowledged
+    }),
+    WindowEndpoint(@commands.ssh_add, (_, payload) => {
+      SshCompleted(bridge.profile_store().add(payload)) catch {
+        error => SshFailed("\{error}")
+      }
+    }),
+    WindowEndpoint(@commands.ssh_save, (_, payload) => {
+      bridge.profile_store().save(payload)
+    }),
+    WindowEndpoint(@commands.ssh_prepare_begin, (_, payload) => {
+      SshCompleted(bridge.preparation.begin(payload)) catch {
+        error => SshFailed("\{error}")
+      }
+    }),
+    WindowEndpoint(@commands.ssh_prepare_execute, (_, payload) => {
+      SshCompleted(
+        bridge.preparation.execute(payload, (request, progress) => {
+          let bootstrap = @host.ssh_installer_bootstrap({
+            dir: @proton.resource_dir(),
+            packaged: @proton.is_packaged(),
+          })
+          bridge.profile_store().prepare(request, bootstrap, progress)
+        }),
+      ) catch {
+        error => SshFailed("\{error}")
+      }
+    }),
+    WindowEndpoint(@commands.ssh_prepare_progress, (_, payload) => {
+      bridge.preparation.progress(payload)
+    }),
+    WindowEndpoint(@commands.ssh_prepare_cancel, (_, payload) => {
+      bridge.preparation.cancel(payload)
+      Acknowledged
+    }),
+    WindowEndpoint(@commands.ssh_connect, (_, payload) => {
+      try {
+        let profile = bridge.profile_store().get(payload.id)
+        let reply : @async.Queue[Result[Unit, String]] = Queue(kind=Blocking(1))
+        bridge.inbox.put(Control(AttachRemote(profile, reply)))
+        match reply.get() {
+          Ok(_) => SshCompleted(Acknowledged)
+          Err(message) => SshFailed(message)
+        }
+      } catch {
+        error => SshFailed("\{error}")
+      }
+    }),
+    WindowEndpoint(@commands.ssh_host_request, (context, payload) => {
+      bridge.remote_host_request(context, state, payload)
+    }),
+    WindowEndpoint(@commands.ssh_request, (_, payload) => {
+      match bridge.route_for(payload.host_id) {
+        Some(route) => route.request(payload)
+        None => SshUnsent("This SSH host is not connected in this window")
+      }
+    }),
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)
     }),
@@ -427,6 +512,7 @@ async fn DesktopBridgeActor::connect(
 ) -> @protocol.EmptyReply {
   // A reloaded page has no references to the previous page's emulator
   // instances, so its PTYs must not survive the new attachment.
+  self.preparation.close()
   self.host_connection.close_terminals()
   let reply : @async.Queue[Unit] = Queue(kind=Blocking(1))
   self.inbox.put(Control(PageConnected(context, reply)))
@@ -449,6 +535,7 @@ pub async fn DesktopBridgeActor::window_ready(
 pub async fn DesktopBridgeActor::window_closed(
   self : DesktopBridgeActor,
 ) -> Unit {
+  self.preparation.close()
   self.inbox.put(Control(WindowClosed))
 }
 
@@ -478,6 +565,7 @@ fn DesktopBridgeActor::subscribe(
 /// through its request-scoped sender; later notifications use the window-owned
 /// sender installed by Proton's lifecycle hook.
 pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
+  defer self.preparation.close()
   @async.with_task_group(group => {
     let subscription = self.subscribe(group)
     defer subscription.close()
@@ -498,6 +586,12 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
         },
       )
     })
+    let tasks : Map[String, @async.Task[Unit]] = Map([])
+    defer (for route in self.routes.values() {
+      route.close_terminals()
+    })
+    let attachments : Map[String, Int32] = Map([])
+    let mut next_attachment = 0
     let mut connected = false
     let mut target : PageEventTarget? = None
     let pending : Array[PageNotification] = []
@@ -505,7 +599,56 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
       match self.inbox.get() {
         Control(control) =>
           match control {
+            AttachRemote(profile, reply) => {
+              if !connected {
+                reply.put(Err("The page is not connected"))
+                continue
+              }
+              let id = profile.id
+              if tasks.get(id) is Some(previous) {
+                previous.cancel()
+                previous.wait() catch {
+                  _ => ()
+                }
+              }
+              if self.routes.get(id) is Some(previous) {
+                previous.close_terminals()
+              }
+              self.routes.remove(id)
+              let route = @ssh.Route(
+                self.profile_store(),
+                profile,
+                self.host_methods.to_array(),
+              ) catch {
+                error => {
+                  reply.put(Err("\{error}"))
+                  continue
+                }
+              }
+              self.routes[id] = route
+              let generation = self.page_generation
+              next_attachment += 1
+              let attachment = next_attachment
+              attachments[id] = attachment
+              tasks[id] = group.spawn(allow_failure=true, () => {
+                self.run_attached_remote(route, generation, attachment)
+              })
+              reply.put(Ok(()))
+            }
             PageConnected(context, reply) => {
+              self.page_generation += 1
+              for task in tasks.values() {
+                task.cancel()
+              }
+              for task in tasks.values() {
+                task.wait() catch {
+                  _ => ()
+                }
+              }
+              tasks.clear()
+              attachments.clear()
+              self.routes.clear()
+              pending.clear()
               // Serialize readiness before subsequent delivery so the
               // frontend can use it as the resync boundary.
               context.emit(connected_event, { stage: Accepted, })
@@ -523,6 +666,18 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
               pending.clear()
             }
             WindowClosed => {
+              self.page_generation += 1
+              for task in tasks.values() {
+                task.cancel()
+              }
+              for task in tasks.values() {
+                task.wait() catch {
+                  _ => ()
+                }
+              }
+              tasks.clear()
+              attachments.clear()
+              self.routes.clear()
               connected = false
               target = None
               pending.clear()
@@ -536,6 +691,18 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
                 pending,
                 SystemAppearanceChanged,
               )
+          }
+        Deliver(Ssh(value)) =>
+          if value
+            is {
+              "attachment": Number(generation, ..),
+              "host_id": String(id),
+              "route": Number(attachment, ..),
+              ..
+            } &&
+            generation.to_int() == self.page_generation &&
+            attachments.get(id) == Some(attachment.to_int()) {
+            deliver_to_page(connected, target, pending, Ssh(value))
           }
         Deliver(notification) =>
           deliver_to_page(connected, target, pending, notification)
@@ -578,7 +745,10 @@ async fn deliver_to_page(
 async test "a full inbox preserves local events before the hub resync boundary" {
   @async.with_timeout(1000, () => {
     @async.with_task_group(group => {
-      let state = @api.ApiState(engine="unused")
+      let state = @api.DesktopState(
+        engine="unused",
+        runtime_dir=Path("/unused-test-host"),
+      )
       let bridge = DesktopBridgeActor(state)
       let subscription = bridge.subscribe(group)
       defer subscription.close()
@@ -605,4 +775,19 @@ async test "a full inbox preserves local events before the hub resync boundary" 
       assert_true(bridge.inbox.try_get() is None)
     })
   })
+}
+
+///|
+fn DesktopBridgeActor::profile_store(
+  self : DesktopBridgeActor,
+) -> @ssh.Store raise {
+  guard self.ssh_store is Some(store) else {
+    raise SshBridgeError("SSH profile store is unavailable")
+  }
+  store
+}
+
+///|
+priv suberror SshBridgeError {
+  SshBridgeError(String)
 }

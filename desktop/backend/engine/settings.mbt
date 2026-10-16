@@ -25,13 +25,6 @@ const EngineSettingsVersion = 2
 const EngineSettingsFileName = "engine-settings.json"
 
 ///|
-/// The SeekMoon relay origin: remote access (browser sign-in) and the
-/// update manifest live here. The hosted chat proxy that used to live on
-/// this origin is retired — runs are bring-your-own-key only — so this
-/// origin no longer serves any chat-completions traffic.
-const RelayServerOrigin : String = "https://openseek-api.moonbitlang.cn"
-
-///|
 /// The chat endpoint selection: where runs send their requests. SeekMoon
 /// runs only on bring-your-own-key providers. `Deepseek` is the official
 /// DeepSeek endpoint with the user's own key; `Glm` is the official Z.AI
@@ -384,30 +377,6 @@ pub async fn pattern_repair_environment(
 }
 
 ///|
-/// The SeekMoon relay origin remote access signs in to. The relay is a
-/// SeekMoon-hosted service on the same origin as the update manifest, and
-/// it no longer depends on the chat provider — only the chat proxy was
-/// retired, so remote access stays available for every provider.
-/// `OPENSEEK_SERVER_URL` overrides the origin for development against a
-/// local or ad-hoc server.
-///
-/// The settings snapshot is awaited but discarded: the origin no longer
-/// derives from the stored provider. The await holds this function's
-/// published `async` signature stable across the BYOK cutover (the
-/// committed `pkg.generated.mbti` pins it); drop it at the next interface
-/// reshape and regenerate with `moon info`.
-pub async fn remote_server_base(manager : EngineManager) -> String? {
-  if @env.get("OPENSEEK_SERVER_URL") is Some(base) && !base.is_blank() {
-    return Some(base.trim().to_owned())
-  }
-  let (_, _) = manager.settings_snapshot()
-  Some(RelayServerOrigin)
-}
-
-// The settings store's contract: tolerant reads, merge-preserving atomic
-// writes, the version guard, and the run-config resolution built on it.
-
-///|
 async fn with_settings_dir(
   body : async (@pathx.Path, EngineManager) -> Unit,
 ) -> Unit {
@@ -522,12 +491,6 @@ async test "retired hosted providers converge on the DeepSeek default" {
     })
     let text = @fsx.read_text(settings_file(dir))
     assert_true(text.contains("\"provider\": \"deepseek\""))
-    // Remote access is a SeekMoon relay service and no longer depends on
-    // the chat provider, so it stays on the production origin.
-    debug_inspect(
-      remote_server_base(manager),
-      content="Some(\"https://openseek-api.moonbitlang.cn\")",
-    )
   })
 }
 

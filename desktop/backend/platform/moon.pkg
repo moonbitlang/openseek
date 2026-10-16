@@ -1,5 +1,5 @@
 import {
-  "openseek_desktop/backend/internal/processx",
+  "openseek_desktop/backend/processx",
   "moonbitlang/async/process",
   "moonbitlang/x/path",
   "moonbitlang/async",

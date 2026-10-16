@@ -9,7 +9,7 @@ fn message_committed(document : @protocol.SessionDocument, id : String) -> Bool 
 
 ///|
 priv enum MessageDeliveryInput {
-  Event(@protocol.Notification)
+  Event(@protocol.HostNotification)
   Receipt(@engine.MessageReceipt)
   Resync
 }

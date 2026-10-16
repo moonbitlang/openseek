@@ -4,7 +4,9 @@ test "an empty successful terminal keeps a boundary without inventing an answer"
   assert_true(
     @transcript.apply_session_item(
       items,
-      @desktop_protocol.Terminal(@desktop_protocol.Finished("  ")),
+      @desktop_protocol.SessionItem::Terminal(
+        @desktop_protocol.SessionTerminal::Finished("  "),
+      ),
       sequence=7,
     ),
   )

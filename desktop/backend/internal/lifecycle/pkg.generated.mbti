@@ -1,0 +1,52 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/lifecycle"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn request_kind(String) -> RequestKind
+
+// Errors
+pub suberror AdmissionError {
+  AdmissionError(String)
+}
+
+// Types and methods
+pub struct Admission {
+  // private fields
+}
+pub fn Admission::Admission() -> Self
+pub fn Admission::check(Self, RequestKind) -> Unit raise
+pub fn Admission::drain(Self) -> Unit
+pub async fn Admission::invoke(Self, String, Json, async () -> Json) -> Json
+pub fn Admission::pending(Self) -> Int
+pub fn Admission::require_recovery(Self) -> Unit
+pub async fn Admission::run(Self) -> Unit
+pub fn Admission::status(Self) -> Status
+
+pub(all) enum RequestKind {
+  Query
+  Connection
+  Control
+  Mutation
+} derive(Eq, @debug.Debug)
+pub fn RequestKind::equal(Self, Self) -> Bool
+pub fn RequestKind::not_equal(Self, Self) -> Bool
+pub fn RequestKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Status {
+  Ready
+  Draining
+  RecoveryRequired
+  Stopped
+} derive(Eq, @debug.Debug)
+pub fn Status::equal(Self, Self) -> Bool
+pub fn Status::name(Self) -> String
+pub fn Status::not_equal(Self, Self) -> Bool
+pub fn Status::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

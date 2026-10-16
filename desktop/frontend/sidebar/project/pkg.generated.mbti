@@ -44,6 +44,7 @@ pub(all) struct Input {
   id : Id
   title : String
   label : String
+  host : (String, Bool)?
   activation : String?
   can_start : Bool
   managed : Bool

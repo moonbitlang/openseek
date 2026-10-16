@@ -73,6 +73,7 @@ pub fn root_command() -> @argparse.Command {
     about="DeepSeek-backed MoonBit coding agent (headless automation CLI).",
     options=@cli.agent_shared_options(global=true),
     subcommands=[
+      @host_cli.command(),
       Command(
         "setup",
         about="Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.",

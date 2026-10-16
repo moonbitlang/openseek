@@ -541,6 +541,18 @@ pub fn[Reply : ToJson] CodexCommandReply::to_json(Self[Reply]) -> Json
 pub impl[Reply : ToJson] ToJson for CodexCommandReply[Reply]
 pub impl[Reply : @json.FromJson] @json.FromJson for CodexCommandReply[Reply]
 
+pub(all) struct CodexConfigReply {
+  path : String
+  terminal_login : Result[(String, Bool), String]
+} derive(Eq, @debug.Debug)
+pub fn CodexConfigReply::equal(Self, Self) -> Bool
+pub fn CodexConfigReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn CodexConfigReply::not_equal(Self, Self) -> Bool
+pub fn CodexConfigReply::to_json(Self) -> Json
+pub fn CodexConfigReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for CodexConfigReply
+pub impl @json.FromJson for CodexConfigReply
+
 pub(all) struct CodexDataReply {
   data : Array[Json]
   next_cursor : String?
@@ -999,6 +1011,18 @@ pub fn ExternalLinkPayload::to_json(Self) -> Json
 pub fn ExternalLinkPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ExternalLinkPayload
 pub impl @json.FromJson for ExternalLinkPayload
+
+pub(all) struct FilePreviewContent {
+  media_type : String
+  data_base64 : String
+} derive(Eq, @debug.Debug)
+pub fn FilePreviewContent::equal(Self, Self) -> Bool
+pub fn FilePreviewContent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn FilePreviewContent::not_equal(Self, Self) -> Bool
+pub fn FilePreviewContent::to_json(Self) -> Json
+pub fn FilePreviewContent::to_repr(Self) -> @debug.Repr
+pub impl ToJson for FilePreviewContent
+pub impl @json.FromJson for FilePreviewContent
 
 pub(all) enum FileSignature {
   Missing
@@ -1781,6 +1805,78 @@ pub fn GoalReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for GoalReply
 pub impl @json.FromJson for GoalReply
 
+pub(all) enum HostNotification {
+  UserQuestions(UserQuestionSnapshot)
+  AgentApprovals(ApprovalSnapshot)
+  AgentConnected(ConnectedPayload)
+  AgentStarted(StartedPayload)
+  AgentEvent(AgentEventPayload)
+  AgentError(AgentErrorPayload)
+  AgentPrediction(PredictionReadyPayload)
+  AgentFinished(FinishedPayload)
+  SessionEvent(SessionCommitPayload)
+  SubrunProgress(SubrunProgressPayload)
+  WorkflowEntry(WorkflowEntryPayload)
+  SessionChanged(SessionChangedPayload)
+  WorkspaceChanged(WorkspacesChangedPayload)
+  WorkspaceSettingsChanged(WorkspaceSettingsPayload)
+  WorktreeChanged(WorktreeChangedPayload)
+  SettingsChanged(SettingsStatusPayload)
+  SkillsChanged
+  CodexStatusChanged(Json)
+  CodexNotification(Json)
+  CodexServerRequest(Json)
+  LspDiagnostics(DiagnosticsPayload)
+  FsChanged(FsChangedPayload)
+  FsWatchFailed(FsWatchFailedPayload)
+  TerminalOutput(TerminalOutputPayload)
+  TerminalExit(TerminalExitPayload)
+  SemanticSearchProgress(SemanticSearchProgressPayload)
+} derive(Eq, @debug.Debug)
+pub fn HostNotification::equal(Self, Self) -> Bool
+pub fn HostNotification::from_wire(String, Json) -> Self?
+pub fn HostNotification::kind(Self) -> HostNotificationKind
+pub fn HostNotification::not_equal(Self, Self) -> Bool
+pub fn HostNotification::params(Self) -> Json
+pub fn HostNotification::to_repr(Self) -> @debug.Repr
+pub fn HostNotification::wire_name(Self) -> String
+
+pub(all) enum HostNotificationKind {
+  UserQuestions
+  AgentApprovals
+  AgentConnected
+  AgentStarted
+  AgentEvent
+  AgentError
+  AgentPrediction
+  AgentFinished
+  SessionEvent
+  SubrunProgress
+  WorkflowEntry
+  SessionChanged
+  WorkspaceChanged
+  WorkspaceSettingsChanged
+  WorktreeChanged
+  SettingsChanged
+  SkillsChanged
+  CodexStatusChanged
+  CodexNotification
+  CodexServerRequest
+  LspDiagnostics
+  FsChanged
+  FsWatchFailed
+  TerminalOutput
+  TerminalExit
+  SemanticSearchProgress
+} derive(Eq, Hash, @debug.Debug)
+pub fn HostNotificationKind::all() -> Array[Self]
+pub fn HostNotificationKind::equal(Self, Self) -> Bool
+pub fn HostNotificationKind::hash(Self) -> Int
+pub fn HostNotificationKind::hash_combine(Self, Hasher) -> Unit
+pub fn HostNotificationKind::not_equal(Self, Self) -> Bool
+pub fn HostNotificationKind::to_repr(Self) -> @debug.Repr
+pub fn HostNotificationKind::wire_name(Self) -> String
+
 pub(all) struct ImportAttachmentReply {
   path : String
 } derive(Eq, @debug.Debug)
@@ -2292,6 +2388,7 @@ pub(all) enum Notification {
   SemanticSearchProgress(SemanticSearchProgressPayload)
 } derive(Eq, @debug.Debug)
 pub fn Notification::equal(Self, Self) -> Bool
+pub fn Notification::from_host(HostNotification) -> Self
 pub fn Notification::from_wire(String, Json) -> Self?
 pub fn Notification::kind(Self) -> NotificationKind
 pub fn Notification::not_equal(Self, Self) -> Bool
@@ -2392,6 +2489,7 @@ pub(all) enum OpenPathReply {
   Opened
   Editor(OpenPathEditorTarget)
   Browser(String)
+  RemotePreview(local_path~ : String, remote_path~ : String)
   Directory(OpenPathDirectoryTarget)
   Refused(String)
 } derive(Eq, @debug.Debug)
@@ -2631,6 +2729,20 @@ pub fn RegistrySkillIdentity::to_json(Self) -> Json
 pub fn RegistrySkillIdentity::to_repr(Self) -> @debug.Repr
 pub impl ToJson for RegistrySkillIdentity
 pub impl @json.FromJson for RegistrySkillIdentity
+
+pub(all) enum ResolveReferenceReply {
+  ReferenceText(path~ : String, line~ : Int?, column~ : Int?)
+  ReferenceDirectory(path~ : String)
+  ReferenceBinary(path~ : String)
+  ReferenceRefused(message~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ResolveReferenceReply::equal(Self, Self) -> Bool
+pub fn ResolveReferenceReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ResolveReferenceReply::not_equal(Self, Self) -> Bool
+pub fn ResolveReferenceReply::to_json(Self) -> Json
+pub fn ResolveReferenceReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ResolveReferenceReply
+pub impl @json.FromJson for ResolveReferenceReply
 
 pub(all) enum RevealPathReply {
   Revealed
@@ -3114,6 +3226,18 @@ pub fn SessionEvent::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionEvent
 pub impl @json.FromJson for SessionEvent
 
+pub(all) struct SessionExportContent {
+  html : String
+  json : String
+} derive(Eq, @debug.Debug)
+pub fn SessionExportContent::equal(Self, Self) -> Bool
+pub fn SessionExportContent::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionExportContent::not_equal(Self, Self) -> Bool
+pub fn SessionExportContent::to_json(Self) -> Json
+pub fn SessionExportContent::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionExportContent
+pub impl @json.FromJson for SessionExportContent
+
 pub(all) struct SessionExportPayload {
   session : String
   workspace : String
@@ -3479,6 +3603,153 @@ pub fn SkillsCatalogReply::to_json(Self) -> Json
 pub fn SkillsCatalogReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SkillsCatalogReply
 pub impl @json.FromJson for SkillsCatalogReply
+
+pub(all) struct SshAdd {
+  name : String
+  destination : String
+  port : Int?
+}
+pub fn SshAdd::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshAdd::to_json(Self) -> Json
+pub impl ToJson for SshAdd
+pub impl @json.FromJson for SshAdd
+
+pub(all) struct SshHostRequest {
+  host_id : String
+  method_ : String
+  params : Json
+}
+pub fn SshHostRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshHostRequest::to_json(Self) -> Json
+pub impl ToJson for SshHostRequest
+pub impl @json.FromJson for SshHostRequest
+
+pub(all) enum SshOperation[T] {
+  SshCompleted(T)
+  SshFailed(String)
+}
+pub fn[T : @json.FromJson] SshOperation::from_json(Json, @json.JsonPath) -> Self[T] raise @json.JsonDecodeError
+pub fn[T : ToJson] SshOperation::to_json(Self[T]) -> Json
+pub impl[T : ToJson] ToJson for SshOperation[T]
+pub impl[T : @json.FromJson] @json.FromJson for SshOperation[T]
+
+pub(all) struct SshPreparationProgress {
+  stage : String?
+} derive(Eq)
+pub fn SshPreparationProgress::equal(Self, Self) -> Bool
+pub fn SshPreparationProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshPreparationProgress::not_equal(Self, Self) -> Bool
+pub fn SshPreparationProgress::to_json(Self) -> Json
+pub impl ToJson for SshPreparationProgress
+pub impl @json.FromJson for SshPreparationProgress
+
+pub(all) struct SshPreparationRequest {
+  target : SshPreparationTarget
+  directory : String
+} derive(Eq)
+pub fn SshPreparationRequest::equal(Self, Self) -> Bool
+pub fn SshPreparationRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshPreparationRequest::not_equal(Self, Self) -> Bool
+pub fn SshPreparationRequest::to_json(Self) -> Json
+pub impl ToJson for SshPreparationRequest
+pub impl @json.FromJson for SshPreparationRequest
+
+pub(all) enum SshPreparationTarget {
+  New(name~ : String, destination~ : String, data_dir~ : String)
+  Existing(id~ : String)
+} derive(Eq)
+pub fn SshPreparationTarget::equal(Self, Self) -> Bool
+pub fn SshPreparationTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshPreparationTarget::not_equal(Self, Self) -> Bool
+pub fn SshPreparationTarget::to_json(Self) -> Json
+pub impl ToJson for SshPreparationTarget
+pub impl @json.FromJson for SshPreparationTarget
+
+pub(all) struct SshPreparationToken {
+  id : String
+} derive(Eq)
+pub fn SshPreparationToken::equal(Self, Self) -> Bool
+pub fn SshPreparationToken::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshPreparationToken::not_equal(Self, Self) -> Bool
+pub fn SshPreparationToken::to_json(Self) -> Json
+pub impl ToJson for SshPreparationToken
+pub impl @json.FromJson for SshPreparationToken
+
+pub(all) struct SshProfile {
+  id : String
+  name : String
+  destination : String
+  launcher : String
+  data_dir : String
+  build_id : String
+  server_id : String?
+} derive(Eq)
+pub fn SshProfile::equal(Self, Self) -> Bool
+pub fn SshProfile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfile::not_equal(Self, Self) -> Bool
+pub fn SshProfile::to_json(Self) -> Json
+pub impl ToJson for SshProfile
+pub impl @json.FromJson for SshProfile
+
+pub(all) struct SshProfileTarget {
+  id : String
+}
+pub fn SshProfileTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfileTarget::to_json(Self) -> Json
+pub impl ToJson for SshProfileTarget
+pub impl @json.FromJson for SshProfileTarget
+
+pub(all) struct SshProfileWrite {
+  id : String?
+  name : String
+  destination : String
+  launcher : String
+  data_dir : String
+  build_id : String
+}
+pub fn SshProfileWrite::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfileWrite::to_json(Self) -> Json
+pub impl ToJson for SshProfileWrite
+pub impl @json.FromJson for SshProfileWrite
+
+pub(all) struct SshProfiles {
+  hosts : Array[SshProfile]
+}
+pub fn SshProfiles::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProfiles::to_json(Self) -> Json
+pub impl ToJson for SshProfiles
+pub impl @json.FromJson for SshProfiles
+
+pub(all) struct SshProjectCatalog {
+  id : String
+  paths : Array[String]
+}
+pub fn SshProjectCatalog::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshProjectCatalog::to_json(Self) -> Json
+pub impl ToJson for SshProjectCatalog
+pub impl @json.FromJson for SshProjectCatalog
+
+pub(all) enum SshReply {
+  SshSuccess(Json)
+  SshUnsent(String)
+  SshRefused(String)
+  SshUnknown(String)
+}
+pub fn SshReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshReply::to_json(Self) -> Json
+pub impl ToJson for SshReply
+pub impl @json.FromJson for SshReply
+
+pub(all) struct SshRequest {
+  host_id : String
+  epoch : Int
+  method_ : String
+  params : Json
+}
+pub fn SshRequest::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SshRequest::to_json(Self) -> Json
+pub impl ToJson for SshRequest
+pub impl @json.FromJson for SshRequest
 
 pub(all) struct StageAttachmentsPayload {
   session : String

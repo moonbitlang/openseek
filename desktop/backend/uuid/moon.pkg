@@ -3,6 +3,6 @@ import {
   "moonbitlang/x/uuid" @x_uuid,
 }
 
-warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
+warnings = "-missing_doc-unused_default_value-unused_optional_argument+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 
-supported_targets = "js+native"
+supported_targets = "+native+wasm"

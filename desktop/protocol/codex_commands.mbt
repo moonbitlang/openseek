@@ -1167,3 +1167,72 @@ pub extend CodexTurnSteerPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend CodexTurnSteerPayload with ToJson::{to_json}
+
+///|
+pub(all) struct CodexConfigReply {
+  path : String
+  terminal_login : Result[(String, Bool), String]
+} derive(Debug, Eq)
+
+///|
+pub impl FromJson for CodexConfigReply with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "Codex configuration path")
+  let value = object.required_string("path")
+  guard !value.is_blank() else {
+    raise JsonDecodeError(
+      (path.add_key("path"), "configuration path must not be blank"),
+    )
+  }
+  let login = JsonObject::decode(
+    object.required_json("terminal_login"),
+    path.add_key("terminal_login"),
+    "terminal login instructions",
+  )
+  let terminal_login = match login.required_string("kind") {
+    "ready" => {
+      let command = login.required_string("command")
+      guard !command.is_blank() else {
+        raise JsonDecodeError((login.path, "login command must not be blank"))
+      }
+      Ok((command, login.required_bool("device_auth")))
+    }
+    "unavailable" => {
+      let message = login.required_string("message")
+      guard !message.is_blank() else {
+        raise JsonDecodeError(
+          (login.path, "login diagnostic must not be blank"),
+        )
+      }
+      Err(message)
+    }
+    _ =>
+      raise JsonDecodeError(
+        (login.path, "expected ready or unavailable login instructions"),
+      )
+  }
+  { path: value, terminal_login, }
+}
+
+///|
+pub impl ToJson for CodexConfigReply with fn to_json(self) {
+  {
+    "path": self.path,
+    "terminal_login": match self.terminal_login {
+      Ok((command, device_auth)) =>
+        { "kind": "ready", "command": command, "device_auth": device_auth }
+      Err(message) => { "kind": "unavailable", "message": message }
+    },
+  }
+}
+
+///|
+pub extend CodexConfigReply with ToJson::{to_json}
+
+///|
+pub extend CodexConfigReply with Debug::{to_repr}
+
+///|
+pub extend CodexConfigReply with Eq::{equal, not_equal}
+
+///|
+pub extend CodexConfigReply with FromJson::{from_json}

@@ -1,7 +1,7 @@
 ///|
 test "GitHub list queries keep author filtering separate from all open and issues" {
   let repository = "https://github.example.com/team/project"
-  for kind in [@protocol.CreatedByMe, AllOpen, Issues] {
+  for kind in [@protocol.GithubListKind::CreatedByMe, AllOpen, Issues] {
     let args = github_list_args(kind, repository, 30)
     assert_eq(args[0], if kind is Issues { "issue" } else { "pr" })
     assert_true(args.contains(repository))

@@ -1,0 +1,11 @@
+import {
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/fs",
+  "openseek_desktop/backend/entropy",
+  "openseek_desktop/backend/pathx",
+  "moonbitlang/async",
+}
+
+supported_targets = "+native+wasm"
+
+warnings = "-missing_doc-unused_default_value-unused_optional_argument"

@@ -10,7 +10,7 @@
 priv enum Outgoing {
   // A complete JSON-RPC response envelope, built where the request ran.
   Response(Json)
-  Notify(@protocol.Notification)
+  Notify(Notification)
   // Protocol-level keepalive, serialized with every text frame.
   Ping
 }
@@ -21,55 +21,59 @@ priv enum Outgoing {
 /// notification follows the connection's resync boundary.
 priv struct ClientSubscription {
   out : @async.Queue[Outgoing]
-  notifications : @broadcast.Subscription[@protocol.Notification]
+  close : () -> Unit
 }
 
 ///|
 /// One client's WebSocket actor: a relay data socket this host dials
 /// (`run`) or a development console socket it accepted (`serve`). Its
-/// subscription, outbound queue, writer, pinger, and request tasks cannot
-/// outlive the socket.
-priv struct WsClientActor {
-  state : @api.ApiState
-  host_connection : @host.HostConnection
+/// subscription, outbound queue, writer, notification forwarder, pinger, and
+/// request tasks cannot outlive the socket.
+struct Client {
+  endpoints : Array[RequestHandler]
+  subscribe : ((Notification) -> Bool raise, () -> Unit) -> () -> Unit
+  run_connection : async (
+    async (Notification) -> Unit,
+    async (Notification) -> Unit,
+  ) -> Unit
 }
 
 ///|
-fn WsClientActor::WsClientActor(state : @api.ApiState) -> WsClientActor {
-  { state, host_connection: HostConnection(), }
+/// The caller supplies one catalog and one connection-owned resource pump.
+pub fn Client::Client(
+  endpoints : Array[RequestHandler],
+  subscribe : ((Notification) -> Bool raise, () -> Unit) -> () -> Unit,
+  run_connection : async (
+    async (Notification) -> Unit,
+    async (Notification) -> Unit,
+  ) -> Unit,
+) -> Client {
+  { endpoints, subscribe, run_connection, }
 }
 
 ///|
-async fn WsClientActor::open_subscription(
-  self : WsClientActor,
+fn Client::open_subscription(
+  self : Client,
   on_overflow~ : () -> Unit,
-) -> ClientSubscription {
+) -> ClientSubscription raise {
   let out : @async.Queue[Outgoing] = Queue(kind=Blocking(OutboundQueueCapacity))
-  // Install the readiness frame before the hub can write into this inbox.
-  out.put(Notify(AgentConnected({ stage: Accepted, })))
-  let notifications = self.state.subscribe(
-    out,
-    map=notification => {
-      if notification_for_client(notification) is Some(notification) {
-        Some(Notify(notification))
-      } else {
-        None
+  ignore(out.try_put(Notify(Host(AgentConnected({ stage: Accepted, })))))
+  let close = (self.subscribe)(
+    notification => {
+      match notification.profile() {
+        Some(event) => out.try_put(Notify(event))
+        None => true
       }
     },
-    on_lag=subscription => {
-      @xlog.warn(category="transport") <?
-        { "event": "hub_subscription_lagged", "transport": "remote" }
-      subscription.close()
+    () => {
       out.close(
         error=SlowClient("client not draining outbound frames"),
         clear=true,
       )
-      // Closing the queue alone cannot interrupt a writer blocked inside a
-      // socket write. The owner also closes the transport immediately.
       on_overflow()
     },
   )
-  { out, notifications, }
+  { out, close, }
 }
 
 ///|
@@ -155,26 +159,15 @@ const CodeEngineError = -32000
 const CodeHostError = -32001
 
 ///|
-/// Dial and serve one announced remote client. A client hanging up mid-run
-/// is routine and only retires this actor; cancelling the parent relay actor
-/// still propagates so every owned resource is closed immediately.
-async fn WsClientActor::run(self : WsClientActor, url : String) -> Unit {
-  let conn = @websocket.Conn::connect(url)
-  defer conn.close()
-  self.serve(conn) catch {
-    _ => ()
-  }
-}
-
-///|
 /// Serve the actor's connected socket until it closes (or its hub
 /// subscription lags for want of draining).
-async fn WsClientActor::serve(
-  self : WsClientActor,
+pub async fn Client::serve(
+  self : Client,
   conn : @websocket.Conn,
+  make_endpoints? : (async (Notification) -> Unit) -> Array[RequestHandler],
 ) -> Unit {
   let subscription = self.open_subscription(on_overflow=() => conn.close())
-  defer subscription.notifications.close()
+  defer (subscription.close)()
   let out = subscription.out
   defer out.close(clear=true)
   let request_permits : @semaphore.Semaphore = Semaphore(
@@ -183,9 +176,10 @@ async fn WsClientActor::serve(
   )
   // Endpoint closures capture this connection's watch and PTY ownership once;
   // every request only performs a name lookup in the stable catalog.
-  let endpoints = @api.endpoints(self.state, self.host_connection, on_share_progress=payload => {
-    enqueue_outgoing(out, Notify(SessionShareProgress(payload)))
-  })
+  let endpoints = match make_endpoints {
+    Some(make) => make(event => enqueue_outgoing(out, Notify(event)))
+    None => self.endpoints
+  }
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {
@@ -196,7 +190,7 @@ async fn WsClientActor::serve(
       // Filesystem watch events belong to this WebSocket connection. They
       // bypass the shared hub so other desktop and remote clients never
       // receive this connection's `fs.changed` notifications.
-      self.host_connection.run(
+      (self.run_connection)(
         notification => enqueue_outgoing(out, Notify(notification)),
         notification => enqueue_outgoing(out, Notify(notification)),
       )
@@ -362,8 +356,8 @@ fn remote_lifecycle(event : @wire.Event) -> @wire.Event? {
 /// trimmed so the hub's original notification stays untouched for local
 /// transports.
 fn notification_for_client(
-  notification : @protocol.Notification,
-) -> @protocol.Notification? {
+  notification : @protocol.HostNotification,
+) -> @protocol.HostNotification? {
   match notification {
     AgentEvent(payload) => {
       // Desktop starts always name a durable session. An event without one
@@ -387,18 +381,20 @@ fn notification_for_client(
 /// Run one request through the dispatcher and shape the outcome as a
 /// JSON-RPC response, mapping each typed failure to its protocol code.
 async fn run_request(
-  endpoints : Array[@endpoint.Endpoint],
+  endpoints : Array[RequestHandler],
   id : Json,
   method_ : String,
   params : Json,
 ) -> Json {
-  guard endpoints.iter().find_first(endpoint => endpoint.name() == method_)
+  guard endpoints.iter().find_first(endpoint => endpoint.name == method_)
     is Some(endpoint) else {
     return error_envelope(id, CodeMethodNotFound, "unknown method '\{method_}'")
   }
-  let result = endpoint.invoke(params) catch {
+  let result = (endpoint.invoke)(params) catch {
     @json.JsonDecodeError(_) as error =>
       return error_envelope(id, CodeInvalidParams, "\{error}")
+    @lifecycle.AdmissionError(message) =>
+      return error_envelope(id, -32012, message)
     @host.PayloadError(message) =>
       return error_envelope(id, CodeInvalidParams, message)
     @engine.EngineError(message) =>
@@ -422,10 +418,20 @@ fn error_envelope(id : Json, code : Int32, message : String) -> Json {
 
 ///|
 async test "readiness precedes the first forwarded hub notification" {
-  let state = @api.ApiState(engine="unused")
-  let subscription = WsClientActor(state).open_subscription(on_overflow=() => ())
-  defer subscription.notifications.close()
-  state.publish(
+  let channel : @broadcast.Channel[@protocol.HostNotification] = Channel()
+  let subscription = Client(
+    [],
+    (emit, on_lag) => {
+      let sub = channel.subscribe_with(offer=value => emit(Host(value)), on_lag=sub => {
+        sub.close()
+        on_lag()
+      })
+      () => sub.close()
+    },
+    (_, _) => (),
+  ).open_subscription(on_overflow=() => ())
+  defer (subscription.close)()
+  channel.publish(
     SessionEvent({
       session: "session-1",
       sequence: 1,
@@ -457,16 +463,24 @@ async test "a full outbound queue rejects responses and retires its subscription
   } noraise {
     _ => fail("a full outbound queue accepted another response")
   }
-  let state = @api.ApiState(engine="unused")
+  let channel : @broadcast.Channel[@protocol.HostNotification] = Channel()
   let mut disconnected = false
-  let subscription = WsClientActor(state).open_subscription(on_overflow=() => {
-    disconnected = true
-  })
-  defer subscription.notifications.close()
+  let subscription = Client(
+    [],
+    (emit, on_lag) => {
+      let sub = channel.subscribe_with(offer=value => emit(Host(value)), on_lag=sub => {
+        sub.close()
+        on_lag()
+      })
+      () => sub.close()
+    },
+    (_, _) => (),
+  ).open_subscription(on_overflow=() => disconnected = true)
+  defer (subscription.close)()
   // Readiness already occupies one slot. Overflow must wake the writer with
   // a connection failure, without escaping into the hub publisher.
   for _ in 0..<OutboundQueueCapacity {
-    state.publish(AgentConnected({ stage: Serving, }))
+    channel.publish(AgentConnected({ stage: Serving, }))
   }
   assert_true(disconnected)
   try subscription.out.get() catch {
@@ -475,7 +489,7 @@ async test "a full outbound queue rejects responses and retires its subscription
   } noraise {
     _ => fail("overflow did not close the stalled client's outbound queue")
   }
-  state.publish(AgentConnected({ stage: Serving, }))
+  channel.publish(AgentConnected({ stage: Serving, }))
 }
 
 ///|
@@ -544,7 +558,7 @@ test "classify rejects non-object catalog parameters" {
 
 ///|
 test "remote delivery drops notifications without a session" {
-  let started_notification : @protocol.Notification = AgentStarted({
+  let started_notification : @protocol.HostNotification = AgentStarted({
     run_id: "run-ephemeral",
     submission_id: None,
     engine: None,
@@ -565,6 +579,6 @@ test "remote delivery drops notifications without a session" {
       brief=None,
     ),
   }
-  let notification : @protocol.Notification = AgentEvent({ ..event, })
+  let notification : @protocol.HostNotification = AgentEvent({ ..event, })
   assert_true(notification_for_client(notification) is None)
 }

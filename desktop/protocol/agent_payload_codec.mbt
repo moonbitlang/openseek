@@ -294,8 +294,8 @@ pub impl ToJson for RunsReply with fn to_json(self) {
 pub impl FromJson for PendingApprovalPayload with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "pending approval")
   {
-    answered: object.required_bool("answered"),
     id: object.required_string("id"),
+    answered: object.required_bool("answered"),
     session: object.required_string("session"),
     run_id: object.optional_string("run_id"),
     tool_name: object.required_string("tool_name"),
