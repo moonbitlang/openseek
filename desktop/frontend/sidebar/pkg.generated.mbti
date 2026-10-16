@@ -20,6 +20,7 @@ pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 // Types and methods
 pub(all) struct Account {
   login : String
+  devices_url : String
   avatar : String
   busy : Bool
   notice : String?

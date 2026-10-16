@@ -45,8 +45,9 @@ priv enum ShellMessage {
   DeviceUnavailable
   DeviceNotInAccount
   RefreshLabel
-  DeviceLinkRequired
-  DeviceLinkDescription
+  ChooseDevice
+  DeviceOnline
+  DeviceOffline
   SigningOut
   SignOutLabel
   LoadingConversation
@@ -347,21 +348,21 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, RefreshLabel) => "刷新"
     (TraditionalChinese, RefreshLabel) => "重新整理"
     (Japanese, RefreshLabel) => "更新"
-    (English, DeviceLinkRequired) => "Device link required"
-    (Spanish, DeviceLinkRequired) => "Se requiere un enlace de dispositivo"
-    (SimplifiedChinese, DeviceLinkRequired) => "需要设备链接"
-    (TraditionalChinese, DeviceLinkRequired) => "需要裝置連結"
-    (Japanese, DeviceLinkRequired) => "デバイスのリンクが必要です"
-    (English, DeviceLinkDescription) =>
-      "Open this page from Remote access in SeekMoon so the URL identifies one device."
-    (Spanish, DeviceLinkDescription) =>
-      "Abre esta página desde Acceso remoto en SeekMoon para que la URL identifique un dispositivo."
-    (SimplifiedChinese, DeviceLinkDescription) =>
-      "请从 SeekMoon 的“远程访问”中打开此页面，以便通过链接识别设备。"
-    (TraditionalChinese, DeviceLinkDescription) =>
-      "請從 SeekMoon 的“遠端存取”中開啟此頁面，以便透過連結識別裝置。"
-    (Japanese, DeviceLinkDescription) =>
-      "SeekMoon の「リモートアクセス」からこのページを開いてください。リンクによってデバイスを識別します。"
+    (English, ChooseDevice) => "Choose a device"
+    (Spanish, ChooseDevice) => "Elegir un dispositivo"
+    (SimplifiedChinese, ChooseDevice) => "选择设备"
+    (TraditionalChinese, ChooseDevice) => "選擇裝置"
+    (Japanese, ChooseDevice) => "デバイスを選択"
+    (English, DeviceOnline) => "Online"
+    (Spanish, DeviceOnline) => "En línea"
+    (SimplifiedChinese, DeviceOnline) => "在线"
+    (TraditionalChinese, DeviceOnline) => "在線"
+    (Japanese, DeviceOnline) => "オンライン"
+    (English, DeviceOffline) => "Offline"
+    (Spanish, DeviceOffline) => "Sin conexión"
+    (SimplifiedChinese, DeviceOffline) => "离线"
+    (TraditionalChinese, DeviceOffline) => "離線"
+    (Japanese, DeviceOffline) => "オフライン"
     (English, SigningOut) => "Signing out…"
     (Spanish, SigningOut) => "Cerrando sesión…"
     (SimplifiedChinese, SigningOut) => "正在退出登录…"

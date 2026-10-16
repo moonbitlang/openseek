@@ -1,0 +1,26 @@
+/* Android-specific layout; shell controls inherit the shared desktop sizes. */
+.android-connect .portal-inner { padding: 24px 20px; }
+.android-connect .portal-card { margin-top: 24px; padding: 20px; align-items: stretch; }
+.android-connect .portal-button-link { text-align: center; padding: 14px 16px; }
+.android-connect .portal-card > button { min-height: 48px; }
+.android-connect .console-account { flex-wrap: wrap; }
+.android-connect .console-account-action { min-height: 44px; }
+.android-connect .composer-input textarea { font-size: 16px; }
+/* This first release focuses on conversation, including prompts/approvals. */
+.android-connect .panel-toggle,
+.android-connect .right-panel-toggle { display: none; }
+
+/* CLI failures can include a full help page. Keep the beginning on screen;
+   scroll the diagnostics instead of letting a bottom-anchored toast grow up
+   past the viewport. Preserve the server's diagnostic line breaks. */
+.android-connect .notifications {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+.android-connect .notification {
+  flex-shrink: 0;
+  max-height: min(240px, 35dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
+}

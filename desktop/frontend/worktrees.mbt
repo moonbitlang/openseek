@@ -61,6 +61,11 @@ fn fetch_worktrees(
         { workspace: workspace.path, },
       ) catch {
         error => {
+          // The connection banner owns transport loss; BridgeReady reloads
+          // the inventory without treating an unavailable registry as empty.
+          if @interop.bridge_connection_lost(channel, error) {
+            return
+          }
           // A failed list is not an empty registry: until a real reply arrives
           // the client cannot safely decide whether a durable conversation is
           // rooted in the project or one of its worktrees.

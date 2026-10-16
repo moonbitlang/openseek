@@ -1072,6 +1072,9 @@ async fn refresh_sessions_into(
     @protocol.EmptyPayload::NoPayload,
   ) catch {
     error => {
+      if @interop.bridge_connection_lost(channel, error) {
+        return
+      }
       scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
       return
     }

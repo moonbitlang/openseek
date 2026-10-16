@@ -3172,6 +3172,13 @@ fn Model::settings_status(self : Model) -> Status {
 /// the settings-derived readiness. Purely derived, so update handlers never
 /// have to keep a stored status in sync with settings changes.
 fn Model::display_status(self : Model) -> Status {
+  // A remote outage has one persistent composer notice; keep the topbar
+  // compact even after several retries instead of repeating a full error.
+  if !self.is_desktop &&
+    self.focused_device() is Some(device) &&
+    device.reconnect_failures > 0 {
+    return Reconnecting
+  }
   match self.bridge_state() {
     Connecting => WaitingBridge
     BridgeLost(message) => Unavailable(message)
@@ -4621,6 +4628,7 @@ fn RunOutcome::label(
 /// its severity cannot drift from the state they describe.
 priv enum Status {
   WaitingBridge
+  Reconnecting
   Ready
   SetupRequired
   ApiKeyRequired
@@ -4642,6 +4650,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
     SimplifiedChinese =>
       return match self {
         WaitingBridge => "正在等待连接桥"
+        Reconnecting => "正在重连"
         Ready => "就绪"
         SetupRequired => "需要设置"
         ApiKeyRequired => "需要 API 密钥"
@@ -4662,6 +4671,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
     TraditionalChinese =>
       return match self {
         WaitingBridge => "正在等待連線橋"
+        Reconnecting => "正在重新連線"
         Ready => "就緒"
         SetupRequired => "需要設定"
         ApiKeyRequired => "需要 API 金鑰"
@@ -4682,6 +4692,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
     Japanese =>
       return match self {
         WaitingBridge => "ブリッジ接続を待機中"
+        Reconnecting => "再接続中"
         Ready => "準備完了"
         SetupRequired => "設定が必要です"
         ApiKeyRequired => "API キーが必要です"
@@ -4703,6 +4714,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
     Spanish =>
       return match self {
         WaitingBridge => "Esperando conexión con el puente"
+        Reconnecting => "Reconectando"
         Ready => "Listo"
         SetupRequired => "Se requiere configuración"
         ApiKeyRequired => "Se requiere una clave de API"
@@ -4718,6 +4730,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
   }
   match self {
     WaitingBridge => "Waiting for bridge"
+    Reconnecting => "Reconnecting…"
     Ready => "Ready"
     SetupRequired => "Setup required"
     ApiKeyRequired => "API key required"
@@ -4735,7 +4748,7 @@ fn Status::label(self : Status, locale~ : @i18n.Locale = English) -> String {
 ///|
 fn Status::kind(self : Status) -> StatusKind {
   match self {
-    WaitingBridge => Neutral
+    WaitingBridge | Reconnecting => Neutral
     Ready => Ok
     SetupRequired
     | ApiKeyRequired

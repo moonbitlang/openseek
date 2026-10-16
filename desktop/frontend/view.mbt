@@ -737,6 +737,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
         avatar,
         busy: self.console.busy,
         notice: self.console.notice,
+        devices_url: self.console.device_picker_url(),
       })
     _ => None
   }
@@ -1790,27 +1791,52 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 }
 
 ///|
-/// The console's full-screen gate. A missing `?device=` stops before sign-in;
-/// authentication gets its own progress/retry states, and a signed-in page
-/// stays here until its one query-selected device is available.
+/// Sign in, explicitly select a device, then wait for that device's channel.
+/// The picker never opens a channel until the user follows a device link.
 fn console_gate_view(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
 ) -> @html.Html {
   let card : Array[@html.Html] = []
-  if console.page_device is Some(id) {
-    match console.auth {
-      AuthChecking => {
+  match console.auth {
+    AuthChecking => {
+      card.push(
+        @html.p(
+          match console.notice {
+            Some(notice) => notice
+            None => shell_text(locale, CheckingSignIn)
+          },
+        ),
+      )
+      if console.notice is Some(_) {
         card.push(
-          @html.p(
-            match console.notice {
-              Some(notice) => notice
-              None => shell_text(locale, CheckingSignIn)
-            },
+          @html.button(
+            class="button primary",
+            on_click=dispatch(Console(RefreshClicked)),
+            shell_text(locale, TryAgain),
           ),
         )
-        if console.notice is Some(_) {
+      }
+    }
+    AuthSignedOut => {
+      card.push(@html.h2(shell_text(locale, SignInLabel)))
+      card.push(@html.p(shell_text(locale, BrowserAccess)))
+      card.push(
+        @html.a(
+          class="portal-button-link",
+          href=console.login_url(),
+          escape=true,
+          shell_text(locale, SignInGitHub),
+        ),
+      )
+    }
+    AuthSignedIn(..) =>
+      match console.roster_sync {
+        RosterLoading => card.push(@html.p(shell_text(locale, CheckingDevice)))
+        RosterFailed(message) => {
+          card.push(@html.h2(shell_text(locale, CannotLoadDevice)))
+          card.push(@html.p(message))
           card.push(
             @html.button(
               class="button primary",
@@ -1819,34 +1845,8 @@ fn console_gate_view(
             ),
           )
         }
-      }
-      AuthSignedOut => {
-        card.push(@html.h2(shell_text(locale, SignInLabel)))
-        card.push(@html.p(shell_text(locale, BrowserAccess)))
-        card.push(
-          @html.a(
-            class="portal-button-link",
-            href=console.login_url(),
-            shell_text(locale, SignInGitHub),
-          ),
-        )
-      }
-      AuthSignedIn(..) =>
-        match console.roster_sync {
-          RosterLoading =>
-            card.push(@html.p(shell_text(locale, CheckingDevice)))
-          RosterFailed(message) => {
-            card.push(@html.h2(shell_text(locale, CannotLoadDevice)))
-            card.push(@html.p(message))
-            card.push(
-              @html.button(
-                class="button primary",
-                on_click=dispatch(Console(RefreshClicked)),
-                shell_text(locale, TryAgain),
-              ),
-            )
-          }
-          RosterReady => {
+        RosterReady => {
+          if console.page_device is Some(id) {
             let selected = console.roster
               .iter()
               .find_first(meta => meta.id == id)
@@ -1867,18 +1867,57 @@ fn console_gate_view(
               card.push(@html.p(shell_text(locale, DeviceNotInAccount)))
             }
             card.push(
-              @html.button(
-                class="button primary",
-                on_click=dispatch(Console(RefreshClicked)),
-                shell_text(locale, RefreshLabel),
+              @html.a(
+                class="portal-button-link secondary",
+                href=console.device_picker_url(),
+                escape=true,
+                shell_text(locale, ChooseDevice),
               ),
             )
+          } else {
+            card.push(@html.h2(shell_text(locale, ChooseDevice)))
+            if console.roster.is_empty() {
+              card.push(@html.p(shell_text(locale, NoDevices)))
+            }
+            for meta in console.roster {
+              let contents : Array[@html.Html] = [
+                @html.span(class="device-name", meta.name),
+                @html.span(
+                  class="device-status",
+                  shell_text(
+                    locale,
+                    if meta.online {
+                      DeviceOnline
+                    } else {
+                      DeviceOffline
+                    },
+                  ),
+                ),
+              ]
+              if meta.online {
+                card.push(
+                  @html.a(
+                    class="device-choice",
+                    href=console.device_url(meta.id),
+                    escape=true,
+                    contents,
+                  ),
+                )
+              } else {
+                card.push(@html.div(class="device-choice offline", contents))
+              }
+            }
+            card.push(@html.p(shell_text(locale, BringOnline)))
           }
+          card.push(
+            @html.button(
+              class="button primary",
+              on_click=dispatch(Console(RefreshClicked)),
+              shell_text(locale, RefreshLabel),
+            ),
+          )
         }
-    }
-  } else {
-    card.push(@html.h2(shell_text(locale, DeviceLinkRequired)))
-    card.push(@html.p(shell_text(locale, DeviceLinkDescription)))
+      }
   }
   // Every signed-in gate hides the sidebar's account controls. Keep the
   // account escape hatch here once, independent of why device access is gated.
