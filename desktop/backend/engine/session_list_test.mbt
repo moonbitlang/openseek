@@ -48,6 +48,8 @@ async test "live and archived listings read stores without an engine executable"
     ),
   )
   @fs.mkdir(workspace + "/.openseek/sessions/husk", recursive=true)
+  // Keep the store listing policy: skip invalid ids without losing good rows.
+  @fs.mkdir(workspace + "/.openseek/sessions/bad\\name", recursive=true)
   let archive = @store.SessionStore(workspace + "/.openseek/archived")
   archive.create(Session(SessionId("archived"), system_prompt=""))
   archive.set_title(SessionId("archived"), "Archived title")

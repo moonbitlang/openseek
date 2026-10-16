@@ -159,16 +159,12 @@ async test "listings order by recency and keep husk directories visible" {
   assert_eq(listings.length(), 3)
   assert_eq(listings[0].id().value(), "newer")
   assert_true(listings[0].last_active_unix_seconds() is Some(_))
-  assert_eq(listings[0].first_prompt(), None)
+  assert_eq(listings[0].first_prompt(), "")
   assert_eq(listings[1].id().value(), "older")
-  assert_eq(listings[1].first_prompt(), Some("  first\n prompt  here "))
+  assert_eq(listings[1].first_prompt(), "  first\n prompt  here ")
   assert_eq(listings[2].id().value(), "husk")
   assert_true(listings[2].last_active_unix_seconds() is None)
-  try listings[2].first_prompt() catch {
-    _ => ()
-  } noraise {
-    _ => fail("missing transcript must report an error")
-  }
+  assert_eq(listings[2].first_prompt(), "")
 }
 
 ///|
@@ -187,7 +183,7 @@ async test "an explicit session title overrides the first prompt without rewriti
   let listings = store.listings()
   assert_eq(listings.length(), 1)
   assert_eq(listings[0].title(), Some("Renamed conversation"))
-  assert_eq(listings[0].first_prompt(), Some("original first prompt"))
+  assert_eq(listings[0].first_prompt(), "original first prompt")
   let loaded = store.load(id)
   guard loaded.events()[0].item() is User(message) else {
     fail("renaming changed the first durable event")
@@ -1189,115 +1185,5 @@ async test "image-only conversations have a nonempty listing preview" {
     system_prompt="system",
   ).append(User(UserMessage(Content([Image(image)]))))
   store.create(session)
-  assert_eq(store.listings()[0].first_prompt(), Some("[Image]"))
-}
-
-///|
-async test "listing extracts text without decoding image payloads" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id = @agent_session.SessionId("image-preview")
-  store.create(Session(id, system_prompt="system"))
-  // A listing is display metadata, not a loadability check. Even an image
-  // whose bytes cannot be decoded must not hide the accompanying title.
-  append_raw(
-    store,
-    id.value(),
-    (
-      #|{"sequence":1,"ts":0,"item":{"kind":"user","payload":{"content":[{"type":"text","text":"Before "},{"type":"image","media_type":"image/png","data":"not-base64"},{"type":"text","text":"after"}]}}}
-    ) +
-    "\n",
-  )
-  assert_eq(store.listings()[0].first_prompt(), Some("Before after"))
-  try store.load(id) catch {
-    _ => ()
-  } noraise {
-    _ => fail("loading must still validate image bytes")
-  }
-}
-
-///|
-async test "listing reads current prompt on demand without retaining errors" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id = @agent_session.SessionId("changing")
-  store.create(Session(id, system_prompt="system"))
-  let listing = store.listings()[0]
-  @fs.remove(store.session_file(id))
-  try listing.first_prompt() catch {
-    _ => ()
-  } noraise {
-    _ => fail("prompt access must read the current file")
-  }
-  store.create(
-    @agent_session.Session(id, system_prompt="system").append(
-      User(UserMessage(Content([Text("Recreated")]))),
-    ),
-  )
-  assert_eq(listing.first_prompt(), Some("Recreated"))
-}
-
-///|
-async test "listing distinguishes absent empty and unreadable prompts" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let id = @agent_session.SessionId("prompt-states")
-  let empty = @agent_session.Session(id, system_prompt="system")
-  store.create(empty)
-  assert_eq(store.listings()[0].first_prompt(), None)
-  store.create(empty.append(User(UserMessage(Content([Text("")])))))
-  // Empty text remains a found prompt on repeated reads.
-  assert_eq(store.listings()[0].first_prompt(), Some(""))
-  assert_eq(store.listings()[0].first_prompt(), Some(""))
-  store.create(empty)
-  append_raw(store, id.value(), "{\n")
-  let malformed = store.listings()[0]
-  try malformed.first_prompt() catch {
-    @json.ParseError::InvalidEof => ()
-    error => raise error
-  } noraise {
-    _ => fail("invalid JSON must report its parse error")
-  }
-  store.create(empty)
-  append_raw(store, id.value(), "{}\n")
-  try store.listings()[0].first_prompt() catch {
-    @json.JsonDecodeError(_) => ()
-    error => raise error
-  } noraise {
-    _ => fail("invalid event must report its decode error")
-  }
-  store.create(empty)
-  append_raw(
-    store,
-    id.value(),
-    (
-      #|{"item":{"kind":"user","payload":{"content":42}}}
-    ) +
-    "\n",
-  )
-  try store.listings()[0].first_prompt() catch {
-    Failure(message) =>
-      assert_true(message.contains("expected content string or array"))
-    error => raise error
-  } noraise {
-    _ => fail("invalid user content must report an error")
-  }
-  // Repairing the transcript restores its label.
-  store.create(empty.append(User(UserMessage(Content([Text("repaired")])))))
-  assert_eq(store.listings()[0].first_prompt(), Some("repaired"))
-}
-
-///|
-async test "listing scan limit reports absence rather than empty text" {
-  let store = new_store()
-  defer @fs.rmdir(store.root(), recursive=true)
-  let mut session = @agent_session.Session(
-    SessionId("scan-limit"),
-    system_prompt="system",
-  )
-  for _ in 0..<50 {
-    session = session.append(Terminal(Finished("done")))
-  }
-  store.create(session.append(User(UserMessage(Content([Text("past limit")])))))
-  assert_eq(store.listings()[0].first_prompt(), None)
+  assert_eq(store.listings()[0].first_prompt(), "[Image]")
 }

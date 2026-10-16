@@ -578,11 +578,11 @@ pub async fn SessionStore::fork(
 /// A listing row is intentionally lighter than a loaded session. It can be
 /// built without replaying the full event log, so it is suitable for pickers
 /// and `--session-list`. A row can also represent a damaged directory: in that
-/// case timestamp may be `None` and reading the first prompt may fail.
+/// case timestamp may be `None` and first prompt may be empty.
 struct SessionListing {
   id : @agent_session.SessionId
   last_active_unix_seconds : Int64?
-  session_file : String
+  first_prompt : String
   title : String?
 } derive(Debug)
 
@@ -609,15 +609,13 @@ pub fn SessionListing::last_active_unix_seconds(
 }
 
 ///|
-/// Read the first user prompt near the start of the event log on demand.
+/// Return the first user prompt found near the start of the event log.
 ///
-/// `None` means no user event was found within the scan limit. `Some("")`
-/// means the first user event has empty text. Read and parse failures raise
-/// the original error; callers can choose a display fallback for damaged rows.
-/// Each call reads the current file; the listing does not capture or cache
-/// prompt text or errors. This is not a full session loadability check.
-pub async fn SessionListing::first_prompt(self : SessionListing) -> String? {
-  first_prompt_in_log(self.session_file)
+/// The value is a display label, not a validated session field. It is `""` when
+/// no user event is found within the scan limit, when the session file cannot
+/// be read, or when the session directory is damaged.
+pub fn SessionListing::first_prompt(self : SessionListing) -> String {
+  self.first_prompt
 }
 
 ///|
@@ -676,65 +674,36 @@ pub async fn SessionStore::set_title(
 let first_prompt_scan_limit : Int32 = 50
 
 ///|
-/// The first user prompt recorded in the session file at `path`, or `None`
-/// when none is found within the scan limit. Read and parse failures raise.
-/// Streams line by line instead of loading the session: a listing only needs a
+/// The first user prompt recorded in the session file at `path`, or `""` when
+/// none is found within the scan limit (or the file cannot be read). Streams
+/// line by line instead of loading the session: a listing only needs a
 /// label, and long or compacted histories should not make `--session-list`
 /// deserialize every event ever appended.
-async fn first_prompt_in_log(path : String) -> String? {
-  let file = @fs.open(path, mode=ReadOnly)
+async fn first_prompt_in_log(path : String) -> String {
+  let file = @fs.open(path, mode=ReadOnly) catch { _ => return "" }
   defer file.close()
   // The first line is the session header; the prompt scan starts after it.
-  let _ = file.read_until("\n")
+  let _ = file.read_until("\n") catch { _ => return "" }
   for _ in 0..<first_prompt_scan_limit {
-    let next = file.read_until("\n")
+    let next = file.read_until("\n") catch { _ => return "" }
     guard next is Some(line) else { break }
     if line.is_blank() {
       continue
     }
-    let event = @json.parse(line)
-    if event
-      is {
-        "item": { "kind": "user", "payload": { "content": content, .. }, .. },
-        ..
-      } {
-      return Some(listing_content_text(content))
-    } else {
-      // Preserve the scan's stopping rule for malformed non-user events.
-      let _ : @agent_session.SessionEvent = @json.from_json(event)
+    let event : @agent_session.SessionEvent = @json.from_json(@json.parse(line)) catch {
+      _ => return ""
+    }
+    if event.item() is User(message) {
+      let content = message.content()
+      let text = content.text()
+      return if text.is_blank() && !content.is_text_only() {
+        "[Image]"
+      } else {
+        text
+      }
     }
   }
-  None
-}
-
-///|
-/// A picker needs the text and whether an image is present, never its bytes.
-/// Full session loading owns Base64 decoding and image validation. Doing that
-/// work here made every title search decode and re-encode every first-turn
-/// attachment, even though none of those bytes contribute to the title.
-fn listing_content_text(content : Json) -> String raise {
-  if content is String(text) {
-    return text
-  }
-  guard content is Array(parts) else {
-    fail("expected content string or array")
-  }
-  let texts : Array[String] = []
-  let mut has_image = false
-  for part in parts {
-    match part {
-      { "type": "text", "text": String(text), .. } => texts.push(text)
-      { "type": "image", "media_type": String(_), "data": String(_), .. } =>
-        has_image = true
-      _ => fail("invalid content part")
-    }
-  }
-  let text = texts.join("")
-  if text.is_blank() && has_image {
-    "[Image]"
-  } else {
-    text
-  }
+  ""
 }
 
 ///|
@@ -759,26 +728,24 @@ fn[T] stamped_newest_first(
 ///|
 /// List sessions with picker-friendly metadata, most recently active first.
 ///
-/// This reads timestamps and explicit titles without opening transcripts.
-/// Prompt text is read on demand by `SessionListing::first_prompt`. Listing
-/// does not require loadability.
+/// This scans each session directory for timestamps and a first prompt label,
+/// but it does not replay whole histories and does not require loadability.
 /// Damaged directories remain visible with `last_active_unix_seconds=None` and
-/// a failing `first_prompt()`, ordered after timestamped rows. Use `latest`
-/// when the caller needs the newest session that can actually be loaded.
+/// `first_prompt=""`, ordered after timestamped rows. Use `latest` when the
+/// caller needs the newest session that can actually be loaded.
 pub async fn SessionStore::listings(
   self : SessionStore,
 ) -> Array[SessionListing] {
   let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
-  let ids = self.list()
-  for id in ids {
+  for id in self.list() {
     let path = self.session_file_path(id) catch { _ => continue }
     let stamp = @fs.mtime(path) catch {
       _ => {
         unreadable.push({
           id,
           last_active_unix_seconds: None,
-          session_file: path,
+          first_prompt: "",
           title: self.title(id),
         })
         continue
@@ -790,7 +757,7 @@ pub async fn SessionStore::listings(
         {
           id,
           last_active_unix_seconds: Some(seconds),
-          session_file: path,
+          first_prompt: first_prompt_in_log(path),
           title: self.title(id),
         },
         seconds,

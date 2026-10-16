@@ -48,30 +48,48 @@ async fn session_group(
     let store = @store.SessionStore(native_root)
     let cache = listing_prompt_caches.get_or_init(native_root, () => Map([]))
     let paths : Set[String] = Set([])
-    let entries : Array[@protocol.SessionListEntry] = [
-      for listing in store.listings() => {
-        let path = store.session_file(listing.id())
-        paths.add(path)
-        let stamp = Some(@fs.mtime(path)) catch { _ => None }
-        let title = if listing.title() is Some(title) {
-          title
-        } else {
-          // A damaged transcript must not hide the rest of the sidebar.
-          try cached_listing_prompt(cache, listing, path, stamp) catch {
-            _ => ""
-          } noraise {
-            prompt => listing_prompt_title(prompt.unwrap_or(""))
-          }
+    let entries : Array[(@protocol.SessionListEntry, Int64, Int32)] = []
+    let unstamped : Array[@protocol.SessionListEntry] = []
+    for id in store.list() {
+      let path = store.session_file(id) catch { _ => continue }
+      paths.add(path)
+      let stamp = Some(@fs.mtime(path)) catch { _ => None }
+      let title = if store.title(id) is Some(title) {
+        title
+      } else {
+        // A damaged transcript must not hide the rest of the sidebar.
+        try cached_listing_prompt(cache, path, stamp) catch {
+          _ => ""
+        } noraise {
+          prompt => listing_prompt_title(prompt.unwrap_or(""))
         }
-        let updated_at_ms = stamp.map(stamp => {
-          let (seconds, nanoseconds) = stamp
-          (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double()
-        })
-        { id: listing.id().value(), title: Some(title), updated_at_ms, }
       }
-    ]
+      let updated_at_ms = stamp.map(stamp => {
+        let (seconds, nanoseconds) = stamp
+        (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double()
+      })
+      let entry : @protocol.SessionListEntry = {
+        id: id.value(),
+        title: Some(title),
+        updated_at_ms,
+      }
+      if stamp is Some((seconds, nanos)) {
+        entries.push((entry, seconds, nanos))
+      } else {
+        unstamped.push(entry)
+      }
+    }
     cache.retain((path, _) => paths.contains(path))
-    entries
+    // Match store listings: newest first with full timestamp precision;
+    // directories without readable timestamps remain visible at the end.
+    entries.sort_by((a, b) => {
+      if a.1 != b.1 {
+        b.1.compare(a.1)
+      } else {
+        b.2.compare(a.2)
+      }
+    })
+    [ for entry in entries => entry.0 ]..append(unstamped)
   } catch {
     error => return failed("session list failed: \{error}")
   }
@@ -101,11 +119,10 @@ priv struct CachedListingPrompt {
 
 ///|
 /// Reuse successful prompt reads only while both file timestamps match.
-/// Title sidecars are read by listings on every call, independently of this
+/// Title sidecars are read on every call, independently of this
 /// cache. ctime also detects rewrites that preserve the original mtime.
 async fn cached_listing_prompt(
   cache : Map[String, CachedListingPrompt],
-  listing : @store.SessionListing,
   path : String,
   mtime : (Int64, Int32)?,
 ) -> String? {
@@ -118,7 +135,7 @@ async fn cached_listing_prompt(
     return Some(cached.text)
   }
   cache.remove(path)
-  let text = listing.first_prompt()
+  let text = @session_preview.read_first_prompt(path)
   // Absence and errors are never cached. Empty text is a successful result.
   if text is Some(text) && mtime is Some(mtime) && ctime is Some(ctime) {
     let unchanged = try

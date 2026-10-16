@@ -13,7 +13,7 @@ import {
 
 // Types and methods
 type SessionListing derive(@debug.Debug)
-pub async fn SessionListing::first_prompt(Self) -> String?
+pub fn SessionListing::first_prompt(Self) -> String
 pub fn SessionListing::id(Self) -> @agent_session.SessionId
 pub fn SessionListing::last_active_unix_seconds(Self) -> Int64?
 pub fn SessionListing::title(Self) -> String?
