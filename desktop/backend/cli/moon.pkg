@@ -1,0 +1,33 @@
+import {
+  "moonbitlang/async/http",
+  "openseek_desktop/backend/moonbit",
+  "openseek_desktop/backend/host_client",
+  "moonbitlang/async/process",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "openseek_desktop/backend/internal/journal",
+  "openseek_desktop/backend/internal/workspaces",
+  "openseek_desktop/backend/api" @backend_api,
+  "openseek_desktop/backend/codex",
+  "openseek_desktop/backend/host",
+  "moonbitlang/async/socket",
+  "openseek_desktop/backend/runtime",
+  "openseek_desktop/backend/remote" @transport,
+  "openseek_desktop/backend/pathx",
+  "openseek_desktop/backend/internal/home",
+  "openseek_desktop/backend/env",
+  "openseek_desktop/backend/uuid",
+  "openseek_desktop/backend/processx",
+  "moonbitlang/openseek_protocol/host_control",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/websocket",
+  "moonbitlang/async/signal",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/argparse",
+}
+
+supported_targets = "+native+wasm"
+
+warnings = "-missing_doc+test_unqualified_package"

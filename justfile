@@ -38,7 +38,7 @@ inspect *args:
     moon run inspect -- {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
-test: test-moon test-cram test-turn-finish test-workflows
+test: test-host-server test-moon test-cram test-turn-finish test-workflows
 
 # Run the offline CLI documentation tests (Git Bash on Windows).
 test-cram:
@@ -99,3 +99,7 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     moon run tests/integration/workflows
+
+# Working-host CLI and SSH connection lifecycle.
+test-host-server:
+    node scripts/test-host-server.mjs

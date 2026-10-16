@@ -1,0 +1,19 @@
+import {
+  "moonbitlang/async/http",
+  "moonbitlang/core/env",
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/async/io",
+  "moonbitlang/async/socket",
+  "moonbitlang/async/websocket",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "openseek_desktop/backend/uuid",
+  "openseek_desktop/backend/internal/ssh_shell",
+  "openseek_desktop/backend/remote" @transport,
+  "moonbitlang/openseek_protocol/host_control",
+}
+
+supported_targets = "+native+wasm"
+
+warnings = "-missing_doc+test_unqualified_package"

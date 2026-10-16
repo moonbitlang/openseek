@@ -22,6 +22,7 @@ pub async fn dispatch() -> Unit {
     @options.export_retry_overrides(m)
   }
   match name {
+    "app-server" => @host_cli.run(m)
     "setup" => @installation.setup()
     "run" => @run.run_task_command(m)
     "serve" => @serve.run_serve_command(m)

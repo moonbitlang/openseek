@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/cli"
+
+import {
+  "moonbitlang/core/argparse",
+}
+
+// Values
+pub fn command() -> @argparse.Command
+
+pub async fn run(@argparse.Matches) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
