@@ -324,8 +324,10 @@ class Build {
       await cp(host, expected);
       return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
     }
-    const warning = this.command === "windows" ? ["--warn-list", "-20"] : [];
-    await this.commandRun("moon", ["build", ".", "--target", "native", ...warning, ...release], { cwd: this.app });
+    // Proton package builds the Windows app with its icon resources below.
+    if (this.command !== "windows") {
+      await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.app });
+    }
     await this.commandRun("moon", ["build", ".", "--target", "native", ...release], { cwd: this.repo });
     return join(this.repo, `_build/native/${profile}/build/moonbitlang/openseek/openseek.exe`);
   }
