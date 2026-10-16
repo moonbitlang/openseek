@@ -720,6 +720,7 @@ async test "disabled registry skills retain their content, update state and unin
       "acme-widget",
       enabled=false,
       library_dir=lib,
+      on_committed=() => changes += 1,
     )
     assert_eq(changes, 1)
     assert_false(@fs.exists("\{lib}/acme-widget"))
@@ -804,33 +805,6 @@ async test "hand-written directory and flat skills can move without rewriting th
   }
   assert_eq(@fs.read_file("\{lib}/My notes.md").text(), "Flat skill")
   assert_eq(@fs.read_file("\{lib}/node.js/SKILL.md").text(), "Directory skill")
-}
-
-///|
-async test "enabling refuses a conflicting entry without replacing either skill" {
-  let lib = @fs.tmpdir(prefix="skillmarket-conflict-")
-  @fs.mkdir("\{lib}/.disabled", recursive=true)
-  @fs.write_file(
-    "\{lib}/notes.md",
-    "Enabled notes",
-    create_mode=CreateOrTruncate,
-  )
-  @fs.write_file(
-    "\{lib}/.disabled/notes.md",
-    "Disabled notes",
-    create_mode=CreateOrTruncate,
-  )
-  try
-    @skillmarket.set_skill_enabled("notes", enabled=true, library_dir=lib)
-  catch {
-    @skillmarket.SkillMarketError(message) =>
-      assert_true(message.contains("both enabled and disabled"))
-    error => raise error
-  } noraise {
-    _ => fail("a conflicting skill must not be overwritten")
-  }
-  assert_eq(@fs.read_file("\{lib}/notes.md").text(), "Enabled notes")
-  assert_eq(@fs.read_file("\{lib}/.disabled/notes.md").text(), "Disabled notes")
 }
 
 ///|

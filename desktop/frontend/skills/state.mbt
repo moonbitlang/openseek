@@ -289,7 +289,14 @@ pub fn State::sync_library(
       Installed(current)
     }
   }
-  guard current != target else { return (@cmd.none, self) }
+  let document_changed = match (target, current) {
+    (Installed(previous), Installed(current)) =>
+      { ..previous, enabled: current.enabled, } != current
+    _ => current != target
+  }
+  // Enablement comes from the live input. Keep the document snapshot so an
+  // outstanding read can still settle against the target it was issued for.
+  guard document_changed else { return (@cmd.none, self) }
   let request = preview_request_id(self.preview) + 1
   (
     fetch_content(emit, input.channel, request, current),
@@ -449,16 +456,20 @@ pub fn State::handle(
         is Some(item) else {
         return (@cmd.none, self, None)
       }
+      let payload : @protocol.SetSkillEnabledPayload = {
+        id,
+        enabled: !item.enabled,
+      }
       let action = SettingEnabled(
         source=if item.source.is_empty() { item.name } else { item.source },
         id~,
-        enabled=!item.enabled,
+        enabled=payload.enabled,
       )
       self.start_action(
         input.channel,
         PendingTarget::LibraryEntry(id),
         action,
-        set_enabled(emit, input.channel, item, action),
+        set_enabled(emit, input.channel, payload, action),
       )
     }
     Install(item) | Update(item) => {

@@ -230,7 +230,7 @@ fn uninstall(
 fn set_enabled(
   emit : @cmd.Emit[Msg],
   channel : @interop.ChannelId,
-  item : InstalledItem,
+  payload : @protocol.SetSkillEnabledPayload,
   action : PendingSkillAction,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
@@ -238,7 +238,7 @@ fn set_enabled(
       let reply = @interop.bridge_request(
         channel,
         @commands.skills_set_enabled,
-        { id: item.id, enabled: !item.enabled, },
+        payload,
       ) catch {
         error => {
           scheduler.add(

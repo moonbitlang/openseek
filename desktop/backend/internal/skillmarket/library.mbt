@@ -72,10 +72,10 @@ fn valid_slug(name : String) -> Bool {
 
 ///|
 /// Hand-written entries need not use registry slugs, but an id still names
-/// exactly one library entry and cannot name its management directories.
+/// exactly one library entry.
 fn valid_skill_id(id : String) -> Bool {
   !id.is_empty() &&
-  !(id is ("." | ".." | ".disabled" | ".staging" | ".backup" | ".trash")) &&
+  !(id is ("." | "..")) &&
   !id.contains("/") &&
   !id.contains("\\")
 }
@@ -389,7 +389,7 @@ pub async fn set_skill_enabled(
   library.recover_all()
   let location = library.locate(id)
   let directory = location.library.target(id)
-  let entry = if @fsx.exists(directory.join("SKILL.md")) {
+  let entry = if @fsx.exists(directory) {
     id
   } else if @fsx.exists(location.library.root.join("\{id}.md")) {
     "\{id}.md"

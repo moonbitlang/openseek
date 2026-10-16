@@ -276,9 +276,12 @@ test('skill enablement comes from the host and survives list/detail navigation a
   const app = new SkillsHarness(page, true);
   await app.openDetails();
   const toggle = page.getByRole('switch');
+  const contentReads = app.requests.filter(r => r.method === 'skills.installed_content').length;
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
+  expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(contentReads);
   expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
     .toEqual([{ id: installed.id, enabled: false }]);
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -288,7 +291,32 @@ test('skill enablement comes from the host and survives list/detail navigation a
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  expect(app.installedSkills[0].enabled).toBe(true);
+  expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
+    .toEqual([{ id: installed.id, enabled: false }, { id: installed.id, enabled: true }]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('enablement changes preserve an in-flight preview request', async ({ page }) => {
+  const app = new SkillsHarness(page, true);
+  const replyFor = app.replyFor.bind(app);
+  let release;
+  const content = new Promise(resolve => { release = resolve; });
+  app.replyFor = request => request.method === 'skills.installed_content'
+    ? content.then(() => replyFor(request))
+    : replyFor(request);
+  await app.install();
+  await app.goto();
+  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await page.getByRole('button', { name: installed.name, exact: true }).click();
+  const toggle = page.getByRole('switch');
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByRole('button', { name: 'Copy SKILL.md', exact: true })).toHaveCount(0);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  release();
+  await expect(page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
+  await expect(page.getByRole('button', { name: 'Copy SKILL.md', exact: true })).toBeVisible();
+  expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(1);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -322,6 +350,7 @@ for (const enabled of [true, false]) {
       ? update.then(() => replyFor(request))
       : replyFor(request);
     await app.openDetails();
+    const contentReads = app.requests.filter(r => r.method === 'skills.installed_content').length;
     await page.getByRole('button', { name: 'Manage skill', exact: true }).click();
     await page.getByRole('menuitem', { name: 'Update to 0.1.1', exact: true }).click();
     const management = page.locator('.skill-detail-action');
@@ -331,11 +360,15 @@ for (const enabled of [true, false]) {
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', String(!enabled));
     await expect(management).toBeDisabled();
+    expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(contentReads);
+    expect(app.requests.filter(r => r.method === 'skills.set_enabled').map(r => r.params))
+      .toEqual([{ id: installed.id, enabled: !enabled }]);
     release();
     await expect(management).toBeEnabled();
     await expect(page.locator('.skill-detail-meta')).toHaveText('Yoorkin/wayfinder@0.1.1');
+    await expect.poll(() => app.requests.filter(r => r.method === 'skills.installed_content').length)
+      .toBe(contentReads + 1);
     await expect(toggle).toHaveAttribute('aria-checked', String(!enabled));
-    expect(app.installedSkills[0].enabled).toBe(!enabled);
     expect(app.pageErrors).toEqual([]);
   });
 }

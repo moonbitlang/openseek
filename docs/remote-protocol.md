@@ -709,8 +709,7 @@ The existing install operation replaces the complete directory and provenance
 through its recoverable transaction in the entry's current enabled or disabled
 directory. The location is resolved after downloading, so toggling while an
 update is in flight preserves the latest enablement state. New installations
-default to enabled. Enabling refuses an occupied destination instead of
-overwriting another entry. These operations do not refresh saved session prompts.
+default to enabled. These operations do not refresh saved session prompts.
 
 Notification:
 
