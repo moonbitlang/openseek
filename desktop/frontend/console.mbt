@@ -956,6 +956,7 @@ test "account changes retire focused host mirrors before the new roster answers"
         description: "",
         source: "old/source@1.0.0",
         registry: None,
+        enabled: true,
       },
     ],
     codex,
