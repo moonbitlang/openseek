@@ -1,29 +1,7 @@
 ///|
-priv enum DraftAnswer {
-  Chosen(String)
-  Written(String)
-} derive(Debug, Eq)
-
-///|
-fn DraftAnswer::text(self : DraftAnswer) -> String {
-  match self {
-    Chosen(text) | Written(text) => text
-  }
-}
-
-///|
-priv enum Submission {
-  Editing
-  Sending
-} derive(Debug, Eq)
-
-///|
 priv struct Card {
   request : @protocol.PendingUserQuestion
-  answers : @sorted_map.SortedMap[String, DraftAnswer]
-  current : Int32
-  submission : Submission
-  error : String?
+  draft : @question_card.Model
 } derive(Debug, Eq)
 
 ///|
@@ -40,10 +18,7 @@ pub fn Model::Model() -> Model {
 ///|
 pub(all) enum Msg {
   Snapshot(@protocol.UserQuestionSnapshot)
-  Edit(request~ : String, question~ : String, text~ : String)
-  Select(request~ : String, question~ : String, option~ : String)
-  Navigate(request~ : String, index~ : Int32)
-  Submit(request~ : String, skip~ : Bool)
+  Interact(request~ : String, @question_card.Action)
   Failed(request~ : String, error~ : String)
 } derive(Debug, Eq)
 
@@ -52,7 +27,7 @@ pub(all) enum Msg {
 pub fn Model::reconnecting(self : Model) -> Model {
   {
     generation: None,
-    cards: self.cards.map(card => { ..card, submission: Editing, }),
+    cards: self.cards.map(card => { ..card, draft: card.draft.reconnecting(), }),
   }
 }
 
@@ -71,51 +46,21 @@ fn Model::snapshot(
         is Some(card) {
         card
       } else {
-        {
-          request,
-          answers: @sorted_map.SortedMap([]),
-          current: 0,
-          submission: Editing,
-          error: None,
-        }
+        { request, draft: @question_card.Model(), }
       }
     }),
   }
 }
 
 ///|
-fn Card::complete(self : Card) -> Bool {
-  self.request.questions.all(question => {
-    self.answers
-    .get(question.id)
-    .map_or(false, answer => !answer.text().is_blank())
+fn Card::questions(self : Card) -> Array[@question_card.Question] {
+  self.request.questions.map(question => {
+    id: question.id,
+    title: question.title,
+    options: question.options
+    .unwrap_or([])
+    .map(label => { label, description: "", }),
   })
-}
-
-///|
-fn Model::edit(
-  self : Model,
-  request : String,
-  question : String,
-  draft : DraftAnswer,
-) -> Model {
-  {
-    ..self,
-    cards: self.cards.map(card => {
-      let valid = card.request.questions.any(item => {
-        item.id == question &&
-        (match draft {
-          Written(_) => true
-          Chosen(option) => item.options.unwrap_or([]).contains(option)
-        })
-      })
-      if card.request.id == request && card.submission is Editing && valid {
-        { ..card, answers: card.answers.add(question, draft), error: None, }
-      } else {
-        card
-      }
-    }),
-  }
 }
 
 ///|
@@ -127,43 +72,13 @@ pub fn Model::update(
 ) -> (@cmd.Cmd, Model) {
   match msg {
     Snapshot(snapshot) => (@cmd.none, self.snapshot(snapshot))
-    Edit(request~, question~, text~) =>
-      (@cmd.none, self.edit(request, question, Written(text)))
-    Select(request~, question~, option~) =>
-      (@cmd.none, self.edit(request, question, Chosen(option)))
-    Navigate(request~, index~) =>
-      (
-        @cmd.none,
-        {
-          ..self,
-          cards: self.cards.map(card => {
-            if card.request.id == request &&
-              card.submission is Editing &&
-              index >= 0 &&
-              index < card.request.questions.length() {
-              { ..card, current: index, }
-            } else {
-              card
-            }
-          }),
-        },
-      )
-    Submit(request~, skip~) => {
+    Interact(request~, Submit(skip~)) => {
       guard self.cards.iter().find_first(card => card.request.id == request)
         is Some(card) &&
-        card.submission is Editing &&
-        (skip || card.complete()) else {
+        card.draft.can_submit(card.questions(), skip~) else {
         return (@cmd.none, self)
       }
-      let answers = if skip {
-        None
-      } else {
-        Some(
-          Map::from_iter(
-            card.answers.iter().map(pair => (pair.0, pair.1.text())),
-          ),
-        )
-      }
+      let answers = if skip { None } else { Some(card.draft.answers()) }
       let payload : @protocol.UserQuestionAnswer = {
         id: request,
         session: card.request.session,
@@ -175,7 +90,10 @@ pub fn Model::update(
           ..self,
           cards: self.cards.map(card => {
             if card.request.id == request {
-              { ..card, submission: Sending, error: None, }
+              {
+                ..card,
+                draft: card.draft.update(card.questions(), Submit(skip~)),
+              }
             } else {
               card
             }
@@ -183,6 +101,20 @@ pub fn Model::update(
         },
       )
     }
+    Interact(request~, action) =>
+      (
+        @cmd.none,
+        {
+          ..self,
+          cards: self.cards.map(card => {
+            if card.request.id == request && !card.draft.is_sending() {
+              { ..card, draft: card.draft.update(card.questions(), action), }
+            } else {
+              card
+            }
+          }),
+        },
+      )
     Failed(request~, error~) =>
       (
         @cmd.none,
@@ -190,7 +122,7 @@ pub fn Model::update(
           ..self,
           cards: self.cards.map(card => {
             if card.request.id == request {
-              { ..card, submission: Editing, error: Some(error), }
+              { ..card, draft: card.draft.failed(error), }
             } else {
               card
             }

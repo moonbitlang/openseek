@@ -1047,16 +1047,16 @@ fn State::respond(
   guard selected is Some(request) && request.response(decision) is Some(result) else {
     return @cmd.none
   }
-  CodexApprovalReply.request(
-    dispatch,
-    channel,
-    @commands.codex_server_request_respond,
-    {
-      request_id: request.request_id,
-      response_token: request.response_token,
-      result,
-    },
-  )
+  let reply = if request.method_ == "item/tool/requestUserInput" {
+    CodexQuestionReply(request.response_token)
+  } else {
+    CodexApprovalReply
+  }
+  reply.request(dispatch, channel, @commands.codex_server_request_respond, {
+    request_id: request.request_id,
+    response_token: request.response_token,
+    result,
+  })
 }
 
 ///|

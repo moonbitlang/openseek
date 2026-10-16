@@ -249,11 +249,6 @@ priv struct CodexGitStatus {
 } derive(Eq)
 
 ///|
-priv struct CodexQuestion {
-  id : String
-}
-
-///|
 priv struct CodexPendingRequest {
   response_token : String
   expanded : Bool
@@ -264,8 +259,8 @@ priv struct CodexPendingRequest {
   thread_id : String
   method_ : String
   params : Json
-  // `item/tool/requestUserInput` keeps one answer per question. MCP form
-  // elicitation uses the reserved `__content` entry as its JSON editor.
+  question_draft : @question_card.Model
+  // MCP form elicitation uses the reserved `__content` entry as its JSON editor.
   answers : Map[String, String]
 } derive(Eq)
 
@@ -341,6 +336,7 @@ priv enum CodexReplyKind {
   CodexCancelLoginReply(String)
   CodexLogoutReply
   CodexApprovalReply
+  CodexQuestionReply(String)
 }
 
 ///|
@@ -1033,7 +1029,8 @@ fn CodexReplyKind::foreground(self : CodexReplyKind) -> CodexForeground? {
     | CodexModelsReply
     | CodexThreadsReply(_)
     | CodexInterruptReply
-    | CodexApprovalReply => None
+    | CodexApprovalReply
+    | CodexQuestionReply(_) => None
   }
 }
 
@@ -1796,7 +1793,12 @@ fn State::with_requests(self : State, value : Json) -> State {
     pending_requests.push(
       match existing {
         Some(existing) =>
-          { ..decoded, answers: existing.answers, expanded: existing.expanded, }
+          {
+            ..decoded,
+            answers: existing.answers,
+            expanded: existing.expanded,
+            question_draft: existing.question_draft,
+          }
         None => decoded
       },
     )
@@ -2472,6 +2474,7 @@ fn CodexPendingRequest::decode(
     params,
     answers: Map([]),
     expanded: false,
+    question_draft: @question_card.Model(),
   })
 }
 
@@ -2517,20 +2520,84 @@ fn State::with_request_answer(
 ///|
 fn CodexPendingRequest::questions(
   self : CodexPendingRequest,
-) -> Array[CodexQuestion] {
-  guard self.params is Object(fields) &&
+) -> Array[@question_card.Question] {
+  guard self.method_ == "item/tool/requestUserInput" &&
+    self.params is Object(fields) &&
     fields.get("questions") is Some(Array(values)) else {
     return []
   }
-  let questions : Array[CodexQuestion] = []
+  let questions : Array[@question_card.Question] = []
   for value in values {
     guard value is Object(question) &&
       @jsonx.json_text(question, "id") is Some(id) else {
       continue
     }
-    questions.push({ id, })
+    let options : Array[@question_card.Choice] = []
+    if question.get("options") is Some(Array(values)) {
+      for value in values {
+        if value is Object(option) &&
+          @jsonx.json_text(option, "label") is Some(label) {
+          options.push({
+            label,
+            description: @jsonx.json_text(option, "description").unwrap_or(""),
+          })
+        }
+      }
+    }
+    questions.push({
+      id,
+      title: @jsonx.json_text(question, "question").unwrap_or(
+        @jsonx.json_text(question, "header").unwrap_or(""),
+      ),
+      options,
+    })
   }
   questions
+}
+
+///|
+fn State::with_question_action(
+  self : State,
+  request_key : String,
+  action : @question_card.Action,
+) -> State {
+  {
+    ..self,
+    pending_requests: self.pending_requests.map(request => {
+      if request.response_token == request_key &&
+        request.method_ == "item/tool/requestUserInput" &&
+        self.active_thread() is Some(active) &&
+        request.thread_id == active.id {
+        {
+          ..request,
+          question_draft: request.question_draft.update(
+            request.questions(),
+            action,
+          ),
+        }
+      } else {
+        request
+      }
+    }),
+  }
+}
+
+///|
+fn State::with_question_error(
+  self : State,
+  request_key : String,
+  error : String,
+) -> State {
+  {
+    ..self,
+    pending_requests: self.pending_requests.map(request => {
+      if request.response_token == request_key {
+        { ..request, question_draft: request.question_draft.failed(error), }
+      } else {
+        request
+      }
+    }),
+  }
 }
 
 ///|
@@ -2560,9 +2627,14 @@ fn CodexPendingRequest::response(
       }
     }
     "item/tool/requestUserInput" => {
+      // Closing the whole card returns an unanswered batch in the Codex protocol.
+      if decision == Json("cancel") {
+        return Some({ "answers": {} })
+      }
+      let draft = self.question_draft.answers()
       let answers : Map[String, Json] = Map([])
       for question in self.questions() {
-        let text = self.answers.get(question.id).unwrap_or("").trim()
+        let text = draft.get(question.id).unwrap_or("").trim()
         if text.is_empty() {
           return None
         }
@@ -3111,9 +3183,18 @@ test "Codex request replies preserve structured values" {
         },
       ],
     },
-    answers: { "scope": "Small" },
+    answers: {},
     expanded: false,
+    question_draft: @question_card.Model(),
   }
+  let request = {
+    ..request,
+    question_draft: request.question_draft.update(
+      request.questions(),
+      Select(question="scope", option="Small"),
+    ),
+  }
+  assert_eq(request.response(Json("cancel")), Some({ "answers": {} }))
   assert_eq(
     request.response(Json("accept")),
     Some({ "answers": { "scope": { "answers": ["Small"] } } }),
@@ -3126,6 +3207,7 @@ test "Codex request replies preserve structured values" {
     params: { "threadId": "thread-1" },
     answers: {},
     expanded: false,
+    question_draft: @question_card.Model(),
   }
   let decision : Json = {
     "acceptWithExecpolicyAmendment": {
@@ -3597,9 +3679,15 @@ test "Codex same-id replacement does not inherit answers, disclosure, or old car
       params,
       1,
     )
-    .with_request_answer("old-token", "scope", "old answer")
+    .with_question_action(
+      "old-token",
+      Edit(question="scope", text="old answer"),
+    )
     .toggle_request("old-token")
-  assert_eq(old.pending_requests[0].answers.get("scope"), Some("old answer"))
+  assert_eq(
+    old.pending_requests[0].question_draft.answers().get("scope"),
+    Some("old answer"),
+  )
   let snapshot = old.with_requests({
     "generation": 1,
     "data": [
@@ -3612,7 +3700,7 @@ test "Codex same-id replacement does not inherit answers, disclosure, or old car
     ],
   })
   assert_eq(
-    snapshot.pending_requests[0].answers.get("scope"),
+    snapshot.pending_requests[0].question_draft.answers().get("scope"),
     Some("old answer"),
   )
   assert_true(snapshot.pending_requests[0].expanded)
@@ -3624,10 +3712,10 @@ test "Codex same-id replacement does not inherit answers, disclosure, or old car
       params,
       3,
     )
-    .with_request_answer("old-token", "scope", "late edit")
+    .with_question_action("old-token", Edit(question="scope", text="late edit"))
   assert_eq(fresh.pending_requests.length(), 1)
   assert_eq(fresh.pending_requests[0].response_token, "new-token")
-  assert_true(fresh.pending_requests[0].answers.is_empty())
+  assert_true(fresh.pending_requests[0].question_draft.answers().is_empty())
   assert_false(fresh.pending_requests[0].expanded)
   let recovered = old.with_requests({
     "generation": 3,
@@ -3641,7 +3729,7 @@ test "Codex same-id replacement does not inherit answers, disclosure, or old car
     ],
   })
   assert_eq(recovered.pending_requests[0].response_token, "new-token")
-  assert_true(recovered.pending_requests[0].answers.is_empty())
+  assert_true(recovered.pending_requests[0].question_draft.answers().is_empty())
   assert_false(recovered.pending_requests[0].expanded)
   let resolved = recovered.with_notification(
     "serverRequest/resolved",

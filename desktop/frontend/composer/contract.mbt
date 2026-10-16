@@ -124,6 +124,9 @@ pub(all) struct QueuedInput {
 /// plain state: callers cannot inject DOM or commands, and every answer comes
 /// back through an identity-scoped composer Action.
 pub(all) struct CodexRequestInput {
+  questions : Array[@question_card.Question]
+  question_draft : @question_card.Model
+  connected : Bool
   request_key : String
   expanded : Bool
   method_ : String
@@ -311,6 +314,11 @@ pub(all) enum Action {
     question_id~ : String,
     answer~ : String
   )
+  CodexQuestionChanged(
+    identity~ : Identity,
+    request_key~ : String,
+    action~ : @question_card.Action
+  )
   CodexRequestResponded(
     identity~ : Identity,
     request_key~ : String,
@@ -362,6 +370,7 @@ pub fn Action::identity(self : Action) -> Identity {
     | ApprovalAnswered(identity~, ..)
     | CodexRequestToggled(identity~, ..)
     | CodexRequestAnswerChanged(identity~, ..)
+    | CodexQuestionChanged(identity~, ..)
     | CodexRequestResponded(identity~, ..)
     | PermissionMenuToggled(identity~)
     | PermissionMenuDismissed(identity~)

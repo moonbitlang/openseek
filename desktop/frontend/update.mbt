@@ -2446,6 +2446,7 @@ fn update_msg(
         | @composer.ApprovalAnswered(..)
         | @composer.CodexRequestToggled(..)
         | @composer.CodexRequestAnswerChanged(..)
+        | @composer.CodexQuestionChanged(..)
         | @composer.CodexRequestResponded(..)
         | @composer.PermissionMenuToggled(..)
         | @composer.PermissionMenuDismissed(..)
@@ -2596,6 +2597,7 @@ fn update_msg(
             | @composer.PermissionSelected(..)
             | @composer.CodexRequestToggled(..)
             | @composer.CodexRequestAnswerChanged(..)
+            | @composer.CodexQuestionChanged(..)
             | @composer.CodexRequestResponded(..) => (@cmd.none, model)
             _ => (@cmd.none, model)
           }

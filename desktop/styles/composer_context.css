@@ -95,7 +95,8 @@
 }
 
 .composer-context :is(.composer-notice-btn, .composer-approval-action,
-  .composer-goal-action, .codex-request-action) {
+  .composer-goal-action, .codex-request-action),
+.composer-context-action {
   min-height: 28px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
@@ -107,7 +108,8 @@
 }
 
 .composer-context :is(.composer-notice-btn, .composer-approval-action,
-  .composer-goal-action, .codex-request-action):hover:not(:disabled) {
+  .composer-goal-action, .codex-request-action):hover:not(:disabled),
+.composer-context-action:hover:not(:disabled) {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
@@ -290,16 +292,6 @@
   flex-shrink: 0;
 }
 
-.user-question-close {
-  display: flex;
-  padding: 4px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  background: transparent;
-  cursor: pointer;
-}
-
 .user-question-field {
   min-width: 0;
   padding: 0;
@@ -364,8 +356,7 @@
   font-size: var(--font-size-sm);
 }
 
-.user-question-option:hover:not(:disabled),
-.user-question-close:hover:not(:disabled) {
+.user-question-option:hover:not(:disabled) {
   background: var(--color-hover-subtle);
 }
 
@@ -374,7 +365,7 @@
 }
 
 .user-question-option.selected .user-question-number {
-  color: white;
+  color: var(--color-on-accent);
   background: var(--color-accent);
   border-color: var(--color-accent);
 }
@@ -412,27 +403,9 @@
   line-height: var(--line-height-normal);
 }
 
-.user-question-answer::placeholder {
-  color: var(--color-text-muted);
-}
-
 .user-question-actions {
   gap: 8px;
   flex-shrink: 0;
-}
-
-.user-question-actions button {
-  min-height: 28px;
-  padding: 3px 9px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-secondary);
-  font: inherit;
-  font-size: var(--font-size-sm);
-  box-shadow: 0 1px 2px #0000000a;
-  white-space: nowrap;
-  cursor: pointer;
 }
 
 .user-question-actions .user-question-submit {
@@ -440,19 +413,8 @@
   font-weight: 600;
 }
 
-.user-question-actions button:hover:not(:disabled) {
-  color: var(--color-text-primary);
-  background: var(--color-hover-subtle);
-}
-
-.user-question-card button:disabled {
-  opacity: .45;
-  cursor: default;
-}
-
-.user-question-card button:focus-visible,
-.user-question-answer:focus-visible {
-  outline: 2px solid var(--color-accent);
+.user-question-card button:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
 
@@ -494,20 +456,6 @@
   display: none;
 }
 
-.user-question-pagination button {
-  display: flex;
-  padding: 4px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
-  background: transparent;
-  cursor: pointer;
-}
-
-.user-question-pagination button:hover:not(:disabled) {
-  background: var(--color-hover-subtle);
-}
-
 .user-question-previous .icon {
   transform: rotate(90deg);
 }
@@ -522,4 +470,22 @@
   font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
+}
+
+/* The composer already owns the outer width and spacing for Codex requests. */
+.codex-pending .user-question-card {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.user-question-option-description {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+.user-question-option-description:empty {
+  display: none;
 }

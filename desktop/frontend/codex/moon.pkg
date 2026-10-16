@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/frontend/navigation",
+  "openseek_desktop/frontend/question_card",
   "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/core/json",

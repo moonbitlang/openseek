@@ -147,7 +147,7 @@ for (const [name, content, allow] of [
   });
 }
 
-test('Codex questions and approvals expand and retain their responses', async ({ page }, testInfo) => {
+test('Codex shares the question card while approvals retain their disclosure', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
     defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
@@ -171,16 +171,13 @@ test('Codex questions and approvals expand and retain their responses', async ({
       { label: 'Parser tests', description: 'Run only the parser suite' },
     ],
   }] });
-  const question = page.locator('.codex-request').first();
+  const question = page.locator('.user-question-card');
   await expect(question).toBeVisible();
-  await expect(question.getByRole('button', { name: /All tests/ })).toBeHidden();
-  await question.locator('summary').first().click();
+  await expect(question.locator('.user-question-option-description').first()).toHaveText('Run the complete suite');
   await question.getByRole('button', { name: /All tests/ }).click();
-  await expect(question.getByRole('button', { name: /All tests/ })).toHaveClass(/selected/);
-  await question.locator('summary').first().click();
-  await question.locator('summary').first().click();
-  await expect(question.getByRole('button', { name: /All tests/ })).toHaveClass(/selected/);
-  await question.getByRole('button', { name: 'Submit answers', exact: true }).click();
+  await expect(question.getByRole('button', { name: /All tests/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(question.locator('textarea')).toHaveValue('');
+  await question.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => app.requests.find(r => r.method === 'codex.server_request.respond')?.params)
     .toMatchObject({ response_token: 'question-1', result: { answers: { scope: { answers: ['All tests'] } } } });
   request('approval-2', 'item/commandExecution/requestApproval', { command: 'moon test', cwd: '/workspace', reason: 'Run the project tests' });

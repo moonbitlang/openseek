@@ -323,6 +323,9 @@ pub fn State::composer_input(
           method_: request.method_,
           params: request.params,
           answers: request.answers,
+          questions: request.questions(),
+          question_draft: request.question_draft,
+          connected: self.connection is CodexReady,
         })
       }
     }
@@ -575,6 +578,30 @@ fn State::apply_composer_action(
         channel,
         _ => @cmd.none,
       )
+    @composer.CodexQuestionChanged(request_key~, action~, ..) =>
+      if action is Submit(skip~) {
+        guard self.pending_requests
+          .iter()
+          .find_first(request => {
+            request.response_token == request_key &&
+            request.method_ == "item/tool/requestUserInput"
+          })
+          is Some(request) &&
+          request.question_draft.can_submit(request.questions(), skip~) else {
+          return (@cmd.none, self)
+        }
+        (
+          self.respond(
+            dispatch,
+            channel,
+            request_key,
+            Json(if skip { "cancel" } else { "accept" }),
+          ),
+          self.with_question_action(request_key, action),
+        )
+      } else {
+        (@cmd.none, self.with_question_action(request_key, action))
+      }
     @composer.CodexRequestResponded(request_key~, decision~, ..) =>
       update(dispatch, Respond(request_key~, decision~), self, channel, _ => {
         @cmd.none

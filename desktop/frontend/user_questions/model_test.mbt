@@ -29,29 +29,34 @@ test "all question updates are pure and stale snapshots cannot revive answered r
   let empty = @user_questions.Model()
   let pending = apply(empty, Snapshot(snapshot()))
   assert_false(empty == pending)
-  assert_eq(apply(pending, Submit(request="r", skip=false)), pending)
-  let edited = apply(pending, Edit(request="r", question="q", text="My answer"))
+  assert_eq(apply(pending, Interact(request="r", Submit(skip=false))), pending)
+  let edited = apply(
+    pending,
+    Interact(request="r", Edit(question="q", text="My answer")),
+  )
   assert_false(edited == pending)
   assert_eq(apply(edited, Snapshot(snapshot())), edited)
   assert_eq(
-    apply(edited, Edit(request="r", question="unknown", text="bad")),
+    apply(edited, Interact(request="r", Edit(question="unknown", text="bad"))),
     edited,
   )
-  let sending = apply(edited, Submit(request="r", skip=false))
+  let sending = apply(edited, Interact(request="r", Submit(skip=false)))
   assert_false(sending == edited)
   assert_eq(
-    apply(sending, Edit(request="r", question="q", text="late")),
+    apply(sending, Interact(request="r", Edit(question="q", text="late"))),
     sending,
   )
-  assert_eq(apply(sending, Submit(request="r", skip=false)), sending)
+  assert_eq(apply(sending, Interact(request="r", Submit(skip=false))), sending)
   let failed = apply(sending, Failed(request="r", error="Offline"))
   assert_false(failed == sending)
-  let retry = apply(failed, Submit(request="r", skip=false))
+  let retry = apply(failed, Interact(request="r", Submit(skip=false)))
   assert_eq(retry, sending)
   let resolved = apply(sending, Snapshot({ generation: 2, requests: [], }))
   assert_eq(apply(resolved, Snapshot(snapshot())), resolved)
   assert_eq(apply(resolved, Failed(request="r", error="late error")), resolved)
-  assert_false(apply(pending, Submit(request="r", skip=true)) == pending)
+  assert_false(
+    apply(pending, Interact(request="r", Submit(skip=true))) == pending,
+  )
   // A restarted host can reset its revision. Text drafts survive a reconnect
   // to the same host/request; a new host's empty snapshot clears the card.
   assert_eq(apply(edited.reconnecting(), Snapshot(snapshot())), edited)
@@ -77,31 +82,46 @@ test "question pages retain distinct choice and written drafts without mutating 
     ],
   }
   let initial = apply(@user_questions.Model(), Snapshot(multi))
-  assert_eq(apply(initial, Navigate(request="r", index=-1)), initial)
-  assert_eq(apply(initial, Navigate(request="r", index=2)), initial)
-  let second = apply(initial, Navigate(request="r", index=1))
+  assert_eq(apply(initial, Interact(request="r", Navigate(index=-1))), initial)
+  assert_eq(apply(initial, Interact(request="r", Navigate(index=2))), initial)
+  let second = apply(initial, Interact(request="r", Navigate(index=1)))
   assert_false(second == initial)
-  assert_eq(apply(second, Navigate(request="r", index=0)), initial)
+  assert_eq(apply(second, Interact(request="r", Navigate(index=0))), initial)
   assert_eq(apply(second.reconnecting(), Snapshot(multi)), second)
   assert_eq(
-    apply(initial, Select(request="r", question="q", option="invalid")),
+    apply(
+      initial,
+      Interact(request="r", Select(question="q", option="invalid")),
+    ),
     initial,
   )
-  let chosen = apply(initial, Select(request="r", question="q", option="A"))
-  let written = apply(initial, Edit(request="r", question="q", text="A"))
+  let chosen = apply(
+    initial,
+    Interact(request="r", Select(question="q", option="A")),
+  )
+  let written = apply(
+    initial,
+    Interact(request="r", Edit(question="q", text="A")),
+  )
   assert_false(chosen == written)
-  assert_eq(apply(chosen, Edit(request="r", question="q", text="A")), written)
   assert_eq(
-    apply(written, Select(request="r", question="q", option="A")),
+    apply(chosen, Interact(request="r", Edit(question="q", text="A"))),
+    written,
+  )
+  assert_eq(
+    apply(written, Interact(request="r", Select(question="q", option="A"))),
     chosen,
   )
-  assert_eq(apply(chosen, Submit(request="r", skip=false)), chosen)
-  let complete = apply(chosen, Edit(request="r", question="q2", text="Details"))
-  let sending = apply(complete, Submit(request="r", skip=false))
+  assert_eq(apply(chosen, Interact(request="r", Submit(skip=false))), chosen)
+  let complete = apply(
+    chosen,
+    Interact(request="r", Edit(question="q2", text="Details")),
+  )
+  let sending = apply(complete, Interact(request="r", Submit(skip=false)))
   assert_false(sending == complete)
-  assert_eq(apply(sending, Navigate(request="r", index=1)), sending)
+  assert_eq(apply(sending, Interact(request="r", Navigate(index=1))), sending)
   assert_eq(
-    apply(sending, Select(request="r", question="q", option="B")),
+    apply(sending, Interact(request="r", Select(question="q", option="B"))),
     sending,
   )
 }

@@ -7,6 +7,7 @@ import {
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/question_card",
   "openseek_desktop/protocol",
 }
 
@@ -27,10 +28,7 @@ pub fn Model::view(Self, String, @i18n.Locale, Bool, @cmd.Emit[Msg]) -> @html.Ht
 
 pub(all) enum Msg {
   Snapshot(@protocol.UserQuestionSnapshot)
-  Edit(request~ : String, question~ : String, text~ : String)
-  Select(request~ : String, question~ : String, option~ : String)
-  Navigate(request~ : String, index~ : Int)
-  Submit(request~ : String, skip~ : Bool)
+  Interact(request~ : String, @question_card.Action)
   Failed(request~ : String, error~ : String)
 } derive(Eq, @debug.Debug)
 pub fn Msg::equal(Self, Self) -> Bool

@@ -884,6 +884,13 @@
   background: var(--color-bg-subtle);
 }
 
+.icon-button.icon-button-compact {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+
 .send-button {
   border-color: transparent;
   background: var(--color-accent);
