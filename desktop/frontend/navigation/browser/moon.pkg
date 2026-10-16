@@ -1,0 +1,9 @@
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
+  "moonbit-community/rabbita/js",
+  "moonbitlang/core/json",
+  "openseek_desktop/frontend/navigation/browser_history",
+}
+
+supported_targets = "js"

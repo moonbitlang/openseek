@@ -423,6 +423,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
 ///|
 #warnings("-alert_unstable")
 fn main {
+  preserve_navigation_asset_base()
   // Proton installs the bridge synchronously when the page's JS context is
   // created, so this is a one-time read of the page's environment, not a
   // wait for something that may still arrive.
@@ -532,20 +533,18 @@ fn main {
             emit.map(url => ExternalLinkClicked(url)),
           ),
         )
-        // Rabbita captures ordinary clicks on its `@html.a` nodes on both
-        // hosts. Always handle their URL requests: Desktop uses its dock,
-        // while the browser console opens a new browser tab.
+        if !model.is_desktop &&
+          model.console.page_device is Some(_) &&
+          model.navigation_initial is Some(path) {
+          subs.push(
+            @navigation_browser.listen(
+              path,
+              emit.map(snapshot => Navigation(Browser(snapshot))),
+            ),
+          )
+        }
         subs.push(
-          @sub.on_url_request(
-            emit.map(request => {
-              ExternalLinkClicked(
-                match request {
-                  @url.Internal(url) => url.to_string()
-                  @url.External(url) => url
-                },
-              )
-            }),
-          ),
+          @sub.on_url_request(emit.map(request => Navigation(Link(request)))),
         )
         if model.file_panel.highlighted is Some(directory) {
           subs.push(
