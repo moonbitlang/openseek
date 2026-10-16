@@ -1490,6 +1490,7 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   await expect(stored).toHaveCount(0);
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
   await expect(page.getByText('This destination no longer exists or is no longer attached.')).toBeVisible();
+  await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
   await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
   expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
@@ -1574,6 +1575,7 @@ test('archiving a pending selection resolves the same destination as read only',
 
   await expect(page.getByRole('menu')).toHaveCount(0);
   await expect(page.getByText('Archived conversation · Read only')).toBeVisible();
+  await expect(page).toHaveURL(/\/chat\/session\/session-2$/);
   await expect(page.locator('#task')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

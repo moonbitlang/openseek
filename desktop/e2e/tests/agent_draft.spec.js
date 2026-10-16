@@ -39,7 +39,13 @@ test('one draft carries current text, file mentions and images through repeated 
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
 
+  const chatDraftPath = new URL(page.url()).pathname;
+  expect(chatDraftPath).toMatch(/\/chat\/draft\//);
+  const codexDraftPath = chatDraftPath.replace('/chat/draft/', '/codex/draft/');
+  const historyLength = await page.evaluate(() => history.length);
   await choose(page, 'Codex test');
+  await expect.poll(() => new URL(page.url()).pathname).toBe(codexDraftPath);
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(initialText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);
@@ -48,6 +54,8 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.pressSequentially(' Edited in Codex');
   const codexText = await task.inputValue();
   await choose(page, 'DS Pro');
+  await expect.poll(() => new URL(page.url()).pathname).toBe(chatDraftPath);
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
   await expect(task).toHaveValue(codexText);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await noDraftRows(page, initialRows);

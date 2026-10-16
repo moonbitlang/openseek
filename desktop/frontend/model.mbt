@@ -787,7 +787,7 @@ priv struct Conversation {
   // Only empty/non-empty transitions update this flag; the text itself stays
   // outside the root Model. It keeps a fresh conversation reachable when the
   // user switches away without putting every keystroke through root update.
-  // Once retained in navigation history, clearing its content keeps its identity.
+  // Once exposed in a draft URL, clearing its content keeps its identity.
   draft_addressed : Bool
   composer_draft_present : Bool
   // Where this conversation's run stands; see `RunPhase`. Replaces the old
@@ -1604,6 +1604,7 @@ priv struct Model {
   management_return : WorkScreen?
   // Destination identities and history; page data stays in its owning state.
   navigation : AppNavigation
+  navigation_initial : String?
   // Codex app-server has an independent durable thread/turn/item model. Keep
   // its page state beside the screen selector instead of folding it into an
   // OpenSeek Conversation, whose persistence and event protocol are different.
@@ -2739,6 +2740,8 @@ fn initial_model(desktop~ : Bool) -> Model {
   // `?workspace=` places that device's first conversation.
   let page_device = if desktop {
     Some(@interop.LocalDeviceId)
+  } else if navigation_device_from_location() is Some(device) {
+    Some(device)
   } else {
     @interop.page_query_param("device")
   }
@@ -2855,6 +2858,11 @@ fn initial_model(desktop~ : Bool) -> Model {
     screen: Chat,
     management_return: None,
     navigation: AppNavigation::empty(),
+    navigation_initial: if desktop {
+      None
+    } else {
+      Some(navigation_initial_path(login_return_to, page_device))
+    },
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),

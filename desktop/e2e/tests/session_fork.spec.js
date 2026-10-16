@@ -82,8 +82,9 @@ for (const minimal of [false, true]) {
 test('a delayed fork cannot replace a newer missing destination', async ({ page }) => {
   const app = await setup(page, false);
   await page.getByRole('button', { name: 'Other conversation', exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
   await page.locator('.conversation-row[title="session-1"]').click();
-  await expect(page.locator('.conversation-row[title="session-1"]')).toHaveClass(/active/);
+  await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
   const pending = Promise.withResolvers();
   const reply = app.replyFor.bind(app);
   app.replyFor = request => request.method === 'session.fork' ? pending.promise : reply(request);
@@ -93,6 +94,7 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   app.notify('session.changed', { change: 'deleted', session: 'session-other', workspace: '/workspace' });
   await expect(page.locator('.conversation-row[title="session-other"]')).toHaveCount(0);
   await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
   const unavailable = page.getByText('This destination no longer exists or is no longer attached.');
   await expect(unavailable).toBeVisible();
   pending.resolve(reply(app.requests.find(r => r.method === 'session.fork')));
@@ -100,6 +102,7 @@ test('a delayed fork cannot replace a newer missing destination', async ({ page 
   await expect(fork).toBeVisible();
   await expect(fork).not.toHaveClass(/active/);
   await expect(unavailable).toBeVisible();
+  await expect(page).toHaveURL(/\/chat\/session\/session-other$/);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -212,7 +215,7 @@ test('a streamed answer gains Fork only when its terminal is committed', async (
     expect(app.requests.find(r => r.method === 'session.edit').params.task).toBe('Start with a different question.');
     expect(app.requests.filter(r => r.method === 'session.fork')).toHaveLength(0);
     await expect(page.locator('#transcript')).not.toContainText('First answer.');
-    await expect(page.locator('.conversation-row[title="fork-session"]')).toHaveClass(/active/);
+    await expect(page).toHaveURL(/\/chat\/session\/fork-session$/);
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -326,6 +329,7 @@ for (const navigate of [false, true]) {
     await expect(editor).toHaveCount(0);
     if (!navigate) {
       await expect(page.getByText('This destination no longer exists or is no longer attached.')).toBeVisible();
+      await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
     }
     if (navigate) {
       await expect(page.locator('.conversation-row[title="session-other"]')).toHaveClass(/active/);

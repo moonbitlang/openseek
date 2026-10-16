@@ -508,6 +508,15 @@ export class DesktopBrowserHarness {
 
   async install() {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
+    // Match openseek-api's stable page entry and versioned asset base.
+    await this.page.route('**/device/**', async route => {
+      if (!route.request().isNavigationRequest()) return route.continue();
+      const url = new URL('/dist/browser/index.html', route.request().url());
+      const response = await route.fetch({ url: url.href });
+      const html = (await response.text()).replace('<head>', '<head><base href="/dist/browser/">');
+      await route.fulfill({ response, body: html, contentType: 'text/html' });
+    });
+
 
     await this.page.route('https://cloud.moonbitlang.cn/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) }));
     await this.page.route('**/v2/devices/*/connect-ticket', async route => {

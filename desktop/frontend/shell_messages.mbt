@@ -6,6 +6,7 @@ priv enum ShellMessage {
   NavigateForward
   NavigationLoading
   NavigationMissing
+  NavigationInvalid
   NavigationRetry
   NewChatLabel
   ArchiveHint
@@ -112,6 +113,13 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
       "此目標已不存在，或其工作區已移除。"
     (Japanese, NavigationMissing) =>
       "移動先が存在しないか、ワークスペースが解除されています。"
+    (English, NavigationInvalid) => "This page address is invalid."
+    (Spanish, NavigationInvalid) =>
+      "La dirección de esta página no es válida."
+    (SimplifiedChinese, NavigationInvalid) => "页面地址无效。"
+    (TraditionalChinese, NavigationInvalid) => "頁面位址無效。"
+    (Japanese, NavigationInvalid) =>
+      "ページのアドレスが無効です。"
     (English, NavigationRetry) => "Retry"
     (Spanish, NavigationRetry) => "Reintentar"
     (SimplifiedChinese, NavigationRetry) => "重试"

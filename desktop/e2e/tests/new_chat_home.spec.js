@@ -199,6 +199,7 @@ test('the title cannot add or change projects until draft opening settles', asyn
 test('returning to the same blank Codex entry retains its pending project add', async ({ page }) => {
   const app = await open(page, ['/workspace', '/other'], true);
   await choose(page, 'Codex test');
+  await expect(page).toHaveURL(/\/codex\/new$/);
   const session = await page.locator('#transcript').getAttribute('data-transcript-session');
   const pending = Promise.withResolvers();
   const reply = app.replyFor.bind(app);
@@ -209,6 +210,7 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await expect.poll(() => app.requests.some(r => r.method === 'workspace.add')).toBe(true);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page).toHaveURL(/\/codex\/new$/);
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
   pending.resolve(reply(app.requests.find(r => r.method === 'workspace.add')));
@@ -216,6 +218,7 @@ test('returning to the same blank Codex entry retains its pending project add', 
   await expect(page.getByRole('button', { name: 'Choose project, current project test', exact: true })).toBeVisible();
   await expect(page.locator('#transcript')).toHaveAttribute('data-transcript-session', session);
   await expect(page.locator('#task')).toHaveValue('');
+  await expect(page).toHaveURL(/\/codex\/new$/);
   expect(app.pageErrors).toEqual([]);
 });
 
