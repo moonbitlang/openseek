@@ -40,6 +40,7 @@ pub(all) struct Input {
   id : Id
   title : String
   label : String
+  host : (String, Bool)?
   // The active conversation's session id while this project holds the
   // focused chat; `None` otherwise. The value identifies the activation: a
   // fold made during one activation holds until a different one arrives.
@@ -262,6 +263,24 @@ pub fn component(
             ),
           ),
           @html.span(class="sidebar-label", input.label),
+          match input.host {
+            Some((name, online)) =>
+              @html.span(class="sidebar-project-host", [
+                @html.span(class="sidebar-host-name", name),
+                @html.span(
+                  class=if online { "remote-dot online" } else { "remote-dot" },
+                  attrs=@html.Attrs::build().aria_label(
+                    if online {
+                      "Connected"
+                    } else {
+                      "Offline"
+                    },
+                  ),
+                  @html.nothing,
+                ),
+              ])
+            None => @html.nothing
+          },
         ],
       ),
     ]

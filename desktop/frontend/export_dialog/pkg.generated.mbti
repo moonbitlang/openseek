@@ -6,6 +6,7 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
   "openseek_desktop/protocol",
 }
 
@@ -19,7 +20,7 @@ pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
-pub fn Model::open(Self, @protocol.SessionExportPayload) -> (@cmd.Cmd, Self)
+pub fn Model::open(Self, @protocol.SessionExportPayload, channel? : @interop.ChannelId) -> (@cmd.Cmd, Self)
 pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self)
 pub fn Model::view(locale? : @i18n.Locale, Self, @cmd.Emit[Msg]) -> @html.Html

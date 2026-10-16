@@ -24,13 +24,15 @@ pub fn host_of(String) -> String?
 
 pub fn is_loopback(String) -> Bool
 
+pub fn is_machine_local_url(String) -> Bool
+
 pub fn is_web_url(String) -> Bool
 
-pub fn navigate(State, Int, String) -> State
+pub fn navigate(State, Int, String, source? : @common.Uri) -> State
 
 pub fn normalize_url(String) -> String?
 
-pub fn open_page(State, url? : String) -> (State, Int)
+pub fn open_page(State, url? : String, source? : @common.Uri) -> (State, Int)
 
 pub fn page(State, Int) -> PageState?
 
@@ -72,6 +74,7 @@ pub(all) enum Msg {
 
 pub(all) struct PageState {
   url : String?
+  source : @common.Uri?
   input : String
   title : String
   loading : Bool

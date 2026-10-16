@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/backend/resources",
   "openseek_desktop/backend/native_runtime" @host_runtime,
+  "openseek_desktop/app/internal/ssh",
   "openseek_desktop/backend/engine" @engine_locator,
   "openseek_desktop/backend/host" @working_host,
   "moonbitlang/async",

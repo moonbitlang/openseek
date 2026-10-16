@@ -495,3 +495,37 @@ html.native-titlebar-overlay .app
 .content.panel-expanded .editor-tabsbar {
   padding-inline-start: var(--main-titlebar-leading-inset);
 }
+
+/* SSH host setup and project locations in the shared desktop window. */
+.ssh-connection-status { display: flex; flex-wrap: wrap; gap: 8px; padding: 9px 16px; background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-border); font-size: 12px; }
+.modal.ssh-host-dialog { width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 64px); overflow: auto; padding: 24px; }
+.ssh-host-dialog h2 { margin-top: 0; }
+.ssh-host-dialog h3 { margin: 24px 0 8px; }
+.ssh-host-dialog p { color: var(--color-text-secondary); font-size: 13px; line-height: 1.5; }
+.ssh-host-destination { font-size: 12px; color: var(--color-text-secondary); margin-top: 4px; }
+.ssh-host-field { display: grid; gap: 5px; margin-top: 12px; font-size: 12px; }
+.ssh-host-field input { width: 100%; box-sizing: border-box; }
+.ssh-host-dialog .ssh-host-error { color: var(--color-danger); }
+
+.ssh-host-actions, .ssh-host-modes { display: flex; flex-wrap: wrap; gap: 8px; }
+.ssh-host-actions { justify-content: flex-end; }
+.ssh-host-modes { margin-top: 20px; }
+.ssh-host-dialog .ssh-host-error, .ssh-host-dialog .ssh-host-progress { overflow-wrap: anywhere; }
+
+.remote-location-toolbar { padding: 12px 16px; border-bottom: 1px solid var(--color-border); }
+.remote-location-label { display: flex; align-items: center; gap: 12px; color: var(--color-text-secondary); font-size: 13px; }
+.remote-location-select { min-width: 200px; max-width: 100%; font: inherit; color: var(--color-text-primary); background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 6px; padding: 8px 10px; }
+.remote-picker-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; font-size: 13px; overflow-wrap: anywhere; }
+.remote-form-heading { display: flex; align-items: center; justify-content: space-between; }
+.sidebar-project-host { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; padding-left: 8px; font-size: 11px; color: var(--color-text-secondary); white-space: nowrap; }
+.remote-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--color-text-secondary); }
+.remote-dot.online { background: #168657; }
+
+.modal.ssh-host-dialog { border-radius: 14px; }
+.ssh-host-field input { min-height: 36px; padding: 8px 10px; font: inherit; font-size: 13px; color: var(--color-text-primary); background: var(--color-bg-surface); border: 1px solid var(--color-border); border-radius: 7px; }
+.ssh-host-field input:focus { outline: 2px solid var(--color-accent); outline-offset: -1px; }
+.ssh-host-dialog > .button { margin-top: 14px; }
+
+.sidebar-project-host { flex: none; min-width: 0; max-width: 72px; padding-left: 0; }
+.sidebar-host-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-dot { flex: none; }

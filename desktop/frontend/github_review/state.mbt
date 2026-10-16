@@ -177,7 +177,8 @@ fn request(
         error => Err(@interop.bridge_error_text(error))
       }
       let drafts = match result {
-        Ok(@protocol.ReviewLoaded(Some(review))) => load_drafts(review.url)
+        Ok(@protocol.GithubReviewReply::ReviewLoaded(Some(review))) =>
+          load_drafts(review.url)
         _ => Ok([])
       }
       scheduler.add(emit(Loaded(epoch, result, drafts)))
@@ -271,7 +272,8 @@ fn mutation(
       }
       // Complete the originating draft even if navigation has retired its UI.
       // A newer local edit is never removed by an older request's completion.
-      let storage = if result is Ok(@protocol.ReviewMutationSuccess) &&
+      let storage = if result
+        is Ok(@protocol.GithubReviewMutationReply::ReviewMutationSuccess) &&
         draft is Some(sent) {
         remove_sent_draft(review.url, sent)
       } else {
@@ -321,8 +323,9 @@ pub fn update(
     Loaded(epoch, result, drafts) => {
       guard epoch == state.epoch else { return (@cmd.none, state) }
       let result = match result {
-        Ok(@protocol.ReviewLoaded(review)) => Ok(review)
-        Ok(@protocol.ReviewLoadFailed(error)) | Err(error) => Err(error)
+        Ok(@protocol.GithubReviewReply::ReviewLoaded(review)) => Ok(review)
+        Ok(@protocol.GithubReviewReply::ReviewLoadFailed(error)) | Err(error) =>
+          Err(error)
       }
       match result {
         Err(error) =>
@@ -381,8 +384,9 @@ pub fn update(
         return (@cmd.none, state)
       }
       let file = match result {
-        Ok(@protocol.ReviewFileLoaded(file)) => Ok(file)
-        Ok(@protocol.ReviewFileFailed(error)) | Err(error) => Err(error)
+        Ok(@protocol.GithubReviewFileReply::ReviewFileLoaded(file)) => Ok(file)
+        Ok(@protocol.GithubReviewFileReply::ReviewFileFailed(error))
+        | Err(error) => Err(error)
       }
       (
         @cmd.none,
@@ -488,7 +492,7 @@ pub fn update(
     Mutated(epoch, action, draft, result, storage) => {
       guard epoch == state.mutation_epoch else { return (@cmd.none, state) }
       match result {
-        Ok(@protocol.ReviewMutationSuccess) => {
+        Ok(@protocol.GithubReviewMutationReply::ReviewMutationSuccess) => {
           let review = state.review.map(review => {
             let threads = review.threads
               .map(thread => {
@@ -528,7 +532,8 @@ pub fn update(
           }
           request(emit, next, current)
         }
-        Ok(@protocol.ReviewMutationFailure(error)) | Err(error) =>
+        Ok(@protocol.GithubReviewMutationReply::ReviewMutationFailure(error))
+        | Err(error) =>
           (
             @cmd.none,
             { ..state, busy: false, mutation_error: Some(Remote(error)), },

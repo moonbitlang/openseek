@@ -119,6 +119,7 @@ fn LocalBridgeSub::wire(
 ) -> Unit {
   // Proton needs one listener per notification kind, so the listeners derive
   // directly from the shared catalog.
+  self.wire_ssh(scheduler, extension_events)
   for kind_ in @protocol.NotificationKind::all() {
     let method_ = kind_.wire_name()
     let handler = (event : @js.Value) => {
@@ -176,7 +177,71 @@ fn LocalBridgeSub::update_dispatch(
 /// Retire every Proton listener and make a still-pending attach harmless.
 fn LocalBridgeSub::unload(self : LocalBridgeSub) -> Unit {
   self.active = false
+  @interop.clear_ssh_epochs()
   for unsubscribe in self.unsubscribers {
     let _ : @js.Value = unsubscribe.apply(([] : FixedArray[@js.Value]))
   }
+}
+
+///|
+fn LocalBridgeSub::wire_ssh(
+  self : LocalBridgeSub,
+  scheduler : &@cmd.Scheduler,
+  events : @js.Value,
+) -> Unit {
+  self.subscribe(events, "openseek.ssh.event", event => {
+    guard self.active && event_payload(event) is Some(payload) else { return }
+    let (channel, payload) = match payload.get("host_id") {
+      Some(String(id)) => {
+        guard @interop.is_native_ssh(Remote(id)) &&
+          payload.get("event") is Some(Object(event)) else {
+          return
+        }
+        (@interop.ChannelId::Remote(id), event)
+      }
+      _ => return
+    }
+    guard payload.get("kind") is Some(String(kind_)) else { return }
+    match kind_ {
+      "connected" => {
+        guard payload.get("epoch") is Some(Number(epoch, ..)) else { return }
+        @interop.set_ssh_epoch(channel, Some(epoch.to_int()))
+      }
+      "terminal" => {
+        guard payload.get("value") is Some(Object(value)) &&
+          value.get("method") is Some(String(method_)) &&
+          value.get("params") is Some(params) &&
+          @protocol.Notification::from_wire(method_, params)
+          is Some(notification) else {
+          return
+        }
+        scheduler.add((self.dispatch)(Notification(channel~, notification~)))
+      }
+      "notification" => {
+        guard payload.get("epoch") is Some(Number(epoch, ..)) &&
+          @interop.current_ssh_epoch(channel) == Some(epoch.to_int()) &&
+          payload.get("value") is Some(Object(value)) &&
+          value.get("method") is Some(String(method_)) &&
+          value.get("params") is Some(params) &&
+          @protocol.Notification::from_wire(method_, params)
+          is Some(notification) else {
+          return
+        }
+        scheduler.add((self.dispatch)(Notification(channel~, notification~)))
+      }
+      "connecting" => {
+        @interop.set_ssh_epoch(channel, None)
+        scheduler.add((self.dispatch)(Connecting(channel~)))
+      }
+      "disconnected" | "identity_blocked" | "failed" => {
+        @interop.set_ssh_epoch(channel, None)
+        let message = match payload.get("message") {
+          Some(String(message)) => message
+          _ => "Connecting to SSH host…"
+        }
+        scheduler.add((self.dispatch)(Unavailable(channel~, message~)))
+      }
+      _ => ()
+    }
+  })
 }

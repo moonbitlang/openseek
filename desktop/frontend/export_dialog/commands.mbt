@@ -6,12 +6,13 @@ fn[Payload : ToJson, Reply : @json.FromJson] request(
   emit : @cmd.Emit[Msg],
   command : @commands.Command[Payload, Reply],
   payload : Payload,
+  channel~ : @interop.ChannelId = Local,
   failure~ : String,
   to_msg : (Result[Reply, String]) -> Msg,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let result = Ok(@interop.bridge_request(Local, command, payload)) catch {
+      let result = Ok(@interop.bridge_request(channel, command, payload)) catch {
         error => Err("\{failure}: \{@interop.bridge_error_text(error)}")
       }
       scheduler.add(emit(to_msg(result)))
@@ -31,6 +32,7 @@ fn Model::share(
   request(
     emit,
     @commands.session_share,
+    channel=self.channel,
     { source, generation, },
     failure=match locale {
       SimplifiedChinese => "分享失败"
@@ -62,6 +64,7 @@ fn Model::download(
   request(
     emit,
     @commands.session_export,
+    channel=self.channel,
     source,
     failure=match locale {
       SimplifiedChinese => "下载失败"
@@ -86,7 +89,7 @@ fn Model::sign_in(
   request(
     emit,
     @commands.auth_connect,
-    @protocol.NoPayload,
+    @protocol.EmptyPayload::NoPayload,
     failure=match locale {
       SimplifiedChinese => "登录失败"
       TraditionalChinese => "登入失敗"
@@ -108,7 +111,7 @@ fn cancel_sign_in() -> @cmd.Cmd {
       let _ = @interop.bridge_request(
         Local,
         @commands.auth_cancel,
-        @protocol.NoPayload,
+        @protocol.EmptyPayload::NoPayload,
       ) catch {
         _ => return
       }

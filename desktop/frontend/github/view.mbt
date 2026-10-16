@@ -263,8 +263,8 @@ fn inventory(
     let groups : Array[@html.Html] = []
     for
       (kind, label) in [
-        (@protocol.CreatedByMe, ui(locale, CreatedByMeLabel)),
-        (@protocol.AllOpen, ui(locale, AllOpenLabel)),
+        (@protocol.GithubListKind::CreatedByMe, ui(locale, CreatedByMeLabel)),
+        (@protocol.GithubListKind::AllOpen, ui(locale, AllOpenLabel)),
       ] {
       let group = state.group(kind)
       groups.push(
@@ -315,12 +315,18 @@ fn inventory(
         disclosure(
           ui(locale, IssuesLabel),
           state.issues.expanded,
-          emit(Toggle(@protocol.Issues)),
+          emit(Toggle(@protocol.GithubListKind::Issues)),
           section=true,
         ),
         if state.issues.expanded {
           @html.div(class="github-section-body", [
-            list_view(locale~, state, @protocol.Issues, emit, open_link),
+            list_view(
+              locale~,
+              state,
+              @protocol.GithubListKind::Issues,
+              emit,
+              open_link,
+            ),
           ])
         } else {
           @html.nothing

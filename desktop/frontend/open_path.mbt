@@ -116,6 +116,13 @@ fn finish_open_path(
       )
     }
     Browser(path) => show_browser_path(dispatch, selected, path)
+    RemotePreview(local_path~, remote_path~) => {
+      guard @resource.of_path(context.owner.channel, remote_path)
+        is Some(source) else {
+        return (@cmd.none, model)
+      }
+      show_browser_path(dispatch, selected, local_path, source~)
+    }
     Directory(target) =>
       reveal_local_directory(dispatch, selected, Relative(target.path))
     Refused(message) => selected.notify_error(dispatch, message)
@@ -201,10 +208,17 @@ fn show_browser_path(
   dispatch : @cmd.Emit[Msg],
   model : Model,
   path : String,
+  source? : @common.Uri,
 ) -> (@cmd.Cmd, Model) {
   guard model.is_desktop &&
     model.active_checkout() is Some(active) &&
-    active.owner.channel is Local else {
+    (
+      active.owner.channel is Local ||
+      (
+        source is Some(source) &&
+        @resource.belongs_to(source, active.owner.channel)
+      )
+    ) else {
     return (@cmd.none, model)
   }
   let dock = @dock.sync(model.dock, active.owner)
@@ -219,8 +233,8 @@ fn show_browser_path(
     None
   }
   let (preview, id) = match reuse {
-    Some(id) => (@preview.navigate(model.preview, id, url), id)
-    None => @preview.open_page(model.preview, url~)
+    Some(id) => (@preview.navigate(model.preview, id, url, source?), id)
+    None => @preview.open_page(model.preview, url~, source?)
   }
   let dock = if dock.active is Some(FilePicker) {
     @dock.resolve_pick(dock, Browser(id~))

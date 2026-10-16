@@ -160,8 +160,8 @@ fn start_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            @protocol.WorktreeCreateResult::WorktreeCreatedReply(reply) => reply
+            @protocol.WorktreeCreateResult::WorktreeCreateError(message) => {
               scheduler.add(
                 device_dispatch(
                   WorktreeSetupFailed(
@@ -340,8 +340,8 @@ fn set_goal_in_new_worktree(
             }
           }
           let reply = match result {
-            @protocol.WorktreeCreatedReply(reply) => reply
-            @protocol.WorktreeCreateError(message) => {
+            @protocol.WorktreeCreateResult::WorktreeCreatedReply(reply) => reply
+            @protocol.WorktreeCreateResult::WorktreeCreateError(message) => {
               scheduler.add(
                 device_dispatch(
                   GoalRejected(
@@ -445,10 +445,12 @@ fn run_shell_in_new_worktree(
               session: Some(session),
               codex_thread: None,
             }) {
-            @protocol.WorktreeCreatedReply(reply) if !reply.name.is_empty() =>
+            @protocol.WorktreeCreateResult::WorktreeCreatedReply(reply) if !reply.name.is_empty() =>
               Ok(reply.name)
-            @protocol.WorktreeCreatedReply(_) => Err("incomplete reply")
-            @protocol.WorktreeCreateError(message) => Err(message)
+            @protocol.WorktreeCreateResult::WorktreeCreatedReply(_) =>
+              Err("incomplete reply")
+            @protocol.WorktreeCreateResult::WorktreeCreateError(message) =>
+              Err(message)
           }
         },
       ) catch {
@@ -528,7 +530,7 @@ fn repair_worktree_cmd(
           return
         }
       }
-      if result is @protocol.WorktreeCreateError(message) {
+      if result is @protocol.WorktreeCreateResult::WorktreeCreateError(message) {
         scheduler.add(
           dispatch(
             WorktreeFailed(

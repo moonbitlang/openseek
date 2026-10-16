@@ -11,6 +11,9 @@ pub extend FileObservation with Eq::{equal, not_equal}
 
 ///|
 fn PageState::local_file(self : PageState) -> @common.Uri? {
+  if self.source is Some(source) {
+    return Some(source)
+  }
   self.url
   .bind(@uri.local_file_path)
   .bind(path => @resource.of_path(@interop.ChannelId::Local, path))
@@ -73,7 +76,13 @@ pub fn State::observe_file(
   let pages = self.pages.copy()
   for id, page in self.pages {
     guard page.local_file() == Some(path) else { continue }
-    if signature is Failed(message) {
+    if page.source is Some(_) && signature is Missing {
+      files[id] = Current(signature)
+      pages[id] = {
+        ..page,
+        failure: Some("The file no longer exists on the SSH host."),
+      }
+    } else if signature is Failed(message) {
       files[id] = Current(signature)
       pages[id] = { ..page, failure: Some(message), }
     } else if files.get(id) != Some(Current(signature)) {

@@ -22,6 +22,8 @@ pub(all) struct PageState {
   // The last URL this page was sent to (optimistic) or reported at (from a
   // `Navigated` event). `None` = blank tab, no native view exists.
   url : String?
+  // Source identity for an SSH file displayed from a private local copy.
+  source : @common.Uri?
   // The address bar's draft. Mirrors `url` after a navigation; edited
   // freely in between.
   input : String
@@ -51,12 +53,17 @@ pub fn State::empty() -> State {
 ///|
 /// Allocate a page. A blank tab starts without a URL; a routed link opens
 /// with one (the caller also asks the host to create the native view then).
-pub fn open_page(state : State, url? : String) -> (State, Int32) {
+pub fn open_page(
+  state : State,
+  url? : String,
+  source? : @common.Uri,
+) -> (State, Int32) {
   let id = state.next_id
   let pages = state.pages.copy()
   pages[id] = {
     url,
-    input: url.unwrap_or(""),
+    source,
+    input: source.map(source => source.path).unwrap_or(url.unwrap_or("")),
     title: "",
     loading: url is Some(_),
     failure: None,
@@ -93,14 +100,28 @@ fn PageState::commit_url(self : PageState, url : String) -> PageState {
   } else {
     ""
   }
-  { ..self, url: Some(url), input: url, title, failure: None, }
+  let source = if @uri.is_file_url(url) { self.source } else { None }
+  {
+    ..self,
+    url: Some(url),
+    source,
+    input: source.map(source => source.path).unwrap_or(url),
+    title,
+    failure: None,
+  }
 }
 
 ///|
 /// Commit a navigation optimistically. The caller sends the matching
 /// `browser.open`/`browser.navigate` to the host.
-pub fn navigate(state : State, id : Int32, url : String) -> State {
+pub fn navigate(
+  state : State,
+  id : Int32,
+  url : String,
+  source? : @common.Uri,
+) -> State {
   guard state.pages.get(id) is Some(previous) else { return state }
+  let previous = { ..previous, source, }
   state.with_page(id, { ..previous.commit_url(url), loading: true, })
 }
 
@@ -108,6 +129,9 @@ pub fn navigate(state : State, id : Int32, url : String) -> State {
 /// The tab chip's label: the page title once one arrived, else the URL's
 /// host, else a blank-tab placeholder.
 pub fn page_label(page : PageState, locale~ : @i18n.Locale = English) -> String {
+  if page.source is Some(source) {
+    return @resource.label(source)
+  }
   if !page.title.is_empty() {
     return page.title
   }

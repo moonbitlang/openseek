@@ -218,3 +218,38 @@ The visualizer (`openseek` sessions in a browser: `inspect`) and
 exactly these per-session directories; the desktop app additionally keeps its
 own metadata under the session root (`workspaces.json`, `archived/sessions`)
 and its settings in webview localStorage.
+
+
+## Working-host service and SSH
+
+`desktop/backend/api.ApiState` owns the shared engine, Codex, scheduler and LSP actors.
+Desktop embeds it; the headless `app-server` CLI runs it independently with an
+owner lock, lifecycle admission, durable crash journal and loopback TCP listener.
+Each `HostConnection` owns watches and any host-supported PTYs, so client loss
+does not cancel an accepted Agent run. Graceful stop waits for service work and durable followers;
+unclean exit blocks business admission pending explicit recovery.
+
+`desktop/backend/host_client` discovers the daemon through SSH; only an explicit not-running
+status permits an idempotent start. The client's WebSocket connects to a local
+loopback port forwarded by an owned `ssh -N -L` process to the remote loopback
+listener. Authentication, version, probe and forwarding failures do not trigger
+restart. There is no application token: SSH provides remote login authentication
+and tunnel encryption, while loopback processes on both machines are trusted.
+Browser Origin headers are rejected. Headless PTYs and OS process-identity inspection are
+unavailable; recovery requires explicit external-tool acknowledgement. See the
+[working-host CLI](../desktop/backend/cli/README.md) for lifecycle and recovery requirements.
+The remote engine and store remain on the working host. Desktop stores SSH
+profiles with a pinned server identity and keeps independent host connections
+and epochs in one window alongside Local. Reconnection reloads durable state; it never replays a mutation
+whose result is unknown. Native window, browser, clipboard and file-picker
+operations remain on the desktop, with explicit transfers for remote content.
+
+The native desktop installer verifies an explicitly selected local headless
+package, uploads it through SSH, and activates it only when the current service
+is idle. It saves the profile after build/protocol/identity checks succeed;
+busy or failed activation preserves the old association. A successful version
+change refreshes the corresponding host connection. Closing the desktop closes its SSH connections, watches and PTYs;
+the detached working-host daemon continues accepted Agent work and schedules.
+Local embedded service lifetime still follows the desktop. See the
+[desktop SSH guide](../desktop/README.md#remote-ssh) and
+[package and upgrade guide](../scripts/headless/README.md).

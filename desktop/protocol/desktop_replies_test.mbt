@@ -406,7 +406,7 @@ test "file reads use one absolute path and may return image bytes" {
     "path": "../image.png",
     "root": "/work/project",
   })
-  let reply = @protocol.BinaryContent(
+  let reply = @protocol.ReadFileReply::BinaryContent(
     data_base64="iVBORw0KGgo=",
     media_type="image/png",
     sig="12:34",
@@ -447,6 +447,10 @@ test "open-path replies distinguish system, editor, browser, and directory targe
       directory,
       browser,
       Browser("/tmp/中文 #100%.pdf"),
+      RemotePreview(
+        local_path="/tmp/cache/document.pdf",
+        remote_path="/remote/中文.pdf",
+      ),
       refusal,
     ] {
     let decoded : @protocol.OpenPathReply = @json.from_json(reply.to_json())
@@ -466,6 +470,22 @@ test "open-path replies distinguish system, editor, browser, and directory targe
         let _ : @protocol.OpenPathReply = @json.from_json({
           "opened": false,
           "browser_target": target,
+        })
+      }),
+    )
+  }
+  for
+    target in [
+      Json::null(),
+      {},
+      { "local_path": "/cache/a.pdf" },
+      { "local_path": "/cache/a.pdf", "remote_path": "relative.pdf" },
+      { "local_path": "//server/cache", "remote_path": "/remote/a.pdf" },
+    ] {
+    assert_true(
+      refused(() => {
+        let _ : @protocol.OpenPathReply = @json.from_json({
+          "remote_preview": target,
         })
       }),
     )

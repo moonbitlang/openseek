@@ -12,6 +12,9 @@ priv enum UiMessage {
   NewFolder
   NameLabel
   LoadingLabel
+  UnavailableLabel
+  RemoteUnavailable
+  RetryOrChooseLocation
   FolderPath
   EnterFolderPath
   CancelPathEditing
@@ -92,6 +95,27 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, LoadingLabel) => "正在加载…"
     (TraditionalChinese, LoadingLabel) => "正在載入…"
     (Japanese, LoadingLabel) => "読み込み中…"
+    (English, UnavailableLabel) => "Unavailable"
+    (Spanish, UnavailableLabel) => "No disponible"
+    (SimplifiedChinese, UnavailableLabel) => "不可用"
+    (TraditionalChinese, UnavailableLabel) => "無法使用"
+    (Japanese, UnavailableLabel) => "利用不可"
+    (English, RemoteUnavailable) => "Remote unavailable"
+    (Spanish, RemoteUnavailable) => "Conexión remota no disponible"
+    (SimplifiedChinese, RemoteUnavailable) => "远程连接不可用"
+    (TraditionalChinese, RemoteUnavailable) => "遠端連線無法使用"
+    (Japanese, RemoteUnavailable) =>
+      "リモート接続を利用できません"
+    (English, RetryOrChooseLocation) =>
+      "Retry the connection or choose another location."
+    (Spanish, RetryOrChooseLocation) =>
+      "Reintenta la conexión o elige otra ubicación."
+    (SimplifiedChinese, RetryOrChooseLocation) =>
+      "请重试连接或选择其他位置。"
+    (TraditionalChinese, RetryOrChooseLocation) =>
+      "請重試連線或選擇其他位置。"
+    (Japanese, RetryOrChooseLocation) =>
+      "接続を再試行するか、別の場所を選択してください。"
     (English, FolderPath) => "Folder path"
     (Spanish, FolderPath) => "Ruta de la carpeta"
     (SimplifiedChinese, FolderPath) => "文件夹路径"

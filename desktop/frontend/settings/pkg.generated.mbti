@@ -40,6 +40,11 @@ pub(all) enum Message {
   Configuration
   OpenConfig
   ConfigDescription
+  RemoteCodexConfigAction
+  RemoteCodexConfigDescription
+  RemoteCodexTerminalLoginInstructions
+  RemoteCodexTerminalBrowserInstructions
+  RemoteCodexSignOut
   RemoteControl
   CheckingSignIn
   EnvironmentRelay

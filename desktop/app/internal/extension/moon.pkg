@@ -1,5 +1,7 @@
 import {
   "openseek_desktop/app/internal/cdp",
+  "openseek_desktop/backend/api" @backend_api,
+  "openseek_desktop/app/internal/ssh",
   "moonbit-community/proton",
   "moonbit-community/proton/extension" @proton_extension,
   "moonbit-community/proton_contract",

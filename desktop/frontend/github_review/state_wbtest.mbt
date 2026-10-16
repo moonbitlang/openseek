@@ -89,7 +89,11 @@ test "shared checkout changes retire old discussions and file reads" {
     let (_, next) = reconcile(emit, old, current, Some("other.mbt"))
     let (_, ignored) = review_update(
       emit,
-      Loaded(old.epoch, Ok(@protocol.ReviewLoaded(old.review)), Ok([])),
+      Loaded(
+        old.epoch,
+        Ok(@protocol.GithubReviewReply::ReviewLoaded(old.review)),
+        Ok([]),
+      ),
       next,
       current~,
     )
@@ -196,7 +200,11 @@ test "shared revalidation preserves discussions and closure retires late loads" 
   )
   let (_, late) = review_update(
     emit,
-    Loaded(old.epoch, Ok(@protocol.ReviewLoaded(old.review)), Ok([])),
+    Loaded(
+      old.epoch,
+      Ok(@protocol.GithubReviewReply::ReviewLoaded(old.review)),
+      Ok([]),
+    ),
     retired,
     current=closed,
   )
@@ -222,7 +230,11 @@ test "shared revalidation preserves discussions and closure retires late loads" 
   assert_false(refreshed.refresh_pending)
   let (_, absent) = review_update(
     emit,
-    Loaded(old.epoch, Ok(@protocol.ReviewLoaded(None)), Ok([])),
+    Loaded(
+      old.epoch,
+      Ok(@protocol.GithubReviewReply::ReviewLoaded(None)),
+      Ok([]),
+    ),
     old,
   )
   assert_false(absent.enabled)
@@ -258,7 +270,7 @@ test "failed sends retain drafts and successful sends only clear the submitted b
       6,
       action,
       Some(sent),
-      Ok(@protocol.ReviewMutationFailure("denied")),
+      Ok(@protocol.GithubReviewMutationReply::ReviewMutationFailure("denied")),
       Ok(()),
     ),
     state,
@@ -268,7 +280,13 @@ test "failed sends retain drafts and successful sends only clear the submitted b
   assert_false(failure.busy)
   let (_, success) = review_update(
     emit,
-    Mutated(6, action, Some(sent), Ok(@protocol.ReviewMutationSuccess), Ok(())),
+    Mutated(
+      6,
+      action,
+      Some(sent),
+      Ok(@protocol.GithubReviewMutationReply::ReviewMutationSuccess),
+      Ok(()),
+    ),
     { ..state, drafts: [changed], },
   )
   assert_true(success.drafts == [changed])
@@ -313,7 +331,11 @@ test "refresh preserves unsaved edits and does not resurrect sent drafts after s
   }
   let (_, refreshed) = review_update(
     emit,
-    Loaded(state.epoch, Ok(@protocol.ReviewLoaded(state.review)), Ok([])),
+    Loaded(
+      state.epoch,
+      Ok(@protocol.GithubReviewReply::ReviewLoaded(state.review)),
+      Ok([]),
+    ),
     state,
   )
   assert_true(refreshed.drafts == [draft])
@@ -330,14 +352,18 @@ test "refresh preserves unsaved edits and does not resurrect sent drafts after s
       state.mutation_epoch,
       action,
       Some(draft),
-      Ok(@protocol.ReviewMutationSuccess),
+      Ok(@protocol.GithubReviewMutationReply::ReviewMutationSuccess),
       Err(SaveDraftsFailed("cannot remove draft")),
     ),
     state,
   )
   let (_, loaded) = review_update(
     emit,
-    Loaded(sent.epoch, Ok(@protocol.ReviewLoaded(sent.review)), Ok([draft])),
+    Loaded(
+      sent.epoch,
+      Ok(@protocol.GithubReviewReply::ReviewLoaded(sent.review)),
+      Ok([draft]),
+    ),
     sent,
   )
   assert_true(loaded.drafts.is_empty())
@@ -369,7 +395,7 @@ test "file navigation reuses the PR snapshot and rejects late local file reads" 
     FileLoaded(
       other.file_epoch,
       "other.mbt",
-      Ok(@protocol.ReviewFileLoaded(None)),
+      Ok(@protocol.GithubReviewFileReply::ReviewFileLoaded(None)),
     ),
     back,
   )
@@ -379,7 +405,11 @@ test "file navigation reuses the PR snapshot and rejects late local file reads" 
     emit,
     Loaded(
       back.epoch,
-      Ok(@protocol.ReviewLoaded(Some({ ..review, head: "newer-head", }))),
+      Ok(
+        @protocol.GithubReviewReply::ReviewLoaded(
+          Some({ ..review, head: "newer-head", }),
+        ),
+      ),
       Ok([]),
     ),
     back,

@@ -6,6 +6,7 @@ fn test_input(activation? : String) -> Input {
     label: "openseek",
     activation,
     can_start: true,
+    host: None,
     managed: true,
     conversations: [],
   }

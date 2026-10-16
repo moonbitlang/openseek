@@ -1105,6 +1105,8 @@ pub(all) enum OpenPathReply {
   Editor(OpenPathEditorTarget)
   // Absolute URI path of a local document to open in the browser.
   Browser(String)
+  // A native window downloaded this remote resource into its own cache.
+  RemotePreview(local_path~ : String, remote_path~ : String)
   // A literal directory inside the conversation checkout, for the built-in
   // Files tree.
   Directory(OpenPathDirectoryTarget)
@@ -1118,6 +1120,14 @@ pub impl ToJson for OpenPathReply with fn to_json(self) {
   match self {
     Opened => { "opened": true }
     Browser(path) => { "opened": false, "browser_target": { "path": path } }
+    RemotePreview(local_path~, remote_path~) =>
+      {
+        "opened": false,
+        "remote_preview": {
+          "local_path": local_path,
+          "remote_path": remote_path,
+        },
+      }
     Editor(target) =>
       { "opened": false, "editor_target": ToJson::to_json(target) }
     Directory(target) =>
@@ -1135,7 +1145,23 @@ pub impl FromJson for OpenPathReply with fn from_json(json, path) {
   guard json is Object(fields) else {
     raise JsonDecodeError((path, "expected an open_path reply"))
   }
-  if fields.get("browser_target") is Some(target) {
+  if fields.get("remote_preview") is Some(target) {
+    guard target is Object(values) &&
+      values.get("local_path") is Some(String(local_path)) &&
+      values.get("remote_path") is Some(String(remote_path)) &&
+      local_path.has_prefix("/") &&
+      !local_path.has_prefix("//") &&
+      remote_path.has_prefix("/") &&
+      !remote_path.has_prefix("//") else {
+      raise JsonDecodeError(
+        (
+          path.add_key("remote_preview"),
+          "expected absolute local and remote paths",
+        ),
+      )
+    }
+    RemotePreview(local_path~, remote_path~)
+  } else if fields.get("browser_target") is Some(target) {
     guard target is Object(target_fields) &&
       target_fields.get("path") is Some(String(file)) &&
       file is ['/', ..] &&

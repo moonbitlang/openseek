@@ -4,9 +4,16 @@
 async fn capture_session_export(
   state : @api.DesktopState,
   payload : @protocol.SessionExportPayload,
+  remote? : @ssh.Route,
 ) -> @protocol.SessionExportContent {
-  let files = state.service().export_session(payload)
-  { html: files.html, json: files.json, }
+  match remote {
+    Some(route) =>
+      route.request_current(@commands.session_export_content, payload)
+    None => {
+      let files = state.service().export_session(payload)
+      { html: files.html, json: files.json, }
+    }
+  }
 }
 
 ///|
@@ -52,8 +59,9 @@ async fn export_session(
   context : @proton.CommandContext,
   state : @api.DesktopState,
   payload : @protocol.SessionExportPayload,
+  remote? : @ssh.Route,
 ) -> @protocol.SessionExportReply {
-  let html = capture_session_export(state, payload).html
+  let html = capture_session_export(state, payload, remote?).html
   let dialog = SessionExportDialog(payload.session)
   guard dialog.destination(context) is Some(path) else {
     return { path: None, opened: false, }

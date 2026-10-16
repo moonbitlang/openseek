@@ -480,7 +480,17 @@ fn Model::sidebar_component_sections(
     projects.push(
       @section.Project({
         id: @project.Id(source="openseek.projects", channel~, root=path.path),
-        title: path.path,
+        title: match
+          self.ssh_ui.hosts
+          .iter()
+          .find_first(host => @interop.Remote(host.id) == dev.channel) {
+          Some(host) => host.name + " · " + path.path
+          None => path.path
+        },
+        host: self.ssh_ui.hosts
+        .iter()
+        .find_first(host => @interop.Remote(host.id) == dev.channel)
+        .map(host => (host.name, dev.bridge == Connected)),
         label: @resource.label(path),
         // The Chat and Codex screens are exclusive, so at most one side
         // claims the row's activation.
@@ -690,27 +700,52 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 /// while a refresh is in flight.
 fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let notices : Array[String] = []
-  let sections = match self.focused_device() {
-    Some(dev) => {
-      if dev.chat_root is Some(Err(message)) {
-        notices.push(
-          dynamic_text(self.locale, DStorageUnavailable(message.to_string())),
-        )
-      }
-      self.sidebar_component_sections(dev)
-    }
-    None => {
-      match self.console.roster_sync {
-        RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
-        RosterFailed(message) => notices.push(message)
-        RosterReady =>
-          if self.console.roster.is_empty() {
-            notices.push(shell_text(self.locale, NoDevices))
-          } else {
-            notices.push(shell_text(self.locale, NoOnlineDevice))
+  let sections = if self.is_desktop &&
+    self.devices.any(dev => dev.channel == Local) {
+    let combined : Array[@section.Input] = []
+    for dev in self.devices {
+      for section in self.sidebar_component_sections(dev) {
+        match
+          combined.search_by(item => item.id.source() == section.id.source()) {
+          Some(index) => {
+            let previous = combined[index]
+            combined[index] = {
+              ..previous,
+              entries: previous.entries + section.entries,
+              activation: match section.activation {
+                Some(_) => section.activation
+                None => previous.activation
+              },
+            }
           }
+          None => combined.push(section)
+        }
       }
-      []
+    }
+    combined
+  } else {
+    match self.focused_device() {
+      Some(dev) => {
+        if dev.chat_root is Some(Err(message)) {
+          notices.push(
+            dynamic_text(self.locale, DStorageUnavailable(message.to_string())),
+          )
+        }
+        self.sidebar_component_sections(dev)
+      }
+      None => {
+        match self.console.roster_sync {
+          RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
+          RosterFailed(message) => notices.push(message)
+          RosterReady =>
+            if self.console.roster.is_empty() {
+              notices.push(shell_text(self.locale, NoDevices))
+            } else {
+              notices.push(shell_text(self.locale, NoOnlineDevice))
+            }
+        }
+        []
+      }
     }
   }
   // The footer's update button tracks the automatic download so its progress
@@ -822,13 +857,32 @@ fn codex_account_rows(
 ) -> Array[@html.Html] {
   let codex = model.codex
   let channel = model.focused
+  let remote = @interop.is_native_ssh(channel)
   let rows : Array[@html.Html] = [
     @settings.row(
       @settings.text(model.locale, Status),
-      [],
+      if remote {
+        [
+          @html.button(
+            class="button secondary",
+            disabled=codex.is_busy() || codex.pending_auth_url() is Some(_),
+            on_click=dispatch(Codex(channel~, @codex.Msg::refresh_account())),
+            shell_text(model.locale, RefreshLabel),
+          ),
+        ]
+      } else {
+        []
+      },
       desc="\{codex.connection_label(locale=model.locale)} · \{codex.account_label(locale=model.locale)}",
     ),
   ]
+  if codex.authentication_error() is Some(message) {
+    rows.push(
+      @settings.row(@settings.text(model.locale, SignIn), [
+        @html.span(class="update-status update-error", message),
+      ]),
+    )
+  }
   if codex.signed_in() {
     rows.push(
       @settings.row(
@@ -841,7 +895,14 @@ fn codex_account_rows(
             @settings.text(model.locale, SignOut),
           ),
         ],
-        desc=@settings.text(model.locale, SignOutDescription),
+        desc=@settings.text(
+          model.locale,
+          if remote {
+            RemoteCodexSignOut
+          } else {
+            SignOutDescription
+          },
+        ),
       ),
     )
   } else if codex.sign_in_required() {
@@ -851,7 +912,9 @@ fn codex_account_rows(
         [
           @html.button(
             class="button primary",
-            disabled=codex.is_busy() || model.codex_project_adoption_pending(),
+            disabled=codex.is_busy() ||
+              codex.pending_auth_url() is Some(_) ||
+              model.codex_project_adoption_pending(),
             on_click=dispatch(Codex(channel~, @codex.Msg::login())),
             @settings.text(model.locale, SignInChatGPT),
           ),
@@ -888,17 +951,78 @@ fn codex_account_rows(
       ),
     )
   }
+  let controls : Array[@html.Html] = [
+    @html.button(
+      class="button secondary",
+      disabled=remote && codex.config_view() is @codex.ConfigLoading,
+      on_click=if remote {
+        dispatch(Codex(channel~, @codex.Msg::prepare_config()))
+      } else {
+        dispatch(OpenCodexConfig)
+      },
+      @settings.text(
+        model.locale,
+        if remote {
+          RemoteCodexConfigAction
+        } else {
+          OpenConfig
+        },
+      ),
+    ),
+  ]
+  if remote {
+    match codex.config_view() {
+      ConfigReady(details) => {
+        controls.push(@html.code(class="setting-desc", details.path))
+        match details.terminal_login {
+          Ok((command, device_auth)) => {
+            controls.push(
+              @html.span(
+                class="setting-desc",
+                @settings.text(
+                  model.locale,
+                  if device_auth {
+                    RemoteCodexTerminalLoginInstructions
+                  } else {
+                    RemoteCodexTerminalBrowserInstructions
+                  },
+                ),
+              ),
+            )
+            controls.push(
+              @html.code(
+                class="setting-desc",
+                style=[
+                  "white-space: pre-wrap", "overflow-wrap: anywhere", "user-select: text",
+                ],
+                command,
+              ),
+            )
+          }
+          Err(message) =>
+            controls.push(
+              @html.span(class="update-status update-error", message),
+            )
+        }
+      }
+      ConfigFailed(message) =>
+        controls.push(@html.span(class="update-status update-error", message))
+      ConfigIdle | ConfigLoading => ()
+    }
+  }
   rows.push(
     @settings.row(
       @settings.text(model.locale, Configuration),
-      [
-        @html.button(
-          class="button secondary",
-          on_click=dispatch(OpenCodexConfig),
-          @settings.text(model.locale, OpenConfig),
-        ),
-      ],
-      desc=@settings.text(model.locale, ConfigDescription),
+      controls,
+      desc=@settings.text(
+        model.locale,
+        if remote {
+          RemoteCodexConfigDescription
+        } else {
+          ConfigDescription
+        },
+      ),
+      stack=remote,
     ),
   )
   rows
@@ -1366,6 +1490,11 @@ fn api_settings_rows(
 /// group, and the composer keeps Send disabled until a usable endpoint is
 /// saved.
 fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  if model.ssh_ui.open {
+    return @page_shell.body(class="settings-page", [
+      @html.div(class="settings", [ssh_settings_group(dispatch, model)]),
+    ])
+  }
   let locale = model.locale
   let settings_loaded = model.host_settings_loaded()
   let ready = model.api_ready()
@@ -1543,6 +1672,9 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
       ),
     ]),
   ]
+  if model.is_desktop {
+    groups.push(ssh_settings_group(dispatch, model))
+  }
   // Self-update swaps the bundle under the desktop process, and the relay
   // sign-in registers the machine the host runs on; from a browser both
   // sections could only break things for whoever is at the machine.
@@ -1710,11 +1842,11 @@ fn conversation_header(
     items.push(model.detail_toggle(dispatch))
   }
   // Export is a native-window operation and the visualizer consumes durable
-  // OpenSeek JSONL. Remote-device conversations and fresh drafts therefore do
-  // not offer a button that their host cannot fulfill.
+  // OpenSeek JSONL. SSH projects export from their owning working host;
+  // relay browser conversations and fresh drafts have no local save dialog.
   if !model.narrow &&
     model.is_desktop &&
-    conv.device is Local &&
+    (conv.device is Local || @interop.is_native_ssh(conv.device)) &&
     !conv.messages.is_empty() {
     items.push(
       @html.button(
@@ -2133,6 +2265,22 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
+  let ssh_status = match
+    (
+      model.ssh_ui.hosts
+      .iter()
+      .find_first(host => @interop.Remote(host.id) == model.focused),
+      model.bridge_state(),
+    ) {
+    (Some(profile), BridgeLost(message)) =>
+      [
+        @html.div(class="ssh-connection-status", [
+          @html.strong(profile.name + " · SSH"),
+          @html.span(message),
+        ]),
+      ]
+    _ => []
+  }
   let content = if navigation_notice(dispatch, model) is Some(notice) {
     [notice]
   } else {
@@ -2143,6 +2291,7 @@ fn view(
       class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
       header,
     ),
+    ..ssh_status,
     ..content,
   ]
   let panel_available = model.screen is Chat ||
@@ -2253,12 +2402,15 @@ fn view(
   if model.api_setup_open {
     children.push(api_setup_modal(dispatch, model))
   }
-  if model.project_picker is Some(picker) {
+  if !model.ssh_ui.open && model.project_picker is Some(picker) {
     children.push(
       @project_picker.view(
         locale=model.locale,
         dispatch.map(msg => ProjectPicker(msg)),
         picker,
+        toolbar=ssh_location_toolbar(dispatch, model, picker.channel()),
+        unavailable=model.device_state(picker.channel())
+          is Some({ bridge: BridgeLost(_), .. }),
       ),
     )
   }
@@ -2283,7 +2435,11 @@ fn view(
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
   // rendered device readable while its topbar and composer show reconnecting.
-  if model.is_desktop && model.bridge_state() is BridgeLost(message) {
+  if model.ssh_ui.open {
+    children.push(ssh_hosts_view(dispatch, model.ssh_ui))
+  }
+  if model.is_desktop &&
+    model.device_state(Local) is Some({ bridge: BridgeLost(message), .. }) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
   }
   @html.div(class=app_shell_class(model.sidebar_open), children)

@@ -194,9 +194,9 @@ fn read_package_graph(
         }
       }
       let message = match reply {
-        @protocol.PackageGraphSource(source~) =>
+        @protocol.MoonPackageGraphReply::PackageGraphSource(source~) =>
           PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~)
-        @protocol.PackageGraphError(message~) =>
+        @protocol.MoonPackageGraphReply::PackageGraphError(message~) =>
           PackageGraphRequestFailed(
             owner~,
             epoch~,
@@ -261,7 +261,8 @@ fn FileContent::from_reply(reply : @protocol.ReadFileReply) -> FileContent {
       }
     // The host echoes the requested path as `absolute`; the document key
     // already names it, so the echo is not read.
-    @protocol.Content(content~, sig~, ..) => Content(content~, sig~)
+    @protocol.ReadFileReply::Content(content~, sig~, ..) =>
+      Content(content~, sig~)
   }
 }
 
@@ -522,7 +523,11 @@ test "typed directory rows build full relative paths" {
 test "typed file replies map to viewer content" {
   assert_true(
     FileContent::from_reply(
-      @protocol.Content(content="hello", absolute="/ws/a.mbt", sig="12:34"),
+      @protocol.ReadFileReply::Content(
+        content="hello",
+        absolute="/ws/a.mbt",
+        sig="12:34",
+      ),
     )
     is Content(content="hello", sig="12:34"),
   )

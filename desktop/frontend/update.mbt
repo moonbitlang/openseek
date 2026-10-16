@@ -504,6 +504,16 @@ fn adopt_projects(
   let workspace_settings_request_generation = dev.workspace_settings_request_generation +
     1
   let commands : Array[@cmd.Cmd] = []
+  if model.is_desktop && channel is Remote(id) {
+    commands.push(
+      ssh_cache_projects(
+        dispatch,
+        id,
+        paths.filter(path => !dev.is_chat_workspace(path)),
+      ),
+    )
+  }
+
   for path in paths {
     commands.push(
       fetch_worktrees(
@@ -1564,9 +1574,9 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
 ///|
 /// The terminal package's view of the active conversation. On the Codex page,
 /// the selected app-server thread supplies the PTY session id and cwd. The
-/// focused device owns every PTY opened from either source; a remote connection
-/// is considered unavailable from its first socket loss because its old PTYs
-/// are torn down at that boundary, even before the page escalates to BridgeLost.
+/// focused device owns every PTY opened from either source. Relay PTYs end on
+/// socket loss; native SSH terminals use independent connections owned by the
+/// window and remain usable while the app-server channel reconnects.
 fn terminal_ctx(model : Model) -> @terminal.Ctx {
   let active = model
     .active_checkout()
@@ -1574,10 +1584,11 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
       owner: { channel: model.focused, session: "", },
       placement: None,
     })
-  let connected = match model.device_state(active.owner.channel) {
-    Some(dev) => dev.bridge is Connected && dev.reconnect_failures == 0
-    None => false
-  }
+  let connected = @interop.is_native_ssh(active.owner.channel) ||
+    (match model.device_state(active.owner.channel) {
+      Some(dev) => dev.bridge is Connected && dev.reconnect_failures == 0
+      None => false
+    })
   @terminal.Ctx(
     channel=active.owner.channel,
     session=active.owner.session,
@@ -2176,6 +2187,7 @@ fn update_msg(
   model : Model,
 ) -> (@cmd.Cmd, Model) {
   match msg {
+    Ssh(msg) => update_ssh(dispatch, msg, model)
     Init => {
       // Both pages boot the same console; they differ only in where its
       // device comes from. A browser console asks the relay who is signed
@@ -2542,7 +2554,7 @@ fn update_msg(
                   dispatch,
                   conv.device,
                   conv.session_id,
-                  @protocol.QueueSteer(id~),
+                  @protocol.QueueAction::QueueSteer(id~),
                   run_id,
                 ),
                 model.replace_conversation(conv),
@@ -2565,7 +2577,7 @@ fn update_msg(
                   dispatch,
                   conv.device,
                   conv.session_id,
-                  @protocol.QueueWithdraw(id~),
+                  @protocol.QueueAction::QueueWithdraw(id~),
                   run_id,
                 ),
                 if editing {
@@ -4474,7 +4486,7 @@ fn update_msg(
                 dispatch,
                 model.focused,
                 conv.session_id,
-                @protocol.QueueEdit(
+                @protocol.QueueAction::QueueEdit(
                   id~,
                   text=task,
                   images=conv.images.map(image => image.url),
@@ -4507,7 +4519,7 @@ fn update_msg(
               dispatch,
               model.focused,
               conv.session_id,
-              @protocol.QueueAdd(
+              @protocol.QueueAction::QueueAdd(
                 id=submission_id,
                 text=task,
                 images=conv.images.map(image => image.url),
@@ -5002,7 +5014,7 @@ fn update_msg(
         model.can_pick_project(channel) else {
         return (@cmd.none, model)
       }
-      let (focus_cmd, model) = focus_channel(dispatch, model, channel)
+      let focus_cmd = @cmd.none
       // Retire Quick Open first. The picker's capture-phase keys claim Enter
       // and Escape for the browse session, so a palette left standing would
       // paint over the picker while every keystroke went to the picker behind
@@ -5014,7 +5026,15 @@ fn update_msg(
         dispatch.map(msg => ProjectPicker(msg)),
       )
       (
-        @cmd.batch([focus_cmd, quick_open_cmd, browse_cmd]),
+        @cmd.batch([
+          focus_cmd,
+          quick_open_cmd,
+          if model.device_state(channel) is Some({ bridge: Connected, .. }) {
+            browse_cmd
+          } else {
+            @cmd.none
+          },
+        ]),
         {
           ..model,
           // A newer project choice supersedes any outstanding chat allocation.
@@ -5035,35 +5055,40 @@ fn update_msg(
         update(dispatch, PickProject(model.focused), model)
       }
     ProjectPicker(msg) =>
-      match model.project_picker {
-        Some(picker) => {
-          let (cmd, next, outcome) = @project_picker.State::handle(
-            locale=model.locale,
-            picker,
-            dispatch.map(msg => ProjectPicker(msg)),
-            msg,
-          )
-          let model = { ..model, project_picker: next, }
-          match outcome {
-            None => (cmd, model)
-            // A failed browse or create leaves the previous listing usable.
-            Some(@project_picker.Outcome::Failed(message)) => {
-              let (toast, model) = model.notify_error(dispatch, message)
-              (@cmd.batch([cmd, toast]), model)
-            }
-            // Confirm registers the directory the host last listed — always
-            // something it confirmed exists — never raw pasted text; a paste
-            // navigates (and validates) first. The pending adoption later
-            // focuses the project the add committed.
-            Some(@project_picker.Outcome::Picked(channel, path)) => {
-              let (add_cmd, next) = adopt_picked_directory(
-                dispatch, channel, path, model,
-              )
-              (@cmd.batch([cmd, add_cmd]), next)
+      if model.ssh_ui.open &&
+        !(msg is (@project_picker.Loaded(..) | @project_picker.Failed(..))) {
+        (@cmd.none, model)
+      } else {
+        match model.project_picker {
+          Some(picker) => {
+            let (cmd, next, outcome) = @project_picker.State::handle(
+              locale=model.locale,
+              picker,
+              dispatch.map(msg => ProjectPicker(msg)),
+              msg,
+            )
+            let model = { ..model, project_picker: next, }
+            match outcome {
+              None => (cmd, model)
+              // A failed browse or create leaves the previous listing usable.
+              Some(@project_picker.Outcome::Failed(message)) => {
+                let (toast, model) = model.notify_error(dispatch, message)
+                (@cmd.batch([cmd, toast]), model)
+              }
+              // Confirm registers the directory the host last listed — always
+              // something it confirmed exists — never raw pasted text; a paste
+              // navigates (and validates) first. The pending adoption later
+              // focuses the project the add committed.
+              Some(@project_picker.Outcome::Picked(channel, path)) => {
+                let (add_cmd, next) = adopt_picked_directory(
+                  dispatch, channel, path, model,
+                )
+                (@cmd.batch([cmd, add_cmd]), next)
+              }
             }
           }
+          None => (@cmd.none, model)
         }
-        None => (@cmd.none, model)
       }
     RemoveProject(channel, path) =>
       // The row itself leaves with the registry commit broadcast; its open
@@ -6181,8 +6206,12 @@ fn update_msg(
     BrowserNavigateSubmitted => {
       guard @dock.active_browser(model.dock) is Some(id) &&
         @preview.page(model.preview, id) is Some(page) &&
+        page.source is None &&
         @preview.normalize_url(page.input) is Some(url) else {
         return (@cmd.none, model)
+      }
+      if model.rejects_remote_local_url(url) {
+        return model.remote_local_url_refused(dispatch)
       }
       // A committed browser navigation is newer than any pending transcript
       // file link. Spend the token only after validation so an invalid address
@@ -6251,6 +6280,9 @@ fn update_msg(
         page.url is Some(url) else {
         return (@cmd.none, model)
       }
+      if model.rejects_remote_local_url(url) {
+        return model.remote_local_url_refused(dispatch)
+      }
       (open_external_link(dispatch, url), model)
     }
     AppToggleMaximizedRequested =>
@@ -6259,7 +6291,7 @@ fn update_msg(
           browser_op(
             dispatch,
             @commands.app_toggle_maximized,
-            @protocol.NoPayload,
+            @protocol.EmptyPayload::NoPayload,
             quiet=false,
           ),
           model,
@@ -6272,7 +6304,7 @@ fn update_msg(
         browser_op(
           dispatch,
           @commands.app_open_devtools,
-          @protocol.NoPayload,
+          @protocol.EmptyPayload::NoPayload,
           quiet=false,
         ),
         model,
@@ -6283,7 +6315,7 @@ fn update_msg(
         browser_op(
           dispatch,
           @commands.app_close_window,
-          @protocol.NoPayload,
+          @protocol.EmptyPayload::NoPayload,
           quiet=false,
         ),
         model,
@@ -6378,7 +6410,10 @@ fn update_msg(
     }
     HostActionFailed(message) => model.notify_error(dispatch, message)
     OpenExport(source) => {
-      let (cmd, export_dialog) = model.export_dialog.open(source)
+      let (cmd, export_dialog) = model.export_dialog.open(
+        source,
+        channel=model.focused,
+      )
       (cmd, { ..model, export_dialog, })
     }
     OpenSessionSearch =>
@@ -6468,7 +6503,9 @@ fn update_msg(
       // built-in Browser instead of changing behavior with the conversation
       // provider. Settings' device-page link is the clearest external case:
       // it wants the browser where the user is already signed in.
-      if !model.is_desktop {
+      if model.rejects_remote_local_url(url) {
+        model.remote_local_url_refused(dispatch)
+      } else if !model.is_desktop {
         (open_browser_link(url), model)
       } else if (model.screen is Chat || model.screen is Codex) &&
         @preview.is_web_url(url) {
@@ -6795,6 +6832,19 @@ fn update_device_msg(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
       ]
+      if model.is_desktop && channel == Local {
+        commands.push(ssh_load(dispatch))
+      }
+      let model = if model.project_picker is Some(picker) &&
+        picker.channel() == channel {
+        let (cmd, picker) = picker.refresh(
+          dispatch.map(msg => ProjectPicker(msg)),
+        )
+        commands.push(cmd)
+        { ..model, project_picker: Some(picker), }
+      } else {
+        model
+      }
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
       // they load on connect rather than when the Skills page opens) follow
@@ -6867,7 +6917,11 @@ fn update_device_msg(
       // starts a fresh monotonic round. Focused-scoped, like the fetches
       // that repopulate the mirror.
       let model = if channel == model.focused {
-        { ..model.clear_host_settings(), conversations, }
+        {
+          ..model.clear_host_settings(),
+          conversations,
+          codex: model.codex.bridge_reconnected(),
+        }
       } else {
         { ..model, conversations, }
       }
@@ -6927,8 +6981,26 @@ fn update_device_msg(
         },
       )
     }
-    BridgeUnavailable(message) =>
-      (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
+    BridgeConnecting => {
+      let model = model.replace_device({ ..dev, bridge: Connecting, })
+      let model = if model.project_picker is Some(picker) &&
+        picker.channel() == channel {
+        { ..model, project_picker: Some(picker.pause()), }
+      } else {
+        model
+      }
+      (@cmd.none, model)
+    }
+    BridgeUnavailable(message) => {
+      let model = model.replace_device({ ..dev, bridge: BridgeLost(message), })
+      let model = if model.project_picker is Some(picker) &&
+        picker.channel() == channel {
+        { ..model, project_picker: Some(picker.pause()), }
+      } else {
+        model
+      }
+      (@cmd.none, model)
+    }
     ChannelDown(websocket_epoch~) => {
       // A close callback may already be queued when sign-out retires a
       // device. If the same relay id is later re-added, it owns a new epoch
@@ -7103,11 +7175,11 @@ fn update_device_msg(
         return (@cmd.none, model)
       }
       let next = match action {
-        @protocol.QueueAdd(id~, ..) => {
+        @protocol.QueueAction::QueueAdd(id~, ..) => {
           let (next, _) = conv.acknowledge_steer(id, Some(run_id))
           next
         }
-        @protocol.QueueEdit(id~, text=content, images~) => {
+        @protocol.QueueAction::QueueEdit(id~, text=content, images~) => {
           let queued_inputs = conv.queued_inputs.copy()
           // The engine may already have consumed the item while the save
           // response was travelling back. Still settle the accepted draft.
@@ -7185,7 +7257,8 @@ fn update_device_msg(
             },
           )
         }
-        @protocol.QueueWithdraw(id~) | @protocol.QueueSteer(id~) => {
+        @protocol.QueueAction::QueueWithdraw(id~)
+        | @protocol.QueueAction::QueueSteer(id~) => {
           let (next, _) = conv.remove_queued_input(id)
           next
         }
@@ -10265,7 +10338,7 @@ test "a matching durable commit de-duplicates without mutating the preview" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -10294,7 +10367,7 @@ test "commit-first reasoning keeps late prefixes and de-duplicates when sealed" 
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Assistant({
+    item=@protocol.SessionItem::Assistant({
       content: "answer",
       tool_calls: None,
       reasoning_content: Some("complete thought"),
@@ -10335,7 +10408,7 @@ test "a delayed untagged commit cannot truncate a newer reasoning stream" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "older answer",
         tool_calls: None,
         reasoning_content: Some("shared"),
@@ -10449,7 +10522,7 @@ test "a new run frontier includes commits already buffered by reload" {
   let buffered : BufferedCommit = {
     sequence: 3,
     ts: None,
-    item: @protocol.Assistant({
+    item: @protocol.SessionItem::Assistant({
       content: "older answer",
       tool_calls: None,
       reasoning_content: Some("shared opening"),
@@ -11047,7 +11120,7 @@ test "session list assigns a commit-first conversation to its durable workspace"
       session="desktop-foreign",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
@@ -11109,7 +11182,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-foreign",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("arrived before the list")]),
         submission_id: None,
       }),
@@ -11133,7 +11206,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-registered",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -11161,7 +11234,7 @@ test "a rooted commit places its conversation without waiting for the list" {
       session="desktop-unseen",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -11215,7 +11288,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -11232,7 +11305,7 @@ test "a commit for an unlisted store refreshes past a same-id row" {
       session="desktop-listed-only",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -11274,7 +11347,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("listed")]),
         submission_id: None,
       }),
@@ -11296,7 +11369,7 @@ test "a commit for an unlisted store refreshes past a same-id watermark" {
       session="desktop-shared",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("other project")]),
         submission_id: None,
       }),
@@ -11595,7 +11668,7 @@ test "reconnect refresh is single-flight and preserves its commit buffer" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("future")]),
         submission_id: None,
       }),
@@ -11832,6 +11905,56 @@ test "BridgeReady resets only conversations owned by its channel" {
   assert_true(kept.compaction is Queued)
   assert_eq(reset.turn.streaming_response, None)
   assert_true(reset.compaction is NotCompacting)
+}
+
+///|
+test "BridgeReady resets Codex approval ordering only for the focused host" {
+  let dispatch = test_dispatch()
+  let background : @interop.ChannelId = Remote("other-host")
+  let model = {
+    ..test_model(),
+    devices: [
+      empty_device_state(@interop.ChannelId::Local),
+      empty_device_state(background),
+    ],
+  }
+  let (_, pending) = update(
+    dispatch,
+    Codex(
+      channel=Local,
+      @codex.Msg::server_request(
+        "old-token",
+        Json(7),
+        "item/commandExecution/requestApproval",
+        { "threadId": "same-thread" },
+        80,
+      ),
+    ),
+    model,
+  )
+  assert_true(pending.codex != model.codex)
+  let (_, unrelated) = update(
+    dispatch,
+    FromDevice(background, BridgeReady),
+    pending,
+  )
+  assert_true(unrelated.codex == pending.codex)
+  let (_, reconnected) = update_dev(dispatch, BridgeReady, unrelated)
+  let (_, fresh) = update(
+    dispatch,
+    Codex(
+      channel=Local,
+      @codex.Msg::server_request(
+        "new-token",
+        Json(7),
+        "item/commandExecution/requestApproval",
+        { "threadId": "same-thread" },
+        1,
+      ),
+    ),
+    reconnected,
+  )
+  assert_true(fresh.codex != reconnected.codex)
 }
 
 ///|
@@ -12620,7 +12743,9 @@ test "run semantic errors never duplicate their terminal commit" {
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Terminal(@protocol.Failed("engine error")),
+    item=@protocol.SessionItem::Terminal(
+      @protocol.SessionTerminal::Failed("engine error"),
+    ),
     session_root=@interop.ChannelId::Local.test_store_root(),
   )
   let (_, semantic_first) = update_dev(dispatch, semantic, running_model())
@@ -14129,7 +14254,7 @@ test "a live commit dates its row on arrival, buffered or applied straight" {
       session~,
       sequence~,
       ts=Some(ts),
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("question")]),
         submission_id: None,
       }),
@@ -14179,7 +14304,7 @@ test "a canonical user commit never settles a local steer" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("go left")]),
         submission_id: None,
       }),
@@ -14382,7 +14507,7 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=2,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "previous answer",
         tool_calls: None,
         reasoning_content: None,
@@ -14417,7 +14542,9 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=3,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("previous answer")),
+      item=@protocol.SessionItem::Terminal(
+        @protocol.SessionTerminal::Finished("previous answer"),
+      ),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     started,
@@ -14428,7 +14555,7 @@ test "a foreign background run schedules one causal read after Started" {
       session~,
       sequence=4,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("current question")]),
         submission_id: None,
       }),
@@ -14510,7 +14637,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("current question")]),
         submission_id: None,
       }),
@@ -14524,7 +14651,7 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "current answer",
         tool_calls: None,
         reasoning_content: None,
@@ -14540,7 +14667,9 @@ test "buffered commits are delivery, not applied chronology" {
       session="desktop-test",
       sequence=4,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("current answer")),
+      item=@protocol.SessionItem::Terminal(
+        @protocol.SessionTerminal::Finished("current answer"),
+      ),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     answer,
@@ -17580,7 +17709,7 @@ test "a new Started incarnation retires its exact deleted tombstone" {
       session=deleted_item.id,
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("new incarnation")]),
         submission_id: None,
       }),
@@ -20438,7 +20567,7 @@ test "send does not show a prompt until its commit lands" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("build the thing")]),
         submission_id: None,
       }),
@@ -20473,7 +20602,7 @@ test "a replayed commit at or below the watermark is dropped" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("already there")]),
         submission_id: None,
       }),
@@ -20498,7 +20627,7 @@ test "a commit past the frontier buffers and flips into a reload" {
       session="desktop-test",
       sequence=5,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("from the future")]),
         submission_id: None,
       }),
@@ -20529,7 +20658,7 @@ test "commits buffer while a reload is in flight" {
       session="desktop-test",
       sequence=3,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("mid-reload")]),
         submission_id: None,
       }),
@@ -20555,7 +20684,7 @@ test "a snapshot drains buffered commits in sequence order" {
       {
         sequence: 4,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("four")]),
           submission_id: None,
         }),
@@ -20563,7 +20692,7 @@ test "a snapshot drains buffered commits in sequence order" {
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("three")]),
           submission_id: None,
         }),
@@ -20617,7 +20746,7 @@ test "a snapshot already containing the buffered commits drops them" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("dup")]),
           submission_id: None,
         }),
@@ -20662,7 +20791,7 @@ test "a snapshot with a still-gapped buffer keeps reloading" {
       {
         sequence: 9,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("far")]),
           submission_id: None,
         }),
@@ -20709,7 +20838,7 @@ test "background retries preserve buffered commits until a later success" {
       {
         sequence: 3,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("x")]),
           submission_id: None,
         }),
@@ -20741,7 +20870,7 @@ test "background retries preserve buffered commits until a later success" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("next")]),
         submission_id: None,
       }),
@@ -20793,7 +20922,7 @@ test "reopening an active failed reload restarts it and keeps the buffer" {
       {
         sequence: 2,
         ts: None,
-        item: @protocol.User({
+        item: @protocol.SessionItem::User({
           content: Content([Text("two")]),
           submission_id: None,
         }),
@@ -20862,7 +20991,7 @@ test "stale and lower-watermark snapshots cannot overwrite current state" {
         {
           sequence: 6,
           ts: None,
-          item: @protocol.User({
+          item: @protocol.SessionItem::User({
             content: Content([Text("six")]),
             submission_id: None,
           }),
@@ -20938,7 +21067,7 @@ test "tool decode semantics wait for their durable error tool result" {
     session="desktop-test",
     sequence=1,
     ts=None,
-    item=@protocol.Assistant({
+    item=@protocol.SessionItem::Assistant({
       content: "",
       tool_calls: Some([{ id: "c1", name: "edit", arguments: "{", }]),
       reasoning_content: None,
@@ -20950,7 +21079,7 @@ test "tool decode semantics wait for their durable error tool result" {
     session="desktop-test",
     sequence=2,
     ts=None,
-    item=@protocol.ToolResult({
+    item=@protocol.SessionItem::ToolResult({
       data: None,
       tool_call_id: "c1",
       tool_name: "edit",
@@ -20998,7 +21127,7 @@ test "assistant semantic events wait for their durable commit" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -21022,7 +21151,7 @@ test "assistant semantic events wait for their durable commit" {
 test "a committed tool result visibly changes its existing call row" {
   let (_, called) = running_conversation().apply_commit(
     1,
-    @protocol.Assistant({
+    @protocol.SessionItem::Assistant({
       content: "",
       tool_calls: Some([
         { id: "c1", name: "read", arguments: "{\"path\":\"moon.mod\"}", },
@@ -21034,7 +21163,7 @@ test "a committed tool result visibly changes its existing call row" {
   inspect(called.messages.length(), content="1")
   let (changed, completed) = called.apply_commit(
     2,
-    @protocol.ToolResult({
+    @protocol.SessionItem::ToolResult({
       data: None,
       tool_call_id: "c1",
       tool_name: "read",
@@ -21078,7 +21207,7 @@ test "a delayed assistant commit never clears a newer live delta" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "older committed answer",
         tool_calls: None,
         reasoning_content: Some("older reasoning"),
@@ -21122,7 +21251,9 @@ test "a delayed terminal commit never clears a newer live delta" {
       session="desktop-test",
       sequence=2,
       ts=None,
-      item=@protocol.Terminal(@protocol.Finished("older answer")),
+      item=@protocol.SessionItem::Terminal(
+        @protocol.SessionTerminal::Finished("older answer"),
+      ),
       session_root=@interop.ChannelId::Local.test_store_root(),
     ),
     model,
@@ -21146,7 +21277,7 @@ test "commit-first assistant semantics do not append again" {
       session="desktop-test",
       sequence=1,
       ts=None,
-      item=@protocol.Assistant({
+      item=@protocol.SessionItem::Assistant({
         content: "answer",
         tool_calls: None,
         reasoning_content: Some("think"),
@@ -21180,7 +21311,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -21204,7 +21335,7 @@ test "a sequence-one commit materializes an unknown hidden conversation" {
       session="desktop-elsewhere",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("hi")]),
         submission_id: None,
       }),
@@ -21224,7 +21355,7 @@ test "a gapped commit for an unknown session materializes then reloads" {
       session="desktop-gap",
       sequence=3,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("third")]),
         submission_id: None,
       }),
@@ -21266,7 +21397,7 @@ test "a late commit cannot resurrect a locally known archived session" {
       session="desktop-archived",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("stale")]),
         submission_id: None,
       }),
@@ -21298,7 +21429,7 @@ test "an archive tombstone blocks commits before the archived list refreshes" {
       session="desktop-tombstoned",
       sequence=1,
       ts=None,
-      item=@protocol.User({
+      item=@protocol.SessionItem::User({
         content: Content([Text("stale")]),
         submission_id: None,
       }),
@@ -22796,9 +22927,9 @@ test "file context inherits the conversation model and its reasoning family" {
     assert_eq(
       ctx.thinking,
       if engine_model is Glm53 {
-        Some(@protocol.ThinkingOff)
+        Some(@protocol.OpenSeekThinking::ThinkingOff)
       } else {
-        Some(@protocol.ThinkingMax)
+        Some(@protocol.OpenSeekThinking::ThinkingMax)
       },
     )
   }
@@ -22991,4 +23122,138 @@ fn Model::with_approval_snapshot(
       { ..conv, pending_approval: pending, }
     }),
   }
+}
+
+///|
+test "remote preview replies open only the current conversation and keep source identity" {
+  let channel : @interop.ChannelId = Remote("ssh_preview")
+  let model = {
+    ..test_model(),
+    is_desktop: true,
+    focused: channel,
+    devices: [
+      {
+        ..empty_device_state(channel),
+        bridge: Connected,
+        projects: [channel.test_project()],
+        worktrees: [channel.test_worktrees()],
+      },
+    ],
+    conversations: [
+      empty_conversation(channel, "desktop-test", channel.test_project()),
+    ],
+  }
+  let dispatch = test_dispatch()
+  let (_, pending) = update(dispatch, OpenFile("report.pdf"), model)
+  let context = FileOpenContext::new(
+    { channel, session: "desktop-test", },
+    pending.file_panel.file_link_generation,
+  )
+  let reply : @protocol.OpenPathReply = RemotePreview(
+    local_path="/tmp/cache/report.pdf",
+    remote_path="/work/project/report.pdf",
+  )
+  let (_, opened) = update(dispatch, OpenPathResolved(context, reply), pending)
+  assert_eq(opened.preview.pages.length(), 1)
+  assert_eq(opened.preview.local_files(), [
+    @resource.of_path(channel, "/work/project/report.pdf").unwrap(),
+  ])
+  let (_, repeated) = update(dispatch, OpenPathResolved(context, reply), opened)
+  assert_eq(repeated.preview.pages.length(), 1)
+  let (_, submitted) = update(dispatch, BrowserNavigateSubmitted, repeated)
+  assert_true(submitted.preview == repeated.preview)
+  let (_, stale) = update(
+    dispatch,
+    OpenPathResolved({ ..context, generation: context.generation - 1, }, reply),
+    pending,
+  )
+  assert_true(stale.preview.pages.is_empty())
+  let (_, wrong) = update(
+    dispatch,
+    OpenPathResolved(
+      { ..context, owner: { channel: Local, session: "desktop-test", }, },
+      reply,
+    ),
+    pending,
+  )
+  assert_true(wrong.preview.pages.is_empty())
+}
+
+///|
+fn Model::rejects_remote_local_url(self : Model, url : String) -> Bool {
+  self.is_desktop &&
+  self.focused is Remote(_) &&
+  @preview.is_machine_local_url(url)
+}
+
+///|
+fn Model::remote_local_url_refused(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+) -> (@cmd.Cmd, Model) {
+  self.notify_error(
+    dispatch, "This link points to the remote host. SSH web port forwarding is not available yet.",
+  )
+}
+
+///|
+test "remote workspace loopback links never open a local browser destination" {
+  let dispatch = test_dispatch()
+  let channel : @interop.ChannelId = Remote("ssh_demo")
+  let remote = {
+    ..test_model(),
+    is_desktop: true,
+    focused: channel,
+    devices: [
+      {
+        ..empty_device_state(channel),
+        bridge: Connected,
+        projects: [channel.test_project()],
+        worktrees: [channel.test_worktrees()],
+      },
+    ],
+    conversations: [
+      empty_conversation(channel, "desktop-test", channel.test_project()),
+    ],
+  }
+  let (_, remote) = update(
+    dispatch,
+    Terminal(@terminal.TabSelected(key="missing-tab")),
+    remote,
+  )
+  let (_, refused) = update(
+    dispatch,
+    ExternalLinkClicked("http://127.1:5173/"),
+    remote,
+  )
+  assert_true(refused.preview.pages.is_empty())
+  assert_eq(refused.notifications.length(), 1)
+  let (_, web) = update(
+    dispatch,
+    ExternalLinkClicked("https://example.com/docs"),
+    remote,
+  )
+  assert_eq(web.preview.pages.length(), 1)
+  let (_, edited) = update(
+    dispatch,
+    BrowserAddressEdited("localhost:3000"),
+    web,
+  )
+  let (_, blocked) = update(dispatch, BrowserNavigateSubmitted, edited)
+  assert_true(blocked.preview == edited.preview)
+  assert_eq(blocked.notifications.length(), 1)
+  let (preview, id) = @preview.open_page(
+    remote.preview,
+    url="http://[::1]:3000/",
+  )
+  let old = { ..remote, preview, dock: @dock.open_browser(remote.dock, id), }
+  let (_, external) = update(dispatch, BrowserOpenExternal, old)
+  assert_eq(external.notifications.length(), 1)
+  // Local desktop development URLs retain their ordinary Browser route.
+  let (_, local_model) = update(
+    dispatch,
+    ExternalLinkClicked("http://127.1:5173/"),
+    desktop_model(),
+  )
+  assert_eq(local_model.preview.pages.length(), 1)
 }

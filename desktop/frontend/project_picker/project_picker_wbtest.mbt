@@ -10,7 +10,11 @@ test "a listing keeps its raw protocol path" {
   assert_true(
     reply_message(
       @interop.ChannelId::Local,
-      @protocol.Listing(path="/C:/project", parent=Some("/C:/"), entries=[]),
+      @protocol.BrowseDirectoryReply::Listing(
+        path="/C:/project",
+        parent=Some("/C:/"),
+        entries=[],
+      ),
       generation=7,
       drives=true,
     )

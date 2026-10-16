@@ -428,6 +428,12 @@ fn main {
   // wait for something that may still arrive.
   let desktop = @interop.openseek_api() is Some(_)
   @crash_page.install()
+  start_frontend(desktop~)
+}
+
+///|
+#warnings("-alert_unstable")
+fn start_frontend(desktop~ : Bool) -> Unit {
   let app = @rabbita.new(() => {
     let (state, emit) = @rabbita.create_state_with_init(
       // Init flows through `update` like any other message, as
@@ -460,7 +466,11 @@ fn main {
         // modal is open — same lifetime rule as the dismissal listeners.
         subs.push(
           @project_picker.subscriptions(
-            model.project_picker,
+            if model.ssh_ui.open {
+              None
+            } else {
+              model.project_picker
+            },
             emit.map(msg => ProjectPicker(msg)),
           ),
         )

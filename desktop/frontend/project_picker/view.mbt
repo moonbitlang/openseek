@@ -43,6 +43,8 @@ pub fn view(
   locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
+  toolbar~ : @html.Html = @html.nothing,
+  unavailable~ : Bool = false,
 ) -> @html.Html {
   let visible_entries = picker.visible_entries()
   let filter_active = !picker.path_filter().is_empty()
@@ -85,7 +87,20 @@ pub fn view(
   if visible_entries.is_empty() && picker.new_folder is None {
     rows.push(empty_view(locale~, picker, filter_active))
   }
-  let can_create = !picker.loading &&
+  if unavailable {
+    rows.clear()
+    rows.push(
+      @html.div(class="picker-empty", [
+        @html.div(class="picker-empty-title", ui(locale, RemoteUnavailable)),
+        @html.div(
+          class="picker-empty-detail",
+          ui(locale, RetryOrChooseLocation),
+        ),
+      ]),
+    )
+  }
+  let can_create = !unavailable &&
+    !picker.loading &&
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
@@ -104,7 +119,7 @@ pub fn view(
   let list_attrs = @html.Attrs::build()
     .id(PathListId)
     .aria_label(ui(locale, FoldersLabel))
-    .aria_busy(picker.loading.to_string())
+    .aria_busy((picker.loading && !unavailable).to_string())
   let list_attrs = if path_editing {
     list_attrs.role("listbox")
   } else {
@@ -146,6 +161,7 @@ pub fn view(
             @icons.icon(@icons.icon_close),
           ),
         ]),
+        toolbar,
         @html.div(class="picker-location-bar", [
           match picker.path_draft {
             Some(value) =>
@@ -166,7 +182,9 @@ pub fn view(
               @html.span(ui(locale, NameLabel)),
               @html.span(
                 class="picker-list-count",
-                if picker.loading {
+                if unavailable {
+                  ui(locale, UnavailableLabel)
+                } else if picker.loading {
                   ui(locale, LoadingLabel)
                 } else {
                   folder_count_label
@@ -176,7 +194,7 @@ pub fn view(
             @html.div(class="picker-list-rows", rows),
           ]),
         ]),
-        picker_footer(locale~, emit, picker),
+        picker_footer(locale~, emit, picker, unavailable~),
       ],
     ),
   ])
@@ -345,16 +363,18 @@ fn empty_view(
 
 ///|
 fn picker_footer(
+  unavailable~ : Bool,
   locale~ : @i18n.Locale = English,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {
-  let can_confirm = !picker.loading &&
+  let can_confirm = !unavailable &&
+    !picker.loading &&
     picker.location is Some(Directory(_)) &&
     picker.new_folder is None &&
     picker.path_draft is None
   @html.div(class="picker-footer", [
-    current_location(locale~, picker),
+    current_location(locale~, picker, unavailable~),
     @html.div(class="modal-actions", [
       @html.button(
         class="button secondary",
@@ -379,13 +399,18 @@ fn picker_footer(
 /// selection summary. A loading navigation intentionally keeps showing the
 /// last successful location while the primary action is disabled.
 fn current_location(
+  unavailable~ : Bool,
   locale~ : @i18n.Locale = English,
   picker : State,
 ) -> @html.Html {
   let (label, path) = match picker.location {
     Some(Directory(path)) => (ui(locale, CurrentFolder), path)
     Some(DriveList) => (ui(locale, LocationLabel), ui(locale, ThisPc))
-    None => (ui(locale, LocationLabel), ui(locale, LoadingLabel))
+    None =>
+      (
+        ui(locale, LocationLabel),
+        ui(locale, if unavailable { UnavailableLabel } else { LoadingLabel }),
+      )
   }
   @html.div(class="picker-current-location", [
     @html.span(

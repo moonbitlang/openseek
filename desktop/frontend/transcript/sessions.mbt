@@ -286,7 +286,7 @@ pub fn session_from_reply(
     // The standing goal replays from the same durable markers the cards
     // above come from, so a resumed conversation shows exactly the goal the
     // engine holds — see `goal.mbt`.
-    if event.item is @desktop_protocol.RuntimeNotice(notice) &&
+    if event.item is @desktop_protocol.SessionItem::RuntimeNotice(notice) &&
       goal_marker(notice.content) is Some(marker) {
       goal = apply_goal_marker(goal, marker)
       goal_markers.push((event.sequence, marker))
@@ -323,7 +323,7 @@ pub fn apply_session_item(
   let before = items.length()
   let mut updated_existing = false
   match item {
-    @desktop_protocol.User(payload) => {
+    @desktop_protocol.SessionItem::User(payload) => {
       let content = match payload.content.0 {
         [Text(text)] => @deepseek.Content([Text(text.trim().to_owned())])
         _ => model_content(payload.content)
@@ -332,7 +332,7 @@ pub fn apply_session_item(
         items.push({ kind: User(content~), ts, sequence, })
       }
     }
-    @desktop_protocol.Assistant(payload) => {
+    @desktop_protocol.SessionItem::Assistant(payload) => {
       let is_replay = payload.is_replay is Some(true)
       // Thinking-mode turns store the reasoning alongside the answer (the
       // store omits the field entirely otherwise). A checkpoint replay
@@ -382,7 +382,7 @@ pub fn apply_session_item(
         })
       }
     }
-    @desktop_protocol.ToolResult(payload) => {
+    @desktop_protocol.SessionItem::ToolResult(payload) => {
       // A result answers the still-pending call recorded with its id. The
       // engine appends every response before running its calls, so the call
       // is always on record; a result nothing is waiting for changes nothing,
@@ -440,7 +440,7 @@ pub fn apply_session_item(
         break
       }
     }
-    @desktop_protocol.RuntimeNotice(payload) =>
+    @desktop_protocol.SessionItem::RuntimeNotice(payload) =>
       if !payload.content.is_blank() {
         match goal_marker(payload.content) {
           // The set/clear/block/unblock markers are the durable goal
@@ -512,20 +512,20 @@ pub fn apply_session_item(
             }
         }
       }
-    @desktop_protocol.Summary(payload) => {
+    @desktop_protocol.SessionItem::Summary(payload) => {
       let content = payload.content.trim().to_owned()
       if !content.is_empty() {
         items.push({ kind: Summary(content), ts, sequence, })
       }
     }
-    @desktop_protocol.Terminal(terminal) =>
+    @desktop_protocol.SessionItem::Terminal(terminal) =>
       updated_existing = SessionTerminalProjection(terminal).append_to(
         items,
         ts?,
         sequence?,
       )
-    @desktop_protocol.UnknownTerminal(_) => ()
-    @desktop_protocol.Unknown(_) => ()
+    @desktop_protocol.SessionItem::UnknownTerminal(_) => ()
+    @desktop_protocol.SessionItem::Unknown(_) => ()
   }
   items.length() > before || updated_existing
 }
@@ -545,7 +545,7 @@ fn SessionTerminalProjection::append_to(
     // A current no-tool final is already the last provider response. Mark
     // that response finished instead of duplicating its prose; it keeps its
     // own stamp and sequence, so the settled bubble stays the same keyed node.
-    @desktop_protocol.Finished(message) => {
+    @desktop_protocol.SessionTerminal::Finished(message) => {
       let message = message.trim().to_owned()
       if !message.is_empty() &&
         items is [.., last] &&
@@ -583,25 +583,26 @@ fn SessionTerminalProjection::append_to(
     }
     // The yield notice renders as its own bubble, as it did when yields
     // were saved as `finished`.
-    @desktop_protocol.ContextYield(message) => {
+    @desktop_protocol.SessionTerminal::ContextYield(message) => {
       match message.trim().to_owned() {
         "" => items.push({ kind: TurnEnd, ts, sequence, })
         message => items.push({ kind: Answer(message), ts, sequence, })
       }
       return false
     }
-    @desktop_protocol.Aborted(message) =>
+    @desktop_protocol.SessionTerminal::Aborted(message) =>
       match message.trim().to_owned() {
         "" => "aborted"
         message => "aborted: \{message}"
       }
-    @desktop_protocol.Interrupted(message) =>
+    @desktop_protocol.SessionTerminal::Interrupted(message) =>
       match message.trim() {
         "" => "cancelled"
         message => "cancelled: \{message}"
       }
-    @desktop_protocol.MaxStepsExhausted => "max steps exhausted"
-    @desktop_protocol.Failed(message) =>
+    @desktop_protocol.SessionTerminal::MaxStepsExhausted =>
+      "max steps exhausted"
+    @desktop_protocol.SessionTerminal::Failed(message) =>
       match message.trim().to_owned() {
         "" => "failed"
         message => message

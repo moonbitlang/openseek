@@ -580,9 +580,9 @@ fn @protocol.CodexPermissionMode::short_label(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => ui(locale, AskLabel)
-    @protocol.AutoReview => ui(locale, ApproveForMe)
-    @protocol.FullAccess => ui(locale, FullAccess)
+    @protocol.CodexPermissionMode::RequestApproval => ui(locale, AskLabel)
+    @protocol.CodexPermissionMode::AutoReview => ui(locale, ApproveForMe)
+    @protocol.CodexPermissionMode::FullAccess => ui(locale, FullAccess)
   }
 }
 
@@ -592,9 +592,10 @@ fn @protocol.CodexPermissionMode::title(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => ui(locale, RequestApproval)
-    @protocol.AutoReview => ui(locale, ApproveForMe)
-    @protocol.FullAccess => ui(locale, FullAccess)
+    @protocol.CodexPermissionMode::RequestApproval =>
+      ui(locale, RequestApproval)
+    @protocol.CodexPermissionMode::AutoReview => ui(locale, ApproveForMe)
+    @protocol.CodexPermissionMode::FullAccess => ui(locale, FullAccess)
   }
 }
 
@@ -604,9 +605,10 @@ fn @protocol.CodexPermissionMode::description(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => ui(locale, AskDescription)
-    @protocol.AutoReview => ui(locale, ReviewDescription)
-    @protocol.FullAccess => ui(locale, FullAccessDescription)
+    @protocol.CodexPermissionMode::RequestApproval => ui(locale, AskDescription)
+    @protocol.CodexPermissionMode::AutoReview => ui(locale, ReviewDescription)
+    @protocol.CodexPermissionMode::FullAccess =>
+      ui(locale, FullAccessDescription)
   }
 }
 
@@ -615,9 +617,9 @@ fn @protocol.CodexPermissionMode::glyph(
   self : @protocol.CodexPermissionMode,
 ) -> String {
   match self {
-    @protocol.RequestApproval => "✋"
-    @protocol.AutoReview => ">_"
-    @protocol.FullAccess => "!"
+    @protocol.CodexPermissionMode::RequestApproval => "✋"
+    @protocol.CodexPermissionMode::AutoReview => ">_"
+    @protocol.CodexPermissionMode::FullAccess => "!"
   }
 }
 
@@ -630,7 +632,7 @@ fn @protocol.CodexPermissionMode::render_option(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  let class_name = if self is @protocol.FullAccess {
+  let class_name = if self is @protocol.CodexPermissionMode::FullAccess {
     "codex-permission-option danger"
   } else {
     "codex-permission-option"
@@ -668,7 +670,7 @@ fn PermissionControl::render(
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
   ignore(locale)
-  let class_name = if self.mode is @protocol.FullAccess {
+  let class_name = if self.mode is @protocol.CodexPermissionMode::FullAccess {
     "codex-permission-control danger"
   } else {
     "codex-permission-control"
@@ -708,19 +710,19 @@ fn PermissionControl::render(
           class="codex-permission-menu-title",
           ui(locale, PermissionQuestion),
         ),
-        @protocol.RequestApproval.render_option(
+        @protocol.CodexPermissionMode::RequestApproval.render_option(
           locale~,
           self.mode,
           identity,
           action_emit,
         ),
-        @protocol.AutoReview.render_option(
+        @protocol.CodexPermissionMode::AutoReview.render_option(
           locale~,
           self.mode,
           identity,
           action_emit,
         ),
-        @protocol.FullAccess.render_option(
+        @protocol.CodexPermissionMode::FullAccess.render_option(
           locale~,
           self.mode,
           identity,

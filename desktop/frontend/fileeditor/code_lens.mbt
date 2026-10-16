@@ -105,7 +105,8 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
       continue
     }
     let raw_position = match lens.action {
-      @protocol.Local(position~, ..) | @protocol.Outside(position~) => position
+      @protocol.MoonIdeCodeLensAction::Local(position~, ..)
+      | @protocol.MoonIdeCodeLensAction::Outside(position~) => position
     }
     guard project_codelens_position(model, raw_position) is Some(position) else {
       continue
@@ -117,12 +118,12 @@ impl @language.CodeLensProvider for MoonIdeCodeLensProvider with fn provide_code
       execute: () => {
         guard is_current() else { return }
         let locations = match lens.action {
-          @protocol.Local(locations~, ..) =>
+          @protocol.MoonIdeCodeLensAction::Local(locations~, ..) =>
             MoonIdeProjection::{
               reply: { locations, },
               channel: projection.context.owner.channel,
             }.to_viewer()
-          @protocol.Outside(_) =>
+          @protocol.MoonIdeCodeLensAction::Outside(_) =>
             request_moon_ide_locations(
               projection.context.owner.channel,
               @commands.moonide_references,

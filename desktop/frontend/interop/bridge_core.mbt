@@ -56,7 +56,16 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request(
       }
       wait_bridge_promise(js_method_promise(api, op, payload))
     }
-    Remote(_) => ws_request(channel, op, payload)
+    Remote(_) =>
+      if is_native_ssh(channel) {
+        if is_ssh_host_command(op) {
+          ssh_host_request(channel, op, payload)
+        } else {
+          ssh_request(channel, op, payload)
+        }
+      } else {
+        ws_request(channel, op, payload)
+      }
   }
   decode_reply(op, reply)
 }
@@ -195,7 +204,16 @@ pub async fn[Payload : ToJson, Reply : @json.FromJson] bridge_request_in_order(
         }
         wait_bridge_promise(js_ordered_method_promise(api, op, payload))
       }
-      Remote(_) => ws_request(channel, op, payload)
+      Remote(_) =>
+        if is_native_ssh(channel) {
+          if is_ssh_host_command(op) {
+            ssh_host_request(channel, op, payload)
+          } else {
+            ssh_request(channel, op, payload)
+          }
+        } else {
+          ws_request(channel, op, payload)
+        }
     }
     decode_reply(op, reply)
   })

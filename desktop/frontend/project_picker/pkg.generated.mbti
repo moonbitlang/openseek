@@ -12,7 +12,7 @@ import {
 // Values
 pub fn subscriptions(State?, @cmd.Emit[Msg]) -> @sub.Sub
 
-pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State) -> @html.Html
+pub fn view(locale? : @i18n.Locale, @cmd.Emit[Msg], State, toolbar? : @html.Html, unavailable? : Bool) -> @html.Html
 
 // Errors
 
@@ -51,10 +51,13 @@ pub enum Outcome {
 }
 
 type State derive(Eq)
+pub fn State::channel(Self) -> @interop.ChannelId
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::handle(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self?, Outcome?)
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::open(@interop.ChannelId, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
+pub fn State::pause(Self) -> Self
+pub fn State::refresh(Self, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
 pub fn State::request_generation(Self) -> Int
 
 // Type aliases

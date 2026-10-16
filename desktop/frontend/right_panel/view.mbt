@@ -206,6 +206,7 @@ fn panel_view(
 ///|
 let blank_browser_page : @preview.PageState = {
   url: None,
+  source: None,
   input: "",
   title: "",
   loading: false,

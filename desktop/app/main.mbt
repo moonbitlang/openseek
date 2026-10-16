@@ -61,6 +61,7 @@ async fn main {
   guard runtime_dir is Some(service_dir) else {
     raise @working_host.HostError("Cannot prepare SeekMoon data directory")
   }
+  let ssh_store = @ssh.Store(service_dir.to_string())
   let codex_home = Some(@codex.home_dir(service_dir))
   // Keep isolation failure local to Codex and retry preparation on its next request.
   let codex = @codex.CodexSettings(
@@ -120,7 +121,7 @@ async fn main {
     console_url?=console.map(console => console.entry_url()),
     host_mcp~,
   )
-  let bridge = @extension.DesktopBridgeActor(state)
+  let bridge = @extension.DesktopBridgeActor(state, ssh_store~)
   views.page_attached(payload => bridge.notify_browser_event(payload))
   let relay = @remote.RelayActor(state, announce=device => {
     @xlog.info() <? { "message": "relay registered", "device": device }

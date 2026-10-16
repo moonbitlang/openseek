@@ -328,22 +328,62 @@ fn update_message(
         (@cmd.none, state)
       }
     Stop => (state.interrupt(dispatch, channel), state)
-    Login =>
-      (state.login(dispatch, channel), state.begin_foreground(CodexLoginReply))
+    RefreshAccount => {
+      guard !state.loading && state.login_id is None else {
+        return (@cmd.none, state)
+      }
+      let next = state.begin_auth()
+      (
+        CodexAccountReply(next.auth_context()).request(
+          dispatch,
+          channel,
+          @commands.codex_account_read,
+          { refresh_token: true, },
+        ),
+        next,
+      )
+    }
+    PrepareConfig => {
+      guard state.config != ConfigLoading else { return (@cmd.none, state) }
+      (
+        CodexConfigReply(state.activity.connection_epoch).request(
+          dispatch,
+          channel,
+          @commands.codex_config_prepare,
+          @protocol.EmptyPayload::NoPayload,
+        ),
+        { ..state, config: ConfigLoading, },
+      )
+    }
+    Login => {
+      guard !state.loading && state.login_id is None else {
+        return (@cmd.none, state)
+      }
+      let next = state.begin_auth()
+      (
+        next.login(dispatch, channel),
+        next.begin_foreground(CodexLoginReply(next.auth_context())),
+      )
+    }
     CancelLogin =>
       if state.login_id is Some(login_id) {
+        let next = state.begin_auth()
         (
-          state.cancel_login(dispatch, channel),
-          state.begin_foreground(CodexCancelLoginReply(login_id)),
+          next.cancel_login(dispatch, channel),
+          next.begin_foreground(
+            CodexCancelLoginReply(login_id, next.auth_context()),
+          ),
         )
       } else {
         (@cmd.none, state)
       }
-    Logout =>
+    Logout => {
+      let next = state.begin_auth()
       (
-        state.logout(dispatch, channel),
-        state.begin_foreground(CodexLogoutReply),
+        next.logout(dispatch, channel),
+        next.begin_foreground(CodexLogoutReply(next.auth_context())),
       )
+    }
     RequestAnswer(request_key~, question_id~, answer~) =>
       (@cmd.none, state.with_request_answer(request_key, question_id, answer))
     Respond(request_key~, decision~) =>
@@ -358,10 +398,20 @@ fn update_message(
       let mut next = state.settle_foreground(kind)
       let mut cmd = @cmd.none
       match kind {
-        CodexStatusReply => next = next.with_status(value)
-        CodexRequestsReply => next = next.with_requests(value)
-        CodexAccountReply => next = next.with_account(value)
+        CodexStatusReply(_, _) => next = next.with_status(value)
+        CodexRequestsReply(_) => next = next.with_requests(value)
+        CodexAccountReply(_) => next = next.with_account(value)
         CodexModelsReply => next = next.with_models(value)
+        CodexConfigReply(_) =>
+          next = {
+            ..next,
+            config: ConfigReady(@json.from_json(value)) catch {
+              _ =>
+                ConfigFailed(
+                  "Malformed Codex configuration and login instructions",
+                )
+            },
+          }
         CodexThreadsReply(context) =>
           next = next.with_threads(
             value,
@@ -433,7 +483,7 @@ fn update_message(
             next.load_skills(dispatch, channel, force_reload=false),
           ])
         }
-        CodexLoginReply => {
+        CodexLoginReply(_) => {
           next = next.with_login(value)
           if next.auth_url is Some(url) {
             cmd = open_external(url)
@@ -478,12 +528,24 @@ fn update_message(
           if next.draft == original {
             next = { ..next, draft: "", }
           }
-        CodexInterruptReply | CodexCancelLoginReply(_) | CodexLogoutReply => {
+        CodexCancelLoginReply(id, _) => {
+          next = next.finish_auth(Some(id), None)
           let (refresh, refreshed) = next.refresh(dispatch, channel)
           cmd = refresh
           next = refreshed
         }
-        CodexApprovalReply | CodexQuestionReply(_) =>
+        CodexLogoutReply(_) => {
+          next = next.finish_auth(None, None)
+          let (refresh, refreshed) = next.refresh(dispatch, channel)
+          cmd = refresh
+          next = refreshed
+        }
+        CodexInterruptReply => {
+          let (refresh, refreshed) = next.refresh(dispatch, channel)
+          cmd = refresh
+          next = refreshed
+        }
+        CodexApprovalReply(_) | CodexQuestionReply(_) =>
           // `serverRequest/resolved` authoritatively removes the request.
           ()
       }
@@ -496,10 +558,14 @@ fn update_message(
       if !state.accepts_reply(kind) {
         return (@cmd.none, state)
       }
+      if kind is CodexConfigReply(_) {
+        return (@cmd.none, { ..state, config: ConfigFailed(message), })
+      }
       let subject = match kind {
-        CodexStatusReply => notice_text(locale, StatusNotice)
-        CodexRequestsReply => notice_text(locale, RequestsNotice)
-        CodexAccountReply => notice_text(locale, AccountNotice)
+        CodexConfigReply(_) => "Codex configuration"
+        CodexStatusReply(_, _) => notice_text(locale, StatusNotice)
+        CodexRequestsReply(_) => notice_text(locale, RequestsNotice)
+        CodexAccountReply(_) => notice_text(locale, AccountNotice)
         CodexModelsReply => notice_text(locale, ModelsNotice)
         CodexThreadsReply(context) =>
           if context.archived {
@@ -514,16 +580,16 @@ fn update_message(
         | CodexTurnSteerReply(_)
         | CodexWorktreeTurnReply(_, _) => notice_text(locale, TurnNotice)
         CodexWorktreeRepairReply(_, _) => notice_text(locale, RepairNotice)
-        CodexLoginReply => notice_text(locale, LoginNotice)
+        CodexLoginReply(_) => notice_text(locale, LoginNotice)
         CodexArchiveReply(_) => notice_text(locale, ArchiveNotice)
         CodexUnarchiveReply(_) => notice_text(locale, RestoreNotice)
         CodexCompactReply(_, _) => notice_text(locale, CompactNotice)
         CodexReviewReply(_, _) => notice_text(locale, ReviewNotice)
         CodexResumeReply(_) => notice_text(locale, ResumeNotice)
         CodexInterruptReply => notice_text(locale, InterruptNotice)
-        CodexCancelLoginReply(_) => notice_text(locale, CancelLoginNotice)
-        CodexLogoutReply => notice_text(locale, LogoutNotice)
-        CodexApprovalReply | CodexQuestionReply(_) =>
+        CodexCancelLoginReply(_, _) => notice_text(locale, CancelLoginNotice)
+        CodexLogoutReply(_) => notice_text(locale, LogoutNotice)
+        CodexApprovalReply(_) | CodexQuestionReply(_) =>
           notice_text(locale, ApprovalNotice)
       }
       let owns_foreground = state.owns_foreground(kind)
@@ -556,10 +622,18 @@ fn update_message(
       } else {
         { ..state, notice: subject + ": " + message, }
       }
+      let next = match kind {
+        CodexLoginReply(_)
+        | CodexCancelLoginReply(_, _)
+        | CodexLogoutReply(_) =>
+          { ..next, auth_error: Some(subject + ": " + message), }
+        _ => next
+      }
       (@cmd.none, next)
     }
     StatusChanged(value) => {
-      let next = state.with_status(value)
+      let observed = { ..state, status_revision: state.status_revision + 1, }
+      let next = observed.with_status(value)
       let mut current = next
       let cmd = if next.connection is CodexReady {
         let (refresh, refreshed) = next.refresh(dispatch, channel)
@@ -610,9 +684,37 @@ fn update_message(
           invalidated,
         )
       }
-      let cmd = if method_ == "account/updated" ||
-        method_ == "account/login/completed" {
-        CodexAccountReply.request(
+      let cmd = if method_ == "account/login/completed" {
+        if params is { "loginId": String(id), .. } && next.login_id == Some(id) {
+          let message = if params
+            is { "success": False, "error": String(message), .. } {
+            Some(message)
+          } else {
+            None
+          }
+          next = next.finish_auth(Some(id), message)
+        }
+        CodexAccountReply(next.auth_context()).request(
+          dispatch,
+          channel,
+          @commands.codex_account_read,
+          { refresh_token: false, },
+        )
+      } else if method_ == "seekmoon/login_failed" {
+        if params is { "loginId": String(id), "message": String(message), .. } &&
+          (next.login_id == Some(id) || next.settled_login_id == Some(id)) {
+          next = next.finish_auth(Some(id), Some(message))
+          CodexAccountReply(next.auth_context()).request(
+            dispatch,
+            channel,
+            @commands.codex_account_read,
+            { refresh_token: false, },
+          )
+        } else {
+          @cmd.none
+        }
+      } else if method_ == "account/updated" {
+        CodexAccountReply(next.auth_context()).request(
           dispatch,
           channel,
           @commands.codex_account_read,
@@ -1286,7 +1388,7 @@ test "Codex permission picker confirms full access and freezes while running" {
   let idle = State::from_thread_snapshot({
     "thread": { "id": "thread-1", "turns": [] },
   })
-  assert_eq(idle.permission_mode(), @protocol.AutoReview)
+  assert_eq(idle.permission_mode(), @protocol.CodexPermissionMode::AutoReview)
   let (_, opened) = update(
     dispatch,
     TogglePermissionMenu,
@@ -1297,15 +1399,18 @@ test "Codex permission picker confirms full access and freezes while running" {
   assert_true(opened.permission_picker is CodexPermissionOpen(_))
   let (_, requested) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(@protocol.CodexPermissionMode::RequestApproval),
     opened,
     @interop.ChannelId::Local,
     open_external,
   )
-  assert_eq(requested.permission_mode(), @protocol.RequestApproval)
+  assert_eq(
+    requested.permission_mode(),
+    @protocol.CodexPermissionMode::RequestApproval,
+  )
   let (_, warning) = update(
     dispatch,
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(@protocol.CodexPermissionMode::FullAccess),
     requested,
     @interop.ChannelId::Local,
     open_external,
@@ -1313,7 +1418,10 @@ test "Codex permission picker confirms full access and freezes while running" {
   assert_true(
     warning.permission_picker is CodexPermissionConfirmingFullAccess(_),
   )
-  assert_eq(warning.permission_mode(), @protocol.RequestApproval)
+  assert_eq(
+    warning.permission_mode(),
+    @protocol.CodexPermissionMode::RequestApproval,
+  )
   let (_, cancelled) = update(
     dispatch,
     CancelFullAccess,
@@ -1321,10 +1429,13 @@ test "Codex permission picker confirms full access and freezes while running" {
     @interop.ChannelId::Local,
     open_external,
   )
-  assert_eq(cancelled.permission_mode(), @protocol.RequestApproval)
+  assert_eq(
+    cancelled.permission_mode(),
+    @protocol.CodexPermissionMode::RequestApproval,
+  )
   let (_, warning) = update(
     dispatch,
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(@protocol.CodexPermissionMode::FullAccess),
     cancelled,
     @interop.ChannelId::Local,
     open_external,
@@ -1336,7 +1447,10 @@ test "Codex permission picker confirms full access and freezes while running" {
     @interop.ChannelId::Local,
     open_external,
   )
-  assert_eq(confirmed.permission_mode(), @protocol.FullAccess)
+  assert_eq(
+    confirmed.permission_mode(),
+    @protocol.CodexPermissionMode::FullAccess,
+  )
 
   let running = State::from_thread_snapshot({
     "thread": {
@@ -1346,20 +1460,23 @@ test "Codex permission picker confirms full access and freezes while running" {
   })
   let (_, unchanged1) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(@protocol.CodexPermissionMode::RequestApproval),
     running,
     @interop.ChannelId::Local,
     open_external,
   )
   let (_, unchanged2) = update(
     dispatch,
-    ChoosePermission(@protocol.RequestApproval),
+    ChoosePermission(@protocol.CodexPermissionMode::RequestApproval),
     running,
     @interop.ChannelId::Local,
     open_external,
   )
   assert_true(unchanged1 == unchanged2)
-  assert_eq(unchanged1.permission_mode(), @protocol.AutoReview)
+  assert_eq(
+    unchanged1.permission_mode(),
+    @protocol.CodexPermissionMode::AutoReview,
+  )
 }
 
 ///|
@@ -1443,7 +1560,7 @@ test "Codex update handlers are pure and idempotent" {
     login_id: Some("login-1"),
     pending_requests: [
       {
-        response_token: "\"request-1\"",
+        response_token: "token-request-1",
         request_id: Json("request-1"),
         thread_id: "thread-1",
         method_: "item/commandExecution/requestApproval",
@@ -1464,9 +1581,9 @@ test "Codex update handlers are pure and idempotent" {
     EffortChanged("high"),
     TogglePermissionMenu,
     DismissPermissionMenu,
-    ChoosePermission(@protocol.RequestApproval),
-    ChoosePermission(@protocol.AutoReview),
-    ChoosePermission(@protocol.FullAccess),
+    ChoosePermission(@protocol.CodexPermissionMode::RequestApproval),
+    ChoosePermission(@protocol.CodexPermissionMode::AutoReview),
+    ChoosePermission(@protocol.CodexPermissionMode::FullAccess),
     ConfirmFullAccess,
     CancelFullAccess,
     WorktreeChanged(
@@ -1491,14 +1608,14 @@ test "Codex update handlers are pure and idempotent" {
     CancelLogin,
     Logout,
     RequestAnswer(
-      request_key=Json("request-1").stringify(),
+      request_key="token-request-1",
       question_id="question-1",
       answer="yes",
     ),
-    Respond(request_key=Json("request-1").stringify(), decision="accept"),
-    Reply(kind=CodexStatusReply, value={ "status": "ready" }),
-    Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 0 }),
-    Reply(kind=CodexAccountReply, value={
+    Respond(request_key="token-request-1", decision="accept"),
+    Reply(kind=CodexStatusReply(0, 0), value={ "status": "ready" }),
+    Reply(kind=CodexRequestsReply(0), value={ "data": [], "generation": 0 }),
+    Reply(kind=CodexAccountReply(State().auth_context()), value={
       "requiresOpenaiAuth": true,
       "account": Json::null(),
     }),
@@ -1544,14 +1661,14 @@ test "Codex update handlers are pure and idempotent" {
       }),
       value={},
     ),
-    Reply(kind=CodexLoginReply, value={
+    Reply(kind=CodexLoginReply(State().auth_context()), value={
       "loginId": "login-2",
       "authUrl": "https://example.test",
     }),
     Reply(kind=CodexArchiveReply("thread-1"), value={}),
     Reply(kind=CodexUnarchiveReply("thread-archived"), value={}),
     Reply(kind=CodexInterruptReply, value={}),
-    Reply(kind=CodexApprovalReply, value={}),
+    Reply(kind=CodexApprovalReply(0), value={}),
     Failed(kind=CodexTurnStartReply("thread-1"), message="test failure"),
     Failed(
       kind=CodexWorktreeRepairReply("thread-1", {
@@ -1568,7 +1685,7 @@ test "Codex update handlers are pure and idempotent" {
       generation=0,
     ),
     ServerRequest(
-      response_token="\"request-2\"",
+      response_token="test-token",
       request_id=Json("request-2"),
       method_="item/commandExecution/requestApproval",
       params={ "threadId": "thread-1", "reason": "test" },
@@ -2185,7 +2302,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
     draft: "pending prompt",
     pending_requests: [
       {
-        response_token: "\"approval-a\"",
+        response_token: "token-approval-a",
         request_id: Json("approval-a"),
         thread_id: "thread-a",
         method_: "item/commandExecution/requestApproval",
@@ -2220,7 +2337,7 @@ test "background Codex metadata does not settle a foreground action" {
   let state = State(loading=true)
   let (_, next) = update(
     dispatch,
-    Reply(kind=CodexAccountReply, value={
+    Reply(kind=CodexAccountReply(State().auth_context()), value={
       "requiresOpenaiAuth": true,
       "account": Json::null(),
     }),
@@ -2239,7 +2356,7 @@ test "Codex approval reply cannot settle an active turn" {
   }).begin_foreground(CodexTurnStartReply("thread-1"))
   let (_, after_approval) = update(
     dispatch,
-    Reply(kind=CodexApprovalReply, value={}),
+    Reply(kind=CodexApprovalReply(0), value={}),
     state,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -2270,7 +2387,7 @@ test "Codex request generations reject stale snapshots" {
   let (_, notified) = update(
     dispatch,
     ServerRequest(
-      response_token="\"request-new\"",
+      response_token="test-token",
       request_id=Json("request-new"),
       method_="item/commandExecution/requestApproval",
       params={ "threadId": "thread-1" },
@@ -2282,7 +2399,7 @@ test "Codex request generations reject stale snapshots" {
   )
   let (_, stale) = update(
     dispatch,
-    Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 1 }),
+    Reply(kind=CodexRequestsReply(0), value={ "data": [], "generation": 1 }),
     notified,
     @interop.ChannelId::Local,
     _ => @cmd.none,
@@ -2293,6 +2410,138 @@ test "Codex request generations reject stale snapshots" {
 }
 
 ///|
+test "Codex host recovery accepts new generations and rejects retired reads" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let ready = { ..State(), connection: CodexReady, }
+  let old = ready.with_pending_request(
+    "old-token",
+    Json(7),
+    "item/commandExecution/requestApproval",
+    { "threadId": "same-thread" },
+    80,
+  )
+  let retired_epoch = old.activity.connection_epoch
+  let recovering = old.bridge_reconnected()
+  assert_true(recovering.pending_requests.is_empty())
+  let epoch = recovering.activity.connection_epoch
+  let snapshot : Json = {
+    "generation": 1,
+    "data": [
+      {
+        "response_token": "new-token",
+        "request_id": 7,
+        "method": "item/commandExecution/requestApproval",
+        "params": { "threadId": "same-thread" },
+      },
+    ],
+  }
+  let (_, restored) = update(
+    dispatch,
+    Reply(kind=CodexRequestsReply(epoch), value=snapshot),
+    recovering,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(restored.pending_requests.length(), 1)
+  assert_eq(restored.pending_requests[0].response_token, "new-token")
+  assert_eq(restored.request_generation, 1)
+  for
+    msg in [
+      Reply(kind=CodexRequestsReply(retired_epoch), value={
+        "generation": 100,
+        "data": [],
+      }),
+      Failed(
+        kind=CodexRequestsReply(retired_epoch),
+        message="old snapshot failed",
+      ),
+      Failed(
+        kind=CodexApprovalReply(retired_epoch),
+        message="old answer failed",
+      ),
+      Reply(kind=CodexStatusReply(retired_epoch, old.status_revision), value={
+        "status": "unavailable",
+      }),
+    ] {
+    let (_, unchanged) = update(
+      dispatch,
+      msg,
+      restored,
+      @interop.ChannelId::Local,
+      _ => @cmd.none,
+    )
+    assert_true(unchanged == restored)
+  }
+  let resolved = restored.with_notification(
+    "serverRequest/resolved",
+    { "requestId": 7 },
+    2,
+  )
+  let (_, late) = update(
+    dispatch,
+    Reply(kind=CodexRequestsReply(epoch), value=snapshot),
+    resolved,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(late.pending_requests.is_empty())
+}
+
+///|
+test "Codex live status fences status reads and clears disconnected approvals" {
+  let dispatch : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let initial = State()
+  let status_read = CodexStatusReply(
+    initial.activity.connection_epoch,
+    initial.status_revision,
+  )
+  let (_, ready) = update(
+    dispatch,
+    StatusChanged({ "status": "ready" }),
+    initial,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  let pending = ready.with_pending_request(
+    "live-token",
+    Json(1),
+    "item/commandExecution/requestApproval",
+    { "threadId": "thread" },
+    2,
+  )
+  let (_, stale_status) = update(
+    dispatch,
+    Reply(kind=status_read, value={ "status": "starting" }),
+    pending,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(stale_status == pending)
+  let (_, disconnected) = update(
+    dispatch,
+    StatusChanged({ "status": "unavailable", "message": "child exited" }),
+    pending,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_true(disconnected.pending_requests.is_empty())
+  assert_true(
+    disconnected.activity.connection_epoch != pending.activity.connection_epoch,
+  )
+  let (_, starting) = update(
+    dispatch,
+    StatusChanged({ "status": "starting" }),
+    disconnected,
+    @interop.ChannelId::Local,
+    _ => @cmd.none,
+  )
+  assert_eq(
+    starting.activity.connection_epoch,
+    disconnected.activity.connection_epoch,
+  )
+}
+
+///|
 test "Codex approvals cannot be edited from another thread" {
   let state = {
     ..State::from_thread_snapshot({
@@ -2300,7 +2549,7 @@ test "Codex approvals cannot be edited from another thread" {
     }),
     pending_requests: [
       {
-        response_token: "\"request-2\"",
+        response_token: "token-request-2",
         request_id: Json("request-2"),
         thread_id: "thread-2",
         method_: "item/tool/requestUserInput",
@@ -2327,7 +2576,7 @@ test "Codex composer reverse-request actions keep their task identity" {
     }),
     pending_requests: [
       {
-        response_token: "\"request-1\"",
+        response_token: "token-request-1",
         request_id: Json("request-1"),
         thread_id: "thread-1",
         method_: "item/tool/requestUserInput",
@@ -2344,7 +2593,7 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexQuestionChanged(
         identity~,
-        request_key=Json("request-1").stringify(),
+        request_key="token-request-1",
         action=Edit(question="scope", text="all"),
       ),
     ),
@@ -2364,7 +2613,7 @@ test "Codex composer reverse-request actions keep their task identity" {
           owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
           archive_generation: 0,
         },
-        request_key=Json("request-1").stringify(),
+        request_key="token-request-1",
         action=Edit(question="scope", text="other"),
       ),
     ),
@@ -2377,10 +2626,7 @@ test "Codex composer reverse-request actions keep their task identity" {
     Some("all"),
   )
   let toggle : Msg = ComposerAction(
-    @composer.CodexRequestToggled(
-      identity~,
-      request_key=Json("request-1").stringify(),
-    ),
+    @composer.CodexRequestToggled(identity~, request_key="token-request-1"),
   )
   let (_, opened) = update(
     dispatch,
@@ -2419,7 +2665,7 @@ test "Codex composer reverse-request actions keep their task identity" {
           owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
           archive_generation: 0,
         },
-        request_key=Json("request-1").stringify(),
+        request_key="token-request-1",
       ),
     ),
     opened,

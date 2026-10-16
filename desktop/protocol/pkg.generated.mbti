@@ -2489,6 +2489,7 @@ pub(all) enum OpenPathReply {
   Opened
   Editor(OpenPathEditorTarget)
   Browser(String)
+  RemotePreview(local_path~ : String, remote_path~ : String)
   Directory(OpenPathDirectoryTarget)
   Refused(String)
 } derive(Eq, @debug.Debug)

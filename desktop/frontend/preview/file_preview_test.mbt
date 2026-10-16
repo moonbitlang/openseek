@@ -10,8 +10,10 @@ test "shared file observations refresh all local tabs once and remain pure" {
   )
   let path = @resource.of_path(@interop.ChannelId::Local, "/tmp/report one.pdf").unwrap()
   assert_true(state.local_files() == [path])
-  let observed = state.observe_file(path, @protocol.Present("1"))
-  assert_true(observed == state.observe_file(path, @protocol.Present("1")))
+  let observed = state.observe_file(path, @protocol.FileSignature::Present("1"))
+  assert_true(
+    observed == state.observe_file(path, @protocol.FileSignature::Present("1")),
+  )
   // Observing a file cannot mutate the original state or interrupt loading.
   let (_, untouched) = state.take_file_reloads()
   assert_true(untouched.is_empty())
@@ -29,10 +31,13 @@ test "shared file observations refresh all local tabs once and remain pure" {
     accepted,
   )
   let (_, repeated) = settled
-    .observe_file(path, @protocol.Present("1"))
+    .observe_file(path, @protocol.FileSignature::Present("1"))
     .take_file_reloads()
   assert_true(repeated.is_empty())
-  let changed = settled.observe_file(path, @protocol.Present("2"))
+  let changed = settled.observe_file(
+    path,
+    @protocol.FileSignature::Present("2"),
+  )
   let (_, refresh) = changed.take_file_reloads()
   assert_eq(refresh, [first])
   // A remote host's identical pathname must not refresh a native local tab.
@@ -40,7 +45,10 @@ test "shared file observations refresh all local tabs once and remain pure" {
     @interop.ChannelId::Remote("device"),
     path.path,
   ).unwrap()
-  assert_true(settled.observe_file(remote, @protocol.Present("3")) == settled)
+  assert_true(
+    settled.observe_file(remote, @protocol.FileSignature::Present("3")) ==
+    settled,
+  )
 }
 
 ///|
@@ -51,8 +59,8 @@ test "preview changes coalesce during loading and navigation retires observation
   )
   let path = @resource.of_path(@interop.ChannelId::Local, "/tmp/a.pdf").unwrap()
   let pending = state
-    .observe_file(path, @protocol.Present("1"))
-    .observe_file(path, @protocol.Present("2"))
+    .observe_file(path, @protocol.FileSignature::Present("1"))
+    .observe_file(path, @protocol.FileSignature::Present("2"))
   let fragment = @preview.update(
     Navigated(id~, url="file:///tmp/a.pdf#page=3"),
     pending,
@@ -62,19 +70,19 @@ test "preview changes coalesce during loading and navigation retires observation
   assert_eq(reloads, [id])
   let settled = @preview.update(LoadingChanged(id~, loading=false), reloading)
   let (_, repeated) = settled
-    .observe_file(path, @protocol.Present("2"))
+    .observe_file(path, @protocol.FileSignature::Present("2"))
     .take_file_reloads()
   assert_true(repeated.is_empty())
   let moved = @preview.navigate(pending, id, "file:///tmp/b.pdf")
   let moved = @preview.update(LoadingChanged(id~, loading=false), moved)
   let (_, stale) = moved
-    .observe_file(path, @protocol.Present("3"))
+    .observe_file(path, @protocol.FileSignature::Present("3"))
     .take_file_reloads()
   assert_true(stale.is_empty())
   let closed = @preview.close_page(pending, id)
   assert_true(closed.local_files().is_empty())
   let (_, stale) = closed
-    .observe_file(path, @protocol.Missing)
+    .observe_file(path, @protocol.FileSignature::Missing)
     .take_file_reloads()
   assert_true(stale.is_empty())
 }
@@ -87,7 +95,10 @@ test "preview stat failures stay distinct from missing files and recovery refres
   )
   let state = @preview.update(LoadingChanged(id~, loading=false), state)
   let path = @resource.of_path(@interop.ChannelId::Local, "/tmp/a.pdf").unwrap()
-  let failed = state.observe_file(path, @protocol.Failed("permission denied"))
+  let failed = state.observe_file(
+    path,
+    @protocol.FileSignature::Failed("permission denied"),
+  )
   assert_true(failed.files_to_check() == [path])
   assert_true(
     @preview.page(failed, id).unwrap().failure == Some("permission denied"),
@@ -95,16 +106,16 @@ test "preview stat failures stay distinct from missing files and recovery refres
   let (_, reloads) = failed.take_file_reloads()
   assert_true(reloads.is_empty())
   let (missing, reloads) = failed
-    .observe_file(path, @protocol.Missing)
+    .observe_file(path, @protocol.FileSignature::Missing)
     .take_file_reloads()
   assert_eq(reloads, [id])
   let missing = @preview.update(LoadingChanged(id~, loading=false), missing)
   let (_, repeated) = missing
-    .observe_file(path, @protocol.Missing)
+    .observe_file(path, @protocol.FileSignature::Missing)
     .take_file_reloads()
   assert_true(repeated.is_empty())
   let (_, restored) = missing
-    .observe_file(path, @protocol.Present("restored"))
+    .observe_file(path, @protocol.FileSignature::Present("restored"))
     .take_file_reloads()
   assert_eq(restored, [id])
 }
@@ -119,7 +130,7 @@ test "failed reload commands release loading and retry unchanged files on the sh
   assert_true(state.files_to_check() == [path])
   let loaded = @preview.update(LoadingChanged(id~, loading=false), state)
   let (reloading, ids) = loaded
-    .observe_file(path, @protocol.Present("1"))
+    .observe_file(path, @protocol.FileSignature::Present("1"))
     .take_file_reloads()
   assert_eq(ids, [id])
   assert_true(reloading.files_to_check().is_empty())
@@ -135,7 +146,7 @@ test "failed reload commands release loading and retry unchanged files on the sh
   let (_, immediate) = failed.take_file_reloads()
   assert_true(immediate.is_empty())
   let (retrying, retry) = failed
-    .observe_file(path, @protocol.Present("1"))
+    .observe_file(path, @protocol.FileSignature::Present("1"))
     .take_file_reloads()
   assert_eq(retry, [id])
   assert_true(@preview.page(retrying, id).unwrap().failure is None)
@@ -143,4 +154,60 @@ test "failed reload commands release loading and retry unchanged files on the sh
   assert_true(@preview.update(failure, moved) == moved)
   let closed = @preview.close_page(reloading, id)
   assert_true(@preview.update(failure, closed) == closed)
+}
+
+///|
+test "downloaded previews observe the source host and retire it on web navigation" {
+  let source = @resource.of_path(
+    @interop.ChannelId::Remote("ssh_one"),
+    "/same/report.pdf",
+  ).unwrap()
+  let other = @resource.of_path(
+    @interop.ChannelId::Remote("ssh_two"),
+    source.path,
+  ).unwrap()
+  let (state, id) = @preview.open_page(
+    @preview.State::empty(),
+    url="file:///tmp/cache/report.pdf",
+    source~,
+  )
+  assert_eq(state.local_files(), [source])
+  assert_eq(@preview.page(state, id).unwrap().input, source.path)
+  assert_eq(
+    @preview.page_label(@preview.page(state, id).unwrap()),
+    "report.pdf",
+  )
+  let loaded = @preview.update(LoadingChanged(id~, loading=false), state)
+  assert_true(loaded.observe_file(other, Present("1")) == loaded)
+  let (_, reloads) = loaded
+    .observe_file(source, Present("1"))
+    .take_file_reloads()
+  assert_eq(reloads, [id])
+  let missing = loaded.observe_file(source, Missing)
+  let (_, missing_reloads) = missing.take_file_reloads()
+  assert_true(missing_reloads.is_empty())
+  assert_eq(
+    @preview.page(missing, id).unwrap().failure,
+    Some("The file no longer exists on the SSH host."),
+  )
+  let (restored, restored_reloads) = missing
+    .observe_file(source, Present("restored"))
+    .take_file_reloads()
+  assert_eq(restored_reloads, [id])
+  assert_true(@preview.page(restored, id).unwrap().failure is None)
+  // A refreshed payload may have a new supported format and local filename.
+  let replaced = @preview.update(
+    Navigated(id~, url="file:///tmp/cache/new.png"),
+    loaded,
+  )
+  assert_eq(replaced.local_files(), [source])
+  let web = @preview.update(
+    Navigated(id~, url="https://example.com/"),
+    replaced,
+  )
+  assert_true(web.local_files().is_empty())
+  let moved = @preview.navigate(replaced, id, "file:///tmp/user.pdf")
+  assert_eq(moved.local_files(), [
+    @resource.of_path(@interop.ChannelId::Local, "/tmp/user.pdf").unwrap(),
+  ])
 }

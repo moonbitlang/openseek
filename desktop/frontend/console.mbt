@@ -99,12 +99,12 @@ fn empty_console_state(
 /// so no `preselect_project` waits here for a roster to consume it.
 fn local_console_state(login_return_to~ : String) -> ConsoleState {
   {
-    auth: AuthSignedIn(login=@interop.LocalDeviceId, avatar=""),
+    auth: AuthSignedIn(login=@interop.ChannelId::Local.device_id(), avatar=""),
     // The name is what the desktop window has always called its own host in
     // the page (`focused_device_name`); no roster UI shows it there.
     roster: [
       {
-        id: @interop.LocalDeviceId,
+        id: @interop.ChannelId::Local.device_id(),
         name: "SeekMoon",
         hostname: None,
         online: true,
@@ -112,7 +112,7 @@ fn local_console_state(login_return_to~ : String) -> ConsoleState {
     ],
     roster_sync: RosterReady,
     roster_request_generation: 0,
-    page_device: Some(@interop.LocalDeviceId),
+    page_device: Some(@interop.ChannelId::Local.device_id()),
     login_return_to,
     preselect_project: None,
     booted: true,

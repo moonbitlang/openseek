@@ -3707,10 +3707,11 @@ fn update_inner(
         return (@cmd.none, { ..state, background_review_requests, })
       }
       let review = match original {
-        @protocol.OriginalContent(content) => ReviewContent(content)
-        @protocol.Missing => ReviewMissing
-        @protocol.BinaryOriginal => ReviewBinary
-        @protocol.OversizedOriginal => ReviewOversized
+        @protocol.GitOriginalFileReply::OriginalContent(content) =>
+          ReviewContent(content)
+        @protocol.GitOriginalFileReply::Missing => ReviewMissing
+        @protocol.GitOriginalFileReply::BinaryOriginal => ReviewBinary
+        @protocol.GitOriginalFileReply::OversizedOriginal => ReviewOversized
       }
       let docs = state.docs.copy()
       let next_doc = {
@@ -3792,10 +3793,12 @@ fn update_inner(
         return (@cmd.none, state)
       }
       let settled = match blob {
-        @protocol.OriginalContent(content) => HistoryBlobContent(content)
-        @protocol.Missing => HistoryBlobMissing
-        @protocol.BinaryOriginal => HistoryBlobBinary
-        @protocol.OversizedOriginal => HistoryBlobOversized
+        @protocol.GitOriginalFileReply::OriginalContent(content) =>
+          HistoryBlobContent(content)
+        @protocol.GitOriginalFileReply::Missing => HistoryBlobMissing
+        @protocol.GitOriginalFileReply::BinaryOriginal => HistoryBlobBinary
+        @protocol.GitOriginalFileReply::OversizedOriginal =>
+          HistoryBlobOversized
       }
       let doc = match side {
         HistoryOriginal => { ..doc, original: settled, }
@@ -5123,7 +5126,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       background=false,
       path=file,
       generation=1,
-      original=@protocol.OriginalContent("old one"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("old one"),
     ),
     old_working,
     ctx,
@@ -5141,7 +5144,7 @@ test "changed-file review fences paired replies and Content opens retain compari
       background=false,
       path=file,
       generation=2,
-      original=@protocol.OriginalContent("old two"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("old two"),
     ),
     ignored,
     ctx,
@@ -5324,7 +5327,7 @@ test "changed-file review preserves a stale cached working document until reload
       background=false,
       path=file,
       generation=1,
-      original=@protocol.OriginalContent("HEAD source"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("HEAD source"),
     ),
     reviewing,
     ctx,
@@ -5503,7 +5506,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       background=false,
       path=test_file(deleted_path.0),
       generation=1,
-      original=@protocol.OriginalContent("removed source"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("removed source"),
     ),
     loading,
     ctx,
@@ -5586,7 +5589,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
       background=false,
       path=test_file(live_path.0),
       generation=1,
-      original=@protocol.Missing,
+      original=@protocol.GitOriginalFileReply::Missing,
     ),
     live_loading,
     live_ctx,
@@ -7620,7 +7623,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
       path=file,
       generation=4,
       background=false,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("new HEAD"),
     ),
     settled,
     { ..test_ctx(), open_files: [file], active_file: Some(file), },
@@ -7711,7 +7714,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
       background=false,
       path=file,
       generation=4,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("new HEAD"),
     ),
     ignored_old_working,
     ctx,
@@ -7842,7 +7845,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
       path=file,
       generation=4,
       background=true,
-      original=@protocol.OriginalContent("new HEAD"),
+      original=@protocol.GitOriginalFileReply::OriginalContent("new HEAD"),
     ),
     coalesced,
     ctx,
