@@ -129,6 +129,35 @@ fn ConsoleState::login_url(self : ConsoleState) -> String {
 }
 
 ///|
+/// Preserve the bundled path when switching devices; drop the old workspace.
+fn ConsoleState::device_picker_url(self : ConsoleState) -> String {
+  if self.login_return_to.split_once("?") is Some((path, _)) {
+    path.to_owned()
+  } else {
+    self.login_return_to
+  }
+}
+
+///|
+fn ConsoleState::device_url(self : ConsoleState, id : String) -> String {
+  "\{self.device_picker_url()}?device=\{@uri.encode_component(id)}"
+}
+
+///|
+test "device selection preserves the bundle and drops the old workspace" {
+  let console = empty_console_state(
+    Some("old"),
+    None,
+    login_return_to="/console/android/index.html?device=old&workspace=%2Fold",
+  )
+  assert_eq(console.device_picker_url(), "/console/android/index.html")
+  assert_eq(
+    console.device_url("new &device"),
+    "/console/android/index.html?device=new%20%26device",
+  )
+}
+
+///|
 test "browser sign-in returns to the same versioned console URL" {
   let console = empty_console_state(
     Some("d_abc"),

@@ -1,6 +1,7 @@
 ///|
 pub(all) struct Account {
   login : String
+  devices_url : String
   avatar : String
   busy : Bool
   notice : String?
@@ -294,6 +295,14 @@ pub fn component(
           disabled=account.busy,
           on_click=actions.sign_out,
           @messages.text(input.locale, SignOut),
+        ),
+      )
+      footer.push(
+        @html.a(
+          class="console-device-picker",
+          href=account.devices_url,
+          escape=true,
+          @messages.text(input.locale, ChooseDevice),
         ),
       )
       footer.push(@html.div(class="console-account", account_row))
