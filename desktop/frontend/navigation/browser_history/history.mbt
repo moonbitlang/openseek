@@ -10,7 +10,7 @@ priv struct Entry {
 /// positions; original records the path actually written to each browser
 /// entry. Covered entries retain that path across identity promotions.
 struct History {
-  prefix : String
+  device : String?
   group : String
   previous : Array[Entry]
   current : Entry
@@ -18,23 +18,35 @@ struct History {
 } derive(Eq)
 
 ///|
+/// Compare valid destinations using the shared codec. Keep invalid paths intact
+/// so the application can display its invalid-route state.
+fn canonical_path(path : String) -> String {
+  match @routes.parse(path) {
+    Ok(location) => location.path()
+    Err(_) => path
+  }
+}
+
+///|
 pub fn History::History(
   path : String,
   group~ : String,
   key~ : String,
 ) -> History {
+  let original = path
+  let path = canonical_path(path)
   {
-    prefix: path.split("/").take(3).join("/") + "/",
+    device: @routes.device(path),
     group,
     previous: [],
-    current: { key, path, original: path, },
+    current: { key, path, original, },
     following: [],
   }
 }
 
 ///|
 pub fn History::owns(self : History, path : String) -> Bool {
-  path.has_prefix(self.prefix)
+  self.device is Some(device) && @routes.device(path) == Some(device)
 }
 
 ///|
@@ -103,7 +115,7 @@ pub fn History::restore(
     stored is { "entries": Array(items), .. } else {
     return None
   }
-  let prefix = initial_path.split("/").take(3).join("/") + "/"
+  guard @routes.device(initial_path) is Some(device) else { return None }
   let entries : Array[Entry] = []
   for item in items {
     guard item
@@ -113,28 +125,29 @@ pub fn History::restore(
         "original": String(original),
         ..
       } &&
-      path.has_prefix(prefix) &&
-      original.has_prefix(prefix) else {
+      @routes.device(path) == Some(device) &&
+      @routes.device(original) == Some(device) else {
       return None
     }
-    entries.push({ key, path, original, })
+    entries.push({ key, path: canonical_path(path), original, })
   }
-  select_entry(prefix, group, entries, key, pathname)
+  select_entry(Some(device), group, entries, key, pathname)
 }
 
 ///|
 fn select_entry(
-  prefix : String,
+  device : String?,
   group : String,
   entries : Array[Entry],
   key : String,
   pathname : String,
 ) -> History? {
+  let canonical = canonical_path(pathname)
   for index, entry in entries {
     if entry.key == key &&
-      (entry.path == pathname || entry.original == pathname) {
+      (entry.path == canonical || canonical_path(entry.original) == canonical) {
       return Some({
-        prefix,
+        device,
         group,
         previous: entries[:index].to_owned(),
         current: entry,
@@ -158,7 +171,7 @@ pub fn History::select(
     return None
   }
   select_entry(
-    self.prefix,
+    self.device,
     group,
     [..self.previous, self.current, ..self.following],
     key,
@@ -173,6 +186,7 @@ pub fn History::visit(
   replace~ : Bool,
   key~ : String,
 ) -> History? {
+  let path = canonical_path(path)
   guard self.owns(path) else { return None }
   if path == self.current.path {
     Some(self)
@@ -194,6 +208,8 @@ pub fn History::promote(
   old_path : String,
   new_path : String,
 ) -> History? {
+  let old_path = canonical_path(old_path)
+  let new_path = canonical_path(new_path)
   guard self.owns(new_path) else { return None }
   let promote = (entry : Entry) => {
     if entry.path == old_path {

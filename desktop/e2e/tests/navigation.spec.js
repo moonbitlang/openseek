@@ -49,6 +49,65 @@ test('direct management entry has no invented predecessor and refresh keeps its 
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const restored of [false, true]) {
+  test(`encoded device deep links share canonical browser history (restored=${restored})`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    await app.install();
+    if (restored) {
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem('encoded-history-seeded')) return;
+        sessionStorage.setItem('encoded-history-seeded', 'yes');
+        const initial = '/device/device-a/chat/new';
+        const settings = '/device/%64evice-a/settings';
+        const marker = key => ({ seekmoonNavigation: { group: 'encoded-group', key } });
+        history.replaceState(marker('initial'), '', initial);
+        history.pushState(marker('settings'), '', settings);
+        sessionStorage.setItem('seekmoon.history.v1.encoded-group', JSON.stringify({ entries: [
+          { key: 'initial', path: initial, original: initial },
+          { key: 'settings', path: settings, original: settings },
+        ] }));
+      });
+    }
+    await page.goto('/device/%64evice-a/settings');
+    await expect(heading(page)).toHaveText('Settings');
+    await expect(page).toHaveURL(new RegExp(path('settings') + '$'));
+    if (restored) await expect(back(page)).toBeEnabled();
+    else await expect(back(page)).toBeDisabled();
+    await page.getByRole('button', { name: 'Skills', exact: true }).click();
+    await expect(heading(page)).toHaveText('Skills');
+    await expect(page).toHaveURL(new RegExp(path('skills') + '$'));
+    await page.reload();
+    await expect(heading(page)).toHaveText('Skills');
+    await back(page).click();
+    await expect(heading(page)).toHaveText('Settings');
+    await expect(page).toHaveURL(new RegExp(path('settings') + '$'));
+    await forward(page).click();
+    await expect(heading(page)).toHaveText('Skills');
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
+test('an invalid target on an encoded device can navigate away and back', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  const invalid = '/device/%64evice-a/not-a-page';
+  await page.goto(invalid);
+  await expect(page.locator('.navigation-notice')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(invalid + '$'));
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(heading(page)).toHaveText('Settings');
+  await expect(page).toHaveURL(new RegExp(path('settings') + '$'));
+  await page.reload();
+  await expect(heading(page)).toHaveText('Settings');
+  await back(page).click();
+  await expect(page.locator('.navigation-notice')).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(invalid + '$'));
+  await forward(page).click();
+  await expect(heading(page)).toHaveText('Settings');
+  await expect(page.locator('.navigation-notice')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('MoonBit history restores the existing v1 browser entries after refresh', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
