@@ -179,6 +179,40 @@ for (const retired of [false, true]) test(`minimal image collapse survives prece
   expect(app.pageErrors).toEqual([]);
 });
 
+test('interrupted questions stop spinning live and after reopening the conversation', async ({ page }, testInfo) => {
+  const app = new MinimalTranscriptHarness(page);
+  app.sessionEvents = [
+    { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture interrupted question.' } } },
+    { sequence: 2, item: { kind: 'assistant', payload: {
+      content: 'Let me ask a question first.',
+      tool_calls: [{ id: 'question', name: 'mcp__seekmoon__ask_user', arguments: '{}' }],
+    } } },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const stream = page.locator('#stream');
+  await expect(stream.locator('.tool-status.pending')).toHaveCount(1);
+  // App shutdown commits a cancellation terminal without a tool result.
+  app.append('terminal', { kind: 'interrupted', message: 'cancelled' });
+  await expect(stream).toContainText('cancelled: cancelled');
+  await expect(stream.locator('.tool-status.pending')).toHaveCount(0);
+  await expect(stream.locator('.tool-status.failed')).toHaveCount(1);
+  await expect(stream.locator('.minimal-call-caption')).toHaveText('mcp__seekmoon__ask_user');
+  await page.reload();
+  await app.openSession();
+  await expect(stream).toContainText('cancelled: cancelled');
+  await expect(stream.locator('.tool-status.pending')).toHaveCount(0);
+  await expect(stream.locator('.tool-status.failed')).toHaveCount(1);
+  await app.detailedMode().click();
+  await expect(stream.locator('.tool-status.pending')).toHaveCount(0);
+  await expect(stream.locator('.tool-status.failed')).toHaveCount(1);
+  const screenshot = testInfo.outputPath('interrupted-question.png');
+  await stream.screenshot({ path: screenshot, animations: 'disabled' });
+  await testInfo.attach('Interrupted question after reopening', { path: screenshot, contentType: 'image/png' });
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('single minimal calls have no duplicate disclosure and preserve status and edits', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [

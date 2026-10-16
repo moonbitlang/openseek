@@ -70,9 +70,10 @@ pub(all) struct ToolCall {
 
 ///|
 /// Where a tool call stands. A call is `Pending` until its durable result
-/// lands; a Codex command can stream `output` while still pending. `Done`
-/// carries the result — its content may legitimately be empty — with the
-/// error flag and the display brief the result came with.
+/// lands or its turn terminates abnormally; a Codex command can stream `output`
+/// while still pending. `Done` carries the recorded result (possibly empty),
+/// or the terminal failure when no result arrived, with an error flag and
+/// optional display brief.
 pub(all) enum ToolOutcome {
   // Historical observation of a background call, with no terminal outcome yet.
   Snapshot(content~ : String)
