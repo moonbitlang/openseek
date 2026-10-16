@@ -876,23 +876,20 @@ async test "an update commits to the current location after an in-flight enablem
         )
       }
       gate.arrived.get()
+      let expected_enabled = !initially_enabled
       @skillmarket.set_skill_enabled(
         "acme-widget",
-        enabled=!initially_enabled,
+        enabled=expected_enabled,
         library_dir=lib,
       )
       gate.release.put(())
       let updated = finished.get()
-      assert_eq(updated.enabled, !initially_enabled)
-      let current = if updated.enabled {
-        "\{lib}/acme-widget"
-      } else {
-        "\{lib}/.disabled/acme-widget"
-      }
-      let other = if updated.enabled {
-        "\{lib}/.disabled/acme-widget"
-      } else {
-        "\{lib}/acme-widget"
+      assert_eq(updated.enabled, expected_enabled)
+      let active = "\{lib}/acme-widget"
+      let disabled = "\{lib}/.disabled/acme-widget"
+      let (current, other) = {
+        guard expected_enabled else { (disabled, active) }
+        (active, disabled)
       }
       assert_eq(@fs.read_file("\{current}/SKILL.md").binary(), skill_body_v2)
       assert_false(@fs.exists(other))
