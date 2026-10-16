@@ -37,6 +37,15 @@ seekmoon/
   web/
 ```
 
+The shared frontend document lives at `web/index.html`; its resources live at
+`web/assets/v<package.version>/`. Browser archives use the identical layout.
+`Build.stageFrontend` stamps origin-relative resource URLs and the asset-base
+metadata into the document once during packaging. Frontend startup applies that
+base to lazy PDF/Mermaid loads, including when Proton supplied a root base.
+Development console responses revalidate assets; published API versions are
+immutable. Deploy API support for `/assets/:version/*file` before releasing this
+archive layout. The separate visualization app remains under `web/viz/`.
+
 Add the executable and its licenses in `Build.stage`. Preserve platform
 suffixes and executable permissions. If a macOS binary requires signing, also
 add its `seekmoon/...` path to `package.sign.binaries` in

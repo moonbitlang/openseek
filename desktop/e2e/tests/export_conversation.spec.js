@@ -63,7 +63,7 @@ class ExportHarness extends DesktopBrowserHarness {
         }),
       };
     });
-    await this.page.goto('/dist/browser/index.html');
+    await this.page.goto('/index.html');
     await this.openSession();
   }
 

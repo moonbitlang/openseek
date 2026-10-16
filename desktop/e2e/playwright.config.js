@@ -31,12 +31,12 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
-    // Serve Desktop's own tree so the suite exercises the browser artifacts
-    // staged by the real Desktop packager, not a test-only copy of the UI.
+    // Mount the real packaged browser directory at the origin root, matching
+    // the Desktop host and local console resource layout.
     // The large frontend bundle makes the Wasm script's transfer cost visible
     // on every fresh page. Compile the same static server for native release.
-    command: `moon run --target native --release ../../scripts/serve-static.mbtx .. ${serverPort}`,
-    url: `${baseURL}/dist/browser/index.html`,
+    command: `moon run --target native --release ../../scripts/serve-static.mbtx ../dist/browser ${serverPort}`,
+    url: `${baseURL}/index.html`,
     reuseExistingServer: Boolean(configuredBaseURL) || !isCI,
     // A fresh checkout also compiles the native server and its dependencies.
     timeout: 120_000,
