@@ -39,6 +39,7 @@ struct ApiState {
   // grants every engine it starts access to it, and `start_services` serves
   // it.
   host_mcp : @mcp.Server?
+  questions : @user_questions.Service
   messages : @session_messages.Service
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
@@ -309,6 +310,7 @@ pub fn ApiState::ApiState(
     console_url,
     host_mcp,
     messages: Service(),
+    questions: Service(),
     on_finished,
   }
 }
@@ -326,6 +328,7 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
   self.hub.sink(on_finished=payload => {
     if self.hub.active_starts.get(payload.run_id) is Some(run) {
       self.messages.detach(run.session)
+      self.questions.detach(run.session)
     }
     if self.on_finished is Some(notify) {
       notify(payload)
@@ -374,11 +377,20 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 /// The commands shared by the embedded page and remote WebSocket. A generic
 /// Endpoint constructor checks each payload/reply pair, then erases those
 /// types only inside the two transport closures it creates.
+/// Share progress returns to this catalog's connection, never the shared hub.
 pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
+  on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
+    @endpoint.Endpoint(@commands.session_share, payload => {
+      SessionShare::{ state, payload: payload.source, }.publish(on_progress=progress => {
+        on_share_progress({ generation: payload.generation, progress, }) catch {
+          _ => ()
+        }
+      })
+    }),
     @endpoint.Endpoint::codex_sync(@commands.codex_status, _ => {
       let reply : @protocol.CodexStatusReply = @json.from_json(
         state.codex.status(),
@@ -474,6 +486,15 @@ pub fn endpoints(
     }),
     Endpoint(@commands.agent_goal, payload => {
       @engine.goal_run(state.manager, payload)
+    }),
+    @endpoint.Endpoint::sync(@commands.user_questions_list, _ => {
+      state.questions.snapshot()
+    }),
+    @endpoint.Endpoint::sync(@commands.user_questions_answer, payload => {
+      state.questions.answer(payload)
+      let snapshot = state.questions.snapshot()
+      state.publish(UserQuestions(snapshot))
+      snapshot
     }),
     // Synchronous like cancel: it hands one line to the engine's writer and
     // reports whether there was still a question to answer. Nothing here waits

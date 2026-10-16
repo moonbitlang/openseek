@@ -91,7 +91,6 @@ priv enum UiMessage {
   DeclineLabel
   CancelLabel
   UnsupportedChoices
-  QuestionLabel
   ShowDetails
   NetworkApproval
   CommandApproval
@@ -101,8 +100,6 @@ priv enum UiMessage {
   ToolRequest
   GrantTurn
   GrantSession
-  TypeAnswer
-  SubmitAnswers
   SubmitJson
   UnsupportedRequest
   NoChecks
@@ -660,11 +657,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "此應用版本無法處理提供的審批選項。"
     (Japanese, UnsupportedChoices) =>
       "このアプリのバージョンでは、指定された承認オプションを処理できません。"
-    (English, QuestionLabel) => "Question"
-    (Spanish, QuestionLabel) => "Pregunta"
-    (SimplifiedChinese, QuestionLabel) => "问题"
-    (TraditionalChinese, QuestionLabel) => "問題"
-    (Japanese, QuestionLabel) => "質問"
     (English, ShowDetails) => "Show details"
     (Spanish, ShowDetails) => "Mostrar detalles"
     (SimplifiedChinese, ShowDetails) => "显示详情"
@@ -710,16 +702,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, GrantSession) => "本会话允许"
     (TraditionalChinese, GrantSession) => "本會話允許"
     (Japanese, GrantSession) => "このセッションで許可"
-    (English, TypeAnswer) => "Type an answer"
-    (Spanish, TypeAnswer) => "Escribe una respuesta"
-    (SimplifiedChinese, TypeAnswer) => "输入答案"
-    (TraditionalChinese, TypeAnswer) => "輸入答案"
-    (Japanese, TypeAnswer) => "回答を入力"
-    (English, SubmitAnswers) => "Submit answers"
-    (Spanish, SubmitAnswers) => "Enviar respuestas"
-    (SimplifiedChinese, SubmitAnswers) => "提交答案"
-    (TraditionalChinese, SubmitAnswers) => "提交答案"
-    (Japanese, SubmitAnswers) => "回答を送信"
     (English, SubmitJson) => "Submit JSON"
     (Spanish, SubmitJson) => "Enviar JSON"
     (SimplifiedChinese, SubmitJson) => "提交 JSON"

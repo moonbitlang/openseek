@@ -74,6 +74,10 @@ pub fn root_command() -> @argparse.Command {
     options=@cli.agent_shared_options(global=true),
     subcommands=[
       Command(
+        "setup",
+        about="Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.",
+      ),
+      Command(
         "run",
         about="Run one task headlessly; print its answer on stdout and its progress on stderr.",
         options=[

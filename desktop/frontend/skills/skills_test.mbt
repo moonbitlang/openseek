@@ -52,6 +52,99 @@ fn market_item(
 }
 
 ///|
+test "market detail failure is stable until explicit retry" {
+  let detail = @skills.MarketRef("acme/widget@1.0.0")
+  let (_, loading, resolution) = @skills.State::empty().open_detail(
+    emit(),
+    input(),
+    detail,
+  )
+  assert_true(resolution is @skills.Waiting)
+  let (_, failed, _) = loading.handle(
+    emit(),
+    @skills.CatalogFailed(
+      channel=@interop.ChannelId::Local,
+      message="unavailable",
+    ),
+    input(),
+  )
+  let (_, unchanged, resolution) = failed.open_detail(emit(), input(), detail)
+  let (_, repeated, again) = failed.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Failed("unavailable"))
+  assert_true(again is @skills.Failed("unavailable"))
+  assert_true(unchanged == failed && repeated == failed)
+  let (_, retrying, _) = failed.handle(emit(), @skills.RefreshCatalog, input())
+  let (_, _, resolution) = retrying.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Waiting)
+}
+
+///|
+test "detail navigation validates retained installed previews after removal" {
+  let skill : @skills.InstalledItem = {
+    id: "acme-widget",
+    name: "widget",
+    description: "",
+    source: "acme/widget@1.0.0",
+    registry: Some({ module_name: "acme/widget", package_path: "", }),
+  }
+  let detail = @skills.InstalledRef(skill.id)
+  let before = input(installed=[skill])
+  let (_, opened, resolution) = @skills.State::empty().open_detail(
+    emit(),
+    before,
+    detail,
+  )
+  assert_true(resolution is @skills.Opened)
+  let (_, cached, resolution) = opened.open_detail(emit(), before, detail)
+  assert_true(resolution is @skills.Opened && cached == opened)
+  let (_, refreshed) = cached.sync_library(emit(), input())
+  assert_true(refreshed.detail() == Some(detail))
+  let (_, missing, resolution) = refreshed.open_detail(emit(), input(), detail)
+  let (_, repeated, again) = refreshed.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Missing && again is @skills.Missing)
+  assert_true(missing == refreshed && repeated == refreshed)
+}
+
+///|
+test "cached market details respect catalog refresh outcomes" {
+  let item = market_item()
+  let detail = @skills.MarketRef(@skills.source_label(item))
+  let (_, loading) = @skills.State::empty().opening(emit(), input())
+  let (_, ready, _) = loading.handle(
+    emit(),
+    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[item]),
+    input(),
+  )
+  let (_, opened, resolution) = ready.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Opened)
+  let (_, cached, resolution) = opened.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Opened && cached == opened)
+  let (_, refreshing, _) = cached.handle(
+    emit(),
+    @skills.RefreshCatalog,
+    input(),
+  )
+  let (_, _, resolution) = refreshing.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Waiting)
+  let (_, failed, _) = refreshing.handle(
+    emit(),
+    @skills.CatalogFailed(channel=@interop.ChannelId::Local, message="offline"),
+    input(),
+  )
+  let (_, unchanged, resolution) = failed.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Failed("offline") && unchanged == failed)
+  let (_, removed, _) = refreshing.handle(
+    emit(),
+    @skills.CatalogLoaded(channel=@interop.ChannelId::Local, items=[]),
+    input(),
+  )
+  let (_, missing, resolution) = removed.open_detail(emit(), input(), detail)
+  let (_, repeated, again) = removed.open_detail(emit(), input(), detail)
+  assert_true(resolution is @skills.Missing && again is @skills.Missing)
+  assert_true(missing == removed && repeated == removed)
+}
+
+///|
 test "a duplicate refresh while loading is a no-op" {
   let (_, opened) = @skills.State::empty().opening(emit(), input())
   let (_, ready, _) = opened.handle(

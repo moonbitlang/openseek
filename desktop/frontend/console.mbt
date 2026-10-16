@@ -307,7 +307,7 @@ fn apply_roster(
   // disappears and later returns, refocusing re-rotates onto that same device.
   let booted = model.console.booted || focus_held
   if focus_held && (!model.console.booted || refocused) {
-    commands.push(rotate_session(dispatch, focused))
+    commands.push(rotate_session(dispatch, focused, model.navigation.revision))
   }
   let reconciled = {
     ..model,

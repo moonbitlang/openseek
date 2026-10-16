@@ -111,7 +111,7 @@ for (const { source, packagePath } of [
     const samePackage = packagePath === '';
     await app.openDetails(!samePackage);
     if (samePackage) {
-      await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
       const registry = page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Available', exact: true }) });
       await expect(registry.locator('.skill-row')).toHaveCount(0);
     } else {
@@ -161,7 +161,7 @@ for (const removing of [false, true]) {
     await expect(page.locator('.skill-detail-action')).toBeDisabled();
     await expect(page.locator('.skill-detail-action')).toHaveAccessibleName(busyLabel);
     // Wait for the committed library state to render, rather than just for the request.
-    await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
     const group = page.locator('.settings-group').filter({
       has: page.getByRole('heading', { name: removing ? 'Available' : 'Installed', exact: true }),
     });
@@ -199,7 +199,7 @@ for (const targetInstalled of [false, true]) {
     for (const cached of [false, true]) {
       await app.performAction('Uninstall');
       await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove wayfinder: permission denied');
-      await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
+      await page.getByRole('button', { name: 'Back', exact: true }).click();
       await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
       await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
       await expect(page.locator('.skill-preview-markdown')).toBeVisible();
@@ -207,7 +207,7 @@ for (const targetInstalled of [false, true]) {
       // The second navigation exercises the cached branch without another read.
       expect(app.requests.filter(r => r.method === contentMethod)).toHaveLength(initialReads + 1);
       if (!cached) {
-        await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
+        await page.getByRole('button', { name: 'Back', exact: true }).click();
         await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
       }
     }
@@ -234,7 +234,7 @@ for (const removing of [false, true]) {
     };
     await app.openDetails();
     const detail = page.locator('.skill-detail-page');
-    const back = page.getByRole('button', { name: 'Back to skills', exact: true });
+    const back = page.getByRole('button', { name: 'Back', exact: true });
     await app.performAction(actionName);
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();

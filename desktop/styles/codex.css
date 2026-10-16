@@ -323,50 +323,10 @@
   font-weight: 600;
 }
 
-.codex-request-reason,
-.codex-question-text {
+.codex-request-reason {
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
-}
-
-.codex-question {
-  display: grid;
-  gap: 7px;
-}
-
-.codex-question-header {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.codex-options {
-  display: grid;
-  gap: 5px;
-}
-
-.codex-option {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface);
-  color: var(--color-text-primary);
-  text-align: left;
-  cursor: pointer;
-}
-
-.codex-option.selected {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
-}
-
-.codex-option-desc {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
 }
 
 /* These controls belong to the conversation pane, whose width can change

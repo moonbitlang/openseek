@@ -7,7 +7,8 @@ pub(all) enum Event {
     images~ : Array[(String, String)],
     documents~ : Array[Document]
   )
-  NativeReady(String?)
+  // Picking does not read bytes; cancellation must not settle a browser read.
+  NativePicked(Result[String?, String])
   Failed(String)
 }
 

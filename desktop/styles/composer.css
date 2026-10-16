@@ -884,6 +884,13 @@
   background: var(--color-bg-subtle);
 }
 
+.icon-button.icon-button-compact {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+}
+
 .send-button {
   border-color: transparent;
   background: var(--color-accent);
@@ -940,18 +947,27 @@
   height: 14px;
 }
 
+.composer-add {
+  display: inline-flex;
+  flex: none;
+}
+.composer-add:empty {
+  display: none;
+}
 .composer-attach {
   box-sizing: border-box;
+  width: 30px;
+  min-width: 30px;
   height: 30px;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  padding: 0 9px;
+  padding: 0;
   position: relative;
   display: inline-flex;
   align-items: center;
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
+  justify-content: center;
+  color: var(--color-text-secondary);
   cursor: pointer;
 }
 .composer-attach:hover {

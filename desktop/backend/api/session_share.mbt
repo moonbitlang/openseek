@@ -2,13 +2,14 @@
 /// Capture the issuer and credential together before rendering or uploading.
 /// A settings switch must never send an old token to a newly selected server.
 priv struct SessionShare {
-  state : @api.ApiState
+  state : ApiState
   payload : @protocol.SessionExportPayload
 }
 
 ///|
 async fn SessionShare::publish(
   self : SessionShare,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let store = self.state.auth_store()
   guard store.desired_connector() is Some(config) else {
@@ -21,6 +22,7 @@ async fn SessionShare::publish(
     }
   }
   try {
+    on_progress(Preparing)
     let (shell, bundle) = self.state.host_state().viz_assets().read()
     let files = @engine.ConversationExport::capture(
       self.state.manager(),
@@ -28,16 +30,10 @@ async fn SessionShare::publish(
       shell,
       bundle,
     )
-    let snapshot = @shares.Snapshot(
-      title=self.payload.title,
-      html=files.html,
-      json=files.json,
-    )
-    self.upload(snapshot, config)
+    self.upload(files, config, on_progress~)
   } catch {
-    @shares.EmptyTitle
-    | @shares.EntropyUnavailable
-    | @shares.Oversized as refusal => Failed(message="\{refusal}")
+    error if @async.is_being_cancelled() => raise error
+    @shares.EmptyTitle as refusal => Failed(message="\{refusal}")
     error => {
       // This scope includes capture, upload and rejected-login cleanup. Do not
       // mislabel an unrelated failure as a missing conversation.
@@ -54,10 +50,14 @@ async fn SessionShare::publish(
 /// the captured config first so a late response cannot clear a newer login.
 async fn SessionShare::upload(
   self : SessionShare,
-  snapshot : @shares.Snapshot,
+  files : @engine.ConversationExport,
   config : @auth.ConnectorConfig,
+  on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
-  let reply = snapshot.publish(
+  let reply = @shares.publish(
+    on_progress~,
+    title=self.payload.title,
+    files,
     server_url=@auth.origin_from_relay_url(config.relay_url),
     token=config.device_token,
   )

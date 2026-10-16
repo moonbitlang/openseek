@@ -228,6 +228,7 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 }
 .export-status { margin-top: 12px; font-size: var(--font-size-sm); overflow-wrap: anywhere; }
 .export-status:empty { margin-top: 0; }
+.export-progress { display: grid; gap: 8px; }
 /* Match .button's vertical padding and line height; stretch the row so the
    field and icon button share their edges even as fonts or touch targets grow. */
 .export-link-row { align-items: stretch; }

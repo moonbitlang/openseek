@@ -28,14 +28,14 @@ test "dialog updates are pure and late replies cannot cross openings" {
     assert_true(a == b)
   }
   let (_, pending) = first.update(emit, Share)
-  assert_true(pending.content is Some({ operation: Sharing, .. }))
+  assert_true(pending.content is Some({ operation: Sharing(_), .. }))
   for msg in [Share, Download, SignIn] {
     let (_, ignored) = pending.update(emit, msg)
     assert_true(ignored == pending)
   }
   let (_, closed) = pending.update(emit, Close)
   let reply = Published(
-    generation=first.generation,
+    generation=pending.generation,
     Shared(url="https://shares.test/v1/shares/a"),
   )
   let (_, late) = closed.update(emit, reply)
@@ -129,7 +129,7 @@ test "share login failure success and clipboard feedback transitions" {
       }
       Some({ operation: Failed("Storage unavailable"), .. }) => {
         let (_, retry) = first.update(emit, Share)
-        assert_true(retry.content is Some({ operation: Sharing, .. }))
+        assert_true(retry.content is Some({ operation: Sharing(_), .. }))
       }
       _ => fail("unexpected publication state")
     }
@@ -174,4 +174,56 @@ test "download cancellation and saved but not opened remain distinct" {
         )
     }
   }
+}
+
+///|
+test "progress is pure and belongs only to the current upload" {
+  let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
+  let (_, opened) = Model().open({
+    session: "a",
+    workspace: "/workspace",
+    title: "A",
+    archived: false,
+  })
+  let (_, pending) = opened.update(emit, Share)
+  for
+    progress in [
+      @protocol.Preparing,
+      Connecting(attempt=1),
+      Uploading(attempt=1, percent=42),
+      Waiting(attempt=1),
+      Connecting(attempt=2),
+      Uploading(attempt=2, percent=0),
+    ] {
+    let msg = Progress({ generation: pending.generation, progress, })
+    let (_, first) = pending.update(emit, msg)
+    let (_, again) = pending.update(emit, msg)
+    assert_true(first == again)
+    assert_true(
+      first.content is Some({ operation: Sharing(actual), .. }) &&
+      actual == progress,
+    )
+    let (_, ignored) = opened.update(emit, msg)
+    assert_true(ignored == opened)
+  }
+  let late = Progress({
+    generation: pending.generation,
+    progress: Waiting(attempt=1),
+  })
+  let (_, failed) = pending.update(
+    emit,
+    Published(generation=pending.generation, Failed(message="offline")),
+  )
+  let (_, retry) = failed.update(emit, Share)
+  let (_, ignored) = retry.update(emit, late)
+  assert_true(ignored == retry)
+  let (_, closed) = pending.update(emit, Close)
+  let (_, ignored) = closed.update(emit, late)
+  assert_true(ignored == closed)
+  let (_, done) = pending.update(
+    emit,
+    Published(generation=pending.generation, Shared(url="https://share.test/a")),
+  )
+  let (_, ignored) = done.update(emit, late)
+  assert_true(ignored == done)
 }

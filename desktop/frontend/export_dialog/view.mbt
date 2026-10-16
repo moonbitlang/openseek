@@ -51,7 +51,7 @@ pub fn Model::view(
           class="button primary",
           disabled=busy || content.publication is Some(_),
           on_click=emit(Share),
-          if content.operation is Sharing {
+          if content.operation is Sharing(_) {
             ui(locale, SharingLabel)
           } else {
             ui(locale, ShareLabel)
@@ -62,7 +62,7 @@ pub fn Model::view(
     let status = match content.operation {
       Ready => @html.nothing
       Downloading => @html.span(ui(locale, ChooseSavePath))
-      Sharing => @html.span(ui(locale, UploadingConversation))
+      Sharing(progress) => share_progress_view(locale, progress)
       SigningIn => @html.span(ui(locale, CompleteBrowserSignIn))
       SignInRequired =>
         @html.div([
@@ -173,4 +173,53 @@ pub fn Model::view(
       .aria_describedby("conversation-export-description"),
     children,
   )
+}
+
+///|
+fn share_progress_view(
+  locale : @i18n.Locale,
+  progress : @protocol.ShareProgress,
+) -> @html.Html {
+  let (label, percent) = match progress {
+    Preparing => (ui(locale, PreparingConversation), None)
+    Connecting(attempt~) =>
+      (
+        ui(locale, if attempt > 1 { RetryingShare } else { ConnectingShare }),
+        None,
+      )
+    Uploading(attempt~, percent~) =>
+      (
+        "\{ui(locale, if attempt > 1 { RetryingShare } else { UploadingConversation })} \{percent}%",
+        Some(percent),
+      )
+    Waiting(..) => (ui(locale, WaitingForShare), Some(100))
+  }
+  let attrs = @html.Attrs::build()
+    .role("progressbar")
+    .aria_label(label)
+    .aria_valuemin("0")
+    .aria_valuemax("100")
+  let attrs = if percent is Some(value) {
+    attrs.aria_valuenow("\{value}")
+  } else {
+    attrs
+  }
+  @html.div(class="export-progress", [
+    @html.span(label),
+    @html.div(class="update-progress-track", attrs~, [
+      @html.div(
+        class=if percent is Some(_) {
+          "update-progress-fill"
+        } else {
+          "update-progress-fill indeterminate"
+        },
+        style=if percent is Some(value) {
+          ["--progress-width: \{value}%"]
+        } else {
+          []
+        },
+        "",
+      ),
+    ]),
+  ])
 }

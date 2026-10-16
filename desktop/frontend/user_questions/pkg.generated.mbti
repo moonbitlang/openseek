@@ -1,0 +1,40 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/user_questions"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/question_card",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub fn fetch(@interop.ChannelId, @cmd.Emit[Msg]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+type Model derive(Eq, @debug.Debug)
+pub fn Model::Model() -> Self
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::reconnecting(Self) -> Self
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, Msg, @interop.ChannelId, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
+pub fn Model::view(Self, String, @i18n.Locale, Bool, @cmd.Emit[Msg]) -> @html.Html
+
+pub(all) enum Msg {
+  Snapshot(@protocol.UserQuestionSnapshot)
+  Interact(request~ : String, @question_card.Action)
+  Failed(request~ : String, error~ : String)
+} derive(Eq, @debug.Debug)
+pub fn Msg::equal(Self, Self) -> Bool
+pub fn Msg::not_equal(Self, Self) -> Bool
+pub fn Msg::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

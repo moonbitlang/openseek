@@ -1,12 +1,4 @@
 ///|
-priv struct CodexRequestQuestion {
-  id : String
-  header : String
-  question : String
-  options : Array[(String, String)]
-}
-
-///|
 /// The string members of a JSON array; every other value is ignored.
 fn json_string_parts(values : Array[Json]) -> Array[String] {
   [
@@ -275,44 +267,6 @@ fn CodexRequestInput::approval_actions(
 }
 
 ///|
-fn CodexRequestInput::questions(
-  locale~ : @i18n.Locale = English,
-  self : CodexRequestInput,
-) -> Array[CodexRequestQuestion] {
-  guard self.params is Object(fields) &&
-    fields.get("questions") is Some(Array(values)) else {
-    return []
-  }
-  let questions : Array[CodexRequestQuestion] = []
-  for value in values {
-    guard value is Object(question) &&
-      @jsonx.json_text(question, "id") is Some(id) else {
-      continue
-    }
-    let options : Array[(String, String)] = []
-    if question.get("options") is Some(Array(values)) {
-      for value in values {
-        if value is Object(option) &&
-          @jsonx.json_text(option, "label") is Some(label) {
-          options.push(
-            (label, @jsonx.json_text(option, "description").unwrap_or("")),
-          )
-        }
-      }
-    }
-    questions.push({
-      id,
-      header: @jsonx.json_text(question, "header").unwrap_or(
-        ui(locale, QuestionLabel),
-      ),
-      question: @jsonx.json_text(question, "question").unwrap_or(""),
-      options,
-    })
-  }
-  questions
-}
-
-///|
 fn CodexRequestInput::raw_details(
   locale~ : @i18n.Locale = English,
   self : CodexRequestInput,
@@ -332,6 +286,17 @@ fn CodexRequestInput::render(
   identity : Identity,
   action_emit : @cmd.Emit[Action],
 ) -> @html.Html {
+  if self.method_ == "item/tool/requestUserInput" {
+    return self.question_draft.view(
+      self.questions,
+      self.request_key,
+      locale,
+      disabled=!self.connected,
+      action_emit.map(action => {
+        CodexQuestionChanged(identity~, request_key=self.request_key, action~)
+      }),
+    )
+  }
   ignore(locale)
   let heading = @html.span(
     class="codex-request-title",
@@ -402,73 +367,6 @@ fn CodexRequestInput::render(
               ),
             ),
             ui(locale, DenyLabel),
-          ),
-        ]),
-      )
-    }
-    "item/tool/requestUserInput" => {
-      for question in self.questions(locale~) {
-        let answer = self.answers.get(question.id).unwrap_or("")
-        let controls : Array[@html.Html] = [
-          @html.div(class="codex-question-header", question.header),
-          @html.div(class="codex-question-text", question.question),
-        ]
-        if !question.options.is_empty() {
-          let options : Array[@html.Html] = []
-          for option in question.options {
-            options.push(
-              @html.button(
-                class=if answer == option.0 {
-                  "codex-option selected"
-                } else {
-                  "codex-option"
-                },
-                on_click=action_emit(
-                  CodexRequestAnswerChanged(
-                    identity~,
-                    request_key=self.request_key,
-                    question_id=question.id,
-                    answer=option.0,
-                  ),
-                ),
-                [
-                  @html.span(class="codex-option-label", option.0),
-                  @html.span(class="codex-option-desc", option.1),
-                ],
-              ),
-            )
-          }
-          controls.push(@html.div(class="codex-options", options))
-        }
-        controls.push(
-          @html.input(
-            value=answer,
-            placeholder=ui(locale, TypeAnswer),
-            on_input=action_emit.map(value => {
-              CodexRequestAnswerChanged(
-                identity~,
-                request_key=self.request_key,
-                question_id=question.id,
-                answer=value,
-              )
-            }),
-            attrs=@html.Attrs::build().data_set("focus-owner", ""),
-          ),
-        )
-        body.push(@html.div(class="codex-question", controls))
-      }
-      body.push(
-        @html.div(class="codex-request-actions", [
-          @html.button(
-            class="codex-request-action codex-request-action-primary",
-            on_click=action_emit(
-              CodexRequestResponded(
-                identity~,
-                request_key=self.request_key,
-                decision=Json("accept"),
-              ),
-            ),
-            ui(locale, SubmitAnswers),
           ),
         ]),
       )

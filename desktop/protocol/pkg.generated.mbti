@@ -176,6 +176,17 @@ pub fn ArchivedSessionPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ArchivedSessionPayload
 pub impl @json.FromJson for ArchivedSessionPayload
 
+pub(all) struct AskUserPayload {
+  questions : Array[UserQuestion]
+} derive(Eq, @debug.Debug)
+pub fn AskUserPayload::equal(Self, Self) -> Bool
+pub fn AskUserPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AskUserPayload::not_equal(Self, Self) -> Bool
+pub fn AskUserPayload::to_json(Self) -> Json
+pub fn AskUserPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for AskUserPayload
+pub impl @json.FromJson for AskUserPayload
+
 pub(all) enum AttachmentSource {
   AttachmentPath(String)
   AttachmentBytes(name~ : String, data_base64~ : String)
@@ -2248,6 +2259,7 @@ pub impl ToJson for MoonPackageGraphReply
 pub impl @json.FromJson for MoonPackageGraphReply
 
 pub(all) enum Notification {
+  UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
   AgentStarted(StartedPayload)
@@ -2256,6 +2268,7 @@ pub(all) enum Notification {
   AgentFinished(FinishedPayload)
   AgentPrediction(PredictionReadyPayload)
   SessionEvent(SessionCommitPayload)
+  SessionShareProgress(SessionShareProgress)
   SubrunProgress(SubrunProgressPayload)
   WorkflowEntry(WorkflowEntryPayload)
   SessionChanged(SessionChangedPayload)
@@ -2287,6 +2300,7 @@ pub fn Notification::to_repr(Self) -> @debug.Repr
 pub fn Notification::wire_name(Self) -> String
 
 pub(all) enum NotificationKind {
+  UserQuestions
   AgentApprovals
   AgentConnected
   AgentStarted
@@ -2295,6 +2309,7 @@ pub(all) enum NotificationKind {
   AgentFinished
   AgentPrediction
   SessionEvent
+  SessionShareProgress
   SubrunProgress
   WorkflowEntry
   SessionChanged
@@ -2461,6 +2476,19 @@ pub fn PendingApprovalPayload::to_json(Self) -> Json
 pub fn PendingApprovalPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for PendingApprovalPayload
 pub impl @json.FromJson for PendingApprovalPayload
+
+pub(all) struct PendingUserQuestion {
+  id : String
+  session : String
+  questions : Array[UserQuestion]
+} derive(Eq, @debug.Debug)
+pub fn PendingUserQuestion::equal(Self, Self) -> Bool
+pub fn PendingUserQuestion::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn PendingUserQuestion::not_equal(Self, Self) -> Bool
+pub fn PendingUserQuestion::to_json(Self) -> Json
+pub fn PendingUserQuestion::to_repr(Self) -> @debug.Repr
+pub impl ToJson for PendingUserQuestion
+pub impl @json.FromJson for PendingUserQuestion
 
 pub(all) struct PickAttachmentReply {
   path : String?
@@ -3263,6 +3291,30 @@ pub fn SessionSearchReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionSearchReply
 pub impl @json.FromJson for SessionSearchReply
 
+pub(all) struct SessionSharePayload {
+  source : SessionExportPayload
+  generation : Int
+} derive(Eq, @debug.Debug)
+pub fn SessionSharePayload::equal(Self, Self) -> Bool
+pub fn SessionSharePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSharePayload::not_equal(Self, Self) -> Bool
+pub fn SessionSharePayload::to_json(Self) -> Json
+pub fn SessionSharePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionSharePayload
+pub impl @json.FromJson for SessionSharePayload
+
+pub(all) struct SessionShareProgress {
+  generation : Int
+  progress : ShareProgress
+} derive(Eq, @debug.Debug)
+pub fn SessionShareProgress::equal(Self, Self) -> Bool
+pub fn SessionShareProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionShareProgress::not_equal(Self, Self) -> Bool
+pub fn SessionShareProgress::to_json(Self) -> Json
+pub fn SessionShareProgress::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionShareProgress
+pub impl @json.FromJson for SessionShareProgress
+
 pub(all) enum SessionShareReply {
   Shared(url~ : String)
   SignInRequired
@@ -3389,6 +3441,20 @@ pub fn SettingsStatusPayload::to_json(Self) -> Json
 pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
+
+pub(all) enum ShareProgress {
+  Preparing
+  Connecting(attempt~ : Int)
+  Uploading(attempt~ : Int, percent~ : Int)
+  Waiting(attempt~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn ShareProgress::equal(Self, Self) -> Bool
+pub fn ShareProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ShareProgress::not_equal(Self, Self) -> Bool
+pub fn ShareProgress::to_json(Self) -> Json
+pub fn ShareProgress::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ShareProgress
+pub impl @json.FromJson for ShareProgress
 
 pub(all) enum SkillContentReply {
   SkillContent(String)
@@ -3779,6 +3845,44 @@ pub fn UpdateDownloadedPayload::to_json(Self) -> Json
 pub fn UpdateDownloadedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for UpdateDownloadedPayload
 pub impl @json.FromJson for UpdateDownloadedPayload
+
+pub(all) struct UserQuestion {
+  id : String
+  title : String
+  options : Array[String]?
+} derive(Eq, @debug.Debug)
+pub fn UserQuestion::equal(Self, Self) -> Bool
+pub fn UserQuestion::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn UserQuestion::not_equal(Self, Self) -> Bool
+pub fn UserQuestion::to_json(Self) -> Json
+pub fn UserQuestion::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UserQuestion
+pub impl @json.FromJson for UserQuestion
+
+pub(all) struct UserQuestionAnswer {
+  id : String
+  session : String
+  answers : Map[String, String]?
+} derive(Eq, @debug.Debug)
+pub fn UserQuestionAnswer::equal(Self, Self) -> Bool
+pub fn UserQuestionAnswer::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn UserQuestionAnswer::not_equal(Self, Self) -> Bool
+pub fn UserQuestionAnswer::to_json(Self) -> Json
+pub fn UserQuestionAnswer::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UserQuestionAnswer
+pub impl @json.FromJson for UserQuestionAnswer
+
+pub(all) struct UserQuestionSnapshot {
+  generation : Int
+  requests : Array[PendingUserQuestion]
+} derive(Eq, @debug.Debug)
+pub fn UserQuestionSnapshot::equal(Self, Self) -> Bool
+pub fn UserQuestionSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn UserQuestionSnapshot::not_equal(Self, Self) -> Bool
+pub fn UserQuestionSnapshot::to_json(Self) -> Json
+pub fn UserQuestionSnapshot::to_repr(Self) -> @debug.Repr
+pub impl ToJson for UserQuestionSnapshot
+pub impl @json.FromJson for UserQuestionSnapshot
 
 pub(all) struct WatchWorkspacePayload {
   path : String

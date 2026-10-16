@@ -9,6 +9,8 @@ import {
   "openseek_desktop/backend/host",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/internal/session_messages",
+  "openseek_desktop/backend/internal/shares",
+  "openseek_desktop/backend/internal/user_questions",
   "openseek_desktop/backend/internal/session_catalog",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/protocol",
@@ -22,7 +24,14 @@ import {
 
 import {
   "moonbitlang/openseek_protocol" @wire,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
 } for "wbtest"
+
+import {
+  "moonbitlang/async/fs",
+} for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"
 

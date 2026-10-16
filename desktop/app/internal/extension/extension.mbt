@@ -10,8 +10,22 @@
 /// `internal/commands`; this package only binds them to native handlers.
 
 ///|
+let user_questions_event : @proton_contract.Event[
+  @protocol.UserQuestionSnapshot,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::UserQuestions.wire_name(),
+)
+
+///|
 let approvals_event : @proton_contract.Event[@protocol.ApprovalSnapshot] = @commands.extension_contract.event(
   @protocol.NotificationKind::AgentApprovals.wire_name(),
+)
+
+///|
+let share_progress_event : @proton_contract.Event[
+  @protocol.SessionShareProgress,
+] = @commands.extension_contract.event(
+  @protocol.NotificationKind::SessionShareProgress.wire_name(),
 )
 
 ///|
@@ -238,6 +252,8 @@ async fn PageEventTarget::emit(
   // Matching the closed enum keeps each Proton descriptor paired with the
   // payload type that belongs to that event.
   match notification {
+    Hub(UserQuestions(payload)) =>
+      self.events.emit(user_questions_event, payload)
     Hub(AgentApprovals(payload)) => self.events.emit(approvals_event, payload)
     Hub(AgentConnected(payload)) => self.events.emit(connected_event, payload)
     Hub(AgentStarted(payload)) => self.events.emit(started_event, payload)
@@ -281,6 +297,8 @@ async fn PageEventTarget::emit(
     Hub(TerminalExit(payload)) => self.events.emit(terminal_exit_event, payload)
     Hub(SemanticSearchProgress(payload)) =>
       self.events.emit(semantic_search_progress_event, payload)
+    Hub(SessionShareProgress(payload)) =>
+      self.events.emit(share_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
     WindowChromeChanged => self.events.emit(window_chrome_changed, NoPayload)
     SystemAppearanceChanged =>
@@ -358,25 +376,14 @@ pub async fn DesktopBridgeActor::notify_system_appearance_changed(
 
 ///|
 pub fn openseek_capability(
-  runtime_dir? : String,
   state : @api.ApiState,
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
-  let endpoints = @api.endpoints(state, bridge.host_connection)
+  let endpoints = @api.endpoints(state, bridge.host_connection, on_share_progress=payload => {
+    bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
+  })
   let window_only = [
-    WindowEndpoint(@commands.github_drafts_get, (_, payload) => {
-      @host.read_github_drafts(runtime_dir, payload)
-    }),
-    WindowEndpoint(@commands.github_drafts_set, (_, payload) => {
-      @host.write_github_drafts(runtime_dir, payload)
-    }),
-    WindowEndpoint(@commands.app_language_get, (_, _) => {
-      @host.read_ui_language(runtime_dir)
-    }),
-    WindowEndpoint(@commands.app_language_set, (_, payload) => {
-      @host.write_ui_language(runtime_dir, payload)
-    }),
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)
     }),
@@ -396,9 +403,6 @@ pub fn openseek_capability(
     }),
     WindowEndpoint(@commands.host_pick_attachment, (context, _) => {
       pick_attachment(context)
-    }),
-    WindowEndpoint(@commands.session_share, (_, payload) => {
-      SessionShare::{ state, payload, }.publish()
     }),
   ]
   for endpoint in window_endpoints(views) {

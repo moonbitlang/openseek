@@ -398,6 +398,62 @@ test "transcript mapping renders non-finished terminals as error bubbles" {
 }
 
 ///|
+test "reopened interrupted question does not retain a pending tool" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"assistant","payload":{"content":"Let me ask a question.","tool_calls":[{"id":"question","name":"mcp__seekmoon__ask_user","arguments":"{}"}]}}},
+    #|{"sequence":2,"item":{"kind":"terminal","payload":{"kind":"interrupted","message":"cancelled"}}}
+  let items = transcript_from_session(session_reply(events))
+  assert_eq(items.length(), 2)
+  assert_eq(items[1].text(), Some("cancelled: cancelled"))
+  guard items[0].kind is @transcript.Assistant(calls=[call], ..) else {
+    fail("expected the outstanding question call")
+  }
+  assert_true(
+    call.outcome
+    is @transcript.Done(
+      content=Content([Text("cancelled: cancelled")]),
+      is_error=true,
+      brief=None
+    ),
+  )
+}
+
+///|
+test "abnormal terminals settle only unfinished calls and preserve recorded results" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"assistant","payload":{"content":"","tool_calls":[{"id":"done","name":"read","arguments":"{}"},{"id":"pending","name":"mcp__seekmoon__ask_user","arguments":"{}"}]}}},
+    #|{"sequence":2,"item":{"kind":"tool_result","payload":{"tool_call_id":"done","tool_name":"read","content":"kept output","is_error":false,"brief":"Read file"}}}
+  let terminals : Array[@desktop_protocol.SessionTerminal] = [
+    Interrupted("cancelled"),
+    Failed("engine exited"),
+    Aborted("aborted"),
+    MaxStepsExhausted,
+  ]
+  for terminal in terminals {
+    let items = transcript_from_session(session_reply(events))
+    guard items[0].kind is @transcript.Assistant(calls=original, ..) else {
+      fail("expected original calls")
+    }
+    assert_true(
+      @transcript.apply_session_item(
+        items,
+        @desktop_protocol.Terminal(terminal),
+        sequence=3,
+      ),
+    )
+    guard items[0].kind is @transcript.Assistant(calls=[done, stopped], ..) else {
+      fail("expected both original calls")
+    }
+    assert_true(done == original[0])
+    assert_true(stopped.outcome is @transcript.Done(is_error=true, ..))
+    assert_eq(stopped.call_id, original[1].call_id)
+    assert_eq(stopped.arguments, original[1].arguments)
+    assert_true(original[1].outcome is @transcript.Pending(..))
+    assert_eq(items[0].sequence, Some(1))
+  }
+}
+
+///|
 test "transcript mapping keeps summaries and background notices" {
   let events =
     #|{"sequence":1,"item":{"kind":"summary","payload":{"content":"earlier turns compacted","from_sequence":1,"to_sequence":8}}},

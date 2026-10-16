@@ -137,7 +137,9 @@ A button's geometry belongs to a recognized component base, while short intent
 classes only choose that component's appearance:
 
 - `.button` owns the padding, type size, focus ring, and responsive target size
-  of ordinary labeled actions.
+  of ordinary labeled actions. Its `compact` variant supplies the smaller
+  padding and minimum height used above the composer; contextual appearance
+  is expressed through the existing `--button-*` properties.
 - Specialized controls such as `.sidebar-button`, `.icon-button`, and
   `.queued-input-action` own their own geometry.
 - `primary`, `secondary`, and `danger` may be nested variants of those bases,

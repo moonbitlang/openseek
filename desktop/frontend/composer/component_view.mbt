@@ -300,7 +300,28 @@ fn Entry::view(
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None
-  let status = input.presentation.status.map(component => {
+  // Keep a permanent first slot so hiding the attachment button does not
+  // rebuild the model and workspace controls that follow it.
+  let status : Array[@html.Html] = [
+    @html.div(
+      class="composer-add",
+      if can_attach {
+        [
+          @html.button(
+            class="composer-attach",
+            type_="button",
+            title=ui(locale, AttachHint),
+            on_click=pick_attachments(locale, input, image_emit),
+            attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
+            @icons.icon(@icons.icon_add),
+          ),
+        ]
+      } else {
+        ([] : Array[@html.Html])
+      },
+    ),
+  ]
+  for component in input.presentation.status {
     // A transfer snapshots completed content. Let attachment reads/uploads
     // finish before the user can move their owner to another agent.
     let component = match component {
@@ -309,18 +330,8 @@ fn Entry::view(
         ModelStatus({ ..control, disabled: true, })
       other => other
     }
-    component.render(locale~, self.identity(), self.draft, action_emit)
-  })
-  if can_attach {
     status.push(
-      @html.button(
-        class="composer-attach",
-        type_="button",
-        title=ui(locale, AttachHint),
-        on_click=pick_attachments(locale, input, image_emit),
-        attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
-        ui(locale, AttachImages),
-      ),
+      component.render(locale~, self.identity(), self.draft, action_emit),
     )
   }
   if self.image_reads > 0 {

@@ -1,0 +1,167 @@
+name: CLI release
+
+# Bump the root moon.mod version, then dispatch on main.
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: cli-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: native CLI (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            runner: ubuntu-22.04
+          - platform: linux-arm64
+            runner: ubuntu-22.04-arm
+          - platform: macos-arm64
+            runner: macos-15
+          - platform: windows-x64
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Install the pinned Windows toolchain
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:MOONBIT_INSTALL_VERSION = (Get-Content desktop/.moonbit-version -Raw).Trim()
+          Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
+          "$env:USERPROFILE\.moon\bin" >> $env:GITHUB_PATH
+      - name: Install the pinned Unix toolchain
+        if: runner.os != 'Windows'
+        run: |
+          version="$(cat desktop/.moonbit-version)"
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash -s -- "$version"
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Build and package the native CLI
+        run: |
+          # The CLI needs these workspace modules, without Desktop's Proton prebuild.
+          printf 'members = [".", "./protocol", "./tools_sdk", "./editor"]\n' > moon.work
+          moon update
+          moon test installation --target native
+          moon build . --target native --release
+          moon run scripts/package-cli.mbtx '${{ matrix.platform }}' dist/cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/cli/*
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      OPENSEEK_S3_BUCKET: ${{ vars.OPENSEEK_S3_BUCKET }}
+      OPENSEEK_S3_REGION: ${{ vars.OPENSEEK_S3_REGION }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: dist/cli
+          merge-multiple: true
+      - name: Prepare the CLI release
+        id: release
+        working-directory: dist/cli
+        run: |
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' ../../moon.mod)"
+          test -n "$version"
+          cat SHA256SUMS-* > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          echo "prefix=openseek/cli/releases/v$version" >> "$GITHUB_OUTPUT"
+          echo "url=https://cli.moonbitlang.com/openseek/cli/releases/v$version" >> "$GITHUB_OUTPUT"
+      - name: Configure S3 credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.OPENSEEK_RELEASE_AWS_ROLE_ARN }}
+          aws-region: ${{ vars.OPENSEEK_S3_REGION }}
+      - name: Reject an already published CLI version
+        env:
+          RELEASE_PREFIX: ${{ steps.release.outputs.prefix }}
+        run: |
+          published="$(aws s3api list-objects-v2 --region "$OPENSEEK_S3_REGION" \
+            --bucket "$OPENSEEK_S3_BUCKET" --prefix "$RELEASE_PREFIX/SHA256SUMS" \
+            --no-paginate --query KeyCount --output text --no-cli-pager)"
+          if [[ "$published" != 0 ]]; then
+            echo "CLI version is already published; bump the root moon.mod version." >&2
+            exit 1
+          fi
+      - name: Install ossutil
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/ossutil.zip" \
+            "https://gosspublic.alicdn.com/ossutil/v2/2.3.0/ossutil-2.3.0-linux-amd64.zip"
+          echo "3ae4d9fc85a7a6e9f5654d1599766f1a3a42a3692870887b5ae9338d582ef65a  $RUNNER_TEMP/ossutil.zip" \
+            | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/ossutil.zip" -d "$RUNNER_TEMP/ossutil"
+          sudo install -m 755 \
+            "$RUNNER_TEMP/ossutil/ossutil-2.3.0-linux-amd64/ossutil" \
+            /usr/local/bin/ossutil
+      - name: Upload and verify CLI archives in OSS and S3
+        working-directory: dist/cli
+        env:
+          RELEASE_PREFIX: ${{ steps.release.outputs.prefix }}
+          OPENSEEK_OSS_BUCKET: ${{ secrets.OPENSEEK_OSS_BUCKET }}
+          OPENSEEK_OSS_REGION: ${{ secrets.OPENSEEK_OSS_REGION }}
+          OSS_ACCESS_KEY_ID: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_ID }}
+          OSS_ACCESS_KEY_SECRET: ${{ secrets.OPENSEEK_OSS_ACCESS_KEY_SECRET }}
+        run: |
+          # Upload the checksum file last so it describes the complete release.
+          for file in openseek-*.tar.gz SHA256SUMS; do
+            sha256="$(sha256sum "$file" | cut -d ' ' -f 1)"
+            size="$(stat --format='%s' "$file")"
+            content_type=application/gzip
+            if [[ "$file" == SHA256SUMS ]]; then content_type=text/plain; fi
+            key="$RELEASE_PREFIX/$file"
+            ossutil cp --force --region "$OPENSEEK_OSS_REGION" \
+              --content-type "$content_type" --metadata "sha256=$sha256" \
+              "$file" "oss://$OPENSEEK_OSS_BUCKET/$key"
+            aws s3 cp "$file" "s3://$OPENSEEK_S3_BUCKET/$key" \
+              --region "$OPENSEEK_S3_REGION" --content-type "$content_type" \
+              --metadata "sha256=$sha256" --checksum-algorithm SHA256 --only-show-errors
+            ossutil api head-object --region "$OPENSEEK_OSS_REGION" \
+              --bucket "$OPENSEEK_OSS_BUCKET" --key "$key" --output-format json --quiet \
+              | jq -e --arg sha "$sha256" --arg size "$size" \
+                '.Header["X-Oss-Meta-Sha256"][0] == $sha and .Header["Content-Length"][0] == $size'
+            aws s3api head-object --region "$OPENSEEK_S3_REGION" \
+              --bucket "$OPENSEEK_S3_BUCKET" --key "$key" --output json --no-cli-pager \
+              | jq -e --arg sha "$sha256" --arg size "$size" \
+                '.Metadata.sha256 == $sha and (.ContentLength | tostring) == $size'
+          done
+      - name: Verify the public checksum file and show download links
+        working-directory: dist/cli
+        env:
+          RELEASE_URL: ${{ steps.release.outputs.url }}
+        run: |
+          curl --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' "$RELEASE_URL/SHA256SUMS" | cmp - SHA256SUMS
+          for file in openseek-*.tar.gz SHA256SUMS; do
+            printf -- '- [%s](%s/%s)\n' "$file" "$RELEASE_URL" "$file" >> "$GITHUB_STEP_SUMMARY"
+          done

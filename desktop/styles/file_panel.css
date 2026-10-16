@@ -2226,26 +2226,37 @@ button.git-history-file.selected {
   color: var(--color-text-faint);
 }
 
-/* Controls for the read-only Office surface live in the breadcrumb row. The
-   search field can shrink before the path does, keeping the file identity
-   visible in a narrow embedded panel. */
+/* The tab already identifies an Office file. Keep its folder breadcrumb and
+   reveal the search field on focus so reading controls fit a narrow pane. */
+.viewer-breadcrumb:has(.office-viewer-toolbar) .crumb-file,
+.viewer-breadcrumb:has(.office-viewer-toolbar) .crumb-sep:has(+ .crumb-file) {
+  display: none;
+}
 .office-viewer-toolbar {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   flex: 0 0 auto;
   min-width: 0;
-  padding: 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-control-surface);
+  padding: 0;
 }
-.office-viewer-toolbar input {
+.office-viewer-find {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--color-text-secondary);
+}
+.office-viewer-find > .icon {
+  position: absolute;
+  inset-inline-start: 6px;
+  pointer-events: none;
+}
+.office-viewer-find input {
   box-sizing: border-box;
-  width: clamp(96px, 16vw, 220px);
-  min-width: 72px;
-  height: 24px;
-  padding: 2px 7px;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 2px 4px 2px 28px;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   color: var(--color-text-primary);
@@ -2253,7 +2264,17 @@ button.git-history-file.selected {
   font: inherit;
   font-size: var(--font-size-xs);
 }
-.office-viewer-toolbar input:focus {
+.office-viewer-find input::placeholder {
+  opacity: 0;
+}
+.office-viewer-find:focus-within input,
+.office-viewer-find.has-query input {
+  width: clamp(120px, 16vw, 220px);
+}
+.office-viewer-find:focus-within input::placeholder {
+  opacity: 1;
+}
+.office-viewer-find input:focus {
   outline: 1px solid var(--color-accent);
   background: var(--color-bg-surface);
 }

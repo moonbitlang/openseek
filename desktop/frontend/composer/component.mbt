@@ -708,16 +708,16 @@ fn Model::update(
         let (next, command) = settled.prepare_attachments(sources, emit)
         return self.commit_entry_change(target, next, command, action_emit)
       }
-      if event is @image_input.NativeReady(path) {
-        guard target.image_reads > 0 else { return (self, @cmd.none) }
-        let settled = { ..target, image_reads: target.image_reads - 1, }
-        let (next, command) = settled.prepare_attachments(
-          match path {
-            Some(path) => [@protocol.AttachmentPath(path)]
-            None => []
-          },
-          emit,
-        )
+      if event is @image_input.NativePicked(result) {
+        let (next, command) = match result {
+          Ok(None) => return (self, @cmd.none)
+          Ok(Some(path)) =>
+            { ..target, image_error: None, }.prepare_attachments(
+              [@protocol.AttachmentPath(path)],
+              emit,
+            )
+          Err(message) => ({ ..target, image_error: Some(message), }, @cmd.none)
+        }
         return self.commit_entry_change(target, next, command, action_emit)
       }
       let next = match event {
@@ -745,7 +745,7 @@ fn Model::update(
             image_error: Some(message),
           }
         }
-        @image_input.DocumentsReady(..) | @image_input.NativeReady(_) => target
+        @image_input.DocumentsReady(..) | @image_input.NativePicked(_) => target
       }
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }

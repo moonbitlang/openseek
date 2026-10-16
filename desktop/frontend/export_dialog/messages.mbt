@@ -12,6 +12,10 @@ priv enum UiMessage {
   ShareLabel
   ChooseSavePath
   UploadingConversation
+  PreparingConversation
+  ConnectingShare
+  RetryingShare
+  WaitingForShare
   CompleteBrowserSignIn
   SignInDescription
   SignInLabel
@@ -26,6 +30,29 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PreparingConversation) => "Preparing conversation…"
+    (Spanish, PreparingConversation) => "Preparando conversación…"
+    (SimplifiedChinese, PreparingConversation) => "正在准备对话…"
+    (TraditionalChinese, PreparingConversation) => "正在準備對話…"
+    (Japanese, PreparingConversation) => "チャットを準備中…"
+    (English, ConnectingShare) => "Connecting to share server…"
+    (Spanish, ConnectingShare) => "Conectando al servidor…"
+    (SimplifiedChinese, ConnectingShare) => "正在连接分享服务器…"
+    (TraditionalChinese, ConnectingShare) => "正在連線至分享伺服器…"
+    (Japanese, ConnectingShare) => "共有サーバーに接続中…"
+    (English, RetryingShare) => "Retrying upload…"
+    (Spanish, RetryingShare) => "Reintentando la subida…"
+    (SimplifiedChinese, RetryingShare) => "正在重试上传…"
+    (TraditionalChinese, RetryingShare) => "正在重試上傳…"
+    (Japanese, RetryingShare) => "アップロードを再試行中…"
+    (English, WaitingForShare) => "Upload sent. Waiting for server response…"
+    (Spanish, WaitingForShare) => "Envío completado. Esperando al servidor…"
+    (SimplifiedChinese, WaitingForShare) =>
+      "上传已发送，正在等待服务器响应…"
+    (TraditionalChinese, WaitingForShare) =>
+      "上傳已送出，正在等待伺服器回應…"
+    (Japanese, WaitingForShare) =>
+      "送信済み。サーバーの応答を待っています…"
     (English, ExportConversation) => "Export conversation"
     (Spanish, ExportConversation) => "Exportar conversación"
     (SimplifiedChinese, ExportConversation) => "导出对话"

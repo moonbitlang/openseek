@@ -5,19 +5,83 @@ fn attachment_step(model : Model, input : Input, message : Msg) -> Model {
 
 ///|
 fn attachment_reading(input : Input) -> Model {
-  let model = attachment_step(
-    Model(input),
-    input,
-    ImageRead(input.identity, input.root, @image_input.Reading),
-  )
   attachment_step(
-    model,
+    Model(input),
     input,
     ImageRead(
       input.identity,
       input.root,
-      @image_input.NativeReady(Some("/Downloads/report.pdf")),
+      @image_input.NativePicked(Ok(Some("/Downloads/report.pdf"))),
     ),
+  )
+}
+
+///|
+test "native picker results preserve concurrent browser reads and remain pure" {
+  let input = Input::fixture("keep this text")
+  for reads in [0, 1] {
+    let model = Model(input).with_entry({ ..Entry(input), image_reads: reads, })
+    for
+      result in [
+        Ok(None),
+        Ok(Some("/Downloads/report.pdf")),
+        Err("picker failed"),
+      ] {
+      let msg = ImageRead(
+        input.identity,
+        input.root,
+        @image_input.NativePicked(result),
+      )
+      let next = attachment_step(model, input, msg)
+      assert_true(next == attachment_step(model, input, msg))
+      assert_eq(next.active(input).image_reads, reads)
+      assert_eq(next.active(input).draft, input.draft)
+      match result {
+        Ok(None) => assert_true(next == model)
+        Ok(Some(_)) => {
+          assert_eq(next.active(input).attachment_requests.length(), 1)
+          assert_true(
+            next.active(input).attachment_requests[0].phase
+            is AttachmentPreparing,
+          )
+          assert_false(next.active(input).can_send(input))
+        }
+        Err(_) => {
+          assert_eq(next.active(input).image_error, Some("picker failed"))
+          assert_true(next.active(input).attachment_requests.is_empty())
+        }
+      }
+      assert_eq(model.active(input).image_reads, reads)
+      assert_true(model.active(input).attachment_requests.is_empty())
+    }
+  }
+}
+
+///|
+test "native selection belongs to its original draft and ignores retired drafts" {
+  let input = Input::fixture("keep this text")
+  let other = {
+    ..input,
+    identity: {
+      ..input.identity,
+      owner: { ..input.identity.owner, session: "other", },
+    },
+  }
+  let msg = ImageRead(
+    input.identity,
+    input.root,
+    @image_input.NativePicked(Ok(Some("/Downloads/report.pdf"))),
+  )
+  let model = Model(input)
+  let next = attachment_step(model, other, msg)
+  assert_eq(next.active(input).attachment_requests.length(), 1)
+  assert_true(next.active(other).attachment_requests.is_empty())
+  let retired = { ..other, retirements: [input.identity.owner], }
+  let dropped = attachment_step(model, retired, msg)
+  assert_true(dropped.entries.all(entry => entry.owner != input.identity.owner))
+  let changed = { ..input, root: Some(@common.Uri::file("/other")), }
+  assert_true(
+    attachment_step(model, changed, msg).active(changed).attachment_requests.is_empty(),
   )
 }
 

@@ -72,7 +72,11 @@ fn Model::finish_fork(
       .notify_error(emit, message)
     Ok(reply) => {
       let should_open = model.screen is Chat &&
-        model.conversation_selection() == Some(pending.source)
+        model.conversation_selection() == Some(pending.source) &&
+        model.navigation.location.map_or(true, location => {
+          model.navigation.phase is Active &&
+          location.target == @navigation.Session(pending.source.session)
+        })
       guard model.device_state(pending.source.channel) is Some(dev) &&
         dev.connection_generation == pending.connection_generation &&
         dev.projects.contains(pending.source.workspace) else {

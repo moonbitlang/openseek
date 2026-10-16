@@ -1,0 +1,11 @@
+import {
+  "openseek_desktop/frontend/question_card",
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/protocol",
+  "openseek_desktop/commands",
+}
+
+supported_targets = "js"

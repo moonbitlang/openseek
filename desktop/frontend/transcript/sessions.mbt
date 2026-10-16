@@ -607,8 +607,56 @@ fn SessionTerminalProjection::append_to(
         message => message
       }
   }
+  // Cancellation can end a turn before its tool results are committed. The
+  // terminal is authoritative: those calls are no longer running, both when
+  // receiving this event live and when replaying the record after a restart.
+  interrupt_pending_calls(items, failure)
   items.push({ kind: Failure(failure), ts, sequence, })
   false
+}
+
+///|
+fn interrupt_pending_calls(
+  items : Array[TranscriptItem],
+  reason : String,
+) -> Unit {
+  let mut index = items.length()
+  while index > 0 {
+    index -= 1
+    let item = items[index]
+    match item.kind {
+      Answer(_) | TurnEnd | Failure(_) | Assistant(finished=true, ..) => break
+      Assistant(reasoning~, prose~, calls~, replay~, finished~, end_sequence~) => {
+        if !calls.any(call => call.outcome is Pending(..)) {
+          continue
+        }
+        items[index] = {
+          ..item,
+          kind: Assistant(
+            reasoning~,
+            prose~,
+            calls=calls.map(call => {
+              guard call.outcome is Pending(output~) else { return call }
+              {
+                ..call,
+                outcome: Done(
+                  content=Content([
+                    Text(output.map_or(reason, text => text + "\n\n" + reason)),
+                  ]),
+                  is_error=true,
+                  brief=None,
+                ),
+              }
+            }),
+            replay~,
+            finished~,
+            end_sequence~,
+          ),
+        }
+      }
+      User(..) | Notice(..) | Summary(_) => ()
+    }
+  }
 }
 
 ///|

@@ -107,7 +107,7 @@ pub let session_export : Command[
 ///|
 /// Upload the same standalone HTML as Download using this desktop's login.
 pub let session_share : Command[
-  @protocol.SessionExportPayload,
+  @protocol.SessionSharePayload,
   @protocol.SessionShareReply,
 ] = Command("session.share")
 
@@ -958,3 +958,15 @@ pub let session_search : Command[
   @protocol.SessionSearchPayload,
   @protocol.SessionSearchReply,
 ] = Command("session.search")
+
+///|
+pub let user_questions_list : Command[
+  @protocol.EmptyPayload,
+  @protocol.UserQuestionSnapshot,
+] = Command("user_questions.list")
+
+///|
+pub let user_questions_answer : Command[
+  @protocol.UserQuestionAnswer,
+  @protocol.UserQuestionSnapshot,
+] = Command("user_questions.answer")

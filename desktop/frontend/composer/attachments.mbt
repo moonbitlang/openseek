@@ -31,7 +31,6 @@ fn pick_attachments(
     )
   }
   @cmd.custom_cmd(scheduler => {
-    scheduler.add(emit(@image_input.Reading))
     @js.Promise::from_async(() => {
       let reply : @protocol.PickAttachmentReply = @interop.bridge_request(
         input.identity.owner.channel,
@@ -40,12 +39,14 @@ fn pick_attachments(
       ) catch {
         error => {
           scheduler.add(
-            emit(@image_input.Failed(@interop.bridge_error_text(error))),
+            emit(
+              @image_input.NativePicked(Err(@interop.bridge_error_text(error))),
+            ),
           )
           return
         }
       }
-      scheduler.add(emit(@image_input.NativeReady(reply.path)))
+      scheduler.add(emit(@image_input.NativePicked(Ok(reply.path))))
     })
     |> ignore
   })

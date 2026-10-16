@@ -1817,9 +1817,8 @@ test('new-chat project title filters and switches registered projects', async ({
   const title = page.locator('.empty-title');
   await expect(title).toHaveText('What should we build in workspace?');
   await expect(page.getByText(/SeekMoon plans the work/)).toHaveCount(0);
-  // The click starts a fresh draft a beat after it returns, and the title
-  // already matched the boot draft: wait for the rotation before recording.
-  await expect(transcript).not.toHaveAttribute('data-transcript-session', bootSession);
+  // New chat on the existing blank entry keeps its identity.
+  await expect(transcript).toHaveAttribute('data-transcript-session', bootSession);
   const originalSession = await transcript.getAttribute('data-transcript-session');
 
   // The picker borrows the app's select popup frame. Capture that frame from
@@ -1958,7 +1957,7 @@ test('new-chat project picker stays clear of its title in a short window', async
   expect(app.pageErrors).toEqual([]);
 });
 
-test('archiving a selected chat restores the existing project draft', async ({ page }) => {
+test('archiving a selected chat keeps its destination and preserves the project draft', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -1983,8 +1982,8 @@ test('archiving a selected chat restores the existing project draft', async ({ p
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.archive' &&
     request.params?.session === 'session-1')).toBe(true);
-  await expect(newChat).toHaveCount(0);
-  await expect(workspace).toHaveClass(/\bactive\b/);
+  await expect(page.getByText('Archived conversation · Read only')).toBeVisible();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.locator('#task')).toHaveValue('Keep this draft');
   expect(app.pageErrors).toEqual([]);
 });
@@ -2057,11 +2056,11 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   ]);
   await expect(page.locator('.modal-backdrop')).toHaveCount(0);
 
-  // The row is gone without a stop in the archive, and the open transcript
-  // gave way to a fresh chat in the same project.
+  // Deletion keeps the requested identity visible as an unavailable target.
+  // It does not silently navigate to a different conversation.
   await expect(stored).toHaveCount(0);
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
-  await expect(page.locator('.empty-title')).toHaveText('What should we build in workspace?');
+  await expect(page.getByText('This destination no longer exists or is no longer attached.')).toBeVisible();
   await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
   expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
@@ -2300,7 +2299,7 @@ test('sidebar menu dismissal and pending selection follow the clicked row', asyn
   expect(app.pageErrors).toEqual([]);
 });
 
-test('removing a pending selection exits its loading state', async ({ page }) => {
+test('archiving a pending selection resolves the same destination as read only', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.liveSessions.push({
     id: 'session-2',
@@ -2331,11 +2330,8 @@ test('removing a pending selection exits its loading state', async ({ page }) =>
   });
 
   await expect(page.getByRole('menu')).toHaveCount(0);
-  await expect(page.getByText('Loading conversation…', { exact: true })).toHaveCount(0);
-  await expect(page.locator('#task')).toBeVisible();
-  await expect(page.locator('.conversation-row', { hasText: 'New chat' })).toHaveCount(0);
-  await expect(page.locator('.workspace-row', { hasText: 'workspace' })).toHaveClass(/\bactive\b/);
-  await expect(page.locator('.empty-title')).toHaveText('What should we build in workspace?');
+  await expect(page.getByText('Archived conversation · Read only')).toBeVisible();
+  await expect(page.locator('#task')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -2564,9 +2560,9 @@ test('skills search, detail navigation, and hand-written protections use the mou
 
   const rabbita = registry.locator('.skill-row').filter({ hasText: 'rabbita' });
   await rabbita.locator('.skill-summary').click();
-  await expect(page.getByRole('button', { name: 'Back to skills' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'rabbita', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Back to skills' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
 
   await installed.locator('.skill-row').filter({ hasText: 'MoonBit' })
     .locator('.skill-summary').click();

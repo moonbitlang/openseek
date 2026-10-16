@@ -252,6 +252,9 @@ pub fn editor_classes(state : State, ctx : Ctx) -> String {
     ctx.active_file is None &&
     ctx.active_history_diff is None
   let mut classes = "editor"
+  if active_office_surface(state, ctx) is Some(_) {
+    classes += " office-reading"
+  }
   if state.tree_open || picking {
     classes += " tree-open"
   }
@@ -2033,14 +2036,25 @@ fn office_viewer_toolbar(
       .role("group")
       .aria_label(ui(locale, OfficeControls)),
     [
-      @html.input(
-        input_type=@html.InputType::Search,
-        value=state.office_query,
-        placeholder=ui(locale, OfficeFind),
-        on_input=dispatch.map(value => OfficeSearchChanged(value)),
-        attrs=@html.Attrs::build()
-          .aria_label(ui(locale, OfficeFind))
-          .data_set("focus-owner", ""),
+      @html.label(
+        class=if state.office_query.is_empty() {
+          "office-viewer-find"
+        } else {
+          "office-viewer-find has-query"
+        },
+        title=ui(locale, OfficeFind),
+        [
+          @icons.icon(@icons.icon_search),
+          @html.input(
+            input_type=@html.InputType::Search,
+            value=state.office_query,
+            placeholder=ui(locale, OfficeFind),
+            on_input=dispatch.map(value => OfficeSearchChanged(value)),
+            attrs=@html.Attrs::build()
+              .aria_label(ui(locale, OfficeFind))
+              .data_set("focus-owner", ""),
+          ),
+        ],
       ),
       @html.button(
         type_="button",

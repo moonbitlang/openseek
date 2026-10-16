@@ -2034,16 +2034,13 @@ fn view(
         narrow=model.narrow,
         codex_actions,
       )
-    Settings =>
-      management_header(dispatch, model, @settings.text(model.locale, Settings))
+    Settings => @page_shell.header(@settings.text(model.locale, Settings))
     Skills =>
-      management_header(
-        dispatch,
-        model,
+      model.skills.header(
+        locale=model.locale,
         @sidebar_messages.text(model.locale, Skills),
       )
-    Schedules =>
-      management_header(dispatch, model, ui(model.locale, ScheduledTasks))
+    Schedules => @page_shell.header(ui(model.locale, ScheduledTasks))
   }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
@@ -2063,6 +2060,23 @@ fn view(
         Transcript(conversation=conv, ..) =>
           [
             transcript_html,
+            if model.device_state(conv.device) is Some(device) &&
+              !conv.is_archived_read_only() {
+              device.questions.view(
+                conv.session_id,
+                model.locale,
+                device.bridge is Connected,
+                dispatch.map(msg => {
+                  UserQuestions(
+                    channel=conv.device,
+                    connection_generation=device.connection_generation,
+                    msg,
+                  )
+                }),
+              )
+            } else {
+              @html.div(class="user-question-region", @html.nothing)
+            },
             if conv.is_archived_read_only() {
               conv.archived_read_only_view(locale=model.locale, dispatch)
             } else if model.scheduled_session_read_only(conv) {
@@ -2119,6 +2133,11 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
+  let content = if navigation_notice(dispatch, model) is Some(notice) {
+    [notice]
+  } else {
+    content
+  }
   let page_content = [
     @html.div(
       class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
@@ -2161,6 +2180,7 @@ fn view(
       attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
       icon(icon_layout_sidebar_left),
     ),
+    navigation_controls(dispatch, model),
     sidebar_html,
     @html.div(class=content_class, [
       // One fixed control owns both states, outside the animated pane tracks.

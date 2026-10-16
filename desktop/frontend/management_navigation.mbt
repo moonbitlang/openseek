@@ -28,21 +28,6 @@ fn Model::codex_work_selected(self : Model) -> Bool {
 }
 
 ///|
-fn management_header(
-  dispatch : @cmd.Emit[Msg],
-  model : Model,
-  title : String,
-) -> Array[@html.Html] {
-  let return_label = shell_text(model.locale, ReturnToWorkLabel)
-  let return_action = dispatch(PageBack)
-  if model.screen is Skills {
-    model.skills.header(locale=model.locale, title, return_label, return_action)
-  } else {
-    @page_shell.header(title, return_label, return_action)
-  }
-}
-
-///|
 priv suberror ManagementNavigationSubscription {
   ManagementNavigationSubscription(@cmd.Emit[Msg])
 }
@@ -96,7 +81,7 @@ fn management_navigation_sub_loader(
         }
         event.prevent_default()
         event.stop_propagation()
-        scheduler.add(emit(PageBack))
+        scheduler.add(emit(Navigation(Back)))
       }
       target.add_event_listener("keydown", listener)
       Some({

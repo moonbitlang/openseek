@@ -1,4 +1,65 @@
 ///|
+async test "share progress is scoped to the requesting endpoint catalog" {
+  let dir : @pathx.Path = Path(@fs.tmpdir(prefix="openseek-share-progress-"))
+  defer @fs.rmdir(dir.to_string(), recursive=true)
+  @fs.write_file(
+    dir.join("auth.json").to_string(),
+    "{\"server_url\":\"http://127.0.0.1:1\",\"device_token\":\"test-token\",\"device\":{\"id\":\"device\",\"name\":\"Test\"},\"user\":{\"login\":\"test\",\"avatar_url\":\"\"}}",
+  )
+  let store = @auth.AuthStore::load(runtime_dir=dir)
+  ignore(store.mark_registered("device"))
+  let state = ApiState(engine="unused-test-engine", auth=store)
+  let hub : @async.Queue[@protocol.Notification] = Queue(kind=Blocking(8))
+  let subscription = state.subscribe(hub, map=value => Some(value), on_lag=sub => {
+    sub.close()
+  })
+  defer subscription.close()
+  let first : Array[@protocol.SessionShareProgress] = []
+  let second : Array[@protocol.SessionShareProgress] = []
+  let catalogs = [
+    endpoints(state, HostConnection(), on_share_progress=payload => {
+      first.push(payload)
+    }),
+    endpoints(state, HostConnection(), on_share_progress=payload => {
+      second.push(payload)
+    }),
+    endpoints(state, HostConnection(), on_share_progress=_ => {
+      raise @host.HostError("notification failed")
+    }),
+  ]
+  for index, catalog in catalogs {
+    guard catalog
+      .iter()
+      .find_first(endpoint => endpoint.name() == "session.share")
+      is Some(endpoint) else {
+      fail("missing share endpoint")
+    }
+    let payload : @protocol.SessionSharePayload = {
+      generation: index + 1,
+      source: {
+        session: "test",
+        workspace: dir.to_string(),
+        title: "Test",
+        archived: false,
+      },
+    }
+    let reply : @protocol.SessionShareReply = @json.from_json(
+      endpoint.invoke(payload.to_json()),
+    )
+    guard reply is Failed(message~) else { fail("expected missing visualizer") }
+    // A broken progress sink cannot replace the authoritative export error.
+    assert_true(message.contains("no bundled session visualizer"))
+    assert_eq(first.length(), 1)
+    assert_eq(second.length(), if index == 0 { 0 } else { 1 })
+  }
+  assert_eq(first[0].generation, 1)
+  assert_true(first[0].progress is Preparing)
+  assert_eq(second[0].generation, 2)
+  assert_true(second[0].progress is Preparing)
+  assert_true(hub.try_get() is None)
+}
+
+///|
 /// The login the upload captured, relative to the store when HTTP 401 arrives.
 priv enum Login {
   // The persisted login, still connected: the refusal must retire it.
@@ -31,7 +92,7 @@ async test "share refusal retires the captured login and preserves a newer one" 
       Stale => { ..current, device_token: "old-token", }
       Current | Retired => current
     }
-    let state = @api.ApiState(engine="unused-test-engine", auth=store)
+    let state = ApiState(engine="unused-test-engine", auth=store)
     let notifications : @async.Queue[@protocol.Notification] = Queue(
       kind=Blocking(8),
     )
@@ -50,11 +111,6 @@ async test "share refusal retires the captured login and preserves a newer one" 
         archived: false,
       },
     }
-    let snapshot = @shares.Snapshot(
-      title="Test",
-      html="<html>test</html>",
-      json="{}",
-    )
     @async.with_task_group(group => {
       let receiver = group.spawn(() => {
         let (connection, _) = server.accept()
@@ -73,7 +129,15 @@ async test "share refusal retires the captured login and preserves a newer one" 
         connection.write_string("{}")
         connection.end_response()
       })
-      let reply = share.upload(snapshot, config)
+      let reply = share.upload(
+        ConversationExport(
+          StandaloneExport(
+            "<html><script src=\"/viz_app.js\"></script></html>", "bundle",
+          ),
+          [],
+        ),
+        config,
+      )
       receiver.wait()
       if login is Stale {
         assert_true(reply is Failed(..))

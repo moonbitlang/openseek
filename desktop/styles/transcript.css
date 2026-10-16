@@ -970,13 +970,13 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: 2em;
+  height: 2em;
   color: var(--color-accent);
 }
 .workspace-file-glyph svg {
-  width: 16px;
-  height: 16px;
+  width: 100%;
+  height: 100%;
 }
 .workspace-file-glyph.spreadsheet { color: #18a058; }
 .workspace-file-glyph.document,

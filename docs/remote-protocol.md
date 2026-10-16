@@ -877,3 +877,44 @@ The versioned snapshot is authoritative for approval UI; raw approval events in
 once only when both `id` and `run_id` name a current, unanswered question. Missing
 run identity, stale identity, or an already accepted answer returns
 `delivered: false`. A refused writer submission leaves the question answerable.
+
+### User questions
+
+The host MCP tool `ask_user` requests information in the calling conversation,
+resolved from its bearer token. Its only argument is `questions`, a nonempty
+array of `{id, title, options?}`. Question IDs must be unique within a request;
+IDs, titles and suggested options must not be blank. Every question supports a
+free-text answer, with or without suggested options. This tool does not grant
+permission and never enters the approval policy or `agent.approval` path.
+
+The host waits up to 30 seconds and returns `{id, status, answers}`. Status is
+`answered` with an object mapping each question ID to one answer string, `skipped`
+with `answers: null`, or `pending` with `answers: null`. The wait deadline is a
+host policy, not a tool argument or a UI countdown. A pending result ends only
+the tool wait: the question remains answerable. Tool cancellation and turn
+completion also retain it. Later answers or skips are delivered through the
+existing session-input path, using the request ID as the delivery identity and
+including the original questions. Independent work may continue while waiting;
+a pending result is neither an answer nor permission to act.
+
+Frontend commands and notifications are independent of approvals:
+
+- `user_questions.list` takes `{}` and returns `{generation, requests}`. Each
+  request contains `{id, session, questions}`.
+- `user_questions.answer` takes `{id, session, answers}`. All questions must have
+  nonblank answers, or `answers` must explicitly be `null` to skip the request.
+  The first submission wins. An identical retry succeeds; a conflicting or
+  unknown submission fails. The reply is the latest question snapshot.
+- `user_questions.changed` broadcasts the same snapshot after creation or
+  resolution. Resolved requests disappear from the snapshot.
+
+Clients fetch on connection, reject older snapshot generations, and scope replies
+by connection generation. Question cards display one question at a time with
+previous/next navigation.
+They retain drafts and the current page across snapshot replays, reconnects,
+and conversation switches, and queue separately from permission cards. Selecting
+a suggestion leaves the custom-reply field empty; typing a reply replaces the
+selection. The final send submits all answers together. The close button skips
+the entire request. Requests live for the host process, surviving frontend
+reconnects but not host shutdown. A
+failed delayed delivery emits a session error and is not automatically retried.

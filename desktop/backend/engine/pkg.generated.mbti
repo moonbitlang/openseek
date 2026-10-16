@@ -6,6 +6,7 @@ import {
   "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/core/debug",
+  "moonbitlang/openseek/viz_export",
   "openseek_desktop/backend/internal/worktree",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/moonbit",
@@ -94,6 +95,7 @@ pub struct ConversationExport {
   html : String
   json : String
 }
+pub fn ConversationExport::ConversationExport(@viz_export.StandaloneExport, Array[@viz_export.Session]) -> Self raise
 pub async fn ConversationExport::capture(EngineManager, @protocol.SessionExportPayload, String, String) -> Self
 
 type EditReplacement

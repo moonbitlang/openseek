@@ -1,7 +1,6 @@
 /* One surface for every persistent row above the draft. Content-specific
    classes retain their behavior; geometry and tone belong to this column. */
 .composer-context {
-  --composer-row-background: light-dark(#f0f0f0, var(--dark-bg-subtle));
   width: 100%;
   max-width: 820px;
   min-width: 0;
@@ -26,7 +25,7 @@
   padding: 10px 14px;
   border: 0;
   border-radius: var(--radius-lg);
-  background: var(--composer-row-background);
+  background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
   box-shadow: none;
   font-size: var(--font-size-md);
@@ -106,6 +105,16 @@
   .composer-goal-action, .codex-request-action):hover:not(:disabled) {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
+}
+
+.button.composer-context-action {
+  --button-color: var(--color-text-primary);
+  --button-border-color: var(--color-border-subtle);
+  --button-background: var(--color-bg-surface);
+  --button-hover-background: var(--color-hover-subtle);
+  box-shadow: 0 1px 2px #0000000a;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .composer-context :is(.composer-approval-allow, .codex-request-action-primary) {
@@ -228,4 +237,248 @@
   .composer-context .queued-input-text {
     flex-basis: 120px;
   }
+}
+
+/* Information requests are independent from permission approval notices. */
+.user-question-region {
+  flex: 0 0 auto;
+  min-height: 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.user-question-region:empty,
+.user-question-footer:empty,
+.user-question-error:empty {
+  display: none;
+}
+
+.user-question-card {
+  box-sizing: border-box;
+  width: calc(100% - 48px);
+  max-width: 820px;
+  margin: 8px auto;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-md);
+  line-height: var(--line-height-normal);
+}
+
+.user-question-header,
+.user-question-heading,
+.user-question-response,
+.user-question-input,
+.user-question-actions {
+  display: flex;
+  align-items: center;
+}
+
+.user-question-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+  color: var(--color-text-secondary);
+}
+
+.user-question-heading {
+  gap: 8px;
+  font-size: var(--font-size-sm);
+}
+
+.user-question-heading svg,
+.user-question-input svg,
+.user-question-close svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex-shrink: 0;
+}
+
+.user-question-field {
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+}
+
+.user-question-title {
+  padding: 0;
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 8px;
+}
+
+.user-question-options {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-question-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-question-option-text {
+  min-width: 0;
+  padding-top: 1px;
+  font-weight: 500;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user-question-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  min-height: 22px;
+  padding: 0 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.user-question-option:hover:not(:disabled) {
+  background: var(--color-hover-subtle);
+}
+
+.user-question-option.selected {
+  background: var(--color-accent-soft);
+}
+
+.user-question-option.selected .user-question-number {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
+.user-question-response {
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.user-question-input {
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+  padding: 0 8px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+}
+
+.user-question-answer {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 0;
+  resize: none;
+  field-sizing: content;
+  min-height: 32px;
+  max-height: 120px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  line-height: var(--line-height-normal);
+}
+
+.user-question-actions {
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.user-question-card :is(.icon-button, .user-question-option):focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.user-question-error {
+  margin-top: 8px;
+  color: var(--color-danger);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .user-question-card {
+    width: calc(100% - 16px);
+    margin: 8px auto;
+    padding: 14px;
+  }
+  .user-question-response {
+    flex-wrap: wrap;
+  }
+  .user-question-input {
+    flex-basis: 100%;
+  }
+  .user-question-footer {
+    margin-left: auto;
+  }
+  .user-question-answer {
+    /* Keep mobile text large enough to avoid focus zoom, while honoring
+       larger application font settings. */
+    font-size: max(1rem, var(--font-size-md));
+  }
+}
+
+.user-question-header-actions,
+.user-question-pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-question-pagination:empty {
+  display: none;
+}
+
+.user-question-previous .icon {
+  transform: rotate(90deg);
+}
+
+.user-question-next .icon {
+  transform: rotate(-90deg);
+}
+
+.user-question-progress {
+  min-width: 36px;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+/* The composer already owns the outer width and spacing for Codex requests. */
+.codex-pending .user-question-card {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.user-question-option-description {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-regular);
+}
+
+.user-question-option-description:empty {
+  display: none;
 }

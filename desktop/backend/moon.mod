@@ -13,6 +13,7 @@ import {
   "moonbit-community/proton_contract@0.3.4",
   "moonbitlang/openseek@0.6.2",
   "openseek_desktop@0.1.5",
+  "Yoorkin/multipart@0.1.3",
 }
 
 license = "Apache-2.0"

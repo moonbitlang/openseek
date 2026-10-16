@@ -1,6 +1,7 @@
 import {
   "openseek_desktop/frontend/pdf_capture/internal/selection",
   "moonbitlang/core/json",
+  "moonbitlang/core/math",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/dom",

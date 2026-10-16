@@ -104,10 +104,14 @@ fn paint_annotations(
       return Err(failure)
     }
     let transforms : Array[@selection.LayerTransform] = []
+    let mut snap_image = image is Some(_)
     let mut ancestor = Some(bitmap)
     while ancestor is Some(node) {
       let css = browser_style(node)
       let transform : String = css.get_with_string("transform")
+      if transform != "none" {
+        snap_image = false
+      }
       let matrix : @js.Value = if transform == "none" {
         @js.globalThis.new_with_string("DOMMatrix", ([] : FixedArray[String]))
       } else {
@@ -133,6 +137,19 @@ fn paint_annotations(
     let css_height : Double = @js.globalThis.apply_with_string("parseFloat", [
       (style.get_with_string("height") : String),
     ])
+    // Chromium snaps an untransformed image's painted edges to CSS pixels.
+    // Match that rectangle instead of stretching its SVG to fractional DOM
+    // bounds, which shifts thin icon strokes in captures of a resized panel.
+    let (bounds, css_width, css_height) = if snap_image {
+      let x = @math.round(bounds.x)
+      let y = @math.round(bounds.y)
+      let width = @math.round(bounds.x + bounds.width) - x
+      let height = @math.round(bounds.y + bounds.height) - y
+      let snapped : @selection.Rect = { x, y, width, height, }
+      (snapped, width, height)
+    } else {
+      (bounds, css_width, css_height)
+    }
     let placement = @selection.bitmap_placement(
       transforms,
       bounds,

@@ -14,6 +14,7 @@ import {
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
   "openseek_desktop/frontend/pathx",
+  "openseek_desktop/frontend/question_card",
   "openseek_desktop/frontend/skills",
   "openseek_desktop/frontend/subrun",
   "openseek_desktop/frontend/transcript",
@@ -59,6 +60,7 @@ pub(all) enum Action {
   ApprovalAnswered(identity~ : Identity, allow~ : Bool)
   CodexRequestToggled(identity~ : Identity, request_key~ : String)
   CodexRequestAnswerChanged(identity~ : Identity, request_key~ : String, question_id~ : String, answer~ : String)
+  CodexQuestionChanged(identity~ : Identity, request_key~ : String, action~ : @question_card.Action)
   CodexRequestResponded(identity~ : Identity, request_key~ : String, decision~ : Json)
   PermissionMenuToggled(identity~ : Identity)
   PermissionMenuDismissed(identity~ : Identity)
@@ -84,6 +86,9 @@ pub(all) struct ApprovalNotice {
 } derive(Eq)
 
 pub(all) struct CodexRequestInput {
+  questions : Array[@question_card.Question]
+  question_draft : @question_card.Model
+  connected : Bool
   request_key : String
   expanded : Bool
   method_ : String

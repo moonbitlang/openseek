@@ -183,7 +183,9 @@ async fn WsClientActor::serve(
   )
   // Endpoint closures capture this connection's watch and PTY ownership once;
   // every request only performs a name lookup in the stable catalog.
-  let endpoints = @api.endpoints(self.state, self.host_connection)
+  let endpoints = @api.endpoints(self.state, self.host_connection, on_share_progress=payload => {
+    enqueue_outgoing(out, Notify(SessionShareProgress(payload)))
+  })
   @async.with_task_group(group => {
     group.spawn_bg(() => {
       for ;; {

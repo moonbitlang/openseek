@@ -1,6 +1,6 @@
 ///|
-/// A command only the desktop window can issue: its handler needs Proton's
-/// page context, so it is bound for the window and has no remote half. The
+/// A command only the desktop window can issue: it needs Proton's page context
+/// or has a window-local contract, so it has no remote half. The
 /// type keeps it out of every remote catalog, which is built from
 /// `@endpoint.Endpoint` alone.
 priv struct WindowEndpoint {

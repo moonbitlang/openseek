@@ -1,0 +1,59 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/question_card"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
+  "openseek_desktop/frontend/i18n",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Action {
+  Edit(question~ : String, text~ : String)
+  Select(question~ : String, option~ : String)
+  Navigate(index~ : Int)
+  Submit(skip~ : Bool)
+} derive(Eq, @debug.Debug)
+pub fn Action::equal(Self, Self) -> Bool
+pub fn Action::not_equal(Self, Self) -> Bool
+pub fn Action::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Choice {
+  label : String
+  description : String
+} derive(Eq, @debug.Debug)
+pub fn Choice::equal(Self, Self) -> Bool
+pub fn Choice::not_equal(Self, Self) -> Bool
+pub fn Choice::to_repr(Self) -> @debug.Repr
+
+type Model derive(Eq, @debug.Debug)
+pub fn Model::Model() -> Self
+pub fn Model::answers(Self) -> Map[String, String]
+pub fn Model::can_submit(Self, Array[Question], skip~ : Bool) -> Bool
+pub fn Model::complete(Self, Array[Question]) -> Bool
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::failed(Self, String) -> Self
+pub fn Model::is_sending(Self) -> Bool
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::reconnecting(Self) -> Self
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, Array[Question], Action) -> Self
+pub fn Model::view(Self, Array[Question], String, @i18n.Locale, disabled? : Bool, @cmd.Emit[Action]) -> @html.Html
+
+pub(all) struct Question {
+  id : String
+  title : String
+  options : Array[Choice]
+} derive(Eq, @debug.Debug)
+pub fn Question::equal(Self, Self) -> Bool
+pub fn Question::not_equal(Self, Self) -> Bool
+pub fn Question::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

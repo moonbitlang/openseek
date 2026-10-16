@@ -787,6 +787,8 @@ priv struct Conversation {
   // Only empty/non-empty transitions update this flag; the text itself stays
   // outside the root Model. It keeps a fresh conversation reachable when the
   // user switches away without putting every keystroke through root update.
+  // Once retained in navigation history, clearing its content keeps its identity.
+  draft_addressed : Bool
   composer_draft_present : Bool
   // Where this conversation's run stands; see `RunPhase`. Replaces the old
   // `running`/`active_run_id`/`status` trio, whose redundant encodings could
@@ -1229,6 +1231,7 @@ priv struct ApprovalMirror {
 /// one entry per channel in `Model::devices` — exactly one today (the page's
 /// own host); the multi-device console renders one sidebar group per entry.
 priv struct DeviceState {
+  questions : @user_questions.Model
   approval_snapshot : ApprovalMirror?
   // The channel this state mirrors.
   channel : @interop.ChannelId
@@ -1302,6 +1305,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_failures: 0,
     connection_generation: 0,
     approval_snapshot: None,
+    questions: @user_questions.Model(),
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -1586,8 +1590,10 @@ priv struct Model {
   chat_creation : (@interop.ChannelId, Int32, Int32)?
   chat_creation_sequence : Int32
   screen : Screen
-  // The work surface retained while visiting management pages.
+  // Which work surface management pages cover; independent of back history.
   management_return : WorkScreen?
+  // Destination identities and history; page data stays in its owning state.
+  navigation : AppNavigation
   // Codex app-server has an independent durable thread/turn/item model. Keep
   // its page state beside the screen selector instead of folding it into an
   // OpenSeek Conversation, whose persistence and event protocol are different.
@@ -1895,7 +1901,7 @@ priv enum Msg {
   // The host swapped the bundle; close the window so `main` can relaunch.
   UpdateApplied
   OpenSetup
-  PageBack
+  Navigation(NavigationMsg)
   // The API-setup modal's "Not now" button and its backdrop click.
   DismissApiSetup
   // The composer's BYOK notice reopens the modal a dismissal closed.
@@ -1953,6 +1959,11 @@ priv enum Msg {
   // transcript the user is reading.
   SendInBackground
   Stop
+  UserQuestions(
+    channel~ : @interop.ChannelId,
+    connection_generation~ : Int32,
+    @user_questions.Msg
+  )
   // The user answered the active conversation's permission question. `allow`
   // grants the one action it asked about; the card stays until the engine's
   // settlement retires it.
@@ -2229,6 +2240,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  QuestionsChanged(@protocol.UserQuestionSnapshot)
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
   BridgeUnavailable(String)
@@ -2465,6 +2477,11 @@ priv enum DeviceMsg {
     request_generation~ : Int32,
     fresh_session~ : String
   )
+  ArchivedFailed(
+    message~ : String,
+    connection_generation~ : Int32,
+    request_generation~ : Int32
+  )
   // The successful delete reply names the identity it removed and a fresh
   // send target, so it can tombstone and leave an active deleted record even
   // when the broadcast arrives later.
@@ -2655,6 +2672,7 @@ fn empty_conversation(
     task: "",
     images: [],
     mentions: [],
+    draft_addressed: false,
     composer_draft_present: false,
     workflows: [],
     run: NoRun(ended=None),
@@ -2708,7 +2726,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     @interop.page_query_param("device")
   }
   // Capture the browser's exact local path once before the first render.
-  // Packaged release pages must return to their versioned bundle after OAuth;
+  // Preserve the complete navigation target across OAuth;
   // reading `window.location` later from `view` would make rendering impure.
   let login_return_to = if @interop.js_prop(@js.globalThis, "location")
     is Some(location) {
@@ -2818,6 +2836,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     conversation_load_failure: None,
     screen: Chat,
     management_return: None,
+    navigation: AppNavigation::empty(),
     codex: @codex.State(),
     schedules: SchedulePage::empty(),
     skills: @skills.State::empty(),
@@ -3830,7 +3849,7 @@ fn Model::activate(
 /// one the list cannot reach does not save the draft, it strands it — the
 /// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
-  self.has_begun() || !self.draft_empty()
+  self.has_begun() || self.draft_addressed || !self.draft_empty()
 }
 
 ///|

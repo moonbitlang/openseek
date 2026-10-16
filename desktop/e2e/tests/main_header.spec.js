@@ -29,11 +29,11 @@ test('empty projects and settings pages share one persistent header', async ({ p
     expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
     await expect(page.locator('main h1')).toHaveCount(1);
     await expect(page.locator('.management-page-content')).toBeVisible();
-    const back = page.getByRole('button', { name: 'Back to conversation', exact: true });
-    await expect(back).toHaveAttribute('title', 'Back to conversation');
+    const back = page.getByRole('button', { name: 'Back', exact: true });
+    await expect(back).toHaveAttribute('title', 'Back');
     await expect(back).toHaveText('');
-    await expect(page.locator('main > .topbar > button:first-child')).toHaveAccessibleName('Back to conversation');
-    await page.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+    await expect(page.locator('.navigation-controls > button:first-child')).toHaveAccessibleName('Back');
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
     await expectHeader(page, 'SeekMoon');
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -42,9 +42,9 @@ test('empty projects and settings pages share one persistent header', async ({ p
   await expect(page.getByRole('button', { name: 'Show sidebar', exact: true })).toBeVisible();
   await expect(page.locator('aside')).toBeHidden();
   await expectHeader(page, 'Settings');
-  await expect(page.getByRole('button', { name: 'Back to conversation', exact: true })).toBeInViewport();
+  await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeInViewport();
   await page.screenshot({ path: testInfo.outputPath('settings-header-narrow.png') });
-  await page.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expectHeader(page, 'SeekMoon');
   expect(app.pageErrors).toEqual([]);
 });
@@ -76,7 +76,7 @@ test('loading and failure retain the selected conversation title', async ({ page
   for (const name of ['Settings', 'Skills', 'Scheduled']) {
     await page.getByRole('button', { name, exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+  for (let i = 0; i < 3; i++) await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expectHeader(page, title);
   await expect(composer).toHaveValue('Keep my unfinished draft');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
@@ -115,7 +115,7 @@ test('workspace settings dialog preserves the Codex shell header', async ({ page
   await composer.fill('Keep my Codex draft');
   for (const name of ['Settings', 'Skills', 'Scheduled']) {
     await page.getByRole('button', { name, exact: true }).click();
-    await page.getByRole('button', { name: 'Back to conversation', exact: true }).click();
+    await page.getByRole('button', { name: 'Back', exact: true }).click();
     await expect(page.locator('main > .codex-topbar')).toBeVisible();
     await expectHeader(page, 'New chat');
     await expect(composer).toHaveValue('Keep my Codex draft');

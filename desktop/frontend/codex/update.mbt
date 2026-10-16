@@ -11,6 +11,57 @@ pub fn update(
   channel : @interop.ChannelId,
   open_external : (String) -> @cmd.Cmd,
 ) -> (@cmd.Cmd, State) {
+  let state = if msg is (StartDraft(..) | OpenThread(_)) {
+    state.retain_navigation_draft()
+  } else {
+    state
+  }
+  let (command, next) = update_message(
+    locale, dispatch, msg, state, channel, open_external,
+  )
+  let next = if next.active_draft() is Some(task) &&
+    state.active_id() == Some(task.id) &&
+    (
+      next.draft != state.draft ||
+      next.mentions != state.mentions ||
+      next.images != state.images
+    ) &&
+    (
+      !next.draft.is_empty() ||
+      !next.mentions.is_empty() ||
+      !next.images.is_empty() ||
+      !state.draft.is_empty() ||
+      !state.mentions.is_empty() ||
+      !state.images.is_empty()
+    ) {
+    { ..next, draft_addressed: true, }
+  } else {
+    next
+  }
+  let next = if state.active_draft() is Some(draft) &&
+    (
+      msg is AbandonDraft ||
+      (next.selection is CodexStoredTask(_) && !(msg is OpenThread(_)))
+    ) {
+    {
+      ..next,
+      saved_drafts: next.saved_drafts.filter(entry => entry.task.id != draft.id),
+    }
+  } else {
+    next
+  }
+  (command, next)
+}
+
+///|
+fn update_message(
+  locale : @i18n.Locale,
+  dispatch : @cmd.Emit[Msg],
+  msg : Msg,
+  state : State,
+  channel : @interop.ChannelId,
+  open_external : (String) -> @cmd.Cmd,
+) -> (@cmd.Cmd, State) {
   match msg {
     Refresh => {
       let (command, next) = state.refresh(dispatch, channel)
@@ -119,7 +170,6 @@ pub fn update(
         (@cmd.none, state)
       }
     StartDraft(id~, cwd~, draft~, worktree~) => {
-      let previous = state.active_draft().map(draft => draft.id)
       let mut next = state.select_draft(id, cwd)
       next = {
         ..next,
@@ -136,9 +186,6 @@ pub fn update(
       if !cwd.trim().is_empty() {
         commands.push(next.open_draft(dispatch, channel, id, cwd))
         next = next.begin_foreground(CodexDraftOpenReply(id, cwd~))
-      }
-      if previous is Some(previous) && previous != id {
-        commands.push(state.close_draft(channel, previous))
       }
       (@cmd.batch(commands), next)
     }
@@ -215,9 +262,6 @@ pub fn update(
           dispatch, channel, thread_id,
         )
         let commands : Array[@cmd.Cmd] = [read]
-        if state.active_draft() is Some(draft) {
-          commands.push(state.close_draft(channel, draft.id))
-        }
         (
           @cmd.batch(commands),
           {
@@ -439,13 +483,16 @@ pub fn update(
           cmd = refresh
           next = refreshed
         }
-        CodexApprovalReply =>
+        CodexApprovalReply | CodexQuestionReply(_) =>
           // `serverRequest/resolved` authoritatively removes the request.
           ()
       }
       (cmd, next)
     }
     Failed(kind~, message~) => {
+      if kind is CodexQuestionReply(request_key) {
+        return (@cmd.none, state.with_question_error(request_key, message))
+      }
       if !state.accepts_reply(kind) {
         return (@cmd.none, state)
       }
@@ -476,7 +523,8 @@ pub fn update(
         CodexInterruptReply => notice_text(locale, InterruptNotice)
         CodexCancelLoginReply(_) => notice_text(locale, CancelLoginNotice)
         CodexLogoutReply => notice_text(locale, LogoutNotice)
-        CodexApprovalReply => notice_text(locale, ApprovalNotice)
+        CodexApprovalReply | CodexQuestionReply(_) =>
+          notice_text(locale, ApprovalNotice)
       }
       let owns_foreground = state.owns_foreground(kind)
       let settled = if owns_foreground {
@@ -1402,6 +1450,7 @@ test "Codex update handlers are pure and idempotent" {
         params: { "threadId": "thread-1", "reason": "test" },
         answers: Map([]),
         expanded: false,
+        question_draft: @question_card.Model(),
       },
     ],
   }
@@ -2143,6 +2192,7 @@ test "archiving the selected Codex task settles its owned foreground work" {
         params: { "threadId": "thread-a" },
         answers: Map([]),
         expanded: false,
+        question_draft: @question_card.Model(),
       },
     ],
   }.begin_foreground(CodexTurnStartReply("thread-a"))
@@ -2257,15 +2307,15 @@ test "Codex approvals cannot be edited from another thread" {
         params: { "threadId": "thread-2", "questions": [{ "id": "scope" }] },
         answers: Map([]),
         expanded: false,
+        question_draft: @question_card.Model(),
       },
     ],
   }
-  let unchanged = state.with_request_answer(
+  let unchanged = state.with_question_action(
     Json("request-2").stringify(),
-    "scope",
-    "all",
+    Edit(question="scope", text="all"),
   )
-  assert_true(unchanged.pending_requests[0].answers.is_empty())
+  assert_true(unchanged.pending_requests[0].question_draft.answers().is_empty())
 }
 
 ///|
@@ -2284,6 +2334,7 @@ test "Codex composer reverse-request actions keep their task identity" {
         params: { "threadId": "thread-1", "questions": [{ "id": "scope" }] },
         answers: Map([]),
         expanded: false,
+        question_draft: @question_card.Model(),
       },
     ],
   }
@@ -2291,36 +2342,40 @@ test "Codex composer reverse-request actions keep their task identity" {
   let (_, answered) = update(
     dispatch,
     ComposerAction(
-      @composer.CodexRequestAnswerChanged(
+      @composer.CodexQuestionChanged(
         identity~,
         request_key=Json("request-1").stringify(),
-        question_id="scope",
-        answer="all",
+        action=Edit(question="scope", text="all"),
       ),
     ),
     state,
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_eq(answered.pending_requests[0].answers.get("scope"), Some("all"))
+  assert_eq(
+    answered.pending_requests[0].question_draft.answers().get("scope"),
+    Some("all"),
+  )
   let (_, unchanged) = update(
     dispatch,
     ComposerAction(
-      @composer.CodexRequestAnswerChanged(
+      @composer.CodexQuestionChanged(
         identity={
           owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),
-        question_id="scope",
-        answer="other",
+        action=Edit(question="scope", text="other"),
       ),
     ),
     answered,
     @interop.ChannelId::Local,
     _ => @cmd.none,
   )
-  assert_eq(unchanged.pending_requests[0].answers.get("scope"), Some("all"))
+  assert_eq(
+    unchanged.pending_requests[0].question_draft.answers().get("scope"),
+    Some("all"),
+  )
   let toggle : Msg = ComposerAction(
     @composer.CodexRequestToggled(
       identity~,
@@ -2344,7 +2399,10 @@ test "Codex composer reverse-request actions keep their task identity" {
   assert_true(opened == repeated)
   assert_true(opened.pending_requests[0].expanded)
   assert_false(answered.pending_requests[0].expanded)
-  assert_eq(opened.pending_requests[0].answers.get("scope"), Some("all"))
+  assert_eq(
+    opened.pending_requests[0].question_draft.answers().get("scope"),
+    Some("all"),
+  )
   let (_, closed) = update(
     dispatch,
     toggle,
@@ -2696,4 +2754,100 @@ test "changing a draft project retains its input and rejects the old workspace r
   )
   assert_true(opened.can_prompt())
   assert_eq(opened.draft, before.draft)
+}
+
+///|
+test "shared Codex question card scopes drafts, submission and retry by response token" {
+  let initial = State::from_thread_snapshot({
+    "thread": { "id": "thread-1", "turns": [] },
+  }).with_pending_request(
+    "question-token",
+    Json(7),
+    "item/tool/requestUserInput",
+    {
+      "threadId": "thread-1",
+      "questions": [
+        {
+          "id": "scope",
+          "question": "Which scope?",
+          "options": [{ "label": "Small", "description": "One package" }],
+        },
+        { "id": "details", "question": "Any details?" },
+      ],
+    },
+    1,
+  )
+  let dispatch : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let identity = initial.composer_identity(Local)
+  let apply = (state : State, action : @question_card.Action) => {
+    let message = ComposerAction(
+      @composer.CodexQuestionChanged(
+        identity~,
+        request_key="question-token",
+        action~,
+      ),
+    )
+    let (_, next) = update(dispatch, message, state, Local, _ => @cmd.none)
+    let (_, repeated) = update(dispatch, message, state, Local, _ => @cmd.none)
+    assert_true(next.pending_requests == repeated.pending_requests)
+    next
+  }
+  let chosen = apply(initial, Select(question="scope", option="Small"))
+  assert_true(initial.pending_requests[0].question_draft.answers().is_empty())
+  assert_eq(
+    chosen.pending_requests[0].question_draft.answers().get("scope"),
+    Some("Small"),
+  )
+  let incomplete = apply(chosen, Submit(skip=false))
+  assert_false(incomplete.pending_requests[0].question_draft.is_sending())
+  let complete = apply(
+    apply(chosen, Navigate(index=1)),
+    Edit(question="details", text="Keep tests"),
+  )
+  let submitted = apply(complete, Submit(skip=false))
+  assert_true(submitted.pending_requests[0].question_draft.is_sending())
+  assert_true(
+    apply(submitted, Edit(question="details", text="Too late")).pending_requests ==
+    submitted.pending_requests,
+  )
+  assert_true(
+    apply(submitted, Submit(skip=false)).pending_requests ==
+    submitted.pending_requests,
+  )
+  let (_, failed) = update(
+    dispatch,
+    Failed(kind=CodexQuestionReply("question-token"), message="Offline"),
+    submitted,
+    Local,
+    _ => @cmd.none,
+  )
+  assert_false(failed.pending_requests[0].question_draft.is_sending())
+  assert_eq(
+    failed.pending_requests[0].question_draft.answers().get("details"),
+    Some("Keep tests"),
+  )
+  assert_true(
+    apply(failed, Submit(skip=false)).pending_requests[0].question_draft.is_sending(),
+  )
+  let (_, stale) = update(
+    dispatch,
+    Failed(kind=CodexQuestionReply("old-token"), message="Old error"),
+    complete,
+    Local,
+    _ => @cmd.none,
+  )
+  assert_true(stale.pending_requests == complete.pending_requests)
+  let other_thread = {
+    ..State::from_thread_snapshot({
+      "thread": { "id": "thread-2", "turns": [] },
+    }),
+    pending_requests: complete.pending_requests,
+  }
+  assert_true(
+    apply(other_thread, Edit(question="details", text="Wrong thread")).pending_requests ==
+    complete.pending_requests,
+  )
+  assert_true(
+    apply(initial, Submit(skip=true)).pending_requests[0].question_draft.is_sending(),
+  )
 }

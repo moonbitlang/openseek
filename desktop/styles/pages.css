@@ -21,6 +21,11 @@
   line-height: var(--line-height-normal);
   cursor: pointer;
 
+  &:where(.compact) {
+    min-height: 28px;
+    padding: 3px 9px;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;
@@ -122,16 +127,6 @@ a:where(.setting-link) {
   gap: 24px;
   max-width: 720px;
   margin: 0 auto;
-}
-
-.management-page-return {
-  flex: none;
-  border: 0;
-}
-
-.management-page-return:focus-visible {
-  outline: 2px solid var(--color-focus-ring);
-  outline-offset: 2px;
 }
 
 .page-eyebrow {

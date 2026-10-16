@@ -33,7 +33,7 @@ pub(all) enum Event {
   Reading
   Ready(Array[(String, String)])
   DocumentsReady(images~ : Array[(String, String)], documents~ : Array[Document])
-  NativeReady(String?)
+  NativePicked(Result[String?, String])
   Failed(String)
 }
 

@@ -74,3 +74,19 @@ test "MCP configs append in order and explicit arguments replace the env fallbac
     }
   }
 }
+
+///|
+test "setup requires no model credentials and has no installation options" {
+  let parsed = @options.root_command().parse(argv=["setup"], env=Map([]))
+  assert_true(parsed.subcommand is Some(("setup", _)))
+  for option in ["--json", "--bundle-url"] {
+    let error = try {
+      @options.root_command().parse(argv=["setup", option], env=Map([]))
+      |> ignore
+      "accepted"
+    } catch {
+      error => "\{error}"
+    }
+    assert_true(error.contains("unexpected argument"))
+  }
+}

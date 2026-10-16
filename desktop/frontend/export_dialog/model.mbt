@@ -2,8 +2,8 @@
 const DialogId = "conversation-export-dialog"
 
 ///|
-/// Each opening captures its source and advances a generation. Late replies
-/// from a dismissed dialog cannot overwrite a later conversation's dialog.
+/// Each opening captures its source. Openings and uploads advance a generation
+/// so late progress or replies cannot overwrite another request.
 struct Model {
   generation : Int32
   content : Content?
@@ -21,7 +21,7 @@ priv struct Content {
 priv enum Operation {
   Ready
   Downloading
-  Sharing
+  Sharing(@protocol.ShareProgress)
   SigningIn
   SignInRequired
   SignInFailed(String)
@@ -49,19 +49,21 @@ pub(all) enum Msg {
   Share
   SignIn
   Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
+  Progress(@protocol.SessionShareProgress)
   Published(generation~ : Int32, @protocol.SessionShareReply)
   SignedIn(generation~ : Int32, Result[Unit, String])
   ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
 ///|
-/// The opening a reply belongs to; user actions always target the current one.
+/// The request a reply belongs to; user actions always target the current one.
 fn Msg::generation(self : Msg) -> Int32? {
   match self {
     Downloaded(generation~, _)
     | Published(generation~, _)
     | SignedIn(generation~, _)
     | ClipboardFinished(generation~, _) => Some(generation)
+    Progress(payload) => Some(payload.generation)
     Close | Download | Share | SignIn => None
   }
 }
@@ -87,7 +89,7 @@ pub fn Model::open(
 
 ///|
 fn Operation::busy(self : Operation) -> Bool {
-  self is (Downloading | Sharing | SigningIn)
+  self is (Downloading | Sharing(_) | SigningIn)
 }
 
 ///|
@@ -124,11 +126,13 @@ pub fn Model::update(
         self.download(locale~, emit, content.source),
         self.showing({ ..content, operation: Downloading, }),
       )
-    Share if !busy && content.publication is None =>
+    Share if !busy && content.publication is None => {
+      let next = { ..self, generation: self.generation + 1, }
       (
-        self.share(locale~, emit, content.source),
-        self.showing({ ..content, operation: Sharing, }),
+        next.share(locale~, emit, content.source),
+        next.showing({ ..content, operation: Sharing(Preparing), }),
       )
+    }
     SignIn if content.operation is (SignInRequired | SignInFailed(_)) =>
       (
         self.sign_in(locale~, emit),
@@ -142,7 +146,12 @@ pub fn Model::update(
       }
       (@cmd.none, self.showing({ ..content, operation, }))
     }
-    Published(reply, ..) if content.operation is Sharing => {
+    Progress(payload) if content.operation is Sharing(_) =>
+      (
+        @cmd.none,
+        self.showing({ ..content, operation: Sharing(payload.progress), }),
+      )
+    Published(reply, ..) if content.operation is Sharing(_) => {
       let content = match reply {
         Shared(url~) =>
           {

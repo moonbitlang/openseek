@@ -41,14 +41,39 @@ fn fetch_archived(
   let dispatch = dispatch.map((msg : DeviceMsg) => FromDevice(channel, msg))
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      // A host without the op (or without a session store) just reads as an
-      // empty Archived group.
       let reply = @interop.bridge_request(
         channel,
         @commands.session_list_archived,
         @protocol.EmptyPayload::NoPayload,
       ) catch {
-        _ => return
+        error => {
+          scheduler.add(
+            dispatch(
+              ArchivedFailed(
+                message=@interop.bridge_error_text(error),
+                connection_generation~,
+                request_generation~,
+              ),
+            ),
+          )
+          return
+        }
+      }
+      // Navigation can establish absence only from a complete inventory.
+      // Keep store failures distinct from an empty archived list.
+      for group in reply.groups {
+        if !group.error.is_empty() {
+          scheduler.add(
+            dispatch(
+              ArchivedFailed(
+                message="\{group.workspace}: \{group.error}",
+                connection_generation~,
+                request_generation~,
+              ),
+            ),
+          )
+          return
+        }
       }
       scheduler.add(
         dispatch(

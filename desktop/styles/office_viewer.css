@@ -129,8 +129,8 @@
 .office-viewer-surface {
   position: relative;
   min-height: 100%;
-  color: #1f2937;
-  background: #eef1f5;
+  color: var(--color-text-primary);
+  background: var(--color-bg-subtle);
 }
 
 /* PDF.js owns page, canvas, text, and annotation geometry. Its scroll container
@@ -316,7 +316,7 @@
   flex: 0 0 304px;
   width: 304px;
   min-height: 44px;
-  color: #334155;
+  color: var(--color-text-primary);
   user-select: none;
 }
 .office-viewer-surface .office-context-rail:not([open]) {
@@ -331,13 +331,13 @@
   min-height: 36px;
   margin: 0 0 12px;
   padding: 8px 10px;
-  border: 1px solid #d8dfe8;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--color-control-surface);
+  color: var(--color-text-secondary);
   cursor: pointer;
   list-style: none;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
 }
 .office-viewer-surface .office-context-heading::-webkit-details-marker { display: none; }
@@ -367,11 +367,11 @@
   height: 16px;
   margin: 0;
   padding: 0 3px;
-  border: 2px solid #eef1f5;
+  border: 2px solid var(--color-bg-subtle);
   border-radius: 9px;
-  background: #2563eb;
-  color: #fff;
-  font-size: 10px;
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+  font-size: var(--font-size-xs);
   line-height: 1;
 }
 .office-viewer-surface .office-context-placed { position: relative; min-height: 0; }
@@ -384,10 +384,10 @@
   height: auto;
   margin: 0;
   padding: 14px;
-  border: 1px solid #d8dfe8;
+  border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: #fff;
-  color: #1f2937;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
   box-shadow: 0 2px 8px rgb(15 23 42 / 6%);
   text-align: left;
   line-height: 1.5;
@@ -402,28 +402,28 @@
 .office-viewer-surface .office-context-unplaced-heading,
 .office-viewer-surface .office-context-more {
   margin: 12px 0 10px 28px;
-  color: #64748b;
-  font-size: 12px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }
 .office-viewer-surface .office-context-unplaced-heading[hidden] { display: none; }
 .office-viewer-surface .office-context-active {
-  border-color: #7da4ee;
-  box-shadow: 0 0 0 2px #dbeafe;
+  border-color: var(--color-accent-strong);
+  box-shadow: 0 0 0 2px var(--color-accent-soft);
 }
 .office-viewer-surface .office-context-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  color: #64748b;
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
 }
 .office-viewer-surface .office-context-header strong { font-weight: 500; }
 .office-viewer-surface .office-context-location {
   margin-top: 8px;
-  color: #64748b;
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }
 .office-viewer-surface .office-context-quote {
@@ -434,29 +434,29 @@
   max-height: 40px;
   margin: 8px 0 0;
   padding: 0 0 0 8px;
-  border-left: 2px solid #bfdbfe;
-  color: #64748b;
-  font-size: 12px;
+  border-left: 2px solid var(--color-accent-soft);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   line-height: 1.6;
 }
 .office-viewer-surface .office-context-entry {
   display: block;
   margin: 12px 0 0;
   padding: 12px 0 0;
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid var(--color-border);
   background: transparent;
   color: inherit;
 }
 .office-viewer-surface .office-context-reply {
   padding-left: 10px;
-  border-left: 2px solid #e2e8f0;
+  border-left: 2px solid var(--color-border);
 }
-.office-viewer-surface .office-context-author { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.office-viewer-surface .office-context-author { font-size: var(--font-size-sm); font-weight: 600; overflow-wrap: anywhere; }
 .office-viewer-surface .office-context-hint,
 .office-viewer-surface .office-context-meta {
   margin-top: 4px;
-  color: #64748b;
-  font-size: 11px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -464,37 +464,37 @@
   margin: 10px 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   line-height: 1.65;
   cursor: text;
   user-select: text;
   -webkit-user-select: text;
 }
-.office-viewer-surface .office-annotation-body[data-empty="true"]::before { content: "Empty comment"; color: #64748b; }
+.office-viewer-surface .office-annotation-body[data-empty="true"]::before { content: "Empty comment"; color: var(--color-text-muted); }
 .office-viewer-surface .office-context-select {
   min-height: 28px;
   padding: 4px 8px;
-  border: 1px solid #d8dfe8;
+  border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--color-control-surface);
+  color: var(--color-text-secondary);
   cursor: pointer;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1.5;
 }
-.office-viewer-surface .office-context-select:hover { background: #eef2f7; }
+.office-viewer-surface .office-context-select:hover { background: var(--color-bg-subtle); }
 .office-viewer-surface .office-context-select:disabled { opacity: .45; cursor: default; }
-.office-viewer-surface .office-context-quote-action { color: #2563eb; background: #eff6ff; border-color: #dbeafe; }
+.office-viewer-surface .office-context-quote-action { color: var(--color-accent); background: var(--color-accent-soft); border-color: var(--color-accent-soft); }
 .office-viewer-surface .office-comment-marker {
   position: absolute;
   left: 0;
   width: 22px;
   height: 24px;
   padding: 0;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-accent-soft);
   border-radius: 6px;
-  background: #eff6ff;
-  color: #2563eb;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
   cursor: pointer;
 }
 .office-viewer-surface .office-comment-marker::before {
@@ -527,16 +527,16 @@
   border-left: 10px solid transparent;
 }
 .office-viewer-surface td.office-has-annotation { position: relative; }
-.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px #93c5fd; }
+.office-viewer-surface td.office-annotation-focus { box-shadow: inset 0 0 0 2px var(--color-accent-strong); }
 .office-viewer-surface .office-context-heading:focus-visible,
 .office-viewer-surface .office-context-select:focus-visible,
 .office-viewer-surface .office-comment-marker:focus-visible,
 .office-viewer-surface .office-note-marker:focus-visible,
-.office-viewer-surface .office-annotation-body:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: #93c5fd; stroke-width: 4px; stroke-opacity: .5; }
+.office-viewer-surface .office-annotation-body:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.office-viewer-surface .office-annotation-focus { paint-order: stroke; stroke: var(--color-accent-strong); stroke-width: 4px; stroke-opacity: .5; }
 .office-viewer-surface .office-context-entry.office-annotation-selected > .office-annotation-body {
-  background: #eff6ff;
-  box-shadow: 0 0 0 4px #eff6ff;
+  background: var(--color-accent-soft);
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
   border-radius: 2px;
 }
 
@@ -593,10 +593,10 @@
 .office-viewer-surface .office-row-heading {
   height: 26px;
   padding: 4px 8px;
-  border: 1px solid #d9dfe8;
-  background: #f1f4f8;
-  color: #64748b;
-  font-size: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
   font-weight: 500;
   text-align: center;
   white-space: nowrap;
@@ -613,7 +613,7 @@
   margin-top: 12px;
   padding: 4px;
   overflow-x: auto;
-  background: #f8fafc;
+  background: var(--color-bg-surface);
 }
 .office-viewer-surface .excel-tab-list {
   display: flex;
@@ -628,20 +628,20 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #64748b;
+  color: var(--color-text-muted);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
   cursor: pointer;
 }
-.office-viewer-surface .excel-sheet-tab:hover { background: #eef2f7; color: #334155; }
+.office-viewer-surface .excel-sheet-tab:hover { background: var(--color-bg-subtle); color: var(--color-text-primary); }
 .office-viewer-surface .excel-sheet-tab.is-active {
-  background: #e8f0ff;
-  color: #1d4ed8;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
   font-weight: 600;
 }
 .office-viewer-surface .excel-sheet-tab:focus-visible {
-  outline: 2px solid #2563eb;
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -736,4 +736,19 @@
   background: transparent;
   border: 1px solid var(--accent, #3578e5);
   box-sizing: border-box;
+}
+
+/* Runtime-created annotation styles also use the host's theme. Source paper
+   and workbook cells retain the document's own colours. */
+.viewer-stack > .office-viewer-surface .office-context-quote {
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+.viewer-stack > .office-viewer-surface .office-context-author {
+  color: var(--color-text-primary);
+}
+.office-viewer-surface .word-page,
+.office-viewer-surface .sheet-document {
+  color-scheme: light;
+  color: #1f2937;
 }

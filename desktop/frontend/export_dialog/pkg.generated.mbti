@@ -30,6 +30,7 @@ pub(all) enum Msg {
   Share
   SignIn
   Downloaded(generation~ : Int, Result[@protocol.SessionExportReply, String])
+  Progress(@protocol.SessionShareProgress)
   Published(generation~ : Int, @protocol.SessionShareReply)
   SignedIn(generation~ : Int, Result[Unit, String])
   ClipboardFinished(generation~ : Int, Result[Unit, String])
