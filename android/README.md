@@ -31,7 +31,10 @@ Packaged development desktop builds start signed out on each launch; sign in
 through Remote access before choosing that device on Android.
 
 The existing frontend owns streaming, approvals, stop, conversation history and
-WebSocket reconnection. Android owns keyboard/system-bar insets, file selection,
+WebSocket reconnection. A dropped connection shows one inline reconnecting
+notice, preserves the draft, and disables sending until the host returns.
+Background inventory reads do not add duplicate connection-loss toasts; host
+rejections remain visible. Android owns keyboard/system-bar insets, file selection,
 Back and WebView lifecycle. Files/editor/terminal entry buttons are hidden in this
 first conversation-focused build. Switching device reloads the page; send or
 save any draft first. No notification/background-service guarantee is provided.
@@ -54,7 +57,7 @@ After `npm ci --prefix desktop/e2e` and building the APK:
 
 ```sh
 cd desktop/e2e
-OPENSEEK_DESKTOP_BROWSER_BASE_URL=http://127.0.0.1:52841 npx playwright test android_connect.spec.js console_http.spec.js session_message_approval.spec.js
+OPENSEEK_DESKTOP_BROWSER_BASE_URL=http://127.0.0.1:52841 npx playwright test android_connect.spec.js console_disconnect.spec.js console_http.spec.js session_message_approval.spec.js
 ```
 
 On a test emulator with the Connect debug APK running:
