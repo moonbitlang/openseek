@@ -1,8 +1,8 @@
 ///|
 test "back forward branching and duplicate visits are pure" {
-  let a : @navigation.Location = { device: "d", target: Session("a"), }
-  let b : @navigation.Location = { device: "d", target: Settings, }
-  let c : @navigation.Location = { device: "d", target: Skills, }
+  let a : @routes.Location = { device: "d", target: Session("a"), }
+  let b : @routes.Location = { device: "d", target: Settings, }
+  let c : @routes.Location = { device: "d", target: Skills, }
   let h = @navigation.History::empty()
     .visit(a, replace=false)
     .visit(b, replace=false)
@@ -20,12 +20,9 @@ test "back forward branching and duplicate visits are pure" {
 
 ///|
 test "draft promotion preserves history position" {
-  let draft : @navigation.Location = {
-    device: "d",
-    target: CodexDraft("draft"),
-  }
-  let thread : @navigation.Location = { device: "d", target: Thread("thread"), }
-  let settings : @navigation.Location = { device: "d", target: Settings, }
+  let draft : @routes.Location = { device: "d", target: CodexDraft("draft"), }
+  let thread : @routes.Location = { device: "d", target: Thread("thread"), }
+  let settings : @routes.Location = { device: "d", target: Settings, }
   let h = @navigation.History::empty()
     .visit(draft, replace=false)
     .visit(settings, replace=false)

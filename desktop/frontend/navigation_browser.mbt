@@ -35,7 +35,7 @@ fn navigation_initial_path(return_to : String, device : String?) -> String {
     return path
   }
   if device is Some(device) {
-    @navigation.Location::{ device, target: ChatNew, }.path()
+    @routes.Location::{ device, target: ChatNew, }.path()
   } else {
     path
   }
@@ -47,7 +47,7 @@ fn apply_browser_navigation(
   snapshot : @navigation_browser.Snapshot,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
-  let parsed = @navigation.parse(
+  let parsed = @routes.parse(
     snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
   )
   let navigation = {
@@ -107,7 +107,7 @@ fn follow_navigation_link(
 ) -> (@cmd.Cmd, Model) {
   match request {
     Internal(url) =>
-      match @navigation.parse(url.path) {
+      match @routes.parse(url.path) {
         Ok(location) if Some(location.device) == model.console.page_device => {
           let (write, next) = navigation_visit(model, location, replace=false)
           let (activate, next) = activate_navigation(dispatch, {

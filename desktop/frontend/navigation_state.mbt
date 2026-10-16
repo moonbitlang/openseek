@@ -21,7 +21,7 @@ priv enum NavigationPhase {
 
 ///|
 priv struct AppNavigation {
-  location : @navigation.Location?
+  location : @routes.Location?
   phase : NavigationPhase
   history : @navigation.History
   can_back : Bool

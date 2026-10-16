@@ -9,11 +9,11 @@ import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
-  "openseek_desktop/frontend/navigation",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/sidebar/conversation",
   "openseek_desktop/frontend/sidebar/section",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/routes",
 }
 
 // Values
@@ -102,7 +102,7 @@ pub fn State::is_busy(Self) -> Bool
 pub fn State::loose_entries(locale? : @i18n.Locale, Self, SidebarContext) -> Array[@section.Entry]
 pub fn State::mark_visible_read(Self) -> Self
 pub fn State::model_listing(locale? : @i18n.Locale, Self) -> CodexModelListing
-pub fn State::navigation_target(Self) -> @navigation.Target
+pub fn State::navigation_target(Self) -> @routes.Target
 pub fn State::new_thread_cwd(Self) -> String
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::page(locale? : @i18n.Locale, Self, @cmd.Emit[Msg], PageActions) -> Array[@html.Html]

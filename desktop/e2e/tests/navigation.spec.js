@@ -331,16 +331,22 @@ test('returning to a Codex draft reloads skills and preserves structured mention
   await app.install(); await app.goto();
   await page.getByRole('button', { name: 'Model', exact: true }).click();
   await page.getByRole('option', { name: 'Navigation Codex', exact: true }).click();
-  const composer = page.locator('#task');
+  await expect(page).toHaveURL(/\/codex\/new$/);
+  const composer = page.getByRole('textbox', {
+    name: 'Ask Codex to inspect, edit, or explain this workspace.', exact: true,
+  });
   await composer.fill('$review');
   await page.getByText('Review a pull request', { exact: true }).click();
   await composer.fill('Review this change');
+  await expect(page).toHaveURL(/\/codex\/draft\/[^/]+$/);
   const draft = page.url();
   await page.locator('.workspace-row').hover();
   await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
   await expect(page).toHaveURL(/\/codex\/new$/);
+  await expect(composer).toHaveValue('');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.skills.list').length).toBe(2);
   await back(page).click(); await expect(page).toHaveURL(draft);
+  await expect(composer).toHaveValue('Review this change');
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.skills.list').length).toBe(3);
   await composer.fill('$review');
   await expect(page.getByText('Review a pull request', { exact: true })).toBeVisible();

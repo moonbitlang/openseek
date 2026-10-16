@@ -2,13 +2,13 @@
 /// Facts accepted by the application update. This adapter alone interprets
 /// root messages and compares domain state; history policy consumes these facts.
 priv struct NavigationObservation {
-  location : @navigation.Location?
+  location : @routes.Location?
   user_visit : Bool
   session_rotated : Bool
   explicit : Bool
   repeat_visit : Bool
-  promotion : (@navigation.Location, @navigation.Location)?
-  durable : Array[(@navigation.Location, @navigation.Location)]
+  promotion : (@routes.Location, @routes.Location)?
+  durable : Array[(@routes.Location, @routes.Location)]
 }
 
 ///|
@@ -79,7 +79,7 @@ fn observe_navigation(
 ) -> NavigationObservation {
   let old_codex = previous.codex.navigation_target()
   let new_codex = next.codex.navigation_target()
-  let promotion : (@navigation.Location, @navigation.Location)? = if message
+  let promotion : (@routes.Location, @routes.Location)? = if message
     is (ModelPicked(_, ..)
     | ComposerAction(@composer.ModelSelected(..))
     | CodexComposerAction(@composer.ModelSelected(..))) &&
@@ -111,7 +111,7 @@ fn observe_navigation(
   let explicit = message.is_navigation_visit() ||
     fork_opened ||
     (message is SessionRotated(_) && previous.navigation.new_chat_requested)
-  let durable : Array[(@navigation.Location, @navigation.Location)] = []
+  let durable : Array[(@routes.Location, @routes.Location)] = []
   if next.console.page_device is Some(device) {
     for conv in next.conversations {
       if conv.has_begun() &&
