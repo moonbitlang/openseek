@@ -2172,7 +2172,8 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
-  let content = if navigation_notice(dispatch, model) is Some(notice) {
+  let content = if !host_gated &&
+    navigation_notice(dispatch, model) is Some(notice) {
     [notice]
   } else {
     content
