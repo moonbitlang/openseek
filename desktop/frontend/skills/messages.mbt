@@ -12,7 +12,6 @@ priv enum UiMessage {
   Install
   LoadingDocument
   Metadata
-  Back
   Details
   CopyDocument
   Copy
@@ -86,11 +85,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Metadata) => "元数据"
     (TraditionalChinese, Metadata) => "後設資料"
     (Japanese, Metadata) => "メタデータ"
-    (English, Back) => "Back to skills"
-    (Spanish, Back) => "Volver a habilidades"
-    (SimplifiedChinese, Back) => "返回技能"
-    (TraditionalChinese, Back) => "返回技能"
-    (Japanese, Back) => "スキルに戻る"
     (English, Details) => "Skill details"
     (Spanish, Details) => "Detalles de la habilidad"
     (SimplifiedChinese, Details) => "技能详情"

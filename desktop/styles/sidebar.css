@@ -43,8 +43,8 @@ html.is-resizing .sidebar-resize-handle {
   background: var(--color-accent-soft);
 }
 
-/* The fixed shell toggle needs a header even without native titlebar controls.
-   Its leading edge stays clear for that toggle and the native controls; the
+/* The fixed history controls and sidebar toggle share the shell header.
+   Its leading edge stays clear for them and the native controls; the
    Chat/Work switch takes the trailing edge. */
 .sidebar-header {
   --sidebar-mode-size: 28px;
@@ -56,7 +56,7 @@ html.is-resizing .sidebar-resize-handle {
 }
 
 /* A two-segment switch between the Chats list and the Projects list,
-   centered in the effective app header alongside the shell toggle. */
+   centered on the same row as the sidebar toggle and history arrows. */
 .sidebar-mode {
   display: flex;
   gap: 2px;

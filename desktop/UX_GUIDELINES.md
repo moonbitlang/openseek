@@ -148,37 +148,42 @@ controls. It must not conceal what will change, what did change, whether the
 result is trustworthy, what failed, or how the user can recover. Simplicity is
 the removal of unnecessary decisions, not the removal of necessary truth.
 
-## Independent management pages
+## Navigation and independent management pages
 
-Settings, Skills, and Scheduled tasks share a persistent shell header, one
-scrolling content column, and a borderless back-arrow button before the page
-title. Give the arrow the tooltip and accessible name **Back to conversation**;
-do not display that label as a text button. Keep the arrow visible while the
-page scrolls and in narrow layouts. Page-specific actions live with their
-content; they do not displace the shared return action.
+Place the sidebar toggle, then global **Back** and **Forward** buttons after
+macOS window controls. Center them on the shared header row, with compact,
+unboxed outline arrows and a subdued disabled state. Keep the three controls visible in narrow layouts and
+reserve their space in the shared header. Disable arrows at the ends of the
+application's history; the initial page has no invented predecessor.
 
-Entering a management page retains the current OpenSeek Chat or Codex work
-surface. Switching between management pages keeps that origin. Returning
-reveals the retained conversation or draft, including unfinished input and
-loading/error state; it does not reload a transcript or start a new chat.
-Selecting another conversation explicitly establishes a new work context.
+History records destination identities: OpenSeek conversations, Codex threads,
+new-chat entry pages, local drafts, Settings, Skills lists and details, and Scheduled tasks. An
+explicit destination change adds an entry and discards the forward branch;
+selecting the same destination does not add a duplicate. Back and Forward
+restore the exact target while current application state continues to own
+content, unfinished input, running work and errors. Sending a draft for the
+first time replaces its identity in history with the durable conversation.
 
-With no prior conversation, return reveals the originating work surface's
-start view (project onboarding when no project is attached). If the original
-conversation or workspace becomes unavailable, normal conversation lifecycle
-handling chooses the remaining conversation or start view. Return must use
-that current state, never resurrect a removed conversation from a saved copy.
+Application history lasts for the window or browser page. Leaving a draft
+keeps it available; an expired draft replaces its history entry with the
+corresponding new-chat page. Missing stored targets and load failures retain
+distinct unavailable states. Offline devices keep their connection UI.
 
-Local navigation remains distinct: **Back to skills** returns from a skill's
-details to its list; **Close log** and **Cancel editing** affect only the
-Scheduled tasks page. **Back to conversation** leaves the management page and
-keeps its local state available on a later visit.
+Creating a blank New chat page from another destination pushes an entry;
+clicking New chat again while already blank is a no-op. The first input,
+attachment or other content replaces that entry with a draft identity.
+Clearing the content retains that identity. First send then replaces the draft
+with its stored identity. Browser URLs and native browser history are unchanged
+in this layer; the following client-routing change connects them.
 
-Future independent management pages must use the shared `page_shell` header
-and body, participate in root return navigation, and define their no-origin
-and unavailable-origin destination. Keep the page title as the shell's single
-`h1`; use lower-level headings for local details. Small contextual operations
-such as Workspace settings use a dismissible dialog instead.
+Settings, Skills, and Scheduled tasks share the `page_shell` header with a
+single `h1` and one scrolling content column. Page actions live with their
+content. Skills sidebar navigation always opens its list; **Back to skills**
+is an explicit list destination, while global Back restores the previous
+history entry, including a detail page. **Close log** and **Cancel editing**
+affect only Scheduled tasks. Editor and embedded-browser navigation remain
+local to their own surfaces. Small contextual operations such as Workspace
+settings use a dismissible dialog.
 
 ## Operational companion
 

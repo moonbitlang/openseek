@@ -1,5 +1,6 @@
 import {
   "openseek_desktop/frontend/session_search",
+  "openseek_desktop/frontend/navigation",
   "openseek_desktop/frontend/page_shell",
   "moonbitlang/editor/base/browser" @base_browser,
   "moonbitlang/async/http",

@@ -2034,16 +2034,13 @@ fn view(
         narrow=model.narrow,
         codex_actions,
       )
-    Settings =>
-      management_header(dispatch, model, @settings.text(model.locale, Settings))
+    Settings => @page_shell.header(@settings.text(model.locale, Settings))
     Skills =>
-      management_header(
-        dispatch,
-        model,
+      model.skills.header(
+        locale=model.locale,
         @sidebar_messages.text(model.locale, Skills),
       )
-    Schedules =>
-      management_header(dispatch, model, ui(model.locale, ScheduledTasks))
+    Schedules => @page_shell.header(ui(model.locale, ScheduledTasks))
   }
   let content = match model.screen {
     // `Model::chat_column` is the one fork that decides what the conversation
@@ -2119,6 +2116,11 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
+  let content = if navigation_notice(dispatch, model) is Some(notice) {
+    [notice]
+  } else {
+    content
+  }
   let page_content = [
     @html.div(
       class=if model.screen is Codex { "topbar codex-topbar" } else { "topbar" },
@@ -2161,6 +2163,7 @@ fn view(
       attrs=@html.Attrs::build().aria_label(sidebar_toggle_label),
       icon(icon_layout_sidebar_left),
     ),
+    navigation_controls(dispatch, model),
     sidebar_html,
     @html.div(class=content_class, [
       // One fixed control owns both states, outside the animated pane tracks.

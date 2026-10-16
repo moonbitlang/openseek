@@ -623,7 +623,7 @@ fn adopt_projects(
     // picks one). With no project left there is nowhere to rotate into, and
     // the view falls to onboarding until one is attached.
     if !paths.is_empty() {
-      commands.push(rotate_session(dispatch, channel))
+      commands.push(rotate_session(dispatch, channel, next.navigation.revision))
     }
     return (
       @cmd.batch(commands),
@@ -657,7 +657,7 @@ fn adopt_projects(
     !(next.screen is Codex && next.codex.has_active()) &&
     !next.codex_project_adoption_pending() &&
     !paths.is_empty() {
-    commands.push(rotate_session(dispatch, channel))
+    commands.push(rotate_session(dispatch, channel, next.navigation.revision))
   }
   (@cmd.batch(commands), next)
 }
@@ -1819,13 +1819,15 @@ fn update(
     ..model,
     management_return: if model.screen.work_screen() is Some(_) {
       None
+    } else if previous.screen.work_screen() is Some(origin) {
+      Some(origin)
     } else {
-      match previous.screen.work_screen() {
-        Some(origin) => Some(origin)
-        None => previous.management_return
-      }
+      previous.management_return
     },
   }
+  let (navigation_cmd, model) = reconcile_navigation(
+    dispatch, msg, previous, model,
+  )
   // The native dialog must not cover the desktop's connection-lost screen.
   // Detaching a workspace or losing its device also dismisses it.
   let model = {
@@ -2088,6 +2090,7 @@ fn update(
   (
     @cmd.batch([
       cmd,
+      navigation_cmd,
       notification_badge_cmd,
       sidebar_mode_cmd,
       quick_open_cmd,
@@ -2182,7 +2185,7 @@ fn update_msg(
       // already in place and it rotates the session at once. Component
       // subscriptions own their transcript and terminal DOM lifetimes.
       let device = if model.is_desktop {
-        rotate_session(dispatch, model.focused)
+        rotate_session(dispatch, model.focused, model.navigation.revision)
       } else {
         fetch_console_me(dispatch)
       }
@@ -4132,28 +4135,7 @@ fn update_msg(
         @cmd.none,
         { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
       )
-    PageBack =>
-      if model.screen is Skills &&
-        model.skills.back(
-          dispatch.map(msg => Skills(msg)),
-          model.skills_input(),
-        )
-        is Some((cmd, skills)) {
-        (cmd, { ..model, skills, })
-      } else if model.screen.work_screen() is None {
-        (
-          @cmd.none,
-          {
-            ..model,
-            screen: match model.management_return {
-              Some(CodexWork) => Codex
-              Some(OpenSeekWork) | None => Chat
-            },
-          },
-        )
-      } else {
-        (@cmd.none, model)
-      }
+    Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (
         @cmd.none,
@@ -4367,7 +4349,12 @@ fn update_msg(
       // The page decides whether its catalog still needs fetching; the
       // installed list is the root's mirror, cheap, and refreshed on every
       // open.
-      let (page_cmd, skills) = model.skills.opening(
+      let (_, skills, _) = model.skills.handle(
+        dispatch.map(msg => Skills(msg)),
+        @skills.BackToList,
+        model.skills_input(),
+      )
+      let (page_cmd, skills) = skills.opening(
         dispatch.map(msg => Skills(msg)),
         model.skills_input(),
       )
@@ -4697,7 +4684,11 @@ fn update_msg(
         }),
       )
     }
-    NewChat =>
+    NewChat => {
+      if model.at_blank_new_page() {
+        return (@cmd.none, model)
+      }
+      let model = model.request_new_navigation()
       // A fresh conversation can start at any time: the current one keeps
       // running in the background and stays one sidebar click away. It lands
       // in the active workspace — the one the on-screen conversation uses —
@@ -4714,11 +4705,29 @@ fn update_msg(
         )
       } else {
         (
-          rotate_session(dispatch, model.focused),
+          rotate_session(dispatch, model.focused, model.navigation.revision),
           { ..model, loading_conversation: None, },
         )
       }
+    }
     NewChatIn(channel, workspace) => {
+      let blank = model.at_blank_new_page()
+      let current_project = if model.screen is Codex {
+        @resource.of_path(model.focused, model.codex.new_thread_cwd())
+      } else {
+        model.active_conversation().map(conv => conv.project())
+      }
+      if blank && model.focused == channel && current_project == workspace {
+        return (@cmd.none, model)
+      }
+      // Moving a blank entry to a project keeps the engine already visible,
+      // even if a deep link differs from the remembered default agent.
+      let use_codex = if blank {
+        model.screen is Codex
+      } else {
+        model.default_agent is CodexAgent
+      }
+      let model = model.request_new_navigation()
       // A workspace section's own "new chat": the fresh conversation lands in
       // that project, and the workspace stays active for the next one. The
       // sidebar components reveal the active row themselves, so no disclosure
@@ -4733,10 +4742,10 @@ fn update_msg(
         chat_creation: None,
         loading_conversation: None,
       }
-      let (start_cmd, model) = if model.default_agent is CodexAgent {
+      let (start_cmd, model) = if use_codex {
         new_codex_chat(dispatch, model, workspace)
       } else {
-        (rotate_session(dispatch, channel), model)
+        (rotate_session(dispatch, channel, model.navigation.revision), model)
       }
       (@cmd.batch([focus_cmd, start_cmd]), model)
     }
@@ -4895,7 +4904,9 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let existing = model.find_conversation(owner.channel, owner.session)
-      let activated = model.activate(owner.channel, owner.session, project)
+      let activated = model
+        .activate(owner.channel, owner.session, project)
+        .with_active_project(Some(project))
       // A rotation creates the conversation, so stamp it with the workspace
       // it was asked into and that workspace's saved default. An existing
       // conversation keeps its own choice if the reply is replayed.
@@ -7820,6 +7831,8 @@ fn update_device_msg(
         },
       )
     }
+    // Navigation owns the load error; retain the last successful inventory.
+    ArchivedFailed(..) => (@cmd.none, model)
     ArchivedLoaded(
       items,
       connection_generation~,
@@ -12343,7 +12356,8 @@ test "archive removal and reopening cannot reuse a transcript request token" {
   )
   assert_true(
     archived.find_conversation(@interop.ChannelId::Local, "desktop-archived")
-    is None,
+    is Some(conv) &&
+    conv.is_archived_read_only(),
   )
   let (_, restored) = update(dispatch, archived_loaded([]), archived)
   // Archiving pruned the live row; the list refresh that follows an
@@ -18327,11 +18341,13 @@ test "selecting a conversation returns from the skills page to the chat" {
   )
   assert_true(back.screen is Chat)
 
-  // …and so is rotating to a fresh one.
+  // A requested rotation also navigates; an unrelated startup callback must
+  // not pull a user away from a management page or deep link.
+  let (_, requested) = update(dispatch, NewChat, opened)
   let (_, rotated) = update(
     dispatch,
     SessionRotated({ channel: Local, session: "desktop-fresh", }),
-    opened,
+    requested,
   )
   assert_true(rotated.screen is Chat)
 }
@@ -18446,15 +18462,15 @@ test "Codex sidebar actions close only the narrow drawer" {
   assert_true(opened.screen is Codex)
   assert_false(opened.sidebar_open)
 
-  // A "New chat" while Codex is the default agent routes there too — and
-  // still closes only the narrow drawer.
+  // A "New chat" from a management page uses the default agent and still
+  // closes only the narrow drawer. An already blank chat is a no-op.
   let (_, ready) = update(
     dispatch,
     Codex(
       channel=narrow.focused,
       @codex.Msg::status_changed({ "status": "ready" }),
     ),
-    { ..narrow, default_agent: CodexAgent, },
+    { ..narrow, screen: Settings, default_agent: CodexAgent, },
   )
   let (_, creating) = update(dispatch, NewChat, ready)
   assert_true(creating.screen is Codex)
