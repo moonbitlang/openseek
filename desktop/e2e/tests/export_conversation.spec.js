@@ -20,6 +20,7 @@ class ExportHarness extends DesktopBrowserHarness {
     this.grantRequests = [];
     this.grantStatus = 201;
     this.pendingSignIn = null;
+    this.pendingSignOut = null;
     this.signInError = null;
   }
 
@@ -38,7 +39,11 @@ class ExportHarness extends DesktopBrowserHarness {
       this.requests.push(request);
       if (request.method === 'session.export') return this.downloadReply;
       if (request.method === 'account.session') return this.accountSignedIn ? { session: { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: `user-${this.userId}`, avatar_url: '' } } } : {};
-      if (request.method === 'auth.disconnect') { this.accountSignedIn = false; return { connected: false }; }
+      if (request.method === 'auth.disconnect') {
+        this.accountSignedIn = false;
+        if (this.pendingSignOut) await this.pendingSignOut;
+        return { connected: false };
+      }
       if (request.method === 'auth.cancel') { this.signInCancelled = true; return { connected: false }; }
       if (request.method === 'auth.connect') {
         if (this.pendingSignIn) await this.pendingSignIn;
@@ -357,4 +362,40 @@ test('a rejected upload grant does not sign out the browser account', async ({ p
   expect(app.count('auth.disconnect')).toBe(0);
   await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
   expect(app.pageErrors).toEqual([]);
+});
+
+test('share login stays retryable while rejected account cleanup is pending', async ({ page }) => {
+  const app = new ExportHarness(page);
+  app.shareReply = { status: 'sign_in_required' };
+  let finishSignOut;
+  let finishSignIn;
+  app.pendingSignOut = new Promise(resolve => { finishSignOut = resolve; });
+  app.pendingSignIn = new Promise(resolve => { finishSignIn = resolve; });
+  try {
+    await app.openDesktop();
+    const dialog = await app.openExport();
+    await dialog.getByRole('button', { name: 'Share', exact: true }).click();
+    const signIn = dialog.getByRole('button', { name: 'Sign in', exact: true });
+    await expect(signIn).toBeVisible();
+    await expect.poll(() => app.count('auth.disconnect')).toBe(1);
+    await signIn.click();
+    // Allow the click's scheduled render to settle before checking retained UI.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    expect(app.count('auth.connect')).toBe(0);
+    await expect(signIn).toBeVisible();
+    await expect(dialog).not.toContainText('Complete sign-in in your browser, then click Share.');
+    finishSignOut();
+    await expect(async () => {
+      if (app.count('auth.connect') === 0) await signIn.click();
+      expect(app.count('auth.connect')).toBe(1);
+    }).toPass({ timeout: 5000 });
+    await expect(dialog).toContainText('Complete sign-in in your browser, then click Share.');
+    finishSignIn();
+    await expect(dialog.getByRole('button', { name: 'Share', exact: true })).toBeEnabled();
+    expect(app.hostShares).toHaveLength(1); // sign-in returns to confirmation
+    expect(app.pageErrors).toEqual([]);
+  } finally {
+    finishSignOut();
+    finishSignIn();
+  }
 });
