@@ -5,8 +5,15 @@ pub(all) enum RouteError {
 } derive(Eq)
 
 ///|
+/// Parse an application pathname, not a full URL. Reserved characters in
+/// identities must be percent-encoded; query and fragment belong to the caller.
 pub fn parse(path : String) -> Result[Location, RouteError] {
   guard path.has_prefix("/device/") else { return Err(OutsideApplication) }
+  guard !path
+    .iter()
+    .any(ch => ch == '\\' || ch == '?' || ch == '#' || ch.is_control()) else {
+    return Err(InvalidRoute)
+  }
   let parts : Array[String] = []
   for part in path.split("/").drop(2) {
     let decoded = @percent.decode(part) catch { _ => return Err(InvalidRoute) }

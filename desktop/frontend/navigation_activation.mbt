@@ -2,7 +2,7 @@
 fn replace_with_new_navigation(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  target : @navigation.Target,
+  target : @routes.Target,
 ) -> (@cmd.Cmd, Model) {
   guard model.console.page_device is Some(device) else {
     return (@cmd.none, model)
@@ -90,7 +90,7 @@ fn activate_navigation(
       (cmd, next, Active)
     }
     Chat | Codex => {
-      let target : @navigation.Target = if location.target is Chat {
+      let target : @routes.Target = if location.target is Chat {
         ChatNew
       } else {
         CodexNew

@@ -1,7 +1,7 @@
 ///|
 fn navigation_visit(
   model : Model,
-  location : @navigation.Location,
+  location : @routes.Location,
   replace~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   let navigation = model.navigation

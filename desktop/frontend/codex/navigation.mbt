@@ -77,7 +77,7 @@ fn State::activate_draft_context(
 }
 
 ///|
-pub fn State::navigation_target(self : State) -> @navigation.Target {
+pub fn State::navigation_target(self : State) -> @routes.Target {
   if self.requested_thread is Some(id) {
     return Thread(id)
   }

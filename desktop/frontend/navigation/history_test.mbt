@@ -1,8 +1,8 @@
 ///|
 test "back forward branching and duplicate visits are pure" {
-  let a : @navigation.Location = { device: Some("d"), target: Session("a"), }
-  let b : @navigation.Location = { device: Some("d"), target: Settings, }
-  let c : @navigation.Location = { device: Some("d"), target: Skills, }
+  let a : @routes.Location = { device: Some("d"), target: Session("a"), }
+  let b : @routes.Location = { device: Some("d"), target: Settings, }
+  let c : @routes.Location = { device: Some("d"), target: Skills, }
   let h = @navigation.History::empty()
     .visit(a, replace=false)
     .visit(b, replace=false)
@@ -20,15 +20,15 @@ test "back forward branching and duplicate visits are pure" {
 
 ///|
 test "draft promotion preserves history position" {
-  let draft : @navigation.Location = {
+  let draft : @routes.Location = {
     device: Some("d"),
     target: CodexDraft("draft"),
   }
-  let thread : @navigation.Location = {
+  let thread : @routes.Location = {
     device: Some("d"),
     target: Thread("thread"),
   }
-  let settings : @navigation.Location = { device: Some("d"), target: Settings, }
+  let settings : @routes.Location = { device: Some("d"), target: Settings, }
   let h = @navigation.History::empty()
     .visit(draft, replace=false)
     .visit(settings, replace=false)
@@ -40,11 +40,11 @@ test "draft promotion preserves history position" {
 
 ///|
 test "forgetting a conversation removes every reference without selecting another" {
-  let deleted : @navigation.Location = {
+  let deleted : @routes.Location = {
     device: None,
     target: CloudSession(account="a", session="gone"),
   }
-  let kept : @navigation.Location = { device: None, target: Settings, }
+  let kept : @routes.Location = { device: None, target: Settings, }
   let history = @navigation.History::empty()
     .visit(deleted, replace=false)
     .visit(kept, replace=false)

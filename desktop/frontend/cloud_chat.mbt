@@ -132,7 +132,7 @@ fn update_cloud(
   if before.user_id is Some(account) {
     for session in removed {
       retirements.push(@interop.Cloud(account~, session~))
-      let location : @navigation.Location = {
+      let location : @routes.Location = {
         device: None,
         target: CloudSession(account~, session~),
       }

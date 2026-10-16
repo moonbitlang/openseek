@@ -75,7 +75,7 @@ fn Model::finish_fork(
         model.conversation_selection() == Some(pending.source) &&
         model.navigation.location.map_or(true, location => {
           model.navigation.phase is Active &&
-          location.target == @navigation.Session(pending.source.session)
+          location.target == @routes.Session(pending.source.session)
         })
       guard model.device_state(pending.source.channel) is Some(dev) &&
         dev.connection_generation == pending.connection_generation &&

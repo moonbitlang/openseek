@@ -2,9 +2,9 @@
 /// Window-local history for the desktop adapter. Browser history is owned by
 /// the browser; its adapter reports the current entry instead of mirroring it.
 struct History {
-  previous : Array[Location]
-  current : Location?
-  following : Array[Location]
+  previous : Array[@routes.Location]
+  current : @routes.Location?
+  following : Array[@routes.Location]
 } derive(Eq)
 
 ///|
@@ -13,7 +13,7 @@ pub fn History::empty() -> History {
 }
 
 ///|
-pub fn History::current(self : History) -> Location? {
+pub fn History::current(self : History) -> @routes.Location? {
   self.current
 }
 
@@ -30,7 +30,7 @@ pub fn History::can_forward(self : History) -> Bool {
 ///|
 pub fn History::visit(
   self : History,
-  location : Location,
+  location : @routes.Location,
   replace~ : Bool,
 ) -> History {
   if self.current == Some(location) {
@@ -81,8 +81,8 @@ pub fn History::forward(self : History) -> History {
 /// pages, without recording another user visit.
 pub fn History::promote(
   self : History,
-  old : Location,
-  next : Location,
+  old : @routes.Location,
+  next : @routes.Location,
 ) -> History {
   {
     previous: self.previous.map(entry => if entry == old { next } else { entry }),
@@ -99,7 +99,7 @@ pub fn History::promote(
 
 ///|
 /// A removed conversation is no longer a destination in window history.
-pub fn History::forget(self : History, location : Location) -> History {
+pub fn History::forget(self : History, location : @routes.Location) -> History {
   {
     previous: self.previous.filter(entry => entry != location),
     current: self.current.filter(entry => entry != location),
