@@ -102,6 +102,10 @@ pub fn icon_play() -> @html.Html
 
 pub fn icon_pull_request() -> @html.Html
 
+pub fn icon_pull_request_closed() -> @html.Html
+
+pub fn icon_pull_request_merged() -> @html.Html
+
 pub fn icon_question() -> @html.Html
 
 pub fn icon_reply() -> @html.Html

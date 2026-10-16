@@ -362,6 +362,16 @@ pub fn ContextComponent::render(
           @html.div(class="composer-context-row composer-banner hidden", "")
       }
     SubrunDock(lanes~) => @subrun.dock(lanes)
+    SessionPrPanel(rows~, error~, collapsed~, checks_url~) =>
+      render_session_prs(
+        locale~,
+        rows,
+        error,
+        collapsed~,
+        checks_url~,
+        identity,
+        action_emit,
+      )
     ApiSetupNotice(text~) =>
       @html.div(class="composer-context-row composer-notice", [
         @html.span(class="composer-notice-text", text),

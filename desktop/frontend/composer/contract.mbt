@@ -138,6 +138,12 @@ pub(all) struct CodexRequestInput {
 pub(all) enum ContextComponent {
   ConnectionBanner(device_name~ : String?)
   SubrunDock(lanes~ : Array[@subrun.Lane])
+  SessionPrPanel(
+    rows~ : Array[SessionPrRow],
+    error~ : String?,
+    collapsed~ : Bool,
+    checks_url~ : String?
+  )
   ApiSetupNotice(text~ : String)
   ApprovalRequest(ApprovalNotice)
   CodexRequests(requests~ : Array[CodexRequestInput])
@@ -322,6 +328,9 @@ pub(all) enum Action {
     identity~ : Identity,
     mode~ : @protocol.CodexPermissionMode
   )
+  PrBindingRemoved(identity~ : Identity, urls~ : Array[String])
+  PrBindingsToggled(identity~ : Identity)
+  PrChecksToggled(identity~ : Identity, url~ : String)
   GitDetailsToggled(identity~ : Identity)
   WorktreeModeToggled(identity~ : Identity)
   ApiSetupRequested(identity~ : Identity)
@@ -366,6 +375,9 @@ pub fn Action::identity(self : Action) -> Identity {
     | PermissionMenuToggled(identity~)
     | PermissionMenuDismissed(identity~)
     | PermissionSelected(identity~, ..)
+    | PrBindingRemoved(identity~, ..)
+    | PrBindingsToggled(identity~)
+    | PrChecksToggled(identity~, ..)
     | GitDetailsToggled(identity~)
     | WorktreeModeToggled(identity~)
     | ApiSetupRequested(identity~)

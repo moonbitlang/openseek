@@ -280,6 +280,7 @@ fn Entry::view(
       ApprovalRequest(_) => "approval"
       CodexRequests(..) => "codex-requests"
       PendingSteerPanel(..) => "steers"
+      SessionPrPanel(..) => "session-prs"
       ShellCommandsRunning(..) => "shell-commands"
       QueuedInputPanel(..) => "queue"
       CompactionNotice(..) => "compaction"

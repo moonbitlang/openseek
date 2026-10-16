@@ -1,10 +1,10 @@
-// The composer's git chip and the popover behind it: ask the host for the
+// Checkout metadata used by branch bindings and diff baselines: ask the host for the
 // branch of a conversation's workspace through the `git.branch` method, and
 // for that branch's GitHub pull request through `git.pull_request`. Probed
 // when a run starts (the workspace is created lazily on the first one), when a
 // stored session opens, and when a run finishes (the agent may have created
 // the repository, switched branches, or opened a pull request mid-turn). Any
-// failure just reads as "nothing to show" — the chip hides.
+// failed checkout probe leaves no current metadata to display.
 
 ///|
 /// This branch's whole line delta, measured locally: from where it left the
@@ -41,47 +41,8 @@ priv struct PullRequestProbe {
   branch : String
   probing : Bool
   stale : Bool
-  pull_request : PullRequest?
+  pull_request : @protocol.GitPullRequest?
   compare_url : String?
-} derive(Eq, Debug)
-
-///|
-/// One pull request as GitHub reports it. `additions`/`deletions` are
-/// GitHub's own totals against the pull request's base, which is a different
-/// question from the locally measured `DiffStat` — and the reason only one of
-/// the two is ever on screen at a time.
-priv struct PullRequest {
-  number : Int32
-  title : String
-  state : PullRequestState
-  draft : Bool
-  url : String
-  // The branch this merges into. Not rendered: it goes back to the host as the
-  // diffstat's baseline, which is the only exact answer to "how big is this
-  // branch" — and the only one that survives a stacked pull request, whose
-  // base is another feature branch no local rule would ever name.
-  base : String
-  additions : Int32
-  deletions : Int32
-  changed_files : Int32
-  checks : Checks?
-} derive(Eq, Debug)
-
-///|
-/// A draft is not a fourth state: it is an open pull request that refuses to
-/// merge, and the chip says so separately.
-priv enum PullRequestState {
-  PullRequestOpen
-  PullRequestMerged
-  PullRequestClosed
-} derive(Eq, Debug)
-
-///|
-/// The head commit's checks, bucketed into what a chip can show at a glance.
-priv struct Checks {
-  passed : Int32
-  failed : Int32
-  pending : Int32
 } derive(Eq, Debug)
 
 ///|
@@ -93,104 +54,6 @@ fn DiffStat::from_reply(reply : @protocol.GitDiffStat) -> DiffStat {
     base: reply.base,
     partial: reply.partial,
   }
-}
-
-///|
-/// Decode one pull request. An unrecognized state is a host speaking a
-/// vocabulary this build does not know, which is worth showing nothing for
-/// rather than a chip that misreports whether the work has landed.
-fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
-  let state = match reply.state {
-    "open" => PullRequestOpen
-    "merged" => PullRequestMerged
-    "closed" => PullRequestClosed
-    _ => return None
-  }
-  Some({
-    number: reply.number,
-    title: reply.title,
-    state,
-    draft: reply.draft,
-    url: reply.url,
-    base: reply.base,
-    additions: reply.additions,
-    deletions: reply.deletions,
-    changed_files: reply.changed_files,
-    checks: reply.checks.map(checks => {
-      passed: checks.passed,
-      failed: checks.failed,
-      pending: checks.pending,
-    }),
-  })
-}
-
-///|
-fn Checks::composer_checks(self : Checks) -> @composer.GitChecks {
-  @composer.GitChecks(
-    passed=self.passed,
-    failed=self.failed,
-    pending=self.pending,
-  )
-}
-
-///|
-fn PullRequest::composer_pull_request(
-  self : PullRequest,
-) -> @composer.GitPullRequest {
-  @composer.GitPullRequest(
-    number=self.number,
-    title=self.title,
-    state=match self.state {
-      PullRequestOpen => "open"
-      PullRequestMerged => "merged"
-      PullRequestClosed => "closed"
-    },
-    draft=self.draft,
-    url=self.url,
-    checks?=self.checks.map(checks => checks.composer_checks()),
-  )
-}
-
-///|
-fn DiffStat::composer_changes(self : DiffStat) -> @composer.GitChanges {
-  @composer.GitChanges(
-    added=self.added,
-    removed=self.removed,
-    files=self.files,
-    partial=self.partial,
-    base?=self.base,
-  )
-}
-
-///|
-fn Conversation::git_presentation(
-  self : Conversation,
-) -> @composer.GitPresentation? {
-  guard self.shows_git_chip() && self.branch is Some(branch) else {
-    return None
-  }
-  let probe = self.settled_probe()
-  Some(
-    @composer.GitPresentation(
-      branch~,
-      changes?=self.diffstat.map(stat => stat.composer_changes()),
-      pull_request?=probe.bind(current => {
-        current.pull_request.map(pull_request => {
-          pull_request.composer_pull_request()
-        })
-      }),
-      compare_url?=probe.bind(current => current.compare_url),
-    ),
-  )
-}
-
-///|
-/// Whether the composer has a git chip for this conversation at all — it needs
-/// a branch, and `Some("")` is how the host says the workspace is not a
-/// repository. `update` fences the popover on this too: an open popover with
-/// no chip to close it is unreachable.
-fn Conversation::shows_git_chip(self : Conversation) -> Bool {
-  self.branch is Some(branch) && !branch.is_empty()
 }
 
 ///|
@@ -284,9 +147,18 @@ fn probe_branch(
     .settled_probe()
     .bind(probe => probe.pull_request)
     .map(pull_request => pull_request.base)
+  let model = model.replace_conversation({
+    ..conv,
+    branch_generation: generation,
+    pr_bindings: { ..conv.pr_bindings, generation, },
+  })
+  let bindings_cmd = fetch_pr_bindings(dispatch, channel, session, generation)
   (
-    fetch_branch(dispatch, channel, session, cwd, generation~, base_hint?),
-    model.replace_conversation({ ..conv, branch_generation: generation, }),
+    @cmd.batch([
+      fetch_branch(dispatch, channel, session, cwd, generation~, base_hint?),
+      bindings_cmd,
+    ]),
+    model,
   )
 }
 
@@ -317,10 +189,10 @@ test "a settled pull request supplies the baseline the next probe measures from"
 
   // Nothing answered yet: the host is left to guess at `origin/HEAD`.
   assert_eq(hint_of(conv), None)
-  let stacked : PullRequest = {
+  let stacked : @protocol.GitPullRequest = {
     number: 717,
     title: "Dismiss menus with a listener",
-    state: PullRequestOpen,
+    state: "open",
     draft: false,
     url: "https://github.test/acme/app/pull/717",
     base: "feature/x",
@@ -328,6 +200,7 @@ test "a settled pull request supplies the baseline the next probe measures from"
     deletions: 0,
     changed_files: 1,
     checks: None,
+    head_url: None,
   }
   let answered = {
     ..conv,
@@ -344,61 +217,6 @@ test "a settled pull request supplies the baseline the next probe measures from"
   // An answer describing a branch the checkout has left is not one to measure
   // from either — `settled_probe` withholds it, as it does from the chip.
   assert_eq(hint_of({ ..answered, branch: Some("feature/z"), }), None)
-}
-
-///|
-test "the chip's tint follows CI, and its label follows the pull request" {
-  // Failures outrank running work, which outranks a clean sweep: the chip has
-  // one color and it should be the one worth acting on.
-  assert_eq(
-    Checks::{ passed: 4, failed: 2, pending: 1, }.composer_checks().tone(),
-    "failed",
-  )
-  assert_eq(
-    Checks::{ passed: 4, failed: 0, pending: 1, }.composer_checks().tone(),
-    "pending",
-  )
-  assert_eq(
-    Checks::{ passed: 4, failed: 0, pending: 0, }.composer_checks().tone(),
-    "passed",
-  )
-  // No checks and no pull request are both "nothing to say", not "passed".
-  assert_eq(@composer.GitPresentation(branch="feature").tone(), "none")
-  assert_eq(
-    Checks::{ passed: 4, failed: 2, pending: 1, }.composer_checks().summary(),
-    "2 failed · 1 running · 4 passed",
-  )
-  assert_eq(
-    Checks::{ passed: 0, failed: 0, pending: 0, }.composer_checks().summary(),
-    "no checks",
-  )
-  let open : PullRequest = {
-    number: 697,
-    title: "Add a changed-files explorer",
-    state: PullRequestOpen,
-    draft: false,
-    url: "https://github.test/acme/app/pull/697",
-    base: "main",
-    additions: 447,
-    deletions: 397,
-    changed_files: 18,
-    checks: None,
-  }
-  // A plainly open pull request spends no width on the word; only the states
-  // that need one carry it.
-  assert_eq(open.composer_pull_request().label(), "#697")
-  assert_eq(
-    { ..open, draft: true, }.composer_pull_request().label(),
-    "#697 Draft",
-  )
-  assert_eq(
-    { ..open, state: PullRequestMerged, }.composer_pull_request().label(),
-    "#697 Merged",
-  )
-  assert_eq(
-    { ..open, state: PullRequestClosed, }.composer_pull_request().label(),
-    "#697 Closed",
-  )
 }
 
 ///|
@@ -527,7 +345,7 @@ fn fetch_pull_request(
             branch~,
             generation~,
             queried=reply.branch,
-            pull_request=reply.pull_request.bind(PullRequest::from_reply),
+            pull_request=reply.pull_request,
             compare_url=reply.compare_url,
           ),
         ),

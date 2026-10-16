@@ -348,6 +348,8 @@ Notifications:
 | `session.load` | `{session, workspace?}` — a non-blank workspace must still be registered; omitted/blank locates the session across registered stores, then the global store | `{session: <the durable session JSON>, watermark?}` — current hosts include `watermark`, the highest event `sequence` the snapshot contains (0 for an empty record); older hosts may omit it, in which case clients derive it from the stored events' own sequences. |
 | `session.load_archived` | `{session, workspace?}` — the same store selection rules as `session.load`, but reads only from that store's archived twin | `{session: <the durable session JSON>, watermark?}` without restoring or otherwise changing the archived record |
 | `session.list_archived` | `{}` | the archived index |
+| `session.pr_list` | `{session}` | `{bindings: [{url}]}` — the saved PR and remote branch associations for the live OpenSeek session; no metadata lookup. An absent sidecar or a session with no live durable record returns an empty list; read/parse failures are errors |
+| `session.pr_remove` | `{session, url}` | `{bindings: [{url}]}` — removes this exact URL from the latest saved list and returns the remainder. Requires a live durable record; does not close the PR, delete the branch, or change the checkout |
 | `session.rename` | `{session, workspace, title}` — all fields are required; `workspace` must name the registered store that owns the live record, and `title` must be non-blank | `{}` — atomically writes display metadata beside the append-only transcript, so a running conversation can be renamed without rewriting its history |
 | `session.edit` | `{session, workspace, through?, model, source_title, source_sequence, task, images, attachment_paths, thinking?, max_steps?}` | `{session, title}` — edits in a fork/new conversation, submits the message, then deletes the unchanged source after the message is saved |
 | `session.fork` | `{session, workspace, through, model, source_title}` — `workspace` must name the registered store that owns the live record; `through` is the `sequence` of the turn-ending event to copy up to; `model` is the model the fork's system prompt is written for; `source_title` is the title the client shows for the original | `{session, title}` — the new conversation's id, minted by the host, and its title. Runs the engine's `sessions fork`, which copies the conversation's own record up to `through` and gives the fork the system prompt a new conversation started in that directory would get. The fork works wherever the original works: a fork of a worktree conversation is bound to the same worktree (a `worktree.changed` broadcast lists it in that row's `sessions`) and shares its checkout, which goes with the last conversation holding it. A fork whose record was written is a fork that was made: the reply reports it even when the engine failed afterwards, and a request cancelled after that point still leaves the fork bound to its worktree, titled, and announced by `session.changed`. Subagent descendant transcripts, job logs, and scratch files are not copied. Refused for a `through` that is not the end of a turn, a subagent transcript, a worktree conversation whose checkout is gone, and a conversation that is archived or moving |
@@ -365,7 +367,48 @@ Notifications:
 | method | params |
 |---|---|
 | `session.event` | `{session, sequence, session_root, event: {sequence, ts, item}}` — one durably **committed** store event, `event` verbatim as `session.load` carries it in `events`. `session_root` is the durable store root the commit was read from: session ids are not globally unique across stores, so the durable identity is `(session_root, session)` and a client must never merge same-id records from different stores; see *The durable transcript* below |
+| `session.pr_changed` | `{session}` — broadcast to connected clients of the writing host after a binding replacement or removal is saved. Re-read `session.pr_list`; this notification carries neither the new list nor PR metadata |
 | `session.changed` | `{change: "archived" \| "unarchived" \| "deleted" \| "renamed" \| "created", session, workspace}` — broadcast to every client (the requester included) when a record moves between stores, is permanently deleted, changes display title, or is created by `session.fork` (`session` is then the new fork); `workspace` is the owning project path, so same-ID records in other project stores remain untouched. A family operation emits one fact for the parent and each descendant subagent record. Recipients apply each store-qualified fact immediately, keep placement facts authoritative over already-in-flight unversioned list replies, and re-read both lists. A new connection starts a fresh list round. |
+
+#### Session PR associations
+
+The `session.pr_*` commands above serve authenticated Desktop frontends. The
+agent-facing [host MCP tools](../desktop/backend/mcp/README.md#session-pr-and-branch-associations)
+are `session_pr_list({})` and `session_pr_bind({bindings: [{url}]})`; their
+session identity comes from the bearer grant, never from tool arguments.
+There is no frontend `session.pr_bind` command. MCP bind replaces the whole
+list, while the frontend remove command edits the latest saved list so a stale
+client cannot erase unrelated additions. Full replacements are serialized,
+but do not perform version checks: the last committed replacement wins.
+
+Bindings are URL-only entries in `pr-bindings.json` beside the transcript.
+Saving normalizes surrounding whitespace and trailing slashes, keeps the
+first occurrence of duplicates, and validates basic HTTPS syntax without
+remote lookup or checkout changes. Malformed entries reject the entire
+replacement. Archive/restore moves the sidecar with the session; writes share
+the archive lock and revalidate the live record before committing.
+
+Clients refresh the list when opening or reconnecting to a conversation and
+on `session.pr_changed`, then request remote metadata through `git.pr_detail`.
+Correlate replies with their requested URL and refresh generation, discard superseded replies,
+and keep saved bindings and cached details on lookup errors. An empty detail
+reply means no enrichment and clears that URL's cached metadata. Merge a
+bound PR and branch only when the resolved `head_url` exactly matches the
+bound branch URL, rather than matching branch names across repositories.
+
+The OpenSeek composer combines these explicit bindings with automatic checkout
+facts from `git.branch` and `git.pull_request`. The current row comes first and
+shows the checkout PR, or the local branch and local diff when no PR is known.
+It works without MCP, including unpublished branches with no URL. No repository
+means no automatic row. Checkout replies are generation- and branch-fenced.
+Exact PR URLs or repository-qualified head URLs merge bindings into that row;
+the automatic row is derived, never written to the binding sidecar.
+
+Removing a merged row removes each of its explicit URLs. Clearing bindings or
+removing a current row's bindings leaves the automatic row visible; an
+unbound current row has no remove button. The separate checkout PR chip and
+`session.pr_detail` command are removed; `git.pr_detail` shares the checkout
+query's metadata shape and parser rather than nesting a second detail type.
 
 #### The durable transcript: snapshots + commits
 
@@ -539,7 +582,8 @@ Notifications:
 | method | params | result |
 |---|---|---|
 | `git.branch` | `{session, cwd?, base_hint?}` | `{branch?, diffstat?}` — the checked-out branch of the conversation's working directory (detached HEAD reads as its short hash), and the branch's whole line delta. `base_hint` is the branch this work merges into: the host measures from `origin/<base_hint>` when that ref exists, otherwise from `origin/HEAD`, and clients that know a pull request's base send it because nothing local can derive one. `diffstat` is `{added, removed, files, base?, partial}`, measured from where the branch left that ref all the way to the working tree — committed and uncommitted alike, untracked files included. `base` names the ref actually measured from and is absent when the repository offered none, leaving the count to cover uncommitted work alone; `partial` marks a count that stopped short of every untracked file, so it reads as a floor rather than a total. Both fields are absent when the directory is not a git repository or git is unavailable, and `diffstat` alone is absent when the diff itself failed |
-| `git.pull_request` | `{session, cwd?}` | `{pull_request?, compare_url?, branch?}` — what GitHub says about the branch that working directory has checked out, read through the user's own `gh` CLI. No `gh`, no authentication, no GitHub remote, and a detached HEAD all answer with nothing rather than an error. `branch` is the branch the host read from `HEAD`, so a checkout that moved mid-request is detectable. `pull_request` is `{number, title, state, draft, url, base, additions, deletions, changed_files, checks?}`, where `base` is the branch it merges into (the exact value for `git.branch`'s `base_hint`) and `checks` is `{passed, failed, pending}` over the head commit's rollup. `compare_url` is offered instead, for a branch with no pull request that the resolved repository already has |
+| `git.pull_request` | `{session, cwd?}` | `{pull_request?, compare_url?, branch?}` — what GitHub says about the branch that working directory has checked out, read through the user's own `gh` CLI. No `gh`, no authentication, no GitHub remote, and a detached HEAD all answer with nothing rather than an error. `branch` is the branch the host read from `HEAD`, so a checkout that moved mid-request is detectable. `pull_request` is `{number, title, state, draft, url, base, additions, deletions, changed_files, checks?, head_url?}`, where `base` is the branch it merges into (the exact value for `git.branch`'s `base_hint`) `head_url` is the optional repository-qualified head branch URL (including forks), and `checks` is `{passed, failed, pending}` over the head commit's rollup. `compare_url` is offered instead, for a branch with no pull request that the resolved repository already has |
+| `git.pr_detail` | `{url}` | `{pull_request?}` — remote display metadata independent of session membership. Uses the same `GitPullRequest` shape as `git.pull_request`, including `head_url`. A branch or unsupported URL returns `{}`; missing `gh`, authentication/remote failures, timeout and invalid metadata use the command error channel |
 
 ### fs.* — host file access
 

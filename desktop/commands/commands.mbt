@@ -958,3 +958,21 @@ pub let session_search : Command[
   @protocol.SessionSearchPayload,
   @protocol.SessionSearchReply,
 ] = Command("session.search")
+
+///|
+pub let session_pr_list : Command[
+  @protocol.SessionPrChangedPayload,
+  @protocol.SessionPrBindings,
+] = Command("session.pr_list")
+
+///|
+pub let session_pr_remove : Command[
+  @protocol.SessionPrRemovePayload,
+  @protocol.SessionPrBindings,
+] = Command("session.pr_remove")
+
+///|
+pub let git_pr_detail : Command[
+  @protocol.GitPrDetailPayload,
+  @protocol.GitPrDetailReply,
+] = Command("git.pr_detail")

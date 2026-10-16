@@ -92,3 +92,24 @@ test "An open pull request outranks the branch's older merged one" {
   }
   assert_eq(merged.state, "merged")
 }
+
+///|
+test "shared PR metadata derives the head URL from the fork and escapes the branch" {
+  let json = pull_request_json(number=1, state="OPEN", draft=false, cross=true)
+  guard json is Object(fields) else { fail("expected object") }
+  let fields = fields.copy()
+  fields["headRefName"] = "topic/雪#1"
+  fields["headRepository"] = { "nameWithOwner": "fork/app" }
+  guard parse_pull_request(Json(fields)) is Some(pr) else {
+    fail("expected PR")
+  }
+  assert_eq(
+    pr.head_url,
+    Some("https://github.test/fork/app/tree/topic/%E9%9B%AA%231"),
+  )
+  fields["headRepository"] = Json::null()
+  guard parse_pull_request(Json(fields)) is Some(pr) else {
+    fail("expected PR")
+  }
+  assert_true(pr.head_url is None)
+}

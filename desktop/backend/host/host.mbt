@@ -332,6 +332,9 @@ pub fn endpoints(
     Endpoint(@commands.update_apply, _ => state.updates.apply()),
     Endpoint(@commands.git_branch, payload => git_branch_op(payload)),
     Endpoint(@commands.git_pull_request, payload => git_pull_request_op(payload)),
+    Endpoint(@commands.git_pr_detail, payload => {
+      pull_request: git_pr_detail(payload),
+    }),
     Endpoint(@commands.github_list, payload => github_list_op(payload)),
     Endpoint(@commands.github_review, payload => github_review_op(payload)),
     Endpoint(@commands.github_review_file, payload => {

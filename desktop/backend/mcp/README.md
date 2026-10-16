@@ -163,3 +163,52 @@ approval with the destination and message.
 
 These tools are offered to the OpenSeek engine; Codex-backed chats are not
 message targets for this implementation.
+
+## Session PR and branch associations
+
+The backend adds two tools to hosts that provide this server:
+
+- `session_pr_list({})` returns `{ "bindings": [{ "url": "https://…" }] }`.
+- `session_pr_bind({ "bindings": [...] })` atomically replaces the **entire**
+  current-session list. Read the list first and retain the entries you still
+  want. Omitted entries are removed; an explicit empty array clears it. It
+  returns the same `{ "bindings": [...] }` shape with the saved entries.
+
+For example:
+
+```json
+{
+  "bindings": [
+    { "url": "https://github.com/example/project/pull/42" },
+    { "url": "https://github.com/example/project/tree/feature/example" }
+  ]
+}
+```
+
+Each entry contains only a URL. The host trims surrounding whitespace and
+trailing slashes and keeps the first occurrence of duplicate URLs. It checks
+basic HTTPS URL syntax, without querying the remote or checking out code.
+A malformed entry rejects the whole replacement. The session comes from the
+MCP grant, never from a tool argument. URLs for unpublished local branches
+are not supported.
+
+Saving requires an existing live session record; a stale grant cannot recreate
+an archived or deleted session. Listing a session with no live record or no
+sidecar returns an empty list, while read/parse failures remain tool errors.
+Concurrent replacements are serialized, with the last committed list winning;
+the read-then-bind workflow is not a version-checked update.
+
+The list lives beside the session transcript in `pr-bindings.json`, and moves
+with that session when archived/restored/deleted. The composer refreshes on
+changes and separately resolves GitHub PR status; lookup failures keep the
+association visible. The composer also automatically shows the current
+checkout PR or local branch and diff, independently of MCP. This automatic row is not
+part of `session_pr_list`; clearing bindings leaves it visible. Removing a
+current row removes only its explicit bindings. PR and branch rows merge
+when the resolved head URL identifies the same branch.
+The [Desktop session protocol](../../../docs/remote-protocol.md#session-pr-associations)
+documents frontend list/remove commands, `git.pr_detail` enrichment, and the
+`session.pr_changed` notification emitted after a save.
+
+These tools belong to the `session` group. If the configuration filters groups
+with `X-SeekMoon-Tool-Groups`, include `session` (for example `browser,session`).
