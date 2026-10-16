@@ -49,7 +49,7 @@ async fn isolated_available(program : String, args : Array[String]) -> Bool {
 
 ///|
 async test "setup installs missing dependencies and reuses them offline" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -90,7 +90,7 @@ async test "setup installs missing dependencies and reuses them offline" {
 
 ///|
 async test "setup resolves a launcher symlink outside the extracted distribution" {
-  if is_windows() {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -118,7 +118,7 @@ async test "setup resolves a launcher symlink outside the extracted distribution
 
 ///|
 async test "setup reuses PATH MoonBit but replaces rg and the complete resource tree" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -164,7 +164,7 @@ async test "setup reuses PATH MoonBit but replaces rg and the complete resource 
 
 ///|
 async test "setup replaces working rg without replacing MoonBit or CLI" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -185,7 +185,7 @@ async test "setup replaces working rg without replacing MoonBit or CLI" {
 
 ///|
 async test "setup propagates installer failure and trusts successful return" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -216,7 +216,7 @@ async test "setup propagates installer failure and trusts successful return" {
 
 ///|
 async test "concurrent setup checks installed files again after taking the lock" {
-  if @env.get_env_var("OS") == Some("Windows_NT") {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")
@@ -240,7 +240,7 @@ async test "concurrent setup checks installed files again after taking the lock"
 
 ///|
 async test "a missing resource source fails before installing MoonBit or deleting resources" {
-  if is_windows() {
+  if @async.platform is Windows {
     return
   }
   let home = @fs.tmpdir(prefix="openseek-setup-test-")

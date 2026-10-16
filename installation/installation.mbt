@@ -8,7 +8,7 @@ let native_distribution : Bool = false
 
 ///|
 fn is_windows() -> Bool {
-  @env.get_env_var("OS") == Some("Windows_NT")
+  @async.platform is Windows
 }
 
 ///|
