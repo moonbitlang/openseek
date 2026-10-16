@@ -692,10 +692,13 @@ these are ordinary command replies, with no transport-level wrapper.
 | `skills.installed_content` | `{id}` | `{content}` — the installed SKILL.md |
 | `skills.install` | `{module_name, version, package_path?}` | `{installed}` |
 | `skills.uninstall` | `{id}` | `{removed}` |
+| `skills.set_enabled` | `{id, enabled: boolean}` | `{ok: true}` — move an installed entry into or out of `skills/.disabled/` |
 
 Installed entries include an optional `registry: {module_name, package_path}`
 identifying the installed registry skill. Root packages use `package_path: ""`;
-non-registry skills omit `registry`.
+non-registry skills omit `registry`. Every installed entry includes a required
+`enabled: boolean`, derived from its location. Both enabled and disabled entries
+are listed and can be previewed; hand-written entries can also be toggled.
 
 The Installed update action reuses `skills.install` with the catalog's module,
 package, and displayed version. The trusted registry guarantees that published
@@ -703,13 +706,16 @@ versions do not move backwards. After matching module and package, clients compa
 the installed `source` with the catalog entry's source label: equal means no
 update; different means an update is available. No version parsing is needed.
 The existing install operation replaces the complete directory and provenance
-through its recoverable transaction.
+through its recoverable transaction in the entry's current enabled or disabled
+directory. The location is resolved after downloading, so toggling while an
+update is in flight preserves the latest enablement state. New installations
+default to enabled. These operations do not refresh saved session prompts.
 
 Notification:
 
 | method | params |
 |---|---|
-| `skills.changed` | `{}` — broadcast after an install, update, or uninstall commits; every client re-reads `skills.installed`, including clients that did not make the request |
+| `skills.changed` | `{}` — broadcast after an install, update, uninstall, or enablement change commits; every client re-reads `skills.installed`, including clients that did not make the request |
 
 ### auth.* — remote-access sign-in
 

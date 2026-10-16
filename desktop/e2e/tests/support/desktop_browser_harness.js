@@ -64,6 +64,7 @@ export class DesktopBrowserHarness {
         name: 'MoonBit',
         description: 'Authoritative MoonBit guidance',
         source: '',
+        enabled: true,
       },
     ];
     this.codexRequiresAuth = false;
@@ -657,6 +658,7 @@ export class DesktopBrowserHarness {
           description: 'Elm-style browser UI',
           source: 'rabbita@0.15.4/moonbitlang/rabbita',
           registry: { module_name: 'rabbita', package_path: 'moonbitlang/rabbita' },
+          enabled: true,
         };
         if (!this.installedSkills.some(skill => skill.id === installed.id)) {
           this.installedSkills.push(installed);

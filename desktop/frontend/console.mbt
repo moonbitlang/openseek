@@ -559,6 +559,7 @@ test "a revoked page device is retired without connecting a survivor" {
         description: "",
         source: "old/source@1.0.0",
         registry: Some({ module_name: "old/source", package_path: "", }),
+        enabled: true,
       },
     ],
   }

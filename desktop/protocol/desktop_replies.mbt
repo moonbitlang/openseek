@@ -1228,6 +1228,7 @@ pub(all) struct InstalledSkill {
   description : String
   source : String
   registry : RegistrySkillIdentity?
+  enabled : Bool
 } derive(Debug, Eq)
 
 ///|
@@ -3884,6 +3885,7 @@ pub impl FromJson for InstalledSkill with fn from_json(json, path) {
     registry: object
     .optional_json("registry")
     .map(value => @json.from_json(value, path=path.add_key("registry"))),
+    enabled: object.required_bool("enabled"),
   }
 }
 
@@ -3894,6 +3896,7 @@ pub impl ToJson for InstalledSkill with fn to_json(self) {
   fields["name"] = Json(self.name)
   fields["description"] = Json(self.description)
   fields["source"] = Json(self.source)
+  fields["enabled"] = Json(self.enabled)
   if self.registry is Some(registry) {
     fields["registry"] = registry.to_json()
   }

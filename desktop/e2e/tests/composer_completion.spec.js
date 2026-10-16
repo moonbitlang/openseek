@@ -6,7 +6,7 @@ for (const marker of ['@', '$']) {
     const app = new DesktopBrowserHarness(page);
     app.searchFiles = Array.from({ length: 20 }, (_, i) => `src/file-${i}.mbt`);
     app.installedSkills = Array.from({ length: 20 }, (_, i) => ({
-      id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '',
+      id: `skill-${i}`, name: `skill-${i}`, description: `Skill ${i}`, source: '', enabled: true,
     }));
     await app.install();
     await app.goto();
@@ -52,3 +52,17 @@ for (const marker of ['@', '$']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+test('disabled skills stay out of skill completion', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.installedSkills = [
+    { id: 'available', name: 'available', description: '', source: '', enabled: true },
+    { id: 'disabled', name: 'disabled', description: '', source: '', enabled: false },
+  ];
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  await page.locator('#task').fill('$');
+  await expect(page.locator('.completion-item .completion-label')).toHaveText(['$available']);
+  expect(app.pageErrors).toEqual([]);
+});
