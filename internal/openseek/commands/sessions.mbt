@@ -1,5 +1,5 @@
 ///|
-/// `openseek sessions <list|show|compact|fork>` — durable-session management. Prints
+/// `openseek sessions <list|show|compact|fork|migrate-images>` — durable-session management. Prints
 /// for humans directly on stdout, so it never opens the event sink; an event a
 /// compaction reports is dropped.
 pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
@@ -7,8 +7,10 @@ pub async fn run_sessions_command(matches : @argparse.Matches) -> Unit {
     Some(("list", m)) => sessions_list(m)
     Some(("show", m)) => sessions_show(m)
     Some(("compact", m)) => sessions_compact(m)
+    Some(("migrate-images", m)) => sessions_migrate_images(m)
     Some(("fork", m)) => sessions_fork(m)
-    _ => fail("usage: openseek sessions <list|show|compact|fork>")
+    _ =>
+      fail("usage: openseek sessions <list|show|compact|fork|migrate-images>")
   }
 }
 
@@ -237,4 +239,17 @@ fn required_positive_int(input : String, label : String) -> Int32 raise {
     fail("\{label} is required")
   }
   @cli.parse_positive_int("\{trimmed}", label)
+}
+
+///|
+async fn sessions_migrate_images(matches : @argparse.Matches) -> Unit {
+  let workspace_root = @setup.prepare_workspace_root(matches, log_created=false)
+  let store = @store.SessionStore(@setup.session_root(matches, workspace_root~))
+  let session = store.migrate_images(
+    sessions_target_id(matches),
+    attachments=@attachments.AttachmentStore::default(),
+  )
+  println(
+    "migrated images for session \{session.id().value()}; last_sequence=\{session.last_sequence()}",
+  )
 }

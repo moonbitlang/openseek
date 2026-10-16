@@ -3,6 +3,7 @@ package "openseek_desktop/commands"
 
 import {
   "moonbit-community/proton_contract",
+  "moonbitlang/openseek_protocol",
   "openseek_desktop/protocol",
 }
 
@@ -150,6 +151,8 @@ pub let fs_import_attachment : Command[@protocol.PrepareAttachmentPayload, @prot
 pub let fs_materialize_semantic_selection : Command[@protocol.MaterializeSemanticSelectionPayload, @protocol.MaterializeSemanticSelectionReply]
 
 pub let fs_prepare_attachment : Command[@protocol.PrepareAttachmentPayload, @protocol.PrepareAttachmentReply]
+
+pub let fs_read_attachment : Command[@openseek_protocol.ImageRef, @protocol.ReadFileReply]
 
 pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirReply]
 

@@ -132,7 +132,12 @@ fn header_line(session : @agent_session.Session) -> String {
     id: session.id().value(),
     system_prompt: session.system_prompt(),
   }
-  "\{Json(header).stringify()}\n"
+  let json = Json(header)
+  if session.events().iter().any(event => event.item().has_image_refs()) &&
+    json is Object(fields) {
+    fields["version"] = Json(2)
+  }
+  "\{json.stringify()}\n"
 }
 
 ///|
@@ -208,7 +213,7 @@ fn parse_session_file(
     Header(header) => header
     UnsupportedVersion(version) =>
       fail(
-        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads version 1",
+        "session file for \{requested_id.value()} uses unsupported session file version \{version}; this build reads versions 1 and 2",
       )
     NotHeader =>
       fail(
@@ -358,7 +363,19 @@ async fn persist_event(
   repair_tail~ : Bool,
 ) -> Unit {
   let path = store.session_file_path(session.id())
-  if !repair_tail && @fs.exists(path) {
+  let upgrade = if event.item().has_image_refs() && @fs.exists(path) {
+    let file = @fs.open(path, mode=ReadOnly)
+    defer file.close()
+    let first = file.read_until("\n")
+    if first is Some(first) {
+      @json.parse(first) is { "version": 1, .. }
+    } else {
+      true
+    }
+  } else {
+    false
+  }
+  if !repair_tail && !upgrade && @fs.exists(path) {
     // `sync=Data` (fdatasync) is the durability policy for event appends: a
     // returned append survives an OS crash, not just a process crash. It is
     // also the `write_file` default today — stated explicitly so the policy
@@ -935,4 +952,26 @@ pub async fn SessionStore::scratch_dir(
   id : @agent_session.SessionId,
 ) -> String {
   @workspace_path.resolve(@fs.realpath("."), "\{self.session_dir(id)}/scratch")
+}
+
+///|
+/// Explicitly migrate legacy inline images while holding the session write lock.
+/// Event sequences and timestamps are preserved; normal reads never rewrite.
+pub async fn SessionStore::migrate_images(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  attachments~ : @attachments.AttachmentStore,
+) -> @agent_session.Session {
+  with_existing_session_lock(self, id, Exclusive, () => {
+    let session = read_session_file(self, id).session.map_content(content => {
+      attachments.admit(content)
+    })
+    write_text_atomic(
+      self.session_file_path(id),
+      session_file_text(session),
+      dirs=self.session_dir_chain(id),
+    )
+    record_mark(self, session)
+    session
+  })
 }

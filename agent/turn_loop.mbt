@@ -1,6 +1,7 @@
 ///|
 priv struct AgentLoop {
   runtime : @agent_runtime.AgentRuntime
+  admit_content : async (@agent_session.Content) -> @agent_session.Content
   client : @client.Client
   /// Client for auto-compaction checkpoint summaries: thinking=No where the
   /// model honors the control — a handoff summary needs no reasoning budget.
@@ -39,10 +40,12 @@ fn AgentLoop::AgentLoop(
   tools~ : @agent_tool.Tools,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   session~ : @agent_session.Session,
+  admit_content~ : async (@agent_session.Content) -> @agent_session.Content,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> AgentLoop {
   {
     runtime,
+    admit_content,
     client,
     summary_client,
     tools,
@@ -409,13 +412,15 @@ async fn AgentLoop::apply_steer_inputs(
 ) -> @agent_session.Session {
   for input in inputs; current = session {
     let steer : SteerMessage = match input {
-      Prompt(content, submission_id~) =>
+      Prompt(content, submission_id~) => {
+        let content = (self.admit_content)(content)
         {
           kind: "prompt",
           content,
           submission_id,
           item: User(UserMessage(content, submission_id?)),
         }
+      }
       Notice(text) =>
         {
           kind: "notice",
@@ -1160,17 +1165,21 @@ async fn AgentLoop::record_tool_result(
   brief? : String,
   data? : Json,
 ) -> @agent_session.Session {
-  let parts : Array[@protocol.ContentPart] = [
-    Text(clamp_tool_result_content(content)),
-    ..images.map(image => @protocol.ContentPart::Image(image)),
-  ]
+  let content = (self.admit_content)(
+    Content(
+      [
+        Text(clamp_tool_result_content(content)),
+        ..images.map(image => @protocol.ContentPart::Image(image)),
+      ],
+    ),
+  )
   let session = self.append(
     session,
     Tool(
       ToolResult(
         tool_call_id~,
         tool_name~,
-        content=parts,
+        content=content.0,
         is_error~,
         brief?,
         data?,
@@ -1180,7 +1189,7 @@ async fn AgentLoop::record_tool_result(
   self.messages.push(
     ChatMessage(
       Tool(tool_call_id),
-      content=@agent_session.to_deepseek_parts(Content(parts)),
+      content=@agent_session.to_deepseek_parts(content),
     ),
   )
   session

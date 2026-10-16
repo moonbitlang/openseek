@@ -4,7 +4,9 @@ package "moonbitlang/openseek/deepseek/client"
 import {
   "moonbitlang/core/debug",
   "moonbitlang/core/json",
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/deepseek",
+  "moonbitlang/openseek_protocol",
 }
 
 // Values
@@ -48,10 +50,12 @@ pub struct Client {
   idle_timeout_ms : Int
   // private fields
 } derive(@debug.Debug)
-pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int, idle_timeout_ms? : Int) -> Self
+pub fn Client::Client(api_key~ : String, model? : @deepseek.Model, api_url? : String, thinking? : @deepseek.ThinkingMode, retry_attempts? : Int, retry_backoff_ms? : Int, idle_timeout_ms? : Int, attachments? : @attachments.AttachmentStore, upload_index_dir? : String) -> Self
 pub async fn Client::chat(Self, Array[@deepseek.ChatMessage], tools? : Array[@deepseek.ToolDefinition], response_format? : @deepseek.ResponseFormat, max_tokens? : Int, stream? : StreamHandler) -> @deepseek.ChatResponse
 pub fn Client::supports_image_input(Self) -> Bool
+pub async fn Client::upload_attachment(Self, @openseek_protocol.ImageRef) -> String
 pub async fn Client::upload_image(Self, Bytes, filename~ : String, expires_after_seconds? : Int, timeout_ms? : Int) -> UploadedFile
+pub fn Client::with_thinking(Self, @deepseek.ThinkingMode) -> Self
 
 type StreamHandler
 pub fn StreamHandler::StreamHandler(on_content_delta~ : async (String) -> Unit, on_reasoning_delta? : async (String) -> Unit, on_retry? : (Int, Int, String) -> Unit) -> Self

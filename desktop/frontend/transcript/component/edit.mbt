@@ -226,9 +226,7 @@ fn MessageEditor::view(
   let attachments : Array[@html.Html] = []
   for image in draft.images {
     attachments.push(
-      @html.div(class="composer-image", [
-        @html.img(src=image.url, alt=image.name, title=image.name),
-      ]),
+      @html.div(class="composer-image", [image_content_view(locale~, image.url)]),
     )
   }
   for mention in draft.mentions {

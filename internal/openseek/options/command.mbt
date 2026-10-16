@@ -174,6 +174,12 @@ pub fn root_command() -> @argparse.Command {
             positionals=[PositionArg("id", about="Session id.")],
           ),
           Command(
+            "migrate-images",
+            about="Move inline session images to the user attachment store.",
+            options=[dir_option()],
+            positionals=[PositionArg("id", about="Session id.")],
+          ),
+          Command(
             "compact",
             about="Append a summary to <id> covering a sequence range.",
             options=[

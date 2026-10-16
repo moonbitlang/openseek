@@ -88,6 +88,7 @@ pub impl @json.FromJson for Content
 pub(all) enum ContentPart {
   Text(String)
   Image(Image)
+  ImageRef(ImageRef)
 } derive(Eq, @debug.Debug)
 pub fn ContentPart::equal(Self, Self) -> Bool
 pub fn ContentPart::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -172,6 +173,22 @@ pub fn Image::from_data_url(String) -> Self raise ImageError
 pub fn Image::not_equal(Self, Self) -> Bool
 pub fn Image::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for Image
+
+pub struct ImageRef {
+  attachment_id : String
+  media_type : String
+  bytes : Int
+} derive(Eq, @debug.Debug)
+pub fn ImageRef::ImageRef(attachment_id~ : String, media_type~ : String, bytes~ : Int) -> Self raise
+pub fn ImageRef::equal(Self, Self) -> Bool
+pub fn ImageRef::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ImageRef::from_url(String) -> Self raise
+pub fn ImageRef::not_equal(Self, Self) -> Bool
+pub fn ImageRef::to_json(Self) -> Json
+pub fn ImageRef::to_repr(Self) -> @debug.Repr
+pub fn ImageRef::url(Self) -> String
+pub impl ToJson for ImageRef
+pub impl @json.FromJson for ImageRef
 
 pub(all) enum JobEventKind {
   Started

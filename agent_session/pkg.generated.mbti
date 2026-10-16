@@ -79,6 +79,7 @@ pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int) -
 pub fn Session::id(Self) -> SessionId
 pub fn Session::last_sequence(Self) -> Int
 pub fn Session::last_terminal(Self) -> TurnTerminal?
+pub async fn Session::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
 pub impl ToJson for Session
@@ -87,6 +88,7 @@ pub impl @json.FromJson for Session
 type SessionEvent derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn SessionEvent::is_agent_step(Self) -> Bool
 pub fn SessionEvent::item(Self) -> SessionItem
+pub async fn SessionEvent::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub fn SessionEvent::sequence(Self) -> Int
 pub fn SessionEvent::unix_ms(Self) -> Int64
 
@@ -104,6 +106,8 @@ pub(all) enum SessionItem {
   Summary(SessionSummary)
   Terminal(TurnTerminal)
 } derive(Eq, @debug.Debug)
+pub fn SessionItem::has_image_refs(Self) -> Bool
+pub async fn SessionItem::map_content(Self, async (@openseek_protocol.Content) -> @openseek_protocol.Content) -> Self
 pub impl @json.FromJson for SessionItem
 
 type SessionSummary derive(Eq, ToJson, @debug.Debug, @json.FromJson)

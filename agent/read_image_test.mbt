@@ -1,9 +1,9 @@
 ///|
 async test "direct and unprinted PTC image results reach the next request and replay after source deletion" {
   let root = @fs.tmpdir(prefix="openseek-image-turn-")
+  let attachments = @attachments.AttachmentStore(root + "/attachments")
   defer @fs.rmdir(root, recursive=true)
   let bytes = @fs.read_file("deepseek/client/testdata/two-colors.png").binary()
-  let image = @agent_session.Image::from_bytes(bytes)
   for ptc in [false, true] {
     @fs.write_file("\{root}/picture", bytes)
     @async.with_task_group(group => {
@@ -21,27 +21,35 @@ async test "direct and unprinted PTC image results reach the next request and re
       } else {
         wait_call_payload("read_image", { "path": "picture" })
       }
-      guard goal_check_test_server(group, bodies, [
-          first,
-          final_answer_payload("seen"),
-          final_answer_payload("replayed"),
-        ])
-        is Some(url) else {
-        fail("missing server")
-      }
+      let url = image_chat_test_server(
+        group,
+        bodies,
+        [],
+        [first, final_answer_payload("seen"), final_answer_payload("replayed")],
+        image_bytes=bytes.length(),
+      )
       let session = @agent.run_turn_in_scope(
+        client=Client(
+          api_key="offline",
+          model=Deepseek(V4Flash),
+          api_url=url,
+          attachments~,
+          upload_index_dir=root + "/deepseek",
+          thinking=Max,
+        ),
+        admit_content=content => attachments.admit(content),
         runtime=AgentRuntime(workspace_root=root),
         scope=AgentTaskScope(group),
-        api_key="offline",
-        model=Deepseek(V4Flash),
-        api_url=url,
         session=Session(SessionId("read-image"), system_prompt="system"),
         content=Content([Text("inspect picture")]),
         max_steps=3,
         append_item=(session, item) => session.append(item),
       )
       assert_eq(bodies.length(), 2)
-      assert_true(bodies[1].contains(image.data_url()), msg=bodies[1])
+      assert_true(bodies[1].contains("file-test-1"), msg=bodies[1])
+      assert_false(
+        bodies[1].contains(@agent_session.Image::from_bytes(bytes).data_url()),
+      )
       @fs.remove("\{root}/picture")
       let mut replay = @agent_session.Session(
         SessionId("read-image"),
@@ -55,11 +63,17 @@ async test "direct and unprinted PTC image results reach the next request and re
       }
       ignore(
         @agent.run_turn_in_scope(
+          client=Client(
+            api_key="offline",
+            model=Deepseek(V4Flash),
+            api_url=url,
+            attachments~,
+            upload_index_dir=root + "/deepseek",
+            thinking=Max,
+          ),
+          admit_content=content => attachments.admit(content),
           runtime=AgentRuntime(workspace_root=root),
           scope=AgentTaskScope(group),
-          api_key="offline",
-          model=Deepseek(V4Flash),
-          api_url=url,
           session=replay,
           content=Content([Text("inspect again")]),
           max_steps=1,
@@ -67,13 +81,16 @@ async test "direct and unprinted PTC image results reach the next request and re
         ),
       )
       assert_eq(bodies.length(), 3)
-      assert_true(bodies[2].contains(image.data_url()))
+      assert_true(bodies[2].contains("file-test-1"))
     })
   }
 }
 
 ///|
 async test "tool text is bounded before durable and API content parts are assembled" {
+  let root = @fs.tmpdir(prefix="openseek-tool-admission-")
+  let attachments = @attachments.AttachmentStore(root + "/attachments")
+  defer @fs.rmdir(root, recursive=true)
   let image = @agent_session.Image::from_bytes(b"\x89PNG\r\n\x1a\n")
   // The emoji straddles the truncation boundary; neither durable nor wire text
   // may retain half of its surrogate pair. Both images must remain intact.
@@ -83,13 +100,10 @@ async test "tool text is bounded before durable and API content parts are assemb
     String::make(100, 'y')
   @async.with_task_group(group => {
     let bodies : Array[String] = []
-    guard goal_check_test_server(group, bodies, [
-        wait_call_payload("picture", {}),
-        final_answer_payload("seen"),
-      ])
-      is Some(url) else {
-      fail("missing server")
-    }
+    let url = image_chat_test_server(group, bodies, [], [
+      wait_call_payload("picture", {}),
+      final_answer_payload("seen"),
+    ])
     let runtime = @agent_runtime.AgentRuntime()
     let scope = @agent_runtime.AgentTaskScope(group)
     let tools = @agent.build_tools(runtime, scope, extra_tools=[
@@ -101,12 +115,18 @@ async test "tool text is bounded before durable and API content parts are assemb
       ),
     ])
     let session = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="offline",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        attachments~,
+        upload_index_dir=root + "/deepseek",
+        thinking=Max,
+      ),
+      admit_content=content => attachments.admit(content),
       runtime~,
       scope~,
       tools~,
-      api_key="offline",
-      model=Deepseek(V4Flash),
-      api_url=url,
       session=Session(SessionId("bounded-tool-images"), system_prompt="system"),
       content=Content([Text("inspect")]),
       max_steps=3,
@@ -116,11 +136,12 @@ async test "tool text is bounded before durable and API content parts are assemb
       for event in session.events() if event.item() is Tool(result) &&
       result.tool_name() == "picture" => result.content()
     ]
-    guard results is [Content([Text(saved_text), Image(first), Image(second)])] else {
+    guard results
+      is [Content([Text(saved_text), ImageRef(first), ImageRef(second)])] else {
       fail("expected text followed by both images")
     }
-    assert_eq(first, image)
-    assert_eq(second, image)
+    assert_eq(first, second)
+    assert_eq(attachments.read(first), image)
     assert_true(saved_text.length() <= 60000)
     assert_true(saved_text.has_suffix(marker))
     assert_false(saved_text.contains("😀"))
@@ -135,23 +156,15 @@ async test "tool text is bounded before durable and API content parts are assemb
         {
           "content": [
             { "type": "text", "text": String(wire_text), .. },
-            {
-              "type": "image_url",
-              "image_url": { "url": String(first_url), .. },
-              ..
-            },
-            {
-              "type": "image_url",
-              "image_url": { "url": String(second_url), .. },
-              ..
-            },
+            { "type": "file", "file_id": String(first_id), .. },
+            { "type": "file", "file_id": String(second_id), .. },
           ],
           ..
         },
       ] &&
       wire_text == saved_text &&
-      first_url == image.data_url() &&
-      second_url == image.data_url(),
+      first_id == "file-test-1" &&
+      second_id == "file-test-1",
     )
   })
 }

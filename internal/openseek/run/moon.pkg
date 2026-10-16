@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/attachments",
   "moonbitlang/openseek/agent",
   "moonbitlang/openseek/agent_explore",
   "moonbitlang/openseek/agent_pattern_repair",

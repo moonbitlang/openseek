@@ -68,14 +68,18 @@ async fn exercise_job_wait(wake : WaitWake) -> Unit {
       let task = group.spawn(
         () => {
           @agent.run_turn_in_scope(
+            client=Client(
+              api_key="test",
+              model=Deepseek(V4Flash),
+              api_url=url,
+              thinking=Max,
+            ),
+            admit_content=content => content,
             runtime~,
             scope~,
-            api_key="test",
-            model=Deepseek(V4Flash),
             session=saved,
             content=Content([Text("process the result")]),
             tools~,
-            api_url=url,
             max_steps=3,
             append_item=(session, item) => {
               saved = session.append(item)
@@ -243,13 +247,17 @@ async fn exercise_plain_finish(existing : Bool) -> Unit {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("finish-live-job"), system_prompt="system"),
       content=Content([Text("start server")]),
-      api_url=url,
       max_steps=3,
       tools=Tools(
         [@job_wait.definition(), @finish.definition()],
@@ -312,13 +320,17 @@ async test "job_wait unknown ids return a tool error and let the model recover" 
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("wait-invalid"), system_prompt="system"),
       content=Content([Text("test")]),
-      api_url=url,
       max_steps=2,
       tools=Tools([@job_wait.definition()], background_jobs=jobs),
       append_item=(session, item) => session.append(item),
@@ -342,13 +354,17 @@ async test "job_wait in the last model step records an error rather than waiting
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("wait-budget"), system_prompt="system"),
       content=Content([Text("test")]),
-      api_url=url,
       max_steps=1,
       tools=Tools([@job_wait.definition()]),
       append_item=(session, item) => session.append(item),
@@ -405,13 +421,17 @@ async test "mixed job_wait batch returns an error and executes the following too
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("wait-mixed"), system_prompt="system"),
       content=Content([Text("test")]),
-      api_url=url,
       max_steps=2,
       tools=Tools([@job_wait.definition(), @finish.definition()]),
       append_item=(session, item) => session.append(item),

@@ -425,6 +425,7 @@ async fn run_serve(
       [..inputs[:boundary]]
     }
 
+    let attachments = @attachments.AttachmentStore::default()
     fn start_turn(
       content : @agent_session.Content,
       submission_id : String?,
@@ -435,10 +436,18 @@ async fn run_serve(
           ignore(steps.try_put(TurnDone(finished=false)) catch { _ => false })
         }
         let _ = @agent.run_turn_in_scope(
+          client=Client(
+            api_key~,
+            model~,
+            thinking~,
+            api_url?,
+            retry_attempts?,
+            retry_backoff_ms?,
+            attachments~,
+          ),
+          admit_content=content => attachments.admit(content),
           runtime~,
           scope~,
-          api_key~,
-          model~,
           session~,
           content~,
           submission_id?,
@@ -452,10 +461,6 @@ async fn run_serve(
             next
           },
           max_steps?,
-          thinking~,
-          api_url?,
-          retry_attempts?,
-          retry_backoff_ms?,
           tools~,
         ) catch {
           error => {

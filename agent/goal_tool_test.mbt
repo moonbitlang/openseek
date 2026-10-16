@@ -40,15 +40,19 @@ async test "goal met defers the tombstone to a batch-safe boundary" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-met"),
       content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     // No finish check (met disarmed it) and no third round.
@@ -101,15 +105,19 @@ async test "goal met in the final batch flushes before the terminal" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-met-final"),
       content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     assert_eq(bodies.length(), 2)
@@ -135,15 +143,19 @@ async test "goal continuing stands in for the finish check" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-continuing"),
       content=Content([Text("do a slice")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     // The structured continuing answer replaces the goal check: the final
@@ -175,15 +187,19 @@ async test "goal calls without a standing goal or remaining are errors" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("try the goal tool")]),
       append_item=(session, item) => session.append(item),
       max_steps=4,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     let errors = [
@@ -215,15 +231,19 @@ async test "goal met flushes its tombstone on non-finish terminals" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-max-steps"),
       content=Content([Text("finish the objective")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     let events = result.events()
@@ -249,15 +269,19 @@ async test "the goal check names the goal tool when registered" {
       return
     }
     let _ = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=answered_goal_session("goal-tool-check-text"),
       content=Content([Text("do the next chunk")]),
       append_item=(session, item) => session.append(item),
       max_steps=3,
-      api_url=url,
       tools=goal_tools_with_probe(),
     )
     assert_eq(bodies.length(), 2)

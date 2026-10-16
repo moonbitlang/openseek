@@ -647,6 +647,7 @@ fn model_content(content : @protocol.Content) -> @deepseek.Content {
       match part {
         Text(text) => Text(text)
         Image(image) => ImageUrl(url=image.data_url())
+        ImageRef(reference) => ImageUrl(url=reference.url())
       }
     }),
   )

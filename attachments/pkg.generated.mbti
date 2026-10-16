@@ -1,0 +1,35 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/attachments"
+
+import {
+  "moonbitlang/core/debug",
+  "moonbitlang/openseek_protocol",
+}
+
+// Values
+pub fn default_home() -> String raise
+
+pub fn digest(Bytes) -> String
+
+pub async fn sync_directory(String) -> Unit
+
+pub async fn write_atomic(String, Bytes) -> Unit
+
+// Errors
+
+// Types and methods
+pub struct AttachmentStore {
+  // private fields
+} derive(@debug.Debug)
+pub fn AttachmentStore::AttachmentStore(String) -> Self
+pub async fn AttachmentStore::admit(Self, @openseek_protocol.Content) -> @openseek_protocol.Content
+pub fn AttachmentStore::default() -> Self raise
+pub fn AttachmentStore::path(Self, @openseek_protocol.ImageRef) -> String
+pub async fn AttachmentStore::read(Self, @openseek_protocol.ImageRef) -> @openseek_protocol.Image
+pub async fn AttachmentStore::restore(Self, @openseek_protocol.Content) -> @openseek_protocol.Content
+pub async fn AttachmentStore::save(Self, @openseek_protocol.Image) -> @openseek_protocol.ImageRef
+pub fn AttachmentStore::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

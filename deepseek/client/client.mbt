@@ -93,6 +93,8 @@ type API_KEY = String
 /// HTTP client for the DeepSeek chat completions API.
 pub struct Client {
   priv api_key : API_KEY
+  priv attachments : @attachments.AttachmentStore?
+  priv upload_index_dir : String?
   model : @deepseek.Model
   api_url : String
   thinking : @deepseek.ThinkingMode
@@ -128,6 +130,11 @@ pub struct Client {
 /// line never approaches the default anyway.) Pass `0` (or less) to disable.
 /// Defaults to 120s; it applies to the streaming path only (the mode the agent
 /// and TUI use).
+///
+/// `attachments` supplies local image bytes; `upload_index_dir` holds this
+/// provider's persistent file-id index. They default lazily to the host's
+/// `~/.openseek/attachments` and `~/.openseek/deepseek` respectively. Applications
+/// should share the attachment store used for content admission with this client.
 pub fn Client::Client(
   api_key~ : String,
   model~ : @deepseek.Model = default_model,
@@ -136,9 +143,13 @@ pub fn Client::Client(
   retry_attempts~ : Int32 = 5,
   retry_backoff_ms~ : Int32 = 500,
   idle_timeout_ms~ : Int32 = 120_000,
+  attachments? : @attachments.AttachmentStore,
+  upload_index_dir? : String,
 ) -> Client {
   {
     api_key,
+    attachments,
+    upload_index_dir,
     model,
     api_url,
     thinking,
@@ -253,7 +264,8 @@ async fn[T] Client::with_retries(
     max_retry=self.retry_attempts - 1,
     fatal_error=error => {
       let stopped = bail(error)
-      let fatal = stopped || error is (Failure::_ | @http.URIParseError::_)
+      let fatal = stopped ||
+        error is (Failure::_ | @http.URIParseError::_ | RejectedImageFile(_))
       if progress is Some(progress) {
         progress.stop_reason = if stopped {
           StreamStarted
@@ -299,6 +311,54 @@ pub async fn Client::chat(
   if max_tokens is Some(limit) && limit <= 0 {
     fail("max_tokens must be positive")
   }
+  // Validate roles and route before uploading anything.
+  ignore(
+    encode_chat_request_for_endpoint(
+      api_url=self.api_url,
+      model=self.model,
+      tools~,
+      thinking=self.thinking,
+      stream=stream is Some(_),
+      response_format?,
+      messages,
+    ),
+  )
+  let prepared = self.resolve_attachments(messages)
+  self.chat_resolved(prepared, tools~, response_format?, max_tokens?, stream?) catch {
+    RejectedImageFile(detail) => {
+      if !messages.any(message => {
+          message.content.0.any(part => {
+            part is ImageUrl(url~) && url.has_prefix("openseek-attachment:")
+          })
+        }) {
+        fail("DeepSeek rejected image file: \{detail}")
+      }
+      self.invalidate_uploads(prepared)
+      self.chat_resolved(
+        self.resolve_attachments(messages),
+        tools~,
+        response_format?,
+        max_tokens?,
+        stream?,
+      ) catch {
+        RejectedImageFile(detail) =>
+          fail("DeepSeek rejected refreshed image file: \{detail}")
+        error => raise error
+      }
+    }
+    error => raise error
+  }
+}
+
+///|
+async fn Client::chat_resolved(
+  self : Client,
+  messages : Array[@deepseek.ChatMessage],
+  tools~ : Array[@deepseek.ToolDefinition],
+  response_format? : @deepseek.ResponseFormat,
+  max_tokens? : Int32,
+  stream? : StreamHandler,
+) -> @deepseek.ChatResponse {
   let is_streaming = stream is Some(_)
   let body = encode_chat_request_for_endpoint(
     api_url=self.api_url,
@@ -332,6 +392,7 @@ pub async fn Client::chat(
             }
           },
         ) catch {
+          RejectedImageFile(_) as error => raise error
           error => fail(progress.failure_message(self, error))
         }
       }
@@ -359,6 +420,7 @@ async fn Client::chat_attempt(
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
+    check_rejected_file(resp.code, text)
     fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // A 2xx body that fails to parse or decode is a final verdict, not a
@@ -408,6 +470,7 @@ async fn Client::chat_stream_attempt(
     if retryable_status(resp.code) {
       raise HttpStatusError(resp.code, text)
     }
+    check_rejected_file(resp.code, text)
     fail("DeepSeek API error \{resp.code}: \{text}")
   }
   // The stream reader finalizes malformed SSE payloads at its parse site
@@ -427,3 +490,12 @@ async fn Client::chat_stream_attempt(
 #doc(hidden)
 #deprecated
 pub extend Client with Debug::{to_repr}
+
+///|
+/// Change reasoning mode while preserving transport and attachment dependencies.
+pub fn Client::with_thinking(
+  self : Client,
+  thinking : @deepseek.ThinkingMode,
+) -> Client {
+  { ..self, thinking, }
+}

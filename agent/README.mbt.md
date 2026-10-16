@@ -21,16 +21,19 @@ to the lower-level turn APIs.
 The exported surface is small:
 
 ```mbt nocheck
+let attachments = @attachments.AttachmentStore::default()
+let client = @client.Client(api_key~, model=Deepseek(V4Pro), thinking=Max, attachments~)
+
 @agent.run(
-  api_key~,
-  model=Deepseek(V4Pro),
+  client~,
+  admit_content=content => attachments.admit(content),
   task="fix the tests",
   system_prompt_text="You are an OpenSeek agent.",
 )
 
 let persisted = @agent.run_turn_with_append(
-  api_key~,
-  model=Deepseek(V4Pro),
+  client~,
+  admit_content=content => attachments.admit(content),
   session~,
   task="continue",
   append_item=(session, item) => store.append(session, item),
@@ -43,8 +46,8 @@ let persisted = @agent.run_turn_with_append(
   let next = @agent.run_turn_in_scope(
     runtime~,
     scope~,
-    api_key~,
-    model=Deepseek(V4Pro),
+    client~,
+    admit_content=content => attachments.admit(content),
     session~,
     content=Content([Text("continue")]),
     append_item=(session, item) => session.append(item),
@@ -64,6 +67,12 @@ called for every committed item and returns the new authoritative session
 snapshot. Filesystem-backed callers use this to persist progress even if a later
 model call or tool execution fails. Callers that only need an in-memory result
 can return `session.append(item)` from the callback.
+
+Initial input, steering input, and tool results admit image bytes to the
+attachment store before constructing their session items. The persistence hook
+receives references and records the supplied content unchanged. The same
+admitted content enters the live request buffer without reading back the
+last session event.
 
 `run_turn_in_scope` is the long-lived engine API. The caller owns the
 `AgentRuntime`, `AgentTaskScope`, and usually a `Tools` registry built once with
@@ -197,6 +206,15 @@ abort, cancellation, failure, or exhausted steps still end the turn.
 
 ## One-Shot Turns
 
+The application constructs the provider `Client` and supplies `admit_content`
+alongside `append_item`. For filesystem-backed images, construct one
+`AttachmentStore`, pass it to `Client(attachments=...)`, and delegate admission
+to `store.admit(content)`. Admission runs before User/Tool items are created, so
+both persistence and model projection receive the same references. The agent
+never resolves a user directory or reads attachment files. Text-only examples
+below use an identity callback; applications accepting images must persist them.
+
+
 `run_turn_with_append` appends the task as a user event, runs up to `max_steps`
 model/tool iterations, then appends a terminal event. With `max_steps=0`, no
 model request is made; this is useful for documenting the session contract
@@ -210,8 +228,12 @@ async test "zero step run_turn_with_append appends user then exhausted terminal"
     system_prompt="system",
   )
   let result = @agent.run_turn_with_append(
-    api_key="unused-api-key",
-    model=Deepseek(V4Flash),
+    client=Client(
+      api_key="unused-api-key",
+      model=Deepseek(V4Flash),
+      thinking=Max,
+    ),
+    admit_content=content => content,
     session~,
     task="hello",
     append_item=(session, item) => session.append(item),
@@ -247,8 +269,12 @@ async test "run_turn_with_append calls the persistence hook for each item" {
   )
   let appended : Array[String] = []
   let result = @agent.run_turn_with_append(
-    api_key="unused-api-key",
-    model=Deepseek(V4Flash),
+    client=Client(
+      api_key="unused-api-key",
+      model=Deepseek(V4Flash),
+      thinking=Max,
+    ),
+    admit_content=content => content,
     session~,
     task="persist me",
     append_item=(session, item) => {
@@ -280,6 +306,7 @@ engine alive across prompts. The caller supplies:
 
 - one shared `AgentRuntime` for workspace-root context and steering;
 - one `AgentTaskScope` from an enclosing `@async.with_task_group`;
+- a configured `Client` and an `admit_content` callback sharing its attachment store;
 - an `append_item` callback for in-memory or durable session updates;
 - usually one shared `Tools` registry from `build_tools(runtime, scope)`.
 

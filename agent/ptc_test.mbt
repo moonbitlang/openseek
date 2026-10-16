@@ -40,12 +40,16 @@ async test "agent PTC stores nested calls while only selected output reaches the
     let tools = @agent.build_tools(runtime, scope, extra_tools=[tool])
     let session = @async.with_timeout(30000, () => {
       @agent.run_turn_in_scope(
+        client=Client(
+          api_key="offline",
+          model=Deepseek(V4Flash),
+          api_url=url,
+          thinking=Max,
+        ),
+        admit_content=content => content,
         runtime~,
         scope~,
         tools~,
-        api_key="offline",
-        model=Deepseek(V4Flash),
-        api_url=url,
         session=Session(SessionId("ptc-model"), system_prompt="system"),
         content=Content([Text("search")]),
         max_steps=3,
@@ -72,6 +76,9 @@ async test "agent PTC stores nested calls while only selected output reaches the
 
 ///|
 async test "agent cancellation persists completed images and interrupted PTC metadata before terminal" {
+  let home = @fs.tmpdir(prefix="openseek-cancel-image-")
+  let attachments = @attachments.AttachmentStore(home + "/attachments")
+  defer @fs.rmdir(home, recursive=true)
   @async.with_task_group(group => {
     let bodies : Array[String] = []
     guard goal_check_test_server(group, bodies, [
@@ -115,12 +122,18 @@ async test "agent cancellation persists completed images and interrupted PTC met
     let items : Array[@agent_session.SessionItem] = []
     let operation = group.spawn(() => {
       @agent.run_turn_in_scope(
+        client=Client(
+          api_key="offline",
+          model=Deepseek(V4Flash),
+          api_url=url,
+          attachments~,
+          upload_index_dir=home + "/deepseek",
+          thinking=Max,
+        ),
+        admit_content=content => attachments.admit(content),
         runtime~,
         scope~,
         tools~,
-        api_key="offline",
-        model=Deepseek(V4Flash),
-        api_url=url,
         session=Session(SessionId("ptc-cancel"), system_prompt="system"),
         content=Content([Text("block")]),
         max_steps=3,
@@ -139,8 +152,7 @@ async test "agent cancellation persists completed images and interrupted PTC met
     assert_true(
       items.any(item => {
         item is Tool(result) &&
-        result.content().0 is [Text(_), Image(saved)] &&
-        saved == image &&
+        result.content().0 is [Text(_), ImageRef(_)] &&
         result.data()
         is Some(
           {

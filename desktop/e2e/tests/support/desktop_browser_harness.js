@@ -898,6 +898,11 @@ export class DesktopBrowserHarness {
         return { kind: 'source', source: this.packageGraphSource };
       case 'fs.read_directory':
         return { entries: this.directoryEntries[request.params?.path] || [] };
+      case 'fs.read_attachment': {
+        const attachment = this.imageAttachments?.[request.params.attachment_id];
+        if (!attachment) throw new Error('Image attachment is missing');
+        return { kind: 'binary_content', data_base64: attachment.data, media_type: attachment.media_type, sig: request.params.attachment_id };
+      }
       case 'fs.read_file':
         return this.readWorkingFile(request.params || {});
       case 'fs.prepare_attachment': {

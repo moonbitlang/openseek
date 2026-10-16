@@ -235,14 +235,18 @@ async test "pressure on a tool-call response yields immediately" {
       .append(User(UserMessage(Content([Text("prior question")]))))
       .append(Terminal(Finished("prior answer")))
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // One model round plus the checkpoint call: the arming batch is closed
@@ -289,14 +293,18 @@ async test "a final answer at pressure checkpoints then finishes normally" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
     )
     // Compact-on-finish: the completed turn still leaves a checkpoint, but
     // stays a normal success — the terminal carries the REAL answer.
@@ -347,14 +355,18 @@ async test "a steer during compact-on-finish continues the turn compacted" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
     )
     // Steer beats finish once more: the turn CONTINUES instead of sealing,
     // and the continuation request is built from the compacted projection —
@@ -427,14 +439,18 @@ async test "a failed checkpoint with a late steer yields instead of continuing" 
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
     )
     // Continuing would rebuild the next request from the same pressured,
     // uncheckpointed history — so the turn yields fail-open instead. The
@@ -492,14 +508,18 @@ async test "a non-control finish shadow is skip-closed at the ceiling" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools~,
     )
     assert_eq(main_requests, 1)
@@ -543,14 +563,18 @@ async test "a pressured finish batch salvages the completion" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=finish_and_probe_tools(),
     )
     assert_eq(main_requests, 1)
@@ -629,14 +653,18 @@ async test "a pressured custom control completion is salvaged at the ceiling" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools~,
     )
     assert_eq(main_requests, 1)
@@ -693,14 +721,18 @@ async test "a lone control verdict without a finish executes then yields" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools~,
     )
     assert_eq(main_requests, 1)
@@ -751,14 +783,18 @@ async test "a pressured finish tool losing to a steer yields instead" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=finish_and_probe_tools(),
     )
     // Steer beats finish, but is never answered in a starved context: the
@@ -804,14 +840,18 @@ async test "a failing checkpoint on a pressured finish keeps the real answer" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("answer briefly")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
     )
     // Fail-open: the turn still finishes as a normal success, uncompacted.
     assert_eq(checkpoint_requests.length(), 1)
@@ -844,14 +884,18 @@ async test "below the soft ceiling nothing yields" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("do a thing")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     assert_eq(requests, 2)
@@ -882,14 +926,18 @@ async test "a failed checkpoint still yields fail-open" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // The turn still ends at the ceiling — uncompacted — so the next turn's
@@ -938,14 +986,18 @@ async test "a steer arriving under pressure survives the checkpoint verbatim" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // The yield proceeds regardless of the steer: one model round plus the
@@ -1003,15 +1055,19 @@ async test "pressure on the last allowed step yields at the ceiling not as exhau
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("one pressured step")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // Context beats steps: the pressured response yields in its own
@@ -1036,15 +1092,19 @@ async test "an explicit single-step bound still exhausts without pressure" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("one step only")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     assert_eq(main_step, 1)
@@ -1076,14 +1136,18 @@ async test "a soft-ceiling batch executes then yields gracefully" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // The batch EXECUTED — its real result is durable, nothing was skipped —
@@ -1170,14 +1234,18 @@ async test "a budget trip salvages a finish in the remainder" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_and_finish_tools(59_000),
     )
     assert_eq(main_requests, 1)
@@ -1232,14 +1300,18 @@ async test "the running budget stops an overflowing batch mid-way" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_tools(59_000),
     )
     assert_eq(main_requests, 1)
@@ -1287,14 +1359,18 @@ async test "a below-soft batch with huge results yields instead of overflowing" 
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_tools(59_000),
     )
     // The turn yields at the checkpoint instead of sending a doomed second
@@ -1339,14 +1415,18 @@ async test "a finish tool in the soft band compacts and finishes normally" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=finish_and_probe_tools(),
     )
     // The finish ran through the NORMAL path (no salvage needed in the
@@ -1377,14 +1457,18 @@ async test "a failing checkpoint after a soft batch keeps its results" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // Fail-open: the executed result stays durable, the turn still yields.
@@ -1428,14 +1512,18 @@ async test "a steer arriving during the checkpoint request is preserved" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("keep grinding")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=probe_tools(["result-1"]),
     )
     // The second drain persists it — uncovered, after the summary — instead
@@ -1486,14 +1574,18 @@ async test "a budget-tripped salvaged finish still checkpoints" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_and_finish_tools(59_000),
     )
     assert_eq(main_requests, 1)
@@ -1548,14 +1640,18 @@ async test "a steer during a salvaged finish's checkpoint continues once" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("wrap it up")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_and_finish_tools(59_000),
     )
     assert_eq(main_requests, 2)
@@ -1610,14 +1706,18 @@ async test "an oversized tool result is clamped at the loop" {
       system_prompt="system",
     )
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("flood me")]),
       append_item=(session, item) => session.append(item),
-      api_url=url,
       tools=flood_tools(70_000),
     )
     let mut clamped = false

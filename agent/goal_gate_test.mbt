@@ -54,15 +54,19 @@ async test "a met goal runs the gate once before the next request" {
     }
     let calls : Array[(String, String)] = []
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-basic"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition()]),
       on_goal_met=(goal, baseline) => {
         calls.push((goal, "\{Repr(baseline)}"))
@@ -101,15 +105,19 @@ async test "a same-batch met plus finish continues through the gate" {
     }
     let mut gate_calls = 0
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-same-batch"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition(), @finish.definition()]),
       on_goal_met=(_goal, _baseline) => {
         gate_calls += 1
@@ -145,15 +153,19 @@ async test "a failing gate folds into an unavailable notice" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-fail"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition()]),
       on_goal_met=(_goal, _baseline) => fail("reviewer exploded"),
     )
@@ -184,15 +196,19 @@ async test "no callback means no gate and no notice" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-off"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition()]),
     )
     assert_eq(review_notice_count(result), 0)
@@ -219,15 +235,19 @@ async test "a replacement goal cancels the pending review before launch" {
     }
     let mut gate_calls = 0
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-superseded"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([
         @goal.definition(),
         AgentToolDefinition(
@@ -276,15 +296,19 @@ async test "a failed checkpoint neither resurrects the goal nor loses the audit"
     }
     let mut gate_calls = 0
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-failed-checkpoint"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition(), @finish.definition()]),
       on_goal_met=(_goal, _baseline) => {
         gate_calls += 1
@@ -313,15 +337,19 @@ async test "a last-step met still gets its audit durably" {
     }
     let mut gate_calls = 0
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-last-step"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
       tools=Tools([@goal.definition(), @finish.definition()]),
       on_goal_met=(_goal, _baseline) => {
         gate_calls += 1
@@ -361,15 +389,19 @@ async test "a met claim yielding at the ceiling still gets its audit" {
     }
     let mut gate_calls = 0
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-yield"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition()]),
       on_goal_met=(_goal, _baseline) => {
         gate_calls += 1
@@ -403,15 +435,19 @@ async test "an in-flight audit completes before a queued replacement applies" {
       return
     }
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=baselined_goal_session("gate-inflight"),
       content=Content([Text("wrap up the goal")]),
       append_item=(session, item) => session.append(item),
       max_steps=6,
-      api_url=url,
       tools=Tools([@goal.definition()]),
       on_goal_met=(_goal, _baseline) => {
         // The user replaces the goal while the reviewer is mid-flight.

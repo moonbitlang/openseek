@@ -70,15 +70,19 @@ async test "agent executes each normal tool call in a response batch" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("run both tools")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
       tools~,
     )
     assert_true(first_called)
@@ -163,15 +167,19 @@ async test "max-step exhaustion preserves continued session state" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session~,
       content=Content([Text("run one tool then exhaust")]),
       append_item=(session, item) => session.append(item),
       max_steps=1,
-      api_url=url,
       tools~,
     )
     let events = result.events()
@@ -219,10 +227,15 @@ async test "agent failure terminal uses the latest persisted session" {
       ),
     ])
     let _ = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime~,
       scope~,
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=initial,
       content=Content([Text("run the append failure tool")]),
       append_item=(session, item) => {
@@ -236,7 +249,6 @@ async test "agent failure terminal uses the latest persisted session" {
         next
       },
       max_steps=1,
-      api_url=url,
       tools~,
     ) catch {
       error => {

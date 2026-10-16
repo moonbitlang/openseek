@@ -29,6 +29,7 @@ pub async fn[T] execute_kind(
   workspace_root~ : String = ".",
   append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
 ) -> T? {
+  let attachments = @attachments.AttachmentStore::default()
   let captured : Ref[T?] = { val: None, }
   let tools = tools(captured)
   let session = @agent_session.Session(SessionId(session_id), system_prompt~)
@@ -41,18 +42,22 @@ pub async fn[T] execute_kind(
   }
   let _ : @agent_session.Session = @async.with_task_group() <| group => {
     @agent.run_turn_in_scope(
+      client=Client(
+        api_key~,
+        model~,
+        thinking~,
+        api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
+        attachments~,
+      ),
+      admit_content=content => attachments.admit(content),
       runtime=AgentRuntime(workspace_root~),
       scope=AgentTaskScope(group),
-      api_key~,
-      model~,
       session~,
       content=Content([Text(task)]),
       append_item=append,
       max_steps~,
-      thinking~,
-      api_url?,
-      retry_attempts?,
-      retry_backoff_ms?,
       tools~,
     )
   }

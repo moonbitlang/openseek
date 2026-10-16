@@ -24,6 +24,7 @@ async fn run_task_turn(
   session_scratch_dir~ : String,
   delegate~ : Bool,
 ) -> Unit {
+  let attachments = @attachments.AttachmentStore::default()
   @async.with_task_group() <| group => {
     // `run` reads no commands, so there is nobody to ask: `--approval ask` is
     // refused where `run_task_command` reads it, and the surviving
@@ -89,10 +90,18 @@ async fn run_task_turn(
       None
     }
     @agent.run_turn_in_scope(
+      client=Client(
+        api_key~,
+        model~,
+        thinking~,
+        api_url?,
+        retry_attempts?,
+        retry_backoff_ms?,
+        attachments~,
+      ),
+      admit_content=content => attachments.admit(content),
       runtime~,
       scope~,
-      api_key~,
-      model~,
       session~,
       content=Content([Text(task)]),
       append_item=(current, item) => {
@@ -101,10 +110,6 @@ async fn run_task_turn(
         next
       },
       max_steps?,
-      thinking~,
-      api_url?,
-      retry_attempts?,
-      retry_backoff_ms?,
       tools~,
       on_goal_met?,
     )

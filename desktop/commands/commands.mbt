@@ -958,3 +958,9 @@ pub let session_search : Command[
   @protocol.SessionSearchPayload,
   @protocol.SessionSearchReply,
 ] = Command("session.search")
+
+///|
+/// Read a verified image from the owning host's user-level attachment store.
+pub let fs_read_attachment : Command[@wire.ImageRef, @protocol.ReadFileReply] = Command(
+  "fs.read_attachment",
+)

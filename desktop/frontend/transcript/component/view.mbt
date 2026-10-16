@@ -883,7 +883,16 @@ fn supported_image_content_url(url : String) -> Bool {
 
 ///|
 fn image_content_view(locale~ : @i18n.Locale, url : String) -> @html.Html {
-  if supported_image_content_url(url) {
+  if url.has_prefix("openseek-attachment:") {
+    @html.div(class="user-images", [
+      @html.img(
+        alt=ui(locale, AttachedImage),
+        loading="lazy",
+        class="user-image transcript-image pending",
+        attrs=@html.Attrs::build().data_set("transcript-image", url),
+      ),
+    ])
+  } else if supported_image_content_url(url) {
     @html.div(class="user-images", [
       @html.img(
         src=url,

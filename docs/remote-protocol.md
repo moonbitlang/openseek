@@ -550,6 +550,7 @@ picker-specific starting-point behavior.
 
 | method | params | result |
 |---|---|---|
+| `fs.read_attachment` | `{type: "image", attachment_id, media_type, bytes}` | `{kind: "binary_content", data_base64, media_type, sig}`; verifies bytes in the owning host’s user attachment store |
 | `fs.read_file` | `{path, root?}` (`path` is absolute without `root`; otherwise `root` is absolute and `path` is relative to it) | `{kind: "content", content, absolute, sig}` \| `{kind: "binary_content", data_base64, media_type}` \| `{kind: "binary"}` \| `{kind: "oversized"}` |
 | `fs.read_directory` | `{path}` (absolute directory) | `{entries: [{name, is_dir}]}`, directories first |
 | `fs.search_files` | `{path, cache_key, query, max_results, generation}` (`path` absolute root) | `{files: […], from_cache, limit_hit, cancelled}` — VS Code-style cache-session query returning root-relative paths; `max_results: 0` populates without returning rows, Quick Open requests at most 512 |

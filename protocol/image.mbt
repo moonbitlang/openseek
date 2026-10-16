@@ -1,6 +1,6 @@
 ///|
-/// Immutable image bytes. JSONL stores base64; no path or provider ID is needed
-/// to replay the image. Constructors check size and raster signatures, not a
+/// Immutable input image bytes. Durable stores replace these with ImageRef
+/// before writing new events. Constructors check size and raster signatures, not a
 /// full pixel decode. Images are never resized or re-encoded by this module.
 pub struct Image {
   media_type : String

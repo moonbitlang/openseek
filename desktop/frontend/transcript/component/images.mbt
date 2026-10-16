@@ -1,6 +1,6 @@
-// Lazy, bounded local-image projection for transcript Markdown. The durable
-// transcript keeps the model-authored path; this component cache contains only
-// display data for the conversation currently mounted in the page.
+// Lazy, bounded projection for Markdown images and durable image attachments.
+// The transcript keeps paths or attachment references; this component cache
+// contains only display data for the conversation currently mounted in the page.
 
 ///|
 fn transcript_image_observer(
@@ -199,6 +199,9 @@ fn ImageOwner::read_target(
   self : ImageOwner,
   path : String,
 ) -> @protocol.ReadFilePayload? {
+  if path.has_prefix("openseek-attachment:") {
+    return Some({ path, root: None, })
+  }
   if @resource.of_path(self.channel, path) is Some(target) {
     return Some({ path: target.path, root: None, })
   }
@@ -210,9 +213,8 @@ fn ImageOwner::read_target(
 }
 
 ///|
-/// Read through the ordinary filesystem command. The request carries either an
-/// absolute path or a relative path with its explicit root; the host resolves
-/// that address, enforces the shared limit, and recognizes raster signatures.
+/// Read attachments by identity and Markdown images by their filesystem path.
+/// The owning host resolves the address and validates the image bytes.
 fn ImageOwner::read_image(
   self : ImageOwner,
   target : @protocol.ReadFilePayload,
@@ -221,11 +223,17 @@ fn ImageOwner::read_image(
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = @interop.bridge_request(
-        self.channel,
-        @commands.fs_read_file,
-        target,
-      ) catch {
+      let reply = try {
+        if path.has_prefix("openseek-attachment:") {
+          @interop.bridge_request(
+            self.channel,
+            @commands.fs_read_attachment,
+            @wire.ImageRef::from_url(path),
+          )
+        } else {
+          @interop.bridge_request(self.channel, @commands.fs_read_file, target)
+        }
+      } catch {
         _ => {
           scheduler.add(emit(ImageResolved(self, path, ImageReadUnavailable)))
           return

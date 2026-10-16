@@ -27,26 +27,20 @@ pub let plan_reminder_after_steps : Int32 = 50
 ///
 /// `system_prompt_text` is required. Prompt selection is intentionally owned by
 /// the application layer, not by `agent`; this package does not depend on the
-/// `prompt` package. `thinking` defaults to `Max`. `workspace_root` defaults to
-/// `"."` and is passed into the per-turn `AgentRuntime`; local file and shell
-/// tools resolve relative paths against that root. `api_url` is forwarded to
-/// the DeepSeek client and is mainly useful for tests or compatible endpoints,
-/// as are `retry_attempts` and `retry_backoff_ms`; omit either to keep the
-/// client's own default.
+/// `prompt` package. The caller configures `client` and supplies `admit_content`
+/// for image persistence, just as it does for `run_turn_in_scope`.
+/// `workspace_root` defaults to `"."` and is passed into the per-turn
+/// `AgentRuntime`; local file and shell tools resolve paths against that root.
 ///
 /// Use `run_turn_with_append` when every committed event must be persisted as
 /// the turn progresses, or `run_turn_in_scope` when runtime/tool state must span
 /// turns.
 pub async fn run(
-  api_key~ : String,
-  model~ : @deepseek.Model,
+  client~ : @client.Client,
+  admit_content~ : async (@agent_session.Content) -> @agent_session.Content,
   task~ : String,
   system_prompt_text~ : String,
   max_steps~ : Int32 = unbounded_max_steps,
-  thinking~ : @deepseek.ThinkingMode = Max,
-  api_url? : String,
-  retry_attempts? : Int32,
-  retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
 ) -> Unit {
   let session = @agent_session.Session(
@@ -55,16 +49,12 @@ pub async fn run(
   )
   ignore(
     run_turn_with_append(
-      api_key~,
-      model~,
+      client~,
+      admit_content~,
       session~,
       task~,
       append_item=(session, item) => session.append(item),
       max_steps~,
-      thinking~,
-      api_url?,
-      retry_attempts?,
-      retry_backoff_ms?,
       workspace_root~,
     ),
   )

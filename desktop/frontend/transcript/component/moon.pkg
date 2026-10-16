@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/frontend/composer",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol/command_context",

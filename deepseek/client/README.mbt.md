@@ -99,8 +99,17 @@ this requires no Files API upload or remote file lifetime management.
 
 The caller must select an image-capable model and an endpoint accepting file
 references; file IDs are scoped to the uploading API key.
-This package does not resize images, cache file IDs, delete uploads, or fall
-back to base64. Callers own local image retention and remote file lifetimes.
+For `openseek-attachment:` references, the client reads the original bytes from
+its `attachments` store and resolves them through the Files API. The persistent
+mapping lives in `upload_index_dir` and is shared across clients; records are
+scoped by endpoint and credential digest. The defaults are
+`~/.openseek/attachments` and `~/.openseek/deepseek`. Applications should pass the
+same `AttachmentStore` used for content admission. `with_thinking` preserves
+both storage dependencies when deriving a summary client.
+
+Uploads run outside the short index-write lock. Cached IDs refresh near expiry
+or once after an explicit invalid/expired file response. Local images retain
+their original bytes; remote uploads have bounded expiry.
 Limits follow the [DeepSeek Files API documentation](https://api-docs.deepseek.com/zh-cn/guides/files_api/).
 
 ## Configuration
@@ -133,6 +142,8 @@ test "construct DeepSeek client configuration" {
     content=(
       #|{
       #|  api_key: ...,
+      #|  attachments: None,
+      #|  upload_index_dir: None,
       #|  model: Deepseek(V4Flash),
       #|  api_url: "https://api.deepseek.com/chat/completions",
       #|  thinking: Max,

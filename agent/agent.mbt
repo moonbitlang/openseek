@@ -124,16 +124,12 @@ fn PlanCadence::record_plan_success(
 /// then called this without it would have parsed the flag and silently dropped
 /// it, which is what best-of-N runs did.
 pub async fn run_turn_with_append(
-  api_key~ : String,
-  model~ : @deepseek.Model,
+  client~ : @client.Client,
+  admit_content~ : async (@agent_session.Content) -> @agent_session.Content,
   session~ : @agent_session.Session,
   task~ : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps~ : Int32 = unbounded_max_steps,
-  thinking~ : @deepseek.ThinkingMode = Max,
-  api_url? : String,
-  retry_attempts? : Int32,
-  retry_backoff_ms? : Int32,
   workspace_root~ : String = ".",
   approval? : @agent_runtime.ApprovalChannel,
 ) -> @agent_session.Session {
@@ -141,16 +137,12 @@ pub async fn run_turn_with_append(
     run_turn_in_scope(
       runtime=AgentRuntime(workspace_root~, approval?),
       scope=AgentTaskScope(group),
-      api_key~,
-      model~,
+      client~,
+      admit_content~,
       session~,
       content=Content([Text(task)]),
       append_item~,
       max_steps~,
-      thinking~,
-      api_url?,
-      retry_attempts?,
-      retry_backoff_ms?,
     )
   }
 }
@@ -161,8 +153,8 @@ async test "run_turn_with_append closes failed persisted turns" {
   let mut calls = 0
   let mut persisted = initial
   let _ = run_turn_with_append(
-    api_key="unused",
-    model=Deepseek(V4Pro),
+    client=Client(api_key="unused", model=Deepseek(V4Pro), thinking=Max),
+    admit_content=content => content,
     session=initial,
     task="hello",
     append_item=(session, item) => {
@@ -239,45 +231,30 @@ async test "run_turn_with_append closes failed persisted turns" {
 ///
 /// `tools` should normally be a registry built once with `build_tools(runtime,
 /// scope)` for a long-lived engine. If `tools` is omitted, this function builds
-/// a fresh registry for this call only. `api_url`, `retry_attempts` and
-/// `retry_backoff_ms` are forwarded to the DeepSeek clients this turn builds;
-/// omitting a retry argument leaves that client default in place.
+/// a fresh registry for this call only. The caller configures the provider
+/// client; summary requests reuse its dependencies with thinking disabled.
+/// Images are admitted before their User/Tool items enter the session.
+/// `admit_content` persists images and returns references before session items
+/// are constructed. Configure `client` to read from that same store. Admission
+/// failures propagate without appending the corresponding User/Tool item.
 /// The caller owns the lifetime of `runtime`, `scope`, and any shared
 /// `tools` registry passed here. Provider reasoning fragments always join the
 /// transient event stream; consumers choose whether and how to present them.
 pub async fn[X] run_turn_in_scope(
   runtime~ : @agent_runtime.AgentRuntime,
   scope~ : @agent_runtime.AgentTaskScope[X],
-  api_key~ : String,
-  model~ : @deepseek.Model,
+  client~ : @client.Client,
+  admit_content~ : async (@agent_session.Content) -> @agent_session.Content,
   session~ : @agent_session.Session,
   content~ : @agent_session.Content,
   submission_id? : String,
   append_item~ : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   max_steps~ : Int32 = unbounded_max_steps,
-  thinking~ : @deepseek.ThinkingMode = Max,
-  api_url? : String,
-  retry_attempts? : Int32,
-  retry_backoff_ms? : Int32,
   tools? : @agent_tool.Tools,
   on_goal_met? : async (String, @agent_session.GoalBaseline?) -> String?,
 ) -> @agent_session.Session {
-  let client = @client.Client(
-    api_key~,
-    model~,
-    thinking~,
-    api_url?,
-    retry_attempts?,
-    retry_backoff_ms?,
-  )
-  let summary_client = @client.Client(
-    api_key~,
-    model~,
-    api_url?,
-    thinking=No,
-    retry_attempts?,
-    retry_backoff_ms?,
-  )
+  let summary_client = client.with_thinking(No)
+  let content = admit_content(content)
   let session = session
     |> append_item(User(UserMessage(content, submission_id?)))
   let tools = try {
@@ -301,6 +278,7 @@ pub async fn[X] run_turn_in_scope(
     append_item~,
     session~,
     on_goal_met?,
+    admit_content~,
   ).run(session, max_steps)
 }
 

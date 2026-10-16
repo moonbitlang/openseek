@@ -43,15 +43,19 @@ async test "each provider response's usage is recorded on its assistant item" {
       ),
     ])
     let result = @agent.run_turn_in_scope(
+      client=Client(
+        api_key="test-key",
+        model=Deepseek(V4Flash),
+        api_url=url,
+        thinking=Max,
+      ),
+      admit_content=content => content,
       runtime=AgentRuntime(),
       scope=AgentTaskScope(group),
-      api_key="test-key",
-      model=Deepseek(V4Flash),
       session=Session(SessionId("usage"), system_prompt="s"),
       content=Content([Text("go")]),
       append_item=(session, item) => session.append(item),
       max_steps=2,
-      api_url=url,
       tools~,
     )
     // One usage per response, on the item that first records it: the

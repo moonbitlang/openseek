@@ -1,4 +1,10 @@
 import {
+  "moonbitlang/openseek/attachments",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async/fs",
+  "moonbitlang/async/semaphore",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek/deepseek/client/internal/form_data",
   "moonbitlang/async",

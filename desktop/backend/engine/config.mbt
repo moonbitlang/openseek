@@ -618,6 +618,13 @@ fn prompt_content(
 ) -> @wire.Content raise EngineError {
   let parts : Array[@wire.ContentPart] = [Text(text)]
   for url in images {
+    if url.has_prefix("openseek-attachment:") {
+      let reference = @wire.ImageRef::from_url(url) catch {
+        error => raise EngineError("Invalid image attachment: \{error}")
+      }
+      parts.push(ImageRef(reference))
+      continue
+    }
     let image = @wire.Image::from_data_url(url) catch {
       error => raise EngineError("Invalid image: \{@debug.Repr(error)}")
     }
