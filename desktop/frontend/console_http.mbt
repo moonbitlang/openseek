@@ -1,4 +1,5 @@
-// The console uses the relay's session-cookie HTTP API. Async's browser
+// The console uses its own account Bearer for relay operations; the local
+// development console retains its launch-scoped cookie. Async's browser
 // transport preserves HTTP status codes, including the signed-out 401 signal.
 
 ///|
@@ -7,6 +8,7 @@ fn console_request(
   method_ : @http.RequestMethod,
   on_done : (Int32, String) -> Unit,
   on_fail : (String) -> Unit,
+  token? : String,
 ) -> Unit {
   @js.Promise::from_async(() => {
     let url = match resolve_browser_url(path) {
@@ -16,7 +18,11 @@ fn console_request(
         return
       }
     }
-    let (response, body) = @http.request(url, method_, {}, "") catch {
+    let headers : Map[@http.CaseInsensitiveString, String] = Map([])
+    if token is Some(token) {
+      headers["Authorization"] = "Bearer " + token
+    }
+    let (response, body) = @http.request(url, method_, headers, "") catch {
       error => {
         on_fail(error.to_string())
         return
@@ -78,16 +84,23 @@ fn parse_console_me(body : String) -> ConsoleMsg? {
 }
 
 ///|
-/// GET `/v1/devices`. A 401 here means the session expired between
+/// GET `/v2/devices` for an account, or the local Dev console's v1 roster.
+/// A 401 here means the session expired between
 /// requests — fold it into the signed-out state rather than an error.
 fn fetch_console_roster(
   dispatch : @cmd.Emit[Msg],
   generation : Int32,
+  token? : String,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     console_request(
-      "/v1/devices",
+      if token is Some(_) {
+        "/v2/devices"
+      } else {
+        "/v1/devices"
+      },
       Get,
+      token?,
       (status, body) => {
         scheduler.add(
           dispatch(
@@ -102,7 +115,7 @@ fn fetch_console_roster(
                         generation~,
                       )
                   }
-                401 => MeUnauthorized
+                401 => RosterUnauthorized(generation~, token~)
                 _ =>
                   RosterFailed(
                     message="the device list answered HTTP \{status}",
@@ -141,20 +154,24 @@ fn sign_out_error(status : Int32, body : String) -> String {
 }
 
 ///|
-/// POST `/v1/auth/logout`.
-fn sign_out(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
+/// POST `/v2/auth/logout` for an account; the local Dev console uses v1.
+fn sign_out(dispatch : @cmd.Emit[Msg], token? : String) -> @cmd.Cmd {
   @cmd.custom_cmd(scheduler => {
     console_request(
-      "/v1/auth/logout",
+      if token is Some(_) {
+        "/v2/auth/logout"
+      } else {
+        "/v1/auth/logout"
+      },
       Post,
+      token?,
       (status, body) => {
         scheduler.add(
           dispatch(
             Console(
               match status {
-                200 | 204 => SignOutDone
-                401 => MeUnauthorized
-                _ => SignOutFailed(sign_out_error(status, body))
+                200 | 204 | 401 => SignOutDone(token~)
+                _ => SignOutFailed(sign_out_error(status, body), token~)
               },
             ),
           ),
@@ -163,7 +180,9 @@ fn sign_out(dispatch : @cmd.Emit[Msg]) -> @cmd.Cmd {
       detail => {
         scheduler.add(
           dispatch(
-            Console(SignOutFailed("the relay is unreachable: \{detail}")),
+            Console(
+              SignOutFailed("the relay is unreachable: \{detail}", token~),
+            ),
           ),
         )
       },

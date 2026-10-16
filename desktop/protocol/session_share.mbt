@@ -42,18 +42,11 @@ pub extend SessionShareReply with FromJson::{from_json}
 pub extend SessionShareReply with ToJson::{to_json}
 
 ///|
-pub(all) struct SessionSharePayload {
-  source : SessionExportPayload
-  generation : Int32
-} derive(Debug, Eq)
-
-///|
-/// Upload percentage measures the rendered text consumed by the transport,
-/// without scanning or encoding the complete export ahead of time.
+/// Publication stages; no client claims unobservable upload byte progress.
 pub(all) enum ShareProgress {
   Preparing
   Connecting(attempt~ : Int32)
-  Uploading(attempt~ : Int32, percent~ : Int32)
+  Uploading(attempt~ : Int32)
   Waiting(attempt~ : Int32)
 } derive(Debug, Eq)
 
@@ -62,18 +55,6 @@ pub(all) struct SessionShareProgress {
   generation : Int32
   progress : ShareProgress
 } derive(Debug, Eq)
-
-///|
-pub extend SessionSharePayload with Debug::{to_repr}
-
-///|
-pub extend SessionSharePayload with Eq::{equal, not_equal}
-
-///|
-pub extend SessionSharePayload with ToJson::{to_json}
-
-///|
-pub extend SessionSharePayload with FromJson::{from_json}
 
 ///|
 pub extend ShareProgress with Debug::{to_repr}
@@ -100,24 +81,6 @@ pub extend SessionShareProgress with ToJson::{to_json}
 pub extend SessionShareProgress with FromJson::{from_json}
 
 ///|
-/// Both fields are required; unknown fields are ignored.
-pub impl FromJson for SessionSharePayload with fn from_json(json, path) {
-  let object = JsonObject::decode(json, path, "session share request")
-  {
-    source: @json.from_json(
-      object.required_json("source"),
-      path=path.add_key("source"),
-    ),
-    generation: object.required_int("generation"),
-  }
-}
-
-///|
-pub impl ToJson for SessionSharePayload with fn to_json(self) {
-  { "source": self.source.to_json(), "generation": self.generation }
-}
-
-///|
 /// Preserve the window-local tagged progress format. Stage payload fields are
 /// required, null and malformed fields are rejected, and extra fields ignored.
 pub impl FromJson for ShareProgress with fn from_json(json, path) {
@@ -137,10 +100,7 @@ pub impl FromJson for ShareProgress with fn from_json(json, path) {
         path.add_index(1),
         "share upload progress",
       )
-      Uploading(
-        attempt=object.required_int("attempt"),
-        percent=object.required_int("percent"),
-      )
+      Uploading(attempt=object.required_int("attempt"))
     }
     ["Waiting", fields] => {
       let object = JsonObject::decode(
@@ -159,8 +119,7 @@ pub impl ToJson for ShareProgress with fn to_json(self) {
   match self {
     Preparing => "Preparing"
     Connecting(attempt~) => ["Connecting", { "attempt": attempt }]
-    Uploading(attempt~, percent~) =>
-      ["Uploading", { "attempt": attempt, "percent": percent }]
+    Uploading(attempt~) => ["Uploading", { "attempt": attempt }]
     Waiting(attempt~) => ["Waiting", { "attempt": attempt }]
   }
 }
@@ -181,3 +140,95 @@ pub impl FromJson for SessionShareProgress with fn from_json(json, path) {
 pub impl ToJson for SessionShareProgress with fn to_json(self) {
   { "generation": self.generation, "progress": self.progress.to_json() }
 }
+
+///|
+/// Native-window account authority or a single remote upload permission.
+pub(all) enum ShareAuthorization {
+  LocalAccount(user_id~ : String)
+  UploadGrant(upload_token~ : String)
+} derive(Eq, Debug)
+
+///|
+/// A share request carries source metadata; the owning host captures the files.
+pub(all) struct SessionSharePayload {
+  generation : Int32
+  source : SessionExportPayload
+  idempotency_key : String
+  authorization : ShareAuthorization
+} derive(Eq, Debug)
+
+///|
+pub impl FromJson for ShareAuthorization with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "share authorization")
+  match object.required_string("kind") {
+    "local_account" => LocalAccount(user_id=object.required_string("user_id"))
+    "upload_grant" => {
+      let upload_token = object.required_string("upload_token")
+      guard upload_token.has_prefix("sug_") else {
+        raise JsonDecodeError((path, "expected a share upload grant"))
+      }
+      UploadGrant(upload_token~)
+    }
+    _ => raise JsonDecodeError((path, "invalid share authorization"))
+  }
+}
+
+///|
+pub impl ToJson for ShareAuthorization with fn to_json(self) {
+  match self {
+    LocalAccount(user_id~) => { "kind": "local_account", "user_id": user_id }
+    UploadGrant(upload_token~) =>
+      { "kind": "upload_grant", "upload_token": upload_token }
+  }
+}
+
+///|
+pub impl FromJson for SessionSharePayload with fn from_json(json, path) {
+  let object = JsonObject::decode(json, path, "session share request")
+  {
+    generation: object.required_int("generation"),
+    source: @json.from_json(
+      object.required_json("source"),
+      path=path.add_key("source"),
+    ),
+    idempotency_key: object.required_string("idempotency_key"),
+    authorization: @json.from_json(
+      object.required_json("authorization"),
+      path=path.add_key("authorization"),
+    ),
+  }
+}
+
+///|
+pub impl ToJson for SessionSharePayload with fn to_json(self) {
+  {
+    "generation": self.generation,
+    "source": self.source.to_json(),
+    "idempotency_key": self.idempotency_key,
+    "authorization": self.authorization.to_json(),
+  }
+}
+
+///|
+pub extend ShareAuthorization with Eq::{equal, not_equal}
+
+///|
+pub extend ShareAuthorization with Debug::{to_repr}
+
+///|
+pub extend SessionSharePayload with Eq::{equal, not_equal}
+
+///|
+pub extend SessionSharePayload with Debug::{to_repr}
+
+///|
+pub extend ShareAuthorization with FromJson::{from_json}
+
+///|
+pub extend ShareAuthorization with ToJson::{to_json}
+
+///|
+pub extend SessionSharePayload with FromJson::{from_json}
+
+///|
+pub extend SessionSharePayload with ToJson::{to_json}

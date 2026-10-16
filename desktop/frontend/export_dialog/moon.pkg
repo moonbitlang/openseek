@@ -1,7 +1,10 @@
 import {
+  "moonbitlang/editor/base/browser" @base_browser,
+  "moonbitlang/async/http",
+  "moonbitlang/core/encoding/utf8",
+  "moonbit-community/rabbita/dom",
   "openseek_desktop/frontend/i18n",
   "moonbitlang/core/debug",
-  "moonbitlang/core/json",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbit-community/rabbita/dialog",

@@ -8,7 +8,8 @@ priv suberror BridgeSubscription {
   RemoteBridge(
     dispatch~ : @cmd.Emit[Event],
     device_id~ : String,
-    websocket_epoch~ : Int32
+    websocket_epoch~ : Int32,
+    account~ : @protocol.AccountSession?
   )
 }
 
@@ -31,13 +32,14 @@ pub fn remote_connection(
   websocket_epoch~ : Int32,
   reconnect_attempt~ : Int32,
   dispatch~ : @cmd.Emit[Event],
+  account~ : @protocol.AccountSession?,
 ) -> @sub.Sub {
   @sub.custom_sub(
     RemoteBridgeSub::subscription_key(
       device_id, websocket_epoch, reconnect_attempt,
     ),
     @sub.Global,
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~),
+    RemoteBridge(dispatch~, device_id~, websocket_epoch~, account~),
     bridge_sub_loader,
   )
 }
@@ -61,8 +63,10 @@ fn bridge_sub_loader(
         },
       })
     }
-    RemoteBridge(dispatch~, device_id~, websocket_epoch~) => {
-      let running = RemoteBridgeSub(device_id, websocket_epoch, dispatch)
+    RemoteBridge(dispatch~, device_id~, websocket_epoch~, account~) => {
+      let running = RemoteBridgeSub(
+        device_id, websocket_epoch, account, dispatch,
+      )
       running.install(scheduler)
       Some({
         unload: _ => running.unload(),

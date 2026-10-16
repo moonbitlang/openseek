@@ -57,10 +57,18 @@ pub fn page_ws_origin() -> String? {
 
 ///|
 /// A device's protocol WebSocket URL: same origin, the relay's
-/// `/v1/devices/<device>/ws` route.
-fn ws_url(device : String) -> String? {
+/// `/v2/devices/<device>/ws` ticket route. The local Dev console
+/// uses its launch cookie on the existing v1 route, without a ticket.
+fn ws_url(device : String, ticket? : String) -> String? {
   guard page_ws_origin() is Some(origin) else { return None }
-  Some("\{origin}/v1/devices/\{device}/ws")
+  let version = if ticket is Some(_) { "v2" } else { "v1" }
+  let url = "\{origin}/\{version}/devices/\{device}/ws"
+  Some(
+    match ticket {
+      Some(ticket) => url + "?ticket=" + @uri.encode_component(ticket)
+      None => url
+    },
+  )
 }
 
 ///|
@@ -71,10 +79,11 @@ fn ws_url(device : String) -> String? {
 /// user-facing message.
 pub fn ws_connect(
   device : String,
+  ticket? : String,
   on_notification~ : (@protocol.Notification) -> Unit,
   on_down~ : () -> Unit,
 ) -> Unit {
-  guard ws_url(device) is Some(url) else {
+  guard ws_url(device, ticket?) is Some(url) else {
     on_down()
     return
   }
@@ -422,4 +431,20 @@ test "a call that never left is not the same as one that went unanswered" {
     ] {
     assert_false(bridge_error_is_definite(error))
   }
+}
+
+///|
+test "account tickets use v2 while the local Dev console keeps its v1 socket" {
+  let previous : @js.Value = @js.globalThis.get_with_string("location")
+  defer @js.globalThis.set_with_string("location", previous)
+  let location = @js.Value::from_json({
+    "host": "relay.test",
+    "protocol": "https:",
+  })
+  @js.globalThis.set_with_string("location", location)
+  assert_eq(
+    ws_url("device-a", ticket="wst_+/="),
+    Some("wss://relay.test/v2/devices/device-a/ws?ticket=wst_%2B%2F%3D"),
+  )
+  assert_eq(ws_url("host"), Some("wss://relay.test/v1/devices/host/ws"))
 }

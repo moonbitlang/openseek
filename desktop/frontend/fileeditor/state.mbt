@@ -469,6 +469,9 @@ pub(all) struct State {
   office_selection : OfficeSelectionPreview?
   // None when no draft exists; Some("") is an open, empty draft.
   office_selection_comment : String?
+  office_region_request : OfficeRegionRequest?
+  office_region : OfficeRegionDraft?
+  office_region_id : Int64
   pdf_capture : PdfCaptureDraft?
   pdf_capture_batch : Bool
   // Feedback identity is independent of the image contents and draft text.
@@ -663,6 +666,9 @@ pub fn State::empty() -> State {
     office_prefer_system_fonts: false,
     office_selection: None,
     office_selection_comment: None,
+    office_region_request: None,
+    office_region: None,
+    office_region_id: 0L,
     pdf_capture: None,
     pdf_capture_batch: false,
     pdf_capture_id: 0L,
@@ -971,6 +977,15 @@ pub(all) enum Msg {
     generation~ : Int32,
     selection~ : String
   )
+  OfficeRegionRequested
+  OfficeRegionFinished(
+    OfficeRegionRequest,
+    Result[@office_capture.Capture, String]?
+  )
+  OfficeRegionFeedbackChanged(OfficeRegionPreview, String)
+  OfficeRegionBatchChanged(OfficeRegionPreview, Bool)
+  OfficeRegionSubmissionDeclined(OfficeRegionPreview)
+  OfficeRegionDismissed(OfficeRegionPreview)
   PdfCaptureRequested
   PdfCaptureFinished(
     owner~ : @interop.ConversationKey,

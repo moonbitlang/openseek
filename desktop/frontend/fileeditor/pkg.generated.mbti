@@ -16,6 +16,7 @@ import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
+  "openseek_desktop/frontend/office_capture",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/pdf_capture",
   "openseek_desktop/protocol",
@@ -65,6 +66,8 @@ pub fn open_history_diff(@cmd.Emit[Msg], State, Ctx, @dock.GitHistoryDiff) -> (@
 pub fn panel_toggle_cmds(@cmd.Emit[Msg], State, Ctx, opening~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn pdf_capture_feedback_subscription(@cmd.Emit[Msg], PdfCaptureDraft, batch~ : Bool, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
+
+pub fn region_feedback_subscription(@cmd.Emit[Msg], RegionFeedbackDraft, batch~ : Bool, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
 
 pub fn remove_editor_feedback(ModelUri, String) -> @cmd.Cmd
 
@@ -291,6 +294,12 @@ pub(all) enum Msg {
   OfficeSystemFontsToggled
   PdfStateChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, event~ : String)
   PdfSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, selection~ : String)
+  OfficeRegionRequested
+  OfficeRegionFinished(OfficeRegionRequest, Result[@office_capture.Capture, String]?)
+  OfficeRegionFeedbackChanged(OfficeRegionPreview, String)
+  OfficeRegionBatchChanged(OfficeRegionPreview, Bool)
+  OfficeRegionSubmissionDeclined(OfficeRegionPreview)
+  OfficeRegionDismissed(OfficeRegionPreview)
   PdfCaptureRequested
   PdfCaptureFinished(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, result~ : Result[@pdf_capture.Capture, String])
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
@@ -377,6 +386,32 @@ pub(all) enum Msg {
   DiffCommentAdded(file~ : @pathx.Relative, original_line_number~ : Int?, modified_line_number~ : Int?, quote~ : String, comment~ : String, resource~ : ModelUri?, feedback_id~ : String?)
 }
 
+pub(all) struct OfficeRegionDraft {
+  preview : OfficeRegionPreview
+  comment : String
+} derive(Eq)
+pub fn OfficeRegionDraft::equal(Self, Self) -> Bool
+pub fn OfficeRegionDraft::not_equal(Self, Self) -> Bool
+
+pub(all) struct OfficeRegionPreview {
+  request : OfficeRegionRequest
+  capture : @office_capture.Capture
+} derive(Eq)
+pub fn OfficeRegionPreview::equal(Self, Self) -> Bool
+pub fn OfficeRegionPreview::materialized_selection(Self, String) -> String
+pub fn OfficeRegionPreview::not_equal(Self, Self) -> Bool
+
+pub(all) struct OfficeRegionRequest {
+  id : Int64
+  owner : @interop.ConversationKey
+  epoch : Int
+  path : @common.Uri
+  sig : String
+  pdf_generation : Int?
+} derive(Eq)
+pub fn OfficeRegionRequest::equal(Self, Self) -> Bool
+pub fn OfficeRegionRequest::not_equal(Self, Self) -> Bool
+
 pub(all) struct OfficeSelectionPreview {
   owner : @interop.ConversationKey
   epoch : Int
@@ -449,6 +484,26 @@ pub fn ReconciledPlacement::identity(Self) -> @interop.CheckoutPlacement?
 pub fn ReconciledPlacement::is_parked(Self) -> Bool
 pub fn ReconciledPlacement::not_equal(Self, Self) -> Bool
 pub fn ReconciledPlacement::reconcile(Self, @interop.CheckoutPlacement?) -> Self
+
+pub(all) struct RegionFeedbackDraft {
+  preview : RegionFeedbackPreview
+  comment : String
+} derive(Eq)
+pub fn RegionFeedbackDraft::equal(Self, Self) -> Bool
+pub fn RegionFeedbackDraft::not_equal(Self, Self) -> Bool
+
+pub(all) enum RegionFeedbackPreview {
+  Pdf(PdfCapturePreview)
+  Office(OfficeRegionPreview)
+} derive(Eq)
+pub fn RegionFeedbackPreview::declined(Self) -> Msg
+pub fn RegionFeedbackPreview::dismissed(Self) -> Msg
+pub fn RegionFeedbackPreview::equal(Self, Self) -> Bool
+pub fn RegionFeedbackPreview::image_name(Self) -> String
+pub fn RegionFeedbackPreview::key(Self) -> String
+pub fn RegionFeedbackPreview::materialized_selection(Self, String) -> String
+pub fn RegionFeedbackPreview::not_equal(Self, Self) -> Bool
+pub fn RegionFeedbackPreview::url(Self) -> String
 
 type RemovedDirectoryRead derive(Eq)
 pub fn RemovedDirectoryRead::equal(Self, Self) -> Bool
@@ -559,6 +614,9 @@ pub(all) struct State {
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?
   office_selection_comment : String?
+  office_region_request : OfficeRegionRequest?
+  office_region : OfficeRegionDraft?
+  office_region_id : Int64
   pdf_capture : PdfCaptureDraft?
   pdf_capture_batch : Bool
   pdf_capture_id : Int64
@@ -629,6 +687,7 @@ pub(all) struct State {
   error : String?
 } derive(Eq)
 pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationKey, Int, @common.Uri, String) -> Bool
+pub fn State::accepts_office_region(Self, Ctx, OfficeRegionRequest) -> Bool
 pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationKey, Int, @common.Uri, String, Int) -> Bool
 pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
 pub fn State::dismiss_office_selection(Self, Ctx, OfficeSelectionPreview) -> (@cmd.Cmd, Self)
@@ -638,11 +697,14 @@ pub fn State::equal(Self, Self) -> Bool
 pub fn State::has_pinned_office_selection(Self, Ctx) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::offer_office_selection(Self, Ctx, String) -> Result[Self, String]
+pub fn State::pending_office_region(Self, Ctx) -> OfficeRegionDraft?
 pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
 pub fn State::pending_pdf_capture(Self, Ctx) -> PdfCaptureDraft?
+pub fn State::pending_region_feedback(Self, Ctx) -> RegionFeedbackDraft?
 pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
 pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
+pub fn State::start_office_region(Self, Ctx, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
 pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self
 pub fn State::with_review_navigation_destination(Self, Ctx, ChangedFile, Bool, cross_file? : Bool) -> Self
 

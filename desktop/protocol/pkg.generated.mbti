@@ -25,6 +25,39 @@ pub fn steer(@openseek_protocol.Content, submission_id? : String) -> @openseek_p
 // Errors
 
 // Types and methods
+pub(all) struct AccountSession {
+  token : String
+  user : AccountUser
+} derive(Eq)
+pub fn AccountSession::equal(Self, Self) -> Bool
+pub fn AccountSession::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountSession::not_equal(Self, Self) -> Bool
+pub fn AccountSession::to_json(Self) -> Json
+pub impl ToJson for AccountSession
+pub impl @json.FromJson for AccountSession
+
+pub(all) struct AccountSessionReply {
+  session : AccountSession?
+} derive(Eq)
+pub fn AccountSessionReply::equal(Self, Self) -> Bool
+pub fn AccountSessionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountSessionReply::not_equal(Self, Self) -> Bool
+pub fn AccountSessionReply::to_json(Self) -> Json
+pub impl ToJson for AccountSessionReply
+pub impl @json.FromJson for AccountSessionReply
+
+pub(all) struct AccountUser {
+  user_id : String
+  login : String
+  avatar_url : String
+} derive(Eq)
+pub fn AccountUser::equal(Self, Self) -> Bool
+pub fn AccountUser::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn AccountUser::not_equal(Self, Self) -> Bool
+pub fn AccountUser::to_json(Self) -> Json
+pub impl ToJson for AccountUser
+pub impl @json.FromJson for AccountUser
+
 pub(all) struct AgentErrorPayload {
   run_id : String?
   message : String?
@@ -2633,6 +2666,16 @@ pub fn RegistrySkillIdentity::to_repr(Self) -> @debug.Repr
 pub impl ToJson for RegistrySkillIdentity
 pub impl @json.FromJson for RegistrySkillIdentity
 
+pub(all) struct RemoteAccessPayload {
+  enabled : Bool
+} derive(Eq)
+pub fn RemoteAccessPayload::equal(Self, Self) -> Bool
+pub fn RemoteAccessPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn RemoteAccessPayload::not_equal(Self, Self) -> Bool
+pub fn RemoteAccessPayload::to_json(Self) -> Json
+pub impl ToJson for RemoteAccessPayload
+pub impl @json.FromJson for RemoteAccessPayload
+
 pub(all) enum RevealPathReply {
   Revealed
   RevealRefused(String)
@@ -3293,8 +3336,10 @@ pub impl ToJson for SessionSearchReply
 pub impl @json.FromJson for SessionSearchReply
 
 pub(all) struct SessionSharePayload {
-  source : SessionExportPayload
   generation : Int
+  source : SessionExportPayload
+  idempotency_key : String
+  authorization : ShareAuthorization
 } derive(Eq, @debug.Debug)
 pub fn SessionSharePayload::equal(Self, Self) -> Bool
 pub fn SessionSharePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3328,6 +3373,17 @@ pub fn SessionShareReply::to_json(Self) -> Json
 pub fn SessionShareReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionShareReply
 pub impl @json.FromJson for SessionShareReply
+
+pub(all) struct SessionSnapshot {
+  html : String
+  json : String
+} derive(Eq)
+pub fn SessionSnapshot::equal(Self, Self) -> Bool
+pub fn SessionSnapshot::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionSnapshot::not_equal(Self, Self) -> Bool
+pub fn SessionSnapshot::to_json(Self) -> Json
+pub impl ToJson for SessionSnapshot
+pub impl @json.FromJson for SessionSnapshot
 
 pub(all) struct SessionSummary {
   content : String
@@ -3467,10 +3523,22 @@ pub fn SettingsStatusPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SettingsStatusPayload
 pub impl @json.FromJson for SettingsStatusPayload
 
+pub(all) enum ShareAuthorization {
+  LocalAccount(user_id~ : String)
+  UploadGrant(upload_token~ : String)
+} derive(Eq, @debug.Debug)
+pub fn ShareAuthorization::equal(Self, Self) -> Bool
+pub fn ShareAuthorization::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn ShareAuthorization::not_equal(Self, Self) -> Bool
+pub fn ShareAuthorization::to_json(Self) -> Json
+pub fn ShareAuthorization::to_repr(Self) -> @debug.Repr
+pub impl ToJson for ShareAuthorization
+pub impl @json.FromJson for ShareAuthorization
+
 pub(all) enum ShareProgress {
   Preparing
   Connecting(attempt~ : Int)
-  Uploading(attempt~ : Int, percent~ : Int)
+  Uploading(attempt~ : Int)
   Waiting(attempt~ : Int)
 } derive(Eq, @debug.Debug)
 pub fn ShareProgress::equal(Self, Self) -> Bool
@@ -3504,6 +3572,17 @@ pub fn SkillsCatalogReply::to_json(Self) -> Json
 pub fn SkillsCatalogReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SkillsCatalogReply
 pub impl @json.FromJson for SkillsCatalogReply
+
+pub(all) struct SnapshotSavePayload {
+  session : String
+  html : String
+} derive(Eq)
+pub fn SnapshotSavePayload::equal(Self, Self) -> Bool
+pub fn SnapshotSavePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SnapshotSavePayload::not_equal(Self, Self) -> Bool
+pub fn SnapshotSavePayload::to_json(Self) -> Json
+pub impl ToJson for SnapshotSavePayload
+pub impl @json.FromJson for SnapshotSavePayload
 
 pub(all) struct StageAttachmentsPayload {
   session : String

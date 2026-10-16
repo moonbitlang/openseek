@@ -1,4 +1,7 @@
 import {
+  "moonbit-community/rabbita/dom",
+  "moonbitlang/async/http",
+  "openseek_desktop/uri",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",

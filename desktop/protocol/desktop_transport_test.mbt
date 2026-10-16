@@ -33,7 +33,7 @@ test "desktop notifications round-trip at the wire edge" {
 test "share progress round-trips through the shared notification catalog" {
   let payload : @protocol.SessionShareProgress = {
     generation: 7,
-    progress: Uploading(attempt=2, percent=56),
+    progress: Uploading(attempt=2),
   }
   let notification = @protocol.Notification::SessionShareProgress(payload)
   assert_eq(notification.wire_name(), "session.share_progress")

@@ -16,7 +16,7 @@ pub(all) enum Frame {
   Register(token~ : String, name~ : String)
   /// Service → desktop: registration succeeded; `device` is the public id.
   Registered(device~ : String)
-  /// Service → desktop: a browser connected to `/v1/devices/<device>/ws`;
+  /// Service → desktop: a browser connected to `/v2/devices/<device>/ws`;
   /// open the matching `/v1/tunnel/<stream>` data WebSocket.
   Open(stream~ : String)
   /// Service → desktop: registration was rejected. The desktop stops using

@@ -14,6 +14,9 @@ priv enum UiMessage {
   PdfPreviousPage
   PdfPageNumber
   PdfNextPage
+  OfficeRegion
+  OfficeRegionHint
+  OfficeRegionFailed
   PdfCapture
   PdfCaptureHint
   PdfCaptureFailed
@@ -241,6 +244,31 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, PdfNextPage) => "下一頁"
     (Japanese, PdfNextPage) => "次のページ"
     (Spanish, PdfNextPage) => "Página siguiente"
+    (English, OfficeRegion) => "Annotate region"
+    (SimplifiedChinese, OfficeRegion) => "区域批注"
+    (TraditionalChinese, OfficeRegion) => "區域批註"
+    (Japanese, OfficeRegion) => "範囲にコメント"
+    (Spanish, OfficeRegion) => "Anotar región"
+    (English, OfficeRegionHint) =>
+      "Click an element or drag a region to comment · Esc to cancel"
+    (SimplifiedChinese, OfficeRegionHint) =>
+      "点击内容或拖选区域添加批注 · Esc 取消"
+    (TraditionalChinese, OfficeRegionHint) =>
+      "點擊內容或拖選區域新增批註 · Esc 取消"
+    (Japanese, OfficeRegionHint) =>
+      "要素をクリック、または範囲をドラッグしてコメント · Esc でキャンセル"
+    (Spanish, OfficeRegionHint) =>
+      "Haz clic o arrastra una región para comentar · Esc para cancelar"
+    (English, OfficeRegionFailed) =>
+      "Could not capture this region. Try selecting it again."
+    (SimplifiedChinese, OfficeRegionFailed) =>
+      "未能截取该区域，请重新选择。"
+    (TraditionalChinese, OfficeRegionFailed) =>
+      "未能擷取該區域，請重新選取。"
+    (Japanese, OfficeRegionFailed) =>
+      "この範囲を撮影できませんでした。もう一度選択してください。"
+    (Spanish, OfficeRegionFailed) =>
+      "No se pudo capturar la región. Selecciónala de nuevo."
     (English, PdfCapture) => "Capture region"
     (SimplifiedChinese, PdfCapture) => "区域截图"
     (TraditionalChinese, PdfCapture) => "區域截圖"

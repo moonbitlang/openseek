@@ -115,6 +115,8 @@ async test "tools_for_client bridges tools with namespaced names and schemas" {
     // executes control-registered calls sight-unseen, so a server-supplied
     // definition must never carry it.
     assert_false(tools[0].is_control())
+    assert_false(tools[0].is_concurrent_safe())
+    assert_true(tools[0].is_program_callable())
   })
 }
 
@@ -186,6 +188,10 @@ async test "build suffixes tools whose sanitized names collide" {
     // pinning only the inner bridge would let a flag slip in at the re-wrap.
     for tool in tools {
       assert_false(tool.is_control())
+      assert_false(tool.is_concurrent_safe())
+      assert_true(
+        @agent_tool.Tools(tools).program_tools().find(tool.name) is Some(_),
+      )
     }
   })
 }
@@ -254,7 +260,7 @@ async fn respond_json(
 /// End-to-end over HTTP: `build` connects a configured Http server (a local
 /// mock MCP endpoint), discovers its tool, and the bridged executor proxies a
 /// live tools/call through the Streamable HTTP transport.
-async test "build bridges and dispatches tools from an http server" {
+async test "build bridges and dispatches MCP tools directly and through PTC" {
   @async.with_task_group() <| group => {
     let server = @http.Server(@socket.Addr::parse("127.0.0.1:0")) catch {
       error if "\{error}".contains("Operation not permitted") => {
@@ -286,7 +292,20 @@ async test "build bridges and dispatches tools from an http server" {
                   },
                 ],
               })
-            { "method": "tools/call", .. } =>
+            {
+              "method": "tools/call",
+              "params": {
+                "name": "ping",
+                "arguments": { "fail": true, .. },
+                ..
+              },
+              ..
+            } =>
+              respond_json(conn, id, {
+                "content": [{ "type": "text", "text": "ping failed" }],
+                "isError": true,
+              })
+            { "method": "tools/call", "params": { "name": "ping", .. }, .. } =>
               respond_json(conn, id, {
                 "content": [{ "type": "text", "text": "pong" }],
               })
@@ -322,5 +341,55 @@ async test "build bridges and dispatches tools from an http server" {
     }
     assert_false(output.is_error)
     assert_eq(output.content, "pong")
+    // Exercise the real PTC listener with definitions from build_grouped,
+    // including its name/metadata re-wrap and the shared execution gate.
+    let file_state = @agent_tool.FileStateMap()
+    let service = @ptc.Service::start(
+      group,
+      Tools(tools.map(tool => file_state.serialize(tool))),
+    )
+    let program = service.register()
+    defer program.close()
+    guard @json.parse(program.env()["OPENSEEK_PTC"])
+      is { "url": String(url), "token": String(token), .. } else {
+      fail("missing PTC capability")
+    }
+    for should_fail in [false, true] {
+      let (response, body) = @http.post(
+        url,
+        (
+          {
+            "version": 1,
+            "name": "mcp__remote__ping",
+            "arguments": { "fail": should_fail },
+          } : Json),
+        headers={ "Authorization": "Bearer \{token}" },
+      )
+      assert_eq(response.code, 200)
+      guard body.json()
+        is { "content": String(content), "is_error": is_error, .. } else {
+        fail("expected a PTC tool result")
+      }
+      assert_eq(is_error, Json(should_fail))
+      assert_eq(content, if should_fail { "ping failed" } else { "pong" })
+    }
+    assert_true(
+      program.trace()
+      is {
+        "ptc_calls": [
+          {
+            "name": "mcp__remote__ping",
+            "result": { "is_error": false, .. },
+            ..
+          },
+          {
+            "name": "mcp__remote__ping",
+            "result": { "is_error": true, .. },
+            ..
+          },
+        ],
+        ..
+      },
+    )
   }
 }

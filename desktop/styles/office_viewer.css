@@ -738,6 +738,33 @@
   box-sizing: border-box;
 }
 
+/* Region annotation uses a document-owned session; this layer never captures
+   pixels, so its outline and hint cannot leak into the exported document. */
+.office-region-selecting, .office-region-selecting * { cursor: crosshair !important; user-select: none !important; }
+.office-region-capture { position: fixed; inset: 0; z-index: 1000; pointer-events: none; }
+.office-region-capture-box { position: fixed; box-sizing: border-box; border: 2px solid #1677ff; background: rgb(22 119 255 / 8%); }
+.office-region-capture-box[hidden] { display: none; }
+.office-region-capture-hint { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); padding: 8px 14px; border-radius: var(--radius-md); background: var(--color-bg-surface); color: var(--color-text-primary); box-shadow: var(--shadow-overlay); font-size: var(--font-size-xs); white-space: nowrap; }
+.office-region-capture[aria-busy="true"] .office-region-capture-box { border-style: dashed; }
+.office-region-capture[aria-busy="true"] .office-region-capture-hint::before { content: "◌ "; }
+.pdf-capture-feedback[data-annotation] .feedback-source-selection::after {
+  content: var(--office-region-label);
+  position: absolute;
+  right: -10px;
+  top: -10px;
+  min-width: 20px;
+  height: 20px;
+  padding-inline: 3px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: white;
+  background: #1677ff;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
 /* Runtime-created annotation styles also use the host's theme. Source paper
    and workbook cells retain the document's own colours. */
 .viewer-stack > .office-viewer-surface .office-context-quote {

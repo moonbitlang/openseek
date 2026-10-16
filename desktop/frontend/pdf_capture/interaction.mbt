@@ -38,11 +38,16 @@ priv struct CaptureSession {
   failure : String
   too_large : String
   unsupported : String
+  annotation : String?
+  canceled : (() -> Unit)?
   completed : (Result[Capture, String]) -> Unit
 }
 
 ///|
-fn CaptureSession::dispose(self : CaptureSession) -> Unit {
+fn CaptureSession::dispose(
+  self : CaptureSession,
+  notify~ : Bool = true,
+) -> Unit {
   if self.phase is Disposed {
     return
   }
@@ -65,6 +70,9 @@ fn CaptureSession::dispose(self : CaptureSession) -> Unit {
         @js.Value::cast_from("__pdfRegionCapture"),
       ]) : Bool),
   )
+  if notify && self.canceled is Some(canceled) {
+    canceled()
+  }
 }
 
 ///|
@@ -236,14 +244,14 @@ fn CaptureSession::release(self : CaptureSession, event : @js.Value) -> Unit {
     capture=true,
     once=true,
   )
-  self.dispose()
-  if rect.width < 4 || rect.height < 4 {
-    return
-  }
-  if !(self.pdf.get_with_string("alive") : Bool) ||
+  if rect.width < 4 ||
+    rect.height < 4 ||
+    !(self.pdf.get_with_string("alive") : Bool) ||
     !browser_same(self.host.get_with_string("__officeViewerPdf"), self.pdf) {
+    self.dispose()
     return
   }
+  self.dispose(notify=false)
   let mut result : Result[Capture, String] = Err(self.failure)
   let succeeded = browser_attempt(() => {
     result = render_capture(
@@ -254,6 +262,7 @@ fn CaptureSession::release(self : CaptureSession, event : @js.Value) -> Unit {
       self.failure,
       self.too_large,
       self.unsupported,
+      annotation?=self.annotation,
     )
   })
   (self.completed)(if succeeded { result } else { Err(self.failure) })
@@ -433,6 +442,8 @@ fn start_region(
   failure : String,
   too_large : String,
   unsupported : String,
+  annotation : String?,
+  canceled : (() -> Unit)?,
   completed : (Result[Capture, String]) -> Unit,
 ) -> Unit {
   let found : @js.Nullable[@js.Value] = browser_document().apply_with_string(
@@ -455,8 +466,15 @@ fn start_region(
     completed(Err(failure))
     return
   }
-  if browser_present(host.get_with_string("__pdfRegionCapture")) is Some(_) {
-    return
+  let previous : @js.Optional[() -> Unit] = host.get_with_string(
+    "__pdfRegionCapture",
+  )
+  if previous.to_option() is Some(previous) {
+    if annotation is Some(_) {
+      previous()
+    } else {
+      return
+    }
   }
   let bounds = browser_bounds(container)
   guard bounds.intersection({
@@ -510,10 +528,12 @@ fn start_region(
     failure,
     too_large,
     unsupported,
+    annotation,
+    canceled,
     completed,
   }
   if !browser_attempt(() => session.wire()) {
-    session.dispose()
+    session.dispose(notify=false)
     completed(Err(failure))
   }
 }

@@ -1,8 +1,8 @@
 // The auth.* op bodies (docs/remote-protocol.md): they run the sign-in
-// flows in `internal/auth` and translate its errors into the transports'
-// `HostError` vocabulary. They live here — not in `internal/auth` — so
+// flows in `auth` and translate its errors into the transports'
+// `HostError` vocabulary. They live here — not in `auth` — so
 // `auth.changed` can go through the hub, and the relay actor
-// (internal/remote, which imports this package) stays cycle-free.
+// (remote, which imports this package) stays cycle-free.
 
 ///|
 /// The current status. The fallback `server_url` is the relay origin —
@@ -12,65 +12,29 @@ async fn auth_status(state : ApiState) -> @protocol.AuthStatusPayload {
 }
 
 ///|
-/// Run the loopback sign-in against the selected server, then wake the
-/// connector. Signed in already means "make sure the connector runs", not
-/// a second browser round-trip — every exchange mints a new device row
-/// server-side, so re-running the flow would duplicate the device.
+/// Sign in to the fixed account issuer. An existing session is reused;
+/// neither path enables remote access or registers a device.
 async fn auth_connect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
-  if store.managed_by_env() {
-    raise @host.HostError(
-      "remote access is configured through OPENSEEK_RELAY_URL/OPENSEEK_DEVICE_TOKEN",
-    )
-  }
   if store.signed_in() {
-    store.poke()
     return auth_status(state)
   }
-  guard @engine.remote_server_base(state.manager) is Some(server_url) else {
-    raise @host.HostError("remote access needs the SeekMoon relay origin")
-  }
+  let server_url = @auth.AccountOrigin
   store.sign_in(server_url~) catch {
     @auth.AuthError(message) => raise @host.HostError(message)
     error => raise @host.HostError("sign-in failed: \{error}")
   }
-  // The persisted session is not final until its issuer still matches the
-  // selected server. This protected completion also runs when cancellation
-  // landed during the commit shield in `sign_in`.
-  @async.protect_from_cancel(() => {
-    if @engine.remote_server_base(state.manager) != Some(server_url) {
-      // Publish the final local state even if cleanup itself raises after
-      // clearing it.
-      defer state.hub.publish(AuthChanged(store.status()))
-      store.sign_out() catch {
-        @auth.AuthError(message) =>
-          raise @host.HostError(
-            "could not discard the superseded sign-in: \{message}",
-          )
-        error =>
-          raise @host.HostError(
-            "could not discard the superseded sign-in: \{error}",
-          )
-      }
-      raise @host.HostError(
-        "the server changed during sign-in; connect again for the selected server",
-      )
-    }
-    state.hub.publish(AuthChanged(store.status()))
-  })
+  state.hub.publish(AuthChanged(store.status()))
   auth_status(state)
 }
 
 ///|
 /// Sign out: the durable local clear wins, the relay-side revoke is
-/// best-effort, and the supervisor parks once poked.
+/// best-effort, and the ordinary remote supervisor parks once poked.
 async fn auth_disconnect(state : ApiState) -> @protocol.AuthStatusPayload {
   let store = state.auth
-  if store.managed_by_env() {
-    raise @host.HostError("remote access is configured through the environment")
-  }
-  // Local authority is cleared before sign_out can suspend. Publish the
-  // resulting state on success, failure, and cancellation alike.
+  // Publish the resulting state on success, failure, and cancellation alike;
+  // sign_out serializes the local clear with persistence.
   defer state.hub.publish(AuthChanged(store.status()))
   store.sign_out() catch {
     @auth.AuthError(message) => raise @host.HostError(message)
@@ -88,27 +52,14 @@ async fn auth_cancel(state : ApiState) -> @protocol.AuthStatusPayload {
 }
 
 ///|
-/// A server switch orphans a sign-in — the device token belongs to the
-/// server that issued it. Called after every settings commit; a no-op
-/// unless the signed-in issuer no longer matches the selection.
-async fn sign_out_after_server_switch(state : ApiState) -> Unit {
-  let store = state.auth
-  guard !store.managed_by_env() && store.signed_in() else { return }
-  if store.session_server() == @engine.remote_server_base(state.manager) {
-    return
+async fn remote_access_set(
+  state : ApiState,
+  payload : @protocol.RemoteAccessPayload,
+) -> @protocol.AuthStatusPayload {
+  defer state.publish(AuthChanged(state.auth.status()))
+  state.auth.set_remote(payload.enabled) catch {
+    @auth.AuthError(message) => raise @host.HostError(message)
+    error => raise error
   }
-  store.sign_out() catch {
-    @auth.AuthError(message) =>
-      @xlog.warn(category="auth") <?
-        { "message": "sign-out after server switch failed", "error": message }
-    error =>
-      @xlog.warn(category="auth") <?
-        {
-          "message": "sign-out after server switch failed",
-          "error": "\{error}",
-        }
-  }
-  @async.protect_from_cancel(() => {
-    state.hub.publish(AuthChanged(store.status()))
-  })
+  auth_status(state)
 }

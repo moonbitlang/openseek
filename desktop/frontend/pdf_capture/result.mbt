@@ -7,6 +7,7 @@ fn finish_capture(
   text : String?,
   failure~ : String,
   too_large~ : String,
+  selected? : @selection.Rect,
 ) -> Result[Capture, String] {
   guard url.has_prefix("data:image/png;base64,") else { return Err(failure) }
   guard @selection.png_within_limit(url) else { return Err(too_large) }
@@ -14,9 +15,17 @@ fn finish_capture(
   let regions : Array[Region] = []
   let source_regions : Array[Json] = []
   for piece in pieces {
+    let crop = if selected is Some(selected) {
+      match piece.crop.intersection(selected) {
+        Some(crop) => crop
+        None => continue
+      }
+    } else {
+      piece.crop
+    }
     let page = piece.page
     let bounds = piece.page_bounds
-    let normalized = piece.crop.mapped(from=bounds, to={
+    let normalized = crop.mapped(from=bounds, to={
       x: 0,
       y: 0,
       width: 1,

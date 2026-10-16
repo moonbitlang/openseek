@@ -2,12 +2,11 @@ name: CLI release
 
 # Bump the root moon.mod version, then dispatch on main.
 on:
-  pull_request:
   workflow_dispatch:
 
 concurrency:
   group: cli-release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read

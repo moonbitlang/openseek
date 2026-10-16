@@ -109,6 +109,7 @@ fn refresh_office_visual(state : State, ctx : Ctx) -> @cmd.Cmd {
 ///|
 fn clear_office_surface() -> @cmd.Cmd {
   @cmd.batch([
+    @office_capture.cancel(OfficeSurfaceId),
     @pdf_capture.cancel(OfficeSurfaceId),
     hide_pdf_capture_feedback(),
     after_render_effect(() => dispose_office_feedback()),

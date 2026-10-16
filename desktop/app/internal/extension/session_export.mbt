@@ -47,13 +47,22 @@ async fn export_session(
     shell,
     bundle,
   )
-  let dialog = SessionExportDialog(payload.session)
+  save_export(context, payload.session, files.html)
+}
+
+///|
+async fn save_export(
+  context : @proton.CommandContext,
+  session : String,
+  html : String,
+) -> @protocol.SessionExportReply {
+  let dialog = SessionExportDialog(session)
   guard dialog.destination(context) is Some(path) else {
     return { path: None, opened: false, }
   }
   // The native dialog has already confirmed replacement for this exact path.
   // `CreateNew` would incorrectly reject an overwrite the user approved.
-  @fs.write_file(path, files.html, create_mode=CreateOrTruncate) catch {
+  @fs.write_file(path, html, create_mode=CreateOrTruncate) catch {
     error =>
       raise @host.HostError("could not save the conversation export: \{error}")
   }

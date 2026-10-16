@@ -1,8 +1,6 @@
-// The host's sign-in state: one signed-in session (or the environment
-// override), the connector's registration status, and the wakeup channel
-// the relay actor parks on. Single-threaded event-loop semantics:
-// plain `mut` fields, no locks — the one re-entrancy hazard (two
-// concurrent `auth.connect` calls) is guarded by `sign_in_active`.
+// One account session, with an optional registration for this computer.
+// Account sign-in never enables the relay connector. Device rejection and
+// transient network loss never retire the account credential.
 
 ///|
 /// Every user-actionable failure of the sign-in/sign-out flows. The API
@@ -29,21 +27,25 @@ pub(all) struct ConnectorConfig {
 } derive(Eq)
 
 ///|
-/// One signed-in registration — exactly what auth.json persists.
+/// One persisted account and its independently enabled device permission.
 priv struct AuthSession {
   server_url : String
-  device_token : String
-  device_id : String
-  device_name : String
-  user_login : String
-  user_avatar_url : String
+  account : @protocol.AccountSession
+  device : DeviceRegistration?
+}
+
+///|
+priv struct DeviceRegistration {
+  token : String
+  id : String
+  name : String
 }
 
 ///|
 /// See the package docs above. Constructed once at startup by
 /// `AuthStore::load` and shared by the dispatcher (auth.* ops) and the
-/// relay actor. Opaque: the token and the state flags never
-/// appear outside this package.
+/// relay actor. Account credentials are exposed only to the local window;
+/// broadcasts carry presentation state without secrets.
 struct AuthStore {
   runtime_dir : @pathx.Path?
   env_override : ConnectorConfig?
@@ -62,6 +64,8 @@ struct AuthStore {
   // Override mode only: the relay rejected the env token as terminal;
   // nothing can mint a new one at runtime, so the supervisor parks.
   mut rejected : Bool
+  persist_mutex : @async.Mutex
+  mut remote_generation : Int32
   mut sign_in_active : Bool
   // Poked by auth.cancel; the in-flight sign-in races against it.
   sign_in_abort : @async.Queue[Unit]
@@ -69,8 +73,8 @@ struct AuthStore {
 
 ///|
 /// Load the persisted sign-in (when there is a runtime dir to read from).
-/// The environment override always wins over a persisted session; it is
-/// never persisted itself.
+/// The environment override controls only the relay, independently of the
+/// persisted account session. The override itself is never persisted.
 pub async fn AuthStore::load(
   runtime_dir? : @pathx.Path,
   env_override? : ConnectorConfig,
@@ -89,6 +93,8 @@ pub async fn AuthStore::load(
     connected: false,
     override_device: None,
     rejected: false,
+    persist_mutex: Mutex(),
+    remote_generation: 0,
     sign_in_active: false,
     sign_in_abort: Queue(kind=DiscardOldest(1)),
   }
@@ -107,6 +113,8 @@ pub fn AuthStore::empty(app_version~ : String = "development") -> AuthStore {
     connected: false,
     override_device: None,
     rejected: false,
+    persist_mutex: Mutex(),
+    remote_generation: 0,
     sign_in_active: false,
     sign_in_abort: Queue(kind=DiscardOldest(1)),
   }
@@ -119,11 +127,13 @@ pub fn AuthStore::desired_connector(self : AuthStore) -> ConnectorConfig? {
   if self.env_override is Some(config) {
     return if self.rejected { None } else { Some(config) }
   }
-  guard self.session is Some(session) else { return None }
+  guard self.session is Some(session) && session.device is Some(device) else {
+    return None
+  }
   Some({
     relay_url: tunnel_url(session.server_url),
-    device_token: session.device_token,
-    device_name: session.device_name,
+    device_token: device.token,
+    device_name: device.name,
   })
 }
 
@@ -168,14 +178,30 @@ pub fn AuthStore::mark_dropped(self : AuthStore) -> Bool {
 /// override mode nothing can repair the config at runtime, so the store
 /// only parks the relay actor; a signed-in session is cleared like a
 /// sign-out, minus the revoke round-trip the relay already answered for.
-pub async fn AuthStore::handle_refusal(self : AuthStore) -> Unit {
+pub async fn AuthStore::handle_refusal(
+  self : AuthStore,
+  expected? : ConnectorConfig,
+) -> Unit {
+  if expected is Some(expected) && self.desired_connector() != Some(expected) {
+    return
+  }
   self.connected = false
   if self.env_override is Some(_) {
     self.rejected = true
     return
   }
-  guard self.session is Some(_) else { return }
-  self.clear_local_session()
+  self.persist_mutex.acquire()
+  defer self.persist_mutex.release()
+  if expected is Some(expected) && self.desired_connector() != Some(expected) {
+    return
+  }
+  guard self.session is Some(session) else { return }
+  self.remote_generation += 1
+  let session = { ..session, device: None, }
+  self.session = Some(session)
+  if self.runtime_dir is Some(dir) {
+    save_session_file(dir, session)
+  }
 }
 
 ///|
@@ -194,15 +220,14 @@ pub fn AuthStore::signed_in(self : AuthStore) -> Bool {
 }
 
 ///|
-/// The server that issued the signed-in session's token, when one exists —
-/// what a server switch compares against the new selection.
+/// The fixed issuer of the signed-in account credential.
 pub fn AuthStore::session_server(self : AuthStore) -> String? {
   self.session.map(session => session.server_url)
 }
 
 ///|
-/// Whether the environment override drives the connector — sign-in and
-/// sign-out are refused in that mode.
+/// Whether the environment override drives the connector. Account login and
+/// logout remain available and do not alter that debug connection.
 pub fn AuthStore::managed_by_env(self : AuthStore) -> Bool {
   self.env_override is Some(_)
 }
@@ -217,48 +242,46 @@ pub fn AuthStore::status(
   self : AuthStore,
   server_url? : String,
 ) -> @protocol.AuthStatusPayload {
-  if self.env_override is Some(config) {
-    let origin = origin_from_relay_url(config.relay_url)
-    return {
-      connected: self.connected,
-      server_url: Some(origin),
-      managed_by_env: Some(true),
-      user: None,
-      device: self.override_device.map(device => {
-        id: device,
-        name: config.device_name,
-        url: device_url(origin, device, app_version=self.app_version),
-      }),
-    }
+  let user = self.session.map(session => @protocol.AuthUserPayload::{
+    login: session.account.user.login,
+    avatar_url: session.account.user.avatar_url,
+  })
+  let device = if self.env_override is Some(config) {
+    self.override_device.map(id => @protocol.AuthDevicePayload::{
+      id,
+      name: config.device_name,
+      url: device_url(
+        origin_from_relay_url(config.relay_url),
+        id,
+        app_version=self.app_version,
+      ),
+    })
+  } else {
+    self.session.bind(session => {
+      session.device.map(device => {
+        id: device.id,
+        name: device.name,
+        url: device_url(
+          session.server_url,
+          device.id,
+          app_version=self.app_version,
+        ),
+      })
+    })
   }
-  match self.session {
-    Some(session) =>
-      {
-        connected: self.connected,
-        server_url: Some(session.server_url),
-        managed_by_env: None,
-        user: Some({
-          login: session.user_login,
-          avatar_url: session.user_avatar_url,
-        }),
-        device: Some({
-          id: session.device_id,
-          name: session.device_name,
-          url: device_url(
-            session.server_url,
-            session.device_id,
-            app_version=self.app_version,
-          ),
-        }),
-      }
-    None =>
-      {
-        connected: self.connected,
-        server_url,
-        managed_by_env: None,
-        user: None,
-        device: None,
-      }
+  {
+    connected: self.connected,
+    server_url: match self.session {
+      Some(session) => Some(session.server_url)
+      None => server_url
+    },
+    managed_by_env: if self.env_override is Some(_) {
+      Some(true)
+    } else {
+      None
+    },
+    user,
+    device,
   }
 }
 
@@ -271,18 +294,25 @@ pub async fn AuthStore::sign_out(self : AuthStore) -> Unit {
   guard !self.sign_in_active else {
     raise AuthError("a sign-in is in progress")
   }
-  guard self.session is Some(session) else { return }
+  let retired : Ref[AuthSession?] = Ref(None)
   let mut clear_error : String? = None
-  self.clear_local_session() catch {
-    AuthError(message) => clear_error = Some(message)
-    error => clear_error = Some("\{error}")
-  }
+  @async.protect_from_cancel(() => {
+    self.persist_mutex.acquire()
+    defer self.persist_mutex.release()
+    retired.val = self.session
+    self.clear_session_locked() catch {
+      AuthError(message) => clear_error = Some(message)
+      error => clear_error = Some("\{error}")
+    }
+  })
   // Even when the local marker could not be written, revoking online may
   // still make the old on-disk credential harmless on the next launch.
-  revoke_device(session) catch {
-    error =>
-      @xlog.warn(category="auth") <?
-        { "message": "device revoke failed", "error": "\{error}" }
+  if retired.val is Some(session) {
+    revoke_session(session) catch {
+      error =>
+        @xlog.warn(category="auth") <?
+          { "message": "session revoke failed", "error": "\{error}" }
+    }
   }
   if clear_error is Some(message) {
     raise AuthError(message)
@@ -294,15 +324,33 @@ pub async fn AuthStore::sign_out(self : AuthStore) -> Unit {
 /// transition. Persisting the signed-out marker may fail and is reported,
 /// but neither that failure nor requester cancellation may leave the old
 /// connector running in this process.
-async fn AuthStore::clear_local_session(self : AuthStore) -> Unit {
+async fn AuthStore::clear_local_session(
+  self : AuthStore,
+  token? : String,
+) -> Unit {
   @async.protect_from_cancel(() => {
-    self.session = None
+    self.persist_mutex.acquire()
+    defer self.persist_mutex.release()
+    if token is Some(token) &&
+      self.account().map(account => account.token) != Some(token) {
+      return
+    }
+    self.clear_session_locked()
+  })
+}
+
+///|
+/// The caller holds persist_mutex across the state transition and file write.
+async fn AuthStore::clear_session_locked(self : AuthStore) -> Unit {
+  self.session = None
+  self.remote_generation += 1
+  if self.env_override is None {
     self.connected = false
     self.poke()
-    if self.runtime_dir is Some(dir) {
-      delete_session_file(dir)
-    }
-  })
+  }
+  if self.runtime_dir is Some(dir) {
+    delete_session_file(dir)
+  }
 }
 
 ///|
@@ -310,3 +358,20 @@ pub extend AuthError with Show::{output, to_string}
 
 ///|
 pub extend ConnectorConfig with Eq::{equal, not_equal}
+
+///|
+/// Read only from the native window's credential endpoint, never auth.changed.
+pub fn AuthStore::account(self : AuthStore) -> @protocol.AccountSession? {
+  self.session.map(session => session.account)
+}
+
+///|
+/// Expire only the credential that actually received a 401.
+pub async fn AuthStore::expire_account(
+  self : AuthStore,
+  token : String,
+) -> Unit {
+  if self.account() is Some(account) && account.token == token {
+    self.clear_local_session(token~)
+  }
+}

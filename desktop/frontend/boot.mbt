@@ -728,7 +728,7 @@ fn main {
     let pdf_feedback_input = state
       .map(model => {
         (
-          model.file_panel.pending_pdf_capture(file_ctx(model)),
+          model.file_panel.pending_region_feedback(file_ctx(model)),
           model.file_panel.pdf_capture_batch,
         )
       })
@@ -761,19 +761,9 @@ fn main {
                   preview.materialized_selection(comment),
                 ),
                 send,
-                images: [
-                  {
-                    name: @common.basename_or_authority(preview.path) +
-                    "-capture.png",
-                    url: preview.capture.url,
-                  },
-                ],
-                accepted: emit(
-                  FileEditor(@fileeditor.PdfCaptureDismissed(preview)),
-                ),
-                declined: emit(
-                  FileEditor(@fileeditor.PdfCaptureSubmissionDeclined(preview)),
-                ),
+                images: [{ name: preview.image_name(), url: preview.url(), }],
+                accepted: emit(FileEditor(preview.dismissed())),
+                declined: emit(FileEditor(preview.declined())),
               }),
             )
           },
@@ -781,7 +771,7 @@ fn main {
             guard slot is (Some(draft), batch, Some(_)) else {
               return @sub.none
             }
-            @fileeditor.pdf_capture_feedback_subscription(
+            @fileeditor.region_feedback_subscription(
               emit.map(msg => FileEditor(msg)),
               draft,
               batch~,
@@ -793,8 +783,7 @@ fn main {
       },
       by=slot => {
         match slot {
-          (Some({ preview: p, .. }), _, Some(_)) =>
-            "capture:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:\{p.id}"
+          (Some({ preview: p, .. }), _, Some(_)) => p.key()
           _ => "closed"
         }
       },

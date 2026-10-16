@@ -2368,8 +2368,10 @@ pub fn sync(
   let state = state.sync_review_navigation_display(ctx)
   let state = state.sync_office_selection(ctx)
   let (capture_cmd, state) = state.sync_pdf_capture(ctx)
+  let (region_cmd, state) = state.sync_office_region(ctx)
   let pending_cmd = @cmd.batch([
     capture_cmd,
+    region_cmd,
     retire_index_cmd,
     reroot_cmd,
     restore_cmd,
@@ -2541,10 +2543,34 @@ fn update_inner(
     OfficeFeedbackSubmitted(_, _, ..) => (@cmd.none, state)
     OfficeSelectionChanged(..)
     | PdfSelectionChanged(..)
+    | OfficeRegionRequested
+    | OfficeRegionFinished(_, _)
+    | OfficeRegionSubmissionDeclined(_)
     | PdfCaptureRequested
     | PdfCaptureFinished(..)
     | PdfCaptureSubmissionDeclined(_)
     | OfficeSelectionConfirmed(_) => (@cmd.none, state)
+    OfficeRegionFeedbackChanged(preview, comment) =>
+      if state.pending_office_region(ctx).map(draft => draft.preview) ==
+        Some(preview) {
+        (@cmd.none, { ..state, office_region: Some({ preview, comment, }), })
+      } else {
+        (@cmd.none, state)
+      }
+    OfficeRegionBatchChanged(preview, batch) =>
+      if state.pending_office_region(ctx).map(draft => draft.preview) ==
+        Some(preview) {
+        (@cmd.none, { ..state, pdf_capture_batch: batch, })
+      } else {
+        (@cmd.none, state)
+      }
+    OfficeRegionDismissed(preview) =>
+      if state.pending_office_region(ctx).map(draft => draft.preview) ==
+        Some(preview) {
+        (hide_pdf_capture_feedback(), { ..state, office_region: None, })
+      } else {
+        (@cmd.none, state)
+      }
     PdfCaptureFeedbackChanged(preview, comment) =>
       if state.pending_pdf_capture(ctx).map(draft => draft.preview) ==
         Some(preview) {

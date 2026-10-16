@@ -48,6 +48,8 @@ async test "live and archived listings read stores without an engine executable"
     ),
   )
   @fs.mkdir(workspace + "/.openseek/sessions/husk", recursive=true)
+  // Keep the store listing policy: skip invalid ids without losing good rows.
+  @fs.mkdir(workspace + "/.openseek/sessions/bad\\name", recursive=true)
   let archive = @store.SessionStore(workspace + "/.openseek/archived")
   archive.create(Session(SessionId("archived"), system_prompt=""))
   archive.set_title(SessionId("archived"), "Archived title")
@@ -118,4 +120,84 @@ async test "live and archived listings read stores without an engine executable"
   let blank = @engine.search_sessions({ query: "  ", include_archived: true, })
   assert_eq(blank.hits.length(), 0)
   assert_eq(blank.errors.length(), 0)
+  // The sidebar and search share a Desktop-owned cache. Other writers, including
+  // CLI sessions and archive moves, must remain visible after a warm search.
+  store.set_title(SessionId("renamed"), "Updated title")
+  assert_eq(
+    @engine.search_sessions({ query: "explicit", include_archived: false, }).hits.length(),
+    0,
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "updated title", include_archived: false, }).hits.length(),
+    1,
+  )
+  store.create(
+    @agent_session.Session(SessionId("prompt"), system_prompt="").append(
+      User(UserMessage(Content([Text("Rewritten prompt")]))),
+    ),
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    1,
+  )
+  @fs.rename(
+    workspace + "/.openseek/sessions/prompt",
+    workspace + "/.openseek/archived/sessions/prompt",
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "rewritten", include_archived: false, }).hits.length(),
+    0,
+  )
+  let moved = @engine.search_sessions({
+    query: "rewritten",
+    include_archived: true,
+  })
+  assert_eq(moved.hits.length(), 1)
+  assert_true(moved.hits[0].archived)
+  // Reusing a live path after an archive move must not reuse the old prompt.
+  let recreated = @agent_session.Session(SessionId("prompt"), system_prompt="")
+  store.create(recreated.append(User(UserMessage(Content([Text("Before")])))))
+  assert_eq(
+    @engine.search_sessions({ query: "before", include_archived: false, }).hits.length(),
+    1,
+  )
+  // Same-length external rewrites must invalidate cached text.
+  store.create(recreated.append(User(UserMessage(Content([Text("After!")])))))
+  assert_eq(
+    @engine.search_sessions({ query: "before", include_archived: false, }).hits.length(),
+    0,
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "after!", include_archived: false, }).hits.length(),
+    1,
+  )
+  @fs.remove(store.session_file(SessionId("prompt")))
+  assert_eq(
+    @engine.search_sessions({ query: "after!", include_archived: false, }).hits.length(),
+    0,
+  )
+  store.create(recreated.append(User(UserMessage(Content([Text("")])))))
+  let titles = Map::from_array(
+    @engine.list_sessions().groups[0].sessions.map(row => (row.id, row.title)),
+  )
+  assert_eq(titles.get("prompt"), Some(Some("")))
+  store.create(
+    recreated.append(User(UserMessage(Content([Text("Recovered")])))),
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "recovered", include_archived: false, }).hits.length(),
+    1,
+  )
+  @fs.rmdir(workspace + "/.openseek/sessions/prompt", recursive=true)
+  assert_eq(
+    @engine.search_sessions({ query: "recovered", include_archived: false, }).hits.length(),
+    0,
+  )
+  store.create(
+    recreated.append(User(UserMessage(Content([Text("New session")])))),
+  )
+  assert_eq(
+    @engine.search_sessions({ query: "new session", include_archived: false, }).hits.length(),
+    1,
+  )
 }

@@ -613,11 +613,7 @@ async fn engine_stdout(manager : EngineManager, args : Array[String]) -> String 
 /// reports the failure in its `error` field rather than failing the whole
 /// reply.
 pub async fn list_sessions() -> SessionsReply {
-  let groups : Array[SessionGroup] = []
-  for path in @workspaces.registered() {
-    groups.push(session_group(path, @workspaces.store_root(path)))
-  }
-  { groups, }
+  session_listing_groups(archived=false)
 }
 
 ///|
@@ -649,64 +645,6 @@ pub async fn rename_session(
   let id : @agent_session.SessionId = SessionId(session)
   store.set_title(id, title) catch {
     error => raise EngineError("session rename failed: \{error}")
-  }
-}
-
-///|
-async fn session_group(
-  workspace : @pathx.Absolute,
-  root : @pathx.Absolute,
-) -> SessionGroup {
-  let name = workspace.to_path().basename().to_owned()
-  let workspace = workspace.resource_path()
-  let native_root = root.to_string()
-  let root = root.resource_path()
-  fn failed(error : String) -> SessionGroup {
-    { workspace, name, session_root: root, sessions: [], error, }
-  }
-
-  let sessions : Array[@protocol.SessionListEntry] = try {
-    let store = @store.SessionStore(native_root)
-    [
-      for listing in store.listings() => {
-        let updated_at_ms = try {
-          let (seconds, nanoseconds) = @fs.mtime(
-            store.session_file(listing.id()),
-          )
-          Some(
-            (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double(),
-          )
-        } catch {
-          _ => None
-        }
-        {
-          id: listing.id().value(),
-          title: Some(
-            listing
-            .title()
-            .unwrap_or_else(() => listing_prompt_title(listing.first_prompt())),
-          ),
-          updated_at_ms,
-        }
-      }
-    ]
-  } catch {
-    error => return failed("session list failed: \{error}")
-  }
-  { workspace, name, session_root: root, sessions, error: "", }
-}
-
-///|
-// Keep the CLI's display-label convention when no explicit title is stored.
-fn listing_prompt_title(first_prompt : String) -> String {
-  let first_prompt = match @command_context.parse(first_prompt) {
-    Some(shell) => "$ \{shell.command}"
-    None => first_prompt
-  }
-  let content = first_prompt.trim()
-  match content.split_once("\n") {
-    Some((line, _)) => line.trim().to_owned()
-    None => content.to_owned()
   }
 }
 

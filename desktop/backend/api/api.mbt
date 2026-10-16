@@ -381,11 +381,12 @@ pub fn ApiState::manager(self : ApiState) -> @engine.EngineManager {
 pub fn endpoints(
   state : ApiState,
   connection : @host.HostConnection,
+  local_share~ : Bool = false,
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
     @endpoint.Endpoint(@commands.session_share, payload => {
-      SessionShare::{ state, payload: payload.source, }.publish(on_progress=progress => {
+      SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
         on_share_progress({ generation: payload.generation, progress, }) catch {
           _ => ()
         }
@@ -517,6 +518,16 @@ pub fn endpoints(
       @engine.search_sessions(payload)
     }),
     Endpoint(@commands.session_list, _ => @engine.list_sessions()),
+    Endpoint(@commands.session_snapshot, payload => {
+      let (shell, bundle) = state.host_state().viz_assets().read()
+      let files = @engine.ConversationExport::capture(
+        state.manager,
+        payload,
+        shell,
+        bundle,
+      )
+      { html: files.html, json: files.json, }
+    }),
     Endpoint(@commands.session_load, payload => {
       @engine.load_session(state.manager, payload)
     }),
@@ -659,9 +670,6 @@ pub fn endpoints(
           // must learn about the committed revision too.
           on_committed=status => state.hub.publish(SettingsChanged(status)),
         )
-        // Credentials belong to the server that issued them. Clear stale
-        // credentials before this request can complete or be cancelled.
-        sign_out_after_server_switch(state)
         status
       })
     }),
@@ -792,6 +800,9 @@ pub fn endpoints(
     Endpoint(@commands.auth_connect, _ => auth_connect(state)),
     Endpoint(@commands.auth_disconnect, _ => auth_disconnect(state)),
     Endpoint(@commands.auth_cancel, _ => auth_cancel(state)),
+    Endpoint(@commands.remote_access_set, payload => {
+      remote_access_set(state, payload)
+    }),
   ]
   for
     endpoint in @host.endpoints(state.host, connection, state.manager, () => {

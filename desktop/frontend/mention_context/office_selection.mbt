@@ -48,7 +48,7 @@ pub fn office_selection_summary(
   }
   let text = match selection {
     { "text": String(text), .. } => Some(text)
-    { "kind": String("pdf-region"), .. } => {
+    { "kind": String("pdf-region" | "office-region"), .. } => {
       guard selection is Object(fields) && fields.get("text") is None else {
         return None
       }

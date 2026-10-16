@@ -13,7 +13,7 @@ let pdf_capture_feedback : Ref[PdfCaptureFeedbackMount?] = Ref(None)
 fn pdf_capture_feedback_view(state : State, ctx : Ctx) -> @html.Html {
   @html.div(
     id=PdfCaptureFeedbackHostId,
-    class=if state.pending_pdf_capture(ctx) is Some(_) {
+    class=if state.pending_region_feedback(ctx) is Some(_) {
       "pdf-capture-feedback editor-shell"
     } else {
       "pdf-capture-feedback editor-shell hidden"
@@ -33,7 +33,7 @@ fn pdf_capture_feedback_view(state : State, ctx : Ctx) -> @html.Html {
 ///|
 fn show_pdf_capture_feedback(
   emit : @cmd.Emit[Msg],
-  draft : PdfCaptureDraft,
+  draft : RegionFeedbackDraft,
   batch~ : Bool,
   submit : (String, Bool) -> @cmd.Cmd,
   alive : Ref[Bool],
@@ -52,7 +52,14 @@ fn show_pdf_capture_feedback(
       viewer_state.services is Some(services) else {
       return
     }
-    let rects = () => pdf_capture_rects(surface, preview.capture)
+    if preview.label() is Some(label) {
+      host.set_attribute("data-annotation", label)
+      host.set_attribute("style", "--office-region-label: '\{label}';")
+    } else {
+      host.remove_attribute("data-annotation")
+      host.remove_attribute("style")
+    }
+    let rects = () => preview.rects(surface)
     let anchor = () => {
       let visible = rects().filter(rect => {
         let bounds = viewport.get_bounding_client_rect()
@@ -66,14 +73,10 @@ fn show_pdf_capture_feedback(
       viewport~,
       layout_source=surface,
       allow_empty_submit=true,
-      on_batch_change=batch => {
-        scheduler.add(emit(PdfCaptureBatchChanged(preview, batch)))
-      },
+      on_batch_change=batch => scheduler.add(emit(preview.batch_changed(batch))),
       on_submit=(text, apply) => scheduler.add(submit(text, apply)),
-      on_change=text => {
-        scheduler.add(emit(PdfCaptureFeedbackChanged(preview, text)))
-      },
-      on_cancel=() => scheduler.add(emit(PdfCaptureDismissed(preview))),
+      on_change=text => scheduler.add(emit(preview.changed(text))),
+      on_cancel=() => scheduler.add(emit(preview.dismissed())),
     )
     pdf_capture_feedback.val = Some({ input, })
     input.show(
@@ -136,16 +139,16 @@ fn pdf_capture_rects(
 priv suberror PdfFeedbackSubscription {
   PdfFeedbackSubscription(
     @cmd.Emit[Msg],
-    PdfCaptureDraft,
+    RegionFeedbackDraft,
     Bool,
     (String, Bool) -> @cmd.Cmd
   )
 }
 
 ///|
-pub fn pdf_capture_feedback_subscription(
+pub fn region_feedback_subscription(
   emit : @cmd.Emit[Msg],
-  draft : PdfCaptureDraft,
+  draft : RegionFeedbackDraft,
   batch~ : Bool,
   submit : (String, Bool) -> @cmd.Cmd,
 ) -> @sub.Sub {
@@ -169,5 +172,20 @@ pub fn pdf_capture_feedback_subscription(
         update_tagger: _ => (),
       })
     },
+  )
+}
+
+///|
+pub fn pdf_capture_feedback_subscription(
+  emit : @cmd.Emit[Msg],
+  draft : PdfCaptureDraft,
+  batch~ : Bool,
+  submit : (String, Bool) -> @cmd.Cmd,
+) -> @sub.Sub {
+  region_feedback_subscription(
+    emit,
+    { preview: Pdf(draft.preview), comment: draft.comment, },
+    batch~,
+    submit,
   )
 }

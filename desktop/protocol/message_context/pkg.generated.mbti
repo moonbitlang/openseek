@@ -3,6 +3,7 @@ package "openseek_desktop/protocol/message_context"
 
 import {
   "moonbitlang/core/debug",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -14,6 +15,7 @@ pub fn parse(String) -> Context?
 pub(all) enum Context {
   Message(source_session~ : String, message_id~ : String, text~ : String)
   DeliveryResult(message_id~ : String, request_id~ : String, target~ : String, status~ : String, error~ : String?)
+  UserQuestionResponse(request_id~ : String, questions~ : Array[@protocol.UserQuestion], answers~ : Map[String, String]?)
 } derive(Eq, @debug.Debug)
 pub fn Context::encode(Self) -> String
 pub fn Context::equal(Self, Self) -> Bool

@@ -28,6 +28,44 @@ function setup(page) {
   return { app, snapshot };
 }
 
+test('live questions occupy visible space between the transcript and composer', async ({ page }, testInfo) => {
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  app.notify('user_questions.changed', { generation: 1, requests: [{
+    id: 'live-question', session: 'session-1', questions: [{
+      id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'],
+    }],
+  }] });
+  const card = page.locator('.user-question-card');
+  await expect(card).toContainText('Which approach should we use?');
+  const region = page.locator('.user-question-region');
+  await expect.poll(() => region.evaluate(el => el.clientHeight)).toBeGreaterThan(0);
+  await expect(card).toBeInViewport({ ratio: 1 });
+  const regionBox = await region.boundingBox();
+  const transcriptBox = await page.locator('.transcript').boundingBox();
+  const composerBox = await page.locator('.composer').boundingBox();
+  expect(regionBox.y).toBeGreaterThanOrEqual(transcriptBox.y + transcriptBox.height - 1);
+  expect(regionBox.y + regionBox.height).toBeLessThanOrEqual(composerBox.y + 1);
+  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await page.screenshot({ path: testInfo.outputPath('live-question.png'), animations: 'disabled' });
+  app.notify('user_questions.changed', { generation: 2, requests: [{
+    id: 'long-question', session: 'session-1', questions: [{
+      id: 'many', title: 'Choose an option', options: Array.from({ length: 30 }, (_, i) => `Option ${i + 1}`),
+    }],
+  }] });
+  await expect(card).toContainText('Choose an option');
+  expect(await region.evaluate(el => el.clientHeight)).toBeLessThanOrEqual(page.viewportSize().height / 2);
+  expect(await region.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+  await card.getByRole('button', { name: 'Option 30', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Option 30', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  app.notify('user_questions.changed', { generation: 3, requests: [] });
+  await expect(region).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('questions survive reload and a finished turn, accept choices and text, and queue independently of approvals', async ({ page }, testInfo) => {
   const { app, snapshot } = setup(page);
   await app.install();
@@ -214,12 +252,13 @@ test('six questions page independently, retain drafts, and send all answers once
 });
 
 for (const theme of ['light', 'dark']) {
-  test(`question controls follow ${theme} appearance and font settings without clipping`, async ({ page }, testInfo) => {
-    await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
-    const { app } = setup(page);
-    await app.install();
-    await app.goto();
-    for (const font of [12, 18]) {
+  for (const font of [12, 18]) {
+    // Give each font its own timeout budget for the page loads on Linux WebKit.
+    test(`question controls follow ${theme} appearance at ${font}px without clipping`, async ({ page, browserName }, testInfo) => {
+      await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
+      const { app } = setup(page);
+      await app.install();
+      await app.goto();
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       await page.getByRole('slider', { name: 'Font size', exact: true }).fill(String(font));
@@ -239,14 +278,73 @@ for (const theme of ['light', 'dark']) {
         const digit = card.locator('.user-question-number').first();
         const digitBox = await digit.boundingBox();
         expect(digitBox.height).toBeGreaterThanOrEqual(await digit.evaluate(el => parseFloat(getComputedStyle(el).lineHeight)));
-        await input.press('Tab');
+        // macOS WebKit uses Option-Tab to include buttons in keyboard traversal.
+        await input.press(browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
         const next = card.getByRole('button', { name: 'Next', exact: true });
         await expect(next).toBeFocused();
         await expect(next).toHaveCSS('outline-style', 'solid');
         const screenshot = testInfo.outputPath(`question-${theme}-${font}-${width}.png`);
         await card.screenshot({ path: screenshot, animations: 'disabled' });
       }
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
+}
+
+for (const width of [1440, 390]) {
+  test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }, testInfo) => {
+    const app = new DesktopBrowserHarness(page);
+    const answered = '<user_question_response request_id="question-1" status="answered">\n'
+      + '<question id="plan">\n<title>Which plan?</title>\n<options>\n<option>Small change</option>\n<option>Full redesign</option>\n</options>\n<answer>Small change</answer>\n</question>\n'
+      + '<question id="details">\n<title>Any details?&#10;中文🙂</title>\n<answer>Keep keyboard support.&#10;&lt;script&gt;plain text&lt;/script&gt; &amp; &amp;lt;/answer&amp;gt;</answer>\n</question>\n'
+      + '</user_question_response>';
+    const skipped = '<user_question_response request_id="question-2" status="skipped">\n'
+      + '<question id="extra">\n<title>Anything else?</title>\n</question>\n</user_question_response>';
+    const event = (sequence, content) => ({ sequence, item: { kind: 'user', payload: { content } } });
+    app.sessionEvents = [event(1, answered)];
+    await app.install();
+    await app.goto();
+    await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+    await page.setViewportSize({ width, height: 900 });
+    const responses = page.locator('.transcript-question-response');
+    await expect(responses).toHaveCount(1);
+    const next = event(2, skipped);
+    app.sessionEvents.push(next);
+    app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
+    for (const reload of [false, true]) {
+      if (reload) {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.reload();
+        await page.getByRole('main').waitFor();
+        const showSidebar = page.getByRole('button', { name: 'Show sidebar', exact: true });
+        if (await showSidebar.isVisible()) await showSidebar.click();
+        await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+        await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+        await page.setViewportSize({ width, height: 900 });
+      }
+      await expect(responses).toHaveCount(2);
+      await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+      await expect(page.locator('.app > aside')).toHaveCSS('visibility', 'hidden');
+      const items = responses.first().locator('.question-response-item');
+      const first = await items.nth(0).boundingBox();
+      const second = await items.nth(1).boundingBox();
+      expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+      await expect(responses.first().locator('.session-message-source')).toHaveText('Your answers');
+      await expect(responses.first().locator('.question-response-title')).toHaveText(['Which plan?', 'Any details?\n中文🙂']);
+      await expect(responses.first().locator('.msg-content')).toHaveText(['Small change', 'Keep keyboard support.\n<script>plain text</script> & &lt;/answer&gt;']);
+      await expect(responses.first()).not.toContainText('Full redesign');
+      await expect(responses.last()).toHaveText('Questions skipped');
+      await expect(page.locator('#stream')).not.toContainText('user_question_response');
+      await expect(page.locator('#stream')).not.toContainText('User response to ask_user:');
+      await expect(responses.locator('script')).toHaveCount(0);
+      for (const response of await responses.all()) {
+        await expect.poll(() => response.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      }
     }
+    const screenshot = testInfo.outputPath(`question-responses-${width}.png`);
+    await page.locator('#stream').screenshot({ path: screenshot, animations: 'disabled' });
+    await testInfo.attach('Formatted question responses', { path: screenshot, contentType: 'image/png' });
     expect(app.pageErrors).toEqual([]);
   });
 }

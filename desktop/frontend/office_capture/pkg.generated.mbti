@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/office_capture"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/dom",
+}
+
+// Values
+pub fn cancel(String) -> @cmd.Cmd
+
+pub fn start(String, Format, label~ : String, hint~ : String, failure~ : String, too_large~ : String, unsupported_annotation~ : String, @cmd.Emit[Result[Capture, String]?]) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub(all) struct Capture {
+  format : Format
+  url : String
+  source : Json
+  regions : Array[Region]
+  rotation : Int?
+  text : String?
+  sheet : String?
+  range : String?
+} derive(Eq)
+pub fn Capture::equal(Self, Self) -> Bool
+pub fn Capture::not_equal(Self, Self) -> Bool
+pub fn Capture::selection_rects(Self, @dom.Element) -> Array[@dom.DOMRect]
+
+pub(all) enum Format {
+  Word
+  Excel
+  Pdf
+} derive(Eq)
+pub fn Format::equal(Self, Self) -> Bool
+pub fn Format::name(Self) -> String
+pub fn Format::not_equal(Self, Self) -> Bool
+
+pub(all) struct Region {
+  index : Int
+  page : Int?
+  x : Double
+  y : Double
+  width : Double
+  height : Double
+} derive(Eq)
+pub fn Region::equal(Self, Self) -> Bool
+pub fn Region::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits
