@@ -27,6 +27,8 @@ struct State {
   preview_cache : Map[(@interop.ChannelId, String), String]
   preview_channel : @interop.ChannelId?
   list_scroll_top : Double
+  // UI preview only; the host does not support enabling/disabling skills yet.
+  ui_disabled : Set[(@interop.ChannelId, String)]
 } derive(Eq)
 
 ///|
@@ -86,6 +88,15 @@ fn State::pending_action(
     return Some(operation.action)
   }
   None
+}
+
+///|
+fn State::skill_enabled(
+  self : State,
+  channel : @interop.ChannelId,
+  id : String,
+) -> Bool {
+  !self.ui_disabled.contains((channel, id))
 }
 
 ///|
@@ -155,6 +166,7 @@ pub fn State::empty() -> State {
     preview_cache: Map([]),
     preview_channel: None,
     list_scroll_top: 0.0,
+    ui_disabled: Set([]),
   }
 }
 
@@ -168,6 +180,7 @@ pub(all) enum Msg {
   // Capture the source alongside the library id before the entry disappears.
   Uninstall(InstalledItem)
   Update(MarketItem)
+  ToggleEnabled(String)
   // A skill operation settled: `action` is the operation to release, and
   // an `error` becomes a notice for that skill (a success reports the
   // library change to the root instead).
@@ -412,6 +425,16 @@ pub fn State::handle(
     CatalogFailed(channel~, message~) => {
       guard channel == input.channel else { return (@cmd.none, self, None) }
       (@cmd.none, { ..self, catalog: Failed(message), }, None)
+    }
+    ToggleEnabled(id) => {
+      let ui_disabled = self.ui_disabled.copy()
+      let key = (input.channel, id)
+      if ui_disabled.contains(key) {
+        ui_disabled.remove(key)
+      } else {
+        ui_disabled.add(key)
+      }
+      (@cmd.none, { ..self, ui_disabled, }, None)
     }
     Install(item) | Update(item) => {
       let source = source_label(item)

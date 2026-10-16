@@ -62,6 +62,7 @@ pub(all) enum Msg {
   Install(MarketItem)
   Uninstall(InstalledItem)
   Update(MarketItem)
+  ToggleEnabled(String)
   ActionDone(channel~ : @interop.ChannelId, action~ : PendingSkillAction, error~ : String?)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)

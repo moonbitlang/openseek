@@ -65,6 +65,13 @@ class SkillsHarness extends DesktopBrowserHarness {
     await group.locator('.skill-summary').first().click();
     await expect(this.page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
   }
+
+  async performAction(name) {
+    if (name === 'Uninstall') {
+      await this.page.locator('.skill-detail-page').getByRole('button', { name: 'Manage skill', exact: true }).click();
+    }
+    await this.page.getByRole(name === 'Uninstall' ? 'menuitem' : 'button', { name, exact: true }).click();
+  }
 }
 
 test('install and uninstall from the same catalog detail page', async ({ page }) => {
@@ -73,9 +80,9 @@ test('install and uninstall from the same catalog detail page', async ({ page })
   await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
   await expect(page.locator('.skill-detail-meta')).toHaveText(installed.source);
   await page.getByRole('button', { name: 'Install skill', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toBeVisible();
   await expect(page.locator('.skill-detail-header h2')).toHaveText(installed.name);
-  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await app.performAction('Uninstall');
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
   expect(app.requests.filter(r => r.method === 'skills.uninstall').map(r => r.params.id)).toEqual([installed.id]);
   expect(app.installedSkills).toEqual([]);
@@ -86,9 +93,9 @@ test('removed skill without a catalog entry cannot be uninstalled again', async 
   const app = new SkillsHarness(page, true);
   app.catalogSkills = [];
   await app.openDetails();
-  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await app.performAction('Uninstall');
   await expect(page.locator('.skill-detail-header')).toContainText('Not installed');
-  await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
   expect(app.installedSkills).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
@@ -109,7 +116,7 @@ for (const { source, packagePath } of [
       await expect(registry.locator('.skill-row')).toHaveCount(0);
     } else {
       await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
     }
     expect(app.pageErrors).toEqual([]);
   });
@@ -118,12 +125,12 @@ for (const { source, packagePath } of [
 test('installed detail stops offering uninstall after the library removes it', async ({ page }) => {
   const app = new SkillsHarness(page, true);
   await app.openDetails();
-  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await app.performAction('Uninstall');
   await expect.poll(() => app.installedSkills.length).toBe(0);
-  await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Install skill', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -131,11 +138,11 @@ test('uninstall failure is visible in the detail page and can be retried', async
   const app = new SkillsHarness(page, true);
   app.rpcErrors.set('skills.uninstall', 'Cannot remove skill: permission denied');
   await app.openDetails();
-  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await app.performAction('Uninstall');
   await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove skill: permission denied');
-  await expect(page.getByRole('button', { name: 'Uninstall', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toBeEnabled();
   app.rpcErrors.delete('skills.uninstall');
-  await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+  await app.performAction('Uninstall');
   await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
@@ -149,10 +156,10 @@ for (const removing of [false, true]) {
     const release = app.holdReplyAfterCommit(method);
     await app.openDetails();
     const refreshes = app.requests.filter(r => r.method === 'skills.installed').length;
-    await page.getByRole('button', { name: removing ? 'Uninstall' : 'Install skill', exact: true }).click();
+    await app.performAction(removing ? 'Uninstall' : 'Install skill');
     await expect.poll(() => app.requests.filter(r => r.method === 'skills.installed').length).toBeGreaterThan(refreshes);
     await expect(page.locator('.skill-detail-action')).toBeDisabled();
-    await expect(page.locator('.skill-detail-action')).toHaveText(busyLabel);
+    await expect(page.locator('.skill-detail-action')).toHaveAccessibleName(busyLabel);
     // Wait for the committed library state to render, rather than just for the request.
     await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
     const group = page.locator('.settings-group').filter({
@@ -161,17 +168,17 @@ for (const removing of [false, true]) {
     await expect(group.locator('.skill-row')).toHaveCount(1);
     const listAction = group.locator('.skill-row button.skill-action');
     await expect(listAction).toBeDisabled();
-    await expect(listAction).toHaveText(busyLabel);
+    await expect(listAction).toHaveAccessibleName(busyLabel);
     await group.locator('.skill-summary').click();
     const action = page.locator('.skill-detail-action');
     await expect(action).toBeDisabled();
-    await expect(action).toHaveText(busyLabel);
+    await expect(action).toHaveAccessibleName(busyLabel);
     await action.evaluate(button => button.click());
     expect(app.requests.filter(r => r.method === inverse)).toHaveLength(0);
     release();
-    const nextAction = page.getByRole('button', { name: removing ? 'Install skill' : 'Uninstall', exact: true });
+    const nextAction = page.getByRole('button', { name: removing ? 'Install skill' : 'Manage skill', exact: true });
     await expect(nextAction).toBeEnabled();
-    await nextAction.click();
+    await app.performAction(removing ? 'Install skill' : 'Uninstall');
     await expect.poll(() => app.requests.filter(r => r.method === inverse).length).toBe(1);
     expect(app.pageErrors).toEqual([]);
   });
@@ -190,7 +197,7 @@ for (const targetInstalled of [false, true]) {
     const contentMethod = targetInstalled ? 'skills.installed_content' : 'skills.content';
     const initialReads = app.requests.filter(r => r.method === contentMethod).length;
     for (const cached of [false, true]) {
-      await page.locator('.skill-detail-page').getByRole('button', { name: 'Uninstall', exact: true }).click();
+      await app.performAction('Uninstall');
       await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove wayfinder: permission denied');
       await page.getByRole('button', { name: 'Back to skills', exact: true }).click();
       await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
@@ -228,7 +235,7 @@ for (const removing of [false, true]) {
     await app.openDetails();
     const detail = page.locator('.skill-detail-page');
     const back = page.getByRole('button', { name: 'Back to skills', exact: true });
-    await detail.getByRole('button', { name: actionName, exact: true }).click();
+    await app.performAction(actionName);
     await expect(detail.locator('.skill-detail-action')).toBeDisabled();
     await back.click();
     await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
@@ -247,8 +254,8 @@ for (const removing of [false, true]) {
     await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
     await expect(detail.locator('.skills-notice')).toHaveText('Wayfinder operation failed after navigation');
     failWayfinder = false;
-    await detail.getByRole('button', { name: actionName, exact: true }).click();
-    await expect(detail.getByRole('button', { name: removing ? 'Install skill' : 'Uninstall', exact: true })).toBeEnabled();
+    await app.performAction(actionName);
+    await expect(detail.getByRole('button', { name: removing ? 'Install skill' : 'Manage skill', exact: true })).toBeEnabled();
     await expect(detail.locator('.skills-notice')).toHaveCount(0);
     await back.click();
     await expect(page.locator('.skills-notice')).toHaveCount(1);
