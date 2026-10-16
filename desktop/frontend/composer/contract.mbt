@@ -191,8 +191,6 @@ pub(all) struct Presentation {
   disabled : Bool
   primary_action : PrimaryAction
   images_enabled : Bool
-  // Only the desktop shell can reference a directory on its own machine.
-  folder_references_enabled : Bool
 } derive(Eq)
 
 ///|
@@ -266,7 +264,6 @@ pub(all) struct Input {
 /// Deliberate operations emitted by the composer. Raw keystrokes, completion
 /// navigation, debounce ticks, and async replies remain private to the package.
 pub(all) enum Action {
-  FolderReferenceRequested(identity~ : Identity, root~ : @common.Uri)
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
   FollowupSubmitted(
     identity~ : Identity,
@@ -341,8 +338,7 @@ pub(all) enum Action {
 /// it. Owners validate this identity before interpreting the operation.
 pub fn Action::identity(self : Action) -> Identity {
   match self {
-    FolderReferenceRequested(identity~, ..)
-    | DraftSubmitted(identity~, ..)
+    DraftSubmitted(identity~, ..)
     | FollowupSubmitted(identity~, ..)
     | DraftPresenceChanged(identity~, ..)
     | ReviewChangesRemoved(identity~, ..)

@@ -35,8 +35,7 @@ test('one draft carries current text, file mentions and images through repeated 
   await task.pressSequentially(' Inspect this 👀');
   const initialText = await task.inputValue();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
 
@@ -97,8 +96,7 @@ test('an image-only Codex draft migrates back and sends through DeepSeek', async
   const initialRows = await page.locator('.conversation-row').count();
   await choose(page, 'Codex test');
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   await (await chooser).setFiles({ name: 'screen.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', imageURL);
   await choose(page, 'DS Pro');

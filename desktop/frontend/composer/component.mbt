@@ -1321,7 +1321,6 @@ pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   action_emit : @cmd.Emit[Action],
-  on_menu_change? : @cmd.Emit[Bool],
 ) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply]) {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -1331,22 +1330,10 @@ pub fn component(
     },
     subscriptions=(state, input, emit) => state.subscriptions(input, emit),
   )
-  let menu_input = state.map3(input, locale, (state, input, locale) => {
-    (state.active(input), input, locale)
-  })
-  let menu = @action_menu.component(
-    menu_input,
-    (data, target) => {
-      let (entry, input, locale) = data
-      entry.add_menu(locale, input, target, emit, action_emit)
-    },
-    on_open_change?=on_menu_change,
-  )
-  let body = state.view3(input, locale, (state, input, locale) => {
+  let html = state.view3(input, locale, (state, input, locale) => {
     state
     .active(input)
     .view(locale~, emit, action_emit, input, clock_ms=state.clock_ms)
   })
-  let html = body.map2(menu, (body, menu) => @html.fragment([body, menu]))
   (html, emit.map(reply => QuoteReplied(reply)))
 }

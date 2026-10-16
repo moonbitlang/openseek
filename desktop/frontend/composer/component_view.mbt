@@ -296,7 +296,10 @@ fn Entry::view(
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
-  let can_attach = self.can_attach(input)
+  let can_attach = (input.presentation.images_enabled || input.root is Some(_)) &&
+    !input.presentation.disabled &&
+    !goal_mode &&
+    shell_command is None
   // Keep a permanent first slot so hiding the attachment button does not
   // rebuild the model and workspace controls that follow it.
   let status : Array[@html.Html] = [
@@ -307,11 +310,9 @@ fn Entry::view(
           @html.button(
             class="composer-attach",
             type_="button",
-            title=ui(locale, AddAttachments),
-            attrs=@action_menu.button_attrs(
-              self.add_menu_target(),
-              leading=true,
-            ).aria_label(ui(locale, AddAttachments)),
+            title=ui(locale, AttachHint),
+            on_click=pick_attachments(locale, input, image_emit),
+            attrs=@html.Attrs::build().aria_label(ui(locale, AttachImages)),
             @icons.icon(@icons.icon_add),
           ),
         ]

@@ -2237,11 +2237,6 @@ fn view(
     children.push(
       @project_picker.view(
         locale=model.locale,
-        purpose=if model.folder_reference is Some(_) {
-          @project_picker.ReferenceFolder
-        } else {
-          @project_picker.AddProject
-        },
         dispatch.map(msg => ProjectPicker(msg)),
         picker,
       ),

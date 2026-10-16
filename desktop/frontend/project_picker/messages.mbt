@@ -2,9 +2,6 @@
 
 ///|
 priv enum UiMessage {
-  AddFolderLabel
-  ReferenceFolderHint
-  ReferenceCurrentFolder
   OneMatch
   OneFolder
   FoldersLabel
@@ -41,31 +38,6 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, AddFolderLabel) => "Add folder"
-    (Spanish, AddFolderLabel) => "Añadir carpeta"
-    (SimplifiedChinese, AddFolderLabel) => "添加文件夹"
-    (TraditionalChinese, AddFolderLabel) => "新增資料夾"
-    (Japanese, AddFolderLabel) => "フォルダーを追加"
-    (English, ReferenceFolderHint) =>
-      "Only the folder path will be referenced. Its contents will not be uploaded."
-    (Spanish, ReferenceFolderHint) =>
-      "Solo se referenciará la ruta de la carpeta. No se subirá su contenido."
-    (SimplifiedChinese, ReferenceFolderHint) =>
-      "只引用文件夹路径，不会上传文件夹内容。"
-    (TraditionalChinese, ReferenceFolderHint) =>
-      "只引用資料夾路徑，不會上傳資料夾內容。"
-    (Japanese, ReferenceFolderHint) =>
-      "フォルダーのパスのみを参照します。内容はアップロードされません。"
-    (English, ReferenceCurrentFolder) =>
-      "You can add this folder even when it has no subfolders."
-    (Spanish, ReferenceCurrentFolder) =>
-      "Puedes añadir esta carpeta aunque no tenga subcarpetas."
-    (SimplifiedChinese, ReferenceCurrentFolder) =>
-      "即使没有子文件夹，也可以添加当前文件夹。"
-    (TraditionalChinese, ReferenceCurrentFolder) =>
-      "即使沒有子資料夾，也可以新增當前資料夾。"
-    (Japanese, ReferenceCurrentFolder) =>
-      "サブフォルダーがなくても、このフォルダーを追加できます。"
     (English, OneMatch) => "1 match"
     (Spanish, OneMatch) => "1 coincidencia"
     (SimplifiedChinese, OneMatch) => "1 个匹配项"

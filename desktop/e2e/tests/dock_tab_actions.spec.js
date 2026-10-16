@@ -1,6 +1,5 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { installDesktopTransport } from './support/desktop_transport.js';
 
 async function openTabs(page, names) {
   const app = new DesktopBrowserHarness(page);
@@ -208,7 +207,32 @@ test('open tab menu follows live locale changes', async ({ page }) => {
 test('tab menu hides and restores the native browser view through the host bridge', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  await installDesktopTransport(page, app);
+  await page.exposeFunction('dockDesktopRequest', request => {
+    app.requests.push(request);
+    if (request.method === 'app.system_appearance') return { dark: false };
+    return app.replyFor(request);
+  });
+  await page.addInitScript(() => {
+    const listeners = new Map();
+    const events = { on(name, callback) {
+      const callbacks = listeners.get(name) || new Set();
+      listeners.set(name, callbacks);
+      callbacks.add(callback);
+      return () => callbacks.delete(callback);
+    } };
+    window.__MoonBit__ = {
+      getTitlebarArea: async () => null,
+      app: events, events,
+      openseek: new Proxy({}, { get: (_, method) => async params => {
+        if (method === 'host.connect') {
+          for (const callback of listeners.get('openseek.agent.connected') || []) {
+            callback({ payload: { stage: 'serving' } });
+          }
+        }
+        return window.dockDesktopRequest({ method, params });
+      } }),
+    };
+  });
   await page.goto('/dist/browser/index.html');
   await app.openSession();
   await app.openReview();
@@ -219,15 +243,6 @@ test('tab menu hides and restores the native browser view through the host bridg
   const visible = () => app.requests.filter(r => r.method === 'browser.set_visible').at(-1)?.params.visible;
   await expect.poll(visible).toBe(true);
   const shows = () => app.requests.filter(r => r.method === 'browser.set_visible' && r.params.visible);
-  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
-  await expect.poll(visible).toBe(false);
-  await page.getByRole('menuitem', { name: 'Add folder', exact: true }).click();
-  const folderPicker = page.getByRole('dialog', { name: 'Add folder', exact: true });
-  await expect(folderPicker).toBeVisible();
-  await expect.poll(visible).toBe(false);
-  await folderPicker.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect.poll(visible).toBe(true);
-
   const composer = page.locator('#task');
   await composer.fill('Keep this draft');
   // Native browser contents have a separate renderer. Model its focus return

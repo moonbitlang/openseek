@@ -39,15 +39,8 @@ fn scroll_path_row(id : String) -> Unit {
 }
 
 ///|
-pub(all) enum Purpose {
-  AddProject
-  ReferenceFolder
-}
-
-///|
 pub fn view(
   locale~ : @i18n.Locale = English,
-  purpose~ : Purpose = AddProject,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {
@@ -90,7 +83,7 @@ pub fn view(
     )
   }
   if visible_entries.is_empty() && picker.new_folder is None {
-    rows.push(empty_view(locale~, purpose, picker, filter_active))
+    rows.push(empty_view(locale~, picker, filter_active))
   }
   let can_create = !picker.loading &&
     picker.location is Some(Directory(_)) &&
@@ -139,26 +132,9 @@ pub fn view(
               @html.div(
                 id="project-picker-title",
                 class="modal-title",
-                ui(
-                  locale,
-                  if purpose is ReferenceFolder {
-                    AddFolderLabel
-                  } else {
-                    AddProjectTitle
-                  },
-                ),
+                ui(locale, AddProjectTitle),
               ),
-              @html.div(
-                class="picker-subtitle",
-                ui(
-                  locale,
-                  if purpose is ReferenceFolder {
-                    ReferenceFolderHint
-                  } else {
-                    ChooseFolder
-                  },
-                ),
-              ),
+              @html.div(class="picker-subtitle", ui(locale, ChooseFolder)),
             ]),
           ]),
           @html.button(
@@ -166,16 +142,7 @@ pub fn view(
             type_="button",
             title=ui(locale, CloseLabel),
             on_click=emit(Close),
-            attrs=@html.Attrs::build().aria_label(
-              ui(
-                locale,
-                if purpose is ReferenceFolder {
-                  CloseLabel
-                } else {
-                  ClosePicker
-                },
-              ),
-            ),
+            attrs=@html.Attrs::build().aria_label(ui(locale, ClosePicker)),
             @icons.icon(@icons.icon_close),
           ),
         ]),
@@ -185,17 +152,13 @@ pub fn view(
               path_editor(locale~, emit, picker, value, suggestion_active)
             None => picker_breadcrumbs(locale~, emit, picker)
           },
-          if purpose is AddProject {
-            @html.button(
-              class="picker-new-folder",
-              type_="button",
-              disabled=!can_create,
-              on_click=emit(BeginCreateFolder),
-              [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
-            )
-          } else {
-            @html.nothing
-          },
+          @html.button(
+            class="picker-new-folder",
+            type_="button",
+            disabled=!can_create,
+            on_click=emit(BeginCreateFolder),
+            [@icons.icon(@icons.icon_add), @html.span(ui(locale, NewFolder))],
+          ),
         ]),
         @html.div(class="picker-browser", [
           @html.div(class="picker-list", attrs=list_attrs, [
@@ -213,7 +176,7 @@ pub fn view(
             @html.div(class="picker-list-rows", rows),
           ]),
         ]),
-        picker_footer(locale~, purpose, emit, picker),
+        picker_footer(locale~, emit, picker),
       ],
     ),
   ])
@@ -364,7 +327,6 @@ fn new_folder_row(
 ///|
 fn empty_view(
   locale~ : @i18n.Locale = English,
-  purpose : Purpose,
   picker : State,
   filter_active : Bool,
 ) -> @html.Html {
@@ -373,17 +335,7 @@ fn empty_view(
   } else if filter_active {
     (ui(locale, NoMatchingFolders), ui(locale, TryAnotherPath))
   } else {
-    (
-      ui(locale, NoFolders),
-      ui(
-        locale,
-        if purpose is ReferenceFolder {
-          ReferenceCurrentFolder
-        } else {
-          CreateOrAdd
-        },
-      ),
-    )
+    (ui(locale, NoFolders), ui(locale, CreateOrAdd))
   }
   @html.div(class="picker-empty", attrs=@html.Attrs::build().role("status"), [
     @html.div(class="picker-empty-title", title),
@@ -394,7 +346,6 @@ fn empty_view(
 ///|
 fn picker_footer(
   locale~ : @i18n.Locale = English,
-  purpose : Purpose,
   emit : @cmd.Emit[Msg],
   picker : State,
 ) -> @html.Html {
@@ -416,14 +367,7 @@ fn picker_footer(
         type_="button",
         disabled=!can_confirm,
         on_click=emit(Confirm),
-        ui(
-          locale,
-          if purpose is ReferenceFolder {
-            AddFolderLabel
-          } else {
-            AddProjectLabel
-          },
-        ),
+        ui(locale, AddProjectLabel),
       ),
     ]),
   ])

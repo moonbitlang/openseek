@@ -2,11 +2,6 @@
 
 ///|
 priv enum UiMessage {
-  AddAttachments
-  AddFilesPhotos
-  AddFolderLabel
-  FolderReferenceHint
-  FolderDesktopOnlyHint
   CommandsLabel
   SkillsLabel
   SymbolsLabel
@@ -28,6 +23,7 @@ priv enum UiMessage {
   QueueNextTurn
   SaveQueued
   AttachHint
+  AttachImages
   ReadingImages
   UploadAttachment
   UploadAttachmentQuestion
@@ -127,39 +123,6 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, AddAttachments) => "Add attachments"
-    (Spanish, AddAttachments) => "Añadir adjuntos"
-    (SimplifiedChinese, AddAttachments) => "添加附件"
-    (TraditionalChinese, AddAttachments) => "新增附件"
-    (Japanese, AddAttachments) => "添付を追加"
-    (English, AddFilesPhotos) => "Add files or photos"
-    (Spanish, AddFilesPhotos) => "Añadir archivos o fotos"
-    (SimplifiedChinese, AddFilesPhotos) => "添加文件或照片"
-    (TraditionalChinese, AddFilesPhotos) => "新增檔案或照片"
-    (Japanese, AddFilesPhotos) => "ファイルまたは写真を追加"
-    (English, AddFolderLabel) => "Add folder"
-    (Spanish, AddFolderLabel) => "Añadir carpeta"
-    (SimplifiedChinese, AddFolderLabel) => "添加文件夹"
-    (TraditionalChinese, AddFolderLabel) => "新增資料夾"
-    (Japanese, AddFolderLabel) => "フォルダーを追加"
-    (English, FolderDesktopOnlyHint) =>
-      "Available only in local desktop sessions"
-    (Spanish, FolderDesktopOnlyHint) =>
-      "Disponible solo en sesiones locales de escritorio"
-    (SimplifiedChinese, FolderDesktopOnlyHint) => "仅桌面本地会话可用"
-    (TraditionalChinese, FolderDesktopOnlyHint) => "僅桌面本機會話可用"
-    (Japanese, FolderDesktopOnlyHint) =>
-      "デスクトップのローカルセッションでのみ利用できます"
-    (English, FolderReferenceHint) =>
-      "Reference a folder path without uploading its contents"
-    (Spanish, FolderReferenceHint) =>
-      "Referenciar una carpeta sin subir su contenido"
-    (SimplifiedChinese, FolderReferenceHint) =>
-      "只引用文件夹路径，不上传内容"
-    (TraditionalChinese, FolderReferenceHint) =>
-      "只引用資料夾路徑，不上傳內容"
-    (Japanese, FolderReferenceHint) =>
-      "内容をアップロードせず、フォルダーのパスを参照"
     (English, CommandsLabel) => "Commands"
     (Spanish, CommandsLabel) => "Comandos"
     (SimplifiedChinese, CommandsLabel) => "命令"
@@ -280,6 +243,11 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "新增圖片（5 MiB）或 PDF、DOCX、XLSX 文件（20 MiB）"
     (Japanese, AttachHint) =>
       "画像（5 MiB）または PDF、DOCX、XLSX 文書（20 MiB）を添付"
+    (English, AttachImages) => "Attach files"
+    (Spanish, AttachImages) => "Adjuntar archivos"
+    (SimplifiedChinese, AttachImages) => "添加附件"
+    (TraditionalChinese, AttachImages) => "新增附件"
+    (Japanese, AttachImages) => "ファイルを添付"
     (English, ReadingImages) => "Reading attachments…"
     (English, PreparingAttachment) => "Preparing attachment…"
     (English, CancelAttachment) => "Cancel"

@@ -1,5 +1,4 @@
 import {
-  "openseek_desktop/frontend/action_menu",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/openseek/deepseek",
   "openseek_desktop/frontend/i18n",

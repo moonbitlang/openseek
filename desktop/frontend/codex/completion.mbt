@@ -435,7 +435,6 @@ pub fn State::composer_input(
         ui(locale, AskCodex)
       },
       disabled: !can_edit,
-      folder_references_enabled: false,
       images_enabled: !self.loading,
       primary_action,
     },
@@ -482,7 +481,6 @@ fn State::apply_composer_action(
     return (@cmd.none, self)
   }
   match action {
-    @composer.FolderReferenceRequested(..) => (@cmd.none, self)
     @composer.DraftSubmitted(draft~, ..) => {
       let next = {
         ..self,

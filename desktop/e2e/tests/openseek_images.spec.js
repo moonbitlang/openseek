@@ -12,14 +12,13 @@ async function open(page) {
   await app.install();
   await app.goto();
   await app.openSession();
-  await expect(page.getByRole('button', { name: 'Add attachments', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
   return app;
 }
 
 async function select(page) {
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Add attachments', exact: true }).click();
-  await page.getByRole('menuitem', { name: 'Add files or photos', exact: true }).click();
+  await page.getByRole('button', { name: 'Attach files', exact: true }).click();
   await (await chooser).setFiles(image);
   await expect(page.locator('.composer-image img')).toHaveAttribute('src', url);
 }
