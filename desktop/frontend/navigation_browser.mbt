@@ -1,18 +1,4 @@
 ///|
-/// Pin a legacy document's relative resources before client navigation changes
-/// its URL. Server/Proton base elements already define their resource root.
-/// This bootstrap-only effect uses the existing typed DOM package.
-fn preserve_navigation_asset_base() -> Unit {
-  let document = @dom.document()
-  guard document.query_selector("base").to_option() is None else { return }
-  if document.query_selector("head").to_option() is Some(head) {
-    let element = document.create_element("base")
-    element.set_attribute("href", @dom.window().current_url())
-    head.append_child(element.as_node())
-  }
-}
-
-///|
 /// Bootstrap-only read; update and view consume data from the model.
 fn navigation_device_from_location() -> String? {
   guard @interop.js_prop(@js.globalThis, "location") is Some(location) &&

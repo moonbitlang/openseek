@@ -22,7 +22,7 @@ test('browser and application arrows share history, preserve drafts and branch a
   const app = new DesktopBrowserHarness(page);
   await app.install(); await app.goto(); await app.openSession();
   await expect(page).toHaveURL(new RegExp(path('chat/session/session-1') + '$'));
-  expect(await page.evaluate(() => new URL('frontend.js', document.baseURI).pathname)).toBe('/dist/browser/frontend.js');
+  expect(await page.evaluate(() => new URL('frontend.js', document.baseURI).pathname)).toMatch(/^\/assets\/v[^/]+\/frontend\.js$/);
   const composer = page.getByRole('textbox', { name: 'Ask SeekMoon to inspect, edit, or explain this workspace.' });
   await composer.fill('Unsent input survives navigation');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();

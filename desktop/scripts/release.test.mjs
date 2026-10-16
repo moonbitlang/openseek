@@ -80,7 +80,7 @@ test("mutating requests fail without retrying", async t => {
   assert.equal(requests, 1);
 });
 
-test("verify distinguishes missing Location, non-redirects, and wrong destinations", async t => {
+test("verify checks console redirects and the versioned asset bytes", async t => {
   const release = new Release();
   release.dist = await fs.mkdtemp(join(tmpdir(), "openseek-release-"));
   t.after(() => fs.rm(release.dist, { recursive: true, force: true }));
@@ -94,6 +94,13 @@ test("verify distinguishes missing Location, non-redirects, and wrong destinatio
   const bytes = Buffer.from("release artifact fixture");
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   for (const file of Object.values(files)) await fs.writeFile(join(release.dist, file), bytes);
+  await fs.mkdir(join(release.dist, "browser/assets/v0.1.9"), { recursive: true });
+  const documents = new Map([
+    ["/console/releases/v0.1.9/index.html", "packaged document"],
+    ["/assets/v0.1.9/frontend.js", "packaged frontend"],
+  ]);
+  await fs.writeFile(join(release.dist, "browser/index.html"), "packaged document");
+  await fs.writeFile(join(release.dist, "browser/assets/v0.1.9/frontend.js"), "packaged frontend");
   const manifest = { version: "0.1.9", platforms: {} };
   let status = 302;
   let headers = {};
@@ -110,6 +117,8 @@ test("verify distinguishes missing Location, non-redirects, and wrong destinatio
       response.end();
     } else if (request.url.startsWith("/v0.1.9/")) {
       response.end(bytes);
+    } else if (documents.has(request.url)) {
+      response.end(documents.get(request.url));
     } else {
       response.writeHead(404);
       response.end();
@@ -125,6 +134,11 @@ test("verify distinguishes missing Location, non-redirects, and wrong destinatio
   status = 302;
   headers = { location: "/console/releases/v0.1.8/index.html" };
   await assert.rejects(release.verify("v0.1.9"), /did not select \/console\/releases\/v0\.1\.9\/index\.html/);
+  headers = { location: "/console/releases/v0.1.9/index.html" };
+  await release.verify("v0.1.9");
+  documents.set("/assets/v0.1.9/frontend.js", "wrong version");
+  await assert.rejects(release.verify("v0.1.9"), /served assets\/v0\.1\.9\/frontend.js does not match/);
+
 });
 
 test("artifact checks preserve non-missing filesystem errors", async t => {

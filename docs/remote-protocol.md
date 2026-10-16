@@ -61,6 +61,8 @@ releases; JSON/WS APIs live under `/v1`:
 |---|---|
 | `GET /console/` | The server-selected Browser release |
 | `GET /console/releases/v<version>/index.html` | One published Browser bundle. `?device=<id>` is required and fixes the page/tab to that device; optional `?workspace=<path>` selects where its first conversation lands. Packaged Desktop links here with its installed version |
+| `GET /device/<device>/…` | Stable client page route; serves the current Browser document without redirecting the requested location |
+| `GET /assets/v<version>/…` | Immutable frontend resources, using the same path prefix as the packaged Desktop host and local console |
 | `GET /d/<device>/…` | Retired: `302` to `/console/?device=<device>` with the original query appended, so old deep links keep their device target |
 | `GET /healthz` | Relay liveness probe, `200 ok` |
 | `/v1/auth/*`, `/v1/devices…` | The relay's own auth and device APIs (see Authentication) |
@@ -68,7 +70,7 @@ releases; JSON/WS APIs live under `/v1`:
 Everything else — commands, queries, and host-pushed events — travels over
 `GET /v1/devices/<device>/ws`, upgraded from the same origin the bundle was
 served from and spliced through to the host. A browser page takes its one
-`<device>` from the required `?device=` query and verifies it against
+`<device>` from the page route (or the legacy `?device=` entry query) and verifies it against
 `GET /v1/devices`; other roster devices need their own page/tab. Frames are
 JSON text, shaped as **JSON-RPC 2.0**:
 

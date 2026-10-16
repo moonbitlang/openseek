@@ -44,7 +44,7 @@ async function installDesktop(page, systemDark = false) {
       }),
     };
   });
-  await page.goto('/dist/browser/index.html');
+  await page.goto('/index.html');
   await app.openSession();
   return app;
 }

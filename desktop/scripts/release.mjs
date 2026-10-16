@@ -409,9 +409,12 @@ export class Release {
     if (new URL(location, this.apiOrigin()).pathname !== consolePath) {
       throw new Error(`/console/ did not select ${consolePath}: HTTP ${redirect.status} ${location}`);
     }
-    for (const file of ["index.html", "frontend.js"]) {
-      const response = await this.fetch(`/console/releases/${version}/${file}`, { auth: false });
-      if (!response.ok) throw new Error(`GET /console/releases/${version}/${file} failed: HTTP ${response.status}`);
+    for (const [file, path] of [
+      ["index.html", consolePath],
+      [`assets/${version}/frontend.js`, `/assets/${version}/frontend.js`],
+    ]) {
+      const response = await this.fetch(path, { auth: false });
+      if (!response.ok) throw new Error(`GET ${path} failed: HTTP ${response.status}`);
       const served = createHash("sha256").update(Buffer.from(await response.arrayBuffer())).digest("hex");
       if (served !== await this.digest(join(this.dist, "browser", file))) {
         throw new Error(`served ${file} does not match the Browser bundle`);

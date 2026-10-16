@@ -233,7 +233,7 @@ test('tab menu hides and restores the native browser view through the host bridg
       } }),
     };
   });
-  await page.goto('/dist/browser/index.html');
+  await page.goto('/index.html');
   await app.openSession();
   await app.openReview();
   await page.locator('.tab-add').click();

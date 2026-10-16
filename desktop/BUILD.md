@@ -102,13 +102,18 @@ All installed platforms receive the same application-owned tree:
 seekmoon/
   web/
     index.html
-    frontend.js
-    app.css
-    viewer.css
-    codicon.ttf
-    xterm.js
-    xterm.css
-    mermaid/
+    assets/v<package.version>/
+      frontend.js
+      app.css
+      viewer.css
+      codicon.ttf
+      xterm.js
+      xterm.css
+      relative-time.js
+      fonts/
+      vendor/pdfjs/
+      pdf-runtime.js
+      mermaid/
     viz/
   bin/
     openseek[.exe]

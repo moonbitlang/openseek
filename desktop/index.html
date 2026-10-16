@@ -2,6 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="seekmoon-asset-base" content="__SEEKMOON_ASSET_BASE__" />
     <!-- interactive-widget makes Chrome shrink the layout viewport when the
          on-screen keyboard opens, so the flex shell compresses (topbar stays,
          composer sits above the keyboard) instead of the whole page panning
@@ -13,21 +14,21 @@
     <title>SeekMoon</title>
     <!-- The one document for both the proton window and the console page
          openseek-api serves; package/build.mjs ships it, frontend.js, and
-         these sidecars to each place unchanged. -->
+         these sidecars under one versioned /assets/ prefix in every host. -->
     <!-- The embedded code viewer's styles, assembled from the editor dependency
          by package/build.mjs. -->
-    <link rel="stylesheet" href="./vendor/pdfjs/web/pdf_viewer.css" />
-    <link rel="stylesheet" href="viewer.css" />
-    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="__SEEKMOON_ASSET_BASE__vendor/pdfjs/web/pdf_viewer.css" />
+    <link rel="stylesheet" href="__SEEKMOON_ASSET_BASE__viewer.css" />
+    <link rel="stylesheet" href="__SEEKMOON_ASSET_BASE__app.css" />
     <!-- Generated from the pinned xterm sources alongside xterm.js below. -->
-    <link rel="stylesheet" href="xterm.css" />
+    <link rel="stylesheet" href="__SEEKMOON_ASSET_BASE__xterm.css" />
   </head>
   <body>
     <div id="app"></div>
     <!-- The packager combines pinned xterm distributions with the adapter that
          exposes their constructors through the __openseek_xterm global. -->
-    <script src="./xterm.js"></script>
-    <script type="module" src="./relative-time.js"></script>
-    <script src="./frontend.js"></script>
+    <script src="__SEEKMOON_ASSET_BASE__xterm.js"></script>
+    <script type="module" src="__SEEKMOON_ASSET_BASE__relative-time.js"></script>
+    <script src="__SEEKMOON_ASSET_BASE__frontend.js"></script>
   </body>
 </html>

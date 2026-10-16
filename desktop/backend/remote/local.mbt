@@ -253,7 +253,7 @@ async fn LocalConsole::handle(
     }
     Logout => respond_status(conn, 204, "No Content")
     Static(relative) => serve_static(root, relative, conn)
-    ApplicationPage => serve_static(root, entry, conn, application=true)
+    ApplicationPage => serve_static(root, entry, conn)
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }
@@ -331,7 +331,6 @@ async fn serve_static(
   relative : String,
   conn : @http.ServerConnection,
   cookie? : @http.Cookie,
-  application~ : Bool = false,
 ) -> Unit {
   // Only an absent file is 404; an unreadable one is the bundle being broken,
   // which the log names and the browser sees as a server failure.
@@ -350,13 +349,6 @@ async fn serve_static(
       respond_status(conn, 500, "Internal Server Error")
       return
     }
-  }
-  let body = if application {
-    @utf8.encode(
-      @utf8.decode(body).replace(old="<head>", new="<head><base href=\"/\">"),
-    )
-  } else {
-    body
   }
   conn.send_response(
     200,
