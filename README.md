@@ -12,8 +12,14 @@ data model, and the life of one agent turn — see
 ## Running without a checkout
 
 Native archives for Linux x64/arm64, macOS arm64 and Windows x64 are
-published by the **CLI release** workflow on the
-[GitHub Releases page](https://github.com/moonbitlang/openseek/releases).
+published independently by the **CLI release** workflow to OSS and S3.
+Downloads use `https://cli.moonbitlang.com/openseek/cli/releases/v<version>/`;
+the version comes from the root `moon.mod`. After publishing version 0.6.2, its files are
+[Linux x64](https://cli.moonbitlang.com/openseek/cli/releases/v0.6.2/openseek-linux-x64.tar.gz),
+[Linux arm64](https://cli.moonbitlang.com/openseek/cli/releases/v0.6.2/openseek-linux-arm64.tar.gz),
+[macOS arm64](https://cli.moonbitlang.com/openseek/cli/releases/v0.6.2/openseek-macos-arm64.tar.gz),
+[Windows x64](https://cli.moonbitlang.com/openseek/cli/releases/v0.6.2/openseek-windows-x64.tar.gz),
+and [SHA256SUMS](https://cli.moonbitlang.com/openseek/cli/releases/v0.6.2/SHA256SUMS).
 Each archive contains `bin/openseek` (`openseek.exe` on Windows), rg, and
 `share` documentation/workflows. Download your platform's archive and verify
 it against the release's `SHA256SUMS`, then extract the whole archive:
