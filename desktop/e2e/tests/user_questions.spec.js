@@ -252,12 +252,13 @@ test('six questions page independently, retain drafts, and send all answers once
 });
 
 for (const theme of ['light', 'dark']) {
-  test(`question controls follow ${theme} appearance and font settings without clipping`, async ({ page, browserName }, testInfo) => {
-    await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
-    const { app } = setup(page);
-    await app.install();
-    await app.goto();
-    for (const font of [12, 18]) {
+  for (const font of [12, 18]) {
+    // Give each font its own timeout budget for the page loads on Linux WebKit.
+    test(`question controls follow ${theme} appearance at ${font}px without clipping`, async ({ page, browserName }, testInfo) => {
+      await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
+      const { app } = setup(page);
+      await app.install();
+      await app.goto();
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       await page.getByRole('slider', { name: 'Font size', exact: true }).fill(String(font));
@@ -285,7 +286,7 @@ for (const theme of ['light', 'dark']) {
         const screenshot = testInfo.outputPath(`question-${theme}-${font}-${width}.png`);
         await card.screenshot({ path: screenshot, animations: 'disabled' });
       }
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
+      expect(app.pageErrors).toEqual([]);
+    });
+  }
 }
