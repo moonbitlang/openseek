@@ -2361,7 +2361,10 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexQuestionChanged(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          owner: @interop.Host({
+            channel: @interop.ChannelId::Local,
+            session: "thread-2",
+          }),
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),
@@ -2416,7 +2419,10 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexRequestToggled(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          owner: @interop.Host({
+            channel: @interop.ChannelId::Local,
+            session: "thread-2",
+          }),
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),

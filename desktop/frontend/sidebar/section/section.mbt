@@ -33,6 +33,7 @@ pub(all) struct Placeholder {
   class_name : String
   nested : Bool
   openable : Bool
+  action : Action?
 } derive(Debug, Eq)
 
 ///|
@@ -138,7 +139,26 @@ fn Actions::placeholder_component(
     if row.nested {
       children.push(@html.span(class="row-twisty spacer", ""))
     }
-    children.push(@html.span(class="sidebar-label", row.label))
+    children.push(
+      @html.span(
+        class=if row.action is Some(_) {
+          "sidebar-label sidebar-notice"
+        } else {
+          "sidebar-label"
+        },
+        row.label,
+      ),
+    )
+    if row.action is Some(action) {
+      children.push(
+        @html.button(
+          class="console-account-action",
+          disabled=action.disabled,
+          on_click=(self.placeholder)(row.id),
+          action.title,
+        ),
+      )
+    }
     [
       (
         "placeholder:\{row.id}",

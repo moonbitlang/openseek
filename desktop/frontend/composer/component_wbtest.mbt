@@ -5,7 +5,7 @@ fn Input::fixture(task : String) -> Input {
     session: "composer-test",
   }
   {
-    identity: { owner, archive_generation: 0, },
+    identity: { owner: @interop.Host(owner), archive_generation: 0, },
     draft: { images: [], task, mentions: [], },
     run: None,
     turn_id: None,
@@ -101,7 +101,7 @@ test "each conversation keeps an independent local draft" {
   }
   let second = {
     ..first,
-    identity: { owner: second_owner, archive_generation: 0, },
+    identity: { owner: @interop.Host(second_owner), archive_generation: 0, },
   }
   let (with_first, _) = Model(first).update(
     first,
@@ -516,7 +516,10 @@ test "follow-up choice is per draft and resets after submission or turn completi
     ..input,
     identity: {
       ..input.identity,
-      owner: { ..input.identity.owner, session: "another", },
+      owner: @interop.Host({
+        ..input.identity.owner.host().unwrap(),
+        session: "another",
+      }),
     },
   }
   assert_eq(queued.active(other).submission_choice(other), Some(SteerNow))
@@ -652,7 +655,10 @@ test "a background successor turn resets the unsent follow-up override" {
     ..base,
     identity: {
       ..base.identity,
-      owner: { ..base.identity.owner, session: "other", },
+      owner: @interop.Host({
+        ..base.identity.owner.host().unwrap(),
+        session: "other",
+      }),
     },
   }
   let (away, _) = opened.update(
@@ -787,7 +793,10 @@ test "image read events remain pure and settle their original cached draft" {
     ..input,
     identity: {
       ..input.identity,
-      owner: { ..input.identity.owner, session: "other", },
+      owner: @interop.Host({
+        ..input.identity.owner.host().unwrap(),
+        session: "other",
+      }),
     },
   }
   let ready = ImageRead(

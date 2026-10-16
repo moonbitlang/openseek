@@ -1,0 +1,19 @@
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/js",
+  "moonbit-community/rabbita/sub",
+  "moonbitlang/core/json",
+  "moonbitlang/async/http",
+  "moonbitlang/editor/base/browser" @base_browser,
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/transcript",
+  "openseek_desktop/protocol",
+  "openseek_desktop/uri",
+}
+
+supported_targets = "js"
+
+import {
+  "moonbitlang/openseek/agent_session/log" @session_log,
+} for "wbtest"

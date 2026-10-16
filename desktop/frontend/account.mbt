@@ -74,6 +74,7 @@ fn fetch_account(
 fn begin_account_login(
   dispatch : @cmd.Emit[Msg],
   model : Model,
+  create~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   guard !model.remote_connecting else { return (@cmd.none, model) }
   let epoch = model.account_epoch + 1
@@ -87,6 +88,11 @@ fn begin_account_login(
     {
       ..model,
       account_epoch: epoch,
+      account_login_create: if create {
+        Some(model.chat_navigation_generation)
+      } else {
+        None
+      },
       remote_connecting: true,
       remote_error: None,
     },
@@ -113,6 +119,7 @@ fn account_loaded(
           ..model,
           export_dialog,
           remote_connecting: false,
+          account_login_create: None,
           remote_error: Some(message),
           console: if model.is_desktop {
             model.console
@@ -123,6 +130,7 @@ fn account_loaded(
       )
     }
   }
+  let intent = model.account_login_create
   let changed = model.account.map(account => account.token) !=
     account.map(account => account.token)
   let (export_command, export_dialog) = if changed {
@@ -134,11 +142,21 @@ fn account_loaded(
     ..model,
     account,
     export_dialog,
+    account_login_create: None,
     remote_connecting: false,
     remote_error: None,
   }
   let (retire_command, next) = if changed && !model.is_desktop {
     console_signed_out(dispatch, next)
+  } else {
+    (@cmd.none, next)
+  }
+  let (command, next) = if changed {
+    update_cloud(
+      dispatch,
+      @cloud.AccountChanged(account.map(account => account.user.user_id)),
+      next,
+    )
   } else {
     (@cmd.none, next)
   }
@@ -177,8 +195,12 @@ fn account_loaded(
     @cmd.none
   }
   let command = @cmd.batch([
-    export_command, retire_command, persistence, console_command, remote_status,
+    export_command, retire_command, command, persistence, console_command, remote_status,
   ])
+  if account is Some(_) && intent == Some(model.chat_navigation_generation) {
+    let (create, next) = update_cloud(dispatch, @cloud.Create, next)
+    return (@cmd.batch([command, create]), next)
+  }
   (command, next)
 }
 
@@ -203,7 +225,7 @@ fn sign_out_account(
   )
   (
     @cmd.batch([reset, disconnect_remote(dispatch, epoch)]),
-    { ..next, remote_connecting: true, },
+    { ..next, account_login_create: None, remote_connecting: true, },
   )
 }
 

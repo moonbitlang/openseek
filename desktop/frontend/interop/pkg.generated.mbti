@@ -95,6 +95,19 @@ pub fn CheckoutPlacement::same_identity(Self, Self) -> Bool
 pub fn CheckoutPlacement::to_repr(Self) -> @debug.Repr
 pub fn CheckoutPlacement::worktree_name(Self) -> String?
 
+pub(all) enum ConversationIdentity {
+  Host(ConversationKey)
+  Cloud(account~ : String, session~ : String)
+} derive(Eq, Hash, @debug.Debug)
+pub fn ConversationIdentity::equal(Self, Self) -> Bool
+pub fn ConversationIdentity::hash(Self) -> Int
+pub fn ConversationIdentity::hash_combine(Self, Hasher) -> Unit
+pub fn ConversationIdentity::host(Self) -> ConversationKey?
+pub fn ConversationIdentity::key(Self) -> String
+pub fn ConversationIdentity::not_equal(Self, Self) -> Bool
+pub fn ConversationIdentity::session(Self) -> String
+pub fn ConversationIdentity::to_repr(Self) -> @debug.Repr
+
 pub(all) struct ConversationKey {
   channel : ChannelId
   session : String

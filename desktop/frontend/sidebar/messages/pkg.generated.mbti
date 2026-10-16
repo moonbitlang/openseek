@@ -14,9 +14,11 @@ pub fn text(@i18n.Locale, Message) -> String
 pub(all) enum Message {
   SearchConversations
   Chats
+  Cloud
+  Local
+  CloudSignInHint
   Projects
   NewChat
-  CreatingChat
   AddProject
   ArchivedChats(Int)
   ShowMore

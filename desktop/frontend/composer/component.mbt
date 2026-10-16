@@ -16,7 +16,7 @@ priv enum PendingSubmission {
 priv enum FileCompletion {
   Local(files~ : Array[@files.Match], loading~ : Bool, epoch~ : Int32)
   RemoteSettled(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
     files~ : Array[@files.Match],
@@ -42,7 +42,7 @@ fn FileCompletion::loading(self : FileCompletion) -> Bool {
 ///|
 fn FileCompletion::matches(
   self : FileCompletion,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   root : @common.Uri?,
   query : String?,
   epoch : Int32,
@@ -69,7 +69,7 @@ fn FileCompletion::matches(
 /// One conversation's local editor state. Entries remain cached for the page
 /// lifetime, so navigation never mirrors keystrokes into the root Model.
 priv struct Entry {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   action_generation : Int32
   source : Draft
   draft : Draft
@@ -337,7 +337,7 @@ fn Model::Model(input : Input) -> Model {
 fn Model::owner_has_pending_retirement(
   self : Model,
   input : Input,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
 ) -> Bool {
   for index in self.applied_retirements..<input.retirements.length() {
     if input.retirements[index] == owner {
@@ -418,25 +418,25 @@ priv enum Msg {
   FollowupMenuDismissed
   FollowupSelected(String)
   SymbolsLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
     items~ : Array[@symbols.Symbol]
   )
   SymbolsFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String
   )
   FilesLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
     epoch~ : Int32,
     files~ : Array[@pathx.Relative]
   )
   FilesFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : @common.Uri,
     query~ : String,
     epoch~ : Int32
@@ -590,7 +590,7 @@ fn Entry::accept_completion(
 fn Entry::settled_file_completion(
   self : Entry,
   input : Input,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   root : @common.Uri,
   query : String,
   epoch : Int32,
@@ -695,7 +695,9 @@ fn Model::update(
           },
         }
         let sources = documents.map(document => {
-          if identity.owner.channel == @interop.Local &&
+          if identity.owner
+            .host()
+            .map_or(false, key => key.channel == @interop.Local) &&
             document.native_path is Some(path) {
             @protocol.AttachmentPath(path)
           } else {
@@ -1102,7 +1104,8 @@ fn Model::update(
           ),
         )
       } else {
-        guard !entry.draft.is_blank() &&
+        guard entry.can_send(input) &&
+          !entry.draft.is_blank() &&
           entry.image_reads == 0 &&
           entry.attachment_requests.is_empty() else {
           return (self.with_entry(entry), @cmd.none)
@@ -1279,10 +1282,11 @@ fn Model::editing_subscriptions(
         Trigger::parse(entry.draft.task, inline_markers="$#") is Some(trigger) &&
         trigger.marker() == "#" {
         let owner = entry.owner
+        guard owner.host() is Some(host) else { return @sub.none }
         let query = trigger.query()
         subs.push(
           @symbols.searching(
-            owner,
+            host,
             query,
             root~,
             loaded=items => emit(SymbolsLoaded(owner~, root~, query~, items~)),
@@ -1296,10 +1300,11 @@ fn Model::editing_subscriptions(
         trigger.marker() == "@" &&
         input.file_index is FileIndexReady(truncated=true, ..) {
         let owner = entry.owner
+        guard owner.host() is Some(host) else { return @sub.none }
         let query = trigger.query()
         let epoch = input.file_index.epoch()
         subs.push(
-          @files.Request(owner.channel, owner.session, Some(root)).searching(
+          @files.Request(host.channel, host.session, Some(root)).searching(
             query,
             epoch~,
             loaded=(files, _limit_hit) => {
