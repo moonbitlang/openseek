@@ -6660,6 +6660,8 @@ fn update_msg(
     }
     ExportDialog(msg) => {
       let (login, model) = if msg is @export_dialog.SignIn {
+        // Leave the dialog retryable while the rejected account is clearing.
+        guard !model.remote_connecting else { return (@cmd.none, model) }
         begin_account_login(dispatch, model, create=false)
       } else {
         (@cmd.none, model)
