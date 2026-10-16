@@ -36,25 +36,6 @@ pub fn RelayActor::RelayActor(
 pub async fn RelayActor::run(self : RelayActor) -> Unit {
   let store = self.state.auth_store()
   for ;; {
-    // `auth.json` may have survived a prior process's failed signed-out
-    // marker write. Never connect a persisted token whose issuer no longer
-    // matches the currently selected OpenSeek server: clear it in memory
-    // before reading `desired_connector`, then retry the durable clear and
-    // revoke as best effort. This makes a successful server switch a
-    // permanent connection fence even across restarts.
-    if !store.managed_by_env() &&
-      store.signed_in() &&
-      store.session_server() != @engine.remote_server_base(self.state.manager()) {
-      store.sign_out() catch {
-        error =>
-          @xlog.warn(category="remote") <?
-            {
-              "message": "could not persist stale-server sign-out",
-              "error": "\{error}",
-            }
-      }
-      self.state.publish(AuthChanged(auth_changed_params(self.state)))
-    }
     match store.desired_connector() {
       // Idle: nothing to run until someone pokes the store.
       None => store.wakeups().get()
@@ -73,7 +54,7 @@ pub async fn RelayActor::run(self : RelayActor) -> Unit {
           Refused(message) => {
             @xlog.warn(category="remote") <?
               { "message": "relay refused registration", "error": message }
-            store.handle_refusal() catch {
+            store.handle_refusal(expected=config) catch {
               error =>
                 // The relay already rejected this token. Keep the actor
                 // alive and parked on the cleared in-memory state even if

@@ -20,6 +20,11 @@ export default defineConfig({
   retries: isCI ? 1 : 0,
   // Run independent test files in parallel while preserving in-file ordering.
   workers: 2,
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    // Safari's grid sizing can hide question cards even when Chromium passes.
+    { name: 'webkit-questions', testMatch: '**/user_questions.spec.js', use: { browserName: 'webkit' } },
+  ],
   reporter: [
     ['list'],
     ['html', { outputFolder: 'playwright-report', open: 'never' }],

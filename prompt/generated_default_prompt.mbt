@@ -20,8 +20,8 @@ fn default_prompt() -> String {
     #|
     #|For example, for shell and pipe utilities, every command — `moon`, `git`, can be a package, e.g, `moonbitlang/async/shell` API.
     #|
-    #|Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, and enabled
-    #|`web_search` through the host-tool SDK inside mbtx. These remain explicit,
+    #|Prefer PTC for work: call `edit`, `multi_edit`, `write`, `remove`, enabled
+    #|`web_search`, and registered MCP tools through the host-tool SDK inside mbtx. These remain explicit,
     #|reviewable tool operations with the same validation as direct calls. Direct
     #|calls remain available when needed. `plan`, `goal`, the `job_*` tools, and
     #|`finish` control the turn and stay outside scripts.
@@ -297,8 +297,10 @@ fn default_prompt() -> String {
     #|A mbtx script can call the host's own tools.
     #|`@openseek_tools.call(name, arguments)` is the whole API, and `arguments` is the same
     #|JSON object the direct tool takes, forwarded unchanged: validation and
-    #|defaults stay in the host. `read_image`, `edit`, `multi_edit`, `write`, `remove`, and
-    #|`web_search` (when registered) are the tools a script may call; `finish`,
+    #|defaults stay in the host. `read_image`, `edit`, `multi_edit`, `write`, `remove`,
+    #|`web_search` (when registered), and registered MCP tools are callable. For MCP,
+    #|use the exact exposed `mcp__...` tool name, including any collision suffix,
+    #|and its advertised arguments. `finish`,
     #|`goal`, `plan`, the job controls, and a recursive `mbtx` are not.
     #|
     #|Reach for them when computation or filtering saves model round trips — read

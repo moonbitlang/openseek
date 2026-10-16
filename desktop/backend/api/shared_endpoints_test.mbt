@@ -3,8 +3,9 @@ async fn invoke_shared(
   state : @api.ApiState,
   name : String,
   params : Json,
+  local_share~ : Bool = false,
 ) -> Json {
-  let endpoints = @api.endpoints(state, HostConnection())
+  let endpoints = @api.endpoints(state, HostConnection(), local_share~)
   let matching = endpoints.filter(endpoint => endpoint.name() == name)
   assert_eq(matching.length(), 1)
   matching[0].invoke(params)
@@ -55,15 +56,22 @@ async test "shared endpoints report signed-out sharing" {
   defer @fs.rmdir(dir, recursive=true)
   let state = @api.ApiState(engine="unused-test-engine")
   let share : @protocol.SessionShareReply = @json.from_json(
-    invoke_shared(state, "session.share", {
-      "source": {
-        "session": "share-test",
-        "workspace": dir,
-        "title": "Shared session",
-        "archived": false,
+    invoke_shared(
+      state,
+      "session.share",
+      {
+        "source": {
+          "session": "share-test",
+          "workspace": dir,
+          "title": "Shared session",
+          "archived": false,
+        },
+        "generation": 1,
+        "idempotency_key": "a".repeat(64),
+        "authorization": { "kind": "local_account", "user_id": "123" },
       },
-      "generation": 1,
-    }),
+      local_share=true,
+    ),
   )
   assert_true(share is SignInRequired)
 }

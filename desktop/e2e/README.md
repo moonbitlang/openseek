@@ -10,13 +10,16 @@ client paths. Its repository snapshot also covers changed-file review,
 review progress and navigation, Git Graph keyboard interaction, commit
 expansion, and immutable historical diffs.
 
+The question-card suite also runs in WebKit to cover Safari's grid sizing,
+clipping, and interaction behavior.
+
 ## Setup
 
 From this directory:
 
 ```sh
 npm ci
-npx playwright install chromium
+npx playwright install chromium webkit
 ```
 
 ## Run

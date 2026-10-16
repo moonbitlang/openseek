@@ -8,7 +8,7 @@ import {
 // Values
 pub fn cancel(String) -> @cmd.Cmd
 
-pub fn start(String, hint~ : String, failure~ : String, too_large~ : String, unsupported_annotation~ : String, @cmd.Emit[Result[Capture, String]]) -> @cmd.Cmd
+pub fn start(String, hint~ : String, failure~ : String, too_large~ : String, unsupported_annotation~ : String, @cmd.Emit[Result[Capture, String]], annotation? : String, canceled? : () -> Unit) -> @cmd.Cmd
 
 // Errors
 

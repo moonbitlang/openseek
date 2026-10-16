@@ -196,7 +196,21 @@ fn render_capture(
   failure : String,
   too_large : String,
   unsupported : String,
+  annotation? : String,
 ) -> Result[Capture, String] {
+  let selected = rect
+  let rect = if annotation is Some(_) {
+    let padded : @selection.Rect = {
+      x: rect.x - 24,
+      y: rect.y - 24,
+      width: rect.width + 48,
+      height: rect.height + 48,
+    }
+    let visible = browser_query(host, ".pdf-container").map(browser_bounds)
+    visible.bind(bounds => padded.intersection(bounds)).unwrap_or(rect)
+  } else {
+    rect
+  }
   let pieces = match collect_pieces(host, session, rect, failure, unsupported) {
     Ok(pieces) => pieces
     Err(message) => return Err(message)
@@ -239,12 +253,15 @@ fn render_capture(
       width: rect.width * size.scale,
       height: rect.height * size.scale,
     })
-    let viewport = piece.crop.mapped(from=piece.bounds, to={
-      x: 0,
-      y: 0,
-      width: piece.viewport.get_with_string("width"),
-      height: piece.viewport.get_with_string("height"),
-    })
+    let viewport = piece.crop
+      .intersection(selected)
+      .unwrap_or(piece.crop)
+      .mapped(from=piece.bounds, to={
+        x: 0,
+        y: 0,
+        width: piece.viewport.get_with_string("width"),
+        height: piece.viewport.get_with_string("height"),
+      })
     ctx.apply_with_string("drawImage", [
       piece.canvas,
       @js.Value::cast_from(source.x),
@@ -273,6 +290,31 @@ fn render_capture(
       return Err(message)
     }
   }
+  if annotation is Some(label) {
+    let x = (selected.x - rect.x) * size.scale
+    let y = (selected.y - rect.y) * size.scale
+    let w = selected.width * size.scale
+    let h = selected.height * size.scale
+    ctx.set_with_string("strokeStyle", "#1677ff")
+    ctx.set_with_string("fillStyle", "#1677ff")
+    ctx.set_with_string("lineWidth", 2.0 * size.scale)
+    ctx.apply_with_string("strokeRect", [x, y, w, h])
+    let radius = 10.0 * size.scale
+    let cx = Double::min(x + w, size.width - radius - size.scale)
+    let cy = Double::max(y, radius + size.scale)
+    ctx.apply_with_string("beginPath", ([] : FixedArray[@js.Value]))
+    ctx.apply_with_string("arc", [cx, cy, radius, 0.0, 6.283185307179586])
+    ctx.apply_with_string("fill", ([] : FixedArray[@js.Value]))
+    ctx.set_with_string("fillStyle", "white")
+    ctx.set_with_string("font", "bold \{12.0 * size.scale}px sans-serif")
+    ctx.set_with_string("textAlign", "center")
+    ctx.set_with_string("textBaseline", "middle")
+    ctx.apply_with_string("fillText", [
+      @js.Value::cast_from(label),
+      @js.Value::cast_from(cx),
+      @js.Value::cast_from(cy),
+    ])
+  }
   let url : String = output.apply_with_string("toDataURL", ["image/png"])
   let identity : @js.Value = session.get_with_string("identity")
   let document = identity.to_json_string() catch { _ => return Err(failure) }
@@ -285,5 +327,6 @@ fn render_capture(
     text,
     failure~,
     too_large~,
+    selected?=annotation.map(_ => selected),
   )
 }

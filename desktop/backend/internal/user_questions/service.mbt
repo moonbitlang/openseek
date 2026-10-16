@@ -186,7 +186,8 @@ pub fn Service::detach(self : Service, session : String) -> Unit {
 ///|
 /// Use the existing session-input delivery path for delayed user answers.
 /// Include the original questions so answers remain interpretable after the
-/// agent has continued work. JSON quoting preserves the user's exact text.
+/// agent has continued work. The shared XML envelope also gives the transcript
+/// a readable presentation without exposing the transport payload.
 pub async fn Service::run(
   self : Service,
   deliver : async (String, String, String) -> Unit,
@@ -202,13 +203,19 @@ pub async fn Service::run(
         if ready {
           entry.feedback = Claimed
           group.spawn_bg(() => {
-            let context : Json = {
-              "questions": Json(entry.pending.questions),
-              "result": entry.result(),
+            let answers = match entry.outcome {
+              Answered(answers) => Some(answers)
+              Skipped => None
+              Pending => return
             }
+            let context = @message_context.UserQuestionResponse(
+              request_id=entry.pending.id,
+              questions=entry.pending.questions,
+              answers~,
+            )
             deliver(
               entry.pending.session,
-              "User response to ask_user:\n" + context.stringify(),
+              context.encode(),
               entry.pending.id + "-result",
             ) catch {
               error =>

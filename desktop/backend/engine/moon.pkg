@@ -21,6 +21,7 @@ import {
   "openseek_desktop/protocol",
   "openseek_desktop/backend/internal/session_record",
   "openseek_desktop/backend/internal/session_store",
+  "openseek_desktop/backend/internal/session_preview",
   "openseek_desktop/backend/internal/subrun",
   "openseek_desktop/backend/internal/workflow",
   "openseek_desktop/backend/uuid",

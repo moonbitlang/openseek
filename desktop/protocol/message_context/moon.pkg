@@ -1,3 +1,4 @@
 import {
+  "openseek_desktop/protocol",
   "moonbitlang/core/debug",
 }

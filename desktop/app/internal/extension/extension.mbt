@@ -295,10 +295,10 @@ async fn PageEventTarget::emit(
     Hub(TerminalOutput(payload)) =>
       self.events.emit(terminal_output_event, payload)
     Hub(TerminalExit(payload)) => self.events.emit(terminal_exit_event, payload)
-    Hub(SemanticSearchProgress(payload)) =>
-      self.events.emit(semantic_search_progress_event, payload)
     Hub(SessionShareProgress(payload)) =>
       self.events.emit(share_progress_event, payload)
+    Hub(SemanticSearchProgress(payload)) =>
+      self.events.emit(semantic_search_progress_event, payload)
     BrowserEvent(payload) => self.events.emit(browser_event, payload)
     WindowChromeChanged => self.events.emit(window_chrome_changed, NoPayload)
     SystemAppearanceChanged =>
@@ -380,9 +380,14 @@ pub fn openseek_capability(
   bridge : DesktopBridgeActor,
   views : BrowserViews,
 ) -> @proton_extension.RendererCapability {
-  let endpoints = @api.endpoints(state, bridge.host_connection, on_share_progress=payload => {
-    bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
-  })
+  let endpoints = @api.endpoints(
+    state,
+    bridge.host_connection,
+    local_share=true,
+    on_share_progress=payload => {
+      bridge.inbox.put(Deliver(Hub(SessionShareProgress(payload))))
+    },
+  )
   let window_only = [
     WindowEndpoint(@commands.host_open_path_preview, (_, payload) => {
       @host.open_path_preview(payload)
@@ -397,6 +402,12 @@ pub fn openseek_capability(
     }),
     WindowEndpoint(@commands.shell_open_external, (_, payload) => {
       open_external(payload, allow_file=true)
+    }),
+    WindowEndpoint(@commands.account_session, (_, _) => {
+      session: state.auth_store().account(),
+    }),
+    WindowEndpoint(@commands.session_snapshot_save, (context, payload) => {
+      save_export(context, payload.session, payload.html)
     }),
     WindowEndpoint(@commands.session_export, (context, payload) => {
       export_session(context, state, payload)

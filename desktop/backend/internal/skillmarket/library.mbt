@@ -265,11 +265,8 @@ async fn SkillLibrary::list_entries(
   self : SkillLibrary,
   enabled~ : Bool,
 ) -> Array[InstalledSkill] {
-  let entries = if @fsx.Directory::try_open(self.root) is Some(dir) {
-    dir.collect()
-  } else {
-    []
-  }
+  guard @fsx.Directory::try_open(self.root) is Some(dir) else { return [] }
+  let entries = dir.collect()
   let skills : Array[InstalledSkill] = []
   for entry in entries {
     let entry = entry.name()
@@ -389,12 +386,12 @@ pub async fn set_skill_enabled(
   library.recover_all()
   let location = library.locate(id)
   let directory = location.library.target(id)
-  let entry = if @fsx.exists(directory) {
-    id
-  } else if @fsx.exists(location.library.root.join("\{id}.md")) {
+  let entry = {
+    guard !@fsx.exists(directory) else { id }
+    guard @fsx.exists(location.library.root.join("\{id}.md")) else {
+      raise SkillMarketError("no skill named \{id} in the library")
+    }
     "\{id}.md"
-  } else {
-    raise SkillMarketError("no skill named \{id} in the library")
   }
   guard location.enabled != enabled else { return }
   let destination = if enabled { library } else { library.disabled() }

@@ -93,6 +93,10 @@ pub fn State::offer_office_selection(
     ctx.active_file is Some(path) else {
     return Ok(self)
   }
+  if self.office_region_request is Some(_) ||
+    self.pending_region_feedback(ctx) is Some(_) {
+    return Ok(self)
+  }
   // A typed draft pins its original source until submission or cancellation.
   if self.has_pinned_office_selection(ctx) {
     return Ok(self)

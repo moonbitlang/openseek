@@ -152,7 +152,7 @@ pub fn ChannelId::of_device(id : String) -> ChannelId {
 
 ///|
 /// The roster id of this channel — the inverse of `of_device`. For a relay
-/// device it is also the `/v1/devices/<id>/ws` route segment.
+/// device it is also the device-id segment of the browser WebSocket route.
 pub fn ChannelId::device_id(self : ChannelId) -> String {
   match self {
     Local => LocalDeviceId

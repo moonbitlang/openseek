@@ -158,6 +158,7 @@ pub async fn[X] build_grouped(
           description=tool.description,
           schema=tool.schema,
           execute=tool.execute,
+          program_callable=tool.is_program_callable(),
         ),
       )
     }
@@ -267,6 +268,10 @@ fn bridge_tool(
     description~,
     schema=JsonSchema(schema),
     execute=Async(args => call_tool(client, tool.name, args)),
+    // This host-owned proxy completes through MCP transport tasks, without
+    // agent-loop dispatch. Enable PTC independently of server annotations;
+    // dynamic tools still receive no control or concurrent-safe privilege.
+    program_callable=true,
   )
 }
 

@@ -104,6 +104,8 @@ pub fn icon_pull_request() -> @html.Html
 
 pub fn icon_question() -> @html.Html
 
+pub fn icon_region_capture() -> @html.Html
+
 pub fn icon_reply() -> @html.Html
 
 pub fn icon_robot() -> @html.Html

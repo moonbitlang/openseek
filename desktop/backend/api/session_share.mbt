@@ -1,9 +1,14 @@
 ///|
-/// Capture the issuer and credential together before rendering or uploading.
-/// A settings switch must never send an old token to a newly selected server.
 priv struct SessionShare {
   state : ApiState
-  payload : @protocol.SessionExportPayload
+  payload : @protocol.SessionSharePayload
+  local_account : Bool
+}
+
+///|
+priv enum ShareCredential {
+  Account(@protocol.AccountSession)
+  Grant(String)
 }
 
 ///|
@@ -12,31 +17,40 @@ async fn SessionShare::publish(
   on_progress~ : async (@protocol.ShareProgress) -> Unit,
 ) -> @protocol.SessionShareReply {
   let store = self.state.auth_store()
-  guard store.desired_connector() is Some(config) else {
-    return if store.managed_by_env() {
-      Failed(
-        message="The configured device token is unavailable. Update OPENSEEK_DEVICE_TOKEN and restart the app.",
-      )
-    } else {
-      SignInRequired
+  // Capture account and issuer before reading records or awaiting HTTP.
+  let (credential, server_url) = match self.payload.authorization {
+    LocalAccount(user_id~) => {
+      guard self.local_account else {
+        return Failed(message="Remote sharing requires an upload grant.")
+      }
+      guard store.account() is Some(account) &&
+        store.session_server() is Some(server_url) else {
+        return SignInRequired
+      }
+      guard account.user.user_id == user_id else {
+        return Failed(
+          message="Sign-in changed before sharing. Try sharing again.",
+        )
+      }
+      (Account(account), server_url)
     }
+    UploadGrant(upload_token~) => (Grant(upload_token), @auth.AccountOrigin)
   }
   try {
     on_progress(Preparing)
     let (shell, bundle) = self.state.host_state().viz_assets().read()
     let files = @engine.ConversationExport::capture(
       self.state.manager(),
-      self.payload,
+      self.payload.source,
       shell,
       bundle,
     )
-    self.upload(files, config, on_progress~)
+    self.upload(files, credential, server_url~, on_progress~)
   } catch {
     error if @async.is_being_cancelled() => raise error
-    @shares.EmptyTitle as refusal => Failed(message="\{refusal}")
+    @shares.EmptyTitle | @shares.Oversized as refusal =>
+      Failed(message="\{refusal}")
     error => {
-      // This scope includes capture, upload and rejected-login cleanup. Do not
-      // mislabel an unrelated failure as a missing conversation.
       @xlog.error(category="shares") <?
         { "event": "share_failed", "error": "\{error}" }
       Failed(message="Could not share the conversation: \{error}")
@@ -45,51 +59,44 @@ async fn SessionShare::publish(
 }
 
 ///|
-/// A 401 must retire the rejected registration before offering auth.connect,
-/// which otherwise treats the persisted login as already signed in. Compare
-/// the captured config first so a late response cannot clear a newer login.
 async fn SessionShare::upload(
   self : SessionShare,
   files : @engine.ConversationExport,
-  config : @auth.ConnectorConfig,
+  credential : ShareCredential,
+  server_url~ : String,
   on_progress~ : async (@protocol.ShareProgress) -> Unit = _ => (),
 ) -> @protocol.SessionShareReply {
-  let reply = @shares.publish(
-    on_progress~,
-    title=self.payload.title,
-    files,
-    server_url=@auth.origin_from_relay_url(config.relay_url),
-    token=config.device_token,
-  )
+  let token = match credential {
+    Account(account) => account.token
+    Grant(token) => token
+  }
+  let reply = @shares.Snapshot(
+    title=self.payload.source.title,
+    html=files.html,
+    json=files.json,
+    key=self.payload.idempotency_key,
+  ).publish(server_url~, token~, on_progress~)
   guard reply is SignInRequired else { return reply }
+  guard credential is Account(account) else {
+    return Failed(
+      message="The share upload permission was rejected. Try sharing again.",
+    )
+  }
   @async.protect_from_cancel(() => {
     let store = self.state.auth_store()
-    // The relay actor may already have retired this same login for its own
-    // refusal, leaving no connector: that is the signed-out outcome below,
-    // not a newer sign-in.
-    if store.desired_connector() is Some(current) && current != config {
+    if store.account() is Some(current) && current.token != account.token {
       return Failed(
         message="Sign-in changed during the upload. Try sharing again.",
       )
     }
-    // Publish the truthful local state even when clearing the persisted login
-    // fails. The existing refusal transition also clears memory and parks the
-    // connector; cancellation must not strand the UI on the rejected login.
     defer self.state.publish(AuthChanged(store.status()))
-    store.handle_refusal() catch {
+    store.expire_account(account.token) catch {
       @auth.AuthError(message) =>
         return Failed(
           message="Could not clear the rejected sign-in: \{message}",
         )
       error => raise error
     }
-    store.poke()
-    if store.managed_by_env() {
-      Failed(
-        message="The configured device token was rejected. Update OPENSEEK_DEVICE_TOKEN and restart the app.",
-      )
-    } else {
-      SignInRequired
-    }
+    SignInRequired
   })
 }

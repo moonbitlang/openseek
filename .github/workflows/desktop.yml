@@ -186,9 +186,9 @@ jobs:
         working-directory: desktop/e2e
         run: npm ci
 
-      - name: Install Chromium
+      - name: Install Chromium and WebKit
         working-directory: desktop/e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Build Desktop browser application
         working-directory: desktop

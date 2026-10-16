@@ -10,6 +10,8 @@ import {
 }
 
 import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/ptc",
   "moonbitlang/openseek/jsonrpc",
   "moonbitlang/openseek/mcp",
   "moonbitlang/openseek/agent_runtime",

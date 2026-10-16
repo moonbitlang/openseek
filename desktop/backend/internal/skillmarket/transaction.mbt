@@ -55,11 +55,8 @@ async fn SkillLibrary::locate(
   id : String,
 ) -> SkillLocation {
   let disabled = self.disabled()
-  if disabled.contains(id) {
-    { library: disabled, enabled: false, }
-  } else {
-    { library: self, enabled: true, }
-  }
+  guard disabled.contains(id) else { return { library: self, enabled: true, } }
+  { library: disabled, enabled: false, }
 }
 
 ///|

@@ -23,32 +23,34 @@ test "dialog updates are pure and late replies cannot cross openings" {
     ClipboardFinished(generation=first.generation, Ok(())),
   ]
   for msg in messages {
-    let (_, a) = first.update(emit, msg)
-    let (_, b) = first.update(emit, msg)
+    let (_, a) = first.advance(emit, msg)
+    let (_, b) = first.advance(emit, msg)
     assert_true(a == b)
   }
-  let (_, pending) = first.update(emit, Share)
+  let (_, pending) = first.advance(emit, Share)
   assert_true(pending.content is Some({ operation: Sharing(_), .. }))
   for msg in [Share, Download, SignIn] {
-    let (_, ignored) = pending.update(emit, msg)
+    let (_, ignored) = pending.advance(emit, msg)
     assert_true(ignored == pending)
   }
-  let (_, closed) = pending.update(emit, Close)
+  let (_, closed) = pending.advance(emit, Close)
   let reply = Published(
     generation=pending.generation,
     Shared(url="https://shares.test/v1/shares/a"),
   )
-  let (_, late) = closed.update(emit, reply)
+  let (_, late) = closed.advance(emit, reply)
   assert_true(late == closed)
   let (_, other) = closed.open({
     ..source,
     session: "b",
     title: "Conversation B",
   })
-  let (_, other_pending) = other.update(emit, Share)
-  let (_, stale) = other_pending.update(emit, reply)
+  let (_, other_pending) = other.advance(emit, Share)
+  let (_, stale) = other_pending.advance(emit, reply)
   assert_true(stale == other_pending)
-  assert_true(stale.content is Some({ source: { session: "b", .. }, .. }))
+  assert_true(
+    stale.content is Some({ source: Host(_, { session: "b", .. }), .. }),
+  )
 }
 
 ///|
@@ -60,7 +62,7 @@ test "share login failure success and clipboard feedback transitions" {
     title: "A",
     archived: true,
   })
-  let (_, pending) = open.update(emit, Share)
+  let (_, pending) = open.advance(emit, Share)
   for
     reply in [
       @protocol.SignInRequired,
@@ -68,19 +70,19 @@ test "share login failure success and clipboard feedback transitions" {
       @protocol.Shared(url="http://shares.test/a"),
     ] {
     let msg = Published(generation=pending.generation, reply)
-    let (_, first) = pending.update(emit, msg)
-    let (_, again) = pending.update(emit, msg)
+    let (_, first) = pending.advance(emit, msg)
+    let (_, again) = pending.advance(emit, msg)
     assert_true(first == again)
     match first.content {
       Some({ operation: SignInRequired, .. }) => {
-        let (_, signing_in) = first.update(emit, SignIn)
-        let (_, signing_in_again) = first.update(emit, SignIn)
+        let (_, signing_in) = first.advance(emit, SignIn)
+        let (_, signing_in_again) = first.advance(emit, SignIn)
         assert_true(signing_in == signing_in_again)
         assert_true(signing_in.content is Some({ operation: SigningIn, .. }))
         for result in [Ok(()), Err("Cancelled")] {
           let signed_in = SignedIn(generation=first.generation, result)
-          let (_, done) = signing_in.update(emit, signed_in)
-          let (_, again) = signing_in.update(emit, signed_in)
+          let (_, done) = signing_in.advance(emit, signed_in)
+          let (_, again) = signing_in.advance(emit, signed_in)
           assert_true(done == again)
           assert_true(
             done.content is Some({ operation: Ready | SignInFailed(_), .. }),
@@ -90,14 +92,14 @@ test "share login failure success and clipboard feedback transitions" {
               fail("expected sign-in failure with its diagnostic")
             }
             assert_eq(detail, message)
-            let (_, retry) = done.update(emit, SignIn)
+            let (_, retry) = done.advance(emit, SignIn)
             assert_true(retry.content is Some({ operation: SigningIn, .. }))
           }
         }
       }
       Some({ publication: Some(_), .. }) => {
-        let (_, downloading) = first.update(emit, Download)
-        let (_, downloaded) = downloading.update(
+        let (_, downloading) = first.advance(emit, Download)
+        let (_, downloaded) = downloading.advance(
           emit,
           Downloaded(
             generation=first.generation,
@@ -114,12 +116,12 @@ test "share login failure success and clipboard feedback transitions" {
             }
           ),
         )
-        let (_, duplicate) = first.update(emit, Share)
+        let (_, duplicate) = first.advance(emit, Share)
         assert_true(duplicate == first)
         for result in [Ok(()), Err("Clipboard denied")] {
           let copied = ClipboardFinished(generation=first.generation, result)
-          let (_, done) = first.update(emit, copied)
-          let (_, again) = first.update(emit, copied)
+          let (_, done) = first.advance(emit, copied)
+          let (_, again) = first.advance(emit, copied)
           assert_true(done == again)
           assert_true(
             done.content
@@ -128,7 +130,7 @@ test "share login failure success and clipboard feedback transitions" {
         }
       }
       Some({ operation: Failed("Storage unavailable"), .. }) => {
-        let (_, retry) = first.update(emit, Share)
+        let (_, retry) = first.advance(emit, Share)
         assert_true(retry.content is Some({ operation: Sharing(_), .. }))
       }
       _ => fail("unexpected publication state")
@@ -145,7 +147,7 @@ test "download cancellation and saved but not opened remain distinct" {
     title: "A",
     archived: false,
   })
-  let (_, pending) = open.update(emit, Download)
+  let (_, pending) = open.advance(emit, Download)
   for
     result in [
       Ok(@protocol.SessionExportReply::{ path: None, opened: false, }),
@@ -154,8 +156,8 @@ test "download cancellation and saved but not opened remain distinct" {
       Err("No access"),
     ] {
     let msg = Downloaded(generation=pending.generation, result)
-    let (_, done) = pending.update(emit, msg)
-    let (_, again) = pending.update(emit, msg)
+    let (_, done) = pending.advance(emit, msg)
+    let (_, again) = pending.advance(emit, msg)
     assert_true(done == again)
     match result {
       Ok({ path: None, .. }) =>
@@ -177,6 +179,43 @@ test "download cancellation and saved but not opened remain distinct" {
 }
 
 ///|
+fn Model::advance(
+  self : Model,
+  emit : @cmd.Emit[Msg],
+  msg : Msg,
+) -> (@cmd.Cmd, Model) {
+  self.update(emit, msg, account={
+    token: "ts_fixture",
+    user: { user_id: "123", login: "octocat", avatar_url: "", },
+  })
+}
+
+///|
+test "sharing without an account requests login and never uploads automatically" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (_, opened) = Model().open({
+    session: "a",
+    workspace: "/workspace",
+    title: "A",
+    archived: false,
+  })
+  let (_, refused) = opened.update(emit, Share)
+  assert_true(refused.content is Some({ operation: SignInRequired, .. }))
+  let (_, signing_in) = refused.update(emit, SignIn)
+  let (_, ready) = signing_in.account_changed(Ok(()))
+  assert_true(
+    ready.content is Some({ operation: Ready, publication: None, .. }),
+  )
+  let (_, retired) = ready.account_changed(Ok(()))
+  assert_false(
+    retired.account_expired(
+      Published(generation=opened.generation, @protocol.SignInRequired),
+    ),
+  )
+  assert_false(retired.is_open())
+}
+
+///|
 test "progress is pure and belongs only to the current upload" {
   let emit : @cmd.Emit[Msg] = @cmd.Emit(_ => @cmd.none)
   let (_, opened) = Model().open({
@@ -185,25 +224,25 @@ test "progress is pure and belongs only to the current upload" {
     title: "A",
     archived: false,
   })
-  let (_, pending) = opened.update(emit, Share)
+  let (_, pending) = opened.advance(emit, Share)
   for
     progress in [
       @protocol.Preparing,
       Connecting(attempt=1),
-      Uploading(attempt=1, percent=42),
+      Uploading(attempt=1),
       Waiting(attempt=1),
       Connecting(attempt=2),
-      Uploading(attempt=2, percent=0),
+      Uploading(attempt=2),
     ] {
     let msg = Progress({ generation: pending.generation, progress, })
-    let (_, first) = pending.update(emit, msg)
-    let (_, again) = pending.update(emit, msg)
+    let (_, first) = pending.advance(emit, msg)
+    let (_, again) = pending.advance(emit, msg)
     assert_true(first == again)
     assert_true(
       first.content is Some({ operation: Sharing(actual), .. }) &&
       actual == progress,
     )
-    let (_, ignored) = opened.update(emit, msg)
+    let (_, ignored) = opened.advance(emit, msg)
     assert_true(ignored == opened)
   }
   let late = Progress({
@@ -214,16 +253,74 @@ test "progress is pure and belongs only to the current upload" {
     emit,
     Published(generation=pending.generation, Failed(message="offline")),
   )
-  let (_, retry) = failed.update(emit, Share)
-  let (_, ignored) = retry.update(emit, late)
+  let (_, retry) = failed.advance(emit, Share)
+  let (_, ignored) = retry.advance(emit, late)
   assert_true(ignored == retry)
-  let (_, closed) = pending.update(emit, Close)
-  let (_, ignored) = closed.update(emit, late)
+  let (_, closed) = pending.advance(emit, Close)
+  let (_, ignored) = closed.advance(emit, late)
   assert_true(ignored == closed)
   let (_, done) = pending.update(
     emit,
     Published(generation=pending.generation, Shared(url="https://share.test/a")),
   )
-  let (_, ignored) = done.update(emit, late)
+  let (_, ignored) = done.advance(emit, late)
   assert_true(ignored == done)
+}
+
+///|
+test "host progress belongs to both the selected source channel and current opening" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let channel = @interop.ChannelId::Remote("selected-host")
+  let (_, opened) = Model().open(
+    {
+      session: "session",
+      workspace: "/workspace",
+      title: "Title",
+      archived: false,
+    },
+    channel~,
+  )
+  let (_, pending) = opened.advance(emit, Share)
+  for
+    (owner, generation) in [
+      (@interop.Local, pending.generation),
+      (channel, pending.generation - 1),
+    ] {
+    let (_, ignored) = pending.update(
+      emit,
+      HostProgress(owner, { generation, progress: Uploading(attempt=2), }),
+    )
+    assert_true(ignored == pending)
+  }
+  let (_, updated) = pending.update(
+    emit,
+    HostProgress(channel, {
+      generation: pending.generation,
+      progress: Uploading(attempt=2),
+    }),
+  )
+  assert_true(
+    updated.content is Some({ operation: Sharing(Uploading(attempt=2)), .. }),
+  )
+}
+
+///|
+test "the local debug console explains sharing is unsupported without requesting login" {
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (_, opened) = Model().open(
+    {
+      session: "session",
+      workspace: "/workspace",
+      title: "Title",
+      archived: false,
+    },
+    channel=Remote("host"),
+  )
+  let (_, refused) = opened.update(emit, Share, desktop=false)
+  assert_true(
+    refused.content is Some({ operation: Failed(message), .. }) &&
+    message.contains("SeekMoonDev.app"),
+  )
+  let (_, downloading) = refused.update(emit, Download, desktop=false)
+  assert_true(downloading.content is Some({ operation: Downloading, .. }))
 }

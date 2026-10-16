@@ -6,11 +6,20 @@ pub fn start(
   too_large~ : String,
   unsupported_annotation~ : String,
   emit : @cmd.Emit[Result[Capture, String]],
+  annotation? : String,
+  canceled? : () -> Unit,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(kind=@cmd.after_render, scheduler => {
-    start_region(surface_id, hint, failure, too_large, unsupported_annotation, result => {
-      scheduler.add(emit(result))
-    })
+    start_region(
+      surface_id,
+      hint,
+      failure,
+      too_large,
+      unsupported_annotation,
+      annotation,
+      canceled,
+      result => scheduler.add(emit(result)),
+    )
   })
 }
 

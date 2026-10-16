@@ -1,6 +1,6 @@
-// Tagged context shared by host delivery and transcript presentation. As with
-// user_shell_command, bodies stay verbatim for the model; attributes are escaped.
-// Closing tags are anchored at the end, so tags inside a message stay its text.
+// Tagged context shared by host delivery and transcript presentation. Agent
+// message bodies stay verbatim, with closing tags anchored at the end. Question
+// responses escape their nested text as well as attributes (see question_response).
 
 ///|
 pub(all) enum Context {
@@ -11,6 +11,11 @@ pub(all) enum Context {
     target~ : String,
     status~ : String,
     error~ : String?
+  )
+  UserQuestionResponse(
+    request_id~ : String,
+    questions~ : Array[@protocol.UserQuestion],
+    answers~ : Map[String, String]?
   )
 } derive(Eq, Debug)
 
@@ -72,6 +77,8 @@ pub fn Context::encode(self : Context) -> String {
         $|\{error.unwrap_or("")}
         $|</session_message_result>
       )
+    UserQuestionResponse(request_id~, questions~, answers~) =>
+      encode_question_response(request_id, questions, answers)
   }
 }
 
@@ -113,5 +120,5 @@ pub fn parse(content : String) -> Context? {
       ),
     )
   }
-  None
+  parse_question_response(content)
 }

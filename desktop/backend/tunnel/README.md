@@ -14,7 +14,7 @@ side is implemented in `desktop/backend/remote`.
    `register` with its device token and display name.
 2. The service validates the token and replies with either `registered`, which
    contains the device's public id, or `fail`, which rejects the registration.
-3. When a browser connects to `/v1/devices/<device>/ws`, the service sends
+3. When a browser connects to `/v2/devices/<device>/ws`, the service sends
    `open` with a fresh stream id over the long-lived WebSocket.
 4. The desktop process opens `/v1/tunnel/<stream>`. The service then copies
    frames between that data WebSocket and the browser WebSocket.

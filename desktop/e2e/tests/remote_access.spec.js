@@ -3,7 +3,7 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
 // The `auth.status` shape (docs/remote-protocol.md): absent fields, never
 // null, stand for a signed-out user and device.
-const relay = 'https://relay.test';
+const relay = 'https://openseek-api.moonbitlang.cn';
 const signedOut = { connected: false, server_url: relay };
 const signedIn = {
   connected: true,
@@ -15,10 +15,11 @@ const signedIn = {
 // Replace only Proton's transport, as close_shortcut.spec.js does. The relay
 // sign-in is scripted: `auth.connect` stays pending until the test settles
 // it, the way the real host waits for the browser round-trip.
-async function installDesktop(page) {
+async function installDesktop(page, { managed = false } = {}) {
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  const auth = { status: signedOut, finishConnect: null };
+  const environment = { ...signedIn, managed_by_env: true };
+  const auth = { status: managed ? environment : signedOut, account: null, finishConnect: null, requests: app.requests, app };
   await page.exposeFunction('desktopRequest', request => {
     app.requests.push(request);
     switch (request.method) {
@@ -26,15 +27,21 @@ async function installDesktop(page) {
         return { dark: false };
       case 'auth.status':
         return auth.status;
+      case 'account.session':
+        return auth.account ? { session: auth.account } : {};
+      case 'remote.access_set':
+        auth.status = request.params.enabled ? signedIn : signedOut;
+        return auth.status;
       case 'auth.connect':
         return new Promise(resolve => {
           auth.finishConnect = () => {
-            auth.status = signedIn;
+            auth.account = { token: 'ts_fixture', user: { user_id: '123', login: 'octocat', avatar_url: '' } };
             resolve(auth.status);
           };
         });
       case 'auth.disconnect':
-        auth.status = signedOut;
+        auth.account = null;
+        auth.status = managed ? environment : signedOut;
         return auth.status;
       default:
         return app.replyFor(request);
@@ -72,12 +79,12 @@ async function installDesktop(page) {
   return auth;
 }
 
-test('Disconnect stays clickable after the Connect button it replaces', async ({ page }) => {
+test('account sign-in remains independent of the remote access toggle and signs out cleanly', async ({ page }) => {
   const auth = await installDesktop(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const section = page.locator('.settings-group', { hasText: 'Remote access' });
+  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
 
-  const connect = section.getByRole('button', { name: 'Connect with GitHub' });
+  const connect = section.getByRole('button', { name: 'Sign in', exact: true });
   await expect(connect).toBeEnabled();
   await connect.click();
 
@@ -88,14 +95,39 @@ test('Disconnect stays clickable after the Connect button it replaces', async ({
   await expect(section.getByRole('button', { name: 'Cancel' })).toBeVisible();
   await expect.poll(() => auth.finishConnect !== null).toBe(true);
 
-  // The signed-in row replaces the Connect row in place. Rabbita patches the
-  // existing <button>, so the disabled state must actually be cleared rather
-  // than left behind as a DOM property the diff cannot remove.
   auth.finishConnect();
-  const disconnect = section.getByRole('button', { name: 'Disconnect' });
-  await expect(section.getByText('@octocat — online — reachable from your browser')).toBeVisible();
-  await expect(disconnect).toBeEnabled();
+  const signOut = section.getByRole('button', { name: 'Sign out', exact: true });
+  await expect(section.getByText('@octocat', { exact: true })).toBeVisible();
+  await expect(signOut).toBeEnabled();
+  const toggle = section.getByRole('switch');
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'true');
+  await expect(section.getByText('online — reachable from your browser', { exact: true })).toBeVisible();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-checked', 'false');
+  await expect(signOut).toBeEnabled();
+  expect(auth.account.token).toBe('ts_fixture');
+  await signOut.click();
+  await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await expect(toggle).toBeDisabled();
+  expect(auth.app.pageErrors).toEqual([]);
+});
 
-  await disconnect.click();
-  await expect(section.getByRole('button', { name: 'Connect with GitHub' })).toBeEnabled();
+test('environment-managed remote access keeps its connection while the account logs out', async ({ page }) => {
+  const auth = await installDesktop(page, { managed: true });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const section = page.locator('.settings-group', { hasText: 'Account · Remote access' });
+  await expect(section.getByRole('switch')).toHaveCount(0);
+  await expect(section).toContainText('Signing out does not close this debug connection.');
+  await section.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect.poll(() => auth.finishConnect !== null).toBe(true);
+  auth.finishConnect();
+  await section.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(section.getByRole('button', { name: 'Sign in', exact: true })).toBeEnabled();
+  await expect(section.getByRole('link', { name: 'Open', exact: true })).toHaveAttribute('href', signedIn.device.url);
+  expect(auth.status.connected).toBe(true);
+  expect(auth.requests.filter(request => request.method === 'remote.access_set')).toEqual([]);
+  expect(auth.app.pageErrors).toEqual([]);
 });

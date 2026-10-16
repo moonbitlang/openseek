@@ -1,0 +1,13 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/session_preview"
+
+// Values
+pub async fn read_first_prompt(String) -> String?
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
