@@ -7,7 +7,7 @@ test "composer input is a projection instead of the root model" {
     mentions: [mention],
   })
   let input = model.composer_input()
-  inspect(input.identity.owner.session, content="desktop-test")
+  inspect(input.identity.owner.session(), content="desktop-test")
   inspect(input.draft.task, content="local draft")
   assert_true(input.draft.mentions == [mention])
   assert_eq(input.identity.archive_generation, 0)
@@ -52,7 +52,10 @@ test "composer submission stays bound to its originating conversation" {
     conversations: [origin, visible],
   }
   let identity : @composer.Identity = {
-    owner: { channel: @interop.ChannelId::Local, session: origin.session_id, },
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Local,
+      session: origin.session_id,
+    }),
     archive_generation: 0,
   }
   let (_, submitted) = update(
@@ -91,10 +94,10 @@ test "composer submission stays bound to its originating conversation" {
 test "annotation-only composer submission starts its conversation" {
   let model = test_model()
   let identity : @composer.Identity = {
-    owner: {
+    owner: @interop.Host({
       channel: @interop.ChannelId::Local,
       session: model.active().session_id,
-    },
+    }),
     archive_generation: 0,
   }
   let mention : Mention = {
@@ -145,13 +148,22 @@ test "a background retirement expires old actions without poisoning a reopened i
     channel: @interop.ChannelId::Local,
     session: "desktop-test",
   }
-  let model = { ..test_model(), composer_entry_retirements: [owner], }
+  let model = {
+    ..test_model(),
+    composer_entry_retirements: [@interop.Host(owner)],
+  }
   assert_true(
-    model.conversation_for_composer_action({ owner, archive_generation: 0, })
+    model.conversation_for_composer_action({
+      owner: @interop.Host(owner),
+      archive_generation: 0,
+    })
     is None,
   )
   assert_true(
-    model.conversation_for_composer_action({ owner, archive_generation: 1, })
+    model.conversation_for_composer_action({
+      owner: @interop.Host(owner),
+      archive_generation: 1,
+    })
     is Some(_),
   )
 }

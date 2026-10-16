@@ -2,6 +2,7 @@
 /// The durable/UI origin of one sidebar conversation row.
 pub(all) enum ConversationSource {
   OpenSeekLive
+  CloudLive
   OpenSeekArchived
   CodexLive
   CodexArchived
@@ -11,6 +12,7 @@ pub(all) enum ConversationSource {
 ///|
 fn ConversationSource::key(self : ConversationSource) -> String {
   match self {
+    CloudLive => "cloud.live"
     OpenSeekLive => "openseek.live"
     OpenSeekArchived => "openseek.archived"
     CodexLive => "codex.live"
@@ -217,7 +219,7 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
     OpenSeekLive | CodexLive => Some(LiveMenu)
     OpenSeekArchived => Some(OpenSeekArchivedMenu)
     CodexArchived => Some(CodexArchivedMenu)
-    CodexDraft => None
+    CodexDraft | CloudLive => None
   }
 }
 

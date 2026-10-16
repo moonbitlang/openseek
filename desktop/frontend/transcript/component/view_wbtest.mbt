@@ -4,6 +4,17 @@ fn stream_keys(input : Input) -> Array[String] {
 }
 
 ///|
+test "a Cloud transcript cannot read an absolute image from the local host" {
+  let owner : ImageOwner = { channel: None, session: "cloud", root: None, }
+  assert_true(owner.read_target("/Users/me/private.png") is None)
+  let emit : @cmd.Emit[Msg] = _ => @cmd.none
+  let (cache, _) = ImageCache::empty().begin_read(
+    owner, "/Users/me/private.png", emit,
+  )
+  assert_true(cache.0.is_empty())
+}
+
+///|
 test "empty transcript title names its project when available" {
   assert_eq(empty_title(Some("openseek")), "What should we build in openseek?")
   assert_eq(empty_title(None), "What should we build?")
@@ -220,7 +231,7 @@ test "transcript stream section key scopes equal session ids by channel" {
   )
   let remote = {
     ..local_input,
-    focused: @interop.ChannelId::Remote("device-a"),
+    focused: Some(@interop.ChannelId::Remote("device-a")),
   }
   assert_eq(
     TranscriptSectionKey::stream(local_input).wire(),

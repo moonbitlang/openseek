@@ -19,7 +19,7 @@ pub(all) struct Draft {
 /// composer entry was created. Every conversation-scoped action carries this
 /// identity so the root can reject a stale command after archive changes.
 pub(all) struct Identity {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   archive_generation : Int32
 } derive(Eq, @debug.Debug)
 
@@ -255,7 +255,7 @@ pub(all) struct Input {
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32
-  retirements : Array[@interop.ConversationKey]
+  retirements : Array[@interop.ConversationIdentity]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?

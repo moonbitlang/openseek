@@ -71,7 +71,7 @@ struct Input {
   dark_mode : Bool
   minimal : Bool
   source : Source
-  focused : @interop.ChannelId
+  focused : @interop.ChannelId?
   active_session : String
   can_fork : Bool
   // Disable every conversation while a request is pending; only its source
@@ -80,6 +80,7 @@ struct Input {
   edit_busy : Bool
   forking : Int32?
   editable_users : Array[Int32]
+  identity : String
   // Where the reader left this conversation last time, read once by `init`.
   scroll : ScrollPosition
   // The registered project that owns this conversation, kept separate from
@@ -117,7 +118,8 @@ pub fn Input::Input(
   dark_mode~ : Bool = false,
   minimal~ : Bool = false,
   source~ : Source,
-  focused~ : @interop.ChannelId,
+  focused? : @interop.ChannelId,
+  identity? : String,
   active_session~ : String,
   can_fork~ : Bool = false,
   fork_busy~ : Bool = false,
@@ -150,6 +152,7 @@ pub fn Input::Input(
     edit_busy,
     forking,
     editable_users,
+    identity: identity.unwrap_or(active_session),
     scroll,
     project_label,
     current_project,

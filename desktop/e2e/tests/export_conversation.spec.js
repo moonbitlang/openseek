@@ -335,7 +335,7 @@ for (const status of [401, 403]) {
     await expect.poll(() => app.grantRequests.length).toBe(1);
     expect(app.hostShares).toEqual([]);
     if (status === 401) {
-      await expect(page.getByRole('link', { name: 'Sign in with GitHub', exact: true })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
     } else {
       await expect(dialog).toContainText('Could not prepare sharing (HTTP 403)');

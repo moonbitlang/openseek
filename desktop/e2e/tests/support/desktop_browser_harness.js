@@ -508,6 +508,7 @@ export class DesktopBrowserHarness {
   async install() {
     this.page.on('pageerror', error => this.pageErrors.push(error.message));
 
+    await this.page.route('https://cloud.moonbitlang.cn/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sessions: [] }) }));
     await this.page.route('**/v2/devices/*/connect-ticket', async route => {
       const request = { url: route.request().url(), headers: await route.request().allHeaders() };
       this.ticketRequests.push(request);

@@ -1,0 +1,147 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/cloud"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
+  "moonbitlang/async/http",
+  "openseek_desktop/frontend/composer",
+  "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/transcript",
+}
+
+// Values
+pub fn discard_legacy_credential() -> Unit
+
+pub async fn export_record(String, String) -> Result[String, Failure]
+
+pub async fn share(String, String, String) -> Result[String, Failure]
+
+pub fn subscriptions(State) -> @sub.Sub
+
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int) -> (State, @cmd.Cmd, String?)
+
+// Errors
+
+// Types and methods
+pub(all) struct Conversation {
+  records : Array[Record]
+  events : Array[Event]
+  request : Int
+  loading : Bool
+  sending : Bool
+  generating : Bool
+  history_required : Bool
+  submission_sequence : Int
+  pending : Submission?
+  stream : StreamLease?
+  task : String?
+  last_seq : Int?
+  streaming_response : String?
+  notice : String?
+} derive(Eq)
+pub fn Conversation::equal(Self, Self) -> Bool
+pub fn Conversation::items(Self) -> Array[@transcript.TranscriptItem]
+pub fn Conversation::not_equal(Self, Self) -> Bool
+
+pub struct Creation {
+  request : Int
+  navigation : Int
+} derive(Eq)
+pub fn Creation::equal(Self, Self) -> Bool
+pub fn Creation::not_equal(Self, Self) -> Bool
+
+pub(all) struct Event {
+  session_id : String
+  task_id : String
+  seq : Int
+  kind : String
+  data : Json
+} derive(Eq)
+pub fn Event::equal(Self, Self) -> Bool
+pub fn Event::not_equal(Self, Self) -> Bool
+
+pub(all) enum Failure {
+  Unauthorized
+  Busy
+  Http(Int)
+  Unreachable
+  Malformed
+  ServiceNotConfigured
+  CredentialServiceUnavailable
+  SignInFailed(String)
+}
+pub fn Failure::label(Self) -> String
+
+pub(all) struct History {
+  messages : Array[Record]
+  generating : Bool
+}
+
+pub(all) enum Msg {
+  AccountChanged(String?)
+  Refresh
+  Create
+  Open(String)
+  Submit(@interop.ConversationIdentity, @composer.Draft)
+  Listed(Int, Int, Array[Session])
+  ListFailed(Int, Int, Failure)
+  Created(Int, Int, String)
+  CreateFailed(Int, Int, Failure)
+  Loaded(Int, String, Int, History)
+  LoadFailed(Int, String, Int, Failure)
+  StreamEvent(Int, String, Int, Event)
+  StreamEnded(Int, String, Int)
+  SendFailed(Int, String, Int, Failure)
+  Poll(Int, String, Int)
+}
+
+pub(all) struct Record {
+  task_id : String
+  kind : String
+  data : Json
+  created_at : Double
+} derive(Eq)
+pub fn Record::equal(Self, Self) -> Bool
+pub fn Record::not_equal(Self, Self) -> Bool
+
+pub(all) struct Session {
+  id : String
+  title : String?
+  updated_at : Double?
+  generating : Bool
+} derive(Eq)
+pub fn Session::equal(Self, Self) -> Bool
+pub fn Session::not_equal(Self, Self) -> Bool
+
+pub(all) struct State {
+  user_id : String?
+  epoch : Int
+  needs_sign_in : Bool
+  sessions : Array[Session]
+  conversations : Map[String, Conversation]
+  sequence : Int
+  list_request : Int
+  creation : Creation?
+  notice : String?
+} derive(Eq)
+pub fn State::creating_at(Self, Int) -> Bool
+pub fn State::empty() -> Self
+pub fn State::equal(Self, Self) -> Bool
+pub fn State::not_equal(Self, Self) -> Bool
+
+pub struct StreamLease {
+  mut active : Bool
+  mut client : @http.Client?
+}
+
+pub struct Submission {
+  content : String
+  known_tasks : Array[String]
+} derive(Eq)
+pub fn Submission::equal(Self, Self) -> Bool
+pub fn Submission::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

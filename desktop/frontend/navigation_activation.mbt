@@ -7,7 +7,11 @@ fn replace_with_new_navigation(
   guard model.console.page_device is Some(device) else {
     return (@cmd.none, model)
   }
-  let (write, next) = navigation_visit(model, { device, target, }, replace=true)
+  let (write, next) = navigation_visit(
+    model,
+    { device: Some(device), target, },
+    replace=true,
+  )
   let (activate, next) = activate_navigation(dispatch, {
     ..next,
     navigation: { ..next.navigation, phase: Waiting, },
@@ -25,16 +29,40 @@ fn activate_navigation(
   }
   let model = { ..model, screen: navigation_screen(location.target), }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
+  if location.target is CloudSession(account~, session~) {
+    guard model.account.map(account => account.user.user_id) == Some(account) &&
+      model.cloud.user_id == Some(account) else {
+      return (
+        @cmd.none,
+        { ..model, navigation: { ..model.navigation, phase: Missing, }, },
+      )
+    }
+    let (command, next) = update_msg(
+      dispatch,
+      OpenCloudConversation(account~, session~),
+      model,
+    )
+    return (
+      command,
+      { ..next, navigation: { ..next.navigation, phase: Active, }, },
+    )
+  }
+  if location.target is Settings {
+    let (command, next) = update_msg(dispatch, OpenSetup, model)
+    return (
+      command,
+      { ..next, navigation: { ..next.navigation, phase: Active, }, },
+    )
+  }
   // Browser authentication and device gates own connectivity UI. Do not turn
   // an unconnected or not-yet-listed target into a missing target.
-  guard model.focused_device() is Some(dev) && dev.bridge is Connected else {
+  guard location.device is Some(_) &&
+    model.focused_device() is Some(dev) &&
+    dev.bridge is Connected else {
     return (@cmd.none, model)
   }
   let (command, next, phase) = match location.target {
-    Settings => {
-      let (cmd, next) = update_msg(dispatch, OpenSetup, model)
-      (cmd, next, Active)
-    }
+    CloudSession(..) | Settings => (@cmd.none, model, Active)
     Schedules => {
       let (cmd, next) = open_schedules(dispatch, model)
       (cmd, next, Active)

@@ -8,11 +8,6 @@ fn navigation_visit(
   let history = navigation.history.visit(location, replace~)
   let next = {
     ..model,
-    chat_creation: if navigation.location is Some(_) {
-      None
-    } else {
-      model.chat_creation
-    },
     pending_project_adoption: if navigation.location is Some(_) {
       model.project_adoption_at(location)
     } else {
@@ -103,7 +98,6 @@ fn update_navigation(
       }
       activate_navigation(dispatch, {
         ..model,
-        chat_creation: None,
         pending_project_adoption: history
         .current()
         .bind(location => model.project_adoption_at(location)),

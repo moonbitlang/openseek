@@ -124,9 +124,9 @@ async fn main {
   })
   // Proton exposes the `__MoonBit__` bridge — both the ops and the event
   // channel the frontend listens on — only to the local origin its asset
-  // entry serves from. The window is bridge-only: it makes no HTTP requests
-  // at all. Remote browsers use the same method catalog over the relay
-  // WebSocket instead (docs/remote-protocol.md).
+  // entry serves from. Host commands use the bridge; account, Cloud and
+  // publication requests use their HTTP APIs. Remote browsers use the host
+  // method catalog over the relay WebSocket (docs/remote-protocol.md).
   // One host per identity: `single_instance` hands a later launch to the
   // process already holding that identity's lock, and that process brings its
   // window to the front. Off by default for now; see `single_instance_wanted`.

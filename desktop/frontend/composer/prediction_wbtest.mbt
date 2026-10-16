@@ -126,7 +126,10 @@ test "empty outcomes and a mismatched conversation never show suggestions" {
     ..input,
     identity: {
       ..input.identity,
-      owner: { ..input.identity.owner, session: "other", },
+      owner: @interop.Host({
+        ..input.identity.owner.host().unwrap(),
+        session: "other",
+      }),
     },
   }
   assert_eq(model.active(input).prediction_text(other), None)

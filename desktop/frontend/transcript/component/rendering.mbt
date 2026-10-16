@@ -330,7 +330,7 @@ fn TranscriptSectionKey::overview() -> TranscriptSectionKey {
 /// may legitimately use the same session id.
 fn TranscriptSectionKey::stream(input : Input) -> TranscriptSectionKey {
   {
-    value: "stream\u{0}\{input.source.wire()}\u{0}\{input.focused.uri_authority()}\u{0}\{input.active_session}",
+    value: "stream\u{0}\{input.source.wire()}\u{0}\{input.focused.map_or(input.identity, channel => channel.uri_authority())}\u{0}\{input.active_session}",
   }
 }
 

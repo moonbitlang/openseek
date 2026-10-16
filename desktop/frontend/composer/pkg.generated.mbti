@@ -195,7 +195,7 @@ pub fn GoalPending::not_equal(Self, Self) -> Bool
 pub fn GoalPending::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Identity {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   archive_generation : Int
 } derive(Eq, @debug.Debug)
 pub fn Identity::equal(Self, Self) -> Bool
@@ -225,7 +225,7 @@ pub(all) struct Input {
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int
   submission_sequence : Int
-  retirements : Array[@interop.ConversationKey]
+  retirements : Array[@interop.ConversationIdentity]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
   active_file : @pathx.Relative?
