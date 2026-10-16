@@ -1,0 +1,24 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/server/host"
+
+import {
+  "openseek_desktop/backend/pathx",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+type Server
+pub async fn Server::bind(engine? : String, port? : Int, runtime_dir? : @pathx.Path, resources? : @openseek_desktop/backend/host.HostResources) -> Self
+pub fn Server::close(Self) -> Unit
+pub fn Server::entry_url(Self) -> String
+pub async fn Server::from_environment(engine? : String, port? : Int) -> Self
+pub async fn Server::run(Self, root? : String, entry? : String, on_ready? : async () -> Unit) -> Unit
+pub fn Server::token(Self) -> String
+pub fn Server::url(Self) -> String
+
+// Type aliases
+
+// Traits

@@ -2,14 +2,15 @@
 
 The wire protocol between a browser client and an OpenSeek **host process**
 — the desktop app's native process, which owns the engine and the host ops.
-The host runs no server: at startup it dials out to a **relay** and
-registers; browsers reach it through the relay, which serves the frontend
-bundle and splices WebSockets without understanding a byte of the protocol.
+The packaged host can dial out to a **relay**, which serves the frontend
+bundle and splices WebSockets. The standalone `desktop/server` host also
+serves authenticated loopback HTTP and WebSocket connections directly for
+terminal clients and desktop windows.
 
-The desktop window itself does not use this protocol. It talks to the host
-over proton's in-process `__MoonBit__` bridge — same method catalog, same
-payloads, no wire. The frontend picks its transport by origin: a `proton://`
-page uses the bridge, anything else opens the WebSocket below.
+The usual desktop window talks over Proton's in-process `__MoonBit__` bridge.
+A window launched with `--server-url` joins the shared server instead. Both
+use the same method catalog and payloads. The frontend picks its transport
+by origin: a `proton://` page uses the bridge; an HTTP page uses WebSocket.
 
 This document is the contract. The implementation follows it, not the other
 way around.
@@ -139,6 +140,16 @@ an absent value selects the host home directory. Its absolute reply fields
 always use the encoding above.
 
 ## Authentication
+
+For the standalone loopback server, `--ready-file` and the startup JSON supply
+the WebSocket `url`, launch `token`, and browser `entry_url`. The socket route
+is `/v1/devices/host/ws`. Native clients send
+`Cookie: seekmoon_session_<port>=<token>` and no web `Origin`; browser clients
+get this cookie by opening `entry_url`, and their `Origin` must match the
+server's loopback origin. Missing or incorrect capabilities and unrelated web
+origins are rejected. The token is scoped to this server launch. Frontend
+assets are optional for native clients. See
+[`desktop/server/README.md`](../desktop/server/README.md) for launch examples.
 
 Auth terminates **at the relay**; the JSON-RPC wire above carries no
 credentials and is unchanged by it. Device ids are stable database ids,

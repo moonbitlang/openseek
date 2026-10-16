@@ -1,12 +1,10 @@
-// The development console: a `.dev` build serves its own frontend bundle on
-// plain `http://127.0.0.1:<port>/` to the system browser, answering the
-// console's account routes for the one machine it is — `/v1/auth/me`, a
-// `/v1/devices` roster naming this host as device `host`, and
-// `/v1/devices/host/ws` upgraded into the JSON-RPC connection a relayed
-// browser gets (docs/remote-protocol.md). The page is the same bundle and
-// document the window loads, so a browser here runs the console exactly as
-// it would against the relay, with the relay out of the loop. The window
-// itself never uses this origin; it stays on the proton bridge.
+// The shared loopback HTTP+WebSocket listener serves an optional frontend
+// bundle and the host's authenticated JSON-RPC API. Desktop development
+// builds use it as a browser console; the standalone server uses the same
+// listener for terminal clients and desktop windows in shared-server mode.
+// Account routes describe this host as device `host`, and
+// `/v1/devices/host/ws` upgrades to the same backend connection used by relay
+// clients (docs/remote-protocol.md).
 //
 // The session cookie is the capability boundary: the launch token minted at
 // bind time rides the entry URL (`/?device=host&token=…`), the document
@@ -19,18 +17,18 @@
 // token, which only ever appears in the entry URL. A present `Origin`
 // header must be our own origin, which keeps foreign web pages (whose
 // browsers always send one) out even though they can reach loopback.
-// Release builds never open this port.
+// Embedded desktop release builds do not open this port by default.
 //
 // Browsers key cookies by host, not port, so the session cookie also
 // reaches any other server on 127.0.0.1 the developer browses to while it
 // exists. That is inherent to loopback cookies and shared by every local
 // development tool that uses one; a recipient would have to be a listener
 // that is not already running as the user (a container's forwarded port,
-// another account's service), and this development-only surface does not
+// another account's service), and this loopback surface does not
 // defend against that.
 
 ///|
-/// The loopback HTTP+WebSocket listener owning the development console's
+/// The loopback HTTP+WebSocket listener owning the shared server's
 /// origin. Bound before the API state exists so the state can carry the
 /// entry URL; served once the state does.
 pub struct LocalConsole {
@@ -105,6 +103,12 @@ pub fn LocalConsole::entry_url(self : LocalConsole) -> String {
 }
 
 ///|
+/// The authenticated JSON-RPC socket used by native clients.
+pub fn LocalConsole::socket_url(self : LocalConsole) -> String {
+  "ws://127.0.0.1:\{self.port()}/v1/devices/\{LocalConsoleDevice}/ws"
+}
+
+///|
 /// Accept and serve connections for the app's lifetime. Files come from
 /// `root`, with `/` resolving to `entry` inside it — the directory and
 /// document the window itself loads. Each connection is its own task: a
@@ -113,15 +117,15 @@ pub fn LocalConsole::entry_url(self : LocalConsole) -> String {
 pub async fn LocalConsole::run(
   self : LocalConsole,
   state : @api.ApiState,
-  root~ : String,
-  entry~ : String,
+  root? : String,
+  entry~ : String = "index.html",
 ) -> Unit {
   defer self.server.close()
   @async.with_task_group(group => {
     for ;; {
       let (conn, _) = self.server.accept()
       group.spawn_bg(allow_failure=true, () => {
-        self.handle(state, conn, root~, entry~)
+        self.handle(state, conn, root?, entry~)
       })
     }
   })
@@ -172,7 +176,7 @@ async fn LocalConsole::handle(
   self : LocalConsole,
   state : @api.ApiState,
   conn : @http.ServerConnection,
-  root~ : String,
+  root? : String,
   entry~ : String,
 ) -> Unit {
   defer conn.close()
@@ -193,18 +197,22 @@ async fn LocalConsole::handle(
       if token == self.token {
         // The document itself carries the session: every load of the entry
         // URL renews the cookie, so the URL remains a working capability.
-        serve_static(
-          root,
-          entry,
-          conn,
-          cookie=Cookie(
-            self.cookie_name,
-            self.token,
-            path="/",
-            http_only=true,
-            extensions=["SameSite=Strict"],
-          ),
-        )
+        if root is Some(root) {
+          serve_static(
+            root,
+            entry,
+            conn,
+            cookie=Cookie(
+              self.cookie_name,
+              self.token,
+              path="/",
+              http_only=true,
+              extensions=["SameSite=Strict"],
+            ),
+          )
+        } else {
+          respond_status(conn, 404, "Frontend assets are not configured")
+        }
       } else {
         respond_status(conn, 403, "Forbidden")
       }
@@ -231,7 +239,12 @@ async fn LocalConsole::handle(
     // signs it back in.
     Login => respond_redirect(conn, "/?device=\{LocalConsoleDevice}")
     Logout => respond_status(conn, 204, "No Content")
-    Static(relative) => serve_static(root, relative, conn)
+    Static(relative) =>
+      if root is Some(root) {
+        serve_static(root, relative, conn)
+      } else {
+        respond_status(conn, 404, "Frontend assets are not configured")
+      }
     Unknown => respond_status(conn, 404, "Not Found")
     MethodNotAllowed => respond_status(conn, 405, "Method Not Allowed")
   }

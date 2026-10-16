@@ -207,6 +207,9 @@ pub fn endpoints(
   on_skills_changed : () -> Unit,
 ) -> Array[@endpoint.Endpoint] {
   [
+    Endpoint(@commands.session_export, payload => {
+      export_session_op(state, manager, payload)
+    }),
     Endpoint(@commands.github_drafts_get, payload => {
       read_github_drafts(state.runtime_dir.map(dir => dir.to_string()), payload)
     }),

@@ -25,6 +25,7 @@ pub impl Show for ToolError
 type Server
 pub async fn Server::Server(Array[Tool], version~ : String) -> Self
 pub fn Server::add_tools(Self, Array[Tool]) -> Unit raise ServerError
+pub fn Server::close(Self) -> Unit
 pub fn Server::grant(Self, String) -> Map[String, String] raise ServerError
 pub async fn Server::run(Self) -> Unit
 pub fn Server::url(Self) -> String

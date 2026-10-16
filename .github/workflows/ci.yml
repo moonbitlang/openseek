@@ -272,6 +272,48 @@ jobs:
           moon build . --target native
           moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
+  # The headless server has to build where there is no window toolkit. A bare
+  # container has neither Node nor the CEF runtime, so a Proton dependency that
+  # reaches `desktop/backend` or `desktop/server` fails here rather than on
+  # someone's remote machine.
+  headless-server:
+    name: headless server (no window toolkit)
+    runs-on: ubuntu-latest
+    container: ubuntu:24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install --yes --no-install-recommends build-essential ca-certificates curl git python3
+
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Update MoonBit package registry
+        run: moon update
+
+      # The root workspace holds the Proton window host, and Moon runs every
+      # resolved module's prebuild. Run from `desktop/server` so that Moon
+      # picks the workspace there, which lists only what the server needs.
+      - name: Build from the server workspace
+        run: |
+          if command -v node; then
+            echo "this job must run without Node to mean anything" >&2
+            exit 1
+          fi
+          moon -C desktop/server build . --target native --release
+
+      - name: Exercise authentication and shutdown with a live PTY
+        run: python3 desktop/server/smoke.py desktop/server/_build/native/release/build/openseek_desktop/server/server.exe
+
   # cmd/viz_app is a separate MoonBit module and owns its browser test runner.
   # Keep it out of Desktop's recipe so either application can be tested alone.
   viz-e2e:

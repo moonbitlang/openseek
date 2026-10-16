@@ -99,3 +99,8 @@ viz-test-browser:
 # Exercise bundled agent workflows against an offline child contract.
 test-workflows:
     moon run tests/integration/workflows
+
+# Run a persistent shared backend for terminal and desktop clients.
+seekmoon-server *args:
+    moon build . --target native
+    moon run desktop/server --target native -- --engine '{{justfile_directory()}}/_build/native/debug/build/moonbitlang/openseek/openseek.exe' {{ args }}

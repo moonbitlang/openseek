@@ -22,7 +22,8 @@ pub async fn LocalConsole::bind(port~ : Int) -> Self
 pub fn LocalConsole::entry_url(Self) -> String
 pub fn LocalConsole::origin(Self) -> String
 pub fn LocalConsole::port(Self) -> Int
-pub async fn LocalConsole::run(Self, @api.ApiState, root~ : String, entry~ : String) -> Unit
+pub async fn LocalConsole::run(Self, @api.ApiState, root? : String, entry? : String) -> Unit
+pub fn LocalConsole::socket_url(Self) -> String
 
 type RelayActor
 pub fn RelayActor::RelayActor(@api.ApiState, announce~ : (String) -> Unit) -> Self

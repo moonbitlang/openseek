@@ -11,6 +11,10 @@ async fn main {
     @shellenv.print_env_json(mark)
     return
   }
+  if matches.values.get("server-url") is Some([url, ..]) {
+    run_server_window(url)
+    return
+  }
   // The async event loop on the process main thread drives Proton's native
   // loop directly (the external event loop is the only runner), so UI work
   // and shutdown ordering stay on the thread that owns AppKit and CEF.
@@ -382,6 +386,12 @@ let command : @argparse.Command = Command(
   "seekmoon",
   about="The SeekMoon desktop host.",
   options=[
+    OptionArg(
+      "server-url",
+      long="server-url",
+      env="SEEKMOON_SHARED_SERVER_URL",
+      about="Open the frontend URL of a shared SeekMoon server, including its launch token. This window uses that server's backend.",
+    ),
     OptionArg(
       "relay-url",
       long="relay-url",

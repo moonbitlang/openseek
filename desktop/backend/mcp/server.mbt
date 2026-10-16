@@ -83,6 +83,12 @@ pub async fn Server::Server(tools : Array[Tool], version~ : String) -> Server {
 }
 
 ///|
+/// Close the listener when its owning host stops or startup fails.
+pub fn Server::close(self : Server) -> Unit {
+  self.listener.close()
+}
+
+///|
 /// Where clients POST.
 pub fn Server::url(self : Server) -> String {
   "http://127.0.0.1:\{self.listener.addr.port()}\{EndpointPath}"
@@ -151,7 +157,7 @@ fn Server::caller(self : Server, request : @http.Request) -> String? {
 /// its own task and answers one request: a tool call can take a while, and
 /// must not hold up another conversation's.
 pub async fn Server::run(self : Server) -> Unit {
-  defer self.listener.close()
+  defer self.close()
   @async.with_task_group(group => {
     for ;; {
       let (conn, _) = self.listener.accept()

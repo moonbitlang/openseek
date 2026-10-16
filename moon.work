@@ -10,4 +10,5 @@ members = [
   "./desktop/backend",
   "./desktop/app",
   "./desktop/frontend",
+  "./desktop/server",
 ]

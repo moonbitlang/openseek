@@ -37,6 +37,17 @@ moon run ./desktop/package/browser
 just desktop-build-scripts-check
 ```
 
+### Shared headless server
+
+Build without Node or the Proton window runtime using the server workspace:
+
+```sh
+moon -C desktop/server build . --target native --release
+```
+
+See [`server/README.md`](server/README.md) for authenticated connections,
+optional browser assets, state directories, and the process smoke test.
+
 The platform commands remain compatible:
 
 ```sh
