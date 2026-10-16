@@ -291,6 +291,8 @@ pub let skills_installed : Command[@protocol.EmptyPayload, @protocol.InstalledSk
 
 pub let skills_installed_content : Command[@protocol.UninstallSkillPayload, @protocol.SkillContentReply]
 
+pub let skills_set_enabled : Command[@protocol.SetSkillEnabledPayload, @protocol.SetSkillEnabledReply]
+
 pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.UninstallSkillReply]
 
 pub let terminal_ack : Command[@protocol.TerminalAckPayload, @protocol.EmptyReply]

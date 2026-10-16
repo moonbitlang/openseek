@@ -9,6 +9,7 @@ const installed = {
   id: 'yoorkin-wayfinder', name: 'wayfinder', description: market.description,
   source: 'Yoorkin/wayfinder@0.1.0',
   registry: { module_name: 'Yoorkin/wayfinder', package_path: '' },
+  enabled: true,
 };
 
 class SkillsHarness extends DesktopBrowserHarness {

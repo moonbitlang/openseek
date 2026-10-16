@@ -1856,6 +1856,7 @@ pub(all) struct InstalledSkill {
   description : String
   source : String
   registry : RegistrySkillIdentity?
+  enabled : Bool
 } derive(Eq, @debug.Debug)
 pub fn InstalledSkill::equal(Self, Self) -> Bool
 pub fn InstalledSkill::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3464,6 +3465,30 @@ pub fn SessionsReply::to_json(Self) -> Json
 pub fn SessionsReply::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionsReply
 pub impl @json.FromJson for SessionsReply
+
+pub(all) struct SetSkillEnabledPayload {
+  id : String
+  enabled : Bool
+} derive(Eq, @debug.Debug)
+pub fn SetSkillEnabledPayload::equal(Self, Self) -> Bool
+pub fn SetSkillEnabledPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SetSkillEnabledPayload::not_equal(Self, Self) -> Bool
+pub fn SetSkillEnabledPayload::to_json(Self) -> Json
+pub fn SetSkillEnabledPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SetSkillEnabledPayload
+pub impl @json.FromJson for SetSkillEnabledPayload
+
+pub(all) enum SetSkillEnabledReply {
+  SkillEnabledSet
+  SkillEnabledError(String)
+} derive(Eq, @debug.Debug)
+pub fn SetSkillEnabledReply::equal(Self, Self) -> Bool
+pub fn SetSkillEnabledReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SetSkillEnabledReply::not_equal(Self, Self) -> Bool
+pub fn SetSkillEnabledReply::to_json(Self) -> Json
+pub fn SetSkillEnabledReply::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SetSkillEnabledReply
+pub impl @json.FromJson for SetSkillEnabledReply
 
 pub(all) struct SettingsSetPayload {
   provider : String?

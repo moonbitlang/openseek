@@ -41,6 +41,7 @@ pub(all) struct InstalledItem {
   // user wrote by hand (which the app never uninstalls).
   source : String
   registry : @protocol.RegistrySkillIdentity?
+  enabled : Bool
 } derive(Eq)
 
 ///|
@@ -108,6 +109,7 @@ pub fn installed_from_reply(
       description: entry.description,
       source: entry.source,
       registry: entry.registry,
+      enabled: entry.enabled,
     })
   }
   items

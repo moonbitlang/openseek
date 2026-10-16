@@ -52,6 +52,7 @@ pub(all) struct InstalledItem {
   description : String
   source : String
   registry : @protocol.RegistrySkillIdentity?
+  enabled : Bool
 } derive(Eq)
 pub fn InstalledItem::equal(Self, Self) -> Bool
 pub fn InstalledItem::not_equal(Self, Self) -> Bool

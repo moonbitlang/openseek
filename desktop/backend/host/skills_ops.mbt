@@ -79,6 +79,7 @@ fn @skillmarket.InstalledSkill::to_protocol(
     name: self.name,
     description: self.description,
     source: self.source,
+    enabled: self.enabled,
     registry: self.registry.map(registry => {
       module_name: registry.module_name,
       package_path: registry.package_path,
@@ -107,4 +108,20 @@ async fn uninstall_skill_op(
     error => return SkillUninstallError("\{error}")
   }
   SkillUninstalled
+}
+
+///|
+async fn set_skill_enabled_op(
+  payload : @protocol.SetSkillEnabledPayload,
+  on_committed : () -> Unit,
+) -> @protocol.SetSkillEnabledReply {
+  @skillmarket.set_skill_enabled(
+    payload.id,
+    enabled=payload.enabled,
+    on_committed~,
+  ) catch {
+    @skillmarket.SkillMarketError(message) => return SkillEnabledError(message)
+    error => return SkillEnabledError("\{error}")
+  }
+  SkillEnabledSet
 }

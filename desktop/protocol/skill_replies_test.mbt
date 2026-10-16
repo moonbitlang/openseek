@@ -52,6 +52,7 @@ test "InstallSkillReply owns its success and error wire shapes" {
     description: "test",
     source: "acme/test@1.0.0",
     registry: Some({ module_name: "acme/test", package_path: "", }),
+    enabled: true,
   })
   let decoded : @protocol.InstallSkillReply = @json.from_json(success.to_json())
   assert_eq(decoded, success)
@@ -112,5 +113,41 @@ test "SkillContentReply owns its success and error wire shapes" {
     } noraise {
       _ => fail("expected malformed skill reply to fail decoding")
     }
+  }
+}
+
+///|
+test "enablement payload requires an explicit boolean and preserves false" {
+  let payload : @protocol.SetSkillEnabledPayload = @json.from_json({
+    "id": "notes",
+    "enabled": false,
+    "future": true,
+  })
+  assert_eq(payload.to_json(), { "id": "notes", "enabled": false })
+  for
+    malformed in [
+      Json::null(),
+      {},
+      { "id": "notes" },
+      { "id": "notes", "enabled": null },
+      { "id": "notes", "enabled": "false" },
+    ] {
+    try {
+      let _ : @protocol.SetSkillEnabledPayload = @json.from_json(malformed)
+    } catch {
+      JsonDecodeError(_) => ()
+    } noraise {
+      _ => fail("enablement requires an explicit desired state")
+    }
+  }
+  for
+    reply in [
+      @protocol.SetSkillEnabledReply::SkillEnabledSet,
+      SkillEnabledError("Cannot move skill"),
+    ] {
+    let decoded : @protocol.SetSkillEnabledReply = @json.from_json(
+      reply.to_json(),
+    )
+    assert_eq(decoded, reply)
   }
 }

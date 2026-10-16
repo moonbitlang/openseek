@@ -655,6 +655,12 @@ pub let skills_uninstall : Command[
 ] = Command("skills.uninstall")
 
 ///|
+pub let skills_set_enabled : Command[
+  @protocol.SetSkillEnabledPayload,
+  @protocol.SetSkillEnabledReply,
+] = Command("skills.set_enabled")
+
+///|
 pub let update_check : Command[
   @protocol.EmptyPayload,
   @protocol.CheckUpdateReply,

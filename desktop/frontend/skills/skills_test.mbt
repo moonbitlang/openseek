@@ -86,6 +86,7 @@ test "detail navigation validates retained installed previews after removal" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    enabled: true,
   }
   let detail = @skills.InstalledRef(skill.id)
   let before = input(installed=[skill])
@@ -307,6 +308,7 @@ test "uninstall is keyed by the library id and deduplicated" {
       description: "",
       source: "acme/widget@1.0.0",
       registry: Some({ module_name: "acme/widget", package_path: "", }),
+      enabled: true,
     },
   ]
   let (_, busy, _) = @skills.State::empty().handle(
@@ -384,9 +386,24 @@ test "installed skill replies decode, with name falling back to id" {
         description: "Build widgets fast.",
         source: "acme/widget@1.0.0",
         registry: Some({ module_name: "acme/widget", package_path: "", }),
+        enabled: true,
       },
-      { id: "handmade", name: "", description: "", source: "", registry: None, },
-      { id: "", name: "no-id", description: "", source: "", registry: None, },
+      {
+        id: "handmade",
+        name: "",
+        description: "",
+        source: "",
+        registry: None,
+        enabled: true,
+      },
+      {
+        id: "",
+        name: "no-id",
+        description: "",
+        source: "",
+        registry: None,
+        enabled: true,
+      },
     ]),
   )
   guard items is [widget, handmade] else {
@@ -407,6 +424,7 @@ test "an install blocks uninstall after a library refresh until completion" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    enabled: true,
   }
   let initial = @skills.State::empty()
   let (_, busy, _) = initial.handle(
@@ -447,6 +465,7 @@ test "an uninstall retains its source after removal and releases only itself" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    enabled: true,
   }
   let initial = @skills.State::empty()
   let before = input(installed=[skill])
@@ -514,6 +533,7 @@ test "detail navigation preserves library errors without mutating state" {
     description: "",
     source: "acme/widget@1.0.0",
     registry: Some({ module_name: "acme/widget", package_path: "", }),
+    enabled: true,
   }
   let clean = @skills.State::empty()
   let failed = clean.with_library_error("library unreadable")
