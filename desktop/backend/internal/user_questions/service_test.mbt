@@ -91,6 +91,16 @@ async test "timeout preserves the card and delivers a later answer or skip once"
         service.detach("chat")
         @async.sleep(1)
         assert_eq(deliveries.length(), 1)
+        assert_eq(
+          @message_context.parse(deliveries[0]),
+          Some(
+            @message_context.UserQuestionResponse(
+              request_id=id,
+              questions=payload().questions,
+              answers=answer.answers,
+            ),
+          ),
+        )
         assert_true(service.snapshot().requests.is_empty())
         assert_true(errors.is_empty())
       })

@@ -3,6 +3,7 @@ import {
   "moonbitlang/async/cond_var",
   "openseek_desktop/backend/uuid",
   "openseek_desktop/protocol",
+  "openseek_desktop/protocol/message_context",
   "moonbitlang/core/json",
 }
 

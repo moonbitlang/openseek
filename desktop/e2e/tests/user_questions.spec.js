@@ -250,3 +250,61 @@ for (const theme of ['light', 'dark']) {
     expect(app.pageErrors).toEqual([]);
   });
 }
+
+for (const width of [1440, 390]) {
+  test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }, testInfo) => {
+    const app = new DesktopBrowserHarness(page);
+    const answered = '<user_question_response request_id="question-1" status="answered">\n'
+      + '<question id="plan">\n<title>Which plan?</title>\n<options>\n<option>Small change</option>\n<option>Full redesign</option>\n</options>\n<answer>Small change</answer>\n</question>\n'
+      + '<question id="details">\n<title>Any details?&#10;中文🙂</title>\n<answer>Keep keyboard support.&#10;&lt;script&gt;plain text&lt;/script&gt; &amp; &amp;lt;/answer&amp;gt;</answer>\n</question>\n'
+      + '</user_question_response>';
+    const skipped = '<user_question_response request_id="question-2" status="skipped">\n'
+      + '<question id="extra">\n<title>Anything else?</title>\n</question>\n</user_question_response>';
+    const event = (sequence, content) => ({ sequence, item: { kind: 'user', payload: { content } } });
+    app.sessionEvents = [event(1, answered)];
+    await app.install();
+    await app.goto();
+    await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+    await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+    await page.setViewportSize({ width, height: 900 });
+    const responses = page.locator('.transcript-question-response');
+    await expect(responses).toHaveCount(1);
+    const next = event(2, skipped);
+    app.sessionEvents.push(next);
+    app.notify('session.event', { session: 'session-1', session_root: '/workspace/.openseek', sequence: 2, event: next });
+    for (const reload of [false, true]) {
+      if (reload) {
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.reload();
+        await page.getByRole('main').waitFor();
+        const showSidebar = page.getByRole('button', { name: 'Show sidebar', exact: true });
+        if (await showSidebar.isVisible()) await showSidebar.click();
+        await page.getByRole('button', { name: 'Rabbita browser fixture', exact: true }).click();
+        await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+        await page.setViewportSize({ width, height: 900 });
+      }
+      await expect(responses).toHaveCount(2);
+      await expect(page.locator('.app')).toHaveClass(/sidebar-collapsed/);
+      await expect(page.locator('.app > aside')).toHaveCSS('visibility', 'hidden');
+      const items = responses.first().locator('.question-response-item');
+      const first = await items.nth(0).boundingBox();
+      const second = await items.nth(1).boundingBox();
+      expect(second.y).toBeGreaterThanOrEqual(first.y + first.height);
+      await expect(responses.first().locator('.session-message-source')).toHaveText('Your answers');
+      await expect(responses.first().locator('.question-response-title')).toHaveText(['Which plan?', 'Any details?\n中文🙂']);
+      await expect(responses.first().locator('.msg-content')).toHaveText(['Small change', 'Keep keyboard support.\n<script>plain text</script> & &lt;/answer&gt;']);
+      await expect(responses.first()).not.toContainText('Full redesign');
+      await expect(responses.last()).toHaveText('Questions skipped');
+      await expect(page.locator('#stream')).not.toContainText('user_question_response');
+      await expect(page.locator('#stream')).not.toContainText('User response to ask_user:');
+      await expect(responses.locator('script')).toHaveCount(0);
+      for (const response of await responses.all()) {
+        await expect.poll(() => response.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      }
+    }
+    const screenshot = testInfo.outputPath(`question-responses-${width}.png`);
+    await page.locator('#stream').screenshot({ path: screenshot, animations: 'disabled' });
+    await testInfo.attach('Formatted question responses', { path: screenshot, contentType: 'image/png' });
+    expect(app.pageErrors).toEqual([]);
+  });
+}

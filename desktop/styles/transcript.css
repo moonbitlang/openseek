@@ -496,6 +496,17 @@
   margin-bottom: 0;
 }
 
+.question-response-item + .question-response-item {
+  margin-top: 12px;
+}
+
+.question-response-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* In the accessibility tree, out of the layout: speaker names and the
    like, which the redesign says visually through alignment and fill. */
 .visually-hidden {

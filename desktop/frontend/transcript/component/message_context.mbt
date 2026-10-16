@@ -35,6 +35,8 @@ fn message_context_view(
       }
       (label, target, error.unwrap_or(""))
     }
+    UserQuestionResponse(request_id~, questions~, answers~) =>
+      return question_response_view(locale~, request_id, questions, answers)
   }
   @html.div(
     class="session-message",
@@ -47,4 +49,41 @@ fn message_context_view(
       },
     ],
   )
+}
+
+///|
+fn question_response_view(
+  locale~ : @i18n.Locale,
+  request_id : String,
+  questions : Array[@protocol.UserQuestion],
+  answers : Map[String, String]?,
+) -> @html.Html {
+  let label = match (locale, answers) {
+    (English, None) => "Questions skipped"
+    (SimplifiedChinese, None) => "已跳过提问"
+    (TraditionalChinese, None) => "已略過提問"
+    (Japanese, None) => "質問をスキップしました"
+    (Spanish, None) => "Preguntas omitidas"
+    (English, Some(_)) => "Your answers"
+    (SimplifiedChinese, Some(_)) => "你的回答"
+    (TraditionalChinese, Some(_)) => "你的回答"
+    (Japanese, Some(_)) => "あなたの回答"
+    (Spanish, Some(_)) => "Tus respuestas"
+  }
+  let children = [
+    @html.div(class="session-message-source", title=request_id, label),
+  ]
+  if answers is Some(answers) {
+    for question in questions {
+      if answers.get(question.id) is Some(answer) {
+        children.push(
+          @html.div(class="question-response-item", [
+            @html.div(class="question-response-title", question.title),
+            @html.div(class="msg-content", answer),
+          ]),
+        )
+      }
+    }
+  }
+  @html.div(class="session-message transcript-question-response", children)
 }
