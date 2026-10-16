@@ -1,4 +1,23 @@
 ///|
+test "device identity is independent of target validity" {
+  for
+    path in [
+      "/device/%68ost/settings", "/device/%68ost/unknown", "/device/host/chat/session/%GG",
+    ] {
+    assert_eq(@routes.device(path), Some("host"))
+  }
+  assert_eq(@routes.device("/device/a%2fb/skills"), Some("a/b"))
+  assert_eq(@routes.device("/device/a%252Fb/skills"), Some("a%2Fb"))
+  for
+    path in [
+      "/console/", "/device//skills", "/device/%GG/skills", "/device/%00/skills",
+      "/device/%2e/skills", "/device/host?other/skills", "/device/host\\other/skills",
+    ] {
+    assert_eq(@routes.device(path), None)
+  }
+}
+
+///|
 test "all targets roundtrip without interpreting encoded separators" {
   let targets : Array[@routes.Target] = [
     Chat,

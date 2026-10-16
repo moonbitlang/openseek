@@ -2,6 +2,8 @@
 package "openseek_desktop/routes"
 
 // Values
+pub fn device(String) -> String?
+
 pub fn parse(String) -> Result[Location, RouteError]
 
 // Errors

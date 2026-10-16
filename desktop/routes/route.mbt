@@ -5,6 +5,29 @@ pub(all) enum RouteError {
 } derive(Eq)
 
 ///|
+fn decode_segment(part : StringView) -> String? {
+  guard !part.iter().any(ch => ch == '\\' || ch == '?' || ch == '#') else {
+    return None
+  }
+  let decoded = @percent.decode(part) catch { _ => return None }
+  guard !decoded.is_empty() &&
+    decoded != "." &&
+    decoded != ".." &&
+    !decoded.iter().any(ch => ch.is_control()) else {
+    return None
+  }
+  Some(decoded)
+}
+
+///|
+/// Identify the device even when the remainder is an invalid application
+/// target. None means that the pathname has no valid device identity.
+pub fn device(path : String) -> String? {
+  guard path.has_prefix("/device/") else { return None }
+  path.split("/").drop(2).next().bind(decode_segment)
+}
+
+///|
 /// Parse an application pathname, not a full URL. Reserved characters in
 /// identities must be percent-encoded; query and fragment belong to the caller.
 pub fn parse(path : String) -> Result[Location, RouteError] {
@@ -16,11 +39,7 @@ pub fn parse(path : String) -> Result[Location, RouteError] {
   }
   let parts : Array[String] = []
   for part in path.split("/").drop(2) {
-    let decoded = @percent.decode(part) catch { _ => return Err(InvalidRoute) }
-    guard !decoded.is_empty() &&
-      decoded != "." &&
-      decoded != ".." &&
-      !decoded.iter().any(ch => ch.is_control()) else {
+    guard decode_segment(part) is Some(decoded) else {
       return Err(InvalidRoute)
     }
     parts.push(decoded)
