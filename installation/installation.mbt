@@ -82,39 +82,14 @@ async fn moonbit_available(
 }
 
 ///|
-fn resource_files() -> Array[String] {
-  [
-    "doc/moonbit/index.md", "doc/moonbit/language/index.md", "doc/moonbit/toolchain/index.md",
-    "workflow/read.mbtx",
-  ]
-}
-
-///|
-async fn resources_available(directory : String) -> Bool {
-  for file in resource_files() {
-    let kind = @fs.kind(directory + "/" + file) catch {
-      @os_error.OSError(_) as error if error.is_ENOENT() => return false
-      error => raise error
-    }
-    if kind != Regular {
-      return false
-    }
-  }
-  true
-}
-
-///|
-/// Fill missing resource files without replacing the user's existing copies.
-async fn copy_missing(source : String, destination : String) -> Unit {
+async fn copy_tree(source : String, destination : String) -> Unit {
   if @fs.kind(source) is Directory {
     @fs.mkdir(destination, recursive=true, allow_exist=true)
     for name in @fs.readdir(source, include_hidden=true) {
-      copy_missing(source + "/" + name, destination + "/" + name)
+      copy_tree(source + "/" + name, destination + "/" + name)
     }
-  } else if !@fs.exists(destination) {
+  } else {
     copy_file(source, destination)
-  } else if @fs.kind(destination) != Regular {
-    fail("resource path is not a file: \{destination}")
   }
 }
 
@@ -140,26 +115,26 @@ async fn install(
   let cli_name = executable_name("openseek")
   let rg_name = executable_name("rg")
   let needs_cli = !available(bin + "/" + cli_name, ["--help"])
-  let needs_resources = !resources_available(root + "/share")
   // Validate the extracted distribution before changing the user's toolchain.
   if !@fs.exists(source + "/bin/" + rg_name) {
     fail(
       "Extract the complete OpenSeek archive before running setup: missing rg",
     )
   }
-  if needs_resources && !resources_available(source + "/share") {
-    fail(
-      "Extract the complete OpenSeek archive before running setup: missing share",
-    )
-  }
+  // The installed CLI can run setup too: preserve its source before removal.
+  let stage = @fs.tmpdir(prefix="openseek-share-")
+  defer @fs.rmdir(stage, recursive=true)
+  copy_tree(source + "/share", stage + "/share")
   let needs_moonbit = !moonbit_available(home, available)
   if needs_moonbit {
     toolchain(home + "/.moon")
   }
   copy_file(source + "/bin/" + rg_name, bin + "/" + rg_name, executable=true)
-  if needs_resources {
-    copy_missing(source + "/share", root + "/share")
+  @fs.rmdir(root + "/share", recursive=true) catch {
+    @os_error.OSError(_) as error if error.is_ENOENT() => ()
+    error => raise error
   }
+  copy_tree(stage + "/share", root + "/share")
   if needs_cli {
     copy_file(source_cli, bin + "/" + cli_name, executable=true)
   }
