@@ -411,7 +411,7 @@ test "approval snapshots preserve accepted replies and reject malformed revision
   )
   assert_eq(snapshot, roundtrip)
   assert_true(
-    @protocol.Notification::from_wire("agent.approvals", snapshot.to_json())
+    @protocol.HostNotification::from_wire("agent.approvals", snapshot.to_json())
     is Some(AgentApprovals(_)),
   )
   for

@@ -1,0 +1,42 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek_protocol/host_control"
+
+import {
+  "moonbitlang/core/json",
+}
+
+// Values
+pub const ProtocolVersion : Int = 1
+
+pub fn shutdown_grace_seconds(Json) -> Int raise @json.JsonDecodeError
+
+// Errors
+
+// Types and methods
+pub(all) struct Identity {
+  server_id : String
+  instance_id : String
+  build_id : String
+  protocol_version : Int
+  platform : String
+  home : String
+  data_dir : String
+  status : String
+}
+pub fn Identity::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Identity::to_json(Self) -> Json
+pub impl ToJson for Identity
+pub impl @json.FromJson for Identity
+
+pub(all) struct Initialize {
+  build_id : String
+  protocol_version : Int
+}
+pub fn Initialize::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Initialize::to_json(Self) -> Json
+pub impl ToJson for Initialize
+pub impl @json.FromJson for Initialize
+
+// Type aliases
+
+// Traits

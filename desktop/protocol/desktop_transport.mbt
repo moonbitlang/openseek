@@ -43,37 +43,39 @@ pub(all) enum NotificationKind {
 /// The stable public name written at a transport boundary.
 pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
   match self {
-    UserQuestions => "user_questions.changed"
-    AgentApprovals => "agent.approvals"
-    AgentConnected => "agent.connected"
-    AgentStarted => "agent.started"
-    AgentEvent => "agent.event"
-    AgentError => "agent.error"
-    AgentFinished => "agent.finished"
-    AgentPrediction => "agent.prediction"
-    SessionEvent => "session.event"
     SessionShareProgress => "session.share_progress"
-    SubrunProgress => "subrun.progress"
-    WorkflowEntry => "workflow.entry"
-    SessionChanged => "session.changed"
-    WorkspaceChanged => "workspace.changed"
-    WorkspaceSettingsChanged => "workspace.settings_changed"
-    WorktreeChanged => "worktree.changed"
-    SettingsChanged => "settings.changed"
-    SkillsChanged => "skills.changed"
+    UserQuestions => "user_questions.changed"
+    AgentApprovals => HostNotificationKind::AgentApprovals.wire_name()
+    AgentConnected => HostNotificationKind::AgentConnected.wire_name()
+    AgentStarted => HostNotificationKind::AgentStarted.wire_name()
+    AgentEvent => HostNotificationKind::AgentEvent.wire_name()
+    AgentError => HostNotificationKind::AgentError.wire_name()
+    AgentPrediction => HostNotificationKind::AgentPrediction.wire_name()
+    AgentFinished => HostNotificationKind::AgentFinished.wire_name()
+    SessionEvent => HostNotificationKind::SessionEvent.wire_name()
+    SubrunProgress => HostNotificationKind::SubrunProgress.wire_name()
+    WorkflowEntry => HostNotificationKind::WorkflowEntry.wire_name()
+    SessionChanged => HostNotificationKind::SessionChanged.wire_name()
+    WorkspaceChanged => HostNotificationKind::WorkspaceChanged.wire_name()
+    WorkspaceSettingsChanged =>
+      HostNotificationKind::WorkspaceSettingsChanged.wire_name()
+    WorktreeChanged => HostNotificationKind::WorktreeChanged.wire_name()
+    SettingsChanged => HostNotificationKind::SettingsChanged.wire_name()
+    SkillsChanged => HostNotificationKind::SkillsChanged.wire_name()
     UpdateDownloadProgress => "update.download_progress"
     UpdateDownloaded => "update.downloaded"
     UpdateDownloadFailed => "update.download_failed"
     AuthChanged => "auth.changed"
-    CodexStatusChanged => "codex.status_changed"
-    CodexNotification => "codex.notification"
-    CodexServerRequest => "codex.server_request"
-    LspDiagnostics => "lsp.diagnostics"
-    FsChanged => "fs.changed"
-    FsWatchFailed => "fs.watch_failed"
-    TerminalOutput => "terminal.output"
-    TerminalExit => "terminal.exit"
-    SemanticSearchProgress => "semantic.search_progress"
+    CodexStatusChanged => HostNotificationKind::CodexStatusChanged.wire_name()
+    CodexNotification => HostNotificationKind::CodexNotification.wire_name()
+    CodexServerRequest => HostNotificationKind::CodexServerRequest.wire_name()
+    LspDiagnostics => HostNotificationKind::LspDiagnostics.wire_name()
+    FsChanged => HostNotificationKind::FsChanged.wire_name()
+    FsWatchFailed => HostNotificationKind::FsWatchFailed.wire_name()
+    TerminalOutput => HostNotificationKind::TerminalOutput.wire_name()
+    TerminalExit => HostNotificationKind::TerminalExit.wire_name()
+    SemanticSearchProgress =>
+      HostNotificationKind::SemanticSearchProgress.wire_name()
   }
 }
 
@@ -163,49 +165,12 @@ pub(all) enum Notification {
 /// table that would only be consumed by this decoder.
 pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
   match name {
-    "user_questions.changed" =>
-      Some(UserQuestions(@json.from_json(params) catch { _ => return None }))
-    "agent.approvals" =>
-      Some(AgentApprovals(@json.from_json(params) catch { _ => return None }))
-    "agent.connected" =>
-      Some(AgentConnected(@json.from_json(params) catch { _ => return None }))
-    "agent.started" =>
-      Some(AgentStarted(@json.from_json(params) catch { _ => return None }))
-    "agent.event" =>
-      Some(AgentEvent(@json.from_json(params) catch { _ => return None }))
-    "agent.error" =>
-      Some(AgentError(@json.from_json(params) catch { _ => return None }))
-    "agent.prediction" =>
-      Some(AgentPrediction(@json.from_json(params) catch { _ => return None }))
-    "agent.finished" =>
-      Some(AgentFinished(@json.from_json(params) catch { _ => return None }))
-    "session.event" =>
-      Some(SessionEvent(@json.from_json(params) catch { _ => return None }))
     "session.share_progress" =>
       Some(
         SessionShareProgress(@json.from_json(params) catch { _ => return None }),
       )
-    "subrun.progress" =>
-      Some(SubrunProgress(@json.from_json(params) catch { _ => return None }))
-    "workflow.entry" =>
-      Some(WorkflowEntry(@json.from_json(params) catch { _ => return None }))
-    "session.changed" =>
-      Some(SessionChanged(@json.from_json(params) catch { _ => return None }))
-    "workspace.changed" =>
-      Some(WorkspaceChanged(@json.from_json(params) catch { _ => return None }))
-    "workspace.settings_changed" =>
-      Some(
-        WorkspaceSettingsChanged(
-          @json.from_json(params) catch {
-            _ => return None
-          },
-        ),
-      )
-    "worktree.changed" =>
-      Some(WorktreeChanged(@json.from_json(params) catch { _ => return None }))
-    "settings.changed" =>
-      Some(SettingsChanged(@json.from_json(params) catch { _ => return None }))
-    "skills.changed" => Some(SkillsChanged)
+    "user_questions.changed" =>
+      Some(UserQuestions(@json.from_json(params) catch { _ => return None }))
     "update.download_progress" =>
       Some(
         UpdateDownloadProgress(
@@ -222,28 +187,7 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
       )
     "auth.changed" =>
       Some(AuthChanged(@json.from_json(params) catch { _ => return None }))
-    "codex.status_changed" => Some(CodexStatusChanged(params))
-    "codex.notification" => Some(CodexNotification(params))
-    "codex.server_request" => Some(CodexServerRequest(params))
-    "lsp.diagnostics" =>
-      Some(LspDiagnostics(@json.from_json(params) catch { _ => return None }))
-    "fs.changed" =>
-      Some(FsChanged(@json.from_json(params) catch { _ => return None }))
-    "fs.watch_failed" =>
-      Some(FsWatchFailed(@json.from_json(params) catch { _ => return None }))
-    "terminal.output" =>
-      Some(TerminalOutput(@json.from_json(params) catch { _ => return None }))
-    "terminal.exit" =>
-      Some(TerminalExit(@json.from_json(params) catch { _ => return None }))
-    "semantic.search_progress" =>
-      Some(
-        SemanticSearchProgress(
-          @json.from_json(params) catch {
-            _ => return None
-          },
-        ),
-      )
-    _ => None
+    _ => HostNotification::from_wire(name, params).map(Notification::from_host)
   }
 }
 
@@ -343,3 +287,36 @@ pub extend NotificationKind with Eq::{equal, not_equal}
 
 ///|
 pub extend NotificationKind with Hash::{hash, hash_combine}
+
+///|
+/// Adapt service events to the desktop catalog without a JSON round trip.
+pub fn Notification::from_host(event : HostNotification) -> Notification {
+  match event {
+    UserQuestions(payload) => UserQuestions(payload)
+    AgentApprovals(payload) => AgentApprovals(payload)
+    AgentConnected(payload) => AgentConnected(payload)
+    AgentStarted(payload) => AgentStarted(payload)
+    AgentEvent(payload) => AgentEvent(payload)
+    AgentError(payload) => AgentError(payload)
+    AgentPrediction(payload) => AgentPrediction(payload)
+    AgentFinished(payload) => AgentFinished(payload)
+    SessionEvent(payload) => SessionEvent(payload)
+    SubrunProgress(payload) => SubrunProgress(payload)
+    WorkflowEntry(payload) => WorkflowEntry(payload)
+    SessionChanged(payload) => SessionChanged(payload)
+    WorkspaceChanged(payload) => WorkspaceChanged(payload)
+    WorkspaceSettingsChanged(payload) => WorkspaceSettingsChanged(payload)
+    WorktreeChanged(payload) => WorktreeChanged(payload)
+    SettingsChanged(payload) => SettingsChanged(payload)
+    SkillsChanged => SkillsChanged
+    CodexStatusChanged(payload) => CodexStatusChanged(payload)
+    CodexNotification(payload) => CodexNotification(payload)
+    CodexServerRequest(payload) => CodexServerRequest(payload)
+    LspDiagnostics(payload) => LspDiagnostics(payload)
+    FsChanged(payload) => FsChanged(payload)
+    FsWatchFailed(payload) => FsWatchFailed(payload)
+    TerminalOutput(payload) => TerminalOutput(payload)
+    TerminalExit(payload) => TerminalExit(payload)
+    SemanticSearchProgress(payload) => SemanticSearchProgress(payload)
+  }
+}

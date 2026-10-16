@@ -66,8 +66,18 @@ test "GitHub display codecs require HTML and preserve it without a Markdown fall
         Some(value) => fields["body_html"] = value
       }
       assert_true(
-        refused(() => github_html_codec(kind, Json(fields)) |> ignore),
+        github_refused(() => github_html_codec(kind, Json(fields)) |> ignore),
       )
     }
+  }
+}
+
+///|
+fn github_refused(decode : () -> Unit raise) -> Bool {
+  try {
+    decode()
+    false
+  } catch {
+    _ => true
   }
 }

@@ -190,3 +190,54 @@ test "Codex response requires an explicit nonblank ownership token" {
   }
   assert_true(missing is None)
 }
+
+///|
+test "Codex configuration path is explicit and preserves host path text" {
+  let expected : @protocol.CodexConfigReply = {
+    path: "/srv/远端 home/codex/config.toml",
+    terminal_login: Err("CLI unavailable"),
+  }
+  let decoded : @protocol.CodexConfigReply = @json.from_json(expected.to_json())
+  assert_eq(decoded, expected)
+  let ready : @protocol.CodexConfigReply = {
+    ..expected,
+    terminal_login: Ok(
+      (
+        "CODEX_HOME='/remote/home' '/remote/bin/codex' login --device-auth", true,
+      ),
+    ),
+  }
+  let decoded_ready : @protocol.CodexConfigReply = @json.from_json(
+    ready.to_json(),
+  )
+  assert_eq(decoded_ready, ready)
+  for
+    login in [
+      Json::null(),
+      {},
+      { "kind": "ready", "command": "" },
+      { "kind": "ready", "command": "codex" },
+      { "kind": "unavailable", "message": " " },
+      { "kind": "unknown", "command": "codex" },
+    ] {
+    let value : Json = { "path": expected.path, "terminal_login": login }
+    let decoded : @protocol.CodexConfigReply? = Some(@json.from_json(value)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
+  let invalid : Array[Json] = [
+    { "path": expected.path },
+    {},
+    { "path": Json::null() },
+    { "path": 4 },
+    { "path": "" },
+    { "path": "  " },
+  ]
+  for value in invalid {
+    let decoded : @protocol.CodexConfigReply? = Some(@json.from_json(value)) catch {
+      _ => None
+    }
+    assert_true(decoded is None)
+  }
+}

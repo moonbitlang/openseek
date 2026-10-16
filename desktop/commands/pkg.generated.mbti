@@ -87,6 +87,8 @@ pub let codex_account_read : Command[@protocol.CodexAccountReadPayload, @protoco
 
 pub let codex_config_open : Command[@protocol.EmptyPayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
+pub let codex_config_prepare : Command[@protocol.EmptyPayload, @protocol.CodexCommandReply[@protocol.CodexConfigReply]]
+
 pub let codex_draft_close : Command[@protocol.CodexDraftClosePayload, @protocol.CodexCommandReply[@protocol.EmptyReply]]
 
 pub let codex_draft_open : Command[@protocol.CodexDraftOpenPayload, @protocol.CodexCommandReply[@protocol.CodexDraftOpenReply]]
@@ -151,9 +153,13 @@ pub let fs_materialize_semantic_selection : Command[@protocol.MaterializeSemanti
 
 pub let fs_prepare_attachment : Command[@protocol.PrepareAttachmentPayload, @protocol.PrepareAttachmentReply]
 
+pub let fs_preview_content : Command[@protocol.ReadFilePayload, @protocol.FilePreviewContent]
+
 pub let fs_read_directory : Command[@protocol.ReadDirPayload, @protocol.ReadDirReply]
 
 pub let fs_read_file : Command[@protocol.ReadFilePayload, @protocol.ReadFileReply]
+
+pub let fs_resolve_reference : Command[@protocol.OpenPathPayload, @protocol.ResolveReferenceReply]
 
 pub let fs_search_files : Command[@protocol.SearchFilesPayload, @protocol.SearchFilesReply]
 
@@ -249,6 +255,8 @@ pub let session_edit : Command[@protocol.SessionEditPayload, @protocol.SessionFo
 
 pub let session_export : Command[@protocol.SessionExportPayload, @protocol.SessionExportReply]
 
+pub let session_export_content : Command[@protocol.SessionExportPayload, @protocol.SessionExportContent]
+
 pub let session_fork : Command[@protocol.SessionForkPayload, @protocol.SessionForkReply]
 
 pub let session_list : Command[@protocol.EmptyPayload, @protocol.SessionsReply]
@@ -284,6 +292,30 @@ pub let skills_installed : Command[@protocol.EmptyPayload, @protocol.InstalledSk
 pub let skills_installed_content : Command[@protocol.UninstallSkillPayload, @protocol.SkillContentReply]
 
 pub let skills_uninstall : Command[@protocol.UninstallSkillPayload, @protocol.UninstallSkillReply]
+
+pub let ssh_add : Command[@protocol.SshAdd, @protocol.SshOperation[@protocol.SshProfile]]
+
+pub let ssh_cache_projects : Command[@protocol.SshProjectCatalog, @protocol.EmptyReply]
+
+pub let ssh_cached_projects : Command[@protocol.SshProfileTarget, Array[String]?]
+
+pub let ssh_connect : Command[@protocol.SshProfileTarget, @protocol.SshOperation[@protocol.EmptyReply]]
+
+pub let ssh_host_request : Command[@protocol.SshHostRequest, @protocol.SshReply]
+
+pub let ssh_prepare_begin : Command[@protocol.SshPreparationRequest, @protocol.SshOperation[@protocol.SshPreparationToken]]
+
+pub let ssh_prepare_cancel : Command[@protocol.SshPreparationToken, @protocol.EmptyReply]
+
+pub let ssh_prepare_execute : Command[@protocol.SshPreparationToken, @protocol.SshOperation[@protocol.SshProfile]]
+
+pub let ssh_prepare_progress : Command[@protocol.SshPreparationToken, @protocol.SshPreparationProgress]
+
+pub let ssh_profiles : Command[@protocol.EmptyPayload, @protocol.SshProfiles]
+
+pub let ssh_request : Command[@protocol.SshRequest, @protocol.SshReply]
+
+pub let ssh_save : Command[@protocol.SshProfileWrite, @protocol.SshProfile]
 
 pub let terminal_ack : Command[@protocol.TerminalAckPayload, @protocol.EmptyReply]
 

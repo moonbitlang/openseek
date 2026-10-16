@@ -7,9 +7,9 @@ test "completed prediction broadcasts round trip and reject incomplete results" 
       outcome: Completed(text=Some("Commit"), input_tokens=1, output_tokens=2),
     },
   }
-  let notification = @protocol.Notification::AgentPrediction(payload)
+  let notification = @protocol.HostNotification::AgentPrediction(payload)
   assert_eq(
-    @protocol.Notification::from_wire(
+    @protocol.HostNotification::from_wire(
       notification.wire_name(),
       notification.params(),
     ),
@@ -31,7 +31,7 @@ test "completed prediction broadcasts round trip and reject incomplete results" 
         },
       ] : Array[Json]) {
     assert_true(
-      @protocol.Notification::from_wire("agent.prediction", value) is None,
+      @protocol.HostNotification::from_wire("agent.prediction", value) is None,
     )
   }
 }
