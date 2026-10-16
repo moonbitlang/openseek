@@ -249,7 +249,7 @@ for (const detachPrevious of [false, true]) {
         await page.getByRole('button', { name: managementPage, exact: true }).click();
         await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeVisible();
         if (managementPage === 'Settings') {
-          await expect(page.locator('main').getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
+          await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
         }
       }
       if (detachPrevious) {
@@ -262,7 +262,7 @@ for (const detachPrevious of [false, true]) {
         const back = page.getByRole('button', { name: 'Back', exact: true });
         await expect(back).toBeVisible();
         if (managementPage === 'Settings') {
-          await expect(page.locator('main').getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
+          await expect(page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Codex', exact: true }) }).getByRole('button', { name: 'Sign out', exact: true })).toBeEnabled();
         }
         await back.click();
       }
