@@ -1,10 +1,5 @@
 /* One surface for every persistent row above the draft. Content-specific
    classes retain their behavior; geometry and tone belong to this column. */
-.composer-context,
-.user-question-region {
-  --composer-row-background: light-dark(#f0f0f0, var(--dark-bg-subtle));
-}
-
 .composer-context {
   width: 100%;
   max-width: 820px;
@@ -30,7 +25,7 @@
   padding: 10px 14px;
   border: 0;
   border-radius: var(--radius-lg);
-  background: var(--composer-row-background);
+  background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
   box-shadow: none;
   font-size: var(--font-size-md);
@@ -95,8 +90,7 @@
 }
 
 .composer-context :is(.composer-notice-btn, .composer-approval-action,
-  .composer-goal-action, .codex-request-action),
-.composer-context-action {
+  .composer-goal-action, .codex-request-action) {
   min-height: 28px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-sm);
@@ -108,10 +102,19 @@
 }
 
 .composer-context :is(.composer-notice-btn, .composer-approval-action,
-  .composer-goal-action, .codex-request-action):hover:not(:disabled),
-.composer-context-action:hover:not(:disabled) {
+  .composer-goal-action, .codex-request-action):hover:not(:disabled) {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
+}
+
+.button.composer-context-action {
+  --button-color: var(--color-text-primary);
+  --button-border-color: var(--color-border-subtle);
+  --button-background: var(--color-bg-surface);
+  --button-hover-background: var(--color-hover-subtle);
+  box-shadow: 0 1px 2px #0000000a;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .composer-context :is(.composer-approval-allow, .codex-request-action-primary) {
@@ -258,7 +261,7 @@
   padding: 12px 14px;
   border: 0;
   border-radius: var(--radius-lg);
-  background: var(--composer-row-background);
+  background: var(--color-bg-subtle);
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
   line-height: var(--line-height-normal);
@@ -297,10 +300,6 @@
   padding: 0;
   margin: 0;
   border: 0;
-}
-
-.user-question-field + .user-question-field {
-  margin-top: 16px;
 }
 
 .user-question-title {
@@ -345,7 +344,7 @@
   align-items: center;
   justify-content: center;
   min-width: 22px;
-  height: 22px;
+  min-height: 22px;
   padding: 0 3px;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -389,17 +388,14 @@
 .user-question-answer {
   box-sizing: border-box;
   width: 100%;
-  min-width: 0;
   padding: 6px 0;
   resize: none;
   field-sizing: content;
   min-height: 32px;
   max-height: 120px;
-  color: var(--color-text-primary);
   background: transparent;
   border: 0;
   border-radius: var(--radius-sm);
-  font: inherit;
   line-height: var(--line-height-normal);
 }
 
@@ -408,12 +404,7 @@
   flex-shrink: 0;
 }
 
-.user-question-actions .user-question-submit {
-  color: var(--color-text-primary);
-  font-weight: 600;
-}
-
-.user-question-card button:focus-visible {
+.user-question-card :is(.icon-button, .user-question-option):focus-visible {
   outline: 2px solid var(--color-focus-ring);
   outline-offset: 2px;
 }
@@ -441,7 +432,9 @@
     margin-left: auto;
   }
   .user-question-answer {
-    font-size: 16px;
+    /* Keep mobile text large enough to avoid focus zoom, while honoring
+       larger application font settings. */
+    font-size: max(1rem, var(--font-size-md));
   }
 }
 

@@ -82,7 +82,7 @@ pub fn Model::view(
   let actions = @html.div(class="user-question-actions", [
     @html.button(
       type_="button",
-      class="composer-context-action user-question-submit",
+      class="button compact composer-context-action user-question-submit",
       disabled=disabled ||
         (if last { !self.complete(questions) } else { !answered }),
       on_click=emit(

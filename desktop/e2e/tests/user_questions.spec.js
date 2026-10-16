@@ -212,3 +212,41 @@ test('six questions page independently, retain drafts, and send all answers once
   expect(app.requests.filter(r=>r.method==='user_questions.answer').map(r=>r.params.answers)).toEqual([answers]);
   expect(app.pageErrors).toEqual([]);
 });
+
+for (const theme of ['light', 'dark']) {
+  test(`question controls follow ${theme} appearance and font settings without clipping`, async ({ page }, testInfo) => {
+    await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
+    const { app } = setup(page);
+    await app.install();
+    await app.goto();
+    for (const font of [12, 18]) {
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await page.getByRole('slider', { name: 'Font size', exact: true }).fill(String(font));
+      await page.reload();
+      await app.openSession();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      const card = page.locator('.user-question-card');
+      const input = card.locator('textarea');
+      await card.getByRole('button', { name: 'Small change', exact: true }).click();
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(input).toHaveCSS('font-size', `${width === 390 ? Math.max(16, font) : font}px`);
+        await input.focus();
+        await expect(input).toHaveCSS('outline-style', 'none');
+        await expect(card.locator('.user-question-input')).toHaveCSS('outline-style', 'none');
+        await expect.poll(() => card.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+        const digit = card.locator('.user-question-number').first();
+        const digitBox = await digit.boundingBox();
+        expect(digitBox.height).toBeGreaterThanOrEqual(await digit.evaluate(el => parseFloat(getComputedStyle(el).lineHeight)));
+        await input.press('Tab');
+        const next = card.getByRole('button', { name: 'Next', exact: true });
+        await expect(next).toBeFocused();
+        await expect(next).toHaveCSS('outline-style', 'solid');
+        const screenshot = testInfo.outputPath(`question-${theme}-${font}-${width}.png`);
+        await card.screenshot({ path: screenshot, animations: 'disabled' });
+      }
+    }
+    expect(app.pageErrors).toEqual([]);
+  });
+}
