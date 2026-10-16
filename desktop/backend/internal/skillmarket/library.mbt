@@ -223,7 +223,8 @@ pub async fn install_skill(
   let sidecar = target.join(SidecarFile)
   // Check ownership after acquiring the process-wide boundary:
   // another request may have installed this slug while the network fetch ran.
-  if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
+  guard !@fsx.exists(flat_target) &&
+    (!@fsx.exists(target) || @fsx.exists(sidecar)) else {
     raise SkillMarketError(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
@@ -288,11 +289,11 @@ async fn SkillLibrary::list_entries(
         continue
       }
       let (name, description) = parse_frontmatter(text, entry)
-      let installed_source = if @fsx.try_read_text(path.join(SidecarFile))
-        is Some(sidecar) {
+      let installed_source = {
+        guard @fsx.try_read_text(path.join(SidecarFile)) is Some(sidecar) else {
+          None
+        }
         decode_sidecar(sidecar)
-      } else {
-        None
       }
       skills.push({
         id: entry,
@@ -323,10 +324,9 @@ pub async fn read_skill_content(
   let location = library.locate(id)
   let directory_file = location.library.target(id).join("SKILL.md")
   let flat_file = location.library.root.join("\{id}.md")
-  let path = if @fsx.exists(directory_file) {
+  let path = {
+    guard @fsx.exists(directory_file) else { flat_file }
     directory_file
-  } else {
-    flat_file
   }
   guard @fsx.try_read_text(path) is Some(content) else {
     raise SkillMarketError("skill \{id} has no readable SKILL.md")
@@ -394,7 +394,10 @@ pub async fn set_skill_enabled(
     "\{id}.md"
   }
   guard location.enabled != enabled else { return }
-  let destination = if enabled { library } else { library.disabled() }
+  let destination = {
+    guard enabled else { library.disabled() }
+    library
+  }
   @fsx.ensure_dir(destination.root)
   @async.protect_from_cancel(() => {
     @fs.rename(
