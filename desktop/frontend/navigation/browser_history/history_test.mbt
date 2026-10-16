@@ -8,6 +8,94 @@ const Settings = "/device/d1/settings"
 const Skills = "/device/d1/skills"
 
 ///|
+test "invalid targets retain their path but allow navigation within the decoded device" {
+  let invalid = "/device/%641/unknown"
+  let initial = @browser_history.History(invalid, group="g", key="a")
+  assert_eq(initial.path(), invalid)
+  assert_true(initial.owns(Settings))
+  assert_false(initial.owns("/device/d2/settings"))
+  guard initial.visit(Settings, replace=false, key="b") is Some(settings) &&
+    @browser_history.History::restore(
+      Settings,
+      Settings,
+      settings.marker(),
+      settings.stored(),
+    )
+    is Some(restored) &&
+    restored.select(invalid, initial.marker()) is Some(back) else {
+    fail("invalid target lost its device or browser entry")
+  }
+  assert_eq(back.path(), invalid)
+  assert_true(back.can_forward())
+}
+
+///|
+test "encoded device and target identities share canonical history" {
+  let encoded = "/device/%641/chat/draft/%64raft%2f1"
+  let draft = "/device/d1/chat/draft/draft%2F1"
+  let initial = @browser_history.History(encoded, group="g", key="a")
+  assert_eq(initial.path(), draft)
+  assert_true(initial.owns(Settings))
+  assert_true(initial.owns("/device/%641/skills"))
+  assert_false(initial.owns("/device/%642/skills"))
+  assert_true(
+    initial.visit(draft, replace=false, key="unused") == Some(initial),
+  )
+  guard initial.visit(Settings, replace=false, key="b") is Some(settings) &&
+    settings.promote(draft, "/device/d1/chat/session/s1") is Some(promoted) &&
+    promoted.select(encoded, initial.marker()) is Some(back) else {
+    fail("encoded draft identity lost during navigation or promotion")
+  }
+  assert_eq(back.path(), "/device/d1/chat/session/s1")
+  assert_true(promoted.select(draft, initial.marker()) == Some(back))
+  assert_true(back.can_forward())
+  assert_false(back.can_back())
+}
+
+///|
+test "restore canonicalizes legacy encoded paths while retaining browser entry URLs" {
+  let encoded = "/device/%641/settings"
+  let marker : Json = { "group": "g", "key": "b" }
+  let stored : Json = {
+    "entries": [
+      { "key": "a", "path": New, "original": New },
+      { "key": "b", "path": encoded, "original": encoded },
+      {
+        "key": "c",
+        "path": "/device/%641/skills",
+        "original": "/device/%641/skills",
+      },
+    ],
+  }
+  guard @browser_history.History::restore(encoded, encoded, marker, stored)
+    is Some(restored) else {
+    fail("same-device legacy entries rejected")
+  }
+  assert_eq(restored.path(), Settings)
+  assert_true(restored.can_back())
+  assert_true(restored.can_forward())
+  guard restored
+    .written()
+    .select("/device/%641/skills", { "group": "g", "key": "c" })
+    is Some(forward) &&
+    forward.visit("/device/%641/settings", replace=false, key="d")
+    is Some(visited) else {
+    fail("legacy entry cannot be traversed or followed by navigation")
+  }
+  assert_eq(forward.path(), Skills)
+  assert_eq(visited.path(), Settings)
+  assert_true(
+    @browser_history.History::restore(
+      Settings,
+      Settings,
+      visited.marker(),
+      visited.written().stored(),
+    ) ==
+    Some(visited.written()),
+  )
+}
+
+///|
 test "visits deduplicate and branch without mutating previous states" {
   let initial = @browser_history.History(New, group="g", key="a")
   assert_false(initial.can_back())

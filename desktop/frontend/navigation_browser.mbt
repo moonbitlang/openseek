@@ -58,7 +58,10 @@ fn apply_browser_navigation(
   }
   match parsed {
     Ok(location) if Some(location.device) == model.console.page_device => {
-      let changed = navigation.location != Some(location)
+      // An invalid URL retains the covered destination, but returning to that
+      // destination must activate it again rather than retain the error phase.
+      let changed = navigation.location != Some(location) ||
+        navigation.phase is Invalid
       let model = {
         ..model,
         console: { ..model.console, login_return_to: snapshot.path, },
