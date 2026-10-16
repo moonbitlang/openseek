@@ -617,38 +617,6 @@ pub async fn list_sessions() -> SessionsReply {
 }
 
 ///|
-// Sidebar refreshes warm the same prompt metadata used by title search.
-// Stores own fingerprint-checked caches; detached stores are released below.
-let listing_stores : Map[String, @store.SessionStore] = Map([])
-
-///|
-async fn session_listing_groups(archived~ : Bool) -> SessionsReply {
-  let workspaces = @workspaces.registered()
-  let roots : Set[String] = Set([])
-  for workspace in workspaces {
-    let root = @workspaces.store_root(workspace)
-    roots.add(root.to_string())
-    roots.add(@session_store.archived_root(root).to_string())
-  }
-  listing_stores.retain((root, _) => roots.contains(root))
-  let groups : Array[SessionGroup] = []
-  for workspace in workspaces {
-    let root = @workspaces.store_root(workspace)
-    groups.push(
-      session_group(
-        workspace,
-        if archived {
-          @session_store.archived_root(root)
-        } else {
-          root
-        },
-      ),
-    )
-  }
-  { groups, }
-}
-
-///|
 /// Give one exact live conversation a durable display title without rewriting
 /// its append-only transcript. Placement and record-operation guards keep the
 /// sidecar write from racing archive, detach, or another preparatory operation.
@@ -677,72 +645,6 @@ pub async fn rename_session(
   let id : @agent_session.SessionId = SessionId(session)
   store.set_title(id, title) catch {
     error => raise EngineError("session rename failed: \{error}")
-  }
-}
-
-///|
-async fn session_group(
-  workspace : @pathx.Absolute,
-  root : @pathx.Absolute,
-) -> SessionGroup {
-  let name = workspace.to_path().basename().to_owned()
-  let workspace = workspace.resource_path()
-  let native_root = root.to_string()
-  let root = root.resource_path()
-  fn failed(error : String) -> SessionGroup {
-    { workspace, name, session_root: root, sessions: [], error, }
-  }
-
-  let sessions : Array[@protocol.SessionListEntry] = try {
-    let store = listing_stores.get_or_init(native_root, () => {
-      SessionStore(native_root)
-    })
-    [
-      for listing in store.listings() => {
-        let updated_at_ms = try {
-          let (seconds, nanoseconds) = @fs.mtime(
-            store.session_file(listing.id()),
-          )
-          Some(
-            (seconds * 1000 + (nanoseconds / 1000000).to_int64()).to_double(),
-          )
-        } catch {
-          _ => None
-        }
-        {
-          id: listing.id().value(),
-          title: Some(
-            listing
-            .title()
-            .unwrap_or_else(() => {
-              // A damaged transcript must not hide the rest of the sidebar.
-              let prompt = listing.first_prompt() catch {
-                _ => return listing_prompt_title("")
-              }
-              listing_prompt_title(prompt.unwrap_or(""))
-            }),
-          ),
-          updated_at_ms,
-        }
-      }
-    ]
-  } catch {
-    error => return failed("session list failed: \{error}")
-  }
-  { workspace, name, session_root: root, sessions, error: "", }
-}
-
-///|
-// Keep the CLI's display-label convention when no explicit title is stored.
-fn listing_prompt_title(first_prompt : String) -> String {
-  let first_prompt = match @command_context.parse(first_prompt) {
-    Some(shell) => "$ \{shell.command}"
-    None => first_prompt
-  }
-  let content = first_prompt.trim()
-  match content.split_once("\n") {
-    Some((line, _)) => line.trim().to_owned()
-    None => content.to_owned()
   }
 }
 

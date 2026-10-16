@@ -38,14 +38,6 @@ struct SessionStore {
   // file on the common append path. Never required for correctness — a
   // missing or mismatching mark falls back to the full comparison.
   marks : Map[String, DurableMark]
-  listing_prompts : Map[String, ListingPrompt]
-} derive(Debug)
-
-///|
-priv struct ListingPrompt {
-  mtime : (Int64, Int32)
-  ctime : (Int64, Int32)
-  text : String
 } derive(Debug)
 
 ///|
@@ -78,7 +70,7 @@ priv struct FileFingerprint {
 /// treat a missing `root/sessions` directory as an empty store where that makes
 /// sense.
 pub fn SessionStore::SessionStore(root : String) -> SessionStore {
-  { root, marks: Map([]), listing_prompts: Map([]), }
+  { root, marks: Map([]), }
 }
 
 ///|
@@ -586,11 +578,11 @@ pub async fn SessionStore::fork(
 /// A listing row is intentionally lighter than a loaded session. It can be
 /// built without replaying the full event log, so it is suitable for pickers
 /// and `--session-list`. A row can also represent a damaged directory: in that
-/// case timestamp may be `None` and first prompt may be empty.
+/// case timestamp may be `None` and reading the first prompt may fail.
 struct SessionListing {
   id : @agent_session.SessionId
   last_active_unix_seconds : Int64?
-  first_prompt : Result[String?, Error]
+  session_file : String
   title : String?
 } derive(Debug)
 
@@ -617,17 +609,15 @@ pub fn SessionListing::last_active_unix_seconds(
 }
 
 ///|
-/// Return the first user prompt found near the start of the event log.
+/// Read the first user prompt near the start of the event log on demand.
 ///
 /// `None` means no user event was found within the scan limit. `Some("")`
 /// means the first user event has empty text. Read and parse failures raise
 /// the original error; callers can choose a display fallback for damaged rows.
-/// This is display metadata, not a full session loadability check.
-pub fn SessionListing::first_prompt(self : SessionListing) -> String? raise {
-  match self.first_prompt {
-    Ok(text) => text
-    Err(error) => raise error
-  }
+/// Each call reads the current file; the listing does not capture or cache
+/// prompt text or errors. This is not a full session loadability check.
+pub async fn SessionListing::first_prompt(self : SessionListing) -> String? {
+  first_prompt_in_log(self.session_file)
 }
 
 ///|
@@ -748,40 +738,6 @@ fn listing_content_text(content : Json) -> String raise {
 }
 
 ///|
-/// Repeated listings reuse only unchanged prompt text. Read title sidecars
-/// separately on every listing so renames are immediately visible. Use the
-/// mtime and ctime together to notice external rewrites even when a writer
-/// preserves the original mtime. A cache hit needs no transcript open/read.
-async fn SessionStore::listing_prompt(
-  self : SessionStore,
-  path : String,
-  mtime : (Int64, Int32),
-) -> String? {
-  let ctime = Some(@fs.ctime(path)) catch { _ => None }
-  if ctime is Some(ctime) &&
-    self.listing_prompts.get(path) is Some(cached) &&
-    cached.mtime == mtime &&
-    cached.ctime == ctime {
-    return Some(cached.text)
-  }
-  self.listing_prompts.remove(path)
-  let text = first_prompt_in_log(path)
-  // Cache found prompts, including empty text, but not absence, errors, or
-  // reads that raced a writer.
-  if text is Some(text) && ctime is Some(ctime) {
-    let unchanged = try
-      @fs.mtime(path) == mtime && @fs.ctime(path) == ctime
-    catch {
-      _ => false
-    }
-    if unchanged {
-      self.listing_prompts[path] = { mtime, ctime, text, }
-    }
-  }
-  text
-}
-
-///|
 /// Order stamped rows newest-first by `(seconds, nanoseconds)`, ignoring the
 /// row payload in tuple position 0.
 fn[T] stamped_newest_first(
@@ -803,27 +759,26 @@ fn[T] stamped_newest_first(
 ///|
 /// List sessions with picker-friendly metadata, most recently active first.
 ///
-/// This scans each session directory for timestamps and a first prompt label,
-/// but it does not replay whole histories and does not require loadability.
+/// This reads timestamps and explicit titles without opening transcripts.
+/// Prompt text is read on demand by `SessionListing::first_prompt`. Listing
+/// does not require loadability.
 /// Damaged directories remain visible with `last_active_unix_seconds=None` and
-/// a raising `first_prompt()`, ordered after timestamped rows. Use `latest` when the
-/// caller needs the newest session that can actually be loaded.
+/// a failing `first_prompt()`, ordered after timestamped rows. Use `latest`
+/// when the caller needs the newest session that can actually be loaded.
 pub async fn SessionStore::listings(
   self : SessionStore,
 ) -> Array[SessionListing] {
   let stamped : Array[(SessionListing, Int64, Int32)] = []
   let unreadable : Array[SessionListing] = []
   let ids = self.list()
-  let paths : Set[String] = Set([])
   for id in ids {
     let path = self.session_file_path(id) catch { _ => continue }
-    paths.add(path)
     let stamp = @fs.mtime(path) catch {
-      error => {
+      _ => {
         unreadable.push({
           id,
           last_active_unix_seconds: None,
-          first_prompt: Err(error),
+          session_file: path,
           title: self.title(id),
         })
         continue
@@ -835,11 +790,7 @@ pub async fn SessionStore::listings(
         {
           id,
           last_active_unix_seconds: Some(seconds),
-          first_prompt: try self.listing_prompt(path, stamp) catch {
-            error => Err(error)
-          } noraise {
-            text => Ok(text)
-          },
+          session_file: path,
           title: self.title(id),
         },
         seconds,
@@ -847,7 +798,6 @@ pub async fn SessionStore::listings(
       ),
     )
   }
-  self.listing_prompts.retain((path, _) => paths.contains(path))
   // Most recently active first.
   stamped.sort_by(stamped_newest_first)
   [ for entry in stamped => entry.0 ]..append(unreadable)

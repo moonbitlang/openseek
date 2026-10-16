@@ -1217,42 +1217,24 @@ async test "listing extracts text without decoding image payloads" {
 }
 
 ///|
-async test "reused listings observe external rewrites renames and recreation" {
-  let reader = new_store()
-  defer @fs.rmdir(reader.root(), recursive=true)
-  let writer = @store.SessionStore(reader.root())
+async test "listing reads current prompt on demand without retaining errors" {
+  let store = new_store()
+  defer @fs.rmdir(store.root(), recursive=true)
   let id = @agent_session.SessionId("changing")
-  let original = @agent_session.Session(id, system_prompt="system").append(
-    User(UserMessage(Content([Text("Before")]))),
-  )
-  writer.create(original)
-  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
-  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
-  // Same-length text written through another store must invalidate the cache.
-  writer.create(
-    @agent_session.Session(id, system_prompt="system").append(
-      User(UserMessage(Content([Text("After!")]))),
-    ),
-  )
-  assert_eq(reader.listings()[0].first_prompt(), Some("After!"))
-  writer.set_title(id, "New title")
-  assert_eq(reader.listings()[0].title(), Some("New title"))
-  @fs.remove(writer.session_file(id))
-  try reader.listings()[0].first_prompt() catch {
+  store.create(Session(id, system_prompt="system"))
+  let listing = store.listings()[0]
+  @fs.remove(store.session_file(id))
+  try listing.first_prompt() catch {
     _ => ()
   } noraise {
-    _ => fail("missing transcript must report an error")
+    _ => fail("prompt access must read the current file")
   }
-  writer.create(original)
-  assert_eq(reader.listings()[0].first_prompt(), Some("Before"))
-  @fs.rmdir("\{reader.root()}/sessions/changing", recursive=true)
-  assert_eq(reader.listings().length(), 0)
-  writer.create(
+  store.create(
     @agent_session.Session(id, system_prompt="system").append(
       User(UserMessage(Content([Text("Recreated")]))),
     ),
   )
-  assert_eq(reader.listings()[0].first_prompt(), Some("Recreated"))
+  assert_eq(listing.first_prompt(), Some("Recreated"))
 }
 
 ///|
@@ -1264,7 +1246,7 @@ async test "listing distinguishes absent empty and unreadable prompts" {
   store.create(empty)
   assert_eq(store.listings()[0].first_prompt(), None)
   store.create(empty.append(User(UserMessage(Content([Text("")])))))
-  // Empty text remains a found prompt on both cold and cached reads.
+  // Empty text remains a found prompt on repeated reads.
   assert_eq(store.listings()[0].first_prompt(), Some(""))
   assert_eq(store.listings()[0].first_prompt(), Some(""))
   store.create(empty)
@@ -1300,7 +1282,7 @@ async test "listing distinguishes absent empty and unreadable prompts" {
   } noraise {
     _ => fail("invalid user content must report an error")
   }
-  // Failed reads are not cached: repairing the transcript restores its label.
+  // Repairing the transcript restores its label.
   store.create(empty.append(User(UserMessage(Content([Text("repaired")])))))
   assert_eq(store.listings()[0].first_prompt(), Some("repaired"))
 }

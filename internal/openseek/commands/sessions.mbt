@@ -145,11 +145,13 @@ fn format_utc_minute(seconds : Int64) -> String {
 /// minute precision; `-` for an unreadable session), and its explicit title
 /// or first user prompt as a one-line label. Tab separation keeps the listing scriptable —
 /// `sessions list | cut -f1` recovers the bare ids the old format printed.
-fn format_session_listing(listing : @store.SessionListing) -> String {
+async fn format_session_listing(listing : @store.SessionListing) -> String {
   let when = listing.last_active_unix_seconds().map_or("-", format_utc_minute)
-  let title = listing
-    .title()
-    .unwrap_or_else(() => listing_prompt_label(listing))
+  let title = if listing.title() is Some(title) {
+    title
+  } else {
+    listing_prompt_label(listing)
+  }
   "\{listing.id().value()}\t\{when}\t\{compact_prompt_label(title)}"
 }
 
@@ -188,9 +190,11 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
       }
       {
         "id": listing.id().value(),
-        "title": listing
-        .title()
-        .unwrap_or_else(() => session_title(listing_prompt_label(listing))),
+        "title": if listing.title() is Some(title) {
+          title
+        } else {
+          session_title(listing_prompt_label(listing))
+        },
         "updated_at_ms": updated_at_ms,
       }
     }
@@ -244,7 +248,7 @@ fn required_positive_int(input : String, label : String) -> Int32 raise {
 ///|
 /// Keep damaged rows visible in CLI and JSON listings. Only this display
 /// boundary substitutes an empty label for missing or unreadable prompts.
-fn listing_prompt_label(listing : @store.SessionListing) -> String {
+async fn listing_prompt_label(listing : @store.SessionListing) -> String {
   let prompt = listing.first_prompt() catch { _ => return "" }
   prompt.unwrap_or("")
 }
