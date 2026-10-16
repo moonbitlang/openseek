@@ -181,6 +181,7 @@ fn device_msg(
     // The payload's stage says how much of the host is up; every stage asks
     // this client for the same resync, so the signal alone is the message.
     AgentConnected(_) => Some(BridgeReady)
+    UserQuestions(payload) => Some(QuestionsChanged(payload))
     AgentApprovals(payload) =>
       Some(
         ApprovalsChanged({

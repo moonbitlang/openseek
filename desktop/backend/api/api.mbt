@@ -39,6 +39,7 @@ struct ApiState {
   // grants every engine it starts access to it, and `start_services` serves
   // it.
   host_mcp : @mcp.Server?
+  questions : @user_questions.Service
   messages : @session_messages.Service
   // Called for every finished run, alongside the notification fan-out — the
   // desktop posts its system notification here.
@@ -309,6 +310,7 @@ pub fn ApiState::ApiState(
     console_url,
     host_mcp,
     messages: Service(),
+    questions: Service(),
     on_finished,
   }
 }
@@ -326,6 +328,7 @@ pub fn ApiState::sink(self : ApiState) -> @engine.EventSink {
   self.hub.sink(on_finished=payload => {
     if self.hub.active_starts.get(payload.run_id) is Some(run) {
       self.messages.detach(run.session)
+      self.questions.detach(run.session)
     }
     if self.on_finished is Some(notify) {
       notify(payload)
@@ -477,6 +480,15 @@ pub fn endpoints(
     }),
     Endpoint(@commands.agent_goal, payload => {
       @engine.goal_run(state.manager, payload)
+    }),
+    @endpoint.Endpoint::sync(@commands.user_questions_list, _ => {
+      state.questions.snapshot()
+    }),
+    @endpoint.Endpoint::sync(@commands.user_questions_answer, payload => {
+      state.questions.answer(payload)
+      let snapshot = state.questions.snapshot()
+      state.publish(UserQuestions(snapshot))
+      snapshot
     }),
     // Synchronous like cancel: it hands one line to the engine's writer and
     // reports whether there was still a question to answer. Nothing here waits

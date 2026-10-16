@@ -14,6 +14,7 @@ pub async fn[G] ApiState::start_services(
 ) -> Unit {
   prepare_workspaces()
   group.spawn_bg(() => self.run_session_messages())
+  group.spawn_bg(() => self.run_user_questions())
   group.spawn_bg(allow_failure=true, () => {
     self.codex.run((method_, params) => {
       if @protocol.Notification::from_wire(method_, params)
@@ -42,6 +43,7 @@ pub async fn[G] ApiState::start_services(
   // from the same moment they can exist.
   if self.host_mcp is Some(server) {
     server.add_tools(self.session_tools())
+    server.add_tools(self.question_tools())
     @xlog.info() <?
       { "event": "desktop_host_tools_serving", "url": server.url() }
     group.spawn_bg(allow_failure=true, () => server.run())

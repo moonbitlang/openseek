@@ -301,6 +301,10 @@ pub let update_check : Command[@protocol.EmptyPayload, @protocol.CheckUpdateRepl
 
 pub let update_download : Command[@protocol.EmptyPayload, @protocol.DownloadUpdateAcceptedReply]
 
+pub let user_questions_answer : Command[@protocol.UserQuestionAnswer, @protocol.UserQuestionSnapshot]
+
+pub let user_questions_list : Command[@protocol.EmptyPayload, @protocol.UserQuestionSnapshot]
+
 pub let workspace_add : Command[@protocol.WorkspacePayload, @protocol.WorkspacesReply]
 
 pub let workspace_list : Command[@protocol.EmptyPayload, @protocol.WorkspacesReply]

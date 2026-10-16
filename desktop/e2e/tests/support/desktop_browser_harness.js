@@ -583,6 +583,8 @@ export class DesktopBrowserHarness {
           prediction: null,
           watermark: this.sessionEvents.at(-1)?.sequence || 0,
         };
+      case 'user_questions.list':
+        return { generation: 0, requests: [] };
       case 'agent.runs':
         return { runs: [], settled: [], approvals: [], approval_generation: 0 };
       case 'workspace.list':

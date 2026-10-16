@@ -4634,6 +4634,18 @@ fn update_msg(
         (@cmd.none, model)
       }
     }
+    UserQuestions(channel~, connection_generation~, msg) => {
+      guard model.device_state(channel) is Some(device) &&
+        device.connection_generation == connection_generation else {
+        return (@cmd.none, model)
+      }
+      let (command, questions) = device.questions.update(
+        msg,
+        channel,
+        dispatch.map(msg => UserQuestions(channel~, connection_generation~, msg)),
+      )
+      (command, model.replace_device({ ..device, questions, }))
+    }
     // Answering is refused once already answered, so a double click cannot
     // send two decisions for one question. The card is marked rather than
     // removed: it comes off screen when the engine says the question settled,
@@ -6768,6 +6780,12 @@ fn update_device_msg(
         // learns each live run's identity — the resync half of the
         // protocol's reconnect story (docs/remote-protocol.md).
         fetch_runs(dispatch, channel, run_frontier, connection_generation),
+        @user_questions.fetch(
+          channel,
+          dispatch.map(msg => {
+            UserQuestions(channel~, connection_generation~, msg)
+          }),
+        ),
         fetch_archived(
           dispatch, channel, connection_generation, archived_request_generation,
         ),
@@ -6825,6 +6843,7 @@ fn update_device_msg(
         reconnect_failures: 0,
         connection_generation,
         approval_snapshot: None,
+        questions: dev.questions.reconnecting(),
         sessions_request_generation,
         archived_request_generation,
         projects_request_generation,
@@ -8875,6 +8894,16 @@ fn update_device_msg(
       })
       (@cmd.batch(commands), seeded)
     }
+    QuestionsChanged(snapshot) =>
+      update_msg(
+        dispatch,
+        UserQuestions(
+          channel~,
+          connection_generation=dev.connection_generation,
+          @user_questions.Snapshot(snapshot),
+        ),
+        model,
+      )
     ApprovalsChanged(snapshot) => {
       if dev.approval_snapshot is Some(previous) &&
         snapshot.generation <= previous.generation {

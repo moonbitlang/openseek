@@ -2060,6 +2060,23 @@ fn view(
         Transcript(conversation=conv, ..) =>
           [
             transcript_html,
+            if model.device_state(conv.device) is Some(device) &&
+              !conv.is_archived_read_only() {
+              device.questions.view(
+                conv.session_id,
+                model.locale,
+                device.bridge is Connected,
+                dispatch.map(msg => {
+                  UserQuestions(
+                    channel=conv.device,
+                    connection_generation=device.connection_generation,
+                    msg,
+                  )
+                }),
+              )
+            } else {
+              @html.div(class="user-question-region", @html.nothing)
+            },
             if conv.is_archived_read_only() {
               conv.archived_read_only_view(locale=model.locale, dispatch)
             } else if model.scheduled_session_read_only(conv) {

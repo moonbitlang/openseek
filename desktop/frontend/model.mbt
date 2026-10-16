@@ -1231,6 +1231,7 @@ priv struct ApprovalMirror {
 /// one entry per channel in `Model::devices` — exactly one today (the page's
 /// own host); the multi-device console renders one sidebar group per entry.
 priv struct DeviceState {
+  questions : @user_questions.Model
   approval_snapshot : ApprovalMirror?
   // The channel this state mirrors.
   channel : @interop.ChannelId
@@ -1304,6 +1305,7 @@ fn empty_device_state(channel : @interop.ChannelId) -> DeviceState {
     reconnect_failures: 0,
     connection_generation: 0,
     approval_snapshot: None,
+    questions: @user_questions.Model(),
     sessions_request_generation: 0,
     archived_request_generation: 0,
     projects_request_generation: 0,
@@ -1957,6 +1959,11 @@ priv enum Msg {
   // transcript the user is reading.
   SendInBackground
   Stop
+  UserQuestions(
+    channel~ : @interop.ChannelId,
+    connection_generation~ : Int32,
+    @user_questions.Msg
+  )
   // The user answered the active conversation's permission question. `allow`
   // grants the one action it asked about; the card stays until the engine's
   // settlement retires it.
@@ -2233,6 +2240,7 @@ priv enum Msg {
 /// `FromDevice(channel, ...)`; messages that back page-global or
 /// focused-scoped state stay on `Msg` itself.
 priv enum DeviceMsg {
+  QuestionsChanged(@protocol.UserQuestionSnapshot)
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
   BridgeUnavailable(String)

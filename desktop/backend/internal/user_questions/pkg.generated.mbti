@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/user_questions"
+
+import {
+  "openseek_desktop/protocol",
+}
+
+// Values
+
+// Errors
+pub suberror QuestionError {
+  QuestionError(String)
+}
+pub fn QuestionError::output(Self, &Logger) -> Unit
+pub fn QuestionError::to_string(Self) -> String
+pub impl Show for QuestionError
+
+// Types and methods
+type Request
+
+type Service
+pub fn Service::Service() -> Self
+pub fn Service::answer(Self, @protocol.UserQuestionAnswer) -> Unit raise QuestionError
+pub fn Service::detach(Self, String) -> Unit
+pub fn Service::request(Self, String, @protocol.AskUserPayload) -> Request raise
+pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
+pub fn Service::snapshot(Self) -> @protocol.UserQuestionSnapshot
+pub async fn Service::wait(Self, Request, wait_ms? : Int) -> Json
+
+// Type aliases
+
+// Traits

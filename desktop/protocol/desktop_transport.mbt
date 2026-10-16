@@ -6,6 +6,7 @@
 /// uses this payload-free enum; `Notification` below carries the associated
 /// typed payload once an event is decoded.
 pub(all) enum NotificationKind {
+  UserQuestions
   AgentApprovals
   AgentConnected
   AgentStarted
@@ -41,6 +42,7 @@ pub(all) enum NotificationKind {
 /// The stable public name written at a transport boundary.
 pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
   match self {
+    UserQuestions => "user_questions.changed"
     AgentApprovals => "agent.approvals"
     AgentConnected => "agent.connected"
     AgentStarted => "agent.started"
@@ -77,6 +79,7 @@ pub fn NotificationKind::wire_name(self : NotificationKind) -> String {
 /// Every event exposed by the desktop transports, in registration order.
 pub fn NotificationKind::all() -> Array[NotificationKind] {
   [
+    UserQuestions,
     AgentApprovals,
     AgentConnected,
     AgentStarted,
@@ -114,6 +117,7 @@ pub fn NotificationKind::all() -> Array[NotificationKind] {
 /// payload are compiler checked throughout the host and frontend. JSON is
 /// introduced only by `from_wire`/`params` at the transport boundary.
 pub(all) enum Notification {
+  UserQuestions(UserQuestionSnapshot)
   AgentApprovals(ApprovalSnapshot)
   AgentConnected(ConnectedPayload)
   AgentStarted(StartedPayload)
@@ -155,6 +159,8 @@ pub(all) enum Notification {
 /// table that would only be consumed by this decoder.
 pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
   match name {
+    "user_questions.changed" =>
+      Some(UserQuestions(@json.from_json(params) catch { _ => return None }))
     "agent.approvals" =>
       Some(AgentApprovals(@json.from_json(params) catch { _ => return None }))
     "agent.connected" =>
@@ -237,6 +243,7 @@ pub fn Notification::from_wire(name : String, params : Json) -> Notification? {
 /// The payload-free identity used by transport registration.
 pub fn Notification::kind(self : Notification) -> NotificationKind {
   match self {
+    UserQuestions(_) => UserQuestions
     AgentApprovals(_) => AgentApprovals
     AgentConnected(_) => AgentConnected
     AgentStarted(_) => AgentStarted
@@ -279,6 +286,7 @@ pub fn Notification::wire_name(self : Notification) -> String {
 /// Encode the typed payload only when a transport writes the public event.
 pub fn Notification::params(self : Notification) -> Json {
   match self {
+    UserQuestions(payload) => ToJson::to_json(payload)
     AgentApprovals(payload) => ToJson::to_json(payload)
     AgentConnected(payload) => ToJson::to_json(payload)
     AgentStarted(payload) => ToJson::to_json(payload)
