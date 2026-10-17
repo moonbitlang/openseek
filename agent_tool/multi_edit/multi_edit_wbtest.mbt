@@ -74,7 +74,7 @@ test "keep_response on the false-alarm path makes the introduced split explicit"
 }
 
 ///|
-test "revert_report marks a truncated count and a failed restore" {
+test "revert_report states a truncated tally's count and a failed restore" {
   let after : @auto_check.CheckErrors = {
     error_count: 400,
     warning_count: 0,
@@ -90,7 +90,8 @@ test "revert_report marks a truncated count and a failed restore" {
     restore_failures=["a.mbt"],
     evidence=clean_tree_evidence(),
   )
-  assert_true(report.contains("reported ≥400 error(s)"))
+  // The count is moon's own even when it listed only some of the sites.
+  assert_true(report.contains("reported 400 error(s)"))
   assert_true(report.contains("WARNING: could not restore 1 file(s): a.mbt"))
 }
 

@@ -694,7 +694,7 @@ async fn revert_guarded_response(
   // the check simply reported.
   if before.plan_failure is Some(reason) {
     return @agent_tool.respond(
-      "\{success_summary(writes)}\nmoon check: the build plan is computable again (before this batch: \{reason}); \{error_count_label(measured.all)} error(s), \{measured.all.warning_count} warning(s) — the guards had no baseline to compare against",
+      "\{success_summary(writes)}\nmoon check: the build plan is computable again (before this batch: \{reason}); \{measured.all.error_count} error(s), \{measured.all.warning_count} warning(s) — the guards had no baseline to compare against",
       brief=success_brief(writes),
       data=batch_data("applied", writes, {
         "check": measured.first.to_json(),
@@ -1140,8 +1140,7 @@ fn keep_response(
   if after.error_count == 0 {
     return "\{summary}\nmoon check: ok — 0 errors, \{after.warning_count} warning(s)"
   }
-  let errors = error_count_label(after)
-  let header = "\{summary}\nmoon check: applied with \{errors} error(s) kept (error count change \{error_delta} < revert_if_error_delta_greater_or_equal=\{threshold}), \{after.warning_count} warning(s)"
+  let header = "\{summary}\nmoon check: applied with \{after.error_count} error(s) kept (error count change \{error_delta} < revert_if_error_delta_greater_or_equal=\{threshold}), \{after.warning_count} warning(s)"
   let first_errors = after.first_errors()
   if first_errors.is_empty() {
     header
@@ -1163,7 +1162,7 @@ fn revert_report(
   evidence~ : @diagnostic_guard.Comparability,
 ) -> String {
   let total = total_edit_count(writes)
-  let head = "reverted: applied \{total} edit(s) across \{writes.length()} file(s), but moon check then reported \{error_count_label(after)} error(s) (\{introduced} error count change >= revert_if_error_delta_greater_or_equal=\{threshold}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
+  let head = "reverted: applied \{total} edit(s) across \{writes.length()} file(s), but moon check then reported \{after.error_count} error(s) (\{introduced} error count change >= revert_if_error_delta_greater_or_equal=\{threshold}); all \{writes.length()} file(s) were rolled back to their pre-batch contents."
   let first_errors = after.first_errors()
   let errors = if first_errors.is_empty() {
     ""
@@ -1171,17 +1170,6 @@ fn revert_report(
     "\nfirst \{first_errors.length()} error(s):\n\{first_errors.join("\n")}"
   }
   "\{head}\{errors}\{restore_note(restore_failures)}\n\{@diagnostic_guard.comparability_advice(evidence, introduced~)}"
-}
-
-///|
-/// Render an error count, marking it a lower bound when moon check's output was
-/// truncated (so the true count is at least this many).
-fn error_count_label(after : @auto_check.CheckErrors) -> String {
-  if after.truncated {
-    "≥\{after.error_count}"
-  } else {
-    "\{after.error_count}"
-  }
 }
 
 ///|
