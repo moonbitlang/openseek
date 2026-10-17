@@ -3,8 +3,8 @@
 // this app installed. The directory layout and frontmatter rules deliberately
 // mirror the engine's `agent_skill` discovery (`<name>.md` flat files and
 // `<name>/SKILL.md` directories, here with the archive's supporting files
-// beside the SKILL.md), so the panel lists exactly what the engine
-// advertises to the model.
+// beside the SKILL.md). The panel also lists entries parked under `.disabled`,
+// which the engine's one-level discovery does not advertise.
 
 ///|
 /// The provenance marker written next to an installed SKILL.md. The engine's
@@ -28,9 +28,10 @@ pub struct InstalledSkill {
   name : String
   description : String
   // `module@version[/package]` recorded at install time; "" for a skill the
-  // user wrote by hand (which this package will never touch).
+  // user wrote by hand (which this package never overwrites or uninstalls).
   source : String
   registry : RegistrySkillIdentity?
+  enabled : Bool
 }
 
 ///|
@@ -67,6 +68,16 @@ fn valid_slug(name : String) -> Bool {
     return false
   }
   name.all(ch => ch is ('a'..<='z' | '0'..<='9' | '-'))
+}
+
+///|
+/// Hand-written entries need not use registry slugs, but an id still names
+/// exactly one library entry.
+fn valid_skill_id(id : String) -> Bool {
+  !id.is_empty() &&
+  !(id is ("." | "..")) &&
+  !id.contains("/") &&
+  !id.contains("\\")
 }
 
 ///|
@@ -187,14 +198,6 @@ pub async fn install_skill(
   guard valid_slug(slug) else {
     raise SkillMarketError("registry entry \{entry} has no installable name")
   }
-  let target = library_dir.join(slug)
-  let sidecar = target.join(SidecarFile)
-  let flat_target = @pathx.Path("\{target}.md")
-  if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
-    raise SkillMarketError(
-      "a skill named \{slug} already exists in your library; not overwriting it",
-    )
-  }
   let skill = skill_files(fetch_archive(entry, source), entry)
   let text = @utf8.decode(skill.skill_md) catch {
     _ =>
@@ -203,13 +206,6 @@ pub async fn install_skill(
       )
   }
   let (name, description) = parse_frontmatter(text, slug)
-  let installed = {
-    id: slug,
-    name,
-    description,
-    source: source_label(module_name, version, package_path),
-    registry: Some({ module_name, package_path, }),
-  }
   let provenance : Json = {
     "module": module_name,
     "version": version,
@@ -218,56 +214,86 @@ pub async fn install_skill(
   }
   library_lock.acquire()
   defer library_lock.release()
-  let library : SkillLibrary = { root: library_dir, }
-  library.recover()
-  // Re-check ownership only after acquiring the process-wide boundary:
+  let root : SkillLibrary = { root: library_dir, }
+  root.recover_all()
+  let location = root.locate(slug)
+  let library = location.library
+  let target = library.target(slug)
+  let flat_target = library.root.join("\{slug}.md")
+  let sidecar = target.join(SidecarFile)
+  // Check ownership after acquiring the process-wide boundary:
   // another request may have installed this slug while the network fetch ran.
-  if @fsx.exists(flat_target) || (@fsx.exists(target) && !@fsx.exists(sidecar)) {
+  guard !@fsx.exists(flat_target) &&
+    (!@fsx.exists(target) || @fsx.exists(sidecar)) else {
     raise SkillMarketError(
       "a skill named \{slug} already exists in your library; not overwriting it",
     )
   }
   library.stage(slug, skill.files, provenance.stringify())
   library.activate(slug, on_committed?)
-  installed
+  {
+    id: slug,
+    name,
+    description,
+    source: source_label(module_name, version, package_path),
+    registry: Some({ module_name, package_path, }),
+    enabled: location.enabled,
+  }
 }
 
 ///|
 /// The library's contents, mirroring the engine's discovery rules: every
 /// `<name>.md`, plus every `<name>/SKILL.md`. A missing or unreadable
-/// library is an empty one. Entries we installed carry their registry
-/// source; everything else is the user's own.
+/// library is an empty one. Enabled and disabled entries are both included.
+/// Entries we installed carry their registry source; everything else is the
+/// user's own.
 pub async fn installed_skills(
   library_dir~ : @pathx.Path = library_dir_from_env(),
 ) -> Array[InstalledSkill] {
   library_lock.acquire()
   defer library_lock.release()
   let library : SkillLibrary = { root: library_dir, }
-  library.recover()
-  let entries = if @fsx.Directory::try_open(library_dir) is Some(dir) {
-    dir.collect()
-  } else {
-    []
-  }
+  library.recover_all()
+  let skills = library.list_entries(enabled=true)
+  skills.append(library.disabled().list_entries(enabled=false))
+  // Keep one stable order across enabled and disabled entries.
+  skills.sort_by((a, b) => a.name.compare(b.name))
+  skills
+}
+
+///|
+async fn SkillLibrary::list_entries(
+  self : SkillLibrary,
+  enabled~ : Bool,
+) -> Array[InstalledSkill] {
+  guard @fsx.Directory::try_open(self.root) is Some(dir) else { return [] }
+  let entries = dir.collect()
   let skills : Array[InstalledSkill] = []
   for entry in entries {
     let entry = entry.name()
-    let path = library_dir.join(entry)
+    let path = self.root.join(entry)
     if entry is [.. id, .. ".md"] {
       guard @fsx.try_read_text(path) is Some(text) else { continue }
       let id = id.to_owned()
       let (name, description) = parse_frontmatter(text, id)
-      skills.push({ id, name, description, source: "", registry: None, })
+      skills.push({
+        id,
+        name,
+        description,
+        source: "",
+        registry: None,
+        enabled,
+      })
     } else {
       guard @fsx.try_read_text(path.join("SKILL.md")) is Some(text) else {
         continue
       }
       let (name, description) = parse_frontmatter(text, entry)
-      let installed_source = if @fsx.try_read_text(path.join(SidecarFile))
-        is Some(sidecar) {
+      let installed_source = {
+        guard @fsx.try_read_text(path.join(SidecarFile)) is Some(sidecar) else {
+          None
+        }
         decode_sidecar(sidecar)
-      } else {
-        None
       }
       skills.push({
         id: entry,
@@ -275,12 +301,10 @@ pub async fn installed_skills(
         description,
         source: installed_source.map_or("", source => source.label),
         registry: installed_source.map(source => source.registry),
+        enabled,
       })
     }
   }
-  // Sort like the engine's discovery does: readdir order is platform-defined,
-  // and the marketplace listing should be stable across runs and platforms.
-  skills.sort_by((a, b) => a.name.compare(b.name))
   skills
 }
 
@@ -290,19 +314,19 @@ pub async fn read_skill_content(
   id : String,
   library_dir~ : @pathx.Path = library_dir_from_env(),
 ) -> String {
-  guard valid_slug(id) else {
+  guard valid_skill_id(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
   library_lock.acquire()
   defer library_lock.release()
   let library : SkillLibrary = { root: library_dir, }
-  library.recover()
-  let directory_file = library_dir.join(id).join("SKILL.md")
-  let flat_file = library_dir.join("\{id}.md")
-  let path = if @fsx.exists(directory_file) {
+  library.recover_all()
+  let location = library.locate(id)
+  let directory_file = location.library.target(id).join("SKILL.md")
+  let flat_file = location.library.root.join("\{id}.md")
+  let path = {
+    guard @fsx.exists(directory_file) else { flat_file }
     directory_file
-  } else {
-    flat_file
   }
   guard @fsx.try_read_text(path) is Some(content) else {
     raise SkillMarketError("skill \{id} has no readable SKILL.md")
@@ -326,11 +350,12 @@ pub async fn uninstall_skill(
   library_lock.acquire()
   defer library_lock.release()
   let library : SkillLibrary = { root: library_dir, }
-  library.recover()
+  library.recover_all()
   guard valid_slug(id) else {
     raise SkillMarketError("invalid skill id: \{id}")
   }
-  let target = library_dir.join(id)
+  let location = library.locate(id)
+  let target = location.library.target(id)
   guard @fsx.exists(target) else {
     raise SkillMarketError("no skill named \{id} in the library")
   }
@@ -339,5 +364,51 @@ pub async fn uninstall_skill(
       "\{id} was not installed from the registry; remove it by hand",
     )
   }
-  library.move_to_trash(id, on_committed?)
+  location.library.move_to_trash(id, on_committed?)
+}
+
+///|
+/// Enable or disable an installed entry with a same-filesystem rename. The
+/// complete directory (including supporting files and provenance), or a flat
+/// hand-written .md file, moves together. Repeated requests are idempotent.
+pub async fn set_skill_enabled(
+  id : String,
+  enabled~ : Bool,
+  library_dir~ : @pathx.Path = library_dir_from_env(),
+  on_committed? : () -> Unit,
+) -> Unit {
+  guard valid_skill_id(id) else {
+    raise SkillMarketError("invalid skill id: \{id}")
+  }
+  library_lock.acquire()
+  defer library_lock.release()
+  let library : SkillLibrary = { root: library_dir, }
+  library.recover_all()
+  let location = library.locate(id)
+  let directory = location.library.target(id)
+  let entry = {
+    guard !@fsx.exists(directory) else { id }
+    guard @fsx.exists(location.library.root.join("\{id}.md")) else {
+      raise SkillMarketError("no skill named \{id} in the library")
+    }
+    "\{id}.md"
+  }
+  guard location.enabled != enabled else { return }
+  let destination = {
+    guard enabled else { library.disabled() }
+    library
+  }
+  @fsx.ensure_dir(destination.root)
+  @async.protect_from_cancel(() => {
+    @fs.rename(
+      location.library.root.join(entry).to_string(),
+      destination.root.join(entry).to_string(),
+      replace=false,
+    ) catch {
+      error => raise SkillMarketError("cannot move skill \{id}: \{error}")
+    }
+    if on_committed is Some(callback) {
+      callback()
+    }
+  })
 }
