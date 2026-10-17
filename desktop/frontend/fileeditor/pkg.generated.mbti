@@ -290,6 +290,8 @@ pub(all) enum Msg {
   OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
   OfficeSelectionDismissed(OfficeSelectionPreview)
   OfficeZoomChanged(String)
+  OfficeFitWidth
+  OfficeWidthFitted(@interop.ConversationKey, Int, @common.Uri, Int)
   OfficeSearchChanged(String)
   OfficeSystemFontsToggled
   PdfStateChanged(owner~ : @interop.ConversationKey, epoch~ : Int, path~ : @common.Uri, sig~ : String, generation~ : Int, event~ : String)
@@ -423,6 +425,13 @@ pub(all) struct OfficeSelectionPreview {
 } derive(Eq)
 pub fn OfficeSelectionPreview::equal(Self, Self) -> Bool
 pub fn OfficeSelectionPreview::not_equal(Self, Self) -> Bool
+
+pub(all) struct OfficeZoomPreference {
+  fit_width : Bool
+  zoom : Int
+} derive(Eq)
+pub fn OfficeZoomPreference::equal(Self, Self) -> Bool
+pub fn OfficeZoomPreference::not_equal(Self, Self) -> Bool
 
 pub(all) enum PackageGraphState {
   PackageGraphLoading(Int)
@@ -610,6 +619,7 @@ pub(all) struct State {
   placement : ReconciledPlacement
   tree_open : Bool
   office_zoom : Int
+  office_zoom_preferences : Map[@common.Uri, OfficeZoomPreference]
   office_query : String
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?

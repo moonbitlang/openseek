@@ -2107,6 +2107,7 @@ pub fn sync(
         placement: PlacementUnknown.reconcile(ctx.placement),
         tree_open: state.tree_open,
         office_zoom: state.office_zoom,
+        office_zoom_preferences: state.office_zoom_preferences,
         office_query: state.office_query,
         office_prefer_system_fonts: state.office_prefer_system_fonts,
         pdf_generation: state.pdf_generation,
@@ -2596,31 +2597,61 @@ fn update_inner(
     | PdfPasswordChanged(_)
     | PdfPasswordSubmitted
     | PdfPasswordCancelled => update_pdf(state, ctx, msg)
-    OfficeZoomChanged(raw) => {
-      let zoom = @string.parse_int(raw) catch { _ => state.office_zoom }
-      let pdf = active_pdf_document(state, ctx) is Some(_)
-      let minimum = if pdf { 25 } else { 50 }
-      let maximum = if pdf { 400 } else { 200 }
-      let bounded = if zoom < minimum {
-        minimum
-      } else if zoom > maximum {
-        maximum
-      } else {
-        zoom
+    OfficeWidthFitted(owner, epoch, path, zoom) => {
+      guard ctx.owner == owner &&
+        state.owner == Some(owner) &&
+        state.request_epoch == epoch &&
+        ctx.active_file == Some(path) &&
+        ctx.active_history_diff is None &&
+        state.docs.get(path) is Some({ state: TabOffice(document~, ..), .. }) &&
+        office_zoom_preference(state, path, document.kind).fit_width else {
+        return (@cmd.none, state)
       }
-      let next = { ..state, office_zoom: bounded, }
-      (refresh_office_visual(next, ctx), next)
+      let preferences = state.office_zoom_preferences.copy()
+      preferences[path] = { fit_width: true, zoom, }
+      (@cmd.none, { ..state, office_zoom_preferences: preferences, })
+    }
+    OfficeFitWidth => {
+      guard ctx.active_file is Some(path) &&
+        state.docs.get(path) is Some({ state: TabOffice(document~, ..), .. }) else {
+        return (@cmd.none, state)
+      }
+      let preferences = state.office_zoom_preferences.copy()
+      preferences[path] = {
+        ..office_zoom_preference(state, path, document.kind),
+        fit_width: true,
+      }
+      let next = { ..state, office_zoom_preferences: preferences, }
+      (refresh_office_visual(next, ctx, dispatch), next)
+    }
+    OfficeZoomChanged(raw) => {
+      let zoom = @string.parse_int(raw) catch { _ => return (@cmd.none, state) }
+      let pdf = active_pdf_document(state, ctx) is Some(_)
+      let bounded = zoom.clamp(
+        min=if pdf { 25 } else { 10 },
+        max=if pdf { 400 } else { 200 },
+      )
+      let preferences = state.office_zoom_preferences.copy()
+      if !pdf && ctx.active_file is Some(path) {
+        preferences[path] = { fit_width: false, zoom: bounded, }
+      }
+      let next = {
+        ..state,
+        office_zoom: bounded,
+        office_zoom_preferences: preferences,
+      }
+      (refresh_office_visual(next, ctx, dispatch), next)
     }
     OfficeSearchChanged(query) => {
       let next = { ..state, office_query: query, }
-      (refresh_office_visual(next, ctx), next)
+      (refresh_office_visual(next, ctx, dispatch), next)
     }
     OfficeSystemFontsToggled => {
       let next = {
         ..state,
         office_prefer_system_fonts: !state.office_prefer_system_fonts,
       }
-      (refresh_office_visual(next, ctx), next)
+      (refresh_office_visual(next, ctx, dispatch), next)
     }
     PullRequestUpdated => {
       let (comments, state) = update_inner(
