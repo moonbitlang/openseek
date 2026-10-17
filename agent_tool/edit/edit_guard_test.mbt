@@ -470,7 +470,7 @@ async test "guards are moot outside a MoonBit project and data still names the o
       "old_string": "new",
       "new_string": "newer",
       "start_line": 1,
-      "revert_if_error_delta_greater_or_equal": Json::null(),
+      "revert_if_error_delta_greater_or_equal": null,
     })
     assert_false(off.is_error, msg=off.content)
     assert_true(

@@ -881,12 +881,12 @@ pub impl ToJson for LoadSessionReply with fn to_json(self) {
     "watermark": if self.watermark is Some(value) {
       Json(value)
     } else {
-      Json::null()
+      null
     },
     "prediction": if self.prediction is Some(value) {
       value.to_json()
     } else {
-      Json::null()
+      null
     },
   }
 }
@@ -1864,23 +1864,23 @@ pub impl FromJson for MoonIdeLocation with fn from_json(json, path) {
   }
   {
     path: @json.from_json(
-      fields.get("path").unwrap_or(Json::null()),
+      fields.get("path").unwrap_or(null),
       path=path.add_key("path"),
     ),
     start_line: @json.from_json(
-      fields.get("start_line").unwrap_or(Json::null()),
+      fields.get("start_line").unwrap_or(null),
       path=path.add_key("start_line"),
     ),
     start_column: @json.from_json(
-      fields.get("start_column").unwrap_or(Json::null()),
+      fields.get("start_column").unwrap_or(null),
       path=path.add_key("start_column"),
     ),
     end_line: @json.from_json(
-      fields.get("end_line").unwrap_or(Json::null()),
+      fields.get("end_line").unwrap_or(null),
       path=path.add_key("end_line"),
     ),
     end_column: @json.from_json(
-      fields.get("end_column").unwrap_or(Json::null()),
+      fields.get("end_column").unwrap_or(null),
       path=path.add_key("end_column"),
     ),
     is_test,
@@ -2152,7 +2152,7 @@ pub impl ToJson for CheckUpdateReply with fn to_json(self) {
       if unavailable_reason is Some(reason) {
         fields["unavailable_reason"] = Json(reason)
       } else {
-        fields["unavailable_reason"] = Json::null()
+        fields["unavailable_reason"] = null
       }
       Json(fields)
     }

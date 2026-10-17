@@ -5,7 +5,7 @@ test "GitHub review comments preserve large IDs, deleted authors and permissions
       "fullDatabaseId": id,
       "bodyHTML": "<p><strong>test</strong></p>",
       "url": "https://github.com/o/r/pull/1#discussion_r9000000001",
-      "author": Json::null(),
+      "author": null,
       "createdAt": "2026-09-20T01:00:00Z",
       "viewerCanDelete": true,
     })
@@ -19,7 +19,7 @@ test "GitHub review comments preserve large IDs, deleted authors and permissions
     "id": "thread",
     "path": "old.mbt",
     "side": "LEFT",
-    "line": Json::null(),
+    "line": null,
     "original_line": 3,
     "resolved": true,
     "outdated": true,
@@ -86,7 +86,7 @@ test "review pagination cannot mistake a missing cursor for a complete discussio
   assert_eq(
     github_review_page({
       "nodes": [],
-      "pageInfo": { "hasNextPage": false, "endCursor": Json::null() },
+      "pageInfo": { "hasNextPage": false, "endCursor": null },
     }).1,
     None,
   )
@@ -100,7 +100,7 @@ test "review pagination cannot mistake a missing cursor for a complete discussio
   let malformed = try {
     github_review_page({
       "nodes": [],
-      "pageInfo": { "hasNextPage": true, "endCursor": Json::null() },
+      "pageInfo": { "hasNextPage": true, "endCursor": null },
     })
     |> ignore
     false

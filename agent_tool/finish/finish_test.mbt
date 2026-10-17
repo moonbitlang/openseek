@@ -44,5 +44,5 @@ test "finish returns empty Finish when answer is non-string" {
 
 ///|
 test "finish returns empty Finish on non-object arguments" {
-  assert_finish(Json::null(), "")
+  assert_finish(null, "")
 }

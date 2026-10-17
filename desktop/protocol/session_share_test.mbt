@@ -11,7 +11,7 @@ test "share reply requires tagged and typed outcomes" {
   }
   for
     invalid in [
-      Json::null(),
+      null,
       {},
       { "status": "shared" },
       { "status": "shared", "url": null },
@@ -51,7 +51,7 @@ test "share phases round trip with request identity" {
 test "share progress codecs reject missing null and malformed fields" {
   for
     invalid in [
-      Json::null(),
+      null,
       {},
       { "generation": 7 },
       { "generation": null, "progress": "Preparing" },

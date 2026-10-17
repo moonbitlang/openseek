@@ -5,7 +5,7 @@ fn pull_request_json(
   number~ : Int32,
   state~ : String,
   draft~ : Bool,
-  checks~ : Json = Json::null(),
+  checks~ : Json = null,
   cross~ : Bool = false,
 ) -> Json {
   {

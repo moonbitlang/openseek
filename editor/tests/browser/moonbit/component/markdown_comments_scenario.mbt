@@ -103,7 +103,7 @@ fn markdown_comments_state_json(viewer : @viewer.Viewer) -> String {
         "activeColumn": Json(active.column),
       })
     }
-    None => Json::null()
+    None => null
   }
   Json({
     "selection": selection,

@@ -54,7 +54,7 @@ test "absent, null, and explicit true all mean the gate is on" {
   let null_valued = @decode.decode({
     "path": "a.mbt",
     "content": "",
-    "revert_on_parse_errors": Json::null(),
+    "revert_on_parse_errors": null,
   })
   let explicit = @decode.decode({
     "path": "a.mbt",
@@ -113,7 +113,7 @@ fn decode_error_says(arguments : Json, expected : String) -> Bool {
 
 ///|
 test "rejections name one field, outermost problem first" {
-  inspect(decode_error_says(Json::null(), "object arguments"), content="true")
+  inspect(decode_error_says(null, "object arguments"), content="true")
   inspect(
     decode_error_says({ "content": "hi" }, "arguments.path"),
     content="true",

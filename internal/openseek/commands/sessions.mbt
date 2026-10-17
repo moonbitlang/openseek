@@ -182,7 +182,7 @@ async fn session_list_json(store : @store.SessionStore) -> Json {
       let updated_at_ms : Json = match
         session_listing_updated_at_ms(store, listing) {
         Some(milliseconds) => Json(milliseconds.to_double())
-        None => Json::null()
+        None => null
       }
       {
         "id": listing.id().value(),

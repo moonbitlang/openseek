@@ -175,7 +175,7 @@ test "Codex response requires an explicit nonblank ownership token" {
     reply.to_json(),
   )
   assert_eq(roundtrip, reply)
-  for token in [Json::null(), Json(""), Json("  "), Json(7)] {
+  for token in [null, Json(""), Json("  "), Json(7)] {
     let decoded : @protocol.CodexServerRequestRespondPayload? = Some(
       @json.from_json({ "request_id": 7, "response_token": token, "result": {} }),
     ) catch {

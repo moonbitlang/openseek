@@ -1010,7 +1010,7 @@ fn default_prompt() -> String {
     #|functions directly from functions marked `raise` and handle errors only at a
     #|real boundary, such as a CLI path that needs its own stderr text. Use
     #|`fail("message")` for a one-off internal failure and a small `suberror` for
-    #|user-facing errors; never encode failure as `Json::null`, `()`, or another
+    #|user-facing errors; never encode failure as `null`, `()`, or another
     #|success sentinel. `async fn` raises by default, so never write
     #|`async fn main raise`; mark an async helper `noraise` when it must not raise.
     #|In tests, call raising functions directly and let a raise fail the test. The
@@ -1070,7 +1070,7 @@ fn default_prompt() -> String {
     #|/// Handle errors only at a real boundary, such as a CLI path that needs its
     #|/// own message. Constructor patterns pick the cases you care about; the
     #|/// last arm covers the rest. Never encode failure as a success sentinel
-    #|/// (`Json::null`, `()`, `-1`): return early with the message instead.
+    #|/// (`null`, `()`, `-1`): return early with the message instead.
     #|fn describe(text : String) -> String {
     #|  let n = count_from(text) catch {
     #|    InvalidInput(reason) => return "invalid: \{reason}"
@@ -1186,7 +1186,7 @@ fn default_prompt() -> String {
     #|```
     #|
     #|- Build JSON values with the `Json(value)` constructor — it accepts any value
-    #|  whose type implements `ToJson`. Use `Json::null()` for null and
+    #|  whose type implements `ToJson`. Use `null` for a JSON null and
     #|  `Json::empty_object()` for an empty object. Do not create JSON with
     #|  `Json::Object(...)`, `Json::String(...)`, or `Json::True`; use variants
     #|  mainly for pattern matching.

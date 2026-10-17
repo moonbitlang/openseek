@@ -53,7 +53,7 @@ fn markdown_folding_facts_json(
   let offset_of = needle => {
     match current.find(needle) {
       Some(offset) => Json(offset)
-      None => Json::null()
+      None => null
     }
   }
   Json({

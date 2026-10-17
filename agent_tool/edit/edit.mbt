@@ -994,7 +994,7 @@ async fn commit_edit(
       written=new_content,
       lines~,
       fail_brief~,
-      { "reason": "unverified", "check": Json::null() },
+      { "reason": "unverified", "check": null },
       head="moon check could not verify the tree after the edit (\{reason})",
       detail="",
       write_scope?,

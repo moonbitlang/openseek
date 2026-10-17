@@ -196,7 +196,7 @@ fn seconds_since(started : Int64) -> Json {
 fn opt_int(value : Int?) -> Json {
   match value {
     Some(value) => value.to_json()
-    None => Json::null()
+    None => null
   }
 }
 
@@ -304,7 +304,7 @@ fn Session::finished(self : Session) -> Bool {
 fn Session::final_message(self : Session) -> Json {
   match self.terminals.last() {
     Some({ "message": message, .. }) => message
-    _ => Json::null()
+    _ => null
   }
 }
 
@@ -349,7 +349,7 @@ fn usage_of(items : Array[Json], log : String) -> Json {
   }
   match totals {
     Some(sums) => sums.to_json()
-    None => Json::null()
+    None => null
   }
 }
 
@@ -571,7 +571,7 @@ fn search_oracle(session : Session, final_message : Json) -> Bool {
   })
   for call in session.nested {
     if call is { "name": "web_search", "result": result, .. } &&
-      result != Json::null() {
+      result != null {
       search_results.push(result)
     }
   }
@@ -1490,7 +1490,7 @@ async fn recovered_execution(
   }
   let previous = "\{out}/\{name}.json"
   if @fs.exists(previous) {
-    guard read_json(previous) is Object(fields) else { return Json::null() }
+    guard read_json(previous) is Object(fields) else { return null }
     let kept = [
       "name", "variant", "repeat", "exit_code", "seconds", "exit_code_unrecorded",
       "seconds_source",
@@ -1518,7 +1518,7 @@ async fn recovered_execution(
       "log creation to last write; excludes silent waits",
     )
   } else {
-    (Json::null(), "unavailable without execution checkpoint")
+    (null, "unavailable without execution checkpoint")
   }
   {
     "name": name,
@@ -1547,7 +1547,7 @@ async fn yaml_analyze_trial(
   }
   let session = Session::new(session_items(workspace, session_name=name))
   session.metrics(result)
-  result["final"] = session.terminals.last().unwrap_or(Json::null())
+  result["final"] = session.terminals.last().unwrap_or(null)
   result["usage"] = usage(workspace, name, log)
   let children = []
   @fs.walk(workspace, (directory, entries) => {
@@ -2281,5 +2281,5 @@ test "usage sums the journal, else older JSONL usage events" {
     "prompt_tokens": 6.0,
     "completion_tokens": 2.0,
   })
-  assert_eq(usage_of([], "error: connection refused\n"), Json::null())
+  assert_eq(usage_of([], "error: connection refused\n"), null)
 }

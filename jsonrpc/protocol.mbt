@@ -104,9 +104,9 @@ fn classify_incoming(message : Json) -> Incoming {
     match message {
       { "id": id, "params": params, .. } =>
         PeerRequest({ id, method_, params, })
-      { "id": id, .. } => PeerRequest({ id, method_, params: Json::null(), })
+      { "id": id, .. } => PeerRequest({ id, method_, params: null, })
       { "params": params, .. } => Notification(method_, params)
-      _ => Notification(method_, Json::null())
+      _ => Notification(method_, null)
     }
   } else {
     match message {
@@ -156,7 +156,7 @@ fn parse_outcome(message : Json) -> Json raise ResponseError {
   match message {
     { "error": error, .. } if !(error is Null) => raise parse_error(error)
     { "result": value, .. } => value
-    _ => Json::null()
+    _ => null
   }
 }
 

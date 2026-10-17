@@ -671,7 +671,7 @@ test "a page's account of its document is read whole or not at all" {
   assert_eq((document.url, document.title), ("https://example.com/", ""))
   // No history entry is said as null, which is not the same as not saying.
   let without = account.copy()
-  without["entry"] = Json::null()
+  without["entry"] = null
   let document : Document = @json.from_json(Json::object(without))
   assert_true(document.entry is None)
   for missing in ["origin", "entry", "complete", "url", "title"] {

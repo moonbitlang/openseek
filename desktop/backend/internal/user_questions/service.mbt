@@ -128,9 +128,9 @@ pub fn Service::answer(
 ///|
 fn Request::result(self : Request) -> Json {
   let (status, answers) : (String, Json) = match self.outcome {
-    Pending => ("pending", Json::null())
+    Pending => ("pending", null)
     Answered(answers) => ("answered", Json(answers))
-    Skipped => ("skipped", Json::null())
+    Skipped => ("skipped", null)
   }
   { "id": self.pending.id, "status": status, "answers": answers }
 }
@@ -168,7 +168,7 @@ pub async fn Service::wait(
   if entry.feedback is Returned {
     entry.result()
   } else {
-    { "id": entry.pending.id, "status": "pending", "answers": Json::null() }
+    { "id": entry.pending.id, "status": "pending", "answers": null }
   }
 }
 

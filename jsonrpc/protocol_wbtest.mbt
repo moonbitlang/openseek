@@ -126,7 +126,7 @@ test "classify_incoming prefers error over result when a reply has both" {
     classify_incoming({
       "jsonrpc": "2.0",
       "id": 5,
-      "result": Json::null(),
+      "result": null,
       "error": { "code": -1, "message": "boom" },
     }) {
     Reply(5, Err(Failed(code~, message~, data~))) => {
@@ -145,7 +145,7 @@ test "classify_incoming ignores an explicit null error and returns the result" {
       "jsonrpc": "2.0",
       "id": 6,
       "result": { "ok": true },
-      "error": Json::null(),
+      "error": null,
     }) {
     Reply(6, Ok(value)) => assert_true(value is { "ok": True, .. })
     _ => fail("expected the null error to be ignored and the result returned")
@@ -156,8 +156,7 @@ test "classify_incoming ignores an explicit null error and returns the result" {
 test "classify_incoming treats a present null id as a peer request" {
   // JSON-RPC 2.0: a notification omits `id`; a present `id: null` is a request
   // that must be answered (echoing the null id).
-  match
-    classify_incoming({ "jsonrpc": "2.0", "id": Json::null(), "method": "ping" }) {
+  match classify_incoming({ "jsonrpc": "2.0", "id": null, "method": "ping" }) {
     PeerRequest(request) => {
       assert_true(request.id is Null)
       assert_eq(request.method_, "ping")
@@ -185,11 +184,7 @@ test "a reply with neither result nor error is a successful empty result" {
 ///|
 test "classify_incoming accepts an exact integer reply id" {
   match
-    classify_incoming({
-      "jsonrpc": "2.0",
-      "id": Json(3.0),
-      "result": Json::null(),
-    }) {
+    classify_incoming({ "jsonrpc": "2.0", "id": Json(3.0), "result": null }) {
     Reply(3, Ok(_)) => ()
     _ => fail("expected an exact integer id to route")
   }
@@ -200,11 +195,7 @@ test "classify_incoming rejects a fractional reply id as unknown" {
   // 1.5 truncates to 1 under `to_int`; accepting it would misroute the reply to
   // pending request 1.
   match
-    classify_incoming({
-      "jsonrpc": "2.0",
-      "id": Json(1.5),
-      "result": Json::null(),
-    }) {
+    classify_incoming({ "jsonrpc": "2.0", "id": Json(1.5), "result": null }) {
     Unknown => ()
     _ => fail("expected a fractional id to be Unknown")
   }
@@ -217,7 +208,7 @@ test "classify_incoming rejects an out-of-range reply id as unknown" {
     classify_incoming({
       "jsonrpc": "2.0",
       "id": Json(4294967297.0),
-      "result": Json::null(),
+      "result": null,
     }) {
     Unknown => ()
     _ => fail("expected an out-of-range id to be Unknown")

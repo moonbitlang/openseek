@@ -1500,7 +1500,7 @@ test "Codex update handlers are pure and idempotent" {
     Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 0 }),
     Reply(kind=CodexAccountReply, value={
       "requiresOpenaiAuth": true,
-      "account": Json::null(),
+      "account": null,
     }),
     Reply(kind=CodexModelsReply, value={ "data": [] }),
     Reply(
@@ -2222,7 +2222,7 @@ test "background Codex metadata does not settle a foreground action" {
     dispatch,
     Reply(kind=CodexAccountReply, value={
       "requiresOpenaiAuth": true,
-      "account": Json::null(),
+      "account": null,
     }),
     state,
     @interop.ChannelId::Local,

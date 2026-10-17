@@ -1,6 +1,6 @@
 ///|
 test "questions support optional choices and preserve exact text" {
-  for options in [Json::null(), Json(["A", "B"])] {
+  for options in [null, Json(["A", "B"])] {
     let payload : @protocol.AskUserPayload = @json.from_json({
       "questions": [
         {

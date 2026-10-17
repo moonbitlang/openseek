@@ -139,7 +139,7 @@ pub impl ToJson for UserQuestionAnswer with fn to_json(self) {
   {
     "id": self.id,
     "session": self.session,
-    "answers": self.answers.map_or(Json::null(), answers => Json(answers)),
+    "answers": self.answers.map_or(null, answers => Json(answers)),
   }
 }
 

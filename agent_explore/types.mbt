@@ -104,7 +104,7 @@ fn ExploreReport::parse(json : Json) -> Result[ExploreReport, String] {
 
 ///|
 test "parse reports an error on malformed json" {
-  guard ExploreReport::parse(Json::null()) is Err(_) else {
+  guard ExploreReport::parse(null) is Err(_) else {
     fail("expected parse error")
   }
 }

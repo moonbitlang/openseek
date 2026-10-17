@@ -146,7 +146,7 @@ fn fetch_console_roster(
 /// The error line of a failed sign-out: the relay's `{error}` body when it
 /// sent one, the HTTP status otherwise.
 fn sign_out_error(status : Int32, body : String) -> String {
-  if (@json.parse(body) catch { _ => Json::null() }) is Object(fields) &&
+  if (@json.parse(body) catch { _ => null }) is Object(fields) &&
     @jsonx.json_text(fields, "error") is Some(message) {
     return message
   }

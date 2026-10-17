@@ -66,7 +66,7 @@ async fn mock_mcp_endpoint(
           conn.send_response(200, "OK")
           return
         }
-        let message = @json.parse(text) catch { _ => Json::null() }
+        let message = @json.parse(text) catch { _ => null }
         match message {
           { "method": "initialize", "id": id, .. } => {
             let reply : Json = {
@@ -202,9 +202,7 @@ async test "a server ping mid-stream is answered while the stream is open" {
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch {
-            _ => Json::null()
-          }
+          let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)
@@ -264,9 +262,7 @@ async test "an http error fails the request fast" {
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch {
-            _ => Json::null()
-          }
+          let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)
@@ -319,9 +315,7 @@ async test "tools/list waits for the initialized notification to complete" {
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch {
-            _ => Json::null()
-          }
+          let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)

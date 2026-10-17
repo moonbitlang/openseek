@@ -2645,7 +2645,7 @@ fn CodexPendingRequest::response(
     "mcpServer/elicitation/request" => {
       guard decision is String(decision_name) else { return None }
       if decision_name == "decline" || decision_name == "cancel" {
-        Some({ "action": Json(decision_name), "content": Json::null() })
+        Some({ "action": Json(decision_name), "content": null })
       } else {
         let text = self.answers
           .get("__content")
@@ -3111,7 +3111,7 @@ test "Codex interrupted history is not a running signal" {
           "id": "turn-1",
           "status": "interrupted",
           "startedAt": 100,
-          "completedAt": Json::null(),
+          "completedAt": null,
           "items": [],
         },
       ],
@@ -3127,7 +3127,7 @@ test "Codex interrupted history is not a running signal" {
           "id": "turn-1",
           "status": "inProgress",
           "startedAt": 100,
-          "completedAt": Json::null(),
+          "completedAt": null,
           "items": [],
         },
       ],

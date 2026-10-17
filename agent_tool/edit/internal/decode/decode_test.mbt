@@ -166,7 +166,7 @@ test "decode rejects missing required fields" {
 
 ///|
 test "decode rejects non-object arguments" {
-  assert_decode_error(Json::null(), "object arguments")
+  assert_decode_error(null, "object arguments")
 }
 
 ///|

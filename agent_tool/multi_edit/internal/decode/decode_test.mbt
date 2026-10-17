@@ -231,7 +231,7 @@ test "decode lists present keys when a required field is misnamed" {
 
 ///|
 test "decode rejects non-object arguments" {
-  assert_decode_args_error(Json::null(), "object arguments")
+  assert_decode_args_error(null, "object arguments")
 }
 
 ///|

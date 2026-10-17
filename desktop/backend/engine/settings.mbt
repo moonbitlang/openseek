@@ -98,7 +98,7 @@ async fn load_engine_settings(runtime_dir : @pathx.Path?) -> EngineSettings {
   let fields : Map[String, Json] = Map([])
   if runtime_dir is Some(dir) &&
     (@fsx.try_read_text(settings_file(dir)) catch { _ => None }) is Some(text) &&
-    (@json.parse(text) catch { _ => Json::null() }) is Object(parsed) {
+    (@json.parse(text) catch { _ => null }) is Object(parsed) {
     for key, value in parsed {
       fields[key] = value
     }

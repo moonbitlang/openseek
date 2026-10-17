@@ -79,7 +79,7 @@ fn CodexError::log(self : CodexError) -> Unit {
           "method": method_,
           "code": code,
           "error_message": message,
-          "data": data.unwrap_or(Json::null()),
+          "data": data.unwrap_or(null),
         }
     TransportClosed(method_~) =>
       @xlog.error(category="codex") <?

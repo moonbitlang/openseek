@@ -123,7 +123,7 @@ pub fn ReviewReport::validate(self : ReviewReport) -> Array[String] {
 
 ///|
 test "parse reports an error on malformed json" {
-  guard ReviewReport::parse(Json::null()) is Err(_) else {
+  guard ReviewReport::parse(null) is Err(_) else {
     fail("expected parse error")
   }
 }

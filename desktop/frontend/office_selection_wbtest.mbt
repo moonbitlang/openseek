@@ -34,7 +34,7 @@ fn office_selection_model(
     surface_html: "",
     item_count: 1,
     warning: "",
-    annotations: Json::null(),
+    annotations: null,
   }
   let docs : Map[@common.Uri, @fileeditor.Doc] = Map([])
   docs[path] = {

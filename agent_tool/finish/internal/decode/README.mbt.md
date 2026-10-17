@@ -45,14 +45,14 @@ test "every malformed shape ends the run with an empty answer" {
     ),
   )
   debug_inspect(
-    @decode.decode({ "answer": Json::null() }),
+    @decode.decode({ "answer": null }),
     content=(
       #|{ answer: "" }
     ),
   )
   // Not even an object.
   debug_inspect(
-    @decode.decode(Json::null()),
+    @decode.decode(null),
     content=(
       #|{ answer: "" }
     ),

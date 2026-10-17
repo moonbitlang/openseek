@@ -327,7 +327,7 @@ test "steer receipts preserve ordered images and legacy text encoding" {
   )
   for
     invalid in [
-      Json::null(),
+      null,
       Json(1),
       { "type": "text", "text": "wrong shape" },
       [{ "type": "unknown" }],
