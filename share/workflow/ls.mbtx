@@ -1,0 +1,129 @@
+///|
+import {
+  "moonbitlang/async@0.22.4",
+  "moonbitlang/async@0.22.4/fs",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/json",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x@0.5.5/sys",
+}
+
+///|
+/// Leave room below mbtx's 48,000-byte transport limit for run diagnostics.
+const OutputBytes : Int32 = 40_000
+
+///|
+/// Bound and quote diagnostics without splitting Unicode or output lines.
+fn error_text(error : Error) -> String {
+  let message = error.to_string()
+  let out = StringBuilder()
+  for char in message.iter().take(256) {
+    out.write_char(char)
+  }
+  if out.to_string().length() < message.length() {
+    out.write_string("… [error truncated]")
+  }
+  Json(out.to_string()).stringify()
+}
+
+///|
+async fn main {
+  let command = @argparse.Command(
+    "ls.mbtx",
+    about="List one level of each directory with mbtx(filename=\"@builtin/ls.mbtx\", args=[\"src\", \"tests\"]). Defaults to cwd (workspace unless overridden). Names are JSON-quoted and sorted; types are file, directory, symlink, or another filesystem kind. Hidden entries require -a/--all. No recursion or symlink traversal of entries. Output is bounded to 40000 UTF-8 bytes; truncated listings report shown/total counts. Use -- before paths beginning with '-'.",
+    flags=[
+      @argparse.FlagArg(
+        "all",
+        short='a',
+        long="all",
+        about="Include hidden entries (excluding . and ..).",
+      ),
+    ],
+    positionals=[
+      @argparse.PositionArg(
+        "paths",
+        num_args=@argparse.ValueRange(lower=0),
+        default_values=["."],
+        about="Directories to list, relative to cwd or absolute.",
+      ),
+    ],
+  )
+  let parsed = command.parse() catch {
+    error => {
+      println("error: ls \{error_text(error)}")
+      @sys.exit(1)
+      return
+    }
+  }
+  let paths = parsed.values.get("paths").unwrap_or(["."])
+  if paths.iter().any(path => path.is_empty()) {
+    println("error: ls directory path must not be empty")
+    @sys.exit(1)
+    return
+  }
+  let include_hidden = parsed.flags.get("all").unwrap_or(false)
+  let mut remaining = OutputBytes - 256
+  let mut failed = false
+  for index, path in paths {
+    let header = "=== \{Json(path).stringify()} ==="
+    let header_bytes = @utf8.encode(header).length() + 1
+    // Reserve room for a bounded directory error or its status footer.
+    if remaining < header_bytes + 2048 {
+      println(
+        "<system>truncated=true skipped_directories=\{paths.length() - index} note=batch output budget exhausted; request remaining directories separately</system>",
+      )
+      break
+    }
+    println(header)
+    remaining -= header_bytes
+    let names = @fs.readdir(path, include_hidden~) catch {
+      error => {
+        let line = "error reading directory: \{error_text(error)}"
+        println(line)
+        remaining -= @utf8.encode(line).length() + 1
+        failed = true
+        continue
+      }
+    }
+    // Also hide dot-prefixed names on Windows, where readdir's hidden flag
+    // otherwise only checks the filesystem attribute.
+    let names = names.filter(name => include_hidden || !name.has_prefix("."))
+    names.sort_by((a, b) => a.lexical_compare(b))
+    let mut shown = 0
+    let mut entry_errors = 0
+    for name in names {
+      let line = try {
+        let kind = match @fs.kind("\{path}/\{name}", follow_symlink=false) {
+          Regular => "file"
+          Directory => "directory"
+          SymLink => "symlink"
+          Socket => "socket"
+          Pipe => "pipe"
+          BlockDevice => "block-device"
+          CharDevice => "char-device"
+          Unknown => "unknown"
+        }
+        "\{kind} \{Json(name).stringify()}"
+      } catch {
+        error => {
+          failed = true
+          entry_errors += 1
+          "error reading entry \{Json(name).stringify()}: \{error_text(error)}"
+        }
+      }
+      let bytes = @utf8.encode(line).length() + 1
+      if bytes + 256 > remaining {
+        break
+      }
+      println(line)
+      remaining -= bytes
+      shown += 1
+    }
+    let footer = "<system>shown_entries=\{shown} total_entries=\{names.length()} truncated=\{shown < names.length()} entry_errors=\{entry_errors}</system>"
+    println(footer)
+    remaining -= @utf8.encode(footer).length() + 1
+  }
+  if failed {
+    @sys.exit(1)
+  }
+}

@@ -5,6 +5,7 @@ alongside the official documentation in `share/doc/moonbit/`.
 `Bundled resources` points to `share/`; the engine's environment prompt gives
 this resource root's absolute path.
 
+- `ls.mbtx` lists directories with entry types and bounded output (see below).
 - `read.mbtx` reads text files with numbered lines and per-file ranges (see below).
 - `rg.mbtx` searches text with ripgrep: its arguments go to `rg` unchanged
   (ripgrep flags and Rust regex, not POSIX grep), output is `path:line:text`
@@ -37,6 +38,29 @@ Missing bundled names do not fall back to workspace files. Other `@namespace/`
 prefixes are reserved and currently rejected. To customize a script, save the
 modified source with an ordinary workspace filename; never send source with
 `@builtin/`.
+
+## Listing directories
+
+```json
+{"filename":"@builtin/ls.mbtx","args":["-a","src","tests"]}
+```
+
+Lists one level of each directory; omitted paths default to cwd. Hidden
+entries are excluded unless `-a`/`--all` is given; `.` and `..` are never
+included. `--` ends option parsing for paths starting with a dash. Relative
+paths use cwd and absolute paths are accepted. Each directory has a quoted
+heading, sorted JSON-quoted entry names prefixed with their filesystem type,
+and a footer with `shown_entries`, `total_entries`, `truncated`, and
+`entry_errors`. Counts refer to entries after hidden-file filtering.
+Symlink entries are identified without following their targets, including
+broken links; an explicitly requested symlink to a directory can be listed.
+
+The entire batch is bounded to 40000 UTF-8 bytes, preserving complete entry
+lines. Truncation exits zero and explicitly reports omitted entries or
+directories; request remaining directories separately or use a focused
+`@builtin/rg.mbtx` file search. Read or stat failures are errors, never empty
+directory results. Errors exit nonzero while allowing later entries and
+directories to be listed within the remaining budget. `--help` shows usage.
 
 ## Reading files
 

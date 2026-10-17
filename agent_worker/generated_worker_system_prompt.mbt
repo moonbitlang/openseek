@@ -124,7 +124,7 @@ fn worker_system_prompt() -> String {
     #|
     #|| Command     | Alternatives     |
     #||-------------|------------------|
-    #|| ls          | @fs.readdir(dir) |
+    #|| ls          | `@builtin/ls.mbtx` (directory paths; `-a` includes hidden entries) |
     #|| find        | @shell.glob(pattern), spread into args as `[..files]` |
     #|| cat         | @fs.read_file(p).text() |
     #|| head/tail   | slice the split text; wc -l → count it |
@@ -149,6 +149,8 @@ fn worker_system_prompt() -> String {
     #|denies writes outside it.
     #|
     #|## Reading files
+    #|
+    #|Discover unknown paths with `mbtx(filename="@builtin/ls.mbtx", args=["src", "tests"])`: one level, cwd by default, `-a` includes hidden entries; output includes entry types and truncation counts.
     #|
     #|Read through `mbtx`: `{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`.
     #|Omit source. Selectors are `path`, `path:start`, or `path:start:end`, with

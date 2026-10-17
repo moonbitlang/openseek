@@ -175,7 +175,7 @@ A directory is refused with the way to list it instead.
 ```mooncram
 $ moonx "$READ" dir
 === "dir" ===
-error reading file: "path is a directory; list it with mbtx (@fs.readdir/@shell.glob), then read specific files"
+error reading file: "path is a directory; list it with mbtx @builtin/ls.mbtx, then read specific files"
 [1]
 ```
 

@@ -76,6 +76,16 @@ foreground/background argument to choose. A standalone definition without a
 job runtime stays in the foreground for up to 300 seconds of run time and is
 cancelled at that deadline.
 
+## Listing directories
+
+Use `{"filename":"@builtin/ls.mbtx","args":["src","tests"]}` to list one
+level of each directory. Omit paths to list cwd; `-a`/`--all` includes hidden
+entries, and `--` ends option parsing. Names are JSON-quoted and sorted, with
+entry types (including symlinks, without following their targets). Output is
+bounded to 40000 UTF-8 bytes with shown/total counts and explicit truncation.
+Directory and entry errors fail the call; later directories are still listed
+while budget remains. No standalone `ls` tool is registered.
+
 ## Reading files
 
 Use `{"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}`

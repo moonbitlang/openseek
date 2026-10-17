@@ -92,7 +92,10 @@ fn default_prompt() -> String {
     #|
     #|Use the returned text and file-status footers directly
     #|to do the task, including empty/missing-file checks. List directories only to
-    #|discover unknown paths. Reread only when needed content is missing,
+    #|discover unknown paths, using `mbtx(filename="@builtin/ls.mbtx", args=["src", "tests"])`.
+    #|It lists one level, defaults to cwd with no paths, and accepts `-a` for hidden
+    #|entries. Names are quoted and sorted, with entry types and truncation counts.
+    #|Reread only when needed content is missing,
     #|truncated, or changed.
     #|
     #|`mbtx` is powerful since it can reuse the whole MoonBit ecosystem
@@ -164,7 +167,7 @@ fn default_prompt() -> String {
     #|
     #|| Command     | Alternatives     |
     #||-------------|------------------|
-    #|| ls          | @fs.readdir(dir) |
+    #|| ls          | `@builtin/ls.mbtx` (directory paths; `-a` includes hidden entries) |
     #|| find        | @shell.glob(pattern), spread into args as `[..files]` |
     #|| cat         | @fs.read_file(p).text() |
     #|| head/tail   | slice the split text; wc -l → count it |

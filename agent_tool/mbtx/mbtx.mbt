@@ -1860,7 +1860,14 @@ fn description(
     #|The script runs on wasm. Import "moonbitlang/core/env" and read
     #|`@env.args()[1:]` to skip the executable name.
     #|Arguments are passed verbatim, without shell expansion or splitting.
-    #|When bundled resources are available, these scripts are already bundled:
+    #|These scripts are built into OpenSeek:
+    #|List directories with {"filename":"@builtin/ls.mbtx","args":["src","tests"]}.
+    #|One level only; no paths lists cwd. Use -a/--all for hidden entries and --
+    #|before option-like paths. Sorted, JSON-quoted names include filesystem types;
+    #|symlink entries are not followed. Output is bounded to 40000 UTF-8 bytes,
+    #|with shown_entries/total_entries/truncated footers and skipped_directories
+    #|when the batch budget runs out. Read/stat errors fail the call while later
+    #|entries/directories continue within budget. args=["--help"] gives usage.
     #|Read text files with {"filename":"@builtin/read.mbtx","args":["src/main.mbt:120:200","moon.mod"]}.
     #|Selectors: path, path:start, path:start:end (inclusive, 1-based); batch in args.
     #|Use ["--literal","name:123"] for numeric-colon filenames, and "--" before

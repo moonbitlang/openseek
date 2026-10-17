@@ -25,7 +25,7 @@
 
 ## 读取文件
 
-已知路径的文件，立即通过 `mbtx` 和 `@builtin/read.mbtx` 一起读取；`path:start:end` 选择从 1 开始、包含首尾的行范围。参数见工具说明。直接根据返回文本和末尾的文件状态完成任务，包括判断文件为空或不存在。仅在需要发现未知路径时列目录。只有所需内容缺失、被截断或发生变化时才重读。
+已知路径的文件，立即通过 `mbtx` 和 `@builtin/read.mbtx` 一起读取；`path:start:end` 选择从 1 开始、包含首尾的行范围。参数见工具说明。直接根据返回文本和末尾的文件状态完成任务，包括判断文件为空或不存在。仅在需要发现未知路径时用 `mbtx(filename="@builtin/ls.mbtx", args=["src", "tests"])` 列目录：只列一层，不传路径时列 cwd，`-a` 包含隐藏项；结果包含排序并转义的名称、类型和截断计数。只有所需内容缺失、被截断或发生变化时才重读。
 
 ## 运行命令
 
@@ -131,7 +131,7 @@ async fn main {
 
 | 命令 | 替代方式 |
 | --- | --- |
-| ls | @fs.readdir(dir) |
+| ls | `@builtin/ls.mbtx`（参数为目录路径；`-a` 包含隐藏项） |
 | find | @shell.glob(pattern)，用 `[..files]` 展开到参数中 |
 | cat | @fs.read_file(p).text() |
 | head/tail | 将文本拆分后切片；wc -l → 计数 |
