@@ -156,6 +156,49 @@
 .office-viewer-surface .textLayer {
   cursor: text;
 }
+
+/* Host-owned page navigation has its own scrollport. The live Word/PDF
+   surface remains a stable sibling, including while the rail is collapsed. */
+.office-page-rail {
+  --office-pages-text: var(--color-text-secondary);
+  --office-pages-hover: var(--color-bg-subtle);
+  --office-pages-accent: var(--color-accent);
+  --office-pages-selected: var(--color-accent-soft);
+  --office-pages-font-size: var(--font-size-sm);
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 184px;
+  width: 184px;
+  min-height: 0;
+  margin: 8px 0 8px 8px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg-surface);
+  box-shadow: 0 3px 12px rgb(15 23 42 / 7%);
+}
+.office-page-rail.hidden { display: none; }
+.office-page-rail[data-overlay="true"] {
+  position: absolute;
+  inset: 8px auto 8px 8px;
+  margin: 0;
+  box-shadow: 0 12px 32px rgb(15 23 42 / 17%);
+}
+.office-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 6px 14px;
+  flex: 0 0 auto;
+}
+.office-page-count {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+}
 .pdf-command-row {
   display: flex;
   align-items: center;

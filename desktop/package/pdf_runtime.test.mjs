@@ -195,8 +195,20 @@ test("cancelled or retired PDF drags do not queue selection previews", async t =
   await flushTimers();
   assert.equal(captures, 0);
   emitDocument("selectionchange");
+  assert.equal(timers.size, 0);
+  emitDocument("pointerup", { pointerId: 4 });
+  await flushTimers();
+  assert.equal(captures, 0);
+  // Keyboard input starts a new selection interaction after cancellation.
+  emitHost("keydown");
+  emitDocument("selectionchange");
+  await flushTimers();
+  assert.equal(captures, 1);
+  // A fresh drag can also resume selection, but closing still retires it.
+  emitHost("pointerdown", { button: 0, pointerId: 5 });
+  emitDocument("pointerup", { pointerId: 5 });
   assert.equal(timers.size, 1);
   session.destroy();
   await flushTimers();
-  assert.equal(captures, 0);
+  assert.equal(captures, 1);
 });

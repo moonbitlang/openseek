@@ -217,6 +217,7 @@ fn apply_pdf_event(
       command = @cmd.batch([
         @office_viewer.pdf_page_command(OfficeSurfaceId, page),
         @office_viewer.pdf_rotation_command(OfficeSurfaceId, document.rotation),
+        office_pages_command(state, pdf_surface_config(state, path)),
       ])
       { ..document, status: PdfReady, pages: Some(pages), page, password: "", }
     }

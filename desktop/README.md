@@ -309,11 +309,17 @@ Existing `.docx`, `.xlsx`, and `.pdf` paths open in the file panel and are read
 as bounded binary payloads (up to 20 MiB). DOCX/XLSX use the standalone viewer's
 `office.mbt` reader/layout pipeline. PDFs use its asynchronous PDF.js surface,
 with page navigation, zoom, fit to width, rotation, search, and password prompts.
+In Word and PDF previews, the **Page thumbnails** toolbar button opens a
+collapsible page navigator, initially closed. Click a thumbnail to jump to its
+page; the highlight follows document scrolling. Office Viewer provides preview
+generation, page synchronization, navigation, caching, and cleanup. OpenSeek owns its
+container and open/closed state. The navigator floats over narrow previews, and
+supports arrow keys, Home, and End for page navigation.
 The Office/PDF controls and password prompts follow the application's language
 setting. Preview and selection failures show a short message with retry guidance.
 DOCX, XLSX, and PDF previews support trackpad pinch zoom and Ctrl+wheel, with
 the toolbar percentage following the document's zoom. Ordinary two-finger
-scrolling remains available. DOCX/XLSX use the existing 50–200% range and PDFs
+scrolling remains available. DOCX/XLSX use a 10–200% range and PDFs
 use 25–400%; zooming keeps the document position under the pointer when the
 scroll range permits it. Selecting content continues to work after zooming.
 Selecting text in DOCX/PDF or a cell range in XLSX opens a preview showing its
@@ -335,13 +341,13 @@ carried into a new task worktree when necessary. Click a file reference to
 preview it and select the content to quote; attaching a document creates no
 extracted-text or JSON sidecar.
 Browser and desktop packages copy the metric-compatible Office fonts and the
-accompanying copyright, license and modification notices from the published
-`Lampese/office-viewer@0.1.3` package into the final web resource tree. The
+accompanying copyright, license and modification notices from the pinned
+`Lampese/office-viewer@0.2.3` package into the final web resource tree. The
 browser-ready fonts retain the layout engine's glyphs and metrics and use
 distinct internal names for the modified font programs. No separate font
 checkout or duplicated font assets are needed.
 
-Moon resolves the viewer from the published module declared in `moon.mod`;
+Moon resolves the viewer from the module declared in `moon.mod`;
 packaging reads its PDF runtime and font assets from the resolved package.
 The runtime and pinned PDF.js engine, worker, stylesheet, CMaps,
 standard fonts, codecs, ICC profiles, and license are packaged in both hosts;
@@ -585,3 +591,12 @@ requires GTK3 and
 `libwebkit2gtk-4.1` installed on the host system, which is the standard
 arrangement for webview-based AppImages. If your system lacks FUSE2, run it
 with `APPIMAGE_EXTRACT_AND_RUN=1`.
+
+### Office width fitting
+
+The fit-width integration requires the `Lampese/office-viewer@0.2.3`
+package for width measurement, observation, document rendering, selections,
+fonts, and PDF.js. A local Office Viewer checkout is not required.
+
+DOCX opens in Fit width. Explicit zoom and fit choices are retained per file;
+Excel opens at 100% and keeps horizontal scrolling unless Fit width is chosen.

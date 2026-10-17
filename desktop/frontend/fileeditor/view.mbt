@@ -452,6 +452,7 @@ pub fn body_view(
   )
   @html.div(class="editor-body", [
     @html.div(class="viewer-stack", [
+      office_pages_view(locale~, dispatch, state, ctx),
       viewer_host,
       office_surface,
       pdf_password_dialog(locale~, dispatch, state, ctx),
@@ -483,7 +484,7 @@ fn active_office_surface(
   }
   match state.docs.get(path) {
     Some({ state: TabOffice(document~, ..), .. }) =>
-      Some(office_surface_config(state, document))
+      Some(office_surface_config(state, path, document))
     Some({ state: TabPdf(..), .. }) => Some(pdf_surface_config(state, path))
     _ => None
   }
@@ -2014,21 +2015,21 @@ fn office_viewer_toolbar(
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
-  guard active_office_surface(state, ctx) is Some(_) else {
+  guard active_office_surface(state, ctx) is Some(config) else {
     return @html.nothing
   }
   let pdf = active_pdf_document(state, ctx) is Some(_)
-  let minimum = if pdf { 25 } else { 50 }
+  let minimum = if pdf { 25 } else { 10 }
   let maximum = if pdf { 400 } else { 200 }
-  let zoom_out = if state.office_zoom <= minimum {
+  let zoom_out = if config.zoom <= minimum {
     @cmd.none
   } else {
-    dispatch(OfficeZoomChanged((state.office_zoom - 10).to_string()))
+    dispatch(OfficeZoomChanged((config.zoom - 10).to_string()))
   }
-  let zoom_in = if state.office_zoom >= maximum {
+  let zoom_in = if config.zoom >= maximum {
     @cmd.none
   } else {
-    dispatch(OfficeZoomChanged((state.office_zoom + 10).to_string()))
+    dispatch(OfficeZoomChanged((config.zoom + 10).to_string()))
   }
   @html.div(
     class="office-viewer-toolbar",
@@ -2036,6 +2037,28 @@ fn office_viewer_toolbar(
       .role("group")
       .aria_label(ui(locale, OfficeControls)),
     [
+      if config.kind == Some(Word) || pdf {
+        @html.button(
+          type_="button",
+          class=if state.office_pages_open {
+            "office-viewer-control active"
+          } else {
+            "office-viewer-control"
+          },
+          title=ui(locale, OfficePages),
+          disabled=pdf &&
+            active_pdf_document(state, ctx)
+            .map(value => value.1.status != PdfReady)
+            .unwrap_or(true),
+          attrs=@html.Attrs::build()
+            .aria_label(ui(locale, OfficePages))
+            .aria_pressed(state.office_pages_open.to_string()),
+          on_click=dispatch(OfficePagesToggled),
+          @icons.icon(@icons.icon_layout_sidebar_left),
+        )
+      } else {
+        @html.nothing
+      },
       @html.button(
         type_="button",
         class="office-viewer-control",
@@ -2071,21 +2094,38 @@ fn office_viewer_toolbar(
         type_="button",
         class="office-viewer-control",
         title=ui(locale, OfficeZoomOut),
-        disabled=state.office_zoom <= minimum,
+        disabled=config.zoom <= minimum,
         on_click=zoom_out,
         attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomOut)),
         "−",
       ),
-      @html.span(class="office-viewer-zoom-value", "\{state.office_zoom}%"),
+      @html.span(class="office-viewer-zoom-value", "\{config.zoom}%"),
       @html.button(
         type_="button",
         class="office-viewer-control",
         title=ui(locale, OfficeZoomIn),
-        disabled=state.office_zoom >= maximum,
+        disabled=config.zoom >= maximum,
         on_click=zoom_in,
         attrs=@html.Attrs::build().aria_label(ui(locale, OfficeZoomIn)),
         "+",
       ),
+      if pdf {
+        @html.nothing
+      } else {
+        @html.button(
+          type_="button",
+          class=if ctx.active_file is Some(path) &&
+            office_zoom_preference(state, path, config.kind.unwrap_or(Word)).fit_width {
+            "office-viewer-control active"
+          } else {
+            "office-viewer-control"
+          },
+          title=ui(locale, PdfFitWidth),
+          attrs=@html.Attrs::build().aria_label(ui(locale, PdfFitWidth)),
+          on_click=dispatch(OfficeFitWidth),
+          "↔",
+        )
+      },
       if pdf {
         @html.nothing
       } else {

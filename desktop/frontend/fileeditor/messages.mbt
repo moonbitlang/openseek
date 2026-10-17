@@ -5,6 +5,11 @@ priv enum UiMessage {
   UnresolvedGithubConversations
   AddToContext
   OfficeControls
+  OfficePages
+  OfficeClosePages
+  OfficePageLabel
+  OfficePageCount
+  OfficePageUnavailable
   OfficeFind
   OfficeZoomOut
   OfficeZoomIn
@@ -192,6 +197,32 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, OfficePages) => "Page thumbnails"
+    (SimplifiedChinese, OfficePages) => "页面缩略图"
+    (TraditionalChinese, OfficePages) => "頁面縮圖"
+    (Japanese, OfficePages) => "ページのサムネイル"
+    (Spanish, OfficePages) => "Miniaturas de páginas"
+    (English, OfficeClosePages) => "Hide page thumbnails"
+    (SimplifiedChinese, OfficeClosePages) => "收起页面缩略图"
+    (TraditionalChinese, OfficeClosePages) => "收合頁面縮圖"
+    (Japanese, OfficeClosePages) => "サムネイルを閉じる"
+    (Spanish, OfficeClosePages) => "Ocultar miniaturas"
+    (English, OfficePageLabel) => "Page {page}"
+    (SimplifiedChinese, OfficePageLabel) => "第 {page} 页"
+    (TraditionalChinese, OfficePageLabel) => "第 {page} 頁"
+    (Japanese, OfficePageLabel) => "{page} ページ"
+    (Spanish, OfficePageLabel) => "Página {page}"
+    (English, OfficePageCount) => "Pages · {count}"
+    (SimplifiedChinese, OfficePageCount) => "{count} 页"
+    (TraditionalChinese, OfficePageCount) => "{count} 頁"
+    (Japanese, OfficePageCount) => "{count} ページ"
+    (Spanish, OfficePageCount) => "Páginas · {count}"
+    (English, OfficePageUnavailable) => "Preview unavailable"
+    (SimplifiedChinese, OfficePageUnavailable) => "预览不可用"
+    (TraditionalChinese, OfficePageUnavailable) => "預覽無法使用"
+    (Japanese, OfficePageUnavailable) =>
+      "プレビューを表示できません"
+    (Spanish, OfficePageUnavailable) => "Vista previa no disponible"
     (English, OfficeControls) => "Office viewer controls"
     (SimplifiedChinese, OfficeControls) => "文档预览控件"
     (TraditionalChinese, OfficeControls) => "文件預覽控制項"
