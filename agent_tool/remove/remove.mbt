@@ -108,8 +108,9 @@ async fn execute_with_workspace(
         Some(
           if version.entries.last() is Some((_, Directory(_))) {
             let files = version.entries
+              .iter()
               .filter(entry => entry.1 is File(_))
-              .length()
+              .count()
             "recursive directory deletion: \{files} files and \{version.entries.length() - files - 1} subdirectories; all contents will be removed"
           } else if file_state.get(path) is Some(Created) {
             "the file's content has changed since the agent last wrote it"

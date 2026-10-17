@@ -164,7 +164,11 @@ pub async fn resume_running(
   mutex.acquire()
   defer mutex.release()
   let (entries, _) = load_entries(geometry.common_git_dir)
-  guard entries.filter(e => e.name == name && !e.state.is_terminal()).last()
+  // Same last-match rule as `filter(..).last()`, but the reverse walk stops at
+  // the first hit instead of filtering the registry into a throwaway array.
+  guard entries
+    .rev_iter()
+    .find_first(e => e.name == name && !e.state.is_terminal())
     is Some(entry) else {
     return Err("no active subtask named \{name}")
   }

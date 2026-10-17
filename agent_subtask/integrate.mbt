@@ -59,10 +59,17 @@ async fn reload_entry(
   entry : SubtaskEntry,
 ) -> SubtaskEntry {
   let (entries, _) = load_entries(common_git_dir)
-  entries
-  .filter(e => e.name == entry.name && e.nonce == entry.nonce)
-  .last()
-  .unwrap_or(entry)
+  // Walk the registry BACK TO FRONT: the LAST matching record is the newest
+  // write and therefore what `filter(..).last()` returned, and the first hit
+  // ends the walk. `rev_iter` is a lazy back-to-front view, not a copy, so
+  // nothing is materialized on the way.
+  for candidate in entries.rev_iter() {
+    if candidate.name == entry.name && candidate.nonce == entry.nonce {
+      return candidate
+    }
+  }
+  // No record matched (or the registry is empty): fall back to the snapshot.
+  entry
 }
 
 ///|

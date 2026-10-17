@@ -267,7 +267,7 @@ fn schedules_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
         ),
       )
     }
-    for run in runs.rev() {
+    for run in runs.rev_iter() {
       section.push(
         @html.div(class="schedule-card", [
           @html.h3(run.name),
