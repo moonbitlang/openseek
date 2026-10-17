@@ -1,1 +1,3 @@
-
+import {
+  "openseek_desktop/routes",
+}

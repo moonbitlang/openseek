@@ -1,4 +1,6 @@
 import {
+  "openseek_desktop/routes",
+  "openseek_desktop/uri",
   "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/backend/api",
   "openseek_desktop/backend/auth",

@@ -154,7 +154,7 @@ Place the sidebar toggle, then global **Back** and **Forward** buttons after
 macOS window controls. Center them on the shared header row, with compact,
 unboxed outline arrows and a subdued disabled state. Keep the three controls visible in narrow layouts and
 reserve their space in the shared header. Disable arrows at the ends of the
-application's history; the initial page has no invented predecessor.
+application's history; a direct link has no invented predecessor.
 
 History records destination identities: OpenSeek conversations, Codex threads,
 new-chat entry pages, local drafts, Settings, Skills lists and details, and Scheduled tasks. An
@@ -164,17 +164,24 @@ restore the exact target while current application state continues to own
 content, unfinished input, running work and errors. Sending a draft for the
 first time replaces its identity in history with the durable conversation.
 
-Application history lasts for the window or browser page. Leaving a draft
-keeps it available; an expired draft replaces its history entry with the
-corresponding new-chat page. Missing stored targets and load failures retain
-distinct unavailable states. Offline devices keep their connection UI.
+Browser URLs use `/device/:device/...` paths. Browser controls and application
+arrows traverse the same history; refresh restores the current target and the
+known history segment in that tab. A tab remains bound to one device; links to
+another device open separately. Desktop history lasts for the window. Draft
+URLs identify in-memory drafts and do not promise recovery of unsaved content
+after refresh. An expired draft replaces its current history entry with the
+corresponding new-chat page and clears the old conversation selection. Confirmed
+missing stored targets and load failures retain their distinct unavailable
+states. Offline and connecting devices keep their connection UI.
 
-Creating a blank New chat page from another destination pushes an entry;
-clicking New chat again while already blank is a no-op. The first input,
-attachment or other content replaces that entry with a draft identity.
-Clearing the content retains that identity. First send then replaces the draft
-with its stored identity. Browser URLs and native browser history are unchanged
-in this layer; the following client-routing change connects them.
+`/device/:device/chat/new` and `/device/:device/codex/new` are stable blank
+entry pages. Clicking New chat uses the same flow as opening these URLs.
+Creating a blank page from another destination pushes an entry; clicking New
+chat again while already blank is a no-op. The first input, attachment or
+other draft content replaces that entry with `/draft/:id`, without pushing.
+Clearing the content afterwards retains the draft identity. The implementation
+may allocate an internal ID before content exists; that alone does not expose
+it in the URL. First send then replaces the draft with its stored identity.
 
 Settings, Skills, and Scheduled tasks share the `page_shell` header with a
 single `h1` and one scrolling content column. Page actions live with their

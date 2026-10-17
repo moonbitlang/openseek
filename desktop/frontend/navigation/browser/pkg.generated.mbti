@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/navigation/browser"
+
+import {
+  "moonbit-community/rabbita/cmd",
+  "moonbit-community/rabbita/sub",
+}
+
+// Values
+pub fn listen(String, @cmd.Emit[Snapshot]) -> @sub.Sub
+
+pub fn promote(String, String) -> @cmd.Cmd
+
+pub fn visit(String, replace~ : Bool) -> @cmd.Cmd
+
+// Errors
+
+// Types and methods
+pub struct Snapshot {
+  path : String
+  can_back : Bool
+  can_forward : Bool
+} derive(Eq)
+pub fn Snapshot::equal(Self, Self) -> Bool
+pub fn Snapshot::not_equal(Self, Self) -> Bool
+
+// Type aliases
+
+// Traits

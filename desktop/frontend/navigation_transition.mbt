@@ -1,8 +1,8 @@
 ///|
 priv enum NavigationWrite {
   Keep
-  Push(@navigation.Location)
-  Replace(@navigation.Location)
+  Push(@routes.Location)
+  Replace(@routes.Location)
 }
 
 ///|
@@ -51,12 +51,16 @@ fn NavigationObservation::addresses_blank(
 ///|
 fn promote_navigation(
   model : Model,
-  old : @navigation.Location,
-  promoted : @navigation.Location,
+  old : @routes.Location,
+  promoted : @routes.Location,
 ) -> (@cmd.Cmd, Model) {
   let navigation = model.navigation
   (
-    @cmd.none,
+    if !model.is_desktop && navigation.browser_ready {
+      @navigation_browser.promote(old.path(), promoted.path())
+    } else {
+      @cmd.none
+    },
     {
       ..model,
       navigation: {

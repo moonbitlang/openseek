@@ -1,11 +1,15 @@
 ///|
 fn navigation_visit(
   model : Model,
-  location : @navigation.Location,
+  location : @routes.Location,
   replace~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   let navigation = model.navigation
-  let history = navigation.history.visit(location, replace~)
+  let history = if model.is_desktop {
+    navigation.history.visit(location, replace~)
+  } else {
+    navigation.history
+  }
   let next = {
     ..model,
     chat_creation: if navigation.location is Some(_) {
@@ -23,8 +27,16 @@ fn navigation_visit(
       location: Some(location),
       phase: Active,
       history,
-      can_back: history.can_back(),
-      can_forward: history.can_forward(),
+      can_back: if model.is_desktop {
+        history.can_back()
+      } else {
+        navigation.can_back
+      },
+      can_forward: if model.is_desktop {
+        history.can_forward()
+      } else {
+        navigation.can_forward
+      },
       new_chat_requested: false,
       revision: if navigation.location is Some(_) {
         navigation.revision + 1
@@ -33,7 +45,14 @@ fn navigation_visit(
       },
     },
   }
-  (@cmd.none, next)
+  (
+    if !model.is_desktop && navigation.browser_ready {
+      @navigation_browser.visit(location.path(), replace~)
+    } else {
+      @cmd.none
+    },
+    next,
+  )
 }
 
 ///|
@@ -96,6 +115,16 @@ fn update_navigation(
         model.navigation.can_forward
       }
       guard allowed else { return (@cmd.none, model) }
+      if !model.is_desktop {
+        return (
+          if message is Back {
+            @nav.back()
+          } else {
+            @nav.forward()
+          },
+          model,
+        )
+      }
       let history = if message is Back {
         model.navigation.history.back()
       } else {
@@ -119,6 +148,8 @@ fn update_navigation(
         },
       })
     }
+    Browser(snapshot) => apply_browser_navigation(dispatch, snapshot, model)
+    Link(request) => follow_navigation_link(dispatch, request, model)
     Retry => {
       let (live, next) = request_sessions_refresh(
         dispatch,
