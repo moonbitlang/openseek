@@ -29,7 +29,7 @@ impl @jsonrpc.Transport for FakeTransport with fn close(self) {
 fn ok(request : Json, result : Json) -> Json {
   let id = match request {
     { "id": id, .. } => id
-    _ => Json::null()
+    _ => null
   }
   { "jsonrpc": "2.0", "id": id, "result": result }
 }
@@ -63,7 +63,7 @@ fn server_reply(request : Json) -> Json? {
     { "method": "tools/call", .. } => {
       let args = match request {
         { "params": { "arguments": args, .. }, .. } => args
-        _ => Json::null()
+        _ => null
       }
       Some(
         ok(request, {
@@ -272,12 +272,10 @@ async test "build bridges and dispatches MCP tools directly and through PTC" {
     group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
       server.run_forever(
         (_request, body, conn) => {
-          let message = @json.parse(body.read_all().text()) catch {
-            _ => Json::null()
-          }
+          let message = @json.parse(body.read_all().text()) catch { _ => null }
           let id = match message {
             { "id": id, .. } => id
-            _ => Json::null()
+            _ => null
           }
           match message {
             { "method": "initialize", .. } =>

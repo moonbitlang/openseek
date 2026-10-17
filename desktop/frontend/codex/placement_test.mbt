@@ -1,6 +1,6 @@
 ///|
 test "managed worktree snapshots use the registry checkout instead of app-server cwd" {
-  for cwd in [Json::string("/work/project"), Json::null()] {
+  for cwd in [Json::string("/work/project"), null] {
     let state = @codex.State::from_thread_snapshot({
       "thread": {
         "id": "thread-1",

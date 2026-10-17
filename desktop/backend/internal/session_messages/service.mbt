@@ -179,9 +179,9 @@ pub fn Message::status(self : Message) -> Json {
     "request_id": self.request_id,
     "target": self.target,
     "status": status,
-    "error": error.map_or(Json::null(), value => Json(value)),
+    "error": error.map_or(null, value => Json(value)),
     "feedback": feedback,
-    "feedback_error": feedback_error.map_or(Json::null(), value => Json(value)),
+    "feedback_error": feedback_error.map_or(null, value => Json(value)),
   }
 }
 

@@ -78,7 +78,7 @@ test "auth.json codec round-trips and reads corruption as signed out" {
   }
   assert_true(reloaded.account.token == "ts_secret")
   assert_true(reloaded.server_url == AccountOrigin)
-  assert_true(session_from_json(Json::null()) is None)
+  assert_true(session_from_json(null) is None)
   assert_true(session_from_json({ "server_url": "x" }) is None)
 }
 

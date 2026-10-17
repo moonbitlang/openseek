@@ -48,7 +48,7 @@ async test "legacy attempts and failures do not block a completed result" {
   let path = store.root() + "/sessions/legacy/prediction.json"
   for
     outcome in [
-      Json::null(),
+      null,
       { "kind": "failed", "message": "timeout" },
       { "kind": "cancelled" },
     ] {

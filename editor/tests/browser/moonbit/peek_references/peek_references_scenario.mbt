@@ -77,7 +77,7 @@ fn peek_references_state_json(
     "codeHasTextFocus": Json(code_viewer.has_text_focus()),
     "position": match code_viewer.get_position() {
       Some(position) => Json([position.line_number, position.column])
-      None => Json::null()
+      None => null
     },
   }).stringify()
 }

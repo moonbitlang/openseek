@@ -37,7 +37,7 @@ test "feedback persistence preserves absent empty and verbatim selection snapsho
 ///|
 test "feedback persistence rejects a malformed selection snapshot" {
   let resource = @base_common.Uri::file("/workspace/README.md")
-  for invalid in [Json::null(), Json(42), Json(true)] {
+  for invalid in [null, Json(42), Json(true)] {
     let encoded : Json = {
       "text": "note",
       "range": [3, 1, 6, 40],

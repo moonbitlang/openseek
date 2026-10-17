@@ -9,7 +9,7 @@ fn office_selection_fixture() -> (State, Ctx, @common.Uri) raise {
     surface_html: "",
     item_count: 1,
     warning: "",
-    annotations: Json::null(),
+    annotations: null,
   }
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[path] = {
@@ -124,7 +124,7 @@ test "Excel preview retains the sheet range and selected cell contents" {
     surface_html: "",
     item_count: 1,
     warning: "",
-    annotations: Json::null(),
+    annotations: null,
   }
   let docs : Map[@common.Uri, Doc] = Map([])
   docs[path] = {

@@ -11,21 +11,13 @@ test "decode reads an explicit offset and treats null as absent" {
     @decode.decode({ "job_id": "bg-3", "offset": 12000 }).offset,
     Some(12000),
   )
-  assert_eq(
-    @decode.decode({ "job_id": "bg-3", "offset": Json::null() }).offset,
-    None,
-  )
+  assert_eq(@decode.decode({ "job_id": "bg-3", "offset": null }).offset, None)
 }
 
 ///|
 test "decode rejects all forms of the removed wait_ms" {
   for
-    value in [
-      Json::number(30000),
-      Json::number(0),
-      Json::string("30000"),
-      Json::null(),
-    ] {
+    value in [Json::number(30000), Json::number(0), Json::string("30000"), null] {
     assert_eq(
       decode_error({ "job_id": "bg-3", "wait_ms": value }),
       Some("job_output no longer accepts wait_ms; use job_wait with job_ids"),

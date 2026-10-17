@@ -4,7 +4,7 @@ test "runtime null, missing value, and exceptions remain distinct" {
     "result": { "type": "object", "subtype": "null", "value": null },
   })
   let value : Json = null_result.decode_value()
-  assert_eq(value, Json::null())
+  assert_eq(value, null)
   let missing = decode_evaluation({ "result": { "type": "undefined" } })
   let rejected = try {
     let _ : Json = missing.decode_value()

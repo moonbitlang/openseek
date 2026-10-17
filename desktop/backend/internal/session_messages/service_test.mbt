@@ -325,7 +325,7 @@ async test "a cancelled tool waiter leaves approval and later feedback alive" {
     let waiter = group.spawn(no_wait=true, () => service.wait(message))
     @async.sleep(1)
     waiter.cancel()
-    ignore(waiter.wait() catch { _ => Json::null() })
+    ignore(waiter.wait() catch { _ => null })
   })
   assert_true(
     message.status()

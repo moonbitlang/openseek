@@ -567,7 +567,7 @@ fn default_prompt_zh() -> String {
     #|- `fn main` 调用抛错函数时，写 `fn main raise { ... }`。
     #|- `async fn` 默认可抛错，不要写 `async fn main raise`。
     #|- 异步辅助函数必须不抛错时，标记 `noraise`，例如 `async fn helper() -> Unit noraise { ... }`。
-    #|- `async fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `Json::null`、`()` 或其他看似成功的哨兵值。
+    #|- `async fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `null`、`()` 或其他看似成功的哨兵值。
     #|- 仅在需要自定义面向用户的错误文本时使用 `catch`。面向用户的 CLI 避免使用中止辅助函数，因为它们可能打印 panic 或调试堆栈。
     #|- 一次性的内部失败用 `fail("message")`；需要简洁的用户可读解析错误时，用小型 `suberror`。
     #|- 自定义错误使用 `suberror`，可以模式匹配错误构造器。匹配其他包的错误时需限定构造器名称，例如 `catch { @pkga.A => ...; @pkga.B => ... }`。如果其他包需要稳定的错误分类或展示，决定是否将构造器模式作为公共 API，或提供辅助函数。
@@ -639,7 +639,7 @@ fn default_prompt_zh() -> String {
     #|- `String::split` 返回迭代器，可直接用于 `for`；需要长度或随机访问时，用 `.to_array()` 收集。
     #|- 优先用 `@string.from_str` 配合显式类型注解解析，例如普通代码或测试中的 `let n : Int = @string.from_str(text)`。不要写 `@string.from_str[:Int](text)` 或 `@string.from_str[Int](text)`。
     #|- `map[key]` 在键不存在时可能 panic。用 `map.get(key)` 得到 `T?`；仅在已知键存在时直接索引。
-    #|- 用 `Json(value)` 构造 JSON，它接受任何实现了 `ToJson` 的值。空值用 `Json::null()`，空对象用 `Json::empty_object()`。不要用 `Json::Object(...)`、`Json::String(...)` 或 `Json::True` 构造 JSON；变体主要用于模式匹配。
+    #|- 用 `Json(value)` 构造 JSON，它接受任何实现了 `ToJson` 的值。空值用 `null`，空对象用 `Json::empty_object()`。不要用 `Json::Object(...)`、`Json::String(...)` 或 `Json::True` 构造 JSON；变体主要用于模式匹配。
     #|- JSON 整数需要保留原始数字写法时，用 `Json::number(n.to_double(), repr=text.to_owned())`。
     #|- JSON CLI 输出和测试使用 `json.stringify()`，或 inspect 其结果；不要依赖 `println(json)` 或 Debug/Show 快照。
     #|- 库返回 `Json` 时，其黑盒测试应匹配 `Json::Object(...)`，不要写 `@library.Json::Object(...)`。

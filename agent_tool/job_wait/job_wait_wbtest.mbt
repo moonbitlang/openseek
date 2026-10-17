@@ -2,7 +2,7 @@
 test "job_wait validates and deduplicates its selection" {
   for
     args in [
-      Json::null(),
+      null,
       {},
       { "job_ids": [] },
       { "job_ids": [""] },

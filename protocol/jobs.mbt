@@ -124,7 +124,7 @@ fn[T : FromJson] job_required(
 fn[T : ToJson] job_optional_json(value : T?) -> Json {
   match value {
     Some(value) => value.to_json()
-    None => Json::null()
+    None => null
   }
 }
 

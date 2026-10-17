@@ -255,19 +255,13 @@ async fn WsClientActor::serve(
         Unparsable =>
           enqueue_outgoing(
             out,
-            Response(
-              error_envelope(Json::null(), CodeParseError, "unparsable frame"),
-            ),
+            Response(error_envelope(null, CodeParseError, "unparsable frame")),
           )
         Invalid =>
           enqueue_outgoing(
             out,
             Response(
-              error_envelope(
-                Json::null(),
-                CodeInvalidRequest,
-                "not a JSON-RPC request",
-              ),
+              error_envelope(null, CodeInvalidRequest, "not a JSON-RPC request"),
             ),
           )
         InvalidParams(id) =>
@@ -450,8 +444,8 @@ async test "readiness precedes the first forwarded hub notification" {
 ///|
 async test "a full outbound queue rejects responses and retires its subscription" {
   let out : @async.Queue[Outgoing] = Queue(kind=Blocking(1))
-  enqueue_outgoing(out, Response(Json::null()))
-  try enqueue_outgoing(out, Response(Json::null())) catch {
+  enqueue_outgoing(out, Response(null))
+  try enqueue_outgoing(out, Response(null)) catch {
     SlowClient(_) => ()
     error => raise error
   } noraise {
@@ -503,7 +497,7 @@ test "classify enforces the JSON-RPC 2.0 request envelope" {
     ] {
     assert_true(classify(message.stringify()) is Invalid)
   }
-  for id in [Json("request-1"), Json(1), Json::null()] {
+  for id in [Json("request-1"), Json(1), null] {
     let message : Json = {
       "jsonrpc": "2.0",
       "id": id,

@@ -713,7 +713,7 @@ returns `Json` on success and its failures travel in `raise`. Call raising
 functions directly from functions marked `raise` and handle errors only at a
 real boundary, such as a CLI path that needs its own stderr text. Use
 `fail("message")` for a one-off internal failure and a small `suberror` for
-user-facing errors; never encode failure as `Json::null`, `()`, or another
+user-facing errors; never encode failure as `null`, `()`, or another
 success sentinel. `async fn` raises by default, so never write
 `async fn main raise`; mark an async helper `noraise` when it must not raise.
 In tests, call raising functions directly and let a raise fail the test. The
@@ -748,7 +748,7 @@ The verified example, compiled and run by CI:
 [share/examples/strings_and_views.mbtx](../share/examples/strings_and_views.mbtx)
 
 - Build JSON values with the `Json(value)` constructor — it accepts any value
-  whose type implements `ToJson`. Use `Json::null()` for null and
+  whose type implements `ToJson`. Use `null` for a JSON null and
   `Json::empty_object()` for an empty object. Do not create JSON with
   `Json::Object(...)`, `Json::String(...)`, or `Json::True`; use variants
   mainly for pattern matching.

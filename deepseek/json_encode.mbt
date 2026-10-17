@@ -56,7 +56,7 @@ impl ToJson for ChatMessage with fn to_json(message : ChatMessage) -> Json {
   let content = if message.role is Assistant &&
     content is String("") &&
     !message.tool_calls.is_empty() {
-    Json::null()
+    null
   } else {
     content
   }

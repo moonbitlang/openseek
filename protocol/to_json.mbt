@@ -8,7 +8,7 @@
 fn or_null(value : String?) -> Json {
   match value {
     Some(value) => Json(value)
-    None => Json::null()
+    None => null
   }
 }
 

@@ -100,7 +100,7 @@ test "PDF region chips have page labels without inventing extracted text" {
     @mention_context.office_selection_title(materialized),
     "/docs/slides.pdf · pp. 1–2",
   )
-  for text in [Json::null(), Json::number(42)] {
+  for text in [null, Json::number(42)] {
     assert_true(
       @mention_context.office_selection_summary(
         display_selection(

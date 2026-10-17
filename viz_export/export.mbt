@@ -32,7 +32,7 @@ pub fn Session::Session(
 ///|
 /// Encode the sidebar row consumed by `/api/sessions`.
 fn Session::listing_json(self : Session) -> Json {
-  let last_active = self.last_active.map_or(Json::null(), n => Json::number(n))
+  let last_active = self.last_active.map_or(null, n => Json::number(n))
   {
     "key": self.key,
     "id": self.id,

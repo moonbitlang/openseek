@@ -43,7 +43,7 @@ test "decode reads revert_on_parse_errors" {
     @decode.decode({
       "path": "/tmp/a.mbt",
       "content": "x",
-      "revert_on_parse_errors": Json::null(),
+      "revert_on_parse_errors": null,
     }),
     content=(
       #|{ path: "/tmp/a.mbt", content: "x", revert_on_parse_errors: true }
@@ -76,7 +76,7 @@ test "decode rejects malformed arguments and names the offending field" {
   )
   assert_decode_error({ "path": "/tmp/file.txt" }, "arguments.content")
   assert_decode_error({ "content": "hello" }, "arguments.path")
-  assert_decode_error(Json::null(), "object arguments")
+  assert_decode_error(null, "object arguments")
 }
 
 ///|
@@ -95,7 +95,7 @@ test "decode accepts filename as an alias and requires agreement" {
     { "path": "a.txt", "filename": "b.txt", "content": "hello" },
     "arguments.path and arguments.filename to match",
   )
-  for value in [Json::null(), Json(42)] {
+  for value in [null, Json(42)] {
     assert_decode_error(
       { "filename": value, "content": "hello" },
       "arguments.filename",

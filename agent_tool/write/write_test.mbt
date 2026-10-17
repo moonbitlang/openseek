@@ -450,7 +450,7 @@ async test "write rejects missing path" {
 
 ///|
 async test "write rejects non-object arguments" {
-  let result = execute(Json::null())
+  let result = execute(null)
   guard result is Respond(output) else { fail("expected Respond") }
   assert_eq(output.content, "error: write requires object arguments")
   assert_true(output.is_error)

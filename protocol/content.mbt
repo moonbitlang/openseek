@@ -94,17 +94,17 @@ pub impl FromJson for ContentPart with fn from_json(json, path) {
     Some(String("text")) =>
       Text(
         @json.from_json(
-          fields.get("text").unwrap_or(Json::null()),
+          fields.get("text").unwrap_or(null),
           path=path.add_key("text"),
         ),
       )
     Some(String("image")) => {
       let media_type : String = @json.from_json(
-        fields.get("media_type").unwrap_or(Json::null()),
+        fields.get("media_type").unwrap_or(null),
         path=path.add_key("media_type"),
       )
       let data : String = @json.from_json(
-        fields.get("data").unwrap_or(Json::null()),
+        fields.get("data").unwrap_or(null),
         path=path.add_key("data"),
       )
       let image = Image::from_base64(media_type~, data) catch {

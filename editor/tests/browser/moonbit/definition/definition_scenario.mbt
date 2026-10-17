@@ -196,7 +196,7 @@ fn definition_state_json(
         "line": Json(position.line_number),
         "column": Json(position.column),
       })
-    None => Json::null()
+    None => null
   }
   let selection = match viewer.get_selection() {
     Some(selection) => {
@@ -209,7 +209,7 @@ fn definition_state_json(
         "activeColumn": Json(active.column),
       })
     }
-    None => Json::null()
+    None => null
   }
   Json({
     "position": position,

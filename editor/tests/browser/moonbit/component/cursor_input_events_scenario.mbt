@@ -117,7 +117,7 @@ pub fn run_cursor_input_events_test() -> Unit {
   viewer.on_did_change_cursor_position(event => {
     let (committed_line, committed_column) = match viewer.get_position() {
       Some(committed) => (Json(committed.line_number), Json(committed.column))
-      None => (Json::null(), Json::null())
+      None => (null, null)
     }
     record_cursor_event(
       Json({
@@ -138,7 +138,7 @@ pub fn run_cursor_input_events_test() -> Unit {
     let active = event.selection.get_position()
     let old_selection_count = match event.old_selections {
       Some(selections) => Json(selections.length())
-      None => Json::null()
+      None => null
     }
     let (old_anchor_line, old_anchor_column, old_active_line, old_active_column) = match
       event.old_selections {
@@ -152,7 +152,7 @@ pub fn run_cursor_input_events_test() -> Unit {
           Json(old_active.column),
         )
       }
-      _ => (Json::null(), Json::null(), Json::null(), Json::null())
+      _ => (null, null, null, null)
     }
     let (
       committed_anchor_line,
@@ -170,7 +170,7 @@ pub fn run_cursor_input_events_test() -> Unit {
           Json(committed_active.column),
         )
       }
-      None => (Json::null(), Json::null(), Json::null(), Json::null())
+      None => (null, null, null, null)
     }
     record_cursor_event(
       Json({

@@ -35,7 +35,7 @@ fn new_transport() -> FakeTransport {
 fn id_of(request : Json) -> Json {
   match request {
     { "id": id, .. } => id
-    _ => Json::null()
+    _ => null
   }
 }
 

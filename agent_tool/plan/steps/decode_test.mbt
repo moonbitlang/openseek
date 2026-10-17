@@ -76,7 +76,7 @@ fn assert_decode_error(arguments : Json, expected : String) -> Unit raise {
 /// or their own scenario note stay in their own tests below.
 test "decode rejects malformed plans and names the broken rule" {
   assert_decode_error(Json::empty_object(), "arguments.steps to be an array")
-  assert_decode_error(Json::null(), "arguments to be an object")
+  assert_decode_error(null, "arguments to be an object")
   assert_decode_error(
     { "steps": [], "note": "extra" },
     "arguments to have only the steps field",

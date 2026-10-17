@@ -945,7 +945,7 @@ fn hover_result_json(payload : HoverResultPayload) -> Json {
   fields["documentRevision"] = Json(payload.revision)
   fields["hover"] = match payload.hover {
     Some(hover) => hover_json(hover)
-    None => Json::null()
+    None => null
   }
   Json(fields)
 }
