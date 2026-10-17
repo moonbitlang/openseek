@@ -1,10 +1,12 @@
 ///|
+#cfg(not(platform="windows"))
 priv struct FileSignatureApi {
   read : @endpoint.Endpoint
   stat : @endpoint.Endpoint
 }
 
 ///|
+#cfg(not(platform="windows"))
 fn FileSignatureApi::new() -> FileSignatureApi? {
   let actor = @engine.new_engine_actor("unused-test-engine")
   let endpoints = @host.endpoints(
@@ -28,6 +30,7 @@ fn FileSignatureApi::new() -> FileSignatureApi? {
 }
 
 ///|
+#cfg(not(platform="windows"))
 async fn FileSignatureApi::read_text(
   self : FileSignatureApi,
   path : String,
@@ -43,6 +46,7 @@ async fn FileSignatureApi::read_text(
 }
 
 ///|
+#cfg(not(platform="windows"))
 async fn FileSignatureApi::signature(
   self : FileSignatureApi,
   path : String,

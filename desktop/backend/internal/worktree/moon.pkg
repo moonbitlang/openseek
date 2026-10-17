@@ -1,5 +1,4 @@
 import {
-  "moonbitlang/core/env" @sys,
   "openseek_desktop/backend/entropy",
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/internal/gitx",
@@ -15,6 +14,7 @@ import {
 
 import {
   "openseek_desktop/backend/internal/processx",
+  "moonbitlang/core/env" @sys,
 } for "wbtest"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

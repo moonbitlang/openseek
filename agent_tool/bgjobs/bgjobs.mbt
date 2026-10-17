@@ -136,9 +136,6 @@ priv struct BgJob {
   // The opaque prepared command is carried from launch so a reader can apply
   // the same source-write-denial detection the foreground path does.
   sandboxed_command : @sandbox.SandboxedCommand?
-  // Preserve the shell policy context that decides whether a standalone
-  // trusted writer is a valid recovery from a sandbox denial.
-  read_only_review : Bool
   // Display-only rewrites carried by the launching tool (for example, mapping
   // a throwaway compiler path back to the submitted source name).
   output_rewrites : Array[(String, String)]
@@ -161,9 +158,8 @@ priv struct BgJob {
 }
 
 ///|
-/// An immutable view of a job's current state. `output` is the inline preview
-/// (the first inline-budget characters); the *full* output — when `over_inline_cap`
-/// — is read with `BgJobRuntime::read_output`.
+/// An immutable view of a job's current state and retained-output metadata.
+/// Read output with `BgJobRuntime::read_output` or `BgJobRuntime::read_output_tail`.
 pub struct BgJobSnapshot {
   image_output : ImageOutput?
   data : Json?
@@ -172,19 +168,15 @@ pub struct BgJobSnapshot {
   command : String
   description : String?
   status : BgJobStatus
-  priv output : String
   output_file : String?
   output_persistent : Bool
   output_error : String?
   output_truncated : Bool
-  priv over_inline_cap : Bool
   size : Int32
-  priv exit_code : Int32?
   // Preserved so a reader can match the foreground path's error semantics: mark
   // binary output as an error, and detect a sandboxed source-write denial.
   had_invalid_utf8 : Bool
   sandboxed_command : @sandbox.SandboxedCommand?
-  priv read_only_review : Bool
   output_rewrites : Array[(String, String)]
   moonrun_policy_active : Bool
   // The job was killed by the output-limit watchdog (flooded past the hard cap),
@@ -313,7 +305,6 @@ pub async fn BgJobRuntime::start(
   cwd? : String,
   max_output_chars~ : Int32 = default_max_output_chars,
   sandboxed_command? : @sandbox.SandboxedCommand,
-  read_only_review~ : Bool = false,
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
   stdin? : &@process.ProcessInput,
@@ -337,7 +328,6 @@ pub async fn BgJobRuntime::start(
     command~,
     description?,
     sandboxed_command?,
-    read_only_review~,
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal=None,
@@ -358,7 +348,6 @@ pub async fn BgJobRuntime::adopt(
   command~ : String,
   description? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
-  read_only_review~ : Bool = false,
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
   on_terminal? : async () -> Unit,
@@ -376,7 +365,6 @@ pub async fn BgJobRuntime::adopt(
     command~,
     description?,
     sandboxed_command?,
-    read_only_review~,
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal~,
@@ -395,7 +383,6 @@ async fn BgJobRuntime::register(
   command~ : String,
   description? : String,
   sandboxed_command? : @sandbox.SandboxedCommand,
-  read_only_review~ : Bool,
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async () -> Unit)?,
@@ -414,7 +401,6 @@ async fn BgJobRuntime::register(
     description,
     exec,
     sandboxed_command,
-    read_only_review,
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
@@ -473,17 +459,13 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
       { content: output.content, images: output.images.copy(), }
     }),
     cleanup_error: self.cleanup_error,
-    output: self.exec.head(),
     output_file: self.exec.spill_path(),
     output_persistent: persistent_logs,
     output_error: self.exec.output_error(),
     output_truncated: self.exec.output_truncated(),
-    over_inline_cap: self.exec.over_inline_cap(),
     size: self.exec.size(),
-    exit_code: self.exec.exit_code(),
     had_invalid_utf8: self.exec.had_invalid_utf8(),
     sandboxed_command: self.sandboxed_command,
-    read_only_review: self.read_only_review,
     output_rewrites: self.output_rewrites.copy(),
     moonrun_policy_active: self.moonrun_policy_active,
     killed_by_output_limit: self.exec.killed_by_output_limit(),
@@ -537,7 +519,7 @@ pub async fn BgJobRuntime::terminal_denial_feedback(
 }
 
 ///|
-/// The current state of one job (inline preview), or `None` for an unknown id.
+/// The current state of one job, or `None` for an unknown id.
 pub fn BgJobRuntime::snapshot(
   self : BgJobRuntime,
   id : String,
@@ -639,13 +621,10 @@ async test "bg job runs to completion and captures output" {
       program="sh",
       args=["-c", "printf hello"],
       command="printf hello",
-      read_only_review=true,
     )
     let snap = poll_until_terminal(rt, id)
     assert_true(snap.status is Exited(0))
-    assert_true(snap.output.contains("hello"))
-    assert_true(snap.exit_code is Some(0))
-    assert_true(snap.read_only_review)
+    assert_eq(rt.read_output(id), Some("hello"))
   })
 }
 
@@ -657,7 +636,6 @@ async test "bg job records a non-zero exit code" {
     let id = rt.start(program="sh", args=["-c", "exit 3"], command="exit 3")
     let snap = poll_until_terminal(rt, id)
     assert_true(snap.status is Exited(3))
-    assert_true(snap.exit_code is Some(3))
   })
 }
 
@@ -676,7 +654,7 @@ async test "stop terminates a running job" {
 
 ///|
 #cfg(not(platform="windows"))
-async test "a large-output job spills; snapshot previews, read_output is full" {
+async test "a large-output job spills; read_output is full and read_output_tail is bounded" {
   let directory = @fs.tmpdir(prefix="bg-job-test-")
   defer @fs.rmdir(directory, recursive=true)
   @async.with_task_group(group => {
@@ -692,10 +670,12 @@ async test "a large-output job spills; snapshot previews, read_output is full" {
     )
     let snap = poll_until_terminal(rt, id)
     assert_true(snap.status is Exited(0))
-    assert_true(snap.over_inline_cap)
-    // The snapshot output is a bounded preview...
-    assert_true(snap.output.char_length() <= 100)
-    // ...while read_output returns the full output from the spill file.
+    assert_true(snap.output_file is Some(_))
+    assert_true(snap.size > 100)
+    let tail = rt.read_output_tail(id, 100).unwrap()
+    assert_true(tail.char_length() <= 100)
+    assert_true(tail.contains("5000"))
+    // Full output remains available from the spill file.
     let full = rt.read_output(id).unwrap()
     assert_true(full.has_prefix("1\n"))
     assert_true(full.contains("5000"))
@@ -711,10 +691,9 @@ async test "adopt registers an already-running execution as a job" {
     let exec = @shell_exec.ShellExecution::start(scope, program="sleep", args=[
       "30",
     ])
-    let id = rt.adopt(exec, command="sleep 30", read_only_review=true)
+    let id = rt.adopt(exec, command="sleep 30")
     @async.sleep(50)
     assert_true(rt.snapshot(id).unwrap().status is Running)
-    assert_true(rt.snapshot(id).unwrap().read_only_review)
     assert_true(rt.stop(id))
     assert_true(rt.snapshot(id).unwrap().status is Stopped)
   })
@@ -835,8 +814,10 @@ async test "two jobs run independently with distinct ids" {
     assert_true(a != b)
     let sa = poll_until_terminal(rt, a)
     let sb = poll_until_terminal(rt, b)
-    assert_true(sa.output.contains("aaa"))
-    assert_true(sb.output.contains("bbb"))
+    assert_true(sa.status is Exited(0))
+    assert_true(sb.status is Exited(0))
+    assert_eq(rt.read_output(a), Some("aaa"))
+    assert_eq(rt.read_output(b), Some("bbb"))
     assert_true(rt.list().length() == 2)
   })
 }

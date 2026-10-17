@@ -20,6 +20,7 @@ fn wait_call_payload(name : String, args : Json) -> String {
 }
 
 ///|
+#cfg(not(platform="windows"))
 priv enum WaitWake {
   Complete
   UserInput

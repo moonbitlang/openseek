@@ -72,6 +72,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
 /// than the id; `hangs-after` writes the record, leaves `<root>/committed` to
 /// say so, and then never finishes. Any other
 /// command lists no sessions, which is all archiving asks of it.
+#cfg(not(platform="windows"))
 fn worktree_fork_engine_script() -> String {
   // `\{newline}` is the two characters a shell `printf` format needs, not an
   // actual line break.

@@ -7,6 +7,7 @@
 ///|
 /// The deadline these tests reap against. Its size is irrelevant: every test
 /// names its own clock.
+#cfg(not(platform="windows"))
 const TestIdleMs : Int64 = 1000L
 
 ///|
