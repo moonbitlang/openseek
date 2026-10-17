@@ -27,7 +27,7 @@ description = "DeepSeek-backed MoonBit coding agent"
 
 preferred_target = "native"
 
-warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unused_optional_argument+unnecessary_annotation"
+warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unused_optional_argument+unnecessary_annotation+result_error_return"
 
 rule(
   name: "md_to_mbt_string",

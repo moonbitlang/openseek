@@ -117,7 +117,13 @@ fn classify_incoming(message : Json) -> Incoming {
         // saturates out-of-range, which would misroute a reply to a real
         // pending id. A non-integer id is classified `Unknown` and dropped.
         if int_reply_id(id) is Some(reply_id) {
-          Reply(reply_id, parse_outcome(message))
+          // The outcome travels to the request awaiting this reply as ordinary
+          // data — a peer error object is not a local failure — so the raise is
+          // turned back into the `Result` that `Incoming::Reply` carries.
+          let outcome : Result[Json, ResponseError] = Ok(parse_outcome(message)) catch {
+            error => Err(error)
+          }
+          Reply(reply_id, outcome)
         } else {
           Unknown
         }
@@ -143,11 +149,14 @@ fn int_reply_id(id : Double) -> Int32? {
 /// is never masked as success even when a peer sends both), but an explicit
 /// `error: null` alongside a result — which many hand-rolled servers emit — is
 /// not a failure; a reply with neither is a successful empty result.
-fn parse_outcome(message : Json) -> Result[Json, ResponseError] {
+///
+/// Raises the peer's `ResponseError` for a real error object; the caller that
+/// routes the message decides to carry it as reply data.
+fn parse_outcome(message : Json) -> Json raise ResponseError {
   match message {
-    { "error": error, .. } if !(error is Null) => Err(parse_error(error))
-    { "result": value, .. } => Ok(value)
-    _ => Ok(Json::null())
+    { "error": error, .. } if !(error is Null) => raise parse_error(error)
+    { "result": value, .. } => value
+    _ => Json::null()
   }
 }
 
