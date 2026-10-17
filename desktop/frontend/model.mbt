@@ -3210,20 +3210,21 @@ fn Model::run_snapshot_frontier(
   self : Model,
   channel : @interop.ChannelId,
 ) -> Array[RunSnapshotFrontier] {
-  self.conversations
-  .filter(conv => conv.device == channel)
-  .map(conv => {
-    let state = match conv.run {
-      NoRun(..) => SnapshotIdle(last_run_id=conv.last_run_id)
-      Starting(submission_id~) => SnapshotStarting(submission_id~)
-      Open(run_id~, ..) => SnapshotOpen(run_id~)
+  [
+    for conv in self.conversations if conv.device == channel => {
+      let state = match conv.run {
+        NoRun(..) => SnapshotIdle(last_run_id=conv.last_run_id)
+        Starting(submission_id~) => SnapshotStarting(submission_id~)
+        Open(run_id~, ..) => SnapshotOpen(run_id~)
+      }
+      let initial_ids = [
+        ..if conv.pending_prompt is Some(pending) {
+          [pending.submission_id]
+        },
+      ]
+      { session: conv.session_id, state, initial_ids, }
     }
-    let initial_ids : Array[String] = []
-    if conv.pending_prompt is Some(pending) {
-      initial_ids.push(pending.submission_id)
-    }
-    { session: conv.session_id, state, initial_ids, }
-  })
+  ]
 }
 
 ///|

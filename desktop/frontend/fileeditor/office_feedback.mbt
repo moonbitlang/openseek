@@ -219,9 +219,11 @@ fn office_feedback_anchor(
         }
       },
       () => {
-        cells
-        .filter(@base_browser.element_is_connected)
-        .map(cell => cell.get_bounding_client_rect())
+        [
+          for cell in cells if @base_browser.element_is_connected(cell) => {
+            cell.get_bounding_client_rect()
+          }
+        ]
       },
       true,
     )

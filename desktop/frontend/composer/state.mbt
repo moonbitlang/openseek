@@ -266,16 +266,21 @@ fn Input::completion(
           trigger.matches([item.label])
         })
       } else {
-        self.installed_skills
-        .filter(skill => trigger.matches([skill.name, skill.description]))
-        .map(skill => CompletionItem::{
-          label: "$\{skill.name}",
-          detail: skill.description,
-          command: "",
-          insert: "\{skill.name} ",
-          path: None,
-          range: None,
-        })
+        [
+          for skill in self.installed_skills if trigger.matches([
+            skill.name,
+            skill.description,
+          ]) => {
+            CompletionItem::{
+              label: "$\{skill.name}",
+              detail: skill.description,
+              command: "",
+              insert: "\{skill.name} ",
+              path: None,
+              range: None,
+            }
+          }
+        ]
       }
       if items.is_empty() {
         None
