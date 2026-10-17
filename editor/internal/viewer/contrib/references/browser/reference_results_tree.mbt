@@ -304,10 +304,7 @@ fn ReferenceResultsTree::render_group(
   row.set_attribute("role", "treeitem")
   row.set_attribute("aria-level", if group.is_test { "2" } else { "1" })
   guard self.model is Some(model) else { return }
-  let ordinary_count = model.groups
-    .iter()
-    .filter(group => !group.is_test)
-    .count()
+  let ordinary_count = model.groups.count_if(group => !group.is_test)
   let position = if group.is_test {
     group.group_index - ordinary_count + 1
   } else {
@@ -1287,14 +1284,13 @@ fn ReferenceResultsTree::render_test_section(
   )
   row.set_attribute("role", "treeitem")
   row.set_attribute("aria-level", "1")
-  let position = model.groups.iter().filter(group => !group.is_test).count() + 1
+  let position = model.groups.count_if(group => !group.is_test) + 1
   row.set_attribute("aria-posinset", position.to_string())
   row.set_attribute("aria-setsize", position.to_string())
   row.set_attribute("data-reference-row-kind", "tests")
-  let count = model.references
-    .iter()
-    .filter(reference => reference.is_test == Some(true))
-    .count()
+  let count = model.references.count_if(reference => {
+    reference.is_test == Some(true)
+  })
   let label = match self.localization.language() {
     English => "Tests"
     SimplifiedChinese => "测试"

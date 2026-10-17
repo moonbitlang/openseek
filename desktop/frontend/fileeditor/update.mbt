@@ -852,8 +852,7 @@ fn selected_review_change(
     return availability_match
   }
   if candidates.length() == 1 &&
-    previous_files.iter().filter(change => change.path == selected.path).count() <=
-    1 {
+    previous_files.count_if(change => change.path == selected.path) <= 1 {
     // A sole row can legitimately cross the working-file boundary (modified
     // to deleted, or deleted back to modified). It is only safe to infer that
     // transition when the previous authoritative inventory did not contain a

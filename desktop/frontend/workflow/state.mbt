@@ -348,7 +348,7 @@ pub fn Run::ordered_rows(self : Run) -> Array[Row] {
 ///|
 /// How many of a run's children are still running.
 pub fn Run::running(self : Run) -> Int32 {
-  self.rows.iter().filter(row => row.status is None).count()
+  self.rows.count_if(row => row.status is None)
 }
 
 ///|
@@ -362,7 +362,7 @@ pub fn Run::tokens(self : Run) -> Int32 {
 /// How many of the run's children spent an amount nobody could account for,
 /// so the totals leave them out.
 pub fn Run::unaccounted(self : Run) -> Int32 {
-  self.rows.iter().filter(row => row.unaccounted is Some(_)).count()
+  self.rows.count_if(row => row.unaccounted is Some(_))
 }
 
 ///|

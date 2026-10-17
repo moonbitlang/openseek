@@ -93,10 +93,7 @@ pub fn panel(
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  let running = state.jobs
-    .iter()
-    .filter(view => !view.job.state.is_terminal())
-    .count()
+  let running = state.jobs.count_if(view => !view.job.state.is_terminal())
   let header = @html.div(class="jobs-heading", [
     @html.div([
       @html.h3(ui(locale, BackgroundJobs)),

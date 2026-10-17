@@ -1597,10 +1597,9 @@ fn change_inventory_rows(
         [@html.div(class="file-panel-empty", ui(locale, NoChangedFiles))]
       } else {
         let reviewable = files.filter(change => change.selectable())
-        let reviewed = reviewable
-          .iter()
-          .filter(change => state.is_change_reviewed(change))
-          .count()
+        let reviewed = reviewable.count_if(change => {
+          state.is_change_reviewed(change)
+        })
         let rows = [
           @html.div(
             class="review-progress-summary",
@@ -3645,10 +3644,9 @@ fn review_filter_controls(
       Some(files) if !state.change_path_filter.is_empty() ||
         state.change_extensions is Some(_) => {
         let filter = state.review_file_filter()
-        let count = files
-          .iter()
-          .filter(file => filter.matches(file.path, file.original))
-          .count()
+        let count = files.count_if(file => {
+          filter.matches(file.path, file.original)
+        })
         @html.div(
           class="review-filter-count",
           attrs=@html.Attrs::build().role("status"),

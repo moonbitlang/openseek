@@ -453,25 +453,13 @@ fn checks_summary(
     return (ui(locale, NoChecksReported), "other")
   }
   // Counting, not collecting: `filter(..)` would materialize a throwaway array
-  // per bucket, while the lazy chain counts without one.
-  let passed = checks
-    .iter()
-    .filter(check => check_style(check.state) == "passed")
-    .count()
-  let pending = checks
-    .iter()
-    .filter(check => check_style(check.state) == "pending")
-    .count()
-  let failed = checks
-    .iter()
-    .filter(check => check_style(check.state) == "failed")
-    .count()
-  let cancelled = checks
-    .iter()
-    .filter(check => check.state == "CANCELLED")
-    .count()
-  let skipped = checks.iter().filter(check => check.state == "SKIPPED").count()
-  let neutral = checks.iter().filter(check => check.state == "NEUTRAL").count()
+  // per bucket; `count_if` only walks the list and adds.
+  let passed = checks.count_if(check => check_style(check.state) == "passed")
+  let pending = checks.count_if(check => check_style(check.state) == "pending")
+  let failed = checks.count_if(check => check_style(check.state) == "failed")
+  let cancelled = checks.count_if(check => check.state == "CANCELLED")
+  let skipped = checks.count_if(check => check.state == "SKIPPED")
+  let neutral = checks.count_if(check => check.state == "NEUTRAL")
   let other = checks.length() -
     passed -
     pending -

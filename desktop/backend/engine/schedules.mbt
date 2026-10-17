@@ -365,7 +365,7 @@ async fn Schedules::take_due(
     let entries = state.entries.copy()
     let runs = state.runs.copy()
     let launches : Array[(@protocol.ScheduleEntry, @protocol.ScheduleRun)] = []
-    let mut active = runs.iter().filter(run => run.status is Running).count()
+    let mut active = runs.count_if(run => run.status is Running)
     let mut changed = false
     for index, entry in entries {
       let due = entry.enabled && entry.next_at is Some(at) && at <= now
