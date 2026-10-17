@@ -25,21 +25,16 @@ async fn run_job_output(
 }
 
 ///|
-/// Poll until `id` leaves Running. Jobs run through `moonx`, which resolves
-/// and caches the wasm tool on first use, so the budget (400 x 25ms) leaves
-/// headroom for a cold registry cache.
+/// Wait for the job to settle before asserting on its final output. Resolving
+/// a cold moonx package can exceed ten seconds on CI; timing out must fail the
+/// test instead of silently continuing with a still-running job.
 async fn poll_bg_terminal(bg : @bgjobs.BgJobRuntime, id : String) -> Unit {
-  for _ in 0..<400 {
-    if bg.snapshot(id) is Some(s) && !(s.status is Running) {
-      break
-    }
-    @async.sleep(25)
-  }
+  @async.with_timeout(60000, () => bg.wait_any([id]))
 }
 
 ///|
-/// Poll until the job's captured output contains `needle`, on the same budget
-/// as `poll_bg_terminal`. Replaces fixed sleeps: moonx startup is ~100ms warm
+/// Poll until the job's captured output contains `needle`, with a budget of
+/// 400 x 25ms. Replaces fixed sleeps: moonx startup is ~100ms warm
 /// and unbounded cold, so a flat delay would flake.
 async fn poll_bg_output(
   bg : @bgjobs.BgJobRuntime,
