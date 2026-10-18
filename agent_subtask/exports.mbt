@@ -229,14 +229,11 @@ pub async fn git_require(
 }
 
 ///|
-/// Whether `text` still holds a line git writes around a conflict.
+/// Whether `text` still holds a line git opens or closes a conflict with.
+/// The `=======` between the sides is not checked on its own: it is also a
+/// Markdown heading underline.
 fn has_conflict_markers(text : String) -> Bool {
   text
   .split("\n")
-  .any(line => {
-    line.has_prefix("<<<<<<< ") ||
-    line.has_prefix(">>>>>>> ") ||
-    line == "=======" ||
-    line == "=======\r"
-  })
+  .any(line => line.has_prefix("<<<<<<< ") || line.has_prefix(">>>>>>> "))
 }

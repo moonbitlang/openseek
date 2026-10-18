@@ -279,6 +279,41 @@ async test "continue stages the resolved conflict set, but not while markers rem
 }
 
 ///|
+async test "continue stages an add/add conflict, and Markdown underlines are not markers" {
+  @vfs.with_tmpdir(prefix="openseek-subtask-addadd-", dir => {
+    let repo = seed_repo(dir)
+    let provisioned = must_provision(
+      repo,
+      name="docs",
+      allowed_paths=["lib"],
+      nonce="n1",
+    )
+    let entry = provisioned.entry
+    // Both sides add the same new file, differently.
+    @vfs.write_text("\{entry.worker_root}/lib", "notes.md", "Worker\n======\n")
+    let captured = @agent_subtask.capture(provisioned.geometry, entry)
+    @vfs.write_text("\{repo}/lib", "notes.md", "Origin\n======\n")
+    for args in [["add", "-A"], ["commit", "-q", "-m", "origin adds notes"]] {
+      must_git(repo, args)
+    }
+    let conflicted = @agent_subtask.integrate(
+      provisioned.geometry,
+      captured.entry,
+    )
+    assert_eq(conflicted.result, "conflicted")
+    assert_true(conflicted.detail[0].contains("lib/notes.md"))
+    // Resolved with a file tool: a Setext heading keeps its own underline.
+    @vfs.write_text("\{repo}/lib", "notes.md", "Notes\n=======\n")
+    let continued = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(continued.result, "integrated")
+    assert_eq(@fs.read_file("\{repo}/lib/notes.md").text(), "Notes\n=======\n")
+  })
+}
+
+///|
 async test "integrate refuses a dirty tracked origin; abort restores state" {
   @vfs.with_tmpdir(prefix="openseek-subtask-dirty-", dir => {
     let repo = seed_repo(dir)

@@ -165,13 +165,16 @@ async fn integrate_locked(
     if merge_head.output.trim() == commit_oid &&
       unmerged.exit_code == 0 &&
       unmerged.output != "" {
+      // Every path with an unmerged index entry, add/add included: a
+      // record `<mode> <oid> <stage>\t<path>` per stage.
       let files : Array[String] = []
-      for
-        change in parse_status_z(
-          git_run(["status", "--porcelain=v1", "-z"], cwd=origin).output,
-        ) {
-        if change.kind.contains("U") && !files.contains(change.path) {
-          files.push(change.path)
+      for record in unmerged.output.split("\u{0}") {
+        guard record.split("\t").nth(1) is Some(path) && !path.is_empty() else {
+          continue
+        }
+        let path = path.to_owned()
+        if !files.contains(path) {
+          files.push(path)
         }
       }
       let entry = { ..entry, state: Conflicted, conflict_paths: files.copy(), }
