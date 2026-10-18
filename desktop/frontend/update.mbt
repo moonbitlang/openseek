@@ -6250,7 +6250,7 @@ fn update_msg(
     // an archived parent's children are archived with it, so they open from
     // the archive, in the parent's workspace.
     Jobs(OpenSession(session_id)) =>
-      match (model.jobs.owner, model.selected_conversation) {
+      match (model.jobs.owner, model.host_selection()) {
         (
           Some({ scope: { archived: true, session: parent, .. }, .. }),
           Some(selected),
@@ -11735,7 +11735,7 @@ test "the jobs panel opens a subagent's session like the sidebar does" {
     Jobs(OpenSession("desktop-test-sr-2")),
     model,
   )
-  guard next.selected_conversation is Some(selection) else {
+  guard next.host_selection() is Some(selection) else {
     fail("expected the subagent's session to be selected")
   }
   inspect(selection.session, content="desktop-test-sr-2")
@@ -23288,12 +23288,14 @@ test "a subagent of an archived conversation opens from the archive" {
   })
   let model = {
     ..model,
-    selected_conversation: Some({
-      channel: Local,
-      session: "desktop-parent",
-      workspace,
-      record: ArchivedRecord,
-    }),
+    selected_conversation: Some(
+      HostSelection({
+        channel: Local,
+        session: "desktop-parent",
+        workspace,
+        record: ArchivedRecord,
+      }),
+    ),
     jobs: {
       ..model.jobs,
       owner: Some({
@@ -23311,7 +23313,7 @@ test "a subagent of an archived conversation opens from the archive" {
     Jobs(OpenSession("desktop-parent-sr-1")),
     model,
   )
-  guard next.selected_conversation
+  guard next.host_selection()
     is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
     fail("expected the child to open from the archive")
   }
