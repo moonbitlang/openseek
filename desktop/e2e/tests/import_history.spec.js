@@ -105,20 +105,6 @@ for (const worktree of [false, true]) {
   });
 }
 
-test('expired share keeps the link for retry; success opens the same chat UI', async ({ page }) => {
-  const { app, dialog } = await setup(page);
-  const link = 'https://shares.example/v1/shares/sh_test';
-  await dialog.getByRole('textbox', { name: 'OpenSeek share link' }).fill(link);
-  app.importFailure = 'The share has expired or was revoked.';
-  await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
-  await expect(dialog.getByRole('status')).toContainText('expired');
-  await expect(dialog.getByRole('textbox')).toHaveValue(link);
-  app.importFailure = null;
-  await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
-  await expectWritable(page, app);
-  expect(app.requests.filter(request => request.method === 'session.import').at(-1).params.source).toEqual({ kind: 'share', url: link });
-});
-
 test('closing a pending import does not navigate away and narrow dialog fits', async ({ page }, testInfo) => {
   const { app, dialog } = await setup(page);
   await dialog.screenshot({ path: testInfo.outputPath('import-dialog-desktop.png') });
@@ -196,19 +182,22 @@ test('leaving while the imported catalog loads prevents a late navigation', asyn
 for (const failure of ['import', 'registration']) {
   test(`Chat import reuses its workspace after ${failure} failures`, async ({ page }) => {
     const { app, dialog } = await setup(page, false, true);
-    await dialog.getByRole('textbox').fill('https://shares.example/v1/shares/sh_test');
+    const link = 'https://shares.example/v1/shares/sh_test';
+    await dialog.getByRole('textbox').fill(link);
     const error = failure === 'import' ? 'The share has expired.' : 'Could not register workspace.';
     if (failure === 'import') app.importFailure = error;
     else app.workspaceFailure = error;
     for (let attempt = 0; attempt < 2; attempt++) {
       await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
       await expect(dialog.getByRole('status')).toHaveText(error);
+      await expect(dialog.getByRole('textbox')).toHaveValue(link);
       await expect(dialog.getByRole('button', { name: 'Import link', exact: true })).toBeEnabled();
     }
     app.importFailure = null;
     app.workspaceFailure = null;
     await dialog.getByRole('button', { name: 'Import link', exact: true }).click();
     await expectWritable(page, app);
+    expect(app.requests.filter(request => request.method === 'session.import').at(-1).params.source).toEqual({ kind: 'share', url: link });
     expect(app.requests.filter(request => request.method === 'fs.create_unnamed_workspace')).toHaveLength(1);
     const registrations = app.requests.filter(request => request.method === 'workspace.add');
     expect(registrations).toHaveLength(failure === 'registration' ? 3 : 1);

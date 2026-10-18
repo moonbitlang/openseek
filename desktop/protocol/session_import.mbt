@@ -16,7 +16,7 @@ pub(all) struct SessionImportPayload {
 pub(all) enum SessionImportReply {
   Success(String)
   Failed(String)
-} derive(Debug, Eq)
+}
 
 ///|
 pub extend SessionImportSource with Debug::{to_repr}
@@ -41,12 +41,6 @@ pub extend SessionImportPayload with ToJson::{to_json}
 
 ///|
 pub extend SessionImportPayload with FromJson::{from_json}
-
-///|
-pub extend SessionImportReply with Debug::{to_repr}
-
-///|
-pub extend SessionImportReply with Eq::{equal, not_equal}
 
 ///|
 pub extend SessionImportReply with ToJson::{to_json}
