@@ -83,6 +83,20 @@ async fn Harness::start(
 }
 
 ///|
+/// Wait until a child has read its request and signalled it with
+/// `touch "$RESULT.reading"`, so a teardown lands while it is truly live.
+async fn Harness::reading(self : Harness) -> Unit {
+  for _ in 0..<400 {
+    let entries = @fs.readdir("\{self.root}/results") catch { _ => [] }
+    if entries.any(name => name.has_suffix(".reading")) {
+      return
+    }
+    @async.sleep(25)
+  }
+  fail("no child started reading")
+}
+
+///|
 /// The child's settled subagent part, once its job is terminal.
 async fn Harness::settled(
   self : Harness,
@@ -305,6 +319,7 @@ async test "session teardown gives a live child its grace" {
     let h = harness(
       group,
       (
+        #|touch "$RESULT.reading"
         #|cat >/dev/null
         #|result '"status":"completed","output":{"answer":"at shutdown"}'
       ),
@@ -316,13 +331,15 @@ async test "session teardown gives a live child its grace" {
       }
     })
     let _ = h.start()
-    @async.sleep(200)
+    h.reading()
     fail("tear the session down")
   }) catch {
     _ => ()
   }
   guard events is [.., last] else { fail("expected job events") }
-  assert_true(last.subagent is Some({ outcome: Some(Captured), .. }))
+  guard last.subagent is Some({ outcome: Some(Captured), .. }) else {
+    fail("expected Captured, got \{Repr(last.subagent)}")
+  }
 }
 
 ///|
@@ -380,6 +397,7 @@ async test "teardown drains a child that writes during its grace" {
     let h = harness(
       group,
       (
+        #|touch "$RESULT.reading"
         #|cat >/dev/null
         #|i=0
         #|while [ $i -lt 20000 ]; do echo "winding down $i"; i=$((i+1)); done
@@ -393,13 +411,15 @@ async test "teardown drains a child that writes during its grace" {
       }
     })
     let _ = h.start()
-    @async.sleep(200)
+    h.reading()
     fail("tear the session down")
   }) catch {
     _ => ()
   }
   guard events is [.., last] else { fail("expected job events") }
-  assert_true(last.subagent is Some({ outcome: Some(Captured), .. }))
+  guard last.subagent is Some({ outcome: Some(Captured), .. }) else {
+    fail("expected Captured, got \{Repr(last.subagent)}")
+  }
 }
 
 ///|
