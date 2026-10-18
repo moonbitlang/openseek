@@ -6131,6 +6131,9 @@ fn update_msg(
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
     // The Workflows tab: opened like the explorer inventories, keeping the
     // right panel on screen with its launcher menu closed.
+    // A subagent job's transcript opens like any session from the sidebar.
+    Jobs(OpenSession(session_id)) =>
+      update(dispatch, OpenSessionHere(session_id), model)
     Jobs(msg) => {
       let (cmd, jobs) = @jobs.update(
         locale=model.locale,
@@ -11561,6 +11564,25 @@ test "open session is a no-op for the current session" {
   )
   inspect(next.active_session, content="desktop-test")
   inspect(next.conversations.length(), content="1")
+}
+
+///|
+test "the jobs panel opens a subagent's session like the sidebar does" {
+  let dispatch = test_dispatch()
+  let model = test_model()
+  let (_, next) = update(
+    dispatch,
+    Jobs(OpenSession("desktop-test-sr-2")),
+    model,
+  )
+  guard next.selected_conversation is Some(selection) else {
+    fail("expected the subagent's session to be selected")
+  }
+  inspect(selection.session, content="desktop-test-sr-2")
+  assert_true(
+    next.loading_conversation
+    is Some({ channel: Local, session: "desktop-test-sr-2", }),
+  )
 }
 
 ///|

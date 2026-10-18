@@ -462,3 +462,79 @@ test "interruption requires a fresh EOF even when persisted bytes trail the curs
   assert_true(selected.reading)
   assert_true(selected.eof_state is None)
 }
+
+///|
+fn subagent_job(
+  state : @wire.JobState,
+  outcome : @wire.SubagentOutcome?,
+  usage? : @wire.SubagentUsage,
+) -> @wire.JobRecord {
+  {
+    ..fixture_job("agent", state).job,
+    output_bytes: 900L,
+    subagent: Some({
+      kind: "explore",
+      label: "find the parser",
+      session: "parent-sr-3",
+      launch: Direct,
+      outcome,
+      usage,
+      report: None,
+      workspace: InPlace,
+    }),
+  }
+}
+
+///|
+/// A subagent's row names the agent's task and says what it achieved and
+/// spent, where a command's row gives its process state and output size.
+test "a subagent job reads as an agent, not a command" {
+  let live = subagent_job(Running, None)
+  assert_eq(job_title(live), "explore: find the parser")
+  assert_eq(job_status(live), ("Running", "running"))
+  assert_eq(job_extent(live), "")
+  let reported = subagent_job(
+    Exited(0),
+    Some(Captured),
+    usage=Known(
+      steps=Some(12),
+      prompt_tokens=1000,
+      completion_tokens=200,
+      cost_usd=None,
+      source=Result,
+      unaccounted=None,
+    ),
+  )
+  assert_eq(job_status(reported), ("Reported", "completed"))
+  assert_eq(job_extent(reported), "12 steps · 1200 tokens")
+  // A stopped child that exited cleanly during its grace is still stopped.
+  assert_eq(
+    job_status(subagent_job(Exited(0), Some(Stopped))),
+    ("Stopped", "stopped"),
+  )
+  assert_eq(
+    job_status(subagent_job(Exited(1), Some(Failed("no key")))),
+    ("Failed · no key", "failed"),
+  )
+  assert_eq(
+    job_status(subagent_job(Exited(0), Some(NoReport))),
+    ("No report", "failed"),
+  )
+  // Spend without a step count shows tokens alone; a command keeps bytes.
+  let unknown_steps = subagent_job(
+    Exited(0),
+    Some(Captured),
+    usage=Known(
+      steps=None,
+      prompt_tokens=5,
+      completion_tokens=5,
+      cost_usd=None,
+      source=Result,
+      unaccounted=None,
+    ),
+  )
+  assert_eq(job_extent(unknown_steps), "10 tokens")
+  let command = fixture_job("cmd", Exited(0)).job
+  assert_eq(job_title(command), "worker")
+  assert_eq(job_extent(command), "0 B")
+}

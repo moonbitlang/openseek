@@ -8,6 +8,10 @@ priv enum DynamicMessage {
   DStarted(String)
   DWorkingDirectory(String)
   DLastOutput(String)
+  DFailedBecause(String)
+  DSpent(String)
+  DSpentSteps(String, String)
+  DSession(String)
 }
 
 ///|
@@ -53,5 +57,26 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DLastOutput(p0)) => "上次输出在 \{p0} 秒前"
     (TraditionalChinese, DLastOutput(p0)) => "上次輸出在 \{p0} 秒前"
     (Japanese, DLastOutput(p0)) => "最終出力は \{p0} 秒前"
+    (English, DFailedBecause(p0)) => "Failed · \{p0}"
+    (Spanish, DFailedBecause(p0)) => "Falló · \{p0}"
+    (SimplifiedChinese, DFailedBecause(p0)) => "失败 · \{p0}"
+    (TraditionalChinese, DFailedBecause(p0)) => "失敗 · \{p0}"
+    (Japanese, DFailedBecause(p0)) => "失敗 · \{p0}"
+    (English, DSpent(p0)) => "\{p0} tokens"
+    (Spanish, DSpent(p0)) => "\{p0} tokens"
+    (SimplifiedChinese, DSpent(p0)) => "\{p0} 个 token"
+    (TraditionalChinese, DSpent(p0)) => "\{p0} 個 token"
+    (Japanese, DSpent(p0)) => "\{p0} トークン"
+    (English, DSpentSteps(p0, p1)) => "\{p0} steps · \{p1} tokens"
+    (Spanish, DSpentSteps(p0, p1)) => "\{p0} pasos · \{p1} tokens"
+    (SimplifiedChinese, DSpentSteps(p0, p1)) => "\{p0} 步 · \{p1} 个 token"
+    (TraditionalChinese, DSpentSteps(p0, p1)) => "\{p0} 步 · \{p1} 個 token"
+    (Japanese, DSpentSteps(p0, p1)) =>
+      "\{p0} ステップ · \{p1} トークン"
+    (English, DSession(p0)) => "Session: \{p0}"
+    (Spanish, DSession(p0)) => "Sesión: \{p0}"
+    (SimplifiedChinese, DSession(p0)) => "会话：\{p0}"
+    (TraditionalChinese, DSession(p0)) => "工作階段：\{p0}"
+    (Japanese, DSession(p0)) => "セッション：\{p0}"
   }
 }

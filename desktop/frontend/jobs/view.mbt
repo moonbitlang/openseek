@@ -8,6 +8,18 @@ fn job_status(
   if job.cleanup_error is Some(_) {
     return (ui(locale, CleanupFailed), "failed")
   }
+  // An ended subagent says what it achieved, not how its process exited.
+  if job.subagent is Some({ outcome: Some(outcome), .. }) {
+    return match outcome {
+      Captured => (ui(locale, ReportedLabel), "completed")
+      NoReport => (ui(locale, NoReportLabel), "failed")
+      MaxSteps => (ui(locale, OutOfStepsLabel), "failed")
+      ContextYield => (ui(locale, ContextFullLabel), "failed")
+      TimedOut => (ui(locale, TimedOutLabel), "failed")
+      Stopped => (ui(locale, StoppedLabel), "stopped")
+      Failed(reason) => (dynamic_text(locale, DFailedBecause(reason)), "failed")
+    }
+  }
   match job.state {
     Running => (ui(locale, RunningLabel), "running")
     Stopping => (ui(locale, StoppingLabel), "stopping")
@@ -22,6 +34,39 @@ fn job_status(
     Stopped(reason) =>
       (dynamic_text(locale, DStopped(reason.to_string())), "stopped")
     Interrupted => (ui(locale, InterruptedLabel), "stopped")
+  }
+}
+
+///|
+/// What a job is about, for its row: an agent's kind and task, or the
+/// command's own description.
+fn job_title(job : @wire.JobRecord) -> String {
+  match job.subagent {
+    Some(info) => "\{info.kind}: \{info.label}"
+    None => job.description.unwrap_or(job.command)
+  }
+}
+
+///|
+/// What a job's row adds after its timing: an agent's spend once known,
+/// otherwise how much output the job wrote.
+fn job_extent(
+  locale~ : @i18n.Locale = English,
+  job : @wire.JobRecord,
+) -> String {
+  match job.subagent {
+    Some(
+      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. }
+    ) => {
+      let tokens = (prompt_tokens + completion_tokens).to_string()
+      match steps {
+        Some(steps) =>
+          dynamic_text(locale, DSpentSteps(steps.to_string(), tokens))
+        None => dynamic_text(locale, DSpent(tokens))
+      }
+    }
+    Some(_) => ""
+    None => "\{job.output_bytes} B"
   }
 }
 
@@ -197,13 +242,17 @@ pub fn panel(
                 status_label,
               ),
             ]),
-            @html.div(
-              class="jobs-command",
-              job.description.unwrap_or(job.command),
-            ),
+            @html.div(class="jobs-command", job_title(job)),
             @html.div(
               class="jobs-row-meta",
-              "\{job_timing(locale~, job)} · \{job.output_bytes} B",
+              {
+                let extent = job_extent(locale~, job)
+                if extent.is_empty() {
+                  job_timing(locale~, job)
+                } else {
+                  "\{job_timing(locale~, job)} · \{extent}"
+                }
+              },
             ),
           ],
         )
@@ -278,6 +327,19 @@ pub fn panel(
           ),
         ),
       ]
+      if job.subagent is Some(info) {
+        details.push(@html.div(class="jobs-detail-meta", job_title(job)))
+        details.push(
+          @html.div(
+            class="jobs-detail-meta",
+            dynamic_text(locale, DSession(info.session)),
+          ),
+        )
+        let extent = job_extent(locale~, job)
+        if !extent.is_empty() {
+          details.push(@html.div(class="jobs-detail-meta", extent))
+        }
+      }
       if job.cwd is Some(cwd) {
         details.push(
           @html.div(
@@ -311,6 +373,15 @@ pub fn panel(
           ui(locale, CopyId),
         ),
       ]
+      if job.subagent is Some(info) {
+        actions.push(
+          @html.button(
+            class="jobs-action",
+            on_click=emit(OpenSession(info.session)),
+            ui(locale, OpenTranscript),
+          ),
+        )
+      }
       if view.output_path is Some(path) {
         details.push(
           @html.div(class="jobs-path", [@html.code(title=path, path)]),

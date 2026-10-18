@@ -44,6 +44,12 @@ priv enum UiMessage {
   NoRetainedOutput
   NoOutputYet
   StopDescription
+  ReportedLabel
+  NoReportLabel
+  OutOfStepsLabel
+  ContextFullLabel
+  TimedOutLabel
+  OpenTranscript
 }
 
 ///|
@@ -294,5 +300,35 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "停止操作作用於直接程序。日誌隨會話保留。"
     (Japanese, StopDescription) =>
       "停止操作は直接のプロセスに適用されます。ログはセッションとともに保持されます。"
+    (English, ReportedLabel) => "Reported"
+    (Spanish, ReportedLabel) => "Informó"
+    (SimplifiedChinese, ReportedLabel) => "已提交报告"
+    (TraditionalChinese, ReportedLabel) => "已提交報告"
+    (Japanese, ReportedLabel) => "報告済み"
+    (English, NoReportLabel) => "No report"
+    (Spanish, NoReportLabel) => "Sin informe"
+    (SimplifiedChinese, NoReportLabel) => "无报告"
+    (TraditionalChinese, NoReportLabel) => "無報告"
+    (Japanese, NoReportLabel) => "報告なし"
+    (English, OutOfStepsLabel) => "Out of steps"
+    (Spanish, OutOfStepsLabel) => "Sin pasos"
+    (SimplifiedChinese, OutOfStepsLabel) => "步数用尽"
+    (TraditionalChinese, OutOfStepsLabel) => "步數用盡"
+    (Japanese, OutOfStepsLabel) => "ステップ上限"
+    (English, ContextFullLabel) => "Context full"
+    (Spanish, ContextFullLabel) => "Contexto lleno"
+    (SimplifiedChinese, ContextFullLabel) => "上下文已满"
+    (TraditionalChinese, ContextFullLabel) => "上下文已滿"
+    (Japanese, ContextFullLabel) => "コンテキスト上限"
+    (English, TimedOutLabel) => "Timed out"
+    (Spanish, TimedOutLabel) => "Tiempo agotado"
+    (SimplifiedChinese, TimedOutLabel) => "已超时"
+    (TraditionalChinese, TimedOutLabel) => "已逾時"
+    (Japanese, TimedOutLabel) => "タイムアウト"
+    (English, OpenTranscript) => "Open transcript"
+    (Spanish, OpenTranscript) => "Abrir transcripción"
+    (SimplifiedChinese, OpenTranscript) => "打开记录"
+    (TraditionalChinese, OpenTranscript) => "開啟記錄"
+    (Japanese, OpenTranscript) => "記録を開く"
   }
 }
