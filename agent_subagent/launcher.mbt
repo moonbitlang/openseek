@@ -282,7 +282,6 @@ pub async fn Launcher::start(
   let (provisioned, input) = match (slice, input) {
     (Some(slice), Object(fields)) => {
       self.working[session] = ()
-      self.known[session] = ()
       admitted()
       match self.provision(slice, claimed) {
         Ok(provisioned) =>
@@ -386,6 +385,10 @@ pub async fn Launcher::start(
     }
   }
   registered.val = true
+  // Its hand-off reaches the model through its own job from here on.
+  if slice is Some(_) {
+    self.known[session] = ()
+  }
   owner.starts += 1
   owner.jobs[job_id] = ()
   owner.live[child.session] = ()

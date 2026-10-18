@@ -366,3 +366,55 @@ async test "a change handed over at shutdown is reported until it is taken" {
     assert_true(fresh.launcher.recover() is [])
   })
 }
+
+///|
+/// A start cut short after its reservation is saved (here while the
+/// dependency cache is being copied in) leaves no worker behind: recovery
+/// takes what it forked, and the same slice can start again.
+#cfg(not(platform="windows"))
+async test "a cancelled worker start leaves nothing that blocks a retry" {
+  @async.with_task_group(group => {
+    let (root, repo) = seeded(group)
+    // A dependency cache big enough that copying it is a window to cancel in.
+    for i in 0..<400 {
+      let dir = "\{repo}/.mooncakes/pkg\{i}"
+      @fs.mkdir(dir, recursive=true)
+      @fs.write_file("\{dir}/f.txt", "x", create_mode=CreateOrTruncate)
+    }
+    let h = harness(
+      group,
+      "touch \"$RESULT.reading\"; cat > /dev/null",
+      root~,
+      cwd=repo,
+    )
+    let registry = "\{repo}/.git/openseek/subtasks"
+    let start = group.spawn(() => h.start_worker("fix-lib", ["lib"]))
+    let mut saw_running = false
+    for _ in 0..<2000 {
+      for name in (@fs.readdir(registry) catch { _ => [] }) {
+        let text = @fs.read_file("\{registry}/\{name}").text() catch { _ => "" }
+        if name.has_suffix(".json") && text.contains("\"Running\"") {
+          saw_running = true
+        }
+      }
+      if saw_running {
+        break
+      }
+      @async.sleep(1)
+    }
+    start.cancel()
+    ignore(start.wait()) catch {
+      _ => ()
+    }
+    // Whether or not the cancel landed before the job registered, what is
+    // left blocks nothing: recovery takes an orphan, and a retry starts.
+    ignore(h.launcher.recover())
+    guard h.start_worker("fix-lib", ["lib"]) is Started(job_id~, ..) else {
+      fail(
+        "the cancelled start still blocks its slice (saw running: \{saw_running})",
+      )
+    }
+    ignore(h.runtime.stop(job_id))
+    ignore(h.settled(job_id))
+  })
+}
