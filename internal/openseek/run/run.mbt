@@ -221,6 +221,11 @@ async fn run_general(
   approval_policy~ : @execution.ApprovalPolicy,
   delegate~ : Bool,
 ) -> Unit {
+  if claim_token(matches) is Some(_) {
+    fail(
+      "--claim is for a --kind run: the general agent starts its own session",
+    )
+  }
   let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
@@ -347,14 +352,25 @@ async fn run_preset(
     String,
     async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
   ) = match @setup.resolved_session_id(matches) {
-    None => (name, (session, item) => turn.record(session.append(item)))
+    None => {
+      if claim_token(matches) is Some(_) {
+        fail("--claim names a claimed session, so it needs --session")
+      }
+      (name, (session, item) => turn.record(session.append(item)))
+    }
     Some(id) => {
       let session_root = @setup.session_root(matches, workspace_root~)
       let store = @store.SessionStore(session_root)
-      if store.exists(id) {
-        fail(
-          "a --kind run starts a new session, and \{id.value()} already exists",
-        )
+      // A launcher that claimed the session hands it over with its token;
+      // any other existing session is refused.
+      match claim_token(matches) {
+        Some(token) => store.accept_claim(id, token)
+        None =>
+          if store.exists(id) {
+            fail(
+              "a --kind run starts a new session, and \{id.value()} already exists",
+            )
+          }
       }
       // Named only once something is recorded: a preset refused for want of
       // a key, or the modelless `echo`, leaves no transcript to point at.
@@ -363,6 +379,10 @@ async fn run_preset(
         (session, item) => {
           let next = store.append(session, item)
           if turn.session is None {
+            // Recorded: a claimed session is an ordinary one from here on.
+            if claim_token(matches) is Some(_) {
+              store.settle_claim(id)
+            }
             turn.session = Some(id.value())
             @emit.emit(
               SessionStarted(

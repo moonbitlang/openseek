@@ -33,7 +33,7 @@ struct SubrunResult[T] {
   completion_tokens : Int32
   cost_usd : Double?
   unaccounted : String?
-  subrun_id : String
+  subrun_id : String?
 } derive(Debug)
 
 ///|
@@ -74,8 +74,9 @@ pub fn[T] SubrunResult::unaccounted(self : SubrunResult[T]) -> String? {
 /// The runner-assigned sub-run id ("sr-N"): the same id the
 /// SubrunStarted/SubrunFinished brackets carried, and — when the child was
 /// launched with a `ChildSession` — the suffix of the child's durable
-/// session id.
-pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String {
+/// session id. `None` when no child was launched because its session could
+/// not be claimed.
+pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String? {
   self.subrun_id
 }
 
@@ -104,7 +105,9 @@ pub fn[T] SubrunResult::subrun_id(self : SubrunResult[T]) -> String {
 /// Lifecycle brackets: the runner emits `SubrunStarted{id, kind, label}`
 /// before anything else and a PAIRED `SubrunFinished{id, status, costs}` on
 /// every exit — success, failure, and cancellation (emitted before the
-/// re-raise) — so a reader never shows a sub-run as running forever. Both
+/// re-raise) — so a reader never shows a sub-run as running forever. (A
+/// durable child whose session cannot be claimed is never launched and gets
+/// no brackets: it is a `Failed` result with no id.) Both
 /// land during the parent's tool call, well before the parent turn's own
 /// terminal event, which the TUI's stale-run guard requires. `label` is
 /// display-bounded here defensively; `emit_event` is a test seam that
@@ -122,22 +125,44 @@ pub async fn[T] run_subrun(
   extra_env? : Map[String, String],
   emit_event~ : (@protocol.Event) -> Unit = event => @emit.emit(event),
 ) -> SubrunResult[T] {
-  // Bump the process counter past any child ordinal an earlier engine
-  // process already persisted for this parent — monotonic, so it can only
-  // skip ids, never reuse one. Without a child session, a floor of 1 is a
-  // no-op.
-  let first_free = match child_session {
-    Some(spec) => spec.first_free
-    None => 1
-  }
-  let id = "sr-\{reserve_subrun_ordinals(1, first_free~)}"
-  // The child persists its own transcript under `<parent>-<id>` when the
-  // parent is durable: the id exists only after allocation, so the session
-  // argv is the runner's to append, not the caller's.
-  let args = match child_session {
+  // A durable child gets a session claimed for it (`ChildSession::claim`):
+  // the id exists only after the claim, so the session argv is the runner's
+  // to append, not the caller's. A claim that fails launches nothing, so
+  // there is no child to bracket or to name.
+  let (id, args) = match child_session {
     Some(spec) =>
-      [..args, "--session", "\{spec.parent}-\{id}", "--session-root", spec.root]
-    None => [..args, "--no-session"]
+      try spec.claim() catch {
+        error =>
+          return {
+            value: None,
+            terminal: Failed("could not claim a child session: \{error}"),
+            steps_used: 0,
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            cost_usd: None,
+            unaccounted: None,
+            subrun_id: None,
+          }
+      } noraise {
+        claimed =>
+          (
+            claimed.subrun_id,
+            [
+              ..args,
+              "--session",
+              claimed.session,
+              "--session-root",
+              spec.root,
+              "--claim",
+              claimed.token,
+            ],
+          )
+      }
+    None =>
+      (
+        "sr-\{reserve_subrun_ordinals(1, first_free=1)}",
+        [..args, "--no-session"],
+      )
   }
   emit_event(
     SubrunStarted(id~, kind~, label=@agent_tool.brief_line(label, limit=72)),
@@ -228,7 +253,7 @@ pub async fn[T] run_subrun(
     completion_tokens,
     cost_usd: attempt.bind(a => a.cost_usd),
     unaccounted,
-    subrun_id: id,
+    subrun_id: Some(id),
   }
 }
 
@@ -251,6 +276,12 @@ struct ChildSession {
 }
 
 ///|
+/// The session store root the children's sessions live in.
+pub fn ChildSession::root(self : ChildSession) -> String {
+  self.root
+}
+
+///|
 /// See `ChildSession`.
 pub fn ChildSession::ChildSession(
   root~ : String,
@@ -258,6 +289,58 @@ pub fn ChildSession::ChildSession(
   first_free~ : Int32 = 1,
 ) -> ChildSession {
   { root, parent, first_free, }
+}
+
+///|
+/// A child session claimed for one launch.
+pub struct ClaimedChild {
+  /// The sub-run id, `sr-N`.
+  subrun_id : String
+  /// The child's session id, `<parent>-sr-N`.
+  session : String
+  /// What the child presents with `--claim` to accept the session.
+  token : String
+}
+
+///|
+/// Claim the next child session of this parent for one launch.
+///
+/// The ordinal comes from the process's ONE counter, the same one a hosted
+/// workflow's block is reserved from, so claims and blocks never overlap in
+/// this process whichever comes first. The claim itself creates the
+/// session's directory exclusively (`SessionStore::claim`), so a sibling
+/// process allocating for the same parent cannot take the same child. On a
+/// taken ordinal the floor is refreshed from the store's listing, past every
+/// child session that exists now, and the claim tries again; the floor
+/// captured when this session started can be far behind a sibling that has
+/// been launching since. Every other failure raises, and the ordinal it
+/// reached stays consumed.
+pub async fn ChildSession::claim(self : ChildSession) -> ClaimedChild {
+  let store = @store.SessionStore(self.root)
+  let mut floor = self.first_free
+  for ;; {
+    let ordinal = reserve_subrun_ordinals(1, first_free=floor)
+    let session = "\{self.parent}-sr-\{ordinal}"
+    match store.claim(SessionId(session)) {
+      Claimed(token~) => return { subrun_id: "sr-\{ordinal}", session, token, }
+      Taken => {
+        let highest = store
+          .list()
+          .iter()
+          .filter_map(id => {
+            match @protocol.split_child_session_id(id.value()) {
+              Some((parent, child)) if parent == self.parent => Some(child)
+              _ => None
+            }
+          })
+          .maximum()
+          .unwrap_or(ordinal)
+        // Past every existing child, and past this ordinal even if the
+        // listing raced its creation.
+        floor = (if highest > ordinal { highest } else { ordinal }) + 1
+      }
+    }
+  }
 }
 
 ///|

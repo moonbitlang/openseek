@@ -354,28 +354,37 @@ async test "a context yield closes with its status" {
 }
 
 ///|
-/// With a `ChildSession` the runner appends the child's durable-session
-/// argv AFTER allocating the sub-run id: the scripted child's positional
-/// view of its own argv pins both flag names and the `<parent>-<id>`
-/// derivation, and the result carries the same id.
-async test "child_session appends session argv derived from the sub-run id" {
+/// With a `ChildSession` the runner claims the child's session and appends
+/// its argv AFTER allocating the sub-run id: the scripted child's positional
+/// view of its own argv pins the flag names, the `<parent>-<id>`
+/// derivation and the claim token, and the result carries the same id.
+async test "child_session claims the session and appends its argv" {
   let script =
-    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$2 $3 $4 $5\"}"
+    #|result "\"status\":\"completed\",\"output\":{\"answer\":\"$2 $3 $4 $5 $6 $7\"}"
   guard can_spawn_sh() else {
     println("skipped: cannot spawn sh")
     return
   }
+  let root = @fs.tmpdir(prefix="openseek-subrun-claim-")
+  defer @fs.rmdir(root, recursive=true)
   let result = run_script(
     script,
-    child_session=ChildSession(root="/tmp/subrun-root", parent="parent-id"),
+    child_session=ChildSession(root~, parent="parent-id"),
   )
   guard result.value() is Some(argv) else {
     fail("expected a captured report, got \{Repr(result.terminal())}")
   }
-  assert_eq(
-    argv,
-    "--session parent-id-\{result.subrun_id()} --session-root /tmp/subrun-root",
-  )
+  let session = "parent-id-\{launched_id(result)}"
+  guard argv.split(" ").collect() is [.. prefix, token] else {
+    fail("unexpected argv \{argv}")
+  }
+  assert_eq(prefix.map(part => part.to_owned()), [
+    "--session", session, "--session-root", root, "--claim",
+  ])
+  // The scripted child does not accept its claim, so the claim is still
+  // there, for the token the child was given.
+  assert_eq(token.length(), 32)
+  @store.SessionStore(root).accept_claim(SessionId(session), token.to_owned())
 }
 
 ///|
@@ -390,27 +399,114 @@ async test "child_session's ordinal floor skips persisted ids" {
     println("skipped: cannot spawn sh")
     return
   }
+  let root = @fs.tmpdir(prefix="openseek-subrun-floor-")
+  defer @fs.rmdir(root, recursive=true)
   let result = run_script(
     script,
-    child_session=ChildSession(
-      root="/tmp/subrun-root",
-      parent="resumed",
-      first_free=50_000,
-    ),
+    child_session=ChildSession(root~, parent="resumed", first_free=50_000),
   )
   guard result.value() is Some(session_arg) else {
     fail("expected a captured report, got \{Repr(result.terminal())}")
   }
   // $3 is the --session value: parent + the allocated id, at or past the floor.
-  assert_eq(session_arg, "resumed-\{result.subrun_id()}")
-  guard result.subrun_id().strip_prefix("sr-") is Some(digits) else {
-    fail("unexpected subrun id \{result.subrun_id()}")
+  assert_eq(session_arg, "resumed-\{launched_id(result)}")
+  assert_true(ordinal_of(launched_id(result)) >= 50_000)
+}
+
+///|
+/// The id of the child a sub-run launched; every launch has one.
+fn[T] launched_id(result : @agent_subrun.SubrunResult[T]) -> String raise {
+  guard result.subrun_id() is Some(id) else {
+    fail("expected a launched child, got \{Repr(result.terminal())}")
+  }
+  id
+}
+
+///|
+fn ordinal_of(subrun_id : String) -> Int32 raise {
+  guard subrun_id.strip_prefix("sr-") is Some(digits) else {
+    fail("unexpected subrun id \{subrun_id}")
   }
   let mut ordinal = 0
   for c in digits {
     ordinal = ordinal * 10 + (c.to_int() - '0'.to_int())
   }
-  assert_true(ordinal >= 50_000)
+  ordinal
+}
+
+///|
+/// Claims and a hosted workflow's block draw from one counter, so neither
+/// can land inside the other, whichever comes first.
+async test "claims and hosted blocks never overlap, in either order" {
+  let root = @fs.tmpdir(prefix="openseek-subrun-order-")
+  defer @fs.rmdir(root, recursive=true)
+  let spec = @agent_subrun.ChildSession(root~, parent="mixed")
+  let first = ordinal_of(spec.claim().subrun_id)
+  let block = spec
+    .injection(exe="/opt/openseek", workspace_root="/ws")
+    .reserve(result_root="/run/tmp")
+  assert_true(block.base() > first)
+  let after = ordinal_of(spec.claim().subrun_id)
+  assert_true(after >= block.base() + @host.block_size)
+}
+
+///|
+/// A child session another process already took is stepped over, never
+/// shared. (The floor is far above every other test's allocations.)
+async test "a claim steps over a session that already exists" {
+  let root = @fs.tmpdir(prefix="openseek-subrun-taken-")
+  defer @fs.rmdir(root, recursive=true)
+  for ordinal in [70_000, 70_001] {
+    @fs.mkdir("\{root}/sessions/taken-sr-\{ordinal}", recursive=true)
+  }
+  let claimed = @agent_subrun.ChildSession(
+    root~,
+    parent="taken",
+    first_free=70_000,
+  ).claim()
+  assert_true(ordinal_of(claimed.subrun_id) >= 70_002)
+  assert_eq(claimed.session, "taken-\{claimed.subrun_id}")
+  assert_true(@fs.exists("\{root}/sessions/\{claimed.session}/claim.json"))
+}
+
+///|
+/// A claim that cannot be made launches nothing: a Failed result with no
+/// child id and no brackets, which the gate degrades to its notice.
+async test "a failed claim is Failed and launches nothing" {
+  let root = @fs.tmpdir(prefix="openseek-subrun-noclaim-")
+  defer @fs.rmdir(root, recursive=true)
+  // A file where the sessions directory should be makes every claim fail.
+  @fs.write_file("\{root}/sessions", "", create_mode=CreateNew)
+  let events : Array[@protocol.Event] = []
+  let result = run_script(
+    "touch launched",
+    child_session=ChildSession(root~, parent="blocked"),
+    emit_event=bracket_collector(events),
+  )
+  guard result.terminal() is Failed(reason) else {
+    fail("expected Failed, got \{Repr(result.terminal())}")
+  }
+  assert_true(reason.has_prefix("could not claim a child session"))
+  assert_true(result.subrun_id() is None)
+  assert_true(events is [])
+  assert_false(@fs.exists("launched"))
+}
+
+///|
+/// A sibling engine that launched many children since this session's floor
+/// was read does not exhaust the claim: the floor is refreshed past them.
+async test "a claim refreshes a stale floor past a sibling's children" {
+  let root = @fs.tmpdir(prefix="openseek-subrun-stale-")
+  defer @fs.rmdir(root, recursive=true)
+  for ordinal in 80_000..<80_100 {
+    @fs.mkdir("\{root}/sessions/busy-sr-\{ordinal}", recursive=true)
+  }
+  let claimed = @agent_subrun.ChildSession(
+    root~,
+    parent="busy",
+    first_free=80_000,
+  ).claim()
+  assert_true(ordinal_of(claimed.subrun_id) >= 80_100)
 }
 
 ///|
@@ -428,5 +524,5 @@ async test "a child without a session is launched with --no-session" {
   guard result.value() is Some(answer) else {
     fail("expected a captured report, got \{Repr(result.terminal())}")
   }
-  assert_eq(answer, "--no-session test-kind \{result.subrun_id()}")
+  assert_eq(answer, "--no-session test-kind \{launched_id(result)}")
 }

@@ -10,7 +10,7 @@
 let delegated_options : Array[String] = [
   "input-format", "cancel-on-stdin-eof", "kind", "result-file", "result-root", "dir",
   "session", "session-root", "no-session", "model", "api-url", "api-key", "thinking",
-  "max-steps", "retry-attempts", "retry-backoff-ms", "approval",
+  "max-steps", "retry-attempts", "retry-backoff-ms", "approval", "claim",
 ]
 
 ///|
@@ -79,4 +79,13 @@ async fn check_result_root(
     fail("--result-file must name a new file: \{path} already exists")
   }
   Some(root)
+}
+
+///|
+/// The token a launcher passed with `--claim`, if any.
+fn claim_token(matches : @argparse.Matches) -> String? {
+  match matches.values.get("claim") {
+    Some([token, ..]) => Some(token)
+    _ => None
+  }
 }

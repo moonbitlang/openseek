@@ -741,6 +741,10 @@ pub async fn SessionStore::listings(
   for id in self.list() {
     let path = self.session_file_path(id) catch { _ => continue }
     let stamp = @fs.mtime(path) catch {
+      // A child's session claimed for it but not yet recorded is a
+      // reserved id, not a session.
+      @os_error.OSError(_) as error if error.is_ENOENT() &&
+        self.only_claimed(id) => continue
       _ => {
         unreadable.push({
           id,
@@ -926,6 +930,17 @@ pub fn SessionStore::job_logs_dir(
   id : @agent_session.SessionId,
 ) -> String raise {
   "\{self.session_dir(id)}/jobs"
+}
+
+///|
+/// Where a subagent session's captured report is kept, beside its
+/// transcript and for as long as the session is. Prospective: nothing is
+/// created here.
+pub fn SessionStore::report_file(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/report.json"
 }
 
 ///|
