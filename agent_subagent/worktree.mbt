@@ -89,11 +89,21 @@ async fn Launcher::provision(
     root,
     name=slice.name,
     allowed_paths=slice.allowed_paths,
-    // `sr-N`: with the parent below, it names the child's session, which is
-    // how a later engine finds the worker a worktree belongs to.
-    nonce=claimed.subrun_id,
+    nonce="\{self.nonce_prefix()}\{claimed.subrun_id}",
     parent_session=self.children.parent(),
   )
+}
+
+///|
+/// What starts the nonce of every worktree this session forks: a digest of
+/// the parent session, so two sessions' `sr-N` never share a registry entry
+/// or branch, and a name a branch can carry whatever the session is called.
+/// The child's `sr-N` follows, so the entry alone names the worker's session.
+fn Launcher::nonce_prefix(self : Launcher) -> String {
+  let digest = @crypto.bytes_to_hex_string(
+    @crypto.sha256(@utf8.encode(self.children.parent())),
+  )
+  "\{digest.view(end_offset=8)}-"
 }
 
 ///|
@@ -101,8 +111,21 @@ async fn Launcher::provision(
 /// when they pass validation. Runs when its job ends, before the terminal
 /// record, which therefore carries the worktree's state.
 async fn capture(child : Child, provisioned : @subtask.Provisioned) -> Unit {
-  let captured = @subtask.capture(provisioned.geometry, provisioned.entry)
-  child.workspace = Worktree(worktree_of(captured.entry))
+  child.workspace = Worktree(
+    captured(@subtask.capture(provisioned.geometry, provisioned.entry)),
+  )
+}
+
+///|
+/// The record of a capture: when git itself failed, the worktree is left as
+/// it was, to be captured again (`Launcher::worktrees`), and says why.
+fn captured(outcome : @subtask.CaptureOutcome) -> @protocol.Worktree {
+  let worktree = worktree_of(outcome.entry)
+  match outcome.entry.state {
+    Provisioning | Running =>
+      { ..worktree, state: CaptureFailed(reasons=outcome.defects.copy()), }
+    _ => worktree
+  }
 }
 
 ///|
@@ -129,9 +152,10 @@ pub async fn Launcher::worktrees(
     } else {
       match entry.state {
         Running => {
-          let entry = @subtask.capture(geometry, entry).entry
-          (self.on_worker)(session, worktree_of(entry))
-          entry
+          let worktree = captured(@subtask.capture(geometry, entry))
+          (self.on_worker)(session, worktree)
+          found.push((session, worktree))
+          continue
         }
         Provisioning =>
           match @subtask.discard(geometry, entry) {
@@ -151,12 +175,17 @@ pub async fn Launcher::worktrees(
 
 ///|
 /// Integrate, continue or abort the integration of, or discard the worktree
-/// of the worker recording to `session`.
+/// of `worker`: the job id of a worker this engine ran, or the session of
+/// any worker this session started.
 pub async fn Launcher::worktree(
   self : Launcher,
-  session : String,
+  worker : String,
   action : WorktreeAction,
 ) -> WorktreeResult {
+  let session = match self.runtime.snapshot(worker) {
+    Some({ subagent: Some(info), .. }) => info.session
+    _ => worker
+  }
   guard self.cwd is Some(root) &&
     @subtask.resolve_geometry(root) is Ok(geometry) else {
     return Unknown
@@ -167,6 +196,11 @@ pub async fn Launcher::worktree(
   }
   guard !self.working.contains(session) else {
     return Refused("its worker is still running; stop it or wait for it first")
+  }
+  // A worktree that is gone is not touched again: a newer slice may have
+  // reused its name and directory.
+  guard !entry.state.is_terminal() else {
+    return Refused("it is already \{describe_state(worktree_of(entry).state)}")
   }
   let result = match action {
     Integrate => outcome(@subtask.integrate(geometry, entry))
@@ -207,14 +241,35 @@ async fn Launcher::entries(
   geometry : @subtask.Geometry,
 ) -> Array[(String, @subtask.SubtaskEntry)] {
   let parent = self.children.parent()
+  let prefix = self.nonce_prefix()
   let (entries, _) = @subtask.load_entries(geometry.common_git_dir)
   entries
   .iter()
   .filter_map(entry => {
-    guard entry.parent_session() is Some(owner) && owner == parent else {
+    guard entry.parent_session() is Some(owner) &&
+      owner == parent &&
+      entry.nonce().strip_prefix(prefix) is Some(subrun) else {
       return None
     }
-    Some(("\{parent}-\{entry.nonce()}", entry))
+    Some(("\{parent}-\{subrun}", entry))
   })
   .to_array()
+}
+
+///|
+/// A worktree's state, in words for the model.
+pub fn describe_state(state : @protocol.WorktreeState) -> String {
+  match state {
+    Working => "being worked on"
+    CaptureFailed(reasons~) =>
+      "not captured: \{reasons.join("; ")} (listing worktrees captures it again)"
+    Committed(commit~) => "committed as \{commit}, ready to integrate"
+    NoChanges => "unchanged; its worktree is gone"
+    Unmergeable(defects~) =>
+      "not mergeable: \{defects.join("; ")}; its worktree is kept for inspection"
+    Conflicted(commit~) =>
+      "conflicted while integrating \{commit}: resolve the markers in this checkout, then continue (or abort)"
+    Integrated => "integrated; its worktree is gone"
+    Discarded => "discarded; its worktree is gone"
+  }
 }

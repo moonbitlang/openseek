@@ -11,6 +11,8 @@ import {
 // Values
 pub fn describe_outcome(@openseek_protocol.SubagentOutcome) -> String
 
+pub fn describe_state(@openseek_protocol.WorktreeState) -> String
+
 // Errors
 
 // Types and methods

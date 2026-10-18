@@ -11,7 +11,9 @@ import {
   "moonbitlang/async/os_error",
   "moonbitlang/async/process",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
   "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
 }
 
 import {

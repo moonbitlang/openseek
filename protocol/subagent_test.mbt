@@ -130,6 +130,7 @@ test "the subagent decoder rejects malformed parts" {
 test "a worker's worktree roundtrips in every state, on its record and in its event" {
   let states : Array[@openseek_protocol.WorktreeState] = [
     Working,
+    CaptureFailed(reasons=["git commit-tree failed: no identity"]),
     Committed(commit="c0ffee"),
     NoChanges,
     Unmergeable(defects=["changed other/b.txt outside lib"]),

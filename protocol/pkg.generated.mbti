@@ -436,6 +436,7 @@ pub impl @json.FromJson for Worktree
 
 pub(all) enum WorktreeState {
   Working
+  CaptureFailed(reasons~ : Array[String])
   Committed(commit~ : String)
   NoChanges
   Unmergeable(defects~ : Array[String])

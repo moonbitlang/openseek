@@ -234,6 +234,11 @@ pub async fn discard(
       "subtask \{entry.name} belongs to a different worktree; discard it from the worktree that launched it",
     )
   }
+  // A terminal entry's worktree is gone, and a newer slice may have reused
+  // its directory: never remove it again.
+  guard !entry.state.is_terminal() else {
+    return Err("subtask \{entry.name} is already \{Repr(entry.state)}")
+  }
   if entry.commit_oid is Some(commit_oid) &&
     merge_in_progress_of(origin, commit_oid) {
     return Err("a merge of this subtask is in progress; abort it first")

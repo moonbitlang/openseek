@@ -125,6 +125,9 @@ pub(all) struct Worktree {
 pub(all) enum WorktreeState {
   /// The worker is running in it, or has not been captured yet.
   Working
+  /// Capturing it failed in git itself, for these reasons; it is left as it
+  /// was, to be captured again.
+  CaptureFailed(reasons~ : Array[String])
   /// Its changes passed validation and are committed on the branch.
   Committed(commit~ : String)
   /// It changed nothing; the worktree is gone.
@@ -351,6 +354,7 @@ pub impl FromJson for Worktree with fn from_json(json, path) {
 pub impl ToJson for WorktreeState with fn to_json(self) {
   match self {
     Working => { "kind": "working" }
+    CaptureFailed(reasons~) => { "kind": "capture_failed", "reasons": reasons }
     Committed(commit~) => { "kind": "committed", "commit": commit }
     NoChanges => { "kind": "no_changes" }
     Unmergeable(defects~) => { "kind": "unmergeable", "defects": defects }
@@ -364,6 +368,8 @@ pub impl ToJson for WorktreeState with fn to_json(self) {
 pub impl FromJson for WorktreeState with fn from_json(json, path) {
   match json {
     { "kind": "working", .. } => Working
+    { "kind": "capture_failed", "reasons": reasons, .. } =>
+      CaptureFailed(reasons=@json.from_json(reasons, path~))
     { "kind": "committed", "commit": String(commit), .. } if !commit.is_empty() =>
       Committed(commit~)
     { "kind": "no_changes", .. } => NoChanges

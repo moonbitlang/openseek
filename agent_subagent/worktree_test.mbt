@@ -88,6 +88,10 @@ async test "a worker's changes are committed on its branch and integrated on req
     // The job ended before the integration: the change is published apart.
     assert_true(h.workers is [(s, { state: Integrated, .. })] && s == session)
     assert_true(h.launcher.worktree(session, Integrate) is Refused(_))
+    // Gone is gone: a newer slice may reuse its name and directory.
+    assert_true(h.launcher.worktree(session, Discard) is Refused(_))
+    // The job id names the same worker as its session.
+    assert_true(h.launcher.worktree(job_id, Discard) is Refused(_))
   })
 }
 
@@ -166,7 +170,7 @@ async test "the next engine captures a worktree whose worker it never ran" {
         repo,
         name="fix-lib",
         allowed_paths=["lib"],
-        nonce="sr-7",
+        nonce="\{nonce_prefix("p")}sr-7",
         parent_session="p",
       )
       is Ok(provisioned) else {
@@ -182,7 +186,7 @@ async test "the next engine captures a worktree whose worker it never ran" {
         repo,
         name="theirs",
         allowed_paths=["other"],
-        nonce="sr-1",
+        nonce="\{nonce_prefix("q")}sr-1",
         parent_session="q",
       )
       is Ok(_) else {
@@ -204,5 +208,48 @@ async test "the next engine captures a worktree whose worker it never ran" {
       fail("expected the recovered worktree to integrate")
     }
     assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
+  })
+}
+
+///|
+/// The nonce prefix the launcher gives the worktrees of session `parent`.
+fn nonce_prefix(parent : String) -> String {
+  let digest = @crypto.bytes_to_hex_string(@crypto.sha256(@utf8.encode(parent)))
+  "\{digest.view(end_offset=8)}-"
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a worktree git could not capture says why, and is captured again" {
+  @async.with_task_group(group => {
+    let (root, repo) = seeded(group)
+    // The worker leaves its index locked, so staging its change fails.
+    let h = harness(
+      group,
+      worker(
+        "printf 'ALPHA\\n' > lib/a.txt; touch \"$(git rev-parse --git-dir)/index.lock\"",
+      ),
+      root~,
+      cwd=repo,
+    )
+    guard h.start_worker("fix-lib", ["lib"]) is Started(job_id~, session~) else {
+      fail("the worker did not start")
+    }
+    guard h.settled(job_id).workspace
+      is Worktree({ state: CaptureFailed(reasons=[_, ..]), path, .. }) else {
+      fail("expected a failed capture")
+    }
+    assert_true(h.launcher.worktree(session, Integrate) is Refused(_))
+    // Once the cause is gone, listing captures it.
+    guard @subtask.git_require(["rev-parse", "--git-dir"], cwd=path)
+      is Ok(git_dir) else {
+      fail("no git dir")
+    }
+    @fs.remove("\{git_dir.trim()}/index.lock")
+    guard h.launcher.worktrees() is Ok([(s, { state: Committed(..), .. })]) &&
+      s == session else {
+      fail("expected the worktree to be captured again")
+    }
+    assert_true(h.workers is [(_, { state: Committed(..), .. })])
   })
 }
