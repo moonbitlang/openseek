@@ -244,6 +244,9 @@ async test "a worktree an earlier engine left is handed over, once, with its ses
     }
     ignore(must_git(repo, ["cherry-pick", commit]))
     assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
+    // Reported until the caller says it delivered the report.
+    assert_true(h.launcher.recover() is [("p-sr-7", _)])
+    h.launcher.reported(["p-sr-7"])
     assert_true(h.launcher.recover() is [])
     assert_true(@fs.exists(theirs.entry.worker_root))
   })
@@ -358,6 +361,7 @@ async test "a change handed over at shutdown is reported until it is taken" {
       fail("expected the unreported change")
     }
     assert_eq(Some(commit), released.commit_oid)
+    h.launcher.reported(["p-sr-3"])
     assert_true(h.launcher.recover() is [])
     // Once it is taken and its branch deleted, nothing is left to report.
     ignore(must_git(repo, ["cherry-pick", commit]))

@@ -156,8 +156,8 @@ fn captured(outcome : @subtask.CaptureOutcome) -> @protocol.Worktree {
 /// released; and one it handed over that no notice of this engine carried
 /// (it ended as that engine shut down) and whose result is still there.
 /// Each comes back with its worker's session, since its job is not this
-/// engine's to read, and only once. A worktree the engine died forking is
-/// removed. Run before a worker starts, so what it left no longer holds
+/// engine's to read, until `reported` says the caller delivered it. A
+/// worktree the engine died forking is removed. Run before a worker starts, so what it left no longer holds
 /// paths the new worker may need.
 pub async fn Launcher::recover(
   self : Launcher,
@@ -177,14 +177,21 @@ pub async fn Launcher::recover(
         ignore(@subtask.discard(geometry, entry))
         continue
       }
-      self.known[session] = ()
       recovered.push((session, hand_over(geometry, entry)))
     } else if left_over(geometry, entry) is Some(worktree) {
-      self.known[session] = ()
       recovered.push((session, worktree))
     }
   }
   recovered
+}
+
+///|
+/// The caller delivered what `recover` returned for these worker sessions:
+/// it is not reported again by this engine.
+pub fn Launcher::reported(self : Launcher, sessions : Array[String]) -> Unit {
+  for session in sessions {
+    self.known[session] = ()
+  }
 }
 
 ///|

@@ -147,16 +147,19 @@ async fn start(
   let recovered_data = Json::array(
     recovered.map(found => { "session": found.0, "worktree": found.1.to_json() }),
   )
-  match
-    launcher.start(
-      kind=name,
-      input~,
-      label~,
-      max_steps~,
-      launch~,
-      validate=kind.validate,
-      slice?,
-    ) {
+  let started = launcher.start(
+    kind=name,
+    input~,
+    label~,
+    max_steps~,
+    launch~,
+    validate=kind.validate,
+    slice?,
+  )
+  // The response below carries what was recovered: from here it is
+  // delivered, and a start cut short before here reports it again.
+  launcher.reported(recovered.map(found => found.0))
+  match started {
     Started(job_id~, session~) if launch is Script(_) =>
       @agent_tool.respond(
         "\{left}started subagent \{job_id} (\{name}: \{label})",

@@ -27,6 +27,7 @@ pub fn Launcher::owns(Self, String, String) -> Bool
 pub fn Launcher::pinned(Self, String) -> Bool
 pub async fn Launcher::recover(Self) -> Array[(String, @openseek_protocol.Worktree)]
 pub fn Launcher::report(Self, String) -> Json?
+pub fn Launcher::reported(Self, Array[String]) -> Unit
 pub async fn Launcher::send(Self, String, String) -> SendResult
 pub async fn Launcher::start(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int, launch~ : @openseek_protocol.SubagentLaunch, validate~ : (Json) -> Result[Json, String], slice? : Slice) -> StartResult
 pub fn Launcher::started_by(Self, String) -> Int
