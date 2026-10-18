@@ -39,6 +39,9 @@ fn worker_input(
 ) -> Json {
   let entry = provisioned.entry
   let fields = Map::from_iter(input.iter())
+  // Set here, never taken from the caller's input: the mode decides the
+  // worker's whole scope.
+  fields["mode"] = "worktree"
   fields["worker_root"] = Json(entry.worker_root)
   fields["worker_admin_dir"] = Json(entry.worker_admin_dir)
   // Resolved before the worktree existed, so the worker's own root is not

@@ -31,11 +31,11 @@ async fn[X] seeded(group : @async.TaskGroup[X]) -> (String, String) {
 }
 
 ///|
-/// A worker child that checks it was handed its worktree, then runs `edit`
-/// in it and reports.
+/// A worker child that checks it was handed its worktree (as a worktree,
+/// whatever its caller's input said), then runs `edit` in it and reports.
 fn worker(edit : String) -> String {
   (
-    $|case "$line" in *'"worker_root"'*'"base_oid"'*) ;; *) exit 3 ;; esac
+    $|case "$line" in *'"mode":"worktree"'*'"worker_root"'*'"base_oid"'*) ;; *) exit 3 ;; esac
     $|\{edit}
     $|result '"status":"completed","output":{"status":"done"}'
   )
@@ -49,7 +49,8 @@ async fn Harness::start_worker(
 ) -> @agent_subagent.StartResult {
   self.launcher.start(
     kind="worker",
-    input={ "task": "t" },
+    // A caller's input cannot choose the mode: the workplace does.
+    input={ "task": "t", "mode": "directory" },
     label=name,
     launch=Direct,
     validate=accept,

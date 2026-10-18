@@ -26,10 +26,10 @@ pub let default_worker_deadline_ms : Int32 = 2_700_000
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
 ///
-/// A worker works in a worktree forked for it (`worker_admin_dir`, its
-/// `base_oid` and `allowed_paths` given), or in place, in a directory of the
-/// session's checkout (`"mode": "directory"`: none of them, and the whole
-/// directory is its to change).
+/// A worker works in a worktree forked for it (`"mode": "worktree"`, with
+/// `worker_admin_dir`, its `base_oid` and `allowed_paths`), or in place, in a
+/// directory of the session's checkout (`"mode": "directory"`: none of them,
+/// and the whole directory is its to change).
 pub struct WorkerInput {
   priv task : String
   priv context : String?
@@ -65,7 +65,10 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
     }
     deny_roots.push(root)
   }
-  if input is { "mode": "directory", .. } {
+  guard input is { "mode": "worktree" | "directory" as mode, .. } else {
+    return Err("worker input requires `mode`: worktree or directory")
+  }
+  if mode == "directory" {
     return Ok({
       task,
       context,

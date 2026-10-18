@@ -41,6 +41,25 @@ async fn Launcher::resolve_directory(
       "\{path} must be a directory below the session's checkout \{root}",
     )
   }
+  let relative = directory.view(start_offset=root.length() + 1).to_owned()
+  guard !relative.split("/").any(part => part is (".git" | ".worktrees")) else {
+    return Err(
+      "\{path} is git metadata or a worktree, not a directory to work in",
+    )
+  }
+  // `moon` builds a module at its root: a worker in a directory inside one
+  // could neither build nor test it.
+  let mut above = @workspace_path.parent_dir(directory)
+  while above is Some(dir) && @workspace_path.is_under_workspace_root(root, dir) {
+    for manifest in ["moon.mod", "moon.mod.json", "moon.work"] {
+      if (@fs.exists("\{dir}/\{manifest}") catch { _ => false }) {
+        return Err(
+          "\{path} is inside the MoonBit module or workspace at \{dir}, which builds at its root; give a worker that root, or a worktree",
+        )
+      }
+    }
+    above = if dir == root { None } else { @workspace_path.parent_dir(dir) }
+  }
   let deny_roots = [root]
   let common = @subtask.git_require(
     ["rev-parse", "--path-format=absolute", "--git-common-dir"],

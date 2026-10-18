@@ -123,24 +123,36 @@ async test "a running directory worker holds its directory, and only a directory
       }
       assert_true(reason.contains("overlaps"))
     }
-    // A directory that is not below the checkout, or none, is refused.
+    // A directory that is not below the checkout, or none, is refused; so
+    // is one inside a MoonBit module (it builds at the module's root), and
+    // git metadata or a worktree.
+    @fs.mkdir("\{work}/m/pkg", recursive=true)
+    @fs.write_file("\{work}/m/moon.mod", "name = \"m\"\n")
+    @fs.mkdir("\{work}/b/.worktrees/w1", recursive=true)
+    let module_root = "\{@fs.realpath(work)}/m"
     for
       (path, because) in [
         (".", "below the session's checkout"),
         (root, "below the session's checkout"),
         ("missing", "does not exist"),
         ("a/lib/a.txt", "not a directory"),
+        ("m/pkg", "inside the MoonBit module or workspace at \{module_root}"),
+        ("b/.worktrees/w1", "a worktree"),
+        ("b/.git", "git metadata"),
       ] {
       guard h.start_in(path) is Unavailable(reason) else {
         fail("\{path} was given")
       }
       assert_true(reason.contains(because))
     }
-    // Another repository is independent of it.
+    // Another repository, or a module's root, is independent of it.
     guard h.start_in("b") is Started(job_id=other, ..) else {
       fail("a separate repository was refused")
     }
-    for id in [job_id, other] {
+    guard h.start_in("m") is Started(job_id=root_job, ..) else {
+      fail("a module's root was refused")
+    }
+    for id in [job_id, other, root_job] {
       ignore(h.runtime.stop(id))
       ignore(h.settled(id))
     }
