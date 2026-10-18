@@ -80,6 +80,9 @@ struct Launcher {
   // The sessions of workers live in their worktrees, from before their
   // worktree is forked until it is captured.
   working : Map[String, Unit]
+  // Workers admitted whose session is not claimed yet, so not in `working`:
+  // counted against the cap from admission, which does not suspend.
+  mut admitting : Int32
 }
 
 ///|
@@ -126,6 +129,7 @@ pub fn[X] Launcher::Launcher(
     owners: Map([]),
     on_worker,
     working: Map([]),
+    admitting: 0,
   }
 }
 
@@ -222,7 +226,8 @@ pub async fn Launcher::start(
   guard slice is None || input is Object(_) else {
     return Unavailable("a worker's input must be an object")
   }
-  guard slice is None || self.working.length() < self.max_workers else {
+  guard slice is None ||
+    self.working.length() + self.admitting < self.max_workers else {
     return Unavailable(
       "\{self.max_workers} workers are already running; wait for one to end (job_wait) and start this one again",
     )
@@ -243,12 +248,29 @@ pub async fn Launcher::start(
       self.live -= 1
     }
   }
+  // A worker holds its place under the cap until it is in `working`.
+  let admitting = Ref(slice is Some(_))
+  if admitting.val {
+    self.admitting += 1
+  }
+  let admitted = () => {
+    if admitting.val {
+      admitting.val = false
+      self.admitting -= 1
+    }
+  }
   // Until the job is registered, every way out, cancellation included,
   // gives the slot back; after, the job does once it is published.
   let registered = Ref(false)
-  errdefer (if !registered.val { release() })
+  errdefer {
+    admitted()
+    if !registered.val {
+      release()
+    }
+  }
   let claimed = self.children.claim() catch {
     error => {
+      admitted()
       release()
       return Unavailable("could not claim a child session: \{error}")
     }
@@ -259,6 +281,7 @@ pub async fn Launcher::start(
   let (provisioned, input) = match (slice, input) {
     (Some(slice), Object(fields)) => {
       self.working[session] = ()
+      admitted()
       match self.provision(slice, claimed) {
         Ok(provisioned) =>
           (Some(provisioned), worker_input(fields, provisioned))

@@ -294,3 +294,36 @@ async test "workers are capped apart from the other subagents" {
     ignore(h.settled(job_id))
   })
 }
+
+///|
+/// Workers started at once are admitted against the cap at once: claiming
+/// their sessions suspends, and the cap must hold across it.
+#cfg(not(platform="windows"))
+async test "workers started in parallel stay within the cap" {
+  @async.with_task_group(group => {
+    let (root, repo) = seeded(group)
+    let h = harness(
+      group,
+      "touch \"$RESULT.reading\"; cat > /dev/null",
+      root~,
+      cwd=repo,
+      max_workers=1,
+    )
+    let results : Array[@agent_subagent.StartResult] = []
+    @async.with_task_group(starts => {
+      starts.spawn_bg(() => results.push(h.start_worker("one", ["lib"])))
+      starts.spawn_bg(() => results.push(h.start_worker("two", ["other"])))
+    })
+    let started = results.filter_map(result => {
+      match result {
+        Started(job_id~, ..) => Some(job_id)
+        _ => None
+      }
+    })
+    assert_eq(started.length(), 1)
+    for job_id in started {
+      ignore(h.runtime.stop(job_id))
+      ignore(h.settled(job_id))
+    }
+  })
+}
