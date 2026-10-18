@@ -469,7 +469,10 @@ async fn verify_hosted(root : String, temp : String) -> Unit {
           assert_true(output.contains("INCOMPLETE:"), msg=output)
         "missing" => assert_true(output.contains("TransportError"), msg=output)
         "busy" | "busy-last" =>
-          assert_true(output.contains("INCOMPLETE: could not start"), msg=output)
+          assert_true(
+            output.contains("INCOMPLETE: could not start"),
+            msg=output,
+          )
         "bad-line"
         | "fractional-line"
         | "missing-file"
