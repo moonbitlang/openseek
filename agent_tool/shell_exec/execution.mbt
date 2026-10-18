@@ -65,6 +65,9 @@ struct ShellExecution {
   // Why the first stop was requested, recorded when it was: later trouble
   // during the wind-down (a capture error, say) does not replace it.
   mut stop_cause : StopCause?
+  // Set once the child is seen to exit on its own: a stop requested after
+  // that (while its output drains) did not end it.
+  mut exited_on_its_own : Bool
   mut ending : Bool
   mut on_ending : (() -> Unit)?
   // Foreground semantics: kill the child once the sink fills (output prefix hit
@@ -138,6 +141,13 @@ pub async fn[X] ShellExecution::start(
       stdin_reader
     }
   }
+  // The handler runs on every cancellation, a requested stop or the group's
+  // teardown alike; teardown requests nothing, so it is recorded here, before
+  // the handler's own effects, unless a cause is already known.
+  let started : Ref[ShellExecution?] = Ref(None)
+  let CancellationHandler(cancel) = cancel_handler.unwrap_or_else(() => {
+    @process.hard_cancel()
+  })
   let process = @process.spawn(
     group,
     program,
@@ -146,7 +156,12 @@ pub async fn[X] ShellExecution::start(
     stdout=writer,
     stderr=writer,
     cwd?=cwd.map(cwd => cwd.view()),
-    cancel_handler=cancel_handler.unwrap_or_else(() => @process.hard_cancel()),
+    cancel_handler=CancellationHandler(pid => {
+      if started.val is Some(exec) {
+        exec.note_stop()
+      }
+      cancel(pid)
+    }),
     no_wait=true,
     no_console_window=true,
   )
@@ -156,6 +171,7 @@ pub async fn[X] ShellExecution::start(
     status: Running,
     cancel_requested: false,
     stop_cause: None,
+    exited_on_its_own: false,
     ending: false,
     on_ending: None,
     kill_when_full,
@@ -169,6 +185,7 @@ pub async fn[X] ShellExecution::start(
     finished_at_ms: None,
     killed_by_time_limit: false,
   }
+  started.val = Some(exec)
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
     // A process with its own cancel handler winds down over a grace when its
     // group is cancelled, and may write its last output then: keep draining
@@ -251,6 +268,7 @@ async fn ShellExecution::monitor(
       if self.cancel_requested {
         Killed
       } else {
+        self.exited_on_its_own = true
         Exited(code)
       }
     } catch {
@@ -318,23 +336,28 @@ pub async fn ShellExecution::stop(self : ShellExecution) -> Bool {
 /// orphan. The monitor (on the session group) then reaps it to `Killed`.
 pub fn ShellExecution::request_stop(self : ShellExecution) -> Unit {
   self.begin_ending()
-  // Each watchdog marks its reason before it asks, so the first request
-  // knows why it was made.
-  if self.stop_cause is None {
-    self.stop_cause = Some(
-      if self.sink.failure is Some(reason) {
-        CaptureFailed(reason)
-      } else if self.killed_by_output_limit {
-        OutputLimit
-      } else if self.killed_by_time_limit {
-        TimeLimit
-      } else {
-        Requested
-      },
-    )
-  }
+  self.note_stop()
   self.cancel_requested = true
   self.process.cancel()
+}
+
+///|
+/// Record why the execution is being stopped, if this is the first time and
+/// the child has not already exited on its own. Each watchdog marks its
+/// reason before it asks, so the first request knows why it was made.
+fn ShellExecution::note_stop(self : ShellExecution) -> Unit {
+  guard self.stop_cause is None && !self.exited_on_its_own else { return }
+  self.stop_cause = Some(
+    if self.sink.failure is Some(reason) {
+      CaptureFailed(reason)
+    } else if self.killed_by_output_limit {
+      OutputLimit
+    } else if self.killed_by_time_limit {
+      TimeLimit
+    } else {
+      Requested
+    },
+  )
 }
 
 ///|

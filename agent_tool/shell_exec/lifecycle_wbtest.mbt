@@ -109,3 +109,46 @@ async test "the first stop cause is kept" {
     exec.wait()
   })
 }
+
+///|
+/// Teardown cancels the process without requesting a stop; the handler
+/// wrapper records it as the first cause, so trouble while the child winds
+/// down does not replace it.
+async test "teardown is recorded as the first stop cause" {
+  @async.with_task_group(group => {
+    let exec = ShellExecution::start(
+      AgentTaskScope(group),
+      program="moonx",
+      args=[CLI_SLEEP, "10"],
+      cancel_handler=CancellationHandler(_ => @async.sleep(10_000)),
+    )
+    // What the group's cancellation does to the process task.
+    exec.process.cancel()
+    for _ in 0..<100 {
+      if exec.stop_cause() is Some(_) {
+        break
+      }
+      @async.sleep(10)
+    }
+    assert_true(exec.stop_cause() is Some(Requested))
+    exec.sink.failure = Some("disk full")
+    exec.request_stop()
+    assert_true(exec.stop_cause() is Some(Requested))
+  })
+}
+
+///|
+/// A child seen to exit on its own was not ended by a stop requested
+/// afterwards.
+async test "a stop after a natural exit records no cause" {
+  @async.with_task_group(group => {
+    let exec = ShellExecution::start(AgentTaskScope(group), program="moonx", args=[
+      CLI_SLEEP,
+      "0",
+    ])
+    exec.wait()
+    assert_true(exec.status() is Exited(0))
+    exec.request_stop()
+    assert_true(exec.stop_cause() is None)
+  })
+}
