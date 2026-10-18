@@ -87,7 +87,7 @@ pub fn Model::update(
   self : Model,
   emit : @cmd.Emit[Msg],
   msg : Msg,
-) -> (@cmd.Cmd, Model, (Target, @protocol.SessionImported)?) {
+) -> (@cmd.Cmd, Model, (Target, String)?) {
   guard self.content is Some(content) else { return (@cmd.none, self, None) }
   if msg.generation() is Some(g) && g != self.generation {
     return (@cmd.none, self, None)
@@ -160,7 +160,7 @@ fn Model::import_source(
   self : Model,
   emit : @cmd.Emit[Msg],
   source : @protocol.SessionImportSource,
-) -> (@cmd.Cmd, Model, (Target, @protocol.SessionImported)?) {
+) -> (@cmd.Cmd, Model, (Target, String)?) {
   guard self.content is Some(content) else { return (@cmd.none, self, None) }
   let generation = self.generation + 1
   (

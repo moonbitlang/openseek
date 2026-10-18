@@ -3239,7 +3239,7 @@ pub impl ToJson for SessionImportPayload
 pub impl @json.FromJson for SessionImportPayload
 
 pub(all) enum SessionImportReply {
-  Success(SessionImported)
+  Success(String)
   Failed(String)
 } derive(Eq, @debug.Debug)
 pub fn SessionImportReply::equal(Self, Self) -> Bool
@@ -3261,20 +3261,6 @@ pub fn SessionImportSource::to_json(Self) -> Json
 pub fn SessionImportSource::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SessionImportSource
 pub impl @json.FromJson for SessionImportSource
-
-pub(all) struct SessionImported {
-  session_id : String
-  workspace : String
-  sessions : Array[SessionListEntry]
-  worktrees : Array[WorktreeInfo]
-} derive(Eq, @debug.Debug)
-pub fn SessionImported::equal(Self, Self) -> Bool
-pub fn SessionImported::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn SessionImported::not_equal(Self, Self) -> Bool
-pub fn SessionImported::to_json(Self) -> Json
-pub fn SessionImported::to_repr(Self) -> @debug.Repr
-pub impl ToJson for SessionImported
-pub impl @json.FromJson for SessionImported
 
 pub(all) enum SessionItem {
   User(SessionUserMessage)

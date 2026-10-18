@@ -12,7 +12,7 @@ const json = JSON.stringify({
   '/api/sessions': JSON.stringify([{ key: 'session-0', id: 'original', first_prompt: 'Imported fixture' }]),
   '/api/sessions/session-0': JSON.stringify({ found: true, events: log }),
 });
-const success = value => ({ status: 'success', result: value });
+const success = session_id => ({ status: 'success', session_id });
 const failed = message => ({ status: 'failed', message });
 
 async function setup(page, worktree = false, unplaced = false) {
@@ -27,7 +27,12 @@ async function setup(page, worktree = false, unplaced = false) {
   app.imports = new Map();
   const trees = worktree ? [{ name: 'feature', sessions: ['session-1'], path: '/workspace/.worktrees/feature', present: true, branch: 'feature', base: 'main', codex_thread: null }] : [];
   app.replyFor = request => {
-    if (request.method === 'workspace.add' && app.workspaceFailure) return { error: app.workspaceFailure };
+    if (request.method === 'workspace.add') {
+      if (app.workspaceFailure) return { error: app.workspaceFailure };
+      const reply = original(request);
+      app.notify('workspace.changed', { ...reply, chat_root: app.chatRoot });
+      return reply;
+    }
     if (request.method === 'worktree.list') return { worktrees: trees };
     if (request.method === 'session.import') {
       if (app.importFailure) return failed(app.importFailure);
@@ -36,7 +41,9 @@ async function setup(page, worktree = false, unplaced = false) {
       app.imports.set(session_id, request.params.workspace);
       app.liveSessions.push(row);
       if (request.params.worktree_of && trees.length) trees[0].sessions.push(session_id);
-      return success({ session_id, workspace: request.params.workspace, sessions: [row], worktrees: trees });
+      app.notify('worktree.changed', { workspace: request.params.workspace, worktrees: trees });
+      app.notify('session.changed', { change: 'created', session: session_id, workspace: request.params.workspace });
+      return success(session_id);
     }
     if (request.method === 'session.load' && app.imports.has(request.params.session)) {
       return { session: { version: 1, id: request.params.session, events }, watermark: null, prediction: null };
@@ -79,6 +86,10 @@ async function expectWritable(page, app) {
 for (const worktree of [false, true]) {
   test(`JSON opens a normal writable session in the ${worktree ? 'current worktree' : 'project'} and survives reload`, async ({ page }) => {
     const { app, dialog } = await setup(page, worktree);
+    if (worktree) {
+      const notify = app.notify.bind(app);
+      app.notify = (...args) => setTimeout(() => notify(...args), 200);
+    }
     await chooseJson(page, dialog);
     await expect(dialog).not.toBeVisible();
     const row = page.locator('.conversation-row').filter({ has: page.getByRole('button', { name: 'Imported fixture', exact: true }) });
@@ -156,6 +167,30 @@ test('imported session accepts a new prompt using the selected workspace', async
   expect(request.params.session).toBe('desktop-import-0');
   expect(request.params.workspace).toBe('/workspace');
   expect(app.pageErrors).toEqual([]);
+});
+
+test('catalog failure after import retries navigation without importing again', async ({ page }) => {
+  const { app, dialog } = await setup(page);
+  app.rpcErrors.set('session.list', 'Catalog unavailable');
+  await chooseJson(page, dialog);
+  await expect(dialog).not.toBeVisible();
+  await expect(page.locator('.navigation-notice')).toContainText('Catalog unavailable');
+  app.rpcErrors.delete('session.list');
+  await page.locator('.navigation-notice').getByRole('button', { name: 'Retry', exact: true }).click();
+  await expectWritable(page, app);
+  expect(app.requests.filter(request => request.method === 'session.import')).toHaveLength(1);
+});
+
+test('leaving while the imported catalog loads prevents a late navigation', async ({ page }) => {
+  const { app, dialog } = await setup(page);
+  app.rpcDelays.set('session.list', 1000);
+  await chooseJson(page, dialog);
+  await expect(page.locator('.navigation-notice')).toContainText('Loading destination');
+  expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Imported fixture', exact: true })).toBeVisible();
+  await expect(page.locator('#transcript')).toContainText('Show the browser fixture');
+  expect(app.requests.some(request => request.method === 'session.load' && request.params.session === 'desktop-import-0')).toBe(false);
 });
 
 for (const failure of ['import', 'registration']) {

@@ -6698,43 +6698,33 @@ fn update_msg(
         msg,
       )
       let model = { ..model, session_import_dialog, }
-      guard imported is Some((target, reply)) &&
+      guard imported is Some((target, session_id)) &&
         model.device_state(target.channel) is Some(dev) &&
         dev.connection_generation == target.connection_generation &&
-        @resource.of_path(target.channel, reply.workspace) is Some(workspace) else {
+        model.console.page_device is Some(device) else {
         return (cmd, model)
       }
-      let sessions = dev.sessions.filter(row => {
-        row.workspace != workspace ||
-        !reply.sessions.any(imported => imported.id == row.id)
-      })
-      for row in reply.sessions {
-        sessions.push({
-          id: row.id,
-          title: row.title,
-          workspace,
-          workspace_name: @resource.label(workspace),
-          updated_at_ms: row.updated_at_ms,
-        })
-      }
-      let projects = if dev.projects.contains(workspace) {
-        dev.projects
-      } else {
-        [..dev.projects, workspace]
-      }
-      let model = model.replace_device(
-        { ..dev, sessions, projects, }.with_worktrees(
-          workspace,
-          worktree_rows(target.channel, reply.worktrees),
-          generation=dev.worktree_generation(workspace),
-        ),
-      )
-      let (open, model) = update_msg(
+      let (focus, model) = focus_channel(dispatch, model, target.channel)
+      let (sessions, model) = request_sessions_refresh(
         dispatch,
-        OpenSession(target.channel, reply.session_id),
+        target.channel,
         model,
       )
-      (@cmd.batch([cmd, open]), model)
+      let (visit, model) = navigation_visit(
+        model,
+        { device: Some(device), target: Session(session_id), },
+        replace=false,
+      )
+      // The ordinary navigation resolver opens the session once its catalog
+      // row arrives. Workspace and worktree notifications use their existing
+      // handlers; the import reply carries no inventory snapshot.
+      (
+        @cmd.batch([cmd, focus, sessions, visit]),
+        {
+          ..model,
+          navigation: { ..model.navigation, phase: Waiting, sessions: None, },
+        },
+      )
     }
     ExportDialog(msg) => {
       let (login, model) = if msg is @export_dialog.SignIn {
@@ -8341,11 +8331,16 @@ fn update_device_msg(
       (@cmd.batch([sessions, archived, toast]), model)
     }
     WorktreeFailed(message) => model.notify_error(dispatch, message)
-    SessionsFailed(message) =>
+    SessionsFailed(message~, connection_generation~, request_generation~) => {
+      guard connection_generation == dev.connection_generation &&
+        request_generation == dev.sessions_request_generation else {
+        return (@cmd.none, model)
+      }
       model.notify_error(
         dispatch,
         notice_text(model.locale, ListSessions(message.to_string())),
       )
+    }
     // Another client archived, restored, or deleted a conversation. Both
     // sidebar lists are stale, but this identity-bearing fact takes effect
     // immediately and remains authoritative over in-flight replies.
@@ -11785,7 +11780,15 @@ test "sessions failure pops a toast without touching the transcript" {
       { kind: User(content=Content([Text("hi")])), ts: None, sequence: None, },
     ],
   })
-  let (_, next) = update_dev(dispatch, SessionsFailed("engine exploded"), model)
+  let (_, next) = update_dev(
+    dispatch,
+    SessionsFailed(
+      message="engine exploded",
+      connection_generation=model.dev().connection_generation,
+      request_generation=model.dev().sessions_request_generation,
+    ),
+    model,
+  )
   inspect(next.notifications.length(), content="1")
   inspect(
     next.notifications[0].message,
@@ -18648,7 +18651,15 @@ test "an archive failure pops a toast that a click or its timer dismisses" {
 test "toast ids only ever grow, so timers and toasts stay paired" {
   let dispatch = test_dispatch()
   let (_, first) = update_dev(dispatch, ArchiveFailed("one"), test_model())
-  let (_, second) = update_dev(dispatch, SessionsFailed("two"), first)
+  let (_, second) = update_dev(
+    dispatch,
+    SessionsFailed(
+      message="two",
+      connection_generation=first.dev().connection_generation,
+      request_generation=first.dev().sessions_request_generation,
+    ),
+    first,
+  )
   inspect(second.notifications.length(), content="2")
   assert_true(second.notifications[0].id != second.notifications[1].id)
   inspect(second.notification_seq, content="2")

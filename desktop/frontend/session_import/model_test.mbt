@@ -16,32 +16,10 @@ test "history updates are pure and stale completions cannot reopen a dialog" {
   let (_, duplicate, _) = pending.update(emit, ImportLink)
   assert_eq(duplicate, pending)
   let (_, closed, _) = pending.update(emit, Close)
-  let (_, stale, _) = closed.update(
-    emit,
-    Imported(
-      2,
-      Success({
-        session_id: "import-1",
-        workspace: "/workspace",
-        sessions: [],
-        worktrees: [],
-      }),
-    ),
-  )
+  let (_, stale, _) = closed.update(emit, Imported(2, Success("import-1")))
   assert_eq(stale, closed)
   let (_, next) = closed.open({ ..target(), channel: Remote("other-device"), })
-  let (_, stale, _) = next.update(
-    emit,
-    Imported(
-      2,
-      Success({
-        session_id: "import-1",
-        workspace: "/workspace",
-        sessions: [],
-        worktrees: [],
-      }),
-    ),
-  )
+  let (_, stale, _) = next.update(emit, Imported(2, Success("import-1")))
   assert_eq(stale, next)
 }
 
@@ -93,18 +71,7 @@ test "workspace progress is pure, survives failure and ignores stale completion"
     assert_eq(ready, repeated)
     let (_, failed, _) = ready.update(emit, Imported(2, Failed("retry")))
     let (_, retry, _) = failed.update(emit, ImportLink)
-    let (_, _, outcome) = retry.update(
-      emit,
-      Imported(
-        3,
-        Success({
-          session_id: "imported",
-          workspace: "/chat",
-          sessions: [],
-          worktrees: [],
-        }),
-      ),
-    )
+    let (_, _, outcome) = retry.update(emit, Imported(3, Success("imported")))
     guard outcome is Some((target, _)) else {
       fail("expected completed import")
     }

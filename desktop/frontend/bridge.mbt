@@ -1060,7 +1060,15 @@ async fn refresh_sessions_into(
     @protocol.EmptyPayload::NoPayload,
   ) catch {
     error => {
-      scheduler.add(dispatch(SessionsFailed(@interop.bridge_error_text(error))))
+      scheduler.add(
+        dispatch(
+          SessionsFailed(
+            message=@interop.bridge_error_text(error),
+            connection_generation~,
+            request_generation~,
+          ),
+        ),
+      )
       return
     }
   }
@@ -1069,7 +1077,13 @@ async fn refresh_sessions_into(
   for group in reply.groups {
     if !group.error.is_empty() {
       scheduler.add(
-        dispatch(SessionsFailed("\{group.workspace}: \{group.error}")),
+        dispatch(
+          SessionsFailed(
+            message="\{group.workspace}: \{group.error}",
+            connection_generation~,
+            request_generation~,
+          ),
+        ),
       )
       return
     }

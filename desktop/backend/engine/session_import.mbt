@@ -4,7 +4,7 @@ pub async fn import_session(
   payload : @protocol.SessionImportPayload,
   on_created~ : (String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
-) -> @protocol.SessionImported {
+) -> String {
   let records = @session_import.prepare(payload.source)
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
@@ -34,7 +34,6 @@ pub async fn import_session(
     }
   })
   let token = workspace.resource_path()
-  let mut worktrees = @worktree.list(token).worktrees
   @worktree.add_session_to_worktree(
     workspace,
     session=session_id,
@@ -55,20 +54,8 @@ pub async fn import_session(
       }
     },
     record_exists=() => @fs.exists(store.session_file(SessionId(session_id))),
-    rows => {
-      worktrees = rows
-      on_worktree_changed(token, rows)
-    },
+    rows => on_worktree_changed(token, rows),
   )
   on_created(session_id)
-  {
-    session_id,
-    workspace: token,
-    sessions: records.map(record => {
-      id: record.session.id().value(),
-      title: Some(record.title),
-      updated_at_ms: None,
-    }),
-    worktrees,
-  }
+  session_id
 }

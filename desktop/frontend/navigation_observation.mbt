@@ -55,7 +55,9 @@ fn observe_navigation_catalogs(message : Msg, model : Model) -> AppNavigation {
         dev.connection_generation &&
         request_generation == dev.archived_request_generation =>
         { ..model.navigation, archived: Some(Err(message)), }
-      SessionsFailed(message) =>
+      SessionsFailed(message~, connection_generation~, request_generation~) if connection_generation ==
+        dev.connection_generation &&
+        request_generation == dev.sessions_request_generation =>
         {
           ..model.navigation,
           sessions: Some(Err(message)),

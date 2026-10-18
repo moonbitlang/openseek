@@ -2330,7 +2330,11 @@ priv enum DeviceMsg {
     connection_generation~ : Int32,
     request_generation~ : Int32
   )
-  SessionsFailed(String)
+  SessionsFailed(
+    message~ : String,
+    connection_generation~ : Int32,
+    request_generation~ : Int32
+  )
   // The host's identity-bearing `session.changed` broadcast. Archive changes
   // invalidate that exact live target immediately; rename and every placement
   // change re-read both sidebar lists for their durable contents.

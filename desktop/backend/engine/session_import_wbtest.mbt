@@ -15,7 +15,7 @@ async test "import loads through the normal session API and joins the selected w
       "",
     )
     let created : Array[String] = []
-    let reply = import_session(
+    let session_id = import_session(
       manager,
       {
         source: JsonFile(text=exported.json),
@@ -25,36 +25,37 @@ async test "import loads through the normal session API and joins the selected w
       on_created=id => created.push(id),
       on_worktree_changed=(_, _) => (),
     )
-    assert_eq(created, [reply.session_id])
+    assert_eq(created, [session_id])
     assert_true(
-      reply.worktrees is [row] && row.sessions.contains(reply.session_id),
+      @worktree.list(workspace).worktrees is [row] &&
+      row.sessions.contains(session_id),
     )
-    assert_eq(@worktree.run_dir(repo, reply.session_id), checkout)
-    assert_true(store.exists(SessionId(reply.session_id)))
+    assert_eq(@worktree.run_dir(repo, session_id), checkout)
+    assert_true(store.exists(SessionId(session_id)))
     assert_true(
       list_sessions().groups.any(group => {
-        group.sessions.any(row => row.id == reply.session_id)
+        group.sessions.any(row => row.id == session_id)
       }),
     )
     let loaded = load_session(manager, {
-      session: reply.session_id,
+      session: session_id,
       workspace: Some(workspace),
     })
-    assert_eq(loaded.session.id, Some(reply.session_id))
+    assert_eq(loaded.session.id, Some(session_id))
     assert_true(loaded.session.events is Some(events) && events.length() == 4)
     let restarted = new_engine_manager("engine-must-not-run")
     assert_eq(
       load_session(restarted, {
-        session: reply.session_id,
+        session: session_id,
         workspace: Some(workspace),
       }),
       loaded,
     )
     assert_eq(
-      load_session(restarted, { session: reply.session_id, workspace: None, }),
+      load_session(restarted, { session: session_id, workspace: None, }),
       loaded,
     )
-    let id : @agent_session.SessionId = SessionId(reply.session_id)
+    let id : @agent_session.SessionId = SessionId(session_id)
     let saved = store.load(id)
     assert_eq(saved.system_prompt(), "system")
     let continued = store.append(
@@ -64,22 +65,22 @@ async test "import loads through the normal session API and joins the selected w
     assert_eq(continued.last_sequence(), 5)
     let fresh = new_engine_manager("engine-must-not-run")
     let reloaded = load_session(fresh, {
-      session: reply.session_id,
+      session: session_id,
       workspace: Some(workspace),
     })
     assert_true(reloaded.session.events is Some(events) && events.length() == 5)
     rename_session(fresh, {
-      session: reply.session_id,
+      session: session_id,
       workspace,
       title: "Renamed import",
     })
     assert_eq(store.title(id), Some("Renamed import"))
-    let lease = fresh.begin_record_op(reply.session_id)
-    fresh.end_record_op(reply.session_id, lease)
+    let lease = fresh.begin_record_op(session_id)
+    fresh.end_record_op(session_id, lease)
     let forked = fork_session(
       manager,
       {
-        session: reply.session_id,
+        session: session_id,
         workspace,
         through: 4,
         model: "deepseek-flash",

@@ -44,17 +44,9 @@ test "import request codecs preserve source and optional worktree placement" {
 
 ///|
 test "import reply carries the session id and preserves failure diagnostics" {
-  let success : Json = {
-    "status": "success",
-    "result": {
-      "session_id": "desktop-imported",
-      "workspace": "/project",
-      "sessions": [],
-      "worktrees": [],
-    },
-  }
+  let success : Json = { "status": "success", "session_id": "desktop-imported" }
   let reply : @protocol.SessionImportReply = @json.from_json(success)
-  assert_true(reply is Success({ session_id: "desktop-imported", .. }))
+  assert_true(reply is Success("desktop-imported"))
   assert_eq(reply.to_json(), success)
   let failure : Json = {
     "status": "failed",

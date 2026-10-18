@@ -184,6 +184,10 @@ fn activate_navigation(
         (cmd, next, Active)
       } else if model.navigation.sessions is Some(Err(message)) {
         (@cmd.none, model, Failed(message))
+      } else if model.navigation.sessions is None {
+        // An archive failure cannot decide whether a live session exists
+        // while its catalog is still loading.
+        (@cmd.none, model, Waiting)
       } else if model.navigation.archived is Some(Err(message)) {
         (@cmd.none, model, Failed(message))
       } else if model.navigation.sessions is Some(Ok(_)) &&

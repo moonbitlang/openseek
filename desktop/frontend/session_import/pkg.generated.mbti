@@ -22,7 +22,7 @@ pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::open(Self, Target) -> (@cmd.Cmd, Self)
 pub fn Model::to_repr(Self) -> @debug.Repr
-pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self, (Target, @protocol.SessionImported)?)
+pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self, (Target, String)?)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
 
 pub(all) enum Msg {

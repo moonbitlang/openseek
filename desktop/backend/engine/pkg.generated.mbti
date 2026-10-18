@@ -44,7 +44,7 @@ pub async fn fork_session(EngineManager, @protocol.SessionForkPayload, on_create
 
 pub async fn goal_run(EngineManager, @protocol.GoalPayload) -> @protocol.GoalReply
 
-pub async fn import_session(EngineManager, @protocol.SessionImportPayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> @protocol.SessionImported
+pub async fn import_session(EngineManager, @protocol.SessionImportPayload, on_created~ : (String) -> Unit, on_worktree_changed~ : (String, Array[@protocol.WorktreeInfo]) -> Unit) -> String
 
 pub async fn list_jobs(EngineManager, @protocol.JobsListPayload) -> @protocol.JobsListReply
 
