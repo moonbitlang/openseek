@@ -1,0 +1,12 @@
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_subagent",
+}
+
+supported_targets = "+wasm+native"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+} for "test"

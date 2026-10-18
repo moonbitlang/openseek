@@ -2,6 +2,13 @@
 /// The completion notice pushed to the model when a background job exits: its
 /// id, terminal status, and how to read its output.
 fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
+  if snapshot.subagent is Some(info) {
+    let ended = match info.outcome {
+      Some(outcome) => @agent_subagent.describe_outcome(outcome)
+      None => "ended"
+    }
+    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended} — read its outcome and report with job_output (job_id=\"\{snapshot.id}\")."
+  }
   let status = if snapshot.cleanup_error is Some(error) {
     "cleanup failed: \{error}"
   } else {
@@ -51,6 +58,10 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 /// `on_background_wake`, when supplied, is called each time a background job
 /// exits, so an idle controller can wake to surface the completion notice.
 ///
+/// `subagents`, when supplied, makes the session's subagent launcher over its
+/// job runtime and adds the `subagent` tool; `job_output` then answers a
+/// subagent job with its outcome and report.
+///
 /// `extra_tools` are appended to the registry after the built-ins — the seam for
 /// dynamically discovered tools (e.g. MCP servers' tools, namespaced so they do
 /// not collide with the built-ins). The caller builds them (keeping this package
@@ -63,6 +74,7 @@ pub async fn[X] build_tools(
   session_scratch_dir? : String,
   extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
   mbtx_subrun? : @host.SubrunInjection,
+  subagents? : @subagent.Subagents,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
   // One session-scoped file-state map, shared by the file-writing tools so they
@@ -171,6 +183,9 @@ pub async fn[X] build_tools(
       }
     })
   })
+  // The session's subagent launcher, when this session may delegate: its
+  // children are jobs of this same runtime.
+  let launcher = subagents.map(spec => (spec.launcher)(bg_runtime))
   let image_input_supported = Ref(false)
   let file_tools = [
     @read_image.definition(workspace_root~),
@@ -237,10 +252,20 @@ pub async fn[X] build_tools(
       // ran — a policy refusal reaches it after minutes of real work — and the
       // sanctioned retry is worded for a run that did not happen. Offering it
       // here would misdescribe the state the job left behind.
-      @job_output.definition(bg_runtime),
+      @job_output.definition(
+        bg_runtime,
+        subagent_report?=launcher.map(launcher => {
+          session => launcher.report(session)
+        }),
+      ),
       @job_stop.definition(bg_runtime),
       @job_wait.definition(),
       @finish.definition(),
+      ..match (launcher, subagents) {
+        (Some(launcher), Some(spec)) =>
+          [@subagent.definition(launcher, spec.kinds)]
+        _ => []
+      },
       ..extras,
     ],
     background_jobs=bg_runtime,

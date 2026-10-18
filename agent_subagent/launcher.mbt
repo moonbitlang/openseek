@@ -127,6 +127,12 @@ fn Child::info(self : Child) -> @protocol.SubagentInfo {
 }
 
 ///|
+/// How many subagents may be live at once.
+pub fn Launcher::max_live(self : Launcher) -> Int32 {
+  self.max_live
+}
+
+///|
 /// The number of subagents live now.
 pub fn Launcher::live(self : Launcher) -> Int32 {
   self.live
@@ -373,5 +379,19 @@ async fn Launcher::settle(
   }
   @async.protect_from_cancel(() => @fs.remove(result_file)) catch {
     _ => ()
+  }
+}
+
+///|
+/// How a subagent ended, in words for the model.
+pub fn describe_outcome(outcome : @protocol.SubagentOutcome) -> String {
+  match outcome {
+    Captured => "reported"
+    NoReport => "finished without a report"
+    MaxSteps => "ran out of steps without a report"
+    ContextYield => "filled its context window without a report"
+    TimedOut => "timed out without a report"
+    Stopped => "stopped"
+    Failed(reason) => "failed: \{reason}"
   }
 }

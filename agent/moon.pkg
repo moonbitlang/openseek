@@ -11,6 +11,8 @@ import {
   "moonbitlang/openseek/agent_tool/job_output",
   "moonbitlang/openseek/agent_tool/job_stop",
   "moonbitlang/openseek/agent_tool/job_wait",
+  "moonbitlang/openseek/agent_tool/subagent",
+  "moonbitlang/openseek/agent_subagent",
   "moonbitlang/openseek/agent_tool/edit",
   "moonbitlang/openseek/agent_tool/finish",
   "moonbitlang/openseek/agent_tool/goal",

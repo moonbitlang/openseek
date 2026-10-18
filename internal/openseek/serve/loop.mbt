@@ -192,9 +192,27 @@ async fn run_serve(
       Some(store) => Some(store.job_logs_dir(initial_session.id()))
       None => None
     }
+    // The model's own subagents, when this session is durable: their
+    // sessions are its `-sr-N` siblings.
+    let subagents = match (store, child_session) {
+      (Some(store), Some(children)) =>
+        Some(
+          @execution.subagents(
+            scope,
+            self_exe=exe,
+            model~,
+            api_url~,
+            workspace_root~,
+            children~,
+            result_dir="\{store.scratch_dir(initial_session.id())}/subagent-results",
+          ),
+        )
+      _ => None
+    }
     let tools = @agent.build_tools(
       runtime,
       scope,
+      subagents?,
       job_log_dir?,
       session_scratch_dir?=match store {
         Some(store) => Some(store.scratch_dir(initial_session.id()))

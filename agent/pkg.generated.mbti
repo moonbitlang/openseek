@@ -6,12 +6,13 @@ import {
   "moonbitlang/openseek/agent_session",
   "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/subagent",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
 }
 
 // Values
-pub async fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], on_background_wake? : () -> Unit, job_log_dir? : String, session_scratch_dir? : String, extra_tools? : Array[@agent_tool.AgentToolDefinition], mbtx_subrun? : @host.SubrunInjection) -> @agent_tool.Tools
+pub async fn[X] build_tools(@agent_runtime.AgentRuntime, @agent_runtime.AgentTaskScope[X], on_background_wake? : () -> Unit, job_log_dir? : String, session_scratch_dir? : String, extra_tools? : Array[@agent_tool.AgentToolDefinition], mbtx_subrun? : @host.SubrunInjection, subagents? : @subagent.Subagents) -> @agent_tool.Tools
 
 pub let plan_reminder_after_steps : Int
 

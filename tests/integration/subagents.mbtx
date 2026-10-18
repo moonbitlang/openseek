@@ -1,0 +1,196 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// The real CLI with a durable session starts two explore subagents with the
+/// `subagent` tool. One local server scripts the parent AND the two real
+/// child processes (they reach it through the forwarded --api-url): a child
+/// is told apart by its `submit_answer` tool and routed by the marker in its
+/// query. The parent waits, reads both reports with job_output, and finishes.
+/// Afterwards each child's session has its transcript and report, and no
+/// claim is left behind.
+fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
+  {
+    "index": index,
+    "id": id,
+    "type": "function",
+    "function": { "name": name, "arguments": args.stringify() },
+  }
+}
+
+///|
+fn calls(list : Array[Json]) -> Json {
+  { "tool_calls": Json::array(list) }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The job id the `subagent` tool announced for `label`.
+fn job_of(messages : String, label : String) -> String? {
+  let marker = "Started subagent job "
+  for part in messages.split(marker) {
+    let part = part.to_owned()
+    if part.contains("(explore: \{label})") {
+      return part.split(" ").next().map(id => id.to_owned())
+    }
+  }
+  None
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/subagents.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let directory = @fs.tmpdir(prefix="openseek-subagents-")
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  @fs.mkdir(directory + "/ws", recursive=true)
+  @fs.write_file(directory + "/ws/answer.mbt", "let answer = 42\n")
+  let child_requests : Map[String, Int] = Map([])
+  let mut answer : String? = None
+  @async.with_timeout(120000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            // Auxiliary non-streaming requests get a fixed answer.
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            let delta : Json = if tool_names(request).contains("submit_answer") {
+              // A child: answer at once, by the marker in its query.
+              let mark = if messages.contains("MARK-A") { "A" } else { "B" }
+              child_requests[mark] = child_requests.get(mark).unwrap_or(0) + 1
+              calls([
+                tool_call(0, "child-\{mark}", "submit_answer", {
+                  "schema_version": 1,
+                  "answer": "answer \{mark}",
+                  "citations": [{ "file": "answer.mbt", "line": 1 }],
+                }),
+              ])
+            } else {
+              assert_true(tool_names(request).contains("subagent"))
+              match (job_of(messages, "scout A"), job_of(messages, "scout B")) {
+                (None, None) =>
+                  calls([
+                    tool_call(0, "start-a", "subagent", {
+                      "kind": "explore",
+                      "input": { "query": "MARK-A where is the answer defined?" },
+                      "label": "scout A",
+                    }),
+                    tool_call(1, "start-b", "subagent", {
+                      "kind": "explore",
+                      "input": { "query": "MARK-B what is the answer's value?" },
+                      "label": "scout B",
+                    }),
+                  ])
+                (Some(a), Some(b)) => {
+                  let read_a = messages.contains("answer A")
+                  let read_b = messages.contains("answer B")
+                  if read_a && read_b {
+                    answer = Some("both scouts reported")
+                    calls([
+                      tool_call(0, "done", "finish", {
+                        "answer": "both scouts reported",
+                      }),
+                    ])
+                  } else if !read_a && messages.contains("job \{a} (explore: scout A) reported") {
+                    calls([tool_call(0, "read-a", "job_output", { "job_id": a })])
+                  } else if !read_b && messages.contains("job \{b} (explore: scout B) reported") {
+                    calls([tool_call(0, "read-b", "job_output", { "job_id": b })])
+                  } else {
+                    calls([tool_call(0, "wait", "job_wait", { "job_ids": [a, b] })])
+                  }
+                }
+                _ => fail("only one subagent started: \{messages}")
+              }
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=false,
+        )
+      }
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let process = @process.spawn(
+        group,
+        executable,
+        [
+          "run", "--dir", directory + "/ws", "--api-key", "test", "--model", "deepseek-flash",
+          "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+          "--max-steps", "12", "--mcp-config", "", "--session", "parent", "--session-root",
+          store_root, "Ask two scouts and report.",
+        ],
+        extra_env={ "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout = group.spawn(() => reader.read_all().text())
+      let stderr = group.spawn(() => errors.read_all().text())
+      let code = process.wait()
+      let out = stdout.wait()
+      let err = stderr.wait()
+      guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
+      assert_true(out.contains("both scouts reported"))
+      server.close()
+    })
+  })
+  assert_eq(answer, Some("both scouts reported"))
+  assert_eq(child_requests.get("A"), Some(1))
+  assert_eq(child_requests.get("B"), Some(1))
+  let sessions = @fs.readdir(store_root + "/sessions", sort=true)
+  assert_eq(sessions, ["parent", "parent-sr-1", "parent-sr-2"])
+  for child in ["parent-sr-1", "parent-sr-2"] {
+    let dir = store_root + "/sessions/" + child
+    let entries = @fs.readdir(dir)
+    assert_true(entries.contains("openseek_session-\{child}.jsonl"))
+    assert_true(!entries.any(name => name.has_prefix("claim")), msg=child)
+    let report = @json.parse(@fs.read_file(dir + "/report.json").text())
+    assert_true(report is { "answer": String(_), .. }, msg=child)
+  }
+  println(
+    "PASS: the real CLI starts two subagents, waits, reads both reports, and leaves their sessions claimed and settled",
+  )
+}

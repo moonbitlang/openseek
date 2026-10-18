@@ -2,8 +2,13 @@
 /// Tool `job_output`: read a background job's output and status by id.
 /// The id comes from a command automatically moved to the background after its
 /// foreground grace period.
+///
+/// `subagent_report` reads the report a subagent job captured, by its child
+/// session; a subagent job is answered with its outcome and report rather
+/// than its log.
 pub fn definition(
   bg_runtime : @bgjobs.BgJobRuntime,
+  subagent_report? : (String) -> Json?,
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="job_output",
@@ -34,7 +39,7 @@ pub fn definition(
       },
       "required": ["job_id"],
     }),
-    execute=Async(arguments => execute(bg_runtime, arguments)),
+    execute=Async(arguments => execute(bg_runtime, arguments, subagent_report~)),
   )
 }
 
@@ -42,6 +47,7 @@ pub fn definition(
 async fn execute(
   bg_runtime : @bgjobs.BgJobRuntime,
   arguments : Json,
+  subagent_report~ : ((String) -> Json?)?,
 ) -> @agent_tool.ToolAction {
   let input = @decode.decode(arguments) catch {
     error => {
@@ -50,6 +56,9 @@ async fn execute(
     }
   }
   let job_id = input.job_id
+  if bg_runtime.snapshot(job_id) is Some({ subagent: Some(info), status, .. }) {
+    return subagent_output(job_id, info, status, subagent_report)
+  }
   guard bg_runtime.snapshot(job_id) is Some(_) else {
     return @agent_tool.respond(
       "error: no background job with id \{job_id}",
@@ -214,4 +223,86 @@ fn apply_output_rewrites(
 fn page_of(text : String, offset~ : Int32, window~ : Int32) -> String {
   // `iter()` yields characters, so drop/take count characters, not code units.
   String::from_iter(text.iter().drop(offset).take(window))
+}
+
+///|
+/// How much of a subagent's report one read shows; a larger report names
+/// where the whole of it is.
+const ReportWindow : Int32 = 48_000
+
+///|
+/// A subagent job, answered as an agent: where it stands, what it spent, and
+/// its report once it has one.
+fn subagent_output(
+  job_id : String,
+  info : @protocol.SubagentInfo,
+  status : @bgjobs.BgJobStatus,
+  subagent_report : ((String) -> Json?)?,
+) -> @agent_tool.ToolAction {
+  let content = StringBuilder()
+  content.write_string(
+    "subagent job \{job_id} (\{info.kind}: \{info.label}), session \{info.session}\n",
+  )
+  match info.outcome {
+    None => {
+      let state = if status is Running { "running" } else { "ending" }
+      content.write_string(
+        "\{state}: wait with job_wait (job_ids=[\"\{job_id}\"]), or stop it with job_stop.\n",
+      )
+    }
+    Some(outcome) =>
+      content.write_string(
+        "ended: \{@agent_subagent.describe_outcome(outcome)}\n",
+      )
+  }
+  match info.usage {
+    Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)) => {
+      let steps = steps.map_or("", steps => "\{steps} steps, ")
+      content.write_string(
+        "spent: \{steps}\{prompt_tokens} prompt and \{completion_tokens} completion tokens\n",
+      )
+    }
+    Some(Unavailable(reason)) =>
+      content.write_string("spent: unknown (\{reason})\n")
+    None => ()
+  }
+  let report = subagent_report.bind(read => read(info.session))
+  match (info.report, report) {
+    (Some(stored), Some(report)) => {
+      let text = report.stringify(indent=2)
+      if text.length() <= ReportWindow {
+        content.write_string("report:\n\{text}\n")
+      } else {
+        content.write_string(
+          "report (the first \{ReportWindow} of \{text.length()} characters):\n",
+        )
+        content.write_string(String::from_iter(text.iter().take(ReportWindow)))
+        content.write_string("\n")
+        match stored {
+          Stored =>
+            content.write_string(
+              "The whole report is report.json in session \{info.session}'s directory.\n",
+            )
+          StoreFailed(reason) =>
+            content.write_string(
+              "The rest is not available: storing the report failed (\{reason}).\n",
+            )
+        }
+      }
+    }
+    (Some(Stored), None) =>
+      content.write_string(
+        "The report is report.json in session \{info.session}'s directory.\n",
+      )
+    (Some(StoreFailed(reason)), None) =>
+      content.write_string(
+        "The report was captured but neither stored (\{reason}) nor still held.\n",
+      )
+    (None, _) => ()
+  }
+  @agent_tool.respond(
+    content.to_string(),
+    brief="subagent \{job_id}: \{info.label}",
+    data={ "job_id": job_id, "subagent": info.to_json() },
+  )
 }

@@ -493,7 +493,15 @@ fn default_prompt() -> String {
     #|  without a timeout. Then read results with
     #|  `job_output`. If your work is complete despite running jobs, explicitly call
     #|  `finish`; a plain-text answer with running jobs asks you to choose. Background
-    #|  jobs are reaped after thirty minutes of wall clock.
+    #|  jobs are reaped after thirty minutes of wall clock, except subagents.
+    #|
+    #|- In a durable session, `subagent` starts a child agent as a background job
+    #|  and returns its job id at once. Use it to keep your own context for the
+    #|  task: `explore` answers a self-contained question about the code with
+    #|  citations; `review` is an advisory audit against a goal or of a diff.
+    #|  Several can run at once. The child does not see this conversation, so give
+    #|  it a complete brief. Act on its notice as on any job's: `job_output` reads
+    #|  its outcome and report, `job_stop` stops it, `job_wait` waits for it.
     #|
     #|- Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
     #|  use `moon build` or `moon test` only when you need artifacts or test results.

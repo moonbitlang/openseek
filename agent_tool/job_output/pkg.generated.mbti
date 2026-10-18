@@ -7,7 +7,7 @@ import {
 }
 
 // Values
-pub fn definition(@bgjobs.BgJobRuntime) -> @agent_tool.AgentToolDefinition
+pub fn definition(@bgjobs.BgJobRuntime, subagent_report? : (String) -> Json?) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

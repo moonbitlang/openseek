@@ -66,11 +66,27 @@ async fn run_task_turn(
           criteria=() => @execution.audit_criteria(latest_session),
         )
       })
+    // The model's own subagents, for a run that may delegate and has a
+    // durable session for its children to record to.
+    let subagents = child_session
+      .filter(_ => delegate)
+      .map(children => {
+        @execution.subagents(
+          scope,
+          self_exe=exe,
+          model~,
+          api_url~,
+          workspace_root~,
+          children~,
+          result_dir="\{session_scratch_dir}/subagent-results",
+        )
+      })
     let tools = @agent.build_tools(
       runtime,
       scope,
       extra_tools~,
       mbtx_subrun?,
+      subagents?,
       job_log_dir?,
       session_scratch_dir~,
     )

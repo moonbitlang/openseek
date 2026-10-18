@@ -1,0 +1,29 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/subagent"
+
+import {
+  "moonbitlang/openseek/agent_subagent",
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/agent_tool/bgjobs",
+}
+
+// Values
+pub fn definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
+
+// Errors
+
+// Types and methods
+pub(all) struct Kind {
+  name : String
+  ceiling : Int
+  validate : (Json) -> Result[Json, String]
+}
+
+pub(all) struct Subagents {
+  launcher : (@bgjobs.BgJobRuntime) -> @agent_subagent.Launcher
+  kinds : Array[Kind]
+}
+
+// Type aliases
+
+// Traits

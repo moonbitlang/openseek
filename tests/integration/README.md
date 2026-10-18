@@ -22,6 +22,17 @@ A second real `serve` scenario clears the goal through stdin while `job_wait`
 observes a gated job. The next model request must report `user_input` before the
 job is released, proving that the command dispatcher wakes the active turn.
 
+# Subagents
+
+`just test-subagents` runs `tests/integration/subagents.mbtx` against the native
+CLI: a `run` with a durable session starts two explore subagents with the
+`subagent` tool, waits, reads both reports with `job_output`, and finishes. One
+local scripted server answers the parent and the two real child processes,
+which reach it through the forwarded `--api-url`; a child is recognized by its
+`submit_answer` tool and routed by a marker in its query. Afterwards each
+child's session holds its transcript and `report.json`, and no claim file is
+left. No model credentials or network are needed.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at
