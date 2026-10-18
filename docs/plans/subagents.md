@@ -1,7 +1,7 @@
 # Plan: subagents as engine-owned background jobs
 
-Date: 2026-10-18. Status: proposal, revised after two external architecture
-review rounds (findings at the end); not implemented. It replaces the draft in #1872
+Date: 2026-10-18. Status: proposal, revised after three external architecture
+review rounds (findings at the end); ready for PR 1. It replaces the draft in #1872
 (branch `subagents-design`, four review rounds) and makes the allocator ledger
 in #1874 unnecessary. Findings of those rounds that still apply are kept and
 marked *(#1872 rN)*.
@@ -75,8 +75,11 @@ marked *(#1872 rN)*.
 - `agent_tool/bgjobs` stays generic. It gains an *execution policy* per job
   (time limit, graceful stop) and an optional typed subagent supplier beside
   its untyped `data`. It does not import anything about agents.
-- `agent_subrun` keeps the spawn and report-validation code; its contract
-  parsing moves to a leaf it and the launcher share.
+- The request and result codecs already live in the protocol
+  (`@protocol.RunRequest`, `@protocol.parse_run_result`,
+  `protocol/run_request.mbt`, `protocol/run_result.mbt`); the launcher uses
+  them and the kinds' report parsers, not the workflow library's private
+  codec. `agent_subrun` keeps the gate's blocking path.
 - A new `agent_subagent` package is the launcher: admission, the claim, the
   child's command line, request delivery, result validation, the record.
   It depends on `bgjobs` and `agent_subrun`, never the reverse (`agent_subrun`
@@ -184,11 +187,16 @@ agent-specific policy:
 - **Request delivery** is owned background work with a 10 s bound: write the
   one request line, keep the pipe open. A failed or timed-out write records
   the termination cause `delivery_failed` and stops the child.
-- **Graceful termination.** The child's process is spawned with the async
-  library's `graceful_cancel` handler instead of the shell path's
-  `hard_cancel` (`agent_tool/shell_exec/execution.mbt:125`), so every way a
-  child is ended (`job_stop`, a program close, session shutdown, the task
-  group's cancellation) closes stdin, waits a 10 s grace, then terminates.
+- **Graceful termination.** The managed child cancels on stdin EOF and then
+  writes its result (`internal/openseek/run/run.mbt:147`, `:192`); it has no
+  signal handling of its own. So the child is spawned with a CUSTOM process
+  cancellation handler instead of the shell path's `hard_cancel`
+  (`agent_tool/shell_exec/execution.mbt:125`): close the stdin writer the
+  launcher owns, wait 10 s with no signal, then force-terminate. (The async
+  library's `graceful_cancel` sends SIGTERM first and never closes stdin, so
+  it would cut the flush short.) Every way a child is ended uses it:
+  `job_stop`, a program close, session shutdown, the task group's
+  cancellation.
 - **Time limit.** Subagent jobs are not reaped at 30 minutes. A child is
   bounded by its step budget, its context ceiling and an optional per-start
   wall deadline (none by default). The 20 M output watchdog stays.
@@ -250,10 +258,12 @@ agent-specific policy:
   already sees its goal.
 - `max_steps` is clamped to the kind's ceiling. A child does not get this
   tool (no nesting).
-- Admission, with no suspension: refuse `busy` with four live subagents
-  (retry after one ends; costs nothing), `quota` past 32 starts for a
-  program, `unavailable` with no durable session or a failed claim. A refusal
-  takes no ordinal.
+- Refusals (see the two-part admission above): `busy` with four live
+  subagents (retry after one ends; costs nothing), `quota` past 32 starts
+  for a program, `unavailable` with no durable session. These come from the
+  no-suspension part and take no slot and no ordinal. A claim that fails in
+  the suspending part is also `unavailable`; if the directory was created,
+  its ordinal is consumed.
 - Returns at once. The model reads `content`: the job id, the child session,
   and how to wait, read and stop. A script reads `data`: `{job_id, session}`
   *(#1872 r3)*. Concurrent-safe.
@@ -340,8 +350,8 @@ later stack.
 
 1. **Claims, runtime, protocol.** The claim (with `--claim`) for every
    durable child, the gate included, on the shared counter; the execution
-   policy in `bgjobs` and the graceful-cancel seam in `shell_exec`; the
-   shared contract parser; `SubagentInfo` in the protocol; the
+   policy in `bgjobs` and the cancellation-handler seam in `shell_exec`;
+   `SubagentInfo` in the protocol; the
    `agent_subagent` launcher with no tool in front of it, tested directly
    with fake children; `--claim` consumption tested through the real CLI;
    existing shell and adoption behavior kept covered.
@@ -374,8 +384,8 @@ All offline except the last.
    reads stdin; slow exit after stdin closes; stop racing a natural end;
    report store failure; output capture failure; job-metadata persistence
    failure; the reaper exemption; every termination cause against the
-   precedence list; graceful shutdown of the session group reaching the
-   child; admission (cancellation or owner close at each suspension, spawn
+   precedence list; task-group cancellation with a child that writes its
+   report only after stdin EOF, which must still be `Captured`; admission (cancellation or owner close at each suspension, spawn
    failure, slot recovery); the claim (concurrent claims in one process, a
    claim then a hosted block and a hosted block then a claim, a create
    interrupted before the claim file, a stale claim never reused).
@@ -458,3 +468,11 @@ rule, worker state, restart, turn boundaries and PTC budgets resolved; PR 1
 | P2: a 48 K rendering does not bound an encoded reply; scripts need the structured report | Running a child as a job (report) |
 | P2: filling a review's goal breaks `{base}` and the builtin's merge rules | Starting (`audit_context`) |
 | Tests: allocator orderings, claim consumption, termination causes, collection allowance, pre-adoption correlation, builtins' semantics, frontend consumption | Integrated testing |
+
+**Round 3** (2026-10-18, Codex, xhigh, on 15b921577): allocation,
+correlation, reports and the review migration resolved. One P1: the async
+library's `graceful_cancel` signals first and never closes stdin, so it
+would cut the child's flush short; replaced by a custom handler (Running a
+child as a job). Left to the PRs that build them: offset units, Unicode-safe
+chunk boundaries, invalid offsets and behavior near PTC budgets (PR 3); a
+truncated report whose store failed must not name a missing file (PR 2).
