@@ -67,7 +67,7 @@ fn parent_turn(messages : String) -> Json {
       }),
     ])
   }
-  if messages.contains("): integrated; its worktree is gone") {
+  if messages.contains("): integrated, and removed") {
     calls([tool_call(0, "done", "finish", { "answer": "the worker's change is integrated" })])
   } else if messages.contains("+beta") {
     // The diff was read: the worker added the file it was asked for.

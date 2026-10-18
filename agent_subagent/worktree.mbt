@@ -251,10 +251,12 @@ pub async fn Launcher::changes(
     (Committed | Conflicted, Some(commit)) =>
       (geometry.origin_root, [entry.base_oid, commit])
     (Running | Captured, _) => (entry.worker_root, [entry.base_oid])
+    // It changed nothing: an answer, not a failure.
+    (NoChanges, _) => return Some(Ok(""))
     _ =>
       return Some(
         Err(
-          "its worktree is \{describe_state(worktree_of(entry).state)}; there is nothing to show",
+          "its worktree is \{describe_state(worktree_of(entry).state)}, so there is nothing to show",
         ),
       )
   }
@@ -329,12 +331,12 @@ pub fn describe_state(state : @protocol.WorktreeState) -> String {
     CaptureFailed(reasons~) =>
       "not captured: \{reasons.join("; ")} (listing worktrees captures it again)"
     Committed(commit~) => "committed as \{commit}, ready to integrate"
-    NoChanges => "unchanged; its worktree is gone"
+    NoChanges => "unchanged, so it was removed"
     Unmergeable(defects~) =>
       "not mergeable: \{defects.join("; ")}; its worktree is kept for inspection"
     Conflicted(commit~) =>
       "conflicted while integrating \{commit}: resolve the markers in this checkout, then continue (or abort)"
-    Integrated => "integrated; its worktree is gone"
-    Discarded => "discarded; its worktree is gone"
+    Integrated => "integrated, and removed"
+    Discarded => "discarded, and removed"
   }
 }

@@ -158,6 +158,8 @@ async test "a running worker holds its paths and its worktree" {
     guard h.settled(job_id).workspace is Worktree({ state: NoChanges, .. }) else {
       fail("expected a worktree with no changes")
     }
+    // Changing nothing is an answer, not a failure.
+    assert_true(h.launcher.changes(session) is Some(Ok("")))
     // Its paths are free again.
     guard h.start_worker("two", ["lib/deep"]) is Started(job_id~, ..) else {
       fail("the freed paths were refused")

@@ -302,6 +302,23 @@ async fn run_case(executable : String, script~ : Bool) -> Unit {
     let report = @json.parse(@fs.read_file(dir + "/report.json").text())
     assert_true(report is { "answer": String(_), .. }, msg=child)
   }
+  // The model's waits name what an ended child achieved, not its exit code.
+  if !script {
+    let transcript = @fs.read_file(
+      store_root + "/sessions/parent/openseek_session-parent.jsonl",
+    ).text()
+    let waits = transcript
+      .split("job_wait reason=")
+      .drop(1)
+      .map(tail => tail.split("Read output with job_output").next().unwrap_or(""))
+      .to_array()
+    assert_true(waits.length() > 0, msg="no job_wait")
+    assert_true(
+      waits.any(wait => wait.contains(" reported")),
+      msg="job_wait did not say a child reported",
+    )
+    assert_false(waits.any(wait => wait.contains("exit=")), msg="job_wait gave an exit code")
+  }
 }
 
 ///|

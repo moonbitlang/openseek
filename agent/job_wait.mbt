@@ -50,6 +50,16 @@ async fn AgentLoop::wait_for_jobs(
   let states = ids
     .map(id => {
       match jobs.snapshot(id) {
+        // An ended subagent says what it achieved: its process can exit 0
+        // without a report.
+        Some({ subagent: Some({ outcome: Some(outcome), workspace, .. }), .. }) => {
+          let worktree = match workspace {
+            Worktree(worktree) =>
+              "; worktree \{worktree.name} \{@agent_subagent.describe_state(worktree.state)}"
+            InPlace => ""
+          }
+          "\{id} \{@agent_subagent.describe_outcome(outcome)}\{worktree}"
+        }
         Some(job) => {
           let status = match job.status {
             Running => "running"
