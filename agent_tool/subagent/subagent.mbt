@@ -21,10 +21,10 @@ pub fn definition(
       #|"context"?: "..."}, plus worktree {"name": "<slug>", "allowed_paths": [...]}:
       #|it works in a new git worktree forked from HEAD (commit what it needs first) and
       #|may change only allowed_paths, disjoint from other live workers'. You get a notice
-      #|when it ends; job_wait waits for it, job_output reads its outcome and report,
-      #|job_stop stops it. Then use the worktree tool to review (diff), integrate or
-      #|discard a worker's changes. Up to 16 run at once. Give each a
-      #|complete brief: it does not see this conversation.
+      #|when it ends; job_wait waits for it, job_output reads its outcome and report
+      #|(for a worker: the commit its change was captured as, and the git that takes
+      #|it), job_stop stops it. Up to 16 run at once. Give each a complete brief: it
+      #|does not see this conversation.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -135,6 +135,18 @@ async fn start(
       steps < kind.ceiling.to_double() => steps.to_int()
     _ => kind.ceiling
   }
+  // What an earlier engine of this session left goes first, so it holds no
+  // paths this worker may need, and its result reaches the caller: its job
+  // is not this engine's to read.
+  let recovered = if slice is Some(_) { launcher.recover() } else { [] }
+  let left = recovered
+    .map(found => {
+      "An earlier engine's worker (session \{found.0}) left this: \{@agent_subagent.describe_worktree(found.1)}\n"
+    })
+    .join("")
+  let recovered_data = Json::array(
+    recovered.map(found => { "session": found.0, "worktree": found.1.to_json() }),
+  )
   match
     launcher.start(
       kind=name,
@@ -146,31 +158,41 @@ async fn start(
       slice?,
     ) {
     Started(job_id~, session~) if launch is Script(_) =>
-      @agent_tool.respond("started subagent \{job_id} (\{name}: \{label})", data={
-        "job_id": job_id,
-        "session": session,
-      })
+      @agent_tool.respond(
+        "\{left}started subagent \{job_id} (\{name}: \{label})",
+        data={
+          "job_id": job_id,
+          "session": session,
+          "recovered": recovered_data,
+        },
+      )
     Started(job_id~, session~) =>
       @agent_tool.respond(
         (
-          $|Started subagent job \{job_id} (\{name}: \{label}), recording to session \{session}.
+          $|\{left}Started subagent job \{job_id} (\{name}: \{label}), recording to session \{session}.
           $|It runs in the background; you will get a notice when it ends.
           $|Wait for it: job_wait (job_ids=["\{job_id}"])
           $|Read its outcome and report: job_output (job_id="\{job_id}")
           $|Stop it: job_stop (job_id="\{job_id}")
         ),
         brief="subagent \{name}: \{label}",
-        data={ "job_id": job_id, "session": session },
+        data={
+          "job_id": job_id,
+          "session": session,
+          "recovered": recovered_data,
+        },
       )
     Busy =>
       @agent_tool.respond(
-        "error: \{launcher.max_live()} subagents are already running; wait for one to end (job_wait) and start this one again. Nothing was started.",
+        "\{left}error: \{launcher.max_live()} subagents are already running; wait for one to end (job_wait) and start this one again. Nothing was started.",
         is_error=true,
+        data={ "recovered": recovered_data },
       )
     Unavailable(reason) =>
       @agent_tool.respond(
-        "error: subagent not started: \{reason}",
+        "\{left}error: subagent not started: \{reason}",
         is_error=true,
+        data={ "recovered": recovered_data },
       )
   }
 }

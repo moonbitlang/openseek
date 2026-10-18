@@ -41,6 +41,13 @@ pub fn SubtaskEntry::defects(self : SubtaskEntry) -> Array[String] {
 }
 
 ///|
+/// Whether the engine has let go of the entry: it reserves no paths, and
+/// nothing of it is the engine's to act on.
+pub fn SubtaskEntry::is_released(self : SubtaskEntry) -> Bool {
+  self.handed_off || self.state.is_terminal()
+}
+
+///|
 /// Terminal states hold no path reservation.
 pub fn SubtaskState::is_terminal(self : SubtaskState) -> Bool {
   self is (Integrated | Discarded | NoChanges)
@@ -64,6 +71,9 @@ pub struct SubtaskEntry {
   priv conflict_paths : Array[String]
   // Why the last capture found the changes unmergeable; empty otherwise.
   priv defects : Array[String]
+  // The engine let go of it after its capture: what is left (a branch, or a
+  // worktree kept for inspection) is its launcher's, and it reserves nothing.
+  priv handed_off : Bool
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -191,6 +201,7 @@ test "registry entry round-trips and states classify" {
       origin_head_before: None,
       conflict_paths: [],
       defects: [],
+      handed_off: false,
     }
   }
   let entry = sample_entry()
@@ -224,6 +235,9 @@ fn with_default_lists(json : Json) -> Json {
         if !map.contains(field) {
           map[field] = Json(([] : Array[String]))
         }
+      }
+      if !map.contains("handed_off") {
+        map["handed_off"] = Json(false)
       }
       json
     }

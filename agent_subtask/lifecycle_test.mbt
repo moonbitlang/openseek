@@ -425,7 +425,7 @@ async test "linked worktree provisions and integrates into itself" {
       fail("expected main worktree geometry")
     }
     let linked_root = provisioned.geometry.origin_root
-    assert_eq(provisioned.entry.worker_root, "\{linked_root}/.worktrees/x")
+    assert_eq(provisioned.entry.worker_root, "\{linked_root}/.worktrees/x--n1")
     let deny_roots = provisioned.geometry.worker_deny_roots()
     assert_true(deny_roots.contains(provisioned.geometry.common_git_dir))
     assert_true(deny_roots.contains(main_geometry.origin_root))

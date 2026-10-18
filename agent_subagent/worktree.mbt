@@ -8,31 +8,6 @@ pub(all) struct Slice {
 }
 
 ///|
-/// What can be done with a worker's worktree once its worker has ended.
-pub(all) enum WorktreeAction {
-  /// Merge its committed changes into the launching checkout.
-  Integrate
-  /// Commit a conflicted integration whose markers were resolved.
-  Continue
-  /// Abandon a conflicted integration; the branch and worktree stay.
-  Abort
-  /// Remove the worktree and branch without integrating.
-  Discard
-}
-
-///|
-/// What `Launcher::worktree` did.
-pub(all) enum WorktreeResult {
-  /// The worktree is now in this state (published as `WorkerChanged`), with
-  /// what happened in words.
-  Changed(@protocol.Worktree, detail~ : Array[String])
-  /// Nothing changed, for this reason.
-  Refused(String)
-  /// The session has no worktree of a worker this session started.
-  Unknown
-}
-
-///|
 /// The record of `entry` as a host shows it.
 fn worktree_of(entry : @subtask.SubtaskEntry) -> @protocol.Worktree {
   {
@@ -43,14 +18,13 @@ fn worktree_of(entry : @subtask.SubtaskEntry) -> @protocol.Worktree {
     allowed_paths: entry.allowed_paths.copy(),
     state: match (entry.state, entry.commit_oid) {
       (Provisioning | Running, _) => Working
-      (Captured, _) => Unmergeable(defects=entry.defects().copy())
       (Committed, Some(commit)) => Committed(commit~)
-      (Conflicted, Some(commit)) => Conflicted(commit~)
-      (Committed | Conflicted, None) =>
-        Unmergeable(defects=["the registry records no commit"])
-      (Integrated, _) => Integrated
-      (Discarded, _) => Discarded
       (NoChanges, _) => NoChanges
+      (Captured, _) => Unmergeable(defects=entry.defects().copy())
+      // States of the integration this engine no longer drives.
+      (Committed | Conflicted, None) | (Integrated | Discarded, _) =>
+        Unmergeable(defects=["the registry records no capture"])
+      (Conflicted, Some(commit)) => Committed(commit~)
     },
   }
 }
@@ -107,18 +81,66 @@ fn Launcher::nonce_prefix(self : Launcher) -> String {
 }
 
 ///|
-/// Decide from git what a worker left in its worktree: commit its changes
-/// when they pass validation. Runs when its job ends, before the terminal
-/// record, which therefore carries the worktree's state.
+/// How many times capture is tried when git itself fails (an index lock,
+/// a slow disk), and how long apart.
+const CaptureAttempts : Int32 = 3
+
+///|
+const CaptureRetryMs : Int32 = 1_000
+
+///|
+/// Decide from git what a worker left in its worktree, then hand it over.
+/// Runs when its job ends, before the terminal record, which therefore
+/// carries the result: its commit, that it changed nothing, or why it could
+/// not be taken.
 async fn capture(child : Child, provisioned : @subtask.Provisioned) -> Unit {
-  child.workspace = Worktree(
-    captured(@subtask.capture(provisioned.geometry, provisioned.entry)),
-  )
+  child.workspace = Worktree(hand_over(provisioned.geometry, provisioned.entry))
+}
+
+///|
+/// Capture `entry` (retrying while git itself fails) and release it to its
+/// launcher: a committed slice keeps only its branch, an unmergeable or
+/// uncaptured one keeps its worktree, and its paths are free again.
+async fn hand_over(
+  geometry : @subtask.Geometry,
+  entry : @subtask.SubtaskEntry,
+) -> @protocol.Worktree {
+  let mut outcome = @subtask.capture(geometry, entry)
+  for attempt = 1
+      attempt < CaptureAttempts &&
+     outcome.entry.state is (Provisioning | Running)
+      attempt = attempt + 1 {
+    @async.sleep(CaptureRetryMs)
+    outcome = @subtask.capture(geometry, outcome.entry)
+  }
+  let worktree = captured(outcome)
+  match @subtask.hand_off(geometry, outcome.entry) {
+    Ok(_) => worktree
+    Err(reason) =>
+      {
+        ..worktree,
+        state: CaptureFailed(
+          reasons=[
+            ..failure_reasons(worktree.state),
+            "it could not be released: \{reason}",
+          ],
+        ),
+      }
+  }
+}
+
+///|
+fn failure_reasons(state : @protocol.WorktreeState) -> Array[String] {
+  match state {
+    CaptureFailed(reasons~) => reasons.copy()
+    Unmergeable(defects~) => defects.copy()
+    _ => []
+  }
 }
 
 ///|
 /// The record of a capture: when git itself failed, the worktree is left as
-/// it was, to be captured again (`Launcher::worktrees`), and says why.
+/// the worker left it, and says why.
 fn captured(outcome : @subtask.CaptureOutcome) -> @protocol.Worktree {
   let worktree = worktree_of(outcome.entry)
   match outcome.entry.state {
@@ -129,175 +151,31 @@ fn captured(outcome : @subtask.CaptureOutcome) -> @protocol.Worktree {
 }
 
 ///|
-/// The worktrees of the workers this session started, in any state.
-///
-/// A worktree whose worker is not running in this engine (it was ended with
-/// an earlier engine) is recovered first: its changes are captured from git,
-/// or, if the engine died while forking it, it is removed. Either change is
-/// published as `WorkerChanged`.
-pub async fn Launcher::worktrees(
+/// Hand over what an earlier engine of this session left: a worktree whose
+/// worker it never captured, or captured and never released. Each comes back
+/// with its worker's session, since its job is not this engine's to read. A
+/// worktree the engine died forking is removed. Run before a worker starts,
+/// so what it left no longer holds paths the new worker may need.
+pub async fn Launcher::recover(
   self : Launcher,
-) -> Result[Array[(String, @protocol.Worktree)], String] {
-  guard self.cwd is Some(root) else { return Ok([]) }
-  let geometry = @subtask.resolve_geometry(root)
-  guard geometry is Ok(geometry) else {
-    // Not a git checkout: no worker could have been started here.
-    return Ok([])
-  }
-  let found = []
-  for found_entry in self.entries(geometry) {
-    let (session, entry) = found_entry
-    let entry = if self.working.contains(session) {
-      entry
-    } else {
-      match entry.state {
-        Running => {
-          let worktree = captured(@subtask.capture(geometry, entry))
-          (self.on_worker)(session, worktree)
-          found.push((session, worktree))
-          continue
-        }
-        Provisioning =>
-          match @subtask.discard(geometry, entry) {
-            Ok(entry) => {
-              (self.on_worker)(session, worktree_of(entry))
-              entry
-            }
-            Err(_) => entry
-          }
-        _ => entry
-      }
-    }
-    found.push((session, worktree_of(entry)))
-  }
-  Ok(found)
-}
-
-///|
-/// Integrate, continue or abort the integration of, or discard the worktree
-/// of `worker`: the job id of a worker this engine ran, or the session of
-/// any worker this session started.
-pub async fn Launcher::worktree(
-  self : Launcher,
-  worker : String,
-  action : WorktreeAction,
-) -> WorktreeResult {
-  guard self.find(worker) is Some((session, geometry, entry)) else {
-    return Unknown
-  }
-  guard !self.working.contains(session) else {
-    return Refused("its worker is still running; stop it or wait for it first")
-  }
-  // A worktree that is gone is not touched again: a newer slice may have
-  // reused its name and directory.
-  guard !entry.state.is_terminal() else {
-    return Refused("it is already \{describe_state(worktree_of(entry).state)}")
-  }
-  let result = match action {
-    Integrate => outcome(@subtask.integrate(geometry, entry))
-    Continue => outcome(@subtask.integrate_continue(geometry, entry))
-    Abort => outcome(@subtask.integrate_abort(geometry, entry))
-    Discard =>
-      match @subtask.discard(geometry, entry) {
-        Ok(entry) => Ok((entry, ["discarded"]))
-        Err(reason) => Err(reason)
-      }
-  }
-  match result {
-    Ok((entry, detail)) => {
-      let worktree = worktree_of(entry)
-      (self.on_worker)(session, worktree)
-      Changed(worktree, detail~)
-    }
-    Err(reason) => Refused(reason)
-  }
-}
-
-///|
-/// The worktree of `worker` (a job id of this engine, or a session): its
-/// worker's session, the repository it is in, and its registry entry.
-async fn Launcher::find(
-  self : Launcher,
-  worker : String,
-) -> (String, @subtask.Geometry, @subtask.SubtaskEntry)? {
-  let session = match self.runtime.snapshot(worker) {
-    Some({ subagent: Some(info), .. }) => info.session
-    _ => worker
-  }
+) -> Array[(String, @protocol.Worktree)] {
   guard self.cwd is Some(root) &&
     @subtask.resolve_geometry(root) is Ok(geometry) else {
-    return None
+    return []
   }
-  self
-  .entries(geometry)
-  .iter()
-  .filter(found => found.0 == session)
-  .last()
-  .map(found => (session, geometry, found.1))
-}
-
-///|
-/// What `worker` changed, as git shows it, in at most `limit` characters:
-/// a committed worktree's commit against its base, or, before a commit, its
-/// working tree against its base. `None` when the session has no such
-/// worker; `Err` when there is nothing to show or git failed.
-pub async fn Launcher::changes(
-  self : Launcher,
-  worker : String,
-  limit~ : Int32 = 40_000,
-) -> Result[String, String]? {
-  guard self.find(worker) is Some((_, geometry, entry)) else { return None }
-  let (cwd, range) = match (entry.state, entry.commit_oid) {
-    (Committed | Conflicted, Some(commit)) =>
-      (geometry.origin_root, [entry.base_oid, commit])
-    (Running | Captured, _) => (entry.worker_root, [entry.base_oid])
-    // It changed nothing: an answer, not a failure.
-    (NoChanges, _) => return Some(Ok(""))
-    _ =>
-      return Some(
-        Err(
-          "its worktree is \{describe_state(worktree_of(entry).state)}, so there is nothing to show",
-        ),
-      )
-  }
-  let text = StringBuilder()
-  let diff = ["diff", "--no-ext-diff", "--no-color"]
-  for args in [[..diff, "--stat", ..range], [..diff, ..range]] {
-    match @subtask.git_require(["--no-pager", ..args], cwd~) {
-      Ok(output) => text.write_string(output)
-      Err(reason) => return Some(Err(reason))
+  let recovered = []
+  for found in self.entries(geometry) {
+    let (session, entry) = found
+    guard !entry.is_released() && !self.working.contains(session) else {
+      continue
+    }
+    if entry.state is Provisioning {
+      ignore(@subtask.discard(geometry, entry))
+    } else {
+      recovered.push((session, hand_over(geometry, entry)))
     }
   }
-  if range.length() == 1 {
-    match
-      @subtask.git_require(["ls-files", "--others", "--exclude-standard"], cwd~) {
-      Ok(untracked) if !untracked.is_blank() =>
-        text.write_string("\nuntracked:\n\{untracked}")
-      _ => ()
-    }
-  }
-  let text = text.to_string()
-  Some(
-    Ok(
-      if text.length() <= limit {
-        text
-      } else {
-        String::from_iter(text.iter().take(limit)) +
-        "\n… (\{text.length() - limit} more characters: run git diff \{range.join(" ")} in \{cwd} for the rest)"
-      },
-    ),
-  )
-}
-
-///|
-fn outcome(
-  outcome : @subtask.IntegrateOutcome,
-) -> Result[(@subtask.SubtaskEntry, Array[String]), String] {
-  if outcome.result == "refused" {
-    Err(outcome.detail.join("; "))
-  } else {
-    Ok((outcome.entry, [outcome.result, ..outcome.detail]))
-  }
+  recovered
 }
 
 ///|
@@ -324,19 +202,39 @@ async fn Launcher::entries(
 }
 
 ///|
-/// A worktree's state, in words for the model.
-pub fn describe_state(state : @protocol.WorktreeState) -> String {
-  match state {
-    Working => "being worked on"
-    CaptureFailed(reasons~) =>
-      "not captured: \{reasons.join("; ")} (listing worktrees captures it again)"
-    Committed(commit~) => "committed as \{commit}, ready to integrate"
-    NoChanges => "unchanged, so it was removed"
+/// Where a worker's change is and what to do with it, in words for the
+/// model: the commands are plain git, run through mbtx.
+pub fn describe_worktree(worktree : @protocol.Worktree) -> String {
+  let name = worktree.name
+  match worktree.state {
+    Working =>
+      "worktree \{name} at \{worktree.path}: its worker is still running"
+    Committed(commit~) =>
+      (
+        $|worktree \{name}: its change is commit \{commit} on branch \{worktree.branch} (forked from \{worktree.base}; the checkout was removed).
+        $|Review it with `git diff \{worktree.base} \{commit}`, then take it with `git cherry-pick \{commit}` (on a conflict, resolve the markers, `git add` them, then `git cherry-pick --continue`, or `--abort`), and delete the branch with `git branch -D \{worktree.branch}`.
+      )
+    NoChanges =>
+      "worktree \{name}: its worker changed nothing; its worktree and branch were removed"
     Unmergeable(defects~) =>
-      "not mergeable: \{defects.join("; ")}; its worktree is kept for inspection"
-    Conflicted(commit~) =>
-      "conflicted while integrating \{commit}: resolve the markers in this checkout, then continue (or abort)"
-    Integrated => "integrated, and removed"
-    Discarded => "discarded, and removed"
+      "worktree \{name}: not mergeable (\{defects.join("; ")}); its files are kept at \{worktree.path} for inspection, on branch \{worktree.branch}"
+    CaptureFailed(reasons~) =>
+      "worktree \{name}: git could not capture it (\{reasons.join("; ")}); its files are kept at \{worktree.path}, on branch \{worktree.branch}"
+  }
+}
+
+///|
+/// A worker's handed-over worktree in a few words, for a notice or a wait:
+/// `describe_worktree` says what to do with it.
+pub fn brief_worktree(worktree : @protocol.Worktree) -> String {
+  match worktree.state {
+    Working => "its worktree \{worktree.name} is still being worked on"
+    Committed(commit~) =>
+      "its change is commit \{commit} on branch \{worktree.branch}"
+    NoChanges => "it changed nothing"
+    Unmergeable(..) =>
+      "its change is not mergeable; its files are kept at \{worktree.path}"
+    CaptureFailed(..) =>
+      "git could not capture its change; its files are kept at \{worktree.path}"
   }
 }

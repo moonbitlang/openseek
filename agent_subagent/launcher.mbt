@@ -75,8 +75,6 @@ struct Launcher {
   // runs, so a report whose store failed can still be read.
   reports : Map[String, Json]
   owners : Map[String, Owner]
-  // Told of a worktree's change after its worker's job ended.
-  on_worker : (String, @protocol.Worktree) -> Unit
   // The sessions of workers live in their worktrees, from before their
   // worktree is forked until it is captured.
   working : Map[String, Unit]
@@ -91,9 +89,7 @@ struct Launcher {
 /// child up to its kind (the engine's own binary, a managed `run`, its model
 /// and endpoint); `cwd` is where it runs, and `env` is added to the
 /// environment it inherits (a credential, kept off its command line). Result files are written in
-/// `result_dir`, which is created when needed. `on_worker` is told, by the
-/// worker's session, of each change to a worktree after its worker's job
-/// ended.
+/// `result_dir`, which is created when needed.
 pub fn[X] Launcher::Launcher(
   scope : @agent_runtime.AgentTaskScope[X],
   runtime~ : @bgjobs.BgJobRuntime,
@@ -107,7 +103,6 @@ pub fn[X] Launcher::Launcher(
   max_workers~ : Int32 = MaxWorkers,
   grace_ms~ : Int32 = StopGraceMs,
   delivery_timeout_ms~ : Int32 = DeliveryTimeoutMs,
-  on_worker~ : (String, @protocol.Worktree) -> Unit = (_, _) => (),
 ) -> Launcher {
   let group = scope.group()
   {
@@ -127,7 +122,6 @@ pub fn[X] Launcher::Launcher(
     live: 0,
     reports: Map([]),
     owners: Map([]),
-    on_worker,
     working: Map([]),
     admitting: 0,
   }

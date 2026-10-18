@@ -117,7 +117,6 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
   match event {
     PredictionResult(..)
     | JobChanged(..)
-    | WorkerChanged(..)
     | JobsSnapshot(..)
     | JobStopResult(..) => None
     AgentStep(step~) => Some(AgentStep(Some(step)))

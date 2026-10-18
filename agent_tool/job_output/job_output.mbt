@@ -267,13 +267,7 @@ fn subagent_output(
     None => ()
   }
   if info.workspace is Worktree(worktree) {
-    content.write_string(
-      (
-        $|worktree \{worktree.name}: branch \{worktree.branch} at \{worktree.path}; when its job ended it was \{@agent_subagent.describe_state(worktree.state)}
-        $|Its state now (it may have been integrated or discarded since): worktree (action="list"). Review its changes with worktree (action="diff", worker="\{job_id}"), then integrate or discard them.
-        $|
-      ),
-    )
+    content.write_string("\{@agent_subagent.describe_worktree(worktree)}\n")
   }
   let report = subagent_report.bind(read => read(info.session))
   match (info.report, report) {

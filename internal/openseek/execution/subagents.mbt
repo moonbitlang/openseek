@@ -85,9 +85,6 @@ pub fn[X] subagents(
         // an unrelated one in the environment does not win over it.
         env=Map([(provider_key_variable(model), api_key)]),
         result_dir~,
-        on_worker=(session, worktree) => {
-          @emit.emit(WorkerChanged(session~, worktree~))
-        },
       )
     },
     kinds: subagent_kinds(),

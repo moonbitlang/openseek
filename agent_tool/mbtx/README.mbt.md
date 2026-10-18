@@ -399,7 +399,7 @@ fn main {
 A snippet starts child agents through the host, never by spawning the engine:
 the engine is not on the spawn allowlist. With PTC on, the session's program
 service binds each script's program to its own `subagent`, `job_wait`,
-`job_output`, `job_stop`, `worktree` and `audit_context` tools (see
+`job_output`, `job_stop` and `audit_context` tools (see
 `agent_tool/subagent`), so a script reaches only the children it started, and
 stopping the script stops them. `definition(…, subagents=true)` only decides
 whether the description teaches this; a session without a launcher has no

@@ -145,6 +145,12 @@ let spawnable_commands : Array[(String, Array[String])] = [
   // guards nothing next to `moon run`, already here and running arbitrary
   // programs, and it refused a plain `git rebase origin/main` in a live turn.
   ("git", ["rebase"]),
+  // Same reasoning as `rebase`: `-s`/`-X` can select a merge program, which
+  // guards nothing next to `moon run`. A worker's change reaches the
+  // launching checkout as a commit, and these are how it is taken:
+  // `cherry-pick` for a linear history, `merge` when a merge commit is wanted.
+  ("git", ["cherry-pick"]),
+  ("git", ["merge"]),
   // Same shape: `submodule foreach` runs an arbitrary command, `worktree
   // move`/`remove --force` relocate or destroy files, and the stash stack is
   // SHARED by every worktree of a repository — a `pop` here can take an entry
@@ -164,8 +170,8 @@ let spawnable_commands : Array[(String, Array[String])] = [
   ("git", ["stash", "show"]),
   // Deliberately absent, matching the forms the shell tool pre-blocked:
   // `am`/`apply` (import arbitrary bytes), `clean` (permanently removes
-  // untracked files), `bisect` (`run` executes a command), `merge`/`pull`/
-  // `cherry-pick` (`-X`/strategy resolve an external merge driver), `mv`,
+  // untracked files), `bisect` (`run` executes a command), `pull`
+  // (`-X`/strategy resolve an external merge driver, and it fetches too), `mv`,
   // `clone`, and the plumbing (`fast-import`, `read-tree`, `update-index`,
   // `filter-branch`). In each of those the dangerous form is selected by a
   // FLAG, which follows the subcommand and so cannot be excluded by a prefix —

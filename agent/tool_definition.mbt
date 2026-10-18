@@ -8,11 +8,10 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
       None => "ended"
     }
     let worktree = match info.workspace {
-      Worktree(worktree) =>
-        "; its worktree \{worktree.name} is \{@agent_subagent.describe_state(worktree.state)}"
+      Worktree(worktree) => "; \{@agent_subagent.brief_worktree(worktree)}"
       InPlace => ""
     }
-    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{worktree} — read its outcome and report with job_output (job_id=\"\{snapshot.id}\")."
+    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{worktree} — read its outcome, its report and what to do with its change with job_output (job_id=\"\{snapshot.id}\")."
   }
   let status = if snapshot.cleanup_error is Some(error) {
     "cleanup failed: \{error}"
@@ -230,9 +229,6 @@ pub async fn[X] build_tools(
           bg_runtime,
           spec.kinds,
           spec.audit_context,
-          // A script's integration writes this checkout, as the file tools
-          // and the model's own `worktree` do.
-          serialize=tool => file_state.serialize(tool),
         ),
       )
     _ => None
@@ -283,13 +279,6 @@ pub async fn[X] build_tools(
       @job_wait.definition(),
       @finish.definition(),
       ..match (launcher, subagents) {
-        (Some(launcher), Some(spec)) if spec.kinds.any(kind => kind.worktree) =>
-          [
-            @subagent.definition(launcher, spec.kinds),
-            @subagent.send_definition(launcher, spec.kinds),
-            // Integrating writes this checkout, as the file tools do.
-            file_state.serialize(@subagent.worktree_definition(launcher)),
-          ]
         (Some(launcher), Some(spec)) =>
           [
             @subagent.definition(launcher, spec.kinds),

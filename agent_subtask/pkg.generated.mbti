@@ -13,6 +13,8 @@ pub async fn discard(Geometry, SubtaskEntry) -> Result[SubtaskEntry, String]
 
 pub async fn git_require(Array[String], cwd~ : String, timeout_ms? : Int) -> Result[String, String]
 
+pub async fn hand_off(Geometry, SubtaskEntry) -> Result[SubtaskEntry, String]
+
 pub async fn integrate(Geometry, SubtaskEntry) -> IntegrateOutcome
 
 pub async fn integrate_abort(Geometry, SubtaskEntry) -> IntegrateOutcome
@@ -69,6 +71,7 @@ pub struct SubtaskEntry {
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn SubtaskEntry::defects(Self) -> Array[String]
+pub fn SubtaskEntry::is_released(Self) -> Bool
 pub fn SubtaskEntry::nonce(Self) -> String
 pub fn SubtaskEntry::parent_session(Self) -> String?
 

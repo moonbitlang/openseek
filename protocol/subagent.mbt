@@ -103,14 +103,14 @@ pub(all) enum SubagentWorkspace {
 ///|
 /// A worker's git worktree: a branch forked from the launching checkout's
 /// HEAD, on which the engine commits the worker's changes once they pass
-/// validation, and which the launching checkout may integrate.
-///
-/// The engine's registry, not a job record, is where its later states live:
-/// a change after the job ended is published as `WorkerChanged`.
+/// validation. When the worker ends, the engine hands it over: what is left
+/// (the branch, or a worktree kept for inspection) is the launching
+/// session's to merge or remove, and the engine tracks it no further.
 pub(all) struct Worktree {
   /// The slice's name, unique among the repository's active worktrees.
   name : String
-  /// The worktree's root directory.
+  /// The worktree's root directory: where the worker ran, and where its
+  /// files are kept when they could not be committed.
   path : String
   branch : String
   /// The commit it was forked from.
@@ -121,26 +121,21 @@ pub(all) struct Worktree {
 } derive(Eq, Debug)
 
 ///|
-/// Where a worker's changes stand.
+/// What a worker's worktree holds when it is handed over.
 pub(all) enum WorktreeState {
-  /// The worker is running in it, or has not been captured yet.
+  /// The worker is running in it.
   Working
-  /// Capturing it failed in git itself, for these reasons; it is left as it
-  /// was, to be captured again.
+  /// Git itself failed to capture it, for these reasons; its files are kept
+  /// at the worktree's path as the worker left them.
   CaptureFailed(reasons~ : Array[String])
-  /// Its changes passed validation and are committed on the branch.
+  /// Its changes passed validation and are this commit on the branch; the
+  /// checkout was removed.
   Committed(commit~ : String)
-  /// It changed nothing; the worktree is gone.
+  /// It changed nothing; its worktree and branch were removed.
   NoChanges
-  /// Its changes failed validation, for these reasons; the worktree is kept
-  /// for inspection.
+  /// Its changes failed validation, for these reasons; its files are kept at
+  /// the worktree's path for inspection.
   Unmergeable(defects~ : Array[String])
-  /// Integrating it hit conflicts, which the launching checkout holds.
-  Conflicted(commit~ : String)
-  /// It was merged into the launching checkout; the worktree is gone.
-  Integrated
-  /// It was abandoned; the worktree and branch are gone.
-  Discarded
 } derive(Eq, Debug)
 
 ///|
@@ -358,9 +353,6 @@ pub impl ToJson for WorktreeState with fn to_json(self) {
     Committed(commit~) => { "kind": "committed", "commit": commit }
     NoChanges => { "kind": "no_changes" }
     Unmergeable(defects~) => { "kind": "unmergeable", "defects": defects }
-    Conflicted(commit~) => { "kind": "conflicted", "commit": commit }
-    Integrated => { "kind": "integrated" }
-    Discarded => { "kind": "discarded" }
   }
 }
 
@@ -375,10 +367,6 @@ pub impl FromJson for WorktreeState with fn from_json(json, path) {
     { "kind": "no_changes", .. } => NoChanges
     { "kind": "unmergeable", "defects": defects, .. } =>
       Unmergeable(defects=@json.from_json(defects, path~))
-    { "kind": "conflicted", "commit": String(commit), .. } if !commit.is_empty() =>
-      Conflicted(commit~)
-    { "kind": "integrated", .. } => Integrated
-    { "kind": "discarded", .. } => Discarded
     _ => raise JsonDecodeError((path, "invalid worktree state"))
   }
 }

@@ -11,11 +11,9 @@ import {
 // Values
 pub fn definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
-pub fn program_binding(@agent_subagent.Launcher, @bgjobs.BgJobRuntime, Array[Kind], () -> Json, serialize~ : (@agent_tool.AgentToolDefinition) -> @agent_tool.AgentToolDefinition) -> (String) -> @ptc.ProgramBinding
+pub fn program_binding(@agent_subagent.Launcher, @bgjobs.BgJobRuntime, Array[Kind], () -> Json) -> (String) -> @ptc.ProgramBinding
 
 pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
-
-pub fn worktree_definition(@agent_subagent.Launcher) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

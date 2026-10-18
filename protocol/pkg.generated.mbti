@@ -116,7 +116,6 @@ pub(all) enum Event {
   SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  WorkerChanged(session~ : String, worktree~ : Worktree)
   PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
@@ -440,9 +439,6 @@ pub(all) enum WorktreeState {
   Committed(commit~ : String)
   NoChanges
   Unmergeable(defects~ : Array[String])
-  Conflicted(commit~ : String)
-  Integrated
-  Discarded
 } derive(Eq, @debug.Debug)
 pub fn WorktreeState::equal(Self, Self) -> Bool
 pub fn WorktreeState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

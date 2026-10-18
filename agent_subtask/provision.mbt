@@ -63,17 +63,17 @@ async fn provision_locked(
   // 1. Reservation check against every non-terminal registry entry.
   let (entries, _) = load_entries(geometry.common_git_dir)
   for existing in entries {
-    if existing.state.is_terminal() {
+    if existing.is_released() {
       continue
     }
     if existing.name == name {
       return Err(
-        "a subtask named \{name} is already active (state \{Repr(existing.state)}); pick another name or integrate/discard it first",
+        "a subtask named \{name} is already active (state \{Repr(existing.state)}); pick another name or wait for it to end",
       )
     }
     if paths_overlap(existing.allowed_paths, allowed_paths) {
       return Err(
-        "allowed_paths overlap active subtask \{existing.name} (\{existing.allowed_paths.join(", ")}); partitions must be disjoint — integrate or discard it first",
+        "allowed_paths overlap active subtask \{existing.name} (\{existing.allowed_paths.join(", ")}); partitions must be disjoint — wait for it to end",
       )
     }
   }
@@ -118,7 +118,13 @@ async fn provision_locked(
   // 5. Reservation becomes visible BEFORE the worktree exists: a crash
   //    between the two leaves a Provisioning entry naming what to clean.
   let branch = "openseek/\{name}--\{nonce}"
-  let worker_root_spelled = "\{origin}/.worktrees/\{name}"
+  // Its own directory, like its branch: a released slice of the same name
+  // may still hold its worktree there.
+  let directory = ".worktrees/\{name}--\{nonce}"
+  let worker_root_spelled = "\{origin}/\{directory}"
+  guard !(@fs.exists(worker_root_spelled) catch { _ => false }) else {
+    return Err("\{worker_root_spelled} already exists")
+  }
   let mut entry : SubtaskEntry = {
     schema_version: 1,
     name,
@@ -134,6 +140,7 @@ async fn provision_locked(
     origin_head_before: None,
     conflict_paths: [],
     defects: [],
+    handed_off: false,
   }
   match save_entry(geometry.common_git_dir, entry) {
     Ok(_) => ()
@@ -142,7 +149,7 @@ async fn provision_locked(
   // 6. The worktree itself, pinned to the recorded base.
   match
     git_require(
-      ["worktree", "add", ".worktrees/\{name}", "-b", branch, base_oid],
+      ["worktree", "add", directory, "-b", branch, base_oid],
       cwd=origin,
       timeout_ms=60_000,
     ) {

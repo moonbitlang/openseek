@@ -1,8 +1,7 @@
 ///|
-/// A worker's worktree as `job_output` shows it is the state its job ended
-/// with, which integrating or discarding changes later: the reader is told
-/// so, and where the current state is.
-test "a worker's output says its worktree state is as its job ended" {
+/// A worker's output says where its change is and the plain git that
+/// reviews and takes it: the engine handed it over when the worker ended.
+test "a worker's output says where its change is and how to take it" {
   let info : @protocol.SubagentInfo = {
     kind: "worker",
     label: "add b",
@@ -23,11 +22,11 @@ test "a worker's output says its worktree state is as its job ended" {
   guard subagent_output("job-1", info, false, None) is Respond(output) else {
     fail("expected a response")
   }
+  // Where the change is, and the plain git that takes it.
   assert_true(
-    output.content.contains(
-      "when its job ended it was committed as c0ffee, ready to integrate",
-    ),
+    output.content.contains("commit c0ffee on branch openseek/add-b"),
     msg=output.content,
   )
-  assert_true(output.content.contains("worktree (action=\"list\")"))
+  assert_true(output.content.contains("git cherry-pick c0ffee"))
+  assert_true(output.content.contains("git diff ba5e c0ffee"))
 }

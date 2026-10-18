@@ -87,9 +87,6 @@ pub(all) enum Event {
 
   // Background execution events are session-scoped and may arrive between turns.
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  /// A worker's worktree changed after its job ended (integrated,
-  /// discarded, or captured on recovery), keyed by the worker's session.
-  WorkerChanged(session~ : String, worktree~ : Worktree)
   PredictionResult(source_sequence~ : Int32, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(

@@ -549,10 +549,12 @@ fn default_prompt() -> String {
     #|  A `worker` makes a change for you in its own git worktree, forked from HEAD
     #|  (commit first what it must see), and may change only its `allowed_paths`,
     #|  which must not overlap another live worker's. Give workers independent,
-    #|  disjoint slices; do coupled edits yourself. When one ends, its changes wait
-    #|  on a branch: review them with `worktree` (`diff`) as you would a
-    #|  colleague's, then integrate them into this checkout (re-run your checks
-    #|  after) or discard them.
+    #|  disjoint slices; do coupled edits yourself. When one ends, `job_output`
+    #|  names the commit its change was captured as, on its own branch: review it
+    #|  with `git diff <base> <commit>` as you would a colleague's, take it with
+    #|  `git cherry-pick <commit>` (or `git merge`), re-run your checks, and delete
+    #|  the branch. A change that failed validation is not committed; its files
+    #|  are kept at the worktree's path for you to inspect.
     #|
     #|- Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
     #|  use `moon build` or `moon test` only when you need artifacts or test results.

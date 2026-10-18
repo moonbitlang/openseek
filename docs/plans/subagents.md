@@ -410,16 +410,32 @@ old generations from model tools.
   registry's in-process mutex; one engine per repository is still assumed.
 - PR 7: `worker` is a kind of `subagent` that takes a `worktree` argument
   (`{name, allowed_paths}`); a kind says whether it changes code, and only
-  such a kind takes one. One `worktree` tool for the model lists the
-  session's worktrees and integrates, continues, aborts or discards one,
-  named by its worker's job id or session; it is serialized with the file
-  tools because integrating writes the checkout. A script gets the same
-  actions on the workers it started. `job_output` and the end notice say
-  where a worker's worktree stands. `tests/integration/workers.mbtx` runs
-  the real CLI and a real worker child against a scripted provider in a
-  temporary repository, through integration.
-  At most 4 workers are live at once, within the session's subagent cap:
-  each builds and tests in its own worktree.
+  such a kind takes one. At most 4 workers are live at once, within the
+  session's subagent cap: each builds and tests in its own worktree.
+  A first version also gave the model a `worktree` tool to integrate,
+  continue, abort or discard after the job ended. It was replaced, after
+  two live runs and an owner review ("too tied to git"), by a hand-off:
+  - When the worker ends the engine captures its change (scope checked
+    from git, committed on its branch with the pinned base as parent),
+    retrying a few times when git itself fails, then releases the entry
+    (`handed_off`, persisted before it is reported): its paths and name are
+    free again. A committed slice keeps only its branch; an unmergeable or
+    uncaptured one keeps its files at its path for inspection; one with no
+    changes is removed.
+  - The main agent takes the change with plain git through mbtx: `git diff
+    <base> <commit>`, then `git cherry-pick <commit>` (or `git merge`, both
+    now admitted by the mbtx policy), then `git branch -D <branch>`.
+    `job_output` and the end notice give the commit, branch and base.
+  - Each worktree has its own directory, `.worktrees/<name>--<nonce>`, so a
+    released slice's kept files survive a new slice of the same name.
+  - What an earlier engine of the session left is handed over when a worker
+    next starts, and reported in that start's response (`data.recovered`
+    for a script), since its job is not the new engine's to read.
+  - Gone with the tool: the launcher's worktree/worktrees/changes API, the
+    `WorkerChanged` event, and the post-job worktree states.
+  `tests/integration/workers.mbtx` runs the real CLI and a real worker child
+  against a scripted provider in a temporary repository, through the main
+  agent's cherry-pick.
 
 ## Integrated testing
 

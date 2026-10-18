@@ -14,9 +14,10 @@ import {
 /// local server scripts the parent AND the real worker child (it reaches the
 /// server through the forwarded --api-url; it is told apart by its
 /// `submit_result` tool). The worker writes `lib/b.txt` in its worktree and
-/// reports; the engine commits that on the worker's branch when it ends; the
-/// parent reviews its diff and integrates it with the `worktree` tool, and
-/// finishes. Afterwards
+/// reports; the engine commits that on the worker's branch when it ends and
+/// hands it over; the parent reads where the change is from job_output,
+/// takes it with plain git through mbtx (`git cherry-pick`, then deletes the
+/// branch), and finishes. Afterwards
 /// the checkout has the file in a merge commit and the worktree is gone.
 fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
   {
@@ -53,9 +54,45 @@ fn started_job(messages : String) -> String? {
 }
 
 ///|
-/// The parent's moves: start the worker, wait for it, integrate its
-/// worktree once its end notice says it is committed, finish once that is
-/// done.
+/// The commit and branch the end notice names, once it has.
+fn handed_over(messages : String) -> (String, String)? {
+  guard messages.split("its change is commit ").nth(1) is Some(tail) else {
+    return None
+  }
+  let words = tail.split(" ").map(word => word.to_owned()).to_array()
+  // "<commit> on branch <branch>...": a branch name is these characters, and
+  // whatever the text puts after it is not.
+  guard words is [commit, "on", "branch", branch, ..] else { return None }
+  let name = String::from_iter(
+    branch
+    .iter()
+    .take_while(c => c is ('a'..='z' | 'A'..='Z' | '0'..='9' | '/' | '-' | '_' | '.')),
+  )
+  Some((commit, name))
+}
+
+///|
+/// The script the parent takes a worker's change with: plain git.
+fn take(commit : String, branch : String) -> String {
+  (
+    $|import {
+    $|  "moonbitlang/async",
+    $|  "moonbitlang/async/shell",
+    $|}
+    $|
+    $|async fn main {
+    $|  for args in [["cherry-pick", "\{commit}"], ["branch", "-D", "\{branch}"]] {
+    $|    let code = @shell.Cmd("git", args).each_line(line => println(line))
+    $|    if code != 0 { fail("git failed (exit=\{"\\{code}"})") }
+    $|  }
+    $|  println("TAKEN-WORKER-CHANGE")
+    $|}
+  )
+}
+
+///|
+/// The parent's moves: start the worker, wait for it, read where its change
+/// is, take it, finish once it is taken.
 fn parent_turn(messages : String) -> Json {
   guard started_job(messages) is Some(job) else {
     return calls([
@@ -67,15 +104,19 @@ fn parent_turn(messages : String) -> Json {
       }),
     ])
   }
-  if messages.contains("): integrated, and removed") {
-    calls([tool_call(0, "done", "finish", { "answer": "the worker's change is integrated" })])
-  } else if messages.contains("+beta") {
-    // The diff was read: the worker added the file it was asked for.
-    calls([tool_call(0, "merge", "worktree", { "action": "integrate", "worker": job })])
-  } else if messages.contains("its worktree add-b is committed as") {
-    calls([tool_call(0, "review", "worktree", { "action": "diff", "worker": job })])
-  } else {
-    calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
+  match handed_over(messages) {
+    _ if messages.contains("TAKEN-WORKER-CHANGE\\n") =>
+      calls([tool_call(0, "done", "finish", { "answer": "the worker's change is in" })])
+    // job_output said what to run: take it.
+    Some((commit, branch)) if messages.contains("git cherry-pick \{commit}") =>
+      calls([
+        tool_call(0, "take", "mbtx", {
+          "description": "take the worker's change",
+          "source": take(commit, branch),
+        }),
+      ])
+    Some(_) => calls([tool_call(0, "read", "job_output", { "job_id": job })])
+    None => calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
   }
 }
 
@@ -154,7 +195,8 @@ async fn main {
               worker_requests.val += 1
               worker_turn(messages)
             } else {
-              assert_true(tool_names(request).contains("worktree"))
+              // The parent takes a change with its own git: no tool for it.
+              assert_false(tool_names(request).contains("worktree"))
               parent_turn(messages)
             }
             conn.send_response(200, "OK", extra_headers={
@@ -194,24 +236,29 @@ async fn main {
       let err = stderr.wait()
       guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
       assert_true(
-        out.contains("the worker's change is integrated"),
+        out.contains("the worker's change is in"),
         msg="stdout: \{out}\nstderr: \{err}",
       )
       server.close()
     })
   })
   assert_eq(worker_requests.val, 2)
-  // The change is in the checkout, through a merge of the worker's branch.
+  // The change is in the checkout as one more commit on a linear history.
   assert_eq(@fs.read_file(ws + "/lib/b.txt").text(), "beta\n")
-  assert_true(git(ws, ["log", "-1", "--format=%P"]).trim().split(" ").count() == 2)
+  assert_true(git(ws, ["log", "-1", "--format=%P"]).trim().split(" ").count() == 1)
   assert_eq(git(ws, ["status", "--porcelain", "--untracked-files=no"]), "")
-  // The worktree is gone, and the worker's session has its report.
-  assert_false(@fs.exists(ws + "/.worktrees/add-b"))
+  // Nothing of the worker is left: the engine removed its checkout, the
+  // parent its branch.
+  assert_eq(git(ws, ["branch", "--list", "openseek/*"]).trim(), "")
+  assert_true(
+    (@fs.readdir(ws + "/.worktrees") catch { _ => [] }).is_empty(),
+    msg="a worktree directory is left",
+  )
   let report = @json.parse(
     @fs.read_file(store_root + "/sessions/parent-sr-1/report.json").text(),
   )
   assert_true(report is { "status": "done", .. })
   println(
-    "PASS: a worker changes its own worktree; the engine commits it, the model integrates it",
+    "PASS: a worker changes its own worktree; the engine commits and hands it over; the model cherry-picks it",
   )
 }

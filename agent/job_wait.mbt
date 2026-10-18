@@ -55,7 +55,7 @@ async fn AgentLoop::wait_for_jobs(
         Some({ subagent: Some({ outcome: Some(outcome), workspace, .. }), .. }) => {
           let worktree = match workspace {
             Worktree(worktree) =>
-              "; worktree \{worktree.name} \{@agent_subagent.describe_state(worktree.state)}"
+              "; \{@agent_subagent.brief_worktree(worktree)}"
             InPlace => ""
           }
           "\{id} \{@agent_subagent.describe_outcome(outcome)}\{worktree}"
