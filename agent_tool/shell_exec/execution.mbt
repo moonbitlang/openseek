@@ -7,6 +7,19 @@
 let reader_drain_grace_ms : Int32 = 200
 
 ///|
+/// Why an execution was first asked to stop.
+pub enum StopCause {
+  /// A caller asked (`stop`, `request_stop`).
+  Requested
+  /// The output watchdog.
+  OutputLimit
+  /// The wall-clock reaper.
+  TimeLimit
+  /// The output could not be captured, with the reason.
+  CaptureFailed(String)
+}
+
+///|
 /// Terminal or live state of one execution.
 ///
 /// - `Running`: the child is executing and a tool call is awaiting it.
@@ -49,6 +62,9 @@ struct ShellExecution {
   // Set before the child is cancelled (by `stop`, or by the output-limit kill)
   // so the monitor reports `Killed` rather than the kill signal's exit code.
   mut cancel_requested : Bool
+  // Why the first stop was requested, recorded when it was: later trouble
+  // during the wind-down (a capture error, say) does not replace it.
+  mut stop_cause : StopCause?
   mut ending : Bool
   mut on_ending : (() -> Unit)?
   // Foreground semantics: kill the child once the sink fills (output prefix hit
@@ -139,6 +155,7 @@ pub async fn[X] ShellExecution::start(
     process,
     status: Running,
     cancel_requested: false,
+    stop_cause: None,
     ending: false,
     on_ending: None,
     kill_when_full,
@@ -301,8 +318,29 @@ pub async fn ShellExecution::stop(self : ShellExecution) -> Bool {
 /// orphan. The monitor (on the session group) then reaps it to `Killed`.
 pub fn ShellExecution::request_stop(self : ShellExecution) -> Unit {
   self.begin_ending()
+  // Each watchdog marks its reason before it asks, so the first request
+  // knows why it was made.
+  if self.stop_cause is None {
+    self.stop_cause = Some(
+      if self.sink.failure is Some(reason) {
+        CaptureFailed(reason)
+      } else if self.killed_by_output_limit {
+        OutputLimit
+      } else if self.killed_by_time_limit {
+        TimeLimit
+      } else {
+        Requested
+      },
+    )
+  }
   self.cancel_requested = true
   self.process.cancel()
+}
+
+///|
+/// Why the execution was first asked to stop; `None` if it never was.
+pub fn ShellExecution::stop_cause(self : ShellExecution) -> StopCause? {
+  self.stop_cause
 }
 
 ///|

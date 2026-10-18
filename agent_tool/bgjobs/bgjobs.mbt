@@ -641,6 +641,14 @@ pub async fn BgJobRuntime::read_output_tail(
 }
 
 ///|
+/// Whether `id` has been asked to stop, for any reason, as of now: set
+/// synchronously with the request, before the process has wound down.
+/// `false` for an unknown id.
+pub fn BgJobRuntime::stop_requested(self : BgJobRuntime, id : String) -> Bool {
+  self.jobs.get(id) is Some(job) && job.exec.stop_cause() is Some(_)
+}
+
+///|
 /// Cancel a running job and return once it is terminal. Idempotent: an
 /// already-terminal known job returns `true`; an unknown id returns `false`.
 pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {

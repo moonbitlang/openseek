@@ -104,9 +104,9 @@ priv struct Child {
   mut outcome : @protocol.SubagentOutcome?
   mut usage : @protocol.SubagentUsage?
   mut report : @protocol.SubagentReport?
-  // Set when the child is being ended (a stop, its owner closing, teardown,
-  // a watchdog), before its stdin is closed: a request write that fails
-  // after this failed because of it, not first.
+  // Set by the cancel handler before it closes stdin, so teardown (which
+  // requests no stop) is known too: a request write that fails after this
+  // failed because of it, not first.
   mut stopping : Bool
   // The request could not be delivered, and that came first.
   mut delivery_failed : Bool
@@ -253,7 +253,9 @@ pub async fn Launcher::start(
   (self.spawn)(() => {
     @async.with_timeout(self.delivery_timeout_ms, () => writer.write(line)) catch {
       _ =>
-        if !child.stopping {
+        // Failed because the child was already being ended: a stop, a
+        // watchdog (recorded when requested) or teardown (its handler).
+        if !child.stopping && !self.runtime.stop_requested(job_id) {
           child.delivery_failed = true
           ignore(self.runtime.stop(job_id))
         }

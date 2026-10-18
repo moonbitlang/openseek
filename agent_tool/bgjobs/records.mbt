@@ -61,20 +61,19 @@ fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
 
 ///|
 /// How the job's process ended, read off its execution once it is terminal.
-/// A capture failure wins over the kill it caused; a kill nobody attributed
-/// is a requested stop or teardown.
+/// The first reason it was asked to stop wins over anything that went wrong
+/// while it wound down; a kill nobody asked for is teardown.
 fn BgJob::end(self : BgJob) -> JobEnd {
-  match self.exec.status() {
-    Exited(code) => Exited(code)
-    Running | Backgrounded | Killed =>
-      if self.exec.output_error() is Some(reason) {
-        CaptureFailed(reason)
-      } else if self.exec.killed_by_output_limit() {
-        OutputLimit
-      } else if self.exec.killed_by_time_limit() {
-        TimeLimit
-      } else {
-        Stopped
+  match (self.exec.stop_cause(), self.exec.status()) {
+    (Some(Requested), _) => Stopped
+    (Some(OutputLimit), _) => OutputLimit
+    (Some(TimeLimit), _) => TimeLimit
+    (Some(CaptureFailed(reason)), _) => CaptureFailed(reason)
+    (None, Exited(code)) => Exited(code)
+    (None, Running | Backgrounded | Killed) =>
+      match self.exec.output_error() {
+        Some(reason) => CaptureFailed(reason)
+        None => Stopped
       }
   }
 }

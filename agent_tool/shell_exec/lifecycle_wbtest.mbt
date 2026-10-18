@@ -80,3 +80,32 @@ async test "session cancellation fires the ending hook before output cleanup" {
     assert_true(observed is Some(Running))
   })
 }
+
+///|
+/// The first reason a stop was requested is the one kept: trouble during
+/// the wind-down, or a later request, does not replace it.
+async test "the first stop cause is kept" {
+  @async.with_task_group(group => {
+    let exec = ShellExecution::start(AgentTaskScope(group), program="moonx", args=[
+      CLI_SLEEP,
+      "10",
+    ])
+    assert_true(exec.stop_cause() is None)
+    exec.request_stop()
+    exec.sink.failure = Some("disk full")
+    exec.killed_by_output_limit = true
+    exec.request_stop()
+    assert_true(exec.stop_cause() is Some(Requested))
+    exec.wait()
+  })
+  @async.with_task_group(group => {
+    let exec = ShellExecution::start(AgentTaskScope(group), program="moonx", args=[
+      CLI_SLEEP,
+      "10",
+    ])
+    exec.kill_for_time_limit()
+    exec.request_stop()
+    assert_true(exec.stop_cause() is Some(TimeLimit))
+    exec.wait()
+  })
+}

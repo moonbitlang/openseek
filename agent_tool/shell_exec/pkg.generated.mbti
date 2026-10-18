@@ -48,7 +48,15 @@ pub async fn[X] ShellExecution::start(@agent_runtime.AgentTaskScope[X], program~
 pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool
+pub fn ShellExecution::stop_cause(Self) -> StopCause?
 pub async fn ShellExecution::wait(Self) -> Unit
+
+pub enum StopCause {
+  Requested
+  OutputLimit
+  TimeLimit
+  CaptureFailed(String)
+}
 
 // Type aliases
 
