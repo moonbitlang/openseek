@@ -166,12 +166,6 @@ pub fn definition(
             is_error=true,
           )
       }
-      if input.subrun {
-        return @agent_tool.respond(
-          "mbtx: `subrun` is retired. A script starts subagents through the host: @tools.call(\"subagent\", {\"kind\": \"explore\", \"input\": {\"query\": ...}}), then job_wait and job_output. The bundled agent workflows (@builtin/review.mbtx and others) need no flag.",
-          is_error=true,
-        )
-      }
       let compatible = input.target == "wasm" && !input.escalated
       let enabled = input.ptc.unwrap_or(
         compatible && program_service is Some(_),
@@ -1611,7 +1605,7 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
                 "ptc",
                 Json({
                   "type": "boolean",
-                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets, escalated, or subrun.",
+                  "description": "Enable @tools.call(name, arguments) for edit, multi_edit, write, remove, and web_search through an explicit \"moonbitlang/openseek_tools@0.2.0\" import. Each arguments value is the same JSON object as for the direct tool. Uses registered host tools and structured results. Defaults to true for supported wasm runs; false opts out. Normal foreground/background timing is unchanged. Explicit true cannot combine with other targets or escalated.",
                 }),
               ),
             ]

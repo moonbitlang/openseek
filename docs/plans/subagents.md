@@ -391,8 +391,8 @@ old generations from model tools.
   subagent starts; the desktop correlates a script's child through the job id
   its trace records. The engine stops emitting `WorkflowStarted`, but the
   protocol event and the desktop's workflow view stay, because existing
-  session logs contain them. A model that still sends `subrun` is told how
-  scripts delegate now. The bundled workflows' offline tests run against a
+  session logs contain them. The `subrun` argument is removed outright, with
+  no compatibility path: a script delegates through `@tools.call`. The bundled workflows' offline tests run against a
   fake host that speaks the PTC protocol.
 
 ## Integrated testing

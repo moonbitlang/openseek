@@ -406,8 +406,7 @@ whether the description teaches this; a session without a launcher has no
 such tools to call.
 
 `WORKFLOW_HOST` is still always set to nothing by the policy, so a snippet
-never inherits a handoff left in an old engine's environment. The retired
-`subrun` argument is refused with a result that says how scripts delegate now.
+never inherits a handoff left in an old engine's environment.
 
 ### Independent review
 
