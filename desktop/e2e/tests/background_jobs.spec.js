@@ -485,3 +485,40 @@ test('background program calls update live and retain edit diffs after reload', 
   await expect(trace.locator('.tool-status-spinner')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('subagent jobs read as agents with their outcome, spend and transcript', async ({ page }, testInfo) => {
+  app = new BackgroundJobsHarness(page);
+  const live = app.view('runtime-new', 'agent-live', app.oldPath, { kind: 'running' });
+  live.job.command = 'openseek run --kind explore --session session-1-sr-1';
+  live.job.subagent = {
+    kind: 'explore', label: 'where is the parser built?', session: 'session-1-sr-1',
+    launch: { kind: 'direct' }, workspace: { kind: 'in_place' },
+  };
+  const done = app.view('runtime-new', 'agent-done', app.oldPath, { kind: 'exited', code: 0 });
+  done.job.command = 'openseek run --kind review --session session-1-sr-2';
+  done.job.subagent = {
+    kind: 'review', label: 'audit the CSV change', session: 'session-1-sr-2',
+    launch: { kind: 'direct' }, workspace: { kind: 'in_place' },
+    outcome: { kind: 'captured' },
+    usage: { kind: 'known', steps: 12, prompt_tokens: 1000, completion_tokens: 200, source: 'result' },
+    report: { kind: 'stored' },
+  };
+  app.jobs.splice(0, app.jobs.length, live, done);
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  const active = page.getByRole('group', { name: 'In progress', exact: true });
+  await expect(active.locator('.jobs-row')).toHaveCount(1);
+  await expect(active.locator('.jobs-command')).toHaveText('explore: where is the parser built?');
+  await expandHistory(page);
+  const history = page.getByRole('group', { name: 'History', exact: true });
+  const row = history.locator('.jobs-row');
+  await expect(row.locator('.jobs-command')).toHaveText('review: audit the CSV change');
+  await expect(row.locator('.jobs-status')).toHaveText('Reported');
+  await expect(row.locator('.jobs-row-meta')).toContainText('12 steps · 1200 tokens');
+  await row.click();
+  await expect(page.locator('.jobs-detail')).toContainText('Session: session-1-sr-2');
+  await expect(page.getByRole('button', { name: 'Open transcript', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('jobs-subagents-light.png'), fullPage: true });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: testInfo.outputPath('jobs-subagents-dark.png'), fullPage: true });
+  expect(app.pageErrors).toEqual([]);
+});
