@@ -1,0 +1,374 @@
+///|
+/// What a background job is when it is a subagent: a child agent the engine
+/// launched, carried on its `JobRecord` so a host can show it as an agent
+/// rather than as a command.
+///
+/// The job's own `state` stays the fact about the PROCESS; `outcome` is what
+/// the child achieved. `outcome`, `usage` and `report` are absent while the
+/// child is live and settled once it has ended.
+pub(all) struct SubagentInfo {
+  /// The preset the child runs: `explore`, `review`, ...
+  kind : String
+  /// A short human label for the child's task.
+  label : String
+  /// The child's own durable session, `<parent>-sr-N`.
+  session : String
+  /// Who started the child, which is also who owns it.
+  launch : SubagentLaunch
+  /// How the child ended; `None` while it is live.
+  outcome : SubagentOutcome?
+  /// What the child spent; `None` while it is live.
+  usage : SubagentUsage?
+  /// Where its report is; `None` unless it ended `Captured`.
+  report : SubagentReport?
+  /// The checkout the child works in.
+  workspace : SubagentWorkspace
+} derive(Eq, Debug)
+
+///|
+/// Who started a subagent. The starter is its owner.
+pub(all) enum SubagentLaunch {
+  /// The model's own tool call. The child belongs to the session.
+  Direct
+  /// A script's host-tool call: the host's id for that script's program,
+  /// and the call's index in the program's trace.
+  Script(program~ : String, call~ : Int32)
+} derive(Eq, Debug)
+
+///|
+/// How a subagent ended.
+pub(all) enum SubagentOutcome {
+  /// It submitted a report that passed its kind's validation.
+  Captured
+  /// It finished its turn without submitting a report.
+  NoReport
+  /// Its step budget ran out first.
+  MaxSteps
+  /// It filled its context window first.
+  ContextYield
+  /// Its launcher's wall deadline ran out first.
+  TimedOut
+  /// It was stopped: by a job stop, its owner closing, or shutdown.
+  Stopped
+  /// Anything else, with the reason.
+  Failed(String)
+} derive(Eq, Debug)
+
+///|
+/// What a subagent spent, once it has ended.
+pub(all) enum SubagentUsage {
+  /// The counts, from the child's own account or reconstructed.
+  Known(
+    steps~ : Int32,
+    prompt_tokens~ : Int32,
+    completion_tokens~ : Int32,
+    cost_usd~ : Double?,
+    source~ : SubagentUsageSource,
+    unaccounted~ : String?
+  )
+  /// Nothing could be read; why.
+  Unavailable(String)
+} derive(Eq, Debug)
+
+///|
+/// Where a subagent's usage counts came from.
+pub(all) enum SubagentUsageSource {
+  /// The child's own result file: exact for the requests it made.
+  Result
+  /// Summed from the child's transcript because it left no result: a lower
+  /// bound when `unaccounted` says so.
+  Transcript
+} derive(Eq, Debug)
+
+///|
+/// Where a captured report is.
+pub(all) enum SubagentReport {
+  /// In `report.json` in the child's session directory.
+  Stored
+  /// Storing it failed, with the reason. The engine that captured it still
+  /// holds it in memory.
+  StoreFailed(String)
+} derive(Eq, Debug)
+
+///|
+/// The checkout a subagent works in.
+pub(all) enum SubagentWorkspace {
+  /// The session's own checkout, the one its launcher works in.
+  InPlace
+} derive(Eq, Debug)
+
+///|
+fn subagent_count(
+  fields : Map[String, Json],
+  name : String,
+  path : @json.JsonPath,
+) -> Int32 raise @json.JsonDecodeError {
+  let value = job_uint(fields, name, path)
+  guard value <= 2147483647L else {
+    raise JsonDecodeError((path, "subagent count out of range: " + name))
+  }
+  value.to_int()
+}
+
+///|
+pub impl ToJson for SubagentLaunch with fn to_json(self) {
+  match self {
+    Direct => { "kind": "direct" }
+    Script(program~, call~) =>
+      { "kind": "script", "program": program, "call": call }
+  }
+}
+
+///|
+pub impl FromJson for SubagentLaunch with fn from_json(json, path) {
+  match json {
+    { "kind": "direct", .. } => Direct
+    Object({ "kind": "script", "program": String(program), .. } as fields) if !program.is_empty() =>
+      Script(program~, call=subagent_count(fields, "call", path))
+    _ => raise JsonDecodeError((path, "invalid subagent launch"))
+  }
+}
+
+///|
+pub impl ToJson for SubagentOutcome with fn to_json(self) {
+  match self {
+    Captured => { "kind": "captured" }
+    NoReport => { "kind": "no_report" }
+    MaxSteps => { "kind": "max_steps" }
+    ContextYield => { "kind": "context_yield" }
+    TimedOut => { "kind": "timed_out" }
+    Stopped => { "kind": "stopped" }
+    Failed(reason) => { "kind": "failed", "reason": reason }
+  }
+}
+
+///|
+pub impl FromJson for SubagentOutcome with fn from_json(json, path) {
+  match json {
+    { "kind": "captured", .. } => Captured
+    { "kind": "no_report", .. } => NoReport
+    { "kind": "max_steps", .. } => MaxSteps
+    { "kind": "context_yield", .. } => ContextYield
+    { "kind": "timed_out", .. } => TimedOut
+    { "kind": "stopped", .. } => Stopped
+    { "kind": "failed", "reason": String(reason), .. } if !reason.is_empty() =>
+      Failed(reason)
+    _ => raise JsonDecodeError((path, "invalid subagent outcome"))
+  }
+}
+
+///|
+pub impl ToJson for SubagentUsage with fn to_json(self) {
+  match self {
+    Known(
+      steps~,
+      prompt_tokens~,
+      completion_tokens~,
+      cost_usd~,
+      source~,
+      unaccounted~
+    ) => {
+      let fields : Map[String, Json] = {
+        "kind": "known",
+        "steps": steps,
+        "prompt_tokens": prompt_tokens,
+        "completion_tokens": completion_tokens,
+        "source": match source {
+          Result => "result"
+          Transcript => "transcript"
+        },
+      }
+      if cost_usd is Some(cost) {
+        fields["cost_usd"] = Json(cost)
+      }
+      if unaccounted is Some(reason) {
+        fields["unaccounted"] = Json(reason)
+      }
+      Json::object(fields)
+    }
+    Unavailable(reason) => { "kind": "unavailable", "reason": reason }
+  }
+}
+
+///|
+pub impl FromJson for SubagentUsage with fn from_json(json, path) {
+  match json {
+    Object({ "kind": "known", "source": String(source), .. } as fields) => {
+      let source : SubagentUsageSource = match source {
+        "result" => Result
+        "transcript" => Transcript
+        _ => raise JsonDecodeError((path, "invalid subagent usage source"))
+      }
+      let cost_usd : Double? = match fields.get("cost_usd") {
+        None | Some(Null) => None
+        Some(Number(cost, ..)) if cost >= 0.0 => Some(cost)
+        Some(_) => raise JsonDecodeError((path, "invalid subagent cost"))
+      }
+      Known(
+        steps=subagent_count(fields, "steps", path),
+        prompt_tokens=subagent_count(fields, "prompt_tokens", path),
+        completion_tokens=subagent_count(fields, "completion_tokens", path),
+        cost_usd~,
+        source~,
+        unaccounted=job_optional(fields, "unaccounted", path),
+      )
+    }
+    { "kind": "unavailable", "reason": String(reason), .. } if !reason.is_empty() =>
+      Unavailable(reason)
+    _ => raise JsonDecodeError((path, "invalid subagent usage"))
+  }
+}
+
+///|
+pub impl ToJson for SubagentReport with fn to_json(self) {
+  match self {
+    Stored => { "kind": "stored" }
+    StoreFailed(reason) => { "kind": "store_failed", "reason": reason }
+  }
+}
+
+///|
+pub impl FromJson for SubagentReport with fn from_json(json, path) {
+  match json {
+    { "kind": "stored", .. } => Stored
+    { "kind": "store_failed", "reason": String(reason), .. } if !reason.is_empty() =>
+      StoreFailed(reason)
+    _ => raise JsonDecodeError((path, "invalid subagent report"))
+  }
+}
+
+///|
+pub impl ToJson for SubagentWorkspace with fn to_json(self) {
+  match self {
+    InPlace => { "kind": "in_place" }
+  }
+}
+
+///|
+pub impl FromJson for SubagentWorkspace with fn from_json(json, path) {
+  match json {
+    { "kind": "in_place", .. } => InPlace
+    _ => raise JsonDecodeError((path, "invalid subagent workspace"))
+  }
+}
+
+///|
+pub impl ToJson for SubagentInfo with fn to_json(self) {
+  let fields : Map[String, Json] = {
+    "kind": self.kind,
+    "label": self.label,
+    "session": self.session,
+    "launch": self.launch.to_json(),
+    "workspace": self.workspace.to_json(),
+  }
+  if self.outcome is Some(outcome) {
+    fields["outcome"] = outcome.to_json()
+  }
+  if self.usage is Some(usage) {
+    fields["usage"] = usage.to_json()
+  }
+  if self.report is Some(report) {
+    fields["report"] = report.to_json()
+  }
+  Json::object(fields)
+}
+
+///|
+pub impl FromJson for SubagentInfo with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a subagent object"))
+  }
+  let kind : String = job_required(fields, "kind", path)
+  let session : String = job_required(fields, "session", path)
+  guard !kind.is_empty() && valid_job_component(session) else {
+    raise JsonDecodeError((path, "invalid subagent kind or session"))
+  }
+  {
+    kind,
+    label: job_required(fields, "label", path),
+    session,
+    launch: job_required(fields, "launch", path),
+    outcome: job_optional(fields, "outcome", path),
+    usage: job_optional(fields, "usage", path),
+    report: job_optional(fields, "report", path),
+    workspace: job_required(fields, "workspace", path),
+  }
+}
+
+///|
+pub extend SubagentInfo with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentInfo with Debug::{to_repr}
+
+///|
+pub extend SubagentInfo with ToJson::{to_json}
+
+///|
+pub extend SubagentInfo with FromJson::{from_json}
+
+///|
+pub extend SubagentLaunch with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentLaunch with Debug::{to_repr}
+
+///|
+pub extend SubagentOutcome with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentOutcome with Debug::{to_repr}
+
+///|
+pub extend SubagentUsage with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentUsage with Debug::{to_repr}
+
+///|
+pub extend SubagentUsageSource with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentUsageSource with Debug::{to_repr}
+
+///|
+pub extend SubagentReport with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentReport with Debug::{to_repr}
+
+///|
+pub extend SubagentWorkspace with Eq::{equal, not_equal}
+
+///|
+pub extend SubagentWorkspace with Debug::{to_repr}
+
+///|
+pub extend SubagentLaunch with ToJson::{to_json}
+
+///|
+pub extend SubagentLaunch with FromJson::{from_json}
+
+///|
+pub extend SubagentOutcome with ToJson::{to_json}
+
+///|
+pub extend SubagentOutcome with FromJson::{from_json}
+
+///|
+pub extend SubagentUsage with ToJson::{to_json}
+
+///|
+pub extend SubagentUsage with FromJson::{from_json}
+
+///|
+pub extend SubagentReport with ToJson::{to_json}
+
+///|
+pub extend SubagentReport with FromJson::{from_json}
+
+///|
+pub extend SubagentWorkspace with ToJson::{to_json}
+
+///|
+pub extend SubagentWorkspace with FromJson::{from_json}

@@ -87,6 +87,11 @@ struct ShellExecution {
 /// gets a pipe of its own whose write end is closed at once, so it reads EOF
 /// immediately (on Windows too, where inheriting the engine's held-open pipe
 /// hangs `git`). Pass a redirect when the program should actually read something.
+///
+/// `cancel_handler` is how the process is ended when the execution is stopped
+/// or its group is cancelled; by default it is killed at once. A program that
+/// winds down on its own signal (closing its stdin, say) passes a handler that
+/// gives that signal and a grace before killing.
 pub async fn[X] ShellExecution::start(
   scope : @agent_runtime.AgentTaskScope[X],
   program~ : String,
@@ -98,6 +103,7 @@ pub async fn[X] ShellExecution::start(
   spill_path? : String,
   kill_when_full~ : Bool = false,
   kill_at_hard_cap~ : Bool = false,
+  cancel_handler? : @process.CancellationHandler,
 ) -> ShellExecution {
   let group = scope.group()
   let sink = ShellOutputSink::ShellOutputSink(
@@ -122,7 +128,7 @@ pub async fn[X] ShellExecution::start(
     stdout=writer,
     stderr=writer,
     cwd?=cwd.map(cwd => cwd.view()),
-    cancel_handler=@process.hard_cancel(),
+    cancel_handler=cancel_handler.unwrap_or_else(() => @process.hard_cancel()),
     no_wait=true,
     no_console_window=true,
   )

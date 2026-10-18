@@ -51,6 +51,8 @@ pub(all) struct JobRecord {
   cleanup_error : String?
   /// Optional structured results retained with this job.
   data : Json?
+  /// Set when the job is a subagent; `None` for every other job.
+  subagent : SubagentInfo?
 } derive(Eq, Debug)
 
 ///|
@@ -202,6 +204,9 @@ pub impl ToJson for JobRecord with fn to_json(self) {
   if self.data is Some(data) {
     fields["data"] = data
   }
+  if self.subagent is Some(subagent) {
+    fields["subagent"] = subagent.to_json()
+  }
   Json::object(fields)
 }
 
@@ -213,6 +218,7 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
   }
   let cleanup_error : String? = job_optional(fields, "cleanup_error", path)
   let data : Json? = job_optional(fields, "data", path)
+  let subagent : SubagentInfo? = job_optional(fields, "subagent", path)
   let generation : String = job_required(fields, "generation", path)
   let id : String = job_required(fields, "id", path)
   let revision = job_uint(fields, "revision", path)
@@ -268,6 +274,7 @@ pub impl FromJson for JobRecord with fn from_json(json, path) {
     invalid_utf8,
     output_error,
     persistence_error,
+    subagent,
   }
 }
 

@@ -120,6 +120,7 @@ fn fixture_job(id : String, state : @wire.JobState) -> @protocol.JobView {
       persistence_error: None,
       cleanup_error: None,
       data: None,
+      subagent: None,
     },
     output_path: Some("/job.out"),
     controllable: !state.is_terminal(),

@@ -209,6 +209,7 @@ pub(all) struct JobRecord {
   persistence_error : String?
   cleanup_error : String?
   data : Json?
+  subagent : SubagentInfo?
 } derive(Eq, @debug.Debug)
 pub fn JobRecord::equal(Self, Self) -> Bool
 pub fn JobRecord::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -312,6 +313,96 @@ pub(all) enum RunStatus {
 pub fn RunStatus::equal(Self, Self) -> Bool
 pub fn RunStatus::not_equal(Self, Self) -> Bool
 pub fn RunStatus::to_repr(Self) -> @debug.Repr
+
+pub(all) struct SubagentInfo {
+  kind : String
+  label : String
+  session : String
+  launch : SubagentLaunch
+  outcome : SubagentOutcome?
+  usage : SubagentUsage?
+  report : SubagentReport?
+  workspace : SubagentWorkspace
+} derive(Eq, @debug.Debug)
+pub fn SubagentInfo::equal(Self, Self) -> Bool
+pub fn SubagentInfo::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentInfo::not_equal(Self, Self) -> Bool
+pub fn SubagentInfo::to_json(Self) -> Json
+pub fn SubagentInfo::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentInfo
+pub impl @json.FromJson for SubagentInfo
+
+pub(all) enum SubagentLaunch {
+  Direct
+  Script(program~ : String, call~ : Int)
+} derive(Eq, @debug.Debug)
+pub fn SubagentLaunch::equal(Self, Self) -> Bool
+pub fn SubagentLaunch::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentLaunch::not_equal(Self, Self) -> Bool
+pub fn SubagentLaunch::to_json(Self) -> Json
+pub fn SubagentLaunch::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentLaunch
+pub impl @json.FromJson for SubagentLaunch
+
+pub(all) enum SubagentOutcome {
+  Captured
+  NoReport
+  MaxSteps
+  ContextYield
+  TimedOut
+  Stopped
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn SubagentOutcome::equal(Self, Self) -> Bool
+pub fn SubagentOutcome::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentOutcome::not_equal(Self, Self) -> Bool
+pub fn SubagentOutcome::to_json(Self) -> Json
+pub fn SubagentOutcome::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentOutcome
+pub impl @json.FromJson for SubagentOutcome
+
+pub(all) enum SubagentReport {
+  Stored
+  StoreFailed(String)
+} derive(Eq, @debug.Debug)
+pub fn SubagentReport::equal(Self, Self) -> Bool
+pub fn SubagentReport::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentReport::not_equal(Self, Self) -> Bool
+pub fn SubagentReport::to_json(Self) -> Json
+pub fn SubagentReport::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentReport
+pub impl @json.FromJson for SubagentReport
+
+pub(all) enum SubagentUsage {
+  Known(steps~ : Int, prompt_tokens~ : Int, completion_tokens~ : Int, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
+  Unavailable(String)
+} derive(Eq, @debug.Debug)
+pub fn SubagentUsage::equal(Self, Self) -> Bool
+pub fn SubagentUsage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentUsage::not_equal(Self, Self) -> Bool
+pub fn SubagentUsage::to_json(Self) -> Json
+pub fn SubagentUsage::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentUsage
+pub impl @json.FromJson for SubagentUsage
+
+pub(all) enum SubagentUsageSource {
+  Result
+  Transcript
+} derive(Eq, @debug.Debug)
+pub fn SubagentUsageSource::equal(Self, Self) -> Bool
+pub fn SubagentUsageSource::not_equal(Self, Self) -> Bool
+pub fn SubagentUsageSource::to_repr(Self) -> @debug.Repr
+
+pub(all) enum SubagentWorkspace {
+  InPlace
+} derive(Eq, @debug.Debug)
+pub fn SubagentWorkspace::equal(Self, Self) -> Bool
+pub fn SubagentWorkspace::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SubagentWorkspace::not_equal(Self, Self) -> Bool
+pub fn SubagentWorkspace::to_json(Self) -> Json
+pub fn SubagentWorkspace::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SubagentWorkspace
+pub impl @json.FromJson for SubagentWorkspace
 
 pub(all) struct Usage {
   prompt_tokens : Int
