@@ -78,6 +78,9 @@ struct Launcher {
   // The sessions of workers live in their worktrees, from before their
   // worktree is forked until it is captured.
   working : Map[String, Unit]
+  // Worker sessions whose hand-off reached the model through this engine:
+  // through their own job, or reported by `recover`.
+  known : Map[String, Unit]
   // Workers admitted whose session is not claimed yet, so not in `working`:
   // counted against the cap from admission, which does not suspend.
   mut admitting : Int32
@@ -123,6 +126,7 @@ pub fn[X] Launcher::Launcher(
     reports: Map([]),
     owners: Map([]),
     working: Map([]),
+    known: Map([]),
     admitting: 0,
   }
 }
@@ -270,11 +274,15 @@ pub async fn Launcher::start(
     }
   }
   let session = claimed.session
+  // A start cut short before its job is registered leaves no worker: its
+  // session leaves the running set too, so recovery can take what it forked.
+  errdefer (if !registered.val { self.working.remove(session) })
   // A worker's worktree, forked once its session is known: the session
   // names it. From here until it is captured, recovery leaves it alone.
   let (provisioned, input) = match (slice, input) {
     (Some(slice), Object(fields)) => {
       self.working[session] = ()
+      self.known[session] = ()
       admitted()
       match self.provision(slice, claimed) {
         Ok(provisioned) =>

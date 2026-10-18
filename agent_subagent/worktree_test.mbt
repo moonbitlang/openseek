@@ -322,3 +322,47 @@ async test "workers started in parallel stay within the cap" {
     }
   })
 }
+
+///|
+/// A change an earlier engine captured and handed over as it shut down
+/// reached no notice: the next engine reports it, once, while its branch is
+/// still there to take.
+#cfg(not(platform="windows"))
+async test "a change handed over at shutdown is reported until it is taken" {
+  @async.with_task_group(group => {
+    let (root, repo) = seeded(group)
+    guard @subtask.provision(
+        repo,
+        name="fix-lib",
+        allowed_paths=["lib"],
+        nonce="\{nonce_prefix("p")}sr-3",
+        parent_session="p",
+      )
+      is Ok(provisioned) else {
+      fail("provision failed")
+    }
+    @fs.write_file(
+      "\{provisioned.entry.worker_root}/lib/a.txt",
+      "ALPHA\n",
+      create_mode=CreateOrTruncate,
+    )
+    // What the earlier engine did as it ended: capture, then release.
+    let captured = @subtask.capture(provisioned.geometry, provisioned.entry)
+    guard @subtask.hand_off(provisioned.geometry, captured.entry)
+      is Ok(released) else {
+      fail("hand-off failed")
+    }
+    let h = harness(group, "", root~, cwd=repo)
+    guard h.launcher.recover()
+      is [("p-sr-3", { state: Committed(commit~), .. })] else {
+      fail("expected the unreported change")
+    }
+    assert_eq(Some(commit), released.commit_oid)
+    assert_true(h.launcher.recover() is [])
+    // Once it is taken and its branch deleted, nothing is left to report.
+    ignore(must_git(repo, ["cherry-pick", commit]))
+    ignore(must_git(repo, ["branch", "-D", released.branch]))
+    let fresh = harness(group, "", root~, cwd=repo)
+    assert_true(fresh.launcher.recover() is [])
+  })
+}

@@ -151,11 +151,14 @@ fn captured(outcome : @subtask.CaptureOutcome) -> @protocol.Worktree {
 }
 
 ///|
-/// Hand over what an earlier engine of this session left: a worktree whose
-/// worker it never captured, or captured and never released. Each comes back
-/// with its worker's session, since its job is not this engine's to read. A
-/// worktree the engine died forking is removed. Run before a worker starts,
-/// so what it left no longer holds paths the new worker may need.
+/// Hand over what an earlier engine of this session left, and report it:
+/// a worktree whose worker it never captured, or captured and never
+/// released; and one it handed over that no notice of this engine carried
+/// (it ended as that engine shut down) and whose result is still there.
+/// Each comes back with its worker's session, since its job is not this
+/// engine's to read, and only once. A worktree the engine died forking is
+/// removed. Run before a worker starts, so what it left no longer holds
+/// paths the new worker may need.
 pub async fn Launcher::recover(
   self : Launcher,
 ) -> Array[(String, @protocol.Worktree)] {
@@ -166,16 +169,61 @@ pub async fn Launcher::recover(
   let recovered = []
   for found in self.entries(geometry) {
     let (session, entry) = found
-    guard !entry.is_released() && !self.working.contains(session) else {
+    guard !self.working.contains(session) && !self.known.contains(session) else {
       continue
     }
-    if entry.state is Provisioning {
-      ignore(@subtask.discard(geometry, entry))
-    } else {
+    if !entry.is_released() {
+      if entry.state is Provisioning {
+        ignore(@subtask.discard(geometry, entry))
+        continue
+      }
+      self.known[session] = ()
       recovered.push((session, hand_over(geometry, entry)))
+    } else if left_over(geometry, entry) is Some(worktree) {
+      self.known[session] = ()
+      recovered.push((session, worktree))
     }
   }
   recovered
+}
+
+///|
+/// What a handed-over entry still holds for its launcher: its committed
+/// branch, unless the change was taken and the branch deleted; or the files
+/// it kept. `None` once nothing is left.
+async fn left_over(
+  geometry : @subtask.Geometry,
+  entry : @subtask.SubtaskEntry,
+) -> @protocol.Worktree? {
+  let worktree = worktree_of(entry)
+  match (entry.state, entry.commit_oid) {
+    (Committed, Some(commit)) => {
+      let tip = @subtask.git_require(
+        ["rev-parse", "--verify", "refs/heads/\{entry.branch}"],
+        cwd=geometry.origin_root,
+      )
+      guard tip is Ok(tip) && tip.trim() == commit else { return None }
+      Some(worktree)
+    }
+    (Captured | Running, _) => {
+      guard (@fs.exists(entry.worker_root) catch { _ => false }) else {
+        return None
+      }
+      Some(
+        if entry.state is Running {
+          {
+            ..worktree,
+            state: CaptureFailed(reasons=[
+              "git could not capture it before its engine ended",
+            ]),
+          }
+        } else {
+          worktree
+        },
+      )
+    }
+    _ => None
+  }
 }
 
 ///|
