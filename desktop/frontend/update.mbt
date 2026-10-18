@@ -6663,13 +6663,13 @@ fn update_msg(
       (command, { ..model, export_dialog, })
     }
     OpenSessionImport => {
-      let conv = if model.screen is Chat {
-        model.active_conversation()
+      let selected = if model.screen is Chat {
+        model.conversation_selection()
       } else {
         None
       }
-      let workspace = match conv {
-        Some(conv) => Some(conv.project().path)
+      let workspace = match selected {
+        Some(selected) => Some(selected.workspace.path)
         None =>
           if model.sidebar_mode is WorkMode {
             model
@@ -6681,7 +6681,7 @@ fn update_msg(
       }
       // Let the host's current registry choose placement even if this
       // client's worktree inventory has not arrived yet.
-      let worktree_of = conv.map(conv => conv.session_id)
+      let worktree_of = selected.map(selected => selected.session)
       let (cmd, session_import_dialog) = model.session_import_dialog.open({
         channel: model.focused,
         connection_generation: model.focused_connection_generation(),
