@@ -104,6 +104,11 @@ priv struct Child {
   mut outcome : @protocol.SubagentOutcome?
   mut usage : @protocol.SubagentUsage?
   mut report : @protocol.SubagentReport?
+  // Set when the child is being ended (a stop, its owner closing, teardown,
+  // a watchdog), before its stdin is closed: a request write that fails
+  // after this failed because of it, not first.
+  mut stopping : Bool
+  // The request could not be delivered, and that came first.
   mut delivery_failed : Bool
 }
 
@@ -139,7 +144,9 @@ pub fn Launcher::report(self : Launcher, session : String) -> Json? {
 ///
 /// Admission takes a slot with no suspension, so of five simultaneous
 /// starts in a session with four slots one is `Busy`. A start that fails
-/// after that gives its slot back; an ordinal it claimed stays consumed.
+/// or is cancelled after that gives its slot back; an ordinal it claimed
+/// stays consumed. A started child holds its slot until its job's terminal
+/// record is published.
 /// `validate` is the kind's report check: a child is `Captured` only with a
 /// result for this request whose output it accepts, and what it returns is
 /// the report kept.
@@ -161,6 +168,10 @@ pub async fn Launcher::start(
       self.live -= 1
     }
   }
+  // Until the job is registered, every way out, cancellation included,
+  // gives the slot back; after, the job does once it is published.
+  let registered = Ref(false)
+  errdefer (if !registered.val { release() })
   let claimed = self.children.claim() catch {
     error => {
       release()
@@ -177,6 +188,7 @@ pub async fn Launcher::start(
     outcome: None,
     usage: None,
     report: None,
+    stopping: false,
     delivery_failed: false,
   }
   let (child_stdin, writer) = try {
@@ -189,6 +201,7 @@ pub async fn Launcher::start(
     }
   }
   let handler = @process.CancellationHandler(pid => {
+    child.stopping = true
     writer.close()
     @async.sleep(self.grace_ms)
     (@process.hard_cancel().0)(pid)
@@ -216,10 +229,10 @@ pub async fn Launcher::start(
     stdin=child_stdin,
     cancel_handler=handler,
     on_end=end => {
-      defer release()
       defer writer.close()
       self.settle(child, end, result_file~, validate~)
     },
+    on_published=release,
     subagent=() => child.info(),
     reaped=false,
   ) catch {
@@ -229,6 +242,7 @@ pub async fn Launcher::start(
       return Unavailable("could not start child \{session}: \{error}")
     }
   }
+  registered.val = true
   let request : @protocol.RunRequest = {
     request_id: Some(session),
     kind: Some(kind),
@@ -238,10 +252,11 @@ pub async fn Launcher::start(
   let line = request.to_json().stringify() + "\n"
   (self.spawn)(() => {
     @async.with_timeout(self.delivery_timeout_ms, () => writer.write(line)) catch {
-      _ => {
-        child.delivery_failed = true
-        ignore(self.runtime.stop(job_id))
-      }
+      _ =>
+        if !child.stopping {
+          child.delivery_failed = true
+          ignore(self.runtime.stop(job_id))
+        }
     }
   })
   Started(job_id~, session~)
@@ -250,19 +265,30 @@ pub async fn Launcher::start(
 ///|
 /// What a child left in its result file: `None` when it left none.
 priv enum Left {
-  Result(@protocol.RunResult)
+  /// A result answering this child's request.
+  Answered(@protocol.RunResult)
+  /// A readable result, but for another request: not this child's account.
+  Foreign
+  /// A result file that could not be read, with the reason.
   Unreadable(String)
 }
 
 ///|
-async fn read_result(path : String) -> Left? {
+async fn read_result(path : String, request_id : String) -> Left? {
   let text = @fs.read_file(path).text() catch {
     @os_error.OSError(_) as error if error.is_ENOENT() => return None
     error => return Some(Unreadable("\{error}"))
   }
-  Some(Result(@protocol.parse_run_result(@json.parse(text)))) catch {
-    error => Some(Unreadable("\{error}"))
+  let result = @protocol.parse_run_result(@json.parse(text)) catch {
+    error => return Some(Unreadable("\{error}"))
   }
+  Some(
+    if result.request_id is Some(id) && id == request_id {
+      Answered(result)
+    } else {
+      Foreign
+    },
+  )
 }
 
 ///|
@@ -276,99 +302,74 @@ async fn Launcher::settle(
   result_file~ : String,
   validate~ : (Json) -> Result[Json, String],
 ) -> Unit {
-  let left = read_result(result_file)
+  let left = read_result(result_file, child.session)
+  let (accepted, rejected) : (Json?, String?) = match left {
+    Some(Answered({ status: Completed(output~), .. })) =>
+      match validate(output) {
+        Ok(report) => (Some(report), None)
+        Err(problem) => (None, Some(problem))
+      }
+    _ => (None, None)
+  }
   // A report for this request that its kind accepts wins over every way
   // the child could have been ended: one written during a stop's grace
-  // still counts.
-  let accepted = match left {
-    Some(Result({ status: Completed(output~), request_id: Some(id), .. })) if id ==
-      child.session =>
-      match validate(output) {
-        Ok(report) => Ok(report)
-        Err(problem) => Err("report rejected: \{problem}")
-      }
-    _ => Err("")
-  }
+  // still counts. Otherwise the first cause of the end decides.
   child.outcome = Some(
     match (accepted, end) {
-      (Ok(_), _) => Captured
+      (Some(_), _) => Captured
       _ if child.delivery_failed => Failed("request not delivered")
       (_, CaptureFailed(reason)) => Failed("output not captured: \{reason}")
       (_, OutputLimit) => Failed("output limit exceeded")
       (_, TimeLimit) => TimedOut
       (_, Stopped) => Stopped
-      (Err(rejected), Exited(code)) =>
-        match left {
-          Some(Result({ status: Completed(..), .. })) if rejected != "" =>
-            Failed(rejected)
-          Some(Result({ status, .. })) => outcome_of(status, code~)
-          Some(Unreadable(reason)) => Failed("unreadable result: \{reason}")
-          None => Failed("exited with code \{code} without a result")
+      (_, Exited(code)) =>
+        match (left, rejected) {
+          (_, Some(problem)) => Failed("report rejected: \{problem}")
+          (Some(Answered({ status: NoReport, .. })), _) => NoReport
+          (Some(Answered({ status: MaxStepsExhausted, .. })), _) => MaxSteps
+          (Some(Answered({ status: ContextYield(..), .. })), _) => ContextYield
+          (Some(Answered({ status: Aborted(reason~), .. })), _)
+          | (Some(Answered({ status: Interrupted(reason~), .. })), _)
+          | (Some(Answered({ status: Failed(reason~), .. })), _) =>
+            Failed(reason)
+          (Some(Answered({ status: Completed(..), .. })), None) =>
+            Failed("report rejected")
+          (Some(Foreign), _) =>
+            Failed("exited with code \{code} with a result for another request")
+          (Some(Unreadable(reason)), _) =>
+            Failed("unreadable result: \{reason}")
+          (None, _) => Failed("exited with code \{code} without a result")
         }
     },
   )
   child.usage = Some(
     match left {
-      Some(Result({ usage: Some(usage), steps, .. })) =>
+      Some(Answered({ usage: Some(usage), steps, .. })) =>
         Known(
-          steps=steps.unwrap_or(0),
+          steps~,
           prompt_tokens=usage.prompt_tokens,
           completion_tokens=usage.completion_tokens,
           cost_usd=None,
           source=Result,
           unaccounted=None,
         )
-      Some(Result(_)) => Unavailable("the child never reached its turn")
+      Some(Answered(_)) => Unavailable("the child never reached its turn")
+      Some(Foreign) => Unavailable("the child's result was for another request")
       Some(Unreadable(_)) | None => Unavailable("the child left no result")
     },
   )
-  if accepted is Ok(report) {
+  if accepted is Some(report) {
     self.reports[child.session] = report
-    child.report = Some(self.store_report(child.session, report))
+    child.report = Some(
+      try {
+        self.store.save_report(SessionId(child.session), report)
+        Stored
+      } catch {
+        error => StoreFailed("\{error}")
+      },
+    )
   }
   @async.protect_from_cancel(() => @fs.remove(result_file)) catch {
     _ => ()
-  }
-}
-
-///|
-/// How a child that exited on its own with a result but no accepted report
-/// ended.
-fn outcome_of(
-  status : @protocol.RunStatus,
-  code~ : Int32,
-) -> @protocol.SubagentOutcome {
-  match status {
-    NoReport => NoReport
-    MaxStepsExhausted => MaxSteps
-    ContextYield(..) => ContextYield
-    Aborted(reason~) | Interrupted(reason~) | Failed(reason~) => Failed(reason)
-    // A completed run whose request id is not this child's.
-    Completed(..) =>
-      Failed("exited with code \{code} with a result for another request")
-  }
-}
-
-///|
-/// Keep `report` beside the child's transcript: written to a sibling, then
-/// renamed into place, so a reader never sees half of one.
-async fn Launcher::store_report(
-  self : Launcher,
-  session : String,
-  report : Json,
-) -> @protocol.SubagentReport {
-  try {
-    let path = self.store.report_file(SessionId(session))
-    let temporary = "\{path}.tmp"
-    @fs.write_file(
-      temporary,
-      report.stringify(),
-      create_mode=CreateOrTruncate,
-      sync=Data,
-    )
-    @fs.rename(temporary, path, replace=true)
-    Stored
-  } catch {
-    error => StoreFailed("\{error}")
   }
 }

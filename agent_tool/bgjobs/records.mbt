@@ -238,6 +238,10 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
         Finished
       },
     )
+    if job.on_published is Some(published) {
+      job.on_published = None
+      published()
+    }
     if self.on_job_exit is Some(callback) &&
       self.snapshot(id) is Some(snapshot) &&
       (

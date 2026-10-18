@@ -57,9 +57,10 @@ pub(all) enum SubagentOutcome {
 ///|
 /// What a subagent spent, once it has ended.
 pub(all) enum SubagentUsage {
-  /// The counts, from the child's own account or reconstructed.
+  /// The counts, from the child's own account or reconstructed. `steps`
+  /// is `None` when the account did not say.
   Known(
-    steps~ : Int32,
+    steps~ : Int32?,
     prompt_tokens~ : Int32,
     completion_tokens~ : Int32,
     cost_usd~ : Double?,
@@ -108,6 +109,17 @@ fn subagent_count(
     raise JsonDecodeError((path, "subagent count out of range: " + name))
   }
   value.to_int()
+}
+
+///|
+/// A session id the session store accepts: not empty, not `.` or `..`, and
+/// without path separators or NUL. Broader than a job artifact name: a
+/// session may be named with spaces or any Unicode.
+fn valid_session_id(id : String) -> Bool {
+  !(id is ("" | "." | "..")) &&
+  !id.contains("/") &&
+  !id.contains("\\") &&
+  !id.contains("\u{0}")
 }
 
 ///|
@@ -170,13 +182,15 @@ pub impl ToJson for SubagentUsage with fn to_json(self) {
     ) => {
       let fields : Map[String, Json] = {
         "kind": "known",
-        "steps": steps,
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "source": match source {
           Result => "result"
           Transcript => "transcript"
         },
+      }
+      if steps is Some(steps) {
+        fields["steps"] = Json(steps)
       }
       if cost_usd is Some(cost) {
         fields["cost_usd"] = Json(cost)
@@ -204,8 +218,12 @@ pub impl FromJson for SubagentUsage with fn from_json(json, path) {
         Some(Number(cost, ..)) if cost >= 0.0 => Some(cost)
         Some(_) => raise JsonDecodeError((path, "invalid subagent cost"))
       }
+      let steps = match fields.get("steps") {
+        None | Some(Null) => None
+        Some(_) => Some(subagent_count(fields, "steps", path))
+      }
       Known(
-        steps=subagent_count(fields, "steps", path),
+        steps~,
         prompt_tokens=subagent_count(fields, "prompt_tokens", path),
         completion_tokens=subagent_count(fields, "completion_tokens", path),
         cost_usd~,
@@ -280,7 +298,7 @@ pub impl FromJson for SubagentInfo with fn from_json(json, path) {
   }
   let kind : String = job_required(fields, "kind", path)
   let session : String = job_required(fields, "session", path)
-  guard !kind.is_empty() && valid_job_component(session) else {
+  guard !kind.is_empty() && valid_session_id(session) else {
     raise JsonDecodeError((path, "invalid subagent kind or session"))
   }
   {

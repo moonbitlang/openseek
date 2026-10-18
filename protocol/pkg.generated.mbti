@@ -374,7 +374,7 @@ pub impl ToJson for SubagentReport
 pub impl @json.FromJson for SubagentReport
 
 pub(all) enum SubagentUsage {
-  Known(steps~ : Int, prompt_tokens~ : Int, completion_tokens~ : Int, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
+  Known(steps~ : Int?, prompt_tokens~ : Int, completion_tokens~ : Int, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
   Unavailable(String)
 } derive(Eq, @debug.Debug)
 pub fn SubagentUsage::equal(Self, Self) -> Bool

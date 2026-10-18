@@ -114,7 +114,7 @@ async test "a child that reports is Captured, with its usage and stored report" 
       info.usage
       is Some(
         Known(
-          steps=3,
+          steps=Some(3),
           prompt_tokens=185,
           completion_tokens=15,
           source=Result,
@@ -323,4 +323,110 @@ async test "session teardown gives a live child its grace" {
   }
   guard events is [.., last] else { fail("expected job events") }
   assert_true(last.subagent is Some({ outcome: Some(Captured), .. }))
+}
+
+///|
+/// A start cancelled before its child exists gives its slot back.
+#cfg(not(platform="windows"))
+async test "a cancelled start does not keep its slot" {
+  @async.with_task_group(group => {
+    let h = harness(group, "result '\"status\":\"no_report\"'", max_live=1)
+    let outcome = @async.with_timeout_opt(0, () => h.start())
+    if outcome is Some((job_id, _)) {
+      // The start won the race; let it finish.
+      let _ = h.settled(job_id)
+    }
+    for _ in 0..<100 {
+      if h.launcher.live() == 0 {
+        break
+      }
+      @async.sleep(10)
+    }
+    assert_eq(h.launcher.live(), 0)
+  })
+}
+
+///|
+/// A stop that interrupts a blocked request write is the child's end: the
+/// write fails because of the stop, not first.
+#cfg(not(platform="windows"))
+async test "a stop during delivery is Stopped, not undelivered" {
+  @async.with_task_group(group => {
+    let h = harness(group, "sleep 30", grace_ms=100, reads=false)
+    let big = "x".repeat(1_000_000)
+    let started = h.launcher.start(
+      kind="explore",
+      input={ "query": big },
+      label="blocked",
+      launch=Direct,
+      validate=accept,
+    )
+    guard started is Started(job_id~, ..) else { fail("expected Started") }
+    @async.sleep(100)
+    assert_true(h.runtime.stop(job_id))
+    let info = h.settled(job_id)
+    assert_true(info.outcome is Some(Stopped))
+  })
+}
+
+///|
+/// Teardown keeps draining a child's output through its grace: a child that
+/// writes a lot after its stdin closes still reports, instead of dying on a
+/// closed pipe.
+#cfg(not(platform="windows"))
+async test "teardown drains a child that writes during its grace" {
+  let events : Array[@protocol.JobRecord] = []
+  @async.with_task_group(group => {
+    let h = harness(
+      group,
+      (
+        #|cat >/dev/null
+        #|i=0
+        #|while [ $i -lt 20000 ]; do echo "winding down $i"; i=$((i+1)); done
+        #|result '"status":"completed","output":{"answer":"after output"}'
+      ),
+    )
+    group.add_defer(() => {
+      @async.protect_from_cancel(() => h.runtime.finalize())
+      for record in h.events {
+        events.push(record)
+      }
+    })
+    let _ = h.start()
+    @async.sleep(200)
+    fail("tear the session down")
+  }) catch {
+    _ => ()
+  }
+  guard events is [.., last] else { fail("expected job events") }
+  assert_true(last.subagent is Some({ outcome: Some(Captured), .. }))
+}
+
+///|
+/// Missing counts stay missing, and another request's account is not this
+/// child's.
+#cfg(not(platform="windows"))
+async test "usage reports only what this child's result says" {
+  @async.with_task_group(group => {
+    let h = harness(
+      group, "result '\"status\":\"no_report\",\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":2,\"total_tokens\":3,\"prompt_cache_hit_tokens\":0,\"prompt_cache_miss_tokens\":1}'",
+    )
+    let (job_id, _) = h.start()
+    let info = h.settled(job_id)
+    assert_true(
+      info.usage
+      is Some(Known(steps=None, prompt_tokens=1, completion_tokens=2, ..)),
+    )
+  })
+  @async.with_task_group(group => {
+    let h = harness(
+      group,
+      (
+        #|printf '{"version":1,"request_id":"other","status":"no_report","usage":{"prompt_tokens":9,"completion_tokens":9,"total_tokens":18,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":9},"steps":4}' > "$RESULT"
+      ),
+    )
+    let (job_id, _) = h.start()
+    let info = h.settled(job_id)
+    assert_true(info.usage is Some(Unavailable(_)))
+  })
 }

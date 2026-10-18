@@ -8,7 +8,7 @@ fn ended_subagent() -> @openseek_protocol.SubagentInfo {
     outcome: Some(Captured),
     usage: Some(
       Known(
-        steps=12,
+        steps=Some(12),
         prompt_tokens=180000,
         completion_tokens=2340,
         cost_usd=Some(0.25),
@@ -57,7 +57,7 @@ test "every subagent outcome, usage and report roundtrips" {
   ]
   let usages : Array[@openseek_protocol.SubagentUsage] = [
     Known(
-      steps=1,
+      steps=None,
       prompt_tokens=2,
       completion_tokens=3,
       cost_usd=None,
@@ -89,10 +89,20 @@ test "every subagent outcome, usage and report roundtrips" {
 }
 
 ///|
+test "a subagent session may be any id the store accepts" {
+  let info = { ..ended_subagent(), session: "my task ✓-sr-2", }
+  let decoded : @openseek_protocol.SubagentInfo = @json.from_json(
+    info.to_json(),
+  )
+  assert_eq(decoded, info)
+}
+
+///|
 test "the subagent decoder rejects malformed parts" {
   for
     (key, value) in [
       ("session", Json("../other")),
+      ("session", Json("..")),
       ("kind", Json("")),
       ("launch", { "kind": "script", "program": "", "call": 1 }),
       ("launch", { "kind": "script", "program": "p", "call": -1 }),

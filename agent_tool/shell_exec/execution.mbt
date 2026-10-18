@@ -91,7 +91,9 @@ struct ShellExecution {
 /// `cancel_handler` is how the process is ended when the execution is stopped
 /// or its group is cancelled; by default it is killed at once. A program that
 /// winds down on its own signal (closing its stdin, say) passes a handler that
-/// gives that signal and a grace before killing.
+/// gives that signal and a grace before killing. With one, the execution's
+/// output is drained until the process has exited even when the group is
+/// being cancelled, so the handler must end the process.
 pub async fn[X] ShellExecution::start(
   scope : @agent_runtime.AgentTaskScope[X],
   program~ : String,
@@ -151,7 +153,15 @@ pub async fn[X] ShellExecution::start(
     killed_by_time_limit: false,
   }
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-    exec.monitor(reader, process)
+    // A process with its own cancel handler winds down over a grace when its
+    // group is cancelled, and may write its last output then: keep draining
+    // it until it has exited, or that write fails on a closed pipe. The
+    // handler bounds the wait; the default handler kills at once.
+    if cancel_handler is Some(_) {
+      @async.protect_from_cancel(() => exec.monitor(reader, process))
+    } else {
+      exec.monitor(reader, process)
+    }
   }
   exec
 }

@@ -167,6 +167,9 @@ priv struct BgJob {
   // Cleared before invocation so it runs exactly once even if more terminal
   // observers are added later.
   mut on_terminal : (async (JobEnd) -> Unit)?
+  // Called once the job's terminal record is published: the job is fully
+  // settled.
+  mut on_published : (() -> Unit)?
   // Where the job is in its finish sequence; see `JobPhase`.
   mut phase : JobPhase
   // Launcher-supplied structured results; frozen to a constant at `CleanedUp`.
@@ -349,6 +352,7 @@ pub async fn BgJobRuntime::start(
   stdin? : &@process.ProcessInput,
   cancel_handler? : @process.CancellationHandler,
   on_end? : async (JobEnd) -> Unit,
+  on_published? : () -> Unit,
   subagent? : () -> @protocol.SubagentInfo,
   reaped~ : Bool = true,
 ) -> String {
@@ -362,7 +366,12 @@ pub async fn BgJobRuntime::start(
   let exec = (self.spawn_exec)(
     program, args, cwd, max_output_chars, spill_path, stdin, cancel_handler,
   )
-  errdefer exec.request_stop()
+  // A start that fails after the spawn returns once that process is gone,
+  // so its caller never counts it as ended while it winds down.
+  errdefer {
+    exec.request_stop()
+    @async.protect_from_cancel(() => exec.wait())
+  }
   exec.materialize_output()
   let _ = exec.background()
   self.register(
@@ -375,6 +384,7 @@ pub async fn BgJobRuntime::start(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal=on_end,
+    on_published~,
     data=None,
     subagent~,
     image_output=None,
@@ -416,6 +426,7 @@ pub async fn BgJobRuntime::adopt(
     output_rewrites~,
     moonrun_policy_active~,
     on_terminal=on_terminal.map(cleanup => _ => cleanup()),
+    on_published=None,
     data~,
     subagent=None,
     image_output~,
@@ -437,6 +448,7 @@ async fn BgJobRuntime::register(
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
   on_terminal~ : (async (JobEnd) -> Unit)?,
+  on_published~ : (() -> Unit)?,
   data~ : (() -> Json)?,
   subagent~ : (() -> @protocol.SubagentInfo)?,
   image_output~ : (() -> ImageOutput)?,
@@ -458,6 +470,7 @@ async fn BgJobRuntime::register(
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
+    on_published,
     phase: Live,
     data,
     subagent,

@@ -41,6 +41,7 @@ pub async fn SessionStore::prediction(Self, @agent_session.SessionId) -> @opense
 pub fn SessionStore::report_file(Self, @agent_session.SessionId) -> String raise
 pub fn SessionStore::root(Self) -> String
 pub async fn SessionStore::save_prediction(Self, @agent_session.Session, @openseek_protocol.PredictionRecord) -> Unit
+pub async fn SessionStore::save_report(Self, @agent_session.SessionId, Json) -> Unit
 pub async fn SessionStore::scratch_dir(Self, @agent_session.SessionId) -> String
 pub fn SessionStore::session_file(Self, @agent_session.SessionId) -> String raise
 pub async fn SessionStore::set_title(Self, @agent_session.SessionId, String) -> Unit

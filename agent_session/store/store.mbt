@@ -944,6 +944,22 @@ pub fn SessionStore::report_file(
 }
 
 ///|
+/// Keep a subagent session's captured `report` at `report_file`: written to
+/// a sibling and renamed into place, then the directories synced, so a
+/// reader never sees half of one and a returned save survives a crash.
+pub async fn SessionStore::save_report(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  report : Json,
+) -> Unit {
+  write_text_atomic(
+    self.report_file(id),
+    report.stringify(),
+    dirs=self.session_dir_chain(id),
+  )
+}
+
+///|
 /// Prospective absolute scratch path; does not materialize a new session.
 pub async fn SessionStore::scratch_dir(
   self : SessionStore,
