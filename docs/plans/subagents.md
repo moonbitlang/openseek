@@ -1,7 +1,7 @@
 # Plan: subagents as engine-owned background jobs
 
-Date: 2026-10-18. Status: proposal, revised after one external architecture
-review (findings at the end); not implemented. It replaces the draft in #1872
+Date: 2026-10-18. Status: proposal, revised after two external architecture
+review rounds (findings at the end); not implemented. It replaces the draft in #1872
 (branch `subagents-design`, four review rounds) and makes the allocator ledger
 in #1874 unnecessary. Findings of those rounds that still apply are kept and
 marked *(#1872 rN)*.
@@ -92,7 +92,7 @@ SubagentInfo {
   label : String
   session : String               // "<parent>-sr-N"
   owner : SubagentOwner          // Model | Program(ProgramId)
-  launch : SubagentLaunch        // Direct | Script(job of the script, call index)
+  launch : SubagentLaunch        // Direct | Script(ProgramId, call index)
   outcome : SubagentOutcome?     // None while live
   usage : SubagentUsage          // Known{..} | Unavailable(reason)
   report : SubagentReport?       // None until ended
@@ -113,11 +113,19 @@ SubagentReport  = Stored(path) | Absent | StoreFailed(String)
 - **Live progress is read from the child's transcript by whoever shows it**,
   not pushed through the record: the desktop's existing probe
   (`@subrun.follow_progress`) is started by `JobChanged(Started)` carrying a
-  `SubagentInfo` instead of by `SubrunStarted`; `job_output` on a live child
-  counts steps from the transcript on demand. The record carries final usage.
-- **Correlation.** A direct launch is found by the job id in the `subagent`
-  tool result; a script launch by the script's job id and the call's index in
-  its retained program trace. No new id is needed.
+  `SubagentInfo` instead of by `SubrunStarted`, is owned by the session's
+  engine connection, and is stopped on the terminal `JobChanged` or when the
+  engine goes away; `job_output` on a live child counts steps from the
+  transcript on demand. The record carries final usage.
+- **Correlation.** A script launch is `Script(ProgramId, call index)`: both
+  exist from the first call, before any adoption, and the program trace
+  records the same pair; the script's job id, once it has one, is an
+  optional association on the program, not part of the key. A direct launch
+  is found by the job id in the `subagent` tool result, which the transcript
+  stores under the model's tool-call id. A tool executor does not see that id
+  today, and the plan does not thread it through: if the engine dies between
+  launching and returning the result, the child appears as a row with no
+  card.
 - The launcher emits no `SubrunStarted`/`SubrunFinished` (turn-scoped; a
   child outlives its turn) *(#1872 r3)*. The gate keeps its brackets.
 - Additive in the session log and the protocol; an old reader ignores it.
@@ -126,10 +134,14 @@ SubagentReport  = Stored(path) | Absent | StoreFailed(String)
 
 Every producer of `<parent>-sr-N` with a durable session uses one claim:
 
-1. Pick N = one past the highest existing `<parent>-sr-*` directory, skipping
-   ordinals this process has reserved in memory for the hosted path.
+1. Pick N from the process's ONE ordinal counter, the same one hosted
+   reservations draw from (`agent_subrun/runner.mbt:282`), floored at one
+   past the highest existing `<parent>-sr-*` directory. Taking N advances the
+   counter, so a later hosted block starts after every claim and a claim
+   starts after every block: coexistence holds in both directions.
 2. Create `<parent>-sr-N` exclusively. Only "already exists" advances N and
-   retries; any other failure refuses the launch as `unavailable`.
+   retries; any other failure refuses the launch as `unavailable`. From a
+   successful create on, N is consumed whatever happens next.
 3. Write a claim file inside it, `claim.json`, with a random token, synced.
 4. Pass the child `--claim <token>`. A `--kind` run given `--claim` accepts
    an existing session directory only if it holds exactly that claim file and
@@ -143,8 +155,8 @@ The gate's reviewer uses the same claim in PR 1; its `--no-session` path is
 unchanged. Two engine processes on one session cannot share a child, a
 restart loses nothing it handed out, and no ledger or lock is needed.
 
-**Coexistence with the hosted path.** In one engine process the claim skips
-the hosted block's ordinals, so they do not collide. Across processes, or
+**Coexistence with the hosted path.** In one engine process claims and
+hosted blocks share the counter, so they do not collide. Across processes, or
 after a restart while a snippet holding an unused block lives on, a hosted
 child can still race a claim; that is today's exposure, not a new one, and
 it ends when the hosted path is retired. To keep that window short, the
@@ -156,32 +168,65 @@ The child is a process, so it fits the job runtime through the shell
 execution (supplied stdin, independent stdout/stderr draining), with an
 agent-specific policy:
 
+- **Admission and ownership.** `subagent` runs in two parts.
+  1. With no suspension: refuse if the owner is closed, over quota, or four
+     subagents are live; otherwise take a slot and add a *pending* entry to
+     the launcher's registry under its owner. From here the owner's close
+     finds it. A refusal here takes no slot and no ordinal.
+  2. With suspensions: claim the directory, spawn the child, register the
+     job. After every suspension the entry rechecks its owner. If the owner
+     closed, or any step failed, the entry rolls back what exists (stops a
+     spawned child, releases the slot, removes the entry) and the call
+     returns `stopped` or the failure. A claimed ordinal stays consumed; its
+     directory remains as a stale claim.
+  Closing an owner marks it closed with no suspension, then stops every live
+  child and joins every pending entry, so nothing it accepted outlives it.
 - **Request delivery** is owned background work with a 10 s bound: write the
-  one request line, keep the pipe open. A failed or timed-out write stops
-  the child and ends it `Failed("request not delivered")`.
-- **Graceful stop.** `job_stop`, a program close or session shutdown closes
-  stdin (the child's cancel signal), waits a 10 s grace, then terminates.
+  one request line, keep the pipe open. A failed or timed-out write records
+  the termination cause `delivery_failed` and stops the child.
+- **Graceful termination.** The child's process is spawned with the async
+  library's `graceful_cancel` handler instead of the shell path's
+  `hard_cancel` (`agent_tool/shell_exec/execution.mbt:125`), so every way a
+  child is ended (`job_stop`, a program close, session shutdown, the task
+  group's cancellation) closes stdin, waits a 10 s grace, then terminates.
 - **Time limit.** Subagent jobs are not reaped at 30 minutes. A child is
   bounded by its step budget, its context ceiling and an optional per-start
-  wall deadline (none by default). The 20 M output watchdog stays; a
-  log-capture failure ends the child `Failed`.
+  wall deadline (none by default). The 20 M output watchdog stays.
+- **Termination cause.** Whatever ends a child first records exactly one
+  cause: `stop` (job stop, owner close or shutdown), `delivery_failed`,
+  `capture_failed` (the log could not be written), `output_limit`,
+  `deadline`, or none for a natural exit.
 - **Outcome precedence,** decided in the job's cleanup hook before the
   terminal record:
   1. a result file whose report passes the kind's validation and matches the
-     request's id → `Captured`, even if a stop arrived during the grace;
-  2. a stop was requested → `Stopped`;
-  3. the per-start deadline fired → `TimedOut`;
-  4. the result file's own failure (`NoReport`, `MaxSteps`, `ContextYield`,
+     request's id → `Captured`, whatever the cause (a report written during
+     the grace still counts);
+  2. cause `delivery_failed`, `capture_failed` or `output_limit` →
+     `Failed` with that reason;
+  3. cause `deadline` → `TimedOut`;
+  4. cause `stop` → `Stopped`;
+  5. the result file's own failure (`NoReport`, `MaxSteps`, `ContextYield`,
      `Failed`);
-  5. otherwise `Failed` with the exit status.
+  6. otherwise `Failed` with the exit status.
 - **Notices.** A natural end queues the existing notice, with the outcome in
   its text. A requested stop fires none (it is already visible). Shutdown
   fires none.
 - **Report.** After the child is reaped, a captured report is written to
-  `sessions/<child>/report.json` (sibling, then rename). `job_output` renders
-  it bounded at 48,000 characters and names the file beyond that; if the
-  store failed it renders the in-memory report under the same bound and says
-  so *(#1872 r4)*. The same bound keeps a script's read under PTC's 64 K cap.
+  `sessions/<child>/report.json` (sibling, then rename) *(#1872 r4)*. The
+  engine keeps the report in memory too, so a failed store still serves
+  reads from this engine.
+  - *The model* gets text from `job_output`, bounded at 48,000 characters;
+    beyond that it says the text is truncated and names the file.
+  - *A script* gets the report as JSON in `data`. `job_output` for programs
+    takes an optional `offset` and returns `{report_chunk, offset, total,
+    complete}`: the report's serialized JSON split so that each ENCODED
+    reply, envelope included, stays under 60,000 characters, measured the
+    way PTC measures it (`agent_tool/ptc/server.mbt:603`). A script
+    concatenates the chunks and parses the result; a report that fits in
+    one reply comes back with `complete: true` and the parsed `report` too.
+    A partial report is never presented as a complete one. This is how
+    `review.mbtx` keeps reading structured findings and `repo-map.mbtx` its
+    citations.
 - **Slots.** Four live subagents per session, counted at admission and
   released when the job is `Published` *(#1872 r4)*.
 
@@ -189,12 +234,20 @@ agent-specific policy:
 
 `subagent(kind, input, label?, max_steps?)`.
 
-- `kind`: `explore` or `review` in the first stack. `input` is what
-  `run --kind <kind>` takes. For `review`, a missing goal and baseline are
-  filled by the engine from the standing goal, which is how
-  `@builtin/review.mbtx` keeps working without the hosted handoff. A review
-  started this way is **advisory**: it is not the goal-met gate, whose
+- `kind`: `explore` or `review` in the first stack. `input` is exactly what
+  `run --kind <kind>` takes; the launcher never fills or rewrites it. A
+  review started this way is **advisory**: it is not the goal-met gate, whose
   criteria, channel and allowance stay its own.
+- **The standing goal for scripts.** `@builtin/review.mbtx` combines the
+  standing goal, the caller's audit focus and an explicit baseline override
+  itself (`share/workflow/review.mbtx:86`); today it reads the goal and
+  baseline from the hosted handoff. A read-only program tool,
+  `audit_context`, returns the same `{goal, sha?, dirty?}` object the handoff
+  carried (`WORKFLOW_HOST.openseek.audit`), or nothing without a standing
+  goal. The builtin swaps its source and keeps its logic, so every review
+  mode (goal, goal plus focus, focus alone, explicit `--sha`/`--dirty`, and
+  `{base: ...}`) behaves as before. The model does not get this tool; it
+  already sees its goal.
 - `max_steps` is clamped to the kind's ceiling. A child does not get this
   tool (no nesting).
 - Admission, with no suspension: refuse `busy` with four live subagents
@@ -236,9 +289,11 @@ agent-specific policy:
   the run does, so its children are stopped then.
 - **Program-owned** children are stopped when the program closes (exit,
   cancel, `job_stop` on the script). A program that owns a live subagent is
-  not reaped at 30 minutes: its reaper re-arms when its last child ends,
-  with a 5-minute allowance to collect. A script that waits on nothing is
-  still reaped.
+  not reaped at 30 minutes. When its last child is `Published` (ended and
+  collectible), a 5-minute collection allowance starts; starting another
+  child cancels that allowance, and the next "last child published" starts
+  a fresh one. When the allowance runs out, or at 30 minutes for a script
+  that never had a child, the script is reaped as today.
 - **The gate**: not a job and not addressable by these tools; it only shares
   the claim.
 
@@ -273,7 +328,7 @@ later stack.
   `WorkerChanged` event keyed by the job id.
 - Outcome and change state stay separate *(#1872 r3)*; integration targets
   the launching checkout; worker admission takes a lock under the common git
-  directory; PR 7 makes association, recovery and cleanup durable before any
+  directory; PR 6 makes association, recovery and cleanup durable before any
   worker can be started.
 - In-place mode as in #1872.
 
@@ -284,14 +339,18 @@ later stack.
 ## Stack
 
 1. **Claims, runtime, protocol.** The claim (with `--claim`) for every
-   durable child, the gate included; the execution policy in `bgjobs`;
-   `SubagentInfo` in the protocol; the `agent_subagent` launcher with no tool
-   in front of it; lifecycle tests.
+   durable child, the gate included, on the shared counter; the execution
+   policy in `bgjobs` and the graceful-cancel seam in `shell_exec`; the
+   shared contract parser; `SubagentInfo` in the protocol; the
+   `agent_subagent` launcher with no tool in front of it, tested directly
+   with fake children; `--claim` consumption tested through the real CLI;
+   existing shell and adoption behavior kept covered.
 2. **The model tool.** `subagent` for `explore` and `review`; `job_output`'s
    subagent branch; the notice text; prompt paragraph and verified example.
 3. **The script entrance and retirement**, reviewed as two commits, merged
-   together: (a) `ProgramId`, per-program dispatch, `subagent` and the
-   program registrations of the job tools, the program reaper rule; (b)
+   together: (a) `ProgramId`, per-program dispatch, `subagent`, the program
+   registrations of the job tools (chunked report reads), `audit_context`,
+   the program reaper rule; (b)
    `review.mbtx`, `repo-map.mbtx` and `change-review.mbtx` onto it, and the
    hosted handoff, spawn rule and in-memory reservation deleted.
 4. **Desktop.** Agent rows and progress (needs 1), then the launch card
@@ -313,12 +372,19 @@ All offline except the last.
    contract, as `agent_subrun/runner_test.mbt` does): captured; no report;
    a malformed, mismatched or oversized report; crash; a child that never
    reads stdin; slow exit after stdin closes; stop racing a natural end;
-   report store failure; output capture failure; the reaper exemption; the
-   claim (concurrent claims in one process, a stale claim never reused, a
-   `--claim` with a wrong token or an existing transcript refused).
-2. **Two processes, one session.** Two engines claiming for the same parent
+   report store failure; output capture failure; job-metadata persistence
+   failure; the reaper exemption; every termination cause against the
+   precedence list; graceful shutdown of the session group reaching the
+   child; admission (cancellation or owner close at each suspension, spawn
+   failure, slot recovery); the claim (concurrent claims in one process, a
+   claim then a hosted block and a hosted block then a claim, a create
+   interrupted before the claim file, a stale claim never reused).
+2. **The real child consuming a claim**, through the CLI: the right token
+   accepted once; a wrong token, a second use of the same token, and an
+   existing transcript refused.
+3. **Two processes, one session.** Two engines claiming for the same parent
    at once; the gate and the launcher claiming at once.
-3. **The real CLI against a scripted provider**, extending
+4. **The real CLI against a scripted provider**, extending
    `tests/integration/turn_finish.mbtx`: a durable session (not
    `--no-session`), test credentials inherited by children, and one local
    server that scripts both the parent and the real child binary, which
@@ -326,7 +392,8 @@ All offline except the last.
    a unique task marker in each child's input (not by system prompt, which
    two children of one kind share), each with its own step sequence; the
    children's submit tools are scripted; non-streaming auxiliary requests
-   get the fixed answer. Scenarios:
+   get the fixed answer. Scenarios that cross turns run under `serve`.
+   Scenarios:
    - two explore children: start, `job_wait`, `job_output`, finish; child
      sessions with transcripts and `report.json`; `JobChanged` from live to
      ended with `SubagentInfo`;
@@ -335,18 +402,25 @@ All offline except the last.
    - a plain-text finish with a live child gets the pending-jobs decision;
    - an end between turns persists the notice and starts no turn;
    - a fifth start refused `busy`; a launch whose response is dropped;
-   - an engine restart: the old record reads "ended with the engine".
-4. **Scripts through the real PTC service**, in the same harness: a compiled
-   snippet fanning out with a task group, the bounded wait, `job_stop` and
-   `job_output` getting through while a wait is held, foreign ids refused,
-   program close stopping its children, close during admission and during
-   adoption, a shortened reaper crossing the 30-minute rule; and
-   `@builtin/review.mbtx` taking the standing goal from the engine.
-5. **Engine to desktop.** The desktop backend driving a real engine with the
-   scripted provider: progress discovery from `JobChanged`, row and card
-   updates, opening the child transcript, the idle reaper keeping an engine
-   with a live child. Static fixtures cannot cover these.
-6. **Live, by hand.** One `deepseek-v4-pro` session on a real repository task
+   - a report larger than one reply: truncated text for the model.
+5. **Scripts through the real PTC service**, in the same harness: a compiled
+   snippet fanning out with a task group; children ending unevenly, with the
+   script removing ended ids before it waits again; the bounded wait;
+   `job_stop` and `job_output` getting through while a wait is held; foreign
+   ids refused; program close stopping its children; close during admission
+   and during adoption; a launch from a foreground script that ends before
+   adoption, still correlated; chunked report reads at the encoded-reply
+   boundary; a shortened reaper: collection allowance expiry, and another
+   launch during the allowance; and the three migrated builtins, each with
+   its current semantics (review's goal, focus and baseline modes, the
+   blocker exit; repo-map's citations; change-review).
+6. **Engine to desktop.** The desktop backend driving a real engine with the
+   scripted provider, and the frontend consuming its events: progress
+   discovery from `JobChanged`, the row and the card, opening the child
+   transcript, the idle reaper keeping an engine with a live child, and
+   after an engine restart the historical-job reader showing "ended with the
+   engine". Static fixtures and backend events alone cannot cover these.
+7. **Live, by hand.** One `deepseek-v4-pro` session on a real repository task
    that delegates, watched in the desktop.
 
 ## Review rounds
@@ -371,3 +445,16 @@ addressed above:
 Optional, adopted: a shared leaf for contract parsing; `bgjobs` does not
 import `agent_subrun`; messaging independent of the core stack; reviews by
 the launcher advisory from the start.
+
+**Round 2** (2026-10-18, Codex, xhigh, on 88b747fac): the hours-long script
+rule, worker state, restart, turn boundaries and PTC budgets resolved; PR 1
+"not too big". Ready after five fixes, each addressed above:
+
+| Required | Where |
+| --- | --- |
+| P1: a later hosted block could include an earlier claim; coexistence must hold both ways | Allocation (one counter) |
+| P1: ownership before suspensions, close joining admissions, rollback; a failed claim file consumes an ordinal; termination causes in the precedence; graceful cancel must reach the process handler | Running a child as a job |
+| P2: correlation before adoption, and for a dropped direct result | The record (correlation) |
+| P2: a 48 K rendering does not bound an encoded reply; scripts need the structured report | Running a child as a job (report) |
+| P2: filling a review's goal breaks `{base}` and the builtin's merge rules | Starting (`audit_context`) |
+| Tests: allocator orderings, claim consumption, termination causes, collection allowance, pre-adoption correlation, builtins' semantics, frontend consumption | Integrated testing |
