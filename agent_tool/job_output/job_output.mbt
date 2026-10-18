@@ -57,7 +57,7 @@ async fn execute(
   }
   let job_id = input.job_id
   if bg_runtime.snapshot(job_id) is Some({ subagent: Some(info), status, .. }) {
-    return subagent_output(job_id, info, status, subagent_report)
+    return subagent_output(job_id, info, status is Running, subagent_report)
   }
   guard bg_runtime.snapshot(job_id) is Some(_) else {
     return @agent_tool.respond(
@@ -236,7 +236,7 @@ const ReportWindow : Int32 = 48_000
 fn subagent_output(
   job_id : String,
   info : @protocol.SubagentInfo,
-  status : @bgjobs.BgJobStatus,
+  running : Bool,
   subagent_report : ((String) -> Json?)?,
 ) -> @agent_tool.ToolAction {
   let content = StringBuilder()
@@ -245,7 +245,7 @@ fn subagent_output(
   )
   match info.outcome {
     None => {
-      let state = if status is Running { "running" } else { "ending" }
+      let state = if running { "running" } else { "ending" }
       content.write_string(
         "\{state}: wait with job_wait (job_ids=[\"\{job_id}\"]), or stop it with job_stop.\n",
       )
@@ -269,8 +269,8 @@ fn subagent_output(
   if info.workspace is Worktree(worktree) {
     content.write_string(
       (
-        $|worktree \{worktree.name}: branch \{worktree.branch} at \{worktree.path}, \{@agent_subagent.describe_state(worktree.state)}
-        $|Review its changes with the worktree tool (action="diff", worker="\{job_id}"), then integrate or discard them.
+        $|worktree \{worktree.name}: branch \{worktree.branch} at \{worktree.path}; when its job ended it was \{@agent_subagent.describe_state(worktree.state)}
+        $|Its state now (it may have been integrated or discarded since): worktree (action="list"). Review its changes with worktree (action="diff", worker="\{job_id}"), then integrate or discard them.
         $|
       ),
     )
