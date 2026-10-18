@@ -42,7 +42,11 @@ fn FakeHost::answer(
   match name {
     "audit_context" => reply("audit context", data=self.audit)
     "subagent" => {
-      if self.mode == "busy" {
+      // "busy": every start is refused; "busy-last": the session fills up
+      // just before the last one.
+      let last = if self.name == "repo-map" { 2 } else { 3 }
+      if self.mode == "busy" ||
+        (self.mode == "busy-last" && self.starts.length() + 1 == last) {
         return reply("error: 4 subagents are already running", is_error=true)
       }
       self.starts.push(arguments)
@@ -397,7 +401,7 @@ async fn verify_hosted(root : String, temp : String) -> Unit {
   for name in ["change-review", "repo-map"] {
     let artifact = compile(root, temp, name)
     let expected_calls = if name == "repo-map" { 2 } else { 3 }
-    let modes = ["success", "partial", "missing", "busy"]
+    let modes = ["success", "partial", "missing", "busy", "busy-last"]
     if name == "repo-map" {
       modes.append([
         "empty", "bad-line", "fractional-line", "missing-file", "directory", "escape",
@@ -424,20 +428,19 @@ async fn verify_hosted(root : String, temp : String) -> Unit {
         mode == "success" || mode == "no-recipes",
         msg=output,
       )
-      assert_eq(
-        host.starts.length(),
-        if mode == "missing" || mode == "busy" {
-          0
-        } else {
-          expected_calls
-        },
-        msg=output,
-      )
+      let started = match mode {
+        "missing" | "busy" => 0
+        "busy-last" => expected_calls - 1
+        _ => expected_calls
+      }
+      assert_eq(host.starts.length(), started, msg=output)
       if mode != "missing" && mode != "busy" {
         assert_true(output.contains("scouts=\{expected_calls}"), msg=output)
+        // Every child that ran is counted, reported or not: 12 tokens each.
+        assert_true(output.contains("tokens=\{started * 12}"), msg=output)
         assert_eq(
           occurrences(output, "offline evidence"),
-          if mode == "partial" || mode == "empty" {
+          if mode == "partial" || mode == "empty" || mode == "busy-last" {
             expected_calls - 1
           } else {
             expected_calls
@@ -465,7 +468,8 @@ async fn verify_hosted(root : String, temp : String) -> Unit {
         "partial" | "empty" =>
           assert_true(output.contains("INCOMPLETE:"), msg=output)
         "missing" => assert_true(output.contains("TransportError"), msg=output)
-        "busy" => assert_true(output.contains("could not start"), msg=output)
+        "busy" | "busy-last" =>
+          assert_true(output.contains("INCOMPLETE: could not start"), msg=output)
         "bad-line"
         | "fractional-line"
         | "missing-file"
