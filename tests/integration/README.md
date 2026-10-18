@@ -33,6 +33,11 @@ which reach it through the forwarded `--api-url`; a child is recognized by its
 child's session holds its transcript and `report.json`, and no claim file is
 left. No model credentials or network are needed.
 
+`tests/integration/subagent_send.mbtx` (also under `just test-subagents`)
+redirects a running explore subagent with `subagent_send`: the child's first
+step is held until the instruction is posted, and its next model request must
+carry it.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at

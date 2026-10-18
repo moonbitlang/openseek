@@ -501,7 +501,9 @@ fn default_prompt() -> String {
     #|  citations; `review` is an advisory audit against a goal or of a diff.
     #|  Several can run at once. The child does not see this conversation, so give
     #|  it a complete brief. Act on its notice as on any job's: `job_output` reads
-    #|  its outcome and report, `job_stop` stops it, `job_wait` waits for it.
+    #|  its outcome and report, `job_stop` stops it, `job_wait` waits for it. To
+    #|  redirect an explore child while it runs, `subagent_send` gives it a new
+    #|  instruction, which it takes at its next step.
     #|
     #|- Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
     #|  use `moon build` or `moon test` only when you need artifacts or test results.

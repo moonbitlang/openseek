@@ -400,3 +400,49 @@ pub fn describe_outcome(outcome : @protocol.SubagentOutcome) -> String {
     Failed(reason) => "failed: \{reason}"
   }
 }
+
+///|
+/// What `Launcher::send` did with an instruction.
+pub(all) enum SendResult {
+  /// Posted; the child reads it at its next step. `receipt` is what its
+  /// transcript records once it has.
+  Sent(receipt~ : String)
+  /// The child has not opened its inbox: it has not started yet (retry), or
+  /// its kind takes no instructions.
+  NotReady
+  /// The child has ended; nothing was posted.
+  Ended
+  /// No subagent job with that id.
+  Unknown
+  /// The message itself was refused, with the reason.
+  Invalid(String)
+}
+
+///|
+/// Post `text` to the running subagent `job_id` as an instruction from this
+/// session, which the child takes at its next step, where user steering
+/// lands.
+pub async fn Launcher::send(
+  self : Launcher,
+  job_id : String,
+  text : String,
+) -> SendResult {
+  guard self.runtime.snapshot(job_id)
+    is Some({ subagent: Some(info), status, .. }) else {
+    return Unknown
+  }
+  guard info.outcome is None && status is Running else { return Ended }
+  guard !text.is_blank() else { return Invalid("the message is blank") }
+  guard text.char_length() <= @inbox.MaxTextChars else {
+    return Invalid("the message is over \{@inbox.MaxTextChars} characters")
+  }
+  let message = @inbox.Message(from=self.children.parent(), text~)
+  let path = self.store.inbox_path(SessionId(info.session)) catch {
+    error => return Invalid("\{error}")
+  }
+  if @inbox.post(path, message) {
+    Sent(receipt=message.receipt())
+  } else {
+    NotReady
+  }
+}

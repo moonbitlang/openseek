@@ -131,3 +131,65 @@ async fn execute(
       )
   }
 }
+
+///|
+/// Tool `subagent_send`: give a running subagent a new instruction. The child
+/// takes it at its next step, as a user's steering, and adjusts its course.
+pub fn send_definition(
+  launcher : @agent_subagent.Launcher,
+) -> @agent_tool.AgentToolDefinition {
+  AgentToolDefinition(
+    name="subagent_send",
+    description=(
+      #|Send a running subagent (by its job_id) a new instruction: a correction, a
+      #|narrower question, or a request to wrap up and report what it has. It takes
+      #|it at its next step. Only explore subagents take instructions.
+    ),
+    schema=JsonSchema({
+      "type": "object",
+      "properties": {
+        "job_id": { "type": "string" },
+        "message": { "type": "string" },
+      },
+      "required": ["job_id", "message"],
+    }),
+    execute=Async(arguments => send(launcher, arguments)),
+    concurrent_safe=true,
+  )
+}
+
+///|
+async fn send(
+  launcher : @agent_subagent.Launcher,
+  arguments : Json,
+) -> @agent_tool.ToolAction {
+  guard arguments is { "job_id": String(job_id), "message": String(text), .. } else {
+    return @agent_tool.respond(
+      "error: subagent_send requires a job_id and a message",
+      is_error=true,
+    )
+  }
+  match launcher.send(job_id, text) {
+    Sent(receipt~) =>
+      @agent_tool.respond(
+        "sent to subagent \{job_id}; it takes the instruction at its next step",
+        data={ "job_id": job_id, "receipt": receipt },
+      )
+    NotReady =>
+      @agent_tool.respond(
+        "error: subagent \{job_id} is not taking instructions yet (it has not started, or its kind takes none); retry shortly",
+        is_error=true,
+      )
+    Ended =>
+      @agent_tool.respond(
+        "error: subagent \{job_id} has ended; read its outcome with job_output",
+        is_error=true,
+      )
+    Unknown =>
+      @agent_tool.respond(
+        "error: no subagent job with id \{job_id}",
+        is_error=true,
+      )
+    Invalid(reason) => @agent_tool.respond("error: \{reason}", is_error=true)
+  }
+}

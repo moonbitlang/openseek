@@ -53,6 +53,7 @@ test-turn-finish:
 test-subagents:
     moon build . --target native
     moon run tests/integration/subagents.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/subagent_send.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
 test-moon:
     moon test --target native

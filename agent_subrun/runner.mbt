@@ -282,6 +282,12 @@ pub fn ChildSession::root(self : ChildSession) -> String {
 }
 
 ///|
+/// The parent session the children belong to.
+pub fn ChildSession::parent(self : ChildSession) -> String {
+  self.parent
+}
+
+///|
 /// See `ChildSession`.
 pub fn ChildSession::ChildSession(
   root~ : String,

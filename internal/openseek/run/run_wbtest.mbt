@@ -51,3 +51,51 @@ test "a review takes exactly one of a goal or a base" {
     )
   }
 }
+
+///|
+test "only a scout takes instructions from its launcher" {
+  assert_true(Kind::Explore.takes_instructions())
+  // A reviewer has no ingress: the agent it audits would be the one posting.
+  for kind in [Kind::Review, Worker, PatternRepair, Echo] {
+    assert_false(kind.takes_instructions())
+  }
+}
+
+///|
+test "an instruction is framed as the launcher's and tagged with its receipt" {
+  assert_eq(launcher_of("desktop-7-sr-3"), Some("desktop-7"))
+  // The innermost suffix names the launcher; a top-level run has none.
+  assert_eq(launcher_of("desktop-7-sr-3-sr-1"), Some("desktop-7-sr-3"))
+  assert_eq(launcher_of("desktop-7"), None)
+  let message : @inbox.Message = {
+    id: "m1",
+    from: "desktop-7",
+    text: "Only production callers.",
+  }
+  guard launcher_instruction(message)
+    is Prompt(Content([Text(text)]), submission_id=Some(tag)) else {
+    fail("an instruction is a tagged prompt")
+  }
+  assert_eq(tag, message.receipt())
+  assert_eq(tag, "m1@desktop-7")
+  assert_true(text.has_prefix("[New instruction from the agent that gave you"))
+  assert_true(text.has_suffix("\nOnly production callers."))
+}
+
+///|
+/// A blank body must not reach the turn: framed, it has content, and content
+/// arriving while a scout submits discards its report.
+test "only the launcher's messages with something to say are presented" {
+  let messages : Array[@inbox.Message] = [
+    { id: "m1", from: "p", text: "Skip the tests.", },
+    { id: "m2", from: "p", text: "  \n ", },
+    { id: "m3", from: "q", text: "From another conversation.", },
+    { id: "m4", from: "p-sr-2", text: "From a sibling.", },
+  ]
+  guard launcher_instructions(messages, Some("p"))
+    is [Prompt(_, submission_id=Some("m1@p"))] else {
+    fail("exactly the launcher's one non-blank message is presented")
+  }
+  // A run that is nobody's child presents nothing at all.
+  assert_true(launcher_instructions(messages, None) is [])
+}

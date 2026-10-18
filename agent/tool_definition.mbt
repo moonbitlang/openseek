@@ -263,7 +263,10 @@ pub async fn[X] build_tools(
       @finish.definition(),
       ..match (launcher, subagents) {
         (Some(launcher), Some(spec)) =>
-          [@subagent.definition(launcher, spec.kinds)]
+          [
+            @subagent.definition(launcher, spec.kinds),
+            @subagent.send_definition(launcher),
+          ]
         _ => []
       },
       ..extras,
