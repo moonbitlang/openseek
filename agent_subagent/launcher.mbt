@@ -35,6 +35,7 @@ struct Launcher {
   program : String
   args : Array[String]
   cwd : String?
+  env : Map[String, String]
   result_dir : String
   spawn : (async () -> Unit) -> Unit
   max_live : Int32
@@ -50,7 +51,8 @@ struct Launcher {
 /// A launcher for the session whose job runtime is `runtime` and whose
 /// children's sessions `children` claims. `program` and `args` start a
 /// child up to its kind (the engine's own binary, a managed `run`, its model
-/// and endpoint); `cwd` is where it runs. Result files are written in
+/// and endpoint); `cwd` is where it runs, and `env` is added to the
+/// environment it inherits (a credential, kept off its command line). Result files are written in
 /// `result_dir`, which is created when needed.
 pub fn[X] Launcher::Launcher(
   scope : @agent_runtime.AgentTaskScope[X],
@@ -59,6 +61,7 @@ pub fn[X] Launcher::Launcher(
   program~ : String,
   args~ : Array[String],
   cwd? : String,
+  env? : Map[String, String],
   result_dir~ : String,
   max_live~ : Int32 = MaxLive,
   grace_ms~ : Int32 = StopGraceMs,
@@ -72,6 +75,7 @@ pub fn[X] Launcher::Launcher(
     program,
     args: args.copy(),
     cwd,
+    env: env.unwrap_or(Map([])),
     result_dir,
     spawn: task => group.spawn_bg(task, no_wait=true, allow_failure=true),
     max_live,
@@ -233,6 +237,7 @@ pub async fn Launcher::start(
     description=label,
     cwd?=self.cwd,
     stdin=child_stdin,
+    extra_env=self.env,
     cancel_handler=handler,
     on_end=end => {
       defer writer.close()

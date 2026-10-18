@@ -131,3 +131,43 @@ async test "subagent says when the session's slots are full" {
     assert_true(runtime.stop(job_id))
   })
 }
+
+///|
+/// A child's budget is always bounded by its kind's ceiling: an omitted
+/// budget is the ceiling, never the engine's own default, and a larger one
+/// is capped.
+#cfg(not(platform="windows"))
+async test "subagent bounds every child's step budget by its kind's ceiling" {
+  for case in [(None, 40), (Some(10), 10), (Some(500), 40)] {
+    let (requested, expected) = case
+    @async.with_task_group(group => {
+      let seen = @fs.tmpdir(prefix="openseek-subagent-request-")
+      group.add_defer(() => @fs.rmdir(seen, recursive=true))
+      let (tool, runtime) = tool_and_runtime(
+        group,
+        script="read line; printf '%s' \"$line\" > \{seen}/request.json",
+      )
+      let arguments : Json = match requested {
+        Some(steps) =>
+          { "kind": "explore", "input": { "query": "q" }, "max_steps": steps }
+        None => { "kind": "explore", "input": { "query": "q" } }
+      }
+      guard call(tool, arguments).data is Some({ "job_id": String(job_id), .. }) else {
+        fail("expected the child to start")
+      }
+      for _ in 0..<400 {
+        if runtime.snapshot(job_id)
+          is Some({ subagent: Some({ outcome: Some(_), .. }), .. }) {
+          break
+        }
+        @async.sleep(25)
+      }
+      let request = @json.parse(@fs.read_file("\{seen}/request.json").text())
+      assert_true(
+        request is { "limits": { "max_steps": Number(steps, ..), .. }, .. } &&
+        steps == expected.to_double(),
+        msg=request.stringify(),
+      )
+    })
+  }
+}

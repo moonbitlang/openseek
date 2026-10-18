@@ -15,7 +15,7 @@ pub fn definition(
       #|Start a child agent in the background on a self-contained task and get its
       #|job_id at once; it runs in its own context and session while you keep working.
       #|kind "explore": answers a question about the code with citations; input
-      #|{"query": "...", "hints"?: [...]}. kind "review": an advisory audit, input
+      #|{"query": "...", "hints"?: "..."}. kind "review": an advisory audit, input
       #|{"goal": "..."} (the worktree against a goal) or {"base": "<ref>"} (the
       #|base...HEAD diff). You get a notice when it ends; job_wait waits for it,
       #|job_output reads its outcome and report, job_stop stops it. Up to four run at
@@ -90,19 +90,20 @@ async fn execute(
       @agent_tool.brief_line(label, limit=72)
     _ => name
   }
+  // Always bounded by the kind's ceiling: an omitted budget is the
+  // ceiling, never the engine's own default, which may be far larger.
   let max_steps = match arguments {
-    { "max_steps": Number(steps, ..), .. } if steps >= 1.0 => {
-      let steps = steps.to_int()
-      Some(if steps > kind.ceiling { kind.ceiling } else { steps })
-    }
-    _ => None
+    { "max_steps": Number(steps, ..), .. } if steps >= 1.0 &&
+      steps < kind.ceiling.to_double() => steps.to_int()
+    _ => kind.ceiling
   }
+
   match
     launcher.start(
       kind=name,
       input~,
       label~,
-      max_steps?,
+      max_steps~,
       launch=Direct,
       validate=kind.validate,
     ) {

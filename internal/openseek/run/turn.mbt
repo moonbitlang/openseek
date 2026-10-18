@@ -75,6 +75,7 @@ async fn run_task_turn(
           scope,
           self_exe=exe,
           model~,
+          api_key~,
           api_url~,
           workspace_root~,
           children~,

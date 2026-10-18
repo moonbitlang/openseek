@@ -27,7 +27,7 @@ pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url
 
 pub fn subagent_kinds() -> Array[@subagent.Kind]
 
-pub fn[X] subagents(@agent_runtime.AgentTaskScope[X], self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, children~ : @agent_subrun.ChildSession, result_dir~ : String) -> @subagent.Subagents
+pub fn[X] subagents(@agent_runtime.AgentTaskScope[X], self_exe~ : String, model~ : @deepseek.Model, api_key~ : String, api_url~ : String?, workspace_root~ : String, children~ : @agent_subrun.ChildSession, result_dir~ : String) -> @subagent.Subagents
 
 pub async fn with_jsonl_stdout(async () -> Unit) -> Unit
 

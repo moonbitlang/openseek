@@ -16,7 +16,8 @@ import {
 /// is told apart by its `submit_answer` tool and routed by the marker in its
 /// query. The parent waits, reads both reports with job_output, and finishes.
 /// Afterwards each child's session has its transcript and report, and no
-/// claim is left behind.
+/// claim is left behind. The parent's key is given only as --api-key while
+/// the environment holds another: every child must use the parent's.
 fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
   {
     "index": index,
@@ -40,6 +41,17 @@ fn tool_names(request : Json) -> Array[String] {
       _ => None
     }
   })
+}
+
+///|
+/// The request's bearer credential.
+fn bearer(request : @http.Request) -> String? {
+  for name, value in request.headers {
+    if name.to_string().to_lower() == "authorization" {
+      return value.strip_prefix("Bearer ").map(key => key.to_owned())
+    }
+  }
+  None
 }
 
 ///|
@@ -73,7 +85,8 @@ async fn main {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       group.spawn_bg(no_wait=true) <| () => {
         server.run_forever(
-          (_, body, conn) => {
+          (head, body, conn) => {
+            assert_eq(bearer(head), Some("key-from-flag"))
             let request = @json.parse(body.read_all().text())
             // Auxiliary non-streaming requests get a fixed answer.
             if !(request is { "stream": True, .. }) {
@@ -157,12 +170,12 @@ async fn main {
         group,
         executable,
         [
-          "run", "--dir", directory + "/ws", "--api-key", "test", "--model", "deepseek-flash",
+          "run", "--dir", directory + "/ws", "--api-key", "key-from-flag", "--model", "deepseek-flash",
           "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
           "--max-steps", "12", "--mcp-config", "", "--session", "parent", "--session-root",
           store_root, "Ask two scouts and report.",
         ],
-        extra_env={ "DEEPSEEK": "test", "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        extra_env={ "DEEPSEEK": "key-from-env", "OPENSEEK_RETRY_ATTEMPTS": "1" },
         stdout=child_stdout,
         stderr=child_stderr,
         cancel_handler=@process.hard_cancel(),

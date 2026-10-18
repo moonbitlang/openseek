@@ -78,6 +78,7 @@ struct BgJobRuntime {
     String?,
     &@process.ProcessInput?,
     @process.CancellationHandler?,
+    Map[String, String]?,
   ) -> @shell_exec.ShellExecution
   // Spawn a *retained* foreground execution (may be detached on timeout):
   // file-backed with a large hard cap, but still killed on exceeding the inline
@@ -245,6 +246,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
       spill_path,
       stdin,
       cancel_handler,
+      extra_env,
     ) => {
       // Background retention: inline preview up to the budget, full output to
       // the spill file, and the hard-cap watchdog so a flooding job is killed
@@ -260,6 +262,7 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
         spill_path?,
         kill_at_hard_cap=true,
         cancel_handler?,
+        extra_env?,
       )
     },
     spawn_foreground_retained_exec: (
@@ -351,6 +354,7 @@ pub async fn BgJobRuntime::start(
   moonrun_policy_active~ : Bool = false,
   stdin? : &@process.ProcessInput,
   cancel_handler? : @process.CancellationHandler,
+  extra_env? : Map[String, String],
   on_end? : async (JobEnd) -> Unit,
   on_published? : () -> Unit,
   subagent? : () -> @protocol.SubagentInfo,
@@ -364,7 +368,7 @@ pub async fn BgJobRuntime::start(
     "\{dir}/\{@protocol.job_storage_name(id)}.out"
   })
   let exec = (self.spawn_exec)(
-    program, args, cwd, max_output_chars, spill_path, stdin, cancel_handler,
+    program, args, cwd, max_output_chars, spill_path, stdin, cancel_handler, extra_env,
   )
   // A start that fails after the spawn returns once that process is gone,
   // so its caller never counts it as ended while it winds down.

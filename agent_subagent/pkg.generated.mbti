@@ -15,7 +15,7 @@ pub fn describe_outcome(@openseek_protocol.SubagentOutcome) -> String
 
 // Types and methods
 type Launcher
-pub fn[X] Launcher::Launcher(@agent_runtime.AgentTaskScope[X], runtime~ : @bgjobs.BgJobRuntime, children~ : @agent_subrun.ChildSession, program~ : String, args~ : Array[String], cwd? : String, result_dir~ : String, max_live? : Int, grace_ms? : Int, delivery_timeout_ms? : Int) -> Self
+pub fn[X] Launcher::Launcher(@agent_runtime.AgentTaskScope[X], runtime~ : @bgjobs.BgJobRuntime, children~ : @agent_subrun.ChildSession, program~ : String, args~ : Array[String], cwd? : String, env? : Map[String, String], result_dir~ : String, max_live? : Int, grace_ms? : Int, delivery_timeout_ms? : Int) -> Self
 pub fn Launcher::live(Self) -> Int
 pub fn Launcher::max_live(Self) -> Int
 pub fn Launcher::report(Self, String) -> Json?

@@ -37,6 +37,7 @@ pub fn[X] subagents(
   scope : @agent_runtime.AgentTaskScope[X],
   self_exe~ : String,
   model~ : @deepseek.Model,
+  api_key~ : String,
   api_url~ : String?,
   workspace_root~ : String,
   children~ : @agent_subrun.ChildSession,
@@ -64,9 +65,24 @@ pub fn[X] subagents(
         program~,
         args~,
         cwd=workspace_root,
+        // The parent's resolved key, under its provider's variable: a key
+        // the parent got only from its command line reaches the child, and
+        // an unrelated one in the environment does not win over it.
+        env=Map([(provider_key_variable(model), api_key)]),
         result_dir~,
       )
     },
     kinds: subagent_kinds(),
+  }
+}
+
+///|
+/// The environment variable a child reads its provider's key from when no
+/// --api-key is given (see `@cli.agent_shared_options`).
+fn provider_key_variable(model : @deepseek.Model) -> String {
+  match model {
+    Deepseek(_) => "DEEPSEEK"
+    Kimi(_) => "KIMI"
+    Glm(_) => "GLM"
   }
 }

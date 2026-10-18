@@ -201,6 +201,7 @@ async fn run_serve(
             scope,
             self_exe=exe,
             model~,
+            api_key~,
             api_url~,
             workspace_root~,
             children~,

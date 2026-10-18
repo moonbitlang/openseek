@@ -125,6 +125,7 @@ pub async fn[X] ShellExecution::start(
   kill_when_full~ : Bool = false,
   kill_at_hard_cap~ : Bool = false,
   cancel_handler? : @process.CancellationHandler,
+  extra_env? : Map[String, String],
 ) -> ShellExecution {
   let group = scope.group()
   let sink = ShellOutputSink::ShellOutputSink(
@@ -156,6 +157,7 @@ pub async fn[X] ShellExecution::start(
     stdout=writer,
     stderr=writer,
     cwd?=cwd.map(cwd => cwd.view()),
+    extra_env?,
     cancel_handler=CancellationHandler(pid => {
       if started.val is Some(exec) {
         exec.note_stop()
