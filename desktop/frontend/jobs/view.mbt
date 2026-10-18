@@ -341,7 +341,7 @@ pub fn panel(
         }
         if info.workspace is Worktree(worktree) {
           details.append(
-            worktree_details(locale~, worktree),
+            worktree_details(locale~, ended=job.state.is_terminal(), worktree),
           )
         }
       }
@@ -581,15 +581,19 @@ fn short_job_id(id : String, jobs : Array[@protocol.JobView]) -> String {
 
 ///|
 /// What a worker's worktree held when it was handed over, in words, and why
-/// when it could not be taken.
+/// when it could not be taken. A worker whose job `ended` with no result
+/// recorded (its engine stopped first) says so: its worktree is handed over
+/// when a worker next starts, and this record is not updated.
 fn worktree_state(
   locale~ : @i18n.Locale = English,
+  ended~ : Bool = false,
   state : @wire.WorktreeState,
 ) -> (String, Array[String]) {
   let short = (commit : String) => {
     commit.view(end_offset=commit.length().min(10)).to_owned()
   }
   match state {
+    Working if ended => (ui(locale, WorktreeUnrecorded), [])
     Working => (ui(locale, WorktreeWorking), [])
     CaptureFailed(reasons~) => (ui(locale, WorktreeCaptureFailed), reasons)
     Committed(commit~) =>
@@ -604,9 +608,10 @@ fn worktree_state(
 /// stand, why when they cannot be integrated, and where it is.
 fn worktree_details(
   locale~ : @i18n.Locale = English,
+  ended~ : Bool,
   worktree : @wire.Worktree,
 ) -> Array[@html.Html] {
-  let (state, reasons) = worktree_state(locale~, worktree.state)
+  let (state, reasons) = worktree_state(locale~, ended~, worktree.state)
   [
     @html.div(
       class="jobs-detail-meta",

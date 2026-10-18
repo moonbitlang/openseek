@@ -544,9 +544,7 @@ test "a subagent job reads as an agent, not a command" {
 /// and why when it could not be taken.
 test "a worker's worktree state reads as words" {
   assert_eq(
-    worktree_state(
-      Committed(commit="0123456789abcdef0123456789abcdef01234567"),
-    ),
+    worktree_state(Committed(commit="0123456789abcdef0123456789abcdef01234567")),
     ("Worktree: committed 0123456789 on its branch, ready to take", []),
   )
   assert_eq(
@@ -560,5 +558,11 @@ test "a worker's worktree state reads as words" {
   assert_eq(
     worktree_state(CaptureFailed(reasons=["index.lock exists"])),
     ("Worktree: not captured; files kept", ["index.lock exists"]),
+  )
+  // A worker whose engine stopped first left no result on its record.
+  assert_eq(worktree_state(Working).0, "Worktree: in progress")
+  assert_eq(
+    worktree_state(ended=true, Working).0,
+    "Worktree: no result recorded (its engine stopped); handed over when a worker next starts",
   )
 }

@@ -51,6 +51,7 @@ priv enum UiMessage {
   TimedOutLabel
   OpenTranscript
   WorktreeWorking
+  WorktreeUnrecorded
   WorktreeNoChanges
   WorktreeUnmergeable
   WorktreeCaptureFailed
@@ -335,6 +336,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, OpenTranscript) => "打开记录"
     (TraditionalChinese, OpenTranscript) => "開啟記錄"
     (Japanese, OpenTranscript) => "記録を開く"
+    (English, WorktreeUnrecorded) =>
+      "Worktree: no result recorded (its engine stopped); handed over when a worker next starts"
+    (Spanish, WorktreeUnrecorded) =>
+      "Worktree: sin resultado registrado (su motor se detuvo); se entrega cuando arranque otro worker"
+    (SimplifiedChinese, WorktreeUnrecorded) =>
+      "工作树：未记录结果（其引擎已停止）；下次启动 worker 时交接"
+    (TraditionalChinese, WorktreeUnrecorded) =>
+      "工作樹：未記錄結果（其引擎已停止）；下次啟動 worker 時交接"
+    (Japanese, WorktreeUnrecorded) =>
+      "ワークツリー：結果未記録（エンジン停止）。次に worker を起動したときに引き渡し"
     (English, WorktreeWorking) => "Worktree: in progress"
     (Spanish, WorktreeWorking) => "Worktree: en curso"
     (SimplifiedChinese, WorktreeWorking) => "工作树：进行中"
@@ -358,8 +369,7 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "工作樹：無法合併，保留以供檢查"
     (Japanese, WorktreeUnmergeable) =>
       "ワークツリー：統合不可・確認用に保持"
-    (English, WorktreeCaptureFailed) =>
-      "Worktree: not captured; files kept"
+    (English, WorktreeCaptureFailed) => "Worktree: not captured; files kept"
     (Spanish, WorktreeCaptureFailed) =>
       "Worktree: no capturado; archivos conservados"
     (SimplifiedChinese, WorktreeCaptureFailed) =>
