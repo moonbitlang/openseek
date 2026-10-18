@@ -31,7 +31,7 @@ pub(all) enum SubagentLaunch {
   /// The model's own tool call. The child belongs to the session.
   Direct
   /// A script's host-tool call: the host's id for that script's program,
-  /// and the call's index in the program's trace.
+  /// and which of that program's subagent starts this is (from 0).
   Script(program~ : String, call~ : Int32)
 } derive(Eq, Debug)
 

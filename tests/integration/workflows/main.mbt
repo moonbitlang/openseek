@@ -1,8 +1,6 @@
 ///|
 async fn main {
   match @env.args() {
-    [_, "hosted-child", name, mode, calls, child, result_file] =>
-      hosted_child(name, mode, calls, child, result_file)
     _ =>
       match @env.get_env_var("OPENSEEK_CI_FIXTURE") {
         Some(dir) => ci_child(dir)
@@ -13,8 +11,8 @@ async fn main {
           }
           let exe = @fs.realpath(exe)
           @vfs.with_tmpdir(temp => {
-            verify_hosted(root, temp, exe)
-            verify_review(root, temp, exe)
+            verify_hosted(root, temp)
+            verify_review(root, temp)
             verify_ci(root, temp, exe)
           })
         }
@@ -77,6 +75,7 @@ async fn compile(root : String, temp : String, name : String) -> String {
 fn clean_env() -> Map[String, String] {
   let env = @env.get_env_vars()
   env.remove("WORKFLOW_HOST")
+  env.remove("OPENSEEK_PTC")
   env.remove("OPENSEEK_CI_FIXTURE")
   env
 }

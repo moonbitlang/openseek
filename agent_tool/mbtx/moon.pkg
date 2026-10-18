@@ -3,7 +3,6 @@ import {
   "moonbitlang/openseek/agent_tool/internal/uuid",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/write_scope",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/agent_runtime",
   "moonbitlang/openseek/agent_tool/mbtx/internal/decode",
@@ -16,7 +15,6 @@ import {
   "moonbitlang/core/json",
   "moonbitlang/core/encoding/utf8",
   "moonbitlang/async/os_error",
-  "moonbitlang/openseek_protocol/emit",
 }
 
 // The bundled workflows run from this embedded copy; `share/workflow/` stays
@@ -52,12 +50,10 @@ import {
   "moonbitlang/async",
   "moonbitlang/core/json",
   "moonbitlang/openseek/agent_runtime",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek/testkit/filesystem" @vfs,
   "moonbitlang/openseek/agent_tool/edit",
   "moonbitlang/openseek/agent_tool/multi_edit",
-  "moonbitlang/openseek_protocol/emit",
   "moonbitlang/openseek/agent_tool/write",
   "moonbitlang/openseek/agent_tool/remove",
 } for "test"

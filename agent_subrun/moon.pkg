@@ -1,10 +1,8 @@
 import {
   "moonbitlang/openseek/agent_session/store",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/openseek_protocol/emit",
-  "moonbitlang/core/json",
   "moonbitlang/workflow/spawn",
 }
 
@@ -12,7 +10,6 @@ import {
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_session/store",
 } for "test"
 

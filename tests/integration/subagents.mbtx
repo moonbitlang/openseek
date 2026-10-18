@@ -10,8 +10,9 @@ import {
 }
 
 ///|
-/// The real CLI with a durable session starts two explore subagents with the
-/// `subagent` tool. One local server scripts the parent AND the two real
+/// The real CLI with a durable session starts two explore subagents, first
+/// with the model's `subagent` tool, then from an mbtx script through
+/// `@tools.call` (the bounded job_wait and chunked job_output). One local server scripts the parent AND the two real
 /// child processes (they reach it through the forwarded --api-url): a child
 /// is told apart by its `submit_answer` tool and routed by the marker in its
 /// query. The parent waits, reads both reports with job_output, and finishes.
@@ -68,19 +69,151 @@ fn job_of(messages : String, label : String) -> String? {
 }
 
 ///|
-async fn main {
-  guard @env.args() is [_, executable] else {
-    fail("Usage: moon run tests/integration/subagents.mbtx EXE")
+/// The script the model runs in the script case: two subagents through
+/// `@tools.call`, waited for with the bounded job_wait, their reports read
+/// in chunks with job_output.
+let fan_out : String =
+  #|import {
+  #|  "moonbitlang/openseek_tools@0.2.0" @tools,
+  #|  "moonbitlang/async",
+  #|  "moonbitlang/core/json",
+  #|}
+  #|
+  #|async fn start(query : String, label : String) -> String {
+  #|  let started = @tools.call("subagent", {
+  #|    "kind": "explore",
+  #|    "input": { "query": query },
+  #|    "label": label,
+  #|  })
+  #|  guard started.data is Some({ "job_id": String(id), .. }) else {
+  #|    fail(started.content)
+  #|  }
+  #|  id
+  #|}
+  #|
+  #|async fn report(id : String) -> Json {
+  #|  let text = StringBuilder()
+  #|  for ;; {
+  #|    let read = @tools.call("job_output", {
+  #|      "job_id": id,
+  #|      "offset": text.to_string().char_length(),
+  #|    })
+  #|    guard read.data
+  #|      is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+  #|      fail(read.content)
+  #|    }
+  #|    text.write_string(chunk)
+  #|    if complete is True {
+  #|      break
+  #|    }
+  #|  }
+  #|  @json.parse(text.to_string())
+  #|}
+  #|
+  #|async fn main {
+  #|  let ids = [
+  #|    start("MARK-A where is the answer defined?", "script A"),
+  #|    start("MARK-B what is the answer's value?", "script B"),
+  #|  ]
+  #|  let mut pending = ids
+  #|  while pending.length() > 0 {
+  #|    let waited = @tools.call("job_wait", {
+  #|      "job_ids": Json::array(pending.map(Json::string)),
+  #|    })
+  #|    guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+  #|      fail(waited.content)
+  #|    }
+  #|    let still : Array[String] = []
+  #|    for job in jobs {
+  #|      if job is { "state": "running", "job_id": String(id), .. } {
+  #|        still.push(id)
+  #|      }
+  #|    }
+  #|    pending = still
+  #|  }
+  #|  for id in ids {
+  #|    guard report(id) is { "answer": String(answer), .. } else {
+  #|      fail("no answer in the report of \{id}")
+  #|    }
+  #|    println("SCRIPT-REPORT \{answer}")
+  #|  }
+  #|}
+
+///|
+/// The job id an mbtx call moved to the background, if it was.
+fn background_job(messages : String) -> String? {
+  guard messages.split("moved to the background as job ").nth(1) is Some(tail) else {
+    return None
   }
-  let executable = @fs.realpath(executable)
+  Some(String::from_iter(tail.iter().take(22)))
+}
+
+///|
+/// The model's moves in the script case: run the script, follow it up if
+/// it moves to the background, finish once both reports are printed.
+fn script_turn(messages : String) -> Json {
+  if messages.contains("SCRIPT-REPORT answer A") &&
+    messages.contains("SCRIPT-REPORT answer B") {
+    return calls([tool_call(0, "done", "finish", { "answer": "the script's scouts reported" })])
+  }
+  match background_job(messages) {
+    None => calls([tool_call(0, "run", "mbtx", { "source": fan_out, "description": "fan out two scouts" })])
+    Some(job) =>
+      if messages.contains("background job \{job} finished") {
+        calls([tool_call(0, "read", "job_output", { "job_id": job })])
+      } else {
+        calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
+      }
+  }
+}
+
+///|
+/// The model's moves in the model case: start two scouts, wait, read each
+/// report once it is announced, finish once both are read.
+fn model_turn(messages : String) -> Json {
+  match (job_of(messages, "scout A"), job_of(messages, "scout B")) {
+    (None, None) =>
+      calls([
+        tool_call(0, "start-a", "subagent", {
+          "kind": "explore",
+          "input": { "query": "MARK-A where is the answer defined?" },
+          "label": "scout A",
+        }),
+        tool_call(1, "start-b", "subagent", {
+          "kind": "explore",
+          "input": { "query": "MARK-B what is the answer's value?" },
+          "label": "scout B",
+        }),
+      ])
+    (Some(a), Some(b)) => {
+      let read_a = messages.contains("answer A")
+      let read_b = messages.contains("answer B")
+      if read_a && read_b {
+        calls([tool_call(0, "done", "finish", { "answer": "both scouts reported" })])
+      } else if !read_a && messages.contains("job \{a} (explore: scout A) reported") {
+        calls([tool_call(0, "read-a", "job_output", { "job_id": a })])
+      } else if !read_b && messages.contains("job \{b} (explore: scout B) reported") {
+        calls([tool_call(0, "read-b", "job_output", { "job_id": b })])
+      } else {
+        calls([tool_call(0, "wait", "job_wait", { "job_ids": [a, b] })])
+      }
+    }
+    _ => abort("only one subagent started: \{messages}")
+  }
+}
+
+///|
+/// One run of the real CLI against the scripted server; `script` picks the
+/// case. Returns after checking both children's sessions.
+async fn run_case(executable : String, script~ : Bool) -> Unit {
   let directory = @fs.tmpdir(prefix="openseek-subagents-")
   defer @fs.rmdir(directory, recursive=true)
   let store_root = directory + "/store"
   @fs.mkdir(directory + "/ws", recursive=true)
   @fs.write_file(directory + "/ws/answer.mbt", "let answer = 42\n")
   let child_requests : Map[String, Int] = Map([])
-  let mut answer : String? = None
-  @async.with_timeout(120000, () => {
+  let expected = if script { "the script's scouts reported" } else { "both scouts reported" }
+  @async.with_timeout(240000, () => {
     @async.with_task_group(group => {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
       group.spawn_bg(no_wait=true) <| () => {
@@ -115,40 +248,7 @@ async fn main {
               ])
             } else {
               assert_true(tool_names(request).contains("subagent"))
-              match (job_of(messages, "scout A"), job_of(messages, "scout B")) {
-                (None, None) =>
-                  calls([
-                    tool_call(0, "start-a", "subagent", {
-                      "kind": "explore",
-                      "input": { "query": "MARK-A where is the answer defined?" },
-                      "label": "scout A",
-                    }),
-                    tool_call(1, "start-b", "subagent", {
-                      "kind": "explore",
-                      "input": { "query": "MARK-B what is the answer's value?" },
-                      "label": "scout B",
-                    }),
-                  ])
-                (Some(a), Some(b)) => {
-                  let read_a = messages.contains("answer A")
-                  let read_b = messages.contains("answer B")
-                  if read_a && read_b {
-                    answer = Some("both scouts reported")
-                    calls([
-                      tool_call(0, "done", "finish", {
-                        "answer": "both scouts reported",
-                      }),
-                    ])
-                  } else if !read_a && messages.contains("job \{a} (explore: scout A) reported") {
-                    calls([tool_call(0, "read-a", "job_output", { "job_id": a })])
-                  } else if !read_b && messages.contains("job \{b} (explore: scout B) reported") {
-                    calls([tool_call(0, "read-b", "job_output", { "job_id": b })])
-                  } else {
-                    calls([tool_call(0, "wait", "job_wait", { "job_ids": [a, b] })])
-                  }
-                }
-                _ => fail("only one subagent started: \{messages}")
-              }
+              if script { script_turn(messages) } else { model_turn(messages) }
             }
             conn.send_response(200, "OK", extra_headers={
               "Content-Type": "text/event-stream",
@@ -186,11 +286,10 @@ async fn main {
       let out = stdout.wait()
       let err = stderr.wait()
       guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
-      assert_true(out.contains("both scouts reported"))
+      assert_true(out.contains(expected), msg="stdout: \{out}\nstderr: \{err}")
       server.close()
     })
   })
-  assert_eq(answer, Some("both scouts reported"))
   assert_eq(child_requests.get("A"), Some(1))
   assert_eq(child_requests.get("B"), Some(1))
   let sessions = @fs.readdir(store_root + "/sessions", sort=true)
@@ -203,7 +302,20 @@ async fn main {
     let report = @json.parse(@fs.read_file(dir + "/report.json").text())
     assert_true(report is { "answer": String(_), .. }, msg=child)
   }
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/subagents.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  run_case(executable, script=false)
   println(
-    "PASS: the real CLI starts two subagents, waits, reads both reports, and leaves their sessions claimed and settled",
+    "PASS: the model starts two subagents, waits, reads both reports; their sessions are claimed and settled",
+  )
+  run_case(executable, script=true)
+  println(
+    "PASS: a script starts two subagents through @tools.call, waits within bounds, reads both reports in chunks",
   )
 }

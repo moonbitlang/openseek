@@ -19,7 +19,6 @@ import {
   "moonbitlang/openseek/agent_tool/multi_edit",
   "moonbitlang/openseek/agent_tool/plan",
   "moonbitlang/openseek/agent_tool/mbtx",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek/agent_tool/remove",
   "moonbitlang/openseek/agent_tool/write",
   "moonbitlang/openseek/deepseek",

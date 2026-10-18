@@ -14,6 +14,28 @@ const StopGraceMs : Int32 = 10_000
 const MaxLive : Int32 = 16
 
 ///|
+/// How many subagents one script may start in all.
+const ScriptQuota : Int32 = 32
+
+///|
+/// How long a script stays pinned past the wall-clock cap after its last
+/// child ended, to collect what it left.
+const CollectAllowanceMs : Int64 = 300_000
+
+///|
+/// What the launcher knows of one owner: the model ("model") or a script's
+/// program.
+priv struct Owner {
+  // Every job it started, live or ended: what it may address.
+  jobs : Map[String, Unit]
+  // The ones still live.
+  live : Map[String, Unit]
+  mut closed : Bool
+  mut starts : Int32
+  mut last_end_ms : Int64?
+}
+
+///|
 /// The engine's launcher of subagents: each child is a background job of the
 /// session's job runtime, so it shares the job lifecycle (ids, records, stop,
 /// the loop-owned wait, the exit notice) and adds a typed
@@ -45,6 +67,7 @@ struct Launcher {
   // Captured reports by child session, kept for as long as this engine
   // runs, so a report whose store failed can still be read.
   reports : Map[String, Json]
+  owners : Map[String, Owner]
 }
 
 ///|
@@ -83,6 +106,7 @@ pub fn[X] Launcher::Launcher(
     delivery_timeout_ms,
     live: 0,
     reports: Map([]),
+    owners: Map([]),
   }
 }
 
@@ -169,6 +193,13 @@ pub async fn Launcher::start(
   launch~ : @protocol.SubagentLaunch,
   validate~ : (Json) -> Result[Json, String],
 ) -> StartResult {
+  let owner = self.owner(launch)
+  guard !owner.closed else {
+    return Unavailable("its owner has ended and can start nothing more")
+  }
+  guard !(launch is Script(_)) || owner.starts < ScriptQuota else {
+    return Unavailable("a script may start at most \{ScriptQuota} subagents")
+  }
   guard self.live < self.max_live else { return Busy }
   self.live += 1
   let held = Ref(true)
@@ -243,7 +274,11 @@ pub async fn Launcher::start(
       defer writer.close()
       self.settle(child, end, result_file~, validate~)
     },
-    on_published=release,
+    on_published=() => {
+      release()
+      owner.live.remove(child.session)
+      owner.last_end_ms = Some(@env.now().reinterpret_as_int64())
+    },
     subagent=() => child.info(),
     reaped=false,
   ) catch {
@@ -254,6 +289,9 @@ pub async fn Launcher::start(
     }
   }
   registered.val = true
+  owner.starts += 1
+  owner.jobs[job_id] = ()
+  owner.live[child.session] = ()
   let request : @protocol.RunRequest = {
     request_id: Some(session),
     kind: Some(kind),
@@ -454,4 +492,80 @@ pub async fn Launcher::send(
   } else {
     NotReady
   }
+}
+
+///|
+/// The owner a launch belongs to, created on first sight.
+fn Launcher::owner(self : Launcher, launch : @protocol.SubagentLaunch) -> Owner {
+  let key = match launch {
+    Direct => "model"
+    Script(program~, ..) => program
+  }
+  match self.owners.get(key) {
+    Some(owner) => owner
+    None => {
+      let owner : Owner = {
+        jobs: Map([]),
+        live: Map([]),
+        closed: false,
+        starts: 0,
+        last_end_ms: None,
+      }
+      self.owners[key] = owner
+      owner
+    }
+  }
+}
+
+///|
+/// How many subagents script `program` has started so far.
+pub fn Launcher::started_by(self : Launcher, program : String) -> Int32 {
+  match self.owners.get(program) {
+    Some(owner) => owner.starts
+    None => 0
+  }
+}
+
+///|
+/// Whether `job_id` is a subagent script `program` started.
+pub fn Launcher::owns(
+  self : Launcher,
+  program : String,
+  job_id : String,
+) -> Bool {
+  self.owners.get(program) is Some(owner) && owner.jobs.contains(job_id)
+}
+
+///|
+/// Whether script `program` must outlive the wall-clock cap for now: it has
+/// a live subagent, or its last one ended under five minutes ago.
+pub fn Launcher::pinned(self : Launcher, program : String) -> Bool {
+  guard self.owners.get(program) is Some(owner) else { return false }
+  if !owner.live.is_empty() {
+    return true
+  }
+  match owner.last_end_ms {
+    Some(ended) =>
+      @env.now().reinterpret_as_int64() - ended < CollectAllowanceMs
+    None => false
+  }
+}
+
+///|
+/// Script `program` has ended: it can start nothing more, and its live
+/// subagents are stopped, together.
+pub async fn Launcher::close_owner(self : Launcher, program : String) -> Unit {
+  guard self.owners.get(program) is Some(owner) else { return }
+  owner.closed = true
+  let live = owner.jobs
+    .keys()
+    .filter(job_id => {
+      self.runtime.snapshot(job_id) is Some({ status: Running, .. })
+    })
+    .to_array()
+  @async.with_task_group(group => {
+    for job_id in live {
+      group.spawn_bg(() => ignore(self.runtime.stop(job_id)))
+    }
+  })
 }

@@ -128,7 +128,7 @@ pub fn definition(
   foreground_timeout_ms~ : Int32 = ForegroundTimeoutMs,
   build_timeout_ms~ : Int32 = BuildTimeoutMs,
   approval? : @agent_runtime.ApprovalChannel,
-  subrun? : @host.SubrunInjection,
+  subagents~ : Bool = false,
   program_service? : @ptc.Service,
   on_program_trace? : (Json) -> Unit,
   on_program_output? : (@bgjobs.ImageOutput) -> Unit,
@@ -146,7 +146,7 @@ pub fn definition(
     description=description(
       background=bg_runtime is Some(_),
       escalation=approval is Some(_),
-      hosting=subrun is Some(_),
+      delegation=subagents,
       auto_background_after_ms~,
       foreground_timeout_ms~,
       build_timeout_ms~,
@@ -154,7 +154,6 @@ pub fn definition(
     schema=JsonSchema(
       schema(
         escalation=approval is Some(_),
-        hosting=subrun is Some(_),
         programmatic=program_service is Some(_),
       ),
     ),
@@ -167,9 +166,13 @@ pub fn definition(
             is_error=true,
           )
       }
-      let compatible = input.target == "wasm" &&
-        !input.escalated &&
-        !input.subrun
+      if input.subrun {
+        return @agent_tool.respond(
+          "mbtx: `subrun` is retired. A script starts subagents through the host: @tools.call(\"subagent\", {\"kind\": \"explore\", \"input\": {\"query\": ...}}), then job_wait and job_output. The bundled agent workflows (@builtin/review.mbtx and others) need no flag.",
+          is_error=true,
+        )
+      }
+      let compatible = input.target == "wasm" && !input.escalated
       let enabled = input.ptc.unwrap_or(
         compatible && program_service is Some(_),
       )
@@ -190,14 +193,13 @@ pub fn definition(
           build_timeout_ms~,
           generations~,
           approval?,
-          subrun?,
           program?,
         )
       }
       let action = if enabled {
         guard compatible else {
           return @agent_tool.respond(
-            "PTC requires the default wasm target and cannot combine with escalated or subrun",
+            "PTC requires the default wasm target and cannot combine with escalated",
             is_error=true,
           )
         }
@@ -328,7 +330,6 @@ async fn execute(
   build_timeout_ms~ : Int32,
   generations~ : Map[String, Int32],
   approval? : @agent_runtime.ApprovalChannel,
-  subrun? : @host.SubrunInjection,
   program? : @ptc.Program,
 ) -> @agent_tool.ToolAction {
   if scratch_dir is Some(dir) {
@@ -457,24 +458,6 @@ async fn execute(
   // targets never had `--wasm-policy` passed to them in the first place — they
   // cannot spawn or touch files at all — so asking here would spend a person's
   // attention on a grant that changes nothing about the run.
-  // Delegation lives in the sandbox policy — the handoff is a policy `env.set`,
-  // the engine a policy `process.allow` entry, the run directory a policy write
-  // root — so it exists only where the policy applies: the wasm target, with
-  // the policy in force. Refuse anything else BEFORE a block is reserved or a
-  // run announced; the alternative is a snippet that finds no handoff while
-  // the desktop shows a workflow that never existed.
-  if input.subrun && input.target != "wasm" {
-    return @agent_tool.respond(
-      "mbtx: `subrun` applies to the wasm target, which is the one the sandbox policy binds — the handoff, the engine's spawn rule and the run's write root all live in that policy; `\{input.target}` runs none. Drop `target` to use wasm, or drop `subrun`.",
-      is_error=true,
-    )
-  }
-  if input.subrun && input.escalated {
-    return @agent_tool.respond(
-      "mbtx: `subrun` and `escalated` exclude each other — escalation runs the snippet with NO sandbox policy, and the delegation handoff is delivered through that policy. Use `subrun` alone to delegate; the allowed programs already include the engine.",
-      is_error=true,
-    )
-  }
   if input.escalated && input.target != "wasm" {
     return @agent_tool.respond(
       "mbtx: `escalated` applies to the wasm target, which is the one the sandbox policy binds; `\{input.target}` runs no policy to lift and cannot spawn or touch files anyway. Drop `escalated`, or drop `target` to use wasm.",
@@ -661,65 +644,7 @@ async fn execute(
   // `cwd` is deliberately NOT a write root: naming where a program runs should
   // not also grant writing there, and reads are open, so a snippet can still
   // work in a directory it may not modify.
-  // Reserve this snippet's child ordinals and journal BEFORE it runs. The
-  // coordinates reach it as guest environment variables, never as argv it
-  // wrote: only values mbtx chose resolve to anything the host watches, so a
-  // snippet cannot name a session that was not reserved for it.
-  let reservation = if input.subrun {
-    match subrun {
-      Some(injection) => Some(injection.reserve(result_root=snippet_tmp))
-      // Asked, and cannot be served: say so. A snippet that believed it had a
-      // handoff would spawn children with no transcript, and the model would
-      // learn nothing until its subagents failed to appear anywhere.
-      None =>
-        return @agent_tool.respond(
-          "mbtx: `subrun` was requested, but this conversation has no durable session, so a workflow's children would have nowhere to leave a transcript. Retry without `subrun` and do the work in this snippet directly.",
-          is_error=true,
-        )
-    }
-  } else {
-    None
-  }
-  // The run's own directory, and the ONE place in the session store the
-  // snippet may write. It must exist before the policy names it — moonrun
-  // canonicalizes every root when it loads the document and refuses the whole
-  // file otherwise. Granting the store itself would let a snippet append to
-  // another session's transcript; the ledger gets a directory instead.
-  // Recursive, so the store root's own existence is not this call's problem:
-  // the store creates its directories lazily, and a policy naming a root that
-  // failed to appear would be refused whole, with nothing to say why.
-  if reservation is Some(r) {
-    @fs.mkdir(r.dir(), recursive=true) catch {
-      _ => ()
-    }
-  }
-  // Announce the run before it can produce anything. A reader is TOLD where
-  // the ledger and its sidecar are, and which child ordinals belong to this
-  // run, because nothing about a snippet is otherwise visible: the parent
-  // sees one opaque tool call however many children it starts. The finish
-  // bracket is closed on every exit below, cancellation included, so nothing
-  // shows a workflow as running forever.
-  if reservation is Some(r) {
-    @emit.emit(
-      WorkflowStarted(
-        id="wf-\{r.base()}",
-        journal=r.journal_path(),
-        events=r.events_path(),
-        first_child=r.base(),
-        child_count=r.limit(),
-      ),
-    )
-  }
-  // Closed here only while this call still owns the run. A background
-  // handoff returns from this function with the snippet STILL RUNNING — the
-  // job then owns its lifecycle, and closes the bracket at terminal status
-  // instead (see `terminal_cleanup`), the same split `cleanup()` makes for
-  // the temp directory. Closing it here regardless would report a workflow
-  // finished the moment it was adopted.
-  defer (if reservation is Some(r) && !job_owns_cleanup {
-    @emit.emit(WorkflowFinished(id="wf-\{r.base()}"))
-  })
-  let injected = reservation.map(r => r.env()).unwrap_or(Map([]))
+  let injected : Map[String, String] = Map([])
   if program is Some(program) {
     for key, value in program.env() {
       injected[key] = value
@@ -727,15 +652,8 @@ async fn execute(
   }
   let policy = wasm_policy_document(
     tmp_dir=snippet_tmp,
-    extra_roots=[
-      ..scratch_dir.map(l => [l]).unwrap_or([]),
-      ..reservation.map(r => [r.dir()]).unwrap_or([]),
-    ],
+    extra_roots=scratch_dir.map(l => [l]).unwrap_or([]),
     inject=injected,
-    spawnable=match (reservation, subrun) {
-      (Some(r), Some(injection)) => Some((injection.exe(), r.spawn_prefix()))
-      _ => None
-    },
   )
   @fs.write_file(policy_path, policy.stringify(), create_mode=CreateOrTruncate)
   // Wrap each phase's command in sandbox-exec for the roles that need a rule
@@ -961,11 +879,6 @@ async fn execute(
         if program is Some(program) {
           program.close()
         }
-        // The workflow bracket closes when the JOB ends — not when this call
-        // returned at adoption, which was while the run was still going.
-        if reservation is Some(r) {
-          @emit.emit(WorkflowFinished(id="wf-\{r.base()}"))
-        }
         @async.protect_from_cancel(() => {
           @fs.rmdir(terminal_cleanup_path, recursive=true) catch {
             _ => ()
@@ -1000,6 +913,8 @@ async fn execute(
         on_terminal=terminal_cleanup,
         data?=program.map(program => () => program.trace()),
         image_output?=program.map(program => () => program.image_output()),
+        // A script orchestrating live subagents outlives the wall-clock cap.
+        pinned?=program.map(program => () => program.pinned()),
       )
       job_owns_cleanup = true
       if program is Some(program) {
@@ -1653,7 +1568,7 @@ async fn read_capped(path : String) -> String {
 /// The `mbtx` argument schema. `escalation` adds `escalated` only when an
 /// approval channel is wired; otherwise every use would come back refused, and
 /// the cheapest way not to waste a turn is for the argument not to exist.
-fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
+fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
   {
     "type": "object",
     "properties": Json(
@@ -1748,25 +1663,6 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
               ),
             ]
           },
-          ..if hosting {
-            [
-              (
-                "subrun",
-                Json({
-                  "type": "boolean",
-                  "description": (
-                    #|Set true when this snippet DELEGATES: runs a `moonbitlang/workflow`
-                    #|workflow whose children are subagents (`import "moonbitlang/workflow/hosted"`,
-                    #|then `@hosted.context()` and `ctx.run(wf => ...)`). Only then are child
-                    #|sessions reserved and handed to the snippet, so its subagents get their own
-                    #|transcripts and appear in the desktop. Leave it unset for every other
-                    #|snippet: reserving children a script never starts wastes ids and announces
-                    #|a workflow that does not exist. A snippet may start at most 32 children.
-                  ),
-                }),
-              ),
-            ]
-          },
         ],
       ),
     ),
@@ -1801,7 +1697,7 @@ fn schema(escalation~ : Bool, hosting~ : Bool, programmatic~ : Bool) -> Json {
 fn description(
   background~ : Bool,
   escalation~ : Bool,
-  hosting~ : Bool,
+  delegation~ : Bool,
   auto_background_after_ms~ : Int32,
   foreground_timeout_ms~ : Int32,
   build_timeout_ms~ : Int32,
@@ -1874,12 +1770,12 @@ fn description(
     #|@builtin/check.mbtx (moon check), @builtin/test.mbtx (moon test),
     #|@builtin/check-test.mbtx (check then test), @builtin/info-fmt.mbtx (info
     #|then fmt), and @builtin/check-json.mbtx (moon check --output-json).
-    #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh (no subrun needed);
+    #|@builtin/ci-watch.mbtx monitors GitHub PR checks with gh;
     #|@builtin/fix-deprecations.mbtx (with ptc=true, cwd at the module) fixes every
     #|deprecation warning whose message names a bare replacement, one guarded edit
     #|per site, and lists the rest for you; --dry-run plans only.
     #|use args=["PR", "--repo", "OWNER/REPO", "--once"] for one snapshot.
-    #|For agent workflows, use subrun=true with @builtin/review.mbtx (independent
+    #|Agent workflows (they start subagents): @builtin/review.mbtx (independent
     #|worktree audit against the criteria in args), @builtin/change-review.mbtx
     #|(working-tree review from three perspectives) or @builtin/repo-map.mbtx
     #|(architecture, validation, extension points).
@@ -1981,26 +1877,26 @@ fn description(
       $|for up to \{foreground_bound}; at that deadline it is cancelled and reported as a timeout.
     )
   }
-  // Delegation is described only where it can be granted. A session with no
-  // durable store has no argument to advertise, and telling the model about
-  // one it cannot use costs it a refused call to find that out.
-  let delegation = if hosting {
+  // Delegation is described only where it can be granted: a session whose
+  // scripts can start subagents.
+  let delegation = if delegation {
     (
       #|
       #|## Delegating to subagents
       #|
-      #|Set `subrun: true` when this snippet runs a `moonbitlang/workflow` workflow whose
-      #|children are subagents — and only then. Import "moonbitlang/workflow" and
-      #|"moonbitlang/workflow/hosted", then `guard @hosted.context() is Some(ctx)` and
-      #|`ctx.run(wf => ...)`; inside, `wf.agent(prompt=..., kind="explore")` runs one
-      #|scout, and `@workflow.parallel([...])` with `@workflow.attempt` fans several out
-      #|concurrently. The children get their own transcripts and appear in the desktop.
-      #|A snippet may start at most 32 children. Without the flag no child sessions are
-      #|reserved and the engine is not on the spawn allowlist: a workflow written
-      #|without it runs with no handoff and its subagents are refused.
+      #|A script starts child agents through the host, like any host tool:
+      #|`@tools.call("subagent", {"kind": "explore", "input": {"query": ...}})`
+      #|returns `data.job_id` at once (kinds: explore, review; at most four live in a
+      #|session, 32 per script). `@tools.call("job_wait", {"job_ids": [...]})`
+      #|returns within a minute with each child's state (drop ended ones and wait
+      #|again); `job_output` gives a child's outcome and its report in chunks
+      #|(`data.report.chunk`, read on from `offset` until `complete`); `job_stop`
+      #|stops one. A script reaches only the children it started, and stopping the
+      #|script stops them. Each child gets its own transcript and appears in the
+      #|desktop.
       #|
       #|For an independent worktree review, run the bundled script:
-      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"],"subrun":true}`.
+      #|`{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling"]}`.
       #|With empty args it audits the standing goal and its recorded baseline, which
       #|the engine supplies; args narrow that goal as an audit focus, or are the whole
       #|criteria when no goal stands. It prints the reviewer's full report (`findings`,

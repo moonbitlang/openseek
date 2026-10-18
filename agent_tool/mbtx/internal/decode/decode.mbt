@@ -25,14 +25,9 @@ pub struct MbtxInput {
   /// the field, but a model that sends it anyway must be told what happened,
   /// not silently run confined while believing otherwise.
   escalated : Bool
-  /// Whether the snippet declares that it will DELEGATE — run a
-  /// `moonbitlang/workflow` workflow whose children must be visible. Only
-  /// then does the tool reserve child ordinals and a run directory and hand
-  /// the snippet a `WORKFLOW_HOST`; every other snippet gets none, so the
-  /// announcement of a workflow means one was asked for. Decoded whatever the
-  /// tool was built with, for the same reason as `escalated`: a model that
-  /// asks on a session that cannot host must be told, not quietly run
-  /// without its children.
+  /// The retired `subrun` argument: decoded only so that a model still
+  /// sending it is told how scripts start subagents now, rather than having
+  /// it silently ignored.
   subrun : Bool
   /// Enable run-scoped programmatic access to explicitly registered leaf tools.
   ptc : Bool?

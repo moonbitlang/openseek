@@ -43,7 +43,7 @@ pub fn definition(
       },
       "required": ["kind", "input"],
     }),
-    execute=Async(arguments => execute(launcher, kinds, arguments)),
+    execute=Async(arguments => start(launcher, kinds, arguments, launch=Direct)),
     concurrent_safe=true,
   )
 }
@@ -66,13 +66,22 @@ pub(all) struct Kind {
 pub(all) struct Subagents {
   launcher : (@bgjobs.BgJobRuntime) -> @agent_subagent.Launcher
   kinds : Array[Kind]
+  /// The session's standing goal and baseline for a script's audit, read
+  /// when asked: `{goal, sha?, dirty?}`, or null.
+  audit_context : () -> Json
 }
 
 ///|
-async fn execute(
+
+///|
+/// Start a child for the model (`Direct`) or a script (`Script`): the same
+/// checks and launcher either way; the model is told in words how to follow
+/// the child up, a script gets `{job_id, session}` in data.
+async fn start(
   launcher : @agent_subagent.Launcher,
   kinds : Array[Kind],
   arguments : Json,
+  launch~ : @protocol.SubagentLaunch,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "kind": String(name), "input": Object(_) as input, .. } else {
     return @agent_tool.respond(
@@ -99,16 +108,20 @@ async fn execute(
       steps < kind.ceiling.to_double() => steps.to_int()
     _ => kind.ceiling
   }
-
   match
     launcher.start(
       kind=name,
       input~,
       label~,
       max_steps~,
-      launch=Direct,
+      launch~,
       validate=kind.validate,
     ) {
+    Started(job_id~, session~) if launch is Script(_) =>
+      @agent_tool.respond("started subagent \{job_id} (\{name}: \{label})", data={
+        "job_id": job_id,
+        "session": session,
+      })
     Started(job_id~, session~) =>
       @agent_tool.respond(
         (

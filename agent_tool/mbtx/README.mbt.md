@@ -394,96 +394,43 @@ fn main {
 }
 ```
 
-## Hosting a workflow
+## Delegating to subagents
 
-Two decisions, made by two parties.
+A snippet starts child agents through the host, never by spawning the engine:
+the engine is not on the spawn allowlist. With PTC on, the session's program
+service binds each script's program to its own `subagent`, `job_wait`,
+`job_output`, `job_stop` and `audit_context` tools (see
+`agent_tool/subagent`), so a script reaches only the children it started, and
+stopping the script stops them. `definition(…, subagents=true)` only decides
+whether the description teaches this; a session without a launcher has no
+such tools to call.
 
-The CLI says whether this session CAN host: `definition(…, subrun?)` takes a
-`SubrunInjection` from `agent_subrun/host` — the engine's launch command (its
-absolute path, or on a wasm build `moonrun` plus the module), the session
-store, the parent id, and the
-session's one child-ordinal allocator — when the conversation has a durable
-session, and nothing when it does not (a `--no-session` run, a read-only
-child's own snippets). That is a capability, not a switch.
-
-The model says whether this snippet WILL delegate: the `subrun: true` argument.
-Only then does the tool reserve a block of 32 child ordinals, create a run
-directory in the session store, write a `WORKFLOW_HOST` handoff into the guest
-environment for `moonbitlang/workflow/hosted` to read, admit that launch
-command to the spawn allowlist, grant the run directory as the one writable
-store path, and announce the run with `workflow_started`. The allowlist admits
-the engine only as a delegated `run` whose argv starts with the prefix this
-host wrote: the managed-mode flags, then the host's `--dir`, `--session-root`,
-`--result-root` (the snippet's temp directory), `--model` and `--api-url`, then
-`--kind` (on a wasm build, also pinned to the module this host chose). The
-snippet picks only what follows: the kind, the result file, the reserved
-session. A delegated run refuses any option given twice and any option outside
-its short list, so nothing appended after the prefix widens the grant (see
-[`docs/run-result.md`](../../docs/run-result.md)).
-Every other snippet gets none of that — reserving children a script never
-starts would waste ids and announce a workflow that does not exist.
-
-Asked on a session that cannot host, the call is refused with a result that
-says why, rather than running the snippet without the coordinates it expects
-and letting its subagents vanish. And whether or not the flag is set,
-`WORKFLOW_HOST` is always DECIDED by the policy — the handoff, or nothing — so
-a child engine's snippet can never inherit its grandparent's handoff and mint
-child ids from a block that is not its own.
-
-### Snippets written for an older `moonbitlang/workflow`
-
-The handoff is version 2, which names how a child reports (`transport`: a
-result file). `moonbitlang/workflow` 0.9.0 is the first release that reads it.
-A release older than that refuses a handoff version it does not know, so for a
-snippet whose imports pin one, `@hosted.context()` returns `None` exactly as it
-does on a session that cannot host: the snippet takes its own no-host branch
-(the bundled scripts fail with a message saying they need OpenSeek), and no
-child is launched or recorded. From 0.10.0 on, a handoff that is present but
-unusable raises `@hosted.HandoffError` with the reason instead of reading as
-no host. Update the imports:
-
-```text
-import {
-  "moonbitlang/workflow@0.10.0",
-  "moonbitlang/workflow@0.10.0/hosted",
-}
-```
-
-Nothing else changes for a snippet that uses the library. A snippet that
-launched `openseek subrun` itself must move to `openseek run --input-format
-json --cancel-on-stdin-eof --kind KIND --result-file PATH`, which is what the
-library does; `subrun` is gone.
+`WORKFLOW_HOST` is still always set to nothing by the policy, so a snippet
+never inherits a handoff left in an old engine's environment. The retired
+`subrun` argument is refused with a result that says how scripts delegate now.
 
 ### Independent review
 
-The bundled `@builtin/review.mbtx` script runs one `review` child through the
-same hosted workflow as scouts. Set `subrun: true`; `args` are optional:
+The bundled `@builtin/review.mbtx` script runs one `review` subagent; `args`
+are optional:
 
 ```json
-{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
+{"description":"Review the CSV parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."]}
 ```
 
 With empty `args` the child audits the standing goal and the baseline it
-recorded. The engine hands both to `WORKFLOW_HOST.openseek.audit` at reservation
-time (`goal`, optional `sha` and `dirty`; see
-`@host.AuditCriteria`), read from the live session rather than a turn-start
-snapshot, so the audited party never restates its own criteria. Given `args`,
-they narrow that goal as an audit focus, or are the whole criteria when no
-goal stands. `--sha COMMIT` (and `--dirty` if the worktree was already dirty
-then) overrides the engine's baseline.
+recorded, which the script reads from `audit_context` (`goal`, optional `sha`
+and `dirty`), live from the session, so the audited party never restates its
+own criteria. Given `args`, they narrow that goal as an audit focus, or are
+the whole criteria when no goal stands. `--sha COMMIT` (and `--dirty` if the
+worktree was already dirty then) overrides the engine's baseline.
 
 The child runs `agent_review.run_goal_audit` against the current worktree and
 validates its submission; the script prints the full report JSON followed by a
-`findings=N blockers=M` line, then fails when any finding is a blocker, so the
-tool result is an error the model cannot read past while the report stays in
-it. A missing report raises. Hosted child limits apply (one child, 10-minute
-default deadline, 100-step ceiling); there is no shared per-turn review
-budget, and `--review-deadline` applies only to the automatic goal-met gate. A
-hand-written workflow reaches the same child with
-`wf.agent_call(kind="review", input={"goal": ...})` — `agent_call`, not the
-scout-shaped `agent`. Without a durable session, hosted delegation is
-unavailable; `openseek run --kind review` still runs the same child
-directly, without a workflow.
+`findings=N blockers=M tokens=T` line, then fails when any finding is a
+blocker, so the tool result is an error the model cannot read past while the
+report stays in it. A child without a report fails the script with its
+outcome. `--review-deadline` applies only to the automatic goal-met gate.
 
 ## Programmatic tool calls
 

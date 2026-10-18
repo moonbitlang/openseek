@@ -418,55 +418,97 @@ fn default_prompt() -> String {
     #|}
     #|```
     #|
-    #|### Orchestration: the `moonbitlang/workflow` package
+    #|### Delegating from a script: subagents
     #|
-    #|With `subrun=true` — offered only in a durable session — one snippet becomes
-    #|a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
-    #|that handoff and is `None` without the flag:
+    #|In a durable session a script starts child agents through the host, like any
+    #|host tool: `@tools.call("subagent", ...)` returns a job id at once,
+    #|`job_wait` returns within a minute with each child's state, and `job_output`
+    #|gives a child's report in chunks. A script reaches only the children it
+    #|started, and stopping the script stops them:
     #|
     #|```mbtx
     #|///|
     #|import {
+    #|  "moonbitlang/openseek_tools@0.2.0" @tools,
     #|  "moonbitlang/async",
-    #|  "moonbitlang/workflow",
-    #|  "moonbitlang/workflow/hosted",
+    #|  "moonbitlang/core/json",
+    #|}
+    #|
+    #|///|
+    #|/// Start one explore subagent; its job id.
+    #|async fn scout(question : String, label : String) -> String {
+    #|  let started = @tools.call("subagent", {
+    #|    "kind": "explore",
+    #|    "input": { "query": question },
+    #|    "label": label,
+    #|  })
+    #|  guard started.data is Some({ "job_id": String(id), .. }) else {
+    #|    fail(started.content)
+    #|  }
+    #|  id
+    #|}
+    #|
+    #|///|
+    #|/// A child's report, read in chunks until complete; `None` when it ended
+    #|/// without one.
+    #|async fn report(id : String) -> Json? {
+    #|  let text = StringBuilder()
+    #|  for ;; {
+    #|    let read = @tools.call("job_output", {
+    #|      "job_id": id,
+    #|      "offset": text.to_string().char_length(),
+    #|    })
+    #|    guard read.data
+    #|      is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+    #|      return None
+    #|    }
+    #|    text.write_string(chunk)
+    #|    if complete is True {
+    #|      return Some(@json.parse(text.to_string()))
+    #|    }
+    #|  }
     #|}
     #|
     #|///|
     #|async fn main {
-    #|  guard @hosted.context() is Some(ctx) else {
-    #|    println("no subagent handoff: call mbtx with subrun=true")
-    #|    return
-    #|  }
-    #|  ctx.run(max_concurrent=3, wf => {
-    #|    wf.phase("survey")
-    #|    let found = @workflow.parallel([
-    #|      () => @workflow.attempt(() => wf.agent(
-    #|        prompt="Where is X constructed, and by whom? Cite file:line.",
-    #|        kind="explore", label="scout:x")),
-    #|      () => @workflow.attempt(() => wf.agent(
-    #|        prompt="Who calls Y, and what do the callers pass? Cite file:line.",
-    #|        kind="explore", label="scout:y")),
-    #|      () => @workflow.attempt(() => wf.agent(
-    #|        prompt="How does Z reach the network? Cite file:line.",
-    #|        kind="explore", label="scout:z")),
-    #|    ])
-    #|    wf.phase("conclude")
-    #|    // Each answer is that scout's report as JSON. Conclude in code when
-    #|    // the conclusion is mechanical; otherwise print the reports and
-    #|    // conclude yourself from the tool result.
-    #|    for answer in @workflow.collect_ok(found, min_ok=2) {
-    #|      println(answer.stringify())
+    #|  let ids = [
+    #|    scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
+    #|    scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+    #|    scout("How does Z reach the network? Cite file:line.", "scout:z"),
+    #|  ]
+    #|  // Each wait returns within a minute with every child's state: drop the
+    #|  // ended ones and wait for the rest.
+    #|  let mut running = ids
+    #|  while running.length() > 0 {
+    #|    let waited = @tools.call("job_wait", {
+    #|      "job_ids": Json::array(running.map(Json::string)),
+    #|    })
+    #|    guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+    #|      fail(waited.content)
     #|    }
-    #|    println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
-    #|  })
+    #|    let still : Array[String] = []
+    #|    for job in jobs {
+    #|      if job is { "state": "running", "job_id": String(id), .. } {
+    #|        still.push(id)
+    #|      }
+    #|    }
+    #|    running = still
+    #|  }
+    #|  // Conclude in code when the conclusion is mechanical; otherwise print the
+    #|  // reports and conclude yourself from the tool result.
+    #|  for id in ids {
+    #|    match report(id) {
+    #|      Some(answer) => println(answer.stringify())
+    #|      None => println("no report from \{id}")
+    #|    }
+    #|  }
     #|}
     #|```
     #|
     #|Before declaring substantial work or a standing goal complete, ask for an
     #|independent audit:
     #|
-    #|`mbtx(description="...", filename="@builtin/review.mbtx", subrun=true)`.
+    #|`mbtx(description="...", filename="@builtin/review.mbtx")`.
     #|
     #|With empty `args` it audits the standing goal and its recorded baseline; put
     #|criteria in `args` to narrow the audit, or as the whole criteria when no goal

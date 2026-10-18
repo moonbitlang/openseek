@@ -254,7 +254,7 @@ test "the mbtx description carries the rendered spawn list" {
   let text = description(
     background=true,
     escalation=false,
-    hosting=false,
+    delegation=false,
     auto_background_after_ms=5_000,
     foreground_timeout_ms=120_000,
     build_timeout_ms=20_000,

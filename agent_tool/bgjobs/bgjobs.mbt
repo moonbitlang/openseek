@@ -53,6 +53,10 @@ pub(all) enum JobEnd {
 let default_hard_timeout_ms : Int32 = 1_800_000
 
 ///|
+/// How often a pinned job past its wall-clock cap is checked again.
+let pinned_recheck_ms : Int32 = 10_000
+
+///|
 /// Session-scoped registry of background ("detached") jobs, each backed by one
 /// shared `@shell_exec.ShellExecution` (a process on `scope.group()`, a
 /// file-backed output sink, and a status flag). Every child is spawned on the
@@ -414,6 +418,7 @@ pub async fn BgJobRuntime::adopt(
   on_terminal? : async () -> Unit,
   data? : () -> Json,
   image_output? : () -> ImageOutput,
+  pinned? : () -> Bool,
 ) -> String {
   errdefer exec.request_stop()
   self.prepare_output()
@@ -435,6 +440,7 @@ pub async fn BgJobRuntime::adopt(
     subagent=None,
     image_output~,
     reaped=true,
+    pinned?,
   )
   id
 }
@@ -457,6 +463,7 @@ async fn BgJobRuntime::register(
   subagent~ : (() -> @protocol.SubagentInfo)?,
   image_output~ : (() -> ImageOutput)?,
   reaped~ : Bool,
+  pinned? : () -> Bool,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -500,6 +507,13 @@ async fn BgJobRuntime::register(
   (self.spawn_watcher)(() => {
     if remaining > 0L {
       @async.sleep(remaining.to_int())
+    }
+    // A pinned job (a script orchestrating live subagents) is reaped only
+    // once it is no longer pinned.
+    if pinned is Some(pinned) {
+      while pinned() && bg_status(exec.status()) is Running {
+        @async.sleep(pinned_recheck_ms)
+      }
     }
     exec.kill_for_time_limit()
   })

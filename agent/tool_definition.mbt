@@ -73,7 +73,6 @@ pub async fn[X] build_tools(
   job_log_dir? : String,
   session_scratch_dir? : String,
   extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
-  mbtx_subrun? : @host.SubrunInjection,
   subagents? : @subagent.Subagents,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
@@ -216,9 +215,26 @@ pub async fn[X] build_tools(
     file_tools + extras,
     image_input_supported~,
   )
-  let program_service = @ptc.Service::start(scope.group(), program_tools, image_directory=() => {
-    bg_runtime.output_directory()
-  })
+  // A script reaches only the subagents it started: each program gets the
+  // subagent tools bound to its own id.
+  let bind = match (launcher, subagents) {
+    (Some(launcher), Some(spec)) =>
+      Some(
+        @subagent.program_binding(
+          launcher,
+          bg_runtime,
+          spec.kinds,
+          spec.audit_context,
+        ),
+      )
+    _ => None
+  }
+  let program_service = @ptc.Service::start(
+    scope.group(),
+    program_tools,
+    image_directory=() => bg_runtime.output_directory(),
+    bind?,
+  )
   let program_trace : Ref[Json?] = Ref(None)
   let program_output : Ref[@bgjobs.ImageOutput?] = Ref(None)
   Tools(
@@ -231,11 +247,8 @@ pub async fn[X] build_tools(
       // it is passed straight through rather than tested and rebuilt. What the
       // tool package receives is the channel and nothing else: it can ask, and
       // knows nothing about who answers.
-      // `mbtx_subrun`, when present, is what lets a snippet delegate to child
-      // agents that are VISIBLE: it carries the engine's own path plus the
-      // block of child session ids and journal paths this session reserved.
-      // Absent for a conversation with no durable session, where a child
-      // would have nowhere to leave a transcript.
+      // `subagents` only says whether the description teaches delegation: a
+      // script starts subagents through the program tools, never by spawning.
       @mbtx.definition(
         workspace_root~,
         file_state~,
@@ -243,7 +256,7 @@ pub async fn[X] build_tools(
         job_dir=scratch,
         scratch_dir?=session_scratch_dir,
         approval?=runtime.approval_channel(),
-        subrun?=mbtx_subrun,
+        subagents=launcher is Some(_),
         program_service~,
         on_program_trace=data => program_trace.val = Some(data),
         on_program_output=content => program_output.val = Some(content),

@@ -146,23 +146,6 @@ async fn run_serve(
       }
       None => None
     }
-    // The same coordinates, in the shape an mbtx snippet needs: a workflow it
-    // runs delegates to children that must be named from the SAME ordinal
-    // counter `run_subrun` uses, or a snippet's child and a `review` child
-    // collide on one transcript file.
-    let mbtx_subrun = child_session.map(spec => {
-      let (exe, launch_prefix) = @setup.workflow_launch(exe)
-      spec.injection(
-        exe~,
-        launch_prefix~,
-        workspace_root~,
-        model="\{model}",
-        api_url?,
-        // Read at reservation time from the loop-updated session, never a
-        // snapshot: a review requested mid-turn audits the LIVE goal.
-        criteria=() => @execution.audit_criteria(session),
-      )
-    })
     let extra_tools = @execution.build_extra_tools(
       scope,
       model~,
@@ -206,6 +189,7 @@ async fn run_serve(
             workspace_root~,
             children~,
             result_dir="\{store.scratch_dir(initial_session.id())}/subagent-results",
+            session=() => session,
           ),
         )
       _ => None
@@ -223,7 +207,6 @@ async fn run_serve(
         ignore(steps.try_put(BackgroundNotice) catch { _ => false })
       },
       extra_tools~,
-      mbtx_subrun?,
     )
     group.spawn_bg(no_wait=true) <| () => {
       @jsonl.each(@stdio.stdin, json => {

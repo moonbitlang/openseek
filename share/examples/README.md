@@ -24,9 +24,9 @@ Part 1 of the prompt teaches the tooling:
   `each_line` and matching it as `@json.parse` output.
 - `cli_count_input.mbtx`: an `argparse` CLI reading a file or stdin through
   async IO.
-- `workflow_scouts.mbtx`: the `moonbitlang/workflow` handoff a `subrun=true`
-  snippet gets — fan out scouts, keep the answers that arrived, report the
-  spend.
+- `subagent_scouts.mbtx`: subagents from a script through `@tools.call` —
+  fan out explore scouts, wait for them within bounds, read each report in
+  chunks.
 
 The reusable-script form is taught from `share/workflow/check.mbtx`, the
 bundled workflow itself, so the prompt shows the same file `@builtin/` runs.

@@ -1,14 +1,14 @@
 ///|
 import {
-  "moonbitlang/async@0.22.4",
+  "moonbitlang/openseek_tools@0.2.0" @tools,
+  "moonbitlang/async",
   "moonbitlang/core/env",
-  "moonbitlang/workflow@0.10.0",
-  "moonbitlang/workflow@0.10.0/hosted",
+  "moonbitlang/core/json",
 }
 
 ///|
-/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"], subrun=true).
-/// One review child audits the current worktree against the standing goal
+/// Run with mbtx(description="Review the worktree", filename="@builtin/review.mbtx", args=["What to audit against"]).
+/// One review subagent audits the current worktree against the standing goal
 /// the engine supplies and/or the criteria in args, prints its full
 /// structured report, and fails on a blocker finding; no retries or
 /// automatic edits.
@@ -16,13 +16,13 @@ const Usage : String =
   #|usage: @builtin/review.mbtx [--sha COMMIT [--dirty]] [--] [CRITERIA...]
   #|
   #|With no arguments the reviewer audits the standing goal and the baseline
-  #|it recorded, which the engine supplies in WORKFLOW_HOST.openseek.audit.
+  #|it recorded, which the engine supplies through the audit_context tool.
   #|The remaining arguments, joined
   #|with spaces, narrow that goal as an audit focus, or are the whole criteria
   #|when no goal stands. --sha names the baseline commit the criteria were
   #|recorded at (--dirty: the worktree was already dirty then) and overrides
   #|the engine's. A blocker finding fails the call: the claim does not hold
-  #|yet. Requires the hosted handoff: call mbtx with subrun=true.
+  #|yet. Needs an OpenSeek session that can start subagents.
 
 ///|
 async fn main {
@@ -56,15 +56,12 @@ async fn main {
   }
   guard sha is Some(_) || !dirty else { fail("--dirty needs --sha\n\{Usage}") }
   let focus = criteria.join(" ")
-  guard @hosted.context() is Some(ctx) else {
-    fail(
-      "This workflow needs OpenSeek: call mbtx with filename=@builtin/review.mbtx and subrun=true",
-    )
-  }
-  let audit = match ctx.extension("openseek") {
-    None => None
-    Some({ "audit"? : audit, .. }) => audit
-    Some(_) => fail("invalid WORKFLOW_HOST.openseek: expected an object")
+  // The standing goal and its baseline, from the engine: null when none.
+  let context = @tools.call("audit_context", {})
+  let audit = match context.data {
+    Some(Null) => None
+    Some(audit) => Some(audit)
+    None => fail("audit_context: \{context.content}")
   }
   let (standing, baseline) : (String?, (String, Bool)?) = match audit {
     None => (None, None)
@@ -80,8 +77,7 @@ async fn main {
       }
       (Some(goal), baseline)
     }
-    Some(_) =>
-      fail("invalid WORKFLOW_HOST.openseek.audit: expected a goal string")
+    Some(_) => fail("invalid audit context: expected a goal string")
   }
   let goal = match (standing, focus.is_blank()) {
     (Some(text), true) => text
@@ -100,31 +96,115 @@ async fn main {
     Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
     None => { "goal": goal }
   }
-  ctx.run() <| wf => {
-    let report = wf.agent_call(
-      kind="review",
-      input~,
-      label="review",
-      max_steps=100,
-    )
-    println(report.stringify())
-    let mut findings = 0
-    let mut blockers = 0
-    if report is { "findings": Array(items), .. } {
-      findings = items.length()
-      for item in items {
-        if item is { "severity": "blocker", .. } {
-          blockers += 1
-        }
+  let id = start("review", input, "review", 100)
+  wait_all([id])
+  let (report, tokens) = match outcome(id) {
+    Reported(report, tokens~) => (report, tokens)
+    NoReport(why) => fail("the review did not report: \{why}")
+  }
+  println(report.stringify())
+  let mut findings = 0
+  let mut blockers = 0
+  if report is { "findings": Array(items), .. } {
+    findings = items.length()
+    for item in items {
+      if item is { "severity": "blocker", .. } {
+        blockers += 1
       }
     }
-    println(
-      "findings=\{findings} blockers=\{blockers} tokens=\{wf.tokens_spent()}",
-    )
-    // The report is already printed; a failing exit makes the tool result an
-    // error the model cannot read past.
-    if blockers > 0 {
-      fail("\{blockers} blocker finding(s): the claim does not hold yet")
+  }
+  println("findings=\{findings} blockers=\{blockers} tokens=\{tokens}")
+  // The report is already printed; a failing exit makes the tool result an
+  // error the model cannot read past.
+  if blockers > 0 {
+    fail("\{blockers} blocker finding(s): the claim does not hold yet")
+  }
+}
+
+///|
+/// Start one subagent through the host and return its job id.
+async fn start(
+  kind : String,
+  input : Json,
+  label : String,
+  max_steps : Int,
+) -> String {
+  let started = @tools.call("subagent", {
+    "kind": kind,
+    "input": input,
+    "label": label,
+    "max_steps": max_steps,
+  })
+  guard started.data is Some({ "job_id": String(id), .. }) else {
+    fail("could not start \{label}: \{started.content}")
+  }
+  id
+}
+
+///|
+/// Wait until every listed child has ended. Each wait returns within a
+/// minute with every child's state, so ended ones are dropped and the rest
+/// waited for again.
+async fn wait_all(ids : Array[String]) -> Unit {
+  let mut pending = ids
+  while pending.length() > 0 {
+    let waited = @tools.call("job_wait", {
+      "job_ids": Json::array(pending.map(Json::string)),
+    })
+    guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+      fail(waited.content)
+    }
+    let running : Array[String] = []
+    for job in jobs {
+      if job is { "state": "running", "job_id": String(id), .. } {
+        running.push(id)
+      }
+    }
+    pending = running
+  }
+}
+
+///|
+/// What an ended child left: its report, or why it has none.
+priv enum Outcome {
+  Reported(Json, tokens~ : Int)
+  NoReport(String)
+}
+
+///|
+/// Read an ended child's report, in chunks that each fit one reply.
+async fn outcome(id : String) -> Outcome {
+  let text = StringBuilder()
+  let mut tokens = 0
+  for ;; {
+    let read = @tools.call("job_output", {
+      "job_id": id,
+      "offset": text.to_string().char_length(),
+    })
+    guard read.data is Some(data) else { return NoReport(read.content) }
+    if data
+      is {
+        "subagent": {
+          "usage": {
+            "prompt_tokens": Number(prompt, ..),
+            "completion_tokens": Number(completion, ..),
+            ..
+          },
+          ..
+        },
+        ..
+      } {
+      tokens = prompt.to_int() + completion.to_int()
+    }
+    match data {
+      { "report": { "chunk": String(chunk), "complete": complete, .. }, .. } => {
+        text.write_string(chunk)
+        if complete is True {
+          return Reported(@json.parse(text.to_string()), tokens~)
+        }
+      }
+      { "state": { "outcome": String(ended), .. }, .. } => return NoReport(ended)
+      _ => return NoReport("no report")
     }
   }
 }

@@ -334,44 +334,82 @@ fn default_prompt_zh() -> String {
     #|
     #|### 审阅与委派工具
     #|
-    #|- 通过 `mbtx` 独立审阅：宣布较大工作或持续目标完成前，若 `mbtx` 提供 `subrun`，使用 `subrun: true` 运行 `@builtin/review.mbtx`，请求独立的 worktree 审计。`args` 为空时审计持续目标及记录的基线；可在 `args` 中提供标准缩小范围，没有持续目标时则以这些标准为全部审计依据。审阅子智能体读取文件、运行项目检查、检查是否仅表面满足要求，并输出带严重程度和 `file:line` 引用的报告。阻塞项会使调用失败，说明完成声明尚不成立。审阅消耗一次有界子智能体运行；小改动直接验证即可。
-    #|- 通过 `mbtx` 使用只读探索子智能体：不熟悉的工作涉及跨包、分头搜索或端到端追踪时，应尽早使用。`mbtx` 只有在持久会话中才提供 `subrun` 参数；用一个设置了 `subrun: true` 的脚本运行 `moonbitlang/workflow` 工作流，其中 `wf.agent` 调用负责探索。每个探索子智能体只接收一个自包含问题，看不到会话其他内容，因此应在提示词中提供已知路径和符号作为线索。它没有编辑工具，只读取和探测工作区，返回有界、带 `file:line` 引用的答案。它们并发运行，各有记录并在桌面显示；你只收到脚本打印的报告这一份工具结果，其文件读取内容不会进入你的上下文。
-    #|  一条宽范围追踪默认用一个探索子智能体。若有至少两条独立调查线索，例如入口、运行流程、调用方与测试、API 范围，在亲自追踪前，先在同一个脚本中并行发出 2–3 个不重叠的问题。第二轮问题依赖第一轮答案，或结论只是比较、计数、交叉核对时，在代码中汇总结论。一个 `moon ide doc` 查询或一次聚焦文件读取即可解决时，直接查询。只在那一次调用上设置 `subrun: true`；没有该标志的脚本不会获得移交上下文，`@hosted.context()` 为 `None`。
+    #|- 通过 `mbtx` 独立审阅：宣布较大工作或持续目标完成前，在持久会话中运行 `@builtin/review.mbtx`，请求独立的 worktree 审计。`args` 为空时审计持续目标及记录的基线；可在 `args` 中提供标准缩小范围，没有持续目标时则以这些标准为全部审计依据。审阅子智能体读取文件、运行项目检查、检查是否仅表面满足要求，并输出带严重程度和 `file:line` 引用的报告。阻塞项会使调用失败，说明完成声明尚不成立。审阅消耗一次有界子智能体运行；小改动直接验证即可。
+    #|- 使用只读探索子智能体：不熟悉的工作涉及跨包、分头搜索或端到端追踪时，应尽早使用。持久会话中可直接调用 `subagent` 工具，或在脚本中通过 `@tools.call("subagent", ...)` 启动；它立即返回 job id，`job_wait` 等待、`job_output` 读取报告、`job_stop` 停止。每个探索子智能体只接收一个自包含问题，看不到会话其他内容，因此应在提示词中提供已知路径和符号作为线索。它没有编辑工具，只读取和探测工作区，返回有界、带 `file:line` 引用的答案。它们并发运行，各有记录并在桌面显示；其文件读取内容不会进入你的上下文。
+    #|  一条宽范围追踪默认用一个探索子智能体。若有至少两条独立调查线索，例如入口、运行流程、调用方与测试、API 范围，在亲自追踪前，先在同一个脚本中并行发出 2–3 个不重叠的问题。第二轮问题依赖第一轮答案，或结论只是比较、计数、交叉核对时，在代码中汇总结论。一个 `moon ide doc` 查询或一次聚焦文件读取即可解决时，直接查询。脚本只能访问自己启动的子智能体，停止脚本会停止它们。
     #|
     #|    ```mbtx
     #|    import {
+    #|      "moonbitlang/openseek_tools@0.2.0" @tools,
     #|      "moonbitlang/async",
-    #|      "moonbitlang/workflow",
-    #|      "moonbitlang/workflow/hosted",
+    #|      "moonbitlang/core/json",
+    #|    }
+    #|
+    #|    /// Start one explore subagent; its job id.
+    #|    async fn scout(question : String, label : String) -> String {
+    #|      let started = @tools.call("subagent", {
+    #|        "kind": "explore",
+    #|        "input": { "query": question },
+    #|        "label": label,
+    #|      })
+    #|      guard started.data is Some({ "job_id": String(id), .. }) else {
+    #|        fail(started.content)
+    #|      }
+    #|      id
+    #|    }
+    #|
+    #|    /// A child's report, read in chunks until complete; `None` when it ended
+    #|    /// without one.
+    #|    async fn report(id : String) -> Json? {
+    #|      let text = StringBuilder()
+    #|      for ;; {
+    #|        let read = @tools.call("job_output", {
+    #|          "job_id": id,
+    #|          "offset": text.to_string().char_length(),
+    #|        })
+    #|        guard read.data
+    #|          is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+    #|          return None
+    #|        }
+    #|        text.write_string(chunk)
+    #|        if complete is True {
+    #|          return Some(@json.parse(text.to_string()))
+    #|        }
+    #|      }
     #|    }
     #|
     #|    async fn main {
-    #|      guard @hosted.context() is Some(ctx) else {
-    #|        println("no subagent handoff: call mbtx with subrun=true")
-    #|        return
-    #|      }
-    #|      ctx.run(max_concurrent=3, wf => {
-    #|        wf.phase("survey")
-    #|        let found = @workflow.parallel([
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="Where is X constructed, and by whom? Cite file:line.",
-    #|            kind="explore", label="scout:x")),
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="Who calls Y, and what do the callers pass? Cite file:line.",
-    #|            kind="explore", label="scout:y")),
-    #|          () => @workflow.attempt(() => wf.agent(
-    #|            prompt="How does Z reach the network? Cite file:line.",
-    #|            kind="explore", label="scout:z")),
-    #|        ])
-    #|        wf.phase("conclude")
-    #|        // Each answer is that scout's report as JSON. Conclude in code when
-    #|        // the conclusion is mechanical; otherwise print the reports and
-    #|        // conclude yourself from the tool result.
-    #|        for answer in @workflow.collect_ok(found, min_ok=2) {
-    #|          println(answer.stringify())
+    #|      let ids = [
+    #|        scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
+    #|        scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+    #|        scout("How does Z reach the network? Cite file:line.", "scout:z"),
+    #|      ]
+    #|      // Each wait returns within a minute with every child's state: drop the
+    #|      // ended ones and wait for the rest.
+    #|      let mut running = ids
+    #|      while running.length() > 0 {
+    #|        let waited = @tools.call("job_wait", {
+    #|          "job_ids": Json::array(running.map(Json::string)),
+    #|        })
+    #|        guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+    #|          fail(waited.content)
     #|        }
-    #|        println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
-    #|      })
+    #|        let still : Array[String] = []
+    #|        for job in jobs {
+    #|          if job is { "state": "running", "job_id": String(id), .. } {
+    #|            still.push(id)
+    #|          }
+    #|        }
+    #|        running = still
+    #|      }
+    #|      // Conclude in code when the conclusion is mechanical; otherwise print the
+    #|      // reports and conclude yourself from the tool result.
+    #|      for id in ids {
+    #|        match report(id) {
+    #|          Some(answer) => println(answer.stringify())
+    #|          None => println("no report from \{id}")
+    #|        }
+    #|      }
     #|    }
     #|    ```
     #|

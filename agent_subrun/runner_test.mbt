@@ -435,22 +435,6 @@ fn ordinal_of(subrun_id : String) -> Int32 raise {
 }
 
 ///|
-/// Claims and a hosted workflow's block draw from one counter, so neither
-/// can land inside the other, whichever comes first.
-async test "claims and hosted blocks never overlap, in either order" {
-  let root = @fs.tmpdir(prefix="openseek-subrun-order-")
-  defer @fs.rmdir(root, recursive=true)
-  let spec = @agent_subrun.ChildSession(root~, parent="mixed")
-  let first = ordinal_of(spec.claim().subrun_id)
-  let block = spec
-    .injection(exe="/opt/openseek", workspace_root="/ws")
-    .reserve(result_root="/run/tmp")
-  assert_true(block.base() > first)
-  let after = ordinal_of(spec.claim().subrun_id)
-  assert_true(after >= block.base() + @host.block_size)
-}
-
-///|
 /// A child session another process already took is stepped over, never
 /// shared. (The floor is far above every other test's allocations.)
 async test "a claim steps over a session that already exists" {

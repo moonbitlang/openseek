@@ -7,12 +7,11 @@ child process; this package is the child half (`run_child` decodes the
 request's input and runs the kind in-process on `@agent_kind.execute_kind`).
 Who launches it:
 
-- a parent agent's `mbtx` snippet running a `moonbitlang/workflow` workflow
-  with `subrun: true` — `wf.agent(prompt=..., kind="explore")` is one scout,
-  and the library sends the child `{"query": prompt, "hints"?: ...}` (the
-  `moonbitlang/workflow/hosted` runner spawns and reaps it);
-- a standalone workflow script, or anything else that launches
-  `openseek run --kind explore` with the same input.
+- the engine's subagent launcher (`agent_subagent`), for the model's
+  `subagent` tool or a script's `@tools.call("subagent", ...)`: input
+  `{"query": ..., "hints"?: "..."}`;
+- anything else that launches `openseek run --kind explore` with the same
+  input.
 
 Why it exists: long autonomous runs burn their context on fan-out reading,
 and MoonBit is young enough that model priors about its APIs are unreliable.
@@ -46,9 +45,9 @@ case at least ten times because delegation is nondeterministic.
 Use a balanced case set:
 
 - **Parallel-positive:** one read-only architecture question with two or three
-  independent tracks, such as tracing subrun budgeting, workflow child launch,
-  and desktop result presentation. The desired first action is one `mbtx` call
-  with `subrun: true` whose workflow runs two or three non-overlapping scouts.
+  independent tracks, such as tracing subagent admission, child launch, and
+  desktop result presentation. The desired first action is two or three
+  non-overlapping `subagent` scouts, started together.
 - **Single-positive:** one broad cross-package flow question. The desired
   behavior is one early scout followed by targeted spot-checks.
 - **Negative control:** an exact symbol or known-file question answerable with

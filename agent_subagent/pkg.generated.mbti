@@ -16,11 +16,15 @@ pub fn describe_outcome(@openseek_protocol.SubagentOutcome) -> String
 // Types and methods
 type Launcher
 pub fn[X] Launcher::Launcher(@agent_runtime.AgentTaskScope[X], runtime~ : @bgjobs.BgJobRuntime, children~ : @agent_subrun.ChildSession, program~ : String, args~ : Array[String], cwd? : String, env? : Map[String, String], result_dir~ : String, max_live? : Int, grace_ms? : Int, delivery_timeout_ms? : Int) -> Self
+pub async fn Launcher::close_owner(Self, String) -> Unit
 pub fn Launcher::live(Self) -> Int
 pub fn Launcher::max_live(Self) -> Int
+pub fn Launcher::owns(Self, String, String) -> Bool
+pub fn Launcher::pinned(Self, String) -> Bool
 pub fn Launcher::report(Self, String) -> Json?
 pub async fn Launcher::send(Self, String, String) -> SendResult
 pub async fn Launcher::start(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int, launch~ : @openseek_protocol.SubagentLaunch, validate~ : (Json) -> Result[Json, String]) -> StartResult
+pub fn Launcher::started_by(Self, String) -> Int
 pub fn Launcher::subagent(Self, String) -> @openseek_protocol.SubagentInfo?
 
 pub(all) enum SendResult {

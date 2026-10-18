@@ -108,14 +108,12 @@ $ sh <<'EOF'
 > test -e "$d/ws" && echo "ws exists" || echo "no ws"
 > printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --session s-echo --session-root "$d/sessions" --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
 > cat "$d/result.json"
-> printf '{"version":1,"kind":"echo","input":0}\n' | env WORKFLOW_HOST='{"v":1}' openseek.exe run --input-format json --cancel-on-stdin-eof --session '' --dir "$d/ws" 2>&1 > /dev/null
 > rm -rf "$d"
 > EOF
 error: explore requires a non-empty query
 {"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
 no ws
 {"version":1,"kind":"echo","status":"completed","output":0}
-error: a run launched from a hosted workflow needs its reserved --session; delegate through @hosted.run so the child gets a transcript
 ```
 
 ## A Claimed Session Is Accepted Once, With Its Token

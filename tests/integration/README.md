@@ -42,13 +42,15 @@ carry it.
 
 `just test-workflows` runs the native MoonBit fixture package at
 `tests/integration/workflows`. It compiles the actual bundled scripts as Wasm
-and exercises them with local child processes. The runner itself doubles as the
-hosted-child fixture and the fake `gh` executable; no Python, shell scripts,
-network access, or model credentials are needed. Builds and fixture files live
-in a temporary directory, keeping the bundled resource tree clean.
+and runs them against a fake host: a local HTTP server that speaks the PTC
+protocol (`OPENSEEK_PTC`) and answers `subagent`, `job_wait`, `job_output` and
+`audit_context` from a script, serving reports in small chunks. The runner
+also doubles as the fake `gh` executable; no Python, shell scripts, network
+access, or model credentials are needed. Builds and fixture files live in a
+temporary directory, keeping the bundled resource tree clean.
 
-The hosted tests cover success, partial failure, missing handoff, insufficient
-capacity, empty answers, bounded context, nested-package discovery, and citation
+The subagent workflow tests cover success, partial failure, a missing host, a
+full session, empty answers, bounded context, nested-package discovery, and citation
 validation (including escaping symlinks and invalid line numbers); the review
 script's criteria resolution (arguments, the engine's standing goal, or both),
 baseline forwarding and override, the failing exit on blockers, and usage

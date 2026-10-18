@@ -5,10 +5,13 @@ import {
   "moonbitlang/openseek/agent_subagent",
   "moonbitlang/openseek/agent_tool",
   "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/agent_tool/ptc",
 }
 
 // Values
 pub fn definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
+
+pub fn program_binding(@agent_subagent.Launcher, @bgjobs.BgJobRuntime, Array[Kind], () -> Json) -> (String) -> @ptc.ProgramBinding
 
 pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
@@ -25,6 +28,7 @@ pub(all) struct Kind {
 pub(all) struct Subagents {
   launcher : (@bgjobs.BgJobRuntime) -> @agent_subagent.Launcher
   kinds : Array[Kind]
+  audit_context : () -> Json
 }
 
 // Type aliases

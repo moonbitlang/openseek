@@ -48,26 +48,9 @@ async fn run_task_turn(
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )
-    // A snippet's workflow delegates to children named from the SAME ordinal
-    // counter `run_subrun` uses, so a snippet's child and a `review` child
-    // cannot collide on one transcript file.
-    // A delegated run does not delegate further: no workflow handoff for its
-    // snippets (they see an empty `WORKFLOW_HOST`) and no review gate.
-    let mbtx_subrun = child_session
-      .filter(_ => delegate)
-      .map(spec => {
-        let (exe, launch_prefix) = @setup.workflow_launch(exe)
-        spec.injection(
-          exe~,
-          launch_prefix~,
-          workspace_root~,
-          model="\{model}",
-          api_url?,
-          criteria=() => @execution.audit_criteria(latest_session),
-        )
-      })
-    // The model's own subagents, for a run that may delegate and has a
-    // durable session for its children to record to.
+    // Subagents, for the model and its scripts, in a run that may delegate
+    // and has a durable session for its children to record to. A delegated
+    // run does not delegate further: no subagents and no review gate.
     let subagents = child_session
       .filter(_ => delegate)
       .map(children => {
@@ -80,13 +63,13 @@ async fn run_task_turn(
           workspace_root~,
           children~,
           result_dir="\{session_scratch_dir}/subagent-results",
+          session=() => latest_session,
         )
       })
     let tools = @agent.build_tools(
       runtime,
       scope,
       extra_tools~,
-      mbtx_subrun?,
       subagents?,
       job_log_dir?,
       session_scratch_dir~,

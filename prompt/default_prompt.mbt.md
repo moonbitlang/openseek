@@ -231,18 +231,20 @@ A script may run `moon check --output-json` itself to find its targets:
 
 [share/examples/ptc_guarded_edit.mbtx](../share/examples/ptc_guarded_edit.mbtx)
 
-### Orchestration: the `moonbitlang/workflow` package
+### Delegating from a script: subagents
 
-With `subrun=true` — offered only in a durable session — one snippet becomes
-a workflow whose `wf.agent` calls are child agents. `@hosted.context()` carries
-that handoff and is `None` without the flag:
+In a durable session a script starts child agents through the host, like any
+host tool: `@tools.call("subagent", ...)` returns a job id at once,
+`job_wait` returns within a minute with each child's state, and `job_output`
+gives a child's report in chunks. A script reaches only the children it
+started, and stopping the script stops them:
 
-[share/examples/workflow_scouts.mbtx](../share/examples/workflow_scouts.mbtx)
+[share/examples/subagent_scouts.mbtx](../share/examples/subagent_scouts.mbtx)
 
 Before declaring substantial work or a standing goal complete, ask for an
 independent audit:
 
-`mbtx(description="...", filename="@builtin/review.mbtx", subrun=true)`.
+`mbtx(description="...", filename="@builtin/review.mbtx")`.
 
 With empty `args` it audits the standing goal and its recorded baseline; put
 criteria in `args` to narrow the audit, or as the whole criteria when no goal

@@ -419,7 +419,6 @@ fn wasm_policy_document(
   tmp_dir~ : String,
   extra_roots~ : Array[String],
   inject~ : Map[String, String],
-  spawnable~ : (String, Array[String])?,
 ) -> Json {
   // A snippet cannot directly write ordinary project files. It does not need to: the file
   // tools make the edits, and the commands whose job is to rewrite source
@@ -446,23 +445,6 @@ fn wasm_policy_document(
       { "program": program, "args_prefix": json_strings(args_prefix) }
     }
     allow.push(rule)
-  }
-  // The engine itself, in one form only: a parent-managed `run` of a preset
-  // (`--kind general` included) with the host's values pinned ahead of
-  // `--kind` (`@host.SubrunReservation::spawn_prefix`). Every child a snippet
-  // starts is therefore a delegated run: it delegates no further, takes only
-  // what the launch grants, a general one holds the workspace's lease, and an
-  // appended copy of a pinned option is refused rather than winning. The other verbs stay out, since a bare
-  // `openseek` starts an interactive agent. A wasm engine's runtime appears with the
-  // module this host chose in front of that verb, so `moonrun` here names
-  // that one engine rather than a general licence to run modules — which is
-  // why this entry is generated per reservation instead of living in
-  // `spawnable_commands`. An admitted verb spawns children of its own — the
-  // sub-run IS an agent — which is the already-accepted `moon run` shape;
-  // what the prefix buys is that only the delegating FORM of this program
-  // exists in a snippet's vocabulary.
-  if spawnable is Some((program, spawn_prefix)) {
-    allow.push({ "program": program, "args_prefix": json_strings(spawn_prefix) })
   }
   {
     // A policy run BUILDS the guest environment rather than inheriting one, so
@@ -542,111 +524,11 @@ fn json_strings(values : Array[String]) -> Json {
 }
 
 ///|
-test "the reservation reaches the guest, and only its own directory is writable" {
-  fn test_injection(issued : Ref[Int32]) -> @host.SubrunInjection {
-    SubrunInjection(
-      exe="/opt/openseek",
-      session_root="/store",
-      parent="run7",
-      workspace_root="/ws",
-      reserve_ordinals=count => {
-        let base = issued.val + 1
-        issued.val += count
-        base
-      },
-    )
-  }
-  let injection = test_injection(Ref(0))
-  let reservation = injection.reserve(result_root="/run/tmp")
-  // A snippet that tried to redirect its own scratch space cannot: the policy
-  // writes TMPDIR last, so the one name here whose value is a policy decision
-  // rather than a message always wins.
-  let inject = reservation.env()
-  inject["TMPDIR"] = "/somewhere/else"
-  let policy = wasm_policy_document(
-    tmp_dir="/run/tmp",
-    extra_roots=[reservation.dir()],
-    inject~,
-    spawnable=Some((injection.exe(), reservation.spawn_prefix())),
-  )
-  guard policy
-    is {
-      "env": { "set": Object(set), .. },
-      "fs": { "write": Array(write), .. },
-      "process": { "allow": Array(allow), .. },
-      ..
-    } else {
-    fail("policy lost its env, fs or process section")
-  }
-  assert_eq(set.get("TMPDIR"), Some(Json::string("/run/tmp")))
-  assert_true(set.get("WORKFLOW_HOST") is Some(String(_)))
-  // The run's directory is writable; the session store as a whole is not. A
-  // snippet can append its own ledger and nothing else's transcript.
-  assert_true(write.contains("/store/run7-wf-1"))
-  assert_false(write.contains("/store"))
-  // The engine is admitted by ABSOLUTE path and in one form, with the host's
-  // values pinned: moonrun matches the program exactly and the argv by
-  // prefix, so a snippet may only append to this, and `run` refuses a second
-  // copy of any option pinned here.
-  assert_true(
-    allow.contains({
-      "program": "/opt/openseek",
-      "args_prefix": json_strings([
-        "run", "--input-format", "json", "--cancel-on-stdin-eof", "--dir", "/ws",
-        "--session-root", "/store", "--result-root", "/run/tmp", "--api-url", "",
-        "--kind",
-      ]),
-    }),
-  )
-}
-
-///|
-/// A wasm engine is admitted through its runtime, and the module this host
-/// chose is what pins the entry: bare `moonrun` would be a general licence to
-/// run modules, and the module alone names no program to run. The entry is
-/// generated per reservation rather than living in `spawnable_commands` for
-/// exactly that reason — the model's vocabulary does not grow.
-test "a wasm engine is admitted as its runtime plus the chosen module" {
-  let injection = @host.SubrunInjection(
-    exe="moonrun",
-    launch_prefix=["/engine/openseek.wasm", "--"],
-    session_root="/store",
-    parent="run7",
-    workspace_root="/ws",
-    reserve_ordinals=_ => 1,
-  )
-  let prefix = injection.reserve(result_root="/run/tmp").spawn_prefix()
+test "a policy clears any inherited handoff and admits no engine" {
   let policy = wasm_policy_document(
     tmp_dir="/run/tmp",
     extra_roots=[],
     inject=Map([]),
-    spawnable=Some((injection.exe(), prefix)),
-  )
-  guard policy is { "process": { "allow": Array(allow), .. }, .. } else {
-    fail("policy lost its process section")
-  }
-  assert_eq(prefix[:3], ["/engine/openseek.wasm", "--", "run"])
-  assert_true(
-    allow.contains({ "program": "moonrun", "args_prefix": json_strings(prefix) }),
-  )
-  // The module is part of the rule: a snippet cannot point the runtime at
-  // another module, nor run one it wrote itself.
-  assert_false(
-    allow.contains({
-      "program": "moonrun",
-      "args_prefix": json_strings(prefix[2:].to_owned()),
-    }),
-  )
-  assert_false(allow.contains({ "program": "moonrun" }))
-}
-
-///|
-test "no injection clears any inherited handoff and admits no engine" {
-  let policy = wasm_policy_document(
-    tmp_dir="/run/tmp",
-    extra_roots=[],
-    inject=Map([]),
-    spawnable=None,
   )
   guard policy
     is {
@@ -656,15 +538,13 @@ test "no injection clears any inherited handoff and admits no engine" {
     } else {
     fail("policy lost its env or process section")
   }
-  // A conversation with no durable session gets no coordinates and no engine
-  // in its command vocabulary: there is nowhere to put a child transcript, so
-  // admitting the spawn would only produce invisible children.
+  // A snippet starts subagents through the host (`@tools.call`), never by
+  // spawning the engine: the engine is not in its command vocabulary.
   //
   // `WORKFLOW_HOST` is still SET — to nothing. The guest copies the host's
-  // environment, and this process may itself be a child of a hosted snippet,
-  // whose handoff it inherited. Left alone, that handoff would reach this
-  // snippet, which would mint child ids from a block that belongs to its
-  // grandparent. An empty value fails the library's reader closed.
+  // environment, and an engine launched under an old hosted workflow could
+  // have inherited a handoff; an empty value fails that library's reader
+  // closed.
   assert_eq(set.length(), 3)
   assert_true(set.get("TMPDIR") is Some(_))
   assert_eq(set.get("WORKFLOW_HOST"), Some(Json::string("")))

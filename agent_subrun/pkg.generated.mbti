@@ -3,7 +3,6 @@ package "moonbitlang/openseek/agent_subrun"
 
 import {
   "moonbitlang/core/debug",
-  "moonbitlang/openseek/agent_subrun/host",
   "moonbitlang/openseek_protocol",
 }
 
@@ -16,7 +15,6 @@ pub async fn[T] run_subrun(command~ : String, args~ : Array[String], input~ : Js
 type ChildSession
 pub fn ChildSession::ChildSession(root~ : String, parent~ : String, first_free? : Int) -> Self
 pub async fn ChildSession::claim(Self) -> ClaimedChild
-pub fn ChildSession::injection(Self, exe~ : String, launch_prefix? : Array[String], workspace_root~ : String, model? : String, api_url? : String, criteria? : () -> @host.AuditCriteria?) -> @host.SubrunInjection
 pub fn ChildSession::parent(Self) -> String
 pub fn ChildSession::root(Self) -> String
 

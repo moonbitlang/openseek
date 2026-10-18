@@ -34,7 +34,8 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
 /// start subagents: a launcher over the session's job runtime that runs this
 /// engine's own binary as a managed `run` of a kind, with the session's
 /// model and endpoint, in `workspace_root`, its children's sessions claimed
-/// through `children`, and their result files in `result_dir`.
+/// through `children`, and their result files in `result_dir`. `session`
+/// reads the live session, for a script's `audit_context`.
 pub fn[X] subagents(
   scope : @agent_runtime.AgentTaskScope[X],
   self_exe~ : String,
@@ -44,6 +45,7 @@ pub fn[X] subagents(
   workspace_root~ : String,
   children~ : @agent_subrun.ChildSession,
   result_dir~ : String,
+  session~ : () -> @agent_session.Session,
 ) -> @subagent.Subagents {
   let (program, launch_prefix) = @setup.workflow_launch(self_exe)
   let args = [
@@ -75,6 +77,22 @@ pub fn[X] subagents(
       )
     },
     kinds: subagent_kinds(),
+    // What a script's audit is held to, read live: the standing goal and
+    // the baseline recorded with it, or null when no goal stands.
+    audit_context: () => {
+      let session = session()
+      match session.current_goal() {
+        None => Json::null()
+        Some(goal) => {
+          let fields : Map[String, Json] = { "goal": Json::string(goal.text()) }
+          if session.current_goal_baseline() is Some(baseline) {
+            fields["sha"] = Json::string(baseline.sha)
+            fields["dirty"] = Json::boolean(baseline.dirty)
+          }
+          Json::object(fields)
+        }
+      }
+    },
   }
 }
 

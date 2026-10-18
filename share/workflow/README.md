@@ -81,39 +81,34 @@ other colons. Paths with spaces are single args without shell quoting.
 - `repo-map.mbtx` surveys architecture and data flow, validation commands, and
   extension points for a new contributor.
 
-Run these with the hosted child-agent handoff:
+Run these in a session that can start subagents; they start them through the
+host with `@tools.call("subagent", ...)`:
 
 ```json
-{"description":"Audit the parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."],"subrun":true}
+{"description":"Audit the parser","filename":"@builtin/review.mbtx","args":["Check the CSV parser's CRLF and escaped-quote handling."]}
 ```
 
 ```json
-{"description":"Review working-tree changes","filename":"@builtin/change-review.mbtx","subrun":true}
+{"description":"Review working-tree changes","filename":"@builtin/change-review.mbtx"}
 ```
 
 ```json
-{"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","subrun":true,"cwd":"/path/to/repository"}
+{"description":"Map repository architecture","filename":"@builtin/repo-map.mbtx","cwd":"/path/to/repository"}
 ```
-
-These scripts import `moonbitlang/workflow@0.10.0`. The engine's version-2
-handoff needs 0.9.0 or newer: a saved copy pinned to an older release sees no
-handoff at all (`@hosted.context()` is `None`) and stops with its "needs
-OpenSeek" message; update its imports to 0.10.0. See
-[snippets written for an older `moonbitlang/workflow`](../../agent_tool/mbtx/README.mbt.md#snippets-written-for-an-older-moonbitlangworkflow).
 
 `review.mbtx` launches one `review` child (100-step ceiling). With no
 arguments it audits the standing goal and the baseline it recorded, which the
-engine places in `WORKFLOW_HOST.openseek.audit` (`goal`, optional `sha` and
+script reads from the host's `audit_context` tool (`goal`, optional `sha` and
 `dirty`) when one stands; arguments, joined
 with spaces, narrow that goal as an audit focus, or are the whole criteria
 when no goal stands. It prints the full report JSON, then a
-`findings=N blockers=M` line, and exits unsuccessfully when any finding is a
+`findings=N blockers=M tokens=T` line, and exits unsuccessfully when any finding is a
 blocker so the caller cannot read past it. `--sha COMMIT` (with `--dirty`
 when the worktree was already dirty at that commit) overrides the engine's
 baseline; `--help` prints usage.
 
-The other two use `moonbitlang/workflow`'s `fan_out` and `attempt` with
-read-only `explore` children. Change review runs three scouts, allowing 16 steps each.
+The other two start read-only `explore` children together, wait for all of
+them, and read each report. Change review runs three scouts, allowing 16 steps each.
 Repo-map runs two scouts, allowing 12 steps each, and displays the root
 `justfile` recipes directly in MoonBit without asking a model to summarize
 commands. Recipes are marked as not executed; a missing `justfile` is reported
@@ -126,10 +121,9 @@ stale and omit private behavior, so behavioral claims still require source.
 
 Repo-map asks for at most six targeted reads before submission. That read limit
 is guidance to the scout; the 12-step ceiling is enforced by the engine.
-The host supplies the runner, journal, event stream, credentials, and reserved
-child IDs through `moonbitlang/workflow/hosted`. Missing handoff or insufficient
-child capacity (three for change review, two for repo-map) fails before any
-scout starts. These workflows use model tokens.
+The host launches, records and accounts for each child. Without a host, or
+when the session cannot start another child, the script fails with the
+reason. These workflows use model tokens.
 
 Change review prints JSON reports; repo-map prints readable Markdown answers,
 supporting references, unverified areas, and usage counts. Repo-map shares one
@@ -156,14 +150,13 @@ calling agent can compare and consolidate the reports without another scout.
 Run against a stable working tree so the scouts inspect the same state.
 
 To customize, copy a script into the workspace and edit its questions or step
-limit. Keep `ctx.run` so OpenSeek can account for and display its children.
-The pinned imports make these scripts independent of the inspected project's
-library dependencies. Compile them with `moon run --build-only --target wasm
-share/workflow/repo-map.mbtx`; execute them through OpenSeek with `subrun=true`.
+limit. The children are OpenSeek's own subagents, so they are accounted for
+and shown in the desktop. Compile them with `moon run --build-only --target
+wasm share/workflow/repo-map.mbtx`; execute them through OpenSeek.
 
-Maintainers: `just test-workflows` exercises all three scripts with an offline
-child contract fixture, including partial failure and missing/insufficient
-handoff.
+Maintainers: `just test-workflows` exercises all three scripts against an
+offline fake host that speaks the PTC protocol, including partial failure, a
+missing host and a full session.
 
 ## GitHub CI monitor
 
@@ -181,8 +174,8 @@ with `--timeout-seconds` (1–3600) and `--interval-seconds` (1–60). Without a
 explicit PR, `cwd` must select the repository containing the current branch.
 `--repo` accepts `OWNER/REPO` or `HOST/OWNER/REPO`. Use `--help` for usage. The
 host's own execution deadline can end the script sooner; with an OpenSeek job
-runtime, long runs use its normal automatic background handoff. No `subrun`
-flag or scheduled automation is needed.
+runtime, long runs use its normal automatic background handoff. No scheduled
+automation is needed.
 
 The first snapshot pins the PR URL and head commit. A changed head stops the
 monitor as superseded, rather than mixing checks from different revisions.
@@ -224,5 +217,5 @@ This does not execute the scripts. `just check` includes this gate, and CI
 runs it in the independent `bundled workflow checks` job. Newly added scripts
 are discovered automatically.
 
-`just test-workflows` separately compiles and executes the hosted review,
+`just test-workflows` separately compiles and executes the review,
 repository mapping, change review, and CI watch scripts with offline fixtures.

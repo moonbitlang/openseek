@@ -383,6 +383,18 @@ later stack.
 Later: a per-child model, a spend limit, surviving an engine restart, reading
 old generations from model tools.
 
+## As built
+
+- PR 1 (#2071) and PR 2 (#2072): as planned.
+- PR 3: one commit, not two, because the retirement touched the same files
+  as the script entrance. `SubagentLaunch::Script.call` counts the script's
+  subagent starts; the desktop correlates a script's child through the job id
+  its trace records. The engine stops emitting `WorkflowStarted`, but the
+  protocol event and the desktop's workflow view stay, because existing
+  session logs contain them. A model that still sends `subrun` is told how
+  scripts delegate now. The bundled workflows' offline tests run against a
+  fake host that speaks the PTC protocol.
+
 ## Integrated testing
 
 All offline except the last.
