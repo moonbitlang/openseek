@@ -667,15 +667,28 @@ pub fn BgJobRuntime::stop_requested(self : BgJobRuntime, id : String) -> Bool {
 }
 
 ///|
-/// Cancel a running job and return once it is terminal. Idempotent: an
-/// already-terminal known job returns `true`; an unknown id returns `false`.
-pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
+/// Ask a running job to stop and return without waiting for it to end:
+/// for a caller inside another job's finish sequence, which shutdown runs
+/// before it reaches this job's. Idempotent; an unknown id returns `false`.
+pub async fn BgJobRuntime::request_stop(
+  self : BgJobRuntime,
+  id : String,
+) -> Bool {
   guard self.jobs.get(id) is Some(job) else { return false }
   if bg_status(job.exec.status()) is Running && !job.requested_stop {
     job.requested_stop = true
     job.exec.request_stop()
     self.publish(id, Updated)
   }
+  true
+}
+
+///|
+/// Cancel a running job and return once it is terminal. Idempotent: an
+/// already-terminal known job returns `true`; an unknown id returns `false`.
+pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
+  guard self.jobs.get(id) is Some(job) else { return false }
+  ignore(self.request_stop(id))
   job.exec.wait()
   self.wait_any([id])
   true

@@ -450,3 +450,46 @@ async test "usage reports only what this child's result says" {
     assert_true(info.usage is Some(Unavailable(_)))
   })
 }
+
+///|
+/// A closed script starts nothing more, and its live children are asked to
+/// stop without its close waiting for them: it runs inside the script's own
+/// finish sequence, which shutdown reaches before the children's.
+#cfg(not(platform="windows"))
+async test "closing a script asks its children to stop and returns at once" {
+  @async.with_task_group(group => {
+    // The child ignores its closed stdin, so it ends only at the grace.
+    let h = harness(
+      group,
+      "touch \"$RESULT.reading\"; trap '' TERM; while :; do sleep 1; done",
+      grace_ms=3_000,
+    )
+    let launch : @protocol.SubagentLaunch = Script(program="program-1", call=0)
+    guard h.launcher.start(
+        kind="explore",
+        input={ "query": "q" },
+        label="scout",
+        launch~,
+        validate=accept,
+      )
+      is Started(job_id~, ..) else {
+      fail("the child did not start")
+    }
+    h.reading()
+    let before = @env.now()
+    h.launcher.close_owner("program-1")
+    assert_true(@env.now() - before < 1_000UL, msg="close waited for its child")
+    assert_true(h.runtime.stop_requested(job_id))
+    assert_true(
+      h.launcher.start(
+        kind="explore",
+        input={ "query": "q" },
+        label="scout",
+        launch=Script(program="program-1", call=1),
+        validate=accept,
+      )
+      is Unavailable(_),
+    )
+    assert_true(h.settled(job_id).outcome is Some(Stopped))
+  })
+}

@@ -553,19 +553,15 @@ pub fn Launcher::pinned(self : Launcher, program : String) -> Bool {
 
 ///|
 /// Script `program` has ended: it can start nothing more, and its live
-/// subagents are stopped, together.
+/// subagents are asked to stop. It does not wait for them to end: it runs in
+/// the script job's own finish sequence, and at shutdown a child's is only
+/// reached after it.
 pub async fn Launcher::close_owner(self : Launcher, program : String) -> Unit {
   guard self.owners.get(program) is Some(owner) else { return }
   owner.closed = true
-  let live = owner.jobs
-    .keys()
-    .filter(job_id => {
-      self.runtime.snapshot(job_id) is Some({ status: Running, .. })
-    })
-    .to_array()
-  @async.with_task_group(group => {
-    for job_id in live {
-      group.spawn_bg(() => ignore(self.runtime.stop(job_id)))
+  for job_id in owner.jobs.keys().to_array() {
+    if self.runtime.snapshot(job_id) is Some({ status: Running, .. }) {
+      ignore(self.runtime.request_stop(job_id))
     }
-  })
+  }
 }
