@@ -169,10 +169,10 @@ async fn integrate_locked(
       // record `<mode> <oid> <stage>\t<path>` per stage.
       let files : Array[String] = []
       for record in unmerged.output.split("\u{0}") {
-        guard record.split("\t").nth(1) is Some(path) && !path.is_empty() else {
-          continue
-        }
-        let path = path.to_owned()
+        // The path is everything after the first tab: it may hold tabs.
+        guard record.find("\t") is Some(tab) else { continue }
+        let path = record.to_owned().view(start_offset=tab + 1).to_owned()
+        guard !path.is_empty() else { continue }
         if !files.contains(path) {
           files.push(path)
         }

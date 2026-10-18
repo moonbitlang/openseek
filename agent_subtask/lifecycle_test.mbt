@@ -289,10 +289,12 @@ async test "continue stages an add/add conflict, and Markdown underlines are not
       nonce="n1",
     )
     let entry = provisioned.entry
-    // Both sides add the same new file, differently.
+    // Both sides add the same new file, differently; its name holds a tab.
     @vfs.write_text("\{entry.worker_root}/lib", "notes.md", "Worker\n======\n")
+    @vfs.write_text("\{entry.worker_root}/lib", "a\tb.txt", "worker\n")
     let captured = @agent_subtask.capture(provisioned.geometry, entry)
     @vfs.write_text("\{repo}/lib", "notes.md", "Origin\n======\n")
+    @vfs.write_text("\{repo}/lib", "a\tb.txt", "origin\n")
     for args in [["add", "-A"], ["commit", "-q", "-m", "origin adds notes"]] {
       must_git(repo, args)
     }
@@ -304,6 +306,7 @@ async test "continue stages an add/add conflict, and Markdown underlines are not
     assert_true(conflicted.detail[0].contains("lib/notes.md"))
     // Resolved with a file tool: a Setext heading keeps its own underline.
     @vfs.write_text("\{repo}/lib", "notes.md", "Notes\n=======\n")
+    @vfs.write_text("\{repo}/lib", "a\tb.txt", "both\n")
     let continued = @agent_subtask.integrate_continue(
       provisioned.geometry,
       conflicted.entry,
