@@ -260,3 +260,37 @@ async test "a worktree git could not capture says why, and is captured again" {
     assert_true(h.workers is [(_, { state: Committed(..), .. })])
   })
 }
+
+///|
+/// Workers have their own cap below the session's: each builds in its own
+/// worktree. A read-only child still starts when the workers are full.
+#cfg(not(platform="windows"))
+async test "workers are capped apart from the other subagents" {
+  @async.with_task_group(group => {
+    let (root, repo) = seeded(group)
+    let h = harness(
+      group,
+      "touch \"$RESULT.reading\"; cat > /dev/null",
+      root~,
+      cwd=repo,
+      max_workers=1,
+    )
+    guard h.start_worker("one", ["lib"]) is Started(job_id~, ..) else {
+      fail("the worker did not start")
+    }
+    guard h.start_worker("two", ["other"]) is Unavailable(reason) else {
+      fail("a second worker started past the cap")
+    }
+    assert_true(reason.contains("1 workers are already running"), msg=reason)
+    let (scout, _) = h.start()
+    ignore(h.runtime.stop(job_id))
+    ignore(h.runtime.stop(scout))
+    ignore(h.settled(job_id))
+    // Its slot is back once it has ended.
+    guard h.start_worker("two", ["other"]) is Started(job_id~, ..) else {
+      fail("the freed worker slot was refused")
+    }
+    ignore(h.runtime.stop(job_id))
+    ignore(h.settled(job_id))
+  })
+}

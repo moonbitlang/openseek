@@ -418,6 +418,8 @@ old generations from model tools.
   where a worker's worktree stands. `tests/integration/workers.mbtx` runs
   the real CLI and a real worker child against a scripted provider in a
   temporary repository, through integration.
+  At most 4 workers are live at once, within the session's subagent cap:
+  each builds and tests in its own worktree.
 
 ## Integrated testing
 

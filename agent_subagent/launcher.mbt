@@ -14,6 +14,12 @@ const StopGraceMs : Int32 = 10_000
 const MaxLive : Int32 = 16
 
 ///|
+/// How many of them may be workers: each builds and tests in a worktree of
+/// its own, which costs the machine, where a read-only child mostly waits on
+/// the model.
+const MaxWorkers : Int32 = 4
+
+///|
 /// How many subagents one script may start in all.
 const ScriptQuota : Int32 = 64
 
@@ -61,6 +67,7 @@ struct Launcher {
   result_dir : String
   spawn : (async () -> Unit) -> Unit
   max_live : Int32
+  max_workers : Int32
   grace_ms : Int32
   delivery_timeout_ms : Int32
   mut live : Int32
@@ -94,6 +101,7 @@ pub fn[X] Launcher::Launcher(
   env? : Map[String, String],
   result_dir~ : String,
   max_live~ : Int32 = MaxLive,
+  max_workers~ : Int32 = MaxWorkers,
   grace_ms~ : Int32 = StopGraceMs,
   delivery_timeout_ms~ : Int32 = DeliveryTimeoutMs,
   on_worker~ : (String, @protocol.Worktree) -> Unit = (_, _) => (),
@@ -110,6 +118,7 @@ pub fn[X] Launcher::Launcher(
     result_dir,
     spawn: task => group.spawn_bg(task, no_wait=true, allow_failure=true),
     max_live,
+    max_workers,
     grace_ms,
     delivery_timeout_ms,
     live: 0,
@@ -212,6 +221,11 @@ pub async fn Launcher::start(
 ) -> StartResult {
   guard slice is None || input is Object(_) else {
     return Unavailable("a worker's input must be an object")
+  }
+  guard slice is None || self.working.length() < self.max_workers else {
+    return Unavailable(
+      "\{self.max_workers} workers are already running; wait for one to end (job_wait) and start this one again",
+    )
   }
   let owner = self.owner(launch)
   guard !owner.closed else {
