@@ -32,7 +32,7 @@ pub fn program_binding(
         "subagent",
         (
           #|Start a child agent of `kind` on `input` in the background; returns
-          #|data {job_id, session} at once. Up to four run at once in a session.
+          #|data {job_id, session} at once. Up to 16 run at once in a session.
         ),
         {
           "type": "object",

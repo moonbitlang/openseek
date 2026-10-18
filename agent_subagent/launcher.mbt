@@ -15,7 +15,7 @@ const MaxLive : Int32 = 16
 
 ///|
 /// How many subagents one script may start in all.
-const ScriptQuota : Int32 = 32
+const ScriptQuota : Int32 = 64
 
 ///|
 /// How long a script stays pinned past the wall-clock cap after its last
