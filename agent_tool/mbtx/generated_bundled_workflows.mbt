@@ -30,10 +30,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "tests", "Find changed behavior that existing tests fail to cover. Propose a minimal regression test with a concrete trigger and expected result.",
           #|    ),
           #|  ]
-          #|  let ids : Array[String] = []
+          #|  let launches : Array[Launch] = []
           #|  for lens in lenses {
           #|    let (label, question) = lens
-          #|    ids.push(
+          #|    launches.push(
           #|      start(
           #|        "explore",
           #|        {
@@ -52,57 +52,78 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ),
           #|    )
           #|  }
-          #|  wait_all(ids)
+          #|  wait_all(launches)
           #|  // Keep successful evidence visible even if another scout failed. A failed
           #|  // lens makes the overall run incomplete, never a clean bill of health.
           #|  let mut incomplete = false
           #|  let mut tokens = 0
-          #|  for index, id in ids {
+          #|  for index, launch in launches {
           #|    let (label, _) = lenses[index]
           #|    println("## " + label)
+          #|    guard launch is Running(id) else {
+          #|      incomplete = true
+          #|      if launch is Refused(why) {
+          #|        println("INCOMPLETE: could not start: \{why}")
+          #|      }
+          #|      continue
+          #|    }
           #|    match outcome(id) {
           #|      Reported(report, tokens=spent) => {
           #|        tokens += spent
           #|        println(report.stringify())
           #|      }
-          #|      NoReport(why) => {
+          #|      NoReport(why, tokens=spent) => {
+          #|        tokens += spent
           #|        incomplete = true
           #|        println("INCOMPLETE: \{why}")
           #|      }
           #|    }
           #|  }
-          #|  println("scouts=\{ids.length()} tokens=\{tokens}")
+          #|  println("scouts=\{launches.length()} tokens=\{tokens}")
           #|  if incomplete {
           #|    fail("change-review incomplete; see the failed lenses above")
           #|  }
           #|}
           #|
           #|///|
-          #|/// Start one subagent through the host and return its job id.
+          #|/// One child's launch: running as a job, or refused with the reason (a full
+          #|/// session, a script past its quota).
+          #|priv enum Launch {
+          #|  Running(String)
+          #|  Refused(String)
+          #|}
+          #|
+          #|///|
+          #|/// Start one subagent through the host.
           #|async fn start(
           #|  kind : String,
           #|  input : Json,
           #|  label : String,
           #|  max_steps : Int,
-          #|) -> String {
+          #|) -> Launch {
           #|  let started = @tools.call("subagent", {
           #|    "kind": kind,
           #|    "input": input,
           #|    "label": label,
           #|    "max_steps": max_steps,
           #|  })
-          #|  guard started.data is Some({ "job_id": String(id), .. }) else {
-          #|    fail("could not start \{label}: \{started.content}")
+          #|  match started.data {
+          #|    Some({ "job_id": String(id), .. }) => Running(id)
+          #|    _ => Refused(started.content)
           #|  }
-          #|  id
           #|}
           #|
           #|///|
-          #|/// Wait until every listed child has ended. Each wait returns within a
+          #|/// Wait until every running child has ended. Each wait returns within a
           #|/// minute with every child's state, so ended ones are dropped and the rest
           #|/// waited for again.
-          #|async fn wait_all(ids : Array[String]) -> Unit {
-          #|  let mut pending = ids
+          #|async fn wait_all(launches : Array[Launch]) -> Unit {
+          #|  let mut pending : Array[String] = []
+          #|  for launch in launches {
+          #|    if launch is Running(id) {
+          #|      pending.push(id)
+          #|    }
+          #|  }
           #|  while pending.length() > 0 {
           #|    let waited = @tools.call("job_wait", {
           #|      "job_ids": Json::array(pending.map(Json::string)),
@@ -121,10 +142,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// What an ended child left: its report, or why it has none.
+          #|/// What an ended child left, and what it spent either way.
           #|priv enum Outcome {
           #|  Reported(Json, tokens~ : Int)
-          #|  NoReport(String)
+          #|  NoReport(String, tokens~ : Int)
           #|}
           #|
           #|///|
@@ -137,7 +158,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "job_id": id,
           #|      "offset": text.to_string().char_length(),
           #|    })
-          #|    guard read.data is Some(data) else { return NoReport(read.content) }
+          #|    guard read.data is Some(data) else { return NoReport(read.content, tokens~) }
           #|    if data
           #|      is {
           #|        "subagent": {
@@ -159,8 +180,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|          return Reported(@json.parse(text.to_string()), tokens~)
           #|        }
           #|      }
-          #|      { "state": { "outcome": String(ended), .. }, .. } => return NoReport(ended)
-          #|      _ => return NoReport("no report")
+          #|      { "state": { "outcome": String(ended), .. }, .. } =>
+          #|        return NoReport(ended, tokens~)
+          #|      _ => return NoReport("no report", tokens~)
           #|    }
           #|  }
           #|}
@@ -1222,10 +1244,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "extension-points", "Choose ONE extension point named in the supplied README. Inspect its definition and one caller or test. Describe one hypothetical additive feature, its actual implementation file, and an existing related test. Reserve at least one read for a test of the selected extension itself and cite it. Tests may be embedded in implementation .mbt files, not only *_test.mbt; a sibling API test is not equivalent. If no directly relevant test was inspected, report that gap rather than calling another test the closest. This is onboarding, not defect discovery: do not invent a bug to justify the example or assume unverified collection/runtime semantics. Do not suggest changing engine tests merely to add a data file already supported by the current contract. Stop after this one example; do not search for additional extension points.",
           #|    ),
           #|  ]
-          #|  let ids : Array[String] = []
+          #|  let launches : Array[Launch] = []
           #|  for lens in lenses {
           #|    let (label, question) = lens
-          #|    ids.push(
+          #|    launches.push(
           #|      start(
           #|        "explore",
           #|        {
@@ -1253,14 +1275,21 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      ),
           #|    )
           #|  }
-          #|  wait_all(ids)
+          #|  wait_all(launches)
           #|  // Keep successful evidence visible even if another scout failed. A failed
           #|  // lens makes the overall run incomplete, never a clean bill of health.
           #|  let mut incomplete = false
           #|  let mut tokens = 0
-          #|  for index, id in ids {
+          #|  for index, launch in launches {
           #|    let (label, _) = lenses[index]
           #|    println("## " + label)
+          #|    guard launch is Running(id) else {
+          #|      incomplete = true
+          #|      if launch is Refused(why) {
+          #|        println("INCOMPLETE: could not start: \{why}")
+          #|      }
+          #|      continue
+          #|    }
           #|    match outcome(id) {
           #|      Reported(report, tokens=spent) => {
           #|        tokens += spent
@@ -1303,13 +1332,14 @@ fn bundled_workflow(name : StringView) -> String? {
           #|          }
           #|        }
           #|      }
-          #|      NoReport(why) => {
+          #|      NoReport(why, tokens=spent) => {
+          #|        tokens += spent
           #|        incomplete = true
           #|        println("INCOMPLETE: \{why}")
           #|      }
           #|    }
           #|  }
-          #|  println("scouts=\{ids.length()} tokens=\{tokens}")
+          #|  println("scouts=\{launches.length()} tokens=\{tokens}")
           #|  if incomplete {
           #|    fail("repo-map incomplete; see the failed lenses above")
           #|  }
@@ -1456,31 +1486,44 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// Start one subagent through the host and return its job id.
+          #|/// One child's launch: running as a job, or refused with the reason (a full
+          #|/// session, a script past its quota).
+          #|priv enum Launch {
+          #|  Running(String)
+          #|  Refused(String)
+          #|}
+          #|
+          #|///|
+          #|/// Start one subagent through the host.
           #|async fn start(
           #|  kind : String,
           #|  input : Json,
           #|  label : String,
           #|  max_steps : Int,
-          #|) -> String {
+          #|) -> Launch {
           #|  let started = @tools.call("subagent", {
           #|    "kind": kind,
           #|    "input": input,
           #|    "label": label,
           #|    "max_steps": max_steps,
           #|  })
-          #|  guard started.data is Some({ "job_id": String(id), .. }) else {
-          #|    fail("could not start \{label}: \{started.content}")
+          #|  match started.data {
+          #|    Some({ "job_id": String(id), .. }) => Running(id)
+          #|    _ => Refused(started.content)
           #|  }
-          #|  id
           #|}
           #|
           #|///|
-          #|/// Wait until every listed child has ended. Each wait returns within a
+          #|/// Wait until every running child has ended. Each wait returns within a
           #|/// minute with every child's state, so ended ones are dropped and the rest
           #|/// waited for again.
-          #|async fn wait_all(ids : Array[String]) -> Unit {
-          #|  let mut pending = ids
+          #|async fn wait_all(launches : Array[Launch]) -> Unit {
+          #|  let mut pending : Array[String] = []
+          #|  for launch in launches {
+          #|    if launch is Running(id) {
+          #|      pending.push(id)
+          #|    }
+          #|  }
           #|  while pending.length() > 0 {
           #|    let waited = @tools.call("job_wait", {
           #|      "job_ids": Json::array(pending.map(Json::string)),
@@ -1499,10 +1542,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// What an ended child left: its report, or why it has none.
+          #|/// What an ended child left, and what it spent either way.
           #|priv enum Outcome {
           #|  Reported(Json, tokens~ : Int)
-          #|  NoReport(String)
+          #|  NoReport(String, tokens~ : Int)
           #|}
           #|
           #|///|
@@ -1515,7 +1558,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "job_id": id,
           #|      "offset": text.to_string().char_length(),
           #|    })
-          #|    guard read.data is Some(data) else { return NoReport(read.content) }
+          #|    guard read.data is Some(data) else { return NoReport(read.content, tokens~) }
           #|    if data
           #|      is {
           #|        "subagent": {
@@ -1537,8 +1580,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|          return Reported(@json.parse(text.to_string()), tokens~)
           #|        }
           #|      }
-          #|      { "state": { "outcome": String(ended), .. }, .. } => return NoReport(ended)
-          #|      _ => return NoReport("no report")
+          #|      { "state": { "outcome": String(ended), .. }, .. } =>
+          #|        return NoReport(ended, tokens~)
+          #|      _ => return NoReport("no report", tokens~)
           #|    }
           #|  }
           #|}
@@ -1646,11 +1690,16 @@ fn bundled_workflow(name : StringView) -> String? {
           #|    Some(sha) => { "goal": goal, "sha": sha, "dirty": dirty }
           #|    None => { "goal": goal }
           #|  }
-          #|  let id = start("review", input, "review", 100)
-          #|  wait_all([id])
+          #|  let launch = start("review", input, "review", 100)
+          #|  let id = match launch {
+          #|    Running(id) => id
+          #|    Refused(why) => fail("could not start the review: \{why}")
+          #|  }
+          #|  wait_all([launch])
           #|  let (report, tokens) = match outcome(id) {
           #|    Reported(report, tokens~) => (report, tokens)
-          #|    NoReport(why) => fail("the review did not report: \{why}")
+          #|    NoReport(why, tokens~) =>
+          #|      fail("the review did not report: \{why} (tokens=\{tokens})")
           #|  }
           #|  println(report.stringify())
           #|  let mut findings = 0
@@ -1672,31 +1721,44 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// Start one subagent through the host and return its job id.
+          #|/// One child's launch: running as a job, or refused with the reason (a full
+          #|/// session, a script past its quota).
+          #|priv enum Launch {
+          #|  Running(String)
+          #|  Refused(String)
+          #|}
+          #|
+          #|///|
+          #|/// Start one subagent through the host.
           #|async fn start(
           #|  kind : String,
           #|  input : Json,
           #|  label : String,
           #|  max_steps : Int,
-          #|) -> String {
+          #|) -> Launch {
           #|  let started = @tools.call("subagent", {
           #|    "kind": kind,
           #|    "input": input,
           #|    "label": label,
           #|    "max_steps": max_steps,
           #|  })
-          #|  guard started.data is Some({ "job_id": String(id), .. }) else {
-          #|    fail("could not start \{label}: \{started.content}")
+          #|  match started.data {
+          #|    Some({ "job_id": String(id), .. }) => Running(id)
+          #|    _ => Refused(started.content)
           #|  }
-          #|  id
           #|}
           #|
           #|///|
-          #|/// Wait until every listed child has ended. Each wait returns within a
+          #|/// Wait until every running child has ended. Each wait returns within a
           #|/// minute with every child's state, so ended ones are dropped and the rest
           #|/// waited for again.
-          #|async fn wait_all(ids : Array[String]) -> Unit {
-          #|  let mut pending = ids
+          #|async fn wait_all(launches : Array[Launch]) -> Unit {
+          #|  let mut pending : Array[String] = []
+          #|  for launch in launches {
+          #|    if launch is Running(id) {
+          #|      pending.push(id)
+          #|    }
+          #|  }
           #|  while pending.length() > 0 {
           #|    let waited = @tools.call("job_wait", {
           #|      "job_ids": Json::array(pending.map(Json::string)),
@@ -1715,10 +1777,10 @@ fn bundled_workflow(name : StringView) -> String? {
           #|}
           #|
           #|///|
-          #|/// What an ended child left: its report, or why it has none.
+          #|/// What an ended child left, and what it spent either way.
           #|priv enum Outcome {
           #|  Reported(Json, tokens~ : Int)
-          #|  NoReport(String)
+          #|  NoReport(String, tokens~ : Int)
           #|}
           #|
           #|///|
@@ -1731,7 +1793,7 @@ fn bundled_workflow(name : StringView) -> String? {
           #|      "job_id": id,
           #|      "offset": text.to_string().char_length(),
           #|    })
-          #|    guard read.data is Some(data) else { return NoReport(read.content) }
+          #|    guard read.data is Some(data) else { return NoReport(read.content, tokens~) }
           #|    if data
           #|      is {
           #|        "subagent": {
@@ -1753,8 +1815,9 @@ fn bundled_workflow(name : StringView) -> String? {
           #|          return Reported(@json.parse(text.to_string()), tokens~)
           #|        }
           #|      }
-          #|      { "state": { "outcome": String(ended), .. }, .. } => return NoReport(ended)
-          #|      _ => return NoReport("no report")
+          #|      { "state": { "outcome": String(ended), .. }, .. } =>
+          #|        return NoReport(ended, tokens~)
+          #|      _ => return NoReport("no report", tokens~)
           #|    }
           #|  }
           #|}
