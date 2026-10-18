@@ -165,18 +165,7 @@ async fn integrate_locked(
     if merge_head.output.trim() == commit_oid &&
       unmerged.exit_code == 0 &&
       unmerged.output != "" {
-      // Every path with an unmerged index entry, add/add included: a
-      // record `<mode> <oid> <stage>\t<path>` per stage.
-      let files : Array[String] = []
-      for record in unmerged.output.split("\u{0}") {
-        // The path is everything after the first tab: it may hold tabs.
-        guard record.find("\t") is Some(tab) else { continue }
-        let path = record.to_owned().view(start_offset=tab + 1).to_owned()
-        guard !path.is_empty() else { continue }
-        if !files.contains(path) {
-          files.push(path)
-        }
-      }
+      let files = unmerged_paths(unmerged.output)
       let entry = { ..entry, state: Conflicted, conflict_paths: files.copy(), }
       let _ = save_entry(geometry.common_git_dir, entry)
       return {
@@ -250,4 +239,21 @@ pub async fn discard(
   let entry = { ..entry, state: Discarded, }
   let _ = save_entry(geometry.common_git_dir, entry)
   Ok(entry)
+}
+
+///|
+/// Every path with an unmerged index entry in `git ls-files -u -z` output,
+/// add/add included: a record `<mode> <oid> <stage>\t<path>` per stage, the
+/// path being everything after the first tab (it may hold tabs).
+fn unmerged_paths(output : String) -> Array[String] {
+  let files : Array[String] = []
+  for record in output.split("\u{0}") {
+    guard record.find("\t") is Some(tab) else { continue }
+    let path = record.to_owned().view(start_offset=tab + 1).to_owned()
+    guard !path.is_empty() else { continue }
+    if !files.contains(path) {
+      files.push(path)
+    }
+  }
+  files
 }

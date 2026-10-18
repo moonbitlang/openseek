@@ -76,8 +76,17 @@ async fn integrate_continue_locked(
       )
     }
   }
-  if !entry.conflict_paths.is_empty() {
-    match git_require(["add", "-A", "--", ..entry.conflict_paths], cwd=origin) {
+  // Only what is still unmerged: a path already resolved and staged (a
+  // deletion by `git rm` among them) is left as it was.
+  let pending = match git_require(["ls-files", "-u", "-z"], cwd=origin) {
+    Ok(output) => {
+      let unmerged = unmerged_paths(output)
+      entry.conflict_paths.filter(path => unmerged.contains(path))
+    }
+    Err(reason) => return refused(entry, reason)
+  }
+  if !pending.is_empty() {
+    match git_require(["add", "-A", "--", ..pending], cwd=origin) {
       Ok(_) => ()
       Err(reason) => return refused(entry, reason)
     }
