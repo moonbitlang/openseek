@@ -279,9 +279,34 @@ pub fn describe_worktree(worktree : @protocol.Worktree) -> String {
 }
 
 ///|
-/// A worker's handed-over worktree in a few words, for a notice or a wait:
-/// `describe_worktree` says what to do with it.
-pub fn brief_worktree(worktree : @protocol.Worktree) -> String {
+/// Where a subagent's change is and what to do with it, for `job_output`:
+/// `None` for a child that works in the session's checkout and changes
+/// nothing there.
+pub fn describe_workspace(workspace : @protocol.SubagentWorkspace) -> String? {
+  match workspace {
+    InPlace => None
+    Worktree(worktree) => Some(describe_worktree(worktree))
+    Directory(path~) =>
+      Some(
+        "directory \{path}: the worker changes files there in place and leaves what it changed uncommitted. Once it has ended, review it there (in a git repository: `git -C \{path} status` and `git -C \{path} diff`, which also show anything uncommitted there before it started), then commit it or restore it.",
+      )
+  }
+}
+
+///|
+/// An ended subagent's change in a few words, for a notice or a wait:
+/// `describe_workspace` says what to do with it.
+pub fn brief_workspace(workspace : @protocol.SubagentWorkspace) -> String? {
+  match workspace {
+    InPlace => None
+    Worktree(worktree) => Some(brief_worktree(worktree))
+    Directory(path~) => Some("its change is left uncommitted in \{path}")
+  }
+}
+
+///|
+/// A worker's handed-over worktree in a few words.
+fn brief_worktree(worktree : @protocol.Worktree) -> String {
   match worktree.state {
     Working => "its worktree \{worktree.name} is still being worked on"
     Committed(commit~) =>

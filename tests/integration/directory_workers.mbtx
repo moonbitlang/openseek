@@ -1,0 +1,230 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// The real CLI, started in a plain directory holding two repositories,
+/// delegates a change in each to a worker that works in place. One local
+/// server scripts the parent AND both real worker children (told apart by
+/// their `submit_result` tool). The parent starts both workers in one step,
+/// waits for both, reads where each change is from job_output, and finishes.
+/// Afterwards each repository has its worker's file, uncommitted, and
+/// nothing else changed: no commit, no branch, no worktree.
+fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
+  {
+    "index": index,
+    "id": id,
+    "type": "function",
+    "function": { "name": name, "arguments": args.stringify() },
+  }
+}
+
+///|
+fn calls(list : Array[Json]) -> Json {
+  { "tool_calls": Json::array(list) }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The job ids the `subagent` tool announced.
+fn started_jobs(messages : String) -> Array[String] {
+  messages
+  .split("Started subagent job ")
+  .drop(1)
+  .filter_map(tail => tail.split(" ").next().map(id => id.to_owned()))
+  .to_array()
+}
+
+///|
+/// The parent's moves: start a worker in each repository, wait for both,
+/// read both outcomes, finish.
+fn parent_turn(messages : String, repos : Array[String]) -> Json {
+  let jobs = started_jobs(messages)
+  guard jobs is [first, second] else {
+    return calls([
+      tool_call(0, "start-a", "subagent", {
+        "kind": "worker",
+        "input": { "task": "MARK-W add lib/b.txt containing beta" },
+        "label": "add b in a",
+        "directory": "a",
+      }),
+      tool_call(1, "start-b", "subagent", {
+        "kind": "worker",
+        "input": { "task": "MARK-W add lib/b.txt containing beta" },
+        "label": "add b in b",
+        "directory": "b",
+      }),
+    ])
+  }
+  let ended = repos.all(repo => {
+    messages.contains("its change is left uncommitted in \{repo}")
+  })
+  if !ended {
+    return calls([tool_call(0, "wait", "job_wait", { "job_ids": [first, second] })])
+  }
+  let read = repos.all(repo => messages.contains("git -C \{repo} diff"))
+  if !read {
+    return calls([
+      tool_call(0, "read-a", "job_output", { "job_id": first }),
+      tool_call(1, "read-b", "job_output", { "job_id": second }),
+    ])
+  }
+  calls([tool_call(0, "done", "finish", { "answer": "both changes are left to review" })])
+}
+
+///|
+/// A worker's moves: write the file, then report.
+fn worker_turn(messages : String) -> Json {
+  if messages.contains("\"tool_call_id\"") {
+    calls([
+      tool_call(0, "report", "submit_result", {
+        "schema_version": 1,
+        "status": "done",
+        "summary": "added lib/b.txt",
+        "verification": "read it back",
+      }),
+    ])
+  } else {
+    calls([tool_call(0, "write", "write", { "path": "lib/b.txt", "content": "beta\n" })])
+  }
+}
+
+///|
+async fn git(cwd : String, args : Array[String]) -> String {
+  let (reader, out) = @process.read_from_process()
+  defer reader.close()
+  let code = @process.run("git", args, cwd~, stdout=out, stderr=out)
+  let text = reader.read_all().text()
+  guard code == 0 else { fail("git \{args.join(" ")}: \{text}") }
+  text
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/directory_workers.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let directory = @fs.realpath(@fs.tmpdir(prefix="openseek-directory-workers-"))
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  // A plain directory, not a repository, holding two repositories.
+  let ws = directory + "/ws"
+  let repos = [ws + "/a", ws + "/b"]
+  for repo in repos {
+    @fs.mkdir(repo + "/lib", recursive=true)
+    @fs.write_file(repo + "/lib/a.txt", "alpha\n")
+    for
+      args in [
+        ["init", "-q"],
+        ["config", "user.email", "e2e@test"],
+        ["config", "user.name", "e2e"],
+        ["add", "-A"],
+        ["commit", "-q", "-m", "base"],
+      ] {
+      ignore(git(repo, args))
+    }
+  }
+  let worker_requests = Ref(0)
+  @async.with_timeout(240000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            let delta = if tool_names(request).contains("submit_result") {
+              assert_true(messages.contains("MARK-W"))
+              // It is told it works in place, and where.
+              assert_true(messages.contains("You work in place"))
+              worker_requests.val += 1
+              worker_turn(messages)
+            } else {
+              parent_turn(messages, repos)
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=false,
+        )
+      }
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let process = @process.spawn(
+        group,
+        executable,
+        [
+          "run", "--dir", ws, "--api-key", "test-key", "--model", "deepseek-flash",
+          "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+          "--max-steps", "12", "--mcp-config", "", "--session", "parent", "--session-root",
+          store_root, "Have workers add lib/b.txt in both repositories.",
+        ],
+        extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout = group.spawn(() => reader.read_all().text())
+      let stderr = group.spawn(() => errors.read_all().text())
+      let code = process.wait()
+      let out = stdout.wait()
+      let err = stderr.wait()
+      guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
+      assert_true(
+        out.contains("both changes are left to review"),
+        msg="stdout: \{out}\nstderr: \{err}",
+      )
+      server.close()
+    })
+  })
+  assert_eq(worker_requests.val, 4)
+  for repo in repos {
+    // Each worker's change is in its own repository, uncommitted.
+    assert_eq(@fs.read_file(repo + "/lib/b.txt").text(), "beta\n")
+    assert_eq(git(repo, ["status", "--porcelain"]).trim(), "?? lib/b.txt")
+    assert_eq(git(repo, ["log", "--oneline"]).trim().split("\n").count(), 1)
+    assert_eq(git(repo, ["branch", "--list"]).trim().split("\n").count(), 1)
+    assert_false(@fs.exists(repo + "/.worktrees"))
+  }
+  println(
+    "PASS: workers change two repositories in place, in parallel; their changes are left uncommitted for the model",
+  )
+}

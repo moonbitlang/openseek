@@ -964,7 +964,7 @@ async test "a worker's snippet writes neither its own tree nor a sibling's" {
       worker_sandbox={
         deny_roots: [@fs.realpath(repo)],
         worker_root: @fs.realpath(worker),
-        worker_admin_dir: @fs.realpath("\{common_git}/worktrees/wt-1"),
+        worker_admin_dir: Some(@fs.realpath("\{common_git}/worktrees/wt-1")),
       },
     )
     let source = (

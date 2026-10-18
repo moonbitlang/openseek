@@ -53,7 +53,7 @@ async fn Harness::start_worker(
     label=name,
     launch=Direct,
     validate=accept,
-    slice={ name, allowed_paths, },
+    workplace=Worktree({ name, allowed_paths, }),
   )
 }
 

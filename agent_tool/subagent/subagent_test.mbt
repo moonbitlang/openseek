@@ -27,14 +27,14 @@ fn kinds() -> Array[@subagent.Kind] {
         }
       },
       takes_instructions: true,
-      worktree: false,
+      changes_code: false,
     },
     {
       name: "change",
       ceiling: 40,
       validate: report => Ok(report),
       takes_instructions: false,
-      worktree: true,
+      changes_code: true,
     },
   ]
 }
@@ -231,7 +231,7 @@ async test "subagent_send refuses a kind that takes no instructions" {
         ceiling: 40,
         validate: report => Ok(report),
         takes_instructions: false,
-        worktree: false,
+        changes_code: false,
       },
     ]
     let start = @subagent.definition(launcher, kinds)

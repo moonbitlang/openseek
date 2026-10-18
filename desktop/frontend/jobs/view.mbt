@@ -339,10 +339,19 @@ pub fn panel(
         if !extent.is_empty() {
           details.push(@html.div(class="jobs-detail-meta", extent))
         }
-        if info.workspace is Worktree(worktree) {
-          details.append(
-            worktree_details(locale~, ended=job.state.is_terminal(), worktree),
-          )
+        match info.workspace {
+          Worktree(worktree) =>
+            details.append(
+              worktree_details(locale~, ended=job.state.is_terminal(), worktree),
+            )
+          Directory(path~) =>
+            details.push(
+              @html.div(
+                class="jobs-detail-meta jobs-worker-directory",
+                dynamic_text(locale, DWorkerDirectory(path)),
+              ),
+            )
+          InPlace => ()
         }
       }
       if job.cwd is Some(cwd) {

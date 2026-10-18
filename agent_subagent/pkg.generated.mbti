@@ -9,9 +9,11 @@ import {
 }
 
 // Values
-pub fn brief_worktree(@openseek_protocol.Worktree) -> String
+pub fn brief_workspace(@openseek_protocol.SubagentWorkspace) -> String?
 
 pub fn describe_outcome(@openseek_protocol.SubagentOutcome) -> String
+
+pub fn describe_workspace(@openseek_protocol.SubagentWorkspace) -> String?
 
 pub fn describe_worktree(@openseek_protocol.Worktree) -> String
 
@@ -29,7 +31,7 @@ pub async fn Launcher::recover(Self) -> Array[(String, @openseek_protocol.Worktr
 pub fn Launcher::report(Self, String) -> Json?
 pub fn Launcher::reported(Self, Array[String]) -> Unit
 pub async fn Launcher::send(Self, String, String) -> SendResult
-pub async fn Launcher::start(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int, launch~ : @openseek_protocol.SubagentLaunch, validate~ : (Json) -> Result[Json, String], slice? : Slice) -> StartResult
+pub async fn Launcher::start(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int, launch~ : @openseek_protocol.SubagentLaunch, validate~ : (Json) -> Result[Json, String], workplace? : Workplace) -> StartResult
 pub fn Launcher::started_by(Self, String) -> Int
 pub fn Launcher::subagent(Self, String) -> @openseek_protocol.SubagentInfo?
 
@@ -50,6 +52,11 @@ pub(all) enum StartResult {
   Started(job_id~ : String, session~ : String)
   Busy
   Unavailable(String)
+}
+
+pub(all) enum Workplace {
+  Worktree(Slice)
+  Directory(String)
 }
 
 // Type aliases

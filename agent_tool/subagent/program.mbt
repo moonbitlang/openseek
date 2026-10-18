@@ -45,6 +45,7 @@ pub fn program_binding(
             "label": { "type": "string" },
             "max_steps": { "type": "integer" },
             "worktree": worktree_schema,
+            "directory": directory_schema,
           },
           "required": ["kind", "input"],
         },

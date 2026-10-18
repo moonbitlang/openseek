@@ -25,14 +25,19 @@ pub let default_worker_deadline_ms : Int32 = 2_700_000
 /// controller, decoded from the `run --kind worker` request's input. Every path is
 /// canonical (the controller realpaths at provision time) — the child does
 /// not re-derive geometry, it enforces with what it was handed.
+///
+/// A worker works in a worktree forked for it (`worker_admin_dir`, its
+/// `base_oid` and `allowed_paths` given), or in place, in a directory of the
+/// session's checkout (`"mode": "directory"`: none of them, and the whole
+/// directory is its to change).
 pub struct WorkerInput {
   priv task : String
   priv context : String?
   priv worker_root : String
-  priv worker_admin_dir : String
+  priv worker_admin_dir : String?
   priv deny_roots : Array[String]
   allowed_paths : Array[String]
-  priv base_oid : String
+  priv base_oid : String?
 } derive(Debug, Eq)
 
 ///|
@@ -50,13 +55,6 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
     @path.Path(worker_root).is_absolute() else {
     return Err("worker input requires an absolute `worker_root`")
   }
-  guard input is { "worker_admin_dir": String(worker_admin_dir), .. } &&
-    @path.Path(worker_admin_dir).is_absolute() else {
-    return Err("worker input requires an absolute `worker_admin_dir`")
-  }
-  guard input is { "base_oid": String(base_oid), .. } && !base_oid.is_blank() else {
-    return Err("worker input requires a non-empty `base_oid`")
-  }
   let deny_roots : Array[String] = []
   guard input is { "deny_roots": Array(roots), .. } && !roots.is_empty() else {
     return Err("worker input requires a non-empty `deny_roots` array")
@@ -66,6 +64,24 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
       return Err("worker input deny_roots must be absolute paths")
     }
     deny_roots.push(root)
+  }
+  if input is { "mode": "directory", .. } {
+    return Ok({
+      task,
+      context,
+      worker_root,
+      worker_admin_dir: None,
+      deny_roots,
+      allowed_paths: [],
+      base_oid: None,
+    })
+  }
+  guard input is { "worker_admin_dir": String(worker_admin_dir), .. } &&
+    @path.Path(worker_admin_dir).is_absolute() else {
+    return Err("worker input requires an absolute `worker_admin_dir`")
+  }
+  guard input is { "base_oid": String(base_oid), .. } && !base_oid.is_blank() else {
+    return Err("worker input requires a non-empty `base_oid`")
   }
   let allowed_paths : Array[String] = []
   guard input is { "allowed_paths": Array(prefixes), .. } &&
@@ -82,10 +98,10 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
     task,
     context,
     worker_root,
-    worker_admin_dir,
+    worker_admin_dir: Some(worker_admin_dir),
     deny_roots,
     allowed_paths,
-    base_oid,
+    base_oid: Some(base_oid),
   })
 }
 
@@ -98,6 +114,14 @@ fn worker_task(input : WorkerInput) -> String {
   if input.context is Some(context) {
     out <+ "\nContext from the delegating agent:\n\{context}\n"
   }
+  guard input.base_oid is Some(base_oid) else {
+    out <+
+      $|
+      $|Your directory (your whole writable world): \{input.worker_root}
+      $|You work in place: what you change is left in this directory, uncommitted, and the delegating agent reviews and commits it after you submit_result. Do not commit, and do not change files you did not need to change (if this directory is a git repository, `git status` and `git diff` show what you changed).
+      $|
+    return out.to_string()
+  }
   out <+ "\nYour worktree (your whole writable world): \{input.worker_root}\n"
   out <+
     "Allowed paths (relative to the worktree; the file tools enforce these):\n"
@@ -105,7 +129,7 @@ fn worker_task(input : WorkerInput) -> String {
     out <+ "- \{prefix}\n"
   }
   out <+
-    "\nYou forked from commit \{input.base_oid}. Do not commit — the harness commits and merges validated changes after you submit_result.\n"
+    "\nYou forked from commit \{base_oid}. Do not commit — the harness commits and merges validated changes after you submit_result.\n"
   out.to_string()
 }
 

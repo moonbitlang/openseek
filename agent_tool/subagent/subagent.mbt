@@ -18,13 +18,17 @@ pub fn definition(
       #|{"query": "...", "hints"?: "..."}. kind "review": an advisory audit, input
       #|{"goal": "..."} (the worktree against a goal) or {"base": "<ref>"} (the
       #|base...HEAD diff). kind "worker": makes a change, input {"task": "...",
-      #|"context"?: "..."}, plus worktree {"name": "<slug>", "allowed_paths": [...]}:
-      #|it works in a new git worktree forked from HEAD (commit what it needs first) and
-      #|may change only allowed_paths, disjoint from other live workers'. You get a notice
-      #|when it ends; job_wait waits for it, job_output reads its outcome and report
-      #|(for a worker: the commit its change was captured as, and the git that takes
-      #|it), job_stop stops it. Up to 16 run at once. Give each a complete brief: it
-      #|does not see this conversation.
+      #|"context"?: "..."}, plus where, one of: worktree {"name": "<slug>",
+      #|"allowed_paths": [...]}: it works in a new git worktree forked from HEAD (commit
+      #|what it needs first) and may change only allowed_paths, disjoint from other live
+      #|workers'; or directory "<path>": it works in place in that directory below this
+      #|checkout (one repository, or one module), which no other live worker's may
+      #|overlap, and leaves its change there uncommitted, for you to review and commit.
+      #|Separate repositories or modules need no worktree. You get a notice when it ends;
+      #|job_wait waits for it, job_output reads its outcome and report (for a worker:
+      #|where its change is, and the git that takes it), job_stop stops it. Up to 16
+      #|run at once, 4 of them workers. Give each a complete brief: it does not see
+      #|this conversation.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -46,6 +50,7 @@ pub fn definition(
           "description": "Optional step budget, capped at the kind's own.",
         },
         "worktree": worktree_schema,
+        "directory": directory_schema,
       },
       "required": ["kind", "input"],
     }),
@@ -64,9 +69,9 @@ pub(all) struct Kind {
   validate : (Json) -> Result[Json, String]
   /// Whether a running child of this kind reads instructions sent to it.
   takes_instructions : Bool
-  /// It changes code, in a worktree of its own: a start names the worktree
-  /// and the paths it may change.
-  worktree : Bool
+  /// It changes code: a start names where, a worktree of its own (and the
+  /// paths it may change there) or a directory of the checkout.
+  changes_code : Bool
 }
 
 ///|
@@ -105,20 +110,28 @@ async fn start(
       is_error=true,
     )
   }
-  let slice : @agent_subagent.Slice? = match (kind.worktree, arguments) {
+  let workplace : @agent_subagent.Workplace? = match
+    (kind.changes_code, arguments) {
+    (true, { "worktree": _, "directory": _, .. }) =>
+      return @agent_tool.respond(
+        "error: a \{name} takes a worktree or a directory, not both",
+        is_error=true,
+      )
     (
       true,
       { "worktree": { "name": String(slug), "allowed_paths": paths, .. }, .. },
     ) if strings(paths) is Some(allowed_paths) =>
-      Some({ name: slug, allowed_paths, })
+      Some(Worktree({ name: slug, allowed_paths, }))
+    (true, { "directory": String(path), .. }) if !path.is_blank() =>
+      Some(Directory(path))
     (true, _) =>
       return @agent_tool.respond(
-        "error: a \{name} needs worktree {\"name\": \"<slug>\", \"allowed_paths\": [\"<path prefix>\", ...]}",
+        "error: a \{name} needs worktree {\"name\": \"<slug>\", \"allowed_paths\": [\"<path prefix>\", ...]} or directory \"<path>\"",
         is_error=true,
       )
-    (false, { "worktree": _, .. }) =>
+    (false, { "worktree": _, .. } | { "directory": _, .. }) =>
       return @agent_tool.respond(
-        "error: only a kind that changes code takes a worktree; \{name} works in this checkout",
+        "error: only a kind that changes code takes a worktree or a directory; \{name} works in this checkout",
         is_error=true,
       )
     (false, _) => None
@@ -138,7 +151,11 @@ async fn start(
   // What an earlier engine of this session left goes first, so it holds no
   // paths this worker may need, and its result reaches the caller: its job
   // is not this engine's to read.
-  let recovered = if slice is Some(_) { launcher.recover() } else { [] }
+  let recovered = if workplace is Some(Worktree(_)) {
+    launcher.recover()
+  } else {
+    []
+  }
   let left = recovered
     .map(found => {
       "An earlier engine's worker (session \{found.0}) left this: \{@agent_subagent.describe_worktree(found.1)}\n"
@@ -154,7 +171,7 @@ async fn start(
     max_steps~,
     launch~,
     validate=kind.validate,
-    slice?,
+    workplace?,
   )
   // The response below carries what was recovered: from here it is
   // delivered, and a start cut short before here reports it again.
@@ -283,6 +300,13 @@ let worktree_schema : Json = {
     "allowed_paths": { "type": "array", "items": { "type": "string" } },
   },
   "required": ["name", "allowed_paths"],
+}
+
+///|
+/// The `directory` argument of a start, for a kind that changes code.
+let directory_schema : Json = {
+  "type": "string",
+  "description": "A worker's directory, below this checkout: one repository or module it works in place, instead of a worktree.",
 }
 
 ///|

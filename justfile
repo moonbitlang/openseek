@@ -56,6 +56,7 @@ test-subagents:
     moon run tests/integration/review_workflow.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/subagent_send.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
     moon run tests/integration/workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/directory_workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
 test-moon:
     moon test --target native

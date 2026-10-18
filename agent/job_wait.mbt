@@ -53,12 +53,10 @@ async fn AgentLoop::wait_for_jobs(
         // An ended subagent says what it achieved: its process can exit 0
         // without a report.
         Some({ subagent: Some({ outcome: Some(outcome), workspace, .. }), .. }) => {
-          let worktree = match workspace {
-            Worktree(worktree) =>
-              "; \{@agent_subagent.brief_worktree(worktree)}"
-            InPlace => ""
-          }
-          "\{id} \{@agent_subagent.describe_outcome(outcome)}\{worktree}"
+          let change = @agent_subagent.brief_workspace(workspace).map_or("", change => {
+            "; \{change}"
+          })
+          "\{id} \{@agent_subagent.describe_outcome(outcome)}\{change}"
         }
         Some(job) => {
           let status = match job.status {

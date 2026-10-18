@@ -13,6 +13,7 @@ priv enum DynamicMessage {
   DSpentSteps(String, String)
   DSession(String)
   DWorktree(String, String)
+  DWorkerDirectory(String)
   DWorktreeCommitted(String)
 }
 
@@ -80,6 +81,16 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DSession(p0)) => "会话：\{p0}"
     (TraditionalChinese, DSession(p0)) => "工作階段：\{p0}"
     (Japanese, DSession(p0)) => "セッション：\{p0}"
+    (English, DWorkerDirectory(p0)) =>
+      "Works in place in \{p0}; its change is left uncommitted there"
+    (Spanish, DWorkerDirectory(p0)) =>
+      "Trabaja en el sitio en \{p0}; su cambio queda allí sin confirmar"
+    (SimplifiedChinese, DWorkerDirectory(p0)) =>
+      "在 \{p0} 中原地工作；改动未提交地留在那里"
+    (TraditionalChinese, DWorkerDirectory(p0)) =>
+      "在 \{p0} 中原地工作；變更未提交地留在那裡"
+    (Japanese, DWorkerDirectory(p0)) =>
+      "\{p0} でその場で作業し、変更は未コミットのまま残ります"
     (English, DWorktree(p0, p1)) => "Worktree \{p0} · branch \{p1}"
     (Spanish, DWorktree(p0, p1)) => "Worktree \{p0} · rama \{p1}"
     (SimplifiedChinese, DWorktree(p0, p1)) => "工作树 \{p0} · 分支 \{p1}"

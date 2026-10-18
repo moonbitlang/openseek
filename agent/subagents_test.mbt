@@ -46,7 +46,7 @@ async test "a session's subagent ends with a notice and a readable report" {
               ceiling: 40,
               validate: report => Ok(report),
               takes_instructions: true,
-              worktree: false,
+              changes_code: false,
             },
           ],
           audit_context: () => Json::null(),

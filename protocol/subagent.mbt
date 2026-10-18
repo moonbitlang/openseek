@@ -98,6 +98,10 @@ pub(all) enum SubagentWorkspace {
   InPlace
   /// A git worktree the engine provisioned for it, as of the record.
   Worktree(Worktree)
+  /// A directory below the session's checkout, `path` (canonical), that the
+  /// worker had to itself while it ran: it changed files there in place, and
+  /// what it changed is left there, uncommitted, for the launching session.
+  Directory(path~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -300,6 +304,7 @@ pub impl ToJson for SubagentWorkspace with fn to_json(self) {
   match self {
     InPlace => { "kind": "in_place" }
     Worktree(worktree) => { "kind": "worktree", "worktree": worktree.to_json() }
+    Directory(path~) => { "kind": "directory", "path": path }
   }
 }
 
@@ -309,6 +314,8 @@ pub impl FromJson for SubagentWorkspace with fn from_json(json, path) {
     { "kind": "in_place", .. } => InPlace
     { "kind": "worktree", "worktree": worktree, .. } =>
       Worktree(Worktree::from_json(worktree, path))
+    { "kind": "directory", "path": String(directory), .. } =>
+      Directory(path=directory)
     _ => raise JsonDecodeError((path, "invalid subagent workspace"))
   }
 }

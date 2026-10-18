@@ -23,7 +23,7 @@ pub(all) struct Kind {
   ceiling : Int
   validate : (Json) -> Result[Json, String]
   takes_instructions : Bool
-  worktree : Bool
+  changes_code : Bool
 }
 
 pub(all) struct Subagents {

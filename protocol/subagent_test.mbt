@@ -112,6 +112,7 @@ test "the subagent decoder rejects malformed parts" {
       ("usage", { "kind": "unavailable", "reason": "" }),
       ("report", { "kind": "stored_elsewhere" }),
       ("workspace", { "kind": "worktree" }),
+      ("workspace", { "kind": "directory" }),
     ] {
     guard ended_subagent().to_json() is Object(fields) else {
       fail("expected object")
@@ -157,4 +158,27 @@ test "a worker's worktree roundtrips in every state" {
     _ => None
   }
   assert_eq(decoded, None)
+}
+
+///|
+test "a worker's directory roundtrips" {
+  let info = {
+    ..ended_subagent(),
+    workspace: Directory(path="/work/moonbit-community/ini"),
+  }
+  let decoded : @openseek_protocol.SubagentInfo = @json.from_json(
+    info.to_json(),
+  )
+  assert_eq(decoded, info)
+  assert_true(
+    info.to_json()
+    is {
+      "workspace": {
+        "kind": "directory",
+        "path": "/work/moonbit-community/ini",
+        ..
+      },
+      ..
+    },
+  )
 }

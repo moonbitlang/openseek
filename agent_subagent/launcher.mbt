@@ -14,9 +14,9 @@ const StopGraceMs : Int32 = 10_000
 const MaxLive : Int32 = 16
 
 ///|
-/// How many of them may be workers: each builds and tests in a worktree of
-/// its own, which costs the machine, where a read-only child mostly waits on
-/// the model.
+/// How many of them may be workers: each builds and tests in a worktree or a
+/// directory of its own, which costs the machine, where a read-only child
+/// mostly waits on the model.
 const MaxWorkers : Int32 = 4
 
 ///|
@@ -76,8 +76,11 @@ struct Launcher {
   reports : Map[String, Json]
   owners : Map[String, Owner]
   // The sessions of workers live in their worktrees, from before their
-  // worktree is forked until it is captured.
+  // worktree is forked until it is captured, or in their directories.
   working : Map[String, Unit]
+  // The directory each worker that works in place holds, by its session,
+  // until its job has ended.
+  directories : Map[String, String]
   // Worker sessions whose hand-off reached the model through this engine:
   // through their own job, or reported by `recover`.
   known : Map[String, Unit]
@@ -126,6 +129,7 @@ pub fn[X] Launcher::Launcher(
     reports: Map([]),
     owners: Map([]),
     working: Map([]),
+    directories: Map([]),
     known: Map([]),
     admitting: 0,
   }
@@ -207,10 +211,12 @@ pub fn Launcher::report(self : Launcher, session : String) -> Json? {
 /// result for this request whose output it accepts, and what it returns is
 /// the report kept.
 ///
-/// With a `slice`, the child is a worker: it runs in a worktree forked for it
-/// from the launching checkout, whose geometry is added to its `input` (an
-/// object), and what it changed there is captured from git when it ends. Its
-/// worktree outlives its job; see `Launcher::worktree`.
+/// With a `workplace`, the child is a worker. In a `Worktree` it runs in a
+/// worktree forked for it from the launching checkout, whose geometry is
+/// added to its `input` (an object), and what it changed there is captured
+/// from git and handed over when it ends. In a `Directory` it runs there,
+/// which no other running worker's directory may overlap, and what it changed
+/// is left there.
 pub async fn Launcher::start(
   self : Launcher,
   kind~ : String,
@@ -219,12 +225,12 @@ pub async fn Launcher::start(
   max_steps? : Int32,
   launch~ : @protocol.SubagentLaunch,
   validate~ : (Json) -> Result[Json, String],
-  slice? : Slice,
+  workplace? : Workplace,
 ) -> StartResult {
-  guard slice is None || input is Object(_) else {
+  guard workplace is None || input is Object(_) else {
     return Unavailable("a worker's input must be an object")
   }
-  guard slice is None ||
+  guard workplace is None ||
     self.working.length() + self.admitting < self.max_workers else {
     return Unavailable(
       "\{self.max_workers} workers are already running; wait for one to end (job_wait) and start this one again",
@@ -247,7 +253,7 @@ pub async fn Launcher::start(
     }
   }
   // A worker holds its place under the cap until it is in `working`.
-  let admitting = Ref(slice is Some(_))
+  let admitting = Ref(workplace is Some(_))
   if admitting.val {
     self.admitting += 1
   }
@@ -275,17 +281,29 @@ pub async fn Launcher::start(
   }
   let session = claimed.session
   // A start cut short before its job is registered leaves no worker: its
-  // session leaves the running set too, so recovery can take what it forked.
-  errdefer (if !registered.val { self.working.remove(session) })
+  // session leaves the running set too, so recovery can take what it forked,
+  // and its directory is free.
+  errdefer (if !registered.val {
+    self.working.remove(session)
+    self.directories.remove(session)
+  })
   // A worker's worktree, forked once its session is known: the session
   // names it. From here until it is captured, recovery leaves it alone.
-  let (provisioned, input) = match (slice, input) {
-    (Some(slice), Object(fields)) => {
+  let (provisioned, workspace, input) : (
+    @subtask.Provisioned?,
+    @protocol.SubagentWorkspace,
+    Json,
+  ) = match (workplace, input) {
+    (Some(Worktree(slice)), Object(fields)) => {
       self.working[session] = ()
       admitted()
       match self.provision(slice, claimed) {
         Ok(provisioned) =>
-          (Some(provisioned), worker_input(fields, provisioned))
+          (
+            Some(provisioned),
+            Worktree(worktree_of(provisioned.entry)),
+            worker_input(fields, provisioned),
+          )
         Err(reason) => {
           self.working.remove(session)
           release()
@@ -293,14 +311,39 @@ pub async fn Launcher::start(
         }
       }
     }
-    _ => (None, input)
+    (Some(Directory(path)), Object(fields)) => {
+      self.working[session] = ()
+      admitted()
+      let held = match self.resolve_directory(path) {
+        Ok((directory, deny_roots)) =>
+          self
+          .reserve_directory(session, directory)
+          .map(_ => (directory, deny_roots))
+        Err(reason) => Err(reason)
+      }
+      match held {
+        Ok((directory, deny_roots)) =>
+          (
+            None,
+            Directory(path=directory),
+            directory_input(fields, directory, deny_roots),
+          )
+        Err(reason) => {
+          self.working.remove(session)
+          release()
+          return Unavailable("could not give it \{path}: \{reason}")
+        }
+      }
+    }
+    _ => (None, InPlace, input)
   }
-  // A start that fails from here gives the worktree up.
+  // A start that fails from here gives its worktree or directory up.
   let abandon = async fn() {
     if provisioned is Some(provisioned) {
       ignore(@subtask.discard(provisioned.geometry, provisioned.entry))
-      self.working.remove(session)
     }
+    self.working.remove(session)
+    self.directories.remove(session)
   }
   let result_file = "\{self.result_dir}/\{session}.result.json"
   let child : Child = {
@@ -313,10 +356,7 @@ pub async fn Launcher::start(
     report: None,
     stopping: false,
     delivery_failed: false,
-    workspace: match provisioned {
-      Some(provisioned) => Worktree(worktree_of(provisioned.entry))
-      None => InPlace
-    },
+    workspace,
   }
   let (child_stdin, writer) = try {
     @fs.mkdir(self.result_dir, recursive=true, allow_exist=true)
@@ -353,9 +393,10 @@ pub async fn Launcher::start(
     // The token is the child's alone: the job's recorded command omits it.
     command="openseek run --kind \{kind} --session \{session}",
     description=label,
-    cwd?=match provisioned {
-      Some(provisioned) => Some(provisioned.entry.worker_root)
-      None => self.cwd
+    cwd?=match workspace {
+      Worktree(worktree) => Some(worktree.path)
+      Directory(path~) => Some(path)
+      InPlace => self.cwd
     },
     stdin=child_stdin,
     extra_env=self.env,
@@ -364,6 +405,8 @@ pub async fn Launcher::start(
       defer writer.close()
       // Left to recovery if capturing is cut short.
       defer self.working.remove(session)
+      // The child has exited: its directory is free.
+      defer self.directories.remove(session)
       self.settle(child, end, result_file~, validate~)
       if provisioned is Some(provisioned) {
         capture(child, provisioned)
@@ -386,7 +429,7 @@ pub async fn Launcher::start(
   }
   registered.val = true
   // Its hand-off reaches the model through its own job from here on.
-  if slice is Some(_) {
+  if workplace is Some(Worktree(_)) {
     self.known[session] = ()
   }
   owner.starts += 1

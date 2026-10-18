@@ -245,6 +245,37 @@ test "worker input parse validates every field" {
 }
 
 ///|
+/// A worker that works in place is given its directory and what is denied,
+/// and nothing a worktree has: the whole directory is its to change.
+test "a directory worker's input needs no worktree geometry" {
+  let input : Json = {
+    "task": "t",
+    "mode": "directory",
+    "worker_root": "/work/a",
+    "deny_roots": ["/work"],
+  }
+  guard @agent_worker.WorkerInput::parse(input) is Ok(parsed) else {
+    fail("expected a valid directory input")
+  }
+  assert_eq(parsed.allowed_paths, [])
+  for
+    bad in (
+      [
+        { "task": "t", "mode": "directory", "worker_root": "/work/a" },
+        {
+          "task": "t",
+          "mode": "directory",
+          "worker_root": "a",
+          "deny_roots": ["/work"],
+        },
+      ] : Array[Json]) {
+    guard @agent_worker.WorkerInput::parse(bad) is Err(_) else {
+      fail("expected a rejection for \{bad.stringify()}")
+    }
+  }
+}
+
+///|
 fn variant(
   task~ : String = "t",
   worker_root~ : String = "/w",

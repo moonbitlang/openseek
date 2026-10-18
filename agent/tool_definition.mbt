@@ -7,11 +7,10 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
       Some(outcome) => @agent_subagent.describe_outcome(outcome)
       None => "ended"
     }
-    let worktree = match info.workspace {
-      Worktree(worktree) => "; \{@agent_subagent.brief_worktree(worktree)}"
-      InPlace => ""
-    }
-    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{worktree} — read its outcome, its report and what to do with its change with job_output (job_id=\"\{snapshot.id}\")."
+    let change = @agent_subagent.brief_workspace(info.workspace).map_or("", change => {
+      "; \{change}"
+    })
+    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{change} — read its outcome, its report and what to do with its change with job_output (job_id=\"\{snapshot.id}\")."
   }
   let status = if snapshot.cleanup_error is Some(error) {
     "cleanup failed: \{error}"

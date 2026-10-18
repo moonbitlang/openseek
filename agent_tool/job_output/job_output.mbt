@@ -266,8 +266,8 @@ fn subagent_output(
       content.write_string("spent: unknown (\{reason})\n")
     None => ()
   }
-  if info.workspace is Worktree(worktree) {
-    content.write_string("\{@agent_subagent.describe_worktree(worktree)}\n")
+  if @agent_subagent.describe_workspace(info.workspace) is Some(workspace) {
+    content.write_string("\{workspace}\n")
   }
   let report = subagent_report.bind(read => read(info.session))
   match (info.report, report) {

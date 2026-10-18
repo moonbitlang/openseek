@@ -291,6 +291,13 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   `git cherry-pick <commit>` (or `git merge`), re-run your checks, and delete
   the branch. A change that failed validation is not committed; its files
   are kept at the worktree's path for you to inspect.
+  Separate repositories, or separate modules, need no worktree: start the
+  worker with `directory` (one repository or module below this checkout)
+  instead, and it works there in place; directories of live workers must
+  not overlap. Many independent ones are what workers are for: start one
+  per directory, up to four at a time, rather than doing them in turn. When
+  one ends, its change is left uncommitted in its directory: review it there
+  (`git -C <dir> diff`), and commit or restore it.
 
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.
