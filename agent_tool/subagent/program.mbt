@@ -17,7 +17,8 @@ const ProgramReplyChars : Int32 = 60_000
 /// The tools are program-callable only (the model has its own `subagent` and
 /// job tools): `subagent`, `job_wait` (returns within 60 s with every listed
 /// child's state), `job_output` (a child's outcome and its report, in
-/// chunks that fit one reply), `job_stop`, and `audit_context` (the session's
+/// chunks that fit one reply), `job_stop`, `worktree` (integrate or discard
+/// the changes of a worker it started), and `audit_context` (the session's
 /// standing goal and baseline, or null).
 pub fn program_binding(
   launcher : @agent_subagent.Launcher,
@@ -44,6 +45,7 @@ pub fn program_binding(
             "input": { "type": "object" },
             "label": { "type": "string" },
             "max_steps": { "type": "integer" },
+            "worktree": worktree_schema,
           },
           "required": ["kind", "input"],
         },
@@ -107,6 +109,28 @@ pub fn program_binding(
           }
           ignore(runtime.stop(job_id))
           @agent_tool.respond("stopped \{job_id}", data={ "job_id": job_id })
+        },
+      ),
+      program_tool(
+        "worktree",
+        (
+          #|Integrate, continue or abort integrating, or discard the worktree of a
+          #|worker this script started, once it has ended: `action` and its
+          #|`worker` job_id. data.worktree is its state after.
+        ),
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": ["integrate", "continue", "abort", "discard"],
+            },
+            "worker": { "type": "string" },
+          },
+          "required": ["action", "worker"],
+        },
+        arguments => {
+          act(launcher, arguments, may=job_id => launcher.owns(program, job_id))
         },
       ),
       program_tool(

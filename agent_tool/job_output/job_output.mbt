@@ -266,6 +266,15 @@ fn subagent_output(
       content.write_string("spent: unknown (\{reason})\n")
     None => ()
   }
+  if info.workspace is Worktree(worktree) {
+    content.write_string(
+      (
+        $|worktree \{worktree.name}: branch \{worktree.branch} at \{worktree.path}, \{@agent_subagent.describe_state(worktree.state)}
+        $|Integrate or discard it with the worktree tool (worker="\{job_id}").
+        $|
+      ),
+    )
+  }
   let report = subagent_report.bind(read => read(info.session))
   match (info.report, report) {
     (Some(stored), Some(report)) => {

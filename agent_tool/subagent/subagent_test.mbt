@@ -19,7 +19,6 @@ fn kinds() -> Array[@subagent.Kind] {
     {
       name: "explore",
       ceiling: 40,
-      takes_instructions: true,
       validate: report => {
         if report is { "answer": String(_), .. } {
           Ok(report)
@@ -27,6 +26,15 @@ fn kinds() -> Array[@subagent.Kind] {
           Err("answer must be a string")
         }
       },
+      takes_instructions: true,
+      worktree: false,
+    },
+    {
+      name: "change",
+      ceiling: 40,
+      validate: report => Ok(report),
+      takes_instructions: false,
+      worktree: true,
     },
   ]
 }
@@ -174,6 +182,60 @@ async test "subagent bounds every child's step budget by its kind's ceiling" {
 }
 
 ///|
+#cfg(not(platform="windows"))
+async test "only a kind that changes code takes a worktree, and it must" {
+  @async.with_task_group(group => {
+    let (tool, _) = tool_and_runtime(group)
+    let missing = call(tool, { "kind": "change", "input": { "task": "t" } })
+    assert_true(missing.is_error && missing.content.contains("needs worktree"))
+    let malformed = call(tool, {
+      "kind": "change",
+      "input": { "task": "t" },
+      "worktree": { "name": "x", "allowed_paths": [1] },
+    })
+    assert_true(
+      malformed.is_error && malformed.content.contains("needs worktree"),
+    )
+    let stray = call(tool, {
+      "kind": "explore",
+      "input": { "query": "q" },
+      "worktree": { "name": "x", "allowed_paths": ["lib"] },
+    })
+    assert_true(
+      stray.is_error && stray.content.contains("only a kind that changes code"),
+    )
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "worktree names what it cannot act on" {
+  @async.with_task_group(group => {
+    let root = @fs.tmpdir(prefix="openseek-worktree-tool-")
+    group.add_defer(() => @fs.rmdir(root, recursive=true))
+    let runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group))
+    let launcher = @agent_subagent.Launcher(
+      AgentTaskScope(group),
+      runtime~,
+      children=ChildSession(root~, parent="p"),
+      program="sh",
+      args=[],
+      result_dir="\{root}/results",
+      cwd=root,
+    )
+    let tool = @subagent.worktree_definition(launcher)
+    // Not a git checkout: no worker could have a worktree here.
+    let listed = call(tool, { "action": "list" })
+    assert_false(listed.is_error)
+    assert_true(listed.content.contains("No worker"))
+    let unknown = call(tool, { "action": "integrate", "worker": "job-9" })
+    assert_true(unknown.is_error && unknown.content.contains("job-9"))
+    let no_worker = call(tool, { "action": "discard" })
+    assert_true(no_worker.is_error)
+  })
+}
+
+///|
 /// A child of a kind that reads no instructions is refused at once, with
 /// what to do instead, rather than with a retry that can never succeed.
 #cfg(not(platform="windows"))
@@ -197,6 +259,7 @@ async test "subagent_send refuses a kind that takes no instructions" {
         ceiling: 40,
         validate: report => Ok(report),
         takes_instructions: false,
+        worktree: false,
       },
     ]
     let start = @subagent.definition(launcher, kinds)

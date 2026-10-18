@@ -17,9 +17,14 @@ pub fn definition(
       #|kind "explore": answers a question about the code with citations; input
       #|{"query": "...", "hints"?: "..."}. kind "review": an advisory audit, input
       #|{"goal": "..."} (the worktree against a goal) or {"base": "<ref>"} (the
-      #|base...HEAD diff). You get a notice when it ends; job_wait waits for it,
-      #|job_output reads its outcome and report, job_stop stops it. Up to 16 run at
-      #|once. Give each a complete brief: it does not see this conversation.
+      #|base...HEAD diff). kind "worker": makes a change, input {"task": "...",
+      #|"context"?: "..."}, plus worktree {"name": "<slug>", "allowed_paths": [...]}:
+      #|it works in a new git worktree forked from HEAD (commit what it needs first) and
+      #|may change only allowed_paths, disjoint from other live workers'. You get a notice
+      #|when it ends; job_wait waits for it, job_output reads its outcome and report (and
+      #|a worker's committed changes), job_stop stops it. Then use the worktree tool to
+      #|integrate or discard a worker's changes. Up to four run at once. Give each a
+      #|complete brief: it does not see this conversation.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -40,6 +45,7 @@ pub fn definition(
           "type": "integer",
           "description": "Optional step budget, capped at the kind's own.",
         },
+        "worktree": worktree_schema,
       },
       "required": ["kind", "input"],
     }),
@@ -58,6 +64,9 @@ pub(all) struct Kind {
   validate : (Json) -> Result[Json, String]
   /// Whether a running child of this kind reads instructions sent to it.
   takes_instructions : Bool
+  /// It changes code, in a worktree of its own: a start names the worktree
+  /// and the paths it may change.
+  worktree : Bool
 }
 
 ///|
@@ -96,6 +105,24 @@ async fn start(
       is_error=true,
     )
   }
+  let slice : @agent_subagent.Slice? = match (kind.worktree, arguments) {
+    (
+      true,
+      { "worktree": { "name": String(slug), "allowed_paths": paths, .. }, .. },
+    ) if strings(paths) is Some(allowed_paths) =>
+      Some({ name: slug, allowed_paths, })
+    (true, _) =>
+      return @agent_tool.respond(
+        "error: a \{name} needs worktree {\"name\": \"<slug>\", \"allowed_paths\": [\"<path prefix>\", ...]}",
+        is_error=true,
+      )
+    (false, { "worktree": _, .. }) =>
+      return @agent_tool.respond(
+        "error: only a kind that changes code takes a worktree; \{name} works in this checkout",
+        is_error=true,
+      )
+    (false, _) => None
+  }
   let label = match arguments {
     { "label": String(label), .. } if !label.is_blank() =>
       @agent_tool.brief_line(label, limit=72)
@@ -116,6 +143,7 @@ async fn start(
       max_steps~,
       launch~,
       validate=kind.validate,
+      slice?,
     ) {
     Started(job_id~, session~) if launch is Script(_) =>
       @agent_tool.respond("started subagent \{job_id} (\{name}: \{label})", data={
@@ -218,4 +246,28 @@ async fn send(
       )
     Invalid(reason) => @agent_tool.respond("error: \{reason}", is_error=true)
   }
+}
+
+///|
+/// The `worktree` argument of a start, for a kind that changes code.
+let worktree_schema : Json = {
+  "type": "object",
+  "description": "A worker's worktree: a short lowercase slug naming it, and the repository-relative path prefixes it may change.",
+  "properties": {
+    "name": { "type": "string" },
+    "allowed_paths": { "type": "array", "items": { "type": "string" } },
+  },
+  "required": ["name", "allowed_paths"],
+}
+
+///|
+/// `json` as an array of strings, if it is one.
+fn strings(json : Json) -> Array[String]? {
+  guard json is Array(items) else { return None }
+  let found = []
+  for item in items {
+    guard item is String(text) else { return None }
+    found.push(text)
+  }
+  Some(found)
 }

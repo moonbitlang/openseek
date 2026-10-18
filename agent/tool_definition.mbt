@@ -7,7 +7,12 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
       Some(outcome) => @agent_subagent.describe_outcome(outcome)
       None => "ended"
     }
-    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended} — read its outcome and report with job_output (job_id=\"\{snapshot.id}\")."
+    let worktree = match info.workspace {
+      Worktree(worktree) =>
+        "; its worktree \{worktree.name} is \{@agent_subagent.describe_state(worktree.state)}"
+      InPlace => ""
+    }
+    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{worktree} — read its outcome and report with job_output (job_id=\"\{snapshot.id}\")."
   }
   let status = if snapshot.cleanup_error is Some(error) {
     "cleanup failed: \{error}"
@@ -275,6 +280,13 @@ pub async fn[X] build_tools(
       @job_wait.definition(),
       @finish.definition(),
       ..match (launcher, subagents) {
+        (Some(launcher), Some(spec)) if spec.kinds.any(kind => kind.worktree) =>
+          [
+            @subagent.definition(launcher, spec.kinds),
+            @subagent.send_definition(launcher, spec.kinds),
+            // Integrating writes this checkout, as the file tools do.
+            file_state.serialize(@subagent.worktree_definition(launcher)),
+          ]
         (Some(launcher), Some(spec)) =>
           [
             @subagent.definition(launcher, spec.kinds),

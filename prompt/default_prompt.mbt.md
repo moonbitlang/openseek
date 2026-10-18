@@ -282,6 +282,12 @@ It costs a bounded subagent run, so for small changes validate directly instead.
   its outcome and report, `job_stop` stops it, `job_wait` waits for it. To
   redirect an explore child while it runs, `subagent_send` gives it a new
   instruction, which it takes at its next step.
+  A `worker` makes a change for you in its own git worktree, forked from HEAD
+  (commit first what it must see), and may change only its `allowed_paths`,
+  which must not overlap another live worker's. Give workers independent,
+  disjoint slices; do coupled edits yourself. When one ends, its changes wait
+  on a branch: read them with `job_output`, then `worktree` integrates them
+  into this checkout (re-run your checks after) or discards them.
 
 - Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
   use `moon build` or `moon test` only when you need artifacts or test results.

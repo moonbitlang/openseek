@@ -408,6 +408,16 @@ old generations from model tools.
   engine restart. The registry entry keeps the capture's defects, so an
   unmergeable worktree still says why after a restart. Admission stays the
   registry's in-process mutex; one engine per repository is still assumed.
+- PR 7: `worker` is a kind of `subagent` that takes a `worktree` argument
+  (`{name, allowed_paths}`); a kind says whether it changes code, and only
+  such a kind takes one. One `worktree` tool for the model lists the
+  session's worktrees and integrates, continues, aborts or discards one,
+  named by its worker's job id or session; it is serialized with the file
+  tools because integrating writes the checkout. A script gets the same
+  actions on the workers it started. `job_output` and the end notice say
+  where a worker's worktree stands. `tests/integration/workers.mbtx` runs
+  the real CLI and a real worker child against a scripted provider in a
+  temporary repository, through integration.
 
 ## Integrated testing
 

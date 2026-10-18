@@ -14,6 +14,7 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
         }
         Ok(report)
       },
+      worktree: false,
     },
     {
       name: "review",
@@ -25,6 +26,16 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
           Err(problem) => Err(problem)
         }
       },
+      worktree: false,
+    },
+    {
+      name: "worker",
+      ceiling: @agent_worker.default_worker_max_steps,
+      validate: report => {
+        @agent_worker.WorkerReport::parse_validated(report).map(_ => report)
+      },
+      takes_instructions: false,
+      worktree: true,
     },
   ]
 }
