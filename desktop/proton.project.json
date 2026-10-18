@@ -26,6 +26,7 @@
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moon-wasm-opt",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moon_cove_report",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moonc",
+        "seekmoon/toolchains/moonbit/macos-arm64/bin/moonc-prove",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/mooncake",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moondoc",
         "seekmoon/toolchains/moonbit/macos-arm64/bin/moonfmt",

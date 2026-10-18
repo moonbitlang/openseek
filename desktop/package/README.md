@@ -42,6 +42,15 @@ suffixes and executable permissions. If a macOS binary requires signing, also
 add its `seekmoon/...` path to `package.sign.binaries` in
 `proton.project.json`.
 
+Signed macOS builds check every staged Mach-O executable, library, and bundle
+against that signing list before packaging. Update the list when a toolchain
+upgrade adds a binary; relocatable object files do not require signing.
+
+If notarized packaging fails after creating a DMG, the build retrieves Apple
+reports for this build's submissions and matches their SHA-256 to that DMG.
+The matching reports, including their status and validation errors, appear in
+the build log. A failed diagnostic lookup preserves the original build failure.
+
 Do not resolve package files from the process working directory. Host features
 append canonical paths to `@proton.resource_dir()`. Installed lookup must fail
 closed rather than silently use a system copy.
