@@ -1,9 +1,10 @@
 # Plan: subagents as engine-owned background jobs
 
-Date: 2026-10-18. Status: proposal, not implemented. It replaces the draft in
-#1872 (branch `subagents-design`, four external review rounds) and makes the
-allocator in #1874 unnecessary if the "Ids" section holds. Findings of those
-rounds that still apply are kept and marked *(#1872 rN)*.
+Date: 2026-10-18. Status: proposal, revised after one external architecture
+review (findings at the end); not implemented. It replaces the draft in #1872
+(branch `subagents-design`, four review rounds) and makes the allocator ledger
+in #1874 unnecessary. Findings of those rounds that still apply are kept and
+marked *(#1872 rN)*.
 
 ## Direction
 
@@ -17,8 +18,8 @@ rounds that still apply are kept and marked *(#1872 rN)*.
 - **A subagent is a specialized background job.** It shares the job
   lifecycle (ids, stop, the loop-owned wait, the exit notice, the jobs panel,
   retained records) and adds a typed record of its own (kind, child session,
-  outcome, usage, workspace) so a host can show it as an agent, and later as a
-  worker with a worktree.
+  outcome, usage, report, workspace) so a host can show it as an agent, and
+  later as a worker with a worktree.
 - **Simple.** One new tool to start a child. Waiting, reading and stopping
   use the job tools the model already knows.
 
@@ -28,239 +29,345 @@ rounds that still apply are kept and marked *(#1872 rN)*.
   calling `mbtx(subrun=true)`. The SNIPPET spawns `openseek run --kind …`
   through `moonbitlang/workflow/hosted`; the engine reserves 32 child ordinals
   in memory beforehand (`agent_subrun/host`, `agent_subrun/injection.mbt`) and
-  sees the children only through their transcripts.
+  sees the children only through their transcripts. `@builtin/review.mbtx`
+  also reads the standing goal and baseline from that handoff
+  (`WORKFLOW_HOST.openseek.audit`, `share/workflow/review.mbtx:64`).
 - `subrun` and PTC exclude each other (`agent_tool/mbtx/mbtx.mbt:200`).
 - The one engine-launched child is the goal-met gate's reviewer, through
-  `@agent_subrun.run_subrun` (`internal/openseek/execution/gate.mbt:102`).
-  It is a blocking call that brackets the child with turn-scoped
-  `SubrunStarted`/`SubrunFinished` events.
-- `run_subrun` spawns through `moonbitlang/workflow/spawn` (`contract_run`),
-  which returns only when the child ends. The child is
-  `openseek run --input-format json --cancel-on-stdin-eof --kind <k>
-  --result-file <f> --session <parent>-sr-N`; it refuses a session that
-  already exists (`internal/openseek/run/run.mbt:356`).
-- Background jobs (`agent_tool/bgjobs`): one `BgJobRuntime` per session, job
-  ids are UUIDv7, records persist under `sessions/<id>/jobs/<generation>`,
-  `JobChanged(kind, JobRecord)` is emitted session-wide (the desktop's jobs
-  panel), a natural exit queues a lossless `Notice` and wakes an idle
-  controller (`agent/tool_definition.mbt:144`). A 30-minute wall-clock reaper
-  applies to every job (`bgjobs.mbt:37`). The registry wraps
-  `@shell_exec.ShellExecution` only.
-- `job_wait` is a loop control (`WaitJobs`) with no timeout; user input
-  interrupts it. PTC rejects loop controls, so a script cannot call it.
-- PTC: 120 s per call on the server (`agent_tool/ptc/server.mbt:230`, exempt
-  for approval-capable tools), 125 s in the SDK (`tools_sdk/client.mbt:51`),
-  four active calls per program, sixteen connections. The program registry is
-  the file tools plus extras (`agent/tool_definition.mbt`).
+  `@agent_subrun.run_subrun` (`internal/openseek/execution/gate.mbt:102`), a
+  blocking call that allocates from a process-local counter
+  (`agent_subrun/runner.mbt:125`) and brackets the child with turn-scoped
+  `SubrunStarted`/`SubrunFinished`. The desktop starts its progress probe for
+  a child on `SubrunStarted` (`desktop/backend/engine/engine.mbt:1833`).
+- The child is `openseek run --input-format json --cancel-on-stdin-eof --kind
+  <k> --result-file <f> --session <parent>-sr-N`. It refuses a session whose
+  directory exists (`run.mbt:354`, `SessionStore::exists` tests the
+  directory, `agent_session/store/store.mbt:482`). The spawn contract writes
+  the request inside its deadline because a child that does not read can
+  block the write (`moonbitlang/workflow/spawn/contract.mbt:162`).
+- Background jobs (`agent_tool/bgjobs`): one runtime per session; UUIDv7 ids;
+  records under `sessions/<id>/jobs/<generation>`; session-scoped
+  `JobChanged(kind, JobRecord)`; a finish sequence of cleanup → frozen data →
+  terminal publication → notice → waiter release (`records.mbt:173`); no
+  update after `Published` (`records.mbt:134`); a 30-minute reaper for every
+  job (`bgjobs.mbt:37`), which also reaps an adopted `mbtx` script; a 20 M
+  character output watchdog. A natural exit queues a lossless notice; between
+  turns that notice is persisted and does NOT start a model turn
+  (`internal/openseek/serve/loop.mbt:358`). The finish guard covers jobs
+  created during the current turn only (`agent/job_wait.mbt:4`). One-shot
+  `run` owns its jobs on the turn's task group (`run/turn.mbt:27`).
+- `job_wait` is a loop control with no timeout; user input interrupts it. PTC
+  rejects loop controls.
+- PTC per program: 120 s per call (server), 125 s (SDK), four active calls,
+  1,024 calls, 512 KiB retained trace, 64 K-character replies; sixteen
+  connections per session. One registry serves every program
+  (`agent_tool/ptc/server.mbt:558`); a program's job id is `None` until
+  adoption (`server.mbt:285`, `:375`).
 - Worker machinery is dormant: `agent_worker` (the kind, still runnable),
-  `agent_subtask` (provision, capture, integrate, discard; no importer outside
-  its own tests), the worker sandbox profile.
+  `agent_subtask` (provision, capture, integrate, discard, a registry under
+  the common git directory, `agent_subtask/registry.mbt:30`; no importer
+  outside its own tests), the worker sandbox profile.
 
 ## Design
 
+### Packages
+
+- `agent_tool/bgjobs` stays generic. It gains an *execution policy* per job
+  (time limit, graceful stop) and an optional typed subagent supplier beside
+  its untyped `data`. It does not import anything about agents.
+- `agent_subrun` keeps the spawn and report-validation code; its contract
+  parsing moves to a leaf it and the launcher share.
+- A new `agent_subagent` package is the launcher: admission, the claim, the
+  child's command line, request delivery, result validation, the record.
+  It depends on `bgjobs` and `agent_subrun`, never the reverse (`agent_subrun`
+  already depends on `agent_tool → bgjobs`).
+
 ### The record
 
-`JobRecord` (protocol) gains one optional, typed part:
+`JobRecord` gains one optional, typed part; `None` for every other job.
 
 ```
-subagent : SubagentInfo?        // None for every other job
-
 SubagentInfo {
-  kind : String                 // "explore" | "review" (later "worker")
+  kind : String                  // "explore" | "review" (later "worker")
   label : String
-  session : String              // "<parent>-sr-N"
-  owner : SubagentOwner         // Model | Program(job id of the script)
-  outcome : SubagentOutcome?    // None while running
-  usage : SubagentUsage?        // None until known; never zeros for unknown
-  workspace : SubagentWorkspace // InPlace (first stack); Worktree{..} later
+  session : String               // "<parent>-sr-N"
+  owner : SubagentOwner          // Model | Program(ProgramId)
+  launch : SubagentLaunch        // Direct | Script(job of the script, call index)
+  outcome : SubagentOutcome?     // None while live
+  usage : SubagentUsage          // Known{..} | Unavailable(reason)
+  report : SubagentReport?       // None until ended
+  workspace : SubagentWorkspace  // InPlace now; Worktree{subtask} later
 }
 SubagentOutcome = Captured | NoReport | MaxSteps | ContextYield | TimedOut
-                | Failed(String) | Stopped | OwnerLost
-SubagentUsage { steps, prompt_tokens, completion_tokens, cost_usd?,
-                source : Result | Transcript, unaccounted : String? }
+                | Stopped | Failed(String)
+SubagentUsage   = Known { steps, prompt_tokens, completion_tokens, cost_usd?,
+                          source : Result | Transcript, unaccounted : String? }
+                | Unavailable(String)
+SubagentReport  = Stored(path) | Absent | StoreFailed(String)
 ```
 
-- The job's own state (`Running`, `Exited`, `Stopped`, `Interrupted`) stays
-  the process fact; `outcome` is what the child achieved *(#1872 r3:
-  process outcome and change state are separate)*.
-- Visualization rides `JobChanged`, which is session-scoped. The launcher does
-  NOT emit `SubrunStarted`/`SubrunFinished`: those are turn-scoped and a child
-  outlives its turn *(#1872 r3)*. The gate keeps its brackets.
-- Additive in the session log and the protocol: an old reader ignores the
-  field (forward compatibility is a non-goal, so no version bump).
+- The job's state (`Running`, `Stopping`, `Exited`, `Stopped`) stays the
+  process fact; `outcome` is what the child achieved *(#1872 r3)*.
+- `report` is separate from `outcome`: a captured report whose store failed
+  is still `Captured`.
+- **Live progress is read from the child's transcript by whoever shows it**,
+  not pushed through the record: the desktop's existing probe
+  (`@subrun.follow_progress`) is started by `JobChanged(Started)` carrying a
+  `SubagentInfo` instead of by `SubrunStarted`; `job_output` on a live child
+  counts steps from the transcript on demand. The record carries final usage.
+- **Correlation.** A direct launch is found by the job id in the `subagent`
+  tool result; a script launch by the script's job id and the call's index in
+  its retained program trace. No new id is needed.
+- The launcher emits no `SubrunStarted`/`SubrunFinished` (turn-scoped; a
+  child outlives its turn) *(#1872 r3)*. The gate keeps its brackets.
+- Additive in the session log and the protocol; an old reader ignores it.
+
+### Allocation: claiming the child's session directory
+
+Every producer of `<parent>-sr-N` with a durable session uses one claim:
+
+1. Pick N = one past the highest existing `<parent>-sr-*` directory, skipping
+   ordinals this process has reserved in memory for the hosted path.
+2. Create `<parent>-sr-N` exclusively. Only "already exists" advances N and
+   retries; any other failure refuses the launch as `unavailable`.
+3. Write a claim file inside it, `claim.json`, with a random token, synced.
+4. Pass the child `--claim <token>`. A `--kind` run given `--claim` accepts
+   an existing session directory only if it holds exactly that claim file and
+   no transcript, and removes the file before its first record. Without
+   `--claim` the existing refusal stands. This is a single-use handoff, not a
+   general "accept an existing directory".
+5. A directory with a claim file and no transcript is a child that never
+   started; it is never reused (the ordinal stays taken).
+
+The gate's reviewer uses the same claim in PR 1; its `--no-session` path is
+unchanged. Two engine processes on one session cannot share a child, a
+restart loses nothing it handed out, and no ledger or lock is needed.
+
+**Coexistence with the hosted path.** In one engine process the claim skips
+the hosted block's ordinals, so they do not collide. Across processes, or
+after a restart while a snippet holding an unused block lives on, a hosted
+child can still race a claim; that is today's exposure, not a new one, and
+it ends when the hosted path is retired. To keep that window short, the
+script entrance and the retirement land together (PR 3).
 
 ### Running a child as a job
 
-The child is a process, so it fits the job runtime, but not as a shell
-execution: it has a request on stdin that must stay open (closing it is the
-graceful cancel), a result file that decides the outcome, and stdout that is
-only a human log.
+The child is a process, so it fits the job runtime through the shell
+execution (supplied stdin, independent stdout/stderr draining), with an
+agent-specific policy:
 
-Proposal: the job runtime gains a second job body beside the shell
-execution, an *agent* body: spawn the child, hold its stdin, capture stdout
-as the job log, and on exit read the result file into `SubagentInfo` before
-the terminal `JobChanged` and the exit notice. Stop closes stdin, waits a
-short grace, then terminates. Everything else (ids, records, retention,
-stop, wait, notices, teardown) is shared.
-
-Alternative: keep the runtime shell-only and run the child through
-`run_subrun` in a session task, registering a job record by hand. Rejected
-here because it duplicates the registry, stop and notice paths; open to the
-reviewer's judgment.
-
-Limits: subagent jobs are exempt from the 30-minute reaper. A child is
-bounded by its step budget, its context ceiling, and an optional per-start
-wall deadline (none by default).
+- **Request delivery** is owned background work with a 10 s bound: write the
+  one request line, keep the pipe open. A failed or timed-out write stops
+  the child and ends it `Failed("request not delivered")`.
+- **Graceful stop.** `job_stop`, a program close or session shutdown closes
+  stdin (the child's cancel signal), waits a 10 s grace, then terminates.
+- **Time limit.** Subagent jobs are not reaped at 30 minutes. A child is
+  bounded by its step budget, its context ceiling and an optional per-start
+  wall deadline (none by default). The 20 M output watchdog stays; a
+  log-capture failure ends the child `Failed`.
+- **Outcome precedence,** decided in the job's cleanup hook before the
+  terminal record:
+  1. a result file whose report passes the kind's validation and matches the
+     request's id → `Captured`, even if a stop arrived during the grace;
+  2. a stop was requested → `Stopped`;
+  3. the per-start deadline fired → `TimedOut`;
+  4. the result file's own failure (`NoReport`, `MaxSteps`, `ContextYield`,
+     `Failed`);
+  5. otherwise `Failed` with the exit status.
+- **Notices.** A natural end queues the existing notice, with the outcome in
+  its text. A requested stop fires none (it is already visible). Shutdown
+  fires none.
+- **Report.** After the child is reaped, a captured report is written to
+  `sessions/<child>/report.json` (sibling, then rename). `job_output` renders
+  it bounded at 48,000 characters and names the file beyond that; if the
+  store failed it renders the in-memory report under the same bound and says
+  so *(#1872 r4)*. The same bound keeps a script's read under PTC's 64 K cap.
+- **Slots.** Four live subagents per session, counted at admission and
+  released when the job is `Published` *(#1872 r4)*.
 
 ### Starting: the `subagent` tool
 
 `subagent(kind, input, label?, max_steps?)`.
 
-- `kind`: `explore` or `review` in the first stack; anything else is refused.
-  `input` is exactly what `run --kind <kind>` takes. `max_steps` is clamped to
-  the kind's ceiling. A child does not get this tool (no nesting).
-- Admission, with no suspension: refuse if four subagents are already
-  running in the session (`busy`, retry after one ends, costs nothing), if a
-  program is over its quota (32 starts), or if the session has no durable
-  store (`unavailable`). A slot is taken at admission and returned when the
-  child's teardown completes *(#1872 r4)*.
-- Returns at once. The model reads `content`, never `data`, so the result is
-  text: the job id, the child session, and how to wait/read/stop. A script
-  reads `data`: `{job_id, session}` *(#1872 r3)*.
-- Concurrent-safe, so a script's starts never queue behind the file gate.
+- `kind`: `explore` or `review` in the first stack. `input` is what
+  `run --kind <kind>` takes. For `review`, a missing goal and baseline are
+  filled by the engine from the standing goal, which is how
+  `@builtin/review.mbtx` keeps working without the hosted handoff. A review
+  started this way is **advisory**: it is not the goal-met gate, whose
+  criteria, channel and allowance stay its own.
+- `max_steps` is clamped to the kind's ceiling. A child does not get this
+  tool (no nesting).
+- Admission, with no suspension: refuse `busy` with four live subagents
+  (retry after one ends; costs nothing), `quota` past 32 starts for a
+  program, `unavailable` with no durable session or a failed claim. A refusal
+  takes no ordinal.
+- Returns at once. The model reads `content`: the job id, the child session,
+  and how to wait, read and stop. A script reads `data`: `{job_id, session}`
+  *(#1872 r3)*. Concurrent-safe.
 
 ### Waiting, reading, stopping
 
-- **The model** uses `job_wait` (loop-owned, no timeout, user input
-  interrupts), `job_output` and `job_stop` unchanged in name. `job_output` on a
-  subagent job renders the outcome, usage and the report itself (bounded; a
-  large report names its file). The exit notice is the existing one, with the
-  outcome in its text, so the model need not wait at all.
-- **A script** never holds a call for a child's lifetime *(#1872 r1: SDK
-  125 s, four active calls, sixteen connections, a retried start pays
-  twice)*. It gets program-callable registrations of the same runtime:
-  - `job_wait` for programs: level-triggered, returns when any listed job has
-    ended or after at most 60 s, with every listed job's current state; ids
-    validated as a whole, unknown or foreign ids refused *(#1872 r2)*;
-    concurrent-safe; one wait in flight per program.
-  - `job_output` and `job_stop` for programs, limited to jobs the program
-    started.
-- The report is stored at `sessions/<child>/report.json` after the child is
-  reaped (the child creates its own session directory; the result file lives
-  in a temporary directory). A failed store keeps the outcome and returns the
-  report inline while this engine holds it *(#1872 r4)*.
+- **The model**: `job_wait`, `job_output`, `job_stop`, unchanged in name;
+  `job_output` gets a subagent branch (outcome, usage, report) instead of a
+  log window.
+- **A script** never holds a call for a child's lifetime *(#1872 r1)*:
+  - a program registration of `job_wait`: level-triggered; returns when any
+    listed job has ended or after at most 60 s, with every listed job's
+    state; the id list validated as a whole; foreign or unknown ids refused
+    *(#1872 r2)*; concurrent-safe; one wait in flight per program;
+  - program registrations of `job_output` and `job_stop`, limited to the
+    program's own subagents.
+  Waits and reads count against the program's 1,024 calls and 512 KiB trace;
+  the taught example waits on all its children in one call and reads each
+  report once.
 
 ### Owners
 
-- **Model**: the child belongs to the session; it survives turns and context
-  yields. A plain-text finish with running children gets the existing
-  pending-jobs decision; an explicit `finish` passes.
-- **Program**: when the script's program closes (exit, cancel, `job_stop` on
-  the script's job), its unfinished children are stopped. Adoption into the
-  background keeps the owner.
-- **The gate**: unchanged; not a job, not addressable by these tools.
-- The user's Cancel stops the turn, not the model's children: they are
-  background jobs and the jobs panel stops them. *(Reverses #1872, which
-  stopped them on Cancel; children here run for hours.)*
-
-### Ids
-
-Only the engine allocates once `subrun=true` is retired. Proposal: the
-filesystem is the allocator. The engine claims `<parent>-sr-N` by creating
-that session directory exclusively (`mkdir` fails if it exists), retrying with
-the next ordinal on a collision, and passes it to the child with a flag that
-lets a `--kind` run adopt the empty, engine-created directory. Two engine
-processes on one session then cannot share a child, a restart loses nothing it
-handed out, and no ledger or lock file is needed.
-
-During the transition the hosted path still reserves blocks of 32 in memory,
-so the case #1874 fixes (an engine that dies while a snippet holding unused
-ordinals lives on) stays open until PR 5. A claim on an existing directory is
-refused rather than shared, so the failure is a refused child, not two
-children writing one transcript.
+- **ProgramId** is host-created at `Service::register`, before the script
+  runs, and stays the same through adoption; the script's job id is attached
+  to it when it has one. Authorization is bound to it, never to arguments or
+  the bearer token. PTC dispatch becomes per program: each program gets its
+  own instances of the owner-bound tools. A dropped connection is not a
+  close.
+- **Model-owned** children belong to the session; they survive turns,
+  context yields and the user's Cancel (Cancel stops the turn; the jobs
+  panel or `job_stop` stops a child). The finish guard keeps its current
+  scope (jobs created in this turn). In one-shot `run` the session ends when
+  the run does, so its children are stopped then.
+- **Program-owned** children are stopped when the program closes (exit,
+  cancel, `job_stop` on the script). A program that owns a live subagent is
+  not reaped at 30 minutes: its reaper re-arms when its last child ends,
+  with a 5-minute allowance to collect. A script that waits on nothing is
+  still reaped.
+- **The gate**: not a job and not addressable by these tools; it only shares
+  the claim.
 
 ### Restart
 
-A child is launched to cancel when its stdin closes, so it ends with the
-engine. Its job record in the next generation reads `Interrupted`, its outcome
-`OwnerLost`; its transcript is kept; it is not resumed. Surviving a restart is
-later work.
+A child cancels when its stdin closes, so it ends with the engine. Its job
+record stays in the old generation. The desktop already derives
+`Interrupted` for an old generation from its `owner.lock`
+(`desktop/backend/engine/jobs.mbt:117`); a record with a `SubagentInfo` and
+no outcome is shown as "ended with the engine". The new engine's
+`job_output` does not read old generations; that stays desktop-only until a
+later stack.
 
 ### Desktop
 
-- A subagent job renders as an agent, not a command: kind, label, live state,
-  steps and tokens, a link to the child's transcript (the sidebar already folds
-  `sr-N` sessions under their parent), and a stop control.
-- A transcript card at the `subagent` call, updated by `JobChanged`.
-- Workers later: branch, diff, integrate and discard.
+- A subagent job renders as an agent: kind, label, live state and progress,
+  a link to the child's transcript (the sidebar already folds `sr-N` under the
+  parent), and stop.
+- A transcript card at the launch, correlated as above.
+- Keep the idle reaper's rule that an engine with live jobs stays alive
+  (`desktop/backend/engine/idle.mbt:84`).
 
 ### Workers (later in the stack)
 
-- `workspace = Worktree { path, branch, base }`, provisioned by the engine
-  through `agent_subtask` when a worker starts; the caller never runs
-  `git worktree`.
-- Outcome and change state stay separate; the change state (none, defective,
-  committed, conflicted, integrated, discarded) is a second typed field.
-- Integration targets the checkout that launched the worker, which may be a
-  linked worktree. Overlap is repository-wide: admission takes a lock under
-  the common git directory *(#1872 r3)*.
-- In-place mode (one at a time, the launcher's edits refuse while it runs) as
-  in #1872.
+- The worktree is provisioned by the engine through `agent_subtask`; the
+  caller never runs `git worktree`. `workspace = Worktree { subtask }`, the
+  identity of the entry in the `agent_subtask` registry.
+- **That registry is the authoritative worker state** (launching checkout,
+  branch, base, commit, scope defects, conflict, cleanup), because
+  integration and discard happen after the job is `Published` and a job
+  record takes no later updates. Its changes are published by a separate
+  `WorkerChanged` event keyed by the job id.
+- Outcome and change state stay separate *(#1872 r3)*; integration targets
+  the launching checkout; worker admission takes a lock under the common git
+  directory; PR 7 makes association, recovery and cleanup durable before any
+  worker can be started.
+- In-place mode as in #1872.
 
-### Messaging (later in the stack)
+### Messaging (later, independent of the core stack)
 
-`subagent_send(job_id, message)`, carried over from #1868–#1871: an inbox per
-receiving session, read at the loop's steer points, receipts read off the
-child's transcript, the sender is always the parent session.
+`subagent_send(job_id, message)`, carried over from #1868–#1871.
 
 ## Stack
 
-1. **Runtime and protocol.** `SubagentInfo` on `JobRecord`; the agent job body
-   in `bgjobs` (spawn, held stdin, result file, graceful stop, per-job time
-   limit); the claimed child session directory. No tool.
-2. **The `subagent` tool for the model.** `explore` and `review`; admission,
-   slots, no nesting; `job_output` and the exit notice render subagent jobs;
-   prompt paragraph and a verified example.
-3. **The script entrance.** `subagent` in the program registry; owner-bound
-   program registrations of `job_wait` (bounded), `job_output`, `job_stop`;
-   program close stops its children; `review.mbtx` moved onto it.
-4. **Desktop.** Agent rows and the transcript card. Depends only on 1.
-5. **Retire `subrun=true`.** Move `repo-map.mbtx` and `change-review.mbtx`;
-   delete the hosted handoff, the spawn rule and the in-memory reservation.
-6. **Messaging.** `subagent_send`.
-7. **Workers: engine.** Worktree provisioning and the change state.
-8. **Workers: integrate and discard**, for the model and scripts.
-9. **Workers: desktop.** Branch, diff, integrate, discard.
+1. **Claims, runtime, protocol.** The claim (with `--claim`) for every
+   durable child, the gate included; the execution policy in `bgjobs`;
+   `SubagentInfo` in the protocol; the `agent_subagent` launcher with no tool
+   in front of it; lifecycle tests.
+2. **The model tool.** `subagent` for `explore` and `review`; `job_output`'s
+   subagent branch; the notice text; prompt paragraph and verified example.
+3. **The script entrance and retirement**, reviewed as two commits, merged
+   together: (a) `ProgramId`, per-program dispatch, `subagent` and the
+   program registrations of the job tools, the program reaper rule; (b)
+   `review.mbtx`, `repo-map.mbtx` and `change-review.mbtx` onto it, and the
+   hosted handoff, spawn rule and in-memory reservation deleted.
+4. **Desktop.** Agent rows and progress (needs 1), then the launch card
+   (needs 2 and 3).
+5. **Messaging.** `subagent_send`.
+6. **Workers: engine.** Durable worktree association, recovery, cleanup,
+   `WorkerChanged`.
+7. **Workers: start, integrate, discard** for the model and scripts.
+8. **Workers: desktop.** Branch, diff, integrate, discard.
 
-Later: a per-child model, a spend limit, surviving an engine restart, reviews
-started by the audited agent (see #1872 "Reviews").
+Later: a per-child model, a spend limit, surviving an engine restart, reading
+old generations from model tools.
 
 ## Integrated testing
 
-Three layers, all offline, plus one live check.
+All offline except the last.
 
-1. **Package tests with fake children.** A script that speaks the workflow
-   child contract (as `agent_subrun/runner_test.mbt` does): captured, no
-   report, crash, hang, slow exit after stdin closes, a report that cannot be
-   stored. They cover the job body, the record, stop and the reaper exemption.
-2. **The real CLI against a scripted provider**, extending the harness in
-   `tests/integration/turn_finish.mbtx` (a local HTTP server answering
-   `/chat/completions` with scripted tool-call deltas, `--api-url` pointed at
-   it). The engine forwards `--api-url` to its children, as the gate does, so
-   the SAME server scripts both the parent and the real child binary,
-   telling them apart by the request's system prompt. Scenarios:
-   - the model starts two children, waits with `job_wait`, reads both with
-     `job_output`, finishes; the child sessions exist with transcripts and
-     `report.json`; `JobChanged` carries `SubagentInfo` from running to ended;
-   - a child that never answers is stopped with `job_stop`; outcome `Stopped`;
-   - a plain-text finish with a running child gets the pending-jobs decision;
-   - an idle end queues the notice and wakes the `serve` loop;
-   - a fifth start is refused `busy`.
-3. **Scripts through the real PTC service.** A compiled snippet that fans out
-   with a task group, waits with the bounded `job_wait`, reads and stops, run
-   by `mbtx` against the scripted provider; plus `@builtin/review.mbtx` in
-   `tests/integration/workflows` once it moves.
-4. **Desktop.** The e2e suite with a session fixture containing subagent job
-   records: the row, the card, opening the child transcript, stop.
-5. **Live, by hand.** One `deepseek-v4-pro` session on a real repository task
-   that delegates, checked in the desktop.
+1. **Package tests with fake children** (a script that speaks the child
+   contract, as `agent_subrun/runner_test.mbt` does): captured; no report;
+   a malformed, mismatched or oversized report; crash; a child that never
+   reads stdin; slow exit after stdin closes; stop racing a natural end;
+   report store failure; output capture failure; the reaper exemption; the
+   claim (concurrent claims in one process, a stale claim never reused, a
+   `--claim` with a wrong token or an existing transcript refused).
+2. **Two processes, one session.** Two engines claiming for the same parent
+   at once; the gate and the launcher claiming at once.
+3. **The real CLI against a scripted provider**, extending
+   `tests/integration/turn_finish.mbtx`: a durable session (not
+   `--no-session`), test credentials inherited by children, and one local
+   server that scripts both the parent and the real child binary, which
+   receive its URL through the forwarded `--api-url`. Requests are routed by
+   a unique task marker in each child's input (not by system prompt, which
+   two children of one kind share), each with its own step sequence; the
+   children's submit tools are scripted; non-streaming auxiliary requests
+   get the fixed answer. Scenarios:
+   - two explore children: start, `job_wait`, `job_output`, finish; child
+     sessions with transcripts and `report.json`; `JobChanged` from live to
+     ended with `SubagentInfo`;
+   - `job_stop` on a child that never answers; Cancel and a context yield
+     leave a model-owned child running;
+   - a plain-text finish with a live child gets the pending-jobs decision;
+   - an end between turns persists the notice and starts no turn;
+   - a fifth start refused `busy`; a launch whose response is dropped;
+   - an engine restart: the old record reads "ended with the engine".
+4. **Scripts through the real PTC service**, in the same harness: a compiled
+   snippet fanning out with a task group, the bounded wait, `job_stop` and
+   `job_output` getting through while a wait is held, foreign ids refused,
+   program close stopping its children, close during admission and during
+   adoption, a shortened reaper crossing the 30-minute rule; and
+   `@builtin/review.mbtx` taking the standing goal from the engine.
+5. **Engine to desktop.** The desktop backend driving a real engine with the
+   scripted provider: progress discovery from `JobChanged`, row and card
+   updates, opening the child transcript, the idle reaper keeping an engine
+   with a live child. Static fixtures cannot cover these.
+6. **Live, by hand.** One `deepseek-v4-pro` session on a real repository task
+   that delegates, watched in the desktop.
+
+## Review rounds
+
+**Round 1** (2026-10-18, Codex, xhigh, on ad81a6154): reuse of the job
+runtime is sound and simpler than #1872; ready after fixes. Each is
+addressed above:
+
+| Required | Where |
+| --- | --- |
+| P1: the gate must use the same allocator; a single-use handoff, not a bypass; the transition is not atomic | Allocation |
+| P1: a foreground program has no job id; ownership needs a host-created identity and per-program dispatch | Owners |
+| P1: an adopted script is reaped at 30 minutes and would kill its children | Owners (program reaper rule) |
+| P1: one admission and finalization contract: request delivery, stop vs natural end, deadline, shutdown, slots | Running a child as a job |
+| P2: correlation, report vs outcome, live progress, unavailable usage | The record |
+| P2: worker state after `Published` needs an authoritative store | Workers |
+| P2: restart wording; turn boundaries; PTC bounds | Restart; Owners; Waiting |
+| P2: `review.mbtx` loses its standing goal without the handoff | Starting |
+| P2: missing race and end-to-end scenarios | Integrated testing |
+| Stack: claims in PR 1; script entrance with retirement; card after 2/3 | Stack |
+
+Optional, adopted: a shared leaf for contract parsing; `bgjobs` does not
+import `agent_subrun`; messaging independent of the core stack; reviews by
+the launcher advisory from the start.
