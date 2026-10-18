@@ -126,10 +126,11 @@ fn dispatch_open(open : Open) -> @cmd.Cmd {
 ///|
 /// Build an ellipsis trigger for a stable target. The menu component owns
 /// toggle state, positioning, and focus.
-pub fn button_attrs(target : String) -> @html.Attrs {
+pub fn button_attrs(target : String, align_right~ : Bool = true) -> @html.Attrs {
   @html.Attrs::build()
   .id(trigger_id(target))
   .data_set("action-menu-owner", target)
+  .data_set("action-menu-align", if align_right { "end" } else { "start" })
   .aria_haspopup("menu")
   .aria_controls(menu_id(target))
   .on_click(event => {
@@ -301,7 +302,13 @@ fn position(target : String, anchor : Anchor) -> @cmd.Cmd {
           } else {
             trigger_rect.get_top() - menu_height - gap
           }
-          (trigger_rect.get_right() - menu_width, top)
+          let left = if trigger.get_attribute("data-action-menu-align")
+            is Some("start") {
+            trigger_rect.get_left()
+          } else {
+            trigger_rect.get_right() - menu_width
+          }
+          (left, top)
         }
       }
       let margin = 4.0

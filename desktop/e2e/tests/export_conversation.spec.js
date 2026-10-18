@@ -37,6 +37,7 @@ class ExportHarness extends DesktopBrowserHarness {
     if (!browser) {
     await this.page.exposeFunction('desktopRequest', async request => {
       this.requests.push(request);
+      if (request.method === 'app.system_appearance') return { dark: false };
       if (request.method === 'session.export') return this.downloadReply;
       if (request.method === 'account.session') return this.accountSignedIn ? { session: { token: `ts_fixture-${this.userId}`, user: { user_id: this.userId, login: `user-${this.userId}`, avatar_url: '' } } } : {};
       if (request.method === 'auth.disconnect') {
@@ -105,7 +106,8 @@ class ExportHarness extends DesktopBrowserHarness {
   count(method) { return this.requests.filter(request => request.method === method).length; }
 
   async openExport() {
-    await this.page.getByRole('button', { name: 'Export conversation', exact: true }).click();
+    await this.page.getByRole('button', { name: 'Export and import', exact: true }).click();
+    await this.page.getByRole('menuitem', { name: 'Export', exact: true }).click();
     const dialog = this.page.getByRole('dialog', { name: 'Export conversation', exact: true });
     await expect(dialog).toBeVisible();
     return dialog;
@@ -118,7 +120,7 @@ test('export opens choices, downloads locally and restores focus on Escape', asy
   const details = page.getByRole('button', { name: 'Detailed mode', exact: true });
   await expect(details).toHaveAttribute('aria-pressed', 'false');
   await expect(details).not.toHaveClass(/active/);
-  await expect(details.locator('xpath=following-sibling::*[1]')).toHaveAttribute('title', 'Export conversation');
+  await expect(details.locator('xpath=preceding-sibling::*[1]')).toHaveAttribute('title', 'Export and import');
   const dialog = await app.openExport();
   expect(app.count('session.export')).toBe(0);
   expect(app.hostShares.length).toBe(0);
@@ -135,7 +137,7 @@ test('export opens choices, downloads locally and restores focus on Escape', asy
   });
   await page.keyboard.press('Escape');
   await expect(dialog).not.toBeVisible();
-  await expect(page.getByRole('button', { name: 'Export conversation', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Export and import', exact: true })).toBeFocused();
   expect(app.hostShares.length).toBe(0);
   expect(app.pageErrors).toEqual([]);
 });
@@ -398,4 +400,33 @@ test('share login stays retryable while rejected account cleanup is pending', as
     finishSignOut();
     finishSignIn();
   }
+});
+
+test('one header menu contains export and import, dismisses with Escape, and restores focus', async ({ page }, testInfo) => {
+  const app = new ExportHarness(page);
+  await app.openDesktop();
+  const trigger = page.getByRole('button', { name: 'Export and import', exact: true });
+  await expect(trigger).toHaveCount(1);
+  await trigger.click();
+  const menu = page.getByRole('menu', { name: 'Export and import', exact: true });
+  await expect(menu.getByRole('menuitem', { name: 'Export', exact: true })).toBeVisible();
+  await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
+  await expect(menu.getByRole('separator')).toHaveCount(0);
+  const triggerBounds = await trigger.boundingBox();
+  const menuBounds = await menu.boundingBox();
+  expect(Math.abs(menuBounds.x - triggerBounds.x)).toBeLessThanOrEqual(1);
+  expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(page.viewportSize().width);
+  await page.screenshot({ path: testInfo.outputPath('share-import-menu.png') });
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await trigger.click();
+  await menu.getByRole('menuitem', { name: 'Import', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Import conversation', exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(menu).not.toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  expect(app.pageErrors).toEqual([]);
 });

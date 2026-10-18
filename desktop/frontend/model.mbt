@@ -1470,6 +1470,7 @@ priv struct Model {
   // and it closes the moment a usable endpoint arrives.
   api_setup_open : Bool
   session_search : @session_search.Model
+  session_import_dialog : @session_import.Model
   export_dialog : @export_dialog.Model
   workspace_settings_dialog : WorkspaceSettingsDialog?
   // The user answered "Not now" to the setup modal. Held until a usable
@@ -1537,6 +1538,7 @@ priv struct Model {
   right_panel_menu_open : Bool
   // Reported by the tab-menu component so native views yield to its surface.
   dock_tab_menu_open : Bool
+  conversation_transfer_menu_open : Bool
   right_panel_expanded : Bool
   // Terminal tabs and their connection snapshots affect both the component
   // view and root layout. The root owns the opaque state once so neither side
@@ -2034,6 +2036,8 @@ priv enum Msg {
   OpenSessionSearch
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
+  OpenSessionImport
+  SessionImport(@session_import.Msg)
   ExportDialog(@export_dialog.Msg)
   // A safe external anchor was clicked in the Proton page. The document-level
   // capture listener emits this for both Rabbita transcript links and the
@@ -2138,6 +2142,7 @@ priv enum Msg {
   ToggleRightPanelExpanded
   CloseRightPanelMenu
   DockTabMenuChanged(Bool)
+  ConversationTransferMenuChanged(Bool)
   // Close a selection through ordinary teardown; All keeps the launcher open.
   CloseDockTabs(@dock.CloseSelection)
   // The composer's goal-editing mode over the active conversation: open
@@ -2819,6 +2824,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     right_panel_open: false,
     right_panel_menu_open: false,
     dock_tab_menu_open: false,
+    conversation_transfer_menu_open: false,
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
     github: @github.State::empty(),
@@ -2868,6 +2874,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     update_ux: UpdateUnknown,
     api_setup_open: false,
     session_search: @session_search.Model(),
+    session_import_dialog: @session_import.Model(),
     export_dialog: @export_dialog.Model(),
     workspace_settings_dialog: None,
     api_setup_dismissed: false,

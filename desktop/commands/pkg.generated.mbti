@@ -255,6 +255,8 @@ pub let session_export : Command[@protocol.SessionExportPayload, @protocol.Sessi
 
 pub let session_fork : Command[@protocol.SessionForkPayload, @protocol.SessionForkReply]
 
+pub let session_import : Command[@protocol.SessionImportPayload, @protocol.SessionImportReply]
+
 pub let session_list : Command[@protocol.EmptyPayload, @protocol.SessionsReply]
 
 pub let session_list_archived : Command[@protocol.EmptyPayload, @protocol.SessionsReply]

@@ -385,7 +385,28 @@ pub fn endpoints(
   on_share_progress~ : async (@protocol.SessionShareProgress) -> Unit = _ => (),
 ) -> Array[@endpoint.Endpoint] {
   let endpoints = [
-    @endpoint.Endpoint(@commands.session_share, payload => {
+    @endpoint.Endpoint(@commands.session_import, payload => {
+      Success(
+        @engine.import_session(
+          state.manager,
+          payload,
+          on_created=created => {
+            publish_session_changed(
+              state,
+              "created",
+              created,
+              payload.workspace,
+            )
+          },
+          on_worktree_changed=(workspace, worktrees) => {
+            publish_worktree_changed(state, workspace, worktrees)
+          },
+        ),
+      ) catch {
+        error => Failed(error.to_string())
+      }
+    }),
+    Endpoint(@commands.session_share, payload => {
       SessionShare::{ state, payload, local_account: local_share, }.publish(on_progress=progress => {
         on_share_progress({ generation: payload.generation, progress, }) catch {
           _ => ()

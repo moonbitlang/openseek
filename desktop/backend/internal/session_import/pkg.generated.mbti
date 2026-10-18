@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/session_import"
+
+import {
+  "moonbitlang/openseek/agent_session",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub async fn prepare(@protocol.SessionImportSource) -> Array[Record]
+
+pub fn share_json_url(String) -> String raise
+
+// Errors
+pub(all) suberror SessionImportError {
+  SessionImportError(String)
+}
+pub fn SessionImportError::output(Self, &Logger) -> Unit
+pub fn SessionImportError::to_string(Self) -> String
+pub impl Show for SessionImportError
+
+// Types and methods
+pub struct Record {
+  title : String
+  session : @agent_session.Session
+}
+
+// Type aliases
+
+// Traits

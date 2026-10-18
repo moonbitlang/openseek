@@ -18,7 +18,7 @@ async function setup(page, { desktop = false } = {}) {
     return route.abort('failed');
   });
   await cloud.goto(); await cloud.open();
-  await page.getByRole('button', { name: 'Export conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
   await expect(dialog).toBeVisible();
   return { cloud, uploads, dialog };
@@ -31,7 +31,7 @@ test('Cloud export stays at the trailing edge of the shared header with a long t
   await cloud.goto();
   await cloud.open();
   const header = page.locator('main > .topbar');
-  const button = header.getByRole('button', { name: 'Export conversation', exact: true });
+  const button = header.getByRole('button', { name: 'Export', exact: true });
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 900 });
     if (width === 390) {

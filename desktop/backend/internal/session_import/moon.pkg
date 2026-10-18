@@ -1,0 +1,18 @@
+import {
+  "moonbitlang/openseek/agent_session",
+  "openseek_desktop/protocol",
+  "openseek_desktop/backend/uuid",
+  "moonbitlang/openseek/agent_session/log",
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "moonbitlang/core/buffer",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "moonbitlang/async/socket",
+  "moonbitlang/openseek/viz_export",
+} for "test"
+
+supported_targets = "native"

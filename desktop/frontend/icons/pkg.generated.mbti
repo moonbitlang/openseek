@@ -24,6 +24,8 @@ pub fn icon_book() -> @html.Html
 
 pub fn icon_chat_export() -> @html.Html
 
+pub fn icon_chat_import() -> @html.Html
+
 pub fn icon_check() -> @html.Html
 
 pub fn icon_chevron_down() -> @html.Html

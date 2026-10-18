@@ -23,7 +23,9 @@ priv enum ShellMessage {
   ShowDetailed
   ShowMinimal
   DetailedMode
+  ConversationTransfer
   ExportConversation
+  ImportConversation
   HideTerminal
   ShowTerminal
   ShowPanel
@@ -218,11 +220,21 @@ fn shell_text(locale : @i18n.Locale, message : ShellMessage) -> String {
     (SimplifiedChinese, DetailedMode) => "详细模式"
     (TraditionalChinese, DetailedMode) => "詳細模式"
     (Japanese, DetailedMode) => "詳細モード"
-    (English, ExportConversation) => "Export conversation"
-    (Spanish, ExportConversation) => "Exportar conversación"
-    (SimplifiedChinese, ExportConversation) => "导出对话"
-    (TraditionalChinese, ExportConversation) => "匯出對話"
-    (Japanese, ExportConversation) => "チャットをエクスポート"
+    (English, ConversationTransfer) => "Export and import"
+    (Spanish, ConversationTransfer) => "Compartir e importar"
+    (SimplifiedChinese, ConversationTransfer) => "导出与导入"
+    (TraditionalChinese, ConversationTransfer) => "匯出與匯入"
+    (Japanese, ConversationTransfer) => "共有とインポート"
+    (English, ExportConversation) => "Export"
+    (Spanish, ExportConversation) => "Exportar"
+    (SimplifiedChinese, ExportConversation) => "导出"
+    (TraditionalChinese, ExportConversation) => "匯出"
+    (Japanese, ExportConversation) => "エクスポート"
+    (English, ImportConversation) => "Import"
+    (Spanish, ImportConversation) => "Importar"
+    (SimplifiedChinese, ImportConversation) => "导入"
+    (TraditionalChinese, ImportConversation) => "匯入"
+    (Japanese, ImportConversation) => "インポート"
     (English, HideTerminal) => "Hide terminal (Ctrl+`)"
     (Spanish, HideTerminal) => "Ocultar terminal (Ctrl+`)"
     (SimplifiedChinese, HideTerminal) => "隐藏终端（Ctrl+`）"

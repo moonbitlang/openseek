@@ -1720,29 +1720,9 @@ fn conversation_header(
       ),
     )
   }
-  // A phone's titlebar carries identity and run state only: the detail,
-  // export, terminal, and right-panel controls all leave the narrow layout.
+  items.push(conversation_transfer_button(model.locale))
   if !model.narrow {
     items.push(model.detail_toggle(dispatch))
-  }
-  // The owning host captures durable Work records; the current client
-  // downloads or publishes the snapshot with its own account.
-  if !conv.messages.is_empty() {
-    items.push(
-      @html.button(
-        class="panel-toggle",
-        title=shell_text(model.locale, ExportConversation),
-        on_click=dispatch(
-          OpenExport(conv.device, {
-            session: conv.session_id,
-            workspace: workspace.path,
-            title: model.selected_conversation_title(),
-            archived: conv.is_archived_read_only(),
-          }),
-        ),
-        icon(icon_chat_export),
-      ),
-    )
   }
   // A browser terminal is rendered locally but its PTY lives on the focused
   // remote device, reached through that device's WebSocket channel.
@@ -2001,10 +1981,10 @@ fn view(
   composer_html : @html.Html,
   codex_composer_html : @html.Html,
   sidebar_html : @html.Html,
-  quick_open_and_context_menu : (@html.Html, @html.Html),
+  quick_open_and_context_menu : (@html.Html, @html.Html, @html.Html),
   skills_and_workspace_settings : (@html.Html, @html.Html),
 ) -> @html.Html {
-  let (quick_open_html, context_menu_html) = quick_open_and_context_menu
+  let (quick_open_html, context_menu_html, transfer_menu_html) = quick_open_and_context_menu
   let (skills_html, workspace_settings_html) = skills_and_workspace_settings
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
@@ -2051,12 +2031,14 @@ fn view(
           _ => {
             let title = model.selected_conversation_title()
             let selected = model.conversation_selection()
-            model.conversation_heading(
+            let items = model.conversation_heading(
               selected.map_or(model.focused, selected => selected.channel),
               title,
               title,
               selected.map(selected => selected.workspace),
             )
+            items.push(conversation_transfer_button(model.locale))
+            items
           }
         }
       }
@@ -2255,6 +2237,10 @@ fn view(
       model.locale,
       dispatch.map(msg => SessionSearch(msg)),
     ),
+    model.session_import_dialog.view(
+      model.locale,
+      dispatch.map(msg => SessionImport(msg)),
+    ),
     model.export_dialog.view(
       locale=model.locale,
       dispatch.map(msg => ExportDialog(msg)),
@@ -2325,6 +2311,7 @@ fn view(
   // placeholder — so opening it never shifts the overlay children around it.
   children.push(quick_open_html)
   children.push(context_menu_html)
+  children.push(transfer_menu_html)
   // On the desktop a lost connection covers everything: with no event
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last

@@ -1634,6 +1634,7 @@ fn covering_overlay(model : Model) -> Bool {
   model.project_picker is Some(_) ||
   model.session_search.is_open() ||
   model.export_dialog.is_open() ||
+  model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
   model.archive_confirm is Some(_) ||
   model.delete_confirm is Some(_) ||
@@ -1665,6 +1666,7 @@ fn desired_browser_view(model : Model) -> Int32? {
     model.right_panel_open &&
     !model.right_panel_menu_open &&
     !model.dock_tab_menu_open &&
+    !model.conversation_transfer_menu_open &&
     model.select_menu is None &&
     !git_details_open &&
     !covering_overlay(model) else {
@@ -5777,6 +5779,8 @@ fn update_msg(
     }
     CloseRightPanelMenu =>
       (@cmd.none, { ..model, right_panel_menu_open: false, })
+    ConversationTransferMenuChanged(open) =>
+      (@cmd.none, { ..model, conversation_transfer_menu_open: open, })
     DockTabMenuChanged(open) =>
       (
         @cmd.none,
@@ -6657,6 +6661,80 @@ fn update_msg(
         title=model.cloud_title(),
       )
       (command, { ..model, export_dialog, })
+    }
+    OpenSessionImport => {
+      let conv = if model.screen is Chat {
+        model.active_conversation()
+      } else {
+        None
+      }
+      let workspace = match conv {
+        Some(conv) => Some(conv.project().path)
+        None =>
+          if model.sidebar_mode is WorkMode {
+            model
+            .device_state(model.focused)
+            .bind(dev => dev.active_project.map(p => p.path))
+          } else {
+            None
+          }
+      }
+      // Let the host's current registry choose placement even if this
+      // client's worktree inventory has not arrived yet.
+      let worktree_of = conv.map(conv => conv.session_id)
+      let (cmd, session_import_dialog) = model.session_import_dialog.open({
+        channel: model.focused,
+        connection_generation: model.focused_connection_generation(),
+        workspace: workspace.map_or(@session_import.Unplaced, path => {
+          @session_import.Registered(path)
+        }),
+        worktree_of,
+      })
+      (cmd, { ..model, session_import_dialog, })
+    }
+    SessionImport(msg) => {
+      let (cmd, session_import_dialog, imported) = model.session_import_dialog.update(
+        dispatch.map(msg => SessionImport(msg)),
+        msg,
+      )
+      let model = { ..model, session_import_dialog, }
+      guard imported is Some((target, reply)) &&
+        model.device_state(target.channel) is Some(dev) &&
+        dev.connection_generation == target.connection_generation &&
+        @resource.of_path(target.channel, reply.workspace) is Some(workspace) else {
+        return (cmd, model)
+      }
+      let sessions = dev.sessions.filter(row => {
+        row.workspace != workspace ||
+        !reply.sessions.any(imported => imported.id == row.id)
+      })
+      for row in reply.sessions {
+        sessions.push({
+          id: row.id,
+          title: row.title,
+          workspace,
+          workspace_name: @resource.label(workspace),
+          updated_at_ms: row.updated_at_ms,
+        })
+      }
+      let projects = if dev.projects.contains(workspace) {
+        dev.projects
+      } else {
+        [..dev.projects, workspace]
+      }
+      let model = model.replace_device(
+        { ..dev, sessions, projects, }.with_worktrees(
+          workspace,
+          worktree_rows(target.channel, reply.worktrees),
+          generation=dev.worktree_generation(workspace),
+        ),
+      )
+      let (open, model) = update_msg(
+        dispatch,
+        OpenSession(target.channel, reply.session_id),
+        model,
+      )
+      (@cmd.batch([cmd, open]), model)
     }
     ExportDialog(msg) => {
       let (login, model) = if msg is @export_dialog.SignIn {

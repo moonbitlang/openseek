@@ -159,7 +159,8 @@ samp,
 }
 
 /* Action menus and selects share visual treatment, not value-selection state. */
-.menu-surface {
+.menu-surface,
+[id="conversation-transfer:actions"] {
   padding: 5px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
@@ -184,7 +185,8 @@ samp,
   font-weight: 600;
 }
 
-.menu-option {
+.menu-option,
+[id="conversation-transfer:actions"] .action-menu-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 16px;
   align-items: center;
@@ -204,11 +206,13 @@ samp,
 }
 
 .menu-option:hover,
-.menu-option.selected {
+.menu-option.selected,
+[id="conversation-transfer:actions"] .action-menu-item:hover {
   background: var(--color-bg-subtle);
 }
 
-.menu-option:focus-visible {
+.menu-option:focus-visible,
+[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
   outline: 1px solid var(--color-focus-ring);
   outline-offset: -1px;
 }

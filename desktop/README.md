@@ -39,6 +39,25 @@ The native `backend` and JS `frontend` modules both depend on the root
 `desktop` module. They do not depend on each other; backend packaging builds
 the frontend workspace member separately and consumes its generated bundle.
 
+## Importing conversations
+
+The **⋯** button at the left of the top-right controls opens an **Export and import** menu. **Export** opens
+the existing sharing/download dialog; **Import** accepts an OpenSeek conversation
+export `.json` file or an OpenSeek share URL. The imported conversation opens in
+the normal chat view and appears in the sidebar under the current project or
+worktree. From an unplaced chat, Desktop creates a chat workspace. Imports persist
+across restarts, including exported subruns, and repeated imports get new ids.
+
+Imported conversations are ordinary writable sessions under `.openseek/sessions`.
+They support continuing, editing, forking, renaming and archiving through the
+existing session APIs. The imported system prompt and historical messages are
+preserved; original workspace files, processes and filesystem attachments are not
+restored. Continuing uses the target checkout's files.
+
+Files and downloaded JSON are limited to 16 MiB. Share imports fetch the public
+JSON resource without account credentials or redirects; expired/revoked shares
+report an error and retain the link for retry.
+
 ## Sessions and streaming
 
 Each conversation is served by one persistent `openseek serve` engine

@@ -9,7 +9,7 @@ import {
 }
 
 // Values
-pub fn button_attrs(String) -> @html.Attrs
+pub fn button_attrs(String, align_right? : Bool) -> @html.Attrs
 
 pub fn[Input : Eq] component(@rabbita.Val[Input], (Input, String) -> Definition?, on_open_change? : @cmd.Emit[Bool]) -> @rabbita.Val[@html.Html]
 

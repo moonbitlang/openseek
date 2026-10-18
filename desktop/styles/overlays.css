@@ -232,7 +232,8 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
 /* Match .button's vertical padding and line height; stretch the row so the
    field and icon button share their edges even as fonts or touch targets grow. */
 .export-link-row { align-items: stretch; }
-.export-link-row input {
+.export-link-row input,
+.session-import-actions input {
   flex: 1;
   min-width: 0;
   box-sizing: border-box;
@@ -881,4 +882,38 @@ dialog.session-search-dialog {
 .session-search-errors p {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Import into the current workspace or a new chat. */
+.session-import-dialog { width: min(640px, calc(100vw - 32px)); }
+.session-import-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px 10px;
+  align-items: stretch;
+  margin-top: 20px;
+}
+.session-import-actions > button:first-child {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+.session-import-actions input {
+  width: 100%;
+  font-size: var(--font-size-sm);
+}
+.session-import-status { min-height: 24px; margin-top: 12px; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.session-import-status:empty { display: none; }
+
+[id="conversation-transfer:actions"] {
+  min-width: 140px;
+}
+[id="conversation-transfer:actions"] .action-menu-item {
+  grid-template-columns: 16px minmax(0, 1fr);
+}
+[id="conversation-transfer:actions"] .action-menu-item:hover,
+[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
+  color: var(--color-text-primary);
+}
+[id="conversation-transfer:actions"] .action-menu-item:focus-visible {
+  background: var(--color-bg-subtle);
 }

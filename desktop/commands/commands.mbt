@@ -997,3 +997,9 @@ pub let remote_access_set : Command[
   @protocol.RemoteAccessPayload,
   @protocol.AuthStatusPayload,
 ] = Command("remote.access_set")
+
+///|
+pub let session_import : Command[
+  @protocol.SessionImportPayload,
+  @protocol.SessionImportReply,
+] = Command("session.import")
