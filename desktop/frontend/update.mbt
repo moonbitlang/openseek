@@ -6131,9 +6131,26 @@ fn update_msg(
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
     // The Workflows tab: opened like the explorer inventories, keeping the
     // right panel on screen with its launcher menu closed.
-    // A subagent job's transcript opens like any session from the sidebar.
+    // A subagent job's transcript opens like any session from the sidebar;
+    // an archived parent's children are archived with it, so they open from
+    // the archive, in the parent's workspace.
     Jobs(OpenSession(session_id)) =>
-      update(dispatch, OpenSessionHere(session_id), model)
+      match (model.jobs.owner, model.selected_conversation) {
+        (
+          Some({ scope: { archived: true, session: parent, .. }, .. }),
+          Some(selected),
+        ) if selected.session == parent =>
+          update(
+            dispatch,
+            OpenArchivedSession(
+              selected.channel,
+              session=session_id,
+              workspace=selected.workspace,
+            ),
+            model,
+          )
+        _ => update(dispatch, OpenSessionHere(session_id), model)
+      }
     Jobs(msg) => {
       let (cmd, jobs) = @jobs.update(
         locale=model.locale,
@@ -9075,8 +9092,8 @@ fn update_device_msg(
       })
       (@cmd.none, { ..model, conversations: settled, })
     }
-    JobsChanged(session) =>
-      if model.jobs.owner is Some(owner) &&
+    JobsChanged(session) => {
+      let (jobs_cmd, model) = if model.jobs.owner is Some(owner) &&
         owner.channel == channel &&
         owner.scope.session == session {
         let (cmd, jobs) = @jobs.update(
@@ -9089,6 +9106,22 @@ fn update_device_msg(
       } else {
         (@cmd.none, model)
       }
+      // A child of this session on screen is reloaded too: its probe reports
+      // only while it advances, and its job's end is what brings its last
+      // writes (its report among them).
+      if @transcript.subrun_parent(model.active_session) is Some(parent) &&
+        parent == session {
+        let (child_cmd, model) = refresh_visible_subrun_child(
+          dispatch,
+          channel,
+          model.active_session,
+          model,
+        )
+        (@cmd.batch([jobs_cmd, child_cmd]), model)
+      } else {
+        (jobs_cmd, model)
+      }
+    }
     Engine(run_id, event, session~) => {
       // Compaction and background notices happen between turns, so their
       // events arrive after the run that owned `run_id` cleared
@@ -23089,5 +23122,64 @@ fn Model::with_approval_snapshot(
         })
       { ..conv, pending_approval: pending, }
     }),
+  }
+}
+
+///|
+/// A subagent is a background job: its job changing is what brings an open
+/// child transcript its last writes, since its probe reports only advances.
+test "a parent's job change refreshes its child transcript on screen" {
+  let page = subrun_page(active="desktop-test-sr-1")
+  let (_, next) = update_dev(test_dispatch(), JobsChanged("desktop-test"), page)
+  assert_true(subrun_child_of(next).sync is Reloading(..))
+  // Another session's jobs leave it alone.
+  let (_, other) = update_dev(
+    test_dispatch(),
+    JobsChanged("desktop-other"),
+    page,
+  )
+  assert_true(subrun_child_of(other).sync is Synced)
+}
+
+///|
+/// An archived parent's children are archived with it: its jobs panel opens a
+/// child's transcript from the archive, not the live store.
+test "a subagent of an archived conversation opens from the archive" {
+  let workspace = @interop.ChannelId::Local.test_project()
+  let model = test_model().with_dev(dev => {
+    ..dev,
+    archived: [
+      archived_item("desktop-parent"),
+      archived_item("desktop-parent-sr-1"),
+    ],
+  })
+  let model = {
+    ..model,
+    selected_conversation: Some({
+      channel: Local,
+      session: "desktop-parent",
+      workspace,
+      record: ArchivedRecord,
+    }),
+    jobs: {
+      ..model.jobs,
+      owner: Some({
+        channel: Local,
+        scope: {
+          session: "desktop-parent",
+          workspace: Some(workspace.to_string()),
+          archived: true,
+        },
+      }),
+    },
+  }
+  let (_, next) = update(
+    test_dispatch(),
+    Jobs(OpenSession("desktop-parent-sr-1")),
+    model,
+  )
+  guard next.selected_conversation
+    is Some({ session: "desktop-parent-sr-1", record: ArchivedRecord, .. }) else {
+    fail("expected the child to open from the archive")
   }
 }

@@ -1890,6 +1890,30 @@ async fn ServeEngine::consume(
               probes.remove(id)
               probe.cancel()
             }
+          // A subagent is a background job: its record says when it runs, so
+          // its probe lives from its first live record to its terminal one.
+          Some(JobChanged(job={ subagent: Some(info), state, .. }, ..)) =>
+            if @wire.split_child_session_id(info.session)
+              is Some((parent, ordinal)) &&
+              parent == engine.session_key {
+              let id = "sr-\{ordinal}"
+              if state.is_terminal() {
+                if probes.get(id) is Some(probe) {
+                  probes.remove(id)
+                  probe.cancel()
+                }
+              } else if engine.session_root is Some(root) &&
+                probes.get(id) is None {
+                probes[id] = group.spawn(no_wait=true, allow_failure=true, () => {
+                  @subrun.follow_progress(
+                    root~,
+                    parent_session=engine.session_key,
+                    id~,
+                    publish=payload => emit(sink, SubrunProgress(payload)),
+                  )
+                })
+              }
+            }
           Some(
             WorkflowStarted(id~, journal~, events~, first_child~, child_count~)
           ) =>
