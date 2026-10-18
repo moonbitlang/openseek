@@ -436,6 +436,12 @@ old generations from model tools.
   `tests/integration/workers.mbtx` runs the real CLI and a real worker child
   against a scripted provider in a temporary repository, through the main
   agent's cherry-pick.
+- PR 8: the desktop shows a worker's worktree in the jobs panel's details:
+  name and branch, what it held when it was handed over (a commit ready to
+  take, nothing changed, not mergeable and why, not captured and why), and
+  its path, with a button to copy it. The job record's state is final, since
+  the engine tracks the worktree no further after the hand-off, so no live
+  overlay or extra command is needed.
 
 ## Integrated testing
 

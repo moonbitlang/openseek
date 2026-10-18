@@ -339,6 +339,11 @@ pub fn panel(
         if !extent.is_empty() {
           details.push(@html.div(class="jobs-detail-meta", extent))
         }
+        if info.workspace is Worktree(worktree) {
+          details.append(
+            worktree_details(locale~, worktree),
+          )
+        }
       }
       if job.cwd is Some(cwd) {
         details.push(
@@ -381,6 +386,15 @@ pub fn panel(
             ui(locale, OpenTranscript),
           ),
         )
+        if info.workspace is Worktree({ path, .. }) {
+          actions.push(
+            @html.button(
+              class="jobs-action",
+              on_click=@clipboard.copy(Text(path)),
+              ui(locale, CopyWorktreePath),
+            ),
+          )
+        }
       }
       if view.output_path is Some(path) {
         details.push(
@@ -563,4 +577,47 @@ fn short_job_id(id : String, jobs : Array[@protocol.JobView]) -> String {
     width += 4
   }
   id
+}
+
+///|
+/// What a worker's worktree held when it was handed over, in words, and why
+/// when it could not be taken.
+fn worktree_state(
+  locale~ : @i18n.Locale = English,
+  state : @wire.WorktreeState,
+) -> (String, Array[String]) {
+  let short = (commit : String) => {
+    commit.view(end_offset=commit.length().min(10)).to_owned()
+  }
+  match state {
+    Working => (ui(locale, WorktreeWorking), [])
+    CaptureFailed(reasons~) => (ui(locale, WorktreeCaptureFailed), reasons)
+    Committed(commit~) =>
+      (dynamic_text(locale, DWorktreeCommitted(short(commit))), [])
+    NoChanges => (ui(locale, WorktreeNoChanges), [])
+    Unmergeable(defects~) => (ui(locale, WorktreeUnmergeable), defects)
+  }
+}
+
+///|
+/// A worker's worktree in the details pane: which it is, where its changes
+/// stand, why when they cannot be integrated, and where it is.
+fn worktree_details(
+  locale~ : @i18n.Locale = English,
+  worktree : @wire.Worktree,
+) -> Array[@html.Html] {
+  let (state, reasons) = worktree_state(locale~, worktree.state)
+  [
+    @html.div(
+      class="jobs-detail-meta",
+      dynamic_text(locale, DWorktree(worktree.name, worktree.branch)),
+    ),
+    @html.div(class="jobs-detail-meta jobs-worktree-state", state),
+    ..reasons.map(reason => {
+      @html.div(class="jobs-detail-meta jobs-worktree-reason", reason)
+    }),
+    @html.div(class="jobs-path", [
+      @html.code(title=worktree.path, worktree.path),
+    ]),
+  ]
 }

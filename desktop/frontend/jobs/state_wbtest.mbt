@@ -538,3 +538,27 @@ test "a subagent job reads as an agent, not a command" {
   assert_eq(job_title(command), "worker")
   assert_eq(job_extent(command), "0 B")
 }
+
+///|
+/// A worker's details say what its worktree held when it was handed over,
+/// and why when it could not be taken.
+test "a worker's worktree state reads as words" {
+  assert_eq(
+    worktree_state(
+      Committed(commit="0123456789abcdef0123456789abcdef01234567"),
+    ),
+    ("Worktree: committed 0123456789 on its branch, ready to take", []),
+  )
+  assert_eq(
+    worktree_state(Unmergeable(defects=["changed other/b.txt"])),
+    ("Worktree: not mergeable; kept for inspection", ["changed other/b.txt"]),
+  )
+  assert_eq(
+    worktree_state(locale=SimplifiedChinese, NoChanges),
+    ("工作树：无改动，已移除", []),
+  )
+  assert_eq(
+    worktree_state(CaptureFailed(reasons=["index.lock exists"])),
+    ("Worktree: not captured; files kept", ["index.lock exists"]),
+  )
+}

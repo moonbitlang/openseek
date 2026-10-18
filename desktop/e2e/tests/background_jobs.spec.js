@@ -522,3 +522,48 @@ test('subagent jobs read as agents with their outcome, spend and transcript', as
   await page.screenshot({ path: testInfo.outputPath('jobs-subagents-dark.png'), fullPage: true });
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a worker job shows its worktree, where its changes stand and why', async ({ page }, testInfo) => {
+  app = new BackgroundJobsHarness(page);
+  const worktree = (state) => ({
+    name: 'csv-quotes', path: '/work/demo/.worktrees/csv-quotes',
+    branch: 'openseek/csv-quotes--1a2b3c4d-sr-3', base: '5e1f0a7', allowed_paths: ['src/csv'], state,
+  });
+  const committed = app.view('runtime-new', 'agent-worker', app.oldPath, { kind: 'exited', code: 0 });
+  committed.job.command = 'openseek run --kind worker --session session-1-sr-3';
+  committed.job.subagent = {
+    kind: 'worker', label: 'handle escaped quotes', session: 'session-1-sr-3',
+    launch: { kind: 'direct' },
+    workspace: { kind: 'worktree', worktree: worktree({ kind: 'committed', commit: '9c41d2e8f0b7a6c5d4e3f2a1b0c9d8e7f6a5b4c3' }) },
+    outcome: { kind: 'captured' },
+    usage: { kind: 'known', steps: 21, prompt_tokens: 3000, completion_tokens: 400, source: 'result' },
+    report: { kind: 'stored' },
+  };
+  const rejected = app.view('runtime-new', 'agent-stray', app.oldPath, { kind: 'exited', code: 0 });
+  rejected.job.command = 'openseek run --kind worker --session session-1-sr-4';
+  rejected.job.subagent = {
+    kind: 'worker', label: 'rename the reader', session: 'session-1-sr-4',
+    launch: { kind: 'direct' },
+    workspace: { kind: 'worktree', worktree: { ...worktree({ kind: 'unmergeable', defects: ['out-of-scope changes (allowed: src/csv): src/main.mbt'] }), name: 'reader', path: '/work/demo/.worktrees/reader', branch: 'openseek/reader--1a2b3c4d-sr-4' } },
+    outcome: { kind: 'captured' },
+    report: { kind: 'stored' },
+  };
+  app.jobs.splice(0, app.jobs.length, committed, rejected);
+  await app.install(); await app.goto(); await app.openSession(); await app.openJobs();
+  await expandHistory(page);
+  const history = page.getByRole('group', { name: 'History', exact: true });
+  await history.locator('.jobs-row', { hasText: 'worker: handle escaped quotes' }).click();
+  const detail = page.locator('.jobs-detail');
+  await expect(detail).toContainText('Worktree csv-quotes · branch openseek/csv-quotes--1a2b3c4d-sr-3');
+  await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: committed 9c41d2e8f0 on its branch, ready to take');
+  await expect(detail).toContainText('/work/demo/.worktrees/csv-quotes');
+  await expect(page.getByRole('button', { name: 'Copy worktree path', exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('jobs-worker-committed.png'), fullPage: true });
+  await history.locator('.jobs-row', { hasText: 'worker: rename the reader' }).click();
+  await expect(detail.locator('.jobs-worktree-state')).toHaveText('Worktree: not mergeable; kept for inspection');
+  await expect(detail.locator('.jobs-worktree-reason')).toHaveText('out-of-scope changes (allowed: src/csv): src/main.mbt');
+  await page.screenshot({ path: testInfo.outputPath('jobs-worker-unmergeable.png'), fullPage: true });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.screenshot({ path: testInfo.outputPath('jobs-worker-unmergeable-dark.png'), fullPage: true });
+  expect(app.pageErrors).toEqual([]);
+});

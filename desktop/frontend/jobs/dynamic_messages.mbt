@@ -12,6 +12,8 @@ priv enum DynamicMessage {
   DSpent(String)
   DSpentSteps(String, String)
   DSession(String)
+  DWorktree(String, String)
+  DWorktreeCommitted(String)
 }
 
 ///|
@@ -78,5 +80,21 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DSession(p0)) => "会话：\{p0}"
     (TraditionalChinese, DSession(p0)) => "工作階段：\{p0}"
     (Japanese, DSession(p0)) => "セッション：\{p0}"
+    (English, DWorktree(p0, p1)) => "Worktree \{p0} · branch \{p1}"
+    (Spanish, DWorktree(p0, p1)) => "Worktree \{p0} · rama \{p1}"
+    (SimplifiedChinese, DWorktree(p0, p1)) => "工作树 \{p0} · 分支 \{p1}"
+    (TraditionalChinese, DWorktree(p0, p1)) => "工作樹 \{p0} · 分支 \{p1}"
+    (Japanese, DWorktree(p0, p1)) =>
+      "ワークツリー \{p0} · ブランチ \{p1}"
+    (English, DWorktreeCommitted(p0)) =>
+      "Worktree: committed \{p0} on its branch, ready to take"
+    (Spanish, DWorktreeCommitted(p0)) =>
+      "Worktree: confirmado \{p0} en su rama, listo para tomar"
+    (SimplifiedChinese, DWorktreeCommitted(p0)) =>
+      "工作树：已提交 \{p0}（在其分支上），可取回"
+    (TraditionalChinese, DWorktreeCommitted(p0)) =>
+      "工作樹：已提交 \{p0}（在其分支上），可取回"
+    (Japanese, DWorktreeCommitted(p0)) =>
+      "ワークツリー：\{p0} をブランチにコミット済み・取り込み可能"
   }
 }
