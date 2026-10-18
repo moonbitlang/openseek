@@ -78,6 +78,7 @@ async test "a directory worker changes its directory in place and leaves the cha
           "mode": "directory",
           "worker_root": String(worker_root),
           "deny_roots": [String(denied), ..],
+          "git_index": String(git_index),
           ..
         },
         ..
@@ -86,6 +87,8 @@ async test "a directory worker changes its directory in place and leaves the cha
     }
     assert_eq(worker_root, mine)
     assert_eq(denied, @fs.realpath(work))
+    // The one piece of git state it may write: its repository's index.
+    assert_eq(git_index, "\{mine}/.git/index")
     // Its change is left uncommitted in its repository; the other is untouched.
     assert_eq(@fs.read_file("\{mine}/lib/a.txt").text(), "ALPHA\n")
     let status = @subtask.git_require(["status", "--porcelain"], cwd=mine)

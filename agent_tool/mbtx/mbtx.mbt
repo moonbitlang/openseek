@@ -688,6 +688,7 @@ async fn execute(
           deny_roots=scope.deny_roots,
           worker_root=scope.worker_root,
           worker_admin_dir?=scope.worker_admin_dir,
+          git_index?=scope.git_index,
         )
       // The read-only roles (explore/review/audit) hold no editing tool, so
       // "may not write source" is the guarantee that defines them and it stays

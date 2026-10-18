@@ -10,14 +10,24 @@ pub(all) enum Workplace {
 }
 
 ///|
-/// `path` resolved as a worker's directory: canonical, strictly below the
-/// launching checkout, and what its sandbox denies — the checkout, and the
-/// git metadata of the repository the directory is in when that lies
-/// outside it (the directory's own `.git` the profile always pins).
+/// A worker's directory as its launcher resolved it: canonical; what its
+/// sandbox denies (the checkout, and the git metadata of the repository the
+/// directory is in when that lies outside it — the directory's own `.git`
+/// the profile always pins); and that repository's index file, the one piece
+/// of git state it may write, so `git restore` works.
+priv struct ResolvedDirectory {
+  directory : String
+  deny_roots : Array[String]
+  git_index : String?
+}
+
+///|
+/// `path` resolved as a worker's directory, strictly below the launching
+/// checkout.
 async fn Launcher::resolve_directory(
   self : Launcher,
   path : String,
-) -> Result[(String, Array[String]), String] {
+) -> Result[ResolvedDirectory, String] {
   guard self.cwd is Some(cwd) else {
     return Err("this session has no checkout to work in")
   }
@@ -73,7 +83,31 @@ async fn Launcher::resolve_directory(
     !@workspace_path.is_under_workspace_root(root, common) {
     deny_roots.push(common)
   }
-  Ok((directory, deny_roots))
+  // Canonical like every profile path: its directory is realpath'd, since
+  // the file itself may not exist yet.
+  let index = @subtask.git_require(
+    ["rev-parse", "--path-format=absolute", "--git-path", "index"],
+    cwd=directory,
+  )
+  let git_index = match index {
+    Ok(index) => {
+      let index = index.trim().to_owned()
+      match @workspace_path.parent_dir(index) {
+        Some(parent) =>
+          Some(
+            @workspace_path.join_child(
+              @fs.realpath(parent),
+              @workspace_path.path_basename(index),
+            ),
+          ) catch {
+            _ => None
+          }
+        None => None
+      }
+    }
+    Err(_) => None
+  }
+  Ok({ directory, deny_roots, git_index, })
 }
 
 ///|
@@ -99,15 +133,19 @@ fn Launcher::reserve_directory(
 
 ///|
 /// `input` with the directory a worker was given and what its sandbox
-/// denies: the worker enforces with what it is handed.
+/// denies and allows: the worker enforces with what it is handed, so none of
+/// it is the caller's to set.
 fn directory_input(
   input : Map[String, Json],
-  directory : String,
-  deny_roots : Array[String],
+  resolved : ResolvedDirectory,
 ) -> Json {
   let fields = Map::from_iter(input.iter())
   fields["mode"] = "directory"
-  fields["worker_root"] = Json(directory)
-  fields["deny_roots"] = Json(deny_roots)
+  fields["worker_root"] = Json(resolved.directory)
+  fields["deny_roots"] = Json(resolved.deny_roots)
+  fields.remove("git_index")
+  if resolved.git_index is Some(index) {
+    fields["git_index"] = Json(index)
+  }
   Json::object(fields)
 }

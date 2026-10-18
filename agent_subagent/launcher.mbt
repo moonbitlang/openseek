@@ -315,18 +315,16 @@ pub async fn Launcher::start(
       self.working[session] = ()
       admitted()
       let held = match self.resolve_directory(path) {
-        Ok((directory, deny_roots)) =>
-          self
-          .reserve_directory(session, directory)
-          .map(_ => (directory, deny_roots))
+        Ok(resolved) =>
+          self.reserve_directory(session, resolved.directory).map(_ => resolved)
         Err(reason) => Err(reason)
       }
       match held {
-        Ok((directory, deny_roots)) =>
+        Ok(resolved) =>
           (
             None,
-            Directory(path=directory),
-            directory_input(fields, directory, deny_roots),
+            Directory(path=resolved.directory),
+            directory_input(fields, resolved),
           )
         Err(reason) => {
           self.working.remove(session)

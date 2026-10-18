@@ -25,6 +25,11 @@
 ///                                           repository a directory is the
 ///                                           root of, last so it wins over the
 ///                                           worker-root allow
+///   (allow file-write* <git index>{,.lock})
+///                                         — a directory's index file alone,
+///                                           so `git restore`/`checkout --`
+///                                           work; objects and refs stay
+///                                           denied, so no commit lands
 ///
 /// Net effect: moon writes `wt/_build` and shared caches; `git status`/`diff`
 /// work; `git commit` and every shared object/ref/config/worktree mutation
@@ -46,6 +51,7 @@ fn worker_write_profile_data(
   deny_roots : Array[String],
   worker_root~ : String,
   worker_admin_dir? : String,
+  git_index? : String,
 ) -> WorkerWriteProfileData raise {
   guard !deny_roots.is_empty() else {
     fail("worker profile needs at least one denied root")
@@ -105,6 +111,13 @@ fn worker_write_profile_data(
   profile <+
     $|(deny file-write* (subpath "\{sbpl_string_escape(gitfile)}"))
     $|
+  // Two literal files, never a subtree: what `git restore` rewrites, and its
+  // lock.
+  if git_index is Some(index) {
+    profile <+
+      $|(allow file-write* (literal "\{sbpl_string_escape(index)}") (literal "\{sbpl_string_escape(index)}.lock"))
+      $|
+  }
   denial_subjects.push(gitfile)
   { profile: profile.to_string(), denial_subjects, }
 }
@@ -120,6 +133,7 @@ pub async fn SandboxedCommand::create_worker_if_available(
   deny_roots~ : Array[String],
   worker_root~ : String,
   worker_admin_dir? : String,
+  git_index? : String,
 ) -> SandboxedCommand? {
   // Validate before the availability probe so caller bugs surface on every
   // platform (see create_if_available).
@@ -127,6 +141,7 @@ pub async fn SandboxedCommand::create_worker_if_available(
     deny_roots,
     worker_root~,
     worker_admin_dir?,
+    git_index?,
   )
   guard sandbox_exec_available() else { return None }
   // This profile has one rule per provisioned deny root, with no recursive

@@ -15,8 +15,10 @@ import {
 /// server scripts the parent AND both real worker children (told apart by
 /// their `submit_result` tool). The parent starts both workers in one step,
 /// waits for both, reads where each change is from job_output, and finishes.
-/// Afterwards each repository has its worker's file, uncommitted, and
-/// nothing else changed: no commit, no branch, no worktree.
+/// Each worker changes a committed file and puts it back with `git restore`
+/// (through mbtx), then adds its own. Afterwards each repository has its
+/// worker's file, uncommitted, and nothing else changed: no commit, no
+/// branch, no worktree.
 fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
   {
     "index": index,
@@ -90,9 +92,36 @@ fn parent_turn(messages : String, repos : Array[String]) -> Json {
 }
 
 ///|
-/// A worker's moves: write the file, then report.
+/// The script a worker puts a committed file back with: plain git.
+let restore : String =
+  #|import {
+  #|  "moonbitlang/async",
+  #|  "moonbitlang/async/shell",
+  #|}
+  #|
+  #|async fn main {
+  #|  let code = @shell.Cmd("git", ["restore", "lib/a.txt"]).each_line(line => println(line))
+  #|  if code != 0 { fail("git restore failed (exit=\{code})") }
+  #|  println("RESTORED-A")
+  #|}
+
+///|
+/// A worker's moves: change a committed file, restore it with git, write its
+/// own file, then report.
 fn worker_turn(messages : String) -> Json {
-  if messages.contains("\"tool_call_id\"") {
+  let sent = (id : String) => messages.contains("\"id\":\"\{id}\"")
+  if !sent("write-a") {
+    calls([tool_call(0, "write-a", "write", { "path": "lib/a.txt", "content": "changed\n" })])
+  } else if !sent("restore-a") {
+    calls([
+      tool_call(0, "restore-a", "mbtx", {
+        "description": "put lib/a.txt back",
+        "source": restore,
+      }),
+    ])
+  } else if !sent("write-b") {
+    calls([tool_call(0, "write-b", "write", { "path": "lib/b.txt", "content": "beta\n" })])
+  } else {
     calls([
       tool_call(0, "report", "submit_result", {
         "schema_version": 1,
@@ -101,8 +130,6 @@ fn worker_turn(messages : String) -> Json {
         "verification": "read it back",
       }),
     ])
-  } else {
-    calls([tool_call(0, "write", "write", { "path": "lib/b.txt", "content": "beta\n" })])
   }
 }
 
@@ -215,16 +242,18 @@ async fn main {
       server.close()
     })
   })
-  assert_eq(worker_requests.val, 4)
+  assert_eq(worker_requests.val, 8)
   for repo in repos {
-    // Each worker's change is in its own repository, uncommitted.
+    // Each worker's change is in its own repository, uncommitted, and the
+    // file it restored is as committed.
     assert_eq(@fs.read_file(repo + "/lib/b.txt").text(), "beta\n")
+    assert_eq(@fs.read_file(repo + "/lib/a.txt").text(), "alpha\n")
     assert_eq(git(repo, ["status", "--porcelain"]).trim(), "?? lib/b.txt")
     assert_eq(git(repo, ["log", "--oneline"]).trim().split("\n").count(), 1)
     assert_eq(git(repo, ["branch", "--list"]).trim().split("\n").count(), 1)
     assert_false(@fs.exists(repo + "/.worktrees"))
   }
   println(
-    "PASS: workers change two repositories in place, in parallel; their changes are left uncommitted for the model",
+    "PASS: workers change two repositories in place, in parallel, restoring with git; their changes are left uncommitted for the model",
   )
 }

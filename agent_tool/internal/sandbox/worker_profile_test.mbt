@@ -156,7 +156,8 @@ async test "worker profile validation rejects impossible geometries" {
 /// A worker that works in place has a directory of the session's checkout:
 /// here a repository among others in a plain directory. Its own files are
 /// writable, a sibling repository is not, and its repository's `.git` is
-/// pinned: `git status` still reads, a commit cannot land.
+/// pinned but for the index: `git status` reads and `git restore` puts a
+/// file back, a commit cannot land.
 async test "the worker profile confines a directory worker to its directory" {
   @vfs.with_tmpdir(prefix="openseek-worker-directory-", dir => {
     let workspace = @fs.realpath(dir)
@@ -176,6 +177,7 @@ async test "the worker profile confines a directory worker to its directory" {
         Shell(cmd),
         deny_roots=[workspace],
         worker_root=mine,
+        git_index="\{mine}/.git/index",
       )
     }
 
@@ -199,6 +201,15 @@ async test "the worker profile confines a directory worker to its directory" {
     }
     assert_true(merged_output_text(against_sibling).0 != 0)
     assert_eq(@fs.read_file("\{theirs}/seed.txt").text(), "seed\n")
+    guard probe("cd \{mine} && git restore seed.txt") is Some(restore) else {
+      fail("probe build failed")
+    }
+    assert_eq(merged_output_text(restore).0, 0)
+    assert_eq(@fs.read_file("\{mine}/seed.txt").text(), "seed\n")
+    guard probe("printf x > \{mine}/seed.txt") is Some(again) else {
+      fail("probe build failed")
+    }
+    assert_eq(merged_output_text(again).0, 0)
     guard probe("cd \{mine} && git commit -q -am steal") is Some(against_git) else {
       fail("probe build failed")
     }

@@ -35,6 +35,7 @@ pub struct WorkerInput {
   priv context : String?
   priv worker_root : String
   priv worker_admin_dir : String?
+  priv git_index : String?
   priv deny_roots : Array[String]
   allowed_paths : Array[String]
   priv base_oid : String?
@@ -74,6 +75,11 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
       context,
       worker_root,
       worker_admin_dir: None,
+      git_index: match input {
+        { "git_index": String(index), .. } if @path.Path(index).is_absolute() =>
+          Some(index)
+        _ => None
+      },
       deny_roots,
       allowed_paths: [],
       base_oid: None,
@@ -102,6 +108,7 @@ pub fn WorkerInput::parse(input : Json) -> Result[WorkerInput, String] {
     context,
     worker_root,
     worker_admin_dir: Some(worker_admin_dir),
+    git_index: None,
     deny_roots,
     allowed_paths,
     base_oid: Some(base_oid),
@@ -171,6 +178,7 @@ pub async fn run_child(
     deny_roots: input.deny_roots,
     worker_root: input.worker_root,
     worker_admin_dir: input.worker_admin_dir,
+    git_index: input.git_index,
   }
   // One provenance map across every file tool, as the main registry wires
   // it: remove's automatic-deletion gate and edit's rebind detection only work
