@@ -2,6 +2,13 @@
 
 ///|
 priv enum UiMessage {
+  ExcelCopyTable
+  ExcelCopyTableHint
+  ExcelCopyMarkdown
+  ExcelCopyMarkdownHint
+  ExcelCopied
+  ExcelCopyFailed
+  ExcelCopyTooLarge
   UnresolvedGithubConversations
   AddToContext
   OfficeControls
@@ -192,6 +199,55 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, ExcelCopyTable) => "Copy table"
+    (SimplifiedChinese, ExcelCopyTable) => "复制表格"
+    (TraditionalChinese, ExcelCopyTable) => "複製表格"
+    (Japanese, ExcelCopyTable) => "表をコピー"
+    (Spanish, ExcelCopyTable) => "Copiar tabla"
+    (English, ExcelCopyTableHint) => "Copy selected values as a table (TSV)"
+    (SimplifiedChinese, ExcelCopyTableHint) =>
+      "将所选值复制为表格（TSV）"
+    (TraditionalChinese, ExcelCopyTableHint) =>
+      "將所選值複製為表格（TSV）"
+    (Japanese, ExcelCopyTableHint) =>
+      "選択した値を表としてコピー（TSV）"
+    (Spanish, ExcelCopyTableHint) =>
+      "Copiar los valores seleccionados como tabla (TSV)"
+    (English, ExcelCopyMarkdown) => "Copy as Markdown table"
+    (SimplifiedChinese, ExcelCopyMarkdown) => "复制为 Markdown 表格"
+    (TraditionalChinese, ExcelCopyMarkdown) => "複製為 Markdown 表格"
+    (Japanese, ExcelCopyMarkdown) => "Markdown の表としてコピー"
+    (Spanish, ExcelCopyMarkdown) => "Copiar como tabla Markdown"
+    (English, ExcelCopyMarkdownHint) =>
+      "Copy as Markdown table; the first row becomes the header"
+    (SimplifiedChinese, ExcelCopyMarkdownHint) =>
+      "复制为 Markdown 表格，首行用作表头"
+    (TraditionalChinese, ExcelCopyMarkdownHint) =>
+      "複製為 Markdown 表格，首行用作表頭"
+    (Japanese, ExcelCopyMarkdownHint) =>
+      "Markdown の表としてコピー（先頭行は見出し）"
+    (Spanish, ExcelCopyMarkdownHint) =>
+      "Copiar como tabla Markdown; la primera fila será el encabezado"
+    (English, ExcelCopied) => "Copied"
+    (SimplifiedChinese, ExcelCopied) => "已复制"
+    (TraditionalChinese, ExcelCopied) => "已複製"
+    (Japanese, ExcelCopied) => "コピーしました"
+    (Spanish, ExcelCopied) => "Copiado"
+    (English, ExcelCopyFailed) => "Copy failed. Try again."
+    (SimplifiedChinese, ExcelCopyFailed) => "复制失败，请重试。"
+    (TraditionalChinese, ExcelCopyFailed) => "複製失敗，請重試。"
+    (Japanese, ExcelCopyFailed) =>
+      "コピーに失敗しました。再試行してください。"
+    (Spanish, ExcelCopyFailed) => "No se pudo copiar. Inténtalo de nuevo."
+    (English, ExcelCopyTooLarge) => "Select at most 1,000,000 cells to copy."
+    (SimplifiedChinese, ExcelCopyTooLarge) =>
+      "选区超过 100 万个单元格，请缩小后复制。"
+    (TraditionalChinese, ExcelCopyTooLarge) =>
+      "選取範圍超過 100 萬個儲存格，請縮小後複製。"
+    (Japanese, ExcelCopyTooLarge) =>
+      "選択範囲を100万セル以下にしてコピーしてください。"
+    (Spanish, ExcelCopyTooLarge) =>
+      "Selecciona como máximo 1.000.000 de celdas para copiar."
     (English, OfficeControls) => "Office viewer controls"
     (SimplifiedChinese, OfficeControls) => "文档预览控件"
     (TraditionalChinese, OfficeControls) => "文件預覽控制項"

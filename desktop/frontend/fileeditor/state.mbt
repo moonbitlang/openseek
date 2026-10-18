@@ -469,6 +469,9 @@ pub(all) struct State {
   office_selection : OfficeSelectionPreview?
   // None when no draft exists; Some("") is an open, empty draft.
   office_selection_comment : String?
+  excel_copy_generation : Int32
+  excel_copy_selection : OfficeSelectionPreview?
+  excel_copy_feedback : ExcelCopyFeedback?
   office_region_request : OfficeRegionRequest?
   office_region : OfficeRegionDraft?
   office_region_id : Int64
@@ -666,6 +669,9 @@ pub fn State::empty() -> State {
     office_prefer_system_fonts: false,
     office_selection: None,
     office_selection_comment: None,
+    excel_copy_generation: 0,
+    excel_copy_selection: None,
+    excel_copy_feedback: None,
     office_region_request: None,
     office_region: None,
     office_region_id: 0L,
@@ -956,6 +962,10 @@ pub(all) enum Msg {
   OfficeFeedbackChanged(OfficeSelectionPreview, String)
   OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
   OfficeSelectionDismissed(OfficeSelectionPreview)
+  ExcelSelectionCopyRequested(OfficeSelectionPreview, ExcelCopyFormat)
+  ExcelSelectionCopyFinished(OfficeSelectionPreview, Int32, Bool)
+  ExcelSelectionCopyExpired(OfficeSelectionPreview, Int32)
+  ExcelSelectionCleared(OfficeSelectionPreview)
   // Office surface controls are kept in the file panel so standalone viewer
   // behavior remains reusable while embedded hosts own their chrome.
   OfficeZoomChanged(String)

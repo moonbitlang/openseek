@@ -246,6 +246,42 @@
 .office-selection-preview.hidden,
 .pdf-capture-feedback.hidden { display: none; }
 
+.excel-copy-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.viewer-breadcrumb:has(.excel-copy-controls) {
+  height: auto;
+  min-height: 34px;
+  flex-wrap: wrap;
+  padding-block: 4px;
+}
+.viewer-breadcrumb:has(.excel-copy-controls) .office-viewer-toolbar {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.excel-copy-controls .office-viewer-control {
+  width: auto;
+  padding-inline: 7px;
+  white-space: nowrap;
+}
+.excel-copy-feedback {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.excel-copy-range {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
 .office-viewer-surface .surface-empty {
   display: grid;
   min-height: 100%;

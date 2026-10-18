@@ -451,20 +451,47 @@ pub fn body_view(
     semantic_review,
   )
   @html.div(class="editor-body", [
-    @html.div(class="viewer-stack", [
-      viewer_host,
-      office_surface,
-      pdf_password_dialog(locale~, dispatch, state, ctx),
-      markdown_viewer_host,
-      mbti_diagram_host,
-      package_diagram_host,
-      diff_editor_host,
-      semantic_review_host,
-      viewer_notice(locale~, state, ctx),
-      github_review_line_layer(locale~, dispatch, state, ctx),
-      office_selection_preview_view(state, ctx),
-      pdf_capture_feedback_view(state, ctx),
-    ]),
+    @html.div(
+      class="viewer-stack",
+      attrs=@html.Attrs::build()
+        .on_keydown(event => {
+          if event
+            .to_keyboard_event()
+            .map(key => key.key() == "Escape")
+            .unwrap_or(false) &&
+            state.pending_excel_selection(ctx) is Some(preview) {
+            dispatch(ExcelSelectionCleared(preview))
+          } else {
+            @cmd.none
+          }
+        })
+        .on_click(event => {
+          if event
+            .target()
+            .to_element()
+            .bind(element => element.closest("[data-excel-sheet-tab]"))
+            is Some(_) &&
+            state.pending_excel_selection(ctx) is Some(preview) {
+            dispatch(ExcelSelectionCleared(preview))
+          } else {
+            @cmd.none
+          }
+        }),
+      [
+        viewer_host,
+        office_surface,
+        pdf_password_dialog(locale~, dispatch, state, ctx),
+        markdown_viewer_host,
+        mbti_diagram_host,
+        package_diagram_host,
+        diff_editor_host,
+        semantic_review_host,
+        viewer_notice(locale~, state, ctx),
+        github_review_line_layer(locale~, dispatch, state, ctx),
+        office_selection_preview_view(state, ctx),
+        pdf_capture_feedback_view(state, ctx),
+      ],
+    ),
     tree_pane(locale~, dispatch, state, ctx),
   ])
 }
@@ -2047,6 +2074,7 @@ fn office_viewer_toolbar(
         attrs=@html.Attrs::build().aria_label(ui(locale, OfficeRegion)),
         @icons.icon(@icons.icon_region_capture),
       ),
+      excel_copy_controls(locale~, dispatch, state, ctx),
       @html.label(
         class=if state.office_query.is_empty() {
           "office-viewer-find"

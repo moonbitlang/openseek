@@ -2110,6 +2110,7 @@ pub fn sync(
         office_query: state.office_query,
         office_prefer_system_fonts: state.office_prefer_system_fonts,
         pdf_generation: state.pdf_generation,
+        excel_copy_generation: state.excel_copy_generation,
         explorer_mode: state.explorer_mode,
         search: state.search.reset_checkout(),
         review_diff_layout: state.review_diff_layout,
@@ -2530,6 +2531,60 @@ fn update_inner(
     }
   }
   match msg {
+    ExcelSelectionCopyRequested(preview, format) =>
+      state.copy_excel_selection(ctx, dispatch, preview, format)
+    ExcelSelectionCleared(preview) =>
+      if state.pending_excel_selection(ctx) == Some(preview) {
+        let (command, state) = if state.pending_office_selection(ctx) ==
+          Some(preview) &&
+          !state.has_pinned_office_selection(ctx) {
+          state.dismiss_office_selection(ctx, preview)
+        } else {
+          (@cmd.none, state)
+        }
+        (
+          @cmd.batch([
+            command,
+            @office_viewer.clear_selection_command(OfficeSurfaceId),
+          ]),
+          { ..state, excel_copy_selection: None, excel_copy_feedback: None, },
+        )
+      } else {
+        (@cmd.none, state)
+      }
+    ExcelSelectionCopyFinished(preview, generation, copied) => {
+      guard state.excel_copy_feedback is Some(feedback) &&
+        feedback.generation == generation &&
+        feedback.preview == preview &&
+        state.pending_excel_selection(ctx) == Some(preview) else {
+        return (@cmd.none, state)
+      }
+      (
+        @cmd.delay(
+          dispatch(ExcelSelectionCopyExpired(preview, generation)),
+          2000,
+        ),
+        {
+          ..state,
+          excel_copy_feedback: Some({
+            ..feedback,
+            status: if copied {
+              Copied
+            } else {
+              Failed
+            },
+          }),
+        },
+      )
+    }
+    ExcelSelectionCopyExpired(preview, generation) =>
+      if state.excel_copy_feedback is Some(feedback) &&
+        feedback.generation == generation &&
+        feedback.preview == preview {
+        (@cmd.none, { ..state, excel_copy_feedback: None, })
+      } else {
+        (@cmd.none, state)
+      }
     // Checkout ownership and the unsaved-change dialog belong to the shell.
     UpdatePullRequest => (@cmd.none, state)
     // The root owns the pending selection and confirmed composer mention. Keep

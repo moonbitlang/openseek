@@ -320,6 +320,14 @@ Selecting text in DOCX/PDF or a cell range in XLSX opens a preview showing its
 content and page or sheet/range. **Add to context** keeps the quotation in the
 active conversation; **Cancel** leaves the draft unchanged. Further selections
 update the pending preview, while separately confirmed quotations accumulate.
+Excel range selections also expose **Copy table** (TSV) and **Markdown** in
+the document toolbar. They copy the complete displayed values independently of
+the Agent preview's excerpt limit. Blank and merged-cell positions are retained;
+merged values occupy one cell and the covered positions remain empty. TSV quotes
+embedded tabs, line breaks, and quotes. Markdown uses the first selected row as
+its header, escapes literal markup, and represents line breaks with `<br>`.
+Copying does not add context or change the workbook. Ranges over one million
+cells must be reduced before copying.
 Each quotation chip shows its file, location, and content excerpt, with the
 selected text in its tooltip. PDF quotations retain a complete
 file/hash/parser-bound PDF text-range reference. Image-only pages display

@@ -7,6 +7,7 @@ pub(all) struct OfficeSelectionPreview {
   pdf_generation : Int32?
   materialized : String
   summary : @mention_context.OfficeSelectionSummary
+  excel_table : ExcelSelectionTable?
 } derive(Eq)
 
 ///|
@@ -97,10 +98,6 @@ pub fn State::offer_office_selection(
     self.pending_region_feedback(ctx) is Some(_) {
     return Ok(self)
   }
-  // A typed draft pins its original source until submission or cancellation.
-  if self.has_pinned_office_selection(ctx) {
-    return Ok(self)
-  }
   let (sig, pdf_generation) = match self.docs.get(path) {
     Some({ state: TabOffice(sig~, ..), stale: false, .. }) => (sig, None)
     Some({ state: TabPdf(document~, sig~), stale: false, .. }) if document.status
@@ -116,18 +113,34 @@ pub fn State::offer_office_selection(
     summary.file == path.path else {
     return Err(ui(ctx.locale, OfficeSelectionFailed))
   }
-  Ok({
+  let preview : OfficeSelectionPreview = {
+    owner: ctx.owner,
+    epoch: self.request_epoch,
+    path,
+    sig,
+    pdf_generation,
+    materialized,
+    summary,
+    excel_table: excel_selection_table(raw),
+  }
+  let state = {
     ..self,
+    excel_copy_selection: if preview.excel_table is Some(_) {
+      Some(preview)
+    } else {
+      None
+    },
+    excel_copy_feedback: None,
+  }
+  // A typed feedback draft stays pinned; clipboard actions follow the new
+  // cell selection independently and never replace that draft's source.
+  if self.has_pinned_office_selection(ctx) {
+    return Ok(state)
+  }
+  Ok({
+    ..state,
     office_selection_comment: Some(""),
-    office_selection: Some({
-      owner: ctx.owner,
-      epoch: self.request_epoch,
-      path,
-      sig,
-      pdf_generation,
-      materialized,
-      summary,
-    }),
+    office_selection: Some(preview),
   })
 }
 
@@ -144,7 +157,11 @@ pub fn State::dismiss_office_selection(
   (
     @cmd.batch([
       hide_office_feedback(),
-      @office_viewer.clear_selection_command(OfficeSurfaceId),
+      if preview.excel_table is Some(_) {
+        @cmd.none
+      } else {
+        @office_viewer.clear_selection_command(OfficeSurfaceId)
+      },
     ]),
     { ..self, office_selection: None, office_selection_comment: None, },
   )
@@ -152,10 +169,18 @@ pub fn State::dismiss_office_selection(
 
 ///|
 fn State::sync_office_selection(self : State, ctx : Ctx) -> State {
-  if self.office_selection is Some(_) &&
+  let state = if self.office_selection is Some(_) &&
     self.pending_office_selection(ctx) is None {
     { ..self, office_selection: None, office_selection_comment: None, }
   } else {
     self
+  }
+  let excel_copy_selection = state.pending_excel_selection(ctx)
+  {
+    ..state,
+    excel_copy_selection,
+    excel_copy_feedback: state.excel_copy_feedback.filter(feedback => {
+      excel_copy_selection == Some(feedback.preview)
+    }),
   }
 }

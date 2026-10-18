@@ -112,6 +112,8 @@ pub fn State::start_office_region(
       office_region_id: request.id,
       office_selection: None,
       office_selection_comment: None,
+      excel_copy_selection: None,
+      excel_copy_feedback: None,
     },
   )
 }

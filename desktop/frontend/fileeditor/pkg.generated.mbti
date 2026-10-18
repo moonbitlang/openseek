@@ -169,6 +169,40 @@ pub(all) struct Doc {
 pub fn Doc::equal(Self, Self) -> Bool
 pub fn Doc::not_equal(Self, Self) -> Bool
 
+pub(all) struct ExcelCopyFeedback {
+  preview : OfficeSelectionPreview
+  generation : Int
+  format : ExcelCopyFormat
+  status : ExcelCopyStatus
+} derive(Eq)
+pub fn ExcelCopyFeedback::equal(Self, Self) -> Bool
+pub fn ExcelCopyFeedback::not_equal(Self, Self) -> Bool
+
+pub(all) enum ExcelCopyFormat {
+  Tsv
+  Markdown
+} derive(Eq)
+pub fn ExcelCopyFormat::equal(Self, Self) -> Bool
+pub fn ExcelCopyFormat::not_equal(Self, Self) -> Bool
+
+pub(all) enum ExcelCopyStatus {
+  Copying
+  Copied
+  Failed
+} derive(Eq)
+pub fn ExcelCopyStatus::equal(Self, Self) -> Bool
+pub fn ExcelCopyStatus::not_equal(Self, Self) -> Bool
+
+pub struct ExcelSelectionTable {
+  first_row : Int
+  last_row : Int
+  first_column : Int
+  last_column : Int
+  cells : Map[(Int, Int), String]
+} derive(Eq)
+pub fn ExcelSelectionTable::equal(Self, Self) -> Bool
+pub fn ExcelSelectionTable::not_equal(Self, Self) -> Bool
+
 pub(all) enum ExplorerMode {
   ExplorerFiles
   ExplorerChanges
@@ -289,6 +323,10 @@ pub(all) enum Msg {
   OfficeFeedbackChanged(OfficeSelectionPreview, String)
   OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
   OfficeSelectionDismissed(OfficeSelectionPreview)
+  ExcelSelectionCopyRequested(OfficeSelectionPreview, ExcelCopyFormat)
+  ExcelSelectionCopyFinished(OfficeSelectionPreview, Int, Bool)
+  ExcelSelectionCopyExpired(OfficeSelectionPreview, Int)
+  ExcelSelectionCleared(OfficeSelectionPreview)
   OfficeZoomChanged(String)
   OfficeSearchChanged(String)
   OfficeSystemFontsToggled
@@ -420,6 +458,7 @@ pub(all) struct OfficeSelectionPreview {
   pdf_generation : Int?
   materialized : String
   summary : @mention_context.OfficeSelectionSummary
+  excel_table : ExcelSelectionTable?
 } derive(Eq)
 pub fn OfficeSelectionPreview::equal(Self, Self) -> Bool
 pub fn OfficeSelectionPreview::not_equal(Self, Self) -> Bool
@@ -614,6 +653,9 @@ pub(all) struct State {
   office_prefer_system_fonts : Bool
   office_selection : OfficeSelectionPreview?
   office_selection_comment : String?
+  excel_copy_generation : Int
+  excel_copy_selection : OfficeSelectionPreview?
+  excel_copy_feedback : ExcelCopyFeedback?
   office_region_request : OfficeRegionRequest?
   office_region : OfficeRegionDraft?
   office_region_id : Int64
