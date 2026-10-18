@@ -145,14 +145,23 @@ Every producer of `<parent>-sr-N` with a durable session uses one claim:
 2. Create `<parent>-sr-N` exclusively. Only "already exists" advances N and
    retries; any other failure refuses the launch as `unavailable`. From a
    successful create on, N is consumed whatever happens next.
-3. Write a claim file inside it, `claim.json`, with a random token, synced.
+3. Write a claim file inside it, `claim.json`, holding the SHA-256 of a
+   random token, synced. The token itself is never on disk, so a snippet
+   that can read the session store cannot accept someone else's claim. (It
+   travels on the child's command line, which a same-user process can still
+   read: the trust model stays cooperative.)
 4. Pass the child `--claim <token>`. A `--kind` run given `--claim` accepts
    an existing session directory only if it holds exactly that claim file and
-   no transcript, and removes the file before its first record. Without
+   no transcript, and renames the file away (the rename is the single-use
+   acceptance), removes it and syncs the directory before its first record. Without
    `--claim` the existing refusal stands. This is a single-use handoff, not a
    general "accept an existing directory".
 5. A directory with a claim file and no transcript is a child that never
    started; it is never reused (the ordinal stays taken).
+
+A taken ordinal refreshes the floor from the store's listing, so a sibling
+that launched many children since the session started costs one rescan, not
+a refusal. A claim that fails launches nothing: no child id, no brackets.
 
 The gate's reviewer uses the same claim in PR 1; its `--no-session` path is
 unchanged. Two engine processes on one session cannot share a child, a
