@@ -52,7 +52,12 @@ pub async fn capture(
           "worktree HEAD moved from the pinned base (\{head.trim()} != \{pin})",
         )
       }
-    Err(reason) => defects.push(reason)
+    // Git failing is not the worker's doing: the entry stays as it was, to
+    // be captured again.
+    Err(reason) => {
+      defects.push(reason)
+      return { entry, evidence, defects, }
+    }
   }
   let status = git_run(
     [
@@ -146,7 +151,10 @@ pub async fn capture(
         )
       }
     }
-    raw => defects.push("git diff --raw failed: \{raw.output.trim()}")
+    raw => {
+      defects.push("git diff --raw failed: \{raw.output.trim()}")
+      return { entry, evidence, defects, }
+    }
   }
   if !defects.is_empty() {
     return settle(geometry, entry, Captured, evidence, defects)
