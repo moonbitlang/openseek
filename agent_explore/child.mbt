@@ -3,7 +3,7 @@
 /// scout answering a real question never dies mid-search (a truncated child
 /// burns its whole allowance and returns nothing); the answer-early rule in
 /// the prompt, not this ceiling, is what keeps exploration cheap.
-pub let default_explore_max_steps : Int32 = 100
+pub let default_explore_max_steps : Int32 = 300
 
 ///|
 /// The entry for `openseek run --kind explore`: decode the request's input

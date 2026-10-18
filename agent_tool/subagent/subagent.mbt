@@ -18,7 +18,7 @@ pub fn definition(
       #|{"query": "...", "hints"?: "..."}. kind "review": an advisory audit, input
       #|{"goal": "..."} (the worktree against a goal) or {"base": "<ref>"} (the
       #|base...HEAD diff). You get a notice when it ends; job_wait waits for it,
-      #|job_output reads its outcome and report, job_stop stops it. Up to four run at
+      #|job_output reads its outcome and report, job_stop stops it. Up to 16 run at
       #|once. Give each a complete brief: it does not see this conversation.
     ),
     schema=JsonSchema({

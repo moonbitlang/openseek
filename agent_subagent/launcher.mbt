@@ -11,7 +11,7 @@ const StopGraceMs : Int32 = 10_000
 
 ///|
 /// How many subagents one session may have live at once.
-const MaxLive : Int32 = 4
+const MaxLive : Int32 = 16
 
 ///|
 /// The engine's launcher of subagents: each child is a background job of the
