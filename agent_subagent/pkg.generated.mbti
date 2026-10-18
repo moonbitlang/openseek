@@ -21,6 +21,7 @@ pub fn Launcher::max_live(Self) -> Int
 pub fn Launcher::report(Self, String) -> Json?
 pub async fn Launcher::send(Self, String, String) -> SendResult
 pub async fn Launcher::start(Self, kind~ : String, input~ : Json, label~ : String, max_steps? : Int, launch~ : @openseek_protocol.SubagentLaunch, validate~ : (Json) -> Result[Json, String]) -> StartResult
+pub fn Launcher::subagent(Self, String) -> @openseek_protocol.SubagentInfo?
 
 pub(all) enum SendResult {
   Sent(receipt~ : String)

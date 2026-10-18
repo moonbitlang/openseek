@@ -7,6 +7,7 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
     {
       name: "explore",
       ceiling: @agent_explore.default_explore_max_steps,
+      takes_instructions: true,
       validate: report => {
         let _ : @agent_explore.ExploreReport = @json.from_json(report) catch {
           error => return Err("\{error}")
@@ -17,6 +18,7 @@ pub fn subagent_kinds() -> Array[@subagent.Kind] {
     {
       name: "review",
       ceiling: @agent_review.default_review_max_steps,
+      takes_instructions: false,
       validate: report => {
         match parse_audit_report(report) {
           Ok(_) => Ok(report)

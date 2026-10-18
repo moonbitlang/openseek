@@ -402,6 +402,15 @@ pub fn describe_outcome(outcome : @protocol.SubagentOutcome) -> String {
 }
 
 ///|
+/// The subagent part of job `job_id`, or `None` for a job that is not one.
+pub fn Launcher::subagent(
+  self : Launcher,
+  job_id : String,
+) -> @protocol.SubagentInfo? {
+  self.runtime.snapshot(job_id).bind(snapshot => snapshot.subagent)
+}
+
+///|
 /// What `Launcher::send` did with an instruction.
 pub(all) enum SendResult {
   /// Posted; the child reads it at its next step. `receipt` is what its

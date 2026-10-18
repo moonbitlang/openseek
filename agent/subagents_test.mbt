@@ -41,7 +41,12 @@ async test "a session's subagent ends with a notice and a readable report" {
             )
           },
           kinds: [
-            { name: "explore", ceiling: 40, validate: report => Ok(report), },
+            {
+              name: "explore",
+              ceiling: 40,
+              validate: report => Ok(report),
+              takes_instructions: true,
+            },
           ],
         },
       )

@@ -19,6 +19,7 @@ fn kinds() -> Array[@subagent.Kind] {
     {
       name: "explore",
       ceiling: 40,
+      takes_instructions: true,
       validate: report => {
         if report is { "answer": String(_), .. } {
           Ok(report)
@@ -170,4 +171,44 @@ async test "subagent bounds every child's step budget by its kind's ceiling" {
       )
     })
   }
+}
+
+///|
+/// A child of a kind that reads no instructions is refused at once, with
+/// what to do instead, rather than with a retry that can never succeed.
+#cfg(not(platform="windows"))
+async test "subagent_send refuses a kind that takes no instructions" {
+  @async.with_task_group(group => {
+    let root = @fs.tmpdir(prefix="openseek-subagent-send-")
+    group.add_defer(() => @fs.rmdir(root, recursive=true))
+    let runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group))
+    let launcher = @agent_subagent.Launcher(
+      AgentTaskScope(group),
+      runtime~,
+      children=ChildSession(root~, parent="p"),
+      program="sh",
+      args=["-c", "read line; cat >/dev/null", "sh"],
+      result_dir="\{root}/results",
+      grace_ms=100,
+    )
+    let kinds : Array[@subagent.Kind] = [
+      {
+        name: "review",
+        ceiling: 40,
+        validate: report => Ok(report),
+        takes_instructions: false,
+      },
+    ]
+    let start = @subagent.definition(launcher, kinds)
+    let send = @subagent.send_definition(launcher, kinds)
+    let started = call(start, { "kind": "review", "input": { "goal": "g" } })
+    guard started.data is Some({ "job_id": String(job_id), .. }) else {
+      fail("expected the review to start")
+    }
+    let refused = call(send, { "job_id": job_id, "message": "narrow it" })
+    assert_true(refused.is_error)
+    assert_true(refused.content.contains("takes no instructions"))
+    assert_false(refused.content.contains("retry"))
+    assert_true(runtime.stop(job_id))
+  })
 }

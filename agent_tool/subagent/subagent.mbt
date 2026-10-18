@@ -56,6 +56,8 @@ pub(all) struct Kind {
   name : String
   ceiling : Int32
   validate : (Json) -> Result[Json, String]
+  /// Whether a running child of this kind reads instructions sent to it.
+  takes_instructions : Bool
 }
 
 ///|
@@ -137,6 +139,7 @@ async fn execute(
 /// takes it at its next step, as a user's steering, and adjusts its course.
 pub fn send_definition(
   launcher : @agent_subagent.Launcher,
+  kinds : Array[Kind],
 ) -> @agent_tool.AgentToolDefinition {
   AgentToolDefinition(
     name="subagent_send",
@@ -153,7 +156,7 @@ pub fn send_definition(
       },
       "required": ["job_id", "message"],
     }),
-    execute=Async(arguments => send(launcher, arguments)),
+    execute=Async(arguments => send(launcher, kinds, arguments)),
     concurrent_safe=true,
   )
 }
@@ -161,11 +164,21 @@ pub fn send_definition(
 ///|
 async fn send(
   launcher : @agent_subagent.Launcher,
+  kinds : Array[Kind],
   arguments : Json,
 ) -> @agent_tool.ToolAction {
   guard arguments is { "job_id": String(job_id), "message": String(text), .. } else {
     return @agent_tool.respond(
       "error: subagent_send requires a job_id and a message",
+      is_error=true,
+    )
+  }
+  // A child of a kind that reads no instructions never will: say so, rather
+  // than letting the model retry a send that cannot be delivered.
+  if launcher.subagent(job_id) is Some(info) &&
+    !kinds.any(kind => kind.name == info.kind && kind.takes_instructions) {
+    return @agent_tool.respond(
+      "error: a \{info.kind} subagent takes no instructions; to change its task, stop it (job_stop) and start another with the new brief",
       is_error=true,
     )
   }
@@ -177,7 +190,7 @@ async fn send(
       )
     NotReady =>
       @agent_tool.respond(
-        "error: subagent \{job_id} is not taking instructions yet (it has not started, or its kind takes none); retry shortly",
+        "error: subagent \{job_id} is still starting and is not taking instructions yet; retry shortly",
         is_error=true,
       )
     Ended =>

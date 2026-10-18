@@ -10,7 +10,7 @@ import {
 // Values
 pub fn definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
-pub fn send_definition(@agent_subagent.Launcher) -> @agent_tool.AgentToolDefinition
+pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.AgentToolDefinition
 
 // Errors
 
@@ -19,6 +19,7 @@ pub(all) struct Kind {
   name : String
   ceiling : Int
   validate : (Json) -> Result[Json, String]
+  takes_instructions : Bool
 }
 
 pub(all) struct Subagents {
