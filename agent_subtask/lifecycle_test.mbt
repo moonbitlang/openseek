@@ -237,6 +237,48 @@ async test "a conflicting merge hands off, continues after resolution" {
 }
 
 ///|
+async test "continue stages the resolved conflict set, but not while markers remain" {
+  @vfs.with_tmpdir(prefix="openseek-subtask-unstaged-", dir => {
+    let repo = seed_repo(dir)
+    let provisioned = must_provision(
+      repo,
+      name="fix-lib",
+      allowed_paths=["lib"],
+      nonce="n1",
+    )
+    let entry = provisioned.entry
+    @vfs.write_text("\{entry.worker_root}/lib", "a.txt", "WORKER\n")
+    let captured = @agent_subtask.capture(provisioned.geometry, entry)
+    @vfs.write_text("\{repo}/lib", "a.txt", "ORIGIN\n")
+    for args in [["add", "-A"], ["commit", "-q", "-m", "origin moved"]] {
+      must_git(repo, args)
+    }
+    let conflicted = @agent_subtask.integrate(
+      provisioned.geometry,
+      captured.entry,
+    )
+    assert_eq(conflicted.result, "conflicted")
+    // The markers are still there: nothing is staged or committed.
+    let early = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(early.result, "refused")
+    assert_true(
+      early.detail[0].contains("conflict markers remain in lib/a.txt"),
+    )
+    // Resolved with a file tool, which does not stage: continue does.
+    @vfs.write_text("\{repo}/lib", "a.txt", "MERGED\n")
+    let continued = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(continued.result, "integrated")
+    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "MERGED\n")
+  })
+}
+
+///|
 async test "integrate refuses a dirty tracked origin; abort restores state" {
   @vfs.with_tmpdir(prefix="openseek-subtask-dirty-", dir => {
     let repo = seed_repo(dir)

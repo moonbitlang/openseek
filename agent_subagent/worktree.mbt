@@ -182,16 +182,7 @@ pub async fn Launcher::worktree(
   worker : String,
   action : WorktreeAction,
 ) -> WorktreeResult {
-  let session = match self.runtime.snapshot(worker) {
-    Some({ subagent: Some(info), .. }) => info.session
-    _ => worker
-  }
-  guard self.cwd is Some(root) &&
-    @subtask.resolve_geometry(root) is Ok(geometry) else {
-    return Unknown
-  }
-  guard self.entries(geometry).iter().filter(found => found.0 == session).last()
-    is Some((_, entry)) else {
+  guard self.find(worker) is Some((session, geometry, entry)) else {
     return Unknown
   }
   guard !self.working.contains(session) else {
@@ -220,6 +211,80 @@ pub async fn Launcher::worktree(
     }
     Err(reason) => Refused(reason)
   }
+}
+
+///|
+/// The worktree of `worker` (a job id of this engine, or a session): its
+/// worker's session, the repository it is in, and its registry entry.
+async fn Launcher::find(
+  self : Launcher,
+  worker : String,
+) -> (String, @subtask.Geometry, @subtask.SubtaskEntry)? {
+  let session = match self.runtime.snapshot(worker) {
+    Some({ subagent: Some(info), .. }) => info.session
+    _ => worker
+  }
+  guard self.cwd is Some(root) &&
+    @subtask.resolve_geometry(root) is Ok(geometry) else {
+    return None
+  }
+  self
+  .entries(geometry)
+  .iter()
+  .filter(found => found.0 == session)
+  .last()
+  .map(found => (session, geometry, found.1))
+}
+
+///|
+/// What `worker` changed, as git shows it, in at most `limit` characters:
+/// a committed worktree's commit against its base, or, before a commit, its
+/// working tree against its base. `None` when the session has no such
+/// worker; `Err` when there is nothing to show or git failed.
+pub async fn Launcher::changes(
+  self : Launcher,
+  worker : String,
+  limit~ : Int32 = 40_000,
+) -> Result[String, String]? {
+  guard self.find(worker) is Some((_, geometry, entry)) else { return None }
+  let (cwd, range) = match (entry.state, entry.commit_oid) {
+    (Committed | Conflicted, Some(commit)) =>
+      (geometry.origin_root, [entry.base_oid, commit])
+    (Running | Captured, _) => (entry.worker_root, [entry.base_oid])
+    _ =>
+      return Some(
+        Err(
+          "its worktree is \{describe_state(worktree_of(entry).state)}; there is nothing to show",
+        ),
+      )
+  }
+  let text = StringBuilder()
+  let diff = ["diff", "--no-ext-diff", "--no-color"]
+  for args in [[..diff, "--stat", ..range], [..diff, ..range]] {
+    match @subtask.git_require(["--no-pager", ..args], cwd~) {
+      Ok(output) => text.write_string(output)
+      Err(reason) => return Some(Err(reason))
+    }
+  }
+  if range.length() == 1 {
+    match
+      @subtask.git_require(["ls-files", "--others", "--exclude-standard"], cwd~) {
+      Ok(untracked) if !untracked.is_blank() =>
+        text.write_string("\nuntracked:\n\{untracked}")
+      _ => ()
+    }
+  }
+  let text = text.to_string()
+  Some(
+    Ok(
+      if text.length() <= limit {
+        text
+      } else {
+        String::from_iter(text.iter().take(limit)) +
+        "\n… (\{text.length() - limit} more characters: run git diff \{range.join(" ")} in \{cwd} for the rest)"
+      },
+    ),
+  )
 }
 
 ///|

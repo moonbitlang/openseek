@@ -79,12 +79,19 @@ async test "a worker's changes are committed on its branch and integrated on req
     }
     // The launching checkout is untouched until it integrates.
     assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "alpha\n")
+    // What it would integrate is its commit against its base.
+    guard h.launcher.changes(session) is Some(Ok(diff)) else {
+      fail("expected the worker's changes")
+    }
+    assert_true(diff.contains("lib/a.txt") && diff.contains("+ALPHA"), msg=diff)
+    assert_true(h.launcher.changes("nobody") is None)
     guard h.launcher.worktree(session, Integrate)
       is Changed({ state: Integrated, .. }, ..) else {
       fail("expected the worktree to integrate")
     }
     assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "ALPHA\n")
     assert_false(@fs.exists(path))
+    assert_true(h.launcher.changes(session) is Some(Err(_)))
     // The job ended before the integration: the change is published apart.
     assert_true(h.workers is [(s, { state: Integrated, .. })] && s == session)
     assert_true(h.launcher.worktree(session, Integrate) is Refused(_))

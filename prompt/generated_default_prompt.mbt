@@ -550,8 +550,9 @@ fn default_prompt() -> String {
     #|  (commit first what it must see), and may change only its `allowed_paths`,
     #|  which must not overlap another live worker's. Give workers independent,
     #|  disjoint slices; do coupled edits yourself. When one ends, its changes wait
-    #|  on a branch: read them with `job_output`, then `worktree` integrates them
-    #|  into this checkout (re-run your checks after) or discards them.
+    #|  on a branch: review them with `worktree` (`diff`) as you would a
+    #|  colleague's, then integrate them into this checkout (re-run your checks
+    #|  after) or discard them.
     #|
     #|- Start `moon check` once `moon.mod` and the relevant `moon.pkg` files exist;
     #|  use `moon build` or `moon test` only when you need artifacts or test results.

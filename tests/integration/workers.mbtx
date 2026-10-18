@@ -15,7 +15,8 @@ import {
 /// server through the forwarded --api-url; it is told apart by its
 /// `submit_result` tool). The worker writes `lib/b.txt` in its worktree and
 /// reports; the engine commits that on the worker's branch when it ends; the
-/// parent integrates it with the `worktree` tool and finishes. Afterwards
+/// parent reviews its diff and integrates it with the `worktree` tool, and
+/// finishes. Afterwards
 /// the checkout has the file in a merge commit and the worktree is gone.
 fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
   {
@@ -68,8 +69,11 @@ fn parent_turn(messages : String) -> Json {
   }
   if messages.contains("): integrated; its worktree is gone") {
     calls([tool_call(0, "done", "finish", { "answer": "the worker's change is integrated" })])
-  } else if messages.contains("its worktree add-b is committed as") {
+  } else if messages.contains("+beta") {
+    // The diff was read: the worker added the file it was asked for.
     calls([tool_call(0, "merge", "worktree", { "action": "integrate", "worker": job })])
+  } else if messages.contains("its worktree add-b is committed as") {
+    calls([tool_call(0, "review", "worktree", { "action": "diff", "worker": job })])
   } else {
     calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
   }

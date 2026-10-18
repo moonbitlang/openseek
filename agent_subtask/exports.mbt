@@ -62,6 +62,26 @@ async fn integrate_continue_locked(
       }
     None => ()
   }
+  // The caller resolves the markers with file tools, which do not stage:
+  // the recorded conflict set is staged here, once no markers remain in it.
+  for path in entry.conflict_paths {
+    let text = @fs.read_file("\{origin}/\{path}").text() catch {
+      // Deleted, or not text: git decides below.
+      _ => continue
+    }
+    if has_conflict_markers(text) {
+      return refused(
+        entry,
+        "conflict markers remain in \{path}; resolve them first",
+      )
+    }
+  }
+  if !entry.conflict_paths.is_empty() {
+    match git_require(["add", "-A", "--", ..entry.conflict_paths], cwd=origin) {
+      Ok(_) => ()
+      Err(reason) => return refused(entry, reason)
+    }
+  }
   let unmerged = git_run(["ls-files", "-u", "-z"], cwd=origin)
   if unmerged.exit_code == 0 && unmerged.output != "" {
     return refused(
@@ -206,4 +226,17 @@ pub async fn git_require(
       "git \{args.join(" ")} failed (exit \{outcome.exit_code}): \{outcome.output}",
     )
   }
+}
+
+///|
+/// Whether `text` still holds a line git writes around a conflict.
+fn has_conflict_markers(text : String) -> Bool {
+  text
+  .split("\n")
+  .any(line => {
+    line.has_prefix("<<<<<<< ") ||
+    line.has_prefix(">>>>>>> ") ||
+    line == "=======" ||
+    line == "=======\r"
+  })
 }

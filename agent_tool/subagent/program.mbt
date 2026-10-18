@@ -20,11 +20,15 @@ const ProgramReplyChars : Int32 = 60_000
 /// chunks that fit one reply), `job_stop`, `worktree` (integrate or discard
 /// the changes of a worker it started), and `audit_context` (the session's
 /// standing goal and baseline, or null).
+///
+/// `serialize` wraps the tool that writes the checkout (`worktree`), so it
+/// takes the session's file lock as the file tools do.
 pub fn program_binding(
   launcher : @agent_subagent.Launcher,
   runtime : @bgjobs.BgJobRuntime,
   kinds : Array[Kind],
   audit_context : () -> Json,
+  serialize~ : (@agent_tool.AgentToolDefinition) -> @agent_tool.AgentToolDefinition,
 ) -> (String) -> @ptc.ProgramBinding {
   program => {
     let waiting = Ref(false)
@@ -111,27 +115,31 @@ pub fn program_binding(
           @agent_tool.respond("stopped \{job_id}", data={ "job_id": job_id })
         },
       ),
-      program_tool(
-        "worktree",
-        (
-          #|Integrate, continue or abort integrating, or discard the worktree of a
-          #|worker this script started, once it has ended: `action` and its
-          #|`worker` job_id. data.worktree is its state after.
-        ),
-        {
-          "type": "object",
-          "properties": {
-            "action": {
-              "type": "string",
-              "enum": ["integrate", "continue", "abort", "discard"],
+      serialize(
+        program_tool(
+          "worktree",
+          (
+            #|Show (diff), integrate, continue or abort integrating, or discard the
+            #|worktree of a worker this script started, once it has ended: `action`
+            #|and its `worker` job_id. data.worktree is its state after a change.
+          ),
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["diff", "integrate", "continue", "abort", "discard"],
+              },
+              "worker": { "type": "string" },
             },
-            "worker": { "type": "string" },
+            "required": ["action", "worker"],
           },
-          "required": ["action", "worker"],
-        },
-        arguments => {
-          act(launcher, arguments, may=job_id => launcher.owns(program, job_id))
-        },
+          arguments => {
+            act(launcher, arguments, may=job_id => {
+              launcher.owns(program, job_id)
+            })
+          },
+        ),
       ),
       program_tool(
         "audit_context",

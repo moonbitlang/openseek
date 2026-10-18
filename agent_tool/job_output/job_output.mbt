@@ -270,7 +270,7 @@ fn subagent_output(
     content.write_string(
       (
         $|worktree \{worktree.name}: branch \{worktree.branch} at \{worktree.path}, \{@agent_subagent.describe_state(worktree.state)}
-        $|Integrate or discard it with the worktree tool (worker="\{job_id}").
+        $|Review its changes with the worktree tool (action="diff", worker="\{job_id}"), then integrate or discard them.
         $|
       ),
     )

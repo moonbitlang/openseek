@@ -21,9 +21,9 @@ pub fn definition(
       #|"context"?: "..."}, plus worktree {"name": "<slug>", "allowed_paths": [...]}:
       #|it works in a new git worktree forked from HEAD (commit what it needs first) and
       #|may change only allowed_paths, disjoint from other live workers'. You get a notice
-      #|when it ends; job_wait waits for it, job_output reads its outcome and report (and
-      #|a worker's committed changes), job_stop stops it. Then use the worktree tool to
-      #|integrate or discard a worker's changes. Up to four run at once. Give each a
+      #|when it ends; job_wait waits for it, job_output reads its outcome and report,
+      #|job_stop stops it. Then use the worktree tool to review (diff), integrate or
+      #|discard a worker's changes. Up to four run at once. Give each a
       #|complete brief: it does not see this conversation.
     ),
     schema=JsonSchema({

@@ -230,6 +230,9 @@ pub async fn[X] build_tools(
           bg_runtime,
           spec.kinds,
           spec.audit_context,
+          // A script's integration writes this checkout, as the file tools
+          // and the model's own `worktree` do.
+          serialize=tool => file_state.serialize(tool),
         ),
       )
     _ => None
