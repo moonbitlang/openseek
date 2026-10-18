@@ -21,6 +21,26 @@ pub enum SubtaskState {
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
+/// The unique part of the entry's branch, worktree registry file and
+/// identity, chosen by whoever provisioned it.
+pub fn SubtaskEntry::nonce(self : SubtaskEntry) -> String {
+  self.nonce
+}
+
+///|
+/// The session that provisioned the entry, when it said.
+pub fn SubtaskEntry::parent_session(self : SubtaskEntry) -> String? {
+  self.parent_session
+}
+
+///|
+/// Why the last capture found the changes unmergeable; empty unless the
+/// entry is `Captured`.
+pub fn SubtaskEntry::defects(self : SubtaskEntry) -> Array[String] {
+  self.defects
+}
+
+///|
 /// Terminal states hold no path reservation.
 pub fn SubtaskState::is_terminal(self : SubtaskState) -> Bool {
   self is (Integrated | Discarded | NoChanges)
@@ -42,6 +62,8 @@ pub struct SubtaskEntry {
   commit_oid : String?
   priv origin_head_before : String?
   priv conflict_paths : Array[String]
+  // Why the last capture found the changes unmergeable; empty otherwise.
+  priv defects : Array[String]
 } derive(Debug, Eq, ToJson, FromJson)
 
 ///|
@@ -110,10 +132,10 @@ pub async fn load_entries(
     }
     let parsed : SubtaskEntry = @json.from_json(json) catch {
       _ =>
-        // Entries written before `conflict_paths` existed decode with the
-        // field defaulted rather than being skipped: a skipped ACTIVE entry
-        // would hide its reservation from provisioning.
-        @json.from_json(with_default_conflict_paths(json)) catch {
+        // Entries written before `conflict_paths` or `defects` existed
+        // decode with the fields defaulted rather than being skipped: a
+        // skipped ACTIVE entry would hide its reservation from provisioning.
+        @json.from_json(with_default_lists(json)) catch {
           _ => {
             skipped.push(name)
             continue
@@ -168,6 +190,7 @@ test "registry entry round-trips and states classify" {
       commit_oid: None,
       origin_head_before: None,
       conflict_paths: [],
+      defects: [],
     }
   }
   let entry = sample_entry()
@@ -191,14 +214,16 @@ test "path overlap is component-wise in both directions" {
 }
 
 ///|
-fn with_default_conflict_paths(json : Json) -> Json {
+fn with_default_lists(json : Json) -> Json {
   match json {
     Object(map) => {
       // Mutating the matched map mutates the parsed value in place; the
       // original handle is returned rather than re-wrapped (Json's
       // constructors are read-only outside core).
-      if !map.contains("conflict_paths") {
-        map["conflict_paths"] = Json(([] : Array[String]))
+      for field in ["conflict_paths", "defects"] {
+        if !map.contains(field) {
+          map[field] = Json(([] : Array[String]))
+        }
       }
       json
     }

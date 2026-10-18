@@ -219,7 +219,7 @@ async fn integrate_locked(
 pub async fn discard(
   geometry : Geometry,
   entry : SubtaskEntry,
-) -> Result[Unit, String] {
+) -> Result[SubtaskEntry, String] {
   let origin = geometry.origin_root
   // Discard stays the destructive escape hatch for ANY non-terminal state
   // (it is the documented recovery for a crashed or cancelled child), but
@@ -241,5 +241,5 @@ pub async fn discard(
   remove_worktree_and_branch(origin, entry, force=true)
   let entry = { ..entry, state: Discarded, }
   let _ = save_entry(geometry.common_git_dir, entry)
-  Ok(())
+  Ok(entry)
 }

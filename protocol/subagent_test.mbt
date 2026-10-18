@@ -125,3 +125,43 @@ test "the subagent decoder rejects malformed parts" {
     }
   }
 }
+
+///|
+test "a worker's worktree roundtrips in every state, on its record and in its event" {
+  let states : Array[@openseek_protocol.WorktreeState] = [
+    Working,
+    Committed(commit="c0ffee"),
+    NoChanges,
+    Unmergeable(defects=["changed other/b.txt outside lib"]),
+    Conflicted(commit="c0ffee"),
+    Integrated,
+    Discarded,
+  ]
+  for state in states {
+    let worktree : @openseek_protocol.Worktree = {
+      name: "fix-lib",
+      path: "/repo/.worktrees/fix-lib",
+      branch: "openseek/fix-lib--sr-3",
+      base: "ba5e",
+      allowed_paths: ["lib"],
+      state,
+    }
+    let info = { ..ended_subagent(), workspace: Worktree(worktree), }
+    let decoded : @openseek_protocol.SubagentInfo = @json.from_json(
+      info.to_json(),
+    )
+    assert_eq(decoded, info)
+    let event : @openseek_protocol.Event = WorkerChanged(
+      session="parent-sr-3",
+      worktree~,
+    )
+    assert_eq(@openseek_protocol.parse(event.to_json()), Some(event))
+  }
+  // A committed state names its commit.
+  let decoded : @openseek_protocol.WorktreeState? = Some(
+    @json.from_json({ "kind": "committed" }),
+  ) catch {
+    _ => None
+  }
+  assert_eq(decoded, None)
+}

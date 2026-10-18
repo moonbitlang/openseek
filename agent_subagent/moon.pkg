@@ -3,6 +3,7 @@ import {
   "moonbitlang/openseek/agent_session/store",
   "moonbitlang/openseek/agent_subrun",
   "moonbitlang/openseek/agent_subrun/inbox",
+  "moonbitlang/openseek/agent_subtask" @subtask,
   "moonbitlang/openseek/agent_tool/bgjobs",
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/async",

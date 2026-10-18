@@ -68,6 +68,11 @@ struct Launcher {
   // runs, so a report whose store failed can still be read.
   reports : Map[String, Json]
   owners : Map[String, Owner]
+  // Told of a worktree's change after its worker's job ended.
+  on_worker : (String, @protocol.Worktree) -> Unit
+  // The sessions of workers live in their worktrees, from before their
+  // worktree is forked until it is captured.
+  working : Map[String, Unit]
 }
 
 ///|
@@ -76,7 +81,9 @@ struct Launcher {
 /// child up to its kind (the engine's own binary, a managed `run`, its model
 /// and endpoint); `cwd` is where it runs, and `env` is added to the
 /// environment it inherits (a credential, kept off its command line). Result files are written in
-/// `result_dir`, which is created when needed.
+/// `result_dir`, which is created when needed. `on_worker` is told, by the
+/// worker's session, of each change to a worktree after its worker's job
+/// ended.
 pub fn[X] Launcher::Launcher(
   scope : @agent_runtime.AgentTaskScope[X],
   runtime~ : @bgjobs.BgJobRuntime,
@@ -89,6 +96,7 @@ pub fn[X] Launcher::Launcher(
   max_live~ : Int32 = MaxLive,
   grace_ms~ : Int32 = StopGraceMs,
   delivery_timeout_ms~ : Int32 = DeliveryTimeoutMs,
+  on_worker~ : (String, @protocol.Worktree) -> Unit = (_, _) => (),
 ) -> Launcher {
   let group = scope.group()
   {
@@ -107,6 +115,8 @@ pub fn[X] Launcher::Launcher(
     live: 0,
     reports: Map([]),
     owners: Map([]),
+    on_worker,
+    working: Map([]),
   }
 }
 
@@ -138,6 +148,7 @@ priv struct Child {
   mut stopping : Bool
   // The request could not be delivered, and that came first.
   mut delivery_failed : Bool
+  mut workspace : @protocol.SubagentWorkspace
 }
 
 ///|
@@ -150,7 +161,7 @@ fn Child::info(self : Child) -> @protocol.SubagentInfo {
     outcome: self.outcome,
     usage: self.usage,
     report: self.report,
-    workspace: InPlace,
+    workspace: self.workspace,
   }
 }
 
@@ -184,6 +195,11 @@ pub fn Launcher::report(self : Launcher, session : String) -> Json? {
 /// `validate` is the kind's report check: a child is `Captured` only with a
 /// result for this request whose output it accepts, and what it returns is
 /// the report kept.
+///
+/// With a `slice`, the child is a worker: it runs in a worktree forked for it
+/// from the launching checkout, whose geometry is added to its `input` (an
+/// object), and what it changed there is captured from git when it ends. Its
+/// worktree outlives its job; see `Launcher::worktree`.
 pub async fn Launcher::start(
   self : Launcher,
   kind~ : String,
@@ -192,7 +208,11 @@ pub async fn Launcher::start(
   max_steps? : Int32,
   launch~ : @protocol.SubagentLaunch,
   validate~ : (Json) -> Result[Json, String],
+  slice? : Slice,
 ) -> StartResult {
+  guard slice is None || input is Object(_) else {
+    return Unavailable("a worker's input must be an object")
+  }
   let owner = self.owner(launch)
   guard !owner.closed else {
     return Unavailable("its owner has ended and can start nothing more")
@@ -220,6 +240,30 @@ pub async fn Launcher::start(
     }
   }
   let session = claimed.session
+  // A worker's worktree, forked once its session is known: the session
+  // names it. From here until it is captured, recovery leaves it alone.
+  let (provisioned, input) = match (slice, input) {
+    (Some(slice), Object(fields)) => {
+      self.working[session] = ()
+      match self.provision(slice, claimed) {
+        Ok(provisioned) =>
+          (Some(provisioned), worker_input(fields, provisioned))
+        Err(reason) => {
+          self.working.remove(session)
+          release()
+          return Unavailable("could not fork a worktree: \{reason}")
+        }
+      }
+    }
+    _ => (None, input)
+  }
+  // A start that fails from here gives the worktree up.
+  let abandon = async fn() {
+    if provisioned is Some(provisioned) {
+      ignore(@subtask.discard(provisioned.geometry, provisioned.entry))
+      self.working.remove(session)
+    }
+  }
   let result_file = "\{self.result_dir}/\{session}.result.json"
   let child : Child = {
     kind,
@@ -231,12 +275,17 @@ pub async fn Launcher::start(
     report: None,
     stopping: false,
     delivery_failed: false,
+    workspace: match provisioned {
+      Some(provisioned) => Worktree(worktree_of(provisioned.entry))
+      None => InPlace
+    },
   }
   let (child_stdin, writer) = try {
     @fs.mkdir(self.result_dir, recursive=true, allow_exist=true)
     @process.write_to_process()
   } catch {
     error => {
+      abandon()
       release()
       return Unavailable("could not prepare child \{session}: \{error}")
     }
@@ -266,13 +315,21 @@ pub async fn Launcher::start(
     // The token is the child's alone: the job's recorded command omits it.
     command="openseek run --kind \{kind} --session \{session}",
     description=label,
-    cwd?=self.cwd,
+    cwd?=match provisioned {
+      Some(provisioned) => Some(provisioned.entry.worker_root)
+      None => self.cwd
+    },
     stdin=child_stdin,
     extra_env=self.env,
     cancel_handler=handler,
     on_end=end => {
       defer writer.close()
+      // Left to recovery if capturing is cut short.
+      defer self.working.remove(session)
       self.settle(child, end, result_file~, validate~)
+      if provisioned is Some(provisioned) {
+        capture(child, provisioned)
+      }
     },
     on_published=() => {
       release()
@@ -284,6 +341,7 @@ pub async fn Launcher::start(
   ) catch {
     error => {
       writer.close()
+      abandon()
       release()
       return Unavailable("could not start child \{session}: \{error}")
     }

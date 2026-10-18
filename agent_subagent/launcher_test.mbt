@@ -26,6 +26,8 @@ struct Harness {
   runtime : @bgjobs.BgJobRuntime
   root : String
   events : Array[@protocol.JobRecord]
+  // What `on_worker` was told, by session.
+  workers : Array[(String, @protocol.Worktree)]
 }
 
 ///|
@@ -36,10 +38,19 @@ async fn[X] harness(
   grace_ms? : Int32,
   delivery_timeout_ms? : Int32,
   reads~ : Bool = true,
+  cwd? : String,
+  root? : String,
 ) -> Harness {
-  let root = @fs.tmpdir(prefix="openseek-subagent-")
-  group.add_defer(() => @fs.rmdir(root, recursive=true))
+  let root = match root {
+    Some(root) => root
+    None => {
+      let root = @fs.tmpdir(prefix="openseek-subagent-")
+      group.add_defer(() => @fs.rmdir(root, recursive=true))
+      root
+    }
+  }
   let events = []
+  let workers = []
   let runtime = @bgjobs.BgJobRuntime(AgentTaskScope(group), on_job_event=(
     _,
     record,
@@ -54,8 +65,10 @@ async fn[X] harness(
     max_live?,
     grace_ms?,
     delivery_timeout_ms?,
+    cwd?,
+    on_worker=(session, worktree) => workers.push((session, worktree)),
   )
-  { launcher, runtime, root, events, }
+  { launcher, runtime, root, events, workers, }
 }
 
 ///|

@@ -61,6 +61,17 @@ pub fn parse(line : Json) -> Event? {
       }
       Some(JobChanged(kind~, job~))
     }
+    "worker_changed" => {
+      guard text(fields, "session") is Some(session) &&
+        valid_session_id(session) &&
+        fields.get("worktree") is Some(value) else {
+        return None
+      }
+      let worktree : Worktree = @json.from_json(value) catch {
+        _ => return None
+      }
+      Some(WorkerChanged(session~, worktree~))
+    }
     "prediction_result" => {
       guard int(fields, "source_sequence") is Some(source_sequence) &&
         source_sequence > 0 &&

@@ -96,6 +96,48 @@ pub(all) enum SubagentReport {
 pub(all) enum SubagentWorkspace {
   /// The session's own checkout, the one its launcher works in.
   InPlace
+  /// A git worktree the engine provisioned for it, as of the record.
+  Worktree(Worktree)
+} derive(Eq, Debug)
+
+///|
+/// A worker's git worktree: a branch forked from the launching checkout's
+/// HEAD, on which the engine commits the worker's changes once they pass
+/// validation, and which the launching checkout may integrate.
+///
+/// The engine's registry, not a job record, is where its later states live:
+/// a change after the job ended is published as `WorkerChanged`.
+pub(all) struct Worktree {
+  /// The slice's name, unique among the repository's active worktrees.
+  name : String
+  /// The worktree's root directory.
+  path : String
+  branch : String
+  /// The commit it was forked from.
+  base : String
+  /// The repository-relative path prefixes the worker may change.
+  allowed_paths : Array[String]
+  state : WorktreeState
+} derive(Eq, Debug)
+
+///|
+/// Where a worker's changes stand.
+pub(all) enum WorktreeState {
+  /// The worker is running in it, or has not been captured yet.
+  Working
+  /// Its changes passed validation and are committed on the branch.
+  Committed(commit~ : String)
+  /// It changed nothing; the worktree is gone.
+  NoChanges
+  /// Its changes failed validation, for these reasons; the worktree is kept
+  /// for inspection.
+  Unmergeable(defects~ : Array[String])
+  /// Integrating it hit conflicts, which the launching checkout holds.
+  Conflicted(commit~ : String)
+  /// It was merged into the launching checkout; the worktree is gone.
+  Integrated
+  /// It was abandoned; the worktree and branch are gone.
+  Discarded
 } derive(Eq, Debug)
 
 ///|
@@ -259,6 +301,7 @@ pub impl FromJson for SubagentReport with fn from_json(json, path) {
 pub impl ToJson for SubagentWorkspace with fn to_json(self) {
   match self {
     InPlace => { "kind": "in_place" }
+    Worktree(worktree) => { "kind": "worktree", "worktree": worktree.to_json() }
   }
 }
 
@@ -266,7 +309,71 @@ pub impl ToJson for SubagentWorkspace with fn to_json(self) {
 pub impl FromJson for SubagentWorkspace with fn from_json(json, path) {
   match json {
     { "kind": "in_place", .. } => InPlace
+    { "kind": "worktree", "worktree": worktree, .. } =>
+      Worktree(Worktree::from_json(worktree, path))
     _ => raise JsonDecodeError((path, "invalid subagent workspace"))
+  }
+}
+
+///|
+pub impl ToJson for Worktree with fn to_json(self) {
+  {
+    "name": self.name,
+    "path": self.path,
+    "branch": self.branch,
+    "base": self.base,
+    "allowed_paths": self.allowed_paths,
+    "state": self.state.to_json(),
+  }
+}
+
+///|
+pub impl FromJson for Worktree with fn from_json(json, path) {
+  guard json is Object(fields) else {
+    raise JsonDecodeError((path, "expected a worktree object"))
+  }
+  let name : String = job_required(fields, "name", path)
+  let root : String = job_required(fields, "path", path)
+  guard !name.is_empty() && !root.is_empty() else {
+    raise JsonDecodeError((path, "invalid worktree name or path"))
+  }
+  {
+    name,
+    path: root,
+    branch: job_required(fields, "branch", path),
+    base: job_required(fields, "base", path),
+    allowed_paths: job_required(fields, "allowed_paths", path),
+    state: job_required(fields, "state", path),
+  }
+}
+
+///|
+pub impl ToJson for WorktreeState with fn to_json(self) {
+  match self {
+    Working => { "kind": "working" }
+    Committed(commit~) => { "kind": "committed", "commit": commit }
+    NoChanges => { "kind": "no_changes" }
+    Unmergeable(defects~) => { "kind": "unmergeable", "defects": defects }
+    Conflicted(commit~) => { "kind": "conflicted", "commit": commit }
+    Integrated => { "kind": "integrated" }
+    Discarded => { "kind": "discarded" }
+  }
+}
+
+///|
+pub impl FromJson for WorktreeState with fn from_json(json, path) {
+  match json {
+    { "kind": "working", .. } => Working
+    { "kind": "committed", "commit": String(commit), .. } if !commit.is_empty() =>
+      Committed(commit~)
+    { "kind": "no_changes", .. } => NoChanges
+    { "kind": "unmergeable", "defects": defects, .. } =>
+      Unmergeable(defects=@json.from_json(defects, path~))
+    { "kind": "conflicted", "commit": String(commit), .. } if !commit.is_empty() =>
+      Conflicted(commit~)
+    { "kind": "integrated", .. } => Integrated
+    { "kind": "discarded", .. } => Discarded
+    _ => raise JsonDecodeError((path, "invalid worktree state"))
   }
 }
 
@@ -390,3 +497,27 @@ pub extend SubagentWorkspace with ToJson::{to_json}
 
 ///|
 pub extend SubagentWorkspace with FromJson::{from_json}
+
+///|
+pub extend Worktree with Eq::{equal, not_equal}
+
+///|
+pub extend Worktree with Debug::{to_repr}
+
+///|
+pub extend Worktree with ToJson::{to_json}
+
+///|
+pub extend Worktree with FromJson::{from_json}
+
+///|
+pub extend WorktreeState with Eq::{equal, not_equal}
+
+///|
+pub extend WorktreeState with Debug::{to_repr}
+
+///|
+pub extend WorktreeState with ToJson::{to_json}
+
+///|
+pub extend WorktreeState with FromJson::{from_json}

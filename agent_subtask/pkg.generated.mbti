@@ -9,7 +9,7 @@ import {
 // Values
 pub async fn capture(Geometry, SubtaskEntry) -> CaptureOutcome
 
-pub async fn discard(Geometry, SubtaskEntry) -> Result[Unit, String]
+pub async fn discard(Geometry, SubtaskEntry) -> Result[SubtaskEntry, String]
 
 pub async fn git_require(Array[String], cwd~ : String, timeout_ms? : Int) -> Result[String, String]
 
@@ -68,6 +68,9 @@ pub struct SubtaskEntry {
   commit_oid : String?
   // private fields
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
+pub fn SubtaskEntry::defects(Self) -> Array[String]
+pub fn SubtaskEntry::nonce(Self) -> String
+pub fn SubtaskEntry::parent_session(Self) -> String?
 
 pub enum SubtaskState {
   Provisioning

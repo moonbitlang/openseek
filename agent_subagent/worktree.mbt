@@ -1,0 +1,220 @@
+///|
+/// The worktree a worker is started in: a slice of the launching checkout
+/// named `name`, in which it may change only `allowed_paths`
+/// (repository-relative prefixes, disjoint from every other active slice's).
+pub(all) struct Slice {
+  name : String
+  allowed_paths : Array[String]
+}
+
+///|
+/// What can be done with a worker's worktree once its worker has ended.
+pub(all) enum WorktreeAction {
+  /// Merge its committed changes into the launching checkout.
+  Integrate
+  /// Commit a conflicted integration whose markers were resolved.
+  Continue
+  /// Abandon a conflicted integration; the branch and worktree stay.
+  Abort
+  /// Remove the worktree and branch without integrating.
+  Discard
+}
+
+///|
+/// What `Launcher::worktree` did.
+pub(all) enum WorktreeResult {
+  /// The worktree is now in this state (published as `WorkerChanged`), with
+  /// what happened in words.
+  Changed(@protocol.Worktree, detail~ : Array[String])
+  /// Nothing changed, for this reason.
+  Refused(String)
+  /// The session has no worktree of a worker this session started.
+  Unknown
+}
+
+///|
+/// The record of `entry` as a host shows it.
+fn worktree_of(entry : @subtask.SubtaskEntry) -> @protocol.Worktree {
+  {
+    name: entry.name,
+    path: entry.worker_root,
+    branch: entry.branch,
+    base: entry.base_oid,
+    allowed_paths: entry.allowed_paths.copy(),
+    state: match (entry.state, entry.commit_oid) {
+      (Provisioning | Running, _) => Working
+      (Captured, _) => Unmergeable(defects=entry.defects().copy())
+      (Committed, Some(commit)) => Committed(commit~)
+      (Conflicted, Some(commit)) => Conflicted(commit~)
+      (Committed | Conflicted, None) =>
+        Unmergeable(defects=["the registry records no commit"])
+      (Integrated, _) => Integrated
+      (Discarded, _) => Discarded
+      (NoChanges, _) => NoChanges
+    },
+  }
+}
+
+///|
+/// `input` with the worktree a worker was given: where it is, what it may
+/// change, what it must not touch, and the commit it starts from. The
+/// worker enforces with what it is handed rather than deriving anything.
+fn worker_input(
+  input : Map[String, Json],
+  provisioned : @subtask.Provisioned,
+) -> Json {
+  let entry = provisioned.entry
+  let fields = Map::from_iter(input.iter())
+  fields["worker_root"] = Json(entry.worker_root)
+  fields["worker_admin_dir"] = Json(entry.worker_admin_dir)
+  // Resolved before the worktree existed, so the worker's own root is not
+  // among them.
+  fields["deny_roots"] = Json(provisioned.geometry.worker_deny_roots())
+  fields["allowed_paths"] = Json(entry.allowed_paths)
+  fields["base_oid"] = Json(entry.base_oid)
+  Json::object(fields)
+}
+
+///|
+/// Fork a worktree for the child `claimed` from the launching checkout.
+async fn Launcher::provision(
+  self : Launcher,
+  slice : Slice,
+  claimed : @agent_subrun.ClaimedChild,
+) -> Result[@subtask.Provisioned, String] {
+  guard self.cwd is Some(root) else {
+    return Err("this session has no checkout to fork a worktree from")
+  }
+  @subtask.provision(
+    root,
+    name=slice.name,
+    allowed_paths=slice.allowed_paths,
+    // `sr-N`: with the parent below, it names the child's session, which is
+    // how a later engine finds the worker a worktree belongs to.
+    nonce=claimed.subrun_id,
+    parent_session=self.children.parent(),
+  )
+}
+
+///|
+/// Decide from git what a worker left in its worktree: commit its changes
+/// when they pass validation. Runs when its job ends, before the terminal
+/// record, which therefore carries the worktree's state.
+async fn capture(child : Child, provisioned : @subtask.Provisioned) -> Unit {
+  let captured = @subtask.capture(provisioned.geometry, provisioned.entry)
+  child.workspace = Worktree(worktree_of(captured.entry))
+}
+
+///|
+/// The worktrees of the workers this session started, in any state.
+///
+/// A worktree whose worker is not running in this engine (it was ended with
+/// an earlier engine) is recovered first: its changes are captured from git,
+/// or, if the engine died while forking it, it is removed. Either change is
+/// published as `WorkerChanged`.
+pub async fn Launcher::worktrees(
+  self : Launcher,
+) -> Result[Array[(String, @protocol.Worktree)], String] {
+  guard self.cwd is Some(root) else { return Ok([]) }
+  let geometry = @subtask.resolve_geometry(root)
+  guard geometry is Ok(geometry) else {
+    // Not a git checkout: no worker could have been started here.
+    return Ok([])
+  }
+  let found = []
+  for found_entry in self.entries(geometry) {
+    let (session, entry) = found_entry
+    let entry = if self.working.contains(session) {
+      entry
+    } else {
+      match entry.state {
+        Running => {
+          let entry = @subtask.capture(geometry, entry).entry
+          (self.on_worker)(session, worktree_of(entry))
+          entry
+        }
+        Provisioning =>
+          match @subtask.discard(geometry, entry) {
+            Ok(entry) => {
+              (self.on_worker)(session, worktree_of(entry))
+              entry
+            }
+            Err(_) => entry
+          }
+        _ => entry
+      }
+    }
+    found.push((session, worktree_of(entry)))
+  }
+  Ok(found)
+}
+
+///|
+/// Integrate, continue or abort the integration of, or discard the worktree
+/// of the worker recording to `session`.
+pub async fn Launcher::worktree(
+  self : Launcher,
+  session : String,
+  action : WorktreeAction,
+) -> WorktreeResult {
+  guard self.cwd is Some(root) &&
+    @subtask.resolve_geometry(root) is Ok(geometry) else {
+    return Unknown
+  }
+  guard self.entries(geometry).iter().filter(found => found.0 == session).last()
+    is Some((_, entry)) else {
+    return Unknown
+  }
+  guard !self.working.contains(session) else {
+    return Refused("its worker is still running; stop it or wait for it first")
+  }
+  let result = match action {
+    Integrate => outcome(@subtask.integrate(geometry, entry))
+    Continue => outcome(@subtask.integrate_continue(geometry, entry))
+    Abort => outcome(@subtask.integrate_abort(geometry, entry))
+    Discard =>
+      match @subtask.discard(geometry, entry) {
+        Ok(entry) => Ok((entry, ["discarded"]))
+        Err(reason) => Err(reason)
+      }
+  }
+  match result {
+    Ok((entry, detail)) => {
+      let worktree = worktree_of(entry)
+      (self.on_worker)(session, worktree)
+      Changed(worktree, detail~)
+    }
+    Err(reason) => Refused(reason)
+  }
+}
+
+///|
+fn outcome(
+  outcome : @subtask.IntegrateOutcome,
+) -> Result[(@subtask.SubtaskEntry, Array[String]), String] {
+  if outcome.result == "refused" {
+    Err(outcome.detail.join("; "))
+  } else {
+    Ok((outcome.entry, [outcome.result, ..outcome.detail]))
+  }
+}
+
+///|
+/// This session's registry entries in `geometry`'s repository, each with
+/// the session of the worker it was forked for.
+async fn Launcher::entries(
+  self : Launcher,
+  geometry : @subtask.Geometry,
+) -> Array[(String, @subtask.SubtaskEntry)] {
+  let parent = self.children.parent()
+  let (entries, _) = @subtask.load_entries(geometry.common_git_dir)
+  entries
+  .iter()
+  .filter_map(entry => {
+    guard entry.parent_session() is Some(owner) && owner == parent else {
+      return None
+    }
+    Some(("\{parent}-\{entry.nonce()}", entry))
+  })
+  .to_array()
+}

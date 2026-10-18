@@ -116,6 +116,7 @@ pub(all) enum Event {
   SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
+  WorkerChanged(session~ : String, worktree~ : Worktree)
   PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
@@ -395,6 +396,7 @@ pub fn SubagentUsageSource::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SubagentWorkspace {
   InPlace
+  Worktree(Worktree)
 } derive(Eq, @debug.Debug)
 pub fn SubagentWorkspace::equal(Self, Self) -> Bool
 pub fn SubagentWorkspace::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -415,6 +417,39 @@ pub fn Usage::equal(Self, Self) -> Bool
 pub fn Usage::not_equal(Self, Self) -> Bool
 pub fn Usage::to_json(Self) -> Json
 pub fn Usage::to_repr(Self) -> @debug.Repr
+
+pub(all) struct Worktree {
+  name : String
+  path : String
+  branch : String
+  base : String
+  allowed_paths : Array[String]
+  state : WorktreeState
+} derive(Eq, @debug.Debug)
+pub fn Worktree::equal(Self, Self) -> Bool
+pub fn Worktree::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn Worktree::not_equal(Self, Self) -> Bool
+pub fn Worktree::to_json(Self) -> Json
+pub fn Worktree::to_repr(Self) -> @debug.Repr
+pub impl ToJson for Worktree
+pub impl @json.FromJson for Worktree
+
+pub(all) enum WorktreeState {
+  Working
+  Committed(commit~ : String)
+  NoChanges
+  Unmergeable(defects~ : Array[String])
+  Conflicted(commit~ : String)
+  Integrated
+  Discarded
+} derive(Eq, @debug.Debug)
+pub fn WorktreeState::equal(Self, Self) -> Bool
+pub fn WorktreeState::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn WorktreeState::not_equal(Self, Self) -> Bool
+pub fn WorktreeState::to_json(Self) -> Json
+pub fn WorktreeState::to_repr(Self) -> @debug.Repr
+pub impl ToJson for WorktreeState
+pub impl @json.FromJson for WorktreeState
 
 // Type aliases
 

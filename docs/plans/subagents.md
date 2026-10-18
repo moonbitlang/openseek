@@ -394,6 +394,20 @@ old generations from model tools.
   session logs contain them. The `subrun` argument is removed outright, with
   no compatibility path: a script delegates through `@tools.call`. The bundled workflows' offline tests run against a
   fake host that speaks the PTC protocol.
+- PR 6: the launcher is the worker controller. `start(slice=…)` forks the
+  worktree once the child's session is claimed, naming the registry entry by
+  the parent session and the child's `sr-N`, so the entry alone says which
+  worker it belongs to. The worker's geometry is added to its input, it runs
+  in the worktree, and its changes are captured from git when its job ends,
+  so the terminal record carries the worktree's state. `worktree(session,
+  action)` integrates, continues or aborts an integration, or discards;
+  `worktrees()` lists the session's worktrees and recovers any whose worker
+  this engine never ran (captures it, or removes it if the engine died while
+  forking). Changes after the job ended are `WorkerChanged`, keyed by the
+  worker's session rather than its job id, because job ids do not survive an
+  engine restart. The registry entry keeps the capture's defects, so an
+  unmergeable worktree still says why after a restart. Admission stays the
+  registry's in-process mutex; one engine per repository is still assumed.
 
 ## Integrated testing
 

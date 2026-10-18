@@ -23,7 +23,7 @@ async fn settle(
   evidence : Array[String],
   defects : Array[String],
 ) -> CaptureOutcome {
-  let entry = { ..entry, state, }
+  let entry = { ..entry, state, defects: defects.copy(), }
   let _ = save_entry(geometry.common_git_dir, entry)
   { entry, evidence, defects, }
 }

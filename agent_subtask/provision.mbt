@@ -133,6 +133,7 @@ async fn provision_locked(
     commit_oid: None,
     origin_head_before: None,
     conflict_paths: [],
+    defects: [],
   }
   match save_entry(geometry.common_git_dir, entry) {
     Ok(_) => ()
