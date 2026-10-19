@@ -8,24 +8,30 @@ fn normalized(path : String) -> String {
 }
 
 ///|
+/// Whether `path` names `name`: either the whole path or its last component.
+/// Backslashes count as separators, so a Windows path classifies like its POSIX
+/// form.
+fn is_named_file(path : String, name : String) -> Bool {
+  let path = normalized(path)
+  path == name || path.has_suffix("/\{name}")
+}
+
+///|
 /// Whether `path` is a `moon.mod` module manifest (the non-JSON form).
 pub fn is_moon_mod_path(path : String) -> Bool {
-  let path = normalized(path)
-  path == "moon.mod" || path.has_suffix("/moon.mod")
+  is_named_file(path, "moon.mod")
 }
 
 ///|
 /// Whether `path` is a `moon.mod.json` module manifest.
 pub fn is_moon_mod_json_path(path : String) -> Bool {
-  let path = normalized(path)
-  path == "moon.mod.json" || path.has_suffix("/moon.mod.json")
+  is_named_file(path, "moon.mod.json")
 }
 
 ///|
 /// Whether `path` is a `moon.pkg` package manifest (the non-JSON form).
 pub fn is_moon_pkg_path(path : String) -> Bool {
-  let path = normalized(path)
-  path == "moon.pkg" || path.has_suffix("/moon.pkg")
+  is_named_file(path, "moon.pkg")
 }
 
 ///|
