@@ -446,7 +446,7 @@ fn SidebarDispatcher::actions(self : SidebarDispatcher) -> @sidebar.Actions {
   }
   {
     update: self.emit(UpdateClicked),
-    open_search: self.emit(OpenSessionSearch),
+    search: @cmd.Emit(msg => self.emit(SessionSearch(msg))),
     open_schedules: self.emit(OpenSchedules),
     open_skills: self.emit(OpenSkills),
     open_settings: self.emit(OpenSetup),

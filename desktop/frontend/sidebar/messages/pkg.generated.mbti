@@ -13,6 +13,7 @@ pub fn text(@i18n.Locale, Message) -> String
 // Types and methods
 pub(all) enum Message {
   SearchConversations
+  NoMatchingConversations
   Chats
   Cloud
   Local

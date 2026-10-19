@@ -7,6 +7,8 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/session_search",
+  "openseek_desktop/frontend/sidebar/conversation",
   "openseek_desktop/frontend/sidebar/section",
 }
 
@@ -30,7 +32,7 @@ pub fn Account::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Actions {
   update : @cmd.Cmd
-  open_search : @cmd.Cmd
+  search : @cmd.Emit[@session_search.Msg]
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
@@ -41,6 +43,7 @@ pub(all) struct Actions {
 }
 
 pub(all) struct Input {
+  search : @session_search.Model
   locale : @i18n.Locale
   mode : Mode
   notices : Array[String]
@@ -53,7 +56,9 @@ pub(all) struct Input {
   account : Account?
 } derive(Eq, @debug.Debug)
 pub fn Input::equal(Self, Self) -> Bool
+pub fn Input::filtered(Self) -> Self
 pub fn Input::not_equal(Self, Self) -> Bool
+pub fn Input::search_results(Self) -> Array[@conversation.Id]
 pub fn Input::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Mode {

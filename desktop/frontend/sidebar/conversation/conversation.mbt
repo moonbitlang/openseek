@@ -183,6 +183,34 @@ pub(all) struct Actions {
 }
 
 ///|
+/// Search presentation is separate from the row's domain identity and state.
+pub(all) struct Search {
+  query : String
+  selected : Id?
+} derive(Eq)
+
+///|
+fn highlighted(value : String, query : String) -> @html.Html {
+  let query = query.trim().to_owned().to_lower()
+  let children : Array[@html.Html] = []
+  let mut rest = value
+  while !query.is_empty() {
+    guard rest.to_lower().find(query) is Some(offset) else { break }
+    children.push(@html.span(rest.view(end_offset=offset).to_owned()))
+    children.push(
+      @html.strong(
+        rest
+        .view(start_offset=offset, end_offset=offset + query.length())
+        .to_owned(),
+      ),
+    )
+    rest = rest.view(start_offset=offset + query.length()).to_owned()
+  }
+  children.push(@html.span(rest))
+  @html.span(children)
+}
+
+///|
 priv enum Msg {
   ToggleChildren
 }
@@ -441,8 +469,9 @@ fn Actions::child_component(
   locale : @rabbita.Val[@i18n.Locale],
   _id : Id,
   input : @rabbita.Val[Input],
+  search : @rabbita.Val[Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  component(locale, input, self)
+  component(locale, input, self, search)
 }
 
 ///|
@@ -454,6 +483,7 @@ pub fn component(
   locale : @rabbita.Val[@i18n.Locale],
   input : @rabbita.Val[Input],
   actions : Actions,
+  search : @rabbita.Val[Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -464,8 +494,8 @@ pub fn component(
       }
     },
   )
-  let child_inputs = input.map2(locale, (input, locale) => {
-    @vector.from_array(input.children.map(child => (locale, child)))
+  let child_inputs = input.map3(locale, search, (input, locale, search) => {
+    @vector.from_array(input.children.map(child => (locale, child, search)))
   })
   let child_rows = child_inputs.assoc_by(
     (id, child) => {
@@ -473,13 +503,21 @@ pub fn component(
         child.map(pair => pair.0),
         id,
         child.map(pair => pair.1),
+        child.map(parts => parts.2),
       )
     },
     by=child => child.1.id(),
   )
-  state.map4(input, child_rows, locale, (state, input, child_rows, locale) => {
+  state.map5(input, child_rows, locale, search, (
+    state,
+    input,
+    child_rows,
+    locale,
+    search,
+  ) => {
     // Opening a workflow child must keep its selected row visible under the parent.
-    let children_open = state.children_open ||
+    let children_open = !search.query.is_blank() ||
+      state.children_open ||
       input.children.any(child => child.active || child.loading)
     let mut class = "conversation-row"
     if input.nested {
@@ -490,6 +528,9 @@ pub fn component(
     }
     if input.active {
       class += " active"
+    }
+    if search.selected is Some(id) && id == input.id {
+      class += " search-selected"
     }
     if input.loading {
       class += " loading"
@@ -551,7 +592,7 @@ pub fn component(
               }
               @cmd.none
             }),
-          input.label,
+          highlighted(input.label, search.query),
         )
       } else {
         @html.span(class="sidebar-label", input.label)
@@ -800,3 +841,6 @@ pub extend TrailingAction with Eq::{equal, not_equal}
 
 ///|
 pub extend RunOutcome with Eq::{equal, not_equal}
+
+///|
+pub extend Search with Eq::{equal, not_equal}

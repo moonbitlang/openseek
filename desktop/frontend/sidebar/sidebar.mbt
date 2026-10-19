@@ -25,6 +25,7 @@ pub(all) enum Mode {
 /// in `Actions`, so this value remains comparable and can drive incremental
 /// Rabbita branches without embedding emitters in application data.
 pub(all) struct Input {
+  search : @session_search.Model
   locale : @i18n.Locale
   mode : Mode
   notices : Array[String]
@@ -40,7 +41,7 @@ pub(all) struct Input {
 ///|
 pub(all) struct Actions {
   update : @cmd.Cmd
-  open_search : @cmd.Cmd
+  search : @cmd.Emit[@session_search.Msg]
   open_schedules : @cmd.Cmd
   open_skills : @cmd.Cmd
   open_settings : @cmd.Cmd
@@ -124,8 +125,9 @@ fn Actions::section_component(
   _id : @section.Id,
   input : @rabbita.Val[@section.Input],
   locale : @rabbita.Val[@i18n.Locale],
+  search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  @section.component(input, self.section, locale)
+  @section.component(input, self.section, locale, search)
 }
 
 ///|
@@ -164,10 +166,21 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
 ) -> @rabbita.Val[@html.Html] {
-  // Locale travels through the same keyed input as section data. A separate
-  // global locale dependency can render a keyed child before its input updates.
+  // Locale and search presentation travel with the keyed section data.
+  // Separate global dependencies can render a child before its input updates.
   let section_inputs = input.map(input => {
-    @vector.from_array(input.sections.map(section => (input.locale, section)))
+    let results = input.search_results()
+    let search : @conversation.Search = {
+      query: input.search.query(),
+      selected: if input.search.query().is_blank() {
+        None
+      } else {
+        results.get(input.search.selected(results.length()))
+      },
+    }
+    @vector.from_array(
+      input.sections.map(section => (input.locale, section, search)),
+    )
   })
   let section_rows = section_inputs.assoc_by(
     (id, section) => {
@@ -175,6 +188,7 @@ pub fn component(
         id,
         section.map(pair => pair.1),
         section.map(pair => pair.0),
+        section.map(parts => parts.2),
       )
     },
     by=section => section.1.id(),
@@ -198,6 +212,15 @@ pub fn component(
       for row in group {
         rows[row.0] = row.1
       }
+    }
+    if !input.search.query().is_blank() && input.search_results().is_empty() {
+      rows["search:empty"] = @html.div(
+        class="conversation-row placeholder",
+        @html.span(
+          class="sidebar-label sidebar-notice",
+          @messages.text(input.locale, NoMatchingConversations),
+        ),
+      )
     }
     let footer : Array[@html.Html] = []
     if input.update_label is Some(label) {
@@ -301,10 +324,9 @@ pub fn component(
         footer.push(@html.div(class="console-notice", notice))
       }
     }
-    let search_title = @messages.text(input.locale, SearchConversations)
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
-      // native controls; the mode switch and search sit at the trailing edge.
+      // native controls; the mode switch sits at the trailing edge.
       @html.div(class="sidebar-header", [
         @html.div(
           class="sidebar-mode",
@@ -321,15 +343,8 @@ pub fn component(
             actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code),
           ],
         ),
-        @html.button(
-          class="icon-button icon-button-compact sidebar-search",
-          type_="button",
-          title=search_title,
-          attrs=@html.Attrs::build().aria_label(search_title),
-          on_click=actions.open_search,
-          @icons.icon(@icons.icon_search),
-        ),
       ]),
+      input.search.view(input.locale, actions.search),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
       ]),

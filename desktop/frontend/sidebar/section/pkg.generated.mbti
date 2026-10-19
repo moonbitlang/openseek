@@ -12,7 +12,7 @@ import {
 }
 
 // Values
-pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale]) -> @rabbita.Val[Array[(String, @html.Html)]]
+pub fn component(@rabbita.Val[Input], Actions, @rabbita.Val[@i18n.Locale], @rabbita.Val[@conversation.Search]) -> @rabbita.Val[Array[(String, @html.Html)]]
 
 // Errors
 

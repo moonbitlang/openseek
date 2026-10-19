@@ -195,8 +195,9 @@ fn Actions::conversation_component(
   locale : @rabbita.Val[@i18n.Locale],
   _id : @conversation.Id,
   input : @rabbita.Val[@conversation.Input],
+  search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
-  @conversation.component(locale, input, self.conversation)
+  @conversation.component(locale, input, self.conversation, search)
 }
 
 ///|
@@ -209,14 +210,15 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
+  search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
     init=(_, _) => ({ fold: Open, preview_limit: PreviewLimit, }, @cmd.none),
     update=(state, input, msg, _) => (state.update(input, msg), @cmd.none),
   )
-  let conversation_inputs = input.map2(locale, (input, locale) => {
-    @vector.from_array(input.conversations.map(row => (locale, row)))
+  let conversation_inputs = input.map3(locale, search, (input, locale, search) => {
+    @vector.from_array(input.conversations.map(row => (locale, row, search)))
   })
   let conversation_rows = conversation_inputs.assoc_by(
     (id, conversation) => {
@@ -224,17 +226,20 @@ pub fn component(
         conversation.map(pair => pair.0),
         id,
         conversation.map(pair => pair.1),
+        conversation.map(parts => parts.2),
       )
     },
     by=conversation => conversation.1.id(),
   )
-  state.map4(input, conversation_rows, locale, (
+  state.map5(input, conversation_rows, locale, search, (
     state,
     input,
     conversation_rows,
     locale,
+    search,
   ) => {
-    let collapsed = state.folded(input)
+    let searching = !search.query.is_blank()
+    let collapsed = !searching && state.folded(input)
     let mut class = if collapsed {
       "workspace-row collapsible collapsed"
     } else {
@@ -311,7 +316,8 @@ pub fn component(
     }
     for index = 0; index < conversation_rows.length(); index = index + 1 {
       let group = conversation_rows[index]
-      if state.conversation_visible(
+      if searching ||
+        state.conversation_visible(
           index,
           stays_visible(input.conversations[index]),
         ) {
@@ -320,7 +326,7 @@ pub fn component(
         }
       }
     }
-    if state.has_hidden_conversation(input) {
+    if !searching && state.has_hidden_conversation(input) {
       rows.push(
         (
           "\{input.id.key()}:more",

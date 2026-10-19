@@ -610,6 +610,54 @@ fn Model::sidebar_component_sections(
       archived_entries.push(@section.Conversation(row))
     }
   }
+  if !self.session_search.query().is_blank() {
+    let scoped : Array[@section.Entry] = []
+    for entry in archived_entries {
+      guard entry is @section.Conversation(row) else { continue }
+      let root = row.id().root()
+      let chat = row.id().source() is @conversation.CloudArchived ||
+        root
+        .bind(path => @resource.of_path(dev.channel, path))
+        .map_or(false, path => dev.is_chat_workspace(path))
+      if self.sidebar_mode is ChatMode {
+        if chat {
+          scoped.push(entry)
+        }
+      } else if !chat && root is Some(root) {
+        let row = { ..row, nested: true, }
+        let mut found = false
+        for index, entry in projects {
+          if entry is @section.Project(project) && project.id().root() == root {
+            projects[index] = @section.Project({
+              ..project,
+              conversations: [..project.conversations, row],
+            })
+            found = true
+            break
+          }
+        }
+        if !found {
+          projects.push(
+            @section.Project({
+              id: @project.Id(source="openseek.projects", channel~, root~),
+              title: root,
+              label: @resource.of_path(dev.channel, root).map_or(root, path => {
+                @resource.label(path)
+              }),
+              activation: None,
+              can_start: false,
+              managed: false,
+              conversations: [row],
+            }),
+          )
+        }
+      }
+    }
+    archived_entries.clear()
+    for entry in scoped {
+      archived_entries.push(entry)
+    }
+  }
   sections.push({
     id: @section.Id(source="archived", channel~),
     label: @sidebar_messages.text(
@@ -774,7 +822,8 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
       })
     _ => None
   }
-  {
+  @sidebar.Input::{
+    search: self.session_search,
     notices,
     locale: self.locale,
     mode: self.sidebar_mode,
@@ -785,7 +834,7 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
     skills_active: self.screen is Skills,
     settings_active: self.screen is Settings,
     account,
-  }
+  }.filtered()
 }
 
 ///|
@@ -2278,12 +2327,6 @@ fn view(
       terminal_html,
     ]),
     workspace_settings_html,
-    // Keep the dialog before conditional overlays: replacing its DOM node
-    // would lose showModal state during resize or a notification.
-    model.session_search.view(
-      model.locale,
-      dispatch.map(msg => SessionSearch(msg)),
-    ),
     model.session_import_dialog.view(
       model.locale,
       dispatch.map(msg => SessionImport(msg)),

@@ -1,6 +1,7 @@
 ///|
 test "the sidebar input keeps peer sections in one component value" {
   let input : @sidebar.Input = {
+    search: @session_search.Model(),
     locale: English,
     mode: WorkMode,
     notices: [],

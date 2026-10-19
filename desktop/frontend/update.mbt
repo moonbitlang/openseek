@@ -1632,7 +1632,6 @@ fn sync_file_panel(
 fn covering_overlay(model : Model) -> Bool {
   (model.narrow && model.sidebar_open) ||
   model.project_picker is Some(_) ||
-  model.session_search.is_open() ||
   model.export_dialog.is_open() ||
   model.session_import_dialog.is_open() ||
   model.workspace_settings_dialog is Some(_) ||
@@ -1942,8 +1941,17 @@ fn update(
       { ..model, sidebar_mode, sidebar_revealed: revealed, }
     _ => model
   }
-  let sidebar_mode_cmd = if model.sidebar_mode != previous.sidebar_mode {
-    save_sidebar_mode(model.sidebar_mode)
+  let sidebar_mode_changed = model.sidebar_mode != previous.sidebar_mode
+  let model = if sidebar_mode_changed {
+    { ..model, session_search: @session_search.Model(), }
+  } else {
+    model
+  }
+  let sidebar_mode_cmd = if sidebar_mode_changed {
+    @cmd.batch([
+      save_sidebar_mode(model.sidebar_mode),
+      @session_search.clear_input(focus=false),
+    ])
   } else {
     @cmd.none
   }
@@ -6640,69 +6648,16 @@ fn update_msg(
       let (cmd, export_dialog) = model.export_dialog.open(source, channel~)
       (cmd, { ..model, export_dialog, })
     }
-    OpenSessionSearch =>
-      update_msg(dispatch, SessionSearch(Open(model.focused)), model)
     SessionSearch(msg) => {
+      let results = model.sidebar_component_input().search_results()
       let (cmd, session_search, selected) = model.session_search.update(
-        dispatch.map(msg => SessionSearch(msg)),
-        msg,
+        msg, results,
       )
-      let model = { ..model, session_search, }
-      if selected is Some(selected) {
-        let hit = selected.hit
-        guard @resource.of_path(selected.channel, hit.workspace)
-          is Some(workspace) &&
-          model.device_state(selected.channel) is Some(dev) else {
-          return (cmd, model)
-        }
-        let item : @transcript.SessionListItem = {
-          id: hit.session,
-          title: Some(hit.title),
-          workspace,
-          workspace_name: hit.workspace,
-          updated_at_ms: hit.updated_at_ms,
-        }
-        // Search can find a record created since the last sidebar refresh.
-        // Seed its placement before using the ordinary conversation loader.
-        let dev = if hit.archived {
-          {
-            ..dev,
-            archived: [
-              item,
-              ..dev.archived.filter(existing => {
-                existing.id != hit.session || existing.workspace != workspace
-              }),
-            ],
-          }
-        } else {
-          {
-            ..dev,
-            sessions: [
-              item,
-              ..dev.sessions.filter(existing => {
-                existing.id != hit.session || existing.workspace != workspace
-              }),
-            ],
-          }
-        }
-        let model = model.replace_device(dev)
-        let (open_cmd, model) = update_msg(
-          dispatch,
-          if hit.archived {
-            OpenArchivedSession(
-              selected.channel,
-              session=hit.session,
-              workspace~,
-            )
-          } else {
-            OpenSession(selected.channel, hit.session)
-          },
-          model,
-        )
-        (@cmd.batch([cmd, open_cmd]), model)
-      } else {
-        (cmd, model)
+      let command = match selected {
+        Some(id) => SidebarDispatcher::{ emit: dispatch, }.conversation_open(id)
+        None => @cmd.none
       }
+      (@cmd.batch([cmd, command]), { ..model, session_search, })
     }
     OpenCloudExport => {
       guard model.cloud_identity() is Some(identity) else {

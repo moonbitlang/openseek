@@ -4,6 +4,7 @@
 /// Shared chrome for sidebar sections and projects; never user-authored titles.
 pub(all) enum Message {
   SearchConversations
+  NoMatchingConversations
   Chats
   Cloud
   Local
@@ -39,6 +40,12 @@ pub(all) enum Message {
 /// Translate sidebar chrome without changing stable component identities.
 pub fn text(locale : @i18n.Locale, message : Message) -> String {
   match (locale, message) {
+    (English, NoMatchingConversations) => "No matching conversations"
+    (SimplifiedChinese, NoMatchingConversations) => "未找到匹配的对话"
+    (TraditionalChinese, NoMatchingConversations) => "找不到符合的對話"
+    (Japanese, NoMatchingConversations) =>
+      "一致するチャットはありません"
+    (Spanish, NoMatchingConversations) => "No se encontraron conversaciones"
     (English, SearchConversations) => "Search"
     (SimplifiedChinese, SearchConversations) => "搜索"
     (TraditionalChinese, SearchConversations) => "搜尋"

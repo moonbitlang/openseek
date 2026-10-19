@@ -4,38 +4,32 @@ package "openseek_desktop/frontend/session_search"
 import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
+  "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
-  "openseek_desktop/frontend/interop",
-  "openseek_desktop/protocol",
+  "openseek_desktop/frontend/sidebar/conversation",
 }
 
 // Values
+pub fn clear_input(focus~ : Bool) -> @cmd.Cmd
 
 // Errors
 
 // Types and methods
-type Model derive(Eq)
+type Model derive(Eq, @debug.Debug)
 pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
-pub fn Model::is_open(Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
-pub fn Model::update(Self, @cmd.Emit[Msg], Msg) -> (@cmd.Cmd, Self, Selection?)
+pub fn Model::query(Self) -> String
+pub fn Model::selected(Self, Int32) -> Int32
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, Msg, Array[@conversation.Id]) -> (@cmd.Cmd, Self, @conversation.Id?)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
 
 pub(all) enum Msg {
-  Open(@interop.ChannelId)
-  Close
   Changed(String)
-  ToggleArchived
-  Due(Int)
-  Loaded(Int, Result[@protocol.SessionSearchReply, String])
+  Clear
   Move(Int)
-  Pick(Int)
-}
-
-pub(all) struct Selection {
-  channel : @interop.ChannelId
-  hit : @protocol.SessionSearchHit
+  Pick
 }
 
 // Type aliases

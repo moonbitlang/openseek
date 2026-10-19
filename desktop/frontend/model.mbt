@@ -2035,7 +2035,6 @@ priv enum Msg {
   // The export is already durable, but its default system application could
   // not be opened. The saved path remains useful in the transient toast.
   SessionSearch(@session_search.Msg)
-  OpenSessionSearch
   OpenExport(@interop.ChannelId, @protocol.SessionExportPayload)
   OpenCloudExport
   OpenSessionImport

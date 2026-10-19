@@ -182,6 +182,7 @@ fn Actions::entry_component(
   _key : String,
   input : @rabbita.Val[Entry],
   locale : @rabbita.Val[@i18n.Locale],
+  search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   input.switch_by(
     entry => {
@@ -193,7 +194,7 @@ fn Actions::entry_component(
               _ => initial
             }
           })
-          @project.component(project_input, self.project, locale)
+          @project.component(project_input, self.project, locale, search)
         }
         Conversation(initial) => {
           let conversation_input = input.map(entry => {
@@ -202,7 +203,12 @@ fn Actions::entry_component(
               _ => initial
             }
           })
-          @conversation.component(locale, conversation_input, self.conversation)
+          @conversation.component(
+            locale,
+            conversation_input,
+            self.conversation,
+            search,
+          )
         }
         Placeholder(initial) => {
           let placeholder_input = input.map(entry => {
@@ -227,6 +233,7 @@ pub fn component(
   input : @rabbita.Val[Input],
   actions : Actions,
   locale : @rabbita.Val[@i18n.Locale],
+  search : @rabbita.Val[@conversation.Search],
 ) -> @rabbita.Val[Array[(String, @html.Html)]] {
   let (state, emit) = @rabbita.create_state_with_input(
     input~,
@@ -263,8 +270,8 @@ pub fn component(
       }
     },
   )
-  let entry_inputs = input.map2(locale, (input, locale) => {
-    @vector.from_array(input.entries.map(entry => (locale, entry)))
+  let entry_inputs = input.map3(locale, search, (input, locale, search) => {
+    @vector.from_array(input.entries.map(entry => (locale, entry, search)))
   })
   let entry_rows = entry_inputs.assoc_by(
     (key, entry) => {
@@ -272,12 +279,13 @@ pub fn component(
         key,
         entry.map(pair => pair.1),
         entry.map(pair => pair.0),
+        entry.map(parts => parts.2),
       )
     },
     by=entry => entry.1.key(),
   )
-  state.map3(input, entry_rows, (state, input, entry_rows) => {
-    let collapsed = state.folded(input)
+  state.map4(input, entry_rows, search, (state, input, entry_rows, search) => {
+    let collapsed = search.query.is_blank() && state.folded(input)
     let mut class = if collapsed {
       "sidebar-heading section-heading collapsible collapsed"
     } else {
