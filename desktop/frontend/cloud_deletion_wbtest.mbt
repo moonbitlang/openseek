@@ -95,6 +95,7 @@ test "Cloud deletion keeps a failed creation in Cloud and allows the normal new 
     CloudAction(@cloud.Deleted(3, "cloud-a", request)),
     pending,
   )
+  let removed = submit_blank_cloud(removed)
   guard removed.cloud.creation is Some(creation) else {
     fail("expected Cloud creation")
   }
@@ -104,17 +105,18 @@ test "Cloud deletion keeps a failed creation in Cloud and allows the normal new 
     removed,
   )
   assert_true(failed.cloud_selected())
-  assert_true(failed.chat_column() is LoadFailed(retry=false, ..))
+  assert_true(failed.chat_column() is CloudTranscript(..))
   assert_true(failed.host_selection() is None)
   let (_, retried) = update(test_dispatch(), CloudAction(@cloud.Create), failed)
-  assert_true(retried.cloud.creation is Some({ failure: None, .. }))
-  assert_true(retried.chat_column() is Loading)
+  assert_true(retried.cloud.creation is Some({ submission: None, .. }))
+  assert_true(retried.chat_column() is CloudTranscript(..))
 }
 
 ///|
 test "deletion reuses an existing pending Cloud creation without losing its navigation" {
   let model = integrated_cloud_model()
   let (_, creating) = update(test_dispatch(), CloudAction(@cloud.Create), model)
+  let creating = submit_blank_cloud(creating)
   guard creating.cloud.creation is Some(creation) else {
     fail("expected creation")
   }

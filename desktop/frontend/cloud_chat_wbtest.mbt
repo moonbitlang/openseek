@@ -161,6 +161,7 @@ test "Back prevents a pending Cloud creation from taking foreground later" {
   let cloud = integrated_cloud_model()
   let (_, settings) = update(dispatch, OpenSetup, cloud)
   let (_, creating) = update(dispatch, CloudAction(@cloud.Create), settings)
+  let creating = submit_blank_cloud(creating)
   let creation = creating.cloud.creation.unwrap()
   let (_, back) = update(dispatch, Navigation(Back), creating)
   let (_, late) = update(
@@ -455,6 +456,7 @@ test "notification navigation prevents a pending Cloud creation from stealing fo
     account: integrated_cloud_model().account,
   }
   let (_, creating) = update(test_dispatch(), CloudAction(@cloud.Create), model)
+  let creating = submit_blank_cloud(creating)
   let request = creating.cloud.sequence
   let (_, opened) = update(
     test_dispatch(),
@@ -566,6 +568,7 @@ test "project New chat replaces Cloud selection before the host rotation arrives
 test "late Cloud creation cannot replace a project New chat" {
   let model = integrated_cloud_model()
   let (_, creating) = update(test_dispatch(), CloudAction(@cloud.Create), model)
+  let creating = submit_blank_cloud(creating)
   let creation = creating.cloud.creation.unwrap()
   let (_, navigating) = update(
     test_dispatch(),

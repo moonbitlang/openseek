@@ -17,7 +17,7 @@ for (const desktop of [false, true]) {
     expect(cloud.device.pageErrors).toEqual([]);
   });
 
-  test(`${desktop ? 'desktop' : 'browser'} creates Cloud directly through the existing plus button and uses the unified account`, async ({ page, context }, testInfo) => {
+  test(`${desktop ? 'desktop' : 'browser'} creates Cloud on first send through the existing composer and unified account`, async ({ page, context }, testInfo) => {
     const cloud = new CloudHarness(page, { desktop, cached: false });
     cloud.device.hostSettings.has_deepseek_key = false;
     await context.addCookies([{ name: 'session', value: 'fixture-account', url: authOrigin }]);
@@ -27,6 +27,7 @@ for (const desktop of [false, true]) {
     await expect(page.getByRole('menuitem', { name: 'Local', exact: true })).toHaveCount(0);
     expect(cloud.device.requests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
     await expect(page.locator('main h1')).toHaveText('New chat');
+    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
     await page.locator('#task').fill('Calculate 1 + 1');
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.locator('#transcript').getByText('您好 🌙 — calculation complete.', { exact: true })).toHaveCount(1);
@@ -78,6 +79,8 @@ for (const failure of ['network', '503']) {
     cloud.listStatus = 200;
     await cloud.create();
     expect(cloud.exchangeCount).toBe(0);
+    await page.locator('#task').fill('First message after reconnect');
+    await page.locator('#task').press('Enter');
     await expect(cloud.row(sessionA)).toBeVisible();
   });
 }
@@ -163,6 +166,9 @@ test('creation cannot steal a conversation selected while it was pending', async
   let finish;
   cloud.pauseCreate = new Promise(resolve => { finish = resolve; });
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await page.locator('#task').fill('First Cloud message');
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
   await cloud.open(sessionB);
   finish();
   await expect(cloud.row(sessionC)).toBeVisible();
@@ -592,6 +598,9 @@ test('late Cloud creation cannot steal a project New chat or its draft', async (
   cloud.pauseCreate = new Promise(resolve => complete = resolve);
   try {
     await page.getByRole('button', { name: 'New chat', exact: true }).click();
+  await page.locator('#task').fill('First Cloud message');
+  await page.locator('#task').press('Enter');
+  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
     await page.getByRole('button', { name: 'Work', exact: true }).click();
     await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
     await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();

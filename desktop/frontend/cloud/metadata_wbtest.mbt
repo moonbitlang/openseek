@@ -321,6 +321,14 @@ test "externally archived inventory fences pending history through restoration" 
   let opened = metadata_update(deletion_state(), Open("a"))
   let old_request = opened.conversations["a"].request
   let creating = metadata_update(opened, Create)
+  let creating = metadata_update(
+    creating,
+    Submit(creating.draft_identity(0).unwrap(), {
+      task: "First message",
+      images: [],
+      mentions: [],
+    }),
+  )
   let created = metadata_update(
     creating,
     Created(2, creating.creation.unwrap().request, "b"),

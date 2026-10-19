@@ -274,7 +274,7 @@ pub fn update(
       (next, command, None)
     }
     Create => {
-      if state.creation is Some(creation) && creation.failure is None {
+      if state.creation is Some(creation) {
         return (
           { ..state, creation: Some({ ..creation, navigation, }), },
           @cmd.none,
@@ -285,16 +285,22 @@ pub fn update(
       let next = {
         ..state,
         sequence: request,
-        creation: Some({ request, navigation, failure: None, }),
+        creation: Some({
+          id: "draft:\{request}",
+          request,
+          navigation,
+          submission: None,
+        }),
         notice: None,
       }
-      let (next, command) = next.create(token, emit)
-      (next, command, None)
+      (next, @cmd.none, None)
     }
     Created(epoch, request, id) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
-        creation.request == request else {
+        creation.request == request &&
+        creation.submission is Some(draft) &&
+        state.user_id is Some(account) else {
         return (state, @cmd.none, None)
       }
       let sessions = [
@@ -307,12 +313,25 @@ pub fn update(
         },
         ..state.sessions.filter(session => session.id != id),
       ]
-      let (next, command) = { ..state, sessions, creation: None, }.list(
-        token, emit,
+      let ready = {
+        ..Conversation::empty(),
+        loading: false,
+        history_required: false,
+        initial_submission: Some(draft.task),
+      }
+      let (next, command) = { ..state, sessions, creation: None, }
+        .replace(id, ready)
+        .list(token, emit)
+      let (next, send, _) = update(
+        next,
+        Submit(@interop.Cloud(account~, session=id), draft),
+        emit,
+        token?,
+        navigation~,
       )
       (
         next,
-        command,
+        @cmd.batch([command, send]),
         if creation.navigation == navigation {
           Some(id)
         } else {
@@ -323,12 +342,13 @@ pub fn update(
     CreateFailed(epoch, request, error) => {
       guard epoch == state.epoch &&
         state.creation is Some(creation) &&
-        creation.request == request else {
+        creation.request == request &&
+        creation.submission is Some(_) else {
         return (state, @cmd.none, None)
       }
       let (next, command) = {
         ..state,
-        creation: Some({ ..creation, failure: Some(error.label()), }),
+        creation: Some({ ..creation, submission: None, }),
       }.failed(error)
       (next, command, None)
     }
@@ -510,6 +530,11 @@ pub fn update(
         },
         submission_sequence: conversation.submission_sequence +
         (if accepted { 1 } else { 0 }),
+        initial_submission: if accepted {
+          None
+        } else {
+          conversation.initial_submission
+        },
       })
       let next = {
         ..next,
@@ -571,6 +596,25 @@ pub fn update(
       (next, command, None)
     }
     Submit(owner, draft) => {
+      if state.draft_identity(navigation) == Some(owner) &&
+        state.creation is Some(creation) {
+        guard creation.submission is None &&
+          token is Some(_) &&
+          !draft.task.is_blank() &&
+          draft.images.is_empty() &&
+          draft.mentions.is_empty() else {
+          return (state, @cmd.none, None)
+        }
+        let request = state.sequence + 1
+        let next = {
+          ..state,
+          sequence: request,
+          notice: None,
+          creation: Some({ ..creation, request, submission: Some(draft), }),
+        }
+        let (next, command) = next.create(token, emit)
+        return (next, command, None)
+      }
       guard owner is @interop.Cloud(account~, session=id) &&
         state.user_id == Some(account) &&
         token is Some(token) &&
@@ -687,6 +731,11 @@ pub fn update(
         },
         submission_sequence: conversation.submission_sequence +
         (if admitted { 1 } else { 0 }),
+        initial_submission: if admitted {
+          None
+        } else {
+          conversation.initial_submission
+        },
       })
       let (next, command) = if admitted {
         next.list(token, emit)

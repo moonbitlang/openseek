@@ -48,6 +48,9 @@ pub(all) struct Conversation {
   generating : Bool
   history_required : Bool
   submission_sequence : Int32
+  // Seed the shared composer after creation assigns a remote ID. Clear only
+  // when the first prompt is admitted, not when its send fails.
+  initial_submission : String?
   pending : Submission?
   stream : StreamLease?
   task : String?
@@ -68,6 +71,7 @@ fn Conversation::empty() -> Conversation {
     generating: false,
     history_required: true,
     submission_sequence: 0,
+    initial_submission: None,
     pending: None,
     stream: None,
     task: None,
@@ -79,9 +83,11 @@ fn Conversation::empty() -> Conversation {
 
 ///|
 pub struct Creation {
+  // A page-local composer entry, never sent as a Cloud session ID.
+  id : String
   request : Int32
   navigation : Int32
-  failure : String?
+  submission : @composer.Draft?
 } derive(Eq)
 
 ///|
@@ -314,4 +320,18 @@ pub extend Creation with Eq::{equal, not_equal}
 ///|
 pub fn State::creating_at(self : State, navigation : Int32) -> Bool {
   self.creation is Some(creation) && creation.navigation == navigation
+}
+
+///|
+pub fn State::draft_identity(
+  self : State,
+  navigation : Int32,
+) -> @interop.ConversationIdentity? {
+  if self.user_id is Some(account) &&
+    self.creation is Some(creation) &&
+    creation.navigation == navigation {
+    Some(@interop.Cloud(account~, session=creation.id))
+  } else {
+    None
+  }
 }

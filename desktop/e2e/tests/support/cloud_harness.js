@@ -285,8 +285,8 @@ export class CloudHarness {
 
   async create() {
     await this.page.locator('.section-primary-action[aria-label="New chat"]').click();
-    await this.row(sessionC).waitFor();
-    await this.page.waitForFunction(() => document.querySelector('.conversation-open[aria-current="true"]')?.textContent.includes('New chat'));
+    await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
+    await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
     await this.page.locator('#task').waitFor();
   }
 

@@ -203,11 +203,12 @@ test "archiving the previous Cloud behind a new-chat page does not retry or reta
     CloudAction(@cloud.Create),
     integrated_cloud_model(),
   )
-  let creation = creating.cloud.creation.unwrap()
+  let submitted = submit_blank_cloud(creating)
+  let creation = submitted.cloud.creation.unwrap()
   let (_, failed) = update(
     test_dispatch(),
     CloudAction(@cloud.CreateFailed(3, creation.request, Http(503))),
-    creating,
+    submitted,
   )
   for model in [creating, failed] {
     let pending = pending_cloud_archive(model)

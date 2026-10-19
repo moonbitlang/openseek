@@ -22,6 +22,8 @@ test('deletion reuses an existing creation request and keeps its Cloud destinati
   await cloud.goto();
   await cloud.open();
   await page.locator('.section-primary-action[aria-label="New chat"]').click();
+  await page.locator('#task').fill('First Cloud message');
+  await page.locator('#task').press('Enter');
   await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
   await cloud.open();
   await askDelete(page, cloud, sessionA);
@@ -33,7 +35,7 @@ test('deletion reuses an existing creation request and keeps its Cloud destinati
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(1);
 });
 
-test('failed creation after deletion reports the error and leaves the normal new action available', async ({ page }, testInfo) => {
+test('creation after deletion waits for Send and keeps the input on failure', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.createStatus = 503;
   await cloud.install();
@@ -42,13 +44,17 @@ test('failed creation after deletion reports the error and leaves the normal new
   await askDelete(page, cloud, sessionA);
   await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
   await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(page.getByRole('main')).toContainText('HTTP 503');
-  await expect(page.locator('#task')).toHaveCount(0);
-  await page.screenshot({ path: testInfo.outputPath('cloud-create-after-delete-error.png'), fullPage: true });
+  await expect(page.locator('#task')).toHaveValue('');
+  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+  await page.locator('#task').fill('Keep this first message');
+  await page.locator('#task').press('Enter');
+  await expect(page.locator('aside')).toContainText('HTTP 503');
+  await expect(page.locator('#task')).toHaveValue('Keep this first message');
   cloud.createStatus = 201;
-  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toHaveCount(0);
-  await page.locator('.section-primary-action[aria-label="New chat"]').click();
+  await page.locator('#task').fill('Edited after create failure');
+  await page.locator('#task').press('Enter');
   await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await expect(page.locator('#transcript').getByText('Edited after create failure', { exact: true })).toBeVisible();
   await expect(page.locator('#task')).toHaveValue('');
 });
 
@@ -72,7 +78,7 @@ for (const desktop of [false, true]) {
     await askDelete(page, cloud, sessionA);
     await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
     await expect(cloud.row(sessionA)).toHaveCount(0);
-    await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+    await expect(cloud.row(sessionC)).toHaveCount(0);
     await expect(page.locator('#task')).toHaveValue('');
     await expect(page.locator('main h1')).toHaveText('New chat');
     expect(deletes(cloud)).toHaveLength(1);
@@ -123,7 +129,7 @@ for (const failure of [409, 503, 'network']) {
     await askDelete(page, cloud, sessionA);
     await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
     await expect(cloud.row(sessionA)).toHaveCount(0);
-    await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+    await expect(cloud.row(sessionC)).toHaveCount(0);
   });
 }
 
@@ -136,7 +142,7 @@ test('delete 404 converges as already removed without signing out', async ({ pag
   await askDelete(page, cloud, sessionA);
   await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
   await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await expect(cloud.row(sessionC)).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
 });
 
@@ -147,7 +153,7 @@ test('history 404 retires an externally removed conversation', async ({ page }) 
   await page.route(`${cloudOrigin}/v1/sessions/${sessionB}/messages`, route => route.fulfill({ status: 404, headers: { 'Access-Control-Allow-Origin': authOrigin } }));
   await cloud.row(sessionB).click();
   await expect(cloud.row(sessionB)).toHaveCount(0);
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
 test('generating Cloud conversations expose a disabled delete without a Stop action', async ({ page }) => {
@@ -176,11 +182,11 @@ test('a history response captured before deletion cannot restore its row or cont
   await askDelete(page, cloud, sessionA);
   cloud.pauseHistory = null;
   await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await expect(cloud.row(sessionC)).toHaveCount(0);
   finish();
   await expect(cloud.row(sessionA)).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText('Deleted old content');
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
 
@@ -205,6 +211,9 @@ test('a new generating list disables deletion after an earlier idle history', as
   await cloud.open();
   cloud.generating.add(sessionA);
   await cloud.create();
+  await page.locator('#task').fill('Refresh the inventory after first send');
+  await page.locator('#task').press('Enter');
+  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
   await menu(page, cloud, sessionA);
   await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
 });

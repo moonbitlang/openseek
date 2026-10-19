@@ -158,7 +158,7 @@ for (const status of [401, 404]) {
       await expect.poll(() => page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toBeNull();
     } else {
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
-      await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+      await expect(cloud.row(sessionC)).toHaveCount(0);
     }
   });
 }
@@ -173,10 +173,10 @@ for (const desktop of [false, true]) {
     await page.locator('#task').fill('Unsent Cloud draft');
     await menu(page, cloud);
     await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
-    await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+    await expect(cloud.row(sessionC)).toHaveCount(0);
     await expect(page.locator('main h1')).toHaveText('New chat');
     await expect(page.locator('#task')).toHaveValue('');
-    expect(creations(cloud)).toHaveLength(1);
+    expect(creations(cloud)).toHaveLength(0);
     expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }]);
     await archivedGroup(page);
     await expect(cloud.row(sessionA)).toHaveAttribute('id', /cloud\.archived:/);
@@ -197,7 +197,7 @@ for (const desktop of [false, true]) {
     await expect(page.locator('.archived-read-only')).toHaveCount(0);
     await expect(page.locator('#task')).toHaveValue('Unsent Cloud draft');
     expect(patches(cloud).map(request => JSON.parse(request.body))).toEqual([{ archived: true }, { archived: false }]);
-    expect(creations(cloud)).toHaveLength(1);
+    expect(creations(cloud)).toHaveLength(0);
     expect(cloud.device.pageErrors).toEqual([]);
   });
 }

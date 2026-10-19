@@ -57,8 +57,8 @@ priv enum ChatColumn {
 ///|
 fn Model::chat_column(self : Model) -> ChatColumn {
   if self.cloud.creating_at(self.chat_navigation_generation) {
-    if self.cloud.creation is Some({ failure: Some(message), .. }) {
-      return LoadFailed(message~, retry=false)
+    if self.cloud_draft_identity() is Some(owner) {
+      return CloudTranscript(slot=CloudTranscriptSlot(owner))
     }
     return Loading
   }
@@ -218,6 +218,26 @@ fn Model::transcript_content(self : Model) -> TranscriptContent {
 
 ///|
 fn Model::transcript_input(self : Model) -> @transcript_component.Input {
+  if self.cloud_draft_identity() is Some(owner) {
+    return @transcript_component.Input(
+      locale=self.locale,
+      dark_mode=self.theme.is_dark(self.system_dark),
+      minimal=self.minimal_transcript_effective(),
+      source=OpenSeek,
+      identity=owner.key(),
+      active_session=owner.session(),
+      scroll=self.remembered_scroll(),
+      current_project=None,
+      projects=[],
+      can_choose_project=false,
+      project_menu_open=false,
+      project_query="",
+      root=None,
+      items=[],
+      streaming_response=None,
+      streaming_identity="idle",
+    )
+  }
   if self.screen is Chat &&
     self.cloud_identity() is Some(owner) &&
     self.cloud_conversation() is Some(conversation) {
