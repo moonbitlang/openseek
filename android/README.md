@@ -22,9 +22,10 @@ adb shell am start -n com.moonbit.openseek.connect.debug/com.moonbit.openseek.Ma
 
 This is a debug-signed Android 8+ build, not a store release.
 
-The launcher icon reuses the rabbit artwork and dark background from
-`desktop/package/macos/appicon.svg`. Android applies its own adaptive icon mask;
-Android 13+ also has a monochrome layer for themed icons.
+The launcher icon uses the white rabbit paths from
+`desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
+Desktop's packaged `AppIcon.icns` / `appicon.png`. Android applies its own
+adaptive icon mask; Android 13+ also has a monochrome layer for themed icons.
 
 ## Use
 
