@@ -2220,7 +2220,7 @@ fn update_msg(
       // subscriptions own their transcript and terminal DOM lifetimes.
       let device = if model.is_desktop {
         rotate_session(dispatch, model.focused, model.navigation.revision)
-      } else if @interop.page_query_param("device") == Some("host") {
+      } else if model.console.page_device == Some("host") {
         fetch_console_me(dispatch)
       } else {
         @cmd.none

@@ -49,6 +49,50 @@ test('direct management entry has no invented predecessor and refresh keeps its 
   expect(app.pageErrors).toEqual([]);
 });
 
+for (const [target, title] of [
+  ['settings', 'Settings'],
+  ['chat/session/session-1', 'Rabbita browser fixture'],
+  ['skills/market/example%2Froute-skill%401.0.0', 'Skill details'],
+]) {
+  test(`local console opens and refreshes ${target} without a device query`, async ({ page }) => {
+    const app = new DesktopBrowserHarness(page);
+    skills(app);
+    await app.install();
+    let signInChecks = 0;
+    await page.route('**/v2/auth/**', route => route.fulfill({ status: 404 }));
+    await page.route('**/v1/auth/me', route => {
+      signInChecks += 1;
+      return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ login: 'local' }) });
+    });
+    await page.route('**/v1/devices', route => route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({ devices: [{ id: 'host', name: 'Local test host', online: true }] }),
+    }));
+    await page.routeWebSocket('**/v1/devices/host/ws', socket => {
+      app.socketURLs.push(socket.url());
+      socket.onMessage(async message => {
+        const request = JSON.parse(message.toString());
+        app.requests.push(request);
+        if (request.id !== undefined) socket.send(JSON.stringify({
+          jsonrpc: '2.0', id: request.id, result: await app.replyFor(request),
+        }));
+      });
+      socket.send(JSON.stringify({ jsonrpc: '2.0', method: 'agent.connected', params: { stage: 'serving' } }));
+    });
+    const destination = `/device/host/${target}`;
+    await page.goto(destination);
+    await expect.poll(() => signInChecks).toBe(1);
+    await expect(heading(page)).toHaveText(title);
+    await page.reload();
+    await expect.poll(() => signInChecks).toBe(2);
+    await expect(heading(page)).toHaveText(title);
+    expect(new URL(page.url()).search).toBe('');
+    expect(app.socketURLs).toHaveLength(2);
+    expect(app.ticketRequests).toEqual([]);
+    expect(app.pageErrors).toEqual([]);
+  });
+}
+
 for (const restored of [false, true]) {
   test(`encoded device deep links share canonical browser history (restored=${restored})`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
