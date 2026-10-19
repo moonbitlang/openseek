@@ -9,6 +9,8 @@ import {
   "moonbitlang/openseek_protocol" @protocol,
   "moonbitlang/async/process",
   "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
   "moonbitlang/openseek/agent_tool/internal/uuid",
 }
 
@@ -18,6 +20,7 @@ supported_targets = "+wasm+native"
 
 import {
   "moonbitlang/async",
+  "moonbitlang/async/fs",
   "moonbitlang/async/process",
   "moonbitlang/openseek_protocol" @protocol,
 } for "test"

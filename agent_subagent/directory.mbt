@@ -149,3 +149,30 @@ fn directory_input(
   }
   Json::object(fields)
 }
+
+///|
+/// What this session's transcript never heard about the directory workers an
+/// earlier engine of it ran: a notice for each one among `records` (an earlier
+/// engine's job records) that no notice of the transcript names (`notified`,
+/// by job id). It says how the worker ended, as its record has it, and where
+/// its change may be. A notice names `subagent job <id> ` as an end notice
+/// does, so one of either kind counts as delivered.
+pub fn unreported_directory_workers(
+  records : Array[@protocol.JobRecord],
+  notified~ : (String) -> Bool,
+) -> Array[String] {
+  records.filter_map(record => {
+    guard record.subagent
+      is Some({ workspace: Directory(path~), kind, label, outcome, .. }) &&
+      !notified(record.id) else {
+      return None
+    }
+    let ended = match outcome {
+      Some(outcome) => "its record says it \{describe_outcome(outcome)}"
+      None => "its record holds no outcome, so it was most likely cut off"
+    }
+    Some(
+      "subagent job \{record.id} (\{kind}: \{label}) ran under an earlier engine of this session, which stopped before its end reached you; \{ended}. Directory \{path} may hold what it changed, uncommitted, with anything uncommitted there before it started: review it there (`git -C \{path} status`, `git -C \{path} diff`), then commit or restore it. The job was not this engine's: job_output and job_wait do not know it.",
+    )
+  })
+}

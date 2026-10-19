@@ -167,3 +167,79 @@ async test "a running directory worker holds its directory, and only a directory
     ignore(h.settled(job_id))
   })
 }
+
+///|
+/// An earlier engine's job record of a subagent, as it was last published.
+fn earlier_job(
+  id : String,
+  workspace : @protocol.SubagentWorkspace,
+  outcome : @protocol.SubagentOutcome?,
+) -> @protocol.JobRecord {
+  {
+    generation: "gen-dead",
+    id,
+    revision: 2,
+    command: "openseek run --kind worker --session p-sr-1",
+    description: Some("upgrade a"),
+    cwd: None,
+    state: if outcome is Some(_) {
+      Exited(0)
+    } else {
+      Running
+    },
+    started_at_ms: 100L,
+    backgrounded_at_ms: 100L,
+    finished_at_ms: None,
+    last_output_at_ms: None,
+    output_file: None,
+    output_persistent: true,
+    output_bytes: 0L,
+    output_chars: 0,
+    output_truncated: false,
+    invalid_utf8: false,
+    output_error: None,
+    persistence_error: None,
+    cleanup_error: None,
+    data: None,
+    subagent: Some({
+      kind: "worker",
+      label: "upgrade a",
+      session: "p-sr-1",
+      launch: Direct,
+      outcome,
+      usage: None,
+      report: None,
+      workspace,
+    }),
+  }
+}
+
+///|
+/// A directory worker of an earlier engine whose end the transcript never
+/// heard gets a notice: how its record says it ended, and where its change may
+/// be. One the transcript already names, a worktree worker, and a read-only
+/// child get none.
+test "an earlier engine's unreported directory workers are noticed" {
+  let records = [
+    earlier_job("uuid-cut", Directory(path="/work/a"), None),
+    earlier_job("uuid-done", Directory(path="/work/b"), Some(Captured)),
+    earlier_job("uuid-told", Directory(path="/work/c"), Some(Captured)),
+    earlier_job("uuid-explore", InPlace, None),
+  ]
+  let notices = @agent_subagent.unreported_directory_workers(records, notified=id => {
+    id == "uuid-told"
+  })
+  assert_eq(notices.length(), 2)
+  // Each names its job as an end notice does, so it counts as delivered once
+  // it is in the transcript.
+  assert_true(
+    notices[0].has_prefix("subagent job uuid-cut (worker: upgrade a) "),
+  )
+  assert_true(
+    notices[0].contains("holds no outcome, so it was most likely cut off"),
+  )
+  assert_true(notices[0].contains("git -C /work/a diff"))
+  assert_true(notices[1].has_prefix("subagent job uuid-done "))
+  assert_true(notices[1].contains("its record says it reported"))
+  assert_true(notices[1].contains("Directory /work/b may hold what it changed"))
+}

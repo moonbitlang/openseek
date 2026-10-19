@@ -30,6 +30,7 @@ pub(all) struct Subagents {
   launcher : (@bgjobs.BgJobRuntime) -> @agent_subagent.Launcher
   kinds : Array[Kind]
   audit_context : () -> Json
+  notified : (String) -> Bool
 }
 
 // Type aliases

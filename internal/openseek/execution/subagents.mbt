@@ -88,6 +88,15 @@ pub fn[X] subagents(
       )
     },
     kinds: subagent_kinds(),
+    notified: id => {
+      let named = "subagent job \{id} "
+      session()
+      .events()
+      .iter()
+      .any(event => {
+        event.item() is Runtime(notice) && notice.content().contains(named)
+      })
+    },
     // What a script's audit is held to, read live: the standing goal and
     // the baseline recorded with it, or null when no goal stands.
     audit_context: () => {

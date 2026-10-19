@@ -17,6 +17,8 @@ pub fn describe_workspace(@openseek_protocol.SubagentWorkspace) -> String?
 
 pub fn describe_worktree(@openseek_protocol.Worktree) -> String
 
+pub fn unreported_directory_workers(Array[@openseek_protocol.JobRecord], notified~ : (String) -> Bool) -> Array[String]
+
 // Errors
 
 // Types and methods

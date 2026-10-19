@@ -50,6 +50,7 @@ async test "a session's subagent ends with a notice and a readable report" {
             },
           ],
           audit_context: () => Json::null(),
+          notified: _ => false,
         },
       )
       guard tools.find("subagent") is Some(subagent) &&

@@ -83,6 +83,9 @@ pub(all) struct Subagents {
   /// The session's standing goal and baseline for a script's audit, read
   /// when asked: `{goal, sha?, dirty?}`, or null.
   audit_context : () -> Json
+  /// Whether a notice in the session's transcript already names job `id`:
+  /// its end notice, or one about it from an earlier engine.
+  notified : (String) -> Bool
 }
 
 ///|

@@ -1,0 +1,236 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// The real CLI with a durable session starts a directory worker, and the
+/// engine is killed while the worker runs: the worker stops with it, its job
+/// record never gets an end. The session is resumed: before its first model
+/// request the engine reads the earlier engine's job records and tells the
+/// model the worker ran, how its record says it ended, and that its directory
+/// may hold its change. A third run of the session, whose transcript now
+/// holds that notice, is not told again. One local server scripts the parent
+/// and the real worker child (told apart by its `submit_result` tool).
+fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
+  {
+    "index": index,
+    "id": id,
+    "type": "function",
+    "function": { "name": name, "arguments": args.stringify() },
+  }
+}
+
+///|
+fn calls(list : Array[Json]) -> Json {
+  { "tool_calls": Json::array(list) }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+/// What the recovery notice says, and how often the messages say it.
+let told : String = "ran under an earlier engine of this session"
+
+///|
+fn count(text : String, part : String) -> Int {
+  text.split(part).count() - 1
+}
+
+///|
+/// The parent's moves in each run: start the worker and wait for it (run 1);
+/// answer with what it was told about it (runs 2 and 3).
+fn parent_turn(messages : String, run : Int) -> Json {
+  if run == 1 {
+    if messages.contains("Started subagent job ") {
+      return calls([tool_call(0, "wait", "job_wait", { "job_ids": [] })])
+    }
+    return calls([
+      tool_call(0, "start", "subagent", {
+        "kind": "worker",
+        "input": { "task": "MARK-W add lib/b.txt" },
+        "label": "add b",
+        "directory": "a",
+      }),
+    ])
+  }
+  calls([
+    tool_call(0, "done", "finish", {
+      "answer": "told \{count(messages, told)} times",
+    }),
+  ])
+}
+
+///|
+async fn git(cwd : String, args : Array[String]) -> String {
+  let (reader, out) = @process.read_from_process()
+  defer reader.close()
+  let code = @process.run("git", args, cwd~, stdout=out, stderr=out)
+  let text = reader.read_all().text()
+  guard code == 0 else { fail("git \{args.join(" ")}: \{text}") }
+  text
+}
+
+///|
+/// Whether the session's job records hold a directory worker's yet.
+async fn worker_recorded(store_root : String) -> Bool {
+  let jobs = "\{store_root}/sessions/parent/jobs"
+  for generation in (@fs.readdir(jobs) catch { _ => [] }) {
+    for name in (@fs.readdir("\{jobs}/\{generation}") catch { _ => [] }) {
+      if name.has_suffix(".json") &&
+        (@fs.read_file("\{jobs}/\{generation}/\{name}").text() catch {
+          _ => ""
+        }).contains("\"directory\"") {
+        return true
+      }
+    }
+  }
+  false
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/directory_recovery.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let directory = @fs.realpath(@fs.tmpdir(prefix="openseek-directory-recovery-"))
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  let ws = directory + "/ws"
+  let repo = ws + "/a"
+  @fs.mkdir(repo + "/lib", recursive=true)
+  @fs.write_file(repo + "/lib/a.txt", "alpha\n")
+  for
+    args in [
+      ["init", "-q"],
+      ["config", "user.email", "e2e@test"],
+      ["config", "user.name", "e2e"],
+      ["add", "-A"],
+      ["commit", "-q", "-m", "base"],
+    ] {
+    ignore(git(repo, args))
+  }
+  let run = Ref(1)
+  let worker_requests = Ref(0)
+  let answers = []
+  @async.with_timeout(240000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            if tool_names(request).contains("submit_result") {
+              // The worker is busy until its engine is killed: it never
+              // gets an answer.
+              worker_requests.val += 1
+              @async.sleep(60000)
+              conn.close()
+              return
+            }
+            let delta = parent_turn(messages, run.val)
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=true,
+        )
+      }
+      let url = "http://127.0.0.1:\{server.addr.port()}/chat/completions"
+      let args = (prompt : String) => [
+        "run", "--dir", ws, "--api-key", "test-key", "--model", "deepseek-flash",
+        "--api-url", url, "--max-steps", "8", "--mcp-config", "", "--session", "parent",
+        "--session-root", store_root, prompt,
+      ]
+      // Run 1: the engine is killed while its worker runs.
+      let (_, out1) = @process.read_from_process()
+      let (_, err1) = @process.read_from_process()
+      let first = @process.spawn(
+        group,
+        executable,
+        args("Have a worker add lib/b.txt in a."),
+        extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=out1,
+        stderr=err1,
+        cancel_handler=@process.hard_cancel(),
+      )
+      for _ in 0..<400 {
+        if worker_requests.val > 0 && worker_recorded(store_root) {
+          break
+        }
+        @async.sleep(50)
+      }
+      assert_true(worker_requests.val > 0, msg="the worker never ran")
+      first.cancel()
+      ignore(first.wait())
+      // Runs 2 and 3 resume the session.
+      for next in [2, 3] {
+        run.val = next
+        let (reader, child_stdout) = @process.read_from_process()
+        let (errors, child_stderr) = @process.read_from_process()
+        let process = @process.spawn(
+          group,
+          executable,
+          args("What became of the worker?"),
+          extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+          stdout=child_stdout,
+          stderr=child_stderr,
+          cancel_handler=@process.hard_cancel(),
+        )
+        let stdout = group.spawn(() => reader.read_all().text())
+        let stderr = group.spawn(() => errors.read_all().text())
+        let code = process.wait()
+        let out = stdout.wait()
+        let err = stderr.wait()
+        reader.close()
+        errors.close()
+        guard code == 0 else {
+          fail("run \{next}: CLI exit \{code}\nstdout: \{out}\nstderr: \{err}")
+        }
+        answers.push(out)
+      }
+      server.close()
+    })
+  })
+  // Resumed, it was told once; the next run, whose transcript holds that
+  // notice, was not told again.
+  assert_true(answers[0].contains("told 1 times"), msg="run 2: \{answers[0]}")
+  assert_true(answers[1].contains("told 1 times"), msg="run 3: \{answers[1]}")
+  println(
+    "PASS: a directory worker cut off with its engine is reported once to the resumed session",
+  )
+}

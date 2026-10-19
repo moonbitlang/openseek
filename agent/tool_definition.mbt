@@ -188,6 +188,25 @@ pub async fn[X] build_tools(
   // The session's subagent launcher, when this session may delegate: its
   // children are jobs of this same runtime.
   let launcher = subagents.map(spec => (spec.launcher)(bg_runtime))
+  // A directory worker an earlier engine of this session ran stopped with it,
+  // and left its change in place; the transcript may never have heard how it
+  // ended. Say so before the next model request, as its end notice would.
+  if (subagents, job_log_dir) is (Some(spec), Some(root)) {
+    let own = match spill_dir.rev_split_once("/") {
+      Some((_, generation)) => generation.to_owned()
+      None => spill_dir
+    }
+    let unreported = @agent_subagent.unreported_directory_workers(
+      @bgjobs.earlier_job_records(root, own~),
+      notified=spec.notified,
+    )
+    for text in unreported {
+      runtime.queue_steer(Notice(text))
+    }
+    if !unreported.is_empty() && on_background_wake is Some(wake) {
+      wake()
+    }
+  }
   let image_input_supported = Ref(false)
   let file_tools = [
     @read_image.definition(workspace_root~),
