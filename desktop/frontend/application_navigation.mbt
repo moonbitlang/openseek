@@ -19,6 +19,28 @@ fn reconcile_navigation(
       }
     }),
   }
+  // Browser URLs are account-neutral. A changed login re-resolves the URL;
+  // desktop history retains its account-bound identity.
+  if !next.is_desktop &&
+    previous.cloud.user_id != next.cloud.user_id &&
+    next.navigation.location
+    is Some(
+      { target: CloudSession(session~, ..) | CloudDraft(id=session, ..), .. } as location
+    ) {
+    let target : @routes.Target = if location.target is CloudDraft(..) {
+      CloudDraft(account=next.cloud.user_id, id=session)
+    } else {
+      CloudSession(account=next.cloud.user_id, session~)
+    }
+    next = {
+      ..next,
+      navigation: {
+        ..next.navigation,
+        location: Some({ device: None, target, }),
+        phase: Waiting,
+      },
+    }
+  }
   let commands : Array[@cmd.Cmd] = []
   next = { ..next, navigation: observe_navigation_catalogs(message, next), }
   let observation = observe_navigation(message, previous, next)

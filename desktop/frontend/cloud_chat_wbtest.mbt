@@ -63,6 +63,34 @@ test "Cloud selection after Settings wins over the previous navigation destinati
   )
   assert_true(cloud.screen is Chat)
   assert_true(cloud.cloud_identity() == model.cloud_identity())
+  let initial = {
+    ..model,
+    is_desktop: false,
+    devices: [],
+    console: { ..model.console, page_device: None, },
+  }
+  let snapshot : @navigation_browser.Snapshot = {
+    path: "/cloud/session/cloud-b",
+    settings: false,
+    can_back: true,
+    can_forward: false,
+  }
+  let (_, direct) = update(dispatch, Navigation(Browser(snapshot)), initial)
+  let (_, repeated) = update(dispatch, Navigation(Browser(snapshot)), initial)
+  assert_true(direct.cloud == repeated.cloud)
+  assert_true(direct.navigation == repeated.navigation)
+  assert_true(
+    direct.cloud_identity() ==
+    Some(@interop.Cloud(account="fixture-user", session="cloud-b")),
+  )
+  assert_false(initial.cloud.conversations.contains("cloud-b"))
+  let (_, home) = update(
+    dispatch,
+    Navigation(Browser({ ..snapshot, path: "/cloud", })),
+    direct,
+  )
+  assert_true(home.cloud_selected() && home.cloud_identity() is None)
+  assert_true(home.cloud.creation is None)
 }
 
 ///|
@@ -325,6 +353,13 @@ test "same-account sign-out retires old composer actions, while the new entry ca
     ),
     connecting,
   )
+  let (_, signed_in) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Listed(epoch, signed_in.cloud.list_request, model.cloud.sessions),
+    ),
+    signed_in,
+  )
   let (_, opened) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
@@ -523,7 +558,12 @@ test "Local setup does not interrupt Cloud selection or background settings" {
 ///|
 test "Cloud suppression does not dismiss Work API setup" {
   let model = integrated_cloud_model()
-  let work = { ..model, selected_conversation: None, }.settle_api_setup()
+  let (_, work) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    model,
+  )
+  let work = work.settle_api_setup()
   assert_true(work.api_setup_open)
   let (_, cloud) = update(
     test_dispatch(),
@@ -532,18 +572,24 @@ test "Cloud suppression does not dismiss Work API setup" {
   )
   assert_false(cloud.api_setup_open)
   assert_false(cloud.api_setup_dismissed)
-  assert_true(
-    { ..cloud, selected_conversation: None, }.settle_api_setup().api_setup_open,
+  let (_, returned) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    cloud,
   )
+  assert_true(returned.settle_api_setup().api_setup_open)
   let (_, dismissed) = update(test_dispatch(), DismissApiSetup, work)
   let (_, cloud) = update(
     test_dispatch(),
     OpenCloudConversation(account="fixture-user", session="cloud-a"),
     dismissed,
   )
-  assert_false(
-    { ..cloud, selected_conversation: None, }.settle_api_setup().api_setup_open,
+  let (_, returned) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    cloud,
   )
+  assert_false(returned.settle_api_setup().api_setup_open)
 }
 
 ///|
@@ -601,11 +647,12 @@ test "the new-chat shortcut follows the visible conversation instead of the side
     sidebar_mode: WorkMode,
   })
   assert_true(cloud.cloud.creation is Some(_))
-  let work = {
-    ..model.with_active_project(Some(@interop.ChannelId::Local.test_project())),
-    selected_conversation: None,
-    sidebar_mode: ChatMode,
-  }
+  let (_, work) = update(
+    test_dispatch(),
+    OpenSession(Local, "desktop-test"),
+    model,
+  )
+  let work = { ..work, sidebar_mode: ChatMode, }
   let (_, navigating) = update(test_dispatch(), NewChatRequested, work)
   let (_, rotated) = update(
     test_dispatch(),
@@ -636,11 +683,14 @@ test "managed local and Codex Chats start Cloud even when browsing Work" {
     active_project: Some(managed),
     chat_root: Some(Ok(root)),
   })
-  let model = { ..model, selected_conversation: None, sidebar_mode: WorkMode, }
   let model = model.replace_conversation({
-    ..model.active(),
+    ..model.find_conversation(channel, "desktop-test").unwrap(),
     workspace: Project(root=managed),
   })
+  let model = {
+    ..model.activate(channel, "desktop-test", managed),
+    sidebar_mode: WorkMode,
+  }
   let (_, created) = update(test_dispatch(), NewChatRequested, model)
   assert_true(created.cloud.creation is Some(_))
   for message in [OpenSetup, OpenSkills, OpenSchedules] {

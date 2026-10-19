@@ -704,15 +704,17 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
       self.sidebar_component_sections(dev)
     }
     None => {
-      match self.console.roster_sync {
-        RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
-        RosterFailed(message) => notices.push(message)
-        RosterReady =>
-          if self.console.roster.is_empty() {
-            notices.push(shell_text(self.locale, NoDevices))
-          } else {
-            notices.push(shell_text(self.locale, NoOnlineDevice))
-          }
+      if self.console.page_device is Some(_) {
+        match self.console.roster_sync {
+          RosterLoading => notices.push(shell_text(self.locale, LoadingDevice))
+          RosterFailed(message) => notices.push(message)
+          RosterReady =>
+            if self.console.roster.is_empty() {
+              notices.push(shell_text(self.locale, NoDevices))
+            } else {
+              notices.push(shell_text(self.locale, NoOnlineDevice))
+            }
+        }
       }
       if self.sidebar_mode is ChatMode {
         let archived_entries = ordered_by_recency(
@@ -2107,6 +2109,7 @@ fn view(
                 composer_html
               },
             ]
+          CloudHome => [cloud_home_view(dispatch, model)]
           LoadFailed(message~, retry~) =>
             [
               conversation_load_failed_view(
@@ -2198,7 +2201,7 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
-  let content = if !host_gated &&
+  let content = if (!host_gated || model.navigation.phase is Invalid) &&
     navigation_notice(dispatch, model) is Some(notice) {
     [notice]
   } else {
@@ -2680,4 +2683,41 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
     }),
     entries,
   }
+}
+
+///|
+fn cloud_home_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
+  @html.section(class="cloud-home management-page", [
+    @html.h2(@sidebar_messages.text(model.locale, Cloud)),
+    if model.account is Some(_) {
+      @html.button(
+        class="button primary",
+        on_click=dispatch(CloudAction(@cloud.Create)),
+        shell_text(model.locale, NewChatLabel),
+      )
+    } else if model.console.auth is AuthChecking {
+      @html.div([
+        @html.p(
+          model.console.notice.unwrap_or(
+            shell_text(model.locale, CheckingSignIn),
+          ),
+        ),
+        if model.console.notice is Some(_) {
+          @html.button(
+            class="button",
+            on_click=dispatch(Console(RefreshClicked)),
+            shell_text(model.locale, TryAgain),
+          )
+        } else {
+          @html.nothing
+        },
+      ])
+    } else {
+      @html.button(
+        class="button primary",
+        on_click=dispatch(RemoteConnectClicked),
+        shell_text(model.locale, SignInGitHub),
+      )
+    },
+  ])
 }

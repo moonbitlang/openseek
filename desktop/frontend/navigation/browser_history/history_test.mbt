@@ -8,6 +8,37 @@ const Settings = "/device/d1/settings"
 const Skills = "/device/d1/skills"
 
 ///|
+test "Cloud URLs share browser history and restore across Cloud and device documents" {
+  let initial = @browser_history.History(Settings, group="g", key="a")
+  let cloud = initial
+    .visit("/cloud/session/session", replace=false, key="b")
+    .unwrap()
+  assert_eq(cloud.path(), "/cloud/session/session")
+  assert_true(cloud.can_back())
+  let covered = cloud.visit_settings(replace=false, key="c")
+  assert_true(covered.settings())
+  let back = covered.select(cloud.path(), cloud.marker()).unwrap()
+  assert_false(back.settings())
+  assert_true(back.can_forward())
+  let restored = @browser_history.History::restore(
+    cloud.path(),
+    cloud.path(),
+    cloud.marker(),
+    covered.stored(),
+  ).unwrap()
+  assert_eq(restored.path(), cloud.path())
+  assert_false(restored.settings())
+  assert_eq(
+    restored.select(Settings, initial.marker()).unwrap().path(),
+    Settings,
+  )
+  assert_false(restored.owns("/device/d2/settings"))
+  let home = @browser_history.History("/cloud", group="h", key="a")
+  assert_true(home.owns("/cloud/session/1"))
+  assert_false(home.owns(Settings))
+}
+
+///|
 test "invalid targets retain their path but allow navigation within the decoded device" {
   let invalid = "/device/%641/unknown"
   let initial = @browser_history.History(invalid, group="g", key="a")
@@ -345,4 +376,24 @@ test "successive promotions retain the URL actually written to each entry" {
     )
     assert_eq(initial.path(), chat)
   }
+}
+
+///|
+test "retired Cloud entries are skipped in both directions and at segment edges" {
+  let initial = @browser_history.History(Settings, group="g", key="a")
+  let a = initial.visit("/cloud/session/a", replace=false, key="b").unwrap()
+  let b = a.visit("/cloud/session/b", replace=false, key="c").unwrap()
+  let live = b.forget_cloud(["a"])
+  let skipped = live.select(a.path(), a.marker()).unwrap()
+  assert_eq(skipped.skip_retired(live), -1)
+  let back = skipped.select(Settings, initial.marker()).unwrap()
+  assert_true(back.can_forward())
+  assert_eq(skipped.skip_retired(back), 1)
+  let all_cloud_deleted = live.forget_cloud(["b"])
+  let initial_again = all_cloud_deleted
+    .select(Settings, initial.marker())
+    .unwrap()
+  assert_false(initial_again.can_forward())
+  let end = initial_again.select(b.path(), b.marker()).unwrap()
+  assert_eq(end.skip_retired(initial_again), -2)
 }

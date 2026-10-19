@@ -31,13 +31,17 @@ fn navigation_device_from_location() -> String? {
 ///|
 fn navigation_initial_path(return_to : String, device : String?) -> String {
   let path = return_to.split("?").next().unwrap_or(return_to[:]).to_owned()
-  if path.has_prefix("/device/") {
+  if path.has_prefix("/device/") ||
+    path == "/cloud" ||
+    path.has_prefix("/cloud/") {
     return path
   }
   if device is Some(device) {
-    @routes.Location::{ device, target: ChatNew, }.path()
+    @routes.Location::{ device: Some(device), target: ChatNew, }
+    .path()
+    .unwrap_or(path)
   } else {
-    path
+    "/cloud"
   }
 }
 
@@ -47,9 +51,13 @@ fn apply_browser_navigation(
   snapshot : @navigation_browser.Snapshot,
   model : Model,
 ) -> (@cmd.Cmd, Model) {
-  let parsed = @routes.parse(
-    snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
-  )
+  let parsed : Result[@routes.Location, @routes.RouteError] = if snapshot.settings {
+    Ok({ device: None, target: Settings, })
+  } else {
+    @routes.parse(
+      snapshot.path.split("?").next().unwrap_or(snapshot.path[:]).to_owned(),
+    )
+  }
   let navigation = {
     ..model.navigation,
     browser_ready: true,
@@ -57,7 +65,9 @@ fn apply_browser_navigation(
     can_forward: snapshot.can_forward,
   }
   match parsed {
-    Ok(location) if Some(location.device) == model.console.page_device => {
+    Ok(location) if location.target.is_cloud() ||
+      location.device == model.console.page_device => {
+      let location = model.bind_cloud_location(location)
       // An invalid URL retains the covered destination, but returning to that
       // destination must activate it again rather than retain the error phase.
       let changed = navigation.location != Some(location) ||
@@ -65,10 +75,10 @@ fn apply_browser_navigation(
       let model = {
         ..model,
         console: { ..model.console, login_return_to: snapshot.path, },
-        chat_creation: if changed && navigation.location is Some(_) {
-          None
+        chat_navigation_generation: if changed && navigation.location is Some(_) {
+          model.chat_navigation_generation + 1
         } else {
-          model.chat_creation
+          model.chat_navigation_generation
         },
         pending_project_adoption: if changed && navigation.location is Some(_) {
           model.project_adoption_at(location)
@@ -97,8 +107,21 @@ fn apply_browser_navigation(
       }
       activate_navigation(dispatch, model)
     }
+    Ok(location) if location.device is Some(_) =>
+      (@nav.load(snapshot.path), model)
     _ =>
-      (@cmd.none, { ..model, navigation: { ..navigation, phase: Invalid, }, })
+      (
+        @cmd.none,
+        {
+          ..model,
+          chat_navigation_generation: if navigation.phase is Invalid {
+            model.chat_navigation_generation
+          } else {
+            model.chat_navigation_generation + 1
+          },
+          navigation: { ..navigation, phase: Invalid, },
+        },
+      )
   }
 }
 
@@ -111,7 +134,15 @@ fn follow_navigation_link(
   match request {
     Internal(url) =>
       match @routes.parse(url.path) {
-        Ok(location) if Some(location.device) == model.console.page_device => {
+        Ok(location) if location.target.is_cloud() ||
+          location.device == model.console.page_device => {
+          let location = model.bind_cloud_location(location)
+          // Explicit navigation cancels an in-flight creation even when the
+          // chosen page is the one still covered by that creation request.
+          let model = {
+            ..model,
+            chat_navigation_generation: model.chat_navigation_generation + 1,
+          }
           let (write, next) = navigation_visit(model, location, replace=false)
           let (activate, next) = activate_navigation(dispatch, {
             ..next,
@@ -122,5 +153,33 @@ fn follow_navigation_link(
         _ => update_msg(dispatch, ExternalLinkClicked(url.to_string()), model)
       }
     External(url) => update_msg(dispatch, ExternalLinkClicked(url), model)
+  }
+}
+
+///|
+/// URL identities resolve against the signed-in account. Desktop history keeps
+/// its original account binding instead of reinterpreting another account's ID.
+fn Model::bind_cloud_location(
+  self : Model,
+  location : @routes.Location,
+) -> @routes.Location {
+  match location.target {
+    CloudSession(account=None, session~) =>
+      {
+        ..location,
+        target: CloudSession(
+          account=self.account.map(account => account.user.user_id),
+          session~,
+        ),
+      }
+    CloudDraft(account=None, id~) =>
+      {
+        ..location,
+        target: CloudDraft(
+          account=self.account.map(account => account.user.user_id),
+          id~,
+        ),
+      }
+    _ => location
   }
 }

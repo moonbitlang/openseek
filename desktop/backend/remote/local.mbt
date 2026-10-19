@@ -152,7 +152,9 @@ fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
   let (route, query) = split_path_query(path)
   match (meth, route) {
     (Get, "/") if query_param(query, "token") is Some(token) => Entry(token)
-    (Get, path) if path.has_prefix("/device/") => ApplicationPage
+    (Get, path) if path.has_prefix("/device/") ||
+      path == "/cloud" ||
+      path.has_prefix("/cloud/") => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
     (Get, "/v1/devices") => Devices
     (Get, "/v1/auth/login") => Login
@@ -236,18 +238,26 @@ async fn LocalConsole::handle(
         @uri.decode_component(value)
       })
       let fallback : @routes.Location = {
-        device: LocalConsoleDevice,
+        device: Some(LocalConsoleDevice),
         target: Chat,
+      }
+      guard fallback.path() is Some(fallback) else {
+        respond_status(conn, 500, "Internal Server Error")
+        return
       }
       let target = if destination is Some(destination) {
         let (path, query) = split_path_query(destination)
         match @routes.parse(path) {
-          Ok(location) if location.device == LocalConsoleDevice =>
-            location.path() + (if query.is_empty() { "" } else { "?" + query })
-          _ => fallback.path()
+          Ok(location) if (
+              location.device == Some(LocalConsoleDevice) ||
+              location.target.is_cloud()
+            ) &&
+            location.path() is Some(path) =>
+            path + (if query.is_empty() { "" } else { "?" + query })
+          _ => fallback
         }
       } else {
-        fallback.path()
+        fallback
       }
       respond_redirect(conn, target)
     }
@@ -611,7 +621,10 @@ test "content types cover the bundled asset set" {
 }
 
 ///|
-test "stable device paths serve the application document" {
+test "stable application paths serve the application document" {
+  for path in ["/cloud", "/cloud/session/s1"] {
+    assert_true(route(Get, path, entry="index.html") is ApplicationPage)
+  }
   assert_true(
     route(Get, "/device/host/chat/session/s1", entry="index.html")
     is ApplicationPage,

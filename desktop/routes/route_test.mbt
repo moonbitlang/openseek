@@ -1,4 +1,33 @@
 ///|
+test "Cloud routes resolve accounts at activation while Settings can remain window-only" {
+  assert_eq(@routes.Location::{ device: None, target: Settings, }.path(), None)
+  assert_true(@routes.parse("/cloud") is Ok({ device: None, target: Cloud, }))
+  for session in ["s", "a/b?中文#%"] {
+    let location : @routes.Location = {
+      device: None,
+      target: CloudSession(account=None, session~),
+    }
+    let path = location.path().unwrap()
+    assert_true(@routes.parse(path) == Ok(location))
+    assert_eq(
+      @routes.Location::{
+        ..location,
+        target: CloudSession(account=Some("user"), session~),
+      }.path(),
+      Some(path),
+    )
+  }
+  for
+    path in [
+      "/cloud/", "/cloud/session", "/cloud/session/", "/cloud/session/a/b", "/cloud/session/%GG",
+      "/cloud/session/%00", "/cloud/session/%2e%2e", "/cloud/session/a?b",
+    ] {
+    assert_true(@routes.parse(path) is Err(InvalidRoute))
+  }
+  assert_true(@routes.parse("/cloudy") is Err(OutsideApplication))
+}
+
+///|
 test "device identity is independent of target validity" {
   for
     path in [
@@ -35,10 +64,9 @@ test "all targets roundtrip without interpreting encoded separators" {
     Schedules,
   ]
   for target in targets {
-    let location : @routes.Location = { device: "d_1", target, }
-    assert_true(
-      @routes.parse(location.path()) is Ok(found) && found == location,
-    )
+    let location : @routes.Location = { device: Some("d_1"), target, }
+    guard location.path() is Some(path) else { fail("device route missing") }
+    assert_true(@routes.parse(path) is Ok(found) && found == location)
   }
 }
 
@@ -67,7 +95,7 @@ test "parsing then encoding normalizes route spelling without decoding identitie
       ("/device/host/chat/session/a%5Cb", "/device/host/chat/session/a%5Cb"),
     ] {
     guard @routes.parse(input) is Ok(location) else { fail("expected route") }
-    assert_eq(location.path(), expected)
+    assert_eq(location.path(), Some(expected))
   }
 }
 

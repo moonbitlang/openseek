@@ -108,6 +108,11 @@ export class CloudHarness {
       const contentType = path.endsWith('.js') ? 'text/javascript' : path.endsWith('.css') ? 'text/css' : path.endsWith('.html') ? 'text/html' : 'application/octet-stream';
       await route.fulfill({ contentType, body: await readFile(new URL(path, bundle)) });
     });
+    await this.page.route(url => url.origin === authOrigin && (url.pathname.startsWith('/device/') || url.pathname === '/cloud' || url.pathname.startsWith('/cloud/')), async route => {
+      if (!route.request().isNavigationRequest()) return route.continue();
+      const html = await readFile(new URL('index.html', bundle), 'utf8');
+      await route.fulfill({ contentType: 'text/html', body: html.replace('<head>', '<head><base href="/console/">') });
+    });
     // Intercept legacy requests too, so accidental downgrades fail locally.
     await this.page.route(`${authOrigin}/{v1,v2}/auth/**`, async route => {
       const request = route.request();
@@ -193,6 +198,7 @@ export class CloudHarness {
         return json({ id: sessionC }, 201);
       }
       if (this.listOffline) return route.abort('failed');
+      if (this.pauseList) await this.pauseList;
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
       return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id) })) }, status);

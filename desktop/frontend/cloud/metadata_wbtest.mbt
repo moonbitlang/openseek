@@ -169,6 +169,10 @@ test "archive and restore block sending until the owning PATCH completes" {
     mentions: [],
   }
   assert_true(initial.can_send("a"))
+  let unknown = { ..initial, sessions: [], }
+  assert_false(unknown.can_compose("a"))
+  assert_false(unknown.can_send("a"))
+  assert_true(metadata_update(unknown, Submit(owner, draft)) == unknown)
   let pending = metadata_update(
     initial,
     Edit(account="fixture", session="a", edit=Archive(true)),

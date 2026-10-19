@@ -6,8 +6,11 @@ pub(all) enum Target {
   ChatNew
   Session(String)
   ChatDraft(String)
-  CloudSession(account~ : String, session~ : String)
-  CloudDraft(account~ : String, id~ : String)
+  Cloud
+  // URL parsing leaves the account unresolved until authentication completes.
+  CloudSession(account~ : String?, session~ : String)
+  // A page-local composer entry; its ID is never a Cloud session ID.
+  CloudDraft(account~ : String?, id~ : String)
   Codex
   CodexNew
   Thread(String)
@@ -18,6 +21,12 @@ pub(all) enum Target {
   MarketSkill(String)
   Schedules
 } derive(Eq)
+
+///|
+/// Cloud destinations belong to the signed-in account, not to a device.
+pub fn Target::is_cloud(self : Target) -> Bool {
+  self is (Cloud | CloudSession(..) | CloudDraft(..))
+}
 
 ///|
 pub(all) struct Location {

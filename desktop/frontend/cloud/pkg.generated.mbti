@@ -153,6 +153,7 @@ pub(all) struct State {
   creation : Creation?
   notice : String?
 } derive(Eq)
+pub fn State::can_compose(Self, String) -> Bool
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool
 pub fn State::can_send(Self, String) -> Bool

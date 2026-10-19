@@ -56,8 +56,11 @@ fn promote_navigation(
 ) -> (@cmd.Cmd, Model) {
   let navigation = model.navigation
   (
-    if !model.is_desktop && navigation.browser_ready {
-      @navigation_browser.promote(old.path(), promoted.path())
+    if !model.is_desktop &&
+      navigation.browser_ready &&
+      old.path() is Some(old_path) &&
+      promoted.path() is Some(new_path) {
+      @navigation_browser.promote(old_path, new_path)
     } else {
       @cmd.none
     },

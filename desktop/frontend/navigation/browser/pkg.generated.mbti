@@ -7,17 +7,22 @@ import {
 }
 
 // Values
+pub fn forget_cloud(Array[String]) -> @cmd.Cmd
+
 pub fn listen(String, @cmd.Emit[Snapshot]) -> @sub.Sub
 
 pub fn promote(String, String) -> @cmd.Cmd
 
 pub fn visit(String, replace~ : Bool) -> @cmd.Cmd
 
+pub fn visit_settings(replace~ : Bool) -> @cmd.Cmd
+
 // Errors
 
 // Types and methods
-pub struct Snapshot {
+pub(all) struct Snapshot {
   path : String
+  settings : Bool
   can_back : Bool
   can_forward : Bool
 } derive(Eq)

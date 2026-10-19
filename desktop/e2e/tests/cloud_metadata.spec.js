@@ -88,6 +88,8 @@ for (const status of [401, 404]) {
     } else {
       expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
       await expect(cloud.row(sessionC)).toHaveCount(0);
+      await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
+      expect(creations(cloud)).toEqual([]);
     }
   });
 }

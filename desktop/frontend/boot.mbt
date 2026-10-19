@@ -571,9 +571,7 @@ fn main {
             emit.map(url => ExternalLinkClicked(url)),
           ),
         )
-        if !model.is_desktop &&
-          model.console.page_device is Some(_) &&
-          model.navigation_initial is Some(path) {
+        if !model.is_desktop && model.navigation_initial is Some(path) {
           subs.push(
             @navigation_browser.listen(
               path,

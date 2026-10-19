@@ -31,11 +31,36 @@ pub fn device(path : String) -> String? {
 /// Parse an application pathname, not a full URL. Reserved characters in
 /// identities must be percent-encoded; query and fragment belong to the caller.
 pub fn parse(path : String) -> Result[Location, RouteError] {
-  guard path.has_prefix("/device/") else { return Err(OutsideApplication) }
+  guard path.has_prefix("/device/") ||
+    path == "/cloud" ||
+    path.has_prefix("/cloud/") else {
+    return Err(OutsideApplication)
+  }
   guard !path
     .iter()
     .any(ch => ch == '\\' || ch == '?' || ch == '#' || ch.is_control()) else {
     return Err(InvalidRoute)
+  }
+  if path == "/cloud" {
+    return Ok({ device: None, target: Cloud, })
+  }
+  if path.has_prefix("/cloud/") {
+    let parts = path.split("/").collect()
+    return match parts {
+      ["", "cloud", "session", id] =>
+        match decode_segment(id) {
+          Some(session) =>
+            Ok({ device: None, target: CloudSession(account=None, session~), })
+          None => Err(InvalidRoute)
+        }
+      ["", "cloud", "draft", id] =>
+        match decode_segment(id) {
+          Some(id) =>
+            Ok({ device: None, target: CloudDraft(account=None, id~), })
+          None => Err(InvalidRoute)
+        }
+      _ => Err(InvalidRoute)
+    }
   }
   let parts : Array[String] = []
   for part in path.split("/").drop(2) {
@@ -61,12 +86,22 @@ pub fn parse(path : String) -> Result[Location, RouteError] {
     ["schedules"] => Schedules
     _ => return Err(InvalidRoute)
   }
-  Ok({ device, target, })
+  Ok({ device: Some(device), target, })
 }
 
 ///|
-pub fn Location::path(self : Location) -> String {
+/// Encode an application target; account identity never enters the URL.
+pub fn Location::path(self : Location) -> String? {
+  match self.target {
+    Cloud => return Some("/cloud")
+    CloudSession(session~, ..) =>
+      return Some("/cloud/session/" + @percent.encode(session))
+    CloudDraft(id~, ..) => return Some("/cloud/draft/" + @percent.encode(id))
+    _ => ()
+  }
+  guard self.device is Some(device) else { return None }
   let suffix = match self.target {
+    Cloud | CloudSession(..) | CloudDraft(..) => return None
     Chat => "chat"
     ChatNew => "chat/new"
     Session(id) => "chat/session/" + @percent.encode(id)
@@ -81,7 +116,7 @@ pub fn Location::path(self : Location) -> String {
     MarketSkill(source) => "skills/market/" + @percent.encode(source)
     Schedules => "schedules"
   }
-  "/device/" + @percent.encode(self.device) + "/" + suffix
+  Some("/device/" + @percent.encode(device) + "/" + suffix)
 }
 
 ///|

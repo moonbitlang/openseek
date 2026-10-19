@@ -5147,7 +5147,15 @@ fn update_msg(
     // backdrop: that second message must not drop the delete's own answer.
     CancelDeleteSession => (@cmd.none, { ..model, delete_confirm: None, })
     SessionRotated(owner) => {
-      guard model.cloud_identity() is None else { return (@cmd.none, model) }
+      guard model.cloud_identity() is None &&
+        (
+          model.navigation.new_chat_requested ||
+          !model.navigation.location.map_or(false, location => {
+            location.target.is_cloud()
+          })
+        ) else {
+        return (@cmd.none, model)
+      }
       // A delayed rotation is owned by the channel that requested it. A focus
       // switch overtakes it; activating the old owner's id here would yank the
       // user back to the host they already left.

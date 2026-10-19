@@ -98,8 +98,11 @@ fn observe_navigation(
     previous.cloud.user_id is Some(account) {
     Some(
       (
-        { device: None, target: CloudDraft(account~, id=creation.id), },
-        { device: None, target: CloudSession(account~, session~), },
+        {
+          device: None,
+          target: CloudDraft(account=Some(account), id=creation.id),
+        },
+        { device: None, target: CloudSession(account=Some(account), session~), },
       ),
     )
   } else if message is Codex(_, ..) &&

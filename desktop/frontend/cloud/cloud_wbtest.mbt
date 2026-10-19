@@ -66,9 +66,25 @@ test "Cloud list preserves nullable and long backend titles" {
 }
 
 ///|
+fn live_test_session() -> Session {
+  {
+    id: "session",
+    title: None,
+    updated_at: None,
+    generating: false,
+    archived: false,
+  }
+}
+
+///|
 test "Busy cannot allow another send before authoritative history recovers" {
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  let state = { ..State::empty(), user_id: Some("user"), epoch: 1, }
+  let state = {
+    ..State::empty(),
+    user_id: Some("user"),
+    epoch: 1,
+    sessions: [live_test_session()],
+  }
   let (opened, _, _) = update(
     state,
     Open("session"),
@@ -143,6 +159,7 @@ test "history recovery clears a send error only when the pending submission was 
         ..State::empty(),
         user_id: Some("user"),
         epoch: 1,
+        sessions: [live_test_session()],
         conversations: Map([
           (
             "session",
@@ -228,6 +245,7 @@ test "Cloud text previews stay response-scoped and terminal events fence late de
     ..State::empty(),
     user_id: Some("user"),
     epoch: 1,
+    sessions: [live_test_session()],
     conversations: Map([
       (
         "session",

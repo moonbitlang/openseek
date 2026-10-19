@@ -9,7 +9,16 @@ fn Model::host_selection(self : Model) -> ConversationSelection? {
 ///|
 fn Model::cloud_selected(self : Model) -> Bool {
   self.screen is Chat &&
-  (self.cloud_identity() is Some(_) || self.cloud_draft_identity() is Some(_))
+  (
+    self.cloud_identity() is Some(_) ||
+    self.cloud_draft_identity() is Some(_) ||
+    (
+      self.selected_conversation is None &&
+      self.navigation.location.map_or(false, location => {
+        location.target.is_cloud()
+      })
+    )
+  )
 }
 
 ///|
@@ -52,6 +61,9 @@ fn Model::cloud_archived(self : Model) -> Bool {
 
 ///|
 fn Model::cloud_title(self : Model) -> String {
+  if self.cloud_identity() is None && self.cloud_draft_identity() is None {
+    return @sidebar_messages.text(self.locale, Cloud)
+  }
   if self.selected_conversation is Some(CloudSelection(account~, session~)) &&
     self.cloud.user_id == Some(account) {
     for item in self.cloud.sessions {
@@ -128,21 +140,46 @@ fn update_cloud(
   } else {
     []
   }
+  let command = if model.navigation.browser_ready && !removed.is_empty() {
+    @cmd.batch([command, @navigation_browser.forget_cloud(removed)])
+  } else {
+    command
+  }
+  let deleted = message
+    is (@cloud.Deleted(_, _, _)
+    | @cloud.DeleteFailed(_, _, _, @cloud.Http(404)))
   let mut navigation = model.navigation
   if before.user_id is Some(account) {
     for session in removed {
       retirements.push(@interop.Cloud(account~, session~))
       let location : @routes.Location = {
         device: None,
-        target: CloudSession(account~, session~),
+        target: CloudSession(account=Some(account), session~),
       }
       let history = navigation.history.forget(location)
       navigation = {
         ..navigation,
         history,
-        can_back: history.can_back(),
-        can_forward: history.can_forward(),
-        location: navigation.location.filter(current => current != location),
+        can_back: if navigation.browser_ready {
+          navigation.can_back
+        } else {
+          history.can_back()
+        },
+        can_forward: if navigation.browser_ready {
+          navigation.can_forward
+        } else {
+          history.can_forward()
+        },
+        location: if deleted {
+          navigation.location.filter(current => current != location)
+        } else {
+          navigation.location
+        },
+        phase: if !deleted && navigation.location == Some(location) {
+          Missing
+        } else {
+          navigation.phase
+        },
       }
     }
   }
@@ -221,7 +258,8 @@ fn update_cloud(
       model.selected_conversation
     },
   }
-  if (removed_selection || archived_selection) && model.screen is Chat {
+  if ((deleted && removed_selection) || archived_selection) &&
+    model.screen is Chat {
     let next = {
       ..next,
       chat_navigation_generation: next.chat_navigation_generation + 1,
@@ -320,7 +358,8 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),
-      disabled: pending || self.cloud_archived(),
+      disabled: pending ||
+      (!creating && !self.cloud.can_compose(owner.session())),
       primary_action: @composer.Send(
         available=self.account is Some(_) &&
           (if creating {

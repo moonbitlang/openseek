@@ -164,15 +164,28 @@ restore the exact target while current application state continues to own
 content, unfinished input, running work and errors. Sending a draft for the
 first time replaces its identity in history with the durable conversation.
 
-Browser URLs use `/device/:device/...` paths. Browser controls and application
-arrows traverse the same history; refresh restores the current target and the
-known history segment in that tab. A tab remains bound to one device; links to
-another device open separately. Desktop history lasts for the window. Draft
-URLs identify in-memory drafts and do not promise recovery of unsaved content
-after refresh. An expired draft replaces its current history entry with the
-corresponding new-chat page and clears the old conversation selection. Confirmed
-missing stored targets and load failures retain their distinct unavailable
-states. Offline and connecting devices keep their connection UI.
+Browser URLs use `/device/:device/...` for host pages, `/cloud` for the Cloud
+landing page, and `/cloud/session/:id` for a durable Cloud conversation. Browser
+controls and application arrows share one history. Cloud URLs do not require a
+connected device; session access is checked using the signed-in account. Opening
+or refreshing `/cloud` never creates a session. Successful explicit creation
+navigates to the new session URL. Login preserves the requested destination.
+Missing sessions show an unavailable state; authorization and operational errors
+remain distinct and never create a replacement session. Direct links can display
+history before the session catalog arrives, but editing waits until the catalog
+confirms the session is live; archived sessions remain read only. Unsent drafts
+remain in memory. Device-less Settings covers the current URL in window history; refreshing
+restores that URL. Cross-device links open separately; traversing back from a
+refreshed Cloud document to a device page reloads its device binding.
+
+Refresh restores the current target and known browser history segment. Desktop
+history lasts for the window and retains each Cloud conversation's account
+identity. Draft URLs identify in-memory drafts and do not promise recovery of
+unsaved content after refresh. An expired draft replaces its current history
+entry with the corresponding new-chat page and clears the old conversation
+selection. Confirmed missing stored targets and load failures retain their
+distinct unavailable states. Offline and connecting devices keep their
+connection UI.
 
 `/device/:device/chat/new` and `/device/:device/codex/new` are stable blank
 entry pages. Clicking New chat uses the same flow as opening these URLs.

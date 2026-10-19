@@ -29,31 +29,65 @@ fn activate_navigation(
   }
   let model = { ..model, screen: navigation_screen(location.target), }
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
-  if location.target is CloudSession(account~, session~) {
-    guard model.account.map(account => account.user.user_id) == Some(account) &&
-      model.cloud.user_id == Some(account) &&
-      !model.cloud.retired.contains(session) else {
+  if location.target is Cloud {
+    return (
+      @cmd.none,
+      {
+        ..model,
+        selected_conversation: None,
+        loading_conversation: None,
+        api_setup_open: false,
+        sidebar_mode: @sidebar.ChatMode,
+        navigation: { ..model.navigation, phase: Active, },
+      },
+    )
+  }
+  if location.target is CloudSession(account=owner, session~) {
+    guard model.account is Some(account) &&
+      model.cloud.user_id == Some(account.user.user_id) else {
+      return (@cmd.none, { ..model, selected_conversation: None, })
+    }
+    let account = account.user.user_id
+    if (owner is Some(owner) && owner != account) ||
+      model.cloud.retired.contains(session) {
       return (
         @cmd.none,
-        { ..model, navigation: { ..model.navigation, phase: Missing, }, },
+        {
+          ..model,
+          selected_conversation: None,
+          navigation: { ..model.navigation, phase: Missing, },
+        },
       )
     }
+    let location = model.bind_cloud_location(location)
     let (command, next) = update_msg(
       dispatch,
       OpenCloudConversation(account~, session~),
-      model,
+      {
+        ..model,
+        navigation: { ..model.navigation, location: Some(location), },
+      },
     )
     return (
       command,
       { ..next, navigation: { ..next.navigation, phase: Active, }, },
     )
   }
-  if location.target is CloudDraft(account~, id~) {
-    guard model.cloud.draft_identity() ==
-      Some(@interop.Cloud(account~, session=id)) else {
+  if location.target is CloudDraft(account=owner, id~) {
+    guard model.account is Some(account) &&
+      model.cloud.user_id == Some(account.user.user_id) else {
+      return (@cmd.none, { ..model, selected_conversation: None, })
+    }
+    let account = account.user.user_id
+    guard (owner is None || owner == Some(account)) &&
+      model.cloud.draft_identity() == Some(@interop.Cloud(account~, session=id)) else {
       return (
         @cmd.none,
-        { ..model, navigation: { ..model.navigation, phase: Missing, }, },
+        {
+          ..model,
+          selected_conversation: None,
+          navigation: { ..model.navigation, phase: Missing, },
+        },
       )
     }
     return (
@@ -61,7 +95,11 @@ fn activate_navigation(
       {
         ..model,
         selected_conversation: Some(CloudDraftSelection(account~, id~)),
-        navigation: { ..model.navigation, phase: Active, },
+        navigation: {
+          ..model.navigation,
+          location: Some(model.bind_cloud_location(location)),
+          phase: Active,
+        },
       },
     )
   }
@@ -80,7 +118,8 @@ fn activate_navigation(
     return (@cmd.none, model)
   }
   let (command, next, phase) = match location.target {
-    CloudSession(..) | CloudDraft(..) | Settings => (@cmd.none, model, Active)
+    Cloud | CloudSession(..) | CloudDraft(..) | Settings =>
+      (@cmd.none, model, Active)
     Schedules => {
       let (cmd, next) = open_schedules(dispatch, model)
       (cmd, next, Active)

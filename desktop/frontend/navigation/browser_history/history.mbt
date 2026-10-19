@@ -3,6 +3,9 @@ priv struct Entry {
   key : String
   path : String
   original : String
+  // Device-less Settings covers the current addressable page until refresh.
+  settings : Bool
+  retired : Bool
 } derive(Eq)
 
 ///|
@@ -22,7 +25,7 @@ struct History {
 /// so the application can display its invalid-route state.
 fn canonical_path(path : String) -> String {
   match @routes.parse(path) {
-    Ok(location) => location.path()
+    Ok(location) => location.path().unwrap_or(path)
     Err(_) => path
   }
 }
@@ -39,19 +42,52 @@ pub fn History::History(
     device: @routes.device(path),
     group,
     previous: [],
-    current: { key, path, original, },
+    current: { key, path, original, settings: false, retired: false, },
     following: [],
   }
 }
 
 ///|
 pub fn History::owns(self : History, path : String) -> Bool {
-  self.device is Some(device) && @routes.device(path) == Some(device)
+  path == "/cloud" ||
+  path.has_prefix("/cloud/") ||
+  (self.device is Some(device) && @routes.device(path) == Some(device))
 }
 
 ///|
 pub fn History::path(self : History) -> String {
   self.current.path
+}
+
+///|
+pub fn History::settings(self : History) -> Bool {
+  self.current.settings
+}
+
+///|
+pub fn History::visit_settings(
+  self : History,
+  replace~ : Bool,
+  key~ : String,
+) -> History {
+  if self.current.settings {
+    self
+  } else if replace {
+    { ..self, current: { ..self.current, settings: true, retired: false, }, }
+  } else {
+    {
+      ..self,
+      previous: [..self.previous, self.current],
+      current: {
+        key,
+        path: self.current.path,
+        original: self.current.path,
+        settings: true,
+        retired: false,
+      },
+      following: [],
+    }
+  }
 }
 
 ///|
@@ -63,12 +99,12 @@ pub fn History::written(self : History) -> History {
 
 ///|
 pub fn History::can_back(self : History) -> Bool {
-  !self.previous.is_empty()
+  self.previous.any(entry => !entry.retired)
 }
 
 ///|
 pub fn History::can_forward(self : History) -> Bool {
-  !self.following.is_empty()
+  self.following.any(entry => !entry.retired)
 }
 
 ///|
@@ -115,7 +151,12 @@ pub fn History::restore(
     stored is { "entries": Array(items), .. } else {
     return None
   }
-  guard @routes.device(initial_path) is Some(device) else { return None }
+  let mut device = @routes.device(initial_path)
+  if device is None &&
+    initial_path != "/cloud" &&
+    !initial_path.has_prefix("/cloud/") {
+    return None
+  }
   let entries : Array[Entry] = []
   for item in items {
     guard item
@@ -124,14 +165,28 @@ pub fn History::restore(
         "path": String(path),
         "original": String(original),
         ..
-      } &&
-      @routes.device(path) == Some(device) &&
-      @routes.device(original) == Some(device) else {
+      } else {
       return None
     }
-    entries.push({ key, path: canonical_path(path), original, })
+    for candidate in [path, original] {
+      if @routes.device(candidate) is Some(owner) {
+        if device is Some(existing) && existing != owner {
+          return None
+        }
+        device = Some(owner)
+      } else if candidate != "/cloud" && !candidate.has_prefix("/cloud/") {
+        return None
+      }
+    }
+    entries.push({
+      key,
+      path: canonical_path(path),
+      original,
+      settings: false,
+      retired: false,
+    })
   }
-  select_entry(Some(device), group, entries, key, pathname)
+  select_entry(device, group, entries, key, pathname)
 }
 
 ///|
@@ -188,15 +243,24 @@ pub fn History::visit(
 ) -> History? {
   let path = canonical_path(path)
   guard self.owns(path) else { return None }
-  if path == self.current.path {
+  if path == self.current.path && !self.current.settings {
     Some(self)
   } else if replace {
-    Some({ ..self, current: { ..self.current, path, original: path, }, })
+    Some({
+      ..self,
+      current: {
+        ..self.current,
+        path,
+        original: path,
+        settings: false,
+        retired: false,
+      },
+    })
   } else {
     Some({
       ..self,
       previous: [..self.previous, self.current],
-      current: { key, path, original: path, },
+      current: { key, path, original: path, settings: false, retired: false, },
       following: [],
     })
   }
@@ -228,3 +292,55 @@ pub fn History::promote(
 
 ///|
 pub extend History with Eq::{equal, not_equal}
+
+///|
+/// Keep retired positions to recognize physical browser entries, but exclude
+/// them from reachable destinations. Retirement is window-local; a refresh
+/// resolves the URL again against the authenticated service.
+pub fn History::forget_cloud(
+  self : History,
+  sessions : Array[String],
+) -> History {
+  let retire = (entry : Entry) => {
+    if @routes.parse(entry.path)
+      is Ok({ target: CloudSession(session~, ..), .. }) &&
+      sessions.contains(session) &&
+      !entry.settings {
+      { ..entry, retired: true, }
+    } else {
+      entry
+    }
+  }
+  {
+    ..self,
+    previous: self.previous.map(retire),
+    current: retire(self.current),
+    following: self.following.map(retire),
+  }
+}
+
+///|
+pub fn History::retired(self : History) -> Bool {
+  self.current.retired
+}
+
+///|
+/// When popstate lands on a retired entry, continue in the same direction.
+/// If the known segment ends there, return toward the last live destination.
+/// The offset is relative to the physical entry selected by popstate.
+pub fn History::skip_retired(self : History, from : History) -> Int32 {
+  guard self.current.retired else { return 0 }
+  let entries = [..self.previous, self.current, ..self.following]
+  let current = self.previous.length()
+  let direction = if current < from.previous.length() { -1 } else { 1 }
+  for step in [direction, -direction] {
+    let mut index = current + step
+    while index >= 0 && index < entries.length() {
+      if !entries[index].retired {
+        return index - current
+      }
+      index = index + step
+    }
+  }
+  0
+}

@@ -45,11 +45,13 @@ extern "js" fn storage_set(key : String, value : String) -> Unit =
 /// history data and transitions are owned by those closures' MoonBit state.
 extern "js" fn install_handlers(
   visit : (String, Bool) -> Unit,
+  visit_settings : (Bool) -> Unit,
   promote : (String, String) -> Unit,
+  forget_cloud : (FixedArray[String]) -> Unit,
   pop : () -> Unit,
 ) -> @js.Value =
-  #|(visit, promote, pop) => {
-  #|  const handle = { visit, promote, pop };
+  #|(visit, visit_settings, promote, forget_cloud, pop) => {
+  #|  const handle = { visit, visit_settings, promote, forget_cloud, pop };
   #|  window.__seekmoonApplicationHistory = handle;
   #|  window.addEventListener('popstate', pop);
   #|  return handle;
@@ -67,5 +69,17 @@ extern "js" fn visit_raw(path : String, replace : Bool) -> Unit =
   #|(path, replace) => window.__seekmoonApplicationHistory.visit(path, replace)
 
 ///|
+extern "js" fn visit_settings_raw(replace : Bool) -> Unit =
+  #|replace => window.__seekmoonApplicationHistory.visit_settings(replace)
+
+///|
 extern "js" fn promote_raw(old_path : String, new_path : String) -> Unit =
   #|(oldPath, newPath) => window.__seekmoonApplicationHistory.promote(oldPath, newPath)
+
+///|
+extern "js" fn forget_cloud_raw(sessions : FixedArray[String]) -> Unit =
+  #|sessions => window.__seekmoonApplicationHistory.forget_cloud(sessions)
+
+///|
+extern "js" fn go(offset : Int32) -> Unit =
+  #|offset => history.go(offset)

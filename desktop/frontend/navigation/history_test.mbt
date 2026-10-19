@@ -42,7 +42,7 @@ test "draft promotion preserves history position" {
 test "forgetting a conversation removes every reference without selecting another" {
   let deleted : @routes.Location = {
     device: None,
-    target: CloudSession(account="a", session="gone"),
+    target: CloudSession(account=Some("a"), session="gone"),
   }
   let kept : @routes.Location = { device: None, target: Settings, }
   let history = @navigation.History::empty()

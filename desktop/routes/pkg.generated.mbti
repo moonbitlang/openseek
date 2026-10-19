@@ -10,12 +10,12 @@ pub fn parse(String) -> Result[Location, RouteError]
 
 // Types and methods
 pub(all) struct Location {
-  device : String
+  device : String?
   target : Target
 } derive(Eq)
 pub fn Location::equal(Self, Self) -> Bool
 pub fn Location::not_equal(Self, Self) -> Bool
-pub fn Location::path(Self) -> String
+pub fn Location::path(Self) -> String?
 
 pub(all) enum RouteError {
   OutsideApplication
@@ -29,6 +29,9 @@ pub(all) enum Target {
   ChatNew
   Session(String)
   ChatDraft(String)
+  Cloud
+  CloudSession(account~ : String?, session~ : String)
+  CloudDraft(account~ : String?, id~ : String)
   Codex
   CodexNew
   Thread(String)
@@ -40,6 +43,7 @@ pub(all) enum Target {
   Schedules
 } derive(Eq)
 pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::is_cloud(Self) -> Bool
 pub fn Target::not_equal(Self, Self) -> Bool
 
 // Type aliases

@@ -50,6 +50,7 @@ priv enum ChatColumn {
   LoadFailed(message~ : String, retry~ : Bool)
   Loading
   Onboarding
+  CloudHome
   Transcript(slot~ : TranscriptSlot, conversation~ : Conversation)
   CloudTranscript(slot~ : TranscriptSlot)
 }
@@ -74,6 +75,9 @@ fn Model::chat_column(self : Model) -> ChatColumn {
       return LoadFailed(message~, retry=true)
     }
     return CloudTranscript(slot=CloudTranscriptSlot(owner))
+  }
+  if self.cloud_selected() {
+    return CloudHome
   }
   if self.conversation_load_failure is Some(failure) &&
     self.host_selection() is Some(selected) &&
@@ -112,7 +116,7 @@ fn Model::transcript_slot(self : Model) -> TranscriptSlot? {
     Chat =>
       match self.chat_column() {
         Transcript(slot~, ..) | CloudTranscript(slot~) => Some(slot)
-        LoadFailed(..) | Loading | Onboarding => None
+        LoadFailed(..) | Loading | Onboarding | CloudHome => None
       }
     Skills | Schedules | Settings => None
   }

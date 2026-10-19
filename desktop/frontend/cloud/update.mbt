@@ -180,9 +180,15 @@ pub fn State::is_archived(self : State, id : String) -> Bool {
 }
 
 ///|
+/// Direct links can load history before the catalog confirms editability.
+pub fn State::can_compose(self : State, id : String) -> Bool {
+  self.sessions.any(session => session.id == id && !session.archived)
+}
+
+///|
 pub fn State::can_send(self : State, id : String) -> Bool {
   self.conversations.get(id) is Some(conversation) &&
-  !self.is_archived(id) &&
+  self.can_compose(id) &&
   !self.deletions.contains(id) &&
   !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
   !conversation.loading &&

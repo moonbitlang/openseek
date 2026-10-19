@@ -5,7 +5,7 @@ fn navigation_visit(
   replace~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   let navigation = model.navigation
-  let history = if model.is_desktop {
+  let history = if model.is_desktop || !navigation.browser_ready {
     navigation.history.visit(location, replace~)
   } else {
     navigation.history
@@ -22,12 +22,12 @@ fn navigation_visit(
       location: Some(location),
       phase: Active,
       history,
-      can_back: if model.is_desktop {
+      can_back: if model.is_desktop || !navigation.browser_ready {
         history.can_back()
       } else {
         navigation.can_back
       },
-      can_forward: if model.is_desktop {
+      can_forward: if model.is_desktop || !navigation.browser_ready {
         history.can_forward()
       } else {
         navigation.can_forward
@@ -42,7 +42,13 @@ fn navigation_visit(
   }
   (
     if !model.is_desktop && navigation.browser_ready {
-      @navigation_browser.visit(location.path(), replace~)
+      if location.path() is Some(path) {
+        @navigation_browser.visit(path, replace~)
+      } else if location.target is Settings {
+        @navigation_browser.visit_settings(replace~)
+      } else {
+        @cmd.none
+      }
     } else {
       @cmd.none
     },
@@ -110,7 +116,7 @@ fn update_navigation(
         model.navigation.can_forward
       }
       guard allowed else { return (@cmd.none, model) }
-      if !model.is_desktop {
+      if !model.is_desktop && model.navigation.browser_ready {
         return (
           if message is Back {
             @nav.back()

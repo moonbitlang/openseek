@@ -87,7 +87,7 @@ test('delete 404 converges as already removed without signing out', async ({ pag
   expect(await page.evaluate(() => localStorage.getItem('seekmoon.account.v1'))).toContain('ts_fixture-123');
 });
 
-test('history 404 retires an externally removed conversation', async ({ page }) => {
+test('history 404 retires an externally removed conversation without creating a replacement', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await cloud.goto();
@@ -95,6 +95,9 @@ test('history 404 retires an externally removed conversation', async ({ page }) 
   await cloud.row(sessionB).click();
   await expect(cloud.row(sessionB)).toHaveCount(0);
   await expect(cloud.row(sessionC)).toHaveCount(0);
+  await expect(page.locator('.navigation-notice')).toContainText('no longer exists');
+  await expect(page).toHaveURL(`${authOrigin}/cloud/session/${sessionB}`);
+  expect(cloud.requests.filter(request => request.path === '/v1/sessions' && request.method === 'POST')).toHaveLength(0);
 });
 
 test('a history response captured before deletion cannot restore its row or content', async ({ page }) => {
@@ -175,5 +178,26 @@ test('busy Cloud menus retain rename while deletion stays disabled with normal d
   await expect(action).toBeDisabled();
   await page.locator('main').click({ position: { x: 400, y: 100 } });
   await expect(popup).toHaveCount(0);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('device browser traversal skips deleted Cloud destinations', async ({ page }) => {
+  const cloud = new CloudHarness(page);
+  await cloud.install(); await cloud.goto();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const heading = page.locator('main > .topbar h1');
+  await cloud.open(sessionA); await cloud.open(sessionB);
+  await askDelete(page, cloud, sessionA);
+  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await expect(cloud.row(sessionA)).toHaveCount(0);
+  await page.goBack(); await expect(heading).toHaveText('Settings');
+  await page.goForward(); await expect(heading).toHaveText('Cloud fixture B');
+  await askDelete(page, cloud, sessionB);
+  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(heading).toHaveText('Settings');
+  await page.getByRole('button', { name: 'Forward', exact: true }).click();
+  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
   expect(cloud.device.pageErrors).toEqual([]);
 });

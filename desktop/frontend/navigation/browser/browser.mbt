@@ -1,6 +1,7 @@
 ///|
-pub struct Snapshot {
+pub(all) struct Snapshot {
   path : String
+  settings : Bool
   can_back : Bool
   can_forward : Bool
 } derive(Eq)
@@ -26,8 +27,8 @@ fn loader(payload : Error, scheduler : &@cmd.Scheduler) -> @sub.RunningSub? {
     return None
   }
   let mut emit = original_emit
-  let handle = install(initial_path, (path, can_back, can_forward) => {
-    scheduler.add(emit({ path, can_back, can_forward, }))
+  let handle = install(initial_path, (path, settings, can_back, can_forward) => {
+    scheduler.add(emit({ path, settings, can_back, can_forward, }))
   })
   Some({
     unload: _ => dispose(handle),
@@ -42,6 +43,11 @@ fn loader(payload : Error, scheduler : &@cmd.Scheduler) -> @sub.RunningSub? {
 ///|
 pub fn visit(path : String, replace~ : Bool) -> @cmd.Cmd {
   @cmd.custom_cmd(_ => visit_raw(path, replace))
+}
+
+///|
+pub fn visit_settings(replace~ : Bool) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => visit_settings_raw(replace))
 }
 
 ///|
@@ -94,7 +100,7 @@ fn write_entry(
 /// transitions and persisted-data validation are pure MoonBit operations.
 fn install(
   initial_path : String,
-  emit : (String, Bool, Bool) -> Unit,
+  emit : (String, Bool, Bool, Bool) -> Unit,
 ) -> @js.Value {
   let marker = read_marker()
   let stored = @browser_history.storage_group(marker).map(read_stored)
@@ -107,11 +113,16 @@ fn install(
   history = write_entry(history, history.path() + search(), replace=true)
   persist(history)
   let report = () => {
-    emit(history.path() + search(), history.can_back(), history.can_forward())
+    emit(
+      history.path() + search(),
+      history.settings(),
+      history.can_back(),
+      history.can_forward(),
+    )
   }
   let handle = install_handlers(
     (path, replace) => {
-      if path == history.path() {
+      if path == history.path() && !history.settings() {
         report()
         return
       }
@@ -120,6 +131,14 @@ fn install(
       }
       history = write_entry(next, path, replace~)
       persist(history)
+      report()
+    },
+    replace => {
+      let next = history.visit_settings(replace~, key=random_id())
+      if next != history {
+        history = write_entry(next, next.path() + search(), replace~)
+        persist(history)
+      }
       report()
     },
     (old_path, new_path) => {
@@ -131,6 +150,12 @@ fn install(
       persist(history)
       report()
     },
+    sessions => {
+      history = history.forget_cloud(Array::from_fixed_array(sessions))
+      if !history.retired() {
+        report()
+      }
+    },
     () => {
       let path = pathname()
       if !history.owns(path) {
@@ -138,9 +163,15 @@ fn install(
         return
       }
       let selected = history.select(path, read_marker())
-      history = selected.unwrap_or_else(() => {
+      let next = selected.unwrap_or_else(() => {
         @browser_history.History(path, group=random_id(), key=random_id())
       })
+      let offset = next.skip_retired(history)
+      history = next
+      if offset != 0 {
+        go(offset)
+        return
+      }
       history = write_entry(history, history.path() + search(), replace=true)
       persist(history)
       report()
@@ -152,3 +183,8 @@ fn install(
 
 ///|
 pub extend Snapshot with Eq::{equal, not_equal}
+
+///|
+pub fn forget_cloud(sessions : Array[String]) -> @cmd.Cmd {
+  @cmd.custom_cmd(_ => forget_cloud_raw(FixedArray::from_array(sessions[:])))
+}

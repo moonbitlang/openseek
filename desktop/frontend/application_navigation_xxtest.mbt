@@ -17,6 +17,25 @@ test "global navigation preserves the visit sequence and is pure" {
   assert_true(forward.screen is Settings)
   let (_, branch) = update(dispatch, OpenSchedules, forward)
   assert_true(!branch.navigation.can_forward)
+  let (_, home) = apply_browser_navigation(
+    dispatch,
+    { path: "/cloud", settings: false, can_back: false, can_forward: false, },
+    initial,
+  )
+  let (_, rotated) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-test", }),
+    home,
+  )
+  assert_true(rotated.cloud_selected() && rotated.cloud_identity() is None)
+  assert_true(rotated.selected_conversation is None)
+  let (_, rotated_again) = update(
+    dispatch,
+    SessionRotated({ channel: Local, session: "desktop-test", }),
+    home,
+  )
+  assert_true(rotated.navigation == rotated_again.navigation)
+  assert_true(home.selected_conversation is None)
 }
 
 ///|
@@ -305,10 +324,7 @@ test "expired draft replaces its entry with a fresh new page" {
 
 ///|
 test "navigation write policy distinguishes foreground visits and background identity updates" {
-  let location : @routes.Location = {
-    device: Some("local"),
-    target: Settings,
-  }
+  let location : @routes.Location = { device: Some("local"), target: Settings, }
   let observed : NavigationObservation = {
     location: Some(location),
     user_visit: false,
