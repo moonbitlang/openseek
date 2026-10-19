@@ -8,6 +8,7 @@ priv enum DynamicMessage {
   DConnecting(String)
   DRestartQuestion(String)
   DDeleteConversation(String)
+  DDeleteCloudConversation(String)
   DDeleteWorktreeConversation(String, String)
   DDeleteDirtyWorktreeConversation(String, String, String)
 }
@@ -64,6 +65,16 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (TraditionalChinese, DRestartQuestion(p0)) => "重啟至 \{p0}？"
     (Japanese, DRestartQuestion(p0)) =>
       "再起動して \{p0} に更新しますか？"
+    (English, DDeleteCloudConversation(p0)) =>
+      "“\{p0}” will be permanently deleted. This cannot be undone. Published shares will remain."
+    (Spanish, DDeleteCloudConversation(p0)) =>
+      "«\{p0}» se eliminará de forma permanente. Esta acción no se puede deshacer. Se conservarán los enlaces compartidos publicados."
+    (SimplifiedChinese, DDeleteCloudConversation(p0)) =>
+      "“\{p0}”将被永久删除，且无法撤销。已发布的分享将被保留。"
+    (TraditionalChinese, DDeleteCloudConversation(p0)) =>
+      "“\{p0}”將被永久刪除，且無法復原。已發布的分享將被保留。"
+    (Japanese, DDeleteCloudConversation(p0)) =>
+      "「\{p0}」は完全に削除され、元に戻せません。公開済みの共有は保持されます。"
     (English, DDeleteConversation(p0)) =>
       "“\{p0}” and all of its subagent history will be permanently deleted. This cannot be undone. Project files and Git branches will remain."
     (Spanish, DDeleteConversation(p0)) =>

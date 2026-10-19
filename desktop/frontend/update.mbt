@@ -2236,9 +2236,32 @@ fn update_msg(
         model,
       )
     }
+    DeleteCloudSession(account~, session~) => {
+      guard model.cloud.user_id == Some(account) &&
+        model.cloud.can_delete(session) &&
+        model.cloud.sessions.iter().find_first(item => item.id == session)
+        is Some(item) else {
+        return (@cmd.none, model)
+      }
+      (
+        @cmd.none,
+        {
+          ..model,
+          delete_confirm: Some(
+            CloudDelete(
+              account~,
+              session~,
+              title=item.title.unwrap_or(shell_text(model.locale, NewChatLabel)),
+            ),
+          ),
+          delete_pending: None,
+        },
+      )
+    }
     CloudAction(message) => update_cloud(dispatch, message, model)
     OpenCloudConversation(account~, session~) => {
-      guard model.cloud.user_id == Some(account) else {
+      guard model.cloud.user_id == Some(account) &&
+        !model.cloud.retired.contains(session) else {
         return (@cmd.none, model)
       }
       update_cloud(dispatch, @cloud.Open(session), {
@@ -5069,7 +5092,16 @@ fn update_msg(
     CancelArchiveDiscard => (@cmd.none, { ..model, archive_confirm: None, })
     ConfirmDeleteSession =>
       match model.delete_confirm {
-        Some(confirm) => {
+        Some(CloudDelete(account~, session~, ..)) => {
+          guard model.cloud.user_id == Some(account) else {
+            return (@cmd.none, { ..model, delete_confirm: None, })
+          }
+          update_cloud(dispatch, @cloud.Delete(session), {
+            ..model,
+            delete_confirm: None,
+          })
+        }
+        Some(HostDelete(confirm)) => {
           guard model.device_state(confirm.channel) is Some(dev) else {
             return (@cmd.none, { ..model, delete_confirm: None, })
           }
@@ -5431,12 +5463,14 @@ fn update_msg(
         @cmd.none,
         {
           ..model,
-          delete_confirm: Some({
-            channel,
-            key,
-            title: session_item_label(item),
-            target: ArchivedChat(sessions~),
-          }),
+          delete_confirm: Some(
+            HostDelete({
+              channel,
+              key,
+              title: session_item_label(item),
+              target: ArchivedChat(sessions~),
+            }),
+          ),
           delete_pending: None,
         },
       )
@@ -8070,12 +8104,14 @@ fn update_device_msg(
         @cmd.none,
         {
           ..model,
-          delete_confirm: Some({
-            channel,
-            key,
-            title: session_item_label(item),
-            target: LiveChat(checkout~),
-          }),
+          delete_confirm: Some(
+            HostDelete({
+              channel,
+              key,
+              title: session_item_label(item),
+              target: LiveChat(checkout~),
+            }),
+          ),
           delete_pending: None,
         },
       )
@@ -8321,8 +8357,8 @@ fn update_device_msg(
           conv.project() != key.workspace
         })
         let confirm = match changed.delete_confirm {
-          Some(confirm) if confirm.channel == channel && confirm.key == key =>
-            None
+          Some(HostDelete(confirm)) if confirm.channel == channel &&
+            confirm.key == key => None
           other => other
         }
         let next = changed
@@ -17401,7 +17437,7 @@ test "archived deletion confirmation owns one visible conversation family" {
     ),
     model,
   )
-  guard staged.delete_confirm is Some(confirm) else {
+  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(
@@ -17479,7 +17515,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=Some(clean)),
     asked,
   )
-  guard staged.delete_confirm is Some(confirm) else {
+  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
     fail("the host's answer staged no confirmation")
   }
   assert_true(confirm.key == key)
@@ -17501,7 +17537,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key~, checkout=Some(dirty)),
     bubbled,
   )
-  guard refused.delete_confirm is Some(again) else {
+  guard refused.delete_confirm is Some(HostDelete(again)) else {
     fail("a refused delete staged no second confirmation")
   }
   assert_true(again.target == LiveChat(checkout=Some(dirty)))
@@ -17526,7 +17562,7 @@ test "deleting a live chat asks the host first and confirms what it reported" {
     DeleteChecked(key=other, checkout=None),
     late,
   )
-  guard current.delete_confirm is Some(latest) else {
+  guard current.delete_confirm is Some(HostDelete(latest)) else {
     fail("the latest question staged no confirmation")
   }
   assert_true(latest.key == other)
@@ -17659,7 +17695,7 @@ test "archived deletion keeps same-id rows in other stores" {
     DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
     model,
   )
-  guard staged.delete_confirm is Some(confirm) else {
+  guard staged.delete_confirm is Some(HostDelete(confirm)) else {
     fail("delete confirmation was not staged")
   }
   assert_true(confirm.key == key)

@@ -14,6 +14,7 @@ priv enum UiMessage {
   DeletePermanently
   DeleteUnavailable
   StopBeforeDelete
+  FinishBeforeDelete
   LoadingConversation
   ConversationLoadFailed
   RunningLabel
@@ -93,6 +94,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "此對話來源不支援永久刪除"
     (Japanese, DeleteUnavailable) =>
       "このチャットのソースは完全削除に対応していません"
+    (English, FinishBeforeDelete) =>
+      "Wait for this conversation to finish before deleting it"
+    (Spanish, FinishBeforeDelete) =>
+      "Espera a que termine esta conversación antes de eliminarla"
+    (SimplifiedChinese, FinishBeforeDelete) =>
+      "等待此对话结束后才能删除"
+    (TraditionalChinese, FinishBeforeDelete) =>
+      "等待此對話結束後才能刪除"
+    (Japanese, FinishBeforeDelete) =>
+      "この会話が終了してから削除してください"
     (English, StopBeforeDelete) => "Stop this conversation before deleting it"
     (Spanish, StopBeforeDelete) =>
       "Detén esta conversación antes de eliminarla"

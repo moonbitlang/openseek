@@ -1976,17 +1976,27 @@ fn conversation_load_failed_view(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   message : String,
+  retry~ : Bool = true,
 ) -> @html.Html {
-  @html.div(class="conversation-load-state failed", [
-    @html.strong(shell_text(locale, CannotLoadConversation)),
-    @html.span(class="conversation-load-state-message", message),
-    @html.button(
-      class="button secondary",
-      type_="button",
-      on_click=dispatch(RetrySelectedConversation),
-      shell_text(locale, RetryLabel),
-    ),
-  ])
+  @html.div(
+    class="conversation-load-state failed",
+    [
+      @html.strong(shell_text(locale, CannotLoadConversation)),
+      @html.span(class="conversation-load-state-message", message),
+      ..if retry {
+        [
+          @html.button(
+            class="button secondary",
+            type_="button",
+            on_click=dispatch(RetrySelectedConversation),
+            shell_text(locale, RetryLabel),
+          ),
+        ]
+      } else {
+        []
+      },
+    ],
+  )
 }
 
 ///|
@@ -2085,12 +2095,13 @@ fn view(
       } else {
         match model.chat_column() {
           CloudTranscript(..) => [transcript_html, composer_html]
-          LoadFailed(message~) =>
+          LoadFailed(message~, retry~) =>
             [
               conversation_load_failed_view(
                 locale=model.locale,
                 dispatch,
                 message,
+                retry~,
               ),
             ]
           Loading => [conversation_loading_view(locale=model.locale)]
@@ -2319,7 +2330,9 @@ fn view(
     )
   }
   if model.delete_confirm is Some(confirm) {
-    children.push(delete_modal(locale=model.locale, dispatch, confirm))
+    children.push(
+      delete_modal(locale=model.locale, dispatch, confirm, model.cloud),
+    )
   }
   // Rendered whether or not the palette is open — closed it is an empty
   // placeholder — so opening it never shifts the overlay children around it.
@@ -2643,7 +2656,7 @@ fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
     activation: self.cloud_identity().map(owner => owner.session()),
     action: Some({
       title: @sidebar_messages.text(self.locale, NewChat),
-      disabled: self.cloud.creation is Some(_),
+      disabled: self.cloud.creation is Some({ failure: None, .. }),
     }),
     entries,
   }

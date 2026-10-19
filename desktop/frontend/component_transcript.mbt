@@ -47,7 +47,7 @@ fn Model::is_console_gated(self : Model) -> Bool {
 /// and the transcript component's lifetime follows it, so the fork is decided
 /// once.
 priv enum ChatColumn {
-  LoadFailed(message~ : String)
+  LoadFailed(message~ : String, retry~ : Bool)
   Loading
   Onboarding
   Transcript(slot~ : TranscriptSlot, conversation~ : Conversation)
@@ -57,12 +57,15 @@ priv enum ChatColumn {
 ///|
 fn Model::chat_column(self : Model) -> ChatColumn {
   if self.cloud.creating_at(self.chat_navigation_generation) {
+    if self.cloud.creation is Some({ failure: Some(message), .. }) {
+      return LoadFailed(message~, retry=false)
+    }
     return Loading
   }
   if self.cloud_identity() is Some(owner) {
     guard self.cloud_conversation() is Some(conversation) else {
       return if self.cloud.notice is Some(message) {
-        LoadFailed(message~)
+        LoadFailed(message~, retry=true)
       } else {
         Loading
       }
@@ -71,14 +74,14 @@ fn Model::chat_column(self : Model) -> ChatColumn {
       return Loading
     }
     if conversation.history_required && conversation.notice is Some(message) {
-      return LoadFailed(message~)
+      return LoadFailed(message~, retry=true)
     }
     return CloudTranscript(slot=CloudTranscriptSlot(owner))
   }
   if self.conversation_load_failure is Some(failure) &&
     self.host_selection() is Some(selected) &&
     selected == failure.target {
-    return LoadFailed(message=failure.message)
+    return LoadFailed(message=failure.message, retry=true)
   }
   if !self.selected_conversation_loaded() {
     return Loading

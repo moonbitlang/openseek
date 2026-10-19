@@ -31,7 +31,8 @@ fn activate_navigation(
   guard model.navigation.phase is Waiting else { return (@cmd.none, model) }
   if location.target is CloudSession(account~, session~) {
     guard model.account.map(account => account.user.user_id) == Some(account) &&
-      model.cloud.user_id == Some(account) else {
+      model.cloud.user_id == Some(account) &&
+      !model.cloud.retired.contains(session) else {
       return (
         @cmd.none,
         { ..model, navigation: { ..model.navigation, phase: Missing, }, },

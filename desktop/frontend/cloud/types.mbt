@@ -80,6 +80,7 @@ fn Conversation::empty() -> Conversation {
 pub struct Creation {
   request : Int32
   navigation : Int32
+  failure : String?
 } derive(Eq)
 
 ///|
@@ -91,6 +92,8 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int32
   list_request : Int32
+  deletions : Map[String, Int32]
+  retired : Array[String]
   creation : Creation?
   notice : String?
 } derive(Eq)
@@ -105,6 +108,8 @@ pub fn State::empty() -> State {
     conversations: Map([]),
     sequence: 0,
     list_request: 0,
+    deletions: {},
+    retired: [],
     creation: None,
     notice: None,
   }
@@ -144,6 +149,9 @@ pub(all) enum Msg {
   Refresh
   Create
   Open(String)
+  Delete(String)
+  Deleted(Int32, String, Int32)
+  DeleteFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
   Listed(Int32, Int32, Array[Session])
   ListFailed(Int32, Int32, Failure)

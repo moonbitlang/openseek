@@ -37,3 +37,23 @@ test "draft promotion preserves history position" {
   assert_true(promoted.back().current() == Some(thread))
   assert_true(!promoted.back().can_back())
 }
+
+///|
+test "forgetting a conversation removes every reference without selecting another" {
+  let deleted : @navigation.Location = {
+    device: None,
+    target: CloudSession(account="a", session="gone"),
+  }
+  let kept : @navigation.Location = { device: None, target: Settings, }
+  let history = @navigation.History::empty()
+    .visit(deleted, replace=false)
+    .visit(kept, replace=false)
+    .visit(deleted, replace=false)
+    .back()
+  let removed = history.forget(deleted)
+  assert_true(removed.current() == Some(kept))
+  assert_false(removed.can_back())
+  assert_false(removed.can_forward())
+  let removed = history.forget(kept)
+  assert_true(removed.current() is None)
+}

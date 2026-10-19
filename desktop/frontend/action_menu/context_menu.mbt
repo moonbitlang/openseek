@@ -477,8 +477,13 @@ pub fn context_component(
     subscriptions=(state, input, emit) => {
       let requests = context_menu_subscription(emit)
       guard state.open_context is Some(open) else { return requests }
-      let enabled = context_definition(input, open.request, actions).map(definition => {
-        definition.enabled_indices()
+      let enabled = context_definition(input, open.request, actions).bind(definition => {
+        let enabled = definition.enabled_indices()
+        if enabled.is_empty() {
+          None
+        } else {
+          Some(enabled)
+        }
       })
       let focus = focus_subscription(
         GlobalContextTarget,

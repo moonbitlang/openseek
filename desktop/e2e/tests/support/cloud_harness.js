@@ -27,6 +27,9 @@ export class CloudHarness {
     this.createStatus = 201;
     this.sendStatus = 200;
     this.shareStatus = 200;
+    this.deleteStatus = 204;
+    this.deleteOffline = false;
+    this.pauseDelete = null;
     this.disconnectShare = false;
     this.logoutStatus = 204;
     this.apiOffline = false;
@@ -39,6 +42,7 @@ export class CloudHarness {
     this.pauseHistory = null;
     this.pauseStream = null;
     this.sessionIds = [sessionA, sessionB];
+    this.generating = new Set();
     this.histories = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -172,7 +176,7 @@ export class CloudHarness {
   async cloudRequest(route) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
@@ -187,7 +191,16 @@ export class CloudHarness {
       if (this.listOffline) return route.abort('failed');
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: false })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id) })) }, status);
+    }
+    if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
+      if (this.pauseDelete) await this.pauseDelete;
+      if (this.deleteOffline) return route.abort('failed');
+      if (![204, 404].includes(this.deleteStatus)) return json({}, this.deleteStatus);
+      const session = decodeURIComponent(path.split('/').pop());
+      this.sessionIds = this.sessionIds.filter(id => id !== session);
+      this.histories.delete(session);
+      return route.fulfill({ status: this.deleteStatus, headers });
     }
     if (/^\/v1\/sessions\/[^/]+\/share$/.test(path)) {
       const body = request.postDataJSON();

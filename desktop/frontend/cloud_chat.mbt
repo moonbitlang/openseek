@@ -93,16 +93,58 @@ fn update_cloud(
       retirements.push(@interop.Cloud(account~, session~))
     }
   }
+  let removed = if before.user_id == cloud.user_id {
+    cloud.retired.filter(id => !before.retired.contains(id))
+  } else {
+    []
+  }
+  let mut navigation = model.navigation
+  if before.user_id is Some(account) {
+    for session in removed {
+      retirements.push(@interop.Cloud(account~, session~))
+      let location : @navigation.Location = {
+        device: None,
+        target: CloudSession(account~, session~),
+      }
+      let history = navigation.history.forget(location)
+      navigation = {
+        ..navigation,
+        history,
+        can_back: history.can_back(),
+        can_forward: history.can_forward(),
+        location: navigation.location.filter(current => current != location),
+      }
+    }
+  }
+  let removed_selection = model.cloud_identity()
+    is Some(@interop.Cloud(session~, ..)) &&
+    removed.contains(session)
   let next = {
     ..model,
     cloud,
+    navigation,
+    delete_confirm: match model.delete_confirm {
+      Some(CloudDelete(account~, session~, ..)) if cloud.user_id !=
+        Some(account) ||
+        cloud.retired.contains(session) => None
+      other => other
+    },
     api_setup_open: model.api_setup_open && !(message is @cloud.Create),
     composer_entry_retirements: retirements,
-    selected_conversation: if switched && model.cloud_identity() is Some(_) {
+    selected_conversation: if removed_selection ||
+      (switched && model.cloud_identity() is Some(_)) {
       None
     } else {
       model.selected_conversation
     },
+  }
+  if removed_selection && model.screen is Chat {
+    let next = {
+      ..next,
+      chat_navigation_generation: next.chat_navigation_generation + 1,
+    }
+    let (open, next) = update_cloud(dispatch, @cloud.Create, next)
+    return (@cmd.batch([command, open]), next)
   }
   if selected is Some(session) && next.cloud.user_id is Some(account) {
     let (open, next) = update_msg(
@@ -171,7 +213,8 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
           !conversation.loading &&
           !conversation.sending &&
           !conversation.generating &&
-          !conversation.history_required,
+          !conversation.history_required &&
+          !self.cloud.deletions.contains(owner.session()),
       ),
     },
   })
@@ -205,10 +248,14 @@ fn Model::cloud_chat_rows(
         }),
         running: conversation.map_or(item.generating, conversation => {
           conversation.sending || conversation.generating
-        }),
+        }) ||
+        item.generating ||
+        self.cloud.deletions.contains(item.id),
         openable: true,
         rename: None,
-        trailing: [],
+        trailing: [
+          @conversation.Delete(title=shell_text(self.locale, DeletePermanently)),
+        ],
         children: [],
         run_mark: @conversation.RunMark::for_task(
           running=item.generating ||

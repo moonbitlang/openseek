@@ -206,6 +206,7 @@ fn Actions::command(
 ///|
 priv enum MenuKind {
   LiveMenu
+  CloudMenu
   OpenSeekArchivedMenu
   CodexArchivedMenu
 }
@@ -219,7 +220,8 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
     OpenSeekLive | CodexLive => Some(LiveMenu)
     OpenSeekArchived => Some(OpenSeekArchivedMenu)
     CodexArchived => Some(CodexArchivedMenu)
-    CodexDraft | CloudLive => None
+    CloudLive => Some(CloudMenu)
+    CodexDraft => None
   }
 }
 
@@ -240,6 +242,21 @@ fn Input::menu_entries_for_kind(
 ) -> Array[@action_menu.Entry] {
   let (archive_enabled, delete_enabled) = self.menu_enabled()
   match kind {
+    CloudMenu =>
+      [
+        Action({
+          label: ui(locale, DeleteLabel),
+          title: if delete_enabled {
+            ui(locale, DeletePermanently)
+          } else {
+            ui(locale, FinishBeforeDelete)
+          },
+          icon: Some(@icons.icon(@icons.icon_close)),
+          enabled: delete_enabled,
+          destructive: true,
+          command: (actions.delete)(self.id),
+        }),
+      ]
     LiveMenu => {
       let entries : Array[@action_menu.Entry] = [
         Action({
@@ -631,7 +648,7 @@ pub fn component(
     // also opens.
     // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
-    if menu_kind is Some(LiveMenu) {
+    if menu_kind is Some(LiveMenu | CloudMenu) {
       buttons.push(
         @html.button(
           class="row-archive row-menu-button",
@@ -646,7 +663,7 @@ pub fn component(
         ),
       )
     }
-    let trailing_actions = if menu_kind is Some(LiveMenu) {
+    let trailing_actions = if menu_kind is Some(LiveMenu | CloudMenu) {
       []
     } else {
       input.trailing

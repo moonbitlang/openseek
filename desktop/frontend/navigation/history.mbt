@@ -98,4 +98,14 @@ pub fn History::promote(
 }
 
 ///|
+/// A removed conversation is no longer a destination in window history.
+pub fn History::forget(self : History, location : Location) -> History {
+  {
+    previous: self.previous.filter(entry => entry != location),
+    current: self.current.filter(entry => entry != location),
+    following: self.following.filter(entry => entry != location),
+  }
+}
+
+///|
 pub extend History with Eq::{equal, not_equal}

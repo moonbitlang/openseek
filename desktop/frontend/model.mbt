@@ -1550,7 +1550,7 @@ priv struct Model {
   archive_confirm : ArchiveConfirm?
   // Permanent chat deletion has its own explicit confirmation. It never
   // shares the worktree-discard dialog because the data at risk differs.
-  delete_confirm : DeleteConfirm?
+  delete_confirm : DeletePrompt?
   // The live chat whose delete question is out with the host. Only the
   // answer about this chat may open the confirmation, and only once: an
   // answer overtaken by a later click must not put another chat's dialog
@@ -2096,6 +2096,7 @@ priv enum Msg {
   // confirmation's display title comes from the listed record itself.
   DeleteSession(@interop.ChannelId, ArchiveRecordKey, ConversationRecord)
   ConfirmDeleteSession
+  DeleteCloudSession(account~ : String, session~ : String)
   CancelDeleteSession
   ConversationRenameRequested(id~ : @conversation.Id, label~ : String)
   ConversationRenameEdited(

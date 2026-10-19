@@ -45,6 +45,22 @@ async fn list_sessions(token : String) -> Array[Session] {
 }
 
 ///|
+async fn delete_session(token : String, session : String) -> Unit {
+  let (response, _) = @http.request(
+    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}",
+    Delete,
+    { "Authorization": "Bearer " + token },
+    "",
+  ) catch {
+    _ => raise CloudError(Unreachable)
+  }
+  // Deletion is idempotent, and a successful 204 has no JSON body.
+  if response.code != 404 {
+    check_status(response.code)
+  }
+}
+
+///|
 async fn load_history(token : String, session : String) -> History {
   decode_history(
     request(

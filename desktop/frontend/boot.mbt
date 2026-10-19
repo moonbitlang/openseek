@@ -301,6 +301,11 @@ fn SidebarDispatcher::conversation_delete(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  if id.source() is @conversation.CloudLive {
+    return self.emit(
+      DeleteCloudSession(account=id.channel(), session=id.conversation()),
+    )
+  }
   let record = match id.source() {
     @conversation.OpenSeekLive => Some(LiveRecord)
     @conversation.OpenSeekArchived => Some(ArchivedRecord)

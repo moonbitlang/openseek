@@ -47,6 +47,7 @@ pub fn Conversation::not_equal(Self, Self) -> Bool
 pub struct Creation {
   request : Int
   navigation : Int
+  failure : String?
 } derive(Eq)
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -83,6 +84,9 @@ pub(all) enum Msg {
   Refresh
   Create
   Open(String)
+  Delete(String)
+  Deleted(Int, String, Int)
+  DeleteFailed(Int, String, Int, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
   Listed(Int, Int, Array[Session])
   ListFailed(Int, Int, Failure)
@@ -122,9 +126,12 @@ pub(all) struct State {
   conversations : Map[String, Conversation]
   sequence : Int
   list_request : Int
+  deletions : Map[String, Int]
+  retired : Array[String]
   creation : Creation?
   notice : String?
 } derive(Eq)
+pub fn State::can_delete(Self, String) -> Bool
 pub fn State::creating_at(Self, Int) -> Bool
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool

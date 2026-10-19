@@ -21,6 +21,12 @@ priv struct DeleteConfirm {
 } derive(Eq)
 
 ///|
+priv enum DeletePrompt {
+  HostDelete(DeleteConfirm)
+  CloudDelete(account~ : String, session~ : String, title~ : String)
+} derive(Eq)
+
+///|
 /// Which record a confirmation is about, with what only that kind carries.
 priv enum DeleteTarget {
   // The parent plus every descendant visible in the same archived snapshot.
@@ -348,12 +354,23 @@ fn DeleteConfirm::message(
 fn delete_modal(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
-  confirm : DeleteConfirm,
+  confirm : DeletePrompt,
+  cloud : @cloud.State,
 ) -> @html.Html {
+  let message = match confirm {
+    HostDelete(confirm) => confirm.message(locale~)
+    CloudDelete(title~, ..) =>
+      dynamic_text(locale, DDeleteCloudConversation(title))
+  }
+  let enabled = match confirm {
+    HostDelete(_) => true
+    CloudDelete(account~, session~, ..) =>
+      cloud.user_id == Some(account) && cloud.can_delete(session)
+  }
   @html.div(class="modal-backdrop", on_click=dispatch(CancelDeleteSession), [
     @html.div(class="modal", [
       @html.div(class="modal-title", shell_text(locale, DeleteChatQuestion)),
-      @html.div(class="modal-body", confirm.message(locale~)),
+      @html.div(class="modal-body", message),
       @html.div(class="modal-actions", [
         @html.button(
           class="button secondary",
@@ -362,6 +379,7 @@ fn delete_modal(
         ),
         @html.button(
           class="button danger",
+          disabled=!enabled,
           on_click=dispatch(ConfirmDeleteSession),
           shell_text(locale, DeletePermanently),
         ),

@@ -333,6 +333,11 @@ fn Definition::enabled_indices(self : Definition) -> Array[Int32] {
 }
 
 ///|
+fn Definition::has_actions(self : Definition) -> Bool {
+  self.entries.any(entry => entry is Action(_))
+}
+
+///|
 fn enabled_position(indices : Array[Int32], index : Int32) -> Int32? {
   indices.search(index)
 }
@@ -480,9 +485,15 @@ fn render_menu(
           focused_id == menu_id(open.target) else {
           return @cmd.none
         }
+        if enabled.is_empty() &&
+          event.key()
+          is ("ArrowDown" | "ArrowUp" | "Home" | "End" | "Enter" | " ") {
+          event.prevent_default()
+          return @cmd.none
+        }
         let destination = match event.key() {
-          "ArrowDown" | "Home" => Some(enabled[0])
-          "ArrowUp" | "End" => Some(enabled[enabled.length() - 1])
+          "ArrowDown" | "Home" => enabled.get(0)
+          "ArrowUp" | "End" => enabled.get(enabled.length() - 1)
           _ => None
         }
         if destination is Some(destination) {
@@ -640,9 +651,9 @@ priv suberror FocusSubscription {
 }
 
 ///|
-/// Close when the open target is no longer actionable. Otherwise, if current
+/// Close when the open target disappears. Otherwise, if current
 /// input disables the focused entry, move to the next enabled entry and fall
-/// back to the previous one.
+/// back to the previous one, or the menu itself when all entries are disabled.
 fn focus_subscription(
   target : String,
   enabled : Array[Int32]?,
@@ -658,7 +669,7 @@ fn focus_subscription(
       }
       let mut previous = enabled.unwrap_or([])
       let mut close = close
-      if enabled is None || previous.is_empty() {
+      if enabled is None {
         scheduler.add(close(()))
       }
       Some({
@@ -670,9 +681,16 @@ fn focus_subscription(
             return
           }
           close = next_close
-          guard next_enabled is Some(next) && !next.is_empty() else {
+          guard next_enabled is Some(next) else {
             scheduler.add(close(()))
             previous = []
+            return
+          }
+          if next.is_empty() {
+            if !previous.is_empty() {
+              scheduler.add(focus_element(menu_id(target), true))
+            }
+            previous = next
             return
           }
           guard focused_element_id() is Some(focused) else {
@@ -728,7 +746,7 @@ pub fn[Input : Eq] component(
             )
           }
           guard resolve(input, next.target) is Some(definition) &&
-            definition.enabled_indices() is [_, ..] else {
+            definition.has_actions() else {
             // Another component may own this target. Only one shared menu
             // surface should remain open across the sidebar and dock.
             let command = match state.menu {
@@ -765,17 +783,19 @@ pub fn[Input : Eq] component(
     subscriptions=(state, input, emit) => {
       let open = open_subscription(emit.map(open => Msg::Open(open)))
       guard state.menu is Some(menu) else { return open }
-      let enabled = resolve(input, menu.target).map(definition => {
-        definition.enabled_indices()
+      let enabled = resolve(input, menu.target).bind(definition => {
+        if definition.has_actions() {
+          Some(definition.enabled_indices())
+        } else {
+          None
+        }
       })
       let focus = focus_subscription(
         menu.target,
         enabled,
         emit.map((_ : Unit) => Msg::Close),
       )
-      guard enabled is Some(enabled) && !enabled.is_empty() else {
-        return @sub.batch([open, focus])
-      }
+      guard enabled is Some(_) else { return @sub.batch([open, focus]) }
       @sub.batch([
         open,
         dismiss_subscription(menu.target, emit.map((_ : Unit) => Msg::Close)),
@@ -786,7 +806,7 @@ pub fn[Input : Eq] component(
   state.map2(input, (state, input) => {
     guard state.menu is Some(open) &&
       resolve(input, open.target) is Some(definition) &&
-      !definition.enabled_indices().is_empty() else {
+      definition.has_actions() else {
       return @html.nothing
     }
     render_menu(open, definition, emit(Close))

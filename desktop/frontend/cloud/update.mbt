@@ -114,6 +114,37 @@ fn poll(
 }
 
 ///|
+pub fn State::can_delete(self : State, id : String) -> Bool {
+  self.sessions.any(session => session.id == id && !session.generating) &&
+  !self.deletions.contains(id) &&
+  !self.retired.contains(id) &&
+  self.conversations
+  .get(id)
+  .map_or(true, conversation => {
+    !conversation.sending && !conversation.generating
+  })
+}
+
+///|
+fn State::forget(self : State, id : String) -> State {
+  let conversations = self.conversations.copy()
+  conversations.remove(id)
+  let deletions = self.deletions.copy()
+  deletions.remove(id)
+  {
+    ..self,
+    sessions: self.sessions.filter(session => session.id != id),
+    conversations,
+    deletions,
+    retired: if self.retired.contains(id) {
+      self.retired
+    } else {
+      [..self.retired, id]
+    },
+  }
+}
+
+///|
 /// The optional result is a completed creation's navigation intent. The root
 /// owns selection; opening and background responses never select a page.
 pub fn update(
@@ -144,7 +175,20 @@ pub fn update(
         token is Some(_) else {
         return (state, @cmd.none, None)
       }
-      ({ ..state, sessions, }, @cmd.none, None)
+      let mut next = state
+      for item in state.sessions {
+        if !sessions.any(session => session.id == item.id) {
+          next = next.forget(item.id)
+        }
+      }
+      (
+        {
+          ..next,
+          sessions: sessions.filter(item => !next.retired.contains(item.id)),
+        },
+        @cmd.none,
+        None,
+      )
     }
     ListFailed(epoch, request, error) => {
       guard epoch == state.epoch && request == state.list_request else {
@@ -154,12 +198,18 @@ pub fn update(
       (next, command, None)
     }
     Create => {
-      guard state.creation is None else { return (state, @cmd.none, None) }
+      if state.creation is Some(creation) && creation.failure is None {
+        return (
+          { ..state, creation: Some({ ..creation, navigation, }), },
+          @cmd.none,
+          None,
+        )
+      }
       let request = state.sequence + 1
       let next = {
         ..state,
         sequence: request,
-        creation: Some({ request, navigation, }),
+        creation: Some({ request, navigation, failure: None, }),
         notice: None,
       }
       let (next, command) = next.create(token, emit)
@@ -194,11 +244,68 @@ pub fn update(
         creation.request == request else {
         return (state, @cmd.none, None)
       }
-      let (next, command) = { ..state, creation: None, }.failed(error)
+      let (next, command) = {
+        ..state,
+        creation: Some({ ..creation, failure: Some(error.label()), }),
+      }.failed(error)
       (next, command, None)
     }
+    Delete(id) => {
+      guard state.can_delete(id) && token is Some(token) else {
+        return (state, @cmd.none, None)
+      }
+      let request = state.sequence + 1
+      let deletions = state.deletions.copy()
+      deletions[id] = request
+      (
+        { ..state, sequence: request, deletions, notice: None, },
+        run(emit, () => {
+          try {
+            delete_session(token, id)
+            Deleted(state.epoch, id, request)
+          } catch {
+            CloudError(error) => DeleteFailed(state.epoch, id, request, error)
+            _ => DeleteFailed(state.epoch, id, request, Unreachable)
+          }
+        }),
+        None,
+      )
+    }
+    Deleted(epoch, id, request) => {
+      guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
+        return (state, @cmd.none, None)
+      }
+      (state.forget(id), @cmd.none, None)
+    }
+    DeleteFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch && state.deletions.get(id) == Some(request) else {
+        return (state, @cmd.none, None)
+      }
+      if error is Http(404) {
+        return (state.forget(id), @cmd.none, None)
+      }
+      let deletions = state.deletions.copy()
+      deletions.remove(id)
+      let (next, command) = { ..state, deletions, }.failed(error)
+      (
+        if error is Busy {
+          {
+            ..next,
+            notice: Some(
+              "This conversation is generating. Try deleting it after it finishes.",
+            ),
+          }
+        } else {
+          next
+        },
+        command,
+        None,
+      )
+    }
     Open(id) => {
-      guard token is Some(_) else { return (state, @cmd.none, None) }
+      guard token is Some(_) && !state.retired.contains(id) else {
+        return (state, @cmd.none, None)
+      }
       let conversation = state.conversations
         .get(id)
         .unwrap_or(Conversation::empty())
@@ -246,6 +353,16 @@ pub fn update(
         submission_sequence: conversation.submission_sequence +
         (if accepted { 1 } else { 0 }),
       })
+      let next = {
+        ..next,
+        sessions: next.sessions.map(session => {
+          if session.id == id {
+            { ..session, generating: history.generating, }
+          } else {
+            session
+          }
+        }),
+      }
       (
         next,
         if history.generating {
@@ -261,6 +378,9 @@ pub fn update(
         state.conversations.get(id) is Some(conversation) &&
         conversation.request == request else {
         return (state, @cmd.none, None)
+      }
+      if error is Http(404) {
+        return (state.forget(id), @cmd.none, None)
       }
       let next = state.replace(id, {
         ..conversation,
@@ -297,6 +417,7 @@ pub fn update(
         state.user_id == Some(account) &&
         token is Some(token) &&
         state.conversations.get(id) is Some(conversation) &&
+        !state.deletions.contains(id) &&
         !conversation.loading &&
         !conversation.sending &&
         !conversation.generating &&

@@ -13,6 +13,7 @@ pub fn History::can_forward(Self) -> Bool
 pub fn History::current(Self) -> Location?
 pub fn History::empty() -> Self
 pub fn History::equal(Self, Self) -> Bool
+pub fn History::forget(Self, Location) -> Self
 pub fn History::forward(Self) -> Self
 pub fn History::not_equal(Self, Self) -> Bool
 pub fn History::promote(Self, Location, Location) -> Self
