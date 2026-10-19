@@ -18,25 +18,23 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-/// `native` is the one backend a snippet may not ask for: moonrun's policy —
-/// the confinement that holds on every platform — applies to wasm alone, and
-/// `--wasm-policy` is silently ignored elsewhere, so naming `native` would be
-/// a one-argument way out of the sandbox.
-test "decode refuses the unsandboxed native target" {
-  let refused = try {
-    @decode.decode({ "source": "fn main {  }", "target": "native" }) |> ignore
-    "accepted"
-  } catch {
-    error => "\{error}"
+/// moonrun's policy applies to wasm alone, so every other backend is refused.
+test "decode refuses every non-wasm target" {
+  for target in ["wasm-gc", "js", "llvm", "native", "banana"] {
+    try @decode.decode({ "source": "fn main {  }", "target": target }) catch {
+      error =>
+        assert_true("\{error}".contains("mbtx only supports the wasm target"))
+    } noraise {
+      _ => fail("accepted target \{target}")
+    }
   }
-  assert_false(refused == "accepted")
-  assert_true(refused.contains("wasm"))
 }
 
 ///|
-test "decode accepts an explicit target" {
-  let input = @decode.decode({ "source": "fn main {  }", "target": "wasm-gc" })
-  assert_eq(input.target, "wasm-gc")
+test "decode accepts explicit wasm and defaults a null target to wasm" {
+  let input = @decode.decode({ "source": "fn main {  }", "target": "wasm" })
+  assert_eq(input.target, "wasm")
+  assert_eq(@decode.decode({ "source": "x", "target": null }).target, "wasm")
 }
 
 ///|
@@ -76,6 +74,7 @@ test "decode rejects malformed arguments" {
     { "source": "x", "cwd": 3 },
     { "source": "x", "description": 3 },
     { "source": "x", "target": "banana" },
+    { "source": "x", "target": 3 },
     { "code": "x" },
     Json("x"),
   ]

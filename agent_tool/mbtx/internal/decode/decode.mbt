@@ -35,24 +35,12 @@ pub struct MbtxInput {
 pub extend Program with Debug::{to_repr}
 
 ///|
-/// The moon backends `--target` accepts.
-fn valid_target(target : String) -> Bool {
-  // `native` is deliberately absent: moonrun's policy — the only confinement
-  // that holds off macOS — applies to the wasm backend alone, and
-  // `--wasm-policy` is silently ignored elsewhere. Letting a snippet name
-  // `native` would hand it a one-argument way out of the sandbox. The
-  // remaining alternatives cannot spawn or touch the filesystem at all.
-  target is ("wasm" | "wasm-gc" | "js" | "llvm")
-}
-
-///|
 /// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
 /// is required; both means save and run a writable script. `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
-/// then the program including its own `main`). `target` is an optional backend
-/// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
-/// applies to — a snippet may not simply ask for an unsandboxed one, so the
-/// compute-only backends are the only alternatives offered. `cwd` is an
+/// then the program including its own `main`). `target` is optional for
+/// compatibility and accepts only `wasm`, the backend moonrun's policy sandbox
+/// applies to. Missing or null `target` also selects `wasm`. `cwd` is an
 /// optional working directory for the program (defaults to the workspace
 /// root). Failures name the offending field.
 pub fn decode(arguments : Json) -> MbtxInput raise {
@@ -129,8 +117,10 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "target": _, .. } => fail("arguments.target to be a string")
         _ => "wasm"
       }
-      guard valid_target(target) else {
-        fail("arguments.target to be one of wasm, wasm-gc, js, llvm")
+      guard target == "wasm" else {
+        fail(
+          "arguments.target to be \"wasm\"; mbtx only supports the wasm target",
+        )
       }
       let cwd = match arguments {
         { "cwd": String(c), .. } => Some(c)

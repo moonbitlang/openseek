@@ -117,36 +117,33 @@ async test "cli_greet example reads process arguments implicitly" {
 }
 
 ///|
-async test "script arguments reach inline and reused scripts verbatim on both runners" {
+async test "script arguments reach inline and reused scripts verbatim" {
   @vfs.with_tmpdir(ws => {
     let values : Array[String] = [
       "--policy", "two words", "", "你好", "$(echo nope)", "--",
     ]
-    for target in ["wasm", "js"] {
-      let skip = if target == "js" { 2 } else { 1 }
-      let source =
-        $|import { "moonbitlang/core/env" }
-        $|fn main { println(@env.args()[\{skip}:].to_array().to_json().stringify()) }
-      let filename = "args-\{target}.mbtx"
-      let inline = run_in(ws, { "source": source, "target": target })
-      assert_false(inline.is_error, msg=inline.content)
-      assert_eq(inline.content, "[]\n")
-      let saved = run_in(ws, {
-        "source": source,
-        "filename": filename,
-        "target": target,
-        "args": values,
-      })
-      assert_false(saved.is_error, msg=saved.content)
-      assert_true(saved.content.contains(Json(values).stringify()))
-      let reused = run_in(ws, {
-        "filename": filename,
-        "target": target,
-        "args": ["different input"],
-      })
-      assert_false(reused.is_error, msg=reused.content)
-      assert_eq(reused.content, "[\"different input\"]\n")
-    }
+    let source =
+      #|import { "moonbitlang/core/env" }
+      #|fn main { println(@env.args()[1:].to_array().to_json().stringify()) }
+    let filename = "args.mbtx"
+    let inline = run_in(ws, { "source": source, "target": "wasm" })
+    assert_false(inline.is_error, msg=inline.content)
+    assert_eq(inline.content, "[]\n")
+    let saved = run_in(ws, {
+      "source": source,
+      "filename": filename,
+      "target": "wasm",
+      "args": values,
+    })
+    assert_false(saved.is_error, msg=saved.content)
+    assert_true(saved.content.contains(Json(values).stringify()))
+    let reused = run_in(ws, {
+      "filename": filename,
+      "target": "wasm",
+      "args": ["different input"],
+    })
+    assert_false(reused.is_error, msg=reused.content)
+    assert_eq(reused.content, "[\"different input\"]\n")
   })
 }
 
@@ -355,10 +352,10 @@ async test "saved scripts retain compiler filename and FFI checks" {
     assert_true(out.content.contains("broken.mbtx:1:"), msg=out.content)
     @fs.write_file(
       "\{ws}/ffi.mbtx",
-      "extern \"js\" fn escape() -> Unit = \"() => {}\"\nfn main { escape() }",
+      "extern \"c\" fn escape() -> Unit = \"escape\"\nfn main { escape() }",
       create_mode=CreateOrTruncate,
     )
-    let out = run_in(ws, { "filename": "./ffi.mbtx", "target": "js" })
+    let out = run_in(ws, { "filename": "./ffi.mbtx", "target": "wasm" })
     assert_true(out.is_error)
     assert_true(out.content.contains("native FFI"))
   })
@@ -445,20 +442,6 @@ async test "a run timeout carries build warnings and blames only the program" {
     assert_true(output.content.contains("the PROGRAM that did not finish"))
     assert_true(output.content.contains("Unused variable"))
   })
-}
-
-///|
-/// Only the wasm target is staged; a single-shot target's one exit code
-/// covers both phases and its report deliberately claims neither.
-async test "a non-wasm failure carries no stage label" {
-  let out = run_in(".", {
-    "source": "fn main { println(\"before\"); panic() }",
-    "target": "js",
-  })
-  assert_true(out.is_error)
-  assert_true(out.content.contains("exited"))
-  assert_false(out.content.contains("at RUNTIME"))
-  assert_false(out.content.contains("BUILD failed"))
 }
 
 ///|
@@ -1038,6 +1021,10 @@ test "the schema advertises every decoded argument" {
       { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
     ),
   )
+  assert_true(
+    properties.get("target")
+    is Some({ "type": "string", "enum": ["wasm"], "default": "wasm", .. }),
+  )
   assert_false(schema is { "anyOf": _, .. })
   assert_true(schema is { "required": ["description"], .. })
 }
@@ -1202,14 +1189,38 @@ async test "rejects non-string source arguments" {
 }
 
 ///|
-async test "runs a pure snippet on a non-native target" {
+async test "runs a pure snippet with omitted null or explicit wasm target" {
   @vfs.with_tmpdir(ws => {
-    let out = run_in(ws, {
-      "source": "fn main { println(6 * 7) }",
-      "target": "js",
-    })
-    assert_false(out.is_error)
-    assert_true(out.content.contains("42"))
+    let inputs : Array[Json] = [
+      { "source": "fn main { println(6 * 7) }" },
+      { "source": "fn main { println(6 * 7) }", "target": null },
+      { "source": "fn main { println(6 * 7) }", "target": "wasm" },
+    ]
+    for arguments in inputs {
+      let out = run_in(ws, arguments)
+      assert_false(out.is_error, msg=out.content)
+      assert_eq(out.content, "42\n")
+    }
+  })
+}
+
+///|
+async test "rejects every other backend before saving or executing a script" {
+  @vfs.with_tmpdir(ws => {
+    for target in ["wasm-gc", "js", "llvm", "native"] {
+      let filename = "rejected-\{target}.mbtx"
+      let out = run_in(ws, {
+        "source": "fn main { println(42) }",
+        "filename": filename,
+        "target": target,
+      })
+      assert_true(out.is_error, msg=out.content)
+      assert_true(
+        out.content.contains("only supports the wasm target"),
+        msg=out.content,
+      )
+      assert_false(@fs.exists("\{ws}/\{filename}"))
+    }
   })
 }
 
@@ -1362,19 +1373,6 @@ async test "the refusal scan applies only to a run that did not exit 0" {
     assert_true(dying.is_error)
     assert_true(dying.content.contains("mbtx sandbox:"))
   })
-}
-
-///|
-/// A compute-only backend has no moonrun policy. Text resembling its refusal
-/// marker is ordinary program output even in a runtime-less definition.
-async test "a runtime-less non-wasm run does not invent a policy refusal" {
-  let out = run_in(".", {
-    "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
-    "target": "js",
-  })
-  assert_false(out.is_error)
-  assert_true(out.content.contains("Sandbox policy blocked"))
-  assert_false(out.content.contains("mbtx sandbox:"))
 }
 
 ///|
@@ -1607,13 +1605,11 @@ async test "a refusal names escalation when a channel is wired" {
 }
 
 ///|
-/// Escalation only means something on the backend the policy binds. The
-/// compute-only targets never had `--wasm-policy` passed to them, so a grant
-/// there would change nothing about the run — and the prompt behind it costs a
-/// person's attention. Refused before anyone is asked.
-async test "escalation is refused on a target that carries no policy" {
+/// Unsupported backends fail before approval, so escalation cannot make a
+/// JavaScript or native process available or interrupt someone for a grant.
+async test "escalation cannot enable a backend other than wasm" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
-  let out = @vfs.with_tmpdir(prefix="mbtx-target-", ws => {
+  @vfs.with_tmpdir(prefix="mbtx-target-", ws => {
     let definition = @mbtx.definition(
       workspace_root=ws,
       approval=ApprovalChannel(ask => {
@@ -1621,15 +1617,19 @@ async test "escalation is refused on a target that carries no policy" {
         AllowedOnce
       }),
     )
-    dispatch(definition, {
-      "source": "fn main { println(1) }",
-      "target": "js",
-      "escalated": true,
-    })
+    for target in ["wasm-gc", "js", "llvm", "native"] {
+      let out = dispatch(definition, {
+        "source": "fn main { println(1) }",
+        "target": target,
+        "escalated": true,
+      })
+      assert_true(out.is_error, msg=out.content)
+      assert_true(
+        out.content.contains("only supports the wasm target"),
+        msg=out.content,
+      )
+    }
   })
-  assert_true(out.is_error)
-  assert_true(out.content.contains("applies to the wasm target"))
-  // Nobody was interrupted for a grant that would have done nothing.
   assert_eq(asked.length(), 0)
 }
 
