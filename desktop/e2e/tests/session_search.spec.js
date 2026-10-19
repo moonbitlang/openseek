@@ -23,7 +23,12 @@ function installSearch(app) {
 async function openSearch(page, app) {
   await app.install();
   await app.goto();
-  await page.locator('.sidebar-search').click();
+  const search = page.getByRole('button', { name: 'Search', exact: true });
+  await expect(search).toHaveAttribute('title', 'Search');
+  await page.locator('.sidebar-mode-option').last().focus();
+  await page.keyboard.press('Tab');
+  await expect(search).toBeFocused();
+  await page.keyboard.press('Enter');
   const input = page.getByRole('textbox', { name: 'Search conversation titles' });
   await expect(input).toBeFocused();
   return input;

@@ -301,9 +301,10 @@ pub fn component(
         footer.push(@html.div(class="console-notice", notice))
       }
     }
+    let search_title = @messages.text(input.locale, SearchConversations)
     @html.aside([
       // The leading edge stays clear for the shell-owned fixed toggle and
-      // native controls; the mode switch sits at the trailing edge.
+      // native controls; the mode switch and search sit at the trailing edge.
       @html.div(class="sidebar-header", [
         @html.div(
           class="sidebar-mode",
@@ -320,10 +321,14 @@ pub fn component(
             actions.mode_option(input, WorkMode, ModeWork, @icons.icon_code),
           ],
         ),
-      ]),
-      @html.button(class="sidebar-search", on_click=actions.open_search, [
-        @icons.icon(@icons.icon_search),
-        @html.span(@messages.text(input.locale, SearchConversations)),
+        @html.button(
+          class="icon-button icon-button-compact sidebar-search",
+          type_="button",
+          title=search_title,
+          attrs=@html.Attrs::build().aria_label(search_title),
+          on_click=actions.open_search,
+          @icons.icon(@icons.icon_search),
+        ),
       ]),
       @html.div(class="sidebar-main", [
         @html.div(class="sidebar-section sessions", rows),
