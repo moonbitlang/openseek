@@ -22,6 +22,10 @@ adb shell am start -n com.moonbit.openseek.connect.debug/com.moonbit.openseek.Ma
 
 This is a debug-signed Android 8+ build, not a store release.
 
+The launcher icon reuses the rabbit artwork and dark background from
+`desktop/package/macos/appicon.svg`. Android applies its own adaptive icon mask;
+Android 13+ also has a monochrome layer for themed icons.
+
 ## Use
 
 The app loads the shared browser entry without selecting a view. The frontend
