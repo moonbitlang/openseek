@@ -111,7 +111,9 @@ fn Control::option_id(self : Control, index : Int32) -> String {
 
 ///|
 /// Focus writes stay inside an event command. `after_render=true` is used
-/// when opening or closing changes which option nodes exist.
+/// when opening creates the option nodes. The trigger already exists when
+/// closing: restore it immediately so a later focus change cannot be stolen
+/// by an after-render command.
 fn Control::focus(
   self : Control,
   option : Int32?,
@@ -243,7 +245,7 @@ fn Control::option_attrs(
       self.focus(Some(next), false)
     } else if event.key() == "Escape" {
       event.prevent_default()
-      @cmd.batch([self.dismiss, self.focus(None, true)])
+      @cmd.batch([self.dismiss, self.focus(None, false)])
     } else {
       @cmd.none
     }
@@ -287,9 +289,9 @@ pub fn Control::render(self : Control) -> @html.Html {
         // is already selected. Close in both cases, but only a new value may
         // reach caller update logic as a change.
         let choose = if selected {
-          @cmd.batch([self.dismiss, self.focus(None, true)])
+          @cmd.batch([self.dismiss, self.focus(None, false)])
         } else {
-          @cmd.batch([(self.change)(option.value), self.focus(None, true)])
+          @cmd.batch([(self.change)(option.value), self.focus(None, false)])
         }
         rows.push(
           @html.button(

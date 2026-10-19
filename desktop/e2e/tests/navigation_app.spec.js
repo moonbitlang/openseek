@@ -41,7 +41,7 @@ test('application history keeps a submitted draft reachable without an extra pre
   expect(app.pageErrors).toEqual([]);
 });
 
-test('titlebar order and narrow layout keep navigation visible', async ({ page }, testInfo) => {
+test('navigation remains reachable in narrow and native titlebars', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install(); await app.goto();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -53,14 +53,11 @@ test('titlebar order and narrow layout keep navigation visible', async ({ page }
     expect(bounds[1].x + bounds[1].width).toBeLessThanOrEqual(bounds[2].x);
     await page.screenshot({ path: testInfo.outputPath(`navigation-${width}.png`) });
   }
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('native titlebar insets keep the sidebar mode switch clear at its minimum width', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install(); await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(heading(page)).toHaveText('Settings');
+  await page.setViewportSize({ width: 1440, height: 844 });
+  // Returning from mobile reopens the sidebar. Measure the native inset
+  // only after the wide shell has rendered and its opening motion settles.
+  await expect(page.locator('.sidebar-backdrop')).toHaveCount(0);
+  await expect.poll(() => page.locator('.app').evaluate(node => node.getAnimations().length)).toBe(0);
   await page.evaluate(() => {
     document.documentElement.style.setProperty('--native-titlebar-left', '84px');
     document.documentElement.style.setProperty('--native-titlebar-height', '28px');

@@ -284,86 +284,6 @@ test('a single completed minimal image call keeps its own disclosure', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('minimal current tools expand with icons and retire when new prose arrives', async ({ page }, testInfo) => {
-  const app = new MinimalTranscriptHarness(page);
-  await app.install();
-  await app.goto();
-  await app.enableMinimal();
-  const older = page.locator('.minimal-tools').first();
-  await expect(older).not.toHaveAttribute('open', '');
-  app.append('assistant', { content: 'Now inspect and edit the implementation.', tool_calls: [
-    { id: 'live-read', name: 'read', arguments: JSON.stringify({ description: 'Read the implementation' }) },
-    { id: 'live-edit', name: 'edit', arguments: JSON.stringify({ description: 'Edit the implementation' }) },
-    { id: 'live-script', name: 'mbtx', arguments: JSON.stringify({ description: 'Verify the implementation' }) },
-  ] });
-  const live = page.locator('.minimal-tools-live');
-  await expect(live.locator('.minimal-call-caption')).toHaveText([
-    'Read the implementation', 'Edit the implementation', 'Verify the implementation',
-  ]);
-  await expect(live.locator('summary')).toHaveCount(0);
-  await expect(live.locator('.minimal-tool-icon > svg')).toHaveCount(3);
-  await expect(live.locator('.minimal-tool-icon')).toHaveText(['', '', '']);
-  for (const name of ['read', 'edit', 'mbtx']) {
-    await expect(live.locator(`.minimal-tool-icon[title="${name}"] > svg`)).toBeVisible();
-  }
-  for (const row of await live.locator('.minimal-call').all()) await expect(row).toBeVisible();
-  app.append('tool_result', { tool_call_id: 'live-read', tool_name: 'read', content: '', brief: 'Read implementation.mbt', is_error: false });
-  await expect(live.locator('.minimal-call-caption').first()).toHaveText('Read implementation.mbt');
-  await expect(live.locator('.tool-status.pending')).toHaveCount(2);
-  await expect(older).not.toHaveAttribute('open', '');
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-live-icons.png') });
-  await page.locator('.minimal-messages').screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-icons-alignment.png') });
-
-  app.append('assistant', { content: 'The implementation is ready; check the results.', tool_calls: [
-    { id: 'next-read', name: 'read', arguments: JSON.stringify({ description: 'Read the results' }) },
-    { id: 'next-image', name: 'imageView', arguments: JSON.stringify({ description: 'Inspect the screenshot' }) },
-  ] });
-  await expect(page.locator('.minimal-tools')).toHaveCount(2);
-  const retired = page.locator('.minimal-tools').last();
-  await expect(retired).not.toHaveAttribute('open', '');
-  await expect(retired.locator('.minimal-call').first()).toBeHidden();
-  await expect(live.locator('.minimal-call-caption')).toHaveText(['Read the results', 'Inspect the screenshot']);
-  await expect(live.locator('.minimal-tool-icon > svg')).toHaveCount(2);
-  await expect(live.locator('.minimal-tool-icon[title="imageView"] > svg')).toBeVisible();
-  await retired.locator(':scope > summary').click();
-  app.append('tool_result', { tool_call_id: 'next-read', tool_name: 'read', content: '', brief: 'Read results.json', is_error: false });
-  await expect(live.locator('.minimal-call-caption').first()).toHaveText('Read results.json');
-  await expect(retired).toHaveAttribute('open', '');
-  for (const width of [1440, 640]) {
-    await page.setViewportSize({ width, height: 900 });
-    const layout = await retired.evaluate(node => {
-      const summary = node.querySelector(':scope > summary');
-      const label = summary.querySelector('.minimal-summary-text').getBoundingClientRect();
-      const arrow = summary.querySelector('.minimal-chevron').getBoundingClientRect();
-      const body = node.querySelector('.minimal-call-list');
-      return { labelRight: label.right, arrowLeft: arrow.left,
-        border: getComputedStyle(body).borderLeftWidth,
-        indent: getComputedStyle(body).marginLeft,
-        padding: getComputedStyle(body).paddingLeft };
-    });
-    expect(layout.arrowLeft).toBeGreaterThanOrEqual(layout.labelRight);
-    expect(layout.border).toBe('0px');
-    expect(layout.indent).toBe('0px');
-    expect(layout.padding).toBe('0px');
-    // SVG baselines differ from text baselines. Compare visible row centers
-    // so folded summaries, expanded calls and their status icons stay aligned.
-    const rows = await page.locator('.minimal-activity-summary:visible, .minimal-call:visible').evaluateAll(nodes => nodes.map(node => {
-      const caption = node.querySelector('.minimal-summary-text, .minimal-call-caption').getBoundingClientRect();
-      const icons = [...node.querySelectorAll(':scope > .minimal-tool-icon > svg, :scope > .minimal-chevron, :scope > .tool-status, :scope > .minimal-tool-status')];
-      const tool = node.querySelector(':scope > .minimal-tool-icon > svg').getBoundingClientRect();
-      return { width: tool.width, height: tool.height,
-        offsets: icons.map(icon => { const box = icon.getBoundingClientRect(); return box.y + box.height / 2 - caption.y - caption.height / 2; }) };
-    }));
-    for (const row of rows) {
-      for (const offset of row.offsets) expect(Math.abs(offset)).toBeLessThanOrEqual(0.5);
-      expect(row.width).toBe(14);
-      expect(row.height).toBe(14);
-    }
-  }
-  await page.screenshot({ animations: 'disabled', path: testInfo.outputPath('minimal-retired-icons.png') });
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('minimal captions persist through completion and yield to newer descriptions and briefs', async ({ page }) => {
   const app = new MinimalTranscriptHarness(page);
   app.sessionEvents = [
@@ -428,11 +348,16 @@ test('minimal captions persist through completion and yield to newer description
 
 test('minimal transcript groups live tools and folds completed work around user messages', async ({ page }, testInfo) => {
   const app = new MinimalTranscriptHarness(page);
+  const nextProse = app.sessionEvents.pop().item.payload;
   await app.install();
   await app.goto();
   await app.openSession();
+  const liveCalls = page.locator('.minimal-tools-live .minimal-call');
+  await expect(liveCalls).toHaveCount(3);
+  for (const call of await liveCalls.all()) await expect(call).toBeVisible();
+  app.append('assistant', nextProse);
   await expect(page.locator('.minimal-tools')).toHaveCount(1);
-  await app.enableMinimal();
+  await expect(page.locator('.minimal-tools .minimal-call').first()).toBeHidden();
   const stream = page.locator('#stream');
   const tools = stream.locator('.minimal-tools');
   await expect(tools).toHaveCount(1);

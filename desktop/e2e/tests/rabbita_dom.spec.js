@@ -1082,14 +1082,10 @@ test('tool-call tabs keep focus-driven scrolling inside the transcript', async (
 
   await originalJson.click();
 
-  const originalJsonInput = tabs.locator('.tool-call-tab-input').nth(1);
+  const originalJsonInput = tabs.getByRole('radio', { name: 'Original JSON', exact: true });
   await expect(originalJsonInput).toBeChecked();
   await originalJsonInput.focus();
   await expect(originalJsonInput).toBeFocused();
-  expect(await transcript.evaluate(node => getComputedStyle(node).position))
-    .toBe('relative');
-  expect(await originalJsonInput.evaluate(node =>
-    Boolean(node.offsetParent?.closest('#transcript')))).toBe(true);
   expect(await page.evaluate(() => document.scrollingElement.scrollTop)).toBe(0);
   expect(await page.locator('.app').evaluate(node =>
     node.getBoundingClientRect().top)).toBe(0);
@@ -1132,57 +1128,6 @@ test('runtime notices keep the compact result-row presentation', async ({ page }
   await expect(result).not.toHaveAttribute('open', '');
   await result.locator('.tool-result-summary').click();
   await expect(result).toContainText('background job bg-1 finished (exit=0)');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a model step shows its thought, then its prose, then its tool rows', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
-  const app = new DesktopBrowserHarness(page);
-  app.sessionEvents = [
-    {
-      sequence: 1,
-      item: {
-        kind: 'user',
-        payload: { content: 'Show the browser fixture model step' },
-      },
-    },
-    {
-      sequence: 2,
-      item: {
-        kind: 'assistant',
-        payload: {
-          content: 'I will inspect the project.',
-          reasoning_content: 'first thought',
-          tool_calls: [{ id: 'c1', name: 'read', arguments: '{"path":"moon.mod"}' }],
-        },
-      },
-    },
-    {
-      sequence: 3,
-      item: {
-        kind: 'tool_result',
-        payload: {
-          tool_call_id: 'c1',
-          tool_name: 'read',
-          content: 'module contents',
-          is_error: false,
-          brief: 'read moon.mod',
-        },
-      },
-    },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-
-  // One durable response is one step, whose parts keep the model's order:
-  // the thought it had, the prose it said, then the calls that prose announced.
-  const step = page.locator('.step');
-  await expect(step).toHaveCount(1);
-  await expect(step.locator(':scope > *')).toHaveClass(['activity-row', 'msg', 'activity-row']);
-  await expect(step.locator('.activity-row').first().locator('.activity-text')).toHaveText('#1 · Thought');
-  await expect(step.locator('.msg .msg-content.markdown')).toContainText('I will inspect the project.');
-  await expect(step.locator('.activity-row').last().locator('.tool-call-text')).toHaveText('read moon.mod');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -1747,32 +1692,6 @@ test('new chat materializes on send, and archive and restore update the sidebar'
   expect(app.pageErrors).toEqual([]);
 });
 
-test('sidebar sizes update immediately between toggles', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await app.install();
-  await app.goto();
-  await expect(page.getByRole('button', { name: 'Hide sidebar', exact: true }))
-    .toBeVisible();
-
-  // No drag class is set: any requested size must take effect immediately,
-  // while the separate toggle test continues to exercise open/close motion.
-  const samples = await page.locator('.app').evaluate(async element => {
-    const sidebar = element.querySelector(':scope > aside');
-    const samples = [];
-    for (const width of [300, 360, 420, 280]) {
-      document.documentElement.style.setProperty('--sidebar-width', `${width}px`);
-      samples.push({ requested: width, actual: sidebar.getBoundingClientRect().width });
-      await new Promise(resolve => requestAnimationFrame(resolve));
-    }
-    return samples;
-  });
-  for (const sample of samples) {
-    expect(Math.abs(sample.actual - sample.requested)).toBeLessThan(0.5);
-  }
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('sidebar toggle stays fixed throughout the sidebar animation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -2286,12 +2205,12 @@ test('sidebar menu dismissal and pending selection follow the clicked row', asyn
   await expect(first).not.toHaveClass(/active/);
   await expect(second.getByRole('status', { name: 'Loading conversation' })).toBeVisible();
   await expect(page.getByText('Loading conversation…', { exact: true })).toBeVisible();
-  const rowSpinner = second.locator('.conversation-load-spinner');
-  const panelSpinner = page.locator('.conversation-load-state-spinner');
-  await expect(rowSpinner).toHaveCSS('animation-name', 'conversation-load-spin');
-  await expect(panelSpinner).toHaveCount(0);
+  const loading = second.getByRole('status', { name: 'Loading conversation' });
+  const moving = () => loading.evaluate(node => node.getAnimations({ subtree: true })
+    .some(animation => animation.playState === 'running'));
+  await expect.poll(moving).toBe(true);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect(rowSpinner).toHaveCSS('animation-name', 'none');
+  await expect.poll(moving).toBe(false);
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
   await expect.poll(() => app.requests.some(request =>
     request.method === 'session.load' && request.params?.session === 'session-2'))

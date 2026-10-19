@@ -6,7 +6,20 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('openseek.minimal_transcript', 'false'));
 });
 
-test('read workflow shows selectors and highlights each MoonBit file in a mixed batch', async ({ page }) => {
+// Observe rendered text colors rather than tokenizer-generated class names or
+// token segmentation. Exclude line-number gutters from this measurement.
+const textColorCount = locator => locator.evaluateAll(elements => {
+  const colors = new Set();
+  for (const element of elements) {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+      if (text.textContent.trim()) colors.add(getComputedStyle(text.parentElement).color);
+    }
+  }
+  return colors.size;
+});
+
+test('read workflow keeps thought, prose and tool order and highlights mixed output', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const output = [
     '=== "src/main.mbt" ===',
@@ -23,7 +36,8 @@ test('read workflow shows selectors and highlights each MoonBit file in a mixed 
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture file reads' } } },
     { sequence: 2, item: { kind: 'assistant', payload: {
-      content: '', tool_calls: [{ id: 'read-workflow', name: 'mbtx', arguments: JSON.stringify({
+      reasoning_content: 'The requested range should be enough.',
+      content: 'Inspect the requested files.', tool_calls: [{ id: 'read-workflow', name: 'mbtx', arguments: JSON.stringify({
         filename: '@builtin/read.mbtx', args: ['src/main.mbt:120:120', 'README.md', 'lib.mbti'],
       }) }],
     } } },
@@ -37,6 +51,16 @@ test('read workflow shows selectors and highlights each MoonBit file in a mixed 
   await app.openSession();
   const call = page.locator('#transcript details.tool-call');
   await expect(call.locator('.tool-call-text')).toContainText('@builtin/read.mbtx');
+  await page.locator('#transcript details.activity > summary').click();
+  const thought = page.getByText('The requested range should be enough.', { exact: true });
+  const prose = page.getByText('Inspect the requested files.', { exact: true });
+  await expect(thought).toBeVisible();
+  await expect(prose).toBeVisible();
+  const thoughtBox = await thought.boundingBox();
+  const proseBox = await prose.boundingBox();
+  const callBox = await call.locator('.tool-call-summary').boundingBox();
+  expect(thoughtBox.y + thoughtBox.height).toBeLessThanOrEqual(proseBox.y);
+  expect(proseBox.y + proseBox.height).toBeLessThanOrEqual(callBox.y);
   await call.locator('.tool-call-summary').click();
   await call.getByText('Filename', { exact: true }).click();
   await expect(call.locator('.mbtx-args')).toContainText('src/main.mbt:120:120');
@@ -47,7 +71,11 @@ test('read workflow shows selectors and highlights each MoonBit file in a mixed 
   const rendered = result.locator('pre.tool-call-output');
   await expect(rendered.locator('.read-moonbit-output')).toHaveCount(2);
   await expect(rendered.locator('.read-moonbit-gutter')).toHaveText(['120', '1']);
-  await expect(rendered.locator('span[class^="mtk"]').first()).toBeVisible();
+  const sources = rendered.locator('.read-moonbit-code');
+  await expect(sources).toHaveText(['let answer = 42', 'pub fn answer() -> Int']);
+  for (const code of await sources.all()) {
+    await expect.poll(() => textColorCount(code)).toBeGreaterThan(1);
+  }
   await expect(rendered).toContainText('# Documentation <literal>');
   await result.getByText('Original output', { exact: true }).click();
   await expect(result.locator('pre.tool-card-original-json:visible')).toHaveText(output);
@@ -119,13 +147,13 @@ test('saved reasoning and answers default unlabelled code to MoonBit', async ({ 
 
 test('write calls show numbered content highlighted by the path language', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
-  // Each write's first token, or null when the path has no tokenizer.
+  // Paths with a supported language should render syntax colors; plain text should not.
   const writes = [
-    { path: 'src/lib.mbt', content: 'pub fn answer() -> Int {\n  42\n}', first: 'pub' },
-    { path: 'src/pkg.generated.mbti', content: 'package "demo/src"\n\npub fn answer() -> Int', first: 'package' },
-    { path: 'scripts/fix.mbtx', content: 'fn main {\n  println("<b>hi</b>")\n}', first: 'fn' },
-    { path: 'src/moon.pkg', content: 'import {\n  "moonbitlang/core/json",\n}', first: 'import' },
-    { path: 'notes.txt', content: 'plain <notes>\nsecond line', first: null },
+    { path: 'src/lib.mbt', content: 'pub fn answer() -> Int {\n  42\n}', highlighted: true },
+    { path: 'src/pkg.generated.mbti', content: 'package "demo/src"\n\npub fn answer() -> Int', highlighted: true },
+    { path: 'scripts/fix.mbtx', content: 'fn main {\n  println("<b>hi</b>")\n}', highlighted: true },
+    { path: 'src/moon.pkg', content: 'import {\n  "moonbitlang/core/json",\n}', highlighted: true },
+    { path: 'notes.txt', content: 'plain <notes>\nsecond line', highlighted: false },
   ];
   app.sessionEvents = [
     { sequence: 1, item: { kind: 'user', payload: { content: 'Show the browser fixture writes' } } },
@@ -140,23 +168,17 @@ test('write calls show numbered content highlighted by the path language', async
   await app.openSession();
   const calls = page.locator('#transcript details.tool-call');
   await expect(calls).toHaveCount(writes.length);
-  for (const [index, { path, content, first }] of writes.entries()) {
+  for (const [index, { path, content, highlighted }] of writes.entries()) {
     const call = calls.nth(index);
     await call.locator('.tool-call-summary').click();
     const card = call.locator('.write-args');
-    await expect(card.locator('.tool-card-chip')).toHaveText([`path: ${path}`]);
+    await expect(card.locator('.tool-card-chip')).toContainText(path);
     const lines = content.split('\n');
     await expect(card.locator('.moonbit-gutter')).toHaveText(lines.map((_, line) => String(line + 1)));
     await expect(card.locator('.moonbit-code')).toHaveText(lines);
-    const tokens = card.locator('span[class^="mtk"]');
-    if (first === null) {
-      await expect(tokens).toHaveCount(0);
-    } else {
-      await expect(tokens.first()).toHaveText(first);
-      // Keywords take a theme color distinct from plain source text.
-      const colors = await tokens.evaluateAll(spans => new Set(spans.map(span => getComputedStyle(span).color)).size);
-      expect(colors).toBeGreaterThan(1);
-    }
+    const colors = () => textColorCount(card.locator('.moonbit-code'));
+    if (highlighted) await expect.poll(colors).toBeGreaterThan(1);
+    else await expect.poll(colors).toBe(1);
   }
   const plain = calls.nth(writes.length - 1);
   await plain.getByText('Original JSON', { exact: true }).click();

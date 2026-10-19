@@ -16,10 +16,24 @@ for (const endpoint of ['auth/me', 'devices']) {
   test(`${endpoint} HTTP 500 remains a retryable failure`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     await app.install();
-    await page.route(`**/v2/${endpoint}`, route => route.fulfill({ status: 500, body: 'unavailable' }));
+    let failing = true;
+    let attempts = 0;
+    await page.route(`**/v2/${endpoint}`, route => {
+      attempts++;
+      return failing ? route.fulfill({ status: 500, body: 'unavailable' }) : route.fallback();
+    });
     await page.goto('/dist/browser/index.html?device=device-a');
-    await expect(page.getByRole('main').getByText(/answered HTTP 500/)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
+    const gate = page.getByRole('main');
+    await expect(gate.getByText(/500/)).toBeVisible();
+    const retry = gate.getByRole('button', { name: 'Try again', exact: true });
+    await expect(retry).toBeVisible();
+    const failedAttempts = attempts;
+    failing = false;
+    await retry.click();
+    await expect.poll(() => attempts).toBeGreaterThan(failedAttempts);
+    await app.openSession();
+    await expect(page.getByText('Browser result', { exact: true })).toBeVisible();
+    await expect(retry).toBeHidden();
     expect(app.pageErrors).toEqual([]);
   });
 }

@@ -1133,6 +1133,11 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
     host.__officeViewerPdf.viewer.currentScaleValue)).not.toBe('page-width');
   await page.locator('#task').fill('Existing draft');
   const captureRect = async () => {
+    // Zoom/rotation updates precede painting and replace the old canvas. Read
+    // geometry only after the first page has finished that replacement.
+    await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
+      host.__officeViewerPdf.viewer.getPageView(0).renderingState)).toBe(3);
+    await expect(page.locator('.pdfViewer canvas').first()).toBeVisible();
     const b = await page.locator('.pdfViewer canvas').first().boundingBox();
     return { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 35), width: 200, height: 90 };
   };
@@ -1160,9 +1165,6 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
       host.__officeViewerPdf.viewer.pagesRotation)).toBe(rotation);
   }
   await page.locator('.pdf-container').evaluate(el => { el.scrollLeft = 0; el.scrollTop = 0; });
-  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host =>
-    host.__officeViewerPdf.viewer.getPageView(0).renderingState)).toBe(3);
-  await expect(page.locator('.pdfViewer canvas').first()).toBeVisible();
   await captureRegion(page, await captureRect(), { confirm: false });
   await feedback.locator('textarea').fill('Discard this comment');
   await feedback.locator('textarea').press('Escape');
@@ -1478,9 +1480,7 @@ for (const restart of [false, true]) {
     // Hold the first index's structure request. A subsequent index must become
     // usable before this older request resolves, even for the same DOM page.
     await page.locator('#openseek-office-surface').evaluate(async host => {
-      const session = host.__officeViewerPdf;
-      const mapping = await session.mapping(1);
-      const pdfPage = mapping.data.page;
+      const pdfPage = host.__officeViewerPdf.viewer.getPageView(0).pdfPage;
       const original = pdfPage.getStructTree.bind(pdfPage);
       let first = true;
       window.pdfIndexPending = false;

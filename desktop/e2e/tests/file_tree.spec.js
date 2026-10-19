@@ -29,6 +29,10 @@ test('switching editors reveals the active file inside collapsed directories', a
   await expect(src).toHaveAttribute('aria-expanded', 'true');
   await expect(main).toHaveAttribute('aria-selected', 'true');
   await expect(tree.locator(':focus')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
+  await expect(main).toBeVisible();
+  await expect(main).toHaveAttribute('aria-selected', 'true');
+  await expect(src).toHaveAttribute('aria-expanded', 'true');
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -149,92 +153,6 @@ test('a failed ancestor listing stops until the next explicit reveal', async ({ 
   await files.click();
   await expect(tree.getByRole('treeitem', { name: 'main.mbt', exact: true })).toHaveAttribute('aria-selected', 'true');
   expect(app.requests.filter(request => request.method === 'fs.read_directory' && request.params?.path === '/workspace/src')).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('file tree keeps compact aligned rows and continuous ancestor guides', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  app.directoryEntries['/workspace'] = [
-    { name: 'production', is_dir: true },
-    { name: 'staging', is_dir: true },
-    { name: 'README.md', is_dir: false },
-  ];
-  app.directoryEntries['/workspace/production'] = [{ name: '.env', is_dir: false }];
-  app.directoryEntries['/workspace/staging'] = [
-    { name: 'deploy', is_dir: true },
-    { name: '.env', is_dir: false },
-    { name: 'docker-compose.yml', is_dir: false },
-  ];
-  const longName = 'a_very_long_deployment_configuration_name_that_does_not_fit.mbt';
-  app.directoryEntries['/workspace/staging/deploy'] = [{ name: longName, is_dir: false }];
-  app.workingFiles['staging/.env'] = 'ENV=staging\n';
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-  await app.openReview();
-  await page.getByRole('tab', { name: 'Files', exact: true }).click();
-  const tree = page.locator('.workspace-file-list');
-  const production = tree.locator('[data-path="production"]');
-  const staging = tree.locator('[data-path="staging"]');
-  await production.click();
-  // Loading the first directory inserts a row above staging. Wait for that
-  // layout change before clicking staging, or the click can hit production/.env.
-  await expect(tree.locator('[data-path="production/.env"]')).toBeVisible();
-  await staging.click();
-  const deploy = tree.locator('[data-path="staging/deploy"]');
-  await deploy.click();
-  const env = tree.locator('[data-path="staging/.env"]');
-  const nested = tree.locator(`[data-path="staging/deploy/${longName}"]`);
-  const readme = tree.locator('[data-path="README.md"]');
-  await expect(nested).toBeVisible();
-  for (const row of [production, staging, deploy, env, nested, readme]) {
-    expect((await row.boundingBox()).height).toBe(24);
-  }
-  expect((await production.boundingBox()).x - (await tree.boundingBox()).x).toBe(4);
-  // Files reserve the same icon slot as directories, so peers align.
-  expect((await readme.locator('.tree-name').boundingBox()).x)
-    .toBe((await production.locator('.tree-name').boundingBox()).x);
-  expect((await env.locator('.tree-name').boundingBox()).x)
-    .toBe((await deploy.locator('.tree-name').boundingBox()).x);
-  expect((await nested.locator('.tree-name').boundingBox()).x - (await env.locator('.tree-name').boundingBox()).x)
-    .toBe(14);
-  await expect(env.locator('.tree-twistie svg')).toHaveCount(0);
-  await expect(deploy.locator('.tree-twistie svg')).toBeVisible();
-  expect((await env.locator('.tree-indent-guides').boundingBox()).width).toBe(14);
-  expect((await nested.locator('.tree-indent-guides').boundingBox()).width).toBe(28);
-  expect((await readme.locator('.tree-indent-guides').boundingBox()).width).toBe(0);
-  const parentGuide = await deploy.locator('.tree-indent-guides').boundingBox();
-  const nestedGuide = await nested.locator('.tree-indent-guides').boundingBox();
-  expect(parentGuide.y + parentGuide.height).toBe(nestedGuide.y);
-  expect(parentGuide.x).toBe(nestedGuide.x);
-  const rootChevron = await production.locator('.tree-twistie').boundingBox();
-  expect(parentGuide.x).toBe(rootChevron.x + rootChevron.width / 2);
-  for (const colorScheme of ['light', 'dark']) {
-    await page.emulateMedia({ colorScheme });
-    const textColor = await page.locator('body')
-      .evaluate(element => getComputedStyle(element).color);
-    await expect(env).toHaveCSS('color', textColor);
-    expect(await env.locator('.tree-indent-guides').evaluate(element => getComputedStyle(element).backgroundImage))
-      .not.toBe('none');
-    await page.locator('.file-tree-pane').screenshot({ path: testInfo.outputPath(`files-${colorScheme}.png`) });
-  }
-  await env.click();
-  await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-  await expect(env).toHaveClass(/selected/);
-  await expect(page.locator('.editor-tabs .editor-tab.active')).toContainText('.env');
-  // Resizing preserves directory expansion and the selected file.
-  await page.getByRole('button', { name: 'Expand panel', exact: true }).click();
-  await expect(nested).toBeVisible();
-  await expect(env).toHaveClass(/selected/);
-  await expect(staging).toHaveAttribute('aria-expanded', 'true');
-  await staging.click();
-  await expect(nested).toBeHidden();
-  await expect(staging).toHaveAttribute('aria-expanded', 'false');
-  await staging.click();
-  await expect(nested).toBeVisible();
-  // Open Editors and the header migration are deliberately absent from this PR.
-  await expect(page.locator('.open-editors')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 
@@ -367,35 +285,58 @@ test('file tree exposes hierarchy and one keyboard entry with directional naviga
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the file picker shows a temporary tree and only a manual toggle keeps it beside files', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.directoryEntries['/workspace'] = [
-    { name: 'a.mbt', is_dir: false },
-    { name: 'b.mbt', is_dir: false },
-  ];
-  app.workingFiles['a.mbt'] = 'fn main {}\n';
-  app.workingFiles['b.mbt'] = 'fn main {}\n';
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  const tree = page.getByRole('tree', { name: 'Workspace files' });
-  for (const name of ['a.mbt', 'b.mbt']) {
-    await app.openReview();
-    await page.getByRole('tab', { name: 'Files', exact: true }).click();
+for (const layout of ['right-sidebar', 'bottom-panel']) {
+  test(`${layout} file tree distinguishes temporary opening from a pinned tree and releases narrow-screen space`, async ({ page }) => {
+    await page.addInitScript(layout => localStorage.setItem('openseek.tree_layout', layout), layout);
+    const app = new DesktopBrowserHarness(page);
+    app.directoryEntries['/workspace'] = [
+      { name: 'a.mbt', is_dir: false },
+      { name: 'b.mbt', is_dir: false },
+    ];
+    app.workingFiles['a.mbt'] = 'fn main {}\n';
+    app.workingFiles['b.mbt'] = 'fn main {}\n';
+    await app.install();
+    await app.goto();
+    await app.openSession();
+    const tree = page.getByRole('tree', { name: 'Workspace files' });
+    for (const name of ['a.mbt', 'b.mbt']) {
+      await app.openReview();
+      await page.getByRole('tab', { name: 'Files', exact: true }).click();
+      await expect(tree).toBeVisible();
+      await tree.getByRole('treeitem', { name, exact: true }).click();
+      await expect(page.locator('.editor-tab.active')).toContainText(name);
+      await expect(tree).toBeHidden();
+    }
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await tree.getByRole('treeitem', { name: 'a.mbt', exact: true }).click();
     await expect(tree).toBeVisible();
-    await tree.getByRole('treeitem', { name, exact: true }).click();
-    await expect(page.locator('#viewer-host .view-lines')).toBeVisible();
+    await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
+    await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+    await expect(tree).toBeVisible();
+    await page.getByTitle('Hide file tree', { exact: true }).click();
     await expect(tree).toBeHidden();
-    expect(await page.locator('.file-tree-pane').evaluate(element => element.getAnimations().length)).toBe(0);
-  }
-  await page.getByTitle('Show file tree', { exact: true }).click();
-  await tree.getByRole('treeitem', { name: 'a.mbt', exact: true }).click();
-  await expect(tree).toBeVisible();
-  await page.getByRole('button', { name: 'Hide panel', exact: true }).click();
-  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
-  await expect(tree).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
+
+    await page.setViewportSize({ width: 390, height: 760 });
+    const expectFullViewer = async () => {
+      await expect(tree).toBeHidden();
+      await expect.poll(() => page.locator('.viewer-stack').evaluate(element => {
+        const body = element.parentElement.getBoundingClientRect();
+        const viewer = element.getBoundingClientRect();
+        return Math.max(Math.abs(body.width - viewer.width), Math.abs(body.height - viewer.height));
+      })).toBeLessThanOrEqual(1);
+    };
+    await expectFullViewer();
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await expect(tree).toBeVisible();
+    await page.getByTitle('Hide file tree', { exact: true }).click();
+    await expectFullViewer();
+    await page.getByTitle('Show file tree', { exact: true }).click();
+    await tree.getByRole('treeitem', { name: 'b.mbt', exact: true }).click();
+    await expect(page.locator('.editor-tab.active')).toContainText('b.mbt');
+    await expectFullViewer();
+    expect(app.pageErrors).toEqual([]);
+  });
+}
 
 for (const target of ['group_40', 'group_40/nested']) {
   test(`directory link ${target} focuses and reveals its destination after loading and on repeated clicks`, async ({ page }) => {

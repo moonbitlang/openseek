@@ -103,6 +103,9 @@ test('mounted GitHub comments, draft failures and focus follow live language cha
     await expect(page.locator('.github-review-error')).toContainText(locale.error);
     await expect(page.locator('.github-review-error')).toContainText('quota test');
     await page.locator(`[data-diff-mode="${locale.mode}"]`).click();
+    // The old comment is still visible until the mode change renders. Wait for
+    // that transition before focusing the next locale's reply composer.
+    await expect(page.locator(`[data-diff-mode="${locale.mode}"]`)).toHaveAttribute('aria-pressed', 'true');
     await expect(right).toBeVisible();
     await expect(reply).toHaveValue(draft);
     await expect(right.locator('.github-review-markdown')).toContainText('Could we add coverage for the new limit?');

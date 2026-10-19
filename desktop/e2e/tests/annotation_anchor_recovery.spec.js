@@ -87,23 +87,29 @@ test('an unavailable Word anchor clears the old composer and permits reselection
   await page.locator('#quick-open-input').fill('report.docx');
   await page.getByRole('option', { name: /report\.docx/ }).click();
   const source = page.locator('.word-page svg text').first();
-  const select = (end, clear) => source.evaluate((element, { end, clear }) => {
+  const select = (whole, clear) => source.evaluate((element, { whole, clear }) => {
     const range = document.createRange();
-    range.setStart(element.firstChild, 0);
-    range.setEnd(element.firstChild, end);
+    range.selectNodeContents(element);
+    if (!whole) {
+      // Find text through wrappers rather than assuming a particular SVG tree.
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const text = walker.nextNode();
+      if (!text?.length) throw new Error('Expected selectable fixture text');
+      range.setEnd(text, Math.max(1, Math.floor(text.length / 2)));
+    }
     const selection = getSelection();
     selection.removeAllRanges();
     selection.addRange(range);
     document.dispatchEvent(new Event('selectionchange'));
     if (clear) selection.removeAllRanges();
-  }, { end, clear });
+  }, { whole, clear });
   const input = page.locator('#office-feedback-input textarea');
-  await select(4, false);
+  await select(false, false);
   await expect(input).toBeVisible();
-  await select(7, true);
+  await select(true, true);
   await expect(input).toBeHidden();
   await expect(page.locator('#office-feedback-input')).toBeHidden();
-  await select(7, false);
+  await select(true, false);
   await expect(input).toBeVisible();
   await input.fill('A fresh, valid source');
   await expect(input).toHaveValue('A fresh, valid source');

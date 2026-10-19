@@ -117,6 +117,36 @@ test('large semantic selection retries and sends its original draft while later 
 });
 
 
+test('closing the follow-up menu does not steal focus back from the composer', async ({ page }) => {
+  await page.clock.install();
+  const app = new DesktopBrowserHarness(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const composer = page.locator('#task');
+  await composer.fill('Start a turn');
+  await page.getByTitle('Send', { exact: true }).click();
+  const choice = page.getByRole('button', { name: 'Follow-up action', exact: true });
+  await expect(choice).toContainText('Steer now');
+  await composer.fill('Queued draft to preserve');
+  await choice.click();
+  await expect(page.getByRole('listbox', { name: 'Follow-up action' })).toBeVisible();
+
+  // Put the user's next focus change between selection and the closing paint.
+  // Enter must still reach the composer when that paint eventually completes.
+  await page.clock.pauseAt(await page.evaluate(() => Date.now()) + 100);
+  await page.getByRole('option', { name: 'Queue next', exact: true }).click();
+  await composer.focus();
+  await page.clock.runFor(32);
+  await expect(choice).toContainText('Queue next');
+  await expect(composer).toBeFocused();
+  await page.clock.resume();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.queued-input-row')).toContainText('Queued draft to preserve');
+  expect(app.requests.filter(request => request.method === 'agent.steer')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('queued message Edit waits for semantic preparation so the send keeps its draft and target', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   app.semanticSearchMatches = largeSelection();

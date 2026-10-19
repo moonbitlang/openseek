@@ -71,7 +71,10 @@ for (const kind of ['question', 'mcp-form']) {
     approval(app, 'first-command', 2);
     if (kind === 'question') {
       request(app, 'editable', 3, 'item/tool/requestUserInput', {
-        questions: [{ id: 'scope', header: 'Scope', question: 'Which files?' }],
+        questions: [
+          { id: 'scope', header: 'Scope', question: 'Which files?' },
+          { id: 'details', header: 'Details', question: 'Any details?' },
+        ],
       });
     } else {
       request(app, 'editable', 3, 'mcpServer/elicitation/request', {
@@ -97,7 +100,39 @@ for (const kind of ['question', 'mcp-form']) {
       .toEqual([3, 6, 'backward']);
     await page.locator('.codex-pending').screenshot({ path: testInfo.outputPath('input-after-removal.png') });
     await page.keyboard.insertText('NEW');
-    await expect(input).toHaveValue(draft.slice(0, 3) + 'NEW' + draft.slice(6));
+    const edited = draft.slice(0, 3) + 'NEW' + draft.slice(6);
+    await expect(input).toHaveValue(edited);
+    if (kind === 'question') {
+      const question = page.locator('.user-question-card');
+      await question.getByRole('button', { name: 'Next', exact: true }).click();
+      await expect(question.getByText('Any details?', { exact: true })).toBeVisible();
+      await question.locator('textarea').fill('Keep keyboard support.');
+      app.rpcErrors.set('codex.server_request.respond', 'Temporary failure');
+      await question.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(question.locator('.user-question-error')).toContainText('Temporary failure');
+      await expect(question.locator('textarea')).toHaveValue('Keep keyboard support.');
+      app.rpcErrors.delete('codex.server_request.respond');
+      await question.getByRole('button', { name: 'Send', exact: true }).click();
+      const responses = () => app.requests.filter(r => r.method === 'codex.server_request.respond');
+      await expect.poll(() => responses().length).toBe(2);
+      expect(responses().at(-1).params).toMatchObject({
+        response_token: 'editable', result: { answers: {
+          scope: { answers: [edited] }, details: { answers: ['Keep keyboard support.'] },
+        } },
+      });
+      resolve(app, 'editable', 5);
+      await expect(question).toHaveCount(0);
+      request(app, 'close-me', 6, 'item/tool/requestUserInput', {
+        questions: [{ id: 'more', question: 'Anything else?' }],
+      });
+      await question.locator('.user-question-close').click();
+      await expect.poll(() => responses().length).toBe(3);
+      expect(responses().at(-1).params).toMatchObject({
+        response_token: 'close-me', result: { answers: {} },
+      });
+      resolve(app, 'close-me', 7);
+      await expect(question).toHaveCount(0);
+    }
     expect(app.pageErrors).toEqual([]);
   });
 }
@@ -120,64 +155,5 @@ test('reusing a request id with a new response token replaces its DOM node', asy
   await replacement.click();
   await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(1);
   expect(app.requests.find(r => r.method === 'codex.server_request.respond').params.response_token).toBe('new-command');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Codex question pages share selection, custom replies, retry and close behavior', async ({ page }, testInfo) => {
-  const app = await openCodex(page);
-  request(app, 'questions', 2, 'item/tool/requestUserInput', {
-    questions: [
-      { id: 'scope', header: 'Scope', question: 'Which approach should we use?', options: [
-        { label: 'Small change', description: 'Keep the current layout' },
-        { label: 'Full redesign', description: 'Replace the layout' },
-      ] },
-      { id: 'details', header: 'Details', question: 'Any details?' },
-    ],
-  });
-  const card = page.locator('.user-question-card');
-  const option = card.getByRole('button', { name: /Small change/ });
-  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
-  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await option.click();
-  await expect(option).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.locator('textarea')).toHaveValue('');
-  const badge = option.locator('.user-question-number');
-  expect(await badge.evaluate(node => getComputedStyle(node).backgroundColor))
-    .toBe(await badge.evaluate(node => getComputedStyle(node).borderTopColor));
-  await page.screenshot({ path: testInfo.outputPath('codex-shared-question-selected.png'), animations: 'disabled' });
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
-  await card.locator('textarea').fill('Keep keyboard support.');
-  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
-  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
-  await expect(option).toHaveAttribute('aria-pressed', 'true');
-  await card.locator('textarea').fill('Small change, with updated spacing');
-  await expect(option).toHaveAttribute('aria-pressed', 'false');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
-  await expect(card.locator('textarea')).toHaveValue('Keep keyboard support.');
-  app.rpcErrors.set('codex.server_request.respond', 'Temporary failure');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card.locator('.user-question-error')).toContainText('Temporary failure');
-  app.rpcErrors.delete('codex.server_request.respond');
-  await card.getByRole('button', { name: 'Send', exact: true }).click();
-  await expect(card.getByRole('button', { name: 'Sending…', exact: true })).toBeDisabled();
-  await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(2);
-  expect(app.requests.filter(r => r.method === 'codex.server_request.respond').at(-1).params).toMatchObject({
-    response_token: 'questions', result: { answers: {
-      scope: { answers: ['Small change, with updated spacing'] },
-      details: { answers: ['Keep keyboard support.'] },
-    } },
-  });
-  resolve(app, 'questions', 3);
-  await expect(card).toHaveCount(0);
-  request(app, 'close-me', 4, 'item/tool/requestUserInput', {
-    questions: [{ id: 'more', question: 'Anything else?' }],
-  });
-  await card.locator('.user-question-close').click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'codex.server_request.respond').length).toBe(3);
-  expect(app.requests.filter(r => r.method === 'codex.server_request.respond').at(-1).params)
-    .toMatchObject({ response_token: 'close-me', result: { answers: {} } });
-  resolve(app, 'close-me', 5);
-  await expect(card).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

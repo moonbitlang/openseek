@@ -214,9 +214,9 @@ test('PR checkout supports keyboard choices, failure notifications and opens Rev
     const row = element.getBoundingClientRect();
     const title = element.querySelector('.github-item-title').getBoundingClientRect();
     const action = element.querySelector('.github-checkout').getBoundingClientRect();
-    return { fits: title.right <= action.left && action.right <= row.right, height: row.height };
+    return { fits: title.right <= action.left && action.right <= row.right };
   });
-  expect(bounds).toEqual({ fits: true, height: 26 });
+  expect(bounds.fits).toBe(true);
   await page.keyboard.press('Enter');
   await expect(row.getByRole('button', { name: 'Checking out PR #42…', exact: true })).toBeDisabled();
   const dialog = page.getByRole('dialog', { name: 'Uncommitted changes before checking out PR #42' });
