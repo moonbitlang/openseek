@@ -19,6 +19,7 @@ export class DesktopBrowserHarness {
     // Error and delay controls let tests exercise the product's real pending,
     // failed, and retry states without replacing its Rabbita update logic.
     this.rpcErrors = new Map();
+    this.connectionAvailable = true;
     this.rpcDelays = new Map();
     this.textSearchMatches = [];
     this.semanticSearchMatches = [];
@@ -555,6 +556,10 @@ export class DesktopBrowserHarness {
       this.issuedTickets.delete(ticket);
       this.socketTickets.push(ticket);
       this.socketURLs.push(socket.url());
+      if (!this.connectionAvailable) {
+        socket.close({ code: 1001, reason: 'fixture offline' });
+        return;
+      }
       this.socket = socket;
       socket.onMessage(async message => {
         const request = JSON.parse(message.toString());

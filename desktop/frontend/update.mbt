@@ -7288,7 +7288,7 @@ fn update_device_msg(
       // comes back through this function, a removed or re-added device fails
       // the state/epoch guards and its old loop simply ends.
       let failures = dev.reconnect_failures + 1
-      let bridge = if failures == WsLostAfter {
+      let bridge = if failures >= WsLostAfter {
         BridgeLost(
           match model.locale {
             SimplifiedChinese =>
@@ -7304,7 +7304,7 @@ fn update_device_msg(
           },
         )
       } else {
-        dev.bridge
+        Connecting
       }
       (
         @cmd.delay(
@@ -12254,6 +12254,18 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     one,
   )
   inspect(due.dev().reconnect_attempt, content="1")
+  let (_, again) = update(
+    dispatch,
+    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    model,
+  )
+  assert_true(
+    one.bridge_state() is Connecting && again.bridge_state() is Connecting,
+  )
+  assert_eq(one.dev().reconnect_failures, again.dev().reconnect_failures)
+  assert_eq(one.dev().reconnect_attempt, again.dev().reconnect_attempt)
+  assert_true(model.bridge_state() is Connected)
+  assert_eq(model.dev().reconnect_failures, 0)
   // Terminal retirement is covered by the terminal component's disconnect
   // test; the application state owns only the reconnect policy now.
   let (_, two) = update(
@@ -12262,13 +12274,21 @@ test "socket losses mark the bridge lost at the third consecutive drop" {
     due,
   )
   inspect(two.dev().reconnect_failures, content="2")
-  assert_true(two.bridge_state() is Connected)
+  assert_true(one.bridge_state() is Connecting)
+  assert_true(two.bridge_state() is Connecting)
   let (_, three) = update(
     dispatch,
     FromDevice(channel, ChannelDown(websocket_epoch=0)),
     two,
   )
   assert_true(three.bridge_state() is BridgeLost(_))
+  let (_, four) = update(
+    dispatch,
+    FromDevice(channel, ChannelDown(websocket_epoch=0)),
+    three,
+  )
+  assert_true(four.bridge_state() is BridgeLost(_))
+  assert_true(four.display_status() is Reconnecting)
 }
 
 ///|

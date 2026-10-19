@@ -1,4 +1,18 @@
 ///|
+/// One stable composer slot shared by both conversation providers.
+fn Model::connection_banner(self : Model) -> @composer.ContextComponent {
+  @composer.ConnectionBanner(
+    device_name=if !self.is_desktop &&
+      self.focused_device() is Some(device) &&
+      device.reconnect_failures > 0 {
+      Some(self.focused_device_name())
+    } else {
+      None
+    },
+  )
+}
+
+///|
 /// Project the root application state into the composer's fixed package
 /// boundary. This method is the only place where composer availability and
 /// surrounding root-owned presentation are derived from `Model`.
@@ -73,15 +87,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
   // projects only typed state, so no caller-owned DOM or command can alter
   // the component's child ordering.
   let context : Array[@composer.ContextComponent] = [
-    @composer.ConnectionBanner(
-      // A browser console names the remote device it lost; the desktop
-      // window's own host needs no name.
-      device_name=if !self.is_desktop && self.bridge_state() is BridgeLost(_) {
-        Some(self.focused_device_name())
-      } else {
-        None
-      },
-    ),
+    self.connection_banner(),
     // Sub-runs dock here rather than at the transcript's tail: a child turn's
     // progress is live run status that no durable event describes, and the
     // scroller shows only what the record can place. The plan is the mirror
@@ -348,6 +354,27 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
       @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
     },
   })
+  let input = {
+    ..input,
+    presentation: {
+      ..input.presentation,
+      context: [self.connection_banner(), ..input.presentation.context],
+      primary_action: if self.bridge_state() is Connected {
+        input.presentation.primary_action
+      } else {
+        match input.presentation.primary_action {
+          Send(..) => @composer.Send(available=false)
+          Running(submit~, ..) =>
+            @composer.Running(
+              submit~,
+              steer_available=false,
+              can_stop=false,
+              queue_available=false,
+            )
+        }
+      },
+    },
+  }
   if self.codex_project_adoption_pending() {
     {
       ..input,

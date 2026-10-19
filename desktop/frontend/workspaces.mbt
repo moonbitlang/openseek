@@ -19,7 +19,12 @@ fn fetch_projects(
         @commands.workspace_list,
         @protocol.EmptyPayload::NoPayload,
       ) catch {
-        error => WorkspaceError(@interop.bridge_error_text(error))
+        error => {
+          if @interop.bridge_connection_lost(channel, error) {
+            return
+          }
+          WorkspaceError(@interop.bridge_error_text(error))
+        }
       }
       // Translate the existing wire name at the protocol boundary; frontend
       // state consistently calls this registered directory list projects.

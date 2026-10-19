@@ -356,6 +356,7 @@ pub fn ContextComponent::render(
         Some(name) =>
           @html.div(
             class="composer-context-row composer-banner",
+            attrs=@html.Attrs::build().role("status"),
             dynamic_text(locale, DReconnecting(name.to_string())),
           )
         None =>
