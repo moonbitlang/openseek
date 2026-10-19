@@ -491,8 +491,7 @@ $ env DEEPSEEK=test-key openseek.exe serve </dev/null 2>/dev/null | grep '"event
 {"event":"mcp_status","status":{"configs":[],"servers":[]}}
 ```
 
-A server that cannot start is listed with the file it came from and its
-failure rather than left out (the `grep -o` stops before the error text, which
+A server that cannot start is listed with its failure rather than left out (the `grep -o` stops before the error text, which
 is the operating system's):
 
 ```mooncram
@@ -501,7 +500,7 @@ $ sh <<'EOF'
 > env DEEPSEEK=test-key openseek.exe serve --mcp-config mcp.json </dev/null 2>/dev/null | grep -o '"event":"mcp_status".*"state":"failed"'
 > rm -f mcp.json
 > EOF
-"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","source":"mcp.json","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
+"event":"mcp_status","status":{"configs":[{"path":"mcp.json","state":"loaded"}],"servers":[{"name":"notes","transport":"stdio","target":"openseek-no-such-mcp-server","state":"failed"
 ```
 
 `serve` takes no positional; a stray task is rejected by the parser before

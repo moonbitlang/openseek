@@ -9,9 +9,8 @@ pub const McpClientVersion : String = "0.2.2"
 /// because the connections are — it is what an `mcp_status` event reports.
 struct McpRegistry {
   configs : Array[@protocol.McpConfigStatus]
-  /// Each server of the merged configuration, in order, beside the file its
-  /// winning entry came from.
-  servers : Array[(String, @mcptools.ServerEntry)]
+  /// Each server of the merged configuration, in order.
+  servers : Array[@mcptools.ServerEntry]
 }
 
 ///|
@@ -27,7 +26,7 @@ pub async fn[X] connect_mcp(
   workspace_root~ : String,
 ) -> McpRegistry {
   let configs : Array[@protocol.McpConfigStatus] = []
-  let loaded : Array[(String, Array[@mcpconfig.McpServer])] = []
+  let loaded : Array[Array[@mcpconfig.McpServer]] = []
   for path in config_paths {
     let text = @fs.read_file(path).text() catch {
       error => {
@@ -46,13 +45,12 @@ pub async fn[X] connect_mcp(
       }
     }
     configs.push({ path, state: Loaded, })
-    loaded.push((path, servers))
+    loaded.push(servers)
   }
   // Preserve the single-file failure contract: no registration event when
   // every input failed to load. A valid empty config still registers normally.
   guard !loaded.is_empty() else { return { configs, servers: [], } }
-  let (sources, servers) = @mcpconfig.merge_sourced(loaded).unzip()
-  // `connect` answers one entry per server, in order.
+  let servers = @mcpconfig.merge(loaded)
   let entries = @mcptools.connect(
     scope,
     servers,
@@ -60,7 +58,7 @@ pub async fn[X] connect_mcp(
     client_version=McpClientVersion,
     workspace_root~,
   )
-  let registry = { configs, servers: sources.zip(entries), }
+  let registry = { configs, servers: entries, }
   let tools = registry.tools()
   @emit.emit(
     McpToolsRegistered(
@@ -77,7 +75,7 @@ pub async fn[X] connect_mcp(
 fn McpRegistry::tools(
   self : McpRegistry,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  self.servers.map(server => server.1.tools).flatten()
+  self.servers.map(entry => entry.tools).flatten()
 }
 
 ///|
@@ -89,8 +87,8 @@ pub fn McpRegistry::on_connection_closed(
   self : McpRegistry,
   handler : () -> Unit,
 ) -> Unit {
-  for server in self.servers {
-    if server.1.connection is Live(client) {
+  for entry in self.servers {
+    if entry.connection is Live(client) {
       client.set_close_handler(handler)
     }
   }
@@ -102,8 +100,7 @@ pub fn McpRegistry::on_connection_closed(
 /// its connection is `Lost`, with the tools that are still registered.
 pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
   let servers : Array[@protocol.McpServerStatus] = []
-  for server in self.servers {
-    let (source, entry) = server
+  for entry in self.servers {
     let tools : Array[@protocol.McpTool] = entry.tools.map(tool => {
       name: tool.name,
       description: tool.description,
@@ -121,7 +118,6 @@ pub fn McpRegistry::status(self : McpRegistry) -> @protocol.McpStatus {
     }
     servers.push({
       name: entry.server.name(),
-      source,
       transport: match entry.server {
         Stdio(..) => Stdio
         Http(..) => Http

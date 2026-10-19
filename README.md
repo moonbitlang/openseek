@@ -321,8 +321,8 @@ asked. It emits an `mcp_status` event once it has finished connecting them, and
 again each time that state changes — a connected server exiting, say. Each
 event carries the whole state: every configuration file in the order given,
 `loaded` or `failed` with the error, and each server of the merged
-configuration with its `source` file, its `transport`, its `target` (the
-command, or the URL without credentials), and a `state` — `connected` with the
+configuration with its `transport`, its `target` (the command, or the URL
+without credentials), and a `state` — `connected` with the
 tools it registered, `lost` when it connected and the connection has closed
 since, `no_tools`, `failed` with the error, or `skipped` when earlier servers
 used up the tool budget. A controller keeps the latest one; it is this engine's

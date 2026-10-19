@@ -283,7 +283,6 @@ pub fn McpServerState::to_repr(Self) -> @debug.Repr
 
 pub(all) struct McpServerStatus {
   name : String
-  source : String
   transport : McpTransport
   target : String
   state : McpServerState

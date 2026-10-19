@@ -113,8 +113,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       assert_true(discovered.contains("/selected"))
       assert_true(discovered.contains("/extra"))
       assert_false(discovered.contains("/overridden"))
-      // The status reports every file in order, and each merged server with
-      // the file whose entry won.
+      // The status reports every file in order, and the merged servers.
       let status = mcp.status()
       guard status.configs
         is [
@@ -128,24 +127,11 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       assert_eq([p1, p2, p3, p4], [first, broken, missing, second])
       guard status.servers
         is [
-          {
-            name: "seekmoon",
-            source: s1,
-            transport: Http,
-            state: Connected(t1),
-            ..
-          },
-          {
-            name: "extra",
-            source: s2,
-            transport: Http,
-            state: Connected(t2),
-            ..
-          },
+          { name: "seekmoon", transport: Http, state: Connected(t1), .. },
+          { name: "extra", transport: Http, state: Connected(t2), .. },
         ] else {
         fail("expected the merged servers in configuration order")
       }
-      assert_eq([s1, s2], [second, first])
       assert_eq(t1.map(tool => tool.name), ["mcp__seekmoon__echo"])
       assert_eq(t2.map(tool => tool.name), ["mcp__extra__echo"])
       // Failed inputs alone must not publish a successful registration.
@@ -215,7 +201,6 @@ async test "the MCP registry tells its owner when a connected server is lost" {
     guard registry.status().servers is [server] else {
       fail("the configured server should be listed")
     }
-    assert_eq(server.source, path)
     assert_eq(server.target, "sh")
     match server.state {
       // Spawning is forbidden in this sandbox: skip.

@@ -216,25 +216,15 @@ pub extend McpServer with Eq::{equal, not_equal}
 /// server with the same name, retaining its original position in the list.
 /// Merge before connecting so overridden servers are never started.
 pub fn merge(configs : Array[Array[McpServer]]) -> Array[McpServer] {
-  merge_sourced(configs.map(servers => ((), servers))).unzip().1
-}
-
-///|
-/// `merge`, keeping beside each server the source of the configuration whose
-/// entry won, so a report can say which file a server came from.
-pub fn[S] merge_sourced(
-  configs : Array[(S, Array[McpServer])],
-) -> Array[(S, McpServer)] {
-  let servers : Array[(S, McpServer)] = []
+  let servers : Array[McpServer] = []
   let positions : Map[String, Int32] = Map([])
   for config in configs {
-    let (source, entries) = config
-    for server in entries {
+    for server in config {
       if positions.get(server.name()) is Some(index) {
-        servers[index] = (source, server)
+        servers[index] = server
       } else {
         positions[server.name()] = servers.length()
-        servers.push((source, server))
+        servers.push(server)
       }
     }
   }

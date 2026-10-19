@@ -77,14 +77,12 @@ pub extend McpServerState with Eq::{equal, not_equal}
 pub extend McpServerState with Debug::{to_repr}
 
 ///|
-/// One server of the merged configuration. `source` is the configuration file
-/// whose entry won — a later file replaces an earlier server of the same name.
-/// `target` is its command (stdio) or its URL without credentials (http);
+/// One server of the merged configuration — a later file replaces an earlier
+/// server of the same name. `target` is its command (stdio) or its URL without credentials (http);
 /// arguments, environment, and headers are never reported because they are
 /// where tokens live.
 pub(all) struct McpServerStatus {
   name : String
-  source : String
   transport : McpTransport
   target : String
   state : McpServerState
@@ -100,7 +98,6 @@ pub extend McpServerStatus with Debug::{to_repr}
 pub impl ToJson for McpServerStatus with fn to_json(self) {
   let fields : Map[String, Json] = {
     "name": Json(self.name),
-    "source": Json(self.source),
     "transport": match self.transport {
       Stdio => "stdio"
       Http => "http"
@@ -131,7 +128,6 @@ pub impl FromJson for McpServerStatus with fn from_json(json, path) {
   guard json
     is {
       "name": String(name),
-      "source": String(source),
       "transport": String(transport),
       "target": String(target),
       "state": String(state),
@@ -173,7 +169,7 @@ pub impl FromJson for McpServerStatus with fn from_json(json, path) {
     "skipped" => Skipped
     _ => raise JsonDecodeError((path.add_key("state"), "invalid state"))
   }
-  { name, source, transport, target, state, }
+  { name, transport, target, state, }
 }
 
 ///|
