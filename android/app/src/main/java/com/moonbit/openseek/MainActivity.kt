@@ -22,7 +22,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
@@ -32,18 +31,17 @@ import org.json.JSONObject
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private var fileResult: ValueCallback<Array<Uri>>? = null
-    private var loginReturnTo = HOME
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val account = result.data?.getStringExtra("account")
-        if (result.resultCode == Activity.RESULT_OK && account != null && isHome(webView.url)) {
-            // Write the existing shared account format only into our bundled
-            // origin. Tokens never appear in a navigation URL or native link.
+        if (result.resultCode == Activity.RESULT_OK && account != null && ConsoleOrigin.contains(webView.url)) {
+            // The frontend owns its current destination. Refresh it after updating
+            // the shared account store; never parse or rebuild an application URL.
+            // Tokens never appear in a navigation URL or native link.
             webView.evaluateJavascript(
                 "localStorage.setItem('seekmoon.account.v1', ${JSONObject.quote(account)});" +
-                    "location.replace(${JSONObject.quote(loginReturnTo)});", null
+                    "location.reload();", null
             )
         } else {
-            webView.loadUrl(loginReturnTo)
             result.data?.getStringExtra("error")?.let { message ->
                 AlertDialog.Builder(this).setTitle("Unable to sign in").setMessage(message)
                     .setPositiveButton("OK", null).show()
@@ -59,7 +57,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        loginReturnTo = savedInstanceState?.getString("loginReturnTo") ?: HOME
         webView = WebView(this)
         val frame = FrameLayout(this)
         frame.addView(webView, FrameLayout.LayoutParams(-1, -1))
@@ -86,8 +83,8 @@ class MainActivity : ComponentActivity() {
         // Reserve this path for the APK's own frontend. API calls retain the
         // real HTTPS origin, its cookies and the shared account-token and Connect-ticket protocol.
         val assets = WebViewAssetLoader.Builder()
-            .setDomain(HOST)
-            .addPathHandler("/console/android/", WebViewAssetLoader.AssetsPathHandler(this))
+            .setDomain(ConsoleOrigin.HOST)
+            .addPathHandler(ConsoleOrigin.ASSET_PATH, WebViewAssetLoader.AssetsPathHandler(this))
             .build()
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
@@ -95,12 +92,8 @@ class MainActivity : ComponentActivity() {
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url
-                if (uri.scheme == "https" && uri.host == HOST &&
-                    (uri.port == -1 || uri.port == 443)) {
-                    if (request.isForMainFrame && uri.path == "/v2/auth/login" && isHome(view.url)) {
-                        val target = uri.getQueryParameter("return_to")
-                        val destination = target?.let { "$ORIGIN$it" }
-                        loginReturnTo = if (isHome(destination)) requireNotNull(destination) else HOME
+                if (ConsoleOrigin.contains(uri.toString())) {
+                    if (request.isForMainFrame && uri.path == "/v2/auth/login" && ConsoleOrigin.contains(view.url)) {
                         signIn.launch(Intent(this@MainActivity, SignInActivity::class.java))
                         return true
                     }
@@ -136,8 +129,8 @@ class MainActivity : ComponentActivity() {
             override fun onShowFileChooser(
                 view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams
             ): Boolean {
-                // Only the bundled console may request local attachments.
-                if (!isHome(view.url)) return false
+                // Only documents on the application origin may request attachments.
+                if (!ConsoleOrigin.contains(view.url)) return false
                 fileResult?.onReceiveValue(null)
                 fileResult = callback
                 try {
@@ -151,7 +144,7 @@ class MainActivity : ComponentActivity() {
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (isHome(webView.url)) {
+                if (ConsoleOrigin.contains(webView.url)) {
                     webView.evaluateJavascript(CLOSE_OVERLAY) { handled ->
                         if (handled != "true") navigateBack()
                     }
@@ -159,7 +152,7 @@ class MainActivity : ComponentActivity() {
             }
         })
         if (savedInstanceState == null || webView.restoreState(savedInstanceState) == null) {
-            webView.loadUrl(HOME)
+            webView.loadUrl(ConsoleOrigin.ENTRY_URL)
         }
     }
 
@@ -168,15 +161,8 @@ class MainActivity : ComponentActivity() {
             .setTitle("Unable to connect")
             .setMessage(message)
             .setPositiveButton("Retry") { _, _ -> view.reload() }
-            .setNegativeButton("Chat") { _, _ -> view.loadUrl(HOME) }
+            .setNegativeButton("Home") { _, _ -> view.loadUrl(ConsoleOrigin.ENTRY_URL) }
             .show()
-    }
-
-    private fun isHome(url: String?): Boolean {
-        if (url == null) return false
-        val uri = url.toUri()
-        return uri.scheme == "https" && uri.host == HOST &&
-            (uri.port == -1 || uri.port == 443) && uri.path == HOME_PATH
     }
 
     private fun navigateBack() {
@@ -185,7 +171,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         webView.saveState(outState)
-        outState.putString("loginReturnTo", loginReturnTo)
         super.onSaveInstanceState(outState)
     }
 
@@ -201,10 +186,6 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        private const val HOST = "seekmoon.moonbitlang.com"
-        private const val HOME_PATH = "/console/android/index.html"
-        internal const val ORIGIN = "https://$HOST"
-        private const val HOME = "$ORIGIN$HOME_PATH?view=chat"
         private val CLOSE_OVERLAY = """
             (() => {
                 const popover = document.querySelector(':popover-open');

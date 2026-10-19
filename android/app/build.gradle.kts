@@ -36,7 +36,7 @@ val bundleConsole by tasks.registering(Sync::class) {
     doLast {
         val entry = destinationDir.resolve("index.html")
         entry.writeText(entry.readText()
-            .replace("</head>", "<link rel=\"stylesheet\" href=\"conversation.css\" /></head>")
+            .replace("</head>", "<link rel=\"stylesheet\" href=\"/console/android/conversation.css\" /></head>")
             .replace("<body>", "<body class=\"android-connect\">"))
     }
     doFirst {

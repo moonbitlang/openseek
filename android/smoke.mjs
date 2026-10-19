@@ -12,8 +12,7 @@ if (!serial) throw new Error('Set ANDROID_SERIAL to the test emulator');
 const adb = `${process.env.ANDROID_HOME}/platform-tools/adb`;
 const run = (...args) => execFileSync(adb, ['-s', serial, ...args], { encoding: 'utf8' }).trim();
 const pkg = 'com.moonbit.openseek.connect.debug';
-const home = 'https://seekmoon.moonbitlang.com/console/android/index.html?view=chat';
-const devices = 'https://seekmoon.moonbitlang.com/console/android/index.html?view=devices';
+const home = 'https://seekmoon.moonbitlang.com/console/android/index.html';
 const device = (await _android.devices()).find(candidate => candidate.serial() === serial);
 if (!device) throw new Error('Test emulator is not connected');
 const page = await (await device.webView({ pkg })).page();
@@ -22,10 +21,23 @@ const output = fileURLToPath(new URL('./app/build/smoke/', import.meta.url));
 mkdirSync(output, { recursive: true });
 const check = (ok, label) => { if (!ok) throw new Error(label); };
 try {
+  // A saved frontend preference may open Cloud before device selection. Keep
+  // unmocked requests off the network; the harness below owns every API reply.
+  const assets = new URL('.', home);
+  await page.route('**/*', route => {
+    const url = new URL(route.request().url());
+    return url.origin === assets.origin && url.pathname.startsWith(assets.pathname)
+      ? route.continue() : route.abort();
+  });
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  await page.goto(devices);
-  await page.getByRole('link', { name: 'Test Mac Online' }).click();
+  // Follow the frontend's own device entry without constructing a route.
+  await page.goto(home);
+  const chooseDevice = page.getByRole('link', { name: 'Choose a device', exact: true });
+  const onlineDevice = page.getByRole('link', { name: 'Test Mac Online' });
+  await onlineDevice.or(chooseDevice).first().waitFor();
+  if (!await onlineDevice.isVisible()) await chooseDevice.click();
+  await onlineDevice.click();
   await page.getByRole('main').waitFor();
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
@@ -52,7 +64,7 @@ try {
   console.log('PASS: bundled entry, device selection, real IME, send/stop, Back');
 } finally {
   await page.unrouteAll({ behavior: 'wait' });
-  // Reload disposes every fixture socket and restores the real Chat entry.
+  // Reload disposes every fixture socket and restores the real application entry.
   await page.goto(home);
   await device.close();
 }
