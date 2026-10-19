@@ -7,8 +7,6 @@ import {
 }
 
 // Values
-pub fn forget_cloud(Array[String]) -> @cmd.Cmd
-
 pub fn listen(String, @cmd.Emit[Snapshot]) -> @sub.Sub
 
 pub fn promote(String, String) -> @cmd.Cmd

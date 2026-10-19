@@ -31,9 +31,7 @@ fn navigation_device_from_location() -> String? {
 ///|
 fn navigation_initial_path(return_to : String, device : String?) -> String {
   let path = return_to.split("?").next().unwrap_or(return_to[:]).to_owned()
-  if path.has_prefix("/device/") ||
-    path == "/cloud" ||
-    path.has_prefix("/cloud/") {
+  if @routes.is_application_path(path) {
     return path
   }
   if device is Some(device) {

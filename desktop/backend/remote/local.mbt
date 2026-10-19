@@ -152,9 +152,7 @@ fn route(meth : @http.RequestMethod, path : String, entry~ : String) -> Route {
   let (route, query) = split_path_query(path)
   match (meth, route) {
     (Get, "/") if query_param(query, "token") is Some(token) => Entry(token)
-    (Get, path) if path.has_prefix("/device/") ||
-      path == "/cloud" ||
-      path.has_prefix("/cloud/") => ApplicationPage
+    (Get, path) if @routes.is_application_path(path) => ApplicationPage
     (Get, "/v1/auth/me") => AuthMe
     (Get, "/v1/devices") => Devices
     (Get, "/v1/auth/login") => Login
@@ -237,14 +235,7 @@ async fn LocalConsole::handle(
       let destination = query_param(query, "return_to").map(value => {
         @uri.decode_component(value)
       })
-      let fallback : @routes.Location = {
-        device: Some(LocalConsoleDevice),
-        target: Chat,
-      }
-      guard fallback.path() is Some(fallback) else {
-        respond_status(conn, 500, "Internal Server Error")
-        return
-      }
+      let fallback = "/device/\{LocalConsoleDevice}/chat"
       let target = if destination is Some(destination) {
         let (path, query) = split_path_query(destination)
         match @routes.parse(path) {

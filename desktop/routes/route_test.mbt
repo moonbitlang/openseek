@@ -110,3 +110,17 @@ test "path parsing rejects browser separators and traversal rather than treating
     assert_true(@routes.parse(path) is Err(InvalidRoute))
   }
 }
+
+///|
+test "application and Cloud path predicates ignore target validity" {
+  for path in ["/cloud", "/cloud/", "/cloud/unknown"] {
+    assert_true(@routes.is_cloud_path(path))
+    assert_true(@routes.is_application_path(path))
+  }
+  assert_false(@routes.is_cloud_path("/device/host/chat"))
+  assert_true(@routes.is_application_path("/device/host/unknown"))
+  for path in ["/", "/cloudy", "/frontend.js", "/devices"] {
+    assert_false(@routes.is_cloud_path(path))
+    assert_false(@routes.is_application_path(path))
+  }
+}

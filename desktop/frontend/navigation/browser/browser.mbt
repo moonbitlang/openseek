@@ -150,28 +150,17 @@ fn install(
       persist(history)
       report()
     },
-    sessions => {
-      history = history.forget_cloud(Array::from_fixed_array(sessions))
-      if !history.retired() {
-        report()
-      }
-    },
     () => {
       let path = pathname()
       if !history.owns(path) {
         reload()
         return
       }
-      let selected = history.select(path, read_marker())
-      let next = selected.unwrap_or_else(() => {
-        @browser_history.History(path, group=random_id(), key=random_id())
-      })
-      let offset = next.skip_retired(history)
-      history = next
-      if offset != 0 {
-        go(offset)
-        return
-      }
+      history = history
+        .select(path, read_marker())
+        .unwrap_or_else(() => {
+          @browser_history.History(path, group=random_id(), key=random_id())
+        })
       history = write_entry(history, history.path() + search(), replace=true)
       persist(history)
       report()
@@ -183,8 +172,3 @@ fn install(
 
 ///|
 pub extend Snapshot with Eq::{equal, not_equal}
-
-///|
-pub fn forget_cloud(sessions : Array[String]) -> @cmd.Cmd {
-  @cmd.custom_cmd(_ => forget_cloud_raw(FixedArray::from_array(sessions[:])))
-}

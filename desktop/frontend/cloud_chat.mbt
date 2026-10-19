@@ -140,11 +140,6 @@ fn update_cloud(
   } else {
     []
   }
-  let command = if model.navigation.browser_ready && !removed.is_empty() {
-    @cmd.batch([command, @navigation_browser.forget_cloud(removed)])
-  } else {
-    command
-  }
   let deleted = message
     is (@cloud.Deleted(_, _, _)
     | @cloud.DeleteFailed(_, _, _, @cloud.Http(404)))

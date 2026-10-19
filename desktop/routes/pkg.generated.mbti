@@ -4,6 +4,10 @@ package "openseek_desktop/routes"
 // Values
 pub fn device(String) -> String?
 
+pub fn is_application_path(String) -> Bool
+
+pub fn is_cloud_path(String) -> Bool
+
 pub fn parse(String) -> Result[Location, RouteError]
 
 // Errors

@@ -84,7 +84,7 @@ test "encoded device and target identities share canonical history" {
 }
 
 ///|
-test "restore canonicalizes legacy encoded paths while retaining browser entry URLs" {
+test "restore canonicalizes non-canonical encoded paths while retaining browser entry URLs" {
   let encoded = "/device/%641/settings"
   let marker : Json = { "group": "g", "key": "b" }
   let stored : Json = {
@@ -100,7 +100,7 @@ test "restore canonicalizes legacy encoded paths while retaining browser entry U
   }
   guard @browser_history.History::restore(encoded, encoded, marker, stored)
     is Some(restored) else {
-    fail("same-device legacy entries rejected")
+    fail("same-device encoded entries rejected")
   }
   assert_eq(restored.path(), Settings)
   assert_true(restored.can_back())
@@ -111,7 +111,7 @@ test "restore canonicalizes legacy encoded paths while retaining browser entry U
     is Some(forward) &&
     forward.visit("/device/%641/settings", replace=false, key="d")
     is Some(visited) else {
-    fail("legacy entry cannot be traversed or followed by navigation")
+    fail("encoded entry cannot be traversed or followed by navigation")
   }
   assert_eq(forward.path(), Skills)
   assert_eq(visited.path(), Settings)
@@ -154,8 +154,8 @@ test "visits deduplicate and branch without mutating previous states" {
 }
 
 ///|
-test "v1 storage restores the cursor by entry key even for repeated paths" {
-  let marker : Json = { "group": "old-group", "key": "second" }
+test "stored history restores the cursor by entry key even for repeated paths" {
+  let marker : Json = { "group": "stored-group", "key": "second" }
   let stored : Json = {
     "entries": [
       { "key": "first", "path": Settings, "original": Settings },
@@ -166,12 +166,12 @@ test "v1 storage restores the cursor by entry key even for repeated paths" {
   }
   guard @browser_history.History::restore(Settings, Settings, marker, stored)
     is Some(history) else {
-    fail("v1 history was not restored")
+    fail("stored history was not restored")
   }
   assert_eq(history.marker(), marker)
   assert_true(history.can_back())
   assert_true(history.can_forward())
-  assert_eq(@browser_history.storage_group(marker), Some("old-group"))
+  assert_eq(@browser_history.storage_group(marker), Some("stored-group"))
   assert_true(
     @browser_history.History::restore(
       Settings,
@@ -376,24 +376,4 @@ test "successive promotions retain the URL actually written to each entry" {
     )
     assert_eq(initial.path(), chat)
   }
-}
-
-///|
-test "retired Cloud entries are skipped in both directions and at segment edges" {
-  let initial = @browser_history.History(Settings, group="g", key="a")
-  let a = initial.visit("/cloud/session/a", replace=false, key="b").unwrap()
-  let b = a.visit("/cloud/session/b", replace=false, key="c").unwrap()
-  let live = b.forget_cloud(["a"])
-  let skipped = live.select(a.path(), a.marker()).unwrap()
-  assert_eq(skipped.skip_retired(live), -1)
-  let back = skipped.select(Settings, initial.marker()).unwrap()
-  assert_true(back.can_forward())
-  assert_eq(skipped.skip_retired(back), 1)
-  let all_cloud_deleted = live.forget_cloud(["b"])
-  let initial_again = all_cloud_deleted
-    .select(Settings, initial.marker())
-    .unwrap()
-  assert_false(initial_again.can_forward())
-  let end = initial_again.select(b.path(), b.marker()).unwrap()
-  assert_eq(end.skip_retired(initial_again), -2)
 }

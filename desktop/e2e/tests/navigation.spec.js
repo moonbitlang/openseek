@@ -152,7 +152,7 @@ test('an invalid target on an encoded device can navigate away and back', async 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('MoonBit history restores the existing v1 browser entries after refresh', async ({ page }) => {
+test('refresh restores stored browser entries and keeps foreign history state', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await page.addInitScript(() => {
@@ -160,10 +160,10 @@ test('MoonBit history restores the existing v1 browser entries after refresh', a
     sessionStorage.setItem('history-fixture-seeded', 'yes');
     const initial = '/device/device-a/chat/new';
     const settings = '/device/device-a/settings';
-    const marker = key => ({ seekmoonNavigation: { group: 'legacy-group', key }, foreignState: 'keep' });
+    const marker = key => ({ seekmoonNavigation: { group: 'stored-group', key }, foreignState: 'keep' });
     history.replaceState(marker('initial'), '', initial);
     history.pushState(marker('settings'), '', settings);
-    sessionStorage.setItem('seekmoon.history.v1.legacy-group', JSON.stringify({ entries: [
+    sessionStorage.setItem('seekmoon.history.v1.stored-group', JSON.stringify({ entries: [
       { key: 'initial', path: initial, original: initial },
       { key: 'settings', path: settings, original: settings },
     ] }));
@@ -172,7 +172,7 @@ test('MoonBit history restores the existing v1 browser entries after refresh', a
   await expect(heading(page)).toHaveText('Settings');
   await expect(back(page)).toBeEnabled();
   expect(await page.evaluate(() => history.state)).toEqual({
-    seekmoonNavigation: { group: 'legacy-group', key: 'settings' }, foreignState: 'keep',
+    seekmoonNavigation: { group: 'stored-group', key: 'settings' }, foreignState: 'keep',
   });
   await page.reload();
   await expect(heading(page)).toHaveText('Settings');

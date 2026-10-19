@@ -20,6 +20,19 @@ fn decode_segment(part : StringView) -> String? {
 }
 
 ///|
+/// Cloud pathnames, valid or not, do not belong to any device.
+pub fn is_cloud_path(path : String) -> Bool {
+  path == "/cloud" || path.has_prefix("/cloud/")
+}
+
+///|
+/// Pathnames served by the application document, valid or not. Anything else
+/// is outside the application, such as the bundle's own resources.
+pub fn is_application_path(path : String) -> Bool {
+  path.has_prefix("/device/") || is_cloud_path(path)
+}
+
+///|
 /// Identify the device even when the remainder is an invalid application
 /// target. None means that the pathname has no valid device identity.
 pub fn device(path : String) -> String? {
@@ -31,11 +44,7 @@ pub fn device(path : String) -> String? {
 /// Parse an application pathname, not a full URL. Reserved characters in
 /// identities must be percent-encoded; query and fragment belong to the caller.
 pub fn parse(path : String) -> Result[Location, RouteError] {
-  guard path.has_prefix("/device/") ||
-    path == "/cloud" ||
-    path.has_prefix("/cloud/") else {
-    return Err(OutsideApplication)
-  }
+  guard is_application_path(path) else { return Err(OutsideApplication) }
   guard !path
     .iter()
     .any(ch => ch == '\\' || ch == '?' || ch == '#' || ch.is_control()) else {

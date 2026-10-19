@@ -47,11 +47,10 @@ extern "js" fn install_handlers(
   visit : (String, Bool) -> Unit,
   visit_settings : (Bool) -> Unit,
   promote : (String, String) -> Unit,
-  forget_cloud : (FixedArray[String]) -> Unit,
   pop : () -> Unit,
 ) -> @js.Value =
-  #|(visit, visit_settings, promote, forget_cloud, pop) => {
-  #|  const handle = { visit, visit_settings, promote, forget_cloud, pop };
+  #|(visit, visit_settings, promote, pop) => {
+  #|  const handle = { visit, visit_settings, promote, pop };
   #|  window.__seekmoonApplicationHistory = handle;
   #|  window.addEventListener('popstate', pop);
   #|  return handle;
@@ -75,11 +74,3 @@ extern "js" fn visit_settings_raw(replace : Bool) -> Unit =
 ///|
 extern "js" fn promote_raw(old_path : String, new_path : String) -> Unit =
   #|(oldPath, newPath) => window.__seekmoonApplicationHistory.promote(oldPath, newPath)
-
-///|
-extern "js" fn forget_cloud_raw(sessions : FixedArray[String]) -> Unit =
-  #|sessions => window.__seekmoonApplicationHistory.forget_cloud(sessions)
-
-///|
-extern "js" fn go(offset : Int32) -> Unit =
-  #|offset => history.go(offset)
