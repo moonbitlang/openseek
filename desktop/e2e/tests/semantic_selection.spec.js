@@ -180,6 +180,9 @@ for (const provider of ['OpenSeek new chat', 'OpenSeek session', 'Codex']) {
       await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
     } else if (provider === 'OpenSeek session') {
       await app.openSession();
+    } else {
+      // The shell can render before the new chat has an active workspace.
+      await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
     }
     await openCodeSearch(page);
     await page.getByRole('button', { name: 'Select match', exact: true }).first().click();
@@ -293,6 +296,7 @@ test('a fresh draft cannot switch agents while its semantic snapshot is being wr
   app.replyFor = request => request.method === method ? materialization.promise : replyFor(request);
   await app.install();
   await app.goto();
+  await expect(page.getByRole('button', { name: 'Choose project, current project workspace', exact: true })).toBeVisible();
   await selectWholePattern(page);
   const picker = page.getByRole('button', { name: 'Model', exact: true });
   await expect(picker).toBeEnabled();

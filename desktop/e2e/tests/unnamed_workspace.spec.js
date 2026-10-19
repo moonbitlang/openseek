@@ -108,7 +108,8 @@ test('existing local Chats load, export, archive, restore and continue without a
   expect(cloud.hostRequests.find(request => request.method === 'session.load')).toMatchObject({
     params: { session: 'legacy-chat', workspace: `${root}/history` },
   });
-  await page.getByRole('button', { name: 'Export conversation', exact: true }).click();
+  await page.getByRole('button', { name: 'Export and import', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('button', { name: 'Close export dialog', exact: true }).click();
