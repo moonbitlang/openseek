@@ -29,7 +29,7 @@ test "scheduled session blocks direct send until the host reports completion" {
   assert_eq(sent.active().task, conv.task)
   let (_, steered) = update(
     test_dispatch(),
-    SendFollowup(@composer.SteerNow),
+    SendFollowup(@composer.SteerNow, pin=true),
     model,
   )
   assert_true(steered.active().run == conv.run)

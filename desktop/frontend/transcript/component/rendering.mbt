@@ -643,7 +643,7 @@ fn section_children(
   )
   children.set(
     TranscriptSectionKey::stream(input).wire(),
-    @html.div(id="stream", class="stream", stream),
+    @html.div(id=stream_id(input.surface), class="stream", stream),
   )
   // Reading history unpins auto-follow (see `watch_transcript_scroll`); the
   // floating button is the way back to the live tail. Sticky inside the

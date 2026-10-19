@@ -13,6 +13,7 @@ priv enum UiMessage {
   SearchHint
   OpenFile
   OpenFileHint
+  SideChatLabel
 }
 
 ///|
@@ -75,5 +76,10 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, OpenFileHint) => "打开工作区文件"
     (TraditionalChinese, OpenFileHint) => "開啟工作區檔案"
     (Japanese, OpenFileHint) => "ワークスペースのファイルを開く"
+    (English, SideChatLabel) => "Side chat"
+    (Spanish, SideChatLabel) => "Chat lateral"
+    (SimplifiedChinese, SideChatLabel) => "侧边对话"
+    (TraditionalChinese, SideChatLabel) => "側邊對話"
+    (Japanese, SideChatLabel) => "サイドチャット"
   }
 }

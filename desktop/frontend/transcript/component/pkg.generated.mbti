@@ -18,7 +18,7 @@ pub fn component(@rabbita.Val[Input], Actions) -> @rabbita.Val[@html.Html]
 
 pub fn program_calls_view(locale? : @i18n.Locale, Json?, String, origin? : @transcript.TraceOrigin) -> @html.Html?
 
-pub fn scroll_to_latest() -> @cmd.Cmd
+pub fn scroll_to_latest(surface? : @interop.ChatSurface) -> @cmd.Cmd
 
 // Errors
 
@@ -39,7 +39,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(surface? : @interop.ChatSurface, locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

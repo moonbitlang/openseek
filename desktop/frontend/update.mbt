@@ -1503,8 +1503,12 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .unwrap_or(model.default_model)
   let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
-    None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
-      false
+    None
+    | Some(Browser(_))
+    | Some(Workflows)
+    | Some(Jobs)
+    | Some(Github)
+    | Some(SideChat(_)) => false
   }
   {
     // Keep the real identity even while placement is unresolved or missing.
@@ -1599,6 +1603,14 @@ fn sync_file_panel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
+  let chats = model
+    .dock_owner()
+    .host()
+    .map(owner => model.side_chats_of(owner))
+    .unwrap_or([])
+  let before = model.dock_state()
+  let dock = @dock.reconcile_side_chats(before, chats)
+  let model = if dock == before { model } else { model.with_dock_state(dock) }
   let (panel, cmd) = @fileeditor.sync(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
@@ -1611,7 +1623,50 @@ fn sync_file_panel(
       }).map(mention => mention.ref_),
     ),
   )
-  ({ ..model, file_panel: panel, }, cmd)
+  let (model, side_chat_cmd) = load_active_side_chat(dispatch, {
+    ..model,
+    file_panel: panel,
+  })
+  (model, @cmd.batch([cmd, side_chat_cmd]))
+}
+
+///|
+/// Give the active side-chat tab its conversation the first time it is
+/// shown. A tab restored from the listing after a restart has a record but
+/// nothing in this page yet; reading it once is enough, since its commits
+/// then keep it current like any conversation the page holds.
+fn load_active_side_chat(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+) -> (Model, @cmd.Cmd) {
+  guard model.dock_state().active is Some(SideChat(owner~)) &&
+    model.find_conversation(owner.channel, owner.session) is None &&
+    model.session_project(owner.channel, owner.session) is Some(project) else {
+    return (model, @cmd.none)
+  }
+  let conv = empty_conversation(
+    owner.channel,
+    owner.session,
+    project,
+    model=model
+      .remembered_model(owner.channel, owner.session)
+      .unwrap_or(model.default_model),
+  )
+  let (model, generation) = model
+    .replace_conversation(conv)
+    .begin_transcript_reload(conv)
+  guard generation is Some(generation) else { return (model, @cmd.none) }
+  (
+    model,
+    session_snapshot_command(
+      dispatch,
+      owner.channel,
+      model,
+      owner.session,
+      generation,
+      false,
+    ),
+  )
 }
 
 ///|
@@ -2656,10 +2711,41 @@ fn update_msg(
         | @composer.MissingWorktreeArchiveRequested(..) => {
           let identity = action.identity()
           guard model.screen is Chat &&
-            model.conversation_for_composer_action(identity) is Some(conv) &&
-            conv.device == model.focused &&
-            conv.session_id == model.active_session else {
+            model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
+          }
+          if conv.device != model.focused ||
+            conv.session_id != model.active_session {
+            // The side chat in the dock answers its own approvals and edits
+            // its own queue; every other control here belongs to the column.
+            // Its action runs as the column's would, with the side chat
+            // selected for just this update, the way Submit sends from a
+            // composer that is not the column's.
+            let owner : @interop.ConversationKey = {
+              channel: conv.device,
+              session: conv.session_id,
+            }
+            guard model.mounted_side_chat_owner() == Some(owner) &&
+              action
+              is (@composer.ApprovalAnswered(..)
+              | @composer.QueuedInputEditRequested(..)
+              | @composer.QueuedInputSteerRequested(..)
+              | @composer.QueuedInputDeleteRequested(..)) else {
+              return (@cmd.none, model)
+            }
+            let (command, handled) = update_msg(dispatch, msg, {
+              ..model,
+              focused: conv.device,
+              active_session: conv.session_id,
+            })
+            return (
+              command,
+              {
+                ..handled,
+                focused: model.focused,
+                active_session: model.active_session,
+              },
+            )
           }
           match action {
             @composer.ModelMenuToggled(..) =>
@@ -2847,19 +2933,25 @@ fn update_msg(
             focused: conv.device,
             active_session: conv.session_id,
           }
+          let in_column = original_focus == conv.device &&
+            original_session == conv.session_id
           let submit = match action {
-            @composer.FollowupSubmitted(choice~, ..) => SendFollowup(choice)
-            _ =>
-              if original_focus == conv.device &&
-                original_session == conv.session_id {
-                Send
-              } else {
-                SendInBackground
-              }
+            @composer.FollowupSubmitted(choice~, ..) =>
+              SendFollowup(choice, pin=in_column)
+            _ => if in_column { Send } else { SendInBackground }
+          }
+          // A side chat sent from the dock follows its own tail there, as the
+          // column's transcript does on a send from the column's composer.
+          let pin_dock = if !in_column &&
+            model.mounted_side_chat_owner() ==
+            Some({ channel: conv.device, session: conv.session_id, }) {
+            @transcript_component.scroll_to_latest(surface=Dock)
+          } else {
+            @cmd.none
           }
           let (command, submitted) = update_msg(dispatch, submit, target)
           (
-            command,
+            @cmd.batch([command, pin_dock]),
             {
               ..submitted,
               focused: original_focus,
@@ -3145,9 +3237,7 @@ fn update_msg(
     JumpToLocation(path~, range~, annotation~) =>
       request_open_path(dispatch, model, path, range, annotation?)
     TranscriptReviewChangesOpened(slot~, selection~) => {
-      guard model.transcript_slot().map(active => active.key()) == Some(slot) else {
-        return (@cmd.none, model)
-      }
+      guard model.transcript_on_screen(slot) else { return (@cmd.none, model) }
       open_review_context(dispatch, model, selection)
     }
     // Intercepted here rather than delegated to the fileeditor package: the
@@ -3400,9 +3490,12 @@ fn update_msg(
         focused: owner.channel,
         active_session: owner.session,
       }
-      let submit = pending.followup
-        .map(choice => SendFollowup(choice))
-        .unwrap_or(Send)
+      let in_column = original_focus == owner.channel &&
+        original_session == owner.session
+      let submit = match pending.followup {
+        Some(choice) => SendFollowup(choice, pin=in_column)
+        None => if in_column { Send } else { SendInBackground }
+      }
       let (command, submitted) = update_msg(dispatch, submit, target)
       let submitted = if !next_mentions.is_empty() &&
         submitted.find_conversation(owner.channel, owner.session)
@@ -4709,18 +4802,18 @@ fn update_msg(
     }
     Send | SendFollowup(_) | SendInBackground => {
       // Re-pinning is for the reader of this conversation's transcript.
-      let scroll = if msg is SendInBackground {
+      let scroll = if msg is (SendInBackground | SendFollowup(_, pin=false)) {
         @cmd.none
       } else {
         @transcript_component.scroll_to_latest()
       }
       let followup = match msg {
-        SendFollowup(choice) => Some(choice)
+        SendFollowup(choice, ..) => Some(choice)
         _ => None
       }
       let followup_behavior = match msg {
-        SendFollowup(@composer.SteerNow) => FollowupSteer
-        SendFollowup(@composer.QueueNext) => FollowupQueue
+        SendFollowup(@composer.SteerNow, ..) => FollowupSteer
+        SendFollowup(@composer.QueueNext, ..) => FollowupQueue
         _ => model.followup_behavior
       }
       guard model.active_conversation() is Some(conv) else {
@@ -5066,15 +5159,11 @@ fn update_msg(
       }
     }
     TranscriptLinkOpened(slot~, path~) => {
-      guard model.transcript_slot().map(current => current.key()) == Some(slot) else {
-        return (@cmd.none, model)
-      }
+      guard model.transcript_on_screen(slot) else { return (@cmd.none, model) }
       update_msg(dispatch, OpenFile(path), model)
     }
     TranscriptLocationOpened(slot~, target) => {
-      guard model.transcript_slot().map(current => current.key()) == Some(slot) else {
-        return (@cmd.none, model)
-      }
+      guard model.transcript_on_screen(slot) else { return (@cmd.none, model) }
       if model.cloud_selected() {
         guard model.cloud_identity() is Some(owner) else {
           return (@cmd.none, model)
@@ -6482,7 +6571,7 @@ fn update_msg(
               }
               // Neither tab owns a document: closing one while active hands
               // focus to a neighbouring file or diff, and otherwise nothing.
-              FilePicker | Workflows | Jobs | Github =>
+              FilePicker | Workflows | Jobs | Github | SideChat(_) =>
                 if was_active && next_file is Some(path) {
                   let (cmd, panel) = @fileeditor.activate(
                     femit,

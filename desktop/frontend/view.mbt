@@ -220,7 +220,8 @@ fn Model::push_group_component_inputs(
     if conv.device != dev.channel ||
       conv.project() != workspace ||
       listed(conv.session_id) ||
-      archived(conv.session_id) {
+      archived(conv.session_id) ||
+      conv.is_side_chat() {
       continue
     }
     let worth_keeping = conv.worth_keeping()
@@ -264,8 +265,11 @@ fn Model::push_group_component_inputs(
   // A child opened from Workflows may not be in the host inventory yet.
   // Fold live and listed sessions together so either source can own a parent
   // or child without creating a second top-level conversation.
+  // A side chat is shown in its conversation's dock, never as a row.
   for item in dev.sessions {
-    if item.workspace == workspace && !archived(item.id) {
+    if item.workspace == workspace &&
+      !archived(item.id) &&
+      @protocol.side_chat_parent(item.id) is None {
       items.push(item)
     }
   }

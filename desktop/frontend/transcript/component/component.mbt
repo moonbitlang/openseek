@@ -63,10 +63,35 @@ pub(all) enum ScrollPosition {
 } derive(Eq)
 
 ///|
+/// The id of the scroller element on `surface`, the root every other lookup
+/// starts from.
+fn transcript_root_id(surface : @interop.ChatSurface) -> String {
+  match surface {
+    Column => "transcript"
+    Dock => "side-chat-transcript"
+  }
+}
+
+///|
+fn stream_id(surface : @interop.ChatSurface) -> String {
+  match surface {
+    Column => "stream"
+    Dock => "side-chat-stream"
+  }
+}
+
+///|
+/// The scroller mounted on `surface`, when it is in the document.
+fn transcript_root(surface : @interop.ChatSurface) -> @dom.Element? {
+  @dom.document().get_element_by_id(transcript_root_id(surface)).to_option()
+}
+
+///|
 /// The conversation data rendered by the component. The application computes
 /// durable chronology and active-run ownership; this package owns only the
 /// transcript subtree and its scroll behavior.
 struct Input {
+  surface : @interop.ChatSurface
   locale : @i18n.Locale
   dark_mode : Bool
   minimal : Bool
@@ -114,6 +139,7 @@ struct Input {
 
 ///|
 pub fn Input::Input(
+  surface~ : @interop.ChatSurface = Column,
   locale~ : @i18n.Locale = English,
   dark_mode~ : Bool = false,
   minimal~ : Bool = false,
@@ -141,6 +167,7 @@ pub fn Input::Input(
   streaming_identity~ : String,
 ) -> Input {
   {
+    surface,
     locale,
     dark_mode,
     minimal,
@@ -237,8 +264,12 @@ fn Model::update(
       (
         { ..self, pinned: true, },
         @cmd.batch([
-          scroll_after_render(),
-          report_visible_turn_after_render(emit, current=self.overview.active),
+          scroll_after_render(input.surface),
+          report_visible_turn_after_render(
+            input.surface,
+            emit,
+            current=self.overview.active,
+          ),
         ]),
       )
     ContentRendered => {
@@ -246,26 +277,30 @@ fn Model::update(
       // tail; the overview re-reads which turn sits under the reading line.
       let commands : Array[@cmd.Cmd] = []
       if self.pinned {
-        commands.push(scroll_after_render())
+        commands.push(scroll_after_render(input.surface))
       }
       commands.push(
         report_visible_turn_after_render(
+          input.surface,
           emit,
           current=self.overview.active,
           unpinned=!self.pinned,
         ),
       )
-      commands.push(self.images.apply_after_render())
+      commands.push(self.images.apply_after_render(input.surface))
       (self, @cmd.batch(commands))
     }
     ImageRequested(path) => {
       let (images, command) = self.images.begin_read(image_owner, path, emit)
-      ({ ..self, images, }, @cmd.batch([command, images.apply_after_render()]))
+      (
+        { ..self, images, },
+        @cmd.batch([command, images.apply_after_render(input.surface)]),
+      )
     }
     ImageResolved(owner, path, result) => {
       guard owner == image_owner else { return (self, @cmd.none) }
       let images = self.images.settle(path, result)
-      ({ ..self, images, }, images.apply_after_render())
+      ({ ..self, images, }, images.apply_after_render(input.surface))
     }
     Overview(msg) => {
       let previous_active = self.overview.active
@@ -277,7 +312,10 @@ fn Model::update(
         // The clicked tick is already under the pointer. Revealing it could
         // move the rail beneath the pointer and transfer hover to a neighbor.
         Clicked(key) =>
-          ({ ..next, pinned: false, }, scroll_turn_into_view(emit, key))
+          (
+            { ..next, pinned: false, },
+            scroll_turn_into_view(input.surface, emit, key),
+          )
         // A transcript scroll may activate a tick outside the rail's visible
         // window. Reveal only an actual active-turn change so rail scrolling
         // itself cannot feed back into another write.
@@ -285,7 +323,7 @@ fn Model::update(
           if next.overview.active == previous_active {
             (next, @cmd.none)
           } else {
-            (next, reveal_active_overview_tick())
+            (next, reveal_active_overview_tick(input.surface))
           }
         _ => (next, @cmd.none)
       }
@@ -317,18 +355,18 @@ pub fn component(
           images: ImageCache::empty(),
         },
         @cmd.batch([
-          render_rows_once_after_mount(),
+          render_rows_once_after_mount(input.surface),
           match input.scroll {
-            Pinned => scroll_after_render()
-            Unpinned(top~) => restore_scroll_after_render(top)
+            Pinned => scroll_after_render(input.surface)
+            Unpinned(top~) => restore_scroll_after_render(input.surface, top)
           },
-          report_visible_turn_after_render(emit, current=None),
+          report_visible_turn_after_render(input.surface, emit, current=None),
         ]),
       )
     },
     update=(state, input, msg, emit) => state.update(input, msg, emit),
-    subscriptions=(model, _, emit) => {
-      transcript_subscription(model, emit, actions.departed)
+    subscriptions=(model, input, emit) => {
+      transcript_subscription(input.surface, model, emit, actions.departed)
     },
   )
   // Every stream child renders in its own branch, keyed by the block within
@@ -440,16 +478,15 @@ fn focus_empty_project_trigger_after_render() -> @cmd.Cmd {
 /// this when Send accepts a prompt or a steer, before the durable User item
 /// arrives, so early streamed work is immediately visible. The scroll it
 /// causes reaches the component's own listener, which records the pin.
-pub fn scroll_to_latest() -> @cmd.Cmd {
-  scroll_after_render()
+pub fn scroll_to_latest(surface~ : @interop.ChatSurface = Column) -> @cmd.Cmd {
+  scroll_after_render(surface)
 }
 
 ///|
-fn scroll_after_render() -> @cmd.Cmd {
+fn scroll_after_render(surface : @interop.ChatSurface) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      if @dom.document().get_element_by_id("transcript").to_option()
-        is Some(transcript) {
+      if transcript_root(surface) is Some(transcript) {
         transcript.set_scroll_top(transcript.get_scroll_height())
       }
     },
@@ -464,10 +501,10 @@ fn scroll_after_render() -> @cmd.Cmd {
 /// at, so after this frame no row stands in at a guessed height: scroll
 /// offsets saved earlier map to the same content, and scrolling through
 /// history never shifts as rows first render.
-fn render_rows_once_after_mount() -> @cmd.Cmd {
+fn render_rows_once_after_mount(surface : @interop.ChatSurface) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document().get_element_by_id("stream").to_option()
+      guard @dom.document().get_element_by_id(stream_id(surface)).to_option()
         is Some(stream) &&
         stream.to_html_element() is Some(stream) else {
         return
@@ -485,18 +522,20 @@ fn render_rows_once_after_mount() -> @cmd.Cmd {
 
 ///|
 /// The custom property `transcript.css` reads for the rows' content
-/// visibility; `visible` on `#stream` renders every row.
+/// visibility; `visible` on the stream element renders every row.
 const STREAM_ROWS_VISIBILITY = "--stream-rows-visibility"
 
 ///|
 /// Put a returning conversation back where its reader left it. Lazily loaded
 /// images may still shift the content afterwards; the offset is the best
 /// available approximation of the same reading position.
-fn restore_scroll_after_render(top : Double) -> @cmd.Cmd {
+fn restore_scroll_after_render(
+  surface : @interop.ChatSurface,
+  top : Double,
+) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      if @dom.document().get_element_by_id("transcript").to_option()
-        is Some(transcript) {
+      if transcript_root(surface) is Some(transcript) {
         transcript.set_scroll_top(top)
       }
     },
@@ -531,11 +570,11 @@ fn scroll_position(transcript : @dom.Element) -> ScrollPosition {
 /// Keep the overview rail's own scrolled window on the active tick. This
 /// writes only the rail: scroll_into_view would also move the transcript
 /// scroller whose position selected the active turn.
-fn reveal_active_overview_tick() -> @cmd.Cmd {
+fn reveal_active_overview_tick(surface : @interop.ChatSurface) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document().query_selector(".overview-rail").to_option()
-        is Some(rail) else {
+      guard transcript_root(surface) is Some(transcript) &&
+        transcript.query_selector(".overview-rail") is Some(rail) else {
         return
       }
       guard rail.query_selector(".overview-tick.active") is Some(tick) else {
@@ -596,17 +635,16 @@ fn visible_turn_anchor(transcript : @dom.Element) -> String? {
 /// scroller, then report the settled pin and active turn even when the write
 /// was clamped and produced no scroll event.
 fn scroll_turn_into_view(
+  surface : @interop.ChatSurface,
   emit : @cmd.Emit[Msg],
   key : @transcript_overview.TurnKey,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
-      guard @dom.document().get_element_by_id("transcript").to_option()
-        is Some(transcript) else {
-        return
-      }
-      guard @dom.document().get_element_by_id(key.anchor()).to_option()
-        is Some(bubble) else {
+      // A side chat copies its conversation's turns, anchors included, so the
+      // bubble is looked up inside this transcript only.
+      guard transcript_root(surface) is Some(transcript) &&
+        transcript.query_selector("#\{key.anchor()}") is Some(bubble) else {
         return
       }
       let offset = bubble.get_bounding_client_rect().get_top() -
@@ -625,16 +663,14 @@ fn scroll_turn_into_view(
 /// Folding content can put an unpinned reader at the bottom without changing
 /// scrollTop, so no scroll event arrives to clear the jump-to-latest button.
 fn report_visible_turn_after_render(
+  surface : @interop.ChatSurface,
   emit : @cmd.Emit[Msg],
   current~ : @transcript_overview.TurnKey?,
   unpinned~ : Bool = false,
 ) -> @cmd.Cmd {
   @cmd.custom_cmd(
     scheduler => {
-      guard @dom.document().get_element_by_id("transcript").to_option()
-        is Some(transcript) else {
-        return
-      }
+      guard transcript_root(surface) is Some(transcript) else { return }
       let active = visible_turn(transcript)
       if unpinned && scroll_position(transcript) is Pinned {
         scheduler.add(emit(Pinned(true)))
@@ -650,6 +686,7 @@ fn report_visible_turn_after_render(
 ///|
 priv suberror TranscriptSubscription {
   TranscriptSubscription(
+    surface~ : @interop.ChatSurface,
     emit~ : @cmd.Emit[Msg],
     departed~ : @cmd.Emit[ScrollPosition],
     // The Model's current reading, refreshed after every message. The scroll
@@ -665,6 +702,7 @@ priv suberror TranscriptSubscription {
 /// transcript. Keeping both in this component means the application no longer
 /// forwards a synthetic "content changed" message into child state.
 fn transcript_subscription(
+  surface : @interop.ChatSurface,
   model : Model,
   emit : @cmd.Emit[Msg],
   departed : @cmd.Emit[ScrollPosition],
@@ -673,6 +711,7 @@ fn transcript_subscription(
     "transcript-dom",
     @sub.Local,
     TranscriptSubscription(
+      surface~,
       emit~,
       departed~,
       pinned=model.pinned,
@@ -688,7 +727,8 @@ fn transcript_sub_loader(
   scheduler : &@cmd.Scheduler,
 ) -> @sub.RunningSub? {
   match payload {
-    TranscriptSubscription(emit~, departed~, pinned~, active~) => {
+    TranscriptSubscription(surface~, emit~, departed~, pinned~, active~) => {
+      let root_id = transcript_root_id(surface)
       let mut emit = emit
       let mut departed = departed
       let mut pinned = pinned
@@ -703,7 +743,8 @@ fn transcript_sub_loader(
       let target = @dom.document().as_event_target()
       let listener : @dom.Listener = event => {
         guard event.target().to_element() is Some(element) &&
-          element.get_property("id").to_option() is Some("transcript") else {
+          element.get_property("id").to_option() is Some(id) &&
+          id == root_id else {
           return
         }
         let top = element.get_scroll_top()
@@ -725,6 +766,7 @@ fn transcript_sub_loader(
       }
       target.add_event_listener_with_options("scroll", listener, capture=true)
       let observers = TranscriptObservers::install(
+        surface,
         () => scheduler.add(emit(ContentRendered)),
         path => scheduler.add(emit(ImageRequested(path))),
         // Establish the baseline before the mounted scroller's first event,
@@ -743,8 +785,7 @@ fn transcript_sub_loader(
           // step before Rabbita replaces the DOM, so the scroller still shows
           // this conversation. Report where the reader was so a return can
           // put them back there.
-          if @dom.document().get_element_by_id("transcript").to_option()
-            is Some(transcript) {
+          if transcript_root(surface) is Some(transcript) {
             scheduler.add(departed(scroll_position(transcript)))
           }
         },
@@ -752,6 +793,7 @@ fn transcript_sub_loader(
           guard payload
             is TranscriptSubscription(
               emit=next,
+              surface=_,
               departed=left,
               pinned=next_pinned,
               active=next_active
@@ -922,6 +964,7 @@ fn TranscriptDomMount::dispose(self : Self) -> Unit {
 
 ///|
 fn TranscriptObservers::install(
+  surface : @interop.ChatSurface,
   on_change : () -> Unit,
   on_image : (String) -> Unit,
   on_mount : (@dom.Element) -> Unit,
@@ -941,7 +984,7 @@ fn TranscriptObservers::install(
     on_change()
   })
   let attach = () => {
-    let next = @dom.document().get_element_by_id("transcript").to_option()
+    let next = transcript_root(surface)
     guard !mount.is_same_element(next) else { return }
     content.disconnect()
     resize.disconnect()

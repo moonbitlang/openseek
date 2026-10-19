@@ -1293,7 +1293,7 @@ fn transcript_view(
   // project title filters and switches registered projects").
   @html.section(
     attrs=@html.Attrs::build()
-      .id("transcript")
+      .id(transcript_root_id(input.surface))
       .class("transcript")
       // Text selected here gets the shell's floating reply.
       .data_set("context-quote", "")

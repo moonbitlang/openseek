@@ -37,7 +37,11 @@ pub fn open_jobs(DockState) -> DockState
 
 pub fn open_picker(DockState) -> DockState
 
+pub fn open_side_chat(DockState, @interop.ConversationKey) -> DockState
+
 pub fn open_workflows(DockState) -> DockState
+
+pub fn reconcile_side_chats(DockState, Array[@interop.ConversationKey]) -> DockState
 
 pub fn resolve_pick(DockState, DockTab) -> DockState
 
@@ -75,6 +79,7 @@ pub(all) enum DockTab {
   Workflows
   Github
   Jobs
+  SideChat(owner~ : @interop.ConversationKey)
 } derive(Eq)
 pub fn DockTab::equal(Self, Self) -> Bool
 pub fn DockTab::not_equal(Self, Self) -> Bool

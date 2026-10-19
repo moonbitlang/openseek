@@ -2006,10 +2006,12 @@ priv enum Msg {
   // Everything the Skills page does with itself once it is open.
   Skills(@skills.Msg)
   Send
-  SendFollowup(@composer.FollowupChoice)
+  // `pin` is false for a conversation that is not the column's: the
+  // transcript the user is reading there must not jump.
+  SendFollowup(@composer.FollowupChoice, pin~ : Bool)
   // `Send` for a conversation that is not the one on screen (a `!` command
-  // finishing in the background): the same submission, without scrolling the
-  // transcript the user is reading.
+  // finishing in the background, a side chat in the dock): the same
+  // submission, without scrolling the transcript the user is reading.
   SendInBackground
   Stop
   UserQuestions(
@@ -3924,10 +3926,17 @@ fn Model::conversation_is_visible(
   channel : @interop.ChannelId,
   session_id : String,
 ) -> Bool {
-  self.transcript_is_visible() &&
-  self.screen is Chat &&
-  channel == self.focused &&
-  session_id == self.active_session
+  if self.transcript_is_visible() &&
+    self.screen is Chat &&
+    channel == self.focused &&
+    session_id == self.active_session {
+    return true
+  }
+  // A side chat is read in the dock, which can be on screen with or without
+  // the column beside it.
+  self.window_focused &&
+  !(self.terminal_panel_visible() && self.terminal.is_maximized()) &&
+  self.mounted_side_chat_owner() == Some({ channel, session: session_id, })
 }
 
 ///|
@@ -3953,11 +3962,17 @@ fn Model::mark_conversation_read(
 /// latest completion. Other screens retain the unread state until the reader
 /// returns to the transcript.
 fn Model::mark_visible_conversation_read(self : Model) -> Model {
-  guard self.transcript_is_visible() else { return self }
-  if self.screen is Codex {
+  let model = if !self.transcript_is_visible() {
+    self
+  } else if self.screen is Codex {
     { ..self, codex: self.codex.mark_visible_read(), }
   } else {
     self.mark_conversation_read(self.focused, self.active_session)
+  }
+  match model.mounted_side_chat_owner() {
+    Some(owner) if model.conversation_is_visible(owner.channel, owner.session) =>
+      model.mark_conversation_read(owner.channel, owner.session)
+    _ => model
   }
 }
 
@@ -3984,7 +3999,9 @@ fn Model::activate(
     if conv.device == channel && conv.session_id == session_id {
       found = true
       conversations.push(conv)
-    } else if conv.worth_keeping() {
+    } else if conv.worth_keeping() || conv.is_side_chat() {
+      // A side chat lives as long as its record, which its dock tab shows;
+      // a fork whose history is still loading has not "begun" here yet.
       conversations.push(conv)
     }
   }
@@ -4051,6 +4068,42 @@ fn Model::activate(
 /// conversation lives on in memory with no way back to it.
 fn Conversation::worth_keeping(self : Conversation) -> Bool {
   self.has_begun() || self.draft_addressed || !self.draft_empty()
+}
+
+///|
+/// The side chats of `owner` that exist, in a stable order: the listed
+/// records named `<owner>-sc-<token>` in the store of `owner`'s project. They
+/// are what `owner`'s dock strip shows as side-chat tabs.
+fn Model::side_chats_of(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> Array[@interop.ConversationKey] {
+  guard !owner.session.is_empty() &&
+    self.device_state(owner.channel) is Some(dev) else {
+    return []
+  }
+  let project = self
+    .find_conversation(owner.channel, owner.session)
+    .map(conv => conv.project())
+  let chats : Array[String] = []
+  for item in dev.sessions {
+    if @protocol.split_side_chat_id(item.id) is Some(parent) &&
+      parent == owner.session &&
+      project.map_or(true, project => item.workspace == project) {
+      chats.push(item.id)
+    }
+  }
+  // The listing orders by activity; restored tabs should not reshuffle when a
+  // side chat is used. Every token is the same length, so this is by token.
+  chats.sort()
+  chats.map(session => { channel: owner.channel, session, })
+}
+
+///|
+/// Whether this conversation is a side chat (or a record of one), shown in
+/// the dock beside its conversation rather than as a conversation of its own.
+fn Conversation::is_side_chat(self : Conversation) -> Bool {
+  @protocol.side_chat_parent(self.session_id) is Some(_)
 }
 
 ///|
