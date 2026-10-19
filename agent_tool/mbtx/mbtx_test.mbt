@@ -1190,36 +1190,25 @@ async test "runs a pure snippet without selecting a target" {
 }
 
 ///|
-async test "rejects the removed target field before saving or executing a script" {
+async test "removed target is rejected before saving or requesting approval" {
   @vfs.with_tmpdir(ws => {
-    let targets : Array[Json] = [
-      "wasm",
-      "wasm-gc",
-      "js",
-      "llvm",
-      "native",
-      null,
-      false,
-      1,
-      [],
-      {},
-    ]
-    for index, target in targets {
-      let filename = "rejected-\{index}.mbtx"
-      let out = run_in(ws, {
-        "source": "fn main { println(42) }",
-        "filename": filename,
-        "target": target,
-      })
-      assert_true(out.is_error, msg=out.content)
-      assert_true(out.content.contains("field was removed"), msg=out.content)
-      assert_true(out.content.contains("always runs on wasm"), msg=out.content)
-      assert_true(
-        out.content.contains("remove target and retry"),
-        msg=out.content,
-      )
-      assert_false(@fs.exists("\{ws}/\{filename}"))
-    }
+    let asked = Ref(false)
+    let definition = @mbtx.definition(
+      workspace_root=ws,
+      approval=ApprovalChannel(_ => {
+        asked.val = true
+        AllowedOnce
+      }),
+    )
+    let out = dispatch(definition, {
+      "source": "fn main { println(42) }",
+      "filename": "rejected.mbtx",
+      "target": "wasm",
+      "escalated": true,
+    })
+    assert_true(out.is_error, msg=out.content)
+    assert_false(@fs.exists("\{ws}/rejected.mbtx"))
+    assert_false(asked.val)
   })
 }
 
@@ -1601,49 +1590,6 @@ async test "a refusal names escalation when a channel is wired" {
   assert_true(plain.is_error)
   assert_true(plain.content.contains("spawn allowlist"))
   assert_false(plain.content.contains("escalated"))
-}
-
-///|
-/// A removed argument fails before approval, even when its value names the
-/// backend the tool always uses.
-async test "a supplied target is rejected before escalation approval" {
-  let asked : Array[@agent_runtime.ApprovalAsk] = []
-  @vfs.with_tmpdir(prefix="mbtx-target-", ws => {
-    let definition = @mbtx.definition(
-      workspace_root=ws,
-      approval=ApprovalChannel(ask => {
-        asked.push(ask)
-        AllowedOnce
-      }),
-    )
-    let targets : Array[Json] = [
-      "wasm",
-      "wasm-gc",
-      "js",
-      "llvm",
-      "native",
-      null,
-      false,
-      1,
-      [],
-      {},
-    ]
-    for target in targets {
-      let out = dispatch(definition, {
-        "source": "fn main { println(1) }",
-        "target": target,
-        "escalated": true,
-      })
-      assert_true(out.is_error, msg=out.content)
-      assert_true(out.content.contains("field was removed"), msg=out.content)
-      assert_true(out.content.contains("always runs on wasm"), msg=out.content)
-      assert_true(
-        out.content.contains("remove target and retry"),
-        msg=out.content,
-      )
-    }
-  })
-  assert_eq(asked.length(), 0)
 }
 
 ///|

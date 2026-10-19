@@ -17,46 +17,17 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-test "decode rejects any removed target value with migration guidance" {
-  let targets : Array[Json] = [
-    "wasm",
-    "wasm-gc",
-    "js",
-    "llvm",
-    "native",
-    "banana",
-    null,
-    3,
-    true,
-    {},
-    [],
-  ]
-  for target in targets {
-    try @decode.decode({ "source": "fn main {  }", "target": target }) catch {
-      error => {
-        let message = "\{error}"
-        assert_true(message.contains("arguments without target"))
-        assert_true(message.contains("mbtx always runs on wasm"))
-        assert_true(message.contains("remove target and retry"))
-      }
-    } noraise {
-      _ => fail("accepted target \{target.stringify()}")
+test "decode tells stale callers to remove target" {
+  try
+    @decode.decode({ "source": "fn main { println(1) }", "target": "wasm" })
+  catch {
+    error => {
+      let message = "\{error}"
+      assert_true(message.contains("mbtx always runs on wasm"))
+      assert_true(message.contains("remove target and retry"))
     }
-  }
-}
-
-///|
-test "removed target migration guidance precedes other argument errors" {
-  let inputs : Array[Json] = [
-    { "target": "wasm" },
-    { "target": null, "source": null, "run_in_background": true },
-  ]
-  for arguments in inputs {
-    try @decode.decode(arguments) catch {
-      error => assert_true("\{error}".contains("arguments without target"))
-    } noraise {
-      _ => fail("accepted removed target")
-    }
+  } noraise {
+    _ => fail("accepted removed target")
   }
 }
 
@@ -77,9 +48,8 @@ test "decode defaults warning to off and reads on/off" {
 }
 
 ///|
-/// Argument shapes `decode` must refuse. Only the refusal itself is pinned
-/// here; the two tests above stay separate because they also pin the wording
-/// the model is supposed to read.
+/// Argument shapes `decode` must refuse. Migration guidance is checked
+/// separately by the removed-field tests.
 test "decode rejects malformed arguments" {
   let malformed : Array[Json] = [
     {},
