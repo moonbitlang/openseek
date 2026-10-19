@@ -148,6 +148,48 @@
     justify-content: flex-start;
   }
 
+  /* Errors stay below the header so a failed send leaves its restored draft
+     and retry controls visible. Bound a group of errors as well as each one. */
+  .notifications.corner-bottom-right,
+  .notifications.corner-bottom-left,
+  .notifications.corner-top-right,
+  .notifications.corner-top-left {
+    top: calc(var(--topbar-height) + 8px);
+    right: 12px;
+    bottom: auto;
+    left: 12px;
+    max-width: none;
+    max-height: min(280px, 40dvh);
+    align-items: stretch;
+  }
+
+  /* Account entry uses the same small-screen layout in ordinary browsers and
+     embedded hosts. Keep shell toolbar sizes shared. */
+  .portal-inner {
+    padding: 24px 20px;
+  }
+  .portal-card {
+    margin-top: 24px;
+    padding: 20px;
+    align-items: stretch;
+  }
+  .portal-button-link {
+    text-align: center;
+    padding: 14px 16px;
+  }
+  .portal-card > button {
+    min-height: 48px;
+  }
+  .console-account {
+    flex-wrap: wrap;
+  }
+  .console-account-action {
+    min-height: 44px;
+  }
+  .composer-input textarea {
+    font-size: 16px;
+  }
+
   /* Portal: the header wraps instead of overflowing. */
   .portal-header {
     flex-wrap: wrap;

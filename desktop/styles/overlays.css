@@ -265,6 +265,8 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   flex-direction: column;
   gap: 8px;
   max-width: min(380px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
 .notifications.corner-bottom-right {
   right: 16px;
@@ -286,7 +288,14 @@ dialog.export-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
   top: 16px;
   align-items: flex-start;
 }
+/* Host failures can include a full CLI help page. Scroll the diagnostics
+   instead of letting a bottom-anchored notice grow above the viewport. */
 .notification {
+  flex-shrink: 0;
+  max-height: min(240px, 35dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  white-space: pre-wrap;
   cursor: pointer;
   padding: 10px 14px;
   border: 1px solid var(--color-danger-border);
