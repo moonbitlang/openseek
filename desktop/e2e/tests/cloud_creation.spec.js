@@ -76,3 +76,45 @@ test('first Cloud admission preserves later typing in the shared composer', asyn
   await expect(page.locator('#task')).toHaveValue('Later typing');
   expect(creations(cloud)).toHaveLength(1);
 });
+
+
+test('Cloud blank stays selected across sidebar browsing, shortcuts and Settings above Work', async ({ page }) => {
+  const cloud = new CloudHarness(page, { desktop: true });
+  const sidebar = name => page.getByRole('group', { name: 'Sidebar list' }).getByRole('button', { name, exact: true });
+  const model = page.getByRole('button', { name: 'Model', exact: true });
+  const heading = page.locator('main > .topbar h1');
+  const shortcut = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta+N' : 'Control+N');
+  await cloud.install(); await cloud.goto();
+  await sidebar('Work').click();
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await expect(page.locator('main > .topbar .topbar-workspace-label')).toHaveText('workspace');
+  await sidebar('Chat').click(); await cloud.open();
+  await sidebar('Work').click();
+  await page.keyboard.press(shortcut);
+  await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
+  await page.locator('#task').fill('Keep the Cloud blank draft');
+  await sidebar('Work').click();
+  await expect(heading).toHaveText('New chat');
+  await expect(model).toBeDisabled();
+  await page.keyboard.press(shortcut);
+  await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(heading).toHaveText('New chat');
+  await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await sidebar('Work').click();
+  await page.keyboard.press(shortcut);
+  await expect(sidebar('Chat')).toHaveAttribute('aria-pressed', 'true');
+  await expect(model).toBeDisabled();
+  await expect(page.locator('#task')).toHaveValue('Keep the Cloud blank draft');
+  expect(creations(cloud)).toHaveLength(0);
+  await sidebar('Work').click();
+  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
+  await page.getByRole('button', { name: 'New conversation in this project', exact: true }).click();
+  await expect(model).toBeEnabled();
+  await expect(page.locator('#task')).toHaveValue('');
+  expect(cloud.device.pageErrors).toEqual([]);
+});

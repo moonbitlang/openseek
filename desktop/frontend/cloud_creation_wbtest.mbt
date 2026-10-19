@@ -83,6 +83,10 @@ test "first Cloud submit creates once and sends its snapshot after creation" {
     created,
   )
   assert_false(late.cloud.sessions.any(item => item.id == "duplicate"))
+  let (_, back) = update(test_dispatch(), Navigation(Back), created)
+  assert_true(
+    back.cloud_identity() is Some(@interop.Cloud(session="cloud-a", ..)),
+  )
 }
 
 ///|
@@ -180,6 +184,92 @@ test "signing in for new Cloud returns to an empty page without creating a sessi
   assert_true(blank.screen is Chat && blank.cloud_selected())
   assert_true(blank.cloud.creation is Some({ submission: None, .. }))
   assert_true(blank.cloud.sessions.is_empty())
+  assert_true(blank.navigation.location == blank.navigation_location())
   assert_true(blank.cloud_identity() is None)
   assert_false(blank.composer_input().presentation.disabled)
+}
+
+///|
+test "Cloud blank selection survives sidebar browsing and Settings over a Work project" {
+  let initial = integrated_cloud_model().with_active_project(
+    Some(@interop.ChannelId::Local.test_project()),
+  )
+  let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), initial)
+  assert_true(blank.sidebar_mode is ChatMode)
+  let identity = blank.composer_input().identity.owner
+  let (_, browsed) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    blank,
+  )
+  assert_true(browsed.cloud_selected())
+  assert_true(browsed.active_conversation() is None)
+  assert_eq(browsed.composer_input().identity.owner, identity)
+  let (_, repeated) = update(test_dispatch(), NewChatRequested, browsed)
+  assert_true(repeated.cloud_selected())
+  assert_eq(repeated.composer_input().identity.owner, identity)
+  let (_, settings) = update(test_dispatch(), OpenSetup, browsed)
+  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  assert_true(back.screen is Chat && back.cloud_selected())
+  assert_eq(back.composer_input().identity.owner, identity)
+  let (_, repeated) = update(test_dispatch(), NewChatRequested, settings)
+  assert_true(repeated.screen is Chat && repeated.cloud_selected())
+  assert_eq(repeated.composer_input().identity.owner, identity)
+  assert_true(repeated.cloud.creation is Some({ submission: None, .. }))
+}
+
+///|
+test "Cloud creation behind Settings promotes its navigation without leaving Settings" {
+  let (_, blank) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Create),
+    integrated_cloud_model(),
+  )
+  let (_, browsed) = update(
+    test_dispatch(),
+    SidebarModeSelected(WorkMode),
+    blank,
+  )
+  let pending = submit_blank_cloud(browsed)
+  assert_true(pending.cloud.creation is Some({ submission: Some(_), .. }))
+  let (_, settings) = update(test_dispatch(), OpenSetup, pending)
+  let (_, created) = update(
+    test_dispatch(),
+    CloudAction(
+      @cloud.Created(3, pending.cloud.creation.unwrap().request, "new-cloud"),
+    ),
+    settings,
+  )
+  assert_true(created.screen is Settings)
+  let (_, back) = update(test_dispatch(), Navigation(Back), created)
+  assert_true(
+    back.cloud_identity() is Some(@interop.Cloud(session="new-cloud", ..)),
+  )
+  assert_true(back.cloud_conversation() is Some({ sending: true, .. }))
+}
+
+///|
+test "account changes retire the Cloud blank selection and its composer" {
+  let (_, blank) = update(
+    test_dispatch(),
+    CloudAction(@cloud.Create),
+    integrated_cloud_model(),
+  )
+  for account in [None, Some("other-user")] {
+    let (_, changed) = update(
+      test_dispatch(),
+      CloudAction(@cloud.AccountChanged(account)),
+      blank,
+    )
+    assert_true(changed.selected_conversation is None)
+    assert_true(changed.cloud.creation is None)
+    assert_true(
+      changed.composer_entry_retirements.contains(
+        blank.composer_input().identity.owner,
+      ),
+    )
+    assert_false(
+      changed.accepts_composer_action(blank.composer_input().identity),
+    )
+  }
 }

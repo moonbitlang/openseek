@@ -27,7 +27,11 @@ test "Cloud delete captures its title and uses the shared confirmation" {
 
 ///|
 test "Cloud deletion falls back within Cloud regardless of the sidebar mode" {
-  let model = { ..integrated_cloud_model(), sidebar_mode: @sidebar.WorkMode, }
+  let model = {
+    ..integrated_cloud_model(),
+    is_desktop: false,
+    sidebar_mode: @sidebar.WorkMode,
+  }
   let pending = delete_cloud(model, "cloud-a")
   let request = pending.cloud.deletions["cloud-a"]
   let (_, removed) = update(
@@ -45,6 +49,10 @@ test "Cloud deletion falls back within Cloud regardless of the sidebar mode" {
     ),
   )
   assert_false(removed.cloud.conversations.contains("cloud-a"))
+  assert_true(removed.navigation.location == removed.navigation_location())
+  let (_, settings) = update(test_dispatch(), OpenSetup, removed)
+  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  assert_true(back.cloud_draft_identity() == removed.cloud_draft_identity())
 }
 
 ///|

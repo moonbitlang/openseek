@@ -19,6 +19,7 @@ fn Msg::is_navigation_visit(self : Msg) -> Bool {
     | OpenSkills
     | OpenCodex
     | OpenCloudConversation(..)
+    | CloudAction(@cloud.Create)
     | OpenSession(_, _)
     | OpenSessionHere(_)
     | OpenArchivedSession(_, ..)
@@ -89,6 +90,18 @@ fn observe_navigation(
     previous.navigation_location() is Some(old) &&
     next.navigation_location() is Some(promoted) {
     Some((old, promoted))
+  } else if message is CloudAction(@cloud.Created(epoch, request, session)) &&
+    epoch == previous.cloud.epoch &&
+    previous.cloud.creation is Some(creation) &&
+    creation.request == request &&
+    next.cloud.creation is None &&
+    previous.cloud.user_id is Some(account) {
+    Some(
+      (
+        { device: None, target: CloudDraft(account~, id=creation.id), },
+        { device: None, target: CloudSession(account~, session~), },
+      ),
+    )
   } else if message is Codex(_, ..) &&
     old_codex is CodexDraft(_) &&
     new_codex is Thread(_) &&
@@ -115,10 +128,9 @@ fn observe_navigation(
     .conversation_selection()
     .map(selection => (selection.channel, selection.session)) ==
     Some((pending.source.channel, reply.session))
-  let cloud_opened = message is CloudAction(_) &&
+  let cloud_opened = message is (CloudAction(_) | AccountLoaded(_, _)) &&
     next.cloud_selected() &&
-    next.cloud_identity() is Some(_) &&
-    next.cloud_identity() != previous.cloud_identity()
+    next.selected_conversation != previous.selected_conversation
   let explicit = message.is_navigation_visit() ||
     cloud_opened ||
     fork_opened ||

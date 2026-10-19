@@ -171,8 +171,9 @@ test "Back prevents a pending Cloud creation from taking foreground later" {
     ),
     back,
   )
-  assert_true(late.cloud_identity() == cloud.cloud_identity())
-  assert_true(late.navigation == back.navigation)
+  assert_true(back.screen is Settings && late.screen is Settings)
+  assert_true(late.navigation.location == back.navigation.location)
+  assert_eq(late.navigation.revision, back.navigation.revision)
   assert_true(late.cloud.sessions.any(item => item.id == "late-cloud"))
 }
 

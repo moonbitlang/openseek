@@ -596,7 +596,7 @@ pub fn update(
       (next, command, None)
     }
     Submit(owner, draft) => {
-      if state.draft_identity(navigation) == Some(owner) &&
+      if state.draft_identity() == Some(owner) &&
         state.creation is Some(creation) {
         guard creation.submission is None &&
           token is Some(_) &&
@@ -610,7 +610,12 @@ pub fn update(
           ..state,
           sequence: request,
           notice: None,
-          creation: Some({ ..creation, request, submission: Some(draft), }),
+          creation: Some({
+            ..creation,
+            request,
+            navigation,
+            submission: Some(draft),
+          }),
         }
         let (next, command) = next.create(token, emit)
         return (next, command, None)

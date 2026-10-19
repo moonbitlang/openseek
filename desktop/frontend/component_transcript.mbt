@@ -56,11 +56,8 @@ priv enum ChatColumn {
 
 ///|
 fn Model::chat_column(self : Model) -> ChatColumn {
-  if self.cloud.creating_at(self.chat_navigation_generation) {
-    if self.cloud_draft_identity() is Some(owner) {
-      return CloudTranscript(slot=CloudTranscriptSlot(owner))
-    }
-    return Loading
+  if self.cloud_draft_identity() is Some(owner) {
+    return CloudTranscript(slot=CloudTranscriptSlot(owner))
   }
   if self.cloud_identity() is Some(owner) {
     guard self.cloud_conversation() is Some(conversation) else {

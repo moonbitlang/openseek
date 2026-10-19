@@ -323,7 +323,7 @@ test "externally archived inventory fences pending history through restoration" 
   let creating = metadata_update(opened, Create)
   let creating = metadata_update(
     creating,
-    Submit(creating.draft_identity(0).unwrap(), {
+    Submit(creating.draft_identity().unwrap(), {
       task: "First message",
       images: [],
       mentions: [],

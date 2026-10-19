@@ -48,6 +48,23 @@ fn activate_navigation(
       { ..next, navigation: { ..next.navigation, phase: Active, }, },
     )
   }
+  if location.target is CloudDraft(account~, id~) {
+    guard model.cloud.draft_identity() ==
+      Some(@interop.Cloud(account~, session=id)) else {
+      return (
+        @cmd.none,
+        { ..model, navigation: { ..model.navigation, phase: Missing, }, },
+      )
+    }
+    return (
+      @cmd.none,
+      {
+        ..model,
+        selected_conversation: Some(CloudDraftSelection(account~, id~)),
+        navigation: { ..model.navigation, phase: Active, },
+      },
+    )
+  }
   if location.target is Settings {
     let (command, next) = update_msg(dispatch, OpenSetup, model)
     return (
@@ -63,7 +80,7 @@ fn activate_navigation(
     return (@cmd.none, model)
   }
   let (command, next, phase) = match location.target {
-    CloudSession(..) | Settings => (@cmd.none, model, Active)
+    CloudSession(..) | CloudDraft(..) | Settings => (@cmd.none, model, Active)
     Schedules => {
       let (cmd, next) = open_schedules(dispatch, model)
       (cmd, next, Active)

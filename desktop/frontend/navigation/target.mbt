@@ -7,6 +7,7 @@ pub(all) enum Target {
   Session(String)
   ChatDraft(String)
   CloudSession(account~ : String, session~ : String)
+  CloudDraft(account~ : String, id~ : String)
   Codex
   CodexNew
   Thread(String)

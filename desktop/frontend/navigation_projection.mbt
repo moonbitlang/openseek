@@ -1,10 +1,6 @@
 ///|
 fn Model::navigation_location(self : Model) -> @navigation.Location? {
   let device = self.console.page_device
-  if self.screen is Chat &&
-    self.cloud.creating_at(self.chat_navigation_generation) {
-    return None
-  }
   let target : @navigation.Target = match self.screen {
     Settings => Settings
     Schedules => Schedules
@@ -16,7 +12,11 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
       }
     Codex => self.codex.navigation_target()
     Chat =>
-      if self.cloud_identity() is Some(@interop.Cloud(account~, session~)) {
+      if self.cloud_draft_identity()
+        is Some(@interop.Cloud(account~, session=id)) {
+        CloudDraft(account~, id~)
+      } else if self.cloud_identity()
+        is Some(@interop.Cloud(account~, session~)) {
         CloudSession(account~, session~)
       } else if self.host_selection() is Some(selection) &&
         self.loading_conversation is Some(_) {
@@ -40,7 +40,7 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
       }
   }
   match target {
-    CloudSession(..) => Some({ device: None, target, })
+    CloudSession(..) | CloudDraft(..) => Some({ device: None, target, })
     Settings => Some({ device, target, })
     _ => if device is Some(_) { Some({ device, target, }) } else { None }
   }
@@ -49,7 +49,12 @@ fn Model::navigation_location(self : Model) -> @navigation.Location? {
 ///|
 fn navigation_screen(target : @navigation.Target) -> Screen {
   match target {
-    Chat | ChatNew | Session(_) | ChatDraft(_) | CloudSession(..) => Chat
+    Chat
+    | ChatNew
+    | Session(_)
+    | ChatDraft(_)
+    | CloudSession(..)
+    | CloudDraft(..) => Chat
     Codex | CodexNew | Thread(_) | CodexDraft(_) => Codex
     Settings => Settings
     Skills | InstalledSkill(_) | MarketSkill(_) => Skills

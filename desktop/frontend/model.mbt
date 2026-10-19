@@ -1399,6 +1399,7 @@ priv struct ConversationLoadFailure {
 priv enum ChatSelection {
   HostSelection(ConversationSelection)
   CloudSelection(account~ : String, session~ : String)
+  CloudDraftSelection(account~ : String, id~ : String)
 } derive(Eq)
 
 ///|

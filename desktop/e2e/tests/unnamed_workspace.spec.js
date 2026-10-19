@@ -144,6 +144,13 @@ test('existing local Chats load, export, archive, restore and continue without a
 
 test('local Chat drafts survive Cloud navigation and sign-out while new Chats remain Cloud', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page, { desktop: true });
+  const expectBlankCloud = async () => {
+    await expect(page.locator('main > .topbar h1')).toHaveText('New chat');
+    await expect(page.locator('#task')).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(page.locator('.conversation-open[aria-current="true"]')).toHaveCount(0);
+    expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
+  };
   localHistory(cloud.device);
   await cloud.install();
   await cloud.goto();
@@ -166,23 +173,23 @@ test('local Chat drafts survive Cloud navigation and sign-out while new Chats re
   expect(cloud.accountSignedIn).toBe(false);
   await page.screenshot({ path: testInfo.outputPath('local-chat-after-sign-out.png') });
   await page.getByRole('button', { name: 'New chat', exact: true }).click();
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(1);
+  await expectBlankCloud();
+  expect(cloud.accountSignedIn).toBe(true);
+  expect(cloud.hostRequests.filter(request => request.method === 'auth.connect')).toHaveLength(1);
   await local.click();
   await expect(page.locator('#task')).toHaveValue('Keep this local draft');
   const shortcut = await page.evaluate(() => navigator.platform.includes('Mac') ? 'Meta+N' : 'Control+N');
   await sidebarMode(page, 'Work').click();
   await page.keyboard.press(shortcut);
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(2);
-  await expect(page.locator('main > .topbar h1')).toHaveText('New chat');
+  await expectBlankCloud();
   await local.click();
   await sidebarMode(page, 'Work').click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.keyboard.press(shortcut);
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(3);
-  await expect(page.locator('main > .topbar h1')).toHaveText('New chat');
+  await expectBlankCloud();
   await sidebarMode(page, 'Work').click();
   await page.keyboard.press(shortcut);
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(4);
+  await expectBlankCloud();
   await sidebarMode(page, 'Work').click();
   const project = page.locator('.workspace-row', { hasText: 'workspace' });
   await project.hover();
@@ -193,7 +200,8 @@ test('local Chat drafts survive Cloud navigation and sign-out while new Chats re
   await page.keyboard.press(shortcut);
   await expect(page.locator('main > .topbar .topbar-workspace-label')).toHaveText('workspace');
   await expect(page.locator('#task')).toHaveValue('');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(4);
+  await expect(page.getByRole('button', { name: 'Model', exact: true })).toBeEnabled();
+  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
   expect(cloud.hostRequests.some(request => request.method === 'fs.create_unnamed_workspace')).toBe(false);
   expect(cloud.device.pageErrors).toEqual([]);
 });

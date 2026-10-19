@@ -560,7 +560,7 @@ fn adopt_projects(
   })
   commands.push(refresh_cmd)
   if model.cloud_identity() is Some(_) ||
-    model.cloud.creating_at(model.chat_navigation_generation) {
+    model.cloud_draft_identity() is Some(_) {
     return (@cmd.batch(commands), next)
   }
   if selected_detached {
@@ -4886,7 +4886,10 @@ fn update_msg(
         .map(selection => (selection.channel, selection.workspace))
       }
       let mode : @sidebar.Mode = if !model.codex_work_selected() &&
-        model.cloud_identity() is Some(_) {
+        (
+          model.cloud_identity() is Some(_) ||
+          model.cloud_draft_identity() is Some(_)
+        ) {
         ChatMode
       } else if target is Some((channel, project)) {
         if model

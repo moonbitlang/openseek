@@ -318,18 +318,8 @@ pub extend Submission with Eq::{equal, not_equal}
 pub extend Creation with Eq::{equal, not_equal}
 
 ///|
-pub fn State::creating_at(self : State, navigation : Int32) -> Bool {
-  self.creation is Some(creation) && creation.navigation == navigation
-}
-
-///|
-pub fn State::draft_identity(
-  self : State,
-  navigation : Int32,
-) -> @interop.ConversationIdentity? {
-  if self.user_id is Some(account) &&
-    self.creation is Some(creation) &&
-    creation.navigation == navigation {
+pub fn State::draft_identity(self : State) -> @interop.ConversationIdentity? {
+  if self.user_id is Some(account) && self.creation is Some(creation) {
     Some(@interop.Cloud(account~, session=creation.id))
   } else {
     None

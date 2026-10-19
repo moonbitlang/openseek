@@ -287,7 +287,8 @@ export class CloudHarness {
     await this.page.locator('.section-primary-action[aria-label="New chat"]').click();
     await expect(this.page.locator('main .topbar-title')).toHaveText('New chat');
     await expect(this.page.locator('main [title="Export conversation"]')).toHaveCount(0);
-    await this.page.locator('#task').waitFor();
+    await expect(this.page.getByRole('button', { name: 'Model', exact: true })).toBeDisabled();
+    await expect(this.page.locator('#task')).toBeEnabled();
   }
 
 }

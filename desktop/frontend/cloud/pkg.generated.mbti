@@ -156,8 +156,7 @@ pub(all) struct State {
 pub fn State::can_delete(Self, String) -> Bool
 pub fn State::can_edit(Self, String, SessionEdit) -> Bool
 pub fn State::can_send(Self, String) -> Bool
-pub fn State::creating_at(Self, Int) -> Bool
-pub fn State::draft_identity(Self, Int) -> @interop.ConversationIdentity?
+pub fn State::draft_identity(Self) -> @interop.ConversationIdentity?
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::is_archived(Self, String) -> Bool

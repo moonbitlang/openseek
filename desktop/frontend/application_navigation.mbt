@@ -74,10 +74,6 @@ fn reconcile_navigation(
     next.codex.can_start_thread() {
     next = { ..next, navigation: { ..next.navigation, phase: Waiting, }, }
   }
-  if next.screen is Chat &&
-    next.cloud.creating_at(next.chat_navigation_generation) {
-    return (@cmd.batch(commands), next)
-  }
   let (activate, next) = activate_navigation(dispatch, next)
   commands.push(activate)
   (@cmd.batch(commands), next)

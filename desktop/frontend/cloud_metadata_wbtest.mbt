@@ -145,10 +145,14 @@ test "archiving the selected Cloud creates a new Cloud without retiring its arch
   }
   let archived = complete_cloud_archive(pending, save.request)
   assert_true(archived.cloud.is_archived("cloud-a"))
-  assert_true(archived.cloud.creating_at(archived.chat_navigation_generation))
+  assert_true(archived.cloud_draft_identity() is Some(_))
   assert_true(archived.cloud_identity() is None)
   assert_true(archived.cloud.retired.is_empty())
   assert_true(archived.cloud.conversations.contains("cloud-a"))
+  assert_true(archived.navigation.location == archived.navigation_location())
+  let (_, settings) = update(test_dispatch(), OpenSetup, archived)
+  let (_, back) = update(test_dispatch(), Navigation(Back), settings)
+  assert_true(back.cloud_draft_identity() == archived.cloud_draft_identity())
 }
 
 ///|
