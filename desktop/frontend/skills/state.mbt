@@ -85,6 +85,17 @@ fn PendingSkillAction::source(self : PendingSkillAction) -> String {
 }
 
 ///|
+/// Whether this operation decides the entry's lifecycle, so the enable switch
+/// must not race it. Updating keeps the entry in place and leaves the switch
+/// usable; a pending enablement is handled by the switch's own pending state.
+fn PendingSkillAction::blocks_enablement(self : PendingSkillAction) -> Bool {
+  match self {
+    Installing(..) | Uninstalling(..) => true
+    Updating(..) | SettingEnabled(..) => false
+  }
+}
+
+///|
 fn State::pending_action(
   self : State,
   channel : @interop.ChannelId,

@@ -426,16 +426,6 @@ h2 {
   border-radius: 0;
 }
 
-.skill-check {
-  font-size: var(--font-size-sm);
-  white-space: nowrap;
-  flex-shrink: 0;
-
-  &:where(.ok) {
-    color: var(--color-success);
-  }
-}
-
 .skill-avatar {
   --icon-size: var(--icon-lg);
   display: grid;

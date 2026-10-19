@@ -511,12 +511,18 @@ fn installed_actions(
 ) -> @html.Html {
   let enabled = item.enabled
   let label = ui(locale, if enabled { Enabled } else { Disabled })
+  let identity = item.identity()
+  let pending = identity.bind(registry => {
+    state.pending_action(channel, registry)
+  })
+  let enablement_locked = state.pending_enabled(channel, item.id) ||
+    pending.map_or(false, action => action.blocks_enablement())
   let buttons : Array[@html.Html] = [
     @html.button(
       class="skill-enable-switch",
       type_="button",
       title=label,
-      disabled=state.pending_enabled(channel, item.id),
+      disabled=enablement_locked,
       on_click=emit(ToggleEnabled(item.id)),
       attrs=@html.Attrs::build()
         .role("switch")
@@ -525,8 +531,7 @@ fn installed_actions(
       @html.span(class="skill-switch-track", ""),
     ),
   ]
-  if item.identity() is Some(identity) {
-    let pending = state.pending_action(channel, identity)
+  if identity is Some(_) {
     let label = pending
       .map(action => ui(locale, action.label()))
       .unwrap_or(ui(locale, ManageSkill))
