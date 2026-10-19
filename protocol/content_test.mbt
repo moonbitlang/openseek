@@ -40,7 +40,7 @@ test "durable content writes single text as a string and other content as arrays
 ///|
 test "durable content rejects malformed parts without dropping them" {
   let invalid : Array[Json] = [
-    Json::null(),
+    null,
     1,
     {},
     ["text"],

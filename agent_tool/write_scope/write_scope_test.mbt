@@ -161,3 +161,28 @@ async test "a POSIX backslash is a filename byte, not a separator" {
     }
   })
 }
+
+///|
+/// A directory worker's scope is a repository's root with no prefixes: its
+/// files are writable, its `.git` (as spelled, or through a link) is not.
+async test "a scope never admits the root's git metadata" {
+  @vfs.with_tmpdir(prefix="write-scope-git-", root => {
+    @vfs.FileSystem({
+      ".git/config": "[core]\n",
+      ".gitignore": "_build\n",
+      "src/a.mbt": "a",
+    }).write_to(root)
+    let scope = scope_of(root)
+    assert_admits(scope, "src/a.mbt")
+    assert_admits(scope, ".gitignore")
+    assert_denies(scope, ".git/config", because="git metadata")
+    assert_denies(
+      scope,
+      "\{root}/.git/hooks/pre-commit",
+      because="git metadata",
+    )
+    assert_denies(scope, ".git", because="git metadata")
+    @fs.symlink(target="\{root}/.git", "\{root}/meta")
+    assert_denies(scope, "meta/config", because="git metadata")
+  })
+}

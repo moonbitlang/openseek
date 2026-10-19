@@ -90,7 +90,7 @@ whole.
 ///|
 test "rejections name one field, outermost problem first" {
   // Not an object at all.
-  inspect(decode_error_says(Json::null(), "object arguments"), content="true")
+  inspect(decode_error_says(null, "object arguments"), content="true")
   inspect(decode_error_says(["a.txt"], "object arguments"), content="true")
   // An object whose `path` is missing or the wrong type.
   inspect(

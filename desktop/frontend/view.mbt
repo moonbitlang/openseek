@@ -397,7 +397,9 @@ fn Model::sidebar_component_sections(
   // archive reply and the list refetch that follows it.
   let archived = (id : String) => dev.archived.any(item => item.id == id)
   let channel = dev.channel.uri_authority()
-  let chat_selected = self.screen is Chat && dev.channel == self.focused
+  let chat_selected = !self.cloud_selected() &&
+    self.screen is Chat &&
+    dev.channel == self.focused
   // The activation identity handed to sections and projects: which
   // conversation is on screen. A branch folded during one activation stays
   // folded until a different one lands in it.
@@ -419,8 +421,8 @@ fn Model::sidebar_component_sections(
     None
   }
   let projects : Array[@section.Entry] = []
-  let chat_rows : Array[(RowStamp, @conversation.Input)] = []
-  let mut chats_activation : String? = None
+  let local_rows : Array[(RowStamp, @conversation.Input)] = []
+  let mut local_activation : String? = None
   for path in dev.projects {
     let standalone = dev.is_chat_workspace(path)
     let stamped : Array[(RowStamp, @conversation.Input)] = []
@@ -466,13 +468,13 @@ fn Model::sidebar_component_sections(
     )
     if standalone {
       for (stamp, row) in stamped {
-        chat_rows.push((stamp, { ..row, nested: false, }))
+        local_rows.push((stamp, { ..row, nested: false, }))
       }
       if openseek_activation is Some(_) {
-        chats_activation = openseek_activation
+        local_activation = openseek_activation
       }
       if codex_activation is Some(_) {
-        chats_activation = codex_activation
+        local_activation = codex_activation
       }
       continue
     }
@@ -511,25 +513,6 @@ fn Model::sidebar_component_sections(
   let openseek_section_activation = activation(
     dev.active_project is Some(project) && !dev.is_chat_workspace(project),
   )
-  // Chats and Projects are the two lists the header switch chooses between;
-  // only the selected one is projected. Archived holds both kinds and stays.
-  let chats : @section.Input = {
-    id: @section.Id(source="openseek.chats", channel~),
-    label: @sidebar_messages.text(self.locale, Chats),
-    initially_collapsed: false,
-    activation: chats_activation,
-    action: Some({
-      title: if self.chat_creation_pending() {
-        @sidebar_messages.text(self.locale, CreatingChat)
-      } else {
-        @sidebar_messages.text(self.locale, NewChat)
-      },
-      disabled: self.chat_creation_pending() ||
-      self.pending_project_adoption is Some(_) ||
-      dev.bridge != Connected,
-    }),
-    entries: ordered_by_recency(chat_rows).map(row => @section.Conversation(row)),
-  }
   let work : @section.Input = {
     id: @section.Id(source="openseek.projects", channel~),
     label: @sidebar_messages.text(self.locale, Projects),
@@ -538,7 +521,7 @@ fn Model::sidebar_component_sections(
       openseek_section_activation
     } else if codex_context is Some(context) &&
       context.selected &&
-      chats_activation is None {
+      local_activation is None {
       self.codex.active_id()
     } else {
       None
@@ -549,12 +532,19 @@ fn Model::sidebar_component_sections(
     }),
     entries: projects,
   }
-  sections.push(
-    match self.sidebar_mode {
-      ChatMode => chats
-      WorkMode => work
-    },
-  )
+  match self.sidebar_mode {
+    ChatMode => {
+      sections.push(self.cloud_chat_section(channel))
+      sections.push(
+        self.local_chat_section(
+          channel~,
+          activation=local_activation,
+          rows=local_rows,
+        ),
+      )
+    }
+    WorkMode => sections.push(work)
+  }
   // Archived conversations fold behind a collapsed section at the end of the
   // list. Their records live in the store's `archived` twin, so they come
   // from the host's archived reply, not the live list; each row carries a
@@ -653,6 +643,12 @@ fn Model::codex_sidebar_context(
 /// same way `sidebar_component_sections` files rows: a conversation is a chat
 /// exactly when its workspace is under the host's managed chat root.
 fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
+  if self.cloud.creating_at(self.chat_navigation_generation) {
+    return None
+  }
+  if self.cloud_identity() is Some(owner) && self.screen is Chat {
+    return Some((@sidebar.ChatMode, owner.session()))
+  }
   guard self.focused_device() is Some(dev) else { return None }
   match self.screen {
     Chat => {
@@ -690,6 +686,9 @@ fn Model::sidebar_activation(self : Model) -> (@sidebar.Mode, String)? {
 /// while a refresh is in flight.
 fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
   let notices : Array[String] = []
+  if self.cloud.notice is Some(notice) {
+    notices.push(notice)
+  }
   let sections = match self.focused_device() {
     Some(dev) => {
       if dev.chat_root is Some(Err(message)) {
@@ -710,7 +709,29 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
             notices.push(shell_text(self.locale, NoOnlineDevice))
           }
       }
-      []
+      if self.sidebar_mode is ChatMode {
+        [
+          self.cloud_chat_section(self.focused.uri_authority()),
+          self.local_chat_section(
+            channel=self.focused.uri_authority(),
+            activation=None,
+            rows=[],
+          ),
+          {
+            id: @section.Id(
+              source="archived",
+              channel=self.focused.uri_authority(),
+            ),
+            label: @sidebar_messages.text(self.locale, ArchivedChats(0)),
+            initially_collapsed: true,
+            activation: None,
+            action: None,
+            entries: [],
+          },
+        ]
+      } else {
+        []
+      }
     }
   }
   // The footer's update button tracks the automatic download so its progress
@@ -1914,6 +1935,7 @@ fn app_shell_class(sidebar_open : Bool) -> String {
 /// navigation never closes terminal state or PTYs, but non-conversation pages
 /// have no active workspace surface to place the panel under.
 fn Model::terminal_panel_visible(self : Model) -> Bool {
+  !self.cloud_selected() &&
   self.terminal.is_open() &&
   (
     self.screen is Chat ||
@@ -1987,9 +2009,7 @@ fn view(
   // Until the relay session and its device exist, the console frame —
   // sidebar, composer, overlays — stays unbuilt and inert Local cannot
   // receive UI work.
-  if model.is_console_gated() {
-    return console_gate_view(locale=model.locale, dispatch, model.console)
-  }
+  let host_gated = model.is_console_gated() && !model.cloud_selected()
   let file_panel_visible = model.file_panel_visible()
   let terminal_panel_visible = model.terminal_panel_visible()
   let codex_actions : @codex.PageActions = {
@@ -2003,18 +2023,41 @@ fn view(
   }
   let header = match model.screen {
     Chat =>
-      match model.chat_column() {
-        Transcript(conversation=conv, ..) =>
-          conversation_header(dispatch, toggle_terminal, model, conv)
-        _ => {
-          let title = model.selected_conversation_title()
-          let selected = model.conversation_selection()
-          model.conversation_heading(
-            selected.map_or(model.focused, selected => selected.channel),
-            title,
-            title,
-            selected.map(selected => selected.workspace),
-          )
+      if host_gated || model.cloud_selected() {
+        [
+          @html.h1(
+            class="topbar-title",
+            if host_gated {
+              "SeekMoon"
+            } else {
+              model.cloud_title()
+            },
+          ),
+          if model.cloud_identity() is Some(_) {
+            @html.button(
+              class="panel-toggle",
+              title=shell_text(model.locale, ExportConversation),
+              on_click=dispatch(OpenCloudExport),
+              icon(icon_chat_export),
+            )
+          } else {
+            @html.nothing
+          },
+        ]
+      } else {
+        match model.chat_column() {
+          Transcript(conversation=conv, ..) =>
+            conversation_header(dispatch, toggle_terminal, model, conv)
+          _ => {
+            let title = model.selected_conversation_title()
+            let selected = model.conversation_selection()
+            model.conversation_heading(
+              selected.map_or(model.focused, selected => selected.channel),
+              title,
+              title,
+              selected.map(selected => selected.workspace),
+            )
+          }
         }
       }
     Codex =>
@@ -2037,57 +2080,62 @@ fn view(
     // `Model::chat_column` is the one fork that decides what the conversation
     // column is; the transcript component's lifetime follows the same value.
     Chat =>
-      match model.chat_column() {
-        LoadFailed(message~) =>
-          [
-            conversation_load_failed_view(
-              locale=model.locale,
-              dispatch,
-              message,
-            ),
-          ]
-        Loading => [conversation_loading_view(locale=model.locale)]
-        Onboarding => [onboarding_view(dispatch, model)]
-        Transcript(conversation=conv, ..) =>
-          [
-            transcript_html,
-            if model.device_state(conv.device) is Some(device) &&
-              !conv.is_archived_read_only() {
-              device.questions.view(
-                conv.session_id,
-                model.locale,
-                device.bridge is Connected,
-                dispatch.map(msg => {
-                  UserQuestions(
-                    channel=conv.device,
-                    connection_generation=device.connection_generation,
-                    msg,
-                  )
-                }),
-              )
-            } else {
-              @html.div(class="user-question-region", @html.nothing)
-            },
-            if conv.is_archived_read_only() {
-              conv.archived_read_only_view(locale=model.locale, dispatch)
-            } else if model.scheduled_session_read_only(conv) {
-              @html.div(class="composer archived-read-only", [
-                @html.div(class="archived-read-only-bar", [
-                  @html.span(
-                    class="archived-read-only-text",
-                    shell_text(model.locale, ScheduleReadOnly),
-                  ),
-                  @html.button(
-                    class="archived-read-only-restore",
-                    on_click=dispatch(OpenSchedules),
-                    shell_text(model.locale, ViewTask),
-                  ),
-                ]),
-              ])
-            } else {
-              composer_html
-            },
-          ]
+      if host_gated {
+        [console_gate_view(locale=model.locale, dispatch, model.console)]
+      } else {
+        match model.chat_column() {
+          CloudTranscript(..) => [transcript_html, composer_html]
+          LoadFailed(message~) =>
+            [
+              conversation_load_failed_view(
+                locale=model.locale,
+                dispatch,
+                message,
+              ),
+            ]
+          Loading => [conversation_loading_view(locale=model.locale)]
+          Onboarding => [onboarding_view(dispatch, model)]
+          Transcript(conversation=conv, ..) =>
+            [
+              transcript_html,
+              if model.device_state(conv.device) is Some(device) &&
+                !conv.is_archived_read_only() {
+                device.questions.view(
+                  conv.session_id,
+                  model.locale,
+                  device.bridge is Connected,
+                  dispatch.map(msg => {
+                    UserQuestions(
+                      channel=conv.device,
+                      connection_generation=device.connection_generation,
+                      msg,
+                    )
+                  }),
+                )
+              } else {
+                @html.div(class="user-question-region", @html.nothing)
+              },
+              if conv.is_archived_read_only() {
+                conv.archived_read_only_view(locale=model.locale, dispatch)
+              } else if model.scheduled_session_read_only(conv) {
+                @html.div(class="composer archived-read-only", [
+                  @html.div(class="archived-read-only-bar", [
+                    @html.span(
+                      class="archived-read-only-text",
+                      shell_text(model.locale, ScheduleReadOnly),
+                    ),
+                    @html.button(
+                      class="archived-read-only-restore",
+                      on_click=dispatch(OpenSchedules),
+                      shell_text(model.locale, ViewTask),
+                    ),
+                  ]),
+                ])
+              } else {
+                composer_html
+              },
+            ]
+        }
       }
     Codex => {
       let page = model.codex.page(
@@ -2124,7 +2172,8 @@ fn view(
       content_class += " terminal-maximized"
     }
   }
-  let content = if navigation_notice(dispatch, model) is Some(notice) {
+  let content = if !host_gated &&
+    navigation_notice(dispatch, model) is Some(notice) {
     [notice]
   } else {
     content
@@ -2136,17 +2185,23 @@ fn view(
     ),
     ..content,
   ]
-  let panel_available = model.screen is Chat ||
+  let panel_available = !model.cloud_selected() &&
     (
-      file_ctx(model).placement is Some(placement) &&
-      placement.checkout_root() is Some(_)
-    )
-  let panel_toggle_visible = file_panel_visible ||
-    (
-      !model.narrow &&
+      model.screen is Chat ||
       (
-        model.screen is Codex ||
-        (model.screen is Chat && model.active_conversation() is Some(_))
+        file_ctx(model).placement is Some(placement) &&
+        placement.checkout_root() is Some(_)
+      )
+    )
+  let panel_toggle_visible = !model.cloud_selected() &&
+    (
+      file_panel_visible ||
+      (
+        !model.narrow &&
+        (
+          model.screen is Codex ||
+          (model.screen is Chat && model.active_conversation() is Some(_))
+        )
       )
     )
   let panel_toggle_label = if file_panel_visible {
@@ -2241,7 +2296,7 @@ fn view(
   }
   // The API-setup modal floats above the toasts like the other modals: it
   // owns the screen until the user answers it or a usable endpoint arrives.
-  if model.api_setup_open {
+  if model.api_setup_open && !model.cloud_selected() {
     children.push(api_setup_modal(dispatch, model))
   }
   if model.project_picker is Some(picker) {
@@ -2274,7 +2329,9 @@ fn view(
   // stream and every API call failing, the app behind it can do nothing,
   // so an honest dead-end beats a half-broken UI. The console keeps its last
   // rendered device readable while its topbar and composer show reconnecting.
-  if model.is_desktop && model.bridge_state() is BridgeLost(message) {
+  if !model.cloud_selected() &&
+    model.is_desktop &&
+    model.bridge_state() is BridgeLost(message) {
     children.push(bridge_lost_overlay(locale=model.locale, message))
   }
   @html.div(class=app_shell_class(model.sidebar_open), children)
@@ -2539,4 +2596,55 @@ test "the token pill reads the same count as the composer's running row" {
   // Both render `usage_tokens`, and both can be on screen at once, so the
   // compaction has one owner (`@labels`) rather than a copy per view.
   inspect(token_label(12345), content="12.3k tokens")
+}
+
+///|
+fn Model::local_chat_section(
+  self : Model,
+  channel~ : String,
+  activation~ : String?,
+  rows~ : Array[(RowStamp, @conversation.Input)],
+) -> @section.Input {
+  {
+    id: @section.Id(source="openseek.chats", channel~),
+    label: @sidebar_messages.text(self.locale, Local),
+    initially_collapsed: false,
+    activation,
+    action: None,
+    entries: ordered_by_recency(rows).map(row => @section.Conversation(row)),
+  }
+}
+
+///|
+fn Model::cloud_chat_section(self : Model, channel : String) -> @section.Input {
+  let entries : Array[@section.Entry] = []
+  if self.account is None {
+    entries.push(
+      @section.Placeholder({
+        id: "cloud-sign-in",
+        label: @sidebar_messages.text(self.locale, CloudSignInHint),
+        class_name: "cloud-sign-in",
+        nested: false,
+        openable: false,
+        action: Some({
+          title: @settings.text(self.locale, SignIn),
+          disabled: self.remote_connecting,
+        }),
+      }),
+    )
+  }
+  for row in ordered_by_recency(self.cloud_chat_rows()) {
+    entries.push(@section.Conversation(row))
+  }
+  {
+    id: @section.Id(source="cloud.chats", channel~),
+    label: @sidebar_messages.text(self.locale, Cloud),
+    initially_collapsed: false,
+    activation: self.cloud_identity().map(owner => owner.session()),
+    action: Some({
+      title: @sidebar_messages.text(self.locale, NewChat),
+      disabled: self.cloud.creation is Some(_),
+    }),
+    entries,
+  }
 }

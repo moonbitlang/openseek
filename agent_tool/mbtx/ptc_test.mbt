@@ -144,8 +144,7 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
       assert_eq(@fs.read_file("\{ws}/saved.mbtx").text(), source)
       for
         args in [
-          ({ "ptc": true, "source": source, "subrun": true } : Json),
-          { "ptc": true, "source": source, "escalated": true },
+          ({ "ptc": true, "source": source, "escalated": true } : Json),
           { "ptc": true, "source": source, "target": "native" },
           { "ptc": "yes", "source": source },
         ] {

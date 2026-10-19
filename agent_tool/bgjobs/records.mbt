@@ -55,6 +55,26 @@ fn BgJob::record(self : BgJob, runtime : BgJobRuntime) -> @protocol.JobRecord {
     persistence_error: self.persistence_error,
     cleanup_error: self.cleanup_error,
     data: self.data.map(get => get()),
+    subagent: self.subagent.map(get => get()),
+  }
+}
+
+///|
+/// How the job's process ended, read off its execution once it is terminal.
+/// The first reason it was asked to stop wins over anything that went wrong
+/// while it wound down; a kill nobody asked for is teardown.
+fn BgJob::end(self : BgJob) -> JobEnd {
+  match (self.exec.stop_cause(), self.exec.status()) {
+    (Some(Requested), _) => Stopped
+    (Some(OutputLimit), _) => OutputLimit
+    (Some(TimeLimit), _) => TimeLimit
+    (Some(CaptureFailed(reason)), _) => CaptureFailed(reason)
+    (None, Exited(code)) => Exited(code)
+    (None, Running | Backgrounded | Killed) =>
+      match self.exec.output_error() {
+        Some(reason) => CaptureFailed(reason)
+        None => Stopped
+      }
   }
 }
 
@@ -184,7 +204,7 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
     job.phase = Finishing
     if job.on_terminal is Some(cleanup) {
       job.on_terminal = None
-      cleanup() catch {
+      cleanup(job.end()) catch {
         error => job.cleanup_error = Some("\{error}")
       }
     }
@@ -193,6 +213,10 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
     job.data = job.data.map(supply => {
       let final_data = supply()
       () => final_data
+    })
+    job.subagent = job.subagent.map(supply => {
+      let final_info = supply()
+      () => final_info
     })
     job.image_output = job.image_output.map(supply => {
       let image_output = supply()
@@ -213,6 +237,10 @@ async fn BgJobRuntime::finish_job(self : BgJobRuntime, id : String) -> Unit {
         Finished
       },
     )
+    if job.on_published is Some(published) {
+      job.on_published = None
+      published()
+    }
     if self.on_job_exit is Some(callback) &&
       self.snapshot(id) is Some(snapshot) &&
       (

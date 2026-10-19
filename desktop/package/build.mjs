@@ -8,6 +8,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { stageResources } from "./resources.mjs";
 import { OfficeFontFiles, resolveOfficeFontSource } from "./office_fonts.mjs";
 import { OfficePdfArchive, stageOfficePdfAssets } from "./office_pdf.mjs";
+import { assertMacosSigningCoverage } from "./signing.mjs";
+import { reportNotarizationFailure } from "./notarization.mjs";
 
 const Hosts = {
   darwin: {
@@ -270,6 +272,7 @@ class Build {
       cwd: this.desktop,
     });
     await this.webAssets();
+    await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
     if (browser) {
       // The console bundle openseek-api serves: the same document and
       // frontend.js the packaged app loads, so the e2e suite can drive one
@@ -293,9 +296,11 @@ class Build {
         await cp(this.frontendBundle(profile), join(output, "frontend.js"));
       }
       await this.sharedWeb(output);
+      await mkdir(join(output, "viz"), { recursive: true });
+      await cp(join(this.repo, "web/index.html"), join(output, "viz/index.html"));
+      await cp(join(this.repo, `_build/js/${profile}/build/moonbitlang/openseek-viz-app/openseek-viz-app.js`), join(output, "viz/viz_app.js"));
       return;
     }
-    await this.commandRun("moon", ["build", "cmd/viz_app", "--target", "js", ...release], { cwd: this.repo });
   }
 
   // The unminified MoonBit output of the frontend executable.
@@ -457,6 +462,10 @@ class Build {
         ? options.targets.map(target => target === "installer" ? "nsis" : target)
         : ["appimage"];
     const config = options.release ? "proton.project.json" : await this.developmentConfig();
+    if (this.command === "macos" && options.sign) {
+      const project = JSON.parse(await readFile(join(this.desktop, config), "utf8"));
+      await assertMacosSigningCoverage(this.desktop, project.package.sign.binaries);
+    }
     const args = ["-C", ".", "package", "--config", config];
     for (const format of [...new Set(formats)]) args.push("--format", format);
     if (options.release) args.push("--release");
@@ -479,7 +488,25 @@ class Build {
       env.PATH = `${dirname(tool)}:${process.env.PATH}`;
       env.APPIMAGE_EXTRACT_AND_RUN = "1";
     }
-    await this.proton(args, env);
+    const startedAt = new Date();
+    try {
+      await this.proton(args, env);
+    } catch (error) {
+      if (options.notarize) {
+        try {
+          const report = await reportNotarizationFailure({
+            artifact: join(this.desktop, "dist", `${options.release ? "SeekMoon" : DevelopmentProduct}.dmg`),
+            profile: process.env.PROTON_MACOS_NOTARY_PROFILE?.trim() || options.notarize,
+            startedAt,
+          });
+          if (report) console.error(`Apple notarization report:\n${JSON.stringify(report, null, 2)}`);
+          else console.error("No Apple notarization report matched this build's DMG.");
+        } catch (diagnosticError) {
+          console.error(`Could not retrieve Apple notarization report: ${diagnosticError.message}`);
+        }
+      }
+      throw error;
+    }
     const bundle = `dist/${options.release ? "SeekMoon" : DevelopmentProduct}.app`;
     if (this.command === "macos" && options.open) await this.commandRun("open", [join(this.desktop, bundle)]);
   }

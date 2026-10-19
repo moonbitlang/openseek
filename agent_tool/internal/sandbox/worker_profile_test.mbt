@@ -151,3 +151,70 @@ async test "worker profile validation rejects impossible geometries" {
     assert_true(admin_reopens is None)
   })
 }
+
+///|
+/// A worker that works in place has a directory of the session's checkout:
+/// here a repository among others in a plain directory. Its own files are
+/// writable, a sibling repository is not, and its repository's `.git` is
+/// pinned but for the index: `git status` reads and `git restore` puts a
+/// file back, a commit cannot land.
+async test "the worker profile confines a directory worker to its directory" {
+  @vfs.with_tmpdir(prefix="openseek-worker-directory-", dir => {
+    let workspace = @fs.realpath(dir)
+    let mine = "\{workspace}/owner/mine"
+    let theirs = "\{workspace}/owner/theirs"
+    for repo in [mine, theirs] {
+      @fs.mkdir(repo, recursive=true)
+      let _ = git_setup(["init", "-q"], repo)
+      let _ = git_setup(["config", "user.email", "e2e@test"], repo)
+      let _ = git_setup(["config", "user.name", "e2e"], repo)
+      @vfs.write_text(repo, "seed.txt", "seed\n")
+      let _ = git_setup(["add", "-A"], repo)
+      let _ = git_setup(["commit", "-q", "-m", "base"], repo)
+    }
+    async fn probe(cmd : String) -> @sandbox.SandboxedCommand? {
+      @sandbox.SandboxedCommand::create_worker_if_available(
+        Shell(cmd),
+        deny_roots=[workspace],
+        worker_root=mine,
+        git_index="\{mine}/.git/index",
+      )
+    }
+
+    guard probe(":") is Some(_) else {
+      println("sandbox-exec unavailable; skipping")
+      return
+    }
+    guard probe("printf x > \{mine}/seed.txt") is Some(own) else {
+      fail("probe build failed")
+    }
+    assert_eq(merged_output_text(own).0, 0)
+    assert_eq(@fs.read_file("\{mine}/seed.txt").text(), "x")
+    guard probe("cd \{mine} && git status --porcelain") is Some(status) else {
+      fail("probe build failed")
+    }
+    let (status_exit, status_text) = merged_output_text(status)
+    assert_eq(status_exit, 0)
+    assert_true(status_text.contains("seed.txt"))
+    guard probe("printf x > \{theirs}/seed.txt") is Some(against_sibling) else {
+      fail("probe build failed")
+    }
+    assert_true(merged_output_text(against_sibling).0 != 0)
+    assert_eq(@fs.read_file("\{theirs}/seed.txt").text(), "seed\n")
+    guard probe("cd \{mine} && git restore seed.txt") is Some(restore) else {
+      fail("probe build failed")
+    }
+    assert_eq(merged_output_text(restore).0, 0)
+    assert_eq(@fs.read_file("\{mine}/seed.txt").text(), "seed\n")
+    guard probe("printf x > \{mine}/seed.txt") is Some(again) else {
+      fail("probe build failed")
+    }
+    assert_eq(merged_output_text(again).0, 0)
+    guard probe("cd \{mine} && git commit -q -am steal") is Some(against_git) else {
+      fail("probe build failed")
+    }
+    assert_true(merged_output_text(against_git).0 != 0)
+    let log = git_setup(["log", "--oneline"], mine)
+    assert_eq(log.trim().split("\n").count(), 1)
+  })
+}

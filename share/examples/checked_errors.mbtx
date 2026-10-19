@@ -51,7 +51,7 @@ fn count_from(text : String) -> Int raise {
 /// Handle errors only at a real boundary, such as a CLI path that needs its
 /// own message. Constructor patterns pick the cases you care about; the
 /// last arm covers the rest. Never encode failure as a success sentinel
-/// (`Json::null`, `()`, `-1`): return early with the message instead.
+/// (`null`, `()`, `-1`): return early with the message instead.
 fn describe(text : String) -> String {
   let n = count_from(text) catch {
     InvalidInput(reason) => return "invalid: \{reason}"

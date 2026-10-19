@@ -73,6 +73,7 @@ fn job_record_fixture() -> @wire.JobRecord {
     persistence_error: None,
     cleanup_error: None,
     data: None,
+    subagent: None,
   }
 }
 

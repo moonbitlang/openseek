@@ -64,7 +64,7 @@ test "native selection belongs to its original draft and ignores retired drafts"
     ..input,
     identity: {
       ..input.identity,
-      owner: { ..input.identity.owner, session: "other", },
+      owner: @interop.Host({ channel: Local, session: "other", }),
     },
   }
   let msg = ImageRead(
@@ -273,7 +273,10 @@ test "document imports stay scoped to their original conversation and workspace"
     ..input,
     identity: {
       ..input.identity,
-      owner: { ..input.identity.owner, session: "other", },
+      owner: @interop.Host({
+        ..input.identity.owner.host().unwrap(),
+        session: "other",
+      }),
     },
   }
   assert_true(
@@ -301,7 +304,10 @@ test "remote document selections retain bytes for confirmation instead of sendin
   let input = {
     ..Input::fixture("inspect"),
     identity: {
-      owner: { channel: @interop.Remote("device"), session: "remote", },
+      owner: @interop.Host({
+        channel: @interop.Remote("device"),
+        session: "remote",
+      }),
       archive_generation: 0,
     },
   }

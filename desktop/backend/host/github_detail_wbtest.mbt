@@ -62,7 +62,7 @@ async test "pull request details preserve GitHub HTML across all comment pages a
             "author": if pages == 1 {
               ({ "login": "reviewer" } : Json)
             } else {
-              Json::null()
+              null
             },
             "bodyHTML": "<p>Comment <em>\{pages}</em></p>",
             "url": "https://github.example/owner/repo/pull/42#issuecomment-\{pages}",

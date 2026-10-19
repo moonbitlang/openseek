@@ -15,3 +15,9 @@ import {
 warnings = "+unnecessary_annotation"
 
 supported_targets = "+wasm+native"
+
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/process",
+  "moonbitlang/openseek_protocol" @protocol,
+} for "test"

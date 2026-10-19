@@ -3,6 +3,12 @@
 /// unlisted conversation needs a temporary label from its local state. Fresh
 /// chats keep the same default title before typing and until the first send.
 fn Model::selected_conversation_title(self : Model) -> String {
+  if self.cloud.creating_at(self.chat_navigation_generation) {
+    return shell_text(self.locale, NewChatLabel)
+  }
+  if self.cloud_selected() {
+    return self.cloud_title()
+  }
   guard self.conversation_selection() is Some(selected) else {
     return "SeekMoon"
   }

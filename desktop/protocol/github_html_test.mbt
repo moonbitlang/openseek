@@ -58,7 +58,7 @@ test "GitHub display codecs require HTML and preserve it without a Markdown fall
     let empty = fields.copy()
     empty["body_html"] = ""
     assert_true(github_html_codec(kind, Json(empty)) == Json(empty))
-    for invalid in [None, Some(Json::null()), Some(Json::number(42.0))] {
+    for invalid in [None, Some(null), Some(Json::number(42.0))] {
       let fields = fields.copy()
       fields["body"] = "legacy raw Markdown is not a fallback"
       match invalid {

@@ -13,8 +13,8 @@ impl Show for ExportError with fn output(self, logger) {
 }
 
 ///|
-/// Capture the client account and source once. The owning host captures and
-/// publishes the snapshot; the client sends account or upload-grant authority.
+/// The caller captures its account and source once. Hosts publish Work files;
+/// Cloud owns its visible-history export. The client never uploads snapshots.
 fn Model::share(
   self : Model,
   emit : @cmd.Emit[Msg],
@@ -49,6 +49,16 @@ fn Model::share(
               idempotency_key,
               authorization,
             })
+          }
+          Cloud(session~, ..) => {
+            scheduler.add(
+              emit(Progress({ generation, progress: Waiting(attempt=1), })),
+            )
+            match @cloud.share(account.token, session, idempotency_key) {
+              Ok(url) => @protocol.Shared(url~)
+              Err(@cloud.Unauthorized) => raise AccountUnauthorized
+              Err(error) => raise ExportError(error.label())
+            }
           }
         }
       } catch {
@@ -109,10 +119,56 @@ async fn upload_grant(
 }
 
 ///|
-async fn capture(source : Source) -> @protocol.SessionSnapshot {
+async fn asset(path : String) -> String {
+  let base : String = @js.Value::cast_from(@dom.document()).get_with_string(
+    "baseURI",
+  )
+  let url = match @base_browser.resolve_url(path, base~) {
+    Ok((url, _)) => url
+    Err(message) => raise ExportError(message)
+  }
+  let (response, body) = @http.get(url)
+  guard response.code == 200 else {
+    raise ExportError("Export assets answered HTTP \{response.code}")
+  }
+  body.text()
+}
+
+///|
+async fn capture(
+  source : Source,
+  account : @protocol.AccountSession?,
+) -> @protocol.SessionSnapshot {
   match source {
     Host(channel, payload) =>
       @interop.bridge_request(channel, @commands.session_snapshot, payload)
+    Cloud(session~, title~) => {
+      guard account is Some(account) else {
+        raise ExportError("Sign in to export Cloud history.")
+      }
+      let events = match @cloud.export_record(account.token, session) {
+        Ok(events) => events
+        Err(@cloud.Unauthorized) => raise AccountUnauthorized
+        Err(error) => raise ExportError(error.label())
+      }
+      let exporter = @viz_export.StandaloneExport(
+        asset("viz/index.html"),
+        asset("viz/viz_app.js"),
+      )
+      let json = exporter.json([
+        @viz_export.Session(
+          key="session-0",
+          id=session,
+          root="cloud://sessions/" + session,
+          root_label="Cloud",
+          is_marker=true,
+          last_active=None,
+          first_prompt=title,
+          events~,
+        ),
+      ])
+      { html: exporter.render_json(json), json, }
+    }
   }
 }
 
@@ -121,6 +177,7 @@ fn Model::download(
   self : Model,
   emit : @cmd.Emit[Msg],
   source : Source,
+  account : @protocol.AccountSession?,
   desktop~ : Bool,
 ) -> @cmd.Cmd {
   let generation = self.generation
@@ -130,11 +187,12 @@ fn Model::download(
         let reply = if desktop && source is Host(Local, payload) {
           @interop.bridge_request(Local, @commands.session_export, payload)
         } else {
-          let files = capture(source)
+          let files = capture(source, account)
           if desktop {
             @interop.bridge_request(Local, @commands.session_snapshot_save, {
               session: match source {
                 Host(_, payload) => payload.session
+                Cloud(session~, ..) => session
               },
               html: files.html,
             })
@@ -170,6 +228,10 @@ fn Model::download(
         }
         Ok(reply)
       } catch {
+        AccountUnauthorized => {
+          scheduler.add(emit(Published(generation~, @protocol.SignInRequired)))
+          Err("Your account sign-in expired.")
+        }
         error => Err(@interop.bridge_error_text(error))
       }
       scheduler.add(emit(Downloaded(generation~, result)))

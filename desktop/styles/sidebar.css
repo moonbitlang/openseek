@@ -200,6 +200,11 @@ html.is-resizing .sidebar-resize-handle {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.conversation-row > .sidebar-notice {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
 .conversation-open {
   padding: 0;
   border: 0;

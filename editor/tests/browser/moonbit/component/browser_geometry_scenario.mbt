@@ -262,7 +262,7 @@ fn BrowserGeometryFixture::state_json(
         "left": Json::number(position.left),
         "height": Json::number(position.height),
       })
-    None => Json::null()
+    None => null
   }
   Json({
     "name": Json(self.name),

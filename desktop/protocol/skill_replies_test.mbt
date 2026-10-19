@@ -10,7 +10,7 @@ test "SkillsCatalogReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [Json::null(), { "error": null }, { "error": 42 }, {}] {
+  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
     try {
       let _ : @protocol.SkillsCatalogReply = @json.from_json(malformed)
     } catch {
@@ -33,7 +33,7 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [Json::null(), { "error": null }, { "error": 42 }, {}] {
+  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
     try {
       let _ : @protocol.InstalledSkillsReply = @json.from_json(malformed)
     } catch {
@@ -79,7 +79,7 @@ test "InstallSkillReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [Json::null(), { "error": null }, { "error": 42 }, {}] {
+  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
     try {
       let _ : @protocol.InstallSkillReply = @json.from_json(malformed)
     } catch {
@@ -102,7 +102,7 @@ test "UninstallSkillReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [Json::null(), { "error": null }, { "error": 42 }, {}] {
+  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
     try {
       let _ : @protocol.UninstallSkillReply = @json.from_json(malformed)
     } catch {
@@ -123,7 +123,7 @@ test "SkillContentReply owns its success and error wire shapes" {
     "unknown": true,
   })
   assert_eq(failure.to_json(), { "error": "HTTP 404" })
-  for malformed in [Json::null(), { "error": null }, { "error": 42 }, {}] {
+  for malformed in [null, { "error": null }, { "error": 42 }, {}] {
     try {
       let _ : @protocol.SkillContentReply = @json.from_json(malformed)
     } catch {

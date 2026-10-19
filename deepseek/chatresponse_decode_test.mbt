@@ -304,7 +304,7 @@ test "chat response decode rejects malformed choices" {
 
 ///|
 test "present null or empty reasoning suppresses the fallback alias" {
-  for primary in [Json::null(), Json("")] {
+  for primary in [null, Json("")] {
     let response : @deepseek.ChatResponse = @json.from_json({
       "choices": [
         {

@@ -241,7 +241,7 @@ async test "removed wait_ms returns actionable tool error" {
         Json::number(30000),
         Json::number(-5),
         Json::string("30000"),
-        Json::null(),
+        null,
       ] {
       let output = run_job_output(bg, { "job_id": "bg-1", "wait_ms": value })
       assert_true(output.is_error)

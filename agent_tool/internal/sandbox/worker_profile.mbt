@@ -1,6 +1,8 @@
 ///|
 /// The kernel-enforced write scope of one worker subagent: everything the
-/// repository shares is denied, the worker's own tree is re-allowed.
+/// repository shares is denied, the worker's own tree is re-allowed. The
+/// tree is a linked worktree (with its private admin dir) or, for a worker
+/// that works in place, a directory of the session's checkout (no admin dir).
 ///
 /// Rule order is load-bearing (SBPL is last-match-wins):
 ///
@@ -16,10 +18,18 @@
 ///   (allow file-write* <worker admin>)    — the worktree's PRIVATE admin dir
 ///                                           (resolved via rev-parse, never
 ///                                           constructed), so status/diff can
-///                                           write their index and locks
-///   (deny  file-write* literal <worker root>/.git)
-///                                         — the gitfile pointer, last so it
-///                                           wins over the worker-root allow
+///                                           write their index and locks;
+///                                           absent for a directory
+///   (deny  file-write* <worker root>/.git)
+///                                         — the gitfile pointer, or the
+///                                           repository a directory is the
+///                                           root of, last so it wins over the
+///                                           worker-root allow
+///   (allow file-write* <git index>{,.lock})
+///                                         — a directory's index file alone,
+///                                           so `git restore`/`checkout --`
+///                                           work; objects and refs stay
+///                                           denied, so no commit lands
 ///
 /// Net effect: moon writes `wt/_build` and shared caches; `git status`/`diff`
 /// work; `git commit` and every shared object/ref/config/worktree mutation
@@ -40,7 +50,8 @@ priv struct WorkerWriteProfileData {
 fn worker_write_profile_data(
   deny_roots : Array[String],
   worker_root~ : String,
-  worker_admin_dir~ : String,
+  worker_admin_dir? : String,
+  git_index? : String,
 ) -> WorkerWriteProfileData raise {
   guard !deny_roots.is_empty() else {
     fail("worker profile needs at least one denied root")
@@ -60,15 +71,17 @@ fn worker_write_profile_data(
   // dir's worktrees/<name> subdirectory). A miscomputed admin path that sits
   // at a denied root — or above one — would re-open shared objects, refs,
   // and config wholesale, because SBPL is last-match-wins.
-  guard deny_roots.any(root => {
-    @workspace_path.is_under_workspace_root(root, worker_admin_dir) &&
-    root != worker_admin_dir
-  }) else {
-    fail("worker_admin_dir must be nested below a denied root")
-  }
-  for root in deny_roots {
-    if @workspace_path.is_under_workspace_root(worker_admin_dir, root) {
-      fail("worker_admin_dir covers a denied root: \{root}")
+  if worker_admin_dir is Some(worker_admin_dir) {
+    guard deny_roots.any(root => {
+      @workspace_path.is_under_workspace_root(root, worker_admin_dir) &&
+      root != worker_admin_dir
+    }) else {
+      fail("worker_admin_dir must be nested below a denied root")
+    }
+    for root in deny_roots {
+      if @workspace_path.is_under_workspace_root(worker_admin_dir, root) {
+        fail("worker_admin_dir covers a denied root: \{root}")
+      }
     }
   }
   let profile = StringBuilder()
@@ -86,12 +99,25 @@ fn worker_write_profile_data(
   }
   profile <+
     $|(allow file-write* (subpath "\{sbpl_string_escape(worker_root)}"))
-    $|(allow file-write* (subpath "\{sbpl_string_escape(worker_admin_dir)}"))
     $|
+  if worker_admin_dir is Some(worker_admin_dir) {
+    profile <+
+      $|(allow file-write* (subpath "\{sbpl_string_escape(worker_admin_dir)}"))
+      $|
+  }
+  // A subpath: the gitfile of a worktree, and the whole `.git` directory of
+  // a repository a directory worker has the root of.
   let gitfile = "\{worker_root}/.git"
   profile <+
-    $|(deny file-write* (literal "\{sbpl_string_escape(gitfile)}"))
+    $|(deny file-write* (subpath "\{sbpl_string_escape(gitfile)}"))
     $|
+  // Two literal files, never a subtree: what `git restore` rewrites, and its
+  // lock.
+  if git_index is Some(index) {
+    profile <+
+      $|(allow file-write* (literal "\{sbpl_string_escape(index)}") (literal "\{sbpl_string_escape(index)}.lock"))
+      $|
+  }
   denial_subjects.push(gitfile)
   { profile: profile.to_string(), denial_subjects, }
 }
@@ -106,14 +132,16 @@ pub async fn SandboxedCommand::create_worker_if_available(
   command : Command,
   deny_roots~ : Array[String],
   worker_root~ : String,
-  worker_admin_dir~ : String,
+  worker_admin_dir? : String,
+  git_index? : String,
 ) -> SandboxedCommand? {
   // Validate before the availability probe so caller bugs surface on every
   // platform (see create_if_available).
   let data = worker_write_profile_data(
     deny_roots,
     worker_root~,
-    worker_admin_dir~,
+    worker_admin_dir?,
+    git_index?,
   )
   guard sandbox_exec_available() else { return None }
   // This profile has one rule per provisioned deny root, with no recursive

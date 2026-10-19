@@ -1,7 +1,8 @@
 import {
   "moonbitlang/async",
   "moonbitlang/async/fs",
-  "moonbitlang/async/stdio",
+  "moonbitlang/async/http",
+  "moonbitlang/async/socket",
   "moonbitlang/async/shell",
   "moonbitlang/core/env",
   "moonbitlang/core/json",

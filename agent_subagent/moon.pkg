@@ -1,0 +1,29 @@
+import {
+  "moonbitlang/openseek/agent_runtime",
+  "moonbitlang/openseek/agent_session/store",
+  "moonbitlang/openseek/agent_subrun",
+  "moonbitlang/openseek/agent_subrun/inbox",
+  "moonbitlang/openseek/agent_subtask" @subtask,
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek/internal/workspace_path",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/os_error",
+  "moonbitlang/async/process",
+  "moonbitlang/core/env",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/json",
+  "moonbitlang/x/crypto",
+  "moonbitlang/x/path",
+}
+
+import {
+  "moonbitlang/openseek/agent_tool/bgjobs",
+  "moonbitlang/openseek_protocol" @protocol,
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/core/json",
+} for "test"
+
+supported_targets = "+wasm+native"

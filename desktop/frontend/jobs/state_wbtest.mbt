@@ -120,6 +120,7 @@ fn fixture_job(id : String, state : @wire.JobState) -> @protocol.JobView {
       persistence_error: None,
       cleanup_error: None,
       data: None,
+      subagent: None,
     },
     output_path: Some("/job.out"),
     controllable: !state.is_terminal(),
@@ -460,4 +461,108 @@ test "interruption requires a fresh EOF even when persisted bytes trail the curs
   let (_, selected) = update(emit, Select("runtime", "bg-1"), drained)
   assert_true(selected.reading)
   assert_true(selected.eof_state is None)
+}
+
+///|
+fn subagent_job(
+  state : @wire.JobState,
+  outcome : @wire.SubagentOutcome?,
+  usage? : @wire.SubagentUsage,
+) -> @wire.JobRecord {
+  {
+    ..fixture_job("agent", state).job,
+    output_bytes: 900L,
+    subagent: Some({
+      kind: "explore",
+      label: "find the parser",
+      session: "parent-sr-3",
+      launch: Direct,
+      outcome,
+      usage,
+      report: None,
+      workspace: InPlace,
+    }),
+  }
+}
+
+///|
+/// A subagent's row names the agent's task and says what it achieved and
+/// spent, where a command's row gives its process state and output size.
+test "a subagent job reads as an agent, not a command" {
+  let live = subagent_job(Running, None)
+  assert_eq(job_title(live), "explore: find the parser")
+  assert_eq(job_status(live), ("Running", "running"))
+  assert_eq(job_extent(live), "")
+  let reported = subagent_job(
+    Exited(0),
+    Some(Captured),
+    usage=Known(
+      steps=Some(12),
+      prompt_tokens=1000,
+      completion_tokens=200,
+      cost_usd=None,
+      source=Result,
+      unaccounted=None,
+    ),
+  )
+  assert_eq(job_status(reported), ("Reported", "completed"))
+  assert_eq(job_extent(reported), "12 steps · 1200 tokens")
+  // A stopped child that exited cleanly during its grace is still stopped.
+  assert_eq(
+    job_status(subagent_job(Exited(0), Some(Stopped))),
+    ("Stopped", "stopped"),
+  )
+  assert_eq(
+    job_status(subagent_job(Exited(1), Some(Failed("no key")))),
+    ("Failed · no key", "failed"),
+  )
+  assert_eq(
+    job_status(subagent_job(Exited(0), Some(NoReport))),
+    ("No report", "failed"),
+  )
+  // Spend without a step count shows tokens alone; a command keeps bytes.
+  let unknown_steps = subagent_job(
+    Exited(0),
+    Some(Captured),
+    usage=Known(
+      steps=None,
+      prompt_tokens=5,
+      completion_tokens=5,
+      cost_usd=None,
+      source=Result,
+      unaccounted=None,
+    ),
+  )
+  assert_eq(job_extent(unknown_steps), "10 tokens")
+  let command = fixture_job("cmd", Exited(0)).job
+  assert_eq(job_title(command), "worker")
+  assert_eq(job_extent(command), "0 B")
+}
+
+///|
+/// A worker's details say what its worktree held when it was handed over,
+/// and why when it could not be taken.
+test "a worker's worktree state reads as words" {
+  assert_eq(
+    worktree_state(Committed(commit="0123456789abcdef0123456789abcdef01234567")),
+    ("Worktree: committed 0123456789 on its branch, ready to take", []),
+  )
+  assert_eq(
+    worktree_state(Unmergeable(defects=["changed other/b.txt"])),
+    ("Worktree: not mergeable; kept for inspection", ["changed other/b.txt"]),
+  )
+  assert_eq(
+    worktree_state(locale=SimplifiedChinese, NoChanges),
+    ("工作树：无改动，已移除", []),
+  )
+  assert_eq(
+    worktree_state(CaptureFailed(reasons=["index.lock exists"])),
+    ("Worktree: not captured; files kept", ["index.lock exists"]),
+  )
+  // A worker whose engine stopped first left no result on its record.
+  assert_eq(worktree_state(Working).0, "Worktree: in progress")
+  assert_eq(
+    worktree_state(ended=true, Working).0,
+    "Worktree: no result recorded (its engine stopped); handed over when a worker next starts",
+  )
 }

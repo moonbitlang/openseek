@@ -8,6 +8,13 @@ priv enum DynamicMessage {
   DStarted(String)
   DWorkingDirectory(String)
   DLastOutput(String)
+  DFailedBecause(String)
+  DSpent(String)
+  DSpentSteps(String, String)
+  DSession(String)
+  DWorktree(String, String)
+  DWorkerDirectory(String)
+  DWorktreeCommitted(String)
 }
 
 ///|
@@ -53,5 +60,52 @@ fn dynamic_text(locale : @i18n.Locale, message : DynamicMessage) -> String {
     (SimplifiedChinese, DLastOutput(p0)) => "上次输出在 \{p0} 秒前"
     (TraditionalChinese, DLastOutput(p0)) => "上次輸出在 \{p0} 秒前"
     (Japanese, DLastOutput(p0)) => "最終出力は \{p0} 秒前"
+    (English, DFailedBecause(p0)) => "Failed · \{p0}"
+    (Spanish, DFailedBecause(p0)) => "Falló · \{p0}"
+    (SimplifiedChinese, DFailedBecause(p0)) => "失败 · \{p0}"
+    (TraditionalChinese, DFailedBecause(p0)) => "失敗 · \{p0}"
+    (Japanese, DFailedBecause(p0)) => "失敗 · \{p0}"
+    (English, DSpent(p0)) => "\{p0} tokens"
+    (Spanish, DSpent(p0)) => "\{p0} tokens"
+    (SimplifiedChinese, DSpent(p0)) => "\{p0} 个 token"
+    (TraditionalChinese, DSpent(p0)) => "\{p0} 個 token"
+    (Japanese, DSpent(p0)) => "\{p0} トークン"
+    (English, DSpentSteps(p0, p1)) => "\{p0} steps · \{p1} tokens"
+    (Spanish, DSpentSteps(p0, p1)) => "\{p0} pasos · \{p1} tokens"
+    (SimplifiedChinese, DSpentSteps(p0, p1)) => "\{p0} 步 · \{p1} 个 token"
+    (TraditionalChinese, DSpentSteps(p0, p1)) => "\{p0} 步 · \{p1} 個 token"
+    (Japanese, DSpentSteps(p0, p1)) =>
+      "\{p0} ステップ · \{p1} トークン"
+    (English, DSession(p0)) => "Session: \{p0}"
+    (Spanish, DSession(p0)) => "Sesión: \{p0}"
+    (SimplifiedChinese, DSession(p0)) => "会话：\{p0}"
+    (TraditionalChinese, DSession(p0)) => "工作階段：\{p0}"
+    (Japanese, DSession(p0)) => "セッション：\{p0}"
+    (English, DWorkerDirectory(p0)) =>
+      "Works in place in \{p0}; its change is left uncommitted there"
+    (Spanish, DWorkerDirectory(p0)) =>
+      "Trabaja en el sitio en \{p0}; su cambio queda allí sin confirmar"
+    (SimplifiedChinese, DWorkerDirectory(p0)) =>
+      "在 \{p0} 中原地工作；改动未提交地留在那里"
+    (TraditionalChinese, DWorkerDirectory(p0)) =>
+      "在 \{p0} 中原地工作；變更未提交地留在那裡"
+    (Japanese, DWorkerDirectory(p0)) =>
+      "\{p0} でその場で作業し、変更は未コミットのまま残ります"
+    (English, DWorktree(p0, p1)) => "Worktree \{p0} · branch \{p1}"
+    (Spanish, DWorktree(p0, p1)) => "Worktree \{p0} · rama \{p1}"
+    (SimplifiedChinese, DWorktree(p0, p1)) => "工作树 \{p0} · 分支 \{p1}"
+    (TraditionalChinese, DWorktree(p0, p1)) => "工作樹 \{p0} · 分支 \{p1}"
+    (Japanese, DWorktree(p0, p1)) =>
+      "ワークツリー \{p0} · ブランチ \{p1}"
+    (English, DWorktreeCommitted(p0)) =>
+      "Worktree: committed \{p0} on its branch, ready to take"
+    (Spanish, DWorktreeCommitted(p0)) =>
+      "Worktree: confirmado \{p0} en su rama, listo para tomar"
+    (SimplifiedChinese, DWorktreeCommitted(p0)) =>
+      "工作树：已提交 \{p0}（在其分支上），可取回"
+    (TraditionalChinese, DWorktreeCommitted(p0)) =>
+      "工作樹：已提交 \{p0}（在其分支上），可取回"
+    (Japanese, DWorktreeCommitted(p0)) =>
+      "ワークツリー：\{p0} をブランチにコミット済み・取り込み可能"
   }
 }

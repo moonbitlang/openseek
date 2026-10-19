@@ -35,10 +35,23 @@ const MaxTraceBytes : Int32 = 524288
 const TraceEntryReserveBytes : Int32 = 1024
 
 ///|
+/// What a program gets of its own, bound to its id when it is registered:
+/// tools that act only on what this program owns (looked up before the
+/// session's shared tools), what to do when it closes, and whether it must
+/// be kept alive past the job runtime's wall-clock cap for now.
+pub(all) struct ProgramBinding {
+  tools : @agent_tool.Tools
+  close : async () -> Unit
+  pinned : () -> Bool
+}
+
+///|
 /// One session-owned listener. Every program has an independent capability.
 struct Service {
   server : @socket.TcpServer
   tools : @agent_tool.Tools
+  bind : ((String) -> ProgramBinding)?
+  mut registered : Int32
   programs : Map[String, Program]
   serial : @async.Mutex
   spawn : (async () -> Json) -> @async.Task[Json]
@@ -72,6 +85,10 @@ struct Program {
   // and the registry this program's token lives in.
   service : Service
   token : String
+  // The host's name for this program, fixed at registration and kept through
+  // adoption: what owner-bound tools are bound to. Never the token.
+  id : String
+  binding : ProgramBinding?
   calls : Array[Json]
   image_results : Map[Int32, ImageResult]
   mut reserved_images : Int32
@@ -117,11 +134,14 @@ pub async fn[X] Service::start(
   call_timeout_ms~ : Int32 = 120000,
   trace_timeout_ms~ : Int32 = 5000,
   image_directory~ : async () -> String? = () => None,
+  bind? : (String) -> ProgramBinding,
 ) -> Service {
   let server = @socket.TcpServer(@socket.Addr::parse("127.0.0.1:0"))
   let service : Service = {
     server,
     tools: tools.program_tools(),
+    bind,
+    registered: 0,
     programs: Map([]),
     serial: Mutex(),
     spawn: operation => group.spawn(operation, no_wait=true, allow_failure=true),
@@ -282,9 +302,13 @@ pub fn Service::register(
     fail("PTC: secure random capability unavailable")
   }
   let token = @crypto.bytes_to_hex_string(entropy)
+  self.registered += 1
+  let id = "program-\{self.registered}"
   let program : Program = {
     service: self,
     token,
+    id,
+    binding: self.bind.map(bind => bind(id)),
     calls: [],
     image_results: Map([]),
     reserved_images: 0,
@@ -444,7 +468,30 @@ pub async fn Program::close(
       self.deliver_trace()
     }
     self.on_trace = _ => ()
+    // What the program owned ends with it: its subagents are stopped.
+    if self.binding is Some(binding) {
+      (binding.close)() catch {
+        error =>
+          self.trace_error = Some(
+            @agent_tool.brief_line("closing the program: \{error}", limit=512),
+          )
+      }
+    }
   })
+}
+
+///|
+/// The host's name for this program; what its owner-bound tools are bound
+/// to.
+pub fn Program::id(self : Program) -> String {
+  self.id
+}
+
+///|
+/// Whether this program must outlive the job runtime's wall-clock cap for
+/// now: it owns work that is still going, or just ended.
+pub fn Program::pinned(self : Program) -> Bool {
+  self.binding is Some(binding) && (binding.pinned)()
 }
 
 ///|
@@ -555,7 +602,11 @@ async fn Program::execute(
   name : String,
   arguments : Json,
 ) -> Json {
-  let tools = self.service.tools
+  // The program's own tools first: they act only on what it owns.
+  let tools = match self.binding {
+    Some(binding) if binding.tools.find(name) is Some(_) => binding.tools
+    _ => self.service.tools
+  }
   errdefer (if @async.is_being_cancelled() {
     self.calls[index] = call_entry(name, arguments, "interrupted")
   })

@@ -1,6 +1,5 @@
 ///|
 priv enum NoticeMessage {
-  CreateChat(String)
   SaveSettings(String)
   WorkspaceFailure(String)
   SaveWorkspace(String, String)
@@ -15,11 +14,6 @@ priv enum NoticeMessage {
 ///|
 fn notice_text(locale : @i18n.Locale, message : NoticeMessage) -> String {
   match (locale, message) {
-    (English, CreateChat(p0)) => "Cannot create chat: \{p0}"
-    (Spanish, CreateChat(p0)) => "No se pudo crear la conversación: \{p0}"
-    (SimplifiedChinese, CreateChat(p0)) => "无法创建对话：\{p0}"
-    (TraditionalChinese, CreateChat(p0)) => "無法建立對話：\{p0}"
-    (Japanese, CreateChat(p0)) => "チャットを作成できません：\{p0}"
     (English, SaveSettings(p0)) => "Saving settings failed: \{p0}"
     (Spanish, SaveSettings(p0)) => "No se pudo guardar la configuración: \{p0}"
     (SimplifiedChinese, SaveSettings(p0)) => "保存设置失败：\{p0}"

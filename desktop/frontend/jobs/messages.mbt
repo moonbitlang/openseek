@@ -44,6 +44,18 @@ priv enum UiMessage {
   NoRetainedOutput
   NoOutputYet
   StopDescription
+  ReportedLabel
+  NoReportLabel
+  OutOfStepsLabel
+  ContextFullLabel
+  TimedOutLabel
+  OpenTranscript
+  WorktreeWorking
+  WorktreeUnrecorded
+  WorktreeNoChanges
+  WorktreeUnmergeable
+  WorktreeCaptureFailed
+  CopyWorktreePath
 }
 
 ///|
@@ -294,5 +306,82 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
       "停止操作作用於直接程序。日誌隨會話保留。"
     (Japanese, StopDescription) =>
       "停止操作は直接のプロセスに適用されます。ログはセッションとともに保持されます。"
+    (English, ReportedLabel) => "Reported"
+    (Spanish, ReportedLabel) => "Informó"
+    (SimplifiedChinese, ReportedLabel) => "已提交报告"
+    (TraditionalChinese, ReportedLabel) => "已提交報告"
+    (Japanese, ReportedLabel) => "報告済み"
+    (English, NoReportLabel) => "No report"
+    (Spanish, NoReportLabel) => "Sin informe"
+    (SimplifiedChinese, NoReportLabel) => "无报告"
+    (TraditionalChinese, NoReportLabel) => "無報告"
+    (Japanese, NoReportLabel) => "報告なし"
+    (English, OutOfStepsLabel) => "Out of steps"
+    (Spanish, OutOfStepsLabel) => "Sin pasos"
+    (SimplifiedChinese, OutOfStepsLabel) => "步数用尽"
+    (TraditionalChinese, OutOfStepsLabel) => "步數用盡"
+    (Japanese, OutOfStepsLabel) => "ステップ上限"
+    (English, ContextFullLabel) => "Context full"
+    (Spanish, ContextFullLabel) => "Contexto lleno"
+    (SimplifiedChinese, ContextFullLabel) => "上下文已满"
+    (TraditionalChinese, ContextFullLabel) => "上下文已滿"
+    (Japanese, ContextFullLabel) => "コンテキスト上限"
+    (English, TimedOutLabel) => "Timed out"
+    (Spanish, TimedOutLabel) => "Tiempo agotado"
+    (SimplifiedChinese, TimedOutLabel) => "已超时"
+    (TraditionalChinese, TimedOutLabel) => "已逾時"
+    (Japanese, TimedOutLabel) => "タイムアウト"
+    (English, OpenTranscript) => "Open transcript"
+    (Spanish, OpenTranscript) => "Abrir transcripción"
+    (SimplifiedChinese, OpenTranscript) => "打开记录"
+    (TraditionalChinese, OpenTranscript) => "開啟記錄"
+    (Japanese, OpenTranscript) => "記録を開く"
+    (English, WorktreeUnrecorded) =>
+      "Worktree: no result recorded (its engine stopped); handed over when a worker next starts"
+    (Spanish, WorktreeUnrecorded) =>
+      "Worktree: sin resultado registrado (su motor se detuvo); se entrega cuando arranque otro worker"
+    (SimplifiedChinese, WorktreeUnrecorded) =>
+      "工作树：未记录结果（其引擎已停止）；下次启动 worker 时交接"
+    (TraditionalChinese, WorktreeUnrecorded) =>
+      "工作樹：未記錄結果（其引擎已停止）；下次啟動 worker 時交接"
+    (Japanese, WorktreeUnrecorded) =>
+      "ワークツリー：結果未記録（エンジン停止）。次に worker を起動したときに引き渡し"
+    (English, WorktreeWorking) => "Worktree: in progress"
+    (Spanish, WorktreeWorking) => "Worktree: en curso"
+    (SimplifiedChinese, WorktreeWorking) => "工作树：进行中"
+    (TraditionalChinese, WorktreeWorking) => "工作樹：進行中"
+    (Japanese, WorktreeWorking) => "ワークツリー：作業中"
+    (English, WorktreeNoChanges) => "Worktree: no changes; removed"
+    (Spanish, WorktreeNoChanges) => "Worktree: sin cambios; eliminado"
+    (SimplifiedChinese, WorktreeNoChanges) =>
+      "工作树：无改动，已移除"
+    (TraditionalChinese, WorktreeNoChanges) =>
+      "工作樹：無變更，已移除"
+    (Japanese, WorktreeNoChanges) =>
+      "ワークツリー：変更なし・削除済み"
+    (English, WorktreeUnmergeable) =>
+      "Worktree: not mergeable; kept for inspection"
+    (Spanish, WorktreeUnmergeable) =>
+      "Worktree: no se puede integrar; se conserva para revisarlo"
+    (SimplifiedChinese, WorktreeUnmergeable) =>
+      "工作树：无法合入，保留以供检查"
+    (TraditionalChinese, WorktreeUnmergeable) =>
+      "工作樹：無法合併，保留以供檢查"
+    (Japanese, WorktreeUnmergeable) =>
+      "ワークツリー：統合不可・確認用に保持"
+    (English, WorktreeCaptureFailed) => "Worktree: not captured; files kept"
+    (Spanish, WorktreeCaptureFailed) =>
+      "Worktree: no capturado; archivos conservados"
+    (SimplifiedChinese, WorktreeCaptureFailed) =>
+      "工作树：未能捕获，文件已保留"
+    (TraditionalChinese, WorktreeCaptureFailed) =>
+      "工作樹：未能擷取，檔案已保留"
+    (Japanese, WorktreeCaptureFailed) =>
+      "ワークツリー：取得失敗・ファイルは保持"
+    (English, CopyWorktreePath) => "Copy worktree path"
+    (Spanish, CopyWorktreePath) => "Copiar ruta del worktree"
+    (SimplifiedChinese, CopyWorktreePath) => "复制工作树路径"
+    (TraditionalChinese, CopyWorktreePath) => "複製工作樹路徑"
+    (Japanese, CopyWorktreePath) => "ワークツリーのパスをコピー"
   }
 }

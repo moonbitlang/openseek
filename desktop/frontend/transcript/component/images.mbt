@@ -41,7 +41,7 @@ priv enum LocalImageState {
 
 ///|
 priv struct ImageOwner {
-  channel : @interop.ChannelId
+  channel : @interop.ChannelId?
   // Session remains frontend identity only: it fences late replies after a
   // conversation switch and is never sent to the filesystem operation.
   session : String
@@ -128,7 +128,7 @@ fn settle_transcript_image(path : String, source : String?) -> Unit {
 ///|
 test "image cache starts one read and settles only the pending entry" {
   let owner : ImageOwner = {
-    channel: @interop.Local,
+    channel: Some(@interop.Local),
     session: "chat",
     root: @resource.of_path(@interop.Local, "/work"),
   }
@@ -160,7 +160,7 @@ test "image read targets preserve absolute or rooted-relative paths" {
     fail("expected an absolute resource root")
   }
   let owner : ImageOwner = {
-    channel: @interop.Local,
+    channel: Some(@interop.Local),
     session: "chat",
     root: Some(root),
   }
@@ -199,11 +199,12 @@ fn ImageOwner::read_target(
   self : ImageOwner,
   path : String,
 ) -> @protocol.ReadFilePayload? {
-  if @resource.of_path(self.channel, path) is Some(target) {
+  guard self.channel is Some(channel) else { return None }
+  if @resource.of_path(channel, path) is Some(target) {
     return Some({ path: target.path, root: None, })
   }
   guard self.root is Some(root) &&
-    @resource.path_for(root, self.channel) is Some(root_path) else {
+    @resource.path_for(root, channel) is Some(root_path) else {
     return None
   }
   Some({ path, root: Some(root_path), })
@@ -219,12 +220,11 @@ fn ImageOwner::read_image(
   path : String,
   emit : @cmd.Emit[Msg],
 ) -> @cmd.Cmd {
+  guard self.channel is Some(channel) else { return @cmd.none }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
       let reply = @interop.bridge_request(
-        self.channel,
-        @commands.fs_read_file,
-        target,
+        channel, @commands.fs_read_file, target,
       ) catch {
         _ => {
           scheduler.add(emit(ImageResolved(self, path, ImageReadUnavailable)))

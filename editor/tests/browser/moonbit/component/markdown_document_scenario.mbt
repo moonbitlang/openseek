@@ -24,7 +24,7 @@ fn MarkdownDocumentHoverCall::to_json(self : MarkdownDocumentHoverCall) -> Json 
     "cancelled": Json(self.token.is_cancellation_requested()),
     "outcome": match self.outcome {
       Some(outcome) => Json(outcome)
-      None => Json::null()
+      None => null
     },
   })
 }

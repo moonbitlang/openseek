@@ -162,6 +162,7 @@ test "tool lines name what the call did and background jobs read as work" {
       persistence_error: None,
       cleanup_error: None,
       data: None,
+      subagent: None,
     }
   }
 
@@ -260,6 +261,7 @@ test "commentary before a backgrounded call comes first, the answer stays out" {
     persistence_error: None,
     cleanup_error: None,
     data: None,
+    subagent: None,
   }
   let (answer, progress) = render_all([
     AssistantMessage(content="I will run the tests."),

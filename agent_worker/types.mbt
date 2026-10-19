@@ -11,11 +11,11 @@ let current_schema_version : Int32 = 1
 
 ///|
 /// Summary length ceiling, enforced by `validate`.
-let max_summary_chars : Int32 = 2_000
+let max_summary_chars : Int32 = 4_000
 
 ///|
 /// Verification length ceiling, enforced by `validate`.
-let max_verification_chars : Int32 = 2_000
+let max_verification_chars : Int32 = 4_000
 
 ///|
 /// The worker's own account of its run. `status` is one of `done` (the task

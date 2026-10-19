@@ -59,10 +59,17 @@ async fn reload_entry(
   entry : SubtaskEntry,
 ) -> SubtaskEntry {
   let (entries, _) = load_entries(common_git_dir)
-  entries
-  .filter(e => e.name == entry.name && e.nonce == entry.nonce)
-  .last()
-  .unwrap_or(entry)
+  // Walk the registry BACK TO FRONT: the LAST matching record is the newest
+  // write and therefore what `filter(..).last()` returned, and the first hit
+  // ends the walk. `rev_iter` is a lazy back-to-front view, not a copy, so
+  // nothing is materialized on the way.
+  for candidate in entries.rev_iter() {
+    if candidate.name == entry.name && candidate.nonce == entry.nonce {
+      return candidate
+    }
+  }
+  // No record matched (or the registry is empty): fall back to the snapshot.
+  entry
 }
 
 ///|
@@ -158,15 +165,7 @@ async fn integrate_locked(
     if merge_head.output.trim() == commit_oid &&
       unmerged.exit_code == 0 &&
       unmerged.output != "" {
-      let files : Array[String] = []
-      for
-        change in parse_status_z(
-          git_run(["status", "--porcelain=v1", "-z"], cwd=origin).output,
-        ) {
-        if change.kind.contains("U") && !files.contains(change.path) {
-          files.push(change.path)
-        }
-      }
+      let files = unmerged_paths(unmerged.output)
       let entry = { ..entry, state: Conflicted, conflict_paths: files.copy(), }
       let _ = save_entry(geometry.common_git_dir, entry)
       return {
@@ -212,7 +211,7 @@ async fn integrate_locked(
 pub async fn discard(
   geometry : Geometry,
   entry : SubtaskEntry,
-) -> Result[Unit, String] {
+) -> Result[SubtaskEntry, String] {
   let origin = geometry.origin_root
   // Discard stays the destructive escape hatch for ANY non-terminal state
   // (it is the documented recovery for a crashed or cancelled child), but
@@ -227,6 +226,11 @@ pub async fn discard(
       "subtask \{entry.name} belongs to a different worktree; discard it from the worktree that launched it",
     )
   }
+  // A terminal entry's worktree is gone, and a newer slice may have reused
+  // its directory: never remove it again.
+  guard !entry.state.is_terminal() else {
+    return Err("subtask \{entry.name} is already \{Repr(entry.state)}")
+  }
   if entry.commit_oid is Some(commit_oid) &&
     merge_in_progress_of(origin, commit_oid) {
     return Err("a merge of this subtask is in progress; abort it first")
@@ -234,5 +238,22 @@ pub async fn discard(
   remove_worktree_and_branch(origin, entry, force=true)
   let entry = { ..entry, state: Discarded, }
   let _ = save_entry(geometry.common_git_dir, entry)
-  Ok(())
+  Ok(entry)
+}
+
+///|
+/// Every path with an unmerged index entry in `git ls-files -u -z` output,
+/// add/add included: a record `<mode> <oid> <stage>\t<path>` per stage, the
+/// path being everything after the first tab (it may hold tabs).
+fn unmerged_paths(output : String) -> Array[String] {
+  let files : Array[String] = []
+  for record in output.split("\u{0}") {
+    guard record.find("\t") is Some(tab) else { continue }
+    let path = record.to_owned().view(start_offset=tab + 1).to_owned()
+    guard !path.is_empty() else { continue }
+    if !files.contains(path) {
+      files.push(path)
+    }
+  }
+  files
 }

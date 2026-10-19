@@ -150,11 +150,12 @@ priv enum QuoteTarget {
 /// Which composer, if any, is shown with a transcript right now. A read-only
 /// conversation shows its transcript without one.
 fn Model::quote_screen(self : Model) -> QuoteScreen? {
-  guard !self.is_console_gated() else { return None }
+  guard self.cloud_selected() || !self.is_console_gated() else { return None }
   match self.screen {
     Codex => Some(CodexQuote)
     Chat =>
       match self.chat_column() {
+        CloudTranscript(..) => Some(ChatQuote)
         Transcript(conversation=conv, ..) if !conv.is_archived_read_only() &&
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
@@ -194,7 +195,7 @@ fn app_shortcut_message(keyboard : @dom.KeyboardEvent, is_apple : Bool) -> Msg? 
   match (keyboard.code(), keyboard.shift_key()) {
     ("KeyP", false) => Some(QuickOpenOpen(@quick_open.Files))
     ("KeyT", false) => Some(QuickOpenOpen(@quick_open.Symbols))
-    ("KeyN", false) => Some(NewChat)
+    ("KeyN", false) => Some(NewChatRequested)
     ("KeyO", false) => Some(AddProjectRequested)
     ("KeyB", false) => Some(ToggleSidebar)
     ("KeyB", true) => Some(ToggleRightPanel)
@@ -234,6 +235,11 @@ fn SidebarDispatcher::conversation_open(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  if id.source() is @conversation.CloudLive {
+    return self.emit(
+      OpenCloudConversation(account=id.channel(), session=id.conversation()),
+    )
+  }
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) else {
     return self.unroutable("open", "channel \{id.channel()}")
   }
@@ -372,7 +378,7 @@ fn SidebarDispatcher::section_primary(
   }
   match id.source() {
     "openseek.projects" => self.emit(PickProject(channel))
-    "openseek.chats" => self.emit(CreateChat(channel))
+    "cloud.chats" => self.emit(CloudAction(@cloud.Create))
     source => self.unroutable("section action", "source \{source}")
   }
 }
@@ -382,7 +388,11 @@ fn SidebarDispatcher::placeholder_open(
   self : SidebarDispatcher,
   id : String,
 ) -> @cmd.Cmd {
-  self.unroutable("placeholder action", id)
+  if id == "cloud-sign-in" {
+    self.emit(RemoteConnectClicked)
+  } else {
+    self.unroutable("placeholder action", id)
+  }
 }
 
 ///|
@@ -452,6 +462,7 @@ fn main {
           // therefore unloads its WebSocket immediately; advancing its retry
           // identity replaces only that device's connection.
           model.bridge_subscriptions(emit),
+          @cloud.subscriptions(model.cloud),
         ]
         if model.screen.work_screen() is None && !model.is_console_gated() {
           subs.push(management_navigation_subscription(emit))
@@ -623,14 +634,8 @@ fn main {
     let transcript_actions = (slot : String) => {
       (
         {
-          open: emit.map(path => OpenFile(path)),
-          jump: emit.map(target => {
-            JumpToLocation(
-              path=target.file,
-              range=target.range,
-              annotation=target.annotation,
-            )
-          }),
+          open: emit.map(path => TranscriptLinkOpened(slot~, path~)),
+          jump: emit.map(target => TranscriptLocationOpened(slot~, target)),
           open_session: emit.map(session => OpenSessionHere(session)),
           fork: emit.map(through => ForkRequested(slot~, through~)),
           edit_user: emit.map(request => {

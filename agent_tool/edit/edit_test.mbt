@@ -229,7 +229,7 @@ async test "edit rejects malformed arguments and names the offending field" {
     let cases : Array[(Json, String)] = [
       ({ "path": "\{dir}/noop.txt" }, "arguments.old_string"),
       ({ "path": "\{dir}/noop.txt", "old_string": "x" }, "arguments.new_string"),
-      (Json::null(), "object arguments"),
+      (null, "object arguments"),
     ]
     for case in cases {
       let (arguments, expected) = case

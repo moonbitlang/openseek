@@ -38,7 +38,7 @@ inspect *args:
     moon run inspect -- {{ args }}
 
 # Run workspace MoonBit tests plus the offline OpenSeek CLI documentation tests.
-test: test-moon test-cram test-turn-finish test-workflows
+test: test-moon test-cram test-turn-finish test-subagents test-workflows
 
 # Run the offline CLI documentation tests (Git Bash on Windows).
 test-cram:
@@ -48,6 +48,15 @@ test-cram:
 test-turn-finish:
     moon build . --target native
     moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+
+# Real CLI subagents (parent and real children) with an offline scripted model.
+test-subagents:
+    moon build . --target native
+    moon run tests/integration/subagents.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/review_workflow.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/subagent_send.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
+    moon run tests/integration/directory_workers.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
 
 test-moon:
     moon test --target native

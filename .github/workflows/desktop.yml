@@ -63,8 +63,8 @@ jobs:
         with:
           arch: x64
 
-      - name: Test release script
-        run: node --test desktop/scripts/release.test.mjs
+      - name: Test release and packaging scripts
+        run: node --test desktop/scripts/release.test.mjs desktop/package/signing.test.mjs desktop/package/notarization.test.mjs
 
       - name: Set up MoonBit
         run: |

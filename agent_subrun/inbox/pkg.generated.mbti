@@ -1,0 +1,39 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_subrun/inbox"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub const MaxTextChars : Int = 8_000
+
+pub async fn open(String) -> Unit
+
+pub async fn post(String, Message) -> Bool
+
+pub async fn read(String) -> Inbox?
+
+// Errors
+
+// Types and methods
+pub(all) struct Inbox {
+  messages : Array[Message]
+  unreadable : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Message {
+  id : String
+  from : String
+  text : String
+} derive(Eq, @debug.Debug)
+pub fn Message::Message(from~ : String, text~ : String) -> Self
+pub fn Message::receipt(Self) -> String
+
+type Reader
+pub fn Reader::Reader(String) -> Self
+pub async fn Reader::take(Self) -> Array[Message]
+
+// Type aliases
+
+// Traits

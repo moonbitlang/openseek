@@ -22,17 +22,35 @@ A second real `serve` scenario clears the goal through stdin while `job_wait`
 observes a gated job. The next model request must report `user_input` before the
 job is released, proving that the command dispatcher wakes the active turn.
 
+# Subagents
+
+`just test-subagents` runs `tests/integration/subagents.mbtx` against the native
+CLI: a `run` with a durable session starts two explore subagents with the
+`subagent` tool, waits, reads both reports with `job_output`, and finishes. One
+local scripted server answers the parent and the two real child processes,
+which reach it through the forwarded `--api-url`; a child is recognized by its
+`submit_answer` tool and routed by a marker in its query. Afterwards each
+child's session holds its transcript and `report.json`, and no claim file is
+left. No model credentials or network are needed.
+
+`tests/integration/subagent_send.mbtx` (also under `just test-subagents`)
+redirects a running explore subagent with `subagent_send`: the child's first
+step is held until the instruction is posted, and its next model request must
+carry it.
+
 # Bundled workflows
 
 `just test-workflows` runs the native MoonBit fixture package at
 `tests/integration/workflows`. It compiles the actual bundled scripts as Wasm
-and exercises them with local child processes. The runner itself doubles as the
-hosted-child fixture and the fake `gh` executable; no Python, shell scripts,
-network access, or model credentials are needed. Builds and fixture files live
-in a temporary directory, keeping the bundled resource tree clean.
+and runs them against a fake host: a local HTTP server that speaks the PTC
+protocol (`OPENSEEK_PTC`) and answers `subagent`, `job_wait`, `job_output` and
+`audit_context` from a script, serving reports in small chunks. The runner
+also doubles as the fake `gh` executable; no Python, shell scripts, network
+access, or model credentials are needed. Builds and fixture files live in a
+temporary directory, keeping the bundled resource tree clean.
 
-The hosted tests cover success, partial failure, missing handoff, insufficient
-capacity, empty answers, bounded context, nested-package discovery, and citation
+The subagent workflow tests cover success, partial failure, a missing host, a
+full session, empty answers, bounded context, nested-package discovery, and citation
 validation (including escaping symlinks and invalid line numbers); the review
 script's criteria resolution (arguments, the engine's standing goal, or both),
 baseline forwarding and override, the failing exit on blockers, and usage

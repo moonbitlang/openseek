@@ -8,6 +8,8 @@ build-scripts-check:
     moon check package/internal/cli package/macos package/windows package/linux package/browser package/dev --target native
     node --check package/build.mjs
     node --test package/resources.test.mjs
+    node --test package/signing.test.mjs
+    node --test package/notarization.test.mjs
     node --test package/office_fonts.test.mjs
     node --test package/office_pdf.test.mjs
     node --experimental-vm-modules --test package/pdf_runtime.test.mjs

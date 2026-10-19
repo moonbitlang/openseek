@@ -31,10 +31,30 @@ pub enum BgJobStatus {
 } derive(Eq)
 
 ///|
+/// How a job's process ended, as its launcher's `on_end` hook is told before
+/// the job's terminal record is published.
+pub(all) enum JobEnd {
+  /// It exited on its own with this code.
+  Exited(Int32)
+  /// It was stopped on request (`stop`) or by session teardown.
+  Stopped
+  /// The output watchdog killed it.
+  OutputLimit
+  /// The wall-clock reaper killed it.
+  TimeLimit
+  /// Its output could not be captured, with the reason; it was killed.
+  CaptureFailed(String)
+}
+
+///|
 /// Default wall-clock lifetime for a background job (thirty minutes): long
 /// enough for real builds and suites, short enough that a runaway spinner —
 /// issue #419 saw one burn 131 minutes unnoticed — is reaped and surfaced.
 let default_hard_timeout_ms : Int32 = 1_800_000
+
+///|
+/// How often a pinned job past its wall-clock cap is checked again.
+let pinned_recheck_ms : Int32 = 10_000
 
 ///|
 /// Session-scoped registry of background ("detached") jobs, each backed by one
@@ -61,6 +81,8 @@ struct BgJobRuntime {
     Int32,
     String?,
     &@process.ProcessInput?,
+    @process.CancellationHandler?,
+    Map[String, String]?,
   ) -> @shell_exec.ShellExecution
   // Spawn a *retained* foreground execution (may be detached on timeout):
   // file-backed with a large hard cap, but still killed on exceeding the inline
@@ -145,14 +167,20 @@ priv struct BgJob {
   // True only when the launching tool enabled moonrun's policy, so ordinary
   // job output resembling a refusal cannot be misclassified as one.
   moonrun_policy_active : Bool
-  // Optional launcher-owned resources to reclaim once the process is terminal.
-  // Cleared before invocation so cleanup is exactly once even if more terminal
+  // Optional launcher-owned work once the process is terminal: reclaiming its
+  // resources, reading what it left behind. Told how the process ended.
+  // Cleared before invocation so it runs exactly once even if more terminal
   // observers are added later.
-  mut on_terminal : (async () -> Unit)?
+  mut on_terminal : (async (JobEnd) -> Unit)?
+  // Called once the job's terminal record is published: the job is fully
+  // settled.
+  mut on_published : (() -> Unit)?
   // Where the job is in its finish sequence; see `JobPhase`.
   mut phase : JobPhase
   // Launcher-supplied structured results; frozen to a constant at `CleanedUp`.
   mut data : (() -> Json)?
+  // What the job is when it is a subagent; frozen at `CleanedUp` like `data`.
+  mut subagent : (() -> @protocol.SubagentInfo)?
   mut image_output : (() -> ImageOutput)?
   // A terminal denial scan may read a large retained log. Cache its
   // classification so repeated job_output calls do not repeat that allocation.
@@ -167,6 +195,7 @@ priv struct BgJob {
 pub struct BgJobSnapshot {
   image_output : ImageOutput?
   data : Json?
+  subagent : @protocol.SubagentInfo?
   cleanup_error : String?
   id : String
   command : String
@@ -213,7 +242,16 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
 ) -> BgJobRuntime {
   let group = scope.group()
   {
-    spawn_exec: (program, args, cwd, max_output_chars, spill_path, stdin) => {
+    spawn_exec: (
+      program,
+      args,
+      cwd,
+      max_output_chars,
+      spill_path,
+      stdin,
+      cancel_handler,
+      extra_env,
+    ) => {
       // Background retention: inline preview up to the budget, full output to
       // the spill file, and the hard-cap watchdog so a flooding job is killed
       // (and surfaced) rather than left burning CPU with its output dropped.
@@ -227,6 +265,8 @@ pub fn[X] BgJobRuntime::BgJobRuntime(
         hard_cap=hard_output_cap,
         spill_path?,
         kill_at_hard_cap=true,
+        cancel_handler?,
+        extra_env?,
       )
     },
     spawn_foreground_retained_exec: (
@@ -317,6 +357,12 @@ pub async fn BgJobRuntime::start(
   output_rewrites~ : Array[(String, String)] = [],
   moonrun_policy_active~ : Bool = false,
   stdin? : &@process.ProcessInput,
+  cancel_handler? : @process.CancellationHandler,
+  extra_env? : Map[String, String],
+  on_end? : async (JobEnd) -> Unit,
+  on_published? : () -> Unit,
+  subagent? : () -> @protocol.SubagentInfo,
+  reaped~ : Bool = true,
 ) -> String {
   // Reserve one id and use it for both the spill file and the registry entry, so
   // the job id and its `<id>.out` file never diverge.
@@ -326,9 +372,14 @@ pub async fn BgJobRuntime::start(
     "\{dir}/\{@protocol.job_storage_name(id)}.out"
   })
   let exec = (self.spawn_exec)(
-    program, args, cwd, max_output_chars, spill_path, stdin,
+    program, args, cwd, max_output_chars, spill_path, stdin, cancel_handler, extra_env,
   )
-  errdefer exec.request_stop()
+  // A start that fails after the spawn returns once that process is gone,
+  // so its caller never counts it as ended while it winds down.
+  errdefer {
+    exec.request_stop()
+    @async.protect_from_cancel(() => exec.wait())
+  }
   exec.materialize_output()
   let _ = exec.background()
   self.register(
@@ -340,9 +391,12 @@ pub async fn BgJobRuntime::start(
     read_only_review~,
     output_rewrites~,
     moonrun_policy_active~,
-    on_terminal=None,
+    on_terminal=on_end,
+    on_published~,
     data=None,
+    subagent~,
     image_output=None,
+    reaped~,
   )
   id
 }
@@ -364,6 +418,7 @@ pub async fn BgJobRuntime::adopt(
   on_terminal? : async () -> Unit,
   data? : () -> Json,
   image_output? : () -> ImageOutput,
+  pinned? : () -> Bool,
 ) -> String {
   errdefer exec.request_stop()
   self.prepare_output()
@@ -379,9 +434,13 @@ pub async fn BgJobRuntime::adopt(
     read_only_review~,
     output_rewrites~,
     moonrun_policy_active~,
-    on_terminal~,
+    on_terminal=on_terminal.map(cleanup => _ => cleanup()),
+    on_published=None,
     data~,
+    subagent=None,
     image_output~,
+    reaped=true,
+    pinned?,
   )
   id
 }
@@ -398,9 +457,13 @@ async fn BgJobRuntime::register(
   read_only_review~ : Bool,
   output_rewrites~ : Array[(String, String)],
   moonrun_policy_active~ : Bool,
-  on_terminal~ : (async () -> Unit)?,
+  on_terminal~ : (async (JobEnd) -> Unit)?,
+  on_published~ : (() -> Unit)?,
   data~ : (() -> Json)?,
+  subagent~ : (() -> @protocol.SubagentInfo)?,
   image_output~ : (() -> ImageOutput)?,
+  reaped~ : Bool,
+  pinned? : () -> Bool,
 ) -> Unit {
   self.jobs[id] = {
     id,
@@ -418,8 +481,10 @@ async fn BgJobRuntime::register(
     output_rewrites: output_rewrites.copy(),
     moonrun_policy_active,
     on_terminal,
+    on_published,
     phase: Live,
     data,
+    subagent,
     image_output,
     denial_scanned: false,
     denial_feedback: None,
@@ -431,15 +496,24 @@ async fn BgJobRuntime::register(
     exec.wait()
     self.finish_job(id)
   })
-  // Wall-clock reaper: every registered job has a bounded lifetime measured
+  // Wall-clock reaper: a registered job has a bounded lifetime measured
   // from its process start, so a detached job's foreground wait counts
   // against the same deadline. The trip marks the reason before cancelling,
-  // and the exit watcher above surfaces it like an output-limit kill.
+  // and the exit watcher above surfaces it like an output-limit kill. A job
+  // started with `reaped=false` is bounded by its launcher instead.
+  guard reaped else { return }
   let remaining = self.hard_timeout_ms.to_int64() -
     (@env.now().reinterpret_as_int64() - exec.started_at_ms())
   (self.spawn_watcher)(() => {
     if remaining > 0L {
       @async.sleep(remaining.to_int())
+    }
+    // A pinned job (a script orchestrating live subagents) is reaped only
+    // once it is no longer pinned.
+    if pinned is Some(pinned) {
+      while pinned() && bg_status(exec.status()) is Running {
+        @async.sleep(pinned_recheck_ms)
+      }
     }
     exec.kill_for_time_limit()
   })
@@ -468,6 +542,7 @@ fn BgJob::to_snapshot(self : BgJob, persistent_logs : Bool) -> BgJobSnapshot {
       bg_status(self.exec.status())
     },
     data: self.data.map(get => get()),
+    subagent: self.subagent.map(get => get()),
     image_output: self.image_output.map(get => {
       let output = get()
       { content: output.content, images: output.images.copy(), }
@@ -584,15 +659,36 @@ pub async fn BgJobRuntime::read_output_tail(
 }
 
 ///|
-/// Cancel a running job and return once it is terminal. Idempotent: an
-/// already-terminal known job returns `true`; an unknown id returns `false`.
-pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
+/// Whether `id` has been asked to stop, for any reason, as of now: set
+/// synchronously with the request, before the process has wound down.
+/// `false` for an unknown id.
+pub fn BgJobRuntime::stop_requested(self : BgJobRuntime, id : String) -> Bool {
+  self.jobs.get(id) is Some(job) && job.exec.stop_cause() is Some(_)
+}
+
+///|
+/// Ask a running job to stop and return without waiting for it to end:
+/// for a caller inside another job's finish sequence, which shutdown runs
+/// before it reaches this job's. Idempotent; an unknown id returns `false`.
+pub async fn BgJobRuntime::request_stop(
+  self : BgJobRuntime,
+  id : String,
+) -> Bool {
   guard self.jobs.get(id) is Some(job) else { return false }
   if bg_status(job.exec.status()) is Running && !job.requested_stop {
     job.requested_stop = true
     job.exec.request_stop()
     self.publish(id, Updated)
   }
+  true
+}
+
+///|
+/// Cancel a running job and return once it is terminal. Idempotent: an
+/// already-terminal known job returns `true`; an unknown id returns `false`.
+pub async fn BgJobRuntime::stop(self : BgJobRuntime, id : String) -> Bool {
+  guard self.jobs.get(id) is Some(job) else { return false }
+  ignore(self.request_stop(id))
   job.exec.wait()
   self.wait_any([id])
   true

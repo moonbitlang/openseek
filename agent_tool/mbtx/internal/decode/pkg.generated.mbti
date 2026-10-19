@@ -19,7 +19,6 @@ pub struct MbtxInput {
   cwd : String?
   warning : Bool
   escalated : Bool
-  subrun : Bool
   ptc : Bool?
 } derive(@debug.Debug)
 

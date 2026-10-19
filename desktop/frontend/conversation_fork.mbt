@@ -148,7 +148,7 @@ fn Model::finish_fork(
       )
       (
         @cmd.batch([save, open]),
-        { ..model, fork_focus: model.selected_conversation, },
+        { ..model, fork_focus: model.host_selection(), },
       )
     }
   }

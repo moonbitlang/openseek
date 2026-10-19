@@ -105,6 +105,12 @@ pub fn root_command() -> @argparse.Command {
             long="kind",
             about="Run a preset instead of the general agent: explore, review, worker, pattern-repair, or echo (general selects the general agent). Needs --input-format json; the request's input is the preset's input.",
           ),
+          // No env binding: a token is for exactly one launch.
+          OptionArg(
+            "claim",
+            long="claim",
+            about="Start the --kind run in the --session its launcher claimed for it, presenting the claim's token. Without it, a --kind run refuses a session that already exists.",
+          ),
           OptionArg(
             "input-format",
             long="input-format",

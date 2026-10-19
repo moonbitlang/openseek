@@ -7,6 +7,19 @@
 let reader_drain_grace_ms : Int32 = 200
 
 ///|
+/// Why an execution was first asked to stop.
+pub enum StopCause {
+  /// A caller asked (`stop`, `request_stop`).
+  Requested
+  /// The output watchdog.
+  OutputLimit
+  /// The wall-clock reaper.
+  TimeLimit
+  /// The output could not be captured, with the reason.
+  CaptureFailed(String)
+}
+
+///|
 /// Terminal or live state of one execution.
 ///
 /// - `Running`: the child is executing and a tool call is awaiting it.
@@ -49,6 +62,12 @@ struct ShellExecution {
   // Set before the child is cancelled (by `stop`, or by the output-limit kill)
   // so the monitor reports `Killed` rather than the kill signal's exit code.
   mut cancel_requested : Bool
+  // Why the first stop was requested, recorded when it was: later trouble
+  // during the wind-down (a capture error, say) does not replace it.
+  mut stop_cause : StopCause?
+  // Set once the child is seen to exit on its own: a stop requested after
+  // that (while its output drains) did not end it.
+  mut exited_on_its_own : Bool
   mut ending : Bool
   mut on_ending : (() -> Unit)?
   // Foreground semantics: kill the child once the sink fills (output prefix hit
@@ -87,6 +106,13 @@ struct ShellExecution {
 /// gets a pipe of its own whose write end is closed at once, so it reads EOF
 /// immediately (on Windows too, where inheriting the engine's held-open pipe
 /// hangs `git`). Pass a redirect when the program should actually read something.
+///
+/// `cancel_handler` is how the process is ended when the execution is stopped
+/// or its group is cancelled; by default it is killed at once. A program that
+/// winds down on its own signal (closing its stdin, say) passes a handler that
+/// gives that signal and a grace before killing. With one, the execution's
+/// output is drained until the process has exited even when the group is
+/// being cancelled, so the handler must end the process.
 pub async fn[X] ShellExecution::start(
   scope : @agent_runtime.AgentTaskScope[X],
   program~ : String,
@@ -98,6 +124,8 @@ pub async fn[X] ShellExecution::start(
   spill_path? : String,
   kill_when_full~ : Bool = false,
   kill_at_hard_cap~ : Bool = false,
+  cancel_handler? : @process.CancellationHandler,
+  extra_env? : Map[String, String],
 ) -> ShellExecution {
   let group = scope.group()
   let sink = ShellOutputSink::ShellOutputSink(
@@ -114,6 +142,13 @@ pub async fn[X] ShellExecution::start(
       stdin_reader
     }
   }
+  // The handler runs on every cancellation, a requested stop or the group's
+  // teardown alike; teardown requests nothing, so it is recorded here, before
+  // the handler's own effects, unless a cause is already known.
+  let started : Ref[ShellExecution?] = Ref(None)
+  let CancellationHandler(cancel) = cancel_handler.unwrap_or_else(() => {
+    @process.hard_cancel()
+  })
   let process = @process.spawn(
     group,
     program,
@@ -122,7 +157,13 @@ pub async fn[X] ShellExecution::start(
     stdout=writer,
     stderr=writer,
     cwd?=cwd.map(cwd => cwd.view()),
-    cancel_handler=@process.hard_cancel(),
+    extra_env?,
+    cancel_handler=CancellationHandler(pid => {
+      if started.val is Some(exec) {
+        exec.note_stop()
+      }
+      cancel(pid)
+    }),
     no_wait=true,
     no_console_window=true,
   )
@@ -131,6 +172,8 @@ pub async fn[X] ShellExecution::start(
     process,
     status: Running,
     cancel_requested: false,
+    stop_cause: None,
+    exited_on_its_own: false,
     ending: false,
     on_ending: None,
     kill_when_full,
@@ -144,8 +187,17 @@ pub async fn[X] ShellExecution::start(
     finished_at_ms: None,
     killed_by_time_limit: false,
   }
+  started.val = Some(exec)
   group.spawn_bg(no_wait=true, allow_failure=true) <| () => {
-    exec.monitor(reader, process)
+    // A process with its own cancel handler winds down over a grace when its
+    // group is cancelled, and may write its last output then: keep draining
+    // it until it has exited, or that write fails on a closed pipe. The
+    // handler bounds the wait; the default handler kills at once.
+    if cancel_handler is Some(_) {
+      @async.protect_from_cancel(() => exec.monitor(reader, process))
+    } else {
+      exec.monitor(reader, process)
+    }
   }
   exec
 }
@@ -218,6 +270,7 @@ async fn ShellExecution::monitor(
       if self.cancel_requested {
         Killed
       } else {
+        self.exited_on_its_own = true
         Exited(code)
       }
     } catch {
@@ -285,8 +338,34 @@ pub async fn ShellExecution::stop(self : ShellExecution) -> Bool {
 /// orphan. The monitor (on the session group) then reaps it to `Killed`.
 pub fn ShellExecution::request_stop(self : ShellExecution) -> Unit {
   self.begin_ending()
+  self.note_stop()
   self.cancel_requested = true
   self.process.cancel()
+}
+
+///|
+/// Record why the execution is being stopped, if this is the first time and
+/// the child has not already exited on its own. Each watchdog marks its
+/// reason before it asks, so the first request knows why it was made.
+fn ShellExecution::note_stop(self : ShellExecution) -> Unit {
+  guard self.stop_cause is None && !self.exited_on_its_own else { return }
+  self.stop_cause = Some(
+    if self.sink.failure is Some(reason) {
+      CaptureFailed(reason)
+    } else if self.killed_by_output_limit {
+      OutputLimit
+    } else if self.killed_by_time_limit {
+      TimeLimit
+    } else {
+      Requested
+    },
+  )
+}
+
+///|
+/// Why the execution was first asked to stop; `None` if it never was.
+pub fn ShellExecution::stop_cause(self : ShellExecution) -> StopCause? {
+  self.stop_cause
 }
 
 ///|

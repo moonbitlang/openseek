@@ -22,6 +22,7 @@ fn sample_job() -> @openseek_protocol.JobRecord {
     persistence_error: None,
     cleanup_error: None,
     data: None,
+    subagent: None,
   }
 }
 

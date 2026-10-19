@@ -63,7 +63,7 @@ test "a durable prompt keeps its text whatever the submission tag looks like" {
     absent in (
       [
         { "content": "hello" },
-        { "content": "hello", "submission_id": Json::null() },
+        { "content": "hello", "submission_id": null },
         { "content": "hello", "submission_id": 7 },
         { "content": "hello", "annotated_by_a_newer_store": true },
       ] : Array[Json]) {
@@ -798,7 +798,7 @@ test "text search payload rejects missing and invalid required fields" {
   assert_true(invalid_rejected)
   let null_rejected = refused(() => {
     let _ : @protocol.SearchTextPayload = @json.from_json({
-      "root": Json::null(),
+      "root": null,
       "query": "moon",
       "regex": false,
       "case_sensitive": false,
@@ -1666,7 +1666,7 @@ test "a run's close keeps its outcome and reports only the evidence it has" {
     thin in (
       [
         { "run_id": "r1", "status": "failed" },
-        { "run_id": "r1", "status": "failed", "answer": Json::null() },
+        { "run_id": "r1", "status": "failed", "answer": null },
         { "run_id": "r1", "status": "failed", "exit_code": "9" },
         { "run_id": "r1", "status": "failed", "settled_by_a_newer_host": true },
       ] : Array[Json]) {
@@ -1707,7 +1707,7 @@ test "a cancel reply spells \"nothing was open\" by omission" {
     absent in (
       [
         Json::empty_object(),
-        { "run_id": Json::null() },
+        { "run_id": null },
         { "run_id": 7 },
         { "run_id": ["r1"] },
         { "cancelled": true, "withdrew_pending_prompt": false },
@@ -1764,7 +1764,7 @@ test "a reconnect settlement is refused unless it names run, session and outcome
     "run_id": "r1",
     "session": "s1",
     "status": "failed",
-    "submission_id": Json::null(),
+    "submission_id": null,
     "exit_code": true,
     "queued_by_a_newer_host": 1,
   })
@@ -2082,7 +2082,7 @@ test "Moon IDE location classification round trips and rejects malformed fields"
       assert_false(location.to_json().stringify().contains("is_test"))
     }
   }
-  for invalid in [Json::null(), Json("true"), Json(1)] {
+  for invalid in [null, Json("true"), Json(1)] {
     let json : Json = {
       "path": "/workspace/main.mbt",
       "start_line": 2,

@@ -108,14 +108,50 @@ $ sh <<'EOF'
 > test -e "$d/ws" && echo "ws exists" || echo "no ws"
 > printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --session s-echo --session-root "$d/sessions" --dir "$d/ws" --result-file "$d/result.json" > /dev/null 2>&1
 > cat "$d/result.json"
-> printf '{"version":1,"kind":"echo","input":0}\n' | env WORKFLOW_HOST='{"v":1}' openseek.exe run --input-format json --cancel-on-stdin-eof --session '' --dir "$d/ws" 2>&1 > /dev/null
 > rm -rf "$d"
 > EOF
 error: explore requires a non-empty query
 {"version":1,"request_id":"r-3","status":"failed","reason":"explore requires a non-empty query"}
 no ws
 {"version":1,"kind":"echo","status":"completed","output":0}
-error: a run launched from a hosted workflow needs its reserved --session; delegate through @hosted.run so the child gets a transcript
+```
+
+## A Claimed Session Is Accepted Once, With Its Token
+
+A launcher reserves a child's session by creating its directory with a claim
+file in it, then hands the child the claim's token with `--claim`. The file
+records only the token's SHA-256 (here, of `t-1`). The child
+accepts the claim before it records anything; without the token, or with
+the wrong one, the session is an existing one and is refused. A claim is
+accepted once; until the child records something (the modelless `echo` never
+does) an accepted marker stays, so the id is not listed as a session. `--claim` needs `--session`, and only a `--kind` run takes it.
+
+```mooncram
+$ sh <<'EOF'
+> d=$(mktemp -d)
+> mkdir -p "$d/ws" "$d/store/sessions/p-sr-1"
+> printf '{"sha256":"46e9bc3476c92ea24fb17adac6cd9cdacff7a34a5c753100787da5a29984f836"}' > "$d/store/sessions/p-sr-1/claim.json"
+> child() { printf '{"version":1,"kind":"echo","input":0}' | openseek.exe run --input-format json --dir "$d/ws" "$@" 2>&1 > /dev/null; echo "exit $?"; }
+> child --session p-sr-1 --session-root "$d/store"
+> child --session p-sr-1 --session-root "$d/store" --claim t-2
+> child --session p-sr-1 --session-root "$d/store" --claim t-1
+> ls "$d/store/sessions/p-sr-1"
+> child --session p-sr-1 --session-root "$d/store" --claim t-1
+> child --no-session --claim t-1
+> openseek.exe run --no-session --dir "$d/ws" --claim t-1 words 2>&1 > /dev/null
+> rm -rf "$d"
+> EOF
+error: a --kind run starts a new session, and p-sr-1 already exists
+exit 1
+error: session p-sr-1 was claimed for another run
+exit 1
+exit 0
+claim.accepted
+error: session p-sr-1 holds no claim; it was accepted already
+exit 1
+error: --claim names a claimed session, so it needs --session
+exit 1
+error: --claim is for a --kind run: the general agent starts its own session
 ```
 
 ## A Parent-Managed Run: One Line In, stdin Held Open

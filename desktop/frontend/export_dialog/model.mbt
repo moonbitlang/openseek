@@ -12,6 +12,7 @@ struct Model {
 ///|
 priv enum Source {
   Host(@interop.ChannelId, @protocol.SessionExportPayload)
+  Cloud(session~ : String, title~ : String)
 } derive(Eq, Debug)
 
 ///|
@@ -144,7 +145,7 @@ pub fn Model::update(
     }
     Download if !busy =>
       (
-        self.download(emit, content.source, desktop~),
+        self.download(emit, content.source, account, desktop~),
         self.showing({ ..content, operation: Downloading, }),
       )
     Share if !busy && content.publication is None =>
@@ -231,6 +232,25 @@ pub extend Model with @debug.Debug::{to_repr}
 /// Native browser panels must hide while this modal owns the screen.
 pub fn Model::is_open(self : Model) -> Bool {
   self.content is Some(_)
+}
+
+///|
+pub fn Model::open_cloud(
+  self : Model,
+  session~ : String,
+  title~ : String,
+) -> (@cmd.Cmd, Model) {
+  (
+    @dialog.show(DialogId),
+    {
+      generation: self.generation + 1,
+      content: Some({
+        source: Cloud(session~, title~),
+        operation: Ready,
+        publication: None,
+      }),
+    },
+  )
 }
 
 ///|

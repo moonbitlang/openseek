@@ -411,9 +411,7 @@ pub fn State::comment_count(self : State, path : String) -> Int32 {
   }
   self.review
   .map(review => {
-    review.threads
-    .filter(thread => thread.path == path && !thread.resolved)
-    .length()
+    review.threads.count_if(thread => thread.path == path && !thread.resolved)
   })
   .unwrap_or(0)
 }

@@ -251,7 +251,7 @@ test "steer preserves an optional submission id and refuses malformed ids" {
       Steer(content=Content([Text("same text")]), submission_id=Some("steer-2"))
     ),
   )
-  for bad in [Json::null(), Json(7), Json(false)] {
+  for bad in [null, Json(7), Json(false)] {
     assert_eq(
       @openseek_protocol.Command::parse({
         "command": "steer",
@@ -323,7 +323,7 @@ test "legacy command images decode to content while malformed content is rejecte
       _ => fail("expected legacy message content")
     }
     assert_true(content.0 is [Text("before"), Image(_)])
-    for malformed in [Json::null(), 7, [{ "type": "image", "data": "bad" }]] {
+    for malformed in [null, 7, [{ "type": "image", "data": "bad" }]] {
       assert_true(
         @openseek_protocol.Command::parse({
           "command": command,

@@ -5,8 +5,11 @@
 /// spawns — runs under the worker write profile, which denies the repository's
 /// shared surfaces (`deny_roots`: the canonical common git dir plus every
 /// enumerated worktree root) and re-allows only the worker's own tree and its
-/// private git admin dir. All paths must be canonical (realpath'd): the kernel
-/// matches profile rules against realpaths.
+/// private git admin dir. A worker that works in place has a directory of
+/// the session's checkout as its tree, the checkout as what is denied, no
+/// admin dir, and its repository's index file (`git_index`) writable, so
+/// `git restore` works where a commit cannot land. All paths must be canonical (realpath'd): the kernel matches
+/// profile rules against realpaths.
 ///
 /// This replaces the workspace source-write profile rather than adding to it:
 /// a worker is *supposed* to write source, just only its own.
@@ -21,5 +24,6 @@
 pub(all) struct WorkerSandbox {
   deny_roots : Array[String]
   worker_root : String
-  worker_admin_dir : String
+  worker_admin_dir : String?
+  git_index : String?
 }

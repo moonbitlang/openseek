@@ -86,7 +86,7 @@ fn[X] new_client(group : @async.TaskGroup[X]) -> (FakeTransport, Client) {
 fn id_of(request : Json) -> Json {
   match request {
     { "id": id, .. } => id
-    _ => Json::null()
+    _ => null
   }
 }
 
@@ -155,15 +155,13 @@ async test "a delivered reply never waits behind other outstanding requests" {
   @async.with_task_group(group => {
     let (transport, client) = new_client(group)
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      client.request(method_="first", params=Json::null()) |> ignore
+      client.request(method_="first", params=null) |> ignore
     })
     group.spawn_bg(no_wait=true, allow_failure=true, () => {
-      client.request(method_="second", params=Json::null()) |> ignore
+      client.request(method_="second", params=null) |> ignore
     })
-    let third = group.spawn(() => {
-      client.request(method_="third", params=Json::null())
-    })
-    let mut third_request = Json::null()
+    let third = group.spawn(() => client.request(method_="third", params=null))
+    let mut third_request = null
     for _ in 0..<3 {
       let sent = transport.outbound.get()
       if sent is { "method": "third", .. } {
@@ -218,7 +216,7 @@ async test "a reply with a null error alongside a result succeeds" {
         "jsonrpc": "2.0",
         "id": id_of(request),
         "result": { "value": 7 },
-        "error": Json::null(),
+        "error": null,
       })
     })
     let result = client.request(method_="probe", params=Json::empty_object())

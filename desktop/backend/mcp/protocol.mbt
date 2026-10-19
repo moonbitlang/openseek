@@ -62,7 +62,7 @@ async fn Server::dispatch(
 ) -> Json? {
   guard message is Object(fields) else {
     // JSON-RPC answers an unidentifiable request under a null id.
-    return Some(failure(Json::null(), InvalidRequest, "Invalid Request"))
+    return Some(failure(null, InvalidRequest, "Invalid Request"))
   }
   guard fields.get("method") is Some(String(method_)) else {
     if fields.contains("result") || fields.contains("error") {
@@ -70,7 +70,7 @@ async fn Server::dispatch(
     }
     return Some(
       failure(
-        fields.get("id").unwrap_or(Json::null()),
+        fields.get("id").unwrap_or(null),
         InvalidRequest,
         "Invalid Request",
       ),

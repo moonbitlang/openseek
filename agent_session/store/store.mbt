@@ -741,6 +741,10 @@ pub async fn SessionStore::listings(
   for id in self.list() {
     let path = self.session_file_path(id) catch { _ => continue }
     let stamp = @fs.mtime(path) catch {
+      // A child's session claimed for it but not yet recorded is a
+      // reserved id, not a session.
+      @os_error.OSError(_) as error if error.is_ENOENT() &&
+        self.only_claimed(id) => continue
       _ => {
         unreadable.push({
           id,
@@ -929,10 +933,49 @@ pub fn SessionStore::job_logs_dir(
 }
 
 ///|
+/// Where a subagent session's captured report is kept, beside its
+/// transcript and for as long as the session is. Prospective: nothing is
+/// created here.
+pub fn SessionStore::report_file(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/report.json"
+}
+
+///|
+/// Keep a subagent session's captured `report` at `report_file`: written to
+/// a sibling and renamed into place, then the directories synced, so a
+/// reader never sees half of one and a returned save survives a crash.
+pub async fn SessionStore::save_report(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+  report : Json,
+) -> Unit {
+  write_text_atomic(
+    self.report_file(id),
+    report.stringify(),
+    dirs=self.session_dir_chain(id),
+  )
+}
+
+///|
 /// Prospective absolute scratch path; does not materialize a new session.
 pub async fn SessionStore::scratch_dir(
   self : SessionStore,
   id : @agent_session.SessionId,
 ) -> String {
   @workspace_path.resolve(@fs.realpath("."), "\{self.session_dir(id)}/scratch")
+}
+
+///|
+/// Return the prospective path of a session's instruction inbox without
+/// creating anything: the file a running child reads the instructions its
+/// launcher posts (see `agent_subrun/inbox`). It lives in the session's own
+/// directory, so it moves with archives and is removed with the session.
+pub fn SessionStore::inbox_path(
+  self : SessionStore,
+  id : @agent_session.SessionId,
+) -> String raise {
+  "\{self.session_dir(id)}/inbox.jsonl"
 }

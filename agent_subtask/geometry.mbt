@@ -66,13 +66,16 @@ pub fn Geometry::worker_deny_roots(self : Geometry) -> Array[String] {
 /// A registry is shared by every worktree of a repository. Bind lifecycle
 /// actions to the worktree that provisioned the worker so an action invoked
 /// from a sibling worktree cannot merge or discard another worktree's slice.
-/// The exact path is safe for schema-v1 entries because provision has always
-/// created workers at `<integration-root>/.worktrees/<name>`.
+/// The exact path is safe for schema-v1 entries because provision creates
+/// workers at `<integration-root>/.worktrees/<name>--<nonce>` (and, before
+/// that, at `<integration-root>/.worktrees/<name>`).
 pub fn Geometry::is_integration_target_for(
   self : Geometry,
   entry : SubtaskEntry,
 ) -> Bool {
-  entry.worker_root == "\{self.origin_root}/.worktrees/\{entry.name}"
+  let worktrees = "\{self.origin_root}/.worktrees"
+  entry.worker_root == "\{worktrees}/\{entry.name}--\{entry.nonce}" ||
+  entry.worker_root == "\{worktrees}/\{entry.name}"
 }
 
 ///|

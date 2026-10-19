@@ -80,19 +80,6 @@ pub async fn run_task_command(matches : @argparse.Matches) -> Unit {
           fail("--review-gate applies to general runs, not presets")
         }
       }
-      // A child spawned from a hosted snippet inherits that snippet's handoff
-      // in its environment. One that arrives with the handoff but without its
-      // reserved session was launched around the library, and its transcript
-      // would not be linked to its parent's. Refuse, so the model learns the
-      // one path that is visible.
-      if delegated &&
-        @env.get_env_var("WORKFLOW_HOST") is Some(handoff) &&
-        !handoff.is_empty() &&
-        reserved_session(matches) is None {
-        fail(
-          "a run launched from a hosted workflow needs its reserved --session; delegate through @hosted.run so the child gets a transcript",
-        )
-      }
       let workspace_root = @setup.prepare_workspace_root(
         matches,
         log_created=true,
@@ -221,6 +208,11 @@ async fn run_general(
   approval_policy~ : @execution.ApprovalPolicy,
   delegate~ : Bool,
 ) -> Unit {
+  if claim_token(matches) is Some(_) {
+    fail(
+      "--claim is for a --kind run: the general agent starts its own session",
+    )
+  }
   let (model, thinking, api_url) = @options.agent_settings(matches)
   guard model.api_key(matches.values) is Some(api_key) else {
     fail("an API key is required for \{model}: pass --api-key")
@@ -343,26 +335,53 @@ async fn run_preset(
   workspace_root~ : String,
 ) -> KindOutcome {
   let (model, thinking, api_url) = @options.agent_settings(matches)
-  let (session_id, append_item) : (
+  let (session_id, append_item, instructions) : (
     String,
     async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session,
+    (async () -> Array[@agent_runtime.SteerInput])?,
   ) = match @setup.resolved_session_id(matches) {
-    None => (name, (session, item) => turn.record(session.append(item)))
+    None => {
+      if claim_token(matches) is Some(_) {
+        fail("--claim names a claimed session, so it needs --session")
+      }
+      (name, (session, item) => turn.record(session.append(item)), None)
+    }
     Some(id) => {
       let session_root = @setup.session_root(matches, workspace_root~)
       let store = @store.SessionStore(session_root)
-      if store.exists(id) {
-        fail(
-          "a --kind run starts a new session, and \{id.value()} already exists",
-        )
+      // A launcher that claimed the session hands it over with its token;
+      // any other existing session is refused.
+      match claim_token(matches) {
+        Some(token) => store.accept_claim(id, token)
+        None =>
+          if store.exists(id) {
+            fail(
+              "a --kind run starts a new session, and \{id.value()} already exists",
+            )
+          }
+      }
+      // The inbox sits beside the transcript and is opened just BEFORE the
+      // first record: a session with a transcript and no inbox is then one
+      // that takes no instructions, never one that has not got to it yet.
+      let inbox = if kind.takes_instructions() {
+        Some(store.inbox_path(id))
+      } else {
+        None
       }
       // Named only once something is recorded: a preset refused for want of
       // a key, or the modelless `echo`, leaves no transcript to point at.
       (
         id.value(),
         (session, item) => {
+          if turn.session is None && inbox is Some(path) {
+            @inbox.open(path)
+          }
           let next = store.append(session, item)
           if turn.session is None {
+            // Recorded: a claimed session is an ordinary one from here on.
+            if claim_token(matches) is Some(_) {
+              store.settle_claim(id)
+            }
             turn.session = Some(id.value())
             @emit.emit(
               SessionStarted(
@@ -377,6 +396,11 @@ async fn run_preset(
           }
           turn.record(next)
         },
+        inbox.map(path => {
+          let reader = @inbox.Reader(path)
+          let launcher = launcher_of(id.value())
+          () => launcher_instructions(reader.take(), launcher)
+        }),
       )
     }
   }
@@ -389,6 +413,7 @@ async fn run_preset(
     requested_max_steps,
     session_id,
     append_item,
+    instructions,
   })
 }
 
@@ -440,19 +465,46 @@ fn incomplete_reason(status : @openseek_protocol.RunStatus) -> String? {
 }
 
 ///|
-/// The session a parent reserved for this run: a non-blank `--session`, not
-/// overridden by `--no-session`. `None` when there is none.
-fn reserved_session(matches : @argparse.Matches) -> String? {
-  match matches {
-    { flags: { "no-session": true, .. }, .. } => None
-    { values: { "session": [session, ..], .. }, .. } if !session.is_blank() =>
-      Some(session)
-    _ => None
-  }
-}
-
-///|
 /// Whether `--inspect` asked to watch this run in the session viewer.
 fn inspect_requested(matches : @argparse.Matches) -> Bool {
   matches.flags.get("inspect") is Some(true)
+}
+
+///|
+/// The session that launched the sub-run recorded as `id`: the parent its
+/// child id names. `None` for a run that is nobody's child.
+fn launcher_of(id : String) -> String? {
+  @openseek_protocol.split_child_session_id(id).map(pair => pair.0)
+}
+
+///|
+/// The steering input `messages` amount to for a run launched by `launcher`.
+///
+/// Only the launcher's messages are presented. One from any other sender is
+/// neither presented nor acknowledged: this build has no honest way to frame
+/// it. Neither is one with a blank body — the framing has content of its own,
+/// so it would supersede a report the run already submitted with an
+/// instruction that says nothing.
+fn launcher_instructions(
+  messages : Array[@inbox.Message],
+  launcher : String?,
+) -> Array[@agent_runtime.SteerInput] {
+  [
+    for message in messages if Some(message.from) == launcher &&
+    !message.text.is_blank() => launcher_instruction(message)
+  ]
+}
+
+///|
+/// One instruction from the launcher as the turn takes it in: a user message
+/// tagged with the message's receipt, so the transcript records exactly which
+/// message — whose, and which of theirs — was delivered. The framing says
+/// who is speaking: a kind's system prompt describes a single task, and a
+/// bare second user message would read as a contradiction of it rather than
+/// as its author changing their mind.
+fn launcher_instruction(message : @inbox.Message) -> @agent_runtime.SteerInput {
+  let text =
+    $|[New instruction from the agent that gave you this task, sent while you work. Follow it: it refines or redirects the task. Your report is still due through the same submit tool.]
+    $|\{message.text}
+  Prompt(Content([Text(text)]), submission_id=Some(message.receipt()))
 }

@@ -62,6 +62,35 @@ async fn integrate_continue_locked(
       }
     None => ()
   }
+  // The caller resolves the markers with file tools, which do not stage:
+  // the recorded conflict set is staged here, once no markers remain in it.
+  for path in entry.conflict_paths {
+    let text = @fs.read_file("\{origin}/\{path}").text() catch {
+      // Deleted, or not text: git decides below.
+      _ => continue
+    }
+    if has_conflict_markers(text) {
+      return refused(
+        entry,
+        "conflict markers remain in \{path}; resolve them first",
+      )
+    }
+  }
+  // Only what is still unmerged: a path already resolved and staged (a
+  // deletion by `git rm` among them) is left as it was.
+  let pending = match git_require(["ls-files", "-u", "-z"], cwd=origin) {
+    Ok(output) => {
+      let unmerged = unmerged_paths(output)
+      entry.conflict_paths.filter(path => unmerged.contains(path))
+    }
+    Err(reason) => return refused(entry, reason)
+  }
+  if !pending.is_empty() {
+    match git_require(["add", "-A", "--", ..pending], cwd=origin) {
+      Ok(_) => ()
+      Err(reason) => return refused(entry, reason)
+    }
+  }
   let unmerged = git_run(["ls-files", "-u", "-z"], cwd=origin)
   if unmerged.exit_code == 0 && unmerged.output != "" {
     return refused(
@@ -164,7 +193,11 @@ pub async fn resume_running(
   mutex.acquire()
   defer mutex.release()
   let (entries, _) = load_entries(geometry.common_git_dir)
-  guard entries.filter(e => e.name == name && !e.state.is_terminal()).last()
+  // Same last-match rule as `filter(..).last()`, but the reverse walk stops at
+  // the first hit instead of filtering the registry into a throwaway array.
+  guard entries
+    .rev_iter()
+    .find_first(e => e.name == name && !e.state.is_terminal())
     is Some(entry) else {
     return Err("no active subtask named \{name}")
   }
@@ -202,4 +235,14 @@ pub async fn git_require(
       "git \{args.join(" ")} failed (exit \{outcome.exit_code}): \{outcome.output}",
     )
   }
+}
+
+///|
+/// Whether `text` still holds a line git opens or closes a conflict with.
+/// The `=======` between the sides is not checked on its own: it is also a
+/// Markdown heading underline.
+fn has_conflict_markers(text : String) -> Bool {
+  text
+  .split("\n")
+  .any(line => line.has_prefix("<<<<<<< ") || line.has_prefix(">>>>>>> "))
 }

@@ -77,6 +77,8 @@ pub(all) enum Msg {
   Listed(Int32, Int32, Result[@protocol.JobsListReply, String])
   Read(Int32, Int32, Result[@protocol.JobReadReply, String])
   Stopped(Int32, (String, String), Result[@protocol.JobStopReply, String])
+  /// Open a subagent job's own session; the shell handles it.
+  OpenSession(String)
 }
 
 ///|
@@ -225,6 +227,8 @@ pub fn update(
   state : State,
 ) -> (@cmd.Cmd, State) {
   match msg {
+    // The shell opens the session; nothing changes here.
+    OpenSession(_) => (@cmd.none, state)
     Poll => {
       let state = { ..state, read_budget: 4, }
       let (list, state) = request_list(emit, state, 0)

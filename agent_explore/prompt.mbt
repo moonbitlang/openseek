@@ -35,14 +35,14 @@ fn explore_task(
         $|The caller suggests starting from:
         $|\{hints}
         $|\{lab}
-        $|Answer the question and submit_answer once, with citations.
+        $|Answer the question and submit_answer, with citations.
       )
     None =>
       (
         $|Question:
         $|\{query}
         $|\{lab}
-        $|Answer the question and submit_answer once, with citations.
+        $|Answer the question and submit_answer, with citations.
       )
   }
 }

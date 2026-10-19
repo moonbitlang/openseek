@@ -2,6 +2,16 @@
 /// The completion notice pushed to the model when a background job exits: its
 /// id, terminal status, and how to read its output.
 fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
+  if snapshot.subagent is Some(info) {
+    let ended = match info.outcome {
+      Some(outcome) => @agent_subagent.describe_outcome(outcome)
+      None => "ended"
+    }
+    let change = @agent_subagent.brief_workspace(info.workspace).map_or("", change => {
+      "; \{change}"
+    })
+    return "subagent job \{snapshot.id} (\{info.kind}: \{info.label}) \{ended}\{change} — read its outcome, its report and what to do with its change with job_output (job_id=\"\{snapshot.id}\")."
+  }
   let status = if snapshot.cleanup_error is Some(error) {
     "cleanup failed: \{error}"
   } else {
@@ -51,6 +61,10 @@ fn background_notice_text(snapshot : @bgjobs.BgJobSnapshot) -> String {
 /// `on_background_wake`, when supplied, is called each time a background job
 /// exits, so an idle controller can wake to surface the completion notice.
 ///
+/// `subagents`, when supplied, makes the session's subagent launcher over its
+/// job runtime and adds the `subagent` tool; `job_output` then answers a
+/// subagent job with its outcome and report.
+///
 /// `extra_tools` are appended to the registry after the built-ins — the seam for
 /// dynamically discovered tools (e.g. MCP servers' tools, namespaced so they do
 /// not collide with the built-ins). The caller builds them (keeping this package
@@ -62,7 +76,7 @@ pub async fn[X] build_tools(
   job_log_dir? : String,
   session_scratch_dir? : String,
   extra_tools~ : Array[@agent_tool.AgentToolDefinition] = [],
-  mbtx_subrun? : @host.SubrunInjection,
+  subagents? : @subagent.Subagents,
 ) -> @agent_tool.Tools {
   let workspace_root = runtime.workspace_root()
   // One session-scoped file-state map, shared by the file-writing tools so they
@@ -171,6 +185,9 @@ pub async fn[X] build_tools(
       }
     })
   })
+  // The session's subagent launcher, when this session may delegate: its
+  // children are jobs of this same runtime.
+  let launcher = subagents.map(spec => (spec.launcher)(bg_runtime))
   let image_input_supported = Ref(false)
   let file_tools = [
     @read_image.definition(workspace_root~),
@@ -201,9 +218,26 @@ pub async fn[X] build_tools(
     file_tools + extras,
     image_input_supported~,
   )
-  let program_service = @ptc.Service::start(scope.group(), program_tools, image_directory=() => {
-    bg_runtime.output_directory()
-  })
+  // A script reaches only the subagents it started: each program gets the
+  // subagent tools bound to its own id.
+  let bind = match (launcher, subagents) {
+    (Some(launcher), Some(spec)) =>
+      Some(
+        @subagent.program_binding(
+          launcher,
+          bg_runtime,
+          spec.kinds,
+          spec.audit_context,
+        ),
+      )
+    _ => None
+  }
+  let program_service = @ptc.Service::start(
+    scope.group(),
+    program_tools,
+    image_directory=() => bg_runtime.output_directory(),
+    bind?,
+  )
   let program_trace : Ref[Json?] = Ref(None)
   let program_output : Ref[@bgjobs.ImageOutput?] = Ref(None)
   Tools(
@@ -216,11 +250,8 @@ pub async fn[X] build_tools(
       // it is passed straight through rather than tested and rebuilt. What the
       // tool package receives is the channel and nothing else: it can ask, and
       // knows nothing about who answers.
-      // `mbtx_subrun`, when present, is what lets a snippet delegate to child
-      // agents that are VISIBLE: it carries the engine's own path plus the
-      // block of child session ids and journal paths this session reserved.
-      // Absent for a conversation with no durable session, where a child
-      // would have nowhere to leave a transcript.
+      // `subagents` only says whether the description teaches delegation: a
+      // script starts subagents through the program tools, never by spawning.
       @mbtx.definition(
         workspace_root~,
         file_state~,
@@ -228,7 +259,7 @@ pub async fn[X] build_tools(
         job_dir=scratch,
         scratch_dir?=session_scratch_dir,
         approval?=runtime.approval_channel(),
-        subrun?=mbtx_subrun,
+        subagents=launcher is Some(_),
         program_service~,
         on_program_trace=data => program_trace.val = Some(data),
         on_program_output=content => program_output.val = Some(content),
@@ -237,10 +268,23 @@ pub async fn[X] build_tools(
       // ran — a policy refusal reaches it after minutes of real work — and the
       // sanctioned retry is worded for a run that did not happen. Offering it
       // here would misdescribe the state the job left behind.
-      @job_output.definition(bg_runtime),
+      @job_output.definition(
+        bg_runtime,
+        subagent_report?=launcher.map(launcher => {
+          session => launcher.report(session)
+        }),
+      ),
       @job_stop.definition(bg_runtime),
       @job_wait.definition(),
       @finish.definition(),
+      ..match (launcher, subagents) {
+        (Some(launcher), Some(spec)) =>
+          [
+            @subagent.definition(launcher, spec.kinds),
+            @subagent.send_definition(launcher, spec.kinds),
+          ]
+        _ => []
+      },
       ..extras,
     ],
     background_jobs=bg_runtime,

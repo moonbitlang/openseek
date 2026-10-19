@@ -57,7 +57,7 @@ pub fn ListPage::page(
     for session in group.sessions {
       candidates.push({
         "id": session.id,
-        "title": session.title.map_or(Json::null(), title => Json(title)),
+        "title": session.title.map_or(null, title => Json(title)),
         "workspace": group.workspace,
       })
     }
@@ -87,7 +87,7 @@ pub fn ListPage::page(
     "next_offset": if index < candidates.length() {
       Json(index)
     } else {
-      Json::null()
+      null
     },
   }
 }

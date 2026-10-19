@@ -4,6 +4,8 @@ import {
   "moonbitlang/openseek/agent_tool/internal/error" @tool_error,
   "moonbitlang/openseek/agent_tool/internal/sandbox",
   "moonbitlang/openseek/agent_tool/job_output/internal/decode",
+  "moonbitlang/openseek/agent_subagent",
+  "moonbitlang/openseek_protocol" @protocol,
 }
 
 import {

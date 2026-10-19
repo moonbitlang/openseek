@@ -1428,9 +1428,11 @@ fn semantic_review_section_changes(
   }
   ReviewHunk::from_diff_hunk(
     {
-      members: document.changes
-      .filter(change => change.kind is Visible)
-      .map(change => change.mapping),
+      members: [
+        for change in document.changes if change.kind is Visible => {
+          change.mapping
+        }
+      ],
     },
     semantic_feedback_line_offset(section, SemanticReviewOriginal),
     semantic_feedback_line_offset(section, SemanticReviewModified),

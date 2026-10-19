@@ -35,6 +35,7 @@ pub(all) enum Msg {
   Listed(Int, Int, Result[@protocol.JobsListReply, String])
   Read(Int, Int, Result[@protocol.JobReadReply, String])
   Stopped(Int, (String, String), Result[@protocol.JobStopReply, String])
+  OpenSession(String)
 }
 
 pub(all) struct Owner {

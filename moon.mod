@@ -1,13 +1,13 @@
 name = "moonbitlang/openseek"
 
-version = "0.6.2"
+version = "0.7.0"
 
 import {
   "moonbitlang/async@0.22.5",
   "bobzhang/open_in_browser@0.1.0",
   "moonbitlang/x@0.5.5",
   "moonbitlang/jsonl@0.2.1",
-  "moonbitlang/openseek_protocol@0.3.1",
+  "moonbitlang/openseek_protocol@0.4.0",
   "moonbit-community/rabbita@0.16.4",
   "Lampese/office-viewer@0.1.3",
   "moonbitlang/editor@0.4.6",
@@ -27,7 +27,7 @@ description = "DeepSeek-backed MoonBit coding agent"
 
 preferred_target = "native"
 
-warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unused_optional_argument+unnecessary_annotation"
+warnings = "+missing_doc+unnecessary_view_op+test_unqualified_package+unused_default_value+implicit_impl_as_method+unused_optional_argument+unnecessary_annotation+result_error_return"
 
 rule(
   name: "md_to_mbt_string",

@@ -1,0 +1,227 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// The real CLI runs the bundled `@builtin/review.mbtx`, as the prompt asks
+/// before declaring substantial work done: the script reads the audit
+/// context, starts a real review child through `@tools.call("subagent")`,
+/// waits for it, reads its report in chunks, prints it, and fails on its
+/// blocker. One local server scripts the parent and the child (told apart by
+/// the child's `submit_review` tool). The parent finishes once it has seen
+/// the script's verdict line.
+fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
+  {
+    "index": index,
+    "id": id,
+    "type": "function",
+    "function": { "name": name, "arguments": args.stringify() },
+  }
+}
+
+///|
+fn calls(list : Array[Json]) -> Json {
+  { "tool_calls": Json::array(list) }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The job id an mbtx call moved to the background, if it was.
+fn background_job(messages : String) -> String? {
+  guard messages.split("moved to the background as job ").nth(1) is Some(tail) else {
+    return None
+  }
+  Some(String::from_iter(tail.iter().take(22)))
+}
+
+///|
+/// The verdict line the script prints after the report.
+let verdict : String = "findings=1 blockers=1"
+
+///|
+/// The parent's moves: run the review, follow it up if it moves to the
+/// background, finish once its verdict line is in.
+fn parent_turn(messages : String) -> Json {
+  if messages.contains(verdict) {
+    return calls([tool_call(0, "done", "finish", { "answer": "the review found the blocker" })])
+  }
+  match background_job(messages) {
+    None =>
+      calls([
+        tool_call(0, "review", "mbtx", {
+          "filename": "@builtin/review.mbtx",
+          "description": "audit add",
+          "args": ["MARK-R add(a, b) must return the sum of a and b"],
+        }),
+      ])
+    Some(job) =>
+      if messages.contains("background job \{job} finished") {
+        calls([tool_call(0, "read", "job_output", { "job_id": job })])
+      } else {
+        calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
+      }
+  }
+}
+
+///|
+/// The review child's one move: report the bug as a blocker.
+fn review_turn() -> Json {
+  calls([
+    tool_call(0, "report", "submit_review", {
+      "schema_version": 1,
+      "scope": { "base": "HEAD", "head": "worktree", "files": ["add.mbt"] },
+      "findings": [
+        {
+          "file": "add.mbt",
+          "line": 2,
+          "severity": "blocker",
+          "category": "correctness",
+          "title": "add subtracts",
+          "detail": "add returns a - b, not the sum",
+        },
+      ],
+      "summary": "add does not return the sum",
+      "stats": {
+        "files_reviewed": 1,
+        "findings": 1,
+        "build": "not run",
+        "tests": "not run",
+      },
+    }),
+  ])
+}
+
+///|
+async fn git(cwd : String, args : Array[String]) -> Unit {
+  let code = @process.run("git", args, cwd~)
+  guard code == 0 else { fail("git \{args.join(" ")} exited \{code}") }
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/review_workflow.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let directory = @fs.realpath(@fs.tmpdir(prefix="openseek-review-workflow-"))
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  let ws = directory + "/ws"
+  @fs.mkdir(ws, recursive=true)
+  @fs.write_file(ws + "/add.mbt", "pub fn add(a : Int, b : Int) -> Int {\n  a + b\n}\n")
+  for
+    args in [
+      ["init", "-q"],
+      ["config", "user.email", "e2e@test"],
+      ["config", "user.name", "e2e"],
+      ["add", "-A"],
+      ["commit", "-q", "-m", "base"],
+    ] {
+    git(ws, args)
+  }
+  // The change under review.
+  @fs.write_file(
+    ws + "/add.mbt",
+    "pub fn add(a : Int, b : Int) -> Int {\n  a - b\n}\n",
+    create_mode=CreateOrTruncate,
+  )
+  let review_requests = Ref(0)
+  @async.with_timeout(240000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            let delta = if tool_names(request).contains("submit_review") {
+              // The child is briefed with the script's criteria.
+              assert_true(messages.contains("MARK-R"))
+              review_requests.val += 1
+              review_turn()
+            } else {
+              parent_turn(messages)
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=false,
+        )
+      }
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let process = @process.spawn(
+        group,
+        executable,
+        [
+          "run", "--dir", ws, "--api-key", "test-key", "--model", "deepseek-flash",
+          "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+          "--max-steps", "12", "--mcp-config", "", "--session", "parent", "--session-root",
+          store_root, "Audit add before I call it done.",
+        ],
+        extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout = group.spawn(() => reader.read_all().text())
+      let stderr = group.spawn(() => errors.read_all().text())
+      let code = process.wait()
+      let out = stdout.wait()
+      let err = stderr.wait()
+      guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
+      assert_true(
+        out.contains("the review found the blocker"),
+        msg="stdout: \{out}\nstderr: \{err}",
+      )
+      server.close()
+    })
+  })
+  assert_eq(review_requests.val, 1)
+  // The child's own session holds its report, and nothing was edited.
+  let report = @json.parse(
+    @fs.read_file(store_root + "/sessions/parent-sr-1/report.json").text(),
+  )
+  assert_true(report is { "findings": [{ "severity": "blocker", .. }], .. })
+  assert_true(@fs.read_file(ws + "/add.mbt").text().contains("a - b"))
+  println(
+    "PASS: @builtin/review.mbtx starts a real review child, reads its report, and fails on its blocker",
+  )
+}

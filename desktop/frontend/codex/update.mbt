@@ -1500,7 +1500,7 @@ test "Codex update handlers are pure and idempotent" {
     Reply(kind=CodexRequestsReply, value={ "data": [], "generation": 0 }),
     Reply(kind=CodexAccountReply, value={
       "requiresOpenaiAuth": true,
-      "account": Json::null(),
+      "account": null,
     }),
     Reply(kind=CodexModelsReply, value={ "data": [] }),
     Reply(
@@ -2222,7 +2222,7 @@ test "background Codex metadata does not settle a foreground action" {
     dispatch,
     Reply(kind=CodexAccountReply, value={
       "requiresOpenaiAuth": true,
-      "account": Json::null(),
+      "account": null,
     }),
     state,
     @interop.ChannelId::Local,
@@ -2361,7 +2361,10 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexQuestionChanged(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          owner: @interop.Host({
+            channel: @interop.ChannelId::Local,
+            session: "thread-2",
+          }),
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),
@@ -2416,7 +2419,10 @@ test "Codex composer reverse-request actions keep their task identity" {
     ComposerAction(
       @composer.CodexRequestToggled(
         identity={
-          owner: { channel: @interop.ChannelId::Local, session: "thread-2", },
+          owner: @interop.Host({
+            channel: @interop.ChannelId::Local,
+            session: "thread-2",
+          }),
           archive_generation: 0,
         },
         request_key=Json("request-1").stringify(),

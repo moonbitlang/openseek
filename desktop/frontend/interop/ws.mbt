@@ -252,7 +252,7 @@ fn handle_message(
   session.pending.remove(id)
   match js_prop(envelope, "error") {
     Some(error_value) => {
-      let message = match (error_value.to_json() catch { _ => Json::null() }) {
+      let message = match (error_value.to_json() catch { _ => null }) {
         { "message": String(message), .. } => message
         _ => "request failed"
       }

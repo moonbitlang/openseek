@@ -194,7 +194,7 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
             conn,
             400,
             "Bad Request",
-            failure(Json::null(), -32700, "Parse error"),
+            failure(null, -32700, "Parse error"),
           )
           return
         }

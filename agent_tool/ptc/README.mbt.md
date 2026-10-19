@@ -113,7 +113,7 @@ Recursive mbtx, finish, goal, plan, and job controls are unavailable. New callab
 executors must remain leaves and must not reacquire the same file gate.
 
 Default activation applies when a session service exists and the selected mode
-is wasm without subrun or escalation. Explicit ptc=true in an incompatible mode
+is wasm without escalation. Explicit ptc=true in an incompatible mode
 errors; omitted ptc leaves those modes unchanged. Standalone definitions without
 a session service can create a scoped `Service` and pass it to mbtx; without
 a job runtime the program stays foreground. There is one registration and

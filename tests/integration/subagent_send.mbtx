@@ -1,0 +1,193 @@
+///|
+import {
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/http",
+  "moonbitlang/async/process",
+  "moonbitlang/async/socket",
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+}
+
+///|
+/// The real CLI starts an explore subagent and redirects it while it runs:
+/// `subagent_send` posts an instruction, the child takes it at its next step
+/// (its next model request carries it), and answers from it. One local
+/// server scripts the parent and the real child process.
+fn tool_call(index : Int, id : String, name : String, args : Json) -> Json {
+  {
+    "index": index,
+    "id": id,
+    "type": "function",
+    "function": { "name": name, "arguments": args.stringify() },
+  }
+}
+
+///|
+fn calls(list : Array[Json]) -> Json {
+  { "tool_calls": Json::array(list) }
+}
+
+///|
+fn tool_names(request : Json) -> Array[String] {
+  guard request is { "tools": Array(tools), .. } else { return [] }
+  tools.filter_map(tool => {
+    match tool {
+      { "function": { "name": String(name), .. }, .. } => Some(name)
+      _ => None
+    }
+  })
+}
+
+///|
+/// The job id the `subagent` tool announced.
+fn job_of(messages : String) -> String? {
+  guard messages.split("Started subagent job ").nth(1) is Some(tail) else {
+    return None
+  }
+  tail.split(" ").next().map(id => id.to_owned())
+}
+
+///|
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/subagent_send.mbtx EXE")
+  }
+  let executable = @fs.realpath(executable)
+  let directory = @fs.tmpdir(prefix="openseek-subagent-send-")
+  defer @fs.rmdir(directory, recursive=true)
+  let store_root = directory + "/store"
+  @fs.mkdir(directory + "/ws", recursive=true)
+  // Set once the parent's send has been accepted: the child's first step is
+  // held until then, so its second request is the one that must carry it.
+  let mut sent = false
+  let mut child_steps = 0
+  let mut instructed = false
+  @async.with_timeout(120000, () => {
+    @async.with_task_group(group => {
+      let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
+      group.spawn_bg(no_wait=true) <| () => {
+        server.run_forever(
+          (_, body, conn) => {
+            let request = @json.parse(body.read_all().text())
+            if !(request is { "stream": True, .. }) {
+              conn.send_response(200, "OK", extra_headers={
+                "Content-Type": "application/json",
+              })
+              let response : Json = {
+                "choices": [{ "message": { "content": "{\"text\":null}" } }],
+              }
+              conn.write(response.stringify())
+              conn.end_response()
+              conn.close()
+              return
+            }
+            let messages = request.stringify()
+            let delta : Json = if tool_names(request).contains("submit_answer") {
+              child_steps += 1
+              if child_steps == 1 {
+                // Hold the first step until the instruction is posted, then
+                // spend it on a rejected submission so the child asks again.
+                for _ in 0..<400 {
+                  if sent {
+                    break
+                  }
+                  @async.sleep(25)
+                }
+                calls([tool_call(0, "early", "submit_answer", { "answer": "" })])
+              } else {
+                instructed = messages.contains("MARK-SEND report the version")
+                calls([
+                  tool_call(0, "final", "submit_answer", {
+                    "schema_version": 1,
+                    "answer": if instructed {
+                      "followed the instruction"
+                    } else {
+                      "never saw the instruction"
+                    },
+                    "citations": [],
+                  }),
+                ])
+              }
+            } else {
+              match job_of(messages) {
+                None =>
+                  calls([
+                    tool_call(0, "start", "subagent", {
+                      "kind": "explore",
+                      "input": { "query": "Where is the version defined?" },
+                      "label": "scout",
+                    }),
+                  ])
+                Some(job) =>
+                  if messages.contains("followed the instruction") ||
+                    messages.contains("never saw the instruction") {
+                    calls([tool_call(0, "done", "finish", { "answer": "redirected" })])
+                  } else if messages.contains("sent to subagent \{job}") {
+                    sent = true
+                    if messages.contains("job \{job} (explore: scout) reported") {
+                      calls([tool_call(0, "read", "job_output", { "job_id": job })])
+                    } else {
+                      calls([tool_call(0, "wait", "job_wait", { "job_ids": [job] })])
+                    }
+                  } else {
+                    // Until the child has opened its inbox, a send is
+                    // refused as not ready; try again a moment later.
+                    @async.sleep(100)
+                    calls([
+                      tool_call(0, "send", "subagent_send", {
+                        "job_id": job,
+                        "message": "MARK-SEND report the version, then stop.",
+                      }),
+                    ])
+                  }
+              }
+            }
+            conn.send_response(200, "OK", extra_headers={
+              "Content-Type": "text/event-stream",
+            })
+            let payload : Json = { "choices": [{ "delta": delta }] }
+            conn.write("data: \{payload.stringify()}\n\ndata: [DONE]\n\n")
+            conn.end_response()
+            conn.close()
+          },
+          max_connections=16,
+          allow_failure=false,
+        )
+      }
+      let (reader, child_stdout) = @process.read_from_process()
+      defer reader.close()
+      let (errors, child_stderr) = @process.read_from_process()
+      defer errors.close()
+      let process = @process.spawn(
+        group,
+        executable,
+        [
+          "run", "--dir", directory + "/ws", "--api-key", "test", "--model", "deepseek-flash",
+          "--api-url", "http://127.0.0.1:\{server.addr.port()}/chat/completions",
+          "--max-steps", "20", "--mcp-config", "", "--session", "parent", "--session-root",
+          store_root, "Scout, then redirect the scout.",
+        ],
+        extra_env={ "OPENSEEK_RETRY_ATTEMPTS": "1" },
+        stdout=child_stdout,
+        stderr=child_stderr,
+        cancel_handler=@process.hard_cancel(),
+      )
+      let stdout = group.spawn(() => reader.read_all().text())
+      let stderr = group.spawn(() => errors.read_all().text())
+      let code = process.wait()
+      let out = stdout.wait()
+      let err = stderr.wait()
+      guard code == 0 else { fail("CLI exit \{code}\nstdout: \{out}\nstderr: \{err}") }
+      assert_true(out.contains("redirected"), msg="stdout: \{out}\nstderr: \{err}")
+      server.close()
+    })
+  })
+  assert_true(sent)
+  assert_true(instructed, msg="the child's next step did not carry the instruction")
+  let inbox = @fs.read_file(store_root + "/sessions/parent-sr-1/inbox.jsonl").text()
+  assert_true(inbox.contains("MARK-SEND"))
+  println(
+    "PASS: subagent_send redirects a running subagent, which takes the instruction at its next step",
+  )
+}

@@ -84,7 +84,7 @@ pub fn run_markdown_feedback_test() -> Unit {
             "text": Json(item.text),
             "selected_text": match item.selected_text {
               Some(text) => Json(text)
-              None => Json::null()
+              None => null
             },
             "resource": Json(item.resource.to_string()),
             "range": Json([

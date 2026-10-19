@@ -349,7 +349,7 @@ test "steer receipts round trip submission ids and accept untagged input" {
     ] {
     assert_eq(@openseek_protocol.parse(event.to_json()), Some(event))
   }
-  for missing in [Json::null(), Json(7)] {
+  for missing in [null, Json(7)] {
     assert_true(
       @openseek_protocol.parse({
         "event": "steer_dropped",

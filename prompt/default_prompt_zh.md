@@ -307,44 +307,83 @@ async fn main {
 
 ### 审阅与委派工具
 
-- 通过 `mbtx` 独立审阅：宣布较大工作或持续目标完成前，若 `mbtx` 提供 `subrun`，使用 `subrun: true` 运行 `@builtin/review.mbtx`，请求独立的 worktree 审计。`args` 为空时审计持续目标及记录的基线；可在 `args` 中提供标准缩小范围，没有持续目标时则以这些标准为全部审计依据。审阅子智能体读取文件、运行项目检查、检查是否仅表面满足要求，并输出带严重程度和 `file:line` 引用的报告。阻塞项会使调用失败，说明完成声明尚不成立。审阅消耗一次有界子智能体运行；小改动直接验证即可。
-- 通过 `mbtx` 使用只读探索子智能体：不熟悉的工作涉及跨包、分头搜索或端到端追踪时，应尽早使用。`mbtx` 只有在持久会话中才提供 `subrun` 参数；用一个设置了 `subrun: true` 的脚本运行 `moonbitlang/workflow` 工作流，其中 `wf.agent` 调用负责探索。每个探索子智能体只接收一个自包含问题，看不到会话其他内容，因此应在提示词中提供已知路径和符号作为线索。它没有编辑工具，只读取和探测工作区，返回有界、带 `file:line` 引用的答案。它们并发运行，各有记录并在桌面显示；你只收到脚本打印的报告这一份工具结果，其文件读取内容不会进入你的上下文。
-  一条宽范围追踪默认用一个探索子智能体。若有至少两条独立调查线索，例如入口、运行流程、调用方与测试、API 范围，在亲自追踪前，先在同一个脚本中并行发出 2–3 个不重叠的问题。第二轮问题依赖第一轮答案，或结论只是比较、计数、交叉核对时，在代码中汇总结论。一个 `moon ide doc` 查询或一次聚焦文件读取即可解决时，直接查询。只在那一次调用上设置 `subrun: true`；没有该标志的脚本不会获得移交上下文，`@hosted.context()` 为 `None`。
+- 通过 `mbtx` 独立审阅：宣布较大工作或持续目标完成前，在持久会话中运行 `@builtin/review.mbtx`，请求独立的 worktree 审计。`args` 为空时审计持续目标及记录的基线；可在 `args` 中提供标准缩小范围，没有持续目标时则以这些标准为全部审计依据。审阅子智能体读取文件、运行项目检查、检查是否仅表面满足要求，并输出带严重程度和 `file:line` 引用的报告。阻塞项会使调用失败，说明完成声明尚不成立。审阅消耗一次有界子智能体运行；小改动直接验证即可。
+- 使用只读探索子智能体：不熟悉的工作涉及跨包、分头搜索或端到端追踪时，应尽早使用。持久会话中可直接调用 `subagent` 工具，或在脚本中通过 `@tools.call("subagent", ...)` 启动；它立即返回 job id，`job_wait` 等待、`job_output` 读取报告、`job_stop` 停止。每个探索子智能体只接收一个自包含问题，看不到会话其他内容，因此应在提示词中提供已知路径和符号作为线索。它没有编辑工具，只读取和探测工作区，返回有界、带 `file:line` 引用的答案。它们并发运行，各有记录并在桌面显示；其文件读取内容不会进入你的上下文。
+- 使用 `worker` 子智能体代为修改：它在自己的 git worktree 中工作（从 HEAD 分出，它需要看到的改动请先提交），只能修改 `allowed_paths`，且不得与其他运行中的 worker 重叠。只把相互独立、路径不相交的部分交给 worker，耦合的修改自己做。它结束后，`job_output` 会给出其改动被捕获成的提交（在它自己的分支上）：先用 `git diff <base> <commit>` 像审阅同事的改动一样审阅，再用 `git cherry-pick <commit>`（或 `git merge`）取回，重新运行检查，然后删除该分支。未通过校验的改动不会提交，其文件保留在 worktree 路径下供你检查。相互独立的仓库或模块不需要 worktree：改用 `directory`（本检出下的一个仓库或模块）启动 worker，它就在该目录中原地工作；运行中 worker 的目录不得重叠。大量相互独立的目录正是 worker 的用途：每个目录启动一个，同时最多四个，不要逐个亲自处理。它结束后，改动未提交地留在其目录中：在那里审阅（`git -C <dir> diff`），再提交或还原。
+  一条宽范围追踪默认用一个探索子智能体。若有至少两条独立调查线索，例如入口、运行流程、调用方与测试、API 范围，在亲自追踪前，先在同一个脚本中并行发出 2–3 个不重叠的问题。第二轮问题依赖第一轮答案，或结论只是比较、计数、交叉核对时，在代码中汇总结论。一个 `moon ide doc` 查询或一次聚焦文件读取即可解决时，直接查询。脚本只能访问自己启动的子智能体，停止脚本会停止它们。
 
     ```mbtx
     import {
+      "moonbitlang/openseek_tools@0.2.0" @tools,
       "moonbitlang/async",
-      "moonbitlang/workflow",
-      "moonbitlang/workflow/hosted",
+      "moonbitlang/core/json",
+    }
+
+    /// Start one explore subagent; its job id.
+    async fn scout(question : String, label : String) -> String {
+      let started = @tools.call("subagent", {
+        "kind": "explore",
+        "input": { "query": question },
+        "label": label,
+      })
+      guard started.data is Some({ "job_id": String(id), .. }) else {
+        fail(started.content)
+      }
+      id
+    }
+
+    /// A child's report, read in chunks until complete; `None` when it ended
+    /// without one.
+    async fn report(id : String) -> Json? {
+      let text = StringBuilder()
+      for ;; {
+        let read = @tools.call("job_output", {
+          "job_id": id,
+          "offset": text.to_string().char_length(),
+        })
+        guard read.data
+          is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+          return None
+        }
+        text.write_string(chunk)
+        if complete is True {
+          return Some(@json.parse(text.to_string()))
+        }
+      }
     }
 
     async fn main {
-      guard @hosted.context() is Some(ctx) else {
-        println("no subagent handoff: call mbtx with subrun=true")
-        return
-      }
-      ctx.run(max_concurrent=3, wf => {
-        wf.phase("survey")
-        let found = @workflow.parallel([
-          () => @workflow.attempt(() => wf.agent(
-            prompt="Where is X constructed, and by whom? Cite file:line.",
-            kind="explore", label="scout:x")),
-          () => @workflow.attempt(() => wf.agent(
-            prompt="Who calls Y, and what do the callers pass? Cite file:line.",
-            kind="explore", label="scout:y")),
-          () => @workflow.attempt(() => wf.agent(
-            prompt="How does Z reach the network? Cite file:line.",
-            kind="explore", label="scout:z")),
-        ])
-        wf.phase("conclude")
-        // Each answer is that scout's report as JSON. Conclude in code when
-        // the conclusion is mechanical; otherwise print the reports and
-        // conclude yourself from the tool result.
-        for answer in @workflow.collect_ok(found, min_ok=2) {
-          println(answer.stringify())
+      let ids = [
+        scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
+        scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+        scout("How does Z reach the network? Cite file:line.", "scout:z"),
+      ]
+      // Each wait returns within a minute with every child's state: drop the
+      // ended ones and wait for the rest.
+      let mut running = ids
+      while running.length() > 0 {
+        let waited = @tools.call("job_wait", {
+          "job_ids": Json::array(running.map(Json::string)),
+        })
+        guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+          fail(waited.content)
         }
-        println("scouts=\{wf.calls_made()} tokens=\{wf.tokens_spent()}")
-      })
+        let still : Array[String] = []
+        for job in jobs {
+          if job is { "state": "running", "job_id": String(id), .. } {
+            still.push(id)
+          }
+        }
+        running = still
+      }
+      // Conclude in code when the conclusion is mechanical; otherwise print the
+      // reports and conclude yourself from the tool result.
+      for id in ids {
+        match report(id) {
+          Some(answer) => println(answer.stringify())
+          None => println("no report from \{id}")
+        }
+      }
     }
     ```
 
@@ -540,7 +579,7 @@ test {
 - `fn main` 调用抛错函数时，写 `fn main raise { ... }`。
 - `async fn` 默认可抛错，不要写 `async fn main raise`。
 - 异步辅助函数必须不抛错时，标记 `noraise`，例如 `async fn helper() -> Unit noraise { ... }`。
-- `async fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `Json::null`、`()` 或其他看似成功的哨兵值。
+- `async fn main` 中优先直接调用抛错函数，由顶层报告错误。若为自定义用户提示而捕获错误，打印后立即返回；不要把失败编码为 `null`、`()` 或其他看似成功的哨兵值。
 - 仅在需要自定义面向用户的错误文本时使用 `catch`。面向用户的 CLI 避免使用中止辅助函数，因为它们可能打印 panic 或调试堆栈。
 - 一次性的内部失败用 `fail("message")`；需要简洁的用户可读解析错误时，用小型 `suberror`。
 - 自定义错误使用 `suberror`，可以模式匹配错误构造器。匹配其他包的错误时需限定构造器名称，例如 `catch { @pkga.A => ...; @pkga.B => ... }`。如果其他包需要稳定的错误分类或展示，决定是否将构造器模式作为公共 API，或提供辅助函数。
@@ -612,7 +651,7 @@ test {
 - `String::split` 返回迭代器，可直接用于 `for`；需要长度或随机访问时，用 `.to_array()` 收集。
 - 优先用 `@string.from_str` 配合显式类型注解解析，例如普通代码或测试中的 `let n : Int = @string.from_str(text)`。不要写 `@string.from_str[:Int](text)` 或 `@string.from_str[Int](text)`。
 - `map[key]` 在键不存在时可能 panic。用 `map.get(key)` 得到 `T?`；仅在已知键存在时直接索引。
-- 用 `Json(value)` 构造 JSON，它接受任何实现了 `ToJson` 的值。空值用 `Json::null()`，空对象用 `Json::empty_object()`。不要用 `Json::Object(...)`、`Json::String(...)` 或 `Json::True` 构造 JSON；变体主要用于模式匹配。
+- 用 `Json(value)` 构造 JSON，它接受任何实现了 `ToJson` 的值。空值用 `null`，空对象用 `Json::empty_object()`。不要用 `Json::Object(...)`、`Json::String(...)` 或 `Json::True` 构造 JSON；变体主要用于模式匹配。
 - JSON 整数需要保留原始数字写法时，用 `Json::number(n.to_double(), repr=text.to_owned())`。
 - JSON CLI 输出和测试使用 `json.stringify()`，或 inspect 其结果；不要依赖 `println(json)` 或 Debug/Show 快照。
 - 库返回 `Json` 时，其黑盒测试应匹配 `Json::Object(...)`，不要写 `@library.Json::Object(...)`。

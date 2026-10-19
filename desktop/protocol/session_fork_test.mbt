@@ -20,7 +20,7 @@ test "session fork requires a concrete terminal boundary and workspace" {
       error => Err(error)
     }
     assert_true(missing is Err(_))
-    fields[field] = Json::null()
+    fields[field] = null
     let null_value : Result[@protocol.SessionForkPayload, @json.JsonDecodeError] = Ok(
       @json.from_json(Json(fields)),
     ) catch {

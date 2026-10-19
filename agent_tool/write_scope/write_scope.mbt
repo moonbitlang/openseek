@@ -124,6 +124,12 @@ pub async fn WriteScope::check(
   guard @workspace_path.is_under_workspace_root(self.root, requested_form) else {
     return Ok(Some("path is outside the writable root \{self.root}"))
   }
+  // The root's git metadata — a worktree's gitfile, or the `.git` of a
+  // repository whose root is the scope's — is never a confined write's.
+  guard !(self.relative_parts(requested_form) is [".git", ..]) &&
+    !(self.relative_parts(resolved) is [".git", ..]) else {
+    return Ok(Some("path is git metadata, which confined writes never change"))
+  }
   if self.allowed.is_empty() {
     return Ok(None)
   }
@@ -151,6 +157,16 @@ fn WriteScope::absolutize(self : WriteScope, path : String) -> String {
 /// allowed prefixes, component-wise (`src` never admits `src2`; a path
 /// ABOVE every prefix is not a writable target either).
 fn WriteScope::prefix_admits(self : WriteScope, path : String) -> Bool {
+  let parts = self.relative_parts(path)
+  self.allowed.any(prefix => parts.has_prefix(prefix))
+}
+
+///|
+/// The components of `path` (under the root) relative to the root.
+fn WriteScope::relative_parts(
+  self : WriteScope,
+  path : String,
+) -> Array[String] {
   // Compare on a separator-normalized COPY (the stored root keeps its
   // canonical realpath spelling): on Windows, realpath returns backslash
   // separators; on POSIX a backslash is a legal filename byte, so rewriting
@@ -167,8 +183,7 @@ fn WriteScope::prefix_admits(self : WriteScope, path : String) -> Bool {
   } else {
     path.view(start_offset=root.length() + 1).to_owned()
   }
-  let parts = relative.split("/").map(p => p.to_owned()).collect()
-  self.allowed.any(prefix => parts.has_prefix(prefix))
+  relative.split("/").map(p => p.to_owned()).collect()
 }
 
 ///|

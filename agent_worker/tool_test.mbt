@@ -93,6 +93,7 @@ async fn with_worker_fixture(body : async (Json) -> Unit) -> Unit {
     @fs.mkdir("\{root}/gitadmin")
     let input : Json = {
       "task": "Fix the placeholder in lib/a.txt.",
+      "mode": "worktree",
       "worker_root": "\{root}/w",
       "worker_admin_dir": "\{root}/gitadmin",
       "deny_roots": [root],
@@ -237,6 +238,39 @@ test "worker input parse validates every field" {
         variant(deny_roots=[]),
         variant(allowed_paths=[]),
         variant(base_oid=""),
+        // No mode: neither a worktree's nor a directory's scope is assumed.
+        { "task": "t", "worker_root": "/w", "deny_roots": ["/g"] },
+      ] : Array[Json]) {
+    guard @agent_worker.WorkerInput::parse(bad) is Err(_) else {
+      fail("expected a rejection for \{bad.stringify()}")
+    }
+  }
+}
+
+///|
+/// A worker that works in place is given its directory and what is denied,
+/// and nothing a worktree has: the whole directory is its to change.
+test "a directory worker's input needs no worktree geometry" {
+  let input : Json = {
+    "task": "t",
+    "mode": "directory",
+    "worker_root": "/work/a",
+    "deny_roots": ["/work"],
+  }
+  guard @agent_worker.WorkerInput::parse(input) is Ok(parsed) else {
+    fail("expected a valid directory input")
+  }
+  assert_eq(parsed.allowed_paths, [])
+  for
+    bad in (
+      [
+        { "task": "t", "mode": "directory", "worker_root": "/work/a" },
+        {
+          "task": "t",
+          "mode": "directory",
+          "worker_root": "a",
+          "deny_roots": ["/work"],
+        },
       ] : Array[Json]) {
     guard @agent_worker.WorkerInput::parse(bad) is Err(_) else {
       fail("expected a rejection for \{bad.stringify()}")
@@ -254,6 +288,7 @@ fn variant(
 ) -> Json {
   {
     "task": task,
+    "mode": "worktree",
     "worker_root": worker_root,
     "worker_admin_dir": "/g/a",
     "deny_roots": deny_roots,

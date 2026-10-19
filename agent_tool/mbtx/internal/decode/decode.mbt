@@ -25,15 +25,6 @@ pub struct MbtxInput {
   /// the field, but a model that sends it anyway must be told what happened,
   /// not silently run confined while believing otherwise.
   escalated : Bool
-  /// Whether the snippet declares that it will DELEGATE — run a
-  /// `moonbitlang/workflow` workflow whose children must be visible. Only
-  /// then does the tool reserve child ordinals and a run directory and hand
-  /// the snippet a `WORKFLOW_HOST`; every other snippet gets none, so the
-  /// announcement of a workflow means one was asked for. Decoded whatever the
-  /// tool was built with, for the same reason as `escalated`: a model that
-  /// asks on a session that cannot host must be told, not quietly run
-  /// without its children.
-  subrun : Bool
   /// Enable run-scoped programmatic access to explicitly registered leaf tools.
   ptc : Bool?
 } derive(Debug)
@@ -161,12 +152,6 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "escalated": _, .. } => fail("arguments.escalated to be a boolean")
         _ => false
       }
-      let subrun = match arguments {
-        { "subrun": true, .. } => true
-        { "subrun": false, .. } | { "subrun": Null, .. } => false
-        { "subrun": _, .. } => fail("arguments.subrun to be a boolean")
-        _ => false
-      }
       let ptc = match fields.get("ptc") {
         Some(True) => Some(true)
         Some(False) => Some(false)
@@ -174,17 +159,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         None | Some(Null) => None
         _ => fail("arguments.ptc to be a boolean")
       }
-      {
-        program,
-        args,
-        description,
-        target,
-        cwd,
-        warning,
-        escalated,
-        subrun,
-        ptc,
-      }
+      { program, args, description, target, cwd, warning, escalated, ptc, }
     }
     _ => fail("object arguments")
   }

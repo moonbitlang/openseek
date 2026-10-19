@@ -26,7 +26,7 @@ test "deep link waits for successful catalogs and does not confuse failure with 
     ..test_model(),
     navigation: {
       ..AppNavigation::empty(),
-      location: Some({ device: "local", target: Session("missing"), }),
+      location: Some({ device: Some("local"), target: Session("missing"), }),
       phase: Waiting,
     },
   }
@@ -129,7 +129,7 @@ test "opening a thread does not promote a different Codex draft" {
     CodexComposerAction(
       @composer.DraftPresenceChanged(
         identity={
-          owner: { channel: Local, session: "local-draft", },
+          owner: @interop.Host({ channel: Local, session: "local-draft", }),
           archive_generation: 0,
         },
         present=true,
@@ -203,30 +203,6 @@ test "allocated drafts cannot overtake a newer navigation intent" {
 }
 
 ///|
-test "leaving a pending workspace allocation cannot adopt its delayed result" {
-  let dispatch = test_dispatch()
-  let (_, initial) = update(dispatch, ToggleSidebar, {
-    ..test_model(),
-    is_desktop: true,
-  })
-  let (_, creating) = update(dispatch, CreateChat(Local), initial)
-  assert_true(creating.chat_creation is Some(_))
-  let (_, settings) = update(dispatch, OpenSetup, creating)
-  assert_true(settings.chat_creation is None)
-  let (_, late) = update(
-    dispatch,
-    ChatWorkspaceCreated(
-      channel=Local,
-      generation=creating.chat_creation_sequence,
-      result=Ok("/new-work"),
-    ),
-    settings,
-  )
-  assert_true(late.pending_project_adoption is None)
-  assert_true(late.navigation == settings.navigation)
-}
-
-///|
 test "blank new entries gain a stable draft identity only after content" {
   let dispatch = test_dispatch()
   let (_, blank) = update(dispatch, ToggleSidebar, {
@@ -244,7 +220,7 @@ test "blank new entries gain a stable draft identity only after content" {
   assert_true(duplicate.navigation == blank.navigation)
   assert_eq(duplicate.active_session, blank.active_session)
   let identity : @composer.Identity = {
-    owner: { channel: Local, session: blank.active_session, },
+    owner: @interop.Host({ channel: Local, session: blank.active_session, }),
     archive_generation: 0,
   }
   let action = ComposerAction(
@@ -284,7 +260,7 @@ test "blank new entries gain a stable draft identity only after content" {
 test "expired draft replaces its entry with a fresh new page" {
   let dispatch = test_dispatch()
   let expired : @navigation.Location = {
-    device: "local",
+    device: Some("local"),
     target: ChatDraft("expired"),
   }
   let base = {
@@ -318,7 +294,7 @@ test "expired draft replaces its entry with a fresh new page" {
   assert_true(fresh.navigation.phase is Active)
   assert_true(fresh.navigation.location is Some({ target: ChatNew, .. }))
   assert_eq(fresh.active_session, "fresh")
-  assert_true(fresh.selected_conversation is Some({ session: "fresh", .. }))
+  assert_true(fresh.host_selection() is Some({ session: "fresh", .. }))
   assert_true(fresh.active_conversation() is Some(conv) && conv.draft_empty())
   assert_true(!fresh.navigation.can_back)
   assert_true(
@@ -329,7 +305,10 @@ test "expired draft replaces its entry with a fresh new page" {
 
 ///|
 test "navigation write policy distinguishes foreground visits and background identity updates" {
-  let location : @navigation.Location = { device: "local", target: Settings, }
+  let location : @navigation.Location = {
+    device: Some("local"),
+    target: Settings,
+  }
   let observed : NavigationObservation = {
     location: Some(location),
     user_visit: false,
@@ -355,7 +334,7 @@ test "navigation write policy distinguishes foreground visits and background ide
 ///|
 test "blank draft addressing does not turn an explicit visit into replacement" {
   let observed : NavigationObservation = {
-    location: Some({ device: "local", target: ChatDraft("draft"), }),
+    location: Some({ device: Some("local"), target: ChatDraft("draft"), }),
     user_visit: false,
     session_rotated: false,
     explicit: false,
@@ -365,7 +344,7 @@ test "blank draft addressing does not turn an explicit visit into replacement" {
   }
   let navigation = {
     ..AppNavigation::empty(),
-    location: Some({ device: "local", target: ChatNew, }),
+    location: Some({ device: Some("local"), target: ChatNew, }),
   }
   assert_true(observed.addresses_blank(navigation))
   assert_true(observed.addresses_blank(navigation))

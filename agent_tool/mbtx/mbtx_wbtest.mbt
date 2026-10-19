@@ -237,7 +237,8 @@ fn spawn_verbs(bullet : String) -> Array[String] {
 /// Grouping is what lets one bullet describe several two-token prefixes, and
 /// getting it wrong would silently narrow what the model believes it may run.
 test "the rendered spawn list groups multi-token prefixes under one verb" {
-  let rendered = spawn_list_markdown()
+  // Wrapping may break an entry across lines; the words are what matter.
+  let rendered = spawn_list_markdown().replace_all(old="\n  ", new=" ")
   assert_true(rendered.contains("`worktree list|add|prune`"))
   assert_true(rendered.contains("`submodule update|status`"))
   assert_true(rendered.contains("`stash list|show`"))
@@ -254,7 +255,7 @@ test "the mbtx description carries the rendered spawn list" {
   let text = description(
     background=true,
     escalation=false,
-    hosting=false,
+    delegation=false,
     auto_background_after_ms=5_000,
     foreground_timeout_ms=120_000,
     build_timeout_ms=20_000,

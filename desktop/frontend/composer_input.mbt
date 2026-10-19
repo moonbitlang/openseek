@@ -7,6 +7,9 @@
 /// simply does not place it — so a model with no conversation projects a
 /// dormant composer rather than inventing one to draft against.
 fn Model::composer_input(self : Model) -> @composer.Input {
+  if self.cloud_composer_input() is Some(input) {
+    return input
+  }
   guard self.active_conversation() is Some(conv) else {
     return self.dormant_composer_input()
   }
@@ -16,7 +19,7 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     session: conv.session_id,
   }
   let identity : @composer.Identity = {
-    owner,
+    owner: @interop.Host(owner),
     archive_generation: self.composer_entry_retirements.length(),
   }
   let checkout_ready = checkout is Some(value) && value.is_ready()
@@ -365,7 +368,10 @@ fn Model::codex_composer_input(self : Model) -> @composer.Input {
 fn Model::dormant_composer_input(self : Model) -> @composer.Input {
   {
     identity: {
-      owner: { channel: self.focused, session: self.active_session, },
+      owner: @interop.Host({
+        channel: self.focused,
+        session: self.active_session,
+      }),
       archive_generation: self.composer_entry_retirements.length(),
     },
     draft: { images: [], task: "", mentions: [], },

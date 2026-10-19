@@ -8,6 +8,18 @@ fn job_status(
   if job.cleanup_error is Some(_) {
     return (ui(locale, CleanupFailed), "failed")
   }
+  // An ended subagent says what it achieved, not how its process exited.
+  if job.subagent is Some({ outcome: Some(outcome), .. }) {
+    return match outcome {
+      Captured => (ui(locale, ReportedLabel), "completed")
+      NoReport => (ui(locale, NoReportLabel), "failed")
+      MaxSteps => (ui(locale, OutOfStepsLabel), "failed")
+      ContextYield => (ui(locale, ContextFullLabel), "failed")
+      TimedOut => (ui(locale, TimedOutLabel), "failed")
+      Stopped => (ui(locale, StoppedLabel), "stopped")
+      Failed(reason) => (dynamic_text(locale, DFailedBecause(reason)), "failed")
+    }
+  }
   match job.state {
     Running => (ui(locale, RunningLabel), "running")
     Stopping => (ui(locale, StoppingLabel), "stopping")
@@ -22,6 +34,39 @@ fn job_status(
     Stopped(reason) =>
       (dynamic_text(locale, DStopped(reason.to_string())), "stopped")
     Interrupted => (ui(locale, InterruptedLabel), "stopped")
+  }
+}
+
+///|
+/// What a job is about, for its row: an agent's kind and task, or the
+/// command's own description.
+fn job_title(job : @wire.JobRecord) -> String {
+  match job.subagent {
+    Some(info) => "\{info.kind}: \{info.label}"
+    None => job.description.unwrap_or(job.command)
+  }
+}
+
+///|
+/// What a job's row adds after its timing: an agent's spend once known,
+/// otherwise how much output the job wrote.
+fn job_extent(
+  locale~ : @i18n.Locale = English,
+  job : @wire.JobRecord,
+) -> String {
+  match job.subagent {
+    Some(
+      { usage: Some(Known(steps~, prompt_tokens~, completion_tokens~, ..)), .. }
+    ) => {
+      let tokens = (prompt_tokens + completion_tokens).to_string()
+      match steps {
+        Some(steps) =>
+          dynamic_text(locale, DSpentSteps(steps.to_string(), tokens))
+        None => dynamic_text(locale, DSpent(tokens))
+      }
+    }
+    Some(_) => ""
+    None => "\{job.output_bytes} B"
   }
 }
 
@@ -93,9 +138,7 @@ pub fn panel(
   state : State,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
-  let running = state.jobs
-    .filter(view => !view.job.state.is_terminal())
-    .length()
+  let running = state.jobs.count_if(view => !view.job.state.is_terminal())
   let header = @html.div(class="jobs-heading", [
     @html.div([
       @html.h3(ui(locale, BackgroundJobs)),
@@ -199,13 +242,17 @@ pub fn panel(
                 status_label,
               ),
             ]),
-            @html.div(
-              class="jobs-command",
-              job.description.unwrap_or(job.command),
-            ),
+            @html.div(class="jobs-command", job_title(job)),
             @html.div(
               class="jobs-row-meta",
-              "\{job_timing(locale~, job)} · \{job.output_bytes} B",
+              {
+                let extent = job_extent(locale~, job)
+                if extent.is_empty() {
+                  job_timing(locale~, job)
+                } else {
+                  "\{job_timing(locale~, job)} · \{extent}"
+                }
+              },
             ),
           ],
         )
@@ -280,6 +327,33 @@ pub fn panel(
           ),
         ),
       ]
+      if job.subagent is Some(info) {
+        details.push(@html.div(class="jobs-detail-meta", job_title(job)))
+        details.push(
+          @html.div(
+            class="jobs-detail-meta",
+            dynamic_text(locale, DSession(info.session)),
+          ),
+        )
+        let extent = job_extent(locale~, job)
+        if !extent.is_empty() {
+          details.push(@html.div(class="jobs-detail-meta", extent))
+        }
+        match info.workspace {
+          Worktree(worktree) =>
+            details.append(
+              worktree_details(locale~, ended=job.state.is_terminal(), worktree),
+            )
+          Directory(path~) =>
+            details.push(
+              @html.div(
+                class="jobs-detail-meta jobs-worker-directory",
+                dynamic_text(locale, DWorkerDirectory(path)),
+              ),
+            )
+          InPlace => ()
+        }
+      }
       if job.cwd is Some(cwd) {
         details.push(
           @html.div(
@@ -313,6 +387,24 @@ pub fn panel(
           ui(locale, CopyId),
         ),
       ]
+      if job.subagent is Some(info) {
+        actions.push(
+          @html.button(
+            class="jobs-action",
+            on_click=emit(OpenSession(info.session)),
+            ui(locale, OpenTranscript),
+          ),
+        )
+        if info.workspace is Worktree({ path, .. }) {
+          actions.push(
+            @html.button(
+              class="jobs-action",
+              on_click=@clipboard.copy(Text(path)),
+              ui(locale, CopyWorktreePath),
+            ),
+          )
+        }
+      }
       if view.output_path is Some(path) {
         details.push(
           @html.div(class="jobs-path", [@html.code(title=path, path)]),
@@ -494,4 +586,52 @@ fn short_job_id(id : String, jobs : Array[@protocol.JobView]) -> String {
     width += 4
   }
   id
+}
+
+///|
+/// What a worker's worktree held when it was handed over, in words, and why
+/// when it could not be taken. A worker whose job `ended` with no result
+/// recorded (its engine stopped first) says so: its worktree is handed over
+/// when a worker next starts, and this record is not updated.
+fn worktree_state(
+  locale~ : @i18n.Locale = English,
+  ended~ : Bool = false,
+  state : @wire.WorktreeState,
+) -> (String, Array[String]) {
+  let short = (commit : String) => {
+    commit.view(end_offset=commit.length().min(10)).to_owned()
+  }
+  match state {
+    Working if ended => (ui(locale, WorktreeUnrecorded), [])
+    Working => (ui(locale, WorktreeWorking), [])
+    CaptureFailed(reasons~) => (ui(locale, WorktreeCaptureFailed), reasons)
+    Committed(commit~) =>
+      (dynamic_text(locale, DWorktreeCommitted(short(commit))), [])
+    NoChanges => (ui(locale, WorktreeNoChanges), [])
+    Unmergeable(defects~) => (ui(locale, WorktreeUnmergeable), defects)
+  }
+}
+
+///|
+/// A worker's worktree in the details pane: which it is, where its changes
+/// stand, why when they cannot be integrated, and where it is.
+fn worktree_details(
+  locale~ : @i18n.Locale = English,
+  ended~ : Bool,
+  worktree : @wire.Worktree,
+) -> Array[@html.Html] {
+  let (state, reasons) = worktree_state(locale~, ended~, worktree.state)
+  [
+    @html.div(
+      class="jobs-detail-meta",
+      dynamic_text(locale, DWorktree(worktree.name, worktree.branch)),
+    ),
+    @html.div(class="jobs-detail-meta jobs-worktree-state", state),
+    ..reasons.map(reason => {
+      @html.div(class="jobs-detail-meta jobs-worktree-reason", reason)
+    }),
+    @html.div(class="jobs-path", [
+      @html.code(title=worktree.path, worktree.path),
+    ]),
+  ]
 }

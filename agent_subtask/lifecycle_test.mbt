@@ -237,6 +237,123 @@ async test "a conflicting merge hands off, continues after resolution" {
 }
 
 ///|
+async test "continue stages the resolved conflict set, but not while markers remain" {
+  @vfs.with_tmpdir(prefix="openseek-subtask-unstaged-", dir => {
+    let repo = seed_repo(dir)
+    let provisioned = must_provision(
+      repo,
+      name="fix-lib",
+      allowed_paths=["lib"],
+      nonce="n1",
+    )
+    let entry = provisioned.entry
+    @vfs.write_text("\{entry.worker_root}/lib", "a.txt", "WORKER\n")
+    let captured = @agent_subtask.capture(provisioned.geometry, entry)
+    @vfs.write_text("\{repo}/lib", "a.txt", "ORIGIN\n")
+    for args in [["add", "-A"], ["commit", "-q", "-m", "origin moved"]] {
+      must_git(repo, args)
+    }
+    let conflicted = @agent_subtask.integrate(
+      provisioned.geometry,
+      captured.entry,
+    )
+    assert_eq(conflicted.result, "conflicted")
+    // The markers are still there: nothing is staged or committed.
+    let early = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(early.result, "refused")
+    assert_true(
+      early.detail[0].contains("conflict markers remain in lib/a.txt"),
+    )
+    // Resolved with a file tool, which does not stage: continue does.
+    @vfs.write_text("\{repo}/lib", "a.txt", "MERGED\n")
+    let continued = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(continued.result, "integrated")
+    assert_eq(@fs.read_file("\{repo}/lib/a.txt").text(), "MERGED\n")
+  })
+}
+
+///|
+async test "continue stages an add/add conflict, and Markdown underlines are not markers" {
+  @vfs.with_tmpdir(prefix="openseek-subtask-addadd-", dir => {
+    let repo = seed_repo(dir)
+    let provisioned = must_provision(
+      repo,
+      name="docs",
+      allowed_paths=["lib"],
+      nonce="n1",
+    )
+    let entry = provisioned.entry
+    // Both sides add the same new file, differently; its name holds a tab.
+    @vfs.write_text("\{entry.worker_root}/lib", "notes.md", "Worker\n======\n")
+    @vfs.write_text("\{entry.worker_root}/lib", "a\tb.txt", "worker\n")
+    let captured = @agent_subtask.capture(provisioned.geometry, entry)
+    @vfs.write_text("\{repo}/lib", "notes.md", "Origin\n======\n")
+    @vfs.write_text("\{repo}/lib", "a\tb.txt", "origin\n")
+    for args in [["add", "-A"], ["commit", "-q", "-m", "origin adds notes"]] {
+      must_git(repo, args)
+    }
+    let conflicted = @agent_subtask.integrate(
+      provisioned.geometry,
+      captured.entry,
+    )
+    assert_eq(conflicted.result, "conflicted")
+    assert_true(conflicted.detail[0].contains("lib/notes.md"))
+    // Resolved with a file tool: a Setext heading keeps its own underline.
+    @vfs.write_text("\{repo}/lib", "notes.md", "Notes\n=======\n")
+    @vfs.write_text("\{repo}/lib", "a\tb.txt", "both\n")
+    let continued = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(continued.result, "integrated")
+    assert_eq(@fs.read_file("\{repo}/lib/notes.md").text(), "Notes\n=======\n")
+  })
+}
+
+///|
+async test "continue accepts a conflict already resolved by git rm" {
+  @vfs.with_tmpdir(prefix="openseek-subtask-rm-", dir => {
+    let repo = seed_repo(dir)
+    let provisioned = must_provision(
+      repo,
+      name="fix-lib",
+      allowed_paths=["lib"],
+      nonce="n1",
+    )
+    let entry = provisioned.entry
+    // The worker changes the file; the origin deletes it: modify/delete.
+    @vfs.write_text("\{entry.worker_root}/lib", "a.txt", "WORKER\n")
+    let captured = @agent_subtask.capture(provisioned.geometry, entry)
+    for
+      args in [
+        ["rm", "-q", "lib/a.txt"],
+        ["commit", "-q", "-m", "origin drops a"],
+      ] {
+      must_git(repo, args)
+    }
+    let conflicted = @agent_subtask.integrate(
+      provisioned.geometry,
+      captured.entry,
+    )
+    assert_eq(conflicted.result, "conflicted")
+    // Resolved by keeping the deletion, staged with git itself.
+    must_git(repo, ["rm", "-q", "lib/a.txt"])
+    let continued = @agent_subtask.integrate_continue(
+      provisioned.geometry,
+      conflicted.entry,
+    )
+    assert_eq(continued.result, "integrated")
+    assert_false(@fs.exists("\{repo}/lib/a.txt"))
+  })
+}
+
+///|
 async test "integrate refuses a dirty tracked origin; abort restores state" {
   @vfs.with_tmpdir(prefix="openseek-subtask-dirty-", dir => {
     let repo = seed_repo(dir)
@@ -308,7 +425,7 @@ async test "linked worktree provisions and integrates into itself" {
       fail("expected main worktree geometry")
     }
     let linked_root = provisioned.geometry.origin_root
-    assert_eq(provisioned.entry.worker_root, "\{linked_root}/.worktrees/x")
+    assert_eq(provisioned.entry.worker_root, "\{linked_root}/.worktrees/x--n1")
     let deny_roots = provisioned.geometry.worker_deny_roots()
     assert_true(deny_roots.contains(provisioned.geometry.common_git_dir))
     assert_true(deny_roots.contains(main_geometry.origin_root))

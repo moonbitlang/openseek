@@ -129,7 +129,7 @@ fn pattern_repair_trace_of(session : @agent_session.Session) -> Array[String] {
     match event.item() {
       Tool(result) if result.tool_name() == "validate_pattern" => {
         let content = result.content().text()
-        let outcome = @json.parse(content) catch { _ => Json::null() }
+        let outcome = @json.parse(content) catch { _ => null }
         if outcome is { "valid": True, .. } {
           pattern_repair_trace_push(trace, "validate_pattern: passed")
         } else if outcome

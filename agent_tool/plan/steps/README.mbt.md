@@ -101,7 +101,7 @@ fn rejects(arguments : Json, expected : String) -> Bool {
 ///|
 test "the payload must be an object with exactly a steps array" {
   inspect(
-    rejects(Json::null(), "arguments to be an object with a steps array"),
+    rejects(null, "arguments to be an object with a steps array"),
     content="true",
   )
   inspect(

@@ -1,0 +1,76 @@
+///|
+import {
+  "moonbitlang/openseek_tools@0.2.0" @tools,
+  "moonbitlang/async",
+  "moonbitlang/core/json",
+}
+
+///|
+/// Start one explore subagent; its job id.
+async fn scout(question : String, label : String) -> String {
+  let started = @tools.call("subagent", {
+    "kind": "explore",
+    "input": { "query": question },
+    "label": label,
+  })
+  guard started.data is Some({ "job_id": String(id), .. }) else {
+    fail(started.content)
+  }
+  id
+}
+
+///|
+/// A child's report, read in chunks until complete; `None` when it ended
+/// without one.
+async fn report(id : String) -> Json? {
+  let text = StringBuilder()
+  for ;; {
+    let read = @tools.call("job_output", {
+      "job_id": id,
+      "offset": text.to_string().char_length(),
+    })
+    guard read.data
+      is Some({ "report": { "chunk": String(chunk), "complete": complete, .. }, .. }) else {
+      return None
+    }
+    text.write_string(chunk)
+    if complete is True {
+      return Some(@json.parse(text.to_string()))
+    }
+  }
+}
+
+///|
+async fn main {
+  let ids = [
+    scout("Where is X constructed, and by whom? Cite file:line.", "scout:x"),
+    scout("Who calls Y, and what do the callers pass? Cite file:line.", "scout:y"),
+    scout("How does Z reach the network? Cite file:line.", "scout:z"),
+  ]
+  // Each wait returns within a minute with every child's state: drop the
+  // ended ones and wait for the rest.
+  let mut running = ids
+  while running.length() > 0 {
+    let waited = @tools.call("job_wait", {
+      "job_ids": Json::array(running.map(Json::string)),
+    })
+    guard waited.data is Some({ "jobs": Array(jobs), .. }) else {
+      fail(waited.content)
+    }
+    let still : Array[String] = []
+    for job in jobs {
+      if job is { "state": "running", "job_id": String(id), .. } {
+        still.push(id)
+      }
+    }
+    running = still
+  }
+  // Conclude in code when the conclusion is mechanical; otherwise print the
+  // reports and conclude yourself from the tool result.
+  for id in ids {
+    match report(id) {
+      Some(answer) => println(answer.stringify())
+      None => println("no report from \{id}")
+    }
+  }
+}

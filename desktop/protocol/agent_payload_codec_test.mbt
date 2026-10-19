@@ -332,7 +332,7 @@ test "agent events carry the engine submission id without a wrapper" {
 
 ///|
 test "start and steer require a typed image array" {
-  for images in [Json::null(), Json("image"), Json([Json(1)])] {
+  for images in [null, Json("image"), Json([Json(1)])] {
     let start : @protocol.StartPayload? = Some(
       @json.from_json({ "task": "", "session": "session", "images": images }),
     ) catch {

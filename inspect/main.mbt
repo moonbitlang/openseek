@@ -786,7 +786,7 @@ priv struct SessionListRow {
 fn SessionListRow::to_json(self : SessionListRow) -> Json {
   let last_active : Json = match self.last_active {
     Some(seconds) => Json(seconds.to_double())
-    None => Json::null()
+    None => null
   }
   {
     "key": self.key,
