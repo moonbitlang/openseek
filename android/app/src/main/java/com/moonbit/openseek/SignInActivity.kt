@@ -45,7 +45,7 @@ class SignInActivity : ComponentActivity() {
         }
         executor.execute {
             try {
-                val pending = BrowserSignIn(MainActivity.ORIGIN, packageName)
+                val pending = BrowserSignIn(ConsoleOrigin.ORIGIN, packageName)
                 flow = pending
                 runOnUiThread {
                     if (!isFinishing) {
@@ -77,7 +77,7 @@ class SignInActivity : ComponentActivity() {
     }
 
     private fun exchange(code: String, verifier: String): String {
-        val connection = URL("${MainActivity.ORIGIN}/v2/auth/account/exchange").openConnection() as HttpURLConnection
+        val connection = URL("${ConsoleOrigin.ORIGIN}/v2/auth/account/exchange").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
             connection.instanceFollowRedirects = false
