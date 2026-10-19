@@ -28,6 +28,9 @@ export class CloudHarness {
     this.sendStatus = 200;
     this.shareStatus = 200;
     this.deleteStatus = 204;
+    this.patchStatus = 204;
+    this.patchOffline = false;
+    this.pausePatch = null;
     this.deleteOffline = false;
     this.pauseDelete = null;
     this.disconnectShare = false;
@@ -43,6 +46,7 @@ export class CloudHarness {
     this.pauseStream = null;
     this.sessionIds = [sessionA, sessionB];
     this.generating = new Set();
+    this.archived = new Set();
     this.histories = new Map();
     this.titles = new Map([[sessionA, 'Cloud fixture A'], [sessionB, 'Cloud fixture B']]);
     this.postCount = 0;
@@ -176,7 +180,7 @@ export class CloudHarness {
   async cloudRequest(route) {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS', 'Access-Control-Expose-Headers': 'x-fixture-admission-bytes, x-fixture-event-boundaries, x-fixture-disconnect-after' };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
@@ -191,7 +195,18 @@ export class CloudHarness {
       if (this.listOffline) return route.abort('failed');
       const status = this.listStatus;
       if (status === 401) this.listStatus = 200;
-      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id) })) }, status);
+      return json({ sessions: this.sessionIds.map(id => ({ id, title: this.titles.get(id) ?? null, updated_at: 1000, generating: this.generating.has(id), archived: this.archived.has(id) })) }, status);
+    }
+    if (request.method() === 'PATCH' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
+      const body = request.postDataJSON();
+      const session = decodeURIComponent(path.split('/').pop());
+      if (this.pausePatch) await this.pausePatch;
+      if (this.patchOffline) return route.abort('failed');
+      if (this.patchStatus !== 204) return json({}, this.patchStatus);
+      if (body.title !== undefined) this.titles.set(session, body.title);
+      if (body.archived === true) this.archived.add(session);
+      if (body.archived === false) this.archived.delete(session);
+      return route.fulfill({ status: 204, headers });
     }
     if (request.method() === 'DELETE' && /^\/v1\/sessions\/[^/]+$/.test(path)) {
       if (this.pauseDelete) await this.pauseDelete;
@@ -254,11 +269,11 @@ export class CloudHarness {
       await expect(dismiss).toHaveCount(0);
     }
     await this.page.getByRole('button', { name: 'Chat', exact: true }).click();
-    if (this.cached) await this.row(sessionA).waitFor();
+    if (this.cached && !this.archived.has(sessionA)) await this.row(sessionA).waitFor();
   }
 
   row(id) {
-    return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"]`);
+    return this.page.locator(`[id="conversation:cloud.live:${this.userId}:${id}::open"], [id="conversation:cloud.archived:${this.userId}:${id}::open"]`);
   }
 
   async open(id = sessionA) {

@@ -8,6 +8,7 @@ priv enum UiMessage {
   ArchiveLabel
   ArchiveConversation
   StopBeforeArchive
+  FinishBeforeArchive
   RestoreLabel
   RestoreConversation
   DeleteLabel
@@ -64,6 +65,16 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, StopBeforeArchive) => "停止此對話後才能歸檔"
     (Japanese, StopBeforeArchive) =>
       "アーカイブするにはこのチャットを停止してください"
+    (English, FinishBeforeArchive) =>
+      "Wait for this conversation to finish before archiving"
+    (Spanish, FinishBeforeArchive) =>
+      "Espera a que termine esta conversación para archivarla"
+    (SimplifiedChinese, FinishBeforeArchive) =>
+      "等待此对话完成后再归档"
+    (TraditionalChinese, FinishBeforeArchive) =>
+      "等待此對話完成後再歸檔"
+    (Japanese, FinishBeforeArchive) =>
+      "このチャットが完了してからアーカイブしてください"
     (English, RestoreLabel) => "Restore"
     (Spanish, RestoreLabel) => "Restaurar"
     (SimplifiedChinese, RestoreLabel) => "恢复"

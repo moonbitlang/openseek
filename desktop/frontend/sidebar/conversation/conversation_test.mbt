@@ -65,4 +65,27 @@ test "a live row lists Delete only where its source offers one" {
     ("Archive", false, false),
     ("Delete…", false, true),
   ])
+  assert_eq(
+    menu_actions({
+      ..deletable,
+      id: @conversation.Id(
+        source=CloudLive,
+        channel="account",
+        conversation="cloud",
+      ),
+    }),
+    menu_actions(deletable),
+  )
+  let archived = live_row(CloudArchived, [
+    Restore(title="Restore"),
+    Delete(title="Delete"),
+  ])
+  assert_eq(menu_actions(archived), [
+    ("Restore", true, false),
+    ("Delete…", true, true),
+  ])
+  assert_eq(menu_actions({ ..archived, running: true, }), [
+    ("Restore", false, false),
+    ("Delete…", false, true),
+  ])
 }

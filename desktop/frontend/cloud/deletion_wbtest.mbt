@@ -5,7 +5,13 @@ fn deletion_state() -> State {
     user_id: Some("fixture"),
     epoch: 2,
     sessions: [
-      { id: "a", title: Some("A"), updated_at: None, generating: false, },
+      {
+        id: "a",
+        title: Some("A"),
+        updated_at: None,
+        generating: false,
+        archived: false,
+      },
     ],
   }
   let (state, _, _) = update(

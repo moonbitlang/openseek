@@ -32,6 +32,7 @@ pub(all) struct Actions {
 pub(all) enum ConversationSource {
   OpenSeekLive
   CloudLive
+  CloudArchived
   OpenSeekArchived
   CodexLive
   CodexArchived

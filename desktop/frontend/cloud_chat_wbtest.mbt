@@ -10,6 +10,7 @@ fn integrated_cloud_model() -> Model {
         title: Some("Cloud conversation"),
         updated_at: Some(100),
         generating: false,
+        archived: false,
       },
     ],
   }
@@ -211,12 +212,14 @@ test "Cloud and Local folders keep their own rows, ordering and create action" {
           title: Some("Older cloud"),
           updated_at: Some(100),
           generating: false,
+          archived: false,
         },
         {
           id: "cloud-b",
           title: Some("Newer cloud"),
           updated_at: Some(300),
           generating: false,
+          archived: false,
         },
       ],
     },

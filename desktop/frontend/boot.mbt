@@ -155,7 +155,7 @@ fn Model::quote_screen(self : Model) -> QuoteScreen? {
     Codex => Some(CodexQuote)
     Chat =>
       match self.chat_column() {
-        CloudTranscript(..) => Some(ChatQuote)
+        CloudTranscript(..) if !self.cloud_archived() => Some(ChatQuote)
         Transcript(conversation=conv, ..) if !conv.is_archived_read_only() &&
           !self.scheduled_session_read_only(conv) => Some(ChatQuote)
         _ => None
@@ -235,7 +235,7 @@ fn SidebarDispatcher::conversation_open(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
-  if id.source() is @conversation.CloudLive {
+  if id.source() is (@conversation.CloudLive | @conversation.CloudArchived) {
     return self.emit(
       OpenCloudConversation(account=id.channel(), session=id.conversation()),
     )
@@ -268,6 +268,17 @@ fn SidebarDispatcher::conversation_archive(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  if id.source() is @conversation.CloudLive {
+    return self.emit(
+      CloudAction(
+        @cloud.Edit(
+          account=id.channel(),
+          session=id.conversation(),
+          edit=Archive(true),
+        ),
+      ),
+    )
+  }
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) else {
     return self.unroutable("archive", "channel \{id.channel()}")
   }
@@ -284,6 +295,17 @@ fn SidebarDispatcher::conversation_restore(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
+  if id.source() is @conversation.CloudArchived {
+    return self.emit(
+      CloudAction(
+        @cloud.Edit(
+          account=id.channel(),
+          session=id.conversation(),
+          edit=Archive(false),
+        ),
+      ),
+    )
+  }
   guard @interop.ChannelId::from_uri_authority(id.channel()) is Some(channel) else {
     return self.unroutable("restore", "channel \{id.channel()}")
   }
@@ -301,7 +323,7 @@ fn SidebarDispatcher::conversation_delete(
   self : SidebarDispatcher,
   id : @conversation.Id,
 ) -> @cmd.Cmd {
-  if id.source() is @conversation.CloudLive {
+  if id.source() is (@conversation.CloudLive | @conversation.CloudArchived) {
     return self.emit(
       DeleteCloudSession(account=id.channel(), session=id.conversation()),
     )

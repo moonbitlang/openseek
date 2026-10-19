@@ -605,6 +605,11 @@ fn Model::sidebar_component_sections(
       )
     }
   }
+  if self.sidebar_mode is ChatMode {
+    for row in ordered_by_recency(self.cloud_chat_rows(archived=true)) {
+      archived_entries.push(@section.Conversation(row))
+    }
+  }
   sections.push({
     id: @section.Id(source="archived", channel~),
     label: @sidebar_messages.text(
@@ -710,6 +715,9 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
           }
       }
       if self.sidebar_mode is ChatMode {
+        let archived_entries = ordered_by_recency(
+          self.cloud_chat_rows(archived=true),
+        ).map(row => @section.Conversation(row))
         [
           self.cloud_chat_section(self.focused.uri_authority()),
           self.local_chat_section(
@@ -722,11 +730,14 @@ fn Model::sidebar_component_input(self : Model) -> @sidebar.Input {
               source="archived",
               channel=self.focused.uri_authority(),
             ),
-            label: @sidebar_messages.text(self.locale, ArchivedChats(0)),
+            label: @sidebar_messages.text(
+              self.locale,
+              ArchivedChats(archived_entries.length()),
+            ),
             initially_collapsed: true,
             activation: None,
             action: None,
-            entries: [],
+            entries: archived_entries,
           },
         ]
       } else {
@@ -810,10 +821,10 @@ fn editable_text(text : String) -> String {
 /// The archived conversation's only bottom action. Keeping it separate from
 /// the live composer means there is no textarea, model selector, goal editor,
 /// Send, or Stop control for an archived durable record.
-fn Conversation::archived_read_only_view(
+fn archived_read_only_view(
   locale~ : @i18n.Locale = English,
-  self : Conversation,
-  dispatch : @cmd.Emit[Msg],
+  restore : @cmd.Cmd,
+  disabled~ : Bool = false,
 ) -> @html.Html {
   @html.div(class="composer archived-read-only", [
     @html.div(class="archived-read-only-bar", [
@@ -825,7 +836,8 @@ fn Conversation::archived_read_only_view(
         class="archived-read-only-restore",
         type_="button",
         title=shell_text(locale, RestoreBeforeContinue),
-        on_click=dispatch(UnarchiveSession(self.device, self.session_id)),
+        disabled~,
+        on_click=restore,
         shell_text(locale, RestoreLabel),
       ),
     ]),
@@ -2094,7 +2106,25 @@ fn view(
         [console_gate_view(locale=model.locale, dispatch, model.console)]
       } else {
         match model.chat_column() {
-          CloudTranscript(..) => [transcript_html, composer_html]
+          CloudTranscript(..) =>
+            [
+              transcript_html,
+              if model.cloud_archived() &&
+                model.cloud_identity()
+                is Some(@interop.Cloud(account~, session~)) {
+                archived_read_only_view(
+                  locale=model.locale,
+                  dispatch(
+                    CloudAction(
+                      @cloud.Edit(account~, session~, edit=Archive(false)),
+                    ),
+                  ),
+                  disabled=model.cloud.metadata_saves.contains(session),
+                )
+              } else {
+                composer_html
+              },
+            ]
           LoadFailed(message~, retry~) =>
             [
               conversation_load_failed_view(
@@ -2127,7 +2157,10 @@ fn view(
                 @html.div(class="user-question-region", @html.nothing)
               },
               if conv.is_archived_read_only() {
-                conv.archived_read_only_view(locale=model.locale, dispatch)
+                archived_read_only_view(
+                  locale=model.locale,
+                  dispatch(UnarchiveSession(conv.device, conv.session_id)),
+                )
               } else if model.scheduled_session_read_only(conv) {
                 @html.div(class="composer archived-read-only", [
                   @html.div(class="archived-read-only-bar", [

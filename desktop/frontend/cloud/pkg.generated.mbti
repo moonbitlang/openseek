@@ -79,6 +79,14 @@ pub(all) struct History {
   generating : Bool
 }
 
+pub(all) struct MetadataSave {
+  request : Int
+  edit : SessionEdit
+  navigation : Int
+} derive(Eq)
+pub fn MetadataSave::equal(Self, Self) -> Bool
+pub fn MetadataSave::not_equal(Self, Self) -> Bool
+
 pub(all) enum Msg {
   AccountChanged(String?)
   Refresh
@@ -87,6 +95,9 @@ pub(all) enum Msg {
   Delete(String)
   Deleted(Int, String, Int)
   DeleteFailed(Int, String, Int, Failure)
+  Edit(account~ : String, session~ : String, edit~ : SessionEdit)
+  Edited(Int, String, Int)
+  EditFailed(Int, String, Int, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
   Listed(Int, Int, Array[Session])
   ListFailed(Int, Int, Failure)
@@ -114,9 +125,17 @@ pub(all) struct Session {
   title : String?
   updated_at : Double?
   generating : Bool
+  archived : Bool
 } derive(Eq)
 pub fn Session::equal(Self, Self) -> Bool
 pub fn Session::not_equal(Self, Self) -> Bool
+
+pub(all) enum SessionEdit {
+  Rename(String)
+  Archive(Bool)
+} derive(Eq)
+pub fn SessionEdit::equal(Self, Self) -> Bool
+pub fn SessionEdit::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   user_id : String?
@@ -127,14 +146,18 @@ pub(all) struct State {
   sequence : Int
   list_request : Int
   deletions : Map[String, Int]
+  metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
   creation : Creation?
   notice : String?
 } derive(Eq)
 pub fn State::can_delete(Self, String) -> Bool
+pub fn State::can_edit(Self, String, SessionEdit) -> Bool
+pub fn State::can_send(Self, String) -> Bool
 pub fn State::creating_at(Self, Int) -> Bool
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
+pub fn State::is_archived(Self, String) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
 
 pub struct StreamLease {

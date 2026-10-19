@@ -60,8 +60,8 @@ for (const desktop of [false, true]) {
     await cloud.open();
     await page.locator('#task').fill('Draft that belongs to deleted A');
     await menu(page, cloud, sessionA);
-    await expect(page.getByRole('menuitem', { name: 'Rename…', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Rename…', exact: true })).toBeEnabled();
+    await expect(page.getByRole('menuitem', { name: 'Archive', exact: true })).toBeEnabled();
     await page.getByRole('menuitem', { name: 'Delete…', exact: true }).click();
     await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).toContainText('Cloud fixture A');
     await expect(page.getByText(/“Cloud fixture A”.*permanently deleted/)).not.toContainText('worktree');
@@ -223,7 +223,7 @@ test('deleting a background conversation preserves the foreground and its draft'
   expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
 });
 
-test('disabled-only shared menus retain focus, reject activation and keep normal dismissal', async ({ page }, testInfo) => {
+test('busy Cloud menus retain rename while deletion stays disabled with normal dismissal', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   cloud.generating.add(sessionA);
   await cloud.install();
@@ -234,11 +234,12 @@ test('disabled-only shared menus retain focus, reject activation and keep normal
   const action = popup.getByRole('menuitem', { name: 'Delete…', exact: true });
   await expect(popup).toBeVisible();
   await expect(action).toBeDisabled();
+  const rename = popup.getByRole('menuitem', { name: 'Rename…', exact: true });
   await expect(popup).toBeFocused();
   await page.screenshot({ path: testInfo.outputPath('cloud-delete-disabled-menu.png'), fullPage: true });
-  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Enter', 'Space']) {
+  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
     await page.keyboard.press(key);
-    await expect(popup).toBeFocused();
+    await expect(rename).toBeFocused();
   }
   expect(deletes(cloud)).toHaveLength(0);
   await expect(page.getByRole('button', { name: 'Delete permanently', exact: true })).toHaveCount(0);

@@ -59,6 +59,39 @@ fn State::load(
 }
 
 ///|
+fn State::fence_archived_history(
+  self : State,
+  id : String,
+  request : Int32,
+  token : String?,
+  emit : @cmd.Emit[Msg],
+) -> (State, @cmd.Cmd) {
+  // A response stream owns its request until StreamEnded; load() cannot
+  // issue a history read while sending, so there is no history to fence yet.
+  guard self.conversations.get(id) is Some(conversation) &&
+    !conversation.sending else {
+    return (self, @cmd.none)
+  }
+  // Fence pre-archive reads even after a later restore. Replace an unfinished
+  // read through the existing loader so the retained transcript can complete.
+  let loading = conversation.loading ||
+    conversation.generating ||
+    conversation.history_required
+  let next = self.replace(id, {
+    ..conversation,
+    request,
+    generating: false,
+    loading,
+    history_required: conversation.history_required || loading,
+  })
+  if loading {
+    next.load(id, token, emit)
+  } else {
+    (next, @cmd.none)
+  }
+}
+
+///|
 fn State::failed(self : State, error : Failure) -> (State, @cmd.Cmd) {
   (
     {
@@ -117,6 +150,7 @@ fn poll(
 pub fn State::can_delete(self : State, id : String) -> Bool {
   self.sessions.any(session => session.id == id && !session.generating) &&
   !self.deletions.contains(id) &&
+  !self.metadata_saves.contains(id) &&
   !self.retired.contains(id) &&
   self.conversations
   .get(id)
@@ -126,16 +160,51 @@ pub fn State::can_delete(self : State, id : String) -> Bool {
 }
 
 ///|
+pub fn State::can_edit(self : State, id : String, edit : SessionEdit) -> Bool {
+  guard !self.retired.contains(id) &&
+    !self.deletions.contains(id) &&
+    !self.metadata_saves.contains(id) &&
+    self.sessions.iter().find_first(session => session.id == id)
+    is Some(session) else {
+    return false
+  }
+  match edit {
+    Rename(_) => !session.archived
+    Archive(archived) => session.archived != archived && self.can_delete(id)
+  }
+}
+
+///|
+pub fn State::is_archived(self : State, id : String) -> Bool {
+  self.sessions.any(session => session.id == id && session.archived)
+}
+
+///|
+pub fn State::can_send(self : State, id : String) -> Bool {
+  self.conversations.get(id) is Some(conversation) &&
+  !self.is_archived(id) &&
+  !self.deletions.contains(id) &&
+  !(self.metadata_saves.get(id) is Some({ edit: Archive(true), .. })) &&
+  !conversation.loading &&
+  !conversation.sending &&
+  !conversation.generating &&
+  !conversation.history_required
+}
+
+///|
 fn State::forget(self : State, id : String) -> State {
   let conversations = self.conversations.copy()
   conversations.remove(id)
   let deletions = self.deletions.copy()
   deletions.remove(id)
+  let metadata_saves = self.metadata_saves.copy()
+  metadata_saves.remove(id)
   {
     ..self,
     sessions: self.sessions.filter(session => session.id != id),
     conversations,
     deletions,
+    metadata_saves,
     retired: if self.retired.contains(id) {
       self.retired
     } else {
@@ -181,14 +250,21 @@ pub fn update(
           next = next.forget(item.id)
         }
       }
-      (
-        {
-          ..next,
-          sessions: sessions.filter(item => !next.retired.contains(item.id)),
-        },
-        @cmd.none,
-        None,
-      )
+      let sessions = sessions.filter(item => !next.retired.contains(item.id))
+      let history : Array[@cmd.Cmd] = []
+      for session in sessions {
+        if session.archived && !state.is_archived(session.id) {
+          let (archived, command) = next.fence_archived_history(
+            session.id,
+            request,
+            token,
+            emit,
+          )
+          next = archived
+          history.push(command)
+        }
+      }
+      ({ ..next, sessions, }, @cmd.batch(history), None)
     }
     ListFailed(epoch, request, error) => {
       guard epoch == state.epoch && request == state.list_request else {
@@ -222,7 +298,13 @@ pub fn update(
         return (state, @cmd.none, None)
       }
       let sessions = [
-        { id, title: None, updated_at: None, generating: false, },
+        {
+          id,
+          title: None,
+          updated_at: None,
+          generating: false,
+          archived: false,
+        },
         ..state.sessions.filter(session => session.id != id),
       ]
       let (next, command) = { ..state, sessions, creation: None, }.list(
@@ -248,6 +330,82 @@ pub fn update(
         ..state,
         creation: Some({ ..creation, failure: Some(error.label()), }),
       }.failed(error)
+      (next, command, None)
+    }
+    Edit(account~, session=id, edit~) => {
+      let edit = match edit {
+        Rename(title) => Rename(title.trim().to_owned())
+        other => other
+      }
+      guard state.user_id == Some(account) &&
+        token is Some(token) &&
+        state.can_edit(id, edit) &&
+        !(edit is Rename(title) && title.is_empty()) else {
+        return (state, @cmd.none, None)
+      }
+      let request = state.sequence + 1
+      let metadata_saves = state.metadata_saves.copy()
+      metadata_saves[id] = { request, edit, navigation, }
+      (
+        { ..state, sequence: request, metadata_saves, notice: None, },
+        run(emit, () => {
+          try {
+            edit_session(token, id, edit)
+            Edited(state.epoch, id, request)
+          } catch {
+            CloudError(error) => EditFailed(state.epoch, id, request, error)
+            _ => EditFailed(state.epoch, id, request, Unreachable)
+          }
+        }),
+        None,
+      )
+    }
+    Edited(epoch, id, request) => {
+      guard epoch == state.epoch &&
+        state.metadata_saves.get(id) is Some(save) &&
+        save.request == request else {
+        return (state, @cmd.none, None)
+      }
+      let metadata_saves = state.metadata_saves.copy()
+      metadata_saves.remove(id)
+      let sessions = state.sessions.map(session => {
+        if session.id != id {
+          session
+        } else {
+          match save.edit {
+            Rename(title) => { ..session, title: Some(title), }
+            Archive(archived) =>
+              {
+                ..session,
+                archived,
+                generating: session.generating && !archived,
+              }
+          }
+        }
+      })
+      // The new list request fences every inventory that began before the
+      // completed PATCH, including reads issued while the save was pending.
+      let next = { ..state, sessions, metadata_saves, }
+      let (next, history) = if save.edit is Archive(true) {
+        next.fence_archived_history(id, request, token, emit)
+      } else {
+        (next, @cmd.none)
+      }
+      let (next, command) = next.list(token, emit)
+      (next, @cmd.batch([history, command]), None)
+    }
+    EditFailed(epoch, id, request, error) => {
+      guard epoch == state.epoch &&
+        state.metadata_saves.get(id) is Some(save) &&
+        save.request == request else {
+        return (state, @cmd.none, None)
+      }
+      if error is Http(404) {
+        return (state.forget(id), @cmd.none, None)
+      }
+      let metadata_saves = state.metadata_saves.copy()
+      metadata_saves.remove(id)
+      let (next, command) = { ..state, metadata_saves, }.failed(error)
       (next, command, None)
     }
     Delete(id) => {
@@ -417,11 +575,7 @@ pub fn update(
         state.user_id == Some(account) &&
         token is Some(token) &&
         state.conversations.get(id) is Some(conversation) &&
-        !state.deletions.contains(id) &&
-        !conversation.loading &&
-        !conversation.sending &&
-        !conversation.generating &&
-        !conversation.history_required &&
+        state.can_send(id) &&
         !draft.task.is_blank() &&
         draft.mentions.is_empty() &&
         draft.images.is_empty() else {

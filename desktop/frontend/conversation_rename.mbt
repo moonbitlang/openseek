@@ -40,12 +40,20 @@ fn Model::decorate_conversation_input(
     selected &&
     !self.selected_conversation_loaded() &&
     !load_failed
-  let rename = match self.conversation_rename {
-    Some(rename) if rename.id == input.id =>
+  let rename = self.conversation_rename_input(input.id)
+  { ..input, active: selected, loading, load_failed, rename, }
+}
+
+///|
+fn Model::conversation_rename_input(
+  self : Model,
+  id : @conversation.Id,
+) -> @conversation.Rename? {
+  match self.conversation_rename {
+    Some(rename) if rename.id == id =>
       Some(@conversation.Rename::{ draft: rename.draft, saving: rename.saving, })
     _ => None
   }
-  { ..input, active: selected, loading, load_failed, rename, }
 }
 
 ///|
@@ -127,6 +135,24 @@ fn Model::edit_conversation_rename(
       close(edit is Submitted)
     Submitted | Left => {
       let saving = { ..rename, saving: true, focus_left: edit is Left, }
+      if rename.id.source() is @conversation.CloudLive {
+        guard self.cloud.user_id == Some(rename.id.channel()) &&
+          self.cloud.can_edit(
+            rename.id.conversation(),
+            @cloud.Rename(title.to_owned()),
+          ) else {
+          return close(edit is Submitted)
+        }
+        return update_cloud(
+          dispatch,
+          @cloud.Edit(
+            account=rename.id.channel(),
+            session=rename.id.conversation(),
+            edit=Rename(title.to_owned()),
+          ),
+          { ..self, conversation_rename: Some(saving), },
+        )
+      }
       (
         rename_conversation(locale=self.locale, dispatch, saving),
         { ..self, conversation_rename: Some(saving), },

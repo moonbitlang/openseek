@@ -3,6 +3,7 @@
 pub(all) enum ConversationSource {
   OpenSeekLive
   CloudLive
+  CloudArchived
   OpenSeekArchived
   CodexLive
   CodexArchived
@@ -13,6 +14,7 @@ pub(all) enum ConversationSource {
 fn ConversationSource::key(self : ConversationSource) -> String {
   match self {
     CloudLive => "cloud.live"
+    CloudArchived => "cloud.archived"
     OpenSeekLive => "openseek.live"
     OpenSeekArchived => "openseek.archived"
     CodexLive => "codex.live"
@@ -206,7 +208,6 @@ fn Actions::command(
 ///|
 priv enum MenuKind {
   LiveMenu
-  CloudMenu
   OpenSeekArchivedMenu
   CodexArchivedMenu
 }
@@ -217,10 +218,9 @@ fn Input::menu_kind(self : Input) -> MenuKind? {
     return None
   }
   match self.id.source() {
-    OpenSeekLive | CodexLive => Some(LiveMenu)
-    OpenSeekArchived => Some(OpenSeekArchivedMenu)
+    OpenSeekLive | CodexLive | CloudLive => Some(LiveMenu)
+    OpenSeekArchived | CloudArchived => Some(OpenSeekArchivedMenu)
     CodexArchived => Some(CodexArchivedMenu)
-    CloudLive => Some(CloudMenu)
     CodexDraft => None
   }
 }
@@ -242,21 +242,6 @@ fn Input::menu_entries_for_kind(
 ) -> Array[@action_menu.Entry] {
   let (archive_enabled, delete_enabled) = self.menu_enabled()
   match kind {
-    CloudMenu =>
-      [
-        Action({
-          label: ui(locale, DeleteLabel),
-          title: if delete_enabled {
-            ui(locale, DeletePermanently)
-          } else {
-            ui(locale, FinishBeforeDelete)
-          },
-          icon: Some(@icons.icon(@icons.icon_close)),
-          enabled: delete_enabled,
-          destructive: true,
-          command: (actions.delete)(self.id),
-        }),
-      ]
     LiveMenu => {
       let entries : Array[@action_menu.Entry] = [
         Action({
@@ -273,7 +258,16 @@ fn Input::menu_entries_for_kind(
           // The menu is the row's only Archive control, so it carries the
           // source's own hint about what archiving keeps.
           title: if !archive_enabled {
-            ui(locale, StopBeforeArchive)
+            ui(
+              locale,
+              if self.id.source() is CloudLive {
+                FinishBeforeArchive
+              } else {
+                StopBeforeArchive
+              },
+            )
+          } else if self.id.source() is CloudLive {
+            ui(locale, ArchiveConversation)
           } else if self.trailing is [Archive(title~), ..] {
             title
           } else {
@@ -293,6 +287,8 @@ fn Input::menu_entries_for_kind(
             label: ui(locale, DeleteLabel),
             title: if delete_enabled {
               title
+            } else if self.id.source() is CloudLive {
+              ui(locale, FinishBeforeDelete)
             } else {
               ui(locale, StopBeforeDelete)
             },
@@ -311,7 +307,7 @@ fn Input::menu_entries_for_kind(
           label: ui(locale, RestoreLabel),
           title: ui(locale, RestoreConversation),
           icon: Some(@icons.icon(@icons.icon_arrow_up)),
-          enabled: true,
+          enabled: !(self.id.source() is CloudArchived && self.running),
           destructive: false,
           command: (actions.restore)(self.id),
         }),
@@ -648,7 +644,7 @@ pub fn component(
     // also opens.
     // Archived rows keep their direct Restore and Delete buttons.
     let buttons : Array[@html.Html] = []
-    if menu_kind is Some(LiveMenu | CloudMenu) {
+    if menu_kind is Some(LiveMenu) {
       buttons.push(
         @html.button(
           class="row-archive row-menu-button",
@@ -663,7 +659,7 @@ pub fn component(
         ),
       )
     }
-    let trailing_actions = if menu_kind is Some(LiveMenu | CloudMenu) {
+    let trailing_actions = if menu_kind is Some(LiveMenu) {
       []
     } else {
       input.trailing
@@ -682,7 +678,11 @@ pub fn component(
         @html.span(class="row-status", status),
       ]
       for action in trailing_actions {
-        let enabled = !(action is Archive(..) && input.running)
+        let enabled = if input.id.source() is CloudArchived {
+          !input.running
+        } else {
+          !(action is Archive(..) && input.running)
+        }
         let (title, button_class, image, id_suffix) = match action {
           Archive(title~) =>
             (title, "row-archive", @icons.icon_archive, "archive")
@@ -705,7 +705,11 @@ pub fn component(
               button_class + " disabled"
             },
             type_="button",
-            title=if enabled { title } else { ui(locale, StopBeforeArchive) },
+            title=if enabled || input.id.source() is CloudArchived {
+              title
+            } else {
+              ui(locale, StopBeforeArchive)
+            },
             attrs=@html.Attrs::build()
               .aria_disabled((!enabled).to_string())
               .on_click(event => {

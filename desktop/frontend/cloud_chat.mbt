@@ -34,6 +34,13 @@ fn Model::cloud_conversation(self : Model) -> @cloud.Conversation? {
 }
 
 ///|
+fn Model::cloud_archived(self : Model) -> Bool {
+  self
+  .cloud_identity()
+  .map_or(false, owner => self.cloud.is_archived(owner.session()))
+}
+
+///|
 fn Model::cloud_title(self : Model) -> String {
   if self.selected_conversation is Some(CloudSelection(account~, session~)) &&
     self.cloud.user_id == Some(account) {
@@ -119,6 +126,28 @@ fn update_cloud(
   let removed_selection = model.cloud_identity()
     is Some(@interop.Cloud(session~, ..)) &&
     removed.contains(session)
+  let archived_selection = match message {
+    @cloud.Edited(epoch, id, request) =>
+      model.screen is Chat &&
+      !model.cloud.creating_at(model.chat_navigation_generation) &&
+      epoch == before.epoch &&
+      before.metadata_saves.get(id)
+      is Some(
+        {
+          request: pending,
+          edit: @cloud.Archive(true),
+          navigation: generation,
+        }
+      ) &&
+      pending == request &&
+      generation == model.chat_navigation_generation &&
+      !cloud.metadata_saves.contains(id) &&
+      cloud.is_archived(id) &&
+      model.cloud_identity() is Some(@interop.Cloud(account~, session~)) &&
+      cloud.user_id == Some(account) &&
+      session == id
+    _ => false
+  }
   let next = {
     ..model,
     cloud,
@@ -130,15 +159,24 @@ fn update_cloud(
       other => other
     },
     api_setup_open: model.api_setup_open && !(message is @cloud.Create),
+    conversation_rename: match model.conversation_rename {
+      Some(rename) if rename.id.source() is @conversation.CloudLive &&
+        (
+          cloud.user_id != Some(rename.id.channel()) ||
+          cloud.retired.contains(rename.id.conversation())
+        ) => None
+      other => other
+    },
     composer_entry_retirements: retirements,
     selected_conversation: if removed_selection ||
+      archived_selection ||
       (switched && model.cloud_identity() is Some(_)) {
       None
     } else {
       model.selected_conversation
     },
   }
-  if removed_selection && model.screen is Chat {
+  if (removed_selection || archived_selection) && model.screen is Chat {
     let next = {
       ..next,
       chat_navigation_generation: next.chat_navigation_generation + 1,
@@ -157,6 +195,22 @@ fn update_cloud(
   if cloud.needs_sign_in {
     let (expired, next) = expire_account(dispatch, next)
     return (@cmd.batch([command, expired]), next)
+  }
+  if next.conversation_rename is Some(rename) &&
+    rename.id.source() is @conversation.CloudLive &&
+    before.metadata_saves.get(rename.id.conversation())
+    is Some({ edit: @cloud.Rename(_), .. }) &&
+    !cloud.metadata_saves.contains(rename.id.conversation()) {
+    let (finish, next) = match message {
+      @cloud.EditFailed(_, _, _, error) =>
+        update_msg(
+          dispatch,
+          ConversationRenameFailed(id=rename.id, message=error.label()),
+          { ..next, cloud: { ..next.cloud, notice: None, }, },
+        )
+      _ => next.finish_conversation_rename(rename)
+    }
+    return (@cmd.batch([command, finish]), next)
   }
   (command, next)
 }
@@ -207,14 +261,10 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
         }),
       ],
       placeholder: shell_text(self.locale, AskPlaceholder),
-      disabled: false,
+      disabled: self.cloud_archived(),
       primary_action: @composer.Send(
         available=self.account is Some(_) &&
-          !conversation.loading &&
-          !conversation.sending &&
-          !conversation.generating &&
-          !conversation.history_required &&
-          !self.cloud.deletions.contains(owner.session()),
+          self.cloud.can_send(owner.session()),
       ),
     },
   })
@@ -223,20 +273,28 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
 ///|
 fn Model::cloud_chat_rows(
   self : Model,
+  archived~ : Bool = false,
 ) -> Array[(RowStamp, @conversation.Input)] {
   guard self.cloud.user_id is Some(account) else { return [] }
-  self.cloud.sessions.map(item => {
+  self.cloud.sessions
+  .filter(item => item.archived == archived)
+  .map(item => {
     let active = self.screen is Chat &&
       self.cloud_identity() == Some(@interop.Cloud(account~, session=item.id))
     let conversation = self.cloud.conversations.get(item.id)
+    let id = @conversation.Id(
+      source=if archived {
+        @conversation.CloudArchived
+      } else {
+        @conversation.CloudLive
+      },
+      channel=account,
+      conversation=item.id,
+    )
     (
       item.updated_at.map_or(ComposingNow, ms => ActiveAt(ms)),
       {
-        id: @conversation.Id(
-          source=@conversation.CloudLive,
-          channel=account,
-          conversation=item.id,
-        ),
+        id,
         title: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         label: item.title.unwrap_or(shell_text(self.locale, NewChatLabel)),
         nested: false,
@@ -250,10 +308,16 @@ fn Model::cloud_chat_rows(
           conversation.sending || conversation.generating
         }) ||
         item.generating ||
-        self.cloud.deletions.contains(item.id),
+        self.cloud.deletions.contains(item.id) ||
+        self.cloud.metadata_saves.contains(item.id),
         openable: true,
-        rename: None,
+        rename: self.conversation_rename_input(id),
         trailing: [
+          if archived {
+            @conversation.Restore(title=shell_text(self.locale, RestoreHint))
+          } else {
+            @conversation.Archive(title=shell_text(self.locale, ArchiveHint))
+          },
           @conversation.Delete(title=shell_text(self.locale, DeletePermanently)),
         ],
         children: [],

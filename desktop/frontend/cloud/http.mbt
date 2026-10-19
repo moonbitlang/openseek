@@ -73,6 +73,27 @@ async fn load_history(token : String, session : String) -> History {
 }
 
 ///|
+async fn edit_session(
+  token : String,
+  session : String,
+  edit : SessionEdit,
+) -> Unit {
+  let (response, _) = @http.request(
+    CloudOrigin + "/v1/sessions/\{@uri.encode_component(session)}",
+    Patch,
+    { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    ToJson::to_json(edit).stringify(),
+  ) catch {
+    _ => raise CloudError(Unreachable)
+  }
+  // Metadata updates return an empty 204, not a JSON document.
+  if response.code == 409 {
+    raise CloudError(Http(409))
+  }
+  check_status(response.code)
+}
+
+///|
 /// Async HTTP's JS client uses fetch, exposing its response stream. Reading
 /// complete UTF-8 lines buffers arbitrary network and codepoint boundaries.
 /// Cookies use fetch's default same-origin policy: none are sent to Cloud.

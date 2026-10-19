@@ -5478,7 +5478,14 @@ fn update_msg(
     ConversationRenameRequested(id~, label~) =>
       // One edit at a time: a save still in flight keeps its field, so its
       // failure has somewhere to be shown.
-      if id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) &&
+      if (
+          id.source() is (@conversation.OpenSeekLive | @conversation.CodexLive) ||
+          (
+            id.source() is @conversation.CloudLive &&
+            model.cloud.user_id == Some(id.channel()) &&
+            model.cloud.can_edit(id.conversation(), @cloud.Rename(label))
+          )
+        ) &&
         !(model.conversation_rename is Some({ saving: true, .. })) {
         (
           focus_conversation_rename(),

@@ -4,6 +4,7 @@ pub(all) struct Session {
   title : String?
   updated_at : Double?
   generating : Bool
+  archived : Bool
 } derive(Eq)
 
 ///|
@@ -84,6 +85,33 @@ pub struct Creation {
 } derive(Eq)
 
 ///|
+pub(all) enum SessionEdit {
+  Rename(String)
+  Archive(Bool)
+} derive(Eq)
+
+///|
+impl ToJson for SessionEdit with fn to_json(self) {
+  match self {
+    Rename(title) => { "title": Json(title) }
+    Archive(archived) => { "archived": Json(archived) }
+  }
+}
+
+///|
+pub(all) struct MetadataSave {
+  request : Int32
+  edit : SessionEdit
+  navigation : Int32
+} derive(Eq)
+
+///|
+pub extend SessionEdit with Eq::{equal, not_equal}
+
+///|
+pub extend MetadataSave with Eq::{equal, not_equal}
+
+///|
 pub(all) struct State {
   user_id : String?
   epoch : Int32
@@ -93,6 +121,7 @@ pub(all) struct State {
   sequence : Int32
   list_request : Int32
   deletions : Map[String, Int32]
+  metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
   creation : Creation?
   notice : String?
@@ -109,6 +138,7 @@ pub fn State::empty() -> State {
     sequence: 0,
     list_request: 0,
     deletions: {},
+    metadata_saves: {},
     retired: [],
     creation: None,
     notice: None,
@@ -152,6 +182,9 @@ pub(all) enum Msg {
   Delete(String)
   Deleted(Int32, String, Int32)
   DeleteFailed(Int32, String, Int32, Failure)
+  Edit(account~ : String, session~ : String, edit~ : SessionEdit)
+  Edited(Int32, String, Int32)
+  EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
   Listed(Int32, Int32, Array[Session])
   ListFailed(Int32, Int32, Failure)
@@ -221,6 +254,10 @@ fn decode_sessions(json : Json) -> Array[Session] raise CloudError {
     },
     updated_at: Some(required_number(item, "updated_at")),
     generating: required_bool(item, "generating"),
+    archived: match item {
+      Object(fields) if !fields.contains("archived") => false
+      _ => required_bool(item, "archived")
+    },
   })
 }
 
