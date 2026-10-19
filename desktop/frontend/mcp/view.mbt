@@ -100,16 +100,33 @@ fn status_rows(
         } else {
           config.path
         }
-        rows.push(problem(text(locale, ConfigFailed(name)), error))
+        rows.push(
+          item(
+            title=text(locale, ConfigFailed(name)),
+            detail=error,
+            state=("danger", text(locale, Failed)),
+          ),
+        )
       }
     }
   }
   if loaded && status.servers.is_empty() {
     rows.push(note(text(locale, NoServers)))
   }
+  // Where a server came from is worth a line only when the user has more
+  // than one file of their own; the built-in file is named as such.
+  let user_files = status.configs.filter(config => {
+    builtin_config != Some(config.path)
+  })
+  let show_source = user_files.length() > 1
   for server in status.servers {
     rows.push(
-      server_row(locale, server, builtin=builtin_config == Some(server.source)),
+      server_row(
+        locale,
+        server,
+        builtin=builtin_config == Some(server.source),
+        show_source~,
+      ),
     )
   }
 }
@@ -123,87 +140,133 @@ fn note(message : String) -> @html.Html {
 }
 
 ///|
-/// A row for something that went wrong, with the error in the words of
-/// whoever reported it (the host or the engine).
+/// A row for something that went wrong while asking, with the error in the
+/// words of whoever reported it.
 fn problem(title : String, error : String) -> @html.Html {
   @html.div(class="setting-row", [
     @html.div(class="setting-text", [
       @html.div(class="setting-name", title),
-      @html.div(class="setting-desc mcp-error", error),
+      @html.div(class="setting-desc", error),
     ]),
   ])
 }
 
 ///|
-/// The tools a server registered, folded until asked for.
-fn tool_list(locale : @i18n.Locale, tools : Array[@wire.McpTool]) -> @html.Html {
-  @html.details(class="mcp-tools", [
-    @html.summary(text(locale, ToolCount(tools.length()))),
-    @html.ul(
-      [
-        for tool in tools => {
-          @html.li(title=tool.description, [@html.code(tool.name)])
-        }
-      ],
-    ),
+/// One listed thing — a server or a configuration file — with an optional
+/// monospace meta line, a detail line, and its state on the right as the
+/// app's status dot and label. `state` is the dot's tone and the label.
+fn item(
+  title~ : String,
+  meta? : String,
+  detail~ : String,
+  detail_title? : String,
+  state~ : (String, String),
+) -> @html.Html {
+  let (tone, label) = state
+  let lines : Array[@html.Html] = [@html.div(class="setting-name", title)]
+  if meta is Some(meta) {
+    lines.push(@html.div(class="mcp-meta", meta))
+  }
+  lines.push(
+    @html.div(class="setting-desc mcp-detail", title?=detail_title, detail),
+  )
+  @html.div(class="setting-row mcp-item", [
+    @html.div(class="setting-text", lines),
+    @html.div(class="run-status mcp-status", [
+      @html.span(class="run-dot \{tone}", ""),
+      @html.span(class="run-text", label),
+    ]),
   ])
 }
 
 ///|
-/// One server: its name, how it is reached, where it was configured — the
-/// host's built-in file is named as such rather than by its path — and the
-/// state the engine found it in.
+/// A registered tool's name without the `mcp__<server>__` namespace every
+/// MCP tool carries, which the row it is listed under already says.
+fn short_tool_name(name : String) -> String {
+  guard name.strip_prefix("mcp__") is Some(rest) &&
+    rest.split_once("__") is Some((_, tool)) &&
+    !tool.is_empty() else {
+    return name
+  }
+  tool.to_owned()
+}
+
+///|
+/// The tools a server registered, by their short names.
+fn tool_line(tools : Array[@wire.McpTool]) -> (String, String) {
+  let names = tools.map(tool => short_tool_name(tool.name))
+  let full = tools.map(tool => {
+    if tool.description.is_empty() {
+      tool.name
+    } else {
+      "\{tool.name} — \{tool.description}"
+    }
+  })
+  (names.join(", "), full.join("\n"))
+}
+
+///|
+/// One server: its name, how it is reached — or, for the host's own entry,
+/// that it is built in — and the state the engine found it in.
 fn server_row(
   locale : @i18n.Locale,
   server : @wire.McpServerStatus,
   builtin~ : Bool,
+  show_source~ : Bool,
 ) -> @html.Html {
   let transport = match server.transport {
     Stdio => "stdio"
     Http => "http"
   }
-  let name : Array[@html.Html] = [@html.text(server.name)]
-  if builtin {
-    name.push(@html.span(class="mcp-origin", text(locale, Builtin)))
+  let meta = if builtin {
+    text(locale, Builtin)
+  } else if show_source {
+    "\{transport} · \{server.target} · \{server.source}"
+  } else {
+    "\{transport} · \{server.target}"
   }
-  let details : Array[@html.Html] = [
-    @html.div(class="setting-name", name),
-    @html.div(class="setting-desc", "\{transport} · \{server.target}"),
-  ]
-  if !builtin {
-    details.push(
-      @html.div(class="setting-desc", text(locale, FromFile(server.source))),
-    )
-  }
-  let (badge_class, badge) = match server.state {
+  match server.state {
     Connected(tools) => {
-      details.push(tool_list(locale, tools))
-      ("mcp-state ok", Connected)
-    }
-    // The tools are still registered, so they are still listed: these are
-    // the calls that now fail.
-    Lost(tools) => {
-      details.push(
-        @html.div(class="setting-desc mcp-error", text(locale, LostReason)),
+      let (detail, detail_title) = tool_line(tools)
+      item(
+        title=server.name,
+        meta~,
+        detail~,
+        detail_title~,
+        state=("ok", text(locale, Connected)),
       )
-      details.push(tool_list(locale, tools))
-      ("mcp-state error", Lost)
     }
-    NoTools => {
-      details.push(@html.div(class="setting-desc", text(locale, NoToolsReason)))
-      ("mcp-state", NoTools)
+    // The tools are still registered: these are the calls that now fail.
+    Lost(tools) => {
+      let (_, detail_title) = tool_line(tools)
+      item(
+        title=server.name,
+        meta~,
+        detail=text(locale, LostReason),
+        detail_title~,
+        state=("warn", text(locale, Lost)),
+      )
     }
-    Failed(error) => {
-      details.push(@html.div(class="setting-desc mcp-error", error))
-      ("mcp-state error", Failed)
-    }
-    Skipped => {
-      details.push(@html.div(class="setting-desc", text(locale, SkippedReason)))
-      ("mcp-state", Skipped)
-    }
+    NoTools =>
+      item(
+        title=server.name,
+        meta~,
+        detail=text(locale, NoToolsReason),
+        state=("", text(locale, NoTools)),
+      )
+    Failed(error) =>
+      item(
+        title=server.name,
+        meta~,
+        detail=error,
+        state=("danger", text(locale, Failed)),
+      )
+    Skipped =>
+      item(
+        title=server.name,
+        meta~,
+        detail=text(locale, SkippedReason),
+        state=("", text(locale, Skipped)),
+      )
   }
-  @html.div(class="setting-row mcp-server", [
-    @html.div(class="setting-text", details),
-    @html.span(class=badge_class, text(locale, badge)),
-  ])
 }

@@ -75,25 +75,22 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const group = mcpGroup(page);
 
-  // The host's own server is named as built in, not by its file; the user's
-  // servers say which file they came from.
-  const seekmoon = group.locator('.mcp-server', { hasText: 'seekmoon' });
+  // The host's own server is named as built in, not by its file or address.
+  const seekmoon = group.locator('.mcp-item', { hasText: 'seekmoon' });
   await expect(seekmoon.getByText('SeekMoon built-in', { exact: true })).toBeVisible();
-  await expect(seekmoon.getByText(builtinPath, { exact: false })).toHaveCount(0);
-  await expect(group.getByText('playwright', { exact: true })).toBeVisible();
-  await expect(group.getByText('stdio · npx', { exact: true })).toBeVisible();
-  await expect(group.getByText(`From ${userPath}`, { exact: true }).first()).toBeVisible();
+  await expect(seekmoon.getByText('127.0.0.1', { exact: false })).toHaveCount(0);
+  // Tools are listed by their short names; the full names are on hover.
+  await expect(seekmoon.getByText('browser_tabs, browser_open, browser_navigate', { exact: true })).toBeVisible();
+  const playwright = group.locator('.mcp-item', { hasText: 'playwright' });
+  await expect(playwright.getByText('stdio · npx', { exact: true })).toBeVisible();
+  await expect(playwright.locator('.mcp-detail')).toHaveAttribute('title', /mcp__playwright__browser_click — Perform click on a web page/);
+  // A single user file is not repeated on every row.
+  await expect(group.getByText(userPath, { exact: false })).toHaveCount(0);
   await expect(group.getByText('Connected', { exact: true })).toHaveCount(2);
-  await expect(group.getByText('Failed', { exact: true })).toBeVisible();
+  await expect(group.locator('.mcp-item', { hasText: 'docs' }).getByText('Failed', { exact: true })).toBeVisible();
   await expect(group.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
   await expect(group.getByText('Disconnected', { exact: true })).toBeVisible();
   await expect(group.getByText('No tools', { exact: true })).toBeVisible();
-
-  // The tools stay folded until asked for.
-  const tool = group.getByText('mcp__playwright__browser_click', { exact: true });
-  await expect(tool).toBeHidden();
-  await group.getByText('2 tools', { exact: true }).click();
-  await expect(tool).toBeVisible();
   await group.screenshot({ path: testInfo.outputPath('mcp-servers.png') });
 
   // The question names the conversation on screen, whose engine is asked.

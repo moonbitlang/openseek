@@ -14,10 +14,8 @@ priv enum UiMessage {
   NoServers
   ConfigFailed(String)
   Builtin
-  FromFile(String)
   CheckFailed
   Connected
-  ToolCount(Int32)
   NoTools
   NoToolsReason
   Failed
@@ -30,21 +28,21 @@ priv enum UiMessage {
 ///|
 fn text(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, Servers) => "MCP servers"
-    (Spanish, Servers) => "Servidores MCP"
-    (SimplifiedChinese, Servers) => "MCP 服务器"
-    (TraditionalChinese, Servers) => "MCP 伺服器"
-    (Japanese, Servers) => "MCP サーバー"
+    (English, Servers) => "Servers"
+    (Spanish, Servers) => "Servidores"
+    (SimplifiedChinese, Servers) => "服务器"
+    (TraditionalChinese, Servers) => "伺服器"
+    (Japanese, Servers) => "サーバー"
     (English, Description) =>
-      "Servers listed in mcp.json give the agent extra tools, beside SeekMoon's built-in ones. This shows what the current conversation's engine is connected to; edits to the file apply from its next message."
+      "What this conversation's engine is connected to. Edits to mcp.json apply from its next message."
     (Spanish, Description) =>
-      "Los servidores indicados en mcp.json dan al agente herramientas adicionales, además de las integradas de SeekMoon. Aquí se muestra a qué está conectado el motor de la conversación actual; los cambios en el archivo se aplican a partir de su siguiente mensaje."
+      "A qué está conectado el motor de esta conversación. Los cambios en mcp.json se aplican a partir de su siguiente mensaje."
     (SimplifiedChinese, Description) =>
-      "除 SeekMoon 内置的工具外，mcp.json 中配置的服务器会为智能体提供额外的工具。这里显示当前对话的引擎实际连接的服务器；对文件的修改从该对话的下一条消息起生效。"
+      "当前对话的引擎连接的服务器。对 mcp.json 的修改从下一条消息起生效。"
     (TraditionalChinese, Description) =>
-      "除 SeekMoon 內建的工具外，mcp.json 中設定的伺服器會為代理提供額外的工具。這裡顯示目前對話的引擎實際連線的伺服器；對檔案的修改從該對話的下一則訊息起生效。"
+      "目前對話的引擎連線的伺服器。對 mcp.json 的修改從下一則訊息起生效。"
     (Japanese, Description) =>
-      "SeekMoon の組み込みツールに加えて、mcp.json に記載したサーバーがエージェントに追加のツールを提供します。ここには現在の会話のエンジンが接続しているサーバーが表示されます。ファイルの変更はその会話の次のメッセージから適用されます。"
+      "この会話のエンジンが接続しているサーバーです。mcp.json の変更は次のメッセージから適用されます。"
     (English, Refresh) => "Refresh"
     (Spanish, Refresh) => "Actualizar"
     (SimplifiedChinese, Refresh) => "刷新"
@@ -121,11 +119,6 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Builtin) => "SeekMoon 内置"
     (TraditionalChinese, Builtin) => "SeekMoon 內建"
     (Japanese, Builtin) => "SeekMoon 組み込み"
-    (English, FromFile(path)) => "From \{path}"
-    (Spanish, FromFile(path)) => "De \{path}"
-    (SimplifiedChinese, FromFile(path)) => "来自 \{path}"
-    (TraditionalChinese, FromFile(path)) => "來自 \{path}"
-    (Japanese, FromFile(path)) => "\{path} から"
     (English, CheckFailed) => "The status could not be read"
     (Spanish, CheckFailed) => "No se pudo leer el estado"
     (SimplifiedChinese, CheckFailed) => "未能读取状态"
@@ -136,13 +129,6 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Connected) => "已连接"
     (TraditionalChinese, Connected) => "已連線"
     (Japanese, Connected) => "接続済み"
-    (English, ToolCount(1)) => "1 tool"
-    (English, ToolCount(count)) => "\{count} tools"
-    (Spanish, ToolCount(1)) => "1 herramienta"
-    (Spanish, ToolCount(count)) => "\{count} herramientas"
-    (SimplifiedChinese, ToolCount(count)) => "\{count} 个工具"
-    (TraditionalChinese, ToolCount(count)) => "\{count} 個工具"
-    (Japanese, ToolCount(count)) => "\{count} 個のツール"
     (English, NoTools) => "No tools"
     (Spanish, NoTools) => "Sin herramientas"
     (SimplifiedChinese, NoTools) => "没有工具"
@@ -168,7 +154,7 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, Lost) => "已中斷"
     (Japanese, Lost) => "切断"
     (English, LostReason) =>
-      "The server connected and has since exited or dropped the connection. Its tools fail until the engine restarts."
+      "Exited or dropped the connection after connecting. Its tools fail until the engine restarts."
     (Spanish, LostReason) =>
       "El servidor se conectó y después terminó o perdió la conexión. Sus herramientas fallan hasta que el motor se reinicie."
     (SimplifiedChinese, LostReason) =>
