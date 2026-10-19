@@ -3,6 +3,18 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// The release workflow stamps Desktop's manifest before all platform builds.
+val appVersion = providers.gradleProperty("releaseVersion").orElse(provider {
+    Regex("""(?m)^version = "([^"]+)"$""")
+        .find(rootProject.file("../desktop/moon.mod").readText())
+        ?.groupValues?.get(1) ?: error("Desktop version is missing")
+}).get()
+val versionParts = Regex("""(0|[1-9][0-9]{0,3})\.(0|[1-9][0-9]?)\.(0|[1-9][0-9]?)""")
+    .matchEntire(appVersion)?.groupValues?.drop(1)?.map(String::toInt)
+    ?: error("Android version must be major.minor.patch (major <= 9999, minor/patch <= 99)")
+// +1 keeps 0.0.0 positive. This ordering agrees with the release version.
+val appVersionCode = versionParts[0] * 10_000 + versionParts[1] * 100 + versionParts[2] + 1
+
 android {
     namespace = "com.moonbit.openseek"
     compileSdk = 36
@@ -10,10 +22,23 @@ android {
         applicationId = "com.moonbit.openseek.connect"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersion
+    }
+    signingConfigs {
+        create("release") {
+            providers.environmentVariable("OPENSEEK_ANDROID_KEYSTORE_PATH").orNull?.let {
+                storeFile = file(it)
+            }
+            storePassword = providers.environmentVariable("OPENSEEK_ANDROID_KEYSTORE_PASSWORD").orNull
+            keyAlias = providers.environmentVariable("OPENSEEK_ANDROID_KEY_ALIAS").orNull
+            keyPassword = providers.environmentVariable("OPENSEEK_ANDROID_KEY_PASSWORD").orNull
+        }
     }
     buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"

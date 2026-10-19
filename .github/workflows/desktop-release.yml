@@ -274,6 +274,16 @@ jobs:
           compression-level: 0
           retention-days: 1
 
+      - name: Hand Browser archive to the Android builder
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
+          overwrite: true
+          path: desktop/dist/SeekMoon.browser.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
       - name: Remove signing keychain
         if: always()
         shell: bash
@@ -281,6 +291,85 @@ jobs:
           if [[ -n "${SIGNING_KEYCHAIN:-}" && -f "$SIGNING_KEYCHAIN" ]]; then
             security delete-keychain "$SIGNING_KEYCHAIN"
           fi
+
+  release-android:
+    name: Build and sign Android
+    needs: [release-needed, release-macos]
+    if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_VERSION: ${{ needs.release-needed.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Install Android SDK
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
+      - name: Stamp release version
+        run: node desktop/scripts/release.mjs stamp "$RELEASE_VERSION"
+
+      # Package the exact Browser bytes built for this release, without a
+      # second frontend build or downloading the large macOS application.
+      - name: Collect Browser archive
+        uses: actions/download-artifact@v4
+        with:
+          name: SeekMoon-browser-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist
+
+      - name: Build signed release APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          OPENSEEK_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          OPENSEEK_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          OPENSEEK_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          export OPENSEEK_ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/openseek-android-release.jks"
+          trap 'rm -f "$OPENSEEK_ANDROID_KEYSTORE_PATH"' EXIT
+          if [[ -z "$ANDROID_KEYSTORE_BASE64" ]]; then
+            echo '::error::Configure ANDROID_KEYSTORE_BASE64 and Android signing password/alias secrets before releasing.'
+            exit 1
+          fi
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$OPENSEEK_ANDROID_KEYSTORE_PATH"
+          node android/build.mjs --release --browser-bundle desktop/dist/SeekMoon.browser.tar.gz
+
+      - name: Verify APK signature and version
+        run: |
+          set -euo pipefail
+          tools="$ANDROID_HOME/build-tools/36.0.0"
+          apk=desktop/dist/SeekMoon-android.apk
+          "$tools/apksigner" verify --verbose --print-certs "$apk"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/android-badging.txt"
+          grep -F "package: name='com.moonbit.openseek.connect'" "$RUNNER_TEMP/android-badging.txt"
+          grep -F "versionName='$RELEASE_VERSION'" "$RUNNER_TEMP/android-badging.txt"
+          if grep -q '^application-debuggable' "$RUNNER_TEMP/android-badging.txt"; then
+            echo '::error::Release APK must not be debuggable'
+            exit 1
+          fi
+
+      - name: Hand Android APK to the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-android-v${{ needs.release-needed.outputs.version }}-build
+          overwrite: true
+          path: desktop/dist/SeekMoon-android.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
   release-windows:
     name: Build Windows
@@ -399,7 +488,7 @@ jobs:
   # nothing: every archive arrives from a build job above.
   release-publish:
     name: Publish
-    needs: [release-needed, release-windows, release-macos]
+    needs: [release-needed, release-windows, release-macos, release-android]
     if: github.ref == 'refs/heads/main' && needs.release-needed.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
@@ -467,6 +556,12 @@ jobs:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}-build
           path: desktop/dist
 
+      - name: Collect Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: SeekMoon-android-v${{ needs.release-needed.outputs.version }}-build
+          path: desktop/dist
+
       # Upload artifacts before publication. Until API publish succeeds, a
       # retry may replace nondeterministic rebuilds; a published Browser
       # version restores the exact OSS bytes instead.
@@ -503,6 +598,16 @@ jobs:
           name: SeekMoon-windows-x64-v${{ needs.release-needed.outputs.version }}
           overwrite: true
           path: desktop/dist/SeekMoon-windows-x64-setup.exe
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Upload Android release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SeekMoon-android-v${{ needs.release-needed.outputs.version }}
+          overwrite: true
+          path: desktop/dist/SeekMoon-android.apk
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
