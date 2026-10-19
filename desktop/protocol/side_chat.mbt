@@ -41,3 +41,21 @@ pub fn split_side_chat_id(id : String) -> String? {
   }
   Some(id[:start].to_owned())
 }
+
+///|
+/// The conversation that `id` sits beside, when `id` is a side chat or a
+/// record of one (a side chat's own sub-run), or `None` for any other
+/// session. Such a record is never a conversation of its own: it shows in the
+/// dock beside that conversation, not in a list of conversations.
+pub fn side_chat_parent(id : String) -> String? {
+  let mut current = id
+  for ;; {
+    if split_side_chat_id(current) is Some(parent) {
+      return Some(parent)
+    }
+    guard @wire.split_child_session_id(current) is Some((parent, _)) else {
+      return None
+    }
+    current = parent
+  }
+}

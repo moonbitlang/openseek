@@ -927,6 +927,8 @@ fn MentionChip::render(
 /// tray, toolbar, action group, stable DOM order, and surrounding chrome;
 /// callers cannot construct it or pass rendered fragments through it.
 priv struct View {
+  // The textarea's id, which the keyboard history recall reads the caret of.
+  input_id : String
   images : @cmd.Emit[@image_input.Event]?
   allow_images : Bool
   before_inner : Map[String, @html.Html]
@@ -985,7 +987,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
       [
         @html.div(class="mention-tray", self.mentions),
         @html.textarea(
-          id=MessageInputId,
+          id=self.input_id,
           value=self.value,
           placeholder=self.placeholder,
           disabled=self.disabled,
@@ -993,7 +995,7 @@ fn View::render(locale~ : @i18n.Locale = English, self : View) -> @html.Html {
           // The surrounding card owns the visible focus frame; this marker lets
           // the global focus styling find the textarea without drawing a second
           // border around the control itself.
-          attrs=self.keyboard.attrs().data_set("focus-target", ""),
+          attrs=self.keyboard.attrs(self.input_id).data_set("focus-target", ""),
           "",
         ),
         // Appended after the textarea, so the chip coming and going never
@@ -1142,13 +1144,11 @@ fn elapsed_label(span_ms : Double) -> String {
 ///|
 /// Reveal the selected row after the new selection has rendered. Scroll only
 /// the popup list so keyboard navigation cannot move the surrounding chat.
-fn reveal_completion_selection() -> @cmd.Cmd {
+fn reveal_completion_selection(surface : @interop.ChatSurface) -> @cmd.Cmd {
   @cmd.custom_cmd(
     _ => {
-      guard @dom.document()
-        .query_selector(".composer .completion-list")
-        .to_option()
-        is Some(list) else {
+      guard composer_root(surface) is Some(composer) &&
+        composer.query_selector(".completion-list") is Some(list) else {
         return
       }
       guard list.query_selector(".completion-item.selected") is Some(row) else {
@@ -1242,7 +1242,10 @@ priv struct KeyboardActions {
 }
 
 ///|
-fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
+fn KeyboardActions::attrs(
+  self : KeyboardActions,
+  input_id : String,
+) -> @html.Attrs {
   @html.Attrs::build().on_keydown(event => {
     if self.menu_open {
       match event.key() {
@@ -1290,7 +1293,7 @@ fn KeyboardActions::attrs(self : KeyboardActions) -> @html.Attrs {
       event.ctrl_key() ||
       event.meta_key() ||
       event.is_composing()) &&
-      caret_at_edge(MessageInputId, up=event.key() == "ArrowUp") {
+      caret_at_edge(input_id, up=event.key() == "ArrowUp") {
       event.prevent_default()
       recall(if event.key() == "ArrowUp" { -1 } else { 1 })
     } else if is_submit_shortcut(event) {
@@ -1345,3 +1348,14 @@ pub extend WorktreeChoice with Eq::{equal, not_equal}
 #deprecated("Use `==` or the `Eq` trait directly", skip_current_package=true)
 #doc(hidden)
 pub extend WorktreeControl with Eq::{equal, not_equal}
+
+///|
+/// The composer card on `surface`: the closest `.composer` around its
+/// textarea, so a lookup never lands in the other composer on screen.
+fn composer_root(surface : @interop.ChatSurface) -> @dom.Element? {
+  guard @dom.document().get_element_by_id(message_input_id(surface)).to_option()
+    is Some(input) else {
+    return None
+  }
+  input.closest(".composer")
+}

@@ -346,3 +346,63 @@ test "historical diffs deduplicate exact commits and distinguish revisions" {
   assert_true(@dock.file_paths(state).is_empty())
   assert_true(@dock.active_file(state) is None)
 }
+
+///|
+fn side_chat_key(session : String) -> @interop.ConversationKey {
+  { channel: @interop.ChannelId::Local, session, }
+}
+
+///|
+fn side_chat(session : String) -> @dock.DockTab {
+  @dock.DockTab::SideChat(owner=side_chat_key(session))
+}
+
+///|
+test "side-chat tabs follow the side chats that exist" {
+  let state = @dock.DockState::empty() |> @dock.open_file(work_file("a.mbt"))
+  // After a restart the records bring the tabs back, behind the tab the
+  // reader is on.
+  let restored = @dock.reconcile_side_chats(state, [
+    side_chat_key("chat-sc-1"),
+    side_chat_key("chat-sc-2"),
+  ])
+  assert_true(
+    restored.tabs ==
+    [file_tab("a.mbt"), side_chat("chat-sc-1"), side_chat("chat-sc-2")],
+  )
+  assert_true(restored.active == Some(file_tab("a.mbt")))
+  // Reconciling again changes nothing.
+  assert_true(
+    @dock.reconcile_side_chats(restored, [
+      side_chat_key("chat-sc-1"),
+      side_chat_key("chat-sc-2"),
+    ]) ==
+    restored,
+  )
+  // A record that went away (deleted, or archived with its conversation)
+  // takes its tab along, the way closing it would.
+  let shown = @dock.update(TabActivated(side_chat("chat-sc-2")), restored)
+  let closed = @dock.reconcile_side_chats(shown, [side_chat_key("chat-sc-1")])
+  assert_true(closed.tabs == [file_tab("a.mbt"), side_chat("chat-sc-1")])
+  assert_true(closed.active == Some(side_chat("chat-sc-1")))
+}
+
+///|
+test "a side chat restored into an empty strip is the active tab" {
+  let state = @dock.DockState::empty()
+  let restored = @dock.reconcile_side_chats(state, [side_chat_key("chat-sc-1")])
+  assert_true(restored.active == Some(side_chat("chat-sc-1")))
+}
+
+///|
+test "opening a side chat appends it and reactivates an existing tab" {
+  let state = @dock.DockState::empty() |> @dock.open_file(work_file("a.mbt"))
+  let opened = @dock.open_side_chat(state, side_chat_key("chat-sc-1"))
+  assert_true(opened.tabs == [file_tab("a.mbt"), side_chat("chat-sc-1")])
+  assert_true(opened.active == Some(side_chat("chat-sc-1")))
+  let another = @dock.open_side_chat(opened, side_chat_key("chat-sc-2"))
+  assert_true(another.active == Some(side_chat("chat-sc-2")))
+  let again = @dock.open_side_chat(another, side_chat_key("chat-sc-1"))
+  assert_true(again.tabs == another.tabs)
+  assert_true(again.active == Some(side_chat("chat-sc-1")))
+}

@@ -344,3 +344,96 @@ fn Model::project_display_label(self : Model, project : @common.Uri) -> String? 
     Some(@resource.label(project))
   }
 }
+
+///|
+/// The side chat the dock shows with its transcript and composer: the active
+/// tab of the shown dock, on the Chat screen. Never the conversation in the
+/// column — one conversation is on screen once.
+fn Model::mounted_side_chat(self : Model) -> Conversation? {
+  guard self.screen is Chat &&
+    self.file_panel_visible() &&
+    self.dock_state().active is Some(SideChat(owner~)) &&
+    !(owner.channel == self.focused && owner.session == self.active_session) else {
+    return None
+  }
+  self.find_conversation(owner.channel, owner.session)
+}
+
+///|
+/// Which side chat `mounted_side_chat` names, as the dock keys it.
+fn Model::mounted_side_chat_owner(self : Model) -> @interop.ConversationKey? {
+  self
+  .mounted_side_chat()
+  .map(conv => { channel: conv.device, session: conv.session_id, })
+}
+
+///|
+/// The key the dock's transcript is remembered and addressed by. It never
+/// equals a column slot's key, so the column and the dock each keep where
+/// their own reader left off.
+fn side_chat_slot_key(owner : @interop.ConversationKey) -> String {
+  "side-chat\u{0}" + owner.channel.uri_authority() + "\u{0}" + owner.session
+}
+
+///|
+/// The transcript of side chat `conv` in the dock: its own history and live
+/// turn, read-only toward the conversation it was forked from. A side chat is
+/// not forked or edited from here, and it has no project to choose.
+///
+/// The dock may recompute this while disposing the side chat's branch, after
+/// the conversation has gone; that reads as an empty transcript.
+fn Model::side_chat_transcript_input(
+  self : Model,
+  owner : @interop.ConversationKey,
+) -> @transcript_component.Input {
+  guard self.find_conversation(owner.channel, owner.session) is Some(conv) else {
+    return @transcript_component.Input(
+      surface=Dock,
+      source=OpenSeek,
+      focused=owner.channel,
+      active_session=owner.session,
+      current_project=None,
+      projects=[],
+      can_choose_project=false,
+      project_menu_open=false,
+      project_query="",
+      root=None,
+      items=[],
+      streaming_response=None,
+      streaming_identity="",
+    )
+  }
+  let (streaming_reasoning, reasoning_complete) = conv.reasoning_for_render()
+  @transcript_component.Input(
+    surface=Dock,
+    locale=self.locale,
+    dark_mode=self.theme.is_dark(self.system_dark),
+    minimal=self.minimal_transcript_effective(),
+    source=OpenSeek,
+    focused=conv.device,
+    active_session=conv.session_id,
+    scroll=self.transcript_scroll
+      .get(side_chat_slot_key(owner))
+      .unwrap_or(Pinned),
+    current_project=Some(conv.project()),
+    projects=[],
+    can_choose_project=false,
+    project_menu_open=false,
+    project_query="",
+    root=self.conversation_placement(conv).bind(value => value.checkout_root()),
+    items=conv.visible_transcript_rows(),
+    streaming_response=conv.turn.live.response,
+    streaming_reasoning?,
+    reasoning_complete~,
+    streaming_identity=conv.streaming_render_identity(),
+  )
+}
+
+///|
+/// Whether the transcript keyed `slot` is on screen: the column's, or the
+/// side chat's in the dock. An action from a transcript that has left is
+/// dropped, as its conversation is no longer the one the reader acts on.
+fn Model::transcript_on_screen(self : Model, slot : String) -> Bool {
+  self.transcript_slot().map(current => current.key()) == Some(slot) ||
+  self.mounted_side_chat_owner().map(side_chat_slot_key) == Some(slot)
+}

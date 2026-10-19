@@ -638,39 +638,6 @@ fn main {
         @sub.batch(subs)
       },
     )
-    let right_panel_input = state.map(model => model.right_panel_input())
-    let right_panel_html = @right_panel.component(
-      state.map(model => model.locale),
-      right_panel_input,
-      {
-        dock: emit.map(msg => Dock(msg)),
-        file_editor: emit.map(msg => FileEditor(msg)),
-        browser_tab: emit(BrowserTabRequested),
-        search: emit(ExplorerRequested(ExplorerSearch)),
-        files: emit(ExplorerRequested(ExplorerFiles)),
-        review: emit(ExplorerRequested(ExplorerChanges)),
-        workflows: emit(WorkflowsRequested),
-        jobs: emit(JobsRequested),
-        github: emit(GithubRequested),
-        github_events: emit.map(msg => Github(msg)),
-        open_link: url => emit(ExternalLinkClicked(url)),
-        job_events: emit.map(msg => Jobs(msg)),
-        open_child: child => emit(OpenSessionHere(child)),
-        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
-        browser_input: emit.map(value => BrowserAddressEdited(value)),
-        browser_submit: emit(BrowserNavigateSubmitted),
-        browser_back: emit(BrowserBack),
-        browser_forward: emit(BrowserForward),
-        browser_reload: emit(BrowserReload),
-        browser_open_external: emit(BrowserOpenExternal),
-        reveal_file: path => emit(RevealFile(path)),
-        toggle_menu: emit(ToggleRightPanelMenu),
-        toggle_expanded: emit(ToggleRightPanelExpanded),
-        close_tabs: emit.map(selection => CloseDockTabs(selection)),
-        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
-        close_menu: emit(CloseRightPanelMenu),
-      },
-    )
     let terminal_input = state.map(model => model.terminal_input())
     let terminal_state = state.map(model => model.terminal)
     let terminal_emit = emit.map(msg => Terminal(msg))
@@ -742,6 +709,70 @@ fn main {
       state.map(model => model.locale),
       codex_composer_input,
       emit.map(action => CodexComposerAction(action)),
+    )
+    // A side chat in the dock gets a transcript and a composer of its own,
+    // built per side chat like the column's transcript and disposed when its
+    // tab stops being the one on screen. Its composer's quote input is kept
+    // for the floating reply; a reply addressed to a composer that has left
+    // is declined by identity like any other.
+    let side_chat_quote : Ref[@cmd.Emit[@composer.QuoteReply]?] = Ref(None)
+    let side_chat_html = state
+      .map(model => model.mounted_side_chat_owner())
+      .switch_by(
+        owner => {
+          guard owner is Some(owner) else {
+            return @rabbita.Val::constant(@html.nothing)
+          }
+          let transcript = @transcript_component.component(
+            state.map(model => model.side_chat_transcript_input(owner)),
+            transcript_actions(side_chat_slot_key(owner)),
+          )
+          let (composer, quote) = @composer.component(
+            state.map(model => model.locale),
+            state.map(model => model.side_chat_composer_input(owner)),
+            emit.map(action => ComposerAction(action)),
+            surface=Dock,
+          )
+          side_chat_quote.val = Some(quote)
+          transcript.map2(composer, (transcript, composer) => {
+            @html.div(class="side-chat", [transcript, composer])
+          })
+        },
+        by=owner => owner.map_or("", side_chat_slot_key),
+      )
+    let right_panel_input = state.map(model => model.right_panel_input())
+    let right_panel_html = @right_panel.component(
+      state.map(model => model.locale),
+      right_panel_input,
+      side_chat=side_chat_html,
+      {
+        dock: emit.map(msg => Dock(msg)),
+        file_editor: emit.map(msg => FileEditor(msg)),
+        browser_tab: emit(BrowserTabRequested),
+        search: emit(ExplorerRequested(ExplorerSearch)),
+        files: emit(ExplorerRequested(ExplorerFiles)),
+        review: emit(ExplorerRequested(ExplorerChanges)),
+        workflows: emit(WorkflowsRequested),
+        jobs: emit(JobsRequested),
+        github: emit(GithubRequested),
+        github_events: emit.map(msg => Github(msg)),
+        open_link: url => emit(ExternalLinkClicked(url)),
+        job_events: emit.map(msg => Jobs(msg)),
+        open_child: child => emit(OpenSessionHere(child)),
+        browser_annotation: emit.map(msg => BrowserAnnotation(msg)),
+        browser_input: emit.map(value => BrowserAddressEdited(value)),
+        browser_submit: emit(BrowserNavigateSubmitted),
+        browser_back: emit(BrowserBack),
+        browser_forward: emit(BrowserForward),
+        browser_reload: emit(BrowserReload),
+        browser_open_external: emit(BrowserOpenExternal),
+        reveal_file: path => emit(RevealFile(path)),
+        toggle_menu: emit(ToggleRightPanelMenu),
+        toggle_expanded: emit(ToggleRightPanelExpanded),
+        close_tabs: emit.map(selection => CloseDockTabs(selection)),
+        tab_menu_changed: emit.map(open => DockTabMenuChanged(open)),
+        close_menu: emit(CloseRightPanelMenu),
+      },
     )
     let sidebar_input = state.map(model => model.sidebar_component_input())
     let sidebar_html = @sidebar.component(

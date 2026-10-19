@@ -8,6 +8,7 @@ fn panel_view(
   actions : Actions,
   semantic_review~ : @html.Html = @html.nothing,
   tab_menu~ : @html.Html = @html.nothing,
+  side_chat~ : @html.Html = @html.nothing,
 ) -> @html.Html {
   let chips : Array[@dock.TabChip] = input.dock.tabs.map(tab => {
     match tab {
@@ -70,6 +71,14 @@ fn panel_view(
         }
         { tab, label, title, missing: false, }
       }
+      SideChat(owner~) => {
+        let label = match
+          input.side_chats.iter().find_first(chat => chat.owner == owner) {
+          Some(chat) => "\{ui(locale, SideChatLabel)} \{chat.number}"
+          None => ui(locale, SideChatLabel)
+        }
+        { tab, label, title: label, missing: false, }
+      }
     }
   })
   let host_tools = input.file_ctx.owner.host() is Some(_)
@@ -103,6 +112,7 @@ fn panel_view(
     Some(Jobs) => "mode-jobs"
     Some(Github) => "mode-github"
     Some(Workflows) => "mode-workflows"
+    Some(SideChat(_)) => "mode-side-chat"
   }
   let active_page : @preview.PageState = match
     @dock.active_browser(input.dock) {
@@ -202,6 +212,9 @@ fn panel_view(
         actions.github_events,
         actions.open_link,
       ),
+      // Always mounted, like every body here; empty unless a side-chat tab is
+      // active, when the root hands in that conversation's pane.
+      @html.div(class="side-chat-pane", [side_chat]),
       tab_menu,
     ],
   )

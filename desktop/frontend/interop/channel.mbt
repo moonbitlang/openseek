@@ -196,3 +196,19 @@ pub extend ConversationKey with Eq::{equal, not_equal}
 
 ///|
 pub extend ConversationKey with Hash::{hash, hash_combine}
+
+///|
+/// Where a conversation's transcript and composer are on screen. The
+/// conversation column and a side chat in the dock can show at the same time,
+/// so each surface owns its element ids and a component mounted on one never
+/// reaches into the other's DOM.
+pub(all) enum ChatSurface {
+  Column
+  Dock
+} derive(Debug, Eq)
+
+///|
+pub extend ChatSurface with Eq::{equal, not_equal}
+
+///|
+pub extend ChatSurface with Debug::{to_repr}

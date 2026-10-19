@@ -88,6 +88,14 @@ pub fn ChannelId::of_device(String) -> Self
 pub fn ChannelId::to_repr(Self) -> @debug.Repr
 pub fn ChannelId::uri_authority(Self) -> String
 
+pub(all) enum ChatSurface {
+  Column
+  Dock
+} derive(Eq, @debug.Debug)
+pub fn ChatSurface::equal(Self, Self) -> Bool
+pub fn ChatSurface::not_equal(Self, Self) -> Bool
+pub fn ChatSurface::to_repr(Self) -> @debug.Repr
+
 pub(all) enum CheckoutPlacement {
   Scratch(root~ : @common.Uri?)
   WorkspaceRoot(root~ : @common.Uri)
