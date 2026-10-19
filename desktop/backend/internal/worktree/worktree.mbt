@@ -679,7 +679,8 @@ pub async fn drop_placements(
 ///|
 /// Add `session` to the worktree `worktree_of` works in, around the creation
 /// of `session`'s durable record: a message edit, which replaces a
-/// conversation that works in a worktree, keeps working in that checkout. A
+/// conversation that works in a worktree, keeps working in that checkout,
+/// and an imported conversation joins the worktree it was imported into. A
 /// fork the user asked for gets one of its own instead, through
 /// `add_session_to_new_worktree`. When `worktree_of` works in the workspace
 /// root there is no worktree to join, and only the record is created.

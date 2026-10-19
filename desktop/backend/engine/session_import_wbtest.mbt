@@ -90,7 +90,11 @@ async test "import loads through the normal session API and joins the selected w
       on_worktree_changed=(_, _) => (),
     )
     assert_true(store.exists(SessionId(forked.session)))
-    assert_eq(@worktree.run_dir(repo, forked.session), checkout)
+    // Like any worktree conversation's fork, it works in a checkout of its
+    // own.
+    let fork_checkout = @worktree.run_dir(repo, forked.session)
+    assert_true(fork_checkout != checkout)
+    assert_true(@fsx.is_dir(fork_checkout.to_path()))
     assert_true(fresh.record_guards.is_empty())
   })
 }
