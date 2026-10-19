@@ -77,7 +77,18 @@ pub fn Model::update(
   }
   match action {
     Edit(question~, text~) => self.edit(questions, question, Written(text))
-    Select(question~, option~) => self.edit(questions, question, Chosen(option))
+    Select(question~, option~) => {
+      let next = self.edit(questions, question, Chosen(option))
+      if self.current + 1 < questions.length() &&
+        !option.is_blank() &&
+        questions.get(self.current) is Some(current) &&
+        current.id == question &&
+        current.options.any(choice => choice.label == option) {
+        { ..next, current: self.current + 1, }
+      } else {
+        next
+      }
+    }
     Navigate(index~) =>
       if index >= 0 && index < questions.length() {
         { ..self, current: index, }

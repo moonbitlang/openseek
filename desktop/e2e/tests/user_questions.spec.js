@@ -1,14 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-function setup(page) {
+function setup(page, questions = [
+  { id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'] },
+  { id: 'details', title: 'Any details?\n<script>plain text</script>' },
+]) {
   const app = new DesktopBrowserHarness(page);
   let generation = 1;
   let requests = [{
-    id: 'question-1', session: 'session-1', questions: [
-      { id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'] },
-      { id: 'details', title: 'Any details?\n<script>plain text</script>' },
-    ],
+    id: 'question-1', session: 'session-1', questions,
   }, {
     id: 'question-2', session: 'session-1', questions: [{ id: 'extra', title: 'Anything else?' }],
   }];
@@ -27,6 +27,52 @@ function setup(page) {
   };
   return { app, snapshot };
 }
+
+test('choosing an option advances to the next question and retains the answer', async ({ page }) => {
+  const { app } = setup(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const card = page.locator('.user-question-card');
+  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
+  await card.getByRole('button', { name: 'Previous question', exact: true }).click();
+  await expect(card.getByRole('button', { name: 'Small change', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await card.getByRole('button', { name: 'Small change', exact: true }).press('Enter');
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  await card.locator('textarea').fill('Keep keyboard support.');
+  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(card).toContainText('Anything else?');
+  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
+    { approach: 'Small change', details: 'Keep keyboard support.' },
+  ]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('choosing a final option waits for Send', async ({ page }) => {
+  const { app } = setup(page, [
+    { id: 'approach', title: 'Which approach should we use?', options: ['Small change', 'Full redesign'] },
+    { id: 'scope', title: 'Which scope?', options: ['Keep scope', 'Expand scope'] },
+  ]);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const card = page.locator('.user-question-card');
+  await card.getByRole('button', { name: 'Small change', exact: true }).click();
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  await card.getByRole('button', { name: 'Keep scope', exact: true }).click();
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  await expect(card.getByRole('button', { name: 'Keep scope', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
+  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(card).toContainText('Anything else?');
+  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
+    { approach: 'Small change', scope: 'Keep scope' },
+  ]);
+  expect(app.pageErrors).toEqual([]);
+});
 
 test('custom answer Enter advances questions and submits the final answer', async ({ page }) => {
   const { app } = setup(page);
@@ -137,6 +183,7 @@ test('live questions occupy visible space between the transcript and composer', 
   expect(regionBox.y + regionBox.height).toBeLessThanOrEqual(composerBox.y + 1);
   await card.getByRole('button', { name: 'Small change', exact: true }).click();
   await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
   await page.screenshot({ path: testInfo.outputPath('live-question.png'), animations: 'disabled' });
   app.notify('user_questions.changed', { generation: 2, requests: [{
     id: 'long-question', session: 'session-1', questions: [{
@@ -177,7 +224,6 @@ test('questions survive reload and a finished turn, accept choices and text, and
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: 'Small change', exact: true }).click();
   await expect(card.locator('textarea')).toHaveValue('');
-  await card.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
   await card.locator('textarea').fill('Keep keyboard support.\n<literal>');
   // Replayed snapshots must neither steal focus nor erase the draft.

@@ -103,9 +103,11 @@ test "question pages retain distinct choice and written drafts without mutating 
     initial,
     Interact(request="r", Edit(question="q", text="A")),
   )
-  assert_false(chosen == written)
+  assert_eq(apply(chosen, Interact(request="r", Navigate(index=1))), chosen)
+  let chosen_back = apply(chosen, Interact(request="r", Navigate(index=0)))
+  assert_false(chosen_back == written)
   assert_eq(
-    apply(chosen, Interact(request="r", Edit(question="q", text="A"))),
+    apply(chosen_back, Interact(request="r", Edit(question="q", text="A"))),
     written,
   )
   assert_eq(

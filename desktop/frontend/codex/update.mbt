@@ -2799,6 +2799,9 @@ test "shared Codex question card scopes drafts, submission and retry by response
     next
   }
   let chosen = apply(initial, Select(question="scope", option="Small"))
+  assert_true(
+    apply(chosen, Navigate(index=1)).pending_requests == chosen.pending_requests,
+  )
   assert_true(initial.pending_requests[0].question_draft.answers().is_empty())
   assert_eq(
     chosen.pending_requests[0].question_draft.answers().get("scope"),
@@ -2806,10 +2809,7 @@ test "shared Codex question card scopes drafts, submission and retry by response
   )
   let incomplete = apply(chosen, Submit(skip=false))
   assert_false(incomplete.pending_requests[0].question_draft.is_sending())
-  let complete = apply(
-    apply(chosen, Navigate(index=1)),
-    Edit(question="details", text="Keep tests"),
-  )
+  let complete = apply(chosen, Edit(question="details", text="Keep tests"))
   let submitted = apply(complete, Submit(skip=false))
   assert_true(submitted.pending_requests[0].question_draft.is_sending())
   assert_true(
