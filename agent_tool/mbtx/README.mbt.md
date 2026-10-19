@@ -116,10 +116,6 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   `@env.args()[1:]` (excluding the executable name). For reuse, call
   `{"filename":"scripts/check.mbtx","args":["--deny-warn"]}` and vary
   `args` on subsequent runs. Explicit `null` and non-string elements are rejected.
-- `target` (string, optional, default `wasm`): only `wasm` is accepted.
-  Omitting the field or passing `null` also selects wasm. Other backends,
-  including `wasm-gc`, `js`, `llvm`, and `native`, are rejected before the
-  script is saved, built, or run. Explicit native FFI is also refused.
 - `cwd` (string, optional, default workspace root): the working directory the
   program runs in. A relative `cwd` resolves against the workspace root.
 - `escalated` (boolean, optional, default `false`): ask the user to run this
@@ -134,6 +130,10 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   is `error` (such as `partial_match`) are maintained as explicit mnemonic
   exceptions and still fail compilation with warnings off.
 
+The `target` argument was removed because `mbtx` always runs on wasm. Calls
+that still include it are rejected before saving, building, running, or
+requesting approval; remove `target` and retry.
+
 Only **dependency resolution** is isolated: a local-package import resolves to
 the **published registry snapshot** (not your uncommitted edits), and a
 third-party import resolves to its **latest** registry version, which can differ
@@ -144,7 +144,8 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 ## Sandbox policy and source-file protection
 
-The wasm run carries a moonrun policy on every platform. The snippet
+The wasm run carries a moonrun policy on every platform. Explicit native FFI
+is refused. The snippet
 may read anywhere but may write only inside its own `@fs.tmpdir()` and any
 caller-provided scratch lab; changing other workspace files belongs to the file
 tools. Process spawning is checked against the implementation's allowlist; the
@@ -304,14 +305,13 @@ async test "mbtx reads a workspace file" {
 }
 ```
 
-The wasm backend can also be selected explicitly:
+The tool always uses the wasm backend:
 
 ```mbt check
 ///|
-async test "mbtx accepts an explicit wasm target" {
+async test "mbtx runs on wasm without a target argument" {
   let action = match @mbtx.definition(workspace_root=".").execute {
-    Async(execute) =>
-      execute({ "source": "fn main { println(6 * 7) }", "target": "wasm" })
+    Async(execute) => execute({ "source": "fn main { println(6 * 7) }" })
     Sync(_) => fail("mbtx is async")
   }
   debug_inspect(

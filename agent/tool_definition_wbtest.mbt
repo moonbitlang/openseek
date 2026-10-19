@@ -236,10 +236,7 @@ async test "a successful wasm handed-off job does not invent a policy refusal" {
       #|  @async.sleep(100)
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, {
-      "source": source,
-      "target": "wasm",
-    })
+    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, { "source": source })
   })
 }
 
@@ -255,7 +252,6 @@ async test "a successful wasm inline run does not invent a policy refusal" {
     )
     let action = run_async_tool(mbtx, {
       "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
-      "target": "wasm",
     })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)

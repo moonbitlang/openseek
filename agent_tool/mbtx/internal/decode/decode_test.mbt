@@ -1,8 +1,7 @@
 ///|
-test "decode reads source with the default wasm target" {
+test "decode reads source" {
   let input = @decode.decode({ "source": "fn main { println(1) }" })
   assert_true(input.program is Source("fn main { println(1) }"))
-  assert_eq(input.target, "wasm")
 }
 
 ///|
@@ -18,23 +17,47 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-/// moonrun's policy applies to wasm alone, so every other backend is refused.
-test "decode refuses every non-wasm target" {
-  for target in ["wasm-gc", "js", "llvm", "native", "banana"] {
+test "decode rejects any removed target value with migration guidance" {
+  let targets : Array[Json] = [
+    "wasm",
+    "wasm-gc",
+    "js",
+    "llvm",
+    "native",
+    "banana",
+    null,
+    3,
+    true,
+    {},
+    [],
+  ]
+  for target in targets {
     try @decode.decode({ "source": "fn main {  }", "target": target }) catch {
-      error =>
-        assert_true("\{error}".contains("mbtx only supports the wasm target"))
+      error => {
+        let message = "\{error}"
+        assert_true(message.contains("arguments without target"))
+        assert_true(message.contains("mbtx always runs on wasm"))
+        assert_true(message.contains("remove target and retry"))
+      }
     } noraise {
-      _ => fail("accepted target \{target}")
+      _ => fail("accepted target \{target.stringify()}")
     }
   }
 }
 
 ///|
-test "decode accepts explicit wasm and defaults a null target to wasm" {
-  let input = @decode.decode({ "source": "fn main {  }", "target": "wasm" })
-  assert_eq(input.target, "wasm")
-  assert_eq(@decode.decode({ "source": "x", "target": null }).target, "wasm")
+test "removed target migration guidance precedes other argument errors" {
+  let inputs : Array[Json] = [
+    { "target": "wasm" },
+    { "target": null, "source": null, "run_in_background": true },
+  ]
+  for arguments in inputs {
+    try @decode.decode(arguments) catch {
+      error => assert_true("\{error}".contains("arguments without target"))
+    } noraise {
+      _ => fail("accepted removed target")
+    }
+  }
 }
 
 ///|
@@ -68,13 +91,11 @@ test "decode rejects malformed arguments" {
     { "source": "x", "filename": "@builtin/check.mbtx" },
     { "source": "x", "filename": null },
     { "source": null, "filename": "run.mbtx" },
-    // An unknown warning value, a non-string cwd, an unknown target, a
+    // An unknown warning value, a non-string cwd, an invalid description, a
     // missing source, and arguments that are not an object at all.
     { "source": "x", "warning": "loud" },
     { "source": "x", "cwd": 3 },
     { "source": "x", "description": 3 },
-    { "source": "x", "target": "banana" },
-    { "source": "x", "target": 3 },
     { "code": "x" },
     Json("x"),
   ]
@@ -118,7 +139,6 @@ test "decode accepts filename with unchanged execution options" {
   })
   assert_true(input.program is File("scripts/check.mbtx"))
   assert_eq(input.cwd, Some("sub"))
-  assert_eq(input.target, "wasm")
   assert_true(input.warning)
 }
 

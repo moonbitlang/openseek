@@ -22,7 +22,7 @@ async fn dispatch(
 }
 
 ///|
-/// Run with an explicit `workspace_root` and raw arguments (for cwd / target /
+/// Run with an explicit `workspace_root` and raw arguments (for cwd and
 /// decode-failure cases).
 async fn run_in(
   workspace_root : String,
@@ -126,20 +126,18 @@ async test "script arguments reach inline and reused scripts verbatim" {
       #|import { "moonbitlang/core/env" }
       #|fn main { println(@env.args()[1:].to_array().to_json().stringify()) }
     let filename = "args.mbtx"
-    let inline = run_in(ws, { "source": source, "target": "wasm" })
+    let inline = run_in(ws, { "source": source })
     assert_false(inline.is_error, msg=inline.content)
     assert_eq(inline.content, "[]\n")
     let saved = run_in(ws, {
       "source": source,
       "filename": filename,
-      "target": "wasm",
       "args": values,
     })
     assert_false(saved.is_error, msg=saved.content)
     assert_true(saved.content.contains(Json(values).stringify()))
     let reused = run_in(ws, {
       "filename": filename,
-      "target": "wasm",
       "args": ["different input"],
     })
     assert_false(reused.is_error, msg=reused.content)
@@ -355,7 +353,7 @@ async test "saved scripts retain compiler filename and FFI checks" {
       "extern \"c\" fn escape() -> Unit = \"escape\"\nfn main { escape() }",
       create_mode=CreateOrTruncate,
     )
-    let out = run_in(ws, { "filename": "./ffi.mbtx", "target": "wasm" })
+    let out = run_in(ws, { "filename": "./ffi.mbtx" })
     assert_true(out.is_error)
     assert_true(out.content.contains("native FFI"))
   })
@@ -1009,10 +1007,7 @@ test "the schema advertises every decoded argument" {
   // MoonBit's String ordering is by length first, so a sorted expectation would
   // encode neither what this test means nor what a reader expects.
   let names = properties.keys().collect()
-  for
-    name in [
-      "source", "filename", "args", "description", "target", "cwd", "warning",
-    ] {
+  for name in ["source", "filename", "args", "description", "cwd", "warning"] {
     assert_true(names.contains(name))
   }
   assert_true(
@@ -1021,10 +1016,7 @@ test "the schema advertises every decoded argument" {
       { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
     ),
   )
-  assert_true(
-    properties.get("target")
-    is Some({ "type": "string", "enum": ["wasm"], "default": "wasm", .. }),
-  )
+  assert_false(properties.contains("target"))
   assert_false(schema is { "anyOf": _, .. })
   assert_true(schema is { "required": ["description"], .. })
 }
@@ -1189,34 +1181,41 @@ async test "rejects non-string source arguments" {
 }
 
 ///|
-async test "runs a pure snippet with omitted null or explicit wasm target" {
+async test "runs a pure snippet without selecting a target" {
   @vfs.with_tmpdir(ws => {
-    let inputs : Array[Json] = [
-      { "source": "fn main { println(6 * 7) }" },
-      { "source": "fn main { println(6 * 7) }", "target": null },
-      { "source": "fn main { println(6 * 7) }", "target": "wasm" },
-    ]
-    for arguments in inputs {
-      let out = run_in(ws, arguments)
-      assert_false(out.is_error, msg=out.content)
-      assert_eq(out.content, "42\n")
-    }
+    let out = run_in(ws, { "source": "fn main { println(6 * 7) }" })
+    assert_false(out.is_error, msg=out.content)
+    assert_eq(out.content, "42\n")
   })
 }
 
 ///|
-async test "rejects every other backend before saving or executing a script" {
+async test "rejects the removed target field before saving or executing a script" {
   @vfs.with_tmpdir(ws => {
-    for target in ["wasm-gc", "js", "llvm", "native"] {
-      let filename = "rejected-\{target}.mbtx"
+    let targets : Array[Json] = [
+      "wasm",
+      "wasm-gc",
+      "js",
+      "llvm",
+      "native",
+      null,
+      false,
+      1,
+      [],
+      {},
+    ]
+    for index, target in targets {
+      let filename = "rejected-\{index}.mbtx"
       let out = run_in(ws, {
         "source": "fn main { println(42) }",
         "filename": filename,
         "target": target,
       })
       assert_true(out.is_error, msg=out.content)
+      assert_true(out.content.contains("field was removed"), msg=out.content)
+      assert_true(out.content.contains("always runs on wasm"), msg=out.content)
       assert_true(
-        out.content.contains("only supports the wasm target"),
+        out.content.contains("remove target and retry"),
         msg=out.content,
       )
       assert_false(@fs.exists("\{ws}/\{filename}"))
@@ -1605,9 +1604,9 @@ async test "a refusal names escalation when a channel is wired" {
 }
 
 ///|
-/// Unsupported backends fail before approval, so escalation cannot make a
-/// JavaScript or native process available or interrupt someone for a grant.
-async test "escalation cannot enable a backend other than wasm" {
+/// A removed argument fails before approval, even when its value names the
+/// backend the tool always uses.
+async test "a supplied target is rejected before escalation approval" {
   let asked : Array[@agent_runtime.ApprovalAsk] = []
   @vfs.with_tmpdir(prefix="mbtx-target-", ws => {
     let definition = @mbtx.definition(
@@ -1617,15 +1616,29 @@ async test "escalation cannot enable a backend other than wasm" {
         AllowedOnce
       }),
     )
-    for target in ["wasm-gc", "js", "llvm", "native"] {
+    let targets : Array[Json] = [
+      "wasm",
+      "wasm-gc",
+      "js",
+      "llvm",
+      "native",
+      null,
+      false,
+      1,
+      [],
+      {},
+    ]
+    for target in targets {
       let out = dispatch(definition, {
         "source": "fn main { println(1) }",
         "target": target,
         "escalated": true,
       })
       assert_true(out.is_error, msg=out.content)
+      assert_true(out.content.contains("field was removed"), msg=out.content)
+      assert_true(out.content.contains("always runs on wasm"), msg=out.content)
       assert_true(
-        out.content.contains("only supports the wasm target"),
+        out.content.contains("remove target and retry"),
         msg=out.content,
       )
     }

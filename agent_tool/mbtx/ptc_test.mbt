@@ -142,10 +142,19 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         assert_true(output.content.contains("foreground done"))
       }
       assert_eq(@fs.read_file("\{ws}/saved.mbtx").text(), source)
+      let removed_target = dispatch(definition, {
+        "ptc": true,
+        "source": source,
+        "target": "wasm",
+      })
+      assert_true(removed_target.is_error, msg=removed_target.content)
+      assert_true(
+        removed_target.content.contains("remove target and retry"),
+        msg=removed_target.content,
+      )
       for
         args in [
           ({ "ptc": true, "source": source, "escalated": true } : Json),
-          { "ptc": true, "source": source, "target": "native" },
           { "ptc": "yes", "source": source },
         ] {
         assert_true(dispatch(definition, args).is_error)

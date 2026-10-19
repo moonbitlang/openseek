@@ -1534,15 +1534,6 @@ fn schema(escalation~ : Bool, programmatic~ : Bool) -> Json {
             []
           },
           (
-            "target",
-            {
-              "type": "string",
-              "enum": ["wasm"],
-              "default": "wasm",
-              "description": "Backend to run on; only wasm is supported and is used when omitted.",
-            },
-          ),
-          (
             "cwd",
             {
               "type": "string",
@@ -1705,7 +1696,7 @@ fn description(
     #|Existing scripts are read once; each run executes its selected snapshot
     #|with the same sandbox and isolated imports as inline source.
     #|Diagnostics cite `source:LINE:COL` or the supplied filename and line/column.
-    #|Only the wasm backend is supported; omit `target` or set it to "wasm".
+    #|The tool always compiles to wasm and runs with moonrun.
   // Rendered from `spawnable_commands`, the table that also builds the
   // moonrun policy: the list the model reads and the list moonrun enforces
   // cannot disagree, because there is only one.

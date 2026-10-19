@@ -15,7 +15,6 @@ pub struct MbtxInput {
   program : Program
   args : Array[String]
   description : String?
-  target : String
   cwd : String?
   warning : Bool
   escalated : Bool
