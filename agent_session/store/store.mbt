@@ -525,6 +525,9 @@ pub fn SessionStore::session_file(
 /// prompt is never inherited: the caller builds the one a new session in the
 /// fork's environment would get.
 ///
+/// `notice`, when given, is appended after the copied history as a runtime
+/// notice: the model reads it before the fork's first prompt.
+///
 /// `fork` must not exist, in the sense `exists` and `list` give the word: no
 /// directory for the id, with or without a session file in it. A directory
 /// left by an interrupted creation may hold a title, scratch files, or job
@@ -546,8 +549,17 @@ pub async fn SessionStore::fork(
   fork : @agent_session.SessionId,
   through? : Int32,
   system_prompt~ : String,
+  notice? : String,
 ) -> @agent_session.Session {
   let copy = self.load(source).fork(fork, system_prompt~, through?)
+  let copy = match notice {
+    Some(notice) =>
+      copy.append(
+        Runtime(RuntimeNotice(notice)),
+        unix_ms=@env.now().reinterpret_as_int64(),
+      )
+    None => copy
+  }
   let title = self.title(source)
   @fs.mkdir(self.session_dir(fork), recursive=true) catch {
     @os_error.OSError(_) as error if error.is_EEXIST() =>

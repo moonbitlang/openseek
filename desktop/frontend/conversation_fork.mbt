@@ -16,8 +16,8 @@ priv struct ConversationFork {
 
 ///|
 /// Whether a conversation can be forked from its answers: a live record of
-/// its own, wherever it works. The fork of a worktree conversation shares
-/// that worktree.
+/// its own, wherever it works. The fork of a worktree conversation gets a
+/// worktree of its own, which the host reports before it replies.
 fn Conversation::can_fork(self : Conversation) -> Bool {
   self.record is LiveRecord &&
   @transcript.subrun_parent(self.session_id) is None
@@ -460,7 +460,7 @@ test "fork and message editing are pure and preserve navigation" {
 }
 
 ///|
-test "the fork of a worktree conversation opens in the same worktree" {
+test "the fork of a worktree conversation opens in its own worktree" {
   let channel = @interop.ChannelId::Local
   let project = channel.test_project()
   let source : Conversation = {
@@ -472,7 +472,7 @@ test "the fork of a worktree conversation opens in the same worktree" {
     ],
   }
   let model = test_model().replace_conversation(source)
-  // The host reports the worktree's new member before it replies.
+  // The host reports the fork's new worktree before it replies.
   let model = model.replace_device({
     ..model.dev(),
     worktrees: [
@@ -481,7 +481,14 @@ test "the fork of a worktree conversation opens in the same worktree" {
         rows: [
           {
             name: "wt-1",
-            sessions: ["desktop-test", "desktop-fork"],
+            sessions: ["desktop-test"],
+            codex_thread: None,
+            path: None,
+            present: true,
+          },
+          {
+            name: "wt-2",
+            sessions: ["desktop-fork"],
             codex_thread: None,
             path: None,
             present: true,
@@ -508,7 +515,7 @@ test "the fork of a worktree conversation opens in the same worktree" {
   guard done.find_conversation(channel, "desktop-fork") is Some(fork) else {
     fail("the fork was not opened")
   }
-  assert_true(fork.workspace == Worktree(project~, name="wt-1"))
+  assert_true(fork.workspace == Worktree(project~, name="wt-2"))
 }
 
 ///|

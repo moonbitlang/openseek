@@ -19,9 +19,9 @@ fn gitlink_paths(metadata : String) -> Array[String] {
 }
 
 ///|
-/// Populate the new checkout with the same top-level submodules that are
-/// initialized in the attached main checkout. Optional, uninitialized
-/// submodules stay opt-in. `--checkout` deliberately overrides any configured
+/// Populate the new checkout with the top-level submodules of its own commit
+/// that are initialized in the attached main checkout. Optional,
+/// uninitialized submodules stay opt-in. `--checkout` deliberately overrides any configured
 /// `!command` update procedure; recursive children use the ordinary checkout
 /// strategy too. The timeout is the caller's validated workspace-settings
 /// snapshot; expiry raises into the existing create-or-repair rollback path.
@@ -30,8 +30,11 @@ async fn provision_initialized_submodules(
   checkout : @pathx.Absolute,
   timeout_seconds : Int32,
 ) -> Unit {
-  // Worktrees branch from HEAD, not the main checkout's staged index.
-  let tree = @gitx.output(origin, ["ls-tree", "-r", "-z", "HEAD"])
+  // The checkout's own commit, not the main checkout's staged index or HEAD:
+  // a repair or a fork can sit on a commit that added, moved, or removed a
+  // submodule. A gitlink the main checkout lacks has no initialized status
+  // there and is skipped below.
+  let tree = @gitx.output(checkout, ["ls-tree", "-r", "-z", "HEAD"])
   let initialized : Array[String] = []
   for path in gitlink_paths(tree) {
     guard @gitx.probe(origin, ["submodule", "status", "--", path])

@@ -3,20 +3,49 @@
 /// placement lock and reader lease keep the store attached and unarchived
 /// until the copy is durable; an active source may continue appending.
 ///
-/// The fork works where its original works: in the workspace root, or bound
-/// to the same worktree, whose checkout the two then share. The engine writes
-/// the fork's prompt in that directory, so a worktree whose checkout is gone
-/// is refused the way a turn there would be. `on_worktree_changed` reports
-/// the worktree's new member.
+/// A fork of a workspace-root conversation works in the workspace root too.
+/// A fork of a worktree conversation gets a worktree of its own, detached at
+/// the source checkout's HEAD; the engine's fork notice names the paths the
+/// source had uncommitted, which the new checkout does not have. The engine
+/// writes the fork's prompt in the fork's directory, so a worktree whose
+/// checkout is gone is refused the way a turn there would be.
+/// `on_worktree_changed` reports the new worktree.
 ///
 /// The engine writes the session file last, so that file is what says the
 /// fork exists, whichever way this request then ends. A fork that exists
-/// keeps its worktree binding, gets its title, and is reported through
-/// `on_created` — also when the engine failed after writing it, and when the
-/// request was cancelled and has no reply to carry the news.
+/// keeps its worktree, gets its title, and is reported through `on_created`
+/// — also when the engine failed after writing it, and when the request was
+/// cancelled and has no reply to carry the news.
 pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
+  on_created~ : (String) -> Unit,
+  on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
+) -> @protocol.SessionForkReply {
+  fork_session_in(
+    manager,
+    payload,
+    OwnWorktree,
+    on_created~,
+    on_worktree_changed~,
+  )
+}
+
+///|
+/// Where a fork of a worktree conversation works. A fork the user asked for
+/// is a second line of work and gets its own checkout; a message edit
+/// replaces its source, which is deleted once the edit is saved, and takes
+/// over the source's checkout by sharing it first.
+priv enum ForkPlacement {
+  OwnWorktree
+  SharedWorktree
+}
+
+///|
+async fn fork_session_in(
+  manager : EngineManager,
+  payload : @protocol.SessionForkPayload,
+  placement : ForkPlacement,
   on_created~ : (String) -> Unit,
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
@@ -67,59 +96,125 @@ pub async fn fork_session(
         announce()
       }
     })
-    @worktree.add_session_to_worktree(
-      workspace,
-      session~,
-      worktree_of=payload.session,
-      dir => {
-        let args = [
-          "sessions",
-          "fork",
-          payload.session,
-          "--as",
-          session,
-          "--through",
-          payload.through.to_string(),
-          "--session-root",
-          root.to_string(),
-          "--dir",
-          dir.to_string(),
-          "--model",
-          payload.model,
-        ]
-        if resolved_global_skills_dir() is Some(skills) {
-          args.append(["--global-skills-dir", skills.to_string()])
-        }
-        let failure : Error? = try {
-          ignore(engine_stdout(manager, args))
-          None
-        } catch {
-          error => Some(error)
-        }
-        // The record says whether the fork was made — not how the engine
-        // exited, nor what it printed. Reporting a failure for a fork that
-        // exists would invite a retry that makes a second one.
-        if !@fs.exists(store.session_file(id)) {
-          if failure is Some(error) {
-            raise error
-          }
-          raise EngineError("engine reported a fork it did not write")
-        }
+    // `notice` is the host's part of the fork's notice: what it knows of
+    // `dir` that the engine does not.
+    async fn engine_fork(dir : @pathx.Absolute, notice : String?) -> Unit {
+      let args = [
+        "sessions",
+        "fork",
+        payload.session,
+        "--as",
+        session,
+        "--through",
+        payload.through.to_string(),
+        "--session-root",
+        root.to_string(),
+        "--dir",
+        dir.to_string(),
+        "--model",
+        payload.model,
+      ]
+      // The `=` spelling keeps text that starts with `-` a value.
+      if notice is Some(text) {
+        args.push("--notice=\{text}")
+      }
+      if resolved_global_skills_dir() is Some(skills) {
+        args.append(["--global-skills-dir", skills.to_string()])
+      }
+      let failure : Error? = try {
+        ignore(engine_stdout(manager, args))
+        None
+      } catch {
+        error => Some(error)
+      }
+      // The record says whether the fork was made — not how the engine
+      // exited, nor what it printed. Reporting a failure for a fork that
+      // exists would invite a retry that makes a second one.
+      if !@fs.exists(store.session_file(id)) {
         if failure is Some(error) {
-          @xlog.warn() <?
-            {
-              "event": "desktop_fork_engine_failed_after_commit",
-              "session": session,
-              "error": error.to_string(),
-            }
+          raise error
         }
-      },
-      record_exists=() => @fs.exists(store.session_file(id)),
-      worktrees => on_worktree_changed(workspace_token, worktrees),
-    )
+        raise EngineError("engine reported a fork it did not write")
+      }
+      if failure is Some(error) {
+        @xlog.warn() <?
+          {
+            "event": "desktop_fork_engine_failed_after_commit",
+            "session": session,
+            "error": error.to_string(),
+          }
+      }
+    }
+
+    match placement {
+      OwnWorktree =>
+        @worktree.add_session_to_new_worktree(
+          workspace,
+          session~,
+          worktree_of=payload.session,
+          checkout => {
+            match checkout {
+              WorkspaceRoot(dir) => engine_fork(dir, None)
+              NewWorktree(dir~, uncommitted~, omitted~) =>
+                engine_fork(
+                  dir,
+                  Some(new_worktree_notice(uncommitted~, omitted~)),
+                )
+            }
+          },
+          record_exists=() => @fs.exists(store.session_file(id)),
+          worktrees => on_worktree_changed(workspace_token, worktrees),
+        )
+      SharedWorktree =>
+        @worktree.add_session_to_worktree(
+          workspace,
+          session~,
+          worktree_of=payload.session,
+          dir => engine_fork(dir, None),
+          record_exists=() => @fs.exists(store.session_file(id)),
+          worktrees => on_worktree_changed(workspace_token, worktrees),
+        )
+    }
   }
   @async.protect_from_cancel(() => announce())
   { session, title, }
+}
+
+///|
+/// The host's part of the notice of a fork made in a worktree of its own:
+/// how its checkout came to be, which the engine — handed only a directory —
+/// cannot know. `uncommitted` lists paths the source's checkout had changed
+/// and the new one lacks; `omitted` counts the ones left unlisted.
+fn new_worktree_notice(
+  uncommitted~ : Array[String],
+  omitted~ : Int32,
+) -> String {
+  let lines = [
+    "The working directory is a new git worktree, checked out at the commit the original conversation's worktree had at HEAD. Uncommitted changes in that worktree were not carried over.",
+  ]
+  if !uncommitted.is_empty() || omitted > 0 {
+    lines.push("That worktree had uncommitted changes to:")
+    for path in uncommitted {
+      lines.push("- \{path}")
+    }
+    if omitted > 0 {
+      lines.push("- and \{omitted} more")
+    }
+  }
+  lines.join("\n")
+}
+
+///|
+test "a new worktree's notice lists what was left behind" {
+  inspect(
+    new_worktree_notice(uncommitted=[], omitted=0).contains("\n"),
+    content="false",
+  )
+  assert_true(
+    new_worktree_notice(uncommitted=["-dash.txt", "src/a.mbt"], omitted=3).has_suffix(
+      "\nThat worktree had uncommitted changes to:\n- -dash.txt\n- src/a.mbt\n- and 3 more",
+    ),
+  )
 }
 
 ///|
@@ -163,8 +258,8 @@ async test "fork validates its request before spawning and releases its reader l
   }
   assert_eq(ordinary, Some("engine reported a fork it did not write"))
   assert_true(manager.record_guards.get("source") is None)
-  // A worktree conversation forks in its checkout, so one whose checkout is
-  // gone is refused before anything is spawned or bound.
+  // A worktree conversation's fork starts from its checkout's HEAD, so one
+  // whose checkout is gone is refused before anything is spawned or made.
   let registry = workspace + "/.openseek/worktrees.json"
   @fs.write_file(
     registry,

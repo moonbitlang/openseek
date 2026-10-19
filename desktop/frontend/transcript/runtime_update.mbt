@@ -14,3 +14,11 @@
 fn is_model_directed_notice(content : String) -> Bool {
   content.has_prefix("[goal") || content.has_prefix("[plan reminder]")
 }
+
+///|
+/// The notice `openseek sessions fork` writes after a fork's copied history.
+/// Its text is for the model; the reader gets a marker where the fork's own
+/// part of the conversation begins.
+fn is_fork_notice(content : String) -> Bool {
+  content.has_prefix("[session forked]")
+}

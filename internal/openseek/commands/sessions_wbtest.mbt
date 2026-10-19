@@ -254,10 +254,17 @@ async test "session fork command copies a session offline under the given id" {
         env=Map([]),
       ),
     )
-    // Both turns and nothing else. The system prompt is regenerated for the
-    // fork: it names the fork's scratch directory and not the original's.
+    // Both turns, then the notice that tells the fork's model its history
+    // was made against files it may not have. The system prompt is
+    // regenerated for the fork: it names the fork's scratch directory and not
+    // the original's.
     let whole = store.load(SessionId("whole"))
-    assert_eq(whole.last_sequence(), 4)
+    assert_eq(whole.last_sequence(), 5)
+    guard whole.events()[4].item() is Runtime(notice) else {
+      fail("expected the fork notice")
+    }
+    assert_true(notice.content().has_prefix(ForkNoticePrefix))
+    assert_eq(notice.content().split("\n").count(), 2)
     let scratch = Json::Json(store.scratch_dir(SessionId("whole"))).stringify()
     let origin_scratch = Json::Json(store.scratch_dir(SessionId("origin"))).stringify()
     assert_true(whole.system_prompt().contains(scratch))
@@ -272,7 +279,31 @@ async test "session fork command copies a session offline under the given id" {
         env=Map([]),
       ),
     )
-    assert_eq(store.load(SessionId("first-turn")).last_sequence(), 2)
+    assert_eq(store.load(SessionId("first-turn")).last_sequence(), 3)
+    // A caller that knows more of the fork's environment adds it after the
+    // standard part, as given.
+    sessions_fork(
+      @testkit.sessions_leaf_matches(
+        sub="fork",
+        argv=[
+          "origin", "--as", "elsewhere", "--notice=- caller line\n- another", "--session-root",
+          root,
+        ],
+        env=Map([]),
+      ),
+    )
+    guard store.load(SessionId("elsewhere")).events()[4].item()
+      is Runtime(notice) else {
+      fail("expected the fork notice")
+    }
+    assert_true(notice.content().has_prefix(ForkNoticePrefix))
+    assert_true(
+      notice
+      .content()
+      .has_suffix(
+        "Re-read a file before relying on what an earlier turn saw or wrote in it.\n- caller line\n- another",
+      ),
+    )
     // The prompt options are the ones `run` takes: a fork of a session made
     // with a custom prompt is given that prompt by passing it again.
     let prompt_file = "\{root}/custom-prompt.txt"
@@ -305,6 +336,6 @@ async test "session fork command copies a session offline under the given id" {
         env=Map([]),
       ),
     )
-    assert_eq(store.list().length(), 5)
+    assert_eq(store.list().length(), 6)
   })
 }

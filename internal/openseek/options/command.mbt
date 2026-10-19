@@ -225,6 +225,11 @@ pub fn root_command() -> @argparse.Command {
                 long="through",
                 about="Copy only up to the turn that ended at this event sequence.",
               ),
+              OptionArg(
+                "notice",
+                long="notice",
+                about="Text the fork's notice carries after its standard part, for what the caller knows of the fork's environment.",
+              ),
             ],
             positionals=[PositionArg("id", about="Session id.")],
           ),

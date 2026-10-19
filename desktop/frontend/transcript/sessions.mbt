@@ -491,11 +491,23 @@ pub fn apply_session_item(
               ts,
               sequence,
             })
-          // What is left is either model-directed text — never a display
-          // card — or a runtime notice the engine injected between turns
-          // (a background-job completion, or a legacy `moon_check` block).
+          // What is left is the fork marker, model-directed text — never a
+          // display card — or a runtime notice the engine injected between
+          // turns (a background-job completion, or a legacy `moon_check`
+          // block).
           None =>
-            if !is_model_directed_notice(payload.content) {
+            if is_fork_notice(payload.content) {
+              items.push({
+                kind: Notice(
+                  label="fork",
+                  brief=Some("Forked from another conversation"),
+                  is_error=false,
+                  body=None,
+                ),
+                ts,
+                sequence,
+              })
+            } else if !is_model_directed_notice(payload.content) {
               items.push({
                 // Runtime notices keep the compact completed-result row used
                 // by the old projection, but the generic label no longer

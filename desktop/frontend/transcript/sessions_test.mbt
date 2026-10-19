@@ -549,6 +549,23 @@ test "transcript mapping drops the plan reminder instead of carding it" {
 }
 
 ///|
+test "transcript mapping marks where a fork's own conversation begins" {
+  let events =
+    #|{"sequence":1,"item":{"kind":"runtime_notice","payload":{"content":"[session forked]\nThis conversation continues from a copy of another conversation's history."}}}
+  let items = transcript_from_session(session_reply(events))
+  inspect(items.length(), content="1")
+  guard items[0].kind
+    is @transcript.Notice(
+      label="fork",
+      brief=Some("Forked from another conversation"),
+      is_error=false,
+      body=None
+    ) else {
+    fail("expected the fork marker")
+  }
+}
+
+///|
 test "a cleared goal leaves cards but no standing goal" {
   let events =
     #|{"sequence":1,"item":{"kind":"runtime_notice","payload":{"content":"[goal]\nline one\nline two"}}},

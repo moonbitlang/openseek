@@ -101,6 +101,11 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
       Some(@cli.parse_positive_int(input.trim().to_owned(), "--through"))
     _ => None
   }
+  let addendum = match matches {
+    { values: { "notice": [text, ..], .. }, .. } if !text.is_blank() =>
+      Some(text.trim().to_owned())
+    _ => None
+  }
   let (model, _, _) = @options.agent_settings(matches)
   let system_prompt = @setup.configured_system_prompt(
     matches,
@@ -108,7 +113,32 @@ async fn sessions_fork(matches : @argparse.Matches) -> Unit {
     workspace_root~,
     session_scratch_dir=store.scratch_dir(fork),
   )
-  println(store.fork(source, fork, through?, system_prompt~).id().value())
+  let notice = fork_notice(workspace_root, addendum?)
+  println(
+    store.fork(source, fork, through?, system_prompt~, notice~).id().value(),
+  )
+}
+
+///|
+/// First line of the runtime notice that opens a fork's own part of its log.
+const ForkNoticePrefix = "[session forked]"
+
+///|
+/// What a fork's model is told before its first prompt: the history it
+/// carries was made against files it may not have. A fork may run in another
+/// directory than its source, and even in the same one the files have moved
+/// on since the turn it was cut at, so earlier tool results are not evidence
+/// of what is on disk now. `addendum` is the caller's own account of the
+/// fork's environment, carried after this standard part as given.
+fn fork_notice(workspace_root : String, addendum? : String) -> String {
+  let lines = [
+    ForkNoticePrefix,
+    "This conversation continues from a copy of another conversation's history; its files were not copied. Earlier tool results describe files as they were when those turns ran, and the working directory is now \{workspace_root}. Re-read a file before relying on what an earlier turn saw or wrote in it.",
+  ]
+  if addendum is Some(text) {
+    lines.push(text)
+  }
+  lines.join("\n")
 }
 
 ///|

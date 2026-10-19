@@ -131,6 +131,14 @@ started with, and the ones the fork will be resumed with. The fork's first
 request does not reuse the source's cached prefix past the point where the two
 prompts differ.
 
+The copied history ends with a `[session forked]` runtime notice, which the
+model reads before the fork's first prompt: the files were not copied with the
+history, so earlier tool results may not describe what is in `--dir` now. A
+caller that knows more about the fork's environment — the desktop app, which
+makes a new git worktree for a fork and knows what the source left
+uncommitted — passes it with `--notice <text>`, which the notice carries after
+its standard part as given.
+
 ## `openseek serve`
 
 In `serve` mode, controllers can ask the engine to generate and append a summary

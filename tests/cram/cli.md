@@ -304,7 +304,9 @@ compacted session demo events 1..2; last_sequence=3
 which `--session` then resumes. The copy ends where the last finished turn
 ended: the prompt that opened a turn still in flight stays with the original.
 The fork's system prompt is built for the fork: it names the fork's own
-scratch directory, where the original's prompt named the original's.
+scratch directory, where the original's prompt named the original's. A
+`[session forked]` runtime notice follows the copied history, telling the
+model that the files were not copied with it.
 `--through` stops at the end of an earlier turn and must name a turn's
 terminal event; an id that already exists is never replaced.
 
@@ -329,6 +331,7 @@ $ sh <<'EOF'
 retry
 user
 terminal
+runtime_notice
 sessions/retry/scratch
 error: session retry already exists
 exit-non-zero

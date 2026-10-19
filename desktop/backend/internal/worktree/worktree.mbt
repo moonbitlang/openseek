@@ -678,10 +678,11 @@ pub async fn drop_placements(
 
 ///|
 /// Add `session` to the worktree `worktree_of` works in, around the creation
-/// of `session`'s durable record: a conversation forked from one that works
-/// in a worktree keeps working in that checkout. When `worktree_of` works in
-/// the workspace root there is no worktree to join, and only the record is
-/// created.
+/// of `session`'s durable record: a message edit, which replaces a
+/// conversation that works in a worktree, keeps working in that checkout. A
+/// fork the user asked for gets one of its own instead, through
+/// `add_session_to_new_worktree`. When `worktree_of` works in the workspace
+/// root there is no worktree to join, and only the record is created.
 ///
 /// `create_record` is handed the directory `session` will work in. It is
 /// read here, under the same locks as the binding, because a directory
@@ -744,6 +745,183 @@ pub async fn add_session_to_worktree(
 }
 
 ///|
+/// Where a fork made by `add_session_to_new_worktree` works. A fork of a
+/// workspace-root conversation works in the same directory as its source. A
+/// fork of a worktree conversation works in a new worktree at the source
+/// checkout's HEAD; `uncommitted` lists up to `ForkUncommittedListLimit`
+/// paths the source checkout had uncommitted changes to, which the new one
+/// does not have, and `omitted` counts the rest.
+pub enum ForkCheckout {
+  WorkspaceRoot(@pathx.Absolute)
+  NewWorktree(
+    dir~ : @pathx.Absolute,
+    uncommitted~ : Array[String],
+    omitted~ : Int32
+  )
+}
+
+///|
+/// The directory the fork works in.
+pub fn ForkCheckout::dir(self : ForkCheckout) -> @pathx.Absolute {
+  match self {
+    WorkspaceRoot(dir) | NewWorktree(dir~, ..) => dir
+  }
+}
+
+///|
+const ForkUncommittedListLimit = 20
+
+///|
+/// Create `session`'s durable record in a checkout of its own when
+/// `worktree_of` works in a worktree: a fork of a worktree conversation gets
+/// a new worktree, detached at the source checkout's HEAD and recording the
+/// source's base, so the review of either one still spans the whole task.
+/// The source's uncommitted changes are not carried: a fork is cut at a past
+/// turn, and no state of the source checkout matches that turn's tool
+/// results anyway. They are reported to `create_record` instead, which tells
+/// the fork. When `worktree_of` works in the workspace root there is no
+/// worktree to copy, and only the record is created, there.
+///
+/// A source whose checkout is gone is refused, as a turn there would be. The
+/// registry stays held from reading the source's row until `create_record`
+/// returns, as in `add_session_to_worktree`: another host's registry write in
+/// between would be lost to this one.
+///
+/// The new row is committed before `create_record` runs, and the checkout
+/// keeps its provisioning lock until the record exists. When
+/// `create_record` does not return, `record_exists` decides, as in
+/// `add_session_to_worktree`: a fork that exists keeps its worktree and is
+/// reported through `on_committed`; one that does not takes its row,
+/// checkout and recovery reference back out.
+pub async fn add_session_to_new_worktree(
+  workspace : @pathx.Absolute,
+  session~ : String,
+  worktree_of~ : String,
+  create_record : async (ForkCheckout) -> Unit,
+  record_exists~ : async () -> Bool,
+  on_committed : (Array[WorktreeInfo]) -> Unit,
+) -> Unit {
+  worktree_registry_lock.acquire()
+  defer worktree_registry_lock.release()
+  let shared = lock_worktrees_file(workspace)
+  defer shared.release()
+  let entries = read_worktrees_unlocked(workspace)
+  guard entries.iter().find_first(entry => entry.sessions.contains(worktree_of))
+    is Some(source) else {
+    create_record(WorkspaceRoot(workspace))
+    return
+  }
+  let source_checkout = worktree_dir(workspace, source.name)
+  let present = @fsx.is_dir(source_checkout.to_path())
+  guard present else {
+    raise WorktreeError(missing_checkout_refusal(source.name))
+  }
+  let head = @gitx.run(source_checkout, [
+    "rev-parse", "--verify", "HEAD^{commit}",
+  ])
+  let status = @gitx.output(source_checkout, [
+    "status", "--porcelain=v1", "-z", "--untracked-files=all",
+  ])
+  let (uncommitted, count) = archive_dirty_path_preview(
+    status,
+    limit=ForkUncommittedListLimit,
+  )
+  let workspace_settings = @workspaces.settings(resource_path(workspace))
+  let name = fresh_worktree_name(workspace, entries)
+  guard @entropy.random_hex(16) is Some(salt) else {
+    raise WorktreeError("no OS entropy available to identify a worktree")
+  }
+  let recovery_ref = "\{WorktreeRecoveryPrefix}\{name}-\{salt}"
+  @workspaces.exclude_from_git(workspace, WorktreesDirName)
+  ignore(
+    @gitx.run(workspace, [
+      "update-ref",
+      recovery_ref,
+      head,
+      "0".repeat(head.length()),
+    ]),
+  )
+  let entry : WorktreeEntry = {
+    name,
+    checkout: Detached(recovery_ref),
+    base: source.base,
+    sessions: [session],
+    codex_thread: None,
+  }
+  let lock_reason = "\{entry.lock_prefix()}\{salt}"
+  let mut published = false
+  {
+    errdefer @async.protect_from_cancel(() => {
+      if published && record_exists() {
+        on_committed(worktree_infos(workspace, entries))
+        finish_fork_worktree(workspace, entry)
+        return
+      }
+      if published {
+        write_worktrees(workspace, entries.filter(row => row.name != name))
+      }
+      rollback_worktree_checkout(workspace, name, lock_reason)
+      @gitx.rollback(workspace, ["update-ref", "-d", recovery_ref, head])
+    })
+    ignore(
+      @gitx.run(workspace, [
+        "worktree",
+        "add",
+        "--detach",
+        "--lock",
+        "--reason",
+        lock_reason,
+        "\{WorktreesDirName}/\{name}",
+        head,
+      ]),
+    )
+    let target = worktree_dir(workspace, name)
+    if workspace_settings.checkout_submodules {
+      provision_initialized_submodules(
+        workspace,
+        target,
+        workspace_settings.submodule_checkout_timeout_seconds,
+      )
+    }
+    entries.push(entry)
+    @async.protect_from_cancel(() => {
+      write_worktrees(workspace, entries)
+      published = true
+    })
+    create_record(
+      NewWorktree(
+        dir=target,
+        uncommitted~,
+        omitted=count - uncommitted.length(),
+      ),
+    )
+  }
+  @async.protect_from_cancel(() => {
+    on_committed(worktree_infos(workspace, entries))
+    finish_fork_worktree(workspace, entry)
+  })
+}
+
+///|
+/// Release a fork's provisioning lock once its record exists. A failure here
+/// leaves a fork that was made, so it is logged rather than raised: an error
+/// would invite a retry that makes a second fork.
+async fn finish_fork_worktree(
+  workspace : @pathx.Absolute,
+  entry : WorktreeEntry,
+) -> Unit {
+  finish_worktree_creation(workspace, entry) catch {
+    error =>
+      @xlog.warn() <?
+        {
+          "event": "desktop_fork_worktree_unlock_failed",
+          "worktree": entry.name,
+          "error": error.to_string(),
+        }
+  }
+}
+
+///|
 /// The tree root an absolute in-workspace `path` belongs to: the registered
 /// worktree containing it when one does, otherwise the workspace itself. A
 /// `.worktrees` path with no registry entry (a worker slice, say) keeps
@@ -770,8 +948,12 @@ const ArchiveDirtyPathPreviewLimit = 8
 /// Extract a bounded path preview from `git status --porcelain=v1 -z` while
 /// retaining the full row count. In `-z` mode a rename/copy consumes the next
 /// NUL field as its source; only the current path is useful in the archive
-/// warning.
-fn archive_dirty_path_preview(status : String) -> (Array[String], Int32) {
+/// warning. `limit` bounds the preview; a fork notice lists more than the
+/// archive warning does.
+fn archive_dirty_path_preview(
+  status : String,
+  limit~ : Int32 = ArchiveDirtyPathPreviewLimit,
+) -> (Array[String], Int32) {
   let fields = status.split("\u{0}").collect()
   let paths : Array[String] = []
   let mut count = 0
@@ -786,7 +968,7 @@ fn archive_dirty_path_preview(status : String) -> (Array[String], Int32) {
     let worktree_status = record.view(start_offset=1, end_offset=2)
     let path = record.view(start_offset=3).to_owned()
     count += 1
-    if paths.length() < ArchiveDirtyPathPreviewLimit {
+    if paths.length() < limit {
       paths.push(path)
     }
     if index_status is ("R" | "C") || worktree_status is ("R" | "C") {

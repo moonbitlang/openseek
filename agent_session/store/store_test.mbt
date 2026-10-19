@@ -228,6 +228,20 @@ async test "fork copies a session's finished turns and title into a new session"
   )
   assert_eq(grown.last_sequence(), 3)
   assert_eq(store.load(SessionId("origin")).last_sequence(), 3)
+  // A notice lands right after the copied history: the first thing the
+  // fork's model reads past it.
+  let noticed = store.fork(
+    SessionId("origin"),
+    SessionId("noticed"),
+    system_prompt="fork system",
+    notice="[session forked]",
+  )
+  assert_eq(noticed.last_sequence(), 3)
+  let tail = store.load(SessionId("noticed")).events()[2]
+  assert_true(
+    tail.item() is Runtime(notice) && notice.content() == "[session forked]",
+  )
+  assert_true(tail.unix_ms() > 0)
   assert_true(
     store.load(SessionId("origin")).events()[2].item() is User(message) &&
     message.content().text() == "second",

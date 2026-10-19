@@ -9,6 +9,8 @@ import {
 }
 
 // Values
+pub async fn add_session_to_new_worktree(@pathx.Absolute, session~ : String, worktree_of~ : String, async (ForkCheckout) -> Unit, record_exists~ : async () -> Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> Unit
+
 pub async fn add_session_to_worktree(@pathx.Absolute, session~ : String, worktree_of~ : String, async (@pathx.Absolute) -> Unit, record_exists~ : async () -> Bool, (Array[@protocol.WorktreeInfo]) -> Unit) -> Unit
 
 pub async fn create(WorktreeHost, String, WorktreeOwner, (Array[@protocol.WorktreeInfo]) -> Unit, name? : String) -> @protocol.WorktreeCreateReply
@@ -44,6 +46,12 @@ pub struct CodexWorktreeBinding {
 pub fn CodexWorktreeBinding::equal(Self, Self) -> Bool
 pub fn CodexWorktreeBinding::not_equal(Self, Self) -> Bool
 pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
+
+pub enum ForkCheckout {
+  WorkspaceRoot(@pathx.Absolute)
+  NewWorktree(dir~ : @pathx.Absolute, uncommitted~ : Array[String], omitted~ : Int)
+}
+pub fn ForkCheckout::dir(Self) -> @pathx.Absolute
 
 pub(all) struct WorktreeHost {
   lifecycle_lock : @async.Mutex

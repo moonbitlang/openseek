@@ -97,7 +97,8 @@ async fn edited_message_saved(
 }
 
 ///|
-/// Later-message edits use the ordinary fork. A first-message edit creates
+/// Later-message edits fork into the source's checkout, which the edit takes
+/// over once the source is deleted. A first-message edit creates
 /// an empty conversation in the same checkout; its first prompt creates the
 /// record. The source is never removed by preparation.
 async fn prepare_session_edit(
@@ -107,7 +108,7 @@ async fn prepare_session_edit(
   on_worktree_changed~ : (String, Array[WorktreeInfo]) -> Unit,
 ) -> @protocol.SessionForkReply {
   if payload.through is Some(through) {
-    return fork_session(
+    return fork_session_in(
       manager,
       {
         session: payload.session,
@@ -116,6 +117,7 @@ async fn prepare_session_edit(
         model: payload.model,
         source_title: payload.source_title,
       },
+      SharedWorktree,
       on_created~,
       on_worktree_changed~,
     )
