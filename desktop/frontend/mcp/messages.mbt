@@ -13,7 +13,6 @@ priv enum UiMessage {
   NotConfigured
   NoServers
   ConfigFailed(String)
-  Builtin
   CheckFailed
   Connected
   NoTools
@@ -114,11 +113,6 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (TraditionalChinese, ConfigFailed(path)) => "無法載入 \{path}"
     (Japanese, ConfigFailed(path)) =>
       "\{path} を読み込めませんでした"
-    (English, Builtin) => "SeekMoon built-in"
-    (Spanish, Builtin) => "Integrado de SeekMoon"
-    (SimplifiedChinese, Builtin) => "SeekMoon 内置"
-    (TraditionalChinese, Builtin) => "SeekMoon 內建"
-    (Japanese, Builtin) => "SeekMoon 組み込み"
     (English, CheckFailed) => "The status could not be read"
     (Spanish, CheckFailed) => "No se pudo leer el estado"
     (SimplifiedChinese, CheckFailed) => "未能读取状态"

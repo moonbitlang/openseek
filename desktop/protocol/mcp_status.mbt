@@ -2,8 +2,7 @@
 // state itself is the engine's (`@wire.McpStatus`, the payload of its
 // `mcp_status` event), kept by the host as last reported; the host adds only
 // what the engine cannot say — that no engine is running or that it has not
-// reported yet, and which of the engine's configuration files is the host's
-// own.
+// reported yet.
 
 ///|
 /// The conversation whose engine is asked.
@@ -45,10 +44,8 @@ pub(all) enum McpStatusReply {
   /// An engine is running and has not reported yet: it is still starting,
   /// which includes connecting its servers.
   Connecting
-  /// The running engine's own latest account of its servers. `builtin_config`
-  /// is the configuration file the host itself handed the engine — the one
-  /// holding the desktop's built-in tool server — when it handed one.
-  Running(status~ : @wire.McpStatus, builtin_config~ : String?)
+  /// The running engine's own latest account of its servers.
+  Running(@wire.McpStatus)
 } derive(Eq, Debug)
 
 ///|
@@ -59,11 +56,10 @@ pub impl FromJson for McpStatusReply with fn from_json(json, path) {
     "connecting" => Connecting
     "running" =>
       Running(
-        status=@json.from_json(
+        @json.from_json(
           object.required_json("status"),
           path=path.add_key("status"),
         ),
-        builtin_config=object.optional_string("builtin_config"),
       )
     _ =>
       raise JsonDecodeError((path.add_key("engine"), "expected engine state"))
@@ -75,16 +71,7 @@ pub impl ToJson for McpStatusReply with fn to_json(self) {
   match self {
     Stopped => { "engine": "stopped" }
     Connecting => { "engine": "connecting" }
-    Running(status~, builtin_config~) => {
-      let fields : Map[String, Json] = {
-        "engine": "running",
-        "status": Json(status),
-      }
-      if builtin_config is Some(path) {
-        fields["builtin_config"] = Json(path)
-      }
-      Json::object(fields)
-    }
+    Running(status) => { "engine": "running", "status": Json(status) }
   }
 }
 

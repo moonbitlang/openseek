@@ -210,8 +210,7 @@ edit that is also undone in that moment goes unnoticed until the file changes
 again.
 
 **Settings → MCP** shows what the current conversation's engine holds of
-its servers: each from the file it was configured in — the host's own entry
-marked as SeekMoon's built-in one — and connected with its tools,
+its servers, the host's own among them: each connected with its tools,
 disconnected since it connected, no tools, failed with the reason, or skipped
 over the tool limit, after any configuration file the engine could not load.
 The host holds no MCP connections of its own. Each engine reports what it

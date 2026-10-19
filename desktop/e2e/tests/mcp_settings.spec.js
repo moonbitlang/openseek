@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-const builtinPath = '/runtime/host-mcp.json';
+const hostPath = '/runtime/host-mcp.json';
 const userPath = '/home/user/.openseek/mcp.json';
 
 function mcpGroup(page) {
@@ -15,7 +15,7 @@ function statusRequests(app) {
 }
 
 function running(status) {
-  return { engine: 'running', status, builtin_config: builtinPath };
+  return { engine: 'running', status };
 }
 
 function loaded(...paths) {
@@ -25,11 +25,10 @@ function loaded(...paths) {
 test('Settings shows what the current conversation\'s engine holds of its MCP servers', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.mcpStatus = running({
-    configs: loaded(builtinPath, userPath),
+    configs: loaded(hostPath, userPath),
     servers: [
       {
         name: 'seekmoon',
-        source: builtinPath,
         transport: 'http',
         target: 'http://127.0.0.1:4321/mcp',
         state: 'connected',
@@ -41,7 +40,6 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
       },
       {
         name: 'playwright',
-        source: userPath,
         transport: 'stdio',
         target: 'npx',
         state: 'connected',
@@ -52,7 +50,6 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
       },
       {
         name: 'docs',
-        source: userPath,
         transport: 'http',
         target: 'https://example.com/mcp',
         state: 'failed',
@@ -60,13 +57,12 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
       },
       {
         name: 'memory',
-        source: userPath,
         transport: 'stdio',
         target: 'memory-mcp',
         state: 'lost',
         tools: [{ name: 'mcp__memory__recall', description: 'Recall a note' }],
       },
-      { name: 'notes', source: userPath, transport: 'stdio', target: 'notes-mcp', state: 'no_tools' },
+      { name: 'notes', transport: 'stdio', target: 'notes-mcp', state: 'no_tools' },
     ],
   });
   await app.install();
@@ -75,17 +71,14 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const group = mcpGroup(page);
 
-  // The host's own server is named as built in, not by its file or address.
+  // The host's own server is listed like any other.
   const seekmoon = group.locator('.mcp-item', { hasText: 'seekmoon' });
-  await expect(seekmoon.getByText('SeekMoon built-in', { exact: true })).toBeVisible();
-  await expect(seekmoon.getByText('127.0.0.1', { exact: false })).toHaveCount(0);
+  await expect(seekmoon.getByText('http · http://127.0.0.1:4321/mcp', { exact: true })).toBeVisible();
   // Tools are listed by their short names; the full names are on hover.
   await expect(seekmoon.getByText('browser_tabs, browser_open, browser_navigate', { exact: true })).toBeVisible();
   const playwright = group.locator('.mcp-item', { hasText: 'playwright' });
   await expect(playwright.getByText('stdio · npx', { exact: true })).toBeVisible();
   await expect(playwright.locator('.mcp-detail')).toHaveAttribute('title', /mcp__playwright__browser_click — Perform click on a web page/);
-  // A single user file is not repeated on every row.
-  await expect(group.getByText(userPath, { exact: false })).toHaveCount(0);
   await expect(group.getByText('Connected', { exact: true })).toHaveCount(2);
   await expect(group.locator('.mcp-item', { hasText: 'docs' }).getByText('Failed', { exact: true })).toBeVisible();
   await expect(group.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
@@ -114,7 +107,7 @@ test('MCP status says when there is no engine to ask, and asks again on reopen a
   await page.getByRole('button', { name: 'Skills', exact: true }).click();
   app.mcpStatus = running({
     configs: [
-      ...loaded(builtinPath),
+      ...loaded(hostPath),
       { path: userPath, state: 'failed', error: 'mcp config error: configuration is missing an `mcpServers` object' },
     ],
     servers: [],
@@ -159,7 +152,7 @@ test('the MCP panel follows what the engine reports while Settings is open', asy
     app.notify('agent.event', { session: 'session-1', event: { event: 'mcp_status', status } });
   };
   const tools = [{ name: 'mcp__memory__recall', description: 'Recall a note' }];
-  const memory = state => ({ name: 'memory', source: userPath, transport: 'stdio', target: 'memory-mcp', state, tools });
+  const memory = state => ({ name: 'memory', transport: 'stdio', target: 'memory-mcp', state, tools });
   report([memory('connected')]);
   await expect(group.getByText('Connected', { exact: true })).toBeVisible();
   expect(statusRequests(app)).toHaveLength(2);

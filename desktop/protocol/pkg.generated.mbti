@@ -2178,7 +2178,7 @@ pub impl @json.FromJson for McpStatusPayload
 pub(all) enum McpStatusReply {
   Stopped
   Connecting
-  Running(status~ : @openseek_protocol.McpStatus, builtin_config~ : String?)
+  Running(@openseek_protocol.McpStatus)
 } derive(Eq, @debug.Debug)
 pub fn McpStatusReply::equal(Self, Self) -> Bool
 pub fn McpStatusReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

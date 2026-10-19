@@ -10,21 +10,12 @@ fn conversation(session : String) -> @interop.ConversationKey {
 
 ///|
 fn answer() -> @protocol.McpStatusReply {
-  Running(
-    status={
-      configs: [{ path: "/home/.openseek/mcp.json", state: Loaded, }],
-      servers: [
-        {
-          name: "playwright",
-          source: "/home/.openseek/mcp.json",
-          transport: Stdio,
-          target: "npx",
-          state: NoTools,
-        },
-      ],
-    },
-    builtin_config=None,
-  )
+  Running({
+    configs: [{ path: "/home/.openseek/mcp.json", state: Loaded, }],
+    servers: [
+      { name: "playwright", transport: Stdio, target: "npx", state: NoTools, },
+    ],
+  })
 }
 
 ///|
@@ -161,10 +152,7 @@ test "an engine's report makes the panel read again without blanking it" {
   // A question is out, so a refresh has nothing to add.
   let (_, still) = @mcp.update(quiet(), Refresh(one), reloading)
   assert_true(still == reloading)
-  let newer : @protocol.McpStatusReply = Running(
-    status={ configs: [], servers: [], },
-    builtin_config=None,
-  )
+  let newer : @protocol.McpStatusReply = Running({ configs: [], servers: [], })
   let (_, settled) = @mcp.update(
     quiet(),
     Checked(serial=reloading.serial, Ok(newer)),

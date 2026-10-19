@@ -71,8 +71,7 @@ pub fn rows(
   match reply {
     Stopped => rows.push(note(text(locale, EngineStopped)))
     Connecting => rows.push(note(text(locale, EngineConnecting)))
-    Running(status~, builtin_config~) =>
-      status_rows(locale, status, builtin_config, rows)
+    Running(status) => status_rows(locale, status, rows)
   }
   rows
 }
@@ -83,7 +82,6 @@ pub fn rows(
 fn status_rows(
   locale : @i18n.Locale,
   status : @wire.McpStatus,
-  builtin_config : String?,
   rows : Array[@html.Html],
 ) -> Unit {
   guard !status.configs.is_empty() else {
@@ -94,40 +92,21 @@ fn status_rows(
   for config in status.configs {
     match config.state {
       Loaded => loaded = true
-      Failed(error) => {
-        let name = if builtin_config == Some(config.path) {
-          text(locale, Builtin)
-        } else {
-          config.path
-        }
+      Failed(error) =>
         rows.push(
           item(
-            title=text(locale, ConfigFailed(name)),
+            title=text(locale, ConfigFailed(config.path)),
             detail=error,
             state=("danger", text(locale, Failed)),
           ),
         )
-      }
     }
   }
   if loaded && status.servers.is_empty() {
     rows.push(note(text(locale, NoServers)))
   }
-  // Where a server came from is worth a line only when the user has more
-  // than one file of their own; the built-in file is named as such.
-  let user_files = status.configs.filter(config => {
-    builtin_config != Some(config.path)
-  })
-  let show_source = user_files.length() > 1
   for server in status.servers {
-    rows.push(
-      server_row(
-        locale,
-        server,
-        builtin=builtin_config == Some(server.source),
-        show_source~,
-      ),
-    )
+    rows.push(server_row(locale, server))
   }
 }
 
@@ -206,25 +185,17 @@ fn tool_line(tools : Array[@wire.McpTool]) -> (String, String) {
 }
 
 ///|
-/// One server: its name, how it is reached — or, for the host's own entry,
-/// that it is built in — and the state the engine found it in.
+/// One server: its name, how it is reached, and the state the engine found it
+/// in.
 fn server_row(
   locale : @i18n.Locale,
   server : @wire.McpServerStatus,
-  builtin~ : Bool,
-  show_source~ : Bool,
 ) -> @html.Html {
   let transport = match server.transport {
     Stdio => "stdio"
     Http => "http"
   }
-  let meta = if builtin {
-    text(locale, Builtin)
-  } else if show_source {
-    "\{transport} · \{server.target} · \{server.source}"
-  } else {
-    "\{transport} · \{server.target}"
-  }
+  let meta = "\{transport} · \{server.target}"
   match server.state {
     Connected(tools) => {
       let (detail, detail_title) = tool_line(tools)

@@ -77,10 +77,6 @@ priv struct ServeEngine {
   // servers, as it last said. `None` until its first report, which comes
   // once it has connected them.
   mut mcp_status : @wire.McpStatus?
-  // The host's own MCP configuration file this process was started with,
-  // when the host has a tool server to hand it; a status report names its
-  // servers' files, and this is how a reader tells the built-in one apart.
-  builtin_mcp_config : String?
 }
 
 ///|
@@ -1581,11 +1577,6 @@ async fn[G] start_serve_engine(
     env~,
     host_mcp=manager.mcp.server is Some(_),
   )
-  let builtin_mcp_config = if manager.mcp.server is Some(_) {
-    Some(host_mcp_config_path(manager.runtime_dir).to_string())
-  } else {
-    None
-  }
   let graceful_cancel = @process.graceful_cancel(timeout=1000)
   @xlog.debug() <?
     {
@@ -1664,7 +1655,6 @@ async fn[G] start_serve_engine(
     job_requests: Map([]),
     last_activity_ms: engine_clock_ms(),
     mcp_status: None,
-    builtin_mcp_config,
   }
   startup_engine = Some(engine)
   // Spawned before the handle is reachable from any request, so stdin has an
@@ -2390,7 +2380,6 @@ fn test_serve_engine(
   condemned~ : Bool = false,
   last_activity_ms~ : Int64 = engine_clock_ms(),
   id~ : String = "test",
-  builtin_mcp_config? : String,
 ) -> ServeEngine {
   {
     session_key: session,
@@ -2416,7 +2405,6 @@ fn test_serve_engine(
     job_requests: Map([]),
     last_activity_ms,
     mcp_status: None,
-    builtin_mcp_config,
   }
 }
 

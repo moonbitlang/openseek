@@ -359,26 +359,6 @@ test "an inherited MCP configuration counts as one the engine will load" {
 }
 
 ///|
-/// Where the host writes the configuration of its own tool server, which it
-/// hands every engine ahead of the user's.
-fn host_mcp_config_path(
-  runtime_dir : @pathx.Path?,
-) -> @pathx.Absolute raise EngineError {
-  let directory = match runtime_dir {
-    Some(directory) => directory
-    None => {
-      guard @workspaces.global_store_root() is Some(root) else {
-        raise EngineError(
-          "Host MCP configuration needs a runtime or home directory",
-        )
-      }
-      root.to_path()
-    }
-  }
-  directory.join("host-mcp.json").resolve()
-}
-
-///|
 /// Put the host defaults before the user's configuration. Once an explicit
 /// host path is passed, argparse no longer reads OPENSEEK_MCP_CONFIG, so carry
 /// that fallback explicitly when the user's usual file is absent.
@@ -390,7 +370,18 @@ async fn engine_mcp_args(
 ) -> Array[String] {
   let args : Array[String] = []
   if host_mcp {
-    let path = host_mcp_config_path(runtime_dir)
+    let directory = match runtime_dir {
+      Some(directory) => directory
+      None => {
+        guard @workspaces.global_store_root() is Some(root) else {
+          raise EngineError(
+            "Host MCP configuration needs a runtime or home directory",
+          )
+        }
+        root.to_path()
+      }
+    }
+    let path = directory.join("host-mcp.json").resolve()
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
     let text =
@@ -429,7 +420,7 @@ pub fn mcp_status(
     return Stopped
   }
   match engine.mcp_status {
-    Some(status) => Running(status~, builtin_config=engine.builtin_mcp_config)
+    Some(status) => Running(status)
     None => Connecting
   }
 }
@@ -453,9 +444,9 @@ async test "MCP status is the live engine's latest report" {
   // lost a moment later, as the real one does when a server exits. Nothing
   // is ever written to it.
   let script =
-    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","source":"/run/host-mcp.json","transport":"stdio","target":"a","state":"connected","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
+    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","transport":"stdio","target":"a","state":"connected","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
     #|sleep 0.3
-    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","source":"/run/host-mcp.json","transport":"stdio","target":"a","state":"lost","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
+    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","transport":"stdio","target":"a","state":"lost","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
     #|cat >/dev/null
   @async.with_task_group(group => {
     let (child_stdin, writer) = @process.write_to_process()
@@ -474,7 +465,6 @@ async test "MCP status is the live engine's latest report" {
       process,
       sink,
       phase=Idle(last_run=None),
-      builtin_mcp_config="/run/host-mcp.json",
     )
     let sessions : Map[String, SessionSlot] = Map([])
     slot_for(sessions, "s-live").engine = Some(engine)
@@ -488,10 +478,7 @@ async test "MCP status is the live engine's latest report" {
     })
     fn server_state() -> @wire.McpServerState? {
       match mcp_status(manager, { session: "s-live", }) {
-        Running(
-          status={ servers: [server], .. },
-          builtin_config=Some("/run/host-mcp.json")
-        ) => Some(server.state)
+        Running({ servers: [server], .. }) => Some(server.state)
         _ => None
       }
     }
