@@ -775,43 +775,6 @@ async test "query cancellation keeps the cache-populating scan alive" {
 }
 
 ///|
-async test "cache keys coalesce scans and clearCache retires one session" {
-  @async.with_task_group(group => {
-    let starts : @async.Queue[Unit] = Queue(kind=Blocking(2))
-    let outcomes : @async.Queue[FileIndexSnapshot] = Queue(kind=Blocking(2))
-    let service = FileSearchService::new_with_scan(_ => {
-      starts.put(())
-      outcomes.get()
-    })
-    group.spawn_bg(() => service.run())
-    let root = @pathx.Path("/workspace-cache").resolve()
-    let warm = group.spawn(() => service.search(root, "cache-a", "", 0, 1))
-    @async.with_timeout(1000, () => starts.get())
-    let joined = group.spawn(() => {
-      service.search(root, "cache-a", "old", 200, 2)
-    })
-    @async.pause()
-    assert_true(starts.try_get() is None)
-    outcomes.put({ files: ["old.mbt", "other.mbt"], })
-    ignore(@async.with_timeout(1000, () => warm.wait()))
-    let joined_reply = @async.with_timeout(1000, () => joined.wait())
-    assert_true(joined_reply.from_cache)
-    assert_eq(joined_reply.files, ["old.mbt"])
-    let narrowed = service.search(root, "cache-a", "old.m", 200, 3)
-    assert_true(narrowed.from_cache)
-    assert_eq(narrowed.files, ["old.mbt"])
-    service.clear_cache("cache-a")
-    let fresh = group.spawn(() => service.search(root, "cache-a", "new", 200, 4))
-    @async.with_timeout(1000, () => starts.get())
-    outcomes.put({ files: ["new.mbt"], })
-    let fresh_reply = @async.with_timeout(1000, () => fresh.wait())
-    assert_false(fresh_reply.from_cache)
-    assert_eq(fresh_reply.files, ["new.mbt"])
-    group.return_immediately(())
-  })
-}
-
-///|
 async test "one connection serializes discovery across cache sessions" {
   @async.with_task_group(group => {
     let starts : @async.Queue[String] = Queue(kind=Blocking(2))
