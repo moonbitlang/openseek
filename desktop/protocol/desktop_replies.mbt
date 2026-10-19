@@ -1228,6 +1228,8 @@ pub(all) struct InstalledSkill {
   description : String
   source : String
   registry : RegistrySkillIdentity?
+  // Derived from the library location; disabled entries remain listed and
+  // previewable, and new installs default to enabled.
   enabled : Bool
 } derive(Debug, Eq)
 

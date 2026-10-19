@@ -20,7 +20,7 @@ async test "skill op returns its error through a normal endpoint reply" {
 }
 
 ///|
-async test "enablement endpoint returns filesystem failures as typed replies" {
+async test "enablement endpoint returns library errors as typed replies" {
   let actor = @engine.new_engine_actor("unused-test-engine")
   let endpoints = @host.endpoints(
     @host.new_host_state("unused-test-engine"),
@@ -31,6 +31,7 @@ async test "enablement endpoint returns filesystem failures as typed replies" {
   for endpoint in endpoints {
     guard endpoint.name() == "skills.set_enabled" else { continue }
     let reply = endpoint.invoke({ "id": "../invalid", "enabled": false })
+    assert_eq(reply, { "error": "invalid skill id: ../invalid" })
     let decoded : @protocol.SetSkillEnabledReply = @json.from_json(reply)
     assert_true(decoded is SkillEnabledError("invalid skill id: ../invalid"))
     return

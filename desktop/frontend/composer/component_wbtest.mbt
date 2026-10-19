@@ -172,6 +172,38 @@ test "file completion accepts a local candidate inside the component" {
 }
 
 ///|
+test "disabled installed skills stay out of skill completion" {
+  let available : @skills.InstalledItem = {
+    id: "available",
+    name: "available",
+    description: "",
+    source: "",
+    registry: None,
+    enabled: true,
+  }
+  let disabled = {
+    ..available,
+    id: "disabled",
+    name: "disabled",
+    enabled: false,
+  }
+  let input = { ..Input::fixture(""), installed_skills: [available, disabled], }
+  let (typing, _) = Model(input).update(
+    input,
+    TextChanged("$"),
+    Msg::test_emit(),
+    Action::test_emit(),
+  )
+  let entry = typing.active(input)
+  guard entry.completion is Some(menu) else {
+    fail("the skill token should open completion")
+  }
+  assert_true(menu.kind is SkillMentions)
+  assert_eq(menu.menu.length(), 1)
+  assert_eq(menu.menu.items[0].label, "$available")
+}
+
+///|
 test "a symbols reply settles the menu through its declared identity" {
   let input = Input::fixture("")
   let (typing, _) = Model(input).update(

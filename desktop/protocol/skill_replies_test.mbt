@@ -45,6 +45,24 @@ test "InstalledSkillsReply owns its success and error wire shapes" {
 }
 
 ///|
+test "InstalledSkillsReply preserves a disabled entry" {
+  let disabled : @protocol.InstalledSkill = {
+    id: "handmade",
+    name: "handmade",
+    description: "",
+    source: "",
+    registry: None,
+    enabled: false,
+  }
+  let reply : @protocol.InstalledSkillsReply = InstalledSkills([disabled])
+  let decoded : @protocol.InstalledSkillsReply = @json.from_json(
+    reply.to_json(),
+  )
+  assert_eq(decoded, reply)
+  assert_true(decoded is InstalledSkills([entry]) && !entry.enabled)
+}
+
+///|
 test "InstallSkillReply owns its success and error wire shapes" {
   let success : @protocol.InstallSkillReply = SkillInstalled({
     id: "test",

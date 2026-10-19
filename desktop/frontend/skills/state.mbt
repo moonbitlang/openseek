@@ -137,6 +137,11 @@ enum Preview {
 } derive(Eq)
 
 ///|
+/// The subject a preview was opened for. For `Installed`, this is the snapshot
+/// the read was issued against: an enablement-only library change deliberately
+/// leaves it untouched so the outstanding read can still settle. Its `enabled`
+/// is therefore historical; render live state from `Input.installed`, as
+/// `detail_action_target` does.
 enum PreviewTarget {
   Market(MarketItem)
   Installed(InstalledItem)
@@ -264,7 +269,8 @@ pub fn State::sync_library(
     _ => current != target
   }
   // Enablement comes from the live input. Keep the document snapshot so an
-  // outstanding read can still settle against the target it was issued for.
+  // outstanding read can still settle against the target it was issued for;
+  // its `enabled` stays historical until the document itself changes.
   guard document_changed else { return (@cmd.none, self) }
   let request = preview_request_id(self.preview) + 1
   (
