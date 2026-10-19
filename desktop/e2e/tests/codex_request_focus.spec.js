@@ -104,15 +104,18 @@ for (const kind of ['question', 'mcp-form']) {
     await expect(input).toHaveValue(edited);
     if (kind === 'question') {
       const question = page.locator('.user-question-card');
-      await question.getByRole('button', { name: 'Next', exact: true }).click();
+      await expect(question.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+      await question.locator('textarea').press('Enter');
       await expect(question.getByText('Any details?', { exact: true })).toBeVisible();
       await question.locator('textarea').fill('Keep keyboard support.');
       app.rpcErrors.set('codex.server_request.respond', 'Temporary failure');
-      await question.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(question.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await question.locator('textarea').press('Enter');
       await expect(question.locator('.user-question-error')).toContainText('Temporary failure');
       await expect(question.locator('textarea')).toHaveValue('Keep keyboard support.');
       app.rpcErrors.delete('codex.server_request.respond');
-      await question.getByRole('button', { name: 'Send', exact: true }).click();
+      await expect(question.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+      await question.locator('textarea').press('Enter');
       const responses = () => app.requests.filter(r => r.method === 'codex.server_request.respond');
       await expect.poll(() => responses().length).toBe(2);
       expect(responses().at(-1).params).toMatchObject({

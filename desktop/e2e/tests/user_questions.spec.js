@@ -28,6 +28,93 @@ function setup(page) {
   return { app, snapshot };
 }
 
+test('custom answer Enter advances questions and submits the final answer', async ({ page }) => {
+  const { app } = setup(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const card = page.locator('.user-question-card');
+  const input = card.locator('textarea');
+  await input.fill('A custom approach');
+  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await input.press('Enter');
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  await expect(input).toBeFocused();
+  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
+  await input.fill('Keep keyboard support.');
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await input.press('Enter');
+  await expect(card).toContainText('Anything else?');
+  await input.fill('One more detail');
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeEnabled();
+  await input.press('Enter');
+  await expect(card).toHaveCount(0);
+  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params)).toEqual([
+    { id: 'question-1', session: 'session-1', answers: { approach: 'A custom approach', details: 'Keep keyboard support.' } },
+    { id: 'question-2', session: 'session-1', answers: { extra: 'One more detail' } },
+  ]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('custom answer Shift+Enter inserts a line and IME Enter keeps the current question', async ({ page }) => {
+  const { app } = setup(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const card = page.locator('.user-question-card');
+  const input = card.locator('textarea');
+  await input.fill('First line');
+  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await input.press('End');
+  await input.press('Shift+Enter');
+  await input.press('x');
+  await expect(input).toHaveValue('First line\nx');
+  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
+  for (const progress of ['1 / 2', '2 / 2']) {
+    await expect(card.getByRole('button', { name: progress === '1 / 2' ? 'Next' : 'Send', exact: true })).toBeEnabled();
+    await input.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: true });
+    await expect(card.locator('.user-question-progress')).toHaveText(progress);
+    expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
+    if (progress === '1 / 2') {
+      await expect(input).toHaveValue('First line\nx');
+      await input.press('Enter');
+      await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+      await input.fill('Final detail');
+    }
+  }
+  await input.press('Enter');
+  await expect(card).toContainText('Anything else?');
+  expect(app.requests.filter(r => r.method === 'user_questions.answer').map(r => r.params.answers)).toEqual([
+    { approach: 'First line\nx', details: 'Final detail' },
+  ]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('custom answer Enter leaves empty questions pending', async ({ page }) => {
+  const { app } = setup(page);
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const card = page.locator('.user-question-card');
+  const input = card.locator('textarea');
+  await input.fill('   ');
+  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await input.press('Enter');
+  await expect(card.locator('.user-question-progress')).toHaveText('1 / 2');
+  await expect(input).toHaveValue('   ');
+  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
+  await input.fill('A custom approach');
+  await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeEnabled();
+  await input.press('Enter');
+  await expect(card.locator('.user-question-progress')).toHaveText('2 / 2');
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  await input.press('Enter');
+  await expect(input).toHaveValue('');
+  await expect(card.getByRole('button', { name: 'Send', exact: true })).toBeDisabled();
+  expect(app.requests.filter(r => r.method === 'user_questions.answer')).toHaveLength(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('live questions occupy visible space between the transcript and composer', { tag: '@webkit-layout' }, async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

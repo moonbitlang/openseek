@@ -79,19 +79,21 @@ pub fn Model::view(
       .get(question.id)
       .map_or(false, answer => !answer.text().is_blank())
     })
+  let action_disabled = disabled ||
+    (if last { !self.complete(questions) } else { !answered })
+  let action = emit(
+    if last {
+      Submit(skip=false)
+    } else {
+      Navigate(index=self.current + 1)
+    },
+  )
   let actions = @html.div(class="user-question-actions", [
     @html.button(
       type_="button",
       class="button compact composer-context-action user-question-submit",
-      disabled=disabled ||
-        (if last { !self.complete(questions) } else { !answered }),
-      on_click=emit(
-        if last {
-          Submit(skip=false)
-        } else {
-          Navigate(index=self.current + 1)
-        },
-      ),
+      disabled=action_disabled,
+      on_click=action,
       label(locale, if sending { Sending } else if last { Send } else { Next }),
     ),
   ])
@@ -143,7 +145,22 @@ pub fn Model::view(
               @icons.icon(@icons.icon_edit),
               @html.textarea(
                 id=input_id,
-                attrs=@html.Attrs::build().data_set("focus-target", ""),
+                attrs=@html.Attrs::build()
+                  .data_set("focus-target", "")
+                  .on_keydown(event => {
+                    if event.key() == "Enter" &&
+                      !event.shift_key() &&
+                      !event.is_composing() {
+                      event.prevent_default()
+                      if action_disabled {
+                        @cmd.none
+                      } else {
+                        action
+                      }
+                    } else {
+                      @cmd.none
+                    }
+                  }),
                 class="user-question-answer",
                 rows=1,
                 value~,
