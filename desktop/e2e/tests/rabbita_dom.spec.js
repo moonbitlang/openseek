@@ -58,7 +58,8 @@ test('workspace search supports toggles and keyboard navigation', async ({ page 
     await expect(tab.locator('.visually-hidden')).toHaveText(name);
   }
 
-  const query = page.getByRole('textbox', { name: 'Search' });
+  const query = page.getByRole('tabpanel', { name: 'Search', exact: true })
+    .getByRole('textbox', { name: 'Search', exact: true });
   await expect(query).toBeFocused();
 
   const wholeWord = page.getByRole('button', { name: 'Match Whole Word' });

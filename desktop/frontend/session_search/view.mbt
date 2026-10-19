@@ -1,4 +1,15 @@
 ///|
+fn search_label(locale : @i18n.Locale) -> String {
+  match locale {
+    English => "Search conversations"
+    SimplifiedChinese => "搜索对话"
+    TraditionalChinese => "搜尋對話"
+    Japanese => "チャットを検索"
+    Spanish => "Buscar conversaciones"
+  }
+}
+
+///|
 fn clear_label(locale : @i18n.Locale) -> String {
   match locale {
     English => "Clear search"
@@ -24,7 +35,7 @@ pub fn Model::view(
       placeholder=label,
       on_input=emit.map(query => Changed(query)),
       attrs=@html.Attrs::build()
-        .aria_label(label)
+        .aria_label(search_label(locale))
         .on_keydown(event => {
           if event.is_composing() {
             return @cmd.none

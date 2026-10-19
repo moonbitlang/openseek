@@ -6,7 +6,8 @@ async function openSearch(page, app) {
   await app.install();
   await app.goto();
   await page.getByRole('button', { name: 'Work', exact: true }).click();
-  const input = page.getByRole('textbox', { name: 'Search', exact: true });
+  const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
+  await expect(input).toHaveAttribute('placeholder', 'Search');
   await input.focus();
   return input;
 }
@@ -102,7 +103,7 @@ test('Chat search includes Cloud live and archived titles, then removes them on 
   await app.install();
   await app.goto();
   await page.getByRole('button', { name: 'Chat', exact: true }).click();
-  const input = page.getByRole('textbox', { name: 'Search', exact: true });
+  const input = page.getByRole('textbox', { name: 'Search conversations', exact: true });
   await input.fill('matching');
   await expect(rows(page)).toHaveCount(2);
   await rows(page).filter({ hasText: 'Matching Cloud live' }).click();
