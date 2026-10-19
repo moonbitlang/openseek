@@ -40,11 +40,13 @@ async fn run_task_turn(
     // audits against the LIVE standing goal, not the turn-start snapshot.
     let mut latest_session : @agent_session.Session = session
     let extra_tools = @execution.build_extra_tools(
-      scope,
+      @execution.connect_mcp(
+        scope,
+        @options.mcp_config_paths(matches),
+        workspace_root~,
+      ),
       model~,
       api_key~,
-      workspace_root~,
-      mcp_config_paths=@options.mcp_config_paths(matches),
       deepseek_api_key?=@options.deepseek_api_key(matches),
       api_url?,
     )

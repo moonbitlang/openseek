@@ -10,6 +10,8 @@ pub fn decode(Json, env? : Map[String, String]) -> Array[McpServer] raise
 
 pub fn merge(Array[Array[McpServer]]) -> Array[McpServer]
 
+pub fn[S] merge_sourced(Array[(S, Array[McpServer])]) -> Array[(S, McpServer)]
+
 // Errors
 pub suberror ConfigError {
   Invalid(String)
@@ -21,6 +23,7 @@ pub(all) enum McpServer {
   Http(name~ : String, url~ : String, headers~ : Map[String, String])
 } derive(Eq, @debug.Debug)
 pub fn McpServer::name(Self) -> String
+pub fn McpServer::target(Self) -> String
 
 // Type aliases
 

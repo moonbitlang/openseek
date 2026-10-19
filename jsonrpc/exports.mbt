@@ -22,6 +22,14 @@ pub fn Client::set_notification_handler(
 }
 
 ///|
+/// Install the handler run once when the client closes — the peer ending the
+/// stream, a transport failure, or a local `close`. Replaces any previous
+/// handler; it runs synchronously inside `close`, so it must not block.
+pub fn Client::set_close_handler(self : Client, handler : () -> Unit) -> Unit {
+  self.on_close = handler
+}
+
+///|
 /// Install the receiver for non-ping requests initiated by the peer. The
 /// receiver runs on the reader task and therefore must not block. Return true
 /// only after transferring the request into caller-owned bounded state; that

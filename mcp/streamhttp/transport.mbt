@@ -18,8 +18,9 @@
 // optional standing GET stream (server-initiated messages between requests) and
 // SSE resumability are not implemented: openseek only issues requests and reads
 // their (possibly streamed) replies. A server that expires the session answers
-// 404; that fails the in-flight call with a clear error (reinitialization is
-// not attempted — reconnect by restarting the engine).
+// 404; that fails the in-flight call with a clear error and ends the
+// connection, since reinitialization is not attempted — reconnect by
+// restarting the engine.
 
 ///|
 /// Cap on concurrently running POST exchanges. A legitimate agent workload
@@ -353,6 +354,11 @@ async fn delete_session(url : String, headers : @http.Headers) -> Unit {
 }
 
 ///|
+/// The server no longer knows this connection's legacy session: it answered
+/// HTTP 404 to a request carrying the session id.
+priv suberror SessionExpired
+
+///|
 /// One POST exchange: send `message`, parse the response (single JSON body or
 /// SSE stream), and deliver each inbound message. Any failure before
 /// `request_id`'s reply has been delivered fails that request via a synthesized
@@ -411,6 +417,21 @@ async fn HttpTransport::run_post(
   let bounded = @async.with_timeout_opt(ExchangeTimeoutMs, () => {
     self.exchange(message, deliver, answered=() => answered)
   }) catch {
+    // Every later request would be refused the same way, and nothing here
+    // reinitializes, so the connection is over: answer the request, then end
+    // the inbound stream so the client closes and its owner sees the loss.
+    // The session is already gone on the server, so closing deletes nothing.
+    SessionExpired => {
+      if request_id is Some(id) && !answered {
+        answered = true
+        self.deliver_error(
+          id, "MCP session expired (HTTP 404); reconnect to reinitialize",
+        )
+      }
+      self.session_id = None
+      self.inbound.close()
+      return
+    }
     error => {
       // Fail the pending request fast (the exchange is dead); a notification
       // has nothing to answer.
@@ -466,7 +487,7 @@ async fn HttpTransport::exchange(
   if response.code >= 300 {
     if @wire.request_version(message) is None {
       if response.code == 404 && self.session_id is Some(_) {
-        fail("MCP session expired (HTTP 404); reconnect to reinitialize")
+        raise SessionExpired
       }
       fail("MCP endpoint answered HTTP \{response.code}")
     }

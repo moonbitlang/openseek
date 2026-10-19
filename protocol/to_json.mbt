@@ -212,6 +212,7 @@ pub fn Event::to_json(self : Event) -> Json {
     SessionError(error~) => { "event": "session_error", "error": error }
     WorkspaceCreated(dir~) => { "event": "workspace_created", "dir": dir }
     CommandError(error~) => { "event": "command_error", "error": error }
+    McpStatus(status~) => { "event": "mcp_status", "status": Json(status) }
     McpConfigIgnored(reason~) =>
       { "event": "mcp_config_ignored", "reason": reason }
     McpConfigUnreadable(path~, error~) =>

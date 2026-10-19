@@ -142,6 +142,7 @@ pub(all) enum Event {
   SessionError(error~ : String)
   WorkspaceCreated(dir~ : String)
   CommandError(error~ : String)
+  McpStatus(status~ : McpStatus)
   McpConfigIgnored(reason~ : String)
   McpConfigUnreadable(path~ : String, error~ : String)
   McpConfigInvalid(path~ : String, error~ : String)
@@ -248,6 +249,84 @@ pub fn JobStopOutcome::to_json(Self) -> Json
 pub fn JobStopOutcome::to_repr(Self) -> @debug.Repr
 pub impl ToJson for JobStopOutcome
 pub impl @json.FromJson for JobStopOutcome
+
+pub(all) enum McpConfigState {
+  Loaded
+  Failed(String)
+} derive(Eq, @debug.Debug)
+pub fn McpConfigState::equal(Self, Self) -> Bool
+pub fn McpConfigState::not_equal(Self, Self) -> Bool
+pub fn McpConfigState::to_repr(Self) -> @debug.Repr
+
+pub(all) struct McpConfigStatus {
+  path : String
+  state : McpConfigState
+} derive(Eq, @debug.Debug)
+pub fn McpConfigStatus::equal(Self, Self) -> Bool
+pub fn McpConfigStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpConfigStatus::not_equal(Self, Self) -> Bool
+pub fn McpConfigStatus::to_json(Self) -> Json
+pub fn McpConfigStatus::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpConfigStatus
+pub impl @json.FromJson for McpConfigStatus
+
+pub(all) enum McpServerState {
+  Connected(Array[McpTool])
+  Lost(Array[McpTool])
+  NoTools
+  Failed(String)
+  Skipped
+} derive(Eq, @debug.Debug)
+pub fn McpServerState::equal(Self, Self) -> Bool
+pub fn McpServerState::not_equal(Self, Self) -> Bool
+pub fn McpServerState::to_repr(Self) -> @debug.Repr
+
+pub(all) struct McpServerStatus {
+  name : String
+  source : String
+  transport : McpTransport
+  target : String
+  state : McpServerState
+} derive(Eq, @debug.Debug)
+pub fn McpServerStatus::equal(Self, Self) -> Bool
+pub fn McpServerStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpServerStatus::not_equal(Self, Self) -> Bool
+pub fn McpServerStatus::to_json(Self) -> Json
+pub fn McpServerStatus::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpServerStatus
+pub impl @json.FromJson for McpServerStatus
+
+pub(all) struct McpStatus {
+  configs : Array[McpConfigStatus]
+  servers : Array[McpServerStatus]
+} derive(Eq, @debug.Debug)
+pub fn McpStatus::equal(Self, Self) -> Bool
+pub fn McpStatus::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpStatus::not_equal(Self, Self) -> Bool
+pub fn McpStatus::to_json(Self) -> Json
+pub fn McpStatus::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpStatus
+pub impl @json.FromJson for McpStatus
+
+pub(all) struct McpTool {
+  name : String
+  description : String
+} derive(Eq, @debug.Debug)
+pub fn McpTool::equal(Self, Self) -> Bool
+pub fn McpTool::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn McpTool::not_equal(Self, Self) -> Bool
+pub fn McpTool::to_json(Self) -> Json
+pub fn McpTool::to_repr(Self) -> @debug.Repr
+pub impl ToJson for McpTool
+pub impl @json.FromJson for McpTool
+
+pub(all) enum McpTransport {
+  Stdio
+  Http
+} derive(Eq, @debug.Debug)
+pub fn McpTransport::equal(Self, Self) -> Bool
+pub fn McpTransport::not_equal(Self, Self) -> Bool
+pub fn McpTransport::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PredictionOutcome {
   Completed(text~ : String?, input_tokens~ : Int, output_tokens~ : Int)

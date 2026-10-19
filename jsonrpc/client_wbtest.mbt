@@ -494,3 +494,17 @@ async test "notify enqueues an id-less message the writer sends" {
     assert_true(!(sent is { "id": _, .. }))
   })
 }
+
+///|
+/// The peer ending the stream closes the client, and the close handler runs
+/// exactly once even when the owner closes it again afterwards.
+async test "the close handler runs once when the peer ends the stream" {
+  let transport = new_transport()
+  let client = Client::Client(transport)
+  let mut closes = 0
+  client.set_close_handler(() => closes += 1)
+  transport.inbound.close()
+  client.run_message_pump()
+  client.close()
+  assert_eq(closes, 1)
+}

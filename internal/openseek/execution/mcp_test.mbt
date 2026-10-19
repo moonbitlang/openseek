@@ -74,13 +74,16 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       @fs.write_file(first, earlier.stringify())
       @fs.write_file(second, later.stringify())
       @fs.write_file(broken, "invalid JSON")
-      let tools = @execution.build_extra_tools(
+      let mcp = @execution.connect_mcp(
         AgentTaskScope(group),
+        [first, broken, missing, second],
+        workspace_root=directory,
+      )
+      let tools = @execution.build_extra_tools(
+        mcp,
         model=Deepseek(V4Pro),
         api_key="test",
         api_url=base,
-        workspace_root=directory,
-        mcp_config_paths=[first, broken, missing, second],
       )
       let events : Array[Json] = []
       while @emit.poll_line() is Some(line) {
@@ -110,16 +113,56 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       assert_true(discovered.contains("/selected"))
       assert_true(discovered.contains("/extra"))
       assert_false(discovered.contains("/overridden"))
+      // The status reports every file in order, and each merged server with
+      // the file whose entry won.
+      let status = mcp.status()
+      guard status.configs
+        is [
+          { path: p1, state: Loaded, },
+          { path: p2, state: Failed(_), },
+          { path: p3, state: Failed(_), },
+          { path: p4, state: Loaded, },
+        ] else {
+        fail("expected each file's outcome in order")
+      }
+      assert_eq([p1, p2, p3, p4], [first, broken, missing, second])
+      guard status.servers
+        is [
+          {
+            name: "seekmoon",
+            source: s1,
+            transport: Http,
+            state: Connected(t1),
+            ..
+          },
+          {
+            name: "extra",
+            source: s2,
+            transport: Http,
+            state: Connected(t2),
+            ..
+          },
+        ] else {
+        fail("expected the merged servers in configuration order")
+      }
+      assert_eq([s1, s2], [second, first])
+      assert_eq(t1.map(tool => tool.name), ["mcp__seekmoon__echo"])
+      assert_eq(t2.map(tool => tool.name), ["mcp__extra__echo"])
       // Failed inputs alone must not publish a successful registration.
       // In particular, retain the original single-file event contract.
       for paths in [[broken], [broken, missing]] {
-        let failed_tools = @execution.build_extra_tools(
+        let failed = @execution.connect_mcp(
           AgentTaskScope(group),
+          paths,
+          workspace_root=directory,
+        )
+        assert_true(failed.status().servers is [])
+        assert_eq(failed.status().configs.length(), paths.length())
+        let failed_tools = @execution.build_extra_tools(
+          failed,
           model=Deepseek(V4Pro),
           api_key="test",
           api_url=base,
-          workspace_root=directory,
-          mcp_config_paths=paths,
         )
         assert_eq(failed_tools.length(), 0)
         let mut failures = 0
@@ -134,5 +177,63 @@ async test "multiple MCP files merge before connecting and bad files do not hide
         assert_eq(failures, paths.length())
       }
     })
+  })
+}
+
+///|
+async test "the MCP registry tells its owner when a connected server is lost" {
+  @async.with_task_group(group => {
+    let dir = @fs.tmpdir(prefix="openseek-mcp-registry-")
+    defer @fs.rmdir(dir, recursive=true)
+    // Offers one tool, then exits a moment later.
+    let brief =
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|read _
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"ping"}]}}\n'
+      #|sleep 1
+    let config : Json = {
+      "mcpServers": {
+        "brief": { "command": "sh", "args": ["-c", Json(brief)] },
+      },
+    }
+    let path = "\{dir}/mcp.json"
+    @fs.write_file(path, config.stringify(), create_mode=CreateOrTruncate)
+    let registry = @execution.connect_mcp(
+      AgentTaskScope(group),
+      [path],
+      workspace_root=dir,
+    )
+    // Install, then read: a connection already gone never runs the handler.
+    let closed : @async.Queue[Unit] = Queue(kind=Unbounded)
+    registry.on_connection_closed(() => {
+      ignore(closed.try_put(()) catch { _ => false })
+    })
+    guard registry.status().servers is [server] else {
+      fail("the configured server should be listed")
+    }
+    assert_eq(server.source, path)
+    assert_eq(server.target, "sh")
+    match server.state {
+      // Spawning is forbidden in this sandbox: skip.
+      Failed(_) => {
+        println("skipped: cannot spawn sh")
+        return
+      }
+      Connected(tools) => {
+        assert_eq([ for tool in tools => tool.name ], ["mcp__brief__ping"])
+        @async.with_timeout(10000, () => closed.get())
+      }
+      _ => ()
+    }
+    // The tools stay registered with the model, so a lost server still lists
+    // them — that is what tells it from one that never connected.
+    guard registry.status().servers is [{ state: Lost(tools), .. }] else {
+      fail("a server whose connection closed should be lost")
+    }
+    assert_eq([ for tool in tools => tool.name ], ["mcp__brief__ping"])
   })
 }

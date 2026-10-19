@@ -8,21 +8,23 @@
 /// set. They used to build it from two copies of the same expression, which is
 /// two chances for one entry point to grow a tool surface the other does not
 /// have.
-pub async fn[X] build_extra_tools(
-  scope : @agent_runtime.AgentTaskScope[X],
+///
+/// `mcp` is what `connect_mcp` made of the configured servers. The caller
+/// connects first and passes it in because a long-lived loop goes on holding
+/// it, to report as `mcp_status`; a one-shot turn has no other use for it.
+pub fn build_extra_tools(
+  mcp : McpRegistry,
   model~ : @deepseek.Model,
   api_key~ : String,
-  workspace_root~ : String,
-  mcp_config_paths~ : Array[String] = [],
   deepseek_api_key? : String,
   api_url? : String,
 ) -> Array[@agent_tool.AgentToolDefinition] {
-  let extra_tools = resolve_mcp_tools(mcp_config_paths, scope, workspace_root~)
+  let tools = mcp.tools()
   if web_search_api_key(model, api_key, api_url, deepseek_api_key)
     is Some(web_search_key) {
-    extra_tools.push(@web_search.definition(api_key=web_search_key))
+    tools.push(@web_search.definition(api_key=web_search_key))
   }
-  extra_tools
+  tools
 }
 
 ///|

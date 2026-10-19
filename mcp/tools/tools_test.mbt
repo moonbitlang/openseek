@@ -397,3 +397,86 @@ async test "build bridges and dispatches MCP tools directly and through PTC" {
     )
   }
 }
+
+///|
+/// `connect` is the build itself: beside the tools, it keeps what connecting
+/// each server came to, and a live connection goes on saying whether it is
+/// still there.
+async test "connect keeps what each server came to, and a live one reports its loss" {
+  @async.with_task_group(group => {
+    let scope = @agent_runtime.AgentTaskScope(group)
+    // Offers one tool, then exits a moment later.
+    let brief =
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|read _
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"ping"}]}}\n'
+      #|sleep 1
+    let empty =
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|read _
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":3,"result":{"tools":[]}}\n'
+      #|sleep 5
+    let wedged =
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|sleep 30
+    fn sh(name : String, script : String) -> @config.McpServer {
+      Stdio(name~, command="sh", args=["-c", script], env=Map([]))
+    }
+
+    let entries = @tools.connect(
+      scope,
+      [
+        sh("brief", brief),
+        sh("empty", empty),
+        sh("wedged", wedged),
+        Stdio(
+          name="bad",
+          command="openseek-no-such-mcp-server-xyz",
+          args=[],
+          env=Map([]),
+        ),
+      ],
+      client_name="openseek",
+      client_version="0.1",
+      discovery_timeout_ms=800,
+    )
+    guard entries is [brief, empty, wedged, bad] else {
+      fail("expected one entry per configured server, in order")
+    }
+    if brief.connection is Failed(_) {
+      // Spawning is forbidden in this sandbox: skip.
+      println("skipped: cannot spawn sh")
+      return
+    }
+    guard brief.connection is Live(client) else {
+      fail("a server that offered a tool should be live")
+    }
+    assert_eq([ for tool in brief.tools => tool.name ], ["mcp__brief__ping"])
+    assert_eq(brief.server.name(), "brief")
+    assert_true(empty.connection is NoTools)
+    assert_true(empty.tools.is_empty())
+    assert_true(wedged.connection is Failed("timed out listing its tools"))
+    assert_true(bad.connection is Failed(_))
+    assert_true(bad.tools.is_empty())
+    // The server exits on its own, and the client says so without being
+    // asked: that is what lets an engine report the loss when it happens.
+    // Install, then read — a connection already gone never runs the handler.
+    let lost : @async.Queue[Unit] = Queue(kind=Unbounded)
+    client.set_close_handler(() => ignore(lost.try_put(()) catch { _ => false }))
+    if !client.is_closed() {
+      @async.with_timeout(10000, () => lost.get())
+    }
+    assert_true(client.is_closed())
+  })
+}

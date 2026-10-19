@@ -108,6 +108,9 @@ struct Client {
   // Distinguishes the default receiver from an installed receiver rejecting
   // work because its bounded queue is full.
   mut accepts_requests : Bool
+  // Called once, synchronously, when the client closes for any reason. It must
+  // not block or abort, for the same reasons as `on_notification`.
+  mut on_close : () -> Unit
 }
 
 ///|
@@ -126,6 +129,7 @@ pub fn[T : Transport] Client::Client(transport : T) -> Client {
     on_notification: (_, _) => (),
     on_request: _ => false,
     accepts_requests: false,
+    on_close: () => (),
   }
 }
 
@@ -364,4 +368,5 @@ pub fn Client::close(self : Client) -> Unit {
   for _, inbox in self.pending {
     inbox.close(error=Closed)
   }
+  (self.on_close)()
 }

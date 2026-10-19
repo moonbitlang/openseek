@@ -27,6 +27,40 @@ pub fn McpServer::name(self : McpServer) -> String {
 }
 
 ///|
+/// What identifies the server to a person without echoing a secret: its
+/// command (stdio), or its URL without userinfo and query (http). Arguments,
+/// environment, and headers are left out because that is where tokens live.
+pub fn McpServer::target(self : McpServer) -> String {
+  match self {
+    Stdio(command~, ..) => command
+    Http(url~, ..) => redact_url(url)
+  }
+}
+
+///|
+/// Strip userinfo (`user:pass@`) and the query/fragment from `url`, keeping
+/// scheme, host, and path — enough to identify the endpoint without echoing
+/// embedded credentials.
+fn redact_url(url : String) -> String {
+  // Cut at the first `?` or `#`, then locate the authority after the FIRST
+  // `://` anywhere — matching the decoder's leniency and staying fail-closed
+  // for malformed values like `/https://user:secret@host` — and drop a
+  // `userinfo@` that precedes any `/` in what follows. The userinfo arm is
+  // start-anchored on purpose: an unanchored lexmatch arm SEARCHES, and would
+  // redact an `@` sitting in the path.
+  let kept = if url =~ (re"[?#]", before~, after=_) { before } else { url }
+  let (prefix, rest) = if kept =~ (re"://", before~, after~) {
+    ("\{before}://", after)
+  } else {
+    ("", kept)
+  }
+  lexmatch rest {
+    re"^[^/@]*@" + (re"(.|\n)*$" as tail) => "\{prefix}\{tail}"
+    _ => "\{prefix}\{rest}"
+  }
+}
+
+///|
 /// A malformed MCP configuration.
 pub suberror ConfigError {
   Invalid(String)
@@ -182,15 +216,25 @@ pub extend McpServer with Eq::{equal, not_equal}
 /// server with the same name, retaining its original position in the list.
 /// Merge before connecting so overridden servers are never started.
 pub fn merge(configs : Array[Array[McpServer]]) -> Array[McpServer] {
-  let servers : Array[McpServer] = []
+  merge_sourced(configs.map(servers => ((), servers))).unzip().1
+}
+
+///|
+/// `merge`, keeping beside each server the source of the configuration whose
+/// entry won, so a report can say which file a server came from.
+pub fn[S] merge_sourced(
+  configs : Array[(S, Array[McpServer])],
+) -> Array[(S, McpServer)] {
+  let servers : Array[(S, McpServer)] = []
   let positions : Map[String, Int32] = Map([])
   for config in configs {
-    for server in config {
+    let (source, entries) = config
+    for server in entries {
       if positions.get(server.name()) is Some(index) {
-        servers[index] = server
+        servers[index] = (source, server)
       } else {
         positions[server.name()] = servers.length()
-        servers.push(server)
+        servers.push((source, server))
       }
     }
   }

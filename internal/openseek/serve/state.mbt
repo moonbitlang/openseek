@@ -140,6 +140,9 @@ priv enum ServeStep {
   // A background job finished; wake the loop to drain and surface its notice
   // even when no turn is active.
   BackgroundNotice
+  // A connected MCP server's connection closed; wake the loop to report what
+  // it holds now.
+  McpConnectionClosed
   Shutdown
 }
 

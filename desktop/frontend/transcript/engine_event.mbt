@@ -118,7 +118,8 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     PredictionResult(..)
     | JobChanged(..)
     | JobsSnapshot(..)
-    | JobStopResult(..) => None
+    | JobStopResult(..)
+    | McpStatus(..) => None
     AgentStep(step~) => Some(AgentStep(Some(step)))
     StreamRetry(attempt~, max_attempts~, reason~) =>
       Some(StreamRetry(attempt~, max_attempts~, reason~))
