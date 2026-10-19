@@ -165,11 +165,13 @@ content, unfinished input, running work and errors. Sending a draft for the
 first time replaces its identity in history with the durable conversation.
 
 Browser URLs use `/device/:device/...` for host pages, `/cloud` for the Cloud
-landing page, and `/cloud/session/:id` for a durable Cloud conversation. Browser
-controls and application arrows share one history. Cloud URLs do not require a
-connected device; session access is checked using the signed-in account. Opening
-or refreshing `/cloud` never creates a session. Successful explicit creation
-navigates to the new session URL. Login preserves the requested destination.
+landing page, `/cloud/draft/:id` for a blank Cloud chat and
+`/cloud/session/:id` for a durable Cloud conversation. Browser controls and
+application arrows share one history. Cloud URLs do not require a connected
+device; session access is checked using the signed-in account. Opening or
+refreshing `/cloud` never creates a session. The first send creates the session
+and replaces the draft URL with its session URL, without pushing. Login
+preserves the requested destination.
 Missing sessions show an unavailable state; authorization and operational errors
 remain distinct and never create a replacement session. Direct links can display
 history before the session catalog arrives, but editing waits until the catalog

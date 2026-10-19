@@ -17,10 +17,18 @@ test "Cloud routes resolve accounts at activation while Settings can remain wind
       Some(path),
     )
   }
+  let draft : @routes.Location = {
+    device: None,
+    target: CloudDraft(account=None, id="draft:2"),
+  }
+  assert_eq(draft.path(), Some("/cloud/draft/draft%3A2"))
+  assert_true(@routes.parse("/cloud/draft/draft%3A2") == Ok(draft))
+  assert_true(draft.target.is_cloud())
   for
     path in [
       "/cloud/", "/cloud/session", "/cloud/session/", "/cloud/session/a/b", "/cloud/session/%GG",
-      "/cloud/session/%00", "/cloud/session/%2e%2e", "/cloud/session/a?b",
+      "/cloud/session/%00", "/cloud/session/%2e%2e", "/cloud/session/a?b", "/cloud/draft",
+      "/cloud/draft/", "/cloud/draft/a/b",
     ] {
     assert_true(@routes.parse(path) is Err(InvalidRoute))
   }

@@ -4,7 +4,7 @@ import { CloudHarness, authOrigin, sessionA, sessionB, sessionC } from './suppor
 const sessionURL = id => `${authOrigin}/cloud/session/${id}`;
 const creations = cloud => cloud.requests.filter(r => r.side === 'cloud' && r.path === '/v1/sessions' && r.method === 'POST');
 
-test('Cloud home refresh is passive and explicit creation navigates to its durable URL', async ({ page }, testInfo) => {
+test('Cloud home refresh is passive and first send promotes the draft URL to its session', async ({ page }, testInfo) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
   await page.goto(`${authOrigin}/cloud`);
@@ -15,8 +15,11 @@ test('Cloud home refresh is passive and explicit creation navigates to its durab
   expect(creations(cloud)).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath('cloud-home.png'), fullPage: true });
   await page.locator('.cloud-home button').click();
+  await expect(page).toHaveURL(new RegExp(`^${authOrigin}/cloud/draft/[^/]+$`));
+  expect(creations(cloud)).toEqual([]);
+  await page.locator('#task').fill('First Cloud message');
+  await page.locator('#task').press('Enter');
   await expect(page).toHaveURL(sessionURL(sessionC));
-  await expect(page.locator('#task')).toBeVisible();
   expect(creations(cloud)).toHaveLength(1);
   await page.goBack();
   await expect(page).toHaveURL(`${authOrigin}/cloud`);

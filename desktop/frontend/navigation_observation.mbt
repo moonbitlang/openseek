@@ -131,8 +131,10 @@ fn observe_navigation(
     .conversation_selection()
     .map(selection => (selection.channel, selection.session)) ==
     Some((pending.source.channel, reply.session))
+  // A cleared selection on a Cloud URL is not a visit: it keeps that URL's
+  // unavailable state instead of falling back to the Cloud landing page.
   let cloud_opened = message is (CloudAction(_) | AccountLoaded(_, _)) &&
-    next.cloud_selected() &&
+    (next.cloud_identity() is Some(_) || next.cloud_draft_identity() is Some(_)) &&
     next.selected_conversation != previous.selected_conversation
   let explicit = message.is_navigation_visit() ||
     cloud_opened ||
