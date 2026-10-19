@@ -20,7 +20,50 @@ adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.moonbit.openseek.connect.debug/com.moonbit.openseek.MainActivity
 ```
 
-This is a debug-signed Android 8+ build, not a store release.
+This builds a debug-signed Android 8+ APK. CI runs the same build, lint and
+native tests on pull requests and uploads the debug APK as an Actions artifact.
+The debug app has a separate application ID and can coexist with the release.
+
+## Release and homepage downloads
+
+The existing `Desktop release` workflow builds Android on `main` alongside
+macOS, Windows and Browser. It reuses that run's Browser archive, stamps the
+same version into the APK, then uploads `SeekMoon-android.apk` to both OSS and
+S3. The publisher verifies size and SHA-256 before adding `platforms.android`
+to the API-owned release manifest. The homepage reads that manifest; the
+Android download card appears once a release includes the APK.
+
+Configure these repository Actions secrets before enabling the first release:
+
+- `ANDROID_KEYSTORE_BASE64`: base64-encoded release keystore.
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: signing key alias.
+- `ANDROID_KEY_PASSWORD`: signing key password.
+
+Keep a private backup of the keystore and passwords outside the repository.
+All future updates must use the same signing key. Signing secrets are read only
+by the main-only release build, never by pull-request checks. Missing secrets
+fail the release before publication; the workflow never substitutes a debug key.
+The temporary runner keystore is removed when the build step exits.
+
+For a local signed build, export the matching environment variables, then run:
+
+```sh
+export OPENSEEK_ANDROID_KEYSTORE_PATH=/absolute/path/to/release.jks
+export OPENSEEK_ANDROID_KEY_ALIAS=release
+# Supply OPENSEEK_ANDROID_KEYSTORE_PASSWORD and OPENSEEK_ANDROID_KEY_PASSWORD
+# privately in your environment; do not commit them or put them in commands.
+node android/build.mjs --release
+```
+
+Output: `desktop/dist/SeekMoon-android.apk`. Without `--browser-bundle`, the
+script builds the frontend from the checkout. CI passes
+`--browser-bundle desktop/dist/SeekMoon.browser.tar.gz` from the same release.
+The APK's version defaults to `desktop/moon.mod`; `-PreleaseVersion=X.Y.Z`
+overrides it for a direct Gradle build. Versions follow the release workflow's
+`major.minor.patch` range (major <= 9999, minor/patch <= 99), with a monotonic
+Android `versionCode` of `major * 10000 + minor * 100 + patch + 1`.
+Older releases predating Android remain valid rollback targets.
 
 The launcher icon uses the white rabbit paths from
 `desktop/package/macos/appicon.svg` and the blue background (`#3B6EF5`) from
