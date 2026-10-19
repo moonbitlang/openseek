@@ -131,8 +131,8 @@ async test "initialize completes the handshake and returns server identity" {
     )
     let init = client.initialize(client_name="openseek", client_version="0.1")
     assert_eq(init.protocol_version, "2025-11-25")
-    assert_eq(init.server_name, "fake")
-    assert_eq(init.server_version, "1.0")
+    assert_eq(init.server_name, Some("fake"))
+    assert_eq(init.server_version, Some("1.0"))
   })
 }
 

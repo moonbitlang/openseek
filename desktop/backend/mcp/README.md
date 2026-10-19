@@ -15,6 +15,13 @@ app-lifetime owners.
 
 ## Shape
 
+The endpoint supports stateless MCP `2026-07-28` requests as well as legacy
+initialization-based clients. Each modern request carries its version and
+capabilities in `params._meta`; no prior handshake or MCP session is required.
+`stateless.mbt` validates the required HTTP headers against the body before
+dispatch. `server/discover` reports the modern capabilities. Legacy `initialize`
+continues to negotiate `2025-11-25` and earlier supported revisions.
+
 - `tool.mbt` — the contract a contributing package implements: `Tool` (name,
   description, input schema, handler) and `ToolCall` (the calling conversation
   and the arguments). A handler returns the text the agent reads; raising makes

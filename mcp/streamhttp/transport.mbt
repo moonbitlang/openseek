@@ -11,7 +11,9 @@
 // error reply whenever its POST errors, so callers never wait out an outer
 // timeout on a dead exchange.
 //
-// Scope: the POST flow of the Streamable HTTP spec, including session ids
+// Modern requests carry their own version and mirrored headers, with no MCP
+// session. Cancelling one closes only its own POST. Legacy requests retain
+// the POST flow of the Streamable HTTP spec, including session ids
 // (`Mcp-Session-Id`) and the negotiated `MCP-Protocol-Version` header. The
 // optional standing GET stream (server-initiated messages between requests) and
 // SSE resumability are not implemented: openseek only issues requests and reads
@@ -68,6 +70,10 @@ priv struct HttpTransport {
   // The negotiated protocol version, sent as `MCP-Protocol-Version` on every
   // request after initialization.
   mut protocol_version : String?
+  // Set only by an HTTP discovery response that identifies a legacy peer.
+  mut legacy_probe : Bool
+  modern_requests : Map[String, Int32]
+  tool_schemas : Map[String, Json]
   mut closed : Bool
 }
 
@@ -92,6 +98,9 @@ fn HttpTransport::HttpTransport(
     session_id: None,
     initialize_id: None,
     protocol_version: None,
+    legacy_probe: false,
+    modern_requests: Map([]),
+    tool_schemas: Map([]),
     closed: false,
   }
 }
@@ -100,19 +109,44 @@ fn HttpTransport::HttpTransport(
 /// The headers for one POST: the MCP-required set, the session/version state,
 /// and the user's extras. `Accept-Encoding: identity` keeps an intermediary from
 /// re-buffering the event stream (same pitfall the DeepSeek client pins).
-fn HttpTransport::request_headers(self : HttpTransport) -> @http.Headers {
+fn HttpTransport::request_headers(
+  self : HttpTransport,
+  message : Json,
+) -> @http.Headers raise {
   let headers : @http.Headers = {
     "Content-Type": "application/json",
     "Accept": "application/json, text/event-stream",
     "Accept-Encoding": "identity",
   }
-  if self.session_id is Some(session_id) {
+  if @wire.request_version(message) is Some(version) {
+    headers["MCP-Protocol-Version"] = version
+    if message is { "method": String(method_), .. } {
+      headers["Mcp-Method"] = method_
+    }
+    if message
+      is {
+        "method": "tools/call",
+        "params": { "name": String(name), "arguments": arguments, .. },
+        ..
+      } {
+      headers["Mcp-Name"] = @wire.encode_header(name)
+      if self.tool_schemas.get(name) is Some(schema) {
+        for key, value in @wire.parameter_headers(schema, arguments) {
+          headers[CaseInsensitiveString(key)] = value
+        }
+      }
+    }
+  } else if self.session_id is Some(session_id) {
     headers["Mcp-Session-Id"] = session_id
   }
-  if self.protocol_version is Some(version) {
+  if @wire.request_version(message) is None &&
+    self.protocol_version is Some(version) {
     headers["MCP-Protocol-Version"] = version
   }
-  self.add_extra_headers(headers)
+  self.add_extra_headers(
+    headers,
+    modern=@wire.request_version(message) is Some(_),
+  )
   headers
 }
 
@@ -121,8 +155,13 @@ fn HttpTransport::request_headers(self : HttpTransport) -> @http.Headers {
 /// replace: the protocol-managed set plus the message-framing headers the HTTP
 /// layer computes. Case-insensitive (differently cased user keys would
 /// otherwise emit conflicting duplicates on the wire).
-fn reserved_header(name : String) -> Bool {
-  name.to_lower()
+fn reserved_header(name : String, modern : Bool) -> Bool {
+  let lower = name.to_lower()
+  (
+    modern &&
+    (lower.has_prefix("mcp-param-") || lower is ("mcp-method" | "mcp-name"))
+  ) ||
+  lower
   is ("content-type"
   | "accept"
   | "accept-encoding"
@@ -140,9 +179,10 @@ fn reserved_header(name : String) -> Bool {
 fn HttpTransport::add_extra_headers(
   self : HttpTransport,
   headers : @http.Headers,
+  modern~ : Bool = false,
 ) -> Unit {
   for key, value in self.extra_headers {
-    if !reserved_header(key) {
+    if !reserved_header(key, modern) {
       headers[key] = value
     }
   }
@@ -160,6 +200,18 @@ fn feed_gate(completion : @async.Queue[Unit]?) -> Unit {
 ///|
 impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   guard !self.closed else { fail("transport closed") }
+  if message
+    is {
+      "method": "notifications/cancelled",
+      "params": { "requestId": id, .. },
+      ..
+    } {
+    if self.modern_requests.get(id.stringify()) is Some(ticket) &&
+      self.pending_posts.get(ticket) is Some(task) {
+      task.cancel()
+    }
+    return
+  }
   // The id this POST must answer (None for a notification or a reply): if the
   // exchange fails before delivering that reply, a synthesized error fails the
   // pending request fast instead of leaving it to an outer timeout.
@@ -210,6 +262,9 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
       done = true
     }
     defer self.pending_posts.remove(ticket)
+    defer (if request_id is Some(id) {
+      self.modern_requests.remove(id.stringify())
+    })
     defer feed_gate(completion)
     if gate is Some(gate) {
       gate.get() catch {
@@ -225,6 +280,9 @@ impl @jsonrpc.Transport for HttpTransport with fn send(self, message) {
   // the exchange cap forever.
   if !done {
     self.pending_posts[ticket] = task
+    if @wire.request_version(message) is Some(_) && request_id is Some(id) {
+      self.modern_requests[id.stringify()] = ticket
+    }
   }
 }
 
@@ -306,6 +364,12 @@ async fn HttpTransport::run_post(
 ) -> Unit {
   let mut answered = false
   let deliver = (inbound : Json) => {
+    if @wire.request_version(message) is Some(_) &&
+      inbound is ({ "id": id, "result": _, .. } | { "id": id, "error": _, .. }) &&
+      request_id != Some(id) {
+      // A modern HTTP response stream belongs only to its originating request.
+      return
+    }
     // Only a reply (result/error) counts as the answer — a server-initiated
     // request whose id happens to collide (both sides number from 1) must not
     // suppress the fail-fast synthesized error.
@@ -313,6 +377,34 @@ async fn HttpTransport::run_post(
       inbound is ({ "id": id, "result": _, .. } | { "id": id, "error": _, .. }) &&
       id == expected {
       answered = true
+    }
+    if @wire.request_version(message) is Some(_) &&
+      inbound is { "method": _, "id": _, .. } {
+      // Stateless MCP forbids independent server requests on either transport.
+      return
+    }
+    let inbound = if @wire.request_version(message) is Some(_) &&
+      message is { "method": "tools/list", .. } &&
+      inbound is Object(envelope) &&
+      envelope.get("result") is Some(Object(result)) &&
+      result.get("tools") is Some(Array(entries)) {
+      let tools = entries.filter(entry => {
+        guard entry is { "name": String(name), "inputSchema": schema, .. } else {
+          return true
+        }
+        if !@wire.valid_header_schema(schema) {
+          return false
+        }
+        self.tool_schemas[name] = schema
+        true
+      })
+      let result = result.copy()
+      result["tools"] = Json(tools)
+      let envelope = envelope.copy()
+      envelope["result"] = Json(result)
+      Json(envelope)
+    } else {
+      inbound
     }
     self.deliver(inbound)
   }
@@ -358,7 +450,10 @@ async fn HttpTransport::exchange(
   deliver : (Json) -> Unit,
   answered~ : () -> Bool,
 ) -> Unit {
-  let client = @http.post_stream(self.url, headers=self.request_headers())
+  let client = @http.post_stream(
+    self.url,
+    headers=self.request_headers(message),
+  )
   defer client.close()
   client.write(message.stringify())
   let response = client.end_request()
@@ -368,12 +463,29 @@ async fn HttpTransport::exchange(
     response.headers.get("Mcp-Session-Id") is Some(session_id) {
     self.session_id = Some(session_id)
   }
-  // < 300: @http follows no redirects, so a 3xx answer is also a dead exchange —
-  // name its status rather than reporting a generic unanswered response.
-  guard response.code < 300 else {
-    // 404 with a session marks an expired session per the spec; name it.
-    if response.code == 404 && self.session_id is Some(_) {
-      fail("MCP session expired (HTTP 404); reconnect to reinitialize")
+  if response.code >= 300 {
+    if @wire.request_version(message) is None {
+      if response.code == 404 && self.session_id is Some(_) {
+        fail("MCP session expired (HTTP 404); reconnect to reinitialize")
+      }
+      fail("MCP endpoint answered HTTP \{response.code}")
+    }
+    let body = client.read_all().text()
+    let parsed = @json.parse(body) catch { _ => Json::null() }
+    let modern_error = parsed
+      is { "error": { "code": Number(code, ..), .. }, .. } &&
+      (
+        @wire.modern_error(code.to_int()) ||
+        (response.code == 404 && code == -32601)
+      )
+    if message is { "method": "server/discover", .. } &&
+      response.code is (400 | 404 | 405) &&
+      !modern_error {
+      self.legacy_probe = true
+    }
+    if parsed is { "error": _, "id": _, .. } {
+      deliver(parsed)
+      return
     }
     fail("MCP endpoint answered HTTP \{response.code}")
   }
@@ -382,11 +494,19 @@ async fn HttpTransport::exchange(
     .get("Content-Type")
     .unwrap_or("")
     .to_lower()
+  let deliver_success = (parsed : Json) => {
+    if message is { "method": "server/discover", .. } &&
+      parsed is { "error": { "code": Number(code, ..), .. }, .. } &&
+      !@wire.modern_error(code.to_int()) {
+      self.legacy_probe = true
+    }
+    deliver(parsed)
+  }
   if content_type.contains("text/event-stream") {
-    read_sse_stream(client, deliver, answered~)
+    read_sse_stream(client, deliver_success, answered~)
   } else if content_type.contains("application/json") {
     let text = client.read_all().text()
-    deliver(@json.parse(text))
+    deliver_success(@json.parse(text))
   } else {
     // 202 Accepted (a notification/response was consumed) or an empty body.
     client.skip_response_body()

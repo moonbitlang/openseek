@@ -95,12 +95,12 @@ test "decode_initialize_result reads identity and defaults" {
     "instructions": "be nice",
   })
   assert_eq(full.protocol_version, "2025-06-18")
-  assert_eq(full.server_name, "srv")
-  assert_eq(full.server_version, "2.0")
+  assert_eq(full.server_name, Some("srv"))
+  assert_eq(full.server_version, Some("2.0"))
   assert_eq(full.instructions, Some("be nice"))
   let minimal = decode_initialize_result({ "protocolVersion": "2025-06-18" })
-  assert_eq(minimal.server_name, "")
-  assert_eq(minimal.server_version, "")
+  assert_eq(minimal.server_name, None)
+  assert_eq(minimal.server_version, None)
   assert_eq(minimal.instructions, None)
 }
 

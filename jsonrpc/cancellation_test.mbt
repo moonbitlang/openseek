@@ -60,3 +60,84 @@ async test "cancelling a blocked writer closes the client and settles its reques
     })
   })
 }
+
+///|
+async test "request cancellation survives a full outbox and preserves the connection" {
+  @async.with_timeout(2000, () => {
+    @async.with_task_group(group => {
+      let transport : BlockedTransport = {
+        sent: Queue(kind=Unbounded),
+        incoming: Queue(kind=Unbounded),
+        release_send: Queue(kind=Unbounded),
+      }
+      let client = @jsonrpc.Client(transport)
+      defer client.close()
+      group.spawn_bg(no_wait=true, allow_failure=true, () => {
+        client.run_message_pump()
+      })
+      group.spawn_bg(no_wait=true, allow_failure=true, () => client.run_writer())
+      let request = group.spawn(no_wait=true, () => {
+        client.request(method_="tools/call", params={}, cancel_on_exit=true)
+      })
+      let sent = transport.sent.get()
+      guard sent is { "id": id, .. } else { fail("missing request ID") }
+      // The writer is blocked after writing the request. Fill the whole bounded
+      // outbox, then cancel without allowing it to make room for a notification.
+      for _ in 0..<1024 {
+        client.notify(method_="queued", params={})
+      }
+      request.cancel()
+      try request.wait() catch {
+        @async.WaitedTaskAlreadyCancelled => ()
+        error => raise error
+      } noraise {
+        _ => fail("request must be cancelled")
+      }
+      transport.release_send.put(())
+      let cancellation = transport.sent.get()
+      assert_eq(cancellation, {
+        "jsonrpc": "2.0",
+        "method": "notifications/cancelled",
+        "params": { "requestId": id },
+      })
+      transport.release_send.put(())
+      assert_true(transport.sent.get() is { "method": "queued", .. })
+      assert_true(!client.is_closed())
+    })
+  })
+}
+
+///|
+async test "cancelling an unsent request never sends a cancellation before its ID" {
+  @async.with_timeout(2000, () => {
+    @async.with_task_group(group => {
+      let transport : BlockedTransport = {
+        sent: Queue(kind=Unbounded),
+        incoming: Queue(kind=Unbounded),
+        release_send: Queue(kind=Unbounded),
+      }
+      let client = @jsonrpc.Client(transport)
+      defer client.close()
+      group.spawn_bg(no_wait=true, allow_failure=true, () => {
+        client.run_message_pump()
+      })
+      group.spawn_bg(no_wait=true, allow_failure=true, () => client.run_writer())
+      client.notify(method_="block-writer", params={})
+      ignore(transport.sent.get())
+      let request = group.spawn(no_wait=true, () => {
+        client.request(method_="must-not-run", params={}, cancel_on_exit=true)
+      })
+      @async.pause()
+      request.cancel()
+      try request.wait() catch {
+        @async.WaitedTaskAlreadyCancelled => ()
+        error => raise error
+      } noraise {
+        _ => fail("request must be cancelled")
+      }
+      client.notify(method_="after-cancel", params={})
+      transport.release_send.put(())
+      assert_true(transport.sent.get() is { "method": "after-cancel", .. })
+    })
+  })
+}

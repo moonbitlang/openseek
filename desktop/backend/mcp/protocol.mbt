@@ -7,15 +7,15 @@
 // offered, which the `initialize` capabilities say.
 
 ///|
-/// The newest protocol revision this server speaks, answered when a client
+/// The newest legacy revision this server speaks, answered when a client
 /// asks for one it does not.
-const LatestProtocolVersion = "2025-11-25"
+const LatestLegacyProtocolVersion = "2025-11-25"
 
 ///|
 /// Whether this server can speak `version`. The methods it answers are
 /// unchanged across these revisions.
-fn supported_version(version : String) -> Bool {
-  version == LatestProtocolVersion ||
+fn supported_legacy_version(version : String) -> Bool {
+  version == LatestLegacyProtocolVersion ||
   version == "2025-06-18" ||
   version == "2025-03-26" ||
   version == "2024-11-05"
@@ -78,12 +78,29 @@ async fn Server::dispatch(
   }
   guard fields.get("id") is Some(id) else { return None }
   let params = fields.get("params").unwrap_or(Json::empty_object())
+  let modern = @wire.request_version(message) is Some(_)
   let answer = match method_ {
+    "server/discover" if modern =>
+      reply(id, {
+        "supportedVersions": [@wire.ModernVersion],
+        "capabilities": { "tools": {} },
+      })
+    "initialize" if modern =>
+      failure(id, MethodNotFound, "Use server/discover for stateless MCP")
     "initialize" => reply(id, self.initialize_result(params))
     "ping" => reply(id, Json::empty_object())
     "tools/list" => reply(id, self.tool_list(groups))
     "tools/call" => self.call_tool(session, id, params, groups)
     _ => failure(id, MethodNotFound, "Method not found: \{method_}")
+  }
+  if modern && answer is { "result": Object(result), .. } {
+    result["resultType"] = "complete"
+    result["_meta"] = {
+      "io.modelcontextprotocol/serverInfo": {
+        "name": Json(ServerName),
+        "version": Json(self.version),
+      },
+    }
   }
   Some(answer)
 }
@@ -91,9 +108,10 @@ async fn Server::dispatch(
 ///|
 fn Server::initialize_result(self : Server, params : Json) -> Json {
   let version = match params {
-    { "protocolVersion": String(requested), .. } if supported_version(requested) =>
-      requested
-    _ => LatestProtocolVersion
+    { "protocolVersion": String(requested), .. } if supported_legacy_version(
+        requested,
+      ) => requested
+    _ => LatestLegacyProtocolVersion
   }
   {
     "protocolVersion": Json(version),

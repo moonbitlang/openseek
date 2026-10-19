@@ -3,7 +3,7 @@
 // future-proof API kept on purpose. Each entry documents its reason.
 
 ///|
-/// What the server reported from `initialize`.
+/// What discovery or legacy initialization reported.
 pub fn HttpConnection::init(self : HttpConnection) -> @mcp.InitializeResult {
   self.init
 }

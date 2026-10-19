@@ -31,7 +31,8 @@ pub fn StdioConnection::shutdown(self : StdioConnection) -> Unit {
 ///|
 /// Spawn `command args...` as an MCP server, wire an NDJSON transport to a
 /// JSON-RPC client (with its reader and writer tasks on `group`), run the MCP
-/// handshake under `handshake_timeout_ms`, and return the initialized
+/// discovery probe, falling back on non-modern peer errors or probe timeout to
+/// the legacy handshake, all under `handshake_timeout_ms`. Return the connected
 /// connection. Raises if the process cannot start, the handshake fails, or the
 /// handshake times out (`@async.TimeoutError`) — terminating the process and
 /// closing the pipes in every failure case so nothing leaks. The server inherits
@@ -131,7 +132,22 @@ pub async fn[X] connect(
   let mcp_client = @mcp.McpClient(client)
   errdefer teardown()
   let init = @async.with_timeout(handshake_timeout_ms) <| () => {
-    mcp_client.initialize(client_name~, client_version~)
+    let discovered = @async.with_timeout_opt(
+      (handshake_timeout_ms / 4).min(1000),
+      () => mcp_client.discover(client_name~, client_version~),
+    ) catch {
+      @jsonrpc.Failed(code~, ..) as error => {
+        if @wire.modern_error(code) {
+          raise error
+        }
+        None
+      }
+      error => raise error
+    }
+    match discovered {
+      Some(info) => info
+      None => mcp_client.initialize(client_name~, client_version~)
+    }
   }
   { client: mcp_client, init, }
 }

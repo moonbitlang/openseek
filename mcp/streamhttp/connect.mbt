@@ -29,7 +29,8 @@ pub fn HttpConnection::shutdown(self : HttpConnection) -> Unit {
 
 ///|
 /// Wire a Streamable HTTP transport for the MCP endpoint at `url` to a JSON-RPC
-/// client (reader and writer tasks on `group`), run the MCP handshake under
+/// client (reader and writer tasks on `group`), prefer stateless discovery and
+/// fall back only when the endpoint identifies itself as legacy, under
 /// `handshake_timeout_ms`, and return the initialized connection. Raises when
 /// the endpoint is unreachable, answers with an error, or the handshake fails
 /// or times out (`@async.TimeoutError`), closing the transport in every failure
@@ -57,10 +58,18 @@ pub async fn[X] connect(
     allow_failure=true,
   )
   group.spawn_bg(() => client.run_writer(), no_wait=true, allow_failure=true)
-  let mcp_client = @mcp.McpClient(client)
+  let mcp_client = @mcp.McpClient(client, list_before_call=true)
   errdefer mcp_client.close()
   let init = @async.with_timeout(handshake_timeout_ms, () => {
-    mcp_client.initialize(client_name~, client_version~)
+    mcp_client.discover(client_name~, client_version~) catch {
+      @jsonrpc.Failed(..) as error => {
+        if !transport.legacy_probe {
+          raise error
+        }
+        mcp_client.initialize(client_name~, client_version~)
+      }
+      error => raise error
+    }
   })
   { client: mcp_client, init, }
 }

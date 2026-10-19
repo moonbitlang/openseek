@@ -3,7 +3,7 @@
 // HttpConnection::init and for callers that need the handshake result.
 
 ///|
-/// What the server reported from `initialize`.
+/// What discovery or legacy initialization reported.
 pub fn StdioConnection::init(self : StdioConnection) -> @mcp.InitializeResult {
   self.init
 }

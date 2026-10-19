@@ -155,8 +155,8 @@ async test "the engine's own MCP client lists and calls this server's tools" {
         client_version="test",
       )
       defer connection.shutdown()
-      assert_eq(connection.init().server_name, "seekmoon")
-      assert_eq(connection.init().server_version, "1.2.3")
+      assert_eq(connection.init().server_name, Some("seekmoon"))
+      assert_eq(connection.init().server_version, Some("1.2.3"))
       let client = connection.client()
       assert_eq(client.list_tools().map(tool => tool.name), [
         "echo", "broken", "browser_get_text",

@@ -162,10 +162,12 @@ async test "build suffixes tools whose sanitized names collide" {
     let scope = @agent_runtime.AgentTaskScope(group)
     let script =
       #|read _
-      #|printf '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
       #|read _
       #|read _
-      #|printf '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"a.b"},{"name":"a-b"}]}}\n'
+      #|printf '{"jsonrpc":"2.0","id":3,"result":{"tools":[{"name":"a.b"},{"name":"a-b"}]}}\n'
       #|sleep 5
     let servers = [
       @config.Stdio(name="s", command="sh", args=["-c", script], env=Map([])),
@@ -204,7 +206,9 @@ async test "build times out discovery on a wedged server" {
     let scope = @agent_runtime.AgentTaskScope(group)
     let script =
       #|read _
-      #|printf '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-11-25"}}\n'
+      #|printf '{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"legacy"}}\n'
+      #|read _
+      #|printf '{"jsonrpc":"2.0","id":2,"result":{"protocolVersion":"2025-11-25"}}\n'
       #|sleep 30
     let servers = [
       @config.Stdio(name="w", command="sh", args=["-c", script], env=Map([])),
@@ -278,6 +282,8 @@ async test "build bridges and dispatches MCP tools directly and through PTC" {
             _ => null
           }
           match message {
+            { "method": "server/discover", .. } =>
+              conn.send_response(400, "Bad Request")
             { "method": "initialize", .. } =>
               respond_json(conn, id, { "protocolVersion": "2025-11-25" })
             { "method": "tools/list", .. } =>

@@ -30,15 +30,16 @@ pub enum ContentBlock {
 
 pub struct InitializeResult {
   protocol_version : String
-  server_name : String
-  server_version : String
+  server_name : String?
+  server_version : String?
   instructions : String?
 } derive(Eq, @debug.Debug)
 
 type McpClient
-pub fn McpClient::McpClient(@jsonrpc.Client) -> Self
+pub fn McpClient::McpClient(@jsonrpc.Client, list_before_call? : Bool) -> Self
 pub async fn McpClient::call_tool(Self, name~ : String, arguments~ : Json) -> CallToolResult
 pub fn McpClient::close(Self) -> Unit
+pub async fn McpClient::discover(Self, client_name~ : String, client_version~ : String) -> InitializeResult
 pub async fn McpClient::initialize(Self, client_name~ : String, client_version~ : String) -> InitializeResult
 pub async fn McpClient::list_tools(Self) -> Array[McpTool]
 

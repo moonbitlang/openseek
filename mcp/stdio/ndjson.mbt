@@ -9,6 +9,7 @@
 priv struct NdjsonTransport {
   reader : &@io.Reader
   writer : &@io.Writer
+  mut modern : Bool
   on_close : () -> Unit
 }
 
@@ -25,11 +26,17 @@ fn NdjsonTransport::NdjsonTransport(
   writer : &@io.Writer,
   on_close~ : () -> Unit,
 ) -> NdjsonTransport {
-  { reader, writer, on_close, }
+  { reader, writer, on_close, modern: false, }
 }
 
 ///|
 impl @jsonrpc.Transport for NdjsonTransport with fn send(self, message) {
+  if @wire.request_version(message) is Some(_) {
+    self.modern = true
+  }
+  if message is { "method": "initialize", .. } {
+    self.modern = false
+  }
   // One line per message; JSON stringify never emits a newline, so the frame is
   // unambiguous.
   self.writer.write("\{message.stringify()}\n")
@@ -52,7 +59,12 @@ impl @jsonrpc.Transport for NdjsonTransport with fn recv(self) {
     try @json.parse(trimmed) catch {
       _ => continue
     } noraise {
-      message => return Some(message)
+      message => {
+        if self.modern && message is { "method": _, "id": _, .. } {
+          continue
+        }
+        return Some(message)
+      }
     }
   }
 }

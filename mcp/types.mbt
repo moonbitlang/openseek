@@ -59,13 +59,13 @@ pub struct CallToolResult {
 } derive(Eq, Debug)
 
 ///|
-/// What the server reported from `initialize`: its negotiated protocol version
-/// and identity. `server_name`/`server_version` are "" when the server omits
+/// What discovery or legacy initialization reported: the selected protocol version
+/// and identity. `server_name`/`server_version` are absent when the server omits
 /// `serverInfo`.
 pub struct InitializeResult {
   protocol_version : String
-  server_name : String
-  server_version : String
+  server_name : String?
+  server_version : String?
   instructions : String?
 } derive(Eq, Debug)
 
@@ -77,12 +77,12 @@ fn decode_initialize_result(result : Json) -> InitializeResult raise {
     raise Protocol("initialize result is missing a string `protocolVersion`")
   }
   let server_name = match result {
-    { "serverInfo": { "name": String(name), .. }, .. } => name
-    _ => ""
+    { "serverInfo": { "name": String(name), .. }, .. } => Some(name)
+    _ => None
   }
   let server_version = match result {
-    { "serverInfo": { "version": String(version), .. }, .. } => version
-    _ => ""
+    { "serverInfo": { "version": String(version), .. }, .. } => Some(version)
+    _ => None
   }
   let instructions = optional_string(result, "instructions")
   { protocol_version, server_name, server_version, instructions, }

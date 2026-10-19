@@ -181,13 +181,13 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
       []
     }
     match read_body(conn) {
-      Some(body) => Accepted(session~, body~, groups~)
+      Some(body) => Accepted(session~, body~, groups~, headers=request.headers)
       None => Refused(413, "Content Too Large")
     }
   })
   match received {
     Refused(code, reason) => respond_status(conn, code, reason)
-    Accepted(session~, body~, groups~) => {
+    Accepted(session~, body~, groups~, headers~) => {
       let message = @json.parse(@utf8.decode(body)) catch {
         _ => {
           respond_json(
@@ -199,8 +199,18 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
           return
         }
       }
+      if self.validate_modern(headers, message) is Some(error) {
+        respond_json(conn, 400, "Bad Request", error)
+        return
+      }
       match self.dispatch(session, message, groups) {
-        Some(answer) => respond_json(conn, 200, "OK", answer)
+        Some(answer) =>
+          if @wire.request_version(message) is Some(_) &&
+            answer is { "error": { "code": -32601, .. }, .. } {
+            respond_json(conn, 404, "Not Found", answer)
+          } else {
+            respond_json(conn, 200, "OK", answer)
+          }
         None => respond_status(conn, 202, "Accepted")
       }
     }
@@ -210,7 +220,12 @@ async fn Server::handle(self : Server, conn : @http.ServerConnection) -> Unit {
 ///|
 /// What reading one request came to.
 priv enum Received {
-  Accepted(session~ : String, body~ : Bytes, groups~ : Array[String])
+  Accepted(
+    session~ : String,
+    body~ : Bytes,
+    groups~ : Array[String],
+    headers~ : @http.Headers
+  )
   Refused(Int32, String)
 }
 

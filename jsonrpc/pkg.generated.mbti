@@ -18,7 +18,7 @@ pub fn[T : Transport] Client::Client(T) -> Self
 pub fn Client::close(Self) -> Unit
 pub fn Client::is_closed(Self) -> Bool
 pub async fn Client::notify(Self, method_~ : String, params~ : Json) -> Unit
-pub async fn Client::request(Self, method_~ : String, params~ : Json) -> Json
+pub async fn Client::request(Self, method_~ : String, params~ : Json, cancel_on_exit? : Bool) -> Json
 pub async fn Client::respond(Self, PeerRequest, Json) -> Unit
 pub async fn Client::respond_error(Self, PeerRequest, code~ : Int, message~ : String) -> Unit
 pub async fn Client::run_message_pump(Self) -> Unit

@@ -58,6 +58,19 @@ const ServerBusy : Int32 = -32000
 const InternalError : Int32 = -32603
 
 ///|
+priv struct RequestDelivery {
+  mut started : Bool
+  mut cancelled : Bool
+}
+
+///|
+priv enum Outgoing {
+  Message(Json)
+  Request(Json, RequestDelivery)
+  Wake
+}
+
+///|
 /// A JSON-RPC client. Build it with `Client::new`, spawn `run_message_pump` and
 /// `run_writer`, then issue `request`/`notify`. Requests may be concurrent;
 /// replies are matched by id.
@@ -73,7 +86,10 @@ struct Client {
   // full (natural backpressure); the reader's peer-request auto-replies are
   // dropped when full (see try_enqueue) so routing never blocks. The writer is
   // the only task that touches the wire.
-  outbox : @async.Queue[Json]
+  outbox : @async.Queue[Outgoing]
+  // One cancellation per abandoned request that reached the transport. Kept
+  // outside the bounded data queue so backpressure cannot drop cancellations.
+  cancellations : Map[Int32, Unit]
   mut next_id : Int32
   // Set once the client is closing (EOF, a failed send, or a cancelled task);
   // later requests fail fast with `Closed`, and both tasks return.
@@ -104,6 +120,7 @@ pub fn[T : Transport] Client::Client(transport : T) -> Client {
     transport: transport as &Transport,
     pending: Map([]),
     outbox: Queue(kind=Blocking(OutboxCapacity)),
+    cancellations: Map([]),
     next_id: 1,
     closed: false,
     on_notification: (_, _) => (),
@@ -118,10 +135,13 @@ pub fn[T : Transport] Client::Client(transport : T) -> Client {
 /// request by id by the reader. Requires running `run_message_pump` and
 /// `run_writer`. Raises `ResponseError::Failed` on a JSON-RPC error reply, or
 /// `ResponseError::Closed` if the client closes before the reply arrives.
+/// With `cancel_on_exit`, abandoning an outstanding request queues an MCP-style
+/// cancellation notification. Transports may translate it into stream closure.
 pub async fn Client::request(
   self : Client,
   method_~ : String,
   params~ : Json,
+  cancel_on_exit~ : Bool = false,
 ) -> Json {
   guard !self.closed else { raise Closed }
   let id = self.next_id
@@ -129,10 +149,25 @@ pub async fn Client::request(
   let inbox : @async.Queue[Result[Json, ResponseError]] = Queue(kind=Unbounded)
   self.pending.set(id, inbox)
   defer self.pending.remove(id)
+  let mut completed = false
+  let delivery : RequestDelivery = { started: false, cancelled: false, }
+  defer (if cancel_on_exit && !completed && !self.closed {
+    delivery.cancelled = true
+    if delivery.started {
+      self.cancellations[id] = ()
+      // A full outbox already guarantees that the writer will wake. The token
+      // carries no cancellation data, so failure to enqueue it loses nothing.
+      (self.outbox.try_put(Wake) catch { _ => false }) |> ignore
+    }
+  })
   // Register the inbox before enqueuing so a concurrent close still delivers
   // `Closed` here rather than leaving us to block forever.
-  self.enqueue(build_request(id, method_, params))
-  inbox.get().unwrap_or_error()
+  self.outbox.put(Request(build_request(id, method_, params), delivery)) catch {
+    _ => ()
+  }
+  let result = inbox.get()
+  completed = true
+  result.unwrap_or_error()
 }
 
 ///|
@@ -178,7 +213,7 @@ pub async fn Client::respond_error(
 /// shutting down) drops the message, since the owning request already fails via
 /// its inbox.
 async fn Client::enqueue(self : Client, message : Json) -> Unit {
-  self.outbox.put(message) catch {
+  self.outbox.put(Message(message)) catch {
     _ => ()
   }
 }
@@ -188,7 +223,7 @@ async fn Client::enqueue(self : Client, message : Json) -> Unit {
 /// blocking the reader: if the outbox is full (a flooding peer) or closed, drop
 /// it. This keeps routing live and the outbox bounded.
 fn Client::try_enqueue(self : Client, message : Json) -> Unit {
-  (self.outbox.try_put(message) catch { _ => false }) |> ignore
+  (self.outbox.try_put(Message(message)) catch { _ => false }) |> ignore
 }
 
 ///|
@@ -198,9 +233,36 @@ fn Client::try_enqueue(self : Client, message : Json) -> Unit {
 pub async fn Client::run_writer(self : Client) -> Unit {
   defer self.close()
   while !self.closed {
-    let message = self.outbox.get() catch {
+    // Snapshot before suspending: another request can cancel during send.
+    let cancelled = self.cancellations.keys().to_array()
+    for id in cancelled {
+      self.cancellations.remove(id)
+      self.transport.send(
+        build_notification("notifications/cancelled", { "requestId": Json(id) }),
+      ) catch {
+        _ => return
+      }
+    }
+    // A cancellation may have arrived while sending the preceding batch.
+    if !self.cancellations.is_empty() {
+      continue
+    }
+    let outgoing = self.outbox.get() catch {
       // Outbox closed: the client is shutting down.
       _ => break
+    }
+    let message = match outgoing {
+      Wake => continue
+      Message(message) => message
+      Request(message, delivery) => {
+        // An abandoned request which has not reached the wire needs neither
+        // execution nor a cancellation. Never cancel before sending its ID.
+        if delivery.cancelled {
+          continue
+        }
+        delivery.started = true
+        message
+      }
     }
     self.transport.send(message) catch {
       _ => break
@@ -298,6 +360,7 @@ pub fn Client::close(self : Client) -> Unit {
   self.closed = true
   self.transport.close()
   self.outbox.close()
+  self.cancellations.clear()
   for _, inbox in self.pending {
     inbox.close(error=Closed)
   }

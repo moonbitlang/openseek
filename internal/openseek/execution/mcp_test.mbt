@@ -8,7 +8,7 @@ async test "multiple MCP files merge before connecting and bad files do not hide
   let missing = directory + "/missing.json"
   @emit.open()
   defer @emit.close()
-  let initialized : Array[String] = []
+  let discovered : Array[String] = []
   @async.with_timeout(10000, () => {
     @async.with_task_group(group => {
       let server = @http.Server(@socket.Addr::parse("127.0.0.1:0"))
@@ -21,11 +21,17 @@ async test "multiple MCP files merge before connecting and bad files do not hide
               return
             }
             let result : Json = match method_ {
-              "initialize" => {
-                initialized.push(request.path)
+              "server/discover" => {
+                discovered.push(request.path)
                 {
-                  "protocolVersion": "2025-11-25",
-                  "serverInfo": { "name": "test", "version": "1" },
+                  "resultType": "complete",
+                  "supportedVersions": ["2026-07-28"],
+                  "_meta": {
+                    "io.modelcontextprotocol/serverInfo": {
+                      "name": "test",
+                      "version": "1",
+                    },
+                  },
                   "capabilities": { "tools": {} },
                 }
               }
@@ -100,10 +106,10 @@ async test "multiple MCP files merge before connecting and bad files do not hide
       )
       assert_true(tools.any(tool => tool.name == "mcp__seekmoon__echo"))
       assert_true(tools.any(tool => tool.name == "mcp__extra__echo"))
-      assert_eq(initialized.length(), 2)
-      assert_true(initialized.contains("/selected"))
-      assert_true(initialized.contains("/extra"))
-      assert_false(initialized.contains("/overridden"))
+      assert_eq(discovered.length(), 2)
+      assert_true(discovered.contains("/selected"))
+      assert_true(discovered.contains("/extra"))
+      assert_false(discovered.contains("/overridden"))
       // Failed inputs alone must not publish a successful registration.
       // In particular, retain the original single-file event contract.
       for paths in [[broken], [broken, missing]] {

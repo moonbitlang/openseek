@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/mcp/wire",
   "moonbitlang/openseek/jsonrpc",
   "moonbitlang/openseek/mcp",
   "moonbitlang/async",

@@ -4,8 +4,8 @@
 
 ///|
 /// The MCP protocol version this client prefers and advertises in `initialize`
-/// (the current revision as of this writing).
-const ProtocolVersion : String = "2025-11-25"
+/// on the legacy handshake path. Modern peers use `discover` instead.
+const LegacyProtocolVersion : String = "2025-11-25"
 
 ///|
 /// Whether this client can speak `version`. The server echoes our preferred
@@ -15,8 +15,8 @@ const ProtocolVersion : String = "2025-11-25"
 /// revisions.
 fn is_supported_version(version : String) -> Bool {
   // The preferred version is named, not respelled: this list is the one place
-  // a bump to `ProtocolVersion` would otherwise silently leave behind.
-  version == ProtocolVersion ||
+  // a bump to `LegacyProtocolVersion` would otherwise silently leave behind.
+  version == LegacyProtocolVersion ||
   version == "2025-06-18" ||
   version == "2025-03-26" ||
   version == "2024-11-05"
@@ -26,13 +26,21 @@ fn is_supported_version(version : String) -> Bool {
 /// An MCP client bound to a connected `@jsonrpc.Client`.
 struct McpClient {
   rpc : @jsonrpc.Client
+  mut metadata : Json?
+  list_before_call : Bool
+  mut tools_listed : Bool
 }
 
 ///|
 /// Wrap a connected JSON-RPC client. Its message pump must already be running
 /// (spawned by the transport/connect layer) so replies are routed.
-pub fn McpClient::McpClient(rpc : @jsonrpc.Client) -> McpClient {
-  { rpc, }
+/// HTTP transports enable `list_before_call` to obtain header annotations before
+/// the first modern tool call, even when the caller has not listed tools.
+pub fn McpClient::McpClient(
+  rpc : @jsonrpc.Client,
+  list_before_call~ : Bool = false,
+) -> McpClient {
+  { rpc, metadata: None, list_before_call, tools_listed: false, }
 }
 
 ///|
@@ -52,8 +60,10 @@ pub async fn McpClient::initialize(
   client_name~ : String,
   client_version~ : String,
 ) -> InitializeResult {
+  self.metadata = None
+  self.tools_listed = false
   let params : Json = {
-    "protocolVersion": ProtocolVersion,
+    "protocolVersion": LegacyProtocolVersion,
     "capabilities": Json::empty_object(),
     "clientInfo": { "name": client_name, "version": client_version },
   }
@@ -85,12 +95,13 @@ pub async fn McpClient::list_tools(self : McpClient) -> Array[McpTool] {
       Some(cursor) => { "cursor": cursor }
       None => Json::empty_object()
     }
-    let result = self.rpc.request(method_="tools/list", params~)
+    let result = self.request(method_="tools/list", params~)
     let (page, next) = decode_tools_page(result)
     tools.append(page)
     guard next is Some(_) else { break }
     cursor = next
   }
+  self.tools_listed = true
   tools
 }
 
@@ -103,7 +114,10 @@ pub async fn McpClient::call_tool(
   name~ : String,
   arguments~ : Json,
 ) -> CallToolResult {
+  if self.metadata is Some(_) && self.list_before_call && !self.tools_listed {
+    self.list_tools() |> ignore
+  }
   let params : Json = { "name": Json(name), "arguments": arguments }
-  let result = self.rpc.request(method_="tools/call", params~)
+  let result = self.request(method_="tools/call", params~)
   decode_call_result(result)
 }

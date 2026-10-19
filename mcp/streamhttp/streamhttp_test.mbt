@@ -68,6 +68,8 @@ async fn mock_mcp_endpoint(
         }
         let message = @json.parse(text) catch { _ => null }
         match message {
+          { "method": "server/discover", .. } =>
+            conn.send_response(400, "Bad Request")
           { "method": "initialize", "id": id, .. } => {
             let reply : Json = {
               "jsonrpc": "2.0",
@@ -139,7 +141,7 @@ async test "http connect handshakes, lists tools over SSE, and echoes session he
         ("mCp-SeSsIoN-iD", "forged"),
       ]),
     )
-    assert_eq(conn.init().server_name, "http-mock")
+    assert_eq(conn.init().server_name, Some("http-mock"))
     assert_eq(conn.init().protocol_version, "2025-11-25")
     let tools = conn.client().list_tools()
     assert_eq(tools.length(), 1)
@@ -204,6 +206,8 @@ async test "a server ping mid-stream is answered while the stream is open" {
         (_request, body, conn) => {
           let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
+            { "method": "server/discover", .. } =>
+              conn.send_response(400, "Bad Request")
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)
             { "method": "tools/list", "id": id, .. } => {
@@ -264,6 +268,8 @@ async test "an http error fails the request fast" {
         (_request, body, conn) => {
           let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
+            { "method": "server/discover", .. } =>
+              conn.send_response(400, "Bad Request")
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)
             { "method": "tools/list", .. } => {
@@ -317,6 +323,8 @@ async test "tools/list waits for the initialized notification to complete" {
         (_request, body, conn) => {
           let message = @json.parse(body.read_all().text()) catch { _ => null }
           match message {
+            { "method": "server/discover", .. } =>
+              conn.send_response(400, "Bad Request")
             { "method": "initialize", "id": id, .. } =>
               answer_initialize(conn, id)
             { "method": "notifications/initialized", .. } => {
