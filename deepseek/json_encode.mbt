@@ -32,6 +32,28 @@ fn thinking_json_fields(
 }
 
 ///|
+/// The optional request fields both chat encoders write, in wire order: a
+/// response format, the stream usage option, and the tool list. Each is omitted
+/// when absent / empty.
+fn optional_request_fields(
+  tools : Array[ToolDefinition],
+  stream : Bool,
+  response_format : ResponseFormat?,
+) -> Array[(String, Json)] {
+  [
+    ..if response_format is Some(format) {
+      [("response_format", ({ "type": "\{format}" } : Json))]
+    },
+    ..if stream {
+      [("stream_options", ({ "include_usage": true } : Json))]
+    },
+    ..if tools.length() > 0 {
+      [("tools", Json(tools))]
+    },
+  ]
+}
+
+///|
 /// Encodes a `ChatMessage` as a chat-completions `messages[]` entry.
 ///
 /// Assistant messages whose combined text is empty but carry tool calls are
@@ -129,15 +151,7 @@ pub fn encode_chat_request(
         ("model", Json(Show::to_string(model))),
         ("messages", Json(messages)),
         ("stream", Json(stream)),
-        ..if response_format is Some(format) {
-          [("response_format", ({ "type": "\{format}" } : Json))]
-        },
-        ..if stream {
-          [("stream_options", ({ "include_usage": true } : Json))]
-        },
-        ..if tools.length() > 0 {
-          [("tools", Json(tools))]
-        },
+        ..optional_request_fields(tools, stream, response_format),
         ..thinking_json_fields(model, thinking),
       ],
     ),

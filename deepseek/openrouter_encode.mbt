@@ -27,15 +27,7 @@ pub fn openrouter_encode_chat_request(
         ("messages", Json(messages)),
         ("stream", Json(stream)),
         ("reasoning", { "effort": effort }),
-        ..if response_format is Some(format) {
-          [("response_format", ({ "type": "\{format}" } : Json))]
-        },
-        ..if stream {
-          [("stream_options", ({ "include_usage": true } : Json))]
-        },
-        ..if tools.length() > 0 {
-          [("tools", Json(tools))]
-        },
+        ..optional_request_fields(tools, stream, response_format),
       ],
     ),
   )
