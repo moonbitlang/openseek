@@ -1472,6 +1472,16 @@ fn settings_page(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
     @settings.group(icon_sparkle, @settings.text(locale, Engine), engine_rows),
     @settings.group(icon_key, "API", api_rows),
     @settings.group(
+      icon_tools,
+      "MCP",
+      @mcp.rows(
+        locale~,
+        model.mcp_subject(),
+        model.mcp,
+        dispatch.map(msg => Mcp(msg)),
+      ),
+    ),
+    @settings.group(
       icon_key,
       @settings.text(locale, Account) +
       " · " +

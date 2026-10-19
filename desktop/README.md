@@ -209,6 +209,24 @@ which costs one more engine start than was needed on the next prompt; only an
 edit that is also undone in that moment goes unnoticed until the file changes
 again.
 
+**Settings → MCP** shows what the current conversation's engine holds of
+its servers: each from the file it was configured in — the host's own entry
+marked as SeekMoon's built-in one — and connected with its tools,
+disconnected since it connected, no tools, failed with the reason, or skipped
+over the tool limit, after any configuration file the engine could not load.
+The host holds no MCP connections of its own. Each engine reports what it
+holds once it has connected its servers, and again whenever that changes
+(`mcp_status` on the serve protocol); the host keeps a conversation's latest
+report and the panel shows it. Reading it starts nothing, so the panel reads
+each time Settings opens, again whenever the engine of the conversation on
+show reports — a server that exits turns to disconnected without a refresh —
+and again when the host reconnects. A conversation whose engine is not
+running — before its first message, or after a restart — is shown as that;
+its servers connect when its next message starts one. One whose engine has
+started and not reported yet is shown as still connecting. An engine that
+exits while Settings is open reports nothing more; **Refresh** shows it
+stopped.
+
 A configuration the engine cannot load, and a server that fails to start, to
 list its tools, or to fit under the tool limit, raise an error toast naming
 the cause; the conversation continues without those tools. A broken file is

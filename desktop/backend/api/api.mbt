@@ -506,6 +506,9 @@ pub fn endpoints(
     Endpoint(@commands.jobs_stop, payload => {
       @engine.stop_job(state.manager, payload)
     }),
+    Endpoint(@commands.mcp_status, payload => {
+      @engine.mcp_status(state.manager, payload)
+    }),
     Endpoint(@commands.agent_goal, payload => {
       @engine.goal_run(state.manager, payload)
     }),
@@ -861,6 +864,7 @@ test "remote endpoint catalog has one entry per command name" {
     }
     names.push(name)
   }
+  assert_true(names.contains("mcp.status"))
   assert_true(names.contains("codex.config.open"))
   assert_true(names.contains("codex.draft.open"))
   assert_true(names.contains("codex.draft.close"))

@@ -223,6 +223,8 @@ pub let lsp_open : Command[@protocol.LspOpenPayload, @protocol.LspDiagnosticsRep
 
 pub let lsp_workspace_symbols : Command[@protocol.WorkspaceSymbolsPayload, @protocol.WorkspaceSymbolsReply]
 
+pub let mcp_status : Command[@protocol.McpStatusPayload, @protocol.McpStatusReply]
+
 pub let moon_package_graph : Command[@protocol.MoonPackageGraphPayload, @protocol.MoonPackageGraphReply]
 
 pub let moonide_codelens : Command[@protocol.MoonIdeCodeLensPayload, @protocol.MoonIdeCodeLensReply]

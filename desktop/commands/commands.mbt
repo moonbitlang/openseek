@@ -913,6 +913,14 @@ pub let jobs_stop : Command[@protocol.JobTarget, @protocol.JobStopReply] = Comma
 )
 
 ///|
+/// What a conversation's engine last reported of its MCP servers. Reads what
+/// the host kept: it starts nothing and does not ask the engine.
+pub let mcp_status : Command[
+  @protocol.McpStatusPayload,
+  @protocol.McpStatusReply,
+] = Command("mcp.status")
+
+///|
 pub let schedules_list : Command[
   @protocol.EmptyPayload,
   @protocol.SchedulesReply,

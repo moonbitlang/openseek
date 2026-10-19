@@ -4314,11 +4314,30 @@ fn update_msg(
       (cmd, { ..next, update_ux, })
     }
     UpdateApplied => (close_window(), model)
-    OpenSetup =>
-      (
-        @cmd.none,
-        { ..model, screen: Settings, setup_api_key: "", api_setup_open: false, },
+    OpenSetup => {
+      // The MCP panel shows the current conversation's engine, and asks it
+      // each time Settings opens: asking starts nothing.
+      let subject = model.mcp_subject()
+      let opened = match subject {
+        Conversation(conversation) => Some(conversation)
+        CodexConversation | NoConversation => None
+      }
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        Opened(opened),
+        model.mcp,
       )
+      (
+        cmd,
+        {
+          ..model,
+          screen: Settings,
+          setup_api_key: "",
+          api_setup_open: false,
+          mcp,
+        },
+      )
+    }
     Navigation(message) => update_navigation(dispatch, message, model)
     DismissApiSetup =>
       (
@@ -6339,6 +6358,14 @@ fn update_msg(
       )
       (cmd, { ..model, jobs, })
     }
+    Mcp(msg) => {
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        msg,
+        model.mcp,
+      )
+      (cmd, { ..model, mcp, })
+    }
     Github(msg) => {
       let completed = msg is @github.CheckedOut(epoch, _) &&
         epoch == model.github.checkout_epoch &&
@@ -7209,6 +7236,20 @@ fn update_device_msg(
           }
           _ => model
         }
+      } else {
+        model
+      }
+      // MCP reports are not replayed across a connection gap either: a panel
+      // holding a conversation on this device asks about it again.
+      let model = if model.mcp.conversation is Some(conversation) &&
+        conversation.channel == channel {
+        let (cmd, mcp) = @mcp.update(
+          dispatch.map(msg => Mcp(msg)),
+          Changed(conversation),
+          model.mcp,
+        )
+        commands.push(cmd)
+        { ..model, mcp, }
       } else {
         model
       }
@@ -9302,6 +9343,14 @@ fn update_device_msg(
         conv
       })
       (@cmd.none, { ..model, conversations: settled, })
+    }
+    McpChanged(session) => {
+      let (cmd, mcp) = @mcp.update(
+        dispatch.map(msg => Mcp(msg)),
+        Changed({ channel, session, }),
+        model.mcp,
+      )
+      (cmd, { ..model, mcp, })
     }
     JobsChanged(session) => {
       let (jobs_cmd, model) = if model.jobs.owner is Some(owner) &&

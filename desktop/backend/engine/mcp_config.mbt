@@ -359,6 +359,26 @@ test "an inherited MCP configuration counts as one the engine will load" {
 }
 
 ///|
+/// Where the host writes the configuration of its own tool server, which it
+/// hands every engine ahead of the user's.
+fn host_mcp_config_path(
+  runtime_dir : @pathx.Path?,
+) -> @pathx.Absolute raise EngineError {
+  let directory = match runtime_dir {
+    Some(directory) => directory
+    None => {
+      guard @workspaces.global_store_root() is Some(root) else {
+        raise EngineError(
+          "Host MCP configuration needs a runtime or home directory",
+        )
+      }
+      root.to_path()
+    }
+  }
+  directory.join("host-mcp.json").resolve()
+}
+
+///|
 /// Put the host defaults before the user's configuration. Once an explicit
 /// host path is passed, argparse no longer reads OPENSEEK_MCP_CONFIG, so carry
 /// that fallback explicitly when the user's usual file is absent.
@@ -370,18 +390,7 @@ async fn engine_mcp_args(
 ) -> Array[String] {
   let args : Array[String] = []
   if host_mcp {
-    let directory = match runtime_dir {
-      Some(directory) => directory
-      None => {
-        guard @workspaces.global_store_root() is Some(root) else {
-          raise EngineError(
-            "Host MCP configuration needs a runtime or home directory",
-          )
-        }
-        root.to_path()
-      }
-    }
-    let path = directory.join("host-mcp.json").resolve()
+    let path = host_mcp_config_path(runtime_dir)
     // Only placeholders are persisted. Grants remain conversation-specific
     // environment variables, including when two hosts share a runtime directory.
     let text =
@@ -400,4 +409,116 @@ async fn engine_mcp_args(
     args.push("--mcp-config=\{path}")
   }
   args
+}
+
+///|
+/// What a conversation's engine holds of its MCP servers. The host keeps no
+/// connections of its own — each engine connects its servers when it starts
+/// and reports what came of it, then again whenever that changes — so this is
+/// the conversation's live engine's latest report, as the host kept it. A
+/// conversation with no engine running has none, and an engine that has not
+/// reported yet is still connecting; both are answers, not errors. Nothing is
+/// started and the engine is not asked.
+pub fn mcp_status(
+  manager : EngineManager,
+  payload : @protocol.McpStatusPayload,
+) -> @protocol.McpStatusReply {
+  guard manager.pump is Serving(sessions~) &&
+    sessions.get(payload.session) is Some(slot) &&
+    slot.live() is Some(engine) else {
+    return Stopped
+  }
+  match engine.mcp_status {
+    Some(status) => Running(status~, builtin_config=engine.builtin_mcp_config)
+    None => Connecting
+  }
+}
+
+///|
+test "MCP status has nothing to report when the conversation has no engine" {
+  let manager = new_engine_manager("unused")
+  // The host is not serving at all, then serving but not this conversation.
+  assert_true(mcp_status(manager, { session: "s-idle", }) is Stopped)
+  manager.pump = Serving(sessions=Map([]))
+  assert_true(mcp_status(manager, { session: "s-idle", }) is Stopped)
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "MCP status is the live engine's latest report" {
+  let manager = new_engine_manager("/bin/sh")
+  let emitted : Array[EngineEvent] = []
+  let sink = EventSink(event => emitted.push(event))
+  // Stands in for a serve engine: reports its one server connected, then
+  // lost a moment later, as the real one does when a server exits. Nothing
+  // is ever written to it.
+  let script =
+    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","source":"/run/host-mcp.json","transport":"stdio","target":"a","state":"connected","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
+    #|sleep 0.3
+    #|printf '{"event":"mcp_status","status":{"configs":[{"path":"/run/host-mcp.json","state":"loaded"}],"servers":[{"name":"a","source":"/run/host-mcp.json","transport":"stdio","target":"a","state":"lost","tools":[{"name":"mcp__a__ping","description":"ping"}]}]}}\n'
+    #|cat >/dev/null
+  @async.with_task_group(group => {
+    let (child_stdin, writer) = @process.write_to_process()
+    let (reader, child_stdout) = @process.read_from_process()
+    let process = @process.spawn(
+      group,
+      "/bin/sh",
+      ["-c", script],
+      stdin=child_stdin,
+      stdout=child_stdout,
+      no_wait=true,
+    )
+    let engine = test_serve_engine(
+      "s-live",
+      writer,
+      process,
+      sink,
+      phase=Idle(last_run=None),
+      builtin_mcp_config="/run/host-mcp.json",
+    )
+    let sessions : Map[String, SessionSlot] = Map([])
+    slot_for(sessions, "s-live").engine = Some(engine)
+    manager.pump = Serving(sessions~)
+    // Nothing of the engine's output has been read yet: it is running and
+    // has not reported, which is neither stopped nor an empty configuration.
+    assert_true(mcp_status(manager, { session: "s-live", }) is Connecting)
+    let stderr_task = group.spawn(no_wait=true, () => "")
+    group.spawn_bg(no_wait=true, allow_failure=true, () => {
+      engine.run(manager, reader, stderr_task)
+    })
+    fn server_state() -> @wire.McpServerState? {
+      match mcp_status(manager, { session: "s-live", }) {
+        Running(
+          status={ servers: [server], .. },
+          builtin_config=Some("/run/host-mcp.json")
+        ) => Some(server.state)
+        _ => None
+      }
+    }
+
+    // Each report replaces the last, so the reply ends on the newest one.
+    @async.with_timeout(10000, () => {
+      while !(server_state() is Some(Lost(_))) {
+        @async.sleep(20)
+      }
+    })
+    // Both reports also went out to pages, in order: that is what tells a
+    // page already showing the status to read it again.
+    let reported : Array[@wire.McpServerState] = []
+    for event in emitted {
+      if event
+        is StreamEvent(
+          {
+            session: "s-live",
+            event: McpStatus(status={ servers: [server], .. }),
+            ..
+          }
+        ) {
+        reported.push(server.state)
+      }
+    }
+    assert_true(reported is [Connected(_), Lost(_)])
+    // Another conversation is not answered by this one's engine.
+    assert_true(mcp_status(manager, { session: "s-other", }) is Stopped)
+  })
 }

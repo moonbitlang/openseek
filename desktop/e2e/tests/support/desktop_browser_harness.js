@@ -21,6 +21,9 @@ export class DesktopBrowserHarness {
     this.rpcErrors = new Map();
     this.connectionAvailable = true;
     this.rpcDelays = new Map();
+    // What `mcp.status` answers for a conversation: by default no engine is
+    // running for it.
+    this.mcpStatus = { engine: 'stopped' };
     this.textSearchMatches = [];
     this.semanticSearchMatches = [];
     this.textSearchMatchCount = undefined;
@@ -632,6 +635,8 @@ export class DesktopBrowserHarness {
         }
         return { workspaces: [...this.workspaces] };
       }
+      case 'mcp.status':
+        return this.mcpStatus;
       case 'settings.get':
         return this.hostSettings;
       case 'settings.set': {
