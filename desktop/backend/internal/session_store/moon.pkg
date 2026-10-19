@@ -1,5 +1,6 @@
 import {
   "moonbitlang/openseek_protocol" @wire,
+  "openseek_desktop/protocol" @desktop_protocol,
   "openseek_desktop/backend/internal/fsx",
   "openseek_desktop/backend/pathx",
   "openseek_desktop/backend/internal/workspaces",

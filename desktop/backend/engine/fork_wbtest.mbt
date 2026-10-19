@@ -44,6 +44,7 @@ async test "a committed fork succeeds even when its title cannot be saved" {
       through: 3,
       model: "deepseek-flash",
       source_title: "Original title",
+      side_chat: None,
     },
     on_created=_ => (),
     on_worktree_changed=(_, _) => (),
@@ -190,6 +191,7 @@ async test "a fork of a worktree conversation works in a checkout of its own" {
         through: 2,
         model: "fork-model",
         source_title: "Original",
+        side_chat: None,
       },
       on_created=session => created.push(session),
       on_worktree_changed=(_, rows) => placements.push(rows),
@@ -277,6 +279,7 @@ async test "a fork is committed exactly when its record was written" {
         through: 2,
         model,
         source_title: "Original",
+        side_chat: None,
       }
       Some(
         fork_session(
@@ -342,6 +345,7 @@ async test "a fork cancelled after its record was written keeps its worktree and
               through: 2,
               model: "hangs-after",
               source_title: "Original",
+              side_chat: None,
             },
             on_created=session => created.push(session),
             on_worktree_changed=(_, rows) => placements.push(rows),
@@ -375,5 +379,75 @@ async test "a fork cancelled after its record was written keeps its worktree and
     let fork_checkout = @worktree.run_dir(repo, fork)
     assert_true(fork_checkout != checkout)
     assert_true(@fsx.is_dir(fork_checkout.to_path()))
+  })
+}
+
+///|
+#cfg(not(platform="windows"))
+async test "a side chat is a numbered member of its conversation's family" {
+  with_worktree_fork_fixture((manager, repo, store, checkout) => {
+    let placements : Array[Array[WorktreeInfo]] = []
+    let created : Array[String] = []
+    async fn side_chat_of(session : String) -> @protocol.SessionForkReply {
+      fork_session(
+        manager,
+        {
+          session,
+          workspace: repo.resource_path(),
+          through: 2,
+          model: "fork-model",
+          source_title: "Original",
+          side_chat: Some(true),
+        },
+        on_created=session => created.push(session),
+        on_worktree_changed=(_, rows) => placements.push(rows),
+      )
+    }
+
+    // Side chats are numbered in the order they are opened, and work in the
+    // conversation's checkout.
+    let first = side_chat_of("s-src")
+    let second = side_chat_of("s-src")
+    assert_eq(first.session, "s-src-sc-1")
+    assert_eq(second.session, "s-src-sc-2")
+    assert_eq(created, ["s-src-sc-1", "s-src-sc-2"])
+    assert_eq(store.title(SessionId(first.session)), Some("Original"))
+    assert_eq(
+      @worktree.run_dir(repo, second.session).to_string(),
+      checkout.to_string(),
+    )
+    // A side chat opens none of its own.
+    let nested = try {
+      ignore(side_chat_of(first.session))
+      false
+    } catch {
+      EngineError(_) => true
+      error => raise error
+    }
+    assert_true(nested)
+    // Closing one keeps the checkout the conversation still works in, and a
+    // later side chat takes the freed number.
+    assert_true(
+      delete_session(manager, first.session, repo.resource_path(), (_, _) => ())
+      is Deleted,
+    )
+    assert_true(@fsx.is_dir(checkout.to_path()))
+    guard @worktree.list(repo.to_string()).worktrees is [row] else {
+      fail("the worktree row must survive a closed side chat")
+    }
+    assert_eq(row.sessions, ["s-src", "s-src-sc-2"])
+    assert_eq(side_chat_of("s-src").session, "s-src-sc-1")
+    // Its side chats leave with the conversation, so they do not keep the
+    // checkout from the conversation's own delete or archive.
+    assert_true(
+      delete_session_check(manager, "s-src", repo.resource_path()).checkout
+      is Some(_),
+    )
+    // Archiving the conversation takes its side chats along, and with them
+    // the last holders of the checkout.
+    assert_true(archive_session(manager, "s-src", (_, _) => ()) is Archived(_))
+    assert_false(store.exists(SessionId("s-src-sc-1")))
+    assert_false(store.exists(SessionId("s-src-sc-2")))
+    assert_false(@fsx.exists(checkout.to_path()))
   })
 }

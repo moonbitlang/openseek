@@ -16,6 +16,12 @@
 /// keeps its worktree, gets its title, and is reported through `on_created`
 /// — also when the engine failed after writing it, and when the request was
 /// cancelled and has no reply to carry the news.
+///
+/// A side-chat fork is the same copy under the id `side_chat_id` gives it —
+/// the source's first free side-chat ordinal — which makes it part of the
+/// source's family. It is an aside about the source's work, so it shares the
+/// source's checkout rather than getting one of its own. A side chat has no
+/// side chats of its own.
 pub async fn fork_session(
   manager : EngineManager,
   payload : @protocol.SessionForkPayload,
@@ -25,7 +31,11 @@ pub async fn fork_session(
   fork_session_in(
     manager,
     payload,
-    OwnWorktree,
+    if payload.side_chat is Some(true) {
+      SharedWorktree
+    } else {
+      OwnWorktree
+    },
     on_created~,
     on_worktree_changed~,
   )
@@ -58,6 +68,10 @@ async fn fork_session_in(
   guard @wire.split_child_session_id(payload.session) is None else {
     raise EngineError("forking a subrun conversation is not supported")
   }
+  let side_chat = payload.side_chat is Some(true)
+  guard !side_chat || @protocol.split_side_chat_id(payload.session) is None else {
+    raise EngineError("a side chat cannot open a side chat of its own")
+  }
   manager.workspace_lifecycle_lock.acquire()
   defer manager.workspace_lifecycle_lock.release()
   let lease = manager.begin_record_read(payload.session)
@@ -67,8 +81,20 @@ async fn fork_session_in(
     raise EngineError("workspace is not a registered workspace")
   }
   let root = @workspaces.store_root(workspace)
-  let session = "desktop-" + @uuid.mint()
   let store = @store.SessionStore(root.to_string())
+  // Under the placement lock no other fork names a side chat of this source
+  // meanwhile; the engine's claim on the directory refuses a collision anyway.
+  let session = if side_chat {
+    let mut ordinal = 1
+    while store.exists(
+            SessionId(@protocol.side_chat_id(payload.session, ordinal)),
+          ) {
+      ordinal += 1
+    }
+    @protocol.side_chat_id(payload.session, ordinal)
+  } else {
+    "desktop-" + @uuid.mint()
+  }
   let id : @agent_session.SessionId = SessionId(session)
   let workspace_token = workspace.resource_path()
   // The renderer uses the same label as the sidebar, including titles derived
@@ -243,6 +269,7 @@ async test "fork validates its request before spawning and releases its reader l
     through: 3,
     model: "deepseek-flash",
     source_title: "Source conversation",
+    side_chat: None,
   }
   let ordinary = try {
     ignore(

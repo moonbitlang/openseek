@@ -182,13 +182,18 @@ pub async fn ensure_not_archived(session : String) -> Unit {
 }
 
 ///|
-/// Whether `candidate` is a sub-run transcript descended from `ancestor`.
-/// Walk the structural `-sr-N` suffixes instead of matching a textual prefix:
-/// a user-chosen id such as `chat-sr-not-an-ordinal` must remain unrelated.
+/// Whether `candidate` is a record descended from `ancestor`: a sub-run
+/// transcript or a side chat, or one of theirs. Walk the structural `-sr-N`
+/// and `-sc-N` suffixes instead of matching a textual prefix: a user-chosen
+/// id such as `chat-sr-not-an-ordinal` must remain unrelated.
 fn is_descendant(candidate : String, ancestor : String) -> Bool {
   let mut current = candidate
   for ;; {
-    guard @wire.split_child_session_id(current) is Some((parent, _)) else {
+    let parent = if @wire.split_child_session_id(current) is Some((parent, _)) {
+      parent
+    } else if @desktop_protocol.split_side_chat_id(current) is Some((parent, _)) {
+      parent
+    } else {
       return false
     }
     if parent == ancestor {
@@ -232,6 +237,15 @@ test "sub-run descent follows the structural suffix, not a text prefix" {
   assert_false(is_descendant("chat-sr-not-an-ordinal", "chat"))
   assert_false(is_descendant("chat", "chat"))
   assert_false(is_descendant("other-sr-1", "chat"))
+}
+
+///|
+test "a side chat and its sub-runs belong to the conversation beside them" {
+  assert_true(is_descendant("chat-sc-1", "chat"))
+  assert_true(is_descendant("chat-sc-1-sr-2", "chat"))
+  assert_true(is_descendant("chat-sr-1-sc-1", "chat"))
+  assert_false(is_descendant("chat-sc-not-an-ordinal", "chat"))
+  assert_false(is_descendant("other-sc-1", "chat"))
 }
 
 ///|

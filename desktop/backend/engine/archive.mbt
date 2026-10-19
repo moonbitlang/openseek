@@ -444,6 +444,7 @@ async fn archive_session_commit(
     manager.worktree_host(),
     force,
     workspace?=family.workspace,
+    family=family.members,
     on_committed?=on_worktree_changed,
   )
   if refusal is Some(refusal) {
@@ -609,6 +610,7 @@ pub async fn delete_session(
     if owner.checkout_removal(
         manager.worktree_host(),
         workspace=selected.workspace,
+        family=family.members,
       )
       is Some(found) &&
       worktree != Some(found.worktree) {
@@ -622,6 +624,7 @@ pub async fn delete_session(
       manager.worktree_host(),
       force,
       workspace=selected.workspace,
+      family=family.members,
       on_committed?=on_worktree_changed,
     )
     if refusal is Some({ worktree, dirty_paths, dirty_path_count, }) {
@@ -668,6 +671,7 @@ pub async fn delete_session_check(
     checkout: @worktree.WorktreeOwner::openseek(session).checkout_removal(
       manager.worktree_host(),
       workspace=selected.workspace,
+      family=@session_store.family_in(selected.root, session),
     ),
   }
 }

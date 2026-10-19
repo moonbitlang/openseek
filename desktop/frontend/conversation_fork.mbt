@@ -220,6 +220,7 @@ fn fork_conversation(
                 through,
                 model: pending.engine_model.wire(),
                 source_title: pending.source_title,
+                side_chat: None,
               },
             )
         }

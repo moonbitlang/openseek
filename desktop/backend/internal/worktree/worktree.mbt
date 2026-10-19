@@ -497,12 +497,13 @@ pub async fn WorktreeOwner::archive_check(
 /// The checkout this owner would remove, when one is on disk and no other
 /// conversation still holds it, with a preview of
 /// what removing it would discard: its uncommitted and untracked paths, none
-/// for a clean checkout. Read-only, like `archive_check`. `workspace` is the
-/// one project to look in, as for `archive_checkout`.
+/// for a clean checkout. Read-only, like `archive_check`. `workspace` and
+/// `family` are as for `archive_checkout`.
 pub async fn WorktreeOwner::checkout_removal(
   self : WorktreeOwner,
   host : WorktreeHost,
   workspace? : @pathx.Absolute,
+  family~ : Array[String] = [],
 ) -> CheckoutRemoval? {
   worktree_registry_lock.acquire()
   defer worktree_registry_lock.release()
@@ -517,7 +518,9 @@ pub async fn WorktreeOwner::checkout_removal(
     is Some(entry) else {
     return None
   }
-  guard !entry.held_by_another(host, workspace, self) else { return None }
+  guard !entry.held_by_another(host, workspace, self, family) else {
+    return None
+  }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   guard present else { return None }
@@ -529,9 +532,10 @@ pub async fn WorktreeOwner::checkout_removal(
 }
 
 ///|
-/// Whether a conversation other than `leaving` still works in this row's
-/// checkout: it has a slot in the running pump or a live durable record in
-/// `workspace`'s store. An archived member keeps its placement but not the
+/// Whether a conversation other than `leaving` and the records leaving with
+/// it (`family`: its side chats and sub-runs, moved in the same operation)
+/// still works in this row's checkout: it has a slot in the running pump or a
+/// live durable record in `workspace`'s store. An archived member keeps its placement but not the
 /// directory, and a member that was bound and never started holds nothing
 /// either. A session id names a record only within one store, so a record
 /// with a member's id in another attached project is a different
@@ -546,10 +550,13 @@ async fn WorktreeEntry::held_by_another(
   host : WorktreeHost,
   workspace : @pathx.Absolute,
   leaving : WorktreeOwner,
+  family : Array[String],
 ) -> Bool {
   let records = @workspaces.store_root(workspace).join("sessions")
   for bound in self.sessions {
-    guard leaving != OpenSeekSession(bound) else { continue }
+    guard leaving != OpenSeekSession(bound) && !family.contains(bound) else {
+      continue
+    }
     if (host.session_is_live)(bound) {
       return true
     }
@@ -583,11 +590,16 @@ async fn WorktreeEntry::held_by_another(
 /// A caller that already selected a store passes it: session ids can repeat
 /// across projects, and the owner alone resolves to the first project that
 /// holds a record with that id.
+///
+/// `family` names the records leaving together with this owner — its side
+/// chats and sub-runs, moved in the same operation — which hold nothing once
+/// it is gone.
 pub async fn WorktreeOwner::archive_checkout(
   self : WorktreeOwner,
   host : WorktreeHost,
   force : Bool,
   workspace? : @pathx.Absolute,
+  family~ : Array[String] = [],
   on_committed? : (String, Array[WorktreeInfo]) -> Unit,
 ) -> ArchiveNeedsForceReply? {
   worktree_registry_lock.acquire()
@@ -607,7 +619,9 @@ pub async fn WorktreeOwner::archive_checkout(
     is Some(entry) else {
     return None
   }
-  guard !entry.held_by_another(host, workspace, self) else { return None }
+  guard !entry.held_by_another(host, workspace, self, family) else {
+    return None
+  }
   let target = worktree_dir(workspace, entry.name)
   let present = @fsx.is_dir(target.to_path()) catch { _ => false }
   if present {

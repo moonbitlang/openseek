@@ -29,3 +29,19 @@ test "session fork requires a concrete terminal boundary and workspace" {
     assert_true(null_value is Err(_))
   }
 }
+
+///|
+test "a side-chat fork says so; an ordinary fork leaves the field out" {
+  let ordinary : @protocol.SessionForkPayload = @json.from_json({
+    "session": "source",
+    "workspace": "/work",
+    "through": 4,
+    "model": "deepseek-flash",
+    "source_title": "Title",
+  })
+  assert_eq(ordinary.side_chat, None)
+  guard ordinary.to_json() is Object(fields) else { fail("not an object") }
+  assert_false(fields.contains("side_chat"))
+  let side_chat = { ..ordinary, side_chat: Some(true), }
+  assert_eq(@json.from_json(side_chat.to_json()), side_chat)
+}

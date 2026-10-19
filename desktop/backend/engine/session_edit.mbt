@@ -117,6 +117,7 @@ async fn prepare_session_edit(
         through,
         model: payload.model,
         source_title: payload.source_title,
+        side_chat: None,
       },
       SharedWorktree,
       on_created~,

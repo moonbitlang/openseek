@@ -24,6 +24,10 @@ pub fn goal_set(String, auto~ : Bool) -> @openseek_protocol.Command
 
 pub fn prompt(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
 
+pub fn side_chat_id(String, Int32) -> String
+
+pub fn split_side_chat_id(String) -> (String, Int32)?
+
 pub fn ssh_connection_arguments(String) -> Array[String] raise
 
 pub fn steer(@openseek_protocol.Content, submission_id? : String) -> @openseek_protocol.Command
@@ -3351,6 +3355,7 @@ pub(all) struct SessionForkPayload {
   through : Int32
   model : String
   source_title : String
+  side_chat : Bool?
 } derive(Eq, @debug.Debug)
 pub fn SessionForkPayload::equal(Self, Self) -> Bool
 pub fn SessionForkPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
