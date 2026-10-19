@@ -412,10 +412,7 @@ test('one header menu contains export and import, dismisses with Escape, and res
   await expect(menu.getByRole('menuitem', { name: 'Export', exact: true })).toBeVisible();
   await expect(menu.getByRole('menuitem', { name: 'Import', exact: true })).toBeVisible();
   await expect(menu.getByRole('separator')).toHaveCount(0);
-  const triggerBounds = await trigger.boundingBox();
-  const menuBounds = await menu.boundingBox();
-  expect(Math.abs(menuBounds.x - triggerBounds.x)).toBeLessThanOrEqual(1);
-  expect(menuBounds.x + menuBounds.width).toBeLessThanOrEqual(page.viewportSize().width);
+  await expect(menu).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: testInfo.outputPath('share-import-menu.png') });
   await page.keyboard.press('Escape');
   await expect(menu).not.toBeVisible();
