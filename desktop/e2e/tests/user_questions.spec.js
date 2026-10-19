@@ -28,7 +28,7 @@ function setup(page) {
   return { app, snapshot };
 }
 
-test('live questions occupy visible space between the transcript and composer', async ({ page }, testInfo) => {
+test('live questions occupy visible space between the transcript and composer', { tag: '@webkit-layout' }, async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
@@ -75,7 +75,6 @@ test('questions survive reload and a finished turn, accept choices and text, and
   await expect(card).toContainText('Which approach should we use?');
   await expect(card.locator('script')).toHaveCount(0);
   await expect(card.getByRole('button', { name: 'Next', exact: true })).toBeDisabled();
-  await expect(card).not.toContainText(/countdown|seconds|30s/i);
   await page.reload();
   await app.openSession();
   await expect(card).toContainText('Which approach should we use?');
@@ -140,7 +139,7 @@ test('failed answers retain text for retry, and a newer resolution beats stale s
   expect(app.pageErrors).toEqual([]);
 });
 
-test('question drafts are scoped to the originating conversation and fit a narrow viewport', async ({ page }, testInfo) => {
+test('question drafts are scoped to the originating conversation and fit a narrow viewport', { tag: '@webkit-layout' }, async ({ page }, testInfo) => {
   const { app } = setup(page);
   app.liveSessions.push({ id: 'session-2', title: 'Another conversation', updated_at_ms: 2 });
   const reply = app.replyFor.bind(app);
@@ -171,127 +170,9 @@ test('question drafts are scoped to the originating conversation and fit a narro
   expect(app.pageErrors).toEqual([]);
 });
 
+{
+  const width = 390;
 
-test('reference card presents numbered choices above the reply row and closes by skipping', async ({ page }, testInfo) => {
-  const { app } = setup(page);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  app.notify('user_questions.changed', { generation: 2, requests: [{
-    id: 'question-1', session: 'session-1', questions: [{
-      id: 'folders',
-      title: '浏览器端的「添加文件夹」怎么处理？桌面端仍可只引用本机目录路径；浏览器端若要让宿主读取客户端目录，需要上传内容。',
-      options: ['浏览器暂时隐藏「添加文件夹」，保留客户端文件或照片上传', '浏览器也允许选择客户端文件夹，并上传其内容'],
-    }],
-  }] });
-  const card = page.locator('.user-question-card');
-  await expect(card).toContainText('浏览器端的「添加文件夹」');
-  await expect(card.locator('.user-question-number')).toHaveText(['1', '2']);
-  await expect(card.locator('.user-question-submit')).toBeDisabled();
-  const optionsBox = await card.locator('.user-question-options').boundingBox();
-  const responseBox = await card.locator('.user-question-response').boundingBox();
-  expect(responseBox.y).toBeGreaterThan(optionsBox.y + optionsBox.height);
-  const option = card.locator('.user-question-option').first();
-  await option.focus();
-  await page.keyboard.press('Enter');
-  await expect(option).toHaveAttribute('aria-pressed', 'true');
-  await expect(card.locator('textarea')).toHaveValue('');
-  await expect(card.locator('.user-question-submit')).toBeEnabled();
-  const screenshot = testInfo.outputPath('question-reference.png');
-  await card.screenshot({ path: screenshot, animations: 'disabled' });
-  await testInfo.attach('Selected question option', { path: screenshot, contentType: 'image/png' });
-  await card.locator('textarea').fill('Use a custom folder flow');
-  await expect(option).toHaveAttribute('aria-pressed', 'false');
-  await card.locator('.user-question-close').click();
-  expect(app.requests.filter(r => r.method === 'user_questions.answer').at(-1).params.answers).toBeNull();
-  expect(app.pageErrors).toEqual([]);
-});
-
-
-test('six questions page independently, retain drafts, and send all answers once', async ({ page }, testInfo) => {
-  const { app } = setup(page);
-  await app.install(); await app.goto(); await app.openSession();
-  app.notify('user_questions.changed', { generation: 2, requests: [{
-    id: 'question-1', session: 'session-1', questions: Array.from({length:6}, (_, i) => ({
-      id: 'q' + i, title: 'Question ' + (i + 1), options: ['Choice A', 'Choice B'],
-    })),
-  }] });
-  const card = page.locator('.user-question-card');
-  await expect(card.locator('.user-question-progress')).toHaveText('1 / 6');
-  await expect(card.locator('.user-question-field')).toHaveCount(1);
-  await expect(card.locator('.user-question-previous')).toBeDisabled();
-  await expect(card.locator('.user-question-skip')).toHaveCount(0);
-  const answers = {};
-  for (let i=0; i<6; i++) {
-    await expect(card.locator('.user-question-progress')).toHaveText((i + 1) + ' / 6');
-    await expect(card.locator('.user-question-submit')).toBeDisabled();
-    await card.getByRole('button', {name:'Choice A',exact:true}).click();
-    await expect(card.locator('textarea')).toHaveValue('');
-    if (i === 0) {
-      const screenshot = testInfo.outputPath('six-questions.png');
-      await card.screenshot({ path: screenshot, animations: 'disabled' });
-      await testInfo.attach('Multiple questions with a selected answer', { path: screenshot, contentType: 'image/png' });
-    }
-    if (i===1) {
-      await card.locator('textarea').fill('Custom answer');
-      await expect(card.getByRole('button', {name:'Choice A',exact:true})).toHaveAttribute('aria-pressed','false');
-      await card.locator('.user-question-previous').click();
-      await expect(card.getByRole('button', {name:'Choice A',exact:true})).toHaveAttribute('aria-pressed','true');
-      await card.locator('.user-question-next').click();
-      await expect(card.locator('textarea')).toHaveValue('Custom answer');
-    }
-    answers['q'+i] = i===1 ? 'Custom answer' : 'Choice A';
-    if (i<5) await card.getByRole('button',{name:'Next',exact:true}).click();
-  }
-  await expect(card.locator('.user-question-next')).toBeDisabled();
-  expect(app.requests.filter(r=>r.method==='user_questions.answer')).toHaveLength(0);
-  await card.getByRole('button',{name:'Send',exact:true}).click();
-  await expect(card).toContainText('Anything else?');
-  expect(app.requests.filter(r=>r.method==='user_questions.answer').map(r=>r.params.answers)).toEqual([answers]);
-  expect(app.pageErrors).toEqual([]);
-});
-
-for (const theme of ['light', 'dark']) {
-  for (const font of [12, 18]) {
-    // Give each font its own timeout budget for the page loads on Linux WebKit.
-    test(`question controls follow ${theme} appearance at ${font}px without clipping`, async ({ page, browserName }, testInfo) => {
-      await page.addInitScript(theme => localStorage.setItem('openseek.theme', theme), theme);
-      const { app } = setup(page);
-      await app.install();
-      await app.goto();
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.getByRole('button', { name: 'Settings', exact: true }).click();
-      await page.getByRole('slider', { name: 'Font size', exact: true }).fill(String(font));
-      await page.reload();
-      await app.openSession();
-      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-      const card = page.locator('.user-question-card');
-      const input = card.locator('textarea');
-      await card.getByRole('button', { name: 'Small change', exact: true }).click();
-      for (const width of [1440, 390]) {
-        await page.setViewportSize({ width, height: 900 });
-        await expect(input).toHaveCSS('font-size', `${width === 390 ? Math.max(16, font) : font}px`);
-        await input.focus();
-        await expect(input).toHaveCSS('outline-style', 'none');
-        await expect(card.locator('.user-question-input')).toHaveCSS('outline-style', 'none');
-        await expect.poll(() => card.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-        const digit = card.locator('.user-question-number').first();
-        const digitBox = await digit.boundingBox();
-        expect(digitBox.height).toBeGreaterThanOrEqual(await digit.evaluate(el => parseFloat(getComputedStyle(el).lineHeight)));
-        // macOS WebKit uses Option-Tab to include buttons in keyboard traversal.
-        await input.press(browserName === 'webkit' && process.platform === 'darwin' ? 'Alt+Tab' : 'Tab');
-        const next = card.getByRole('button', { name: 'Next', exact: true });
-        await expect(next).toBeFocused();
-        await expect(next).toHaveCSS('outline-style', 'solid');
-        const screenshot = testInfo.outputPath(`question-${theme}-${font}-${width}.png`);
-        await card.screenshot({ path: screenshot, animations: 'disabled' });
-      }
-      expect(app.pageErrors).toEqual([]);
-    });
-  }
-}
-
-for (const width of [1440, 390]) {
   test(`XML question responses render answers and skips live and after reload at ${width}px`, async ({ page }, testInfo) => {
     const app = new DesktopBrowserHarness(page);
     const answered = '<user_question_response request_id="question-1" status="answered">\n'

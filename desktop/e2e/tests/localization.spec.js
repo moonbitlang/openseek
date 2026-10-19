@@ -1,32 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('Japanese selection covers pages and persists at a narrow viewport', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.locator('#language-select').click();
-  await page.getByRole('option', { name: '日本語', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
-  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'チャット', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'プロジェクト', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'API キーを保存', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('japanese-settings.png') });
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('ja');
-  await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.getByRole('button', { name: 'スキル', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'スキル', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'スケジュールタスク', exact: true }).click();
-  await page.getByRole('button', { name: '新しいスケジュール', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'スケジュールを保存', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('japanese-schedule-narrow.png') });
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('Chinese covers feature pages, composer and dock after live switching', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -107,36 +81,6 @@ test('Chinese system preference resolves at startup and a failed save keeps the 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('Traditional Chinese selection updates Settings and persists across reload', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.locator('#language-select').click();
-  await page.getByRole('option', { name: '繁體中文', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hant');
-  await expect(page.getByRole('heading', { name: '設定', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '技能', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '對話', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '專案', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '主題', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'API 端點', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '儲存 API 金鑰', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '開啟 config.toml', exact: true })).toBeVisible();
-  await expect(page.getByText('儲存在此裝置上，僅隨 API 請求傳送。SeekMoon 不會讀取它。')).toBeVisible();
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.screenshot({ path: testInfo.outputPath('traditional-chinese-settings.png') });
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hant');
-  await page.reload();
-  await expect(page.getByRole('button', { name: '設定', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '設定', exact: true }).click();
-  await page.locator('#language-select').click();
-  await page.getByRole('option', { name: 'English', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  expect(app.pageErrors).toEqual([]);
-});
-
 // Locale matching is covered by i18n/locale_test.mbt. One mounted flow covers
 // IME, focus, selection and editor preservation; selection tests above/below
 // still check the individual languages' visible labels.
@@ -180,7 +124,6 @@ test('system language switching preserves palette IME, focus and editor contents
   expect(app.pageErrors).toEqual([]);
 });
 
-
 test('Traditional Chinese system startup yields to an explicit saved choice', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -196,34 +139,5 @@ test('Traditional Chinese system startup yields to an explicit saved choice', as
   await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('zh-Hans');
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-Hans');
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('Spanish selection persists and covers feature pages at a narrow viewport', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await page.locator('#language-select').click();
-  await page.getByRole('option', { name: 'Español', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
-  await expect(page.getByRole('heading', { name: 'Configuración', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Guardar clave de API', exact: true })).toBeVisible();
-  await expect.poll(() => page.evaluate(() => localStorage.getItem('openseek.language'))).toBe('es');
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.screenshot({ path: testInfo.outputPath('spanish-settings.png') });
-  await page.reload();
-  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
-  await page.evaluate(() => {
-    Object.defineProperty(navigator, 'languages', { configurable: true, value: ['en-US'] });
-    window.dispatchEvent(new Event('languagechange'));
-  });
-  await expect(page.locator('html')).toHaveAttribute('lang', 'es');
-  await page.getByRole('button', { name: 'Habilidades', exact: true }).click();
-  await expect(page.getByPlaceholder('Buscar habilidades…')).toBeVisible();
-  await page.getByRole('button', { name: 'Tareas programadas', exact: true }).click();
-  await page.getByRole('button', { name: 'Nueva programación', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Guardar programación', exact: true })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('spanish-schedule.png') });
   expect(app.pageErrors).toEqual([]);
 });

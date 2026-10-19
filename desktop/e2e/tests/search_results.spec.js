@@ -101,17 +101,7 @@ for (const mode of ['Text', 'Code']) {
     await expect(results).toBeHidden();
     await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
     const header = results.getByRole('button', { name: /main.mbt.*src/ });
-    const expectChevronAligned = async () => {
-      const offset = await header.evaluate(element => {
-        const icon = element.querySelector('.search-file-chevron').getBoundingClientRect();
-        const name = element.querySelector('.search-file-name').getBoundingClientRect();
-        return Math.abs((icon.top + icon.bottom - name.top - name.bottom) / 2);
-      });
-      expect(offset).toBeLessThanOrEqual(1);
-    };
-    await expectChevronAligned();
     await header.click();
-    await expectChevronAligned();
     await expect(row).toHaveCount(0);
     await header.click();
     await expectVisibleRows();

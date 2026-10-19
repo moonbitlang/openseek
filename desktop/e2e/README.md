@@ -10,8 +10,9 @@ client paths. Its repository snapshot also covers changed-file review,
 review progress and navigation, Git Graph keyboard interaction, commit
 expansion, and immutable historical diffs.
 
-The question-card suite also runs in WebKit to cover Safari's grid sizing,
-clipping, and interaction behavior.
+Two question-card layout flows also run in WebKit to cover Safari's grid
+sizing, clipping, and narrow-viewport interaction. Shared question state and
+protocol cases run in Chromium and model tests.
 
 ## Setup
 
@@ -42,3 +43,18 @@ Prefer accessible roles, labels, and visible text. Use classes only for
 product DOM whose presentation contract is itself under test. Mock network
 traffic with Playwright routes and use retrying assertions instead of fixed
 sleeps.
+
+## Suite scope
+
+Keep E2E cases for browser integration: event wiring, focus, selection, real
+rendering, transport ownership, and complete user workflows. Exercise state
+transition permutations in the existing model tests. Before adding a browser
+case, identify the integration failure that existing model and E2E tests miss.
+
+Use representative combinations when theme, viewport, renderer, or error
+variants share the same implementation. Keep extra variants when they exercise
+a distinct integration path or reproduce a browser-specific regression.
+
+Avoid checks that only memorialize a removed control or feature, or pin icon
+paths, decorative pixel dimensions, alignment, and theme colors. Keep layout
+checks tied to observable behavior such as clipping, reachability, or scrolling.

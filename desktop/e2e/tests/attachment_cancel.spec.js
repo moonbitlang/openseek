@@ -38,7 +38,8 @@ async function openNative(page, pick, prepare) {
   return app;
 }
 
-for (const delayed of [false, true]) {
+{
+  const delayed = true;
   test(`native picker cancellation leaves draft usable (${delayed ? 'delayed' : 'immediate'})`, async ({ page }) => {
     let cancel;
     const app = await openNative(page, () => delayed

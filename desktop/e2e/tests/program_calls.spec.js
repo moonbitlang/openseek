@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-for (const minimal of [false, true]) {
+{
+  const minimal = true;
   test(`PTC results retain edit diffs and interruptions across reload (${minimal ? 'minimal' : 'full'})`, async ({ page }, testInfo) => {
     await page.addInitScript((enabled) => {
       localStorage.setItem('openseek.minimal_transcript', String(enabled));
@@ -67,7 +68,8 @@ for (const minimal of [false, true]) {
   });
 }
 
-for (const minimal of [false, true]) {
+{
+  const minimal = false;
   test(`background call snapshots remain historical after reload (${minimal ? 'minimal' : 'full'})`, async ({ page }) => {
     await page.addInitScript(enabled => localStorage.setItem('openseek.minimal_transcript', String(enabled)), minimal);
     const app = new DesktopBrowserHarness(page);

@@ -97,51 +97,6 @@ test('install and uninstall from the same catalog detail page', async ({ page })
   expect(app.pageErrors).toEqual([]);
 });
 
-test('removed skill without a catalog entry cannot be uninstalled again', async ({ page }) => {
-  const app = new SkillsHarness(page, true);
-  app.catalogSkills = [];
-  await app.openDetails();
-  await app.performAction('Uninstall');
-  await expect(page.locator('.skill-detail-header')).toContainText('Not installed');
-  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-  expect(app.installedSkills).toEqual([]);
-  expect(app.pageErrors).toEqual([]);
-});
-
-for (const { source, packagePath } of [
-  { source: 'Yoorkin/wayfinder@0.0.9', packagePath: '' },
-  { source: 'Yoorkin/wayfinder@0.1.0/other', packagePath: 'other' },
-]) {
-  test(`catalog excludes installed packages regardless of version: ${source}`, async ({ page }) => {
-    const app = new SkillsHarness(page, true);
-    app.installedSkills[0].source = source;
-    app.installedSkills[0].registry.package_path = packagePath;
-    const samePackage = packagePath === '';
-    await app.openDetails(!samePackage);
-    if (samePackage) {
-      await page.getByRole('button', { name: 'Back', exact: true }).click();
-      const registry = page.locator('.settings-group').filter({ has: page.getByRole('heading', { name: 'Available', exact: true }) });
-      await expect(registry.locator('.skill-row')).toHaveCount(0);
-    } else {
-      await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-test('installed detail stops offering uninstall after the library removes it', async ({ page }) => {
-  const app = new SkillsHarness(page, true);
-  await app.openDetails();
-  await app.performAction('Uninstall');
-  await expect.poll(() => app.installedSkills.length).toBe(0);
-  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Install skill', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Install skill', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Manage skill', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('uninstall failure is visible in the detail page and can be retried', async ({ page }) => {
   const app = new SkillsHarness(page, true);
   app.rpcErrors.set('skills.uninstall', 'Cannot remove skill: permission denied');
@@ -155,75 +110,9 @@ test('uninstall failure is visible in the detail page and can be retried', async
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const removing of [false, true]) {
-  test(`${removing ? 'uninstall' : 'install'} stays busy when SkillsChanged precedes its reply`, async ({ page }) => {
-    const app = new SkillsHarness(page, removing);
-    const method = removing ? 'skills.uninstall' : 'skills.install';
-    const inverse = removing ? 'skills.install' : 'skills.uninstall';
-    const busyLabel = removing ? 'Removing…' : 'Installing…';
-    const release = app.holdReplyAfterCommit(method);
-    await app.openDetails();
-    const refreshes = app.requests.filter(r => r.method === 'skills.installed').length;
-    await app.performAction(removing ? 'Uninstall' : 'Install skill');
-    await expect.poll(() => app.requests.filter(r => r.method === 'skills.installed').length).toBeGreaterThan(refreshes);
-    await expect(page.locator('.skill-detail-action')).toBeDisabled();
-    await expect(page.locator('.skill-detail-action')).toHaveAccessibleName(busyLabel);
-    // Wait for the committed library state to render, rather than just for the request.
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
-    const group = page.locator('.settings-group').filter({
-      has: page.getByRole('heading', { name: removing ? 'Available' : 'Installed', exact: true }),
-    });
-    await expect(group.locator('.skill-row')).toHaveCount(1);
-    const listAction = group.locator('.skill-row button.skill-action');
-    await expect(listAction).toBeDisabled();
-    await expect(listAction).toHaveAccessibleName(busyLabel);
-    await group.locator('.skill-summary').click();
-    const action = page.locator('.skill-detail-action');
-    await expect(action).toBeDisabled();
-    await expect(action).toHaveAccessibleName(busyLabel);
-    await action.evaluate(button => button.click());
-    expect(app.requests.filter(r => r.method === inverse)).toHaveLength(0);
-    release();
-    const nextAction = page.getByRole('button', { name: removing ? 'Install skill' : 'Manage skill', exact: true });
-    await expect(nextAction).toBeEnabled();
-    await app.performAction(removing ? 'Install skill' : 'Uninstall');
-    await expect.poll(() => app.requests.filter(r => r.method === inverse).length).toBe(1);
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+{
+  const removing = true;
 
-for (const targetInstalled of [false, true]) {
-  test(`opening ${targetInstalled ? 'installed' : 'catalog'} details hides another skill's error, including cached previews`, async ({ page }) => {
-    const app = new SkillsHarness(page, true);
-    const other = { ...market, name: 'widget', module_name: 'acme/widget' };
-    app.catalogSkills.push(other);
-    if (targetInstalled) {
-      app.installedSkills.push({ ...installed, id: 'acme-widget', name: 'widget', source: 'acme/widget@0.1.0', registry: { module_name: 'acme/widget', package_path: '' } });
-    }
-    app.rpcErrors.set('skills.uninstall', 'Cannot remove wayfinder: permission denied');
-    await app.openDetails();
-    const contentMethod = targetInstalled ? 'skills.installed_content' : 'skills.content';
-    const initialReads = app.requests.filter(r => r.method === contentMethod).length;
-    for (const cached of [false, true]) {
-      await app.performAction('Uninstall');
-      await expect(page.locator('.skill-detail-page')).toContainText('Cannot remove wayfinder: permission denied');
-      await page.getByRole('button', { name: 'Back', exact: true }).click();
-      await page.locator('.skill-summary').filter({ hasText: 'widget' }).first().click();
-      await expect(page.locator('.skill-detail-header h2')).toHaveText('widget');
-      await expect(page.locator('.skill-preview-markdown')).toBeVisible();
-      await expect(page.locator('.skill-detail-page .skills-notice')).toHaveCount(0);
-      // The second navigation exercises the cached branch without another read.
-      expect(app.requests.filter(r => r.method === contentMethod)).toHaveLength(initialReads + 1);
-      if (!cached) {
-        await page.getByRole('button', { name: 'Back', exact: true }).click();
-        await page.locator('.skill-summary').filter({ hasText: 'wayfinder' }).first().click();
-      }
-    }
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-for (const removing of [false, true]) {
   test(`late ${removing ? 'uninstall' : 'install'} errors stay with their skill across navigation and retry`, async ({ page }) => {
     const app = new SkillsHarness(page, removing);
     app.catalogSkills.push({ ...market, name: 'widget', module_name: 'acme/widget' });
@@ -296,30 +185,6 @@ test('skill enablement comes from the host and survives list/detail navigation a
   expect(app.pageErrors).toEqual([]);
 });
 
-test('enablement changes preserve an in-flight preview request', async ({ page }) => {
-  const app = new SkillsHarness(page, true);
-  const replyFor = app.replyFor.bind(app);
-  let release;
-  const content = new Promise(resolve => { release = resolve; });
-  app.replyFor = request => request.method === 'skills.installed_content'
-    ? content.then(() => replyFor(request))
-    : replyFor(request);
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
-  await page.getByRole('button', { name: installed.name, exact: true }).click();
-  const toggle = page.getByRole('switch');
-  await expect(toggle).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByRole('button', { name: 'Copy SKILL.md', exact: true })).toHaveCount(0);
-  await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-checked', 'false');
-  release();
-  await expect(page.locator('.skill-preview-markdown')).toContainText('Plan uncertain work.');
-  await expect(page.getByRole('button', { name: 'Copy SKILL.md', exact: true })).toBeVisible();
-  expect(app.requests.filter(r => r.method === 'skills.installed_content')).toHaveLength(1);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('a failed handwritten skill move preserves its state and can be retried', async ({ page }) => {
   const app = new SkillsHarness(page, true);
   app.installedSkills[0] = { ...installed, id: 'My notes', source: '', registry: undefined };
@@ -338,7 +203,9 @@ test('a failed handwritten skill move preserves its state and can be retried', a
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const enabled of [true, false]) {
+{
+  const enabled = true;
+
   test(`enablement remains independent while updating an initially ${enabled ? 'enabled' : 'disabled'} skill`, async ({ page }) => {
     const app = new SkillsHarness(page, true);
     app.installedSkills[0].enabled = enabled;

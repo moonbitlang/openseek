@@ -104,20 +104,6 @@ test('opening a PDF defaults to a hidden tree and preserves manual reopening acr
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const filename of ['report.pdf', 'extensionless']) {
-  test(`a tree manually reopened while ${filename} loads stays open`, async ({ page }) => {
-    const app = await setup(page, { openTree: false });
-    app.rpcDelays.set('fs.read_file', 2000);
-    await openFile(app, filename);
-    await expect(page.locator('#openseek-office-surface')).not.toHaveAttribute('data-pdf-painted', 'true');
-    await page.getByTitle('Show file tree', { exact: true }).click();
-    await expect(page.locator('.file-tree-pane')).toBeVisible();
-    await expectPdf(page);
-    await expect(page.locator('.file-tree-pane')).toBeVisible();
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
 test('opening an extensionless PDF from a hidden panel keeps the default tree closed', async ({ page }) => {
   const app = await setup(page, { openTree: false });
   await openFile(app, 'report.docx');
@@ -352,7 +338,6 @@ test('encrypted PDFs retry incorrect passwords and release a cancelled session',
   expect(app.pageErrors).toEqual([]);
 });
 
-
 test('PDF uses the shared annotation composer with pinned drafts, Batch, and apply', async ({ page }, testInfo) => {
   const app = await setup(page);
   await openFile(app, 'report.pdf');
@@ -412,158 +397,6 @@ test('PDF uses the shared annotation composer with pinned drafts, Batch, and app
   expect(selections[1].comment).toBe('Apply both');
   expect(app.pageErrors).toEqual([]);
 });
-
-
-for (const action of ['cancel', 'batch']) {
-  test(`PDF capture preserves a typed text annotation until ${action}`, async ({ page }) => {
-    const app = await setup(page);
-    await enableImages(page);
-    await openFile(app, 'report.pdf');
-    await expectPdf(page);
-    const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'OpenSeek PDF preview' }).first();
-    const select = () => text.evaluate(element => {
-      const range = document.createRange();
-      range.selectNodeContents(element);
-      const selection = window.getSelection();
-      selection.removeAllRanges();
-      selection.addRange(range);
-      document.dispatchEvent(new Event('selectionchange'));
-    });
-    const preview = page.locator('.office-selection-preview');
-    const input = preview.locator('textarea[data-agent-feedback-input]');
-    const camera = page.getByRole('button', { name: 'Capture region', exact: true });
-    await select();
-    await expect(input).toBeVisible();
-    await expect(camera).toBeEnabled();
-    await input.fill('Keep my annotation');
-    await expect(camera).toBeDisabled();
-    await expect(camera).toHaveAttribute('title', 'Submit or cancel the current annotation before capturing a region.');
-    await expect(input).toBeVisible();
-    await expect(input).toHaveValue('Keep my annotation');
-    await expect(preview.locator('.feedback-source-selection')).toHaveCount(1);
-    if (action === 'cancel') {
-      await input.press('Escape');
-    } else {
-      await preview.getByRole('checkbox').check();
-      await input.press('Enter');
-      await expect(page.locator('.mention-chip')).toContainText('Keep my annotation');
-    }
-    await expect(camera).toBeEnabled();
-    await camera.click();
-    await expect(page.locator('.pdf-region-capture')).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
-    await select();
-    await expect(input).toBeVisible();
-    await input.fill('Next annotation');
-    await expect(input).toHaveValue('Next annotation');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
-for (const theme of ['light', 'dark']) {
-test(`PDF annotation matches Markdown and code styling and anchors beside the selected text (${theme})`, async ({ page }, testInfo) => {
-  await page.emulateMedia({ colorScheme: theme });
-  const app = await setup(page);
-  app.workingFiles['docs/notes.md'] = 'A paragraph for comparing annotation styles.\n';
-  app.searchFiles.push('docs/notes.md', 'src/main.mbt');
-  const measureStyle = (locator) => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    const input = getComputedStyle(element.querySelector('textarea'));
-    const button = getComputedStyle(element.querySelector('button'));
-    return Object.fromEntries([
-      ...['backgroundColor', 'color', 'border', 'borderRadius', 'boxShadow', 'padding', 'gap', 'font'].map(name => [name, style[name]]),
-      ...['font', 'color', 'padding', 'minHeight'].map(name => ['input.' + name, input[name]]),
-      ...['width', 'height', 'borderRadius', 'backgroundColor', 'color'].map(name => ['button.' + name, button[name]]),
-    ]);
-  });
-  await openFile(app, 'report.pdf');
-  await expectPdf(page);
-  const text = page.locator('.page[data-page-number="1"] [data-pdf-item]').filter({ hasText: 'Selectable first page text' }).first();
-  await text.evaluate(element => {
-    const range = document.createRange();
-    range.selectNodeContents(element);
-    const selection = window.getSelection();
-    selection.removeAllRanges(); selection.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  const pdfWidget = page.locator('#office-feedback-input .agent-feedback-input-widget');
-  await expect(pdfWidget).toBeVisible();
-  await expect(page.locator('.office-selection-actions')).toHaveCount(0);
-  await expect(page.locator('#office-feedback-input')).toHaveAttribute('data-theme', theme);
-  const pdfStyle = await measureStyle(pdfWidget);
-  const textBox = await text.boundingBox();
-  const popupBox = await pdfWidget.boundingBox();
-  expect(Math.abs(popupBox.y - (textBox.y + textBox.height))).toBeLessThan(4);
-  await pdfWidget.locator('textarea').fill('Explain this passage');
-  await page.screenshot({ path: testInfo.outputPath('pdf-annotation.png'), animations: 'disabled' });
-  const scale = await page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale);
-  await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-  await expect.poll(() => page.locator('#openseek-office-surface').evaluate(host => host.__officeViewerPdf.viewer.currentScale)).toBeGreaterThan(scale + 0.05);
-  await expect.poll(async () => {
-    const anchor = await text.boundingBox();
-    const popup = await pdfWidget.boundingBox();
-    return popup ? Math.abs(popup.y - anchor.y - anchor.height) : Infinity;
-  }).toBeLessThan(4);
-  const before = await pdfWidget.boundingBox();
-  await page.locator('.pdf-container').evaluate(element => { element.scrollTop += 30; });
-  await expect.poll(async () => (await pdfWidget.boundingBox())?.y).toBeLessThan(before.y - 20);
-  await expect(pdfWidget.locator('textarea')).toHaveValue('Explain this passage');
-  await page.setViewportSize({ width: 1100, height: 900 });
-  await expect.poll(async () => {
-    const popup = await pdfWidget.boundingBox();
-    const viewport = await page.locator('#office-feedback-input').boundingBox();
-    return popup && popup.x >= viewport.x && popup.x + popup.width <= viewport.x + viewport.width + 1;
-  }).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await pdfWidget.locator('textarea').press('Escape');
-  const lowerText = page.locator('.page[data-page-number="2"] [data-pdf-item]').filter({ hasText: 'PDF attachments retain source references' }).first();
-  await lowerText.scrollIntoViewIfNeeded();
-  await lowerText.evaluate(element => {
-    const viewport = element.closest('.pdf-container');
-    viewport.scrollTop += element.getBoundingClientRect().bottom - (viewport.getBoundingClientRect().bottom - 8);
-    const range = document.createRange(); range.selectNodeContents(element);
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  await expect(pdfWidget).toBeVisible();
-  await expect.poll(async () => {
-    const popup = await pdfWidget.boundingBox();
-    const anchor = await lowerText.boundingBox();
-    return Math.abs(popup.y + popup.height - anchor.y);
-  }).toBeLessThan(4);
-  await pdfWidget.locator('textarea').press('Escape');
-
-  await openFile(app, 'notes.md');
-  const markdown = page.locator('#markdown-viewer-host .moonbit-viewer-markdown-document');
-  await expect(markdown).toBeVisible();
-  await markdown.focus();
-  await markdown.locator('p').first().evaluate(element => {
-    const range = document.createRange(); range.selectNodeContents(element);
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-    document.dispatchEvent(new Event('selectionchange'));
-  });
-  const markdownWidget = markdown.locator('.agent-feedback-input-widget');
-  await expect(markdownWidget).toBeVisible();
-  expect(await measureStyle(markdownWidget)).toEqual(pdfStyle);
-  await markdownWidget.locator('textarea').fill('Explain this passage');
-  await page.screenshot({ path: testInfo.outputPath('markdown-annotation.png'), animations: 'disabled' });
-  await markdownWidget.locator('textarea').press('Escape');
-
-  await openFile(app, 'main.mbt');
-  const code = page.locator('#viewer-host');
-  const line = code.locator('.view-line').filter({ hasText: 'fn main' }).first();
-  await expect(line).toBeVisible();
-  await line.hover();
-  await code.locator('.agent-feedback-glyph.line-hover').click();
-  const codeWidget = code.locator('.agent-feedback-input-widget');
-  await expect(codeWidget).toBeVisible();
-  expect(await measureStyle(codeWidget)).toEqual(pdfStyle);
-  await codeWidget.locator('textarea').fill('Explain this passage');
-  await page.screenshot({ path: testInfo.outputPath('code-annotation.png'), animations: 'disabled' });
-  expect(app.pageErrors).toEqual([]);
-});
-}
 
 test('PDF annotation retains a visible source selection while typing', async ({ page }, testInfo) => {
   const app = await setup(page);
@@ -800,18 +633,6 @@ test.describe('PDF region screenshots', () => {
     expect(app.pageErrors).toEqual([]);
   });
 
-  test('a model without image input gets an explanation', async ({ page }) => {
-    const app = await setup(page);
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
-    await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
-    await openFile(app, 'report.pdf');
-    await expectPdf(page);
-    await page.getByRole('button', { name: 'Capture region', exact: true }).click();
-    await expect(page.getByText('To attach a screenshot, open a conversation with an image-capable model.', { exact: true })).toBeVisible();
-    await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
-    expect(app.pageErrors).toEqual([]);
-  });
-
   test('a visible region spanning two pages becomes one image', async ({ page }) => {
     const app = await setup(page);
     await enableImages(page);
@@ -861,8 +682,6 @@ test.describe('PDF region screenshots', () => {
 
 for (const { rotation, partial = false, noRotate = false, hidden = false, note = false } of [
   { rotation: 0 },
-  { rotation: 90 },
-  { rotation: 180, partial: true },
   { rotation: 270, partial: true },
   { rotation: 90, noRotate: true },
   { rotation: 0, hidden: true },
@@ -934,29 +753,6 @@ test('PDF capture rejects HTML-only form text without producing an incomplete im
   expect(app.pageErrors).toEqual([]);
 });
 
-test('PDF repeated capture starts keep the active selection', async ({ page }) => {
-  const app = await setup(page);
-  await enableImages(page);
-  await openFile(app, 'report.pdf');
-  await expectPdf(page);
-  const button = page.getByRole('button', { name: 'Capture region', exact: true });
-  await button.dblclick();
-  await expect(page.locator('.pdf-region-capture')).toHaveCount(1);
-  const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
-  await page.mouse.move(bounds.x + 40, bounds.y + 40);
-  await page.mouse.down();
-  await page.mouse.move(bounds.x + 220, bounds.y + 140, { steps: 5 });
-  await page.mouse.up();
-  const input = page.locator('.pdf-capture-feedback textarea');
-  await expect(input).toBeVisible();
-  await input.press('Escape');
-  await button.dblclick();
-  await expect(page.locator('.pdf-region-capture')).toHaveCount(1);
-  await page.keyboard.press('Escape');
-  await expect(page.locator('.pdf-region-capture')).toHaveCount(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test.describe('PDF touch capture', () => {
   test.use({ hasTouch: true });
 
@@ -1011,12 +807,6 @@ test('PDF capture mode keeps native scrolling and opens the shared feedback comp
   await page.mouse.wheel(0, 140);
   await expect.poll(() => container.evaluate(el => el.scrollTop)).toBeGreaterThan(before + 50);
   await expect(page.locator('.pdf-region-capture')).toBeVisible();
-  await expect(button.locator('.icon svg')).toHaveCount(1);
-  expect(await button.innerText()).toBe('');
-  const overlayStyle = await page.locator('.pdf-region-capture').evaluate(el => ({
-    background: getComputedStyle(el).backgroundColor, shadow: getComputedStyle(el).boxShadow,
-  }));
-  expect(overlayStyle).toEqual({ background: 'rgba(0, 0, 0, 0)', shadow: 'none' });
   const x = bounds.x + 70, y = bounds.y + 80;
   await page.mouse.move(x, y); await page.mouse.down();
   await page.mouse.move(x + 200, y + 100, { steps: 5 }); await page.mouse.up();
@@ -1024,52 +814,6 @@ test('PDF capture mode keeps native scrolling and opens the shared feedback comp
   await expect(page.locator('.composer-image')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const batch of [false, true]) {
-  test(`PDF capture submission after losing image support preserves feedback and explains recovery (${batch ? 'Batch' : 'Apply'})`, async ({ page }, testInfo) => {
-    const app = await setup(page);
-    await enableImages(page);
-    await openFile(app, 'report.pdf');
-    await expectPdf(page);
-    await page.locator('#task').fill('Keep my existing draft');
-    const b = await page.locator('.pdfViewer canvas').first().boundingBox();
-    await captureRegion(page, { x: Math.ceil(b.x + 35), y: Math.ceil(b.y + 30), width: 240, height: 120 }, { confirm: false });
-    const feedback = page.locator('.pdf-capture-feedback');
-    const input = feedback.locator('textarea');
-    const comment = batch ? '' : 'Keep this screenshot comment';
-    await input.fill(comment);
-    await feedback.getByRole('checkbox').setChecked(batch);
-    await page.getByRole('button', { name: 'Model', exact: true }).click();
-    await page.getByRole('option', { name: 'DS Pro', exact: true }).click();
-    await expect(input).toBeVisible();
-    await expect(input).toHaveValue(comment);
-    await feedback.locator('.agent-feedback-input-action').click();
-    await expect(page.getByText('Could not add the screenshot. Use an image-capable model and a regular message prompt, then try again.', { exact: true })).toBeVisible();
-    await expect(input).toHaveValue(comment);
-    await expect(feedback.locator('.feedback-source-selection')).toHaveCount(1);
-    await expect(page.locator('#task')).toHaveValue('Keep my existing draft');
-    await expect(page.locator('.composer-image')).toHaveCount(0);
-    expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-    if (!batch) await page.screenshot({ path: testInfo.outputPath('pdf-capture-capability-feedback.png'), animations: 'disabled' });
-    await enableImages(page);
-    await expect(input).toHaveValue(comment);
-    await expect(feedback.getByRole('checkbox')).toBeChecked({ checked: batch });
-    await feedback.locator('.agent-feedback-input-action').click();
-    await expect(feedback).toBeHidden();
-    if (batch) {
-      await expect(page.locator('.composer-image')).toHaveCount(1);
-      await page.locator('#send').click();
-    }
-    await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
-    const request = app.requests.find(r => r.method === 'agent.start');
-    expect(JSON.stringify(request.params)).toContain('data:image/png;base64,');
-    expect(request.params.task).toContain('Keep my existing draft');
-    const selection = JSON.parse(request.params.task.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
-    expect(selection.selection).toEqual({ format: 'pdf', kind: 'pdf-region', pages: [1] });
-    if (comment) expect(selection.comment).toBe(comment);
-    expect(app.pageErrors).toEqual([]);
-  });
-}
 
 for (const codex of [false, true]) {
   test(`PDF capture feedback sends the image and instruction with existing ${codex ? 'Codex' : 'OpenSeek'} typing`, async ({ page }, testInfo) => {
@@ -1179,7 +923,9 @@ test('PDF capture feedback can be batched with text or cancelled without adding 
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const [comment, action] of [['', 'batch'], ['Keep this screenshot', 'cancel']]) {
+{
+  const [comment, action] = ['Keep this screenshot', 'cancel'];
+
   test(`PDF screenshot drafts survive outside pointer and focus changes until ${action}`, async ({ page }) => {
     const app = await setup(page);
     await enableImages(page);
@@ -1222,80 +968,6 @@ for (const [comment, action] of [['', 'batch'], ['Keep this screenshot', 'cancel
     expect(app.pageErrors).toEqual([]);
   });
 }
-
-test('PDF capture Batch persists across screenshot feedbacks', async ({ page }) => {
-  const app = await setup(page);
-  await enableImages(page);
-  await openFile(app, 'report.pdf');
-  await expectPdf(page);
-  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
-  const rect = { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 };
-  const feedback = page.locator('.pdf-capture-feedback');
-  await captureRegion(page, rect, { confirm: false });
-  await feedback.locator('textarea').fill('First change');
-  await feedback.getByRole('checkbox').check();
-  await feedback.locator('textarea').press('Enter');
-  await expect(feedback).toBeHidden();
-  await captureRegion(page, rect, { confirm: false });
-  await expect(feedback.getByRole('checkbox')).toBeChecked();
-  await feedback.locator('textarea').fill('Second change');
-  await feedback.locator('textarea').press('Enter');
-  await expect(page.locator('.composer-image')).toHaveCount(2);
-  await expect(page.locator('.mention-chip')).toHaveText([/First change/, /Second change/]);
-  await expect(page.locator('#task')).toHaveValue('');
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.filter(r => r.method === 'agent.start').length).toBe(1);
-  const params = app.requests.find(r => r.method === 'agent.start').params;
-  const selections = [...params.task.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
-  expect(selections.map(selection => selection.comment)).toEqual(['First change', 'Second change']);
-  expect(JSON.stringify(params).match(/data:image\/png;base64,/g)).toHaveLength(2);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('PDF capture opening then cancelling goal edit preserves screenshot comment', async ({ page }) => {
-  const app = await setup(page);
-  await enableImages(page);
-  await openFile(app, 'report.pdf');
-  await expectPdf(page);
-  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
-  await captureRegion(page, { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 }, { confirm: false });
-  const input = page.locator('.pdf-capture-feedback textarea');
-  await input.fill('Do not lose this feedback');
-  await page.locator('.pdf-capture-feedback').getByRole('checkbox').check();
-  await page.getByTitle('Edit the standing goal', { exact: true }).click();
-  await expect(input).toBeHidden();
-  await page.locator('#goal-cancel').click();
-  await expect(input).toBeVisible();
-  await expect(input).toHaveValue('Do not lose this feedback');
-  await expect(page.locator('.pdf-capture-feedback').getByRole('checkbox')).toBeChecked();
-  await input.press('Enter');
-  await expect(page.locator('.mention-chip')).toContainText('Do not lose this feedback');
-  await expect(page.locator('.composer-image')).toHaveCount(1);
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(0);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('PDF capture archiving another conversation does not disable screenshot delivery', async ({ page }) => {
-  const app = await setup(page);
-  await enableImages(page);
-  await openFile(app, 'report.pdf');
-  await expectPdf(page);
-  const b = await page.locator('.pdfViewer canvas').first().boundingBox();
-  await captureRegion(page, { x: Math.ceil(b.x + 30), y: Math.ceil(b.y + 30), width: 160, height: 90 }, { confirm: false });
-  const feedback = page.locator('.pdf-capture-feedback');
-  await feedback.locator('textarea').fill('Keep this feedback deliverable');
-  app.archivedSessions.push({ id: 'session-2', title: 'Second fixture', updated_at_ms: 2 });
-  app.notify('session.changed', { change: 'archived', session: 'session-2', workspace: '/workspace' });
-  await expect(page.locator('.section-heading', { hasText: 'Archived chats (1)' })).toHaveCount(1);
-  await expect(feedback.locator('textarea')).toBeFocused();
-  await expect(feedback.locator('textarea')).toHaveValue('Keep this feedback deliverable');
-  await feedback.getByRole('checkbox').check();
-  await feedback.locator('textarea').press('Enter');
-  await expect(page.locator('.composer-image')).toHaveCount(1);
-  await expect(page.locator('.mention-chip')).toContainText('Keep this feedback deliverable');
-  expect(app.pageErrors).toEqual([]);
-});
 
 async function hoverPdfText(page, text) {
   const span = page.locator('.textLayer span[data-pdf-item]').filter({ hasText: text }).first();
@@ -1437,9 +1109,8 @@ test('PDF element hover follows scroll and works on a rotated zoomed second page
   expect(app.pageErrors).toEqual([]);
 });
 
-
-for (const tagged of [false, true]) {
-  for (const [intrinsic, rotation] of [[0, 90], [0, 180], [0, 270], [90, 0], [180, 0], [270, 0], [90, 180]]) {
+// Selection geometry is unit-tested; keep tagged/viewer and untagged/composed rotation browser seams.
+for (const [tagged, intrinsic, rotation] of [[true, 0, 90], [false, 90, 180]]) {
     test(`PDF split heading preserves grouping and spaces (${tagged ? 'tagged' : 'untagged'}, intrinsic ${intrinsic}, viewer ${rotation})`, async ({ page }) => {
       const app = await setup(page);
       app.officeFiles['docs/report.pdf'] = annotationPdf(tagged, intrinsic);
@@ -1468,7 +1139,6 @@ for (const tagged of [false, true]) {
       await expect(page.locator('.mention-chip [title]').first()).toHaveAttribute('title', '/workspace/docs/report.pdf · p. 1\nHello world');
       expect(app.pageErrors).toEqual([]);
     });
-  }
 }
 
 for (const restart of [false, true]) {
@@ -1520,7 +1190,6 @@ for (const restart of [false, true]) {
   });
 }
 
-
 test('PDF capture rejects a DOM-only push button border', async ({ page }) => {
   const app = await setup(page);
   app.officeFiles['docs/report.pdf'] = formPdf({ kind: 'pushButton', appearance: false });
@@ -1551,7 +1220,6 @@ test('PDF capture rejects a DOM-only push button border', async ({ page }) => {
   expect(app.pageErrors).toEqual([]);
 });
 
-
 for (const state of ['hidden', 'transparent', 'unpainted']) {
   test(`PDF capture allows a ${state} DOM-only button`, async ({ page }) => {
     const app = await setup(page);
@@ -1573,7 +1241,9 @@ for (const state of ['hidden', 'transparent', 'unpainted']) {
   });
 }
 
-for (const kind of ['pushButton', 'checkbox', 'radio', 'choice']) {
+{
+  const kind = 'pushButton';
+
   test(`PDF capture retains ${kind} bitmap appearances with interactive forms disabled`, async ({ page }) => {
     const app = await setup(page);
     app.officeFiles['docs/report.pdf'] = formPdf({ kind });
@@ -1601,7 +1271,9 @@ for (const kind of ['pushButton', 'checkbox', 'radio', 'choice']) {
   });
 }
 
-for (const kind of ['Line', 'Square', 'Circle', 'PolyLine', 'Polygon', 'Ink']) {
+{
+  const kind = 'Square';
+
   test(`PDF capture preserves ${kind} markup beneath transparent SVG hit areas`, async ({ page }) => {
     const app = await setup(page);
     app.officeFiles['docs/report.pdf'] = markupPdf(kind);

@@ -116,7 +116,6 @@ test('large semantic selection retries and sends its original draft while later 
   expect(app.pageErrors).toEqual([]);
 });
 
-
 test('closing the follow-up menu does not steal focus back from the composer', async ({ page }) => {
   await page.clock.install();
   const app = new DesktopBrowserHarness(page);
@@ -194,7 +193,7 @@ test('queued message Edit waits for semantic preparation so the send keeps its d
   expect(app.pageErrors).toEqual([]);
 });
 
-for (const provider of ['OpenSeek new chat', 'OpenSeek session', 'Codex']) {
+for (const provider of ['OpenSeek session', 'Codex']) {
   test(`${provider} semantic chip opens the selected search results`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     app.codexModels = codexModels;
@@ -315,7 +314,6 @@ for (const clear of [false, true]) {
     expect(app.pageErrors).toEqual([]);
   });
 }
-
 
 test('a fresh draft cannot switch agents while its semantic snapshot is being written', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);

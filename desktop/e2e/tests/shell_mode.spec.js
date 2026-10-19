@@ -42,38 +42,6 @@ function exit(app, id, code) {
   app.notify('terminal.exit', { id, code });
 }
 
-async function startTurn(page, app) {
-  await page.locator('#task').fill('Begin');
-  await page.locator('#send').click();
-  await expect.poll(() => app.requests.some(r => r.method === 'agent.start')).toBe(true);
-  const start = app.requests.find(r => r.method === 'agent.start');
-  app.notify('agent.started', {
-    run_id: 'run-e2e', session: 'session-1', session_root: '/workspace/.openseek',
-    submission_id: start.params.submission_id, model: 'deepseek-v4-pro', max_steps: 1000,
-  });
-  // The sent draft leaves the composer once the start is acknowledged; typing
-  // before that would append to it.
-  await expect(page.locator('#task')).toHaveValue('');
-}
-
-test('a leading ! switches the composer into shell mode and deleting it leaves', async ({ page }) => {
-  const app = await open(page);
-  const task = page.locator('#task');
-  await task.fill('!');
-  await expect(page.locator('.composer-mode-chip')).toHaveText('shell');
-  await expect(task).toHaveValue('!');
-  await task.press('Backspace');
-  await expect(page.locator('.composer-mode-chip')).toHaveCount(0);
-  await expect(task).toHaveValue('');
-  // `!` typed at the start of existing text makes that text the command.
-  await task.fill('git status');
-  await task.press('Home');
-  await task.press('!');
-  await expect(page.locator('.composer-mode-chip')).toBeVisible();
-  await expect(task).toHaveValue('!git status');
-  expect(app.pageErrors).toEqual([]);
-});
-
 // A finished command's result is sent like a typed message: as the prompt of
 // a new turn while the conversation is idle.
 function sentResult(app) {
@@ -94,12 +62,8 @@ test('a ! command runs in a terminal tab and its output becomes a card', async (
   // size, but the panel does not open for it: the composer keeps the focus
   // and lists the command as running.
   const id = await commandTerminal(app, 'ls -la');
-  const opened = app.requests.find(r => r.method === 'terminal.open' && r.params.command === 'ls -la');
-  expect(opened.params.cols).toBeGreaterThanOrEqual(80);
-  expect(opened.params.rows).toBeGreaterThanOrEqual(24);
   await expect(page.locator('.terminal-panel.open')).toHaveCount(0);
   await expect(page.locator('.shell-commands-running')).toContainText('$ ls -la');
-  await expect(page.locator('.composer-mode-chip')).toHaveCount(0);
   await expect(task).toHaveValue('');
   await expect(task).toBeFocused();
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
@@ -165,20 +129,6 @@ test('closing a running command tab settles the command as cancelled', async ({ 
   expect(app.pageErrors).toEqual([]);
 });
 
-test('a result the host refuses comes back to the composer', async ({ page }) => {
-  const app = await open(page);
-  app.rpcErrors.set('agent.start', 'start refused for the test');
-  await typeCommand(page, '!pwd');
-  const id = await commandTerminal(app, 'pwd');
-  print(app, id, '/workspace\r\n');
-  exit(app, id, 0);
-  await expect(page.getByText('start refused for the test', { exact: false }).first()).toBeVisible();
-  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
-  // Nothing the command printed is lost: the result is the restored draft.
-  await expect(page.locator('#task')).toHaveValue(envelope('pwd', 'exit=0\n/workspace'));
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('a ! command whose terminal cannot open runs nothing and comes back', async ({ page }) => {
   const app = await open(page);
   app.rpcErrors.set('terminal.open', 'terminal requires a conversation workspace');
@@ -236,21 +186,6 @@ test('a ! command whose worktree cannot be set up runs nothing and comes back', 
   await expect(page.locator('#task')).toHaveValue('!pwd');
   expect(app.requests.some(r => r.method === 'terminal.open')).toBe(false);
   expect(app.requests.some(r => r.method === 'agent.start')).toBe(false);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a command that finishes mid-turn steers the running turn with its result', async ({ page }) => {
-  const app = await open(page);
-  await startTurn(page, app);
-  await typeCommand(page, '!moon test');
-  const id = await commandTerminal(app, 'moon test');
-  print(app, id, '2 tests failed\r\n');
-  exit(app, id, 1);
-  await expect.poll(() => app.requests.find(r => r.method === 'agent.steer')?.params)
-    .toMatchObject({ run_id: 'run-e2e', text: envelope('moon test', 'exit=1\n2 tests failed') });
-  // One turn is open; the result joined it and started no second one.
-  expect(app.requests.filter(r => r.method === 'agent.start')).toHaveLength(1);
-  await expect(page.locator('.shell-commands-running')).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
 

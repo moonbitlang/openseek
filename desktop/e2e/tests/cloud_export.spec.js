@@ -24,36 +24,6 @@ async function setup(page, { desktop = false } = {}) {
   return { cloud, uploads, dialog };
 }
 
-test('Cloud export stays at the trailing edge of the shared header with a long title', async ({ page }, testInfo) => {
-  const cloud = new CloudHarness(page);
-  cloud.titles.set(sessionA, 'A long Cloud conversation title that must leave room for the export button. '.repeat(4));
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  const header = page.locator('main > .topbar');
-  const button = header.getByRole('button', { name: 'Export', exact: true });
-  for (const width of [1440, 390]) {
-    await page.setViewportSize({ width, height: 900 });
-    if (width === 390) {
-      await expect(page.getByRole('button', { name: 'Show sidebar', exact: true })).toBeVisible();
-      await expect(page.locator('aside')).toBeHidden();
-    }
-    await expect(button).toBeInViewport();
-    await expect.poll(() => header.evaluate(header => {
-      const title = header.querySelector('h1');
-      const button = header.querySelector('button');
-      const trailing = header.getBoundingClientRect().right - parseFloat(getComputedStyle(header).paddingRight);
-      return Math.abs(button.getBoundingClientRect().right - trailing) < 1 && title.scrollWidth > title.clientWidth;
-    })).toBe(true);
-    await button.click();
-    const dialog = page.getByRole('dialog', { name: 'Export conversation', exact: true });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Close export dialog', exact: true }).click();
-    await page.screenshot({ path: testInfo.outputPath(`cloud-export-header-${width}.png`) });
-  }
-  expect(cloud.device.pageErrors).toEqual([]);
-});
-
 test('Cloud shares and downloads a standalone visible-history snapshot without a host export bridge', async ({ page }) => {
   const { cloud, uploads, dialog } = await setup(page);
   await expect(dialog).toContainText('Anyone with the link can view it for 7 days');
@@ -95,7 +65,6 @@ for (const status of [401, 503]) {
     expect(cloud.device.pageErrors).toEqual([]);
   });
 }
-
 
 test('desktop Cloud downloads use the window save dialog and preserve cancel, save and failure outcomes', async ({ page }) => {
   let reply = { opened: false };

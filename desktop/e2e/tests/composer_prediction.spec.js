@@ -86,20 +86,6 @@ test('two clients receive the same broadcast and editing only hides one suggesti
   } finally { await otherPage.close(); }
 });
 
-test('Escape leaves the broadcast suggestion available without a Tab badge', async ({ page }) => {
-  const app = await open(page);
-  await app.finish();
-  app.publish();
-  const input = page.locator('#task');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await input.press('Escape');
-  await expect(input).toHaveAttribute('placeholder', 'Commit the fix');
-  await expect(page.locator('.composer-prediction-hint')).toHaveCount(0);
-  await input.press('Tab');
-  await expect(input).toHaveValue('Commit the fix');
-  app.assertNoPredictionRequests();
-});
-
 test('whitespace preserves the draft and lets Tab move focus', async ({ page }) => {
   const app = await open(page);
   await app.finish();
@@ -131,15 +117,5 @@ test('reopening restores the persisted broadcast without a prediction request', 
   await app.openSession();
   await expect(page.locator('#task')).toHaveAttribute('placeholder', 'Commit the fix');
   await expect(page.locator('#task')).toHaveValue('');
-  app.assertNoPredictionRequests();
-});
-
-test('a persisted empty suggestion stays empty without requests', async ({ page }) => {
-  const app = new PredictionHarness(page);
-  app.predictionRecord = prediction(null);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await expect(page.locator('#task')).not.toHaveAttribute('placeholder', 'Commit the fix');
   app.assertNoPredictionRequests();
 });

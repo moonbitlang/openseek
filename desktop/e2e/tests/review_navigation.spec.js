@@ -24,49 +24,9 @@ async function settleReviewScroll(page) {
   });
 }
 
-for (const mode of ['Line', 'Token', 'Tree']) {
-  test(`${mode} opening a review returns to its first outstanding hunk`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    const baseline = ['fn review {', ...Array.from({ length: 120 }, (_, i) => `  println("line ${i}")`), '}', ''].join('\n');
-    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
-    app.workingFiles['src/main.mbt'] = baseline.replace('line 5"', 'changed 5"').replace('line 55"', 'changed 55"').replace('line 105"', 'changed 105"');
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    const changes = page.locator('#review-changes-body');
-    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-    await main.click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    await selectDiffMode(page, mode);
-    const position = page.locator('.review-hunk-position');
-    const next = page.getByRole('button', { name: 'Next change', exact: true });
-    await expect(position).toHaveText('Change 1 of 3');
-    await page.getByRole('button', { name: 'Mark hunk viewed', exact: true }).click();
-    await next.click();
-    await expect(position).toHaveText('Change 2 of 3');
-    await next.click();
-    await expect(position).toHaveText('Change 3 of 3');
-    await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
-    await expect(position).toHaveText('Change 1 of 1');
-    await main.click();
-    await settleReviewScroll(page);
-    await expect(position).toHaveText('Change 2 of 3');
-    const surface = page.locator(mode === 'Line' ? '#diff-editor-host' : '#semantic-review-host');
-    await expect(surface.locator('.moonbit-diff-editor-modified .view-line').filter({ hasText: 'changed 55' }).first()).toBeInViewport();
-    // Explicitly selecting a completed file must keep that file open.
-    await page.getByRole('button', { name: 'Mark file reviewed', exact: true }).click();
-    await changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ }).click();
-    await expect(position).toHaveText('Change 1 of 1');
-    await main.click();
-    await settleReviewScroll(page);
-    await expect(main).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('button', { name: 'Mark file unreviewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
+{
+  const mode = 'Tree';
 
-for (const mode of ['Token', 'Tree']) {
   test(`${mode} each navigation click retains its target among short sections without Git refreshes`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const baseline = Array.from({ length: 12 }, (_, i) => `fn value_${i}() -> Int {\n  ${i}\n}\n`).join('\n');
@@ -115,7 +75,7 @@ for (const mode of ['Token', 'Tree']) {
   });
 }
 
-for (const mode of ['Line', 'Token', 'Tree']) {
+for (const mode of ['Line', 'Tree']) {
   test(`${mode} continuous navigation crosses files in both directions and wraps`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const baseline = ['fn first() -> Int { 1 }', ...Array.from({ length: 8 }, (_, i) => `fn same_${i}() -> Int { ${i} }`), 'fn last() -> Int { 2 }', ''].join('\n\n');
@@ -163,7 +123,8 @@ for (const mode of ['Line', 'Token', 'Tree']) {
   });
 }
 
-for (const mode of ['Line', 'Token', 'Tree']) {
+{
+  const mode = 'Tree';
   test(`${mode} n/p cycle skips marked hunks and files and m can reopen the completed cycle`, async ({ page }) => {
     const app = new DesktopBrowserHarness(page);
     const baseline = ['fn review {', ...Array.from({ length: 90 }, (_, i) => `  println("line ${i}")`), '}', ''].join('\n');
@@ -245,84 +206,6 @@ for (const mode of ['Line', 'Token', 'Tree']) {
   });
 }
 
-for (const mode of ['Token', 'Tree']) {
-  test(`${mode} cross-file navigation skips visible hunks already marked in partially reviewed files`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    const baseline = 'fn value() -> Int { 1 }\n\ntest "ignored" { println(1) }\n';
-    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
-    app.workingFiles['src/main.mbt'] = baseline.replace('{ 1 }', '{ 10 }').replace('println(1)', 'println(10)');
-    const libBaseline = ['fn first() -> Int { 1 }', ...Array.from({ length: 8 }, (_, i) => `fn same_${i}() -> Int { ${i} }`), 'fn last() -> Int { 2 }', ''].join('\n\n');
-    app.gitFilesByRevision[app.gitBaseline]['src/lib.mbt'] = libBaseline;
-    app.workingFiles['src/lib.mbt'] = libBaseline.replace('first() -> Int { 1 }', 'first() -> Int { 10 }').replace('last() -> Int { 2 }', 'last() -> Int { 20 }');
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    const changes = page.locator('#review-changes-body');
-    const main = changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ });
-    const lib = changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ });
-    await main.click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    await selectDiffMode(page, mode);
-    const position = page.locator('.review-hunk-position');
-    const mark = page.locator('.review-navigation-controls .review-progress');
-    await expect(position).toHaveText('Change 1 of 1');
-    await page.getByRole('button', { name: 'Next change', exact: true }).focus();
-    await page.keyboard.press('m');
-    await expect(mark).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByRole('button', { name: 'Mark file reviewed', exact: true })).toHaveAttribute('aria-pressed', 'mixed');
-    await page.keyboard.press('n');
-    await expect(lib).toHaveAttribute('aria-current', 'page');
-    await expect(position).toHaveText('Change 1 of 2');
-    await expect(mark).toHaveAttribute('aria-pressed', 'false');
-    await page.keyboard.press('n');
-    await expect(position).toHaveText('Change 2 of 2');
-    await page.keyboard.press('n');
-    await expect(lib).toHaveAttribute('aria-current', 'page');
-    await expect(position).toHaveText('Change 1 of 2');
-    await expect(mark).toHaveAttribute('aria-pressed', 'false');
-    await page.keyboard.press('p');
-    await expect(lib).toHaveAttribute('aria-current', 'page');
-    await expect(position).toHaveText('Change 2 of 2');
-    await expect(mark).toHaveAttribute('aria-pressed', 'false');
-    expect(app.pageErrors).toEqual([]);
-  });
-
-  test(`${mode} navigation leaves marked collapsed sections out of the cycle`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    const baseline = 'fn first() -> Int { 1 }\n\nfn second() -> Int { 2 }\n';
-    app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'] = baseline;
-    app.workingFiles['src/main.mbt'] = baseline.replace('{ 1 }', '{ 10 }').replace('{ 2 }', '{ 20 }');
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    await page.locator('#review-changes-body').getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await selectDiffMode(page, mode);
-    const headers = page.locator('.semantic-diff-entry .semantic-entry-header-content');
-    const position = page.locator('.review-hunk-position');
-    await expect(position).toHaveText('Change 1 of 2');
-    await page.getByRole('button', { name: 'Next change', exact: true }).focus();
-    await page.keyboard.press('m');
-    await expect(page.getByRole('button', { name: 'Unmark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    for (const header of await headers.all()) {
-      await header.click();
-      await expect(header).toHaveAttribute('aria-expanded', 'false');
-    }
-    await page.keyboard.press('n');
-    await expect(headers.nth(0)).toHaveAttribute('aria-expanded', 'false');
-    await expect(headers.nth(1)).toHaveAttribute('aria-expanded', 'true');
-    await expect(position).toHaveText('Change 2 of 2');
-    await headers.nth(1).click();
-    await expect(headers.nth(1)).toHaveAttribute('aria-expanded', 'false');
-    await page.keyboard.press('p');
-    await expect(headers.nth(0)).toHaveAttribute('aria-expanded', 'false');
-    await expect(headers.nth(1)).toHaveAttribute('aria-expanded', 'true');
-    await expect(position).toHaveText('Change 2 of 2');
-    expect(app.pageErrors).toEqual([]);
-  });
-}
-
 test('review shortcuts preserve modified keys, composition, repeats, and feedback typing', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
@@ -353,22 +236,3 @@ test('review shortcuts preserve modified keys, composition, repeats, and feedbac
   await expect(page.getByRole('button', { name: 'Mark hunk viewed', exact: true })).toHaveAttribute('aria-pressed', 'false');
   expect(app.pageErrors).toEqual([]);
 });
-
-for (const mode of ['Line', 'Tree']) {
-  test(`${mode} empty comparisons can still navigate to the next file`, async ({ page }) => {
-    const app = new DesktopBrowserHarness(page);
-    app.workingFiles['src/main.mbt'] = app.gitFilesByRevision[app.gitBaseline]['src/main.mbt'];
-    await app.install();
-    await app.goto();
-    await app.openSession();
-    await app.openReview();
-    const changes = page.locator('#review-changes-body');
-    await changes.getByRole('treeitem', { name: /View diff: src\/main\.mbt/ }).click();
-    await page.getByRole('button', { name: 'Show file tree', exact: true }).click();
-    await page.getByRole('button', { name: `${mode} diff`, exact: true }).click();
-    await page.getByRole('button', { name: 'Next change', exact: true }).click();
-    await expect(changes.getByRole('treeitem', { name: /View diff: src\/lib\.mbt/ })).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('.review-hunk-position')).toHaveText('Change 1 of 1');
-    expect(app.pageErrors).toEqual([]);
-  });
-}

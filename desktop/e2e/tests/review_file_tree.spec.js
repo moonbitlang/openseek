@@ -58,38 +58,3 @@ test('Review tree supports keyboard folding and independent tri-state review che
   await expect(main).toBeFocused();
   expect(app.pageErrors).toEqual([]);
 });
-
-test('Review tree keeps compact paths and readable filenames in a narrow pane', async ({ page }, testInfo) => {
-  const app = new DesktopBrowserHarness(page);
-  app.gitChanges = [
-    { path: 'desktop/backend/internal/host/open_ops.mbt', kind: 'modified', index_status: ' ', worktree_status: 'M' },
-    { path: 'desktop/backend/internal/host/protocol.mbt', kind: 'modified', index_status: ' ', worktree_status: 'M' },
-    { path: 'desktop/e2e/tests/external_file_poll.spec.js', kind: 'added', index_status: 'A', worktree_status: ' ' },
-    ...Array.from({ length: 30 }, (_, i) => ({ path: `desktop/frontend/fileeditor/file_${i}.mbt`, kind: 'modified', index_status: ' ', worktree_status: 'M' })),
-    { path: 'README.md', kind: 'deleted', index_status: 'D', worktree_status: ' ' },
-  ];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openReview();
-  const tree = page.getByRole('tree', { name: 'Changed files', exact: true });
-  const host = tree.getByRole('treeitem', { name: 'desktop/backend/internal/host', exact: true });
-  const open = tree.locator('[data-path="desktop/backend/internal/host/open_ops.mbt"]');
-  await expect(host.locator('.change-path')).toHaveText('backend/internal/host');
-  await expect(open.locator('.change-path')).toHaveText('open_ops.mbt');
-  await expect(open).toHaveAttribute('aria-level', '3');
-  expect((await open.boundingBox()).height).toBe(24);
-  expect((await open.locator('.change-path').boundingBox()).width).toBeGreaterThan(100);
-  expect(await tree.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
-  await tree.locator('[data-path="README.md"]').scrollIntoViewIfNeeded();
-  expect(await page.locator('#review-changes-body').evaluate(el => el.scrollTop)).toBeGreaterThan(0);
-  await host.scrollIntoViewIfNeeded();
-  for (const colorScheme of ['light', 'dark']) {
-    await page.emulateMedia({ colorScheme });
-    await page.locator('.file-tree-pane').screenshot({ path: testInfo.outputPath(`review-tree-${colorScheme}.png`) });
-  }
-  await host.click();
-  await expect(open).toBeHidden();
-  await expect(tree.locator('[data-path="desktop/e2e/tests/external_file_poll.spec.js"]')).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});

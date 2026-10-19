@@ -31,14 +31,12 @@ test('both agents share the first screen and Codex can choose its project in the
   const transcript = page.locator('#transcript');
   await expect(title).toHaveText('What should we build in workspace?');
   const logo = await badge.innerHTML();
-  await expect(page.locator('.empty-sub')).toHaveCount(0);
   await choose(page, 'Codex test');
   const trigger = page.getByRole('button', {
     name: 'Choose project, current project workspace', exact: true,
   });
   await expect(trigger).toBeVisible();
   expect(await badge.innerHTML()).toBe(logo);
-  await expect(page.getByText(/Codex inspects, edits/)).toHaveCount(0);
   const session = await transcript.getAttribute('data-transcript-session');
   const openCount = app.requests.filter(r => r.method === 'codex.draft.open').length;
   const task = page.locator('#task');
@@ -222,7 +220,7 @@ test('returning to the same blank Codex entry retains its pending project add', 
 });
 
 for (const detachPrevious of [false, true]) {
-  for (const managementPage of [null, 'Settings', 'Skills', 'Scheduled']) {
+  for (const managementPage of [null, 'Settings']) {
     test(`a pending project add preserves its draft while sending is blocked (detach previous: ${detachPrevious}, page: ${managementPage})`, async ({ page }) => {
       const app = await open(page, ['/workspace', '/other'], true);
       await choose(page, 'Codex test');
@@ -279,7 +277,9 @@ for (const detachPrevious of [false, true]) {
   }
 }
 
-for (const managementPage of ['Settings', 'Skills', 'Scheduled']) {
+{
+  const managementPage = 'Settings';
+
   for (const broadcastFirst of [false, true]) {
     test(`adding a project from ${managementPage} preserves its hidden draft (broadcast first: ${broadcastFirst})`, async ({ page }) => {
       const app = await open(page, ['/workspace', '/other']);

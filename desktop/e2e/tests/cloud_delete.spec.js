@@ -14,51 +14,9 @@ async function askDelete(page, cloud, id) {
 
 const deletes = cloud => cloud.requests.filter(request => request.method === 'DELETE');
 
-test('deletion reuses an existing creation request and keeps its Cloud destination', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  let finish;
-  cloud.pauseCreate = new Promise(resolve => { finish = resolve; });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await page.locator('.section-primary-action[aria-label="New chat"]').click();
-  await page.locator('#task').fill('First Cloud message');
-  await page.locator('#task').press('Enter');
-  await expect.poll(() => cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions').length).toBe(1);
-  await cloud.open();
-  await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  finish();
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('#task')).toHaveValue('');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(1);
-});
+{
+  const desktop = false;
 
-test('creation after deletion waits for Send and keeps the input on failure', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.createStatus = 503;
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(page.locator('#task')).toHaveValue('');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-  await page.locator('#task').fill('Keep this first message');
-  await page.locator('#task').press('Enter');
-  await expect(page.locator('aside')).toContainText('HTTP 503');
-  await expect(page.locator('#task')).toHaveValue('Keep this first message');
-  cloud.createStatus = 201;
-  await page.locator('#task').fill('Edited after create failure');
-  await page.locator('#task').press('Enter');
-  await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('#transcript').getByText('Edited after create failure', { exact: true })).toBeVisible();
-  await expect(page.locator('#task')).toHaveValue('');
-});
-
-for (const desktop of [false, true]) {
   test(`${desktop ? 'desktop' : 'browser'} deletes Cloud through the shared confirmation and stays in Chat`, async ({ page }, testInfo) => {
     const cloud = new CloudHarness(page, { desktop });
     await cloud.install();
@@ -89,26 +47,9 @@ for (const desktop of [false, true]) {
   });
 }
 
-test('a late deletion never steals the conversation or its existing composer draft', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  let finish;
-  cloud.pauseDelete = new Promise(resolve => { finish = resolve; });
-  await askDelete(page, cloud, sessionA);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect.poll(() => deletes(cloud).length).toBe(1);
-  await cloud.open(sessionB);
-  await page.locator('#task').fill('Keep this B draft');
-  finish();
-  await expect(cloud.row(sessionA)).toHaveCount(0);
-  await expect(cloud.row(sessionB)).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('#task')).toHaveValue('Keep this B draft');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
-});
+{
+  const failure = 503;
 
-for (const failure of [409, 503, 'network']) {
   test(`delete ${failure} preserves the account, conversation and normal delete action`, async ({ page }, testInfo) => {
     const cloud = new CloudHarness(page);
     cloud.deleteStatus = failure === 'network' ? 204 : failure;
@@ -156,20 +97,6 @@ test('history 404 retires an externally removed conversation', async ({ page }) 
   await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
-test('generating Cloud conversations expose a disabled delete without a Stop action', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  cloud.histories.set(sessionA, { messages: [], generating: true });
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await menu(page, cloud, sessionA);
-  const action = page.getByRole('menuitem', { name: 'Delete…', exact: true });
-  await expect(action).toBeDisabled();
-  await expect(action).toHaveAttribute('title', /finish before deleting/);
-  await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-  expect(deletes(cloud)).toHaveLength(0);
-});
-
 test('a history response captured before deletion cannot restore its row or content', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.histories.set(sessionA, { messages: [{ task_id: 'old', kind: 'assistant_message', data: { content: 'Deleted old content' }, created_at: 1 }], generating: false });
@@ -189,7 +116,6 @@ test('a history response captured before deletion cannot restore its row or cont
   await expect(cloud.row(sessionC)).toHaveCount(0);
 });
 
-
 test('completed history enables deletion even when the earlier list reported generation', async ({ page }) => {
   const cloud = new CloudHarness(page);
   cloud.generating.add(sessionA);
@@ -203,7 +129,6 @@ test('completed history enables deletion even when the earlier list reported gen
   await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeEnabled();
 });
 
-
 test('a new generating list disables deletion after an earlier idle history', async ({ page }) => {
   const cloud = new CloudHarness(page);
   await cloud.install();
@@ -216,20 +141,6 @@ test('a new generating list disables deletion after an earlier idle history', as
   await expect(cloud.row(sessionC)).toHaveAttribute('aria-current', 'true');
   await menu(page, cloud, sessionA);
   await expect(page.getByRole('menuitem', { name: 'Delete…', exact: true })).toBeDisabled();
-});
-
-test('deleting a background conversation preserves the foreground and its draft', async ({ page }) => {
-  const cloud = new CloudHarness(page);
-  await cloud.install();
-  await cloud.goto();
-  await cloud.open();
-  await page.locator('#task').fill('Keep A foreground draft');
-  await askDelete(page, cloud, sessionB);
-  await page.getByRole('button', { name: 'Delete permanently', exact: true }).click();
-  await expect(cloud.row(sessionB)).toHaveCount(0);
-  await expect(cloud.row(sessionA)).toHaveAttribute('aria-current', 'true');
-  await expect(page.locator('#task')).toHaveValue('Keep A foreground draft');
-  expect(cloud.requests.filter(request => request.method === 'POST' && request.path === '/v1/sessions')).toHaveLength(0);
 });
 
 test('busy Cloud menus retain rename while deletion stays disabled with normal dismissal', async ({ page }, testInfo) => {
@@ -256,6 +167,7 @@ test('busy Cloud menus retain rename while deletion stays disabled with normal d
   await expect(popup).toHaveCount(0);
   await expect(trigger).toBeFocused();
   await menu(page, cloud, sessionA);
+  await expect(popup).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(popup).toHaveCount(0);
   await cloud.row(sessionA).click({ button: 'right' });

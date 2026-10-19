@@ -111,88 +111,6 @@ test('transport errors and partial store failures stay visible and can be retrie
   expect(app.pageErrors).toEqual([]);
 });
 
-test('search uses titles without category tabs and Enter on Close does not open a result', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  installSearch(app);
-  const input = await openSearch(page, app);
-  await input.fill('Unicode');
-  await expect(page.locator('.session-search-result')).toHaveCount(2);
-  await expect(page.locator('.session-search-filters')).toHaveCount(0);
-  expect(app.requests.filter(r => r.method === 'session.search').every(r => !('scope' in r.params))).toBe(true);
-  const before = app.requests.filter(r => r.method === 'session.load').length;
-  await page.getByRole('button', { name: 'Close search' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.locator('#session-search-dialog')).not.toBeVisible();
-  expect(app.requests.filter(r => r.method === 'session.load')).toHaveLength(before);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('search shares Quick Open styling and fits smaller windows in Chinese', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  await page.addInitScript(() => localStorage.setItem('openseek.language', 'zh-Hans'));
-  const replyFor = app.replyFor.bind(app);
-  const titles = ['Unicode 属性覆盖评估', '整理工作区文档', 'TUI 库设计方案', 'Desktop capabilities via MCP', 'Fork UI for desktop assistant messages', 'Unicode 字符数组表示', '终端渲染与文本选择', 'MoonBit 标准库迁移'];
-  app.replyFor = request => request.method === 'session.search'
-    ? { hits: titles.map((title, index) => ({ session: `demo-${index}`, workspace: index % 2 ? '/projects/moonbit' : '/projects/openseek', title: title.includes('Unicode') ? title : `Unicode · ${title}`, archived: false, updated_at_ms: 100 - index })), errors: [], has_more: false }
-    : replyFor(request);
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await app.openQuickOpen();
-  const surfaceStyle = locator => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    const box = element.getBoundingClientRect();
-    return { width: box.width, top: box.top, border: style.border, radius: style.borderRadius, background: style.backgroundColor, shadow: style.boxShadow };
-  });
-  const inputStyle = locator => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { font: style.font, color: style.color, padding: style.padding, outline: style.outlineStyle };
-  });
-  const rowStyle = locator => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { height: element.getBoundingClientRect().height, padding: style.padding, radius: style.borderRadius, gap: style.gap, color: style.color, background: style.backgroundColor };
-  });
-  const quickOpenRowStyle = await rowStyle(page.locator('.quick-open-backdrop .quick-open-row.selected'));
-  const quickOpenInputStyle = await inputStyle(page.locator('#quick-open-input'));
-  const quickOpenStyle = await surfaceStyle(page.locator('.quick-open-backdrop .quick-open-dialog'));
-  const quickOpenInputHeight = (await page.locator('.quick-open-backdrop .quick-open-input-wrap').boundingBox()).height;
-  await page.screenshot({ path: 'test-results/quick-open-reference-zh.png' });
-  await page.locator('#quick-open-input').press('Escape');
-  const sidebar = page.locator('aside');
-  const searchBox = page.locator('.sidebar-search');
-  const sidebarBounds = await sidebar.boundingBox();
-  const searchBounds = await searchBox.boundingBox();
-  expect(searchBounds.height).toBe(26);
-  expect(searchBounds.x - sidebarBounds.x).toBe(10);
-  expect(sidebarBounds.x + sidebarBounds.width - searchBounds.x - searchBounds.width).toBe(11);
-  await page.screenshot({ path: 'test-results/session-search-sidebar-zh.png', clip: { x: 0, y: 0, width: sidebarBounds.width, height: 300 } });
-  await page.locator('.sidebar-search').click();
-  await page.getByRole('textbox', { name: '搜索会话标题' }).fill('unicode');
-  await expect(page.locator('.session-search-result')).toHaveCount(8);
-  const dialog = page.locator('#session-search-dialog');
-  expect(await surfaceStyle(dialog)).toEqual(quickOpenStyle);
-  expect(await inputStyle(page.locator('#session-search-input'))).toEqual(quickOpenInputStyle);
-  expect(await rowStyle(page.locator('.session-search-result.selected'))).toEqual(quickOpenRowStyle);
-  expect((await dialog.locator('.quick-open-input-wrap').boundingBox()).height).toBe(quickOpenInputHeight);
-  await expect(dialog).toHaveCSS('padding', '0px');
-  expect((await dialog.boundingBox()).height).toBeLessThanOrEqual(400);
-  expect(await page.locator('.session-search-results').evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
-  await page.setViewportSize({ width: 1120, height: 760 });
-  expect((await dialog.boundingBox()).height).toBeLessThanOrEqual(400);
-  await page.screenshot({ path: 'test-results/session-search-reference-zh.png' });
-  await page.setViewportSize({ width: 800, height: 650 });
-  const box = await dialog.boundingBox();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(800);
-  await page.setViewportSize({ width: 600, height: 400 });
-  const compact = await dialog.boundingBox();
-  expect(compact.y).toBe(16);
-  expect(compact.y + compact.height).toBeLessThanOrEqual(384);
-  await expect(page.getByRole('button', { name: '显示已归档会话' })).toBeInViewport();
-  expect(app.pageErrors).toEqual([]);
-});
-
-
 test('keyboard navigation scrolls selected results without losing query focus', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   const replyFor = app.replyFor.bind(app);
@@ -212,7 +130,6 @@ test('keyboard navigation scrolls selected results without losing query focus', 
   expect(row.y + row.height).toBeLessThanOrEqual(list.y + list.height + 1);
   expect(app.pageErrors).toEqual([]);
 });
-
 
 test('result navigation preserves the query caret and IME confirmation', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);

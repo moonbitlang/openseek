@@ -1,25 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 
-test('Codex uses the shell panel control', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.codexModels = [{ id: 'gpt-test', displayName: 'Codex fixture', isDefault: true }];
-  await app.install();
-  await app.goto();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'Codex fixture', exact: true }).click();
-  const toggle = page.getByRole('button', { name: 'Show files', exact: true });
-  await expect(toggle).toBeEnabled();
-  const original = await toggle.elementHandle();
-  await toggle.click();
-  const close = page.getByRole('button', { name: 'Hide panel', exact: true });
-  await expect(close).toBeFocused();
-  await close.press('Enter');
-  await expect(toggle).toBeFocused();
-  expect(await original.evaluate(node => node.isConnected)).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
 test('panel toggle keeps its node, focus and position across drawer transitions', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

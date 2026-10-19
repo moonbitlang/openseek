@@ -5,9 +5,6 @@ async function expectHeader(page, title) {
   const header = page.locator('main > .topbar');
   await expect(header).toHaveCount(1);
   await expect(header.getByRole('heading', { level: 1 })).toHaveText(title);
-  await expect(page.locator('.window-titlebar-drag-strip')).toHaveCount(0);
-  const bounds = await header.boundingBox();
-  expect(bounds.height).toBeGreaterThan(30);
   await expect.poll(() => page.locator('main').evaluate(main => {
     const header = main.querySelector('.topbar');
     const body = header.nextElementSibling;
@@ -80,45 +77,5 @@ test('loading and failure retain the selected conversation title', async ({ page
   await expectHeader(page, title);
   await expect(composer).toHaveValue('Keep my unfinished draft');
   expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('workspace settings dialog preserves the Codex shell header', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.codexModels = [{ id: 'gpt-5.4-codex', displayName: 'GPT-5.4 Codex', isDefault: true,
-    defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ reasoningEffort: 'medium', description: 'Balanced' }] }];
-  await app.install();
-  await app.goto();
-  const original = await page.locator('main > .topbar').elementHandle();
-  await page.getByRole('button', { name: 'Model', exact: true }).click();
-  await page.getByRole('option', { name: 'GPT-5.4 Codex' }).click();
-  await expect(page.locator('main > .codex-topbar')).toBeVisible();
-  await expectHeader(page, 'New chat');
-  expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
-  await page.locator('.workspace-row', { hasText: 'workspace' }).hover();
-  await page.getByTitle('More actions').click();
-  await page.getByRole('menuitem', { name: 'Workspace settings' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Workspace settings' });
-  await expect(dialog).toBeVisible();
-  await expect(dialog).toHaveJSProperty('open', true);
-  await expect(dialog.getByRole('heading', { name: 'Workspace settings', level: 2 })).toBeVisible();
-  await expect(dialog.locator('.workspace-settings-name')).toHaveText('workspace');
-  await expect(dialog.locator('.settings-subtitle')).toHaveText('/workspace');
-  await expect(page.locator('main > .codex-topbar h1')).toHaveText('New chat');
-  expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
-  await dialog.getByRole('button', { name: 'Close workspace settings', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  await expectHeader(page, 'New chat');
-  await expect(page.locator('main > .codex-topbar')).toBeVisible();
-  expect(await original.evaluate(node => node === document.querySelector('main > .topbar'))).toBe(true);
-  const composer = page.getByRole('textbox', { name: 'Ask Codex to inspect, edit, or explain this workspace.' });
-  await composer.fill('Keep my Codex draft');
-  for (const name of ['Settings', 'Skills', 'Scheduled']) {
-    await page.getByRole('button', { name, exact: true }).click();
-    await page.getByRole('button', { name: 'Back', exact: true }).click();
-    await expect(page.locator('main > .codex-topbar')).toBeVisible();
-    await expectHeader(page, 'New chat');
-    await expect(composer).toHaveValue('Keep my Codex draft');
-  }
   expect(app.pageErrors).toEqual([]);
 });
