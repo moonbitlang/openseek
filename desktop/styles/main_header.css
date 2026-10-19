@@ -25,9 +25,10 @@ main {
   grid-row: 1;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--titlebar-control-gap);
   height: var(--topbar-height);
-  padding-block: 0;
+  /* Balance the bottom divider to center controls on the full header. */
+  padding-block: 1px 0;
   padding-inline: var(--topbar-inline-padding);
   padding-inline-start: var(--main-titlebar-leading-inset);
   padding-inline-end: var(--main-titlebar-trailing-inset);
@@ -36,31 +37,49 @@ main {
   background: var(--color-bg-surface);
 }
 
+/* Both ends of the titlebar share one control grid. Panel buttons elsewhere
+   keep their own geometry. */
+.sidebar-toggle,
+.navigation-controls .icon-button,
+.topbar > .panel-toggle,
+.editor-tabsbar > .panel-toggle,
+.editor-tabsbar > .tab-action,
+.right-panel-toggle {
+  --icon-size: var(--titlebar-icon-size);
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: var(--titlebar-control-size);
+  min-inline-size: var(--titlebar-control-size);
+  block-size: var(--titlebar-control-size);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  line-height: var(--line-height-tight);
+}
+
 .sidebar-toggle {
-  --icon-size: 14px;
+  display: grid;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
   position: fixed;
   /* Center in the effective app header alongside the sidebar mode switch. */
   inset-block-start: max(
     0px,
-    calc((var(--topbar-height) - var(--sidebar-toggle-size)) / 2)
+    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
   );
   inset-inline-start: var(--sidebar-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
   -webkit-app-region: no-drag;
-  display: grid;
-  place-items: center;
-  inline-size: var(--sidebar-toggle-size);
-  block-size: var(--sidebar-toggle-size);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text-muted);
-  line-height: var(--line-height-tight);
-  cursor: pointer;
 }
 .sidebar-toggle:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text-primary);
+}
+
+.editor-tabsbar {
+  gap: var(--titlebar-control-gap);
+  padding-block-start: 1px;
 }
 
 .topbar-title {
@@ -175,7 +194,7 @@ main {
   position: fixed;
   inset-block-start: max(
     0px,
-    calc((var(--topbar-height) - 28px) / 2)
+    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
   );
   inset-inline-end: var(--panel-toggle-inline-inset);
   z-index: var(--z-titlebar-control);
@@ -193,24 +212,20 @@ main > .conversation-load-state {
 
 /* Compact history arrows follow the sidebar toggle on the header's centerline. */
 .navigation-controls {
-  --icon-size: 14px;
   position: fixed;
-  inset-block-start: calc((var(--topbar-height) - var(--sidebar-toggle-size)) / 2);
+  inset-block-start: max(
+    0px,
+    calc((var(--topbar-height) - var(--titlebar-control-size)) / 2)
+  );
   inset-inline-start: var(--navigation-inline-inset);
   z-index: var(--z-titlebar-control);
   display: flex;
-  gap: 0;
+  gap: var(--titlebar-control-gap);
   -webkit-app-region: no-drag;
 }
 .navigation-controls .icon-button {
-  inline-size: var(--sidebar-toggle-size);
-  min-inline-size: var(--sidebar-toggle-size);
-  block-size: var(--sidebar-toggle-size);
-  border: 0;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
-.navigation-controls svg { stroke-width: 1.1; }
 .navigation-controls button:disabled { opacity: 0.5; cursor: default; }
 .navigation-notice { padding: 24px; color: var(--color-text-muted); }
 
