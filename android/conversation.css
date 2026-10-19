@@ -1,0 +1,4 @@
+/* Product scope of the Android conversation client. Responsive layout is
+   shared with ordinary browsers in desktop/styles/responsive.css. */
+.android-connect .panel-toggle,
+.android-connect .right-panel-toggle { display: none; }
