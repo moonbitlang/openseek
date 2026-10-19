@@ -52,6 +52,28 @@ pub async fn ApprovalDesk::ApprovalDesk(now_ms~ : Int64) -> ApprovalDesk {
 }
 
 ///|
+/// Mint this desk's next question id: the desk's nonce plus an ordinal, so ids
+/// from two engines cannot collide and one log still reads in ask order.
+fn ApprovalDesk::mint_request_id(self : ApprovalDesk) -> String {
+  self.next_id += 1
+  "ap-\{self.nonce}-\{self.next_id}"
+}
+
+///|
+/// Announce one permission question on the wire. Retiring it is the asker's own
+/// job: every announced question is answered by exactly one `approval_resolved`.
+fn announce_request(id : String, ask : @agent_runtime.ApprovalAsk) -> Unit {
+  @emit.emit(
+    ApprovalRequested(
+      id~,
+      tool_name=ask.tool_name,
+      detail=ask.detail,
+      body=ask.body,
+    ),
+  )
+}
+
+///|
 /// Announce one question and wait for its answer, for as long as that takes.
 ///
 /// There is deliberately no deadline. Neither reference has one on a human
@@ -75,8 +97,7 @@ async fn ApprovalDesk::ask(
   // for an answer that cannot come is a turn that never ends. Not announced
   // either: a request nobody can see is not a question.
   guard !self.closed else { return Cancelled }
-  self.next_id += 1
-  let id = "ap-\{self.nonce}-\{self.next_id}"
+  let id = self.mint_request_id()
   let replies : @aqueue.Queue[@agent_runtime.ApprovalOutcome] = Queue(
     kind=Unbounded,
   )
@@ -89,14 +110,7 @@ async fn ApprovalDesk::ask(
     self.pending.remove(id)
     @emit.emit(ApprovalResolved(id~, outcome=approval_outcome_word(outcome)))
   }
-  @emit.emit(
-    ApprovalRequested(
-      id~,
-      tool_name=ask.tool_name,
-      detail=ask.detail,
-      body=ask.body,
-    ),
-  )
+  announce_request(id, ask)
   outcome = replies.get()
   outcome
 }
@@ -160,16 +174,8 @@ pub fn approval_channel(
     Always =>
       Some(
         ApprovalChannel(ask => {
-          desk.next_id += 1
-          let id = "ap-\{desk.nonce}-\{desk.next_id}"
-          @emit.emit(
-            ApprovalRequested(
-              id~,
-              tool_name=ask.tool_name,
-              detail=ask.detail,
-              body=ask.body,
-            ),
-          )
+          let id = desk.mint_request_id()
+          announce_request(id, ask)
           @emit.emit(ApprovalResolved(id~, outcome="allowed_once"))
           AllowedOnce
         }),
