@@ -552,6 +552,113 @@ h2 {
   flex-shrink: 0;
 }
 
+.skill-installed-actions {
+  display: grid;
+  grid-template-columns: 40px 32px;
+}
+
+.skill-enable-switch,
+.skill-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.skill-enable-switch {
+  width: 40px;
+}
+
+.skill-switch-track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-border);
+}
+
+.skill-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--color-bg-surface);
+}
+
+.skill-enable-switch[aria-checked="true"] .skill-switch-track {
+  background: var(--color-text-primary);
+}
+
+.skill-enable-switch[aria-checked="true"] .skill-switch-track::after {
+  left: 14px;
+}
+
+.skill-enable-switch:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.skill-menu-trigger:not(:disabled):hover,
+.skill-menu-trigger[aria-expanded="true"] {
+  background: var(--color-hover-subtle);
+}
+
+.skill-menu-trigger:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+.skill-menu-trigger > .icon {
+  transform: rotate(90deg);
+}
+
+.skill-meta-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.skill-operation {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.skill-update-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-bg-surface));
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.skill-update-badge > .icon {
+  width: 12px;
+  height: 12px;
+}
+
+@media (pointer: coarse) {
+  .skill-installed-actions {
+    grid-template-columns: 44px 44px;
+  }
+
+  .skill-enable-switch,
+  .skill-menu-trigger {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .skill-preview {
   display: grid;
   gap: 14px;
@@ -662,7 +769,6 @@ h2 {
 
 .skill-detail-action {
   justify-self: start;
-  margin-top: 4px;
 }
 
 .skill-detail-card {

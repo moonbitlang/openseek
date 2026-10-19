@@ -691,6 +691,12 @@ export class DesktopBrowserHarness {
           skill => skill.id !== request.params?.id,
         );
         return { removed: true };
+      case 'skills.set_enabled': {
+        const skill = this.installedSkills.find(skill => skill.id === request.params.id);
+        if (!skill) return { error: 'Skill is no longer installed' };
+        skill.enabled = request.params.enabled;
+        return { ok: true };
+      }
       case 'agent.start':
         return { run_id: 'run-e2e', status: 'accepted', exit_code: 0 };
       case 'agent.queue':

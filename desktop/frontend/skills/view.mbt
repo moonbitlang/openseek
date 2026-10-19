@@ -18,11 +18,15 @@ fn notice_views(
         guard target is Some(target) else {
           "\{operation.action.source()}: \{message}"
         }
-        let identity = match target {
-          Market(item) => Some(item.identity())
-          Installed(item) => item.identity()
+        let belongs = match operation.identity {
+          Registry(identity) =>
+            match target {
+              Market(item) => item.identity() == identity
+              Installed(item) => item.identity() == Some(identity)
+            }
+          LibraryEntry(id) => target is Installed(item) && item.id == id
         }
-        guard identity == Some(operation.identity) else { continue }
+        guard belongs else { continue }
         message
       }
     }
@@ -37,14 +41,15 @@ fn PendingSkillAction::label(self : PendingSkillAction) -> UiMessage {
     Installing(..) => Installing
     Uninstalling(..) => Removing
     Updating(..) => Updating
+    SettingEnabled(enabled~, ..) => if enabled { Enabled } else { Disabled }
   }
 }
 
 ///|
 /// One local-library row: name, description, and — for registry installs
-/// only — the source tag and update/uninstall actions. Hand-written skills are
-/// listed so the user sees everything the engine advertises, but the app
-/// never offers to delete them.
+/// only — the source tag and management menu. Hand-written skills are
+/// listed alongside registry installs, including disabled entries, but the
+/// app never offers to delete them.
 fn installed_row(
   locale~ : @i18n.Locale = English,
   state : State,
@@ -53,14 +58,17 @@ fn installed_row(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let info : Array[@html.Html] = [
-    @html.span(
-      class="skill-meta",
-      if skill.source.is_empty() {
-        ui(locale, HandWritten)
-      } else {
-        skill.source
-      },
-    ),
+    @html.div(class="skill-meta-line", [
+      @html.span(
+        class="skill-meta",
+        if skill.source.is_empty() {
+          ui(locale, HandWritten)
+        } else {
+          skill.source
+        },
+      ),
+      installed_status(locale, state, channel, skill),
+    ]),
   ]
   if !skill.description.is_blank() {
     info.push(@html.span(class="skill-desc", skill.description))
@@ -76,14 +84,7 @@ fn installed_row(
     ),
   ]
   header.push(
-    {
-      guard !skill.source.is_empty() else {
-        @html.div(class="skill-actions", [
-          @html.span(class="skill-check ok", "✓"),
-        ])
-      }
-      installed_actions(locale, state, channel, skill, emit, "skill-action")
-    },
+    installed_actions(locale, state, channel, skill, emit, "skill-action"),
   )
   @html.div(class="skill-row", on_click=emit(PreviewInstalled(skill)), [
     @html.div(class="skill-header", header),
@@ -225,7 +226,14 @@ fn detail_shell(
     @html.div(class="skill-detail-header", [
       @html.div(class="page-eyebrow", ui(locale, Details)),
       @html.h2(preview_name(target)),
-      @html.div(class="skill-detail-meta", preview_meta(locale~, target)),
+      @html.div(class="skill-detail-meta skill-meta-line", [
+        @html.span(preview_meta(locale~, target)),
+        if detail_action_target(target, state, input) is Some(Installed(item)) {
+          installed_status(locale, state, input.channel, item)
+        } else {
+          @html.nothing
+        },
+      ]),
       detail_action(locale~, target, state, input, emit),
       @html.div(notice_views(state, input, Some(target))),
     ]),
@@ -299,10 +307,7 @@ fn detail_action(
         },
       )
     }
-    Installed(item) => {
-      guard item.registry is Some(_) else {
-        return @html.span(class="skill-check ok", ui(locale, HandWrittenSkill))
-      }
+    Installed(item) =>
       installed_actions(
         locale,
         state,
@@ -311,7 +316,6 @@ fn detail_action(
         emit,
         "skill-detail-action",
       )
-    }
   }
 }
 
@@ -505,40 +509,68 @@ fn installed_actions(
   emit : @cmd.Emit[Msg],
   button_class : String,
 ) -> @html.Html {
-  guard item.identity() is Some(identity) else { return @html.nothing }
-  let pending = state.pending_action(channel, identity)
-  let candidate = state.update_candidate(item)
-  let buttons : Array[@html.Html] = []
-  if candidate is Some(_) || pending is Some(Updating(..)) {
+  let enabled = item.enabled
+  let label = ui(locale, if enabled { Enabled } else { Disabled })
+  let buttons : Array[@html.Html] = [
+    @html.button(
+      class="skill-enable-switch",
+      type_="button",
+      title=label,
+      disabled=state.pending_enabled(channel, item.id),
+      on_click=emit(ToggleEnabled(item.id)),
+      attrs=@html.Attrs::build()
+        .role("switch")
+        .aria_label("\{item.name}: \{label}")
+        .aria_checked(enabled.to_string()),
+      @html.span(class="skill-switch-track", ""),
+    ),
+  ]
+  if item.identity() is Some(identity) {
+    let pending = state.pending_action(channel, identity)
+    let label = pending
+      .map(action => ui(locale, action.label()))
+      .unwrap_or(ui(locale, ManageSkill))
     buttons.push(
       @html.button(
-        class="button primary \{button_class}",
+        class="skill-menu-trigger \{button_class}",
+        type_="button",
+        title=label,
         disabled=pending is Some(_),
-        attrs=@html.Attrs::build().on_click(event => {
-          event.stop_propagation()
-          guard candidate is Some(target) else { return @cmd.none }
-          emit(Update(target))
-        }),
-        {
-          guard pending is Some(Updating(..)) else { ui(locale, Update) }
-          ui(locale, Updating)
-        },
+        attrs=@action_menu.button_attrs(installed_menu_target(channel, item)).aria_label(
+          label,
+        ),
+        icon(@icons.icon_more),
       ),
     )
   }
-  buttons.push(
-    @html.button(
-      class="button secondary \{button_class}",
-      disabled=pending is Some(_),
-      attrs=@html.Attrs::build().on_click(event => {
-        event.stop_propagation()
-        emit(Uninstall(item))
-      }),
-      match pending {
-        Some(Updating(..)) | None => ui(locale, Uninstall)
-        Some(action) => ui(locale, action.label())
-      },
-    ),
+  @html.div(
+    class="skill-actions skill-installed-actions",
+    attrs=@html.Attrs::build().on_click(event => {
+      event.stop_propagation()
+      @cmd.none
+    }),
+    buttons,
   )
-  @html.div(class="skill-actions", buttons)
+}
+
+///|
+fn installed_status(
+  locale : @i18n.Locale,
+  state : State,
+  channel : @interop.ChannelId,
+  item : InstalledItem,
+) -> @html.Html {
+  guard item.identity() is Some(identity) else { return @html.nothing }
+  if state.pending_action(channel, identity) is Some(action) {
+    return @html.span(
+      class="skill-operation",
+      attrs=@html.Attrs::build().role("status"),
+      ui(locale, action.label()),
+    )
+  }
+  guard state.update_candidate(item) is Some(_) else { return @html.nothing }
+  @html.span(class="skill-update-badge", [
+    icon(@icons.icon_arrow_up),
+    @html.span(ui(locale, UpdateAvailable)),
+  ])
 }

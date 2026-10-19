@@ -5,7 +5,11 @@ priv enum UiMessage {
   HandWritten
   Removing
   Updating
-  Update
+  UpdateTo(String)
+  UpdateAvailable
+  ManageSkill
+  Enabled
+  Disabled
   Uninstall
   NotInstalled
   Installing
@@ -17,7 +21,6 @@ priv enum UiMessage {
   Copy
   Loading
   InstallSkill
-  HandWrittenSkill
   Library
   Description
   Search
@@ -40,11 +43,31 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Updating) => "正在更新…"
     (TraditionalChinese, Updating) => "正在更新…"
     (Japanese, Updating) => "更新中…"
-    (English, Update) => "Update"
-    (Spanish, Update) => "Actualizar"
-    (SimplifiedChinese, Update) => "更新"
-    (TraditionalChinese, Update) => "更新"
-    (Japanese, Update) => "更新"
+    (English, UpdateTo(version)) => "Update to \{version}"
+    (Spanish, UpdateTo(version)) => "Actualizar a \{version}"
+    (SimplifiedChinese, UpdateTo(version)) => "更新至 \{version}"
+    (TraditionalChinese, UpdateTo(version)) => "更新至 \{version}"
+    (Japanese, UpdateTo(version)) => "\{version} に更新"
+    (English, UpdateAvailable) => "Update available"
+    (Spanish, UpdateAvailable) => "Actualización disponible"
+    (SimplifiedChinese, UpdateAvailable) => "有更新"
+    (TraditionalChinese, UpdateAvailable) => "有更新"
+    (Japanese, UpdateAvailable) => "更新あり"
+    (English, ManageSkill) => "Manage skill"
+    (Spanish, ManageSkill) => "Administrar habilidad"
+    (SimplifiedChinese, ManageSkill) => "管理技能"
+    (TraditionalChinese, ManageSkill) => "管理技能"
+    (Japanese, ManageSkill) => "スキルを管理"
+    (English, Enabled) => "Enabled"
+    (Spanish, Enabled) => "Habilitada"
+    (SimplifiedChinese, Enabled) => "已启用"
+    (TraditionalChinese, Enabled) => "已啟用"
+    (Japanese, Enabled) => "有効"
+    (English, Disabled) => "Disabled"
+    (Spanish, Disabled) => "Deshabilitada"
+    (SimplifiedChinese, Disabled) => "已停用"
+    (TraditionalChinese, Disabled) => "已停用"
+    (Japanese, Disabled) => "無効"
     (English, HandWritten) => "hand-written"
     (Spanish, HandWritten) => "escrita a mano"
     (SimplifiedChinese, HandWritten) => "手动编写"
@@ -110,11 +133,6 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, InstallSkill) => "安装技能"
     (TraditionalChinese, InstallSkill) => "安裝技能"
     (Japanese, InstallSkill) => "スキルをインストール"
-    (English, HandWrittenSkill) => "hand-written skill"
-    (Spanish, HandWrittenSkill) => "habilidad escrita a mano"
-    (SimplifiedChinese, HandWrittenSkill) => "手动编写的技能"
-    (TraditionalChinese, HandWrittenSkill) => "手動編寫的技能"
-    (Japanese, HandWrittenSkill) => "手動作成のスキル"
     (English, Library) => "Library"
     (Spanish, Library) => "Biblioteca"
     (SimplifiedChinese, Library) => "技能库"
