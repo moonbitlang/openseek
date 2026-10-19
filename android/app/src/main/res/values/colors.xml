@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#23272f</color>
+    <!-- Matches Desktop's packaged AppIcon.icns and appicon.png. -->
+    <color name="ic_launcher_background">#3B6EF5</color>
 </resources>
