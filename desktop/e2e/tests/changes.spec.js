@@ -51,6 +51,19 @@ test('the changes card lists the checkout and what the agent attached, and remov
     { type: 'pull_request', url: `${repo}/pull/2119` },
     { type: 'branch', url: `${repo}/tree/codex/session-artifacts-ui` },
   ];
+  // The host keeps only an attached pull request's address; GitHub has the
+  // rest.
+  app.githubPrDetails[`${repo}/pull/2119`] = {
+    number: 2119,
+    title: 'Show session artifacts with the current checkout',
+    state: 'closed',
+    draft: false,
+    url: `${repo}/pull/2119`,
+    base: 'main',
+    additions: 1726,
+    deletions: 358,
+    changed_files: 33,
+  };
   await app.install();
   await app.goto();
   await app.openSession();
@@ -68,11 +81,20 @@ test('the changes card lists the checkout and what the agent attached, and remov
   await expect(current.getByRole('link')).toHaveAttribute('href', `${repo}/pull/2130`);
   await expect(current.getByRole('button', { name: 'Remove from this conversation' })).toHaveCount(0);
   await expect(rows.nth(1).getByText('#2119', { exact: true })).toBeVisible();
-  await expect(rows.nth(1).getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByText('Show session artifacts with the current checkout', { exact: true })).toBeVisible();
+  await expect(rows.nth(1).getByRole('link')).toHaveAttribute('href', `${repo}/pull/2119`);
+  await expect(rows.nth(1).locator('.conv-changes-icon')).toHaveClass(/\bclosed\b/);
+  await expect(current.locator('.conv-changes-icon')).toHaveClass(/\bopen\b/);
   await expect(rows.nth(2).getByText('codex/session-artifacts-ui', { exact: true })).toBeVisible();
   await expect(rows.nth(2).getByRole('link')).toHaveAttribute('href', `${repo}/tree/codex/session-artifacts-ui`);
   await page.screenshot({ path: testInfo.outputPath('changes.png') });
   expect(requests(app, 'session.artifacts_list').map(request => request.params)).toEqual([{ session: 'session-1' }]);
+  // Every attached pull request is looked up, the checkout's own included;
+  // branches are not.
+  expect(requests(app, 'github.pr_detail').map(request => request.params.url).sort()).toEqual([
+    `${repo}/pull/2119`,
+    `${repo}/pull/2130`,
+  ]);
 
   // Folded, the card is its summary.
   await card.getByRole('button', { name: 'Changes', exact: true }).click();
@@ -104,7 +126,9 @@ test('the changes card appears when the agent attaches something to a conversati
   app.sessionArtifacts['session-1'] = [{ type: 'pull_request', url: `${repo}/pull/2030` }];
   app.notify('session.artifacts_changed', { session: 'session-1' });
   const card = changesCard(panel);
+  // GitHub has nothing to say about it, so it reads as its address.
   await expect(card.getByText('#2030', { exact: true })).toBeVisible();
+  await expect(card.getByText('moonbitlang/openseek', { exact: true })).toBeVisible();
   expect(requests(app, 'session.artifacts_list')).toHaveLength(2);
   await page.screenshot({ path: testInfo.outputPath('changes-attached.png') });
 

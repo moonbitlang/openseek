@@ -8,6 +8,13 @@
 // while the connection was down is not replayed. The user can take an
 // attached item off the list; that removes the association only — it closes
 // no pull request and deletes no branch.
+//
+// The list holds only addresses, so the title and state of each attached pull
+// request are looked up on GitHub when a list answer names it. What a lookup
+// found is kept by address, across conversations, and replaced only by a later
+// lookup; one that fails leaves it standing. Each arrival of the overview and
+// each change to the list starts a new generation, in which every pull request
+// the next answer names is looked up once more.
 
 ///|
 pub(all) enum Msg {
@@ -25,6 +32,14 @@ pub(all) enum Msg {
     @interop.ConversationKey,
     @protocol.SessionArtifact,
     Result[@protocol.SessionArtifacts, String]
+  )
+  /// GitHub answered the lookup of the pull request at `url`, asked in
+  /// generation `generation`. `Ok(None)` means the address is not a pull
+  /// request GitHub knows how to describe.
+  Detailed(
+    url~ : String,
+    generation~ : Int32,
+    Result[@protocol.GitPullRequest?, String]
   )
 }
 
@@ -64,6 +79,15 @@ pub struct State {
   /// Why the last removal for the conversation failed, until the next one
   /// succeeds or the overview moves to another conversation.
   remove_error : String?
+  /// What GitHub last said about each attached pull request, by address.
+  details : Map[String, PullRequest]
+  /// The generation each address was last looked up in. A lookup is answered
+  /// only while it is still its address's latest, and an address is looked up
+  /// at most once per generation.
+  looked_up : Map[String, Int32]
+  /// Counts the overview's arrivals and the list's changes, the moments every
+  /// attached pull request is looked up again.
+  generation : Int32
 } derive(Eq)
 
 ///|
@@ -77,6 +101,9 @@ pub fn State::initial() -> State {
     serial: 0,
     removing: [],
     remove_error: None,
+    details: {},
+    looked_up: {},
+    generation: 0,
   }
 }
 
@@ -108,9 +135,14 @@ pub fn update(
       match state.phase_for(conversation) {
         Checking | Reloading(_) => (@cmd.none, state)
         Loaded(artifacts) =>
-          ask(emit, conversation, state, waiting=Reloading(artifacts))
+          ask(
+            emit,
+            conversation,
+            state.next_generation(),
+            waiting=Reloading(artifacts),
+          )
         Unchecked | CheckFailed(_) =>
-          ask(emit, conversation, state, waiting=Checking)
+          ask(emit, conversation, state.next_generation(), waiting=Checking)
       }
     // A change to a list the overview is not showing changes nothing here:
     // that conversation is asked about when the overview shows it. For the
@@ -124,17 +156,22 @@ pub fn update(
         Loaded(artifacts) | Reloading(artifacts) => Reloading(artifacts)
         Unchecked | Checking | CheckFailed(_) => Checking
       }
-      ask(emit, conversation, state, waiting~)
+      ask(emit, conversation, state.next_generation(), waiting~)
     }
     Listed(serial~, result) => {
-      guard serial == state.serial && state.phase is (Checking | Reloading(_)) else {
+      guard serial == state.serial &&
+        state.phase is (Checking | Reloading(_)) &&
+        state.conversation is Some(conversation) else {
         return (@cmd.none, state)
       }
-      let phase = match result {
-        Ok(list) => Loaded(list.artifacts)
-        Err(message) => CheckFailed(message)
+      match result {
+        Ok(list) =>
+          look_up(emit, conversation.channel, list.artifacts, {
+            ..state,
+            phase: Loaded(list.artifacts),
+          })
+        Err(message) => (@cmd.none, { ..state, phase: CheckFailed(message), })
       }
-      (@cmd.none, { ..state, phase, })
     }
     Remove(conversation, artifact) => {
       guard state.conversation == Some(conversation) &&
@@ -182,7 +219,71 @@ pub fn update(
           (@cmd.none, { ..state, removing, remove_error: Some(message), })
       }
     }
+    // An answer a later lookup of the same address superseded is dropped. A
+    // failed lookup keeps what an earlier one found.
+    Detailed(url~, generation~, result) => {
+      guard state.looked_up.get(url) == Some(generation) else {
+        return (@cmd.none, state)
+      }
+      match result {
+        Ok(found) => {
+          let details = state.details.copy()
+          match found.bind(PullRequest::from_reply) {
+            Some(detail) => details[url] = detail
+            None => details.remove(url)
+          }
+          (@cmd.none, { ..state, details, })
+        }
+        Err(_) => (@cmd.none, state)
+      }
+    }
   }
+}
+
+///|
+fn State::next_generation(self : State) -> State {
+  { ..self, generation: self.generation + 1, }
+}
+
+///|
+/// Look up each attached pull request in `artifacts` that this generation has
+/// not looked up yet, through the host on `channel`.
+fn look_up(
+  emit : @cmd.Emit[Msg],
+  channel : @interop.ChannelId,
+  artifacts : Array[@protocol.SessionArtifact],
+  state : State,
+) -> (@cmd.Cmd, State) {
+  let generation = state.generation
+  let looked_up = state.looked_up.copy()
+  let commands : Array[@cmd.Cmd] = []
+  for artifact in artifacts {
+    let url = artifact.url
+    guard artifact.type_ is PullRequest &&
+      looked_up.get(url) != Some(generation) else {
+      continue
+    }
+    looked_up[url] = generation
+    commands.push(
+      @cmd.attempt(
+        result => {
+          emit(
+            Detailed(
+              url~,
+              generation~,
+              result
+              .map((reply : @protocol.GithubPrDetailReply) => reply.pull_request)
+              .map_err(@interop.bridge_error_text),
+            ),
+          )
+        },
+        () => {
+          @interop.bridge_request(channel, @commands.github_pr_detail, { url, })
+        },
+      ),
+    )
+  }
+  (@cmd.batch(commands), { ..state, looked_up, })
 }
 
 ///|
@@ -212,4 +313,19 @@ fn ask(
     { ..state, removing: [], remove_error: None, }
   }
   (cmd, { ..state, conversation: Some(conversation), phase: waiting, serial, })
+}
+
+///|
+/// An unrecognized state is a host speaking a vocabulary this build does not
+/// know; the row then reads as the bare address rather than misreporting
+/// whether the work has landed.
+fn PullRequest::from_reply(reply : @protocol.GitPullRequest) -> PullRequest? {
+  let state : PullRequestState = match reply.state {
+    "open" if reply.draft => Draft
+    "open" => Open
+    "merged" => Merged
+    "closed" => Closed
+    _ => return None
+  }
+  Some({ number: reply.number, title: reply.title, state, url: reply.url, })
 }

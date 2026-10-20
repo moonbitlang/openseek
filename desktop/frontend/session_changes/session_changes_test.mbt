@@ -287,3 +287,140 @@ test "the folded summary counts the checkout and what is attached" {
   )
   assert_true(@session_changes.rows(one, None, failed, quiet()).length() == 1)
 }
+
+///|
+/// What GitHub says about pull request `number`.
+fn described(
+  number : Int32,
+  state : String,
+  draft~ : Bool = false,
+) -> Result[@protocol.GitPullRequest?, String] {
+  let pull_request : @protocol.GitPullRequest = @json.from_json({
+    "number": Json(number),
+    "title": "Pull request \{number}",
+    "state": Json(state),
+    "draft": Json(draft),
+    "url": Json(pull(number).url),
+    "base": "main",
+    "additions": 1,
+    "deletions": 0,
+    "changed_files": 1,
+  }) catch {
+    error => abort(error.to_string())
+  }
+  Ok(Some(pull_request))
+}
+
+///|
+test "each attached pull request is looked up once per generation" {
+  let one = conversation("s-1")
+  let state = loaded(one, [pull(1), branch("feature")])
+  let url = pull(1).url
+  // Branches have nothing to look up.
+  assert_true(state.looked_up.get(url) == Some(state.generation))
+  assert_true(state.looked_up.get(branch("feature").url) is None)
+  let (_, described) = @session_changes.update(
+    quiet(),
+    Detailed(
+      url~,
+      generation=state.generation,
+      described(1, "open", draft=true),
+    ),
+    state,
+  )
+  assert_true(
+    described.details.get(url)
+    is Some({ number: 1, title: "Pull request 1", state: Draft, .. }),
+  )
+  // A removal reads the list again within the same generation: what is
+  // already looked up is not asked for again, a new pull request is.
+  let (_, removing) = @session_changes.update(
+    quiet(),
+    Remove(one, branch("feature")),
+    described,
+  )
+  let (_, removed) = @session_changes.update(
+    quiet(),
+    Removed(one, branch("feature"), listed([pull(1)])),
+    removing,
+  )
+  let (_, relisted) = @session_changes.update(
+    quiet(),
+    Listed(serial=removed.serial, listed([pull(1), pull(2)])),
+    removed,
+  )
+  assert_true(relisted.generation == state.generation)
+  assert_true(relisted.looked_up.get(pull(2).url) == Some(state.generation))
+  // A change to the list looks every pull request up again, keeping what
+  // the last lookup said until the new one answers.
+  let (_, changed) = @session_changes.update(quiet(), Changed(one), relisted)
+  let (_, refreshed) = @session_changes.update(
+    quiet(),
+    Listed(serial=changed.serial, listed([pull(1), pull(2)])),
+    changed,
+  )
+  assert_true(refreshed.generation != state.generation)
+  assert_true(refreshed.looked_up.get(url) == Some(refreshed.generation))
+  assert_true(refreshed.details.get(url) == described.details.get(url))
+  // So does the overview coming back.
+  let (_, reopened) = @session_changes.update(quiet(), Opened(one), refreshed)
+  assert_true(reopened.generation != refreshed.generation)
+}
+
+///|
+test "a superseded lookup is dropped, and a failed one keeps the last answer" {
+  let one = conversation("s-1")
+  let state = loaded(one, [pull(1)])
+  let url = pull(1).url
+  let first = state.generation
+  let (_, open) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=first, described(1, "open")),
+    state,
+  )
+  let (_, changed) = @session_changes.update(quiet(), Changed(one), open)
+  let (_, asked) = @session_changes.update(
+    quiet(),
+    Listed(serial=changed.serial, listed([pull(1)])),
+    changed,
+  )
+  let second = asked.generation
+  // The earlier lookup answering late is not the latest word.
+  let (_, stale) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=first, described(1, "closed")),
+    asked,
+  )
+  assert_true(stale == asked)
+  let (_, failed) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=second, Err("gh is not signed in")),
+    asked,
+  )
+  assert_true(failed.details.get(url) is Some({ state: Open, .. }))
+  let (_, merged) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=second, described(1, "merged")),
+    asked,
+  )
+  assert_true(merged.details.get(url) is Some({ state: Merged, .. }))
+  // GitHub having nothing to say, or saying it in words this build does not
+  // know, takes the row back to its bare address.
+  let (_, nothing) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=second, Ok(None)),
+    merged,
+  )
+  assert_true(nothing.details.get(url) is None)
+  let (_, unknown) = @session_changes.update(
+    quiet(),
+    Detailed(url~, generation=second, described(1, "queued")),
+    merged,
+  )
+  assert_true(unknown.details.get(url) is None)
+  // The summary counts the same rows either way.
+  assert_true(
+    @session_changes.summary(one, None, merged) ==
+    @session_changes.summary(one, None, asked),
+  )
+}

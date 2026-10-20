@@ -721,6 +721,12 @@ pub let github_pull_request : Command[
 ] = Command("github.pull_request")
 
 ///|
+pub let github_pr_detail : Command[
+  @protocol.GithubPrDetailPayload,
+  @protocol.GithubPrDetailReply,
+] = Command("github.pr_detail")
+
+///|
 pub let github_checkout : Command[
   @protocol.GithubCheckoutPayload,
   @protocol.GithubCheckoutReply,
