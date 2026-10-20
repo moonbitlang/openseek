@@ -48,11 +48,41 @@ test "outline body decorations complete the hidden body inline" {
   let collapsed = provider.get_decoration_option(true, false, false, true)
   assert_eq(
     collapsed.description,
-    "folding-collapsed-outline-body-highlighted-visual-decoration",
+    "folding-collapsed-outline-body-highlighted-auto-hide-visual-decoration",
   )
   assert_eq(collapsed.after_content_class_name, Some("inline-folded-body"))
   assert_eq(
     collapsed.first_line_decoration_class_name,
-    Some(FOLDING_COLLAPSED_ICON_CLASS),
+    Some("\{FOLDING_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}"),
   )
+}
+
+///|
+test "collapsed chevrons auto-hide only under mouseover controls" {
+  let provider = FoldingDecorationProvider(folding_test_model(["line"]))
+  let cases = [(false, false), (true, false), (false, true)]
+  for case in cases {
+    let (is_manual, is_outline_body) = case
+    let mouseover = provider.get_decoration_option(
+      true, false, is_manual, is_outline_body,
+    )
+    assert_true(
+      mouseover.first_line_decoration_class_name is Some(name) &&
+      name.has_suffix(" \{FOLD_ICON_AUTO_HIDE_CLASS}"),
+    )
+  }
+  provider.update_options(
+    show_folding_controls=Always,
+    show_folding_highlights=true,
+  )
+  for case in cases {
+    let (is_manual, is_outline_body) = case
+    let always = provider.get_decoration_option(
+      true, false, is_manual, is_outline_body,
+    )
+    assert_true(
+      always.first_line_decoration_class_name is Some(name) &&
+      !name.contains(FOLD_ICON_AUTO_HIDE_CLASS),
+    )
+  }
 }

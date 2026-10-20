@@ -73,6 +73,11 @@
   white-space: nowrap;
 }
 
+.moonbit-viewer-markdown-comment-preview > :not(hr):last-child::after {
+  content: " \2026";
+  color: var(--vscode-editor-foldPlaceholderForeground, currentColor);
+}
+
 .moonbit-viewer-markdown-comment[data-source-visible="true"][data-documentation-foldable]
   :is(
     .moonbit-viewer-markdown-comment-full,
@@ -212,10 +217,9 @@
   transition: opacity 0.5s;
 }
 
-/* Match the code-folding reveal: collapsed chevrons stay visible, expanded
- * chevrons surface while the pointer is over the gutter. */
-.margin:hover .moonbit-viewer-markdown-comment-margin-toggle,
-.moonbit-viewer-markdown-comment-margin-toggle.codicon-folding-collapsed {
+/* Match the code-folding reveal: chevrons surface while the pointer is over
+ * the gutter. A collapsed preview's trailing ellipsis carries its state. */
+.margin:hover .moonbit-viewer-markdown-comment-margin-toggle {
   opacity: 1;
 }
 

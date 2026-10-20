@@ -24,9 +24,12 @@
   width: 16px !important;
 }
 
+/* `autoHideFoldIcon` marks collapsed chevrons under `Mouseover`: they reveal
+ * with the expanded ones on gutter hover, and the inline placeholder carries
+ * the folded state otherwise (a host deviation from VS Code). */
 .margin-view-overlays:hover .codicon,
-.margin-view-overlays .codicon.codicon-folding-collapsed,
-.margin-view-overlays .codicon.codicon-folding-manual-collapsed,
+.margin-view-overlays .codicon.codicon-folding-collapsed:not(.autoHideFoldIcon),
+.margin-view-overlays .codicon.codicon-folding-manual-collapsed:not(.autoHideFoldIcon),
 .margin-view-overlays .codicon.alwaysShowFoldIcons {
   opacity: 1;
 }

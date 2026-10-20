@@ -125,7 +125,7 @@ test "folding: MoonBit outline keeps the complete signature and opening brace" {
     .text_model()
     .get_decorations_in_range(folding_model.text_model().get_full_model_range()) {
     if decoration.options.description ==
-      "folding-collapsed-outline-body-highlighted-visual-decoration" {
+      "folding-collapsed-outline-body-highlighted-auto-hide-visual-decoration" {
       saw_outline_body = true
       assert_eq(
         decoration.options.after_content_class_name,
@@ -532,7 +532,7 @@ test "folding: MoonBit outline collapses a copyright header to its first line" {
     .get_decorations_in_range(folding_model.text_model().get_full_model_range()) {
     if decoration.range.start_line_number == 1 &&
       decoration.options.first_line_decoration_class_name
-      is Some("codicon codicon-folding-collapsed") {
+      is Some("codicon codicon-folding-collapsed autoHideFoldIcon") {
       saw_comment_header = true
       assert_true(
         decoration.options.after_content_class_name is Some("inline-folded"),
@@ -785,7 +785,7 @@ test "folding: toggling a region folds its lines out of the view axis" {
           folding_model.text_model().get_full_model_range(),
         ) {
         if decoration.options.first_line_decoration_class_name
-          is Some("codicon codicon-folding-collapsed") {
+          is Some("codicon codicon-folding-collapsed autoHideFoldIcon") {
           saw_collapsed = true
           assert_true(
             decoration.options.after_content_class_name is Some("inline-folded"),

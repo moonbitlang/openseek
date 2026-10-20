@@ -96,6 +96,73 @@ let manually_collapsed_highlighted_visual_decoration : @model.ModelDecorationOpt
 )
 
 ///|
+/// Host deviation: under `Mouseover`, collapsed chevrons hide with expanded
+/// ones. VS Code keeps them visible, but a folded outline puts one on nearly
+/// every row, and the inline placeholder already marks each folded line and
+/// unfolds on click. `Always` keeps the upstream always-visible decorations.
+const FOLD_ICON_AUTO_HIDE_CLASS : String = "autoHideFoldIcon"
+
+///|
+let collapsed_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "",
+  description="folding-collapsed-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
+let collapsed_highlighted_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "folded-background",
+  description="folding-collapsed-highlighted-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
+let collapsed_outline_body_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "",
+  description="folding-collapsed-outline-body-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
+let collapsed_outline_body_highlighted_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "folded-background",
+  description="folding-collapsed-outline-body-highlighted-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded-body",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
+let manually_collapsed_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "",
+  description="folding-manually-collapsed-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_MANUAL_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
+let manually_collapsed_highlighted_auto_hide_visual_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
+  "folded-background",
+  description="folding-manually-collapsed-highlighted-auto-hide-visual-decoration",
+  stickiness=AlwaysGrowsWhenTypingAtEdges,
+  after_content_class_name="inline-folded",
+  is_whole_line=true,
+  first_line_decoration_class_name="\{FOLDING_MANUAL_COLLAPSED_ICON_CLASS} \{FOLD_ICON_AUTO_HIDE_CLASS}",
+)
+
+///|
 /// `NO_CONTROLS_COLLAPSED_RANGE_DECORATION`.
 let no_controls_collapsed_range_decoration : @model.ModelDecorationOptions = ModelDecorationOptions(
   "",
@@ -259,7 +326,25 @@ fn FoldingDecorationProvider::get_decoration_option(
     }
     return no_controls_expanded_range_decoration
   }
-  if is_collapsed {
+  if is_collapsed && self.show_folding_controls == Mouseover {
+    if is_outline_body {
+      if self.show_folding_highlights {
+        collapsed_outline_body_highlighted_auto_hide_visual_decoration
+      } else {
+        collapsed_outline_body_auto_hide_visual_decoration
+      }
+    } else if is_manual {
+      if self.show_folding_highlights {
+        manually_collapsed_highlighted_auto_hide_visual_decoration
+      } else {
+        manually_collapsed_auto_hide_visual_decoration
+      }
+    } else if self.show_folding_highlights {
+      collapsed_highlighted_auto_hide_visual_decoration
+    } else {
+      collapsed_auto_hide_visual_decoration
+    }
+  } else if is_collapsed {
     if is_outline_body {
       if self.show_folding_highlights {
         collapsed_outline_body_highlighted_visual_decoration
