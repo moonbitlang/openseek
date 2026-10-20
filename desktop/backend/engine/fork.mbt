@@ -81,6 +81,25 @@ async fn fork_session_in(
   }
   let root = @workspaces.store_root(workspace)
   let store = @store.SessionStore(root.to_string())
+  // A side chat joins its conversation's family, which another host
+  // attached to this project may be archiving or deleting. Those moves take
+  // this lock on the store's archive and re-read the family under it, so
+  // holding it until the side chat exists means the move either takes the
+  // side chat along or finds its conversation gone here first.
+  let shared = if side_chat {
+    Some(
+      @fsx.FileLock::acquire(@session_store.archived_root(root).to_path()) catch {
+        error =>
+          raise EngineError("could not lock the archived store: \{error}")
+      },
+    )
+  } else {
+    None
+  }
+  defer (if shared is Some(lock) { lock.release() })
+  guard !side_chat || store.exists(SessionId(payload.session)) else {
+    raise EngineError("this conversation was archived or deleted")
+  }
   // A side chat's token only has to differ from its siblings'; draw again on
   // the rare collision. Under the placement lock no other fork claims one
   // meanwhile, and the engine's claim on the directory refuses one anyway.

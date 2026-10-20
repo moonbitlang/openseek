@@ -111,6 +111,26 @@ fn release_family_claims(
 }
 
 ///|
+/// Refuse a move of live `session`'s family that gained a member since it
+/// was claimed. Another host attached to this project can make a side chat
+/// of the conversation between this host's discovery and its commit, and a
+/// side chat left behind would outlive its conversation. A side-chat fork
+/// takes the same lock on the store's archive, so under it the family is
+/// final: the side chat is either here, refusing this move, or refused
+/// itself once this move has taken its conversation.
+async fn SessionFamilyMove::refuse_new_members(
+  self : SessionFamilyMove,
+  session : String,
+) -> Unit {
+  let members = @session_store.family_in(self.root, session)
+  guard members.iter().all(id => self.members.contains(id)) else {
+    raise EngineError(
+      "a side chat of this conversation was just opened; try again",
+    )
+  }
+}
+
+///|
 fn SessionFamilyMove::release(self : SessionFamilyMove) -> Unit {
   guard self.active else { return }
   self.active = false
@@ -435,6 +455,7 @@ async fn archive_session_commit(
     error => raise EngineError("could not lock the archived store: \{error}")
   }
   defer shared.release()
+  family.refuse_new_members(session)
   // The checkout goes with the conversation. A dirty refusal
   // lands here — after the idle engine already closed, which is harmless
   // (the next prompt respawns) — so nothing irreversible has happened yet;
@@ -599,6 +620,7 @@ pub async fn delete_session(
     error => raise EngineError("could not lock the archived store: \{error}")
   }
   defer shared.release()
+  family.refuse_new_members(session)
 
   async fn commit() -> SessionDeleteReply {
     // Only the selected project's checkout may go: another project can hold a
