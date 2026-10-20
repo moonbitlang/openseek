@@ -37,9 +37,16 @@ fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
     guard conv.device == source.device && conv.project() == source.project() else {
       return false
     }
+    // The edit deletes the source's whole family once the new message is
+    // saved — its sub-runs and its side chats — and the host refuses that
+    // while any of them is busy, so every member counts here.
     let mut current = conv.session_id
     while current != source.session_id {
-      guard @transcript.subrun_parent(current) is Some(parent) else {
+      let parent = if @transcript.subrun_parent(current) is Some(parent) {
+        parent
+      } else if @protocol.split_side_chat_id(current) is Some((parent, _)) {
+        parent
+      } else {
         return false
       }
       current = parent
@@ -135,6 +142,11 @@ test "message editing is blocked by active work in its own conversation family" 
     run: Starting(submission_id="child"),
   }
   assert_true(model.replace_conversation(child).message_edit_busy(source))
+  // A side chat goes with its conversation too, and so does its own sub-run.
+  for session_id in ["-sc-1", "-sc-1-sr-1"] {
+    let side = { ..child, session_id: source.session_id + session_id, }
+    assert_true(model.replace_conversation(side).message_edit_busy(source))
+  }
   let unrelated = { ..child, session_id: source.session_id + "-sr-unrelated", }
   assert_false(model.replace_conversation(unrelated).message_edit_busy(source))
 }
