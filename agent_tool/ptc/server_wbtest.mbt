@@ -64,19 +64,31 @@ async fn await_admission(program : Program) -> Unit {
 }
 
 ///|
+/// One call on its own connection. The listener closes every connection after
+/// its reply; waiting for that close leaves the TIME_WAIT on the listener's
+/// port. Closing first would park an ephemeral port for 30 seconds per call,
+/// and the budget test's thousand calls then starve concurrent loopback tests
+/// on the machine of `connect()` addresses.
 async fn request(
   env : Map[String, String],
   name : String,
   arguments : Json,
 ) -> Json {
   let (url, token) = capability(env)
-  let (response, body) = @http.post(
-    url,
-    ({ "version": 1, "name": name, "arguments": arguments } : Json),
-    headers={ "Authorization": "Bearer \{token}" },
-  )
+  let client = @http.post_stream(url, headers={
+    "Authorization": "Bearer \{token}",
+  })
+  defer client.close()
+  let response = client
+    ..write(({ "version": 1, "name": name, "arguments": arguments } : Json))
+    .end_request()
   assert_eq(response.code, 200)
-  body.json()
+  let body = client.read_all().json()
+  client.enter_passthrough_mode()
+  guard client.read_some() is None else {
+    fail("PTC kept the connection open after its reply")
+  }
+  body
 }
 
 ///|
@@ -88,7 +100,14 @@ async test "PTC serializes stateful requests and overlaps concurrent-safe reques
       concurrent_safe~,
       execute=Async(_ => {
         journal.push("start")
-        @async.sleep(30)
+        if concurrent_safe {
+          // Overlap is the contract: neither call ends before both started.
+          while journal.length() < 2 {
+            @async.sleep(1)
+          }
+        } else {
+          @async.sleep(30)
+        }
         journal.push("end")
         @agent_tool.respond("ok", data={ "answer": 42 })
       }),
