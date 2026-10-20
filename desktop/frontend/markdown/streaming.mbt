@@ -3,7 +3,7 @@
 /// for the lifetime of its keyed render branch; Markdown source stays intact.
 pub struct StreamingMarkdown {
   mut source : String
-  ends : Array[Int]
+  ends : Array[Int32]
 }
 
 ///|
@@ -14,8 +14,8 @@ pub fn StreamingMarkdown::new() -> StreamingMarkdown {
 ///|
 priv struct StreamingFragments {
   source : String
-  ends : Array[Int]
-  fresh_from : Int
+  ends : Array[Int32]
+  fresh_from : Int32
 }
 
 ///|
@@ -61,7 +61,7 @@ fn stream_fragment(text : String, fresh : Bool) -> @html.Html {
 fn MarkdownRender::text_offset(
   self : MarkdownRender,
   node : @cmark.Node[String],
-) -> Int? {
+) -> Int32? {
   guard self.streaming is Some(stream) else { return None }
   let first = node.meta.loc.first_ccode
   let end = node.meta.loc.last_ccode + 1
@@ -89,12 +89,16 @@ fn MarkdownRender::fresh_text(
 fn MarkdownRender::text_nodes(
   self : MarkdownRender,
   text : String,
-  first? : Int,
+  first? : Int32,
   fresh~ : Bool = false,
 ) -> Array[@html.Html] {
   guard self.streaming is Some(stream) else { return [@html.text(text)] }
   guard first is Some(first) else {
-    return if fresh { [stream_fragment(text, true)] } else { [@html.text(text)] }
+    return if fresh {
+      [stream_fragment(text, true)]
+    } else {
+      [@html.text(text)]
+    }
   }
   let out : Array[@html.Html] = []
   let mut boundary = match stream.ends.binary_search(first) {
@@ -117,7 +121,7 @@ fn MarkdownRender::text_nodes(
       }
       start = offset
       while boundary < stream.ends.length() &&
-        stream.ends[boundary] <= first + offset {
+            stream.ends[boundary] <= first + offset {
         boundary += 1
       }
     }

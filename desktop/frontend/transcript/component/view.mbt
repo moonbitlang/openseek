@@ -1195,10 +1195,7 @@ fn assistant_message_view(
     } else {
       @markdown.markdown_nodes(locale~, content, open_file=on_open)
     }
-    @html.div(
-      class="msg-content markdown",
-      nodes,
-    )
+    @html.div(class="msg-content markdown", nodes)
   }
   let children = [speaker_label(assistant_name), body]
   // Only an answer confirmed by the durable Finished terminal gets this row.
