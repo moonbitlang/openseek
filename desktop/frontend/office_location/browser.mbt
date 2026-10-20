@@ -203,6 +203,57 @@ fn excel_nodes(
 }
 
 ///|
+/// Calls `ready` once, after `node` has a non-zero client size. A size that is
+/// already non-zero produces the initial observation, so a layout between the
+/// caller's measurement and `observe` is not missed.
+extern "js" fn observe_layout(node : @js.Value, ready : () -> Unit) -> Unit =
+  #| (node, ready) => {
+  #|   const observer = new ResizeObserver(() => {
+  #|     if (node.clientWidth > 0 && node.clientHeight > 0) {
+  #|       observer.disconnect();
+  #|       ready();
+  #|     }
+  #|   });
+  #|   observer.observe(node);
+  #| }
+
+///|
+/// A virtual worksheet mounts no cells while its viewport has no size, but its
+/// reveal provider still reports success, so revealing then would report the
+/// range as missing. When `target` is a virtual sheet's range and the visible
+/// sheet is not laid out yet, this arranges for `ready` to run once it is and
+/// returns `true`; the caller reveals again from `ready`. Every other target
+/// returns `false` and may be revealed now.
+pub fn wait_for_layout(
+  id : String,
+  target : Target,
+  ready : () -> Unit,
+) -> Bool {
+  guard target is ExcelRange(sheet~, ..) && host(id) is Some(host) else {
+    return false
+  }
+  let virtual_target = elements(host, "section[data-sheet]").any(section => {
+    attribute(section, "data-sheet") == Some(sheet) &&
+    !elements(section, "table.office-virtual-table").is_empty()
+  })
+  guard virtual_target &&
+    elements(host, "section[data-sheet].is-active") is [active] else {
+    return false
+  }
+  // The provider activates the target sheet itself; every sheet shares the
+  // panel's layout, so the visible sheet's viewport stands for the target's.
+  let node = match elements(active, ".office-sheet-viewport") {
+    [viewport] => viewport
+    _ => active
+  }
+  let width : Double = node.get_with_string("clientWidth")
+  let height : Double = node.get_with_string("clientHeight")
+  guard width <= 0.0 || height <= 0.0 else { return false }
+  observe_layout(node, ready)
+  true
+}
+
+///|
 /// Navigate without setting a browser selection: highlighting a citation must
 /// not create a new composer annotation. All values are compared as data, never
 /// interpolated into selectors. The caller fences this effect to its active tab.

@@ -12,6 +12,8 @@ pub fn parse(String) -> Reference?
 
 pub fn reveal(String, Target) -> Bool
 
+pub fn wait_for_layout(String, Target, () -> Unit) -> Bool
+
 // Errors
 
 // Types and methods

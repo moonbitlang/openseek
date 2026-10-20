@@ -951,6 +951,7 @@ fn Ctx::checkout_ready(self : Ctx) -> Bool {
 ///|
 pub(all) enum Msg {
   OfficeCitationLocated(OfficeCitationNavigation, Bool)
+  OfficeCitationLaidOut(OfficeCitationNavigation)
   ReviewContextRevealFinished(
     source~ : @mention_context.ReviewSource,
     found~ : Bool

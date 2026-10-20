@@ -2678,6 +2678,12 @@ fn update_inner(
       } else {
         (@cmd.none, state)
       }
+    OfficeCitationLaidOut(navigation) =>
+      if navigation.is_current(state, ctx) {
+        (@cmd.none, { ..state, office_navigation: Some(navigation), })
+      } else {
+        (@cmd.none, state)
+      }
     OfficeCitationLocated(navigation, found) =>
       if navigation.is_current(state, ctx) && !found {
         (

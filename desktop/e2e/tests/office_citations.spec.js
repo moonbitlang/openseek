@@ -171,3 +171,20 @@ test('Excel citations reveal a far virtual range without a native scroll and kee
   await expect(page.locator('.office-selection-preview')).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
+
+test('Excel citations into a closed panel wait for the virtual sheet layout before revealing', async ({ page }) => {
+  // The panel opens with the citation, so the first reveal can run before the
+  // virtual viewport has a size. It must reveal once the sheet is laid out.
+  const app = await openAnswer(page, [
+    '稀疏工作表的远端范围。[^1]',
+    '[^1]: [大型工作簿](/workspace/docs/large-workbook.xlsx#sheet=Sparse&range=A1200:B1201)',
+  ].join('\n\n'));
+  await page.locator('.citation[data-citation="1"] button').click();
+  const sparse = page.locator('section[data-sheet="Sparse"]');
+  const target = sparse.locator('td[data-cell="A1200"]');
+  await expect(target).toHaveClass(/office-citation-target/);
+  await expect(target).toBeInViewport();
+  await expect(sparse.locator('td.office-citation-target')).toHaveCount(4);
+  await expect(page.locator('.file-panel-error')).toBeHidden();
+  expect(app.pageErrors).toEqual([]);
+});

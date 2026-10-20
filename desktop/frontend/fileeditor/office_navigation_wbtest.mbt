@@ -100,3 +100,50 @@ test "stale navigation results do not show errors in a newer destination" {
   )
   assert_eq(ignored.error, None)
 }
+
+///|
+test "a laid-out sheet re-arms only the current Excel navigation" {
+  let (state, ctx, path) = office_selection_fixture()
+  let navigation : OfficeCitationNavigation = {
+    owner: ctx.owner,
+    epoch: state.request_epoch,
+    generation: state.file_link_generation,
+    path,
+    target: ExcelRange(sheet="Sparse", range="A1200:B1201"),
+  }
+  // A loading document keeps a re-armed navigation pending, which makes the
+  // re-arm observable after `update` synchronizes the navigation.
+  let docs = state.docs.copy()
+  docs[path] = { ..docs[path], state: TabLoading, }
+  let state = { ..state, docs, }
+  let (_, rearmed) = update(
+    test_emit(),
+    OfficeCitationLaidOut(navigation),
+    state,
+    ctx,
+  )
+  assert_eq(rearmed.office_navigation, Some(navigation))
+  assert_eq(rearmed.error, None)
+  for
+    stale in [
+      { ..navigation, generation: navigation.generation - 1, },
+      { ..navigation, epoch: navigation.epoch - 1, },
+      { ..navigation, path: test_file("other.xlsx"), },
+    ] {
+    let (_, ignored) = update(
+      test_emit(),
+      OfficeCitationLaidOut(stale),
+      state,
+      ctx,
+    )
+    assert_eq(ignored.office_navigation, None)
+    assert_eq(ignored.error, None)
+  }
+  let (_, closed) = update(
+    test_emit(),
+    OfficeCitationLaidOut(navigation),
+    state,
+    { ..ctx, panel_open: false, },
+  )
+  assert_eq(closed.office_navigation, None)
+}

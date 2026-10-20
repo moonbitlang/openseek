@@ -78,6 +78,13 @@ fn State::sync_office_navigation(
   }
   let reveal = @cmd.custom_cmd(
     scheduler => {
+      // A cold-opened panel may not be laid out yet. Re-arm through the
+      // update loop so `is_current` still fences the later reveal.
+      if @office_location.wait_for_layout(OfficeSurfaceId, navigation.target, () => {
+          scheduler.add(dispatch(OfficeCitationLaidOut(navigation)))
+        }) {
+        return
+      }
       let found = @js.Error_::wrap(
         () => {
           @js.Value::cast_from(
