@@ -984,18 +984,25 @@ fn main {
       file_feedback,
       @action_menu.selection_component(
         state.map(model => model.locale),
-        quote_target.map2(side_chat_quote_target, (column, dock) => {
+        state
+        .map(model => {
+          (model.can_open_side_chat(), model.mounted_side_chat_owner())
+        })
+        .map3(quote_target, side_chat_quote_target, (screen, column, dock) => {
+          let (side_chat, _) = screen
           let targets : Array[@action_menu.SelectionTarget[SelectionComposer]] = []
           if column is Some(target) {
             targets.push({
               source: @interop.ChatSurface::Column.quote_source(),
               target: ColumnComposer(target),
+              side_chat: side_chat && target is ChatComposer(_),
             })
           }
           if dock is Some(identity) {
             targets.push({
               source: @interop.ChatSurface::Dock.quote_source(),
               target: DockComposer(identity),
+              side_chat: false,
             })
           }
           targets
@@ -1019,6 +1026,16 @@ fn main {
             accepted: reply.accepted,
             declined: reply.declined,
           })
+        },
+        side_chat=(target, quote) => {
+          match target {
+            ColumnComposer(ChatComposer(identity)) =>
+              match identity.owner.host() {
+                Some(owner) => emit(SideChatRequested(owner~, quote~))
+                None => @cmd.none
+              }
+            _ => @cmd.none
+          }
         },
       ),
       (context_menu, _, selection_actions) => {

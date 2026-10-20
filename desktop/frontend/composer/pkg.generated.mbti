@@ -31,6 +31,8 @@ pub fn focus_message_end(surface? : @interop.ChatSurface) -> @cmd.Cmd
 
 pub fn is_submit_shortcut(@dom.KeyboardEvent) -> Bool
 
+pub fn quoted_draft(String) -> String
+
 pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array[@mention_context.MentionRef]) -> Unit
 
 // Errors

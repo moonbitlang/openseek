@@ -5859,6 +5859,8 @@ fn update_msg(
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
       model.request_fork(dispatch, slot, through)
+    SideChatRequested(owner~, quote~) =>
+      model.request_side_chat(dispatch, owner, quote)
     SideChatCloseFailed(chat~, message~) =>
       {
         ..model,
