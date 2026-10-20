@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/backend/internal/console_proxy"
+
+// Values
+pub const DefaultRelay : String = "https://seekmoon.moonbitlang.com"
+
+pub async fn serve(Upstream, bundle~ : String, port~ : Int, on_ready? : (String) -> Unit) -> Unit
+
+// Errors
+
+// Types and methods
+pub(all) enum Upstream {
+  Relay(String)
+  Demo
+}
+
+// Type aliases
+
+// Traits

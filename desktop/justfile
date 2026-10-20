@@ -24,6 +24,12 @@ package:
 dev:
     moon run package/dev --target native
 
+# Build the browser console and serve it on loopback against the production
+# relay; see backend/internal/console_proxy/README.md (`--relay`, `--port`, `--demo`).
+console-proxy *args:
+    moon run package/browser --target native
+    moon run backend/internal/console_proxy/main --target native -- {{ args }}
+
 # Build the Desktop browser application and run Playwright.
 test-browser:
     moon run package/browser --target native

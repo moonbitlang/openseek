@@ -1,0 +1,10 @@
+import {
+  "openseek_desktop/backend/internal/console_proxy",
+  "moonbitlang/async",
+  "moonbitlang/core/argparse",
+  "moonbitlang/core/string",
+}
+
+supported_targets = "+native"
+
+pkgtype(kind: "executable")
