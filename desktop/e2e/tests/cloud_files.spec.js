@@ -545,3 +545,36 @@ test('a Cloud generation finishing off screen invalidates only its parked file c
   await expect(source(page)).toContainText('Background generation finished');
   expect(cloud.fileRequests.filter(request => request.content).at(-1).allowLarge).toBeNull();
 });
+
+test('Cloud file events refresh the visible preview, keep other tabs lazy, and reconnect without read-epoch churn', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.get(`${sessionA}:`).push({ name: 'background.txt', is_dir: false });
+  cloud.contents.set(`${sessionA}:background.txt`, { kind: 'content', content: 'Old background', sig: 'old', absolute: '/background.txt' });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud); await openText(page);
+  await showTree(page); await file(page, 'background.txt').click();
+  await expect(source(page)).toContainText('Old background');
+  await showTree(page); await file(page, 'hello #.mbt').click();
+  await expect(source(page)).toContainText('Cloud text');
+  const connections = () => cloud.requests.filter(request => request.path.endsWith('/files/events'));
+  await expect.poll(() => connections().length).toBe(1);
+  const backgroundReads = cloud.fileRequests.filter(request => request.content && request.path === 'background.txt').length;
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: 'Changed visible', sig: 'new', absolute: '/src/hello #.mbt' });
+  cloud.contents.set(`${sessionA}:background.txt`, { kind: 'content', content: 'Changed background', sig: 'new', absolute: '/background.txt' });
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  await expect(source(page)).toContainText('Changed visible');
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'background.txt')).toHaveLength(backgroundReads);
+  expect(connections()).toHaveLength(1);
+  await showTree(page); await file(page, 'background.txt').click();
+  await expect(source(page)).toContainText('Changed background');
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'background.txt')).toHaveLength(backgroundReads + 1);
+  await page.evaluate(session => window.cloudCloseFileEvents(session), sessionA);
+  await expect.poll(() => connections().length).toBe(2);
+  await expect(source(page)).toContainText('Changed background');
+  await cloud.open(sessionB);
+  await expect.poll(() => cloud.fileStreamCancellations).toBe(1);
+  const reads = cloud.fileRequests.length;
+  await page.evaluate(session => window.cloudInvalidateFiles(session), sessionA);
+  expect(cloud.fileRequests).toHaveLength(reads);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});

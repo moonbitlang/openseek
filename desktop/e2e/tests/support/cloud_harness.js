@@ -40,6 +40,8 @@ export class CloudHarness {
     this.disconnectSend = false;
     this.rejectStreamCancel = false;
     this.streamCancellations = 0;
+    this.fileStreamCancellations = 0;
+    this.fileEventStatus = 200;
     this.pauseCreate = null;
     this.pauseSend = null;
     this.pauseHistory = null;
@@ -59,6 +61,7 @@ export class CloudHarness {
     await this.page.exposeFunction('cloudWaitForStream', () => this.pauseStream);
     await this.page.exposeFunction('cloudWaitForEvent', index => this.eventPauses?.get(index));
     await this.page.exposeFunction('cloudStreamCancelled', () => this.streamCancellations++);
+    await this.page.exposeFunction('cloudFileStreamCancelled', () => this.fileStreamCancellations++);
     await this.page.addInitScript(({ cached, authOrigin, cloudOrigin, rejectStreamCancel }) => {
       window.cloudUnhandledRejections = [];
       window.addEventListener('unhandledrejection', event => window.cloudUnhandledRejections.push(String(event.reason)));
@@ -69,8 +72,34 @@ export class CloudHarness {
         localStorage.setItem('seekmoon.account.v1', JSON.stringify({ token: 'ts_fixture-123', user: { user_id: '123', login: 'octocat', avatar_url: '' } }));
       }
       const original = window.fetch;
+      window.cloudFileStreams = new Map();
+      window.cloudInvalidateFiles = session => {
+        for (const controller of window.cloudFileStreams.get(session) || []) {
+          controller.enqueue(new TextEncoder().encode('event: workspace_invalidated\ndata: {}\n\n'));
+        }
+      };
+      window.cloudCloseFileEvents = session => {
+        for (const controller of window.cloudFileStreams.get(session) || []) controller.close();
+        window.cloudFileStreams.delete(session);
+      };
       window.fetch = async (...args) => {
         const response = await original(...args);
+        const fileEvents = String(args[0]).match(/\/v1\/sessions\/([^/]+)\/files\/events$/);
+        if (String(args[0]).startsWith(cloudOrigin) && fileEvents && response.ok) {
+          const initial = new TextEncoder().encode(await response.text());
+          const session = decodeURIComponent(fileEvents[1]);
+          let current;
+          return new Response(new ReadableStream({ start(controller) {
+            current = controller;
+            const streams = window.cloudFileStreams.get(session) || new Set();
+            streams.add(controller);
+            window.cloudFileStreams.set(session, streams);
+            controller.enqueue(initial);
+          }, cancel() {
+            window.cloudFileStreams.get(session)?.delete(current);
+            window.cloudFileStreamCancelled();
+          } }), { status: response.status, headers: response.headers });
+        }
         if (String(args[0]).startsWith(cloudOrigin) && response.headers.get('content-type')?.startsWith('text/event-stream')) {
           const bytes = new TextEncoder().encode(await response.text());
           let cancelled = false;
@@ -194,6 +223,9 @@ export class CloudHarness {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     this.requests.push({ side: 'cloud', path, method: request.method(), body: request.postData(), headers: await request.allHeaders() });
     const json = (data, status = 200) => route.fulfill({ status, headers, contentType: 'application/json', body: JSON.stringify(data) });
+    if (/^\/v1\/sessions\/[^/]+\/files\/events$/.test(path)) {
+      return route.fulfill({ status: this.fileEventStatus, headers, contentType: 'text/event-stream', body: 'event: workspace_invalidated\ndata: {}\n\n' });
+    }
     if (path === '/v1/sessions') {
       if (request.method() === 'POST') {
         const finish = this.pauseCreate;

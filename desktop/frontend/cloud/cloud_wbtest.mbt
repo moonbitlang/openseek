@@ -35,14 +35,14 @@ test "Cloud history reads message metadata without unused IDs or outcomes" {
 
 ///|
 test "SSE dispatches only complete events and preserves multiline data" {
-  let parser = SseParser::new()
+  let parser = @cloud_client.SseParser::new()
   assert_true(parser.line(": keepalive") is None)
   assert_true(parser.line("event: assistant_message\r") is None)
   assert_true(parser.line("data: {\"content\":\"您好 🌙\",\r") is None)
   assert_true(parser.line("data: \"ok\":true}\r") is None)
   assert_eq(
     parser.line("\r"),
-    Some("{\"content\":\"您好 🌙\",\n\"ok\":true}"),
+    Some(("assistant_message", "{\"content\":\"您好 🌙\",\n\"ok\":true}")),
   )
   assert_true(parser.line("") is None)
 }

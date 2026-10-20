@@ -435,6 +435,7 @@ pub(all) enum Msg {
   FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationIdentity)
+  WorkspaceInvalidated(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32)
   RefreshExternalFiles
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])

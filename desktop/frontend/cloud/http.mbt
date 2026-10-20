@@ -113,43 +113,17 @@ async fn send_message(
     }
   }
   check_status(response.code)
-  let parser = SseParser::new()
+  let parser = @cloud_client.SseParser::new()
   while stream.active {
     let line = client.read_until("\n") catch {
       _ => raise CloudError(Unreachable)
     }
     guard line is Some(line) else { break }
-    if parser.line(line) is Some(data) {
+    if parser.line(line) is Some((_, data)) {
       let json = @json.parse(data) catch { _ => raise CloudError(Malformed) }
       event(decode_event(json))
     }
   }
-}
-
-///|
-/// SSE data fields are joined until the empty dispatch line. Comments,
-/// event names and IDs do not supply message content.
-priv struct SseParser {
-  mut data : Array[String]
-}
-
-///|
-fn SseParser::new() -> SseParser {
-  { data: [], }
-}
-
-///|
-fn SseParser::line(self : SseParser, raw : String) -> String? {
-  let line = raw.strip_suffix("\r").unwrap_or(raw.view()).to_owned()
-  if line.is_empty() {
-    let data = self.data
-    self.data = []
-    return if data.is_empty() { None } else { Some(data.join("\n")) }
-  }
-  if line.strip_prefix("data:") is Some(value) {
-    self.data.push(value.strip_prefix(" ").unwrap_or(value).to_owned())
-  }
-  None
 }
 
 ///|

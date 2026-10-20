@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/async",
+  "moonbitlang/async/http",
+  "openseek_desktop/frontend/cloud_client",
   "moonbitlang/openseek_protocol" @wire,
   "openseek_desktop/frontend/cloud",
   "openseek_desktop/frontend/office_location",

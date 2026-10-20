@@ -23,6 +23,8 @@ pub async fn read_file_index(String, String) -> Result[Array[String], Failure]
 
 pub async fn request(String, String, @http.RequestMethod, token? : String, body? : Json) -> Json
 
+pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Result[Unit, Failure]
+
 // Errors
 pub suberror RequestError {
   RequestError(Failure)
@@ -48,6 +50,13 @@ pub(all) enum Failure {
   InvalidImage
 }
 pub fn Failure::label(Self) -> String
+
+pub struct SseParser {
+  mut event : String
+  mut data : Array[String]
+}
+pub fn SseParser::line(Self, String) -> (String, String)?
+pub fn SseParser::new() -> Self
 
 // Type aliases
 

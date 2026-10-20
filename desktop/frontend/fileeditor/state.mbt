@@ -1343,6 +1343,7 @@ pub(all) enum Msg {
   // the one cheap signal that covers them. `owner` fences a background
   // conversation's finish.
   RunSettled(owner~ : @interop.ConversationIdentity)
+  WorkspaceInvalidated(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32)
   // Files outside the checkout, or whose watcher failed, share one stat tick.
   RefreshExternalFiles
   // A `stat_files` reply: each open tab's current mtime signature, or that

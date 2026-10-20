@@ -1746,6 +1746,7 @@ pub fn subscriptions(
       @sub.none
     },
     changes_poll_subscription(state, ctx, dispatch),
+    cloud_files_subscription(ctx, dispatch),
     review_diff_navigation_subscription(state, ctx, dispatch),
     review_context_dismiss_subscription(),
     match ctx.search_input() {
@@ -4279,6 +4280,13 @@ fn update_inner(
         (@cmd.none, state)
       }
     }
+    WorkspaceInvalidated(owner~, auth_epoch~) =>
+      if owner == ctx.owner &&
+        ctx.cloud_files.map(files => files.epoch) == Some(auth_epoch) {
+        refresh_cloud_files(dispatch, state, ctx)
+      } else {
+        (@cmd.none, state)
+      }
     RunSettled(owner=@interop.Cloud(..)) =>
       refresh_cloud_files(dispatch, state, ctx)
     RunSettled(owner=@interop.Host(owner)) =>

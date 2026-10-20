@@ -110,8 +110,8 @@ async fn read_directory_source(
 }
 
 ///|
-/// Cloud has no filesystem watcher. A manual Files refresh and a settled
-/// generation share this invalidation, keeping background tabs lazy.
+/// File events, manual refreshes and settled generations share invalidation,
+/// keeping background tabs lazy.
 fn refresh_cloud_files(
   dispatch : @cmd.Emit[Msg],
   state : State,
@@ -192,7 +192,6 @@ fn refresh_cloud_files(
       removed_directory_reads: Map([]),
       directory_errors: Map([]),
       error: None,
-      explorer_mode: ExplorerFiles,
     },
   )
 }
