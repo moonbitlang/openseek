@@ -77,8 +77,9 @@ fn reconcile_navigation(
     commands.push(command)
     next = updated
   }
-  // Lifecycle fallback may retire a deleted selection; navigation keeps the
-  // requested identity and renders its unavailable state instead of another chat.
+  // Lifecycle fallback may retire a selection deleted elsewhere; navigation
+  // keeps the requested identity and renders its unavailable state instead of
+  // another chat. This page's own delete already replaced its entry above.
   if next.navigation.phase is Active &&
     next.navigation.location is Some(location) {
     match location.target {

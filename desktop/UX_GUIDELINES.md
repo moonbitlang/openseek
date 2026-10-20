@@ -185,8 +185,11 @@ history lasts for the window and retains each Cloud conversation's account
 identity. Draft URLs identify in-memory drafts and do not promise recovery of
 unsaved content after refresh. An expired draft replaces its current history
 entry with the corresponding new-chat page and clears the old conversation
-selection. Confirmed missing stored targets and load failures retain their
-distinct unavailable states. Offline and connecting devices keep their
+selection. Deleting the shown conversation from this window, whether on a
+device or in Cloud, replaces its entry with a fresh draft; a conversation
+deleted elsewhere, and older history entries for a deleted one, show the
+unavailable state. Confirmed missing stored targets and load failures retain
+their distinct unavailable states. Offline and connecting devices keep their
 connection UI.
 
 `/device/:device/chat/new` and `/device/:device/codex/new` are stable blank
