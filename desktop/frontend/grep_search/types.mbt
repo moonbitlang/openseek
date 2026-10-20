@@ -161,8 +161,9 @@ pub fn State::selected_semantic_reference(
 pub(all) struct Input {
   model : String
   thinking : @protocol.OpenSeekThinking?
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   root : @common.Uri?
+  cloud_access : @cloud_client.Access?
 } derive(Eq)
 
 ///|
@@ -172,7 +173,22 @@ pub fn Input::Input(
   owner~ : @interop.ConversationKey,
   root~ : @common.Uri?,
 ) -> Input {
-  { owner, root, model, thinking, }
+  { owner: Host(owner), root, model, thinking, cloud_access: None, }
+}
+
+///|
+pub fn Input::cloud(
+  owner~ : @interop.ConversationIdentity,
+  access~ : @cloud_client.Access,
+  root~ : @common.Uri,
+) -> Input {
+  {
+    owner,
+    root: Some(root),
+    model: "",
+    thinking: None,
+    cloud_access: Some(access),
+  }
 }
 
 ///|
@@ -207,18 +223,18 @@ pub(all) enum Msg {
   ToggleSemanticGroup(pattern~ : String, path~ : String?)
   SetSemanticResultFilter(SemanticResultFilter)
   RequestStarted(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32
   )
   Loaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
     reply~ : @protocol.SearchTextReply
   )
   SemanticLoaded(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
     reply~ : @protocol.SearchSemanticReply
@@ -236,7 +252,7 @@ pub(all) enum Msg {
     file_count~ : Int32
   )
   RequestFailed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     root~ : String,
     generation~ : Int32,
     code~ : String,

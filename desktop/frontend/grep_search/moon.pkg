@@ -10,13 +10,12 @@ import {
   "openseek_desktop/commands",
   "openseek_desktop/protocol",
   "openseek_desktop/frontend/interop",
+  "openseek_desktop/frontend/cloud_client",
+  "openseek_desktop/uri",
+  "moonbitlang/core/json",
   "openseek_desktop/frontend/icons",
   "openseek_desktop/frontend/resource",
   "openseek_desktop/frontend/mention_context",
 }
 
 supported_targets = "js"
-
-import {
-  "moonbitlang/core/json",
-} for "wbtest"

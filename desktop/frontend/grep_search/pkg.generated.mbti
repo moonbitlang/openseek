@@ -7,6 +7,7 @@ import {
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/debug",
   "moonbitlang/editor/base/common",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
@@ -28,10 +29,12 @@ pub fn EditorHighlights::to_repr(Self) -> @debug.Repr
 pub(all) struct Input {
   model : String
   thinking : @protocol.OpenSeekThinking?
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   root : @common.Uri?
+  cloud_access : @cloud_client.Access?
 } derive(Eq)
 pub fn Input::Input(model~ : String, thinking~ : @protocol.OpenSeekThinking?, owner~ : @interop.ConversationKey, root~ : @common.Uri?) -> Self
+pub fn Input::cloud(owner~ : @interop.ConversationIdentity, access~ : @cloud_client.Access, root~ : @common.Uri) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 
@@ -64,11 +67,11 @@ pub(all) enum Msg {
   ToggleSemanticHit(String)
   ToggleSemanticGroup(pattern~ : String, path~ : String?)
   SetSemanticResultFilter(SemanticResultFilter)
-  RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32)
-  Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, reply~ : @protocol.SearchTextReply)
-  SemanticLoaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, reply~ : @protocol.SearchSemanticReply)
+  RequestStarted(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32)
+  Loaded(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, reply~ : @protocol.SearchSemanticReply)
   SemanticProgress(root~ : String, session_key~ : String, generation~ : Int32, matches~ : Array[@protocol.SemanticSearchHit], match_count~ : Int32, file_count~ : Int32)
-  RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, code~ : String, message~ : String)
+  RequestFailed(owner~ : @interop.ConversationIdentity, root~ : String, generation~ : Int32, code~ : String, message~ : String)
 }
 
 type Page derive(Eq)
@@ -107,7 +110,7 @@ pub fn State::explorer_view(locale? : @i18n.Locale, Self, Input, @cmd.Emit[Msg],
 pub fn State::handle(Self, Msg, Input) -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::park(Self) -> Self
-pub fn State::reset_checkout(Self) -> Self
+pub fn State::reset_checkout(Self, text_only? : Bool) -> Self
 pub fn State::selected_semantic_reference(Self, String) -> @mention_context.SemanticSearchReference?
 pub fn State::subscription(Self, Input, @cmd.Emit[Msg]) -> @sub.Sub
 

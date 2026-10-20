@@ -2157,7 +2157,9 @@ pub fn sync(
         } else {
           state.explorer_mode
         },
-        search: state.search.reset_checkout(),
+        search: state.search.reset_checkout(
+          text_only=ctx.owner is @interop.Cloud(..),
+        ),
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
         review_diff_ignore_comments: state.review_diff_ignore_comments,
@@ -3245,10 +3247,7 @@ fn update_inner(
       )
     ToggleActiveReviewHunk => (@cmd.none, state.toggle_active_review_hunk(ctx))
     Search(msg) => {
-      guard ctx.search_input() is Some(input) &&
-        ctx.owner is @interop.Host(owner) else {
-        return (@cmd.none, state)
-      }
+      guard ctx.search_input() is Some(input) else { return (@cmd.none, state) }
       let search = state.search.handle(msg, input)
       let next = { ..state, search, }
       let highlights = ctx.active_file.bind(path => {
@@ -3258,7 +3257,8 @@ fn update_inner(
         ctx.root().bind(root => search.selected_semantic_reference(root.path))
       }
       let reference = selection(search)
-      let selection_command = if reference != selection(state.search) {
+      let selection_command = if ctx.owner is @interop.Host(owner) &&
+        reference != selection(state.search) {
         @cmd.custom_cmd(scheduler => {
           scheduler.add(dispatch(SemanticSelectionChanged(owner~, reference~)))
         })
@@ -3276,10 +3276,15 @@ fn update_inner(
     SemanticSelectionChanged(..) => (@cmd.none, state)
     ExplorerModeSelected(mode) => {
       if ctx.owner is @interop.Cloud(..) {
-        return if mode is ExplorerFiles {
-          refresh_cloud_files(dispatch, state, ctx)
-        } else {
-          (@cmd.none, state)
+        match mode {
+          ExplorerFiles =>
+            return refresh_cloud_files(
+              dispatch,
+              { ..state, explorer_mode: ExplorerFiles, },
+              ctx,
+            )
+          ExplorerChanges => return (@cmd.none, state)
+          ExplorerSearch => ()
         }
       }
       let already_selected = state.explorer_mode == mode

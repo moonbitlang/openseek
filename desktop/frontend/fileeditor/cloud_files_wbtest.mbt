@@ -119,7 +119,7 @@ test "Cloud file state fences session switches and account lifecycle changes" {
   assert_true(ignored.children.is_empty())
   assert_true(renewed.watched_paths(relogged) is None)
   assert_true(renewed.polled_files(relogged).is_empty())
-  assert_true(relogged.search_input() is None)
+  assert_true(relogged.search_input() is Some(_))
 }
 
 ///|

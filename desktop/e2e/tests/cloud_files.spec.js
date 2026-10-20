@@ -250,7 +250,7 @@ test('Cloud browses nested text files through the existing read-only Files pane'
   const cloud = new CloudFilesHarness(page);
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
   await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: 'Search', exact: true })).toHaveCount(1);
   await openText(page);
   expect(cloud.fileRequests.at(-1)).toMatchObject({ session: sessionA, path: 'src/hello #.mbt', content: true });
   expect(cloud.fileRequests.at(-1).headers.authorization).toBe('Bearer ts_fixture-123');
@@ -544,6 +544,49 @@ test('a Cloud generation finishing off screen invalidates only its parked file c
   await cloud.open(sessionA);
   await expect(source(page)).toContainText('Background generation finished');
   expect(cloud.fileRequests.filter(request => request.content).at(-1).allowLarge).toBeNull();
+});
+
+test('Cloud text search reuses options, results, keyboard tabs and positioned file opens', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.contents.set(`${sessionA}:src/hello #.mbt`, { kind: 'content', content: 'fn hello {\n  // moon moon\n}', sig: 'search', absolute: '/src/hello #.mbt' });
+  const searches = [];
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/*/files/search`, async route => {
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const body = route.request().postDataJSON(); searches.push(body);
+    if (body.query === '[') return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, matches: [], match_count: 0, file_count: 0, limit_hit: false, cancelled: false, error_code: 'invalid_regex', error_message: 'regex parse error: unclosed character class' }) });
+    return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ generation: body.generation, matches: [{ path: 'src/hello #.mbt', line_number: 2, preview: '  // moon moon', preview_start_column: 1, ranges: [{ start_column: 6, end_column: 10 }, { start_column: 11, end_column: 15 }] }], match_count: 2, file_count: 1, limit_hit: false, cancelled: false }) });
+  });
+  await cloud.goto(); await openFiles(page, cloud);
+  const filesTab = page.getByRole('tab', { name: 'Files', exact: true });
+  await filesTab.focus(); await page.keyboard.press('ArrowRight');
+  const searchTab = page.getByRole('tab', { name: 'Search', exact: true });
+  await expect(searchTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Changes', exact: true })).toHaveCount(0);
+  const search = page.locator('.workspace-search');
+  await expect(search.getByRole('button', { name: 'Code search', exact: true })).toHaveCount(0);
+  await search.getByTitle('Match Case', { exact: true }).click();
+  await search.getByTitle('Match Whole Word', { exact: true }).click();
+  await search.getByTitle('Use Regular Expression', { exact: true }).click();
+  await search.getByTitle('Toggle Search Details', { exact: true }).click();
+  await search.getByRole('textbox', { name: 'files to include', exact: true }).fill('src/**/*.mbt');
+  await search.getByRole('textbox', { name: 'files to exclude', exact: true }).fill('**/*_test.mbt');
+  const query = search.getByRole('textbox', { name: 'Search', exact: true });
+  await query.fill('['); await query.press('Enter');
+  await expect(search.getByRole('alert')).toContainText('regex parse error: unclosed character class');
+  await query.fill('moon'); await query.press('Enter');
+  await expect(search.locator('.search-summary')).toHaveText('2 matches in 1 file');
+  await expect(search.getByRole('alert')).toHaveCount(0);
+  expect(searches.at(-1)).toMatchObject({ query: 'moon', case_sensitive: true, whole_word: true, regex: true, include_glob: 'src/**/*.mbt', exclude_glob: '**/*_test.mbt' });
+  expect(Object.keys(searches.at(-1)).sort()).toEqual(['query', 'case_sensitive', 'whole_word', 'regex', 'include_glob', 'exclude_glob', 'generation', 'max_results'].sort());
+  await expect(search.locator('.search-match-highlight')).toHaveText(['moon', 'moon']);
+  await page.screenshot({ path: testInfo.outputPath('cloud-search.png'), fullPage: true });
+  await search.locator('.search-result-row').getByRole('button', { name: /moon moon/ }).click();
+  await expect(source(page)).toContainText('moon moon');
+  expect(cloud.fileRequests.some(request => request.content && request.path === 'src/hello #.mbt')).toBe(true);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
 });
 
 test('Cloud file events refresh the visible preview, keep other tabs lazy, and reconnect without read-epoch churn', async ({ page }) => {

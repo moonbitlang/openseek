@@ -923,16 +923,28 @@ pub fn Ctx::root(self : Ctx) -> @common.Uri? {
 
 ///|
 fn Ctx::search_input(self : Ctx) -> @grep_search.Input? {
-  self.owner
-  .host()
-  .map(owner => {
-    @grep_search.Input(
-      owner~,
-      root=self.root(),
-      model=self.model,
-      thinking=self.thinking,
-    )
-  })
+  match self.owner {
+    Host(owner) =>
+      Some(
+        @grep_search.Input(
+          owner~,
+          root=self.root(),
+          model=self.model,
+          thinking=self.thinking,
+        ),
+      )
+    Cloud(..) => {
+      guard self.root() is Some(root) && self.cloud_files is Some(files) else {
+        return None
+      }
+      Some(
+        @grep_search.Input::cloud(owner=self.owner, root~, access={
+          token: files.token,
+          epoch: files.epoch,
+        }),
+      )
+    }
+  }
 }
 
 ///|
@@ -1343,7 +1355,10 @@ pub(all) enum Msg {
   // the one cheap signal that covers them. `owner` fences a background
   // conversation's finish.
   RunSettled(owner~ : @interop.ConversationIdentity)
-  WorkspaceInvalidated(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32)
+  WorkspaceInvalidated(
+    owner~ : @interop.ConversationIdentity,
+    auth_epoch~ : Int32
+  )
   // Files outside the checkout, or whose watcher failed, share one stat tick.
   RefreshExternalFiles
   // A `stat_files` reply: each open tab's current mtime signature, or that

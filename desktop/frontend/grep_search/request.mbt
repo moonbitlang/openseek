@@ -1,6 +1,11 @@
 ///|
 priv suberror SearchRequestSub {
-  SearchRequest(@interop.ConversationKey, SearchRequest, Int32, @cmd.Emit[Msg])
+  SearchRequest(
+    @interop.ConversationIdentity,
+    SearchRequest,
+    Int32,
+    @cmd.Emit[Msg]
+  )
 }
 
 ///|
@@ -10,6 +15,7 @@ priv suberror SearchRequestSub {
 /// other mode.
 priv enum SearchRequest {
   Text(@protocol.SearchTextPayload)
+  CloudText(@cloud_client.Access, @protocol.SearchTextPayload)
   Semantic(@protocol.SearchSemanticPayload)
 }
 
@@ -23,7 +29,7 @@ struct SearchRequestIdentity {
 ///|
 fn SearchRequest::identity(self : SearchRequest) -> SearchRequestIdentity {
   match self {
-    Text(payload) =>
+    Text(payload) | CloudText(_, payload) =>
       { root: payload.root, generation: payload.generation, kind: "text", }
     Semantic(payload) =>
       { root: payload.root, generation: payload.generation, kind: "semantic", }
@@ -45,8 +51,9 @@ priv enum LoadedReply {
 ///|
 fn SearchRequest::cancel(
   self : SearchRequest,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
 ) -> Unit {
+  guard owner is Host(owner) else { return }
   @js.Promise::from_async(() => {
     match self {
       Text(payload) =>
@@ -62,6 +69,7 @@ fn SearchRequest::cancel(
         ) catch {
           _ => ()
         }
+      CloudText(_, _) => ()
       Semantic(payload) =>
         ignore(
           @interop.bridge_request(
@@ -112,17 +120,34 @@ fn search_request_loader(
           Text(payload) =>
             TextLoaded(
               @interop.bridge_request(
-                owner.channel,
+                owner.host().unwrap().channel,
                 @commands.fs_search_text,
                 payload,
               ),
             ) catch {
               error => RequestFailed(@interop.bridge_error_text(error))
             }
+          CloudText(access, payload) =>
+            TextLoaded(
+              decode_cloud_search_reply(
+                @cloud_client.request(
+                  @cloud_client.CloudOrigin,
+                  "/v1/sessions/\{@uri.encode_component(owner.session())}/files/search",
+                  Post,
+                  token=access.token,
+                  body=cloud_search_body(payload),
+                ),
+                payload.root,
+              ),
+            ) catch {
+              @cloud_client.RequestError(failure) =>
+                RequestFailed(failure.label())
+              _ => RequestFailed(@cloud_client.Failure::Malformed.label())
+            }
           Semantic(payload) =>
             SemanticLoaded(
               @interop.bridge_request(
-                owner.channel,
+                owner.host().unwrap().channel,
                 @commands.fs_search_semantic,
                 payload,
               ),
@@ -205,14 +230,22 @@ fn State::search_subscription(
   let page = self.page
   guard (page.phase is Debouncing || page.phase is Loading) &&
     input.root is Some(root) &&
-    @resource.belongs_to(root, input.owner.channel) else {
+    input.owns_root(root) else {
     return @sub.none
   }
   let request = match page.mode {
     Text =>
       page
       .text_request_payload(input)
-      .map(payload => SearchRequest::Text(payload))
+      .bind(payload => {
+        match input.owner {
+          Host(_) => Some(SearchRequest::Text(payload))
+          Cloud(..) =>
+            input.cloud_access.map(access => {
+              SearchRequest::CloudText(access, payload)
+            })
+        }
+      })
     Semantic =>
       page
       .semantic_request_payload(input)
@@ -222,7 +255,7 @@ fn State::search_subscription(
   let identity = request.identity()
   let request_root = identity.root
   @sub.custom_sub(
-    "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request_root}:\{identity.generation}:\{identity.kind}",
+    "grep-search:\{input.owner.key()}:\{input.cloud_access.map(access => access.epoch).unwrap_or(0)}:\{request_root}:\{identity.generation}:\{identity.kind}",
     Local,
     SearchRequestSub::SearchRequest(input.owner, request, page.delay_ms, emit),
     @sub.SubLoader(search_request_loader),

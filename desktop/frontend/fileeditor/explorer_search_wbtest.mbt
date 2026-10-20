@@ -26,12 +26,7 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     error: None,
   }
   let search = @grep_search.State::empty().handle(
-    @grep_search.Loaded(
-      owner=ctx.owner.host().unwrap(),
-      root=root.path,
-      generation=0,
-      reply~,
-    ),
+    @grep_search.Loaded(owner=ctx.owner, root=root.path, generation=0, reply~),
     ctx.search_input().unwrap(),
   )
   let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }
@@ -76,4 +71,45 @@ test "Explorer tab keyboard navigation wraps and honors Home and End" {
     explorer_tab_key_target(ExplorerFiles, "End") == Some(ExplorerSearch),
   )
   assert_true(explorer_tab_key_target(ExplorerFiles, "Enter") is None)
+}
+
+///|
+test "Cloud search actions reach the shared reducer without enabling semantic selection" {
+  let ctx = cloud_ctx("account", "session", 4)
+  let (base, _) = sync(test_emit(), State::empty(), ctx)
+  let (_, selected) = update(
+    test_emit(),
+    ExplorerModeSelected(ExplorerSearch),
+    base,
+    ctx,
+  )
+  let (_, changed) = update(
+    test_emit(),
+    Search(@grep_search.QueryChanged("needle")),
+    selected,
+    ctx,
+  )
+  assert_true(
+    changed.search ==
+    selected.search.handle(
+      @grep_search.QueryChanged("needle"),
+      ctx.search_input().unwrap(),
+    ),
+  )
+  assert_false(changed.search == selected.search)
+  let (_, details) = update(
+    test_emit(),
+    Search(@grep_search.ToggleDetails),
+    changed,
+    ctx,
+  )
+  assert_false(details.search == changed.search)
+  assert_true(
+    explorer_tab_key_target(ExplorerFiles, "ArrowRight", cloud=true)
+    is Some(ExplorerSearch),
+  )
+  assert_true(
+    explorer_tab_key_target(ExplorerSearch, "ArrowLeft", cloud=true)
+    is Some(ExplorerFiles),
+  )
 }

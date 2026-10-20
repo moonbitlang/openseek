@@ -42,13 +42,17 @@ fn fresh_page() -> Page {
 /// generation deliberately survives the reset so an A -> B -> A transition
 /// cannot make an old reply current again, while the armed Search mode and its
 /// semantic settings survive the checkout switch.
-pub fn State::reset_checkout(self : State) -> State {
+pub fn State::reset_checkout(self : State, text_only~ : Bool = false) -> State {
   let generation = self.generation + 1
   {
     page: {
       ..fresh_page(),
       generation,
-      mode: self.page.mode,
+      mode: if text_only {
+        Text
+      } else {
+        self.page.mode
+      },
       text: fresh_page().text,
       semantic: { ..self.page.semantic, hits: [], partial: false, },
     },
@@ -66,7 +70,11 @@ fn Input::root_text(self : Input) -> String {
 /// Host echoes it back in progress notifications so a stream can be fenced
 /// against the same owner/root/generation triple as the final reply.
 fn Input::semantic_session_key(self : Input) -> String {
-  "semantic-search:\{self.owner.channel.uri_authority()}:\{self.owner.session}:\{self.root_text()}"
+  match self.owner {
+    Host(owner) =>
+      "semantic-search:\{owner.channel.uri_authority()}:\{owner.session}:\{self.root_text()}"
+    Cloud(..) => ""
+  }
 }
 
 ///|
@@ -149,6 +157,7 @@ pub fn State::handle(self : State, msg : Msg, input : Input) -> State {
         input,
         immediate=false,
       )
+    ModeChanged(Semantic) if input.owner is Cloud(..) => self
     ModeChanged(mode) =>
       self.schedule(
         {
@@ -655,7 +664,11 @@ fn Page::text_request_payload(
     whole_word: self.text.whole_word,
     include_glob: self.include_glob,
     exclude_glob: self.exclude_glob,
-    session_key: "grep-search:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{root.path}",
+    session_key: match input.owner {
+      Host(owner) =>
+        "grep-search:\{owner.channel.uri_authority()}:\{owner.session}:\{root.path}"
+      Cloud(..) => ""
+    },
     generation: self.generation,
     max_results: MaxSearchResults,
   })
@@ -666,7 +679,7 @@ fn Page::semantic_request_payload(
   self : Page,
   input : Input,
 ) -> @protocol.SearchSemanticPayload? {
-  guard self.mode is Semantic else { return None }
+  guard self.mode is Semantic && input.owner is Host(_) else { return None }
   guard input.root is Some(root) else { return None }
   let patterns = self.semantic.patterns.filter(pattern => {
     !pattern.trim().is_empty()
@@ -688,7 +701,8 @@ test "checkout reset clears results while preserving the generation fence" {
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    owner: { channel: @interop.ChannelId::Local, session: "first", },
+    owner: Host({ channel: @interop.ChannelId::Local, session: "first", }),
+    cloud_access: None,
     root: Some(@common.Uri::parse("file:///work/a")),
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
@@ -705,7 +719,8 @@ test "mode changes preserve each search input and shared details" {
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    owner: { channel: @interop.ChannelId::Local, session: "mode-state", },
+    owner: Host({ channel: @interop.ChannelId::Local, session: "mode-state", }),
+    cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
   }
   let state = State::empty()
@@ -728,15 +743,16 @@ test "mode changes preserve each search input and shared details" {
 
 ///|
 test "query changes debounce and stale replies cannot replace the page" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "one",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
@@ -762,15 +778,16 @@ test "query changes debounce and stale replies cannot replace the page" {
 
 ///|
 test "semantic progress streams partial hits and late progress is fenced" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "semantic-progress",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -822,15 +839,16 @@ test "semantic progress streams partial hits and late progress is fenced" {
 
 ///|
 test "semantic progress batches append only new hits" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "semantic-batches",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -878,15 +896,16 @@ test "semantic progress batches append only new hits" {
 
 ///|
 test "new semantic search clears partial results and cancellation clears them" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "semantic-clear",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -940,15 +959,16 @@ test "new semantic search clears partial results and cancellation clears them" {
 
 ///|
 test "active result helpers share file grouping and highlight projection" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "active-results",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty().handle(QueryChanged("moon"), input)
@@ -997,15 +1017,16 @@ test "active result helpers share file grouping and highlight projection" {
 
 ///|
 test "parking a checkout keeps its draft and fences the in-flight reply" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "suspend",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let running = State::empty()
@@ -1038,15 +1059,16 @@ test "parking a checkout keeps its draft and fences the in-flight reply" {
 
 ///|
 test "refresh is immediate and loaded file groups can collapse and clear" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "one",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -1097,15 +1119,16 @@ test "refresh is immediate and loaded file groups can collapse and clear" {
 
 ///|
 test "editor highlights include every retained match for the file" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "editor-highlights",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -1170,15 +1193,16 @@ test "editor highlights include every retained match for the file" {
 
 ///|
 test "invalid regex replies retain their actionable Host error" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "regex",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()

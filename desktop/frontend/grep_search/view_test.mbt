@@ -14,7 +14,8 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
   let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
-    owner: { channel: @interop.ChannelId::Local, session: "icons", },
+    owner: Host({ channel: @interop.ChannelId::Local, session: "icons", }),
+    cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
   }
   let html = render_search(State::empty(), input)
@@ -26,15 +27,16 @@ test "Search renders VS Code's Whole Word codicon instead of a text label" {
 ///|
 #cfg(not(target="js"))
 test "Search view groups files and marks matching UTF-16 slices" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "view",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()
@@ -86,15 +88,16 @@ test "Search view groups files and marks matching UTF-16 slices" {
 ///|
 #cfg(not(target="js"))
 test "large Search replies render incrementally without changing totals" {
-  let owner : @interop.ConversationKey = {
+  let owner : @interop.ConversationIdentity = Host({
     channel: @interop.ChannelId::Local,
     session: "large-view",
-  }
+  })
   let root = @common.Uri::parse("file:///work")
   let input : @grep_search.Input = {
     model: "deepseek-v4-flash",
     thinking: Some(ThinkingHigh),
     owner,
+    cloud_access: None,
     root: Some(root),
   }
   let state = State::empty()

@@ -84,7 +84,8 @@ fn Page::pattern_repair_request_payload(
   self : Page,
   input : Input,
 ) -> @protocol.PatternRepairPayload? {
-  guard self.mode is Semantic &&
+  guard input.owner is Host(_) &&
+    self.mode is Semantic &&
     self.pattern_repair_phase is PatternRepairRequested &&
     input.root is Some(root) else {
     return None
@@ -120,17 +121,18 @@ fn State::pattern_repair_subscription(
 ) -> @sub.Sub {
   let page = self.page
   guard page.pattern_repair_phase is PatternRepairRequested &&
+    input.owner is Host(owner) &&
     input.root is Some(root) &&
-    @resource.belongs_to(root, input.owner.channel) else {
+    @resource.belongs_to(root, owner.channel) else {
     return @sub.none
   }
   guard page.pattern_repair_request_payload(input) is Some(request) else {
     return @sub.none
   }
   @sub.custom_sub(
-    "grep-pattern-repair:\{input.owner.channel.uri_authority()}:\{input.owner.session}:\{request.root}:\{request.generation}",
+    "grep-pattern-repair:\{owner.channel.uri_authority()}:\{owner.session}:\{request.root}:\{request.generation}",
     Local,
-    PatternRepairRequestSub::PatternRepairRequest(input.owner, request, 0, emit),
+    PatternRepairRequestSub::PatternRepairRequest(owner, request, 0, emit),
     @sub.SubLoader(pattern_repair_request_loader),
   )
 }

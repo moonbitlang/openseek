@@ -1,7 +1,8 @@
 ///|
 test "pattern repair carries model and thinking through the request codec" {
   let input : Input = {
-    owner: { channel: @interop.ChannelId::Local, session: "repair", },
+    owner: Host({ channel: @interop.ChannelId::Local, session: "repair", }),
+    cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
     model: "glm-5.3",
     thinking: Some(ThinkingMax),
@@ -28,7 +29,8 @@ test "pattern repair carries model and thinking through the request codec" {
 ///|
 test "repair completion is pure, ignores stale replies, and preserves outcomes" {
   let input : Input = {
-    owner: { channel: @interop.ChannelId::Local, session: "repair", },
+    owner: Host({ channel: @interop.ChannelId::Local, session: "repair", }),
+    cloud_access: None,
     root: Some(@common.Uri::parse("file:///work")),
     model: "glm-5.3",
     thinking: None,

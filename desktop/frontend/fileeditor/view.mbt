@@ -177,7 +177,26 @@ fn ExplorerMode::previous(self : ExplorerMode) -> ExplorerMode {
 }
 
 ///|
-fn explorer_tab_key_target(mode : ExplorerMode, key : String) -> ExplorerMode? {
+fn explorer_tab_key_target(
+  mode : ExplorerMode,
+  key : String,
+  cloud~ : Bool = false,
+) -> ExplorerMode? {
+  if cloud &&
+    (
+      key == "ArrowRight" ||
+      key == "ArrowDown" ||
+      key == "ArrowLeft" ||
+      key == "ArrowUp"
+    ) {
+    return Some(
+      if mode is ExplorerFiles {
+        ExplorerSearch
+      } else {
+        ExplorerFiles
+      },
+    )
+  }
   match key {
     "Home" => Some(ExplorerFiles)
     "End" => Some(ExplorerSearch)
@@ -196,7 +215,7 @@ fn explorer_tab(
   mode : ExplorerMode,
   title : String,
   children : Array[@html.Html],
-  single~ : Bool = false,
+  cloud~ : Bool = false,
 ) -> @html.Html {
   let active = selected == mode
   @html.button(
@@ -210,12 +229,7 @@ fn explorer_tab(
       .aria_controls(ExplorerPanelId)
       .aria_selected(active.to_string())
       .on_keydown(event => {
-        match
-          (if single {
-            None
-          } else {
-            explorer_tab_key_target(mode, event.key())
-          }) {
+        match explorer_tab_key_target(mode, event.key(), cloud~) {
           Some(target) => {
             event.prevent_default()
             @cmd.batch([
@@ -766,7 +780,7 @@ fn tree_pane(
             @icons.icon(@icons.icon_folder),
             @html.span(class="visually-hidden", ui(locale, FilesLabel)),
           ],
-          single=ctx.owner.host() is None,
+          cloud=ctx.owner is @interop.Cloud(..),
         ),
         if ctx.owner.host() is Some(_) {
           explorer_tab(
@@ -784,7 +798,7 @@ fn tree_pane(
         } else {
           @html.nothing
         },
-        if ctx.owner.host() is Some(_) {
+        if ctx.search_input() is Some(_) {
           explorer_tab(
             dispatch,
             state.explorer_mode,
@@ -794,6 +808,7 @@ fn tree_pane(
               @icons.icon(@icons.icon_search),
               @html.span(class="visually-hidden", ui(locale, SearchLabel)),
             ],
+            cloud=ctx.owner is @interop.Cloud(..),
           )
         } else {
           @html.nothing

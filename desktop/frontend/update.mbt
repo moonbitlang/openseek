@@ -3277,7 +3277,11 @@ fn update_msg(
     // mention, and Quick Open navigation. An active picker is fulfilled in
     // place; an already-open file is activated.
     FileEditor(@fileeditor.SearchMatchSelected(path~, range~)) =>
-      request_open_path(dispatch, model, path, Some(range))
+      match model.cloud_identity() {
+        Some(owner) =>
+          open_cloud_file(dispatch, model, owner, path, Some(range))
+        None => request_open_path(dispatch, model, path, Some(range))
+      }
     SemanticSelectionMaterialized(owner~, submission_id~, artifact~) => {
       guard model.find_conversation(owner.channel, owner.session) is Some(conv) &&
         conv.pending_semantic_submission is Some(pending) &&

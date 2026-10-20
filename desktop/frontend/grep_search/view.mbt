@@ -847,6 +847,7 @@ fn semantic_pattern_group_view(
 fn page_view(
   locale~ : @i18n.Locale = English,
   page : Page,
+  semantic_enabled~ : Bool = true,
   emit : @cmd.Emit[Msg],
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
@@ -883,7 +884,11 @@ fn page_view(
   }
   @html.div(class="workspace-search", [
     @html.div(class="search-query-row", [
-      mode_control(locale~, page.mode, emit),
+      if semantic_enabled {
+        mode_control(locale~, page.mode, emit)
+      } else {
+        @html.nothing
+      },
       if page.mode is Text {
         @html.textarea(
           value=page.text.query,
@@ -986,7 +991,14 @@ pub fn State::explorer_view(
   open_match : (String, @common.Range) -> @cmd.Cmd,
 ) -> @html.Html {
   match input.root {
-    Some(_) => page_view(locale~, self.page, emit, open_match)
+    Some(_) =>
+      page_view(
+        locale~,
+        self.page,
+        semantic_enabled=input.owner is Host(_),
+        emit,
+        open_match,
+      )
     None =>
       @html.div(class="workspace-search search-no-workspace", [
         @html.div(class="search-empty-title", ui(locale, NoCheckout)),
