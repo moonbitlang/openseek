@@ -526,3 +526,63 @@ test "a side chat whose stop failed gets its tab back" {
   }
   assert_true(side.run is Open(run_id="r7", stage=AtStep(None)))
 }
+
+///|
+/// `model` with the side chat's tab still in the strip but another tab on
+/// screen, and the side chat's transcript in sync state `sync`.
+fn side_chat_behind_another_tab(model : Model, sync : TranscriptSync) -> Model {
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    abort("the side chat must be held")
+  }
+  model
+  .replace_conversation({ ..side, sync, })
+  .with_dock_state({
+    tabs: [SideChat(owner=side_chat_owner()), FilePicker],
+    active: Some(FilePicker),
+  })
+}
+
+///|
+fn side_chat_sync(model : Model) -> TranscriptSync? {
+  model
+  .find_conversation(@interop.ChannelId::Local, SideChatId)
+  .map(side => side.sync)
+}
+
+///|
+test "choosing a side chat's tab re-reads it, and retries a read that gave up" {
+  let chosen = @dock.SideChat(owner=side_chat_owner())
+  let synced = side_chat_behind_another_tab(side_chat_model(), Synced)
+  let (_, reread) = update(test_dispatch(), Dock(TabActivated(chosen)), synced)
+  assert_true(side_chat_sync(reread) is Some(Reloading(attempt=1, ..)))
+  let failed = side_chat_behind_another_tab(
+    side_chat_model(),
+    ReloadFailed(generation=1, buffered=[]),
+  )
+  let (_, retried) = update(test_dispatch(), Dock(TabActivated(chosen)), failed)
+  assert_true(side_chat_sync(retried) is Some(Reloading(attempt=1, ..)))
+  // A read in flight stays the only one.
+  let reading = side_chat_behind_another_tab(
+    reread,
+    side_chat_sync(reread).unwrap(),
+  )
+  let (_, again) = update(test_dispatch(), Dock(TabActivated(chosen)), reading)
+  assert_eq(
+    again.transcript_request_generation,
+    reread.transcript_request_generation,
+  )
+}
+
+///|
+test "a reconnect re-reads the side chat in the dock" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let shown = model.replace_conversation({ ..side, sync: Synced, })
+  assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
+  let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, shown)
+  assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
+}
