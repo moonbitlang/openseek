@@ -1873,14 +1873,17 @@ fn conversation_header(
         icon(icon_terminal),
       ),
     )
-    items.push(
-      @conversation_overview.toggle(
-        locale=model.locale,
-        model.overview_open,
-        dispatch(ToggleOverview),
-      ),
-    )
   }
+  // The overview is the only place the conversation's connectors are shown,
+  // so the narrow layout keeps it: there it is always the panel over the
+  // transcript.
+  items.push(
+    @conversation_overview.toggle(
+      locale=model.locale,
+      model.overview_open,
+      dispatch(ToggleOverview),
+    ),
+  )
   items
 }
 
@@ -2287,7 +2290,7 @@ fn view(
                 composer_html
               },
               // Last, so showing it never shifts the composer's position.
-              if model.overview_open && !model.narrow {
+              if model.overview_open {
                 overview_view(dispatch, model, conv)
               } else {
                 @html.nothing

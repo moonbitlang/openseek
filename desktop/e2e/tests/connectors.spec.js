@@ -243,5 +243,26 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await page.screenshot({ path: testInfo.outputPath('overview-panel.png') });
   await page.getByRole('textbox').first().click();
   await expect(page.getByRole('textbox').first()).toBeFocused();
+
+  // The narrow layout (760px and below, phones included) keeps the overview:
+  // it is the only place the connectors are shown. It stays a panel inside
+  // the window, the transcript keeps its row, and the titlebar control still
+  // hides and shows it.
+  for (const width of [760, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await expect(panel).toBeVisible();
+    await keepsItsRow();
+    const box = await panel.boundingBox();
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'Refresh', exact: true })).toBeVisible();
+    await panel.getByRole('button', { name: 'Connectors', exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'Hide overview', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
+  await expect(panel).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('overview-phone.png') });
   expect(app.pageErrors).toEqual([]);
 });
