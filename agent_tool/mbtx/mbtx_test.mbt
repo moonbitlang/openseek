@@ -1007,10 +1007,7 @@ test "the schema advertises every decoded argument" {
   // MoonBit's String ordering is by length first, so a sorted expectation would
   // encode neither what this test means nor what a reader expects.
   let names = properties.keys().collect()
-  for
-    name in [
-      "source", "filename", "args", "description", "target", "cwd", "warning",
-    ] {
+  for name in ["source", "filename", "args", "description", "cwd", "warning"] {
     assert_true(names.contains(name))
   }
   assert_true(
@@ -1019,17 +1016,7 @@ test "the schema advertises every decoded argument" {
       { "type": "array", "items": { "type": "string", .. }, "default": [], .. }
     ),
   )
-  assert_true(
-    properties.get("target")
-    is Some(
-      {
-        "type": "string",
-        "enum": ["wasm", "wasm-gc", "js", "llvm"],
-        "default": "wasm",
-        ..
-      }
-    ),
-  )
+  assert_true(properties.get("target") is None)
   assert_false(schema is { "anyOf": _, .. })
   assert_true(schema is { "required": ["description"], .. })
 }
@@ -1203,61 +1190,25 @@ async test "runs a pure snippet without selecting a target" {
 }
 
 ///|
-async test "a JS target asks for approval without escalated and runs the approved program" {
+async test "removed target is rejected before saving or requesting approval" {
   @vfs.with_tmpdir(ws => {
-    let asked : Array[@agent_runtime.ApprovalAsk] = []
+    let asked = Ref(false)
     let definition = @mbtx.definition(
       workspace_root=ws,
-      approval=ApprovalChannel(ask => {
-        asked.push(ask)
+      approval=ApprovalChannel(_ => {
+        asked.val = true
         AllowedOnce
       }),
     )
-    let source = "fn main { println(6 * 7) }"
-    let out = dispatch(definition, { "source": source, "target": "js" })
-    assert_false(out.is_error, msg=out.content)
-    assert_eq(out.content, "42\n")
-    assert_eq(asked.length(), 1)
-    assert_eq(asked[0].tool_name, "mbtx")
-    assert_eq(asked[0].body, Some(source))
-    assert_true(asked[0].detail.contains("js"))
-    assert_true(asked[0].detail.contains("without moonrun's sandbox policy"))
-  })
-}
-
-///|
-async test "a declined JS target never executes" {
-  @vfs.with_tmpdir(ws => {
-    let asked : Array[@agent_runtime.ApprovalAsk] = []
-    let definition = @mbtx.definition(
-      workspace_root=ws,
-      approval=ApprovalChannel(ask => {
-        asked.push(ask)
-        Rejected
-      }),
-    )
     let out = dispatch(definition, {
-      "source": "fn main { println(\"this JS program must not run\") }",
-      "target": "js",
-    })
-    assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("declined"), msg=out.content)
-    assert_false(out.content.contains("this JS program must not run"))
-    assert_eq(asked.length(), 1)
-  })
-}
-
-///|
-async test "a JS target without an approval channel is rejected before saving" {
-  @vfs.with_tmpdir(ws => {
-    let out = run_in(ws, {
       "source": "fn main { println(42) }",
       "filename": "rejected.mbtx",
-      "target": "js",
-      "escalated": false,
+      "target": "wasm",
+      "escalated": true,
     })
     assert_true(out.is_error, msg=out.content)
     assert_false(@fs.exists("\{ws}/rejected.mbtx"))
+    assert_false(asked.val)
   })
 }
 

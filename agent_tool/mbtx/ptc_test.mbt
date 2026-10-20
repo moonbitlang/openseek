@@ -117,17 +117,12 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
   @vfs.with_tmpdir(ws => {
     @async.with_task_group(group => {
       let service = @ptc.Service::start(group, Tools([]))
-      let asked = Ref(false)
       let definition = @mbtx.definition(
         workspace_root=ws,
         job_dir=ws,
         auto_background_after_ms=1,
         foreground_timeout_ms=10000,
         program_service=service,
-        approval=ApprovalChannel(_ => {
-          asked.val = true
-          AllowedOnce
-        }),
       )
       let source =
         #|import { "moonbitlang/openseek_tools@0.2.0" @tools, "moonbitlang/async" @a, "moonbitlang/async/http" @h, "moonbitlang/core/json" @j, "moonbitlang/core/env" @e }
@@ -147,17 +142,6 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
         assert_true(output.content.contains("foreground done"))
       }
       assert_eq(@fs.read_file("\{ws}/saved.mbtx").text(), source)
-      let incompatible = dispatch(definition, {
-        "ptc": true,
-        "source": source,
-        "target": "js",
-      })
-      assert_true(incompatible.is_error, msg=incompatible.content)
-      assert_true(
-        incompatible.content.contains("PTC requires the default wasm target"),
-        msg=incompatible.content,
-      )
-      assert_false(asked.val)
       for
         args in [
           ({ "ptc": true, "source": source, "escalated": true } : Json),

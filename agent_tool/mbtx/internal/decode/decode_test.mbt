@@ -1,8 +1,7 @@
 ///|
-test "decode reads source with the default wasm target" {
+test "decode reads source" {
   let input = @decode.decode({ "source": "fn main { println(1) }" })
   assert_true(input.program is Source("fn main { println(1) }"))
-  assert_eq(input.target, "wasm")
 }
 
 ///|
@@ -18,21 +17,15 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-test "decode refuses the unsupported native target" {
-  let refused = try {
-    @decode.decode({ "source": "fn main {  }", "target": "native" }) |> ignore
-    "accepted"
+test "decode rejects the removed target argument" {
+  let rejected = try {
+    @decode.decode({ "source": "fn main { println(1) }", "target": "wasm" })
+    |> ignore
+    false
   } catch {
-    error => "\{error}"
+    _ => true
   }
-  assert_false(refused == "accepted")
-  assert_true(refused.contains("wasm"))
-}
-
-///|
-test "decode accepts an explicit js target" {
-  let input = @decode.decode({ "source": "fn main {  }", "target": "js" })
-  assert_eq(input.target, "js")
+  assert_true(rejected)
 }
 
 ///|
@@ -52,8 +45,7 @@ test "decode defaults warning to off and reads on/off" {
 }
 
 ///|
-/// Argument shapes `decode` must refuse. Migration guidance is checked
-/// separately by the removed-background-field test.
+/// Argument shapes `decode` must refuse.
 test "decode rejects malformed arguments" {
   let malformed : Array[Json] = [
     {},
@@ -70,7 +62,6 @@ test "decode rejects malformed arguments" {
     { "source": "x", "warning": "loud" },
     { "source": "x", "cwd": 3 },
     { "source": "x", "description": 3 },
-    { "source": "x", "target": "banana" },
     { "code": "x" },
     Json("x"),
   ]
@@ -114,7 +105,6 @@ test "decode accepts filename with unchanged execution options" {
   })
   assert_true(input.program is File("scripts/check.mbtx"))
   assert_eq(input.cwd, Some("sub"))
-  assert_eq(input.target, "wasm")
   assert_true(input.warning)
 }
 

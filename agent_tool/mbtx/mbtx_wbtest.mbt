@@ -78,28 +78,16 @@ test "cap_build_notes bounds a warning flood and marks the cut" {
 }
 
 ///|
-/// The run-phase framing: on the staged wasm path a failure is from the run
-/// by construction and says so; single-shot targets keep the plain wording
-/// that claims neither stage.
-test "finished_body and timeout_head are stage-aware only when staged" {
-  assert_eq(finished_body("out\n", 0, staged=true), "out\n")
-  let staged_failure = finished_body("trace", 3, staged=true)
+/// A run-phase failure or timeout must say that the build already succeeded.
+test "finished_body and timeout_head identify run-phase failures" {
+  assert_eq(finished_body("out\n", 0), "out\n")
+  let staged_failure = finished_body("trace", 3)
   assert_true(staged_failure.contains("exited 3 at RUNTIME"))
   assert_true(staged_failure.contains("from the run, not the build"))
   assert_true(
-    finished_body("", 3, staged=true).contains(
-      "the build succeeded, then the run exited 3",
-    ),
+    finished_body("", 3).contains("the build succeeded, then the run exited 3"),
   )
-  let plain_failure = finished_body("trace", 3, staged=false)
-  assert_true(plain_failure.contains("exited 3"))
-  assert_false(plain_failure.contains("RUNTIME"))
-  assert_true(
-    timeout_head(5_000, staged=true).contains("the PROGRAM that did not finish"),
-  )
-  assert_true(
-    timeout_head(5_000, staged=false).contains("a build that never completed"),
-  )
+  assert_true(timeout_head(5_000).contains("the PROGRAM that did not finish"))
   assert_eq(with_build_notes("", "body"), "body")
   assert_eq(with_build_notes("warn", "body"), "warn\nbody")
 }
