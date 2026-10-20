@@ -65,6 +65,8 @@ class MainActivity : ComponentActivity() {
         val frame = FrameLayout(this)
         frame.addView(webView, FrameLayout.LayoutParams(-1, -1))
         setContentView(frame)
+        // The keyboard arrives as an ime() inset: edge-to-edge delivers it on
+        // Android 11+, and the manifest's adjustResize delivers it on 8–10.
         ViewCompat.setOnApplyWindowInsetsListener(frame) { view, insets ->
             val visible = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
