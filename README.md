@@ -44,11 +44,11 @@ curl, network access, and Bash (Unix) or PowerShell (Windows). Linux binaries
 require glibc 2.35+.
 Git and Codex remain user-installed. Other commands do not require setup.
 
-`openseek app-server` launches the native companion beside the CLI. It serves
-the working-host API at `ws://127.0.0.1:<port>/host`, intended for SSH forwarding.
+`openseek-app-server` serves the working-host API at `ws://127.0.0.1:<port>/host`, intended for SSH forwarding.
 Stdout announces the port, instance ID and protocol version as one JSON line;
-stdin EOF ends the service. Clients initialize with that instance ID and
-protocol version before calling the host API. Browser-origin requests are
+stdin EOF ends the service. The server uses the `openseek` executable beside it;
+`OPENSEEK_ENGINE` can select an engine for source builds. Clients initialize
+with that instance ID and protocol version before calling the host API. Browser-origin requests are
 rejected. Keep the listener and SSH forward bound to loopback.
 
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a

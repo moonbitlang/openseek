@@ -1,52 +1,145 @@
 ///|
 import {
-  "moonbitlang/async@0.22.5",
-  "moonbitlang/async@0.22.5/fs",
-  "moonbitlang/async@0.22.5/process",
+  "moonbitlang/async",
+  "moonbitlang/async/fs",
+  "moonbitlang/async/process",
+  "moonbitlang/async/websocket",
   "moonbitlang/core/env",
+  "moonbitlang/core/json",
 }
 
 ///|
-// Exercise the real CLI's companion launch, with a tiny companion that starts
-// the exported engine from another workspace, as the backend does.
+async fn request(
+  ws : @websocket.Conn,
+  id : Int32,
+  method_ : String,
+  params : Json,
+) -> Json {
+  ws.send_text(
+    ({ "jsonrpc": "2.0", "id": id, "method": method_, "params": params } : Json).stringify(),
+  )
+  for ;; {
+    let message = ws.recv()
+    let reply = @json.parse(message.read_all().text())
+    if reply is { "id": Number(reply_id, ..), .. } && reply_id == id.to_double() {
+      guard reply is { "result": result, .. } else { fail(reply.stringify()) }
+      return result
+    }
+  }
+}
+
+///|
+// Start the real standalone service and let it launch its sibling engine in a
+// different workspace. The engine fixture records cwd without any model call.
 async fn main {
   guard @env.args() is [_, executable] else {
-    fail("Usage: moon run tests/integration/app_server.mbtx <native-cli>")
+    fail(
+      "Usage: moon run tests/integration/app_server.mbtx <native-app-server>",
+    )
   }
   if @async.platform is Windows {
-    println("app-server launch: Unix shell companion fixture skipped on Windows")
+    println("app-server launch: Unix shell engine fixture skipped on Windows")
     return
   }
-  let executable = @fs.realpath(executable)
   let root = @fs.tmpdir(prefix="openseek-app-server-launch-")
   defer @fs.rmdir(root, recursive=true)
   let root = @fs.realpath(root)
   @fs.mkdir(root + "/bin")
   @fs.mkdir(root + "/workspace")
-  @fs.write_file(root + "/bin/openseek", @fs.read_file(executable))
-  @fs.chmod(root + "/bin/openseek", 0o755)
-  @fs.write_file(root + "/bin/openseek-app-server", (
-    #|#!/bin/sh
-    #|set -eu
-    #|cd "$WORKSPACE"
-    #|exec "$OPENSEEK_ENGINE" --help
-    #|
-  ))
+  @fs.write_file(root + "/bin/openseek-app-server", @fs.read_file(executable))
   @fs.chmod(root + "/bin/openseek-app-server", 0o755)
-  for program in ["./bin/openseek", "openseek"] {
-    let (code, stdout, stderr) = @process.collect_output(
-      "/bin/sh",
-      ["-c", "exec \"$1\" app-server", "sh", program],
-      cwd=root,
-      inherit_env=false,
-      extra_env={
-        "HOME": root,
-        "PATH": root + "/bin:/usr/bin:/bin",
-        "WORKSPACE": root + "/workspace",
-      },
-    )
-    assert_eq(code, 0, msg=stderr.text())
-    assert_true(stdout.text().contains("Usage: openseek"))
+  @fs.write_file(
+    root + "/bin/openseek",
+    (
+      #|#!/bin/sh
+      #|set -eu
+      #|if [ "$1" = serve ]; then
+      #|  pwd > "$HOME/engine-cwd"
+      #|  while IFS= read -r line; do :; done
+      #|else
+      #|  printf '%s\n' '{"events":[]}'
+      #|fi
+      #|
+    ),
+  )
+  @fs.chmod(root + "/bin/openseek", 0o755)
+  let moon_home = @env.get_env_var("MOON_HOME").unwrap_or(
+    @env.get_env_var("HOME").unwrap_or("") + "/.moon",
+  )
+  for program in ["./bin/openseek-app-server", "openseek-app-server"] {
+    @async.with_timeout(15000, () => {
+      @async.with_task_group(group => {
+        let (input, writer) = @process.write_to_process()
+        defer writer.close()
+        let (reader, output) = @process.read_from_process()
+        defer reader.close()
+        let child = @process.spawn(
+          group,
+          "/bin/sh",
+          ["-c", "exec \"$1\"", "sh", program],
+          cwd=root,
+          stdin=input,
+          stdout=output,
+          inherit_env=false,
+          extra_env={
+            "HOME": root,
+            "MOON_HOME": moon_home,
+            "PATH": (if program.has_prefix("./") { "" } else { root + "/bin:" }) +
+            moon_home +
+            "/bin:/usr/bin:/bin",
+          },
+        )
+        guard reader.read_until("\n") is Some(line) &&
+          @json.parse(line)
+          is {
+            "port": Number(port, ..),
+            "instance": String(instance),
+            "protocol": 1,
+            ..
+          } else {
+          fail("missing endpoint announcement")
+        }
+        let ws = @websocket.connect(
+          "ws://127.0.0.1:" + port.to_int().to_string() + "/host",
+        )
+        defer ws.close()
+        assert_eq(
+          request(ws, 1, "initialize", { "instance": instance, "protocol": 1 }),
+          { "instance": instance, "protocol": 1 },
+        )
+        ignore(request(ws, 2, "workspace.add", { "path": root + "/workspace" }))
+        ignore(
+          request(ws, 3, "settings.set", {
+            "provider": "custom",
+            "custom_api_url": "http://127.0.0.1:1/unused",
+            "custom_api_key": "fixture",
+          }),
+        )
+        ignore(
+          request(ws, 4, "agent.start", {
+            "session": "launch-test",
+            "workspace": root + "/workspace",
+            "task": "fixture",
+            "images": [],
+            "model": "deepseek-flash",
+            "max_steps": 1,
+          }),
+        )
+        while !@fs.exists(root + "/engine-cwd") {
+          @async.sleep(10)
+        }
+        assert_eq(
+          @fs.read_file(root + "/engine-cwd").text().trim(),
+          root + "/workspace",
+        )
+        ws.close()
+        writer.close()
+        assert_eq(child.wait(), 0)
+        @fs.remove(root + "/engine-cwd")
+      })
+    })
   }
-  println("app-server launch: relative path and PATH survive workspace changes")
+  println(
+    "app-server launch: direct relative/PATH startup, sibling engine cwd, and EOF cleanup passed",
+  )
 }

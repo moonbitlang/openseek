@@ -1,4 +1,6 @@
 import {
+  "moonbitlang/openseek/env" @executable,
+  "moonbitlang/x/path",
   "openseek_desktop/backend/api",
   "openseek_desktop/backend/mcp",
   "openseek_desktop/backend/remote",
