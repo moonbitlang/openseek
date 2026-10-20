@@ -31,7 +31,7 @@ async fn github_pull_request_summary_op(
         "--repo",
         "https://\{identity.host}/\{identity.owner}/\{identity.repo}",
         "--json",
-        PullRequestFields,
+        PullRequestSummaryFields,
       ],
       env~,
     )
@@ -47,6 +47,12 @@ async fn github_pull_request_summary_op(
   }
   { pull_request: Some(pull_request), }
 }
+
+///|
+/// What `parse_pull_request` requires, without the check rollup: the card shows
+/// no checks, and a token that may read a pull request but not its check runs
+/// makes `gh pr view` fail the whole request rather than leave the field out.
+const PullRequestSummaryFields : String = "number,title,state,url,baseRefName,isDraft,additions,deletions,changedFiles"
 
 ///|
 /// `gh` sends `GH_ENTERPRISE_TOKEN` (or `GITHUB_ENTERPRISE_TOKEN`) to
