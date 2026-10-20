@@ -38,7 +38,7 @@ pub fn Model::view(
     children.push(
       @html.div(class="modal-actions", [
         @html.button(
-          class="button secondary",
+          class="button secondary export-download",
           disabled=busy,
           on_click=emit(Download),
           if content.operation is Downloading {
