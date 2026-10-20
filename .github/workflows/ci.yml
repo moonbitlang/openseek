@@ -362,32 +362,6 @@ jobs:
           echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
           "$HOME/.moon/bin/moon" update
 
-      # Even a browser-only build invokes the root workspace's Proton prebuild.
-      - name: Resolve pinned Proton version
-        id: proton
-        run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/app/moon.mod)"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: Restore Proton runtime
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
-
-      - name: Install Proton Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-3-dev libx11-dev
-
-      - name: Assemble Proton CEF runtime
-        run: >-
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
-
       # No production signing credentials are exposed to pull requests.
       - name: Build debug APK, lint and test native code
         run: node android/build.mjs
