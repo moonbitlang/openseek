@@ -9,7 +9,9 @@
   /* The full-scroll-height .view-lines plane is z-index 1. Keep caller-owned
    * Markdown input above it, but below editor cursors (4) and widgets (50+). */
   z-index: 2;
-  color: var(--vscode-editor-foreground);
+  /* Prose annotates the code below it; the signature stays the brightest
+   * element on the row. */
+  color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
   background: var(--vscode-editor-background);
   font-family: var(--ui-font-family, var(--editor-font-family));
   font-size: calc(var(--editor-font-size) * 0.92);
@@ -24,7 +26,9 @@
   box-sizing: border-box;
   /* The pinned outer already ends at the vertical scrollbar rail. */
   width: 100%;
-  padding: 4px 40px 5px 0;
+  /* The leading separator's air lives in padding, not margins, so the
+   * measured offsetHeight carries it. */
+  padding: 6px 40px 4px 0;
   overflow-wrap: anywhere;
   user-select: text;
   -webkit-user-select: text;
@@ -189,7 +193,8 @@
 
 .moonbit-viewer-markdown-comment-margin-toggle.codicon {
   position: absolute;
-  top: 4px;
+  /* Centered on the first prose line below the leading divider. */
+  top: 12px;
   right: 8px;
   /* The later `.margin-view-overlays` sibling otherwise paints above the
    * zones container and intercepts the click. */
@@ -312,16 +317,21 @@
   background: color-mix(in srgb, var(--vscode-editor-foreground) 10%, transparent);
 }
 
-/* Leading item anchors separate blocks through whitespace. Interior Markdown
- * rules keep their stroke; preserve the anchor's measured source geometry. */
+/* A leading item anchor is the item divider. It stands in for the hidden
+ * `///|` marker and the blank lines above it, so it draws a fainter stroke
+ * than interior rules and keeps only a compact gap before the prose. */
 .moonbit-viewer-markdown-comment-body > hr:first-child {
-  background: transparent;
+  margin-bottom: 6px;
+  background: color-mix(in srgb, var(--vscode-editor-foreground) 7%, transparent);
 }
 
-/* An item separator replaces one source line. Its content box is otherwise
- * 10px tall (4px + 1px + 5px), so retain the configured line geometry. */
+.moonbit-viewer-markdown-comment-body > hr:first-child + * {
+  margin-top: 0;
+}
+
+/* An undocumented item is the divider alone. */
 .moonbit-viewer-markdown-comment-body > hr:only-child {
-  margin-bottom: calc(var(--editor-line-height, 18px) - 10px);
+  margin-bottom: 0;
 }
 
 .moonbit-viewer-markdown-comment-content a {
@@ -346,9 +356,9 @@
 }
 
 .moonbit-viewer-markdown-comment-content :not(pre) > code {
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: var(--vscode-textCodeBlock-background);
+  /* Monospace and the full foreground set identifiers apart from the muted
+   * prose without a chip that disturbs the baseline. */
+  color: var(--vscode-editor-foreground);
 }
 
 .moonbit-viewer-markdown-comment-content pre,

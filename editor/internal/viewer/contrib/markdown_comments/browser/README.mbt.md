@@ -15,11 +15,12 @@ accessible name `Original source`, reports the selected presentation through
 `aria-pressed`, and uses its tooltip for the next action. Rendered content
 always reserves its trailing hit area, while a one-line separator constrains
 the control to the existing ViewZone height. Source controls appear on block
-hover or keyboard focus and remain visible while inspecting source. Documentation uses a subtle
-tinted surface and the same prose foreground in preview and full modes.
-Leading item separators use whitespace instead of a horizontal stroke;
-interior Markdown rules remain visible. Separator-only
-blocks retain the editor background.
+hover or keyboard focus and remain visible while inspecting source. Documentation
+uses the muted description foreground in preview and full modes, with inline
+code in the full editor foreground and no chip. A leading item separator draws
+a faint divider that stands in for the hidden marker and any blank lines the
+provider folds into the block; interior Markdown rules keep the stronger
+stroke. Separator-only blocks are the divider alone on the editor background.
 Item-delimited multi-line API documents whose provider registration opted
 into folding start on the preview. Two affordances drive one fold state: a
 mouse-only gutter chevron that reuses the code-folding `.cldr` codicons and

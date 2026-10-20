@@ -309,7 +309,7 @@ test('blends documentation into the editor across themes and folding states', as
   }
 });
 
-test('renders undocumented MoonBit item anchors as quiet spacing', async ({
+test('renders undocumented MoonBit item anchors as compact dividers', async ({
   page,
 }) => {
   await page.goto('/');
@@ -319,12 +319,13 @@ test('renders undocumented MoonBit item anchors as quiet spacing', async ({
     '.moonbit-viewer-markdown-comment[data-start-line="1"][data-end-line="2"]',
   );
   const second = page.locator(
-    '.moonbit-viewer-markdown-comment[data-start-line="6"][data-end-line="7"]',
+    // The blank line above the marker belongs to the block.
+    '.moonbit-viewer-markdown-comment[data-start-line="5"][data-end-line="7"]',
   );
   await expect(first.locator('hr')).toBeVisible();
   await expect(second.locator('hr')).toBeVisible();
-  await expect(first.locator('hr')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect(second.locator('hr')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(first.locator('hr')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(second.locator('hr')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await expect(first).toHaveAttribute('data-documentation-foldable', 'false');
   await expect(second).toHaveAttribute('data-documentation-foldable', 'false');
   await expect(first.locator('.moonbit-viewer-markdown-comment-toggle')).toBeHidden();
@@ -353,7 +354,9 @@ test('renders undocumented MoonBit item anchors as quiet spacing', async ({
   const firstCodeLineBox = await page
     .locator('.view-line[data-line="2"]')
     .boundingBox();
-  expect(firstBox?.height).toBe(firstCodeLineBox?.height);
+  // The divider is shorter than the source line and blank line it replaces.
+  expect(firstBox?.height).toBeGreaterThan(0);
+  expect(firstBox?.height).toBeLessThan(firstCodeLineBox?.height);
   await expect(page.locator('.view-lines')).not.toContainText('///|');
   expect(await page.evaluate(() => globalThis.__readonlyEditorSource)).toContain(
     '///|\npub struct StartupEvent',

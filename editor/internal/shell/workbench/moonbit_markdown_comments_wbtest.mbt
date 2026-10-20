@@ -105,7 +105,7 @@ test "MoonBit Markdown comments anchor a file header with marker-line text" {
       ),
     },
     {
-      line_range: LineRange(6, 8),
+      line_range: LineRange(5, 8),
       markdown: (
         #|---
         #|
@@ -212,4 +212,18 @@ test "workbench installs the provider only for MoonBit models" {
     ),
   )
   assert_true(handle.markdown_comment_provider_render_result(plaintext) is None)
+}
+
+///|
+test "MoonBit Markdown comments cover the blank lines above their marker" {
+  let blocks = moonbit_markdown_comments_in_snapshot(
+    TextSnapshot(
+      "// header\n\n///|\n/// Doc.\nfn first {}\n\n///|\n\n///|\nfn second {}",
+    ),
+  )
+  assert_eq(blocks, [
+    { line_range: LineRange(2, 5), markdown: "---\n\nDoc.", },
+    { line_range: LineRange(6, 8), markdown: "---", },
+    { line_range: LineRange(8, 10), markdown: "---", },
+  ])
 }

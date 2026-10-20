@@ -24,7 +24,8 @@ fn install_moonbit_markdown_comment_provider() -> Unit {
 }
 
 ///|
-/// Returns anchored MoonBit documentation and item-separator blocks. Every
+/// Returns anchored MoonBit documentation and item-separator blocks. Each
+/// block also covers the blank lines directly above its marker. Every
 /// `///|` marker becomes a Markdown horizontal rule; text after the marker is
 /// the first documentation line, and consecutive `///` lines form the body.
 fn moonbit_markdown_comments_in_snapshot(
@@ -33,6 +34,7 @@ fn moonbit_markdown_comments_in_snapshot(
   let blocks : Array[@language.MarkdownCommentBlock] = []
   let line_count = snapshot.line_count()
   let mut line_number = 1
+  let mut previous_end = 1
   while line_number <= line_count {
     guard moonbit_markdown_comment_anchor_content(
         snapshot.get_line_content(line_number),
@@ -60,7 +62,12 @@ fn moonbit_markdown_comments_in_snapshot(
       }
     }
     blocks.push({
-      line_range: @common.LineRange(start_line_number, line_number),
+      line_range: @common.LineRange(
+        moonbit_markdown_comment_leading_blank_start(
+          snapshot, start_line_number, previous_end,
+        ),
+        line_number,
+      ),
       markdown: if contents.is_empty() {
         "---"
       } else {
@@ -71,8 +78,26 @@ fn moonbit_markdown_comments_in_snapshot(
         )
       },
     })
+    previous_end = line_number
   }
   blocks
+}
+
+///|
+/// The first of the blank lines directly above an item anchor. The block
+/// hides them with its marker so the rendered separator alone spaces the item
+/// from the code above it. `floor` is the previous block's exclusive end; a
+/// block never reaches back into it.
+fn moonbit_markdown_comment_leading_blank_start(
+  snapshot : @model.TextSnapshot,
+  anchor_line_number : Int32,
+  floor : Int32,
+) -> Int32 {
+  let mut start = anchor_line_number
+  while start - 1 >= floor && snapshot.get_line_content(start - 1).is_blank() {
+    start -= 1
+  }
+  start
 }
 
 ///|
