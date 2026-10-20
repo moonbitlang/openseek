@@ -4,7 +4,9 @@
 citeable source list. The model passes one `query` string; the result is a
 markdown list of sources (`- [title](url) — snippet (published)`), a
 refine-the-query note when the result cap dropped sources, and a standing
-instruction to cite the relevant URLs as markdown links.
+instruction to cite relevant URLs with numbered Markdown footnotes. The answer
+places `[^1]` beside a supported claim and defines `[^1]: [Source title](URL)`
+at the end, reusing the number for repeated references to the same source.
 
 ## Design Rationale
 

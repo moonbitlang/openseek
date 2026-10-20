@@ -61,7 +61,7 @@ fn graph_fixture_state() -> State {
 test "historical model URIs encode revision side and path immutably" {
   let revision = "1111111111111111111111111111111111111111"
   let uri = history_revision_model_uri(
-    test_ctx().owner,
+    test_ctx().owner.host().unwrap(),
     revision,
     "original",
     @pathx.Relative("src/a #.mbt"),
@@ -86,14 +86,24 @@ test "Git history replies are fenced by generation" {
   }
   let (_, stale) = update(
     test_emit(),
-    GitHistoryLoaded(owner=test_ctx().owner, generation=2, append=false, reply~),
+    GitHistoryLoaded(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=2,
+      append=false,
+      reply~,
+    ),
     state,
     test_ctx(),
   )
   assert_true(stale.git_graph is GitGraphLoading)
   let (_, settled) = update(
     test_emit(),
-    GitHistoryLoaded(owner=test_ctx().owner, generation=3, append=false, reply~),
+    GitHistoryLoaded(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=3,
+      append=false,
+      reply~,
+    ),
     state,
     test_ctx(),
   )

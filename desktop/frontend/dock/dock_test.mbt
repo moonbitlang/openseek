@@ -130,19 +130,19 @@ test "closing a background tab keeps the active tab" {
 test "sync parks the strip and restores it when the conversation returns" {
   let first = owner("alpha")
   let second = owner("beta")
-  let state = @dock.sync(@dock.State::empty(), first)
+  let state = @dock.sync(@dock.State::empty(), @interop.Host(first))
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
   let state = @dock.update(@dock.TabActivated(file_tab("a.mbt")), state)
   // Switch away: the strip parks and the panel starts empty.
-  let away = @dock.sync(state, second)
-  assert_true(away.owner == Some(second))
+  let away = @dock.sync(state, @interop.Host(second))
+  assert_true(away.owner == Some(@interop.Host(second)))
   assert_true(away.tabs.is_empty())
   assert_true(away.active is None)
   // A same-owner sync is a no-op.
-  assert_true(@dock.sync(away, second) == away)
+  assert_true(@dock.sync(away, @interop.Host(second)) == away)
   // Switch back: identities and the active tab return.
-  let back = @dock.sync(away, first)
+  let back = @dock.sync(away, @interop.Host(first))
   assert_true(back.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(back.active == Some(file_tab("a.mbt")))
 }
@@ -151,12 +151,12 @@ test "sync parks the strip and restores it when the conversation returns" {
 test "sync does not park a strip owned by an empty session" {
   let nameless = owner("")
   let real = owner("alpha")
-  let state = @dock.sync(@dock.State::empty(), nameless)
+  let state = @dock.sync(@dock.State::empty(), @interop.Host(nameless))
     |> @dock.open_file(work_file("a.mbt"))
-  let moved = @dock.sync(state, real)
+  let moved = @dock.sync(state, @interop.Host(real))
   assert_true(moved.tabs.is_empty())
   // Returning to the empty session restores nothing.
-  let back = @dock.sync(moved, nameless)
+  let back = @dock.sync(moved, @interop.Host(nameless))
   assert_true(back.tabs.is_empty())
   assert_true(back.active is None)
 }
@@ -239,12 +239,12 @@ test "closing the picker activates a neighbor like any tab" {
 
 ///|
 test "park and restore keeps browser and picker tabs" {
-  let state = @dock.sync(@dock.State::empty(), owner("s1"))
+  let state = @dock.sync(@dock.State::empty(), @interop.Host(owner("s1")))
     |> @dock.open_browser(3)
     |> @dock.open_picker
-  let state = @dock.sync(state, owner("s2"))
+  let state = @dock.sync(state, @interop.Host(owner("s2")))
   assert_true(state.tabs.is_empty())
-  let state = @dock.sync(state, owner("s1"))
+  let state = @dock.sync(state, @interop.Host(owner("s1")))
   assert_true(
     state.tabs == [@dock.DockTab::Browser(id=3), @dock.DockTab::FilePicker],
   )

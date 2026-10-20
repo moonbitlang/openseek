@@ -1,0 +1,38 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/office_location"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn citation_destination(String, String) -> String
+
+pub fn parse(String) -> Reference?
+
+pub fn reveal(String, Target) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) struct Reference {
+  path : String
+  target : Target
+} derive(Eq, @debug.Debug)
+pub fn Reference::equal(Self, Self) -> Bool
+pub fn Reference::not_equal(Self, Self) -> Bool
+pub fn Reference::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Target {
+  PdfPage(Int32)
+  WordHeading(String)
+  WordParagraph(String)
+  ExcelRange(sheet~ : String, range~ : String)
+} derive(Eq, @debug.Debug)
+pub fn Target::equal(Self, Self) -> Bool
+pub fn Target::not_equal(Self, Self) -> Bool
+pub fn Target::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

@@ -1504,21 +1504,28 @@ fn Model::active_checkout(self : Model) -> ActiveCheckout? {
 }
 
 ///|
-/// The file-editor package's read-only projection of the selected checkout.
+/// The selected file source. Cloud never inherits a previous Host checkout;
+/// the existing empty-session shell identity has no source on Cloud home.
 fn file_ctx(model : Model) -> @fileeditor.Ctx {
-  let active = model
-    .active_checkout()
-    .unwrap_or({
-      owner: { channel: model.focused, session: "", },
-      placement: None,
-    })
+  let active = (if model.cloud_selected() {
+    None
+  } else {
+    model.active_checkout()
+  }).unwrap_or({
+    owner: { channel: model.focused, session: "", },
+    placement: None,
+  })
   // A cwd-less Codex task has a valid scratch Terminal identity but app-server
   // exposes no path that Files or language services may address. Keep the one
   // typed placement in Codex state, then project this capability as absent at
   // the file-editor boundary rather than inventing a directory.
-  let file_placement = match active.placement {
-    Some(@interop.Scratch(root=None)) if model.screen is Codex => None
-    placement => placement
+  let file_placement = if model.cloud_selected() {
+    None
+  } else {
+    match active.placement {
+      Some(@interop.Scratch(root=None)) if model.screen is Codex => None
+      placement => placement
+    }
   }
   let engine_model = model
     .find_conversation(active.owner.channel, active.owner.session)
@@ -1534,7 +1541,27 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // Both panel packages use the typed checkout state to park host work; the
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
-    owner: active.owner,
+    owner: if model.cloud_selected() {
+      match model.cloud_identity() {
+        Some(owner) => owner
+        None =>
+          model.cloud_draft_identity().unwrap_or(@interop.Host(active.owner))
+      }
+    } else {
+      @interop.Host(active.owner)
+    },
+    cloud_files: if model.cloud_selected() &&
+      model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
+      model.cloud.user_id == Some(account) {
+      model.account
+      .filter(credentials => credentials.user.user_id == account)
+      .map(credentials => @fileeditor.CloudFiles::{
+        epoch: model.cloud.epoch,
+        token: credentials.token,
+      })
+    } else {
+      None
+    },
     locale: model.locale,
     model: engine_model.wire(),
     thinking: engine_model.thinking(model.reasoning_for(engine_model)),
@@ -2045,29 +2072,33 @@ fn update(
   }
   let ctx = file_ctx(model)
   let owns_panel = model.file_panel.owner == Some(ctx.owner)
-  let checkout = ctx.placement
-    .bind(placement => placement.checkout_root())
-    .map(root => {
-      let previous = model.github.scope.filter(checkout => {
-        checkout.channel == ctx.owner.channel && checkout.cwd == root.path
+  let checkout = ctx.owner
+    .host()
+    .bind(owner => {
+      ctx.placement
+      .bind(placement => placement.checkout_root())
+      .map(root => {
+        let previous = model.github.scope.filter(checkout => {
+          checkout.channel == owner.channel && checkout.cwd == root.path
+        })
+        @github.CheckoutScope::{
+          channel: owner.channel,
+          cwd: root.path,
+          head: if owns_panel {
+            model.file_panel.git_actual_head
+          } else {
+            previous.bind(checkout => checkout.head)
+          },
+          branch: match (owns_panel, model.file_panel.git_graph) {
+            (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
+            _ => previous.bind(checkout => checkout.branch)
+          },
+        }
       })
-      @github.CheckoutScope::{
-        channel: ctx.owner.channel,
-        cwd: root.path,
-        head: if owns_panel {
-          model.file_panel.git_actual_head
-        } else {
-          previous.bind(checkout => checkout.head)
-        },
-        branch: match (owns_panel, model.file_panel.git_graph) {
-          (true, GitGraphReady(snapshot~, ..)) => snapshot.branch
-          _ => previous.bind(checkout => checkout.branch)
-        },
-      }
     })
   let github_visible = model.file_panel_visible() &&
     model.devices.any(dev => {
-      dev.channel == ctx.owner.channel &&
+      ctx.owner.host().map_or(false, owner => dev.channel == owner.channel) &&
       dev.bridge is Connected &&
       dev.reconnect_failures == 0
     })
@@ -3075,7 +3106,7 @@ fn update_msg(
       (@cmd.batch([command, notice]), next)
     }
     FileEditor(@fileeditor.ReviewContextChanged(owner~, selection~, adding~)) => {
-      guard file_ctx(model).owner == owner &&
+      guard file_ctx(model).owner == @interop.Host(owner) &&
         model.file_panel.accepts_review_context(selection) else {
         return (@cmd.none, model)
       }
@@ -3398,7 +3429,10 @@ fn update_msg(
       ) else {
         return (@cmd.none, model)
       }
-      offer_office_selection(dispatch, model, owner, selection)
+      match owner {
+        Host(host) => offer_office_selection(dispatch, model, host, selection)
+        Cloud(..) => (@cmd.none, model)
+      }
     }
     FileEditor(@fileeditor.OfficeFeedbackSubmitted(preview, text, apply~)) => {
       guard model.file_panel.pending_office_selection(file_ctx(model)) ==
@@ -3527,7 +3561,12 @@ fn update_msg(
       guard ctx.panel_open &&
         owns_office_selection(model, owner) &&
         model.file_panel.accepts_pdf_callback(
-          ctx, owner, epoch, path, sig, generation,
+          ctx,
+          @interop.Host(owner),
+          epoch,
+          path,
+          sig,
+          generation,
         ) else {
         return (@cmd.none, model)
       }
@@ -3600,11 +3639,28 @@ fn update_msg(
       ) else {
         return (@cmd.none, model)
       }
-      offer_office_selection(dispatch, model, owner, selection)
+      match owner {
+        Host(host) => offer_office_selection(dispatch, model, host, selection)
+        Cloud(..) => (@cmd.none, model)
+      }
     }
     // The host classifies tree selections before the dock opens their viewer.
     FileEditor(FileSelected(path~, ..)) =>
-      request_open_path(dispatch, model, path.0, None)
+      if model.cloud_selected() {
+        guard file_ctx(model).root() is Some(root) else {
+          return (@cmd.none, model)
+        }
+        let model = model.begin_editor_navigation()
+        show_editor_resource(
+          dispatch,
+          model,
+          @resource.join_relative(root, path),
+          None,
+          file_link_generation=model.file_panel.file_link_generation,
+        )
+      } else {
+        request_open_path(dispatch, model, path.0, None)
+      }
     // A Changes row is the review action: open/activate the same ordinary file
     // tab, then let the file subsystem pair its working-tree document with the
     // row's HEAD path. Deleted rows have no working file but still use the
@@ -3672,8 +3728,8 @@ fn update_msg(
     // stamp rejects a language reply that outlived a conversation switch.
     FileEditor(OpenNavigationLocation(owner~, path~, range~)) => {
       guard model.file_panel.owner is Some(panel_owner) &&
-        panel_owner == owner &&
-        file_ctx(model).owner == owner else {
+        panel_owner == @interop.Host(owner) &&
+        file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
       request_open_path(dispatch, model, path.0, Some(range))
@@ -3684,8 +3740,8 @@ fn update_msg(
     // toasts: one user gesture can cause Viewer to ask more than once.
     FileEditor(@fileeditor.LanguageRequestFailed(owner~, message~)) => {
       guard model.file_panel.owner is Some(panel_owner) &&
-        panel_owner == owner &&
-        file_ctx(model).owner == owner else {
+        panel_owner == @interop.Host(owner) &&
+        file_ctx(model).owner == @interop.Host(owner) else {
         return (@cmd.none, model)
       }
       if model.notifications.any(toast => toast.message == message) {
@@ -6007,7 +6063,7 @@ fn update_msg(
     FileEditor(msg) => {
       let preview = if msg
         is @fileeditor.StatsLoaded(owner~, epoch~, stats~, ..) &&
-        model.file_panel.owner == Some(owner) &&
+        model.file_panel.owner == Some(@interop.Host(owner)) &&
         model.file_panel.request_epoch == epoch {
         let mut preview = model.preview
         for stat in stats {
@@ -6044,7 +6100,7 @@ fn update_msg(
       )
       if model.github.review_pending &&
         msg is @fileeditor.ChangesLoaded(owner~, generation~, files~, ..) &&
-        model.file_panel.owner == Some(owner) &&
+        model.file_panel.owner == Some(@interop.Host(owner)) &&
         model.file_panel.changes_generation == generation &&
         panel.changes_generation == generation &&
         panel.changes is ChangeListReady(refreshing=false, ..) {
@@ -6334,7 +6390,11 @@ fn update_msg(
     }
     BrowserTabRequested => {
       let model = model.begin_editor_navigation()
-      let (cmd, model) = open_browser_tab(dispatch, model, model.dock.owner)
+      let (cmd, model) = open_browser_tab(
+        dispatch,
+        model,
+        model.dock.owner.bind(owner => owner.host()),
+      )
       (@cmd.batch([cmd, focus_browser_address()]), model)
     }
     ExplorerRequested(mode) => open_explorer(dispatch, model, mode)
@@ -6508,7 +6568,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock.owner,
+            model.dock.owner.bind(owner => owner.host()),
           ),
           { shown: None, rect: None, geo: None, },
         )
@@ -6521,7 +6581,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock.owner,
+            model.dock.owner.bind(owner => owner.host()),
           ),
           model.browser_pane,
         )
@@ -6847,7 +6907,7 @@ fn update_msg(
                 id,
                 url,
                 model.theme.is_dark(model.system_dark),
-                model.dock.owner,
+                model.dock.owner.bind(owner => owner.host()),
               ),
               {
                 ..model,
@@ -6859,7 +6919,13 @@ fn update_msg(
               },
             )
           }
-          None => open_browser_tab(dispatch, model, model.dock.owner, url~)
+          None =>
+            open_browser_tab(
+              dispatch,
+              model,
+              model.dock.owner.bind(owner => owner.host()),
+              url~,
+            )
         }
       } else {
         (open_external_link(dispatch, url), model)
@@ -9863,7 +9929,11 @@ fn update_device_msg(
         if first_finish {
           let (panel_cmd, panel_next) = update_msg(
             dispatch,
-            FileEditor(RunSettled(owner={ channel, session: conv.session_id, })),
+            FileEditor(
+              RunSettled(
+                owner=@interop.Host({ channel, session: conv.session_id, }),
+              ),
+            ),
             next,
           )
           commands.push(panel_cmd)
@@ -12106,7 +12176,7 @@ test "a reconnect retires the file index watcher until placement returns" {
   }
   let panel = {
     ..model.file_panel,
-    owner: Some(owner),
+    owner: Some(@interop.Host(owner)),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
     watching: Some(watched),
     watch_generation: 7,
@@ -12171,7 +12241,7 @@ test "device focus retires the outgoing watcher and file index" {
   )
   let panel = {
     ..model.file_panel,
-    owner: Some(owner),
+    owner: Some(@interop.Host(owner)),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
     watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
     watch_generation: 7,
@@ -12193,7 +12263,8 @@ test "device focus retires the outgoing watcher and file index" {
   // the new remote conversation starts without either resource.
   assert_eq(next.focused, remote)
   assert_true(
-    next.file_panel.owner is Some({ channel: Remote("remote-device"), .. }),
+    next.file_panel.owner
+    is Some(@interop.Host({ channel: Remote("remote-device"), .. })),
   )
   assert_true(next.file_panel.watching is None)
   assert_eq(next.file_panel.watch_generation, 8)
@@ -17191,13 +17262,13 @@ test "right-panel menu closes when the dock owner changes" {
     ..model,
     right_panel_open: true,
     right_panel_menu_open: true,
-    dock: { ..model.dock, owner: Some(stale_owner), },
+    dock: { ..model.dock, owner: Some(@interop.Host(stale_owner)), },
   }
   // Any root message runs the centralized dock synchronization. The owner
   // transition closes the menu directly, with no rendered marker or observer.
   let (_, synced) = update(dispatch, CloseGitDetails, stale)
   assert_false(synced.right_panel_menu_open)
-  assert_true(synced.dock.owner != Some(stale_owner))
+  assert_true(synced.dock.owner != Some(@interop.Host(stale_owner)))
 }
 
 ///|
@@ -18847,7 +18918,7 @@ test "Codex sidebar selection uses the main conversation screen" {
   assert_true(opened.codex.active_id() is Some("codex-thread-1"))
   assert_true(
     opened.file_panel.owner
-    is Some({ channel: Local, session: "codex-thread-1", }),
+    is Some(@interop.Host({ channel: Local, session: "codex-thread-1", })),
   )
   let workspace = @interop.ChannelId::Local.test_resource("/work/codex-project")
   guard opened.active_checkout() is Some(active) else {
@@ -18888,7 +18959,7 @@ test "Codex sidebar selection uses the main conversation screen" {
   assert_true(opened_again.codex.active_id() is Some("codex-thread-1"))
   assert_true(
     opened_again.file_panel.owner
-    is Some({ channel: Local, session: "codex-thread-1", }),
+    is Some(@interop.Host({ channel: Local, session: "codex-thread-1", })),
   )
 }
 
@@ -18915,7 +18986,7 @@ test "cwd-less Codex tasks keep Files unavailable and use scratch Terminal" {
   })
   let model = { ..test_model(), codex, screen: Codex, }
   let files = file_ctx(model)
-  inspect(files.owner.session, content="codex-scratch-1")
+  inspect(files.owner.session(), content="codex-scratch-1")
   assert_true(files.placement is None)
 
   // The owner remains stable for async fencing. Terminal identifies the
@@ -19164,7 +19235,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
     )
     let response = OpenPathResolved(
       FileOpenContext::new(
-        file_ctx(pending).owner,
+        file_ctx(pending).owner.host().unwrap(),
         pending.file_panel.file_link_generation,
         range?,
         annotation?,
@@ -19216,7 +19287,10 @@ test "directory reveal opens a picker without changing the manual tree preferenc
     let (_, revealed) = update(
       dispatch,
       OpenPathResolved(
-        FileOpenContext::new(owner, pending.file_panel.file_link_generation),
+        FileOpenContext::new(
+          owner.host().unwrap(),
+          pending.file_panel.file_link_generation,
+        ),
         Directory({ path: "src/nested", }),
       ),
       pending,
@@ -19367,10 +19441,10 @@ test "resolved transcript files and directories stay in the right panel" {
   let (_, replayed) = update(dispatch, response, pending)
   assert_eq(parked.active_session, background.active_session)
   assert_true(parked.dock == replayed.dock)
-  assert_eq(parked.dock.owner, Some(owner))
+  assert_eq(parked.dock.owner, Some(@interop.Host(owner)))
   assert_true(parked.dock.active is None)
   assert_true(
-    parked.dock.remembered.get(target_owner)
+    parked.dock.remembered.get(@interop.Host(target_owner))
     is Some({ active: Some(Browser(..)), .. }),
   )
   let (_, obsolete) = update(
@@ -19522,7 +19596,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileFailed(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=ordinary_pending.file_panel.request_epoch,
         path=main_file,
         file_link_generation=Some(3),
@@ -19542,7 +19616,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileLoaded(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=ordinary_failed.file_panel.request_epoch,
         path=main_file,
         name="main.mbt",
@@ -19563,7 +19637,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileLoaded(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=first.file_panel.request_epoch,
         path=main_file,
         name="main.mbt",
@@ -19586,7 +19660,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileFailed(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=first.file_panel.request_epoch,
         path=main_file,
         file_link_generation=Some(1),
@@ -19607,7 +19681,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileFailed(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=first.file_panel.request_epoch,
         path=main_file,
         file_link_generation=Some(2),
@@ -19626,7 +19700,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     dispatch,
     FileEditor(
       @fileeditor.FileLoaded(
-        owner~,
+        owner=@interop.Host(owner),
         epoch=first.file_panel.request_epoch,
         path=main_file,
         name="main.mbt",
@@ -20106,10 +20180,12 @@ test "chip jumps relativize legacy absolute paths against the roots" {
     ..model,
     file_panel: {
       ..model.file_panel,
-      owner: Some({
-        channel: @interop.ChannelId::Remote("previous"),
-        session: "previous-session",
-      }),
+      owner: Some(
+        @interop.Host({
+          channel: @interop.ChannelId::Remote("previous"),
+          session: "previous-session",
+        }),
+      ),
       tree_open: false,
       explorer_mode: @fileeditor.ExplorerChanges,
       changes_generation: 7,
@@ -20186,11 +20262,11 @@ test "RevealDirectory(\"\") opens the workspace breadcrumb picker" {
   }
   let dock = {
     ..@dock.open_file(model.dock, model.test_file("README.md")),
-    owner: Some(owner),
+    owner: Some(@interop.Host(owner)),
   }
   let panel = {
     ..model.file_panel,
-    owner: Some(owner),
+    owner: Some(@interop.Host(owner)),
     tree_open: false,
     highlighted: Some(Relative("src")),
   }
@@ -20211,7 +20287,7 @@ test "RevealDirectory loads an uncached breadcrumb directory" {
   let model = test_model()
   let panel = {
     ..model.file_panel,
-    owner: Some({ channel: Local, session: "desktop-test", }),
+    owner: Some(@interop.Host({ channel: Local, session: "desktop-test", })),
   }
   let (_, next) = update(
     dispatch,
@@ -20232,7 +20308,7 @@ test "RevealDirectory on an already-cached directory needs no reload" {
   ])
   let panel = {
     ..model.file_panel,
-    owner: Some({ channel: Local, session: "desktop-test", }),
+    owner: Some(@interop.Host({ channel: Local, session: "desktop-test", })),
     children,
   }
   let (_, next) = update(
@@ -20253,7 +20329,7 @@ test "HighlightCleared only clears a highlight that still matches" {
   // panel and clears the highlight itself.
   let panel = {
     ..model.file_panel,
-    owner: Some({ channel: Local, session: "desktop-test", }),
+    owner: Some(@interop.Host({ channel: Local, session: "desktop-test", })),
     highlighted: Some(Relative("src")),
   }
   let (_, stale) = update(
@@ -22075,7 +22151,7 @@ test "file rows and location jumps cannot open while checkout placement is missi
     dispatch,
     FileEditor(
       OpenNavigationLocation(
-        owner=file_ctx(model).owner,
+        owner=file_ctx(model).owner.host().unwrap(),
         path~,
         range=@common.Range(1, 1, 1, 1),
       ),
@@ -22093,7 +22169,7 @@ test "language request failures toast once and remain conversation fenced" {
   let owner = file_ctx(model).owner
   let msg = FileEditor(
     @fileeditor.LanguageRequestFailed(
-      owner~,
+      owner=owner.host().unwrap(),
       message="Go to definition failed: workspace index is unavailable",
     ),
   )
@@ -22132,7 +22208,13 @@ test "file watcher failures toast once and retain lifecycle state" {
     ..model.file_panel,
     owner: Some(owner),
     placement: @fileeditor.PlacementLive(@interop.WorkspaceRoot(root~)),
-    watching: Some({ owner, root, files: [], directories: [], recursive: true, }),
+    watching: Some({
+      owner: owner.host().unwrap(),
+      root,
+      files: [],
+      directories: [],
+      recursive: true,
+    }),
     watch_generation: generation,
   }
   let model = { ..model, file_panel: panel, }
@@ -22148,7 +22230,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   let (_, ready) = @fileeditor.update(
     file_emit,
     @fileeditor.FilesIndexed(
-      owner~,
+      owner=owner.host().unwrap(),
       epoch=loading.request_epoch,
       files=[],
       truncated=false,
@@ -22160,7 +22242,7 @@ test "file watcher failures toast once and retain lifecycle state" {
   let message = "File watching stopped: too many open files"
   let failure = FileEditor(
     @fileeditor.FileWatchFailed(
-      channel=owner.channel,
+      channel=owner.host().unwrap().channel,
       root~,
       generation="\{file_ctx(model).watch_namespace}:\{generation}",
       message~,
@@ -22181,7 +22263,7 @@ test "file watcher failures toast once and retain lifecycle state" {
     dispatch,
     FileEditor(
       @fileeditor.FileWatchFailed(
-        channel=owner.channel,
+        channel=owner.host().unwrap().channel,
         root~,
         generation="\{file_ctx(model).watch_namespace}:\{generation - 1}",
         message="stale watcher failure",
@@ -22209,7 +22291,7 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
     dispatch,
     BrowserOpenRequested(
       request="r-1",
-      session=on_screen.session,
+      session=on_screen.session(),
       url="https://example.com/",
     ),
     model,
@@ -22236,7 +22318,7 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
     @preview.page(elsewhere.preview, 2).unwrap().url ==
     Some("https://example.org/"),
   )
-  let returned = @dock.sync(elsewhere.dock, away)
+  let returned = @dock.sync(elsewhere.dock, @interop.Host(away))
   assert_true(returned.tabs == [Browser(id=2)])
   assert_true(@dock.active_browser(returned) == Some(2))
   // And the first conversation's strip is intact when it comes back.
@@ -22254,7 +22336,7 @@ test "user and agent tab creation share placement without sharing navigation pri
   let url = "https://example.com/shared"
   let agent_open = BrowserOpenRequested(
     request="r-shared",
-    session=owner.session,
+    session=owner.session(),
     url~,
   )
   let (_, agent) = update(dispatch, agent_open, model)
@@ -23264,7 +23346,7 @@ fn PendingReviewContext::is_current(
   model : Model,
 ) -> Bool {
   let ctx = file_ctx(model)
-  self.owner == ctx.owner &&
+  @interop.Host(self.owner) == ctx.owner &&
   self.navigation == model.file_panel.file_link_generation &&
   ctx.placement
   .bind(placement => placement.checkout_root())
@@ -23279,7 +23361,8 @@ fn open_review_context(
   selection : @mention_context.ReviewChanges,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
-  guard ctx.placement
+  guard ctx.owner is @interop.Host(owner) &&
+    ctx.placement
     .bind(placement => placement.checkout_root())
     .map(root => root.path) ==
     Some(selection.source.workspace) else {
@@ -23300,7 +23383,7 @@ fn open_review_context(
     {
       ..opened,
       pending_review_context: Some({
-        owner: ctx.owner,
+        owner,
         navigation: opened.file_panel.file_link_generation,
         selection,
       }),
@@ -23327,7 +23410,7 @@ fn finish_review_context_load(
   }
   // A coalesced refresh is still loading. Stale/duplicate replies cannot
   // complete a newer jump, and an intermediate empty list is not deletion.
-  guard before.owner == Some(owner) &&
+  guard before.owner == Some(@interop.Host(owner)) &&
     pending.owner == owner &&
     before.changes_generation == generation &&
     model.file_panel.changes_generation == generation &&
@@ -23383,7 +23466,10 @@ fn Model::test_resolve_editor(self : Model, path : String) -> Model {
   let (_, model) = update(
     test_dispatch(),
     OpenPathResolved(
-      FileOpenContext::new(owner, self.file_panel.file_link_generation),
+      FileOpenContext::new(
+        owner.host().unwrap(),
+        self.file_panel.file_link_generation,
+      ),
       Editor({ path, line: None, column: None, }),
     ),
     self,

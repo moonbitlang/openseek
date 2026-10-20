@@ -1,8 +1,7 @@
 ///|
-test "decode reads source with the default wasm target" {
+test "decode reads source" {
   let input = @decode.decode({ "source": "fn main { println(1) }" })
   assert_true(input.program is Source("fn main { println(1) }"))
-  assert_eq(input.target, "wasm")
 }
 
 ///|
@@ -18,25 +17,15 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-/// `native` is the one backend a snippet may not ask for: moonrun's policy —
-/// the confinement that holds on every platform — applies to wasm alone, and
-/// `--wasm-policy` is silently ignored elsewhere, so naming `native` would be
-/// a one-argument way out of the sandbox.
-test "decode refuses the unsandboxed native target" {
-  let refused = try {
-    @decode.decode({ "source": "fn main {  }", "target": "native" }) |> ignore
-    "accepted"
+test "decode rejects the removed target argument" {
+  let rejected = try {
+    @decode.decode({ "source": "fn main { println(1) }", "target": "wasm" })
+    |> ignore
+    false
   } catch {
-    error => "\{error}"
+    _ => true
   }
-  assert_false(refused == "accepted")
-  assert_true(refused.contains("wasm"))
-}
-
-///|
-test "decode accepts an explicit target" {
-  let input = @decode.decode({ "source": "fn main {  }", "target": "wasm-gc" })
-  assert_eq(input.target, "wasm-gc")
+  assert_true(rejected)
 }
 
 ///|
@@ -56,9 +45,7 @@ test "decode defaults warning to off and reads on/off" {
 }
 
 ///|
-/// Argument shapes `decode` must refuse. Only the refusal itself is pinned
-/// here; the two tests above stay separate because they also pin the wording
-/// the model is supposed to read.
+/// Argument shapes `decode` must refuse.
 test "decode rejects malformed arguments" {
   let malformed : Array[Json] = [
     {},
@@ -70,12 +57,11 @@ test "decode rejects malformed arguments" {
     { "source": "x", "filename": "@builtin/check.mbtx" },
     { "source": "x", "filename": null },
     { "source": null, "filename": "run.mbtx" },
-    // An unknown warning value, a non-string cwd, an unknown target, a
+    // An unknown warning value, a non-string cwd, an invalid description, a
     // missing source, and arguments that are not an object at all.
     { "source": "x", "warning": "loud" },
     { "source": "x", "cwd": 3 },
     { "source": "x", "description": 3 },
-    { "source": "x", "target": "banana" },
     { "code": "x" },
     Json("x"),
   ]
@@ -119,7 +105,6 @@ test "decode accepts filename with unchanged execution options" {
   })
   assert_true(input.program is File("scripts/check.mbtx"))
   assert_eq(input.cwd, Some("sub"))
-  assert_eq(input.target, "wasm")
   assert_true(input.warning)
 }
 

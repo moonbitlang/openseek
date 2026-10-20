@@ -406,6 +406,21 @@ standard fonts, codecs, ICC profiles, and license are packaged in both hosts;
 PDF previews do not fetch runtime resources from a CDN or require a sibling
 Office Viewer checkout.
 
+Answer citation links can navigate to a verified Office location and highlight
+it without creating a composer annotation. Both inline citation numbers and
+Sources cards use the same local-file route. Supported fragments are PDF
+`#page=2` (one-based physical page), DOCX `#heading=Revenue` (unique complete
+paragraph text) or `#paragraph=%2Fdocx%2Fbody%2Fp%5B3%5D` (canonical source
+selector), and XLSX `#sheet=Revenue&range=B2:D8`. Encode each fragment value
+separately; filenames retain the usual Markdown path encoding. Saved citations
+using explicit `— p. 2` or `— 第 2 页` metadata also navigate to that PDF page.
+Navigation waits for file/PDF loading, including password prompts. Missing or
+ambiguous locations and cells outside the rendered preview show a notice while
+keeping the file open. PDF page citations outline the page; Word highlights
+the matched paragraph's rendered text; Excel switches sheets and highlights
+the cited cells. These are navigation highlights rather than Office edits or
+persisted annotations.
+
 What still needs preparing, beyond the MoonBit packages:
 
 - The native host links `libproton`, which in turn needs CEF. The Proton

@@ -67,7 +67,7 @@ fn active_pdf_document(
 pub fn State::accepts_pdf_callback(
   self : State,
   ctx : Ctx,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   epoch : Int32,
   path : @common.Uri,
   sig : String,

@@ -21,6 +21,10 @@ pub fn active_history_diff(State) -> GitHistoryDiff?
 
 pub fn file_paths(State) -> Array[@common.Uri]
 
+pub fn forget_cloud_account(State, String) -> State
+
+pub fn forget_cloud_session(State, String, String) -> State
+
 pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html
@@ -43,7 +47,7 @@ pub fn open_workflows(State) -> State
 
 pub fn resolve_pick(State, DockTab) -> State
 
-pub fn sync(State, @interop.ConversationKey) -> State
+pub fn sync(State, @interop.ConversationIdentity) -> State
 
 pub fn tab_menu(locale? : @i18n.Locale, State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
 
@@ -88,6 +92,7 @@ pub fn GitHistoryDiff::not_equal(Self, Self) -> Bool
 pub fn GitHistoryDiff::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LauncherActions {
+  host_tools : Bool
   browser : @cmd.Cmd?
   search : @cmd.Cmd
   files : @cmd.Cmd
@@ -110,10 +115,10 @@ pub fn RememberedStrip::equal(Self, Self) -> Bool
 pub fn RememberedStrip::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
-  owner : @interop.ConversationKey?
+  owner : @interop.ConversationIdentity?
   tabs : Array[DockTab]
   active : DockTab?
-  remembered : Map[@interop.ConversationKey, RememberedStrip]
+  remembered : Map[@interop.ConversationIdentity, RememberedStrip]
 } derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool

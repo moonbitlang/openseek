@@ -14,7 +14,6 @@ pub struct MbtxInput {
   args : Array[String]
   /// Presentation metadata, inherited by a background job.
   description : String?
-  target : String
   cwd : String?
   /// Whether compiler warnings appear in the run output — decoded from the
   /// `"on"`/`"off"` tool argument, defaulting to `"off"` (suppressed).
@@ -35,27 +34,19 @@ pub struct MbtxInput {
 pub extend Program with Debug::{to_repr}
 
 ///|
-/// The moon backends `--target` accepts.
-fn valid_target(target : String) -> Bool {
-  // `native` is deliberately absent: moonrun's policy — the only confinement
-  // that holds off macOS — applies to the wasm backend alone, and
-  // `--wasm-policy` is silently ignored elsewhere. Letting a snippet name
-  // `native` would hand it a one-argument way out of the sandbox. The
-  // remaining alternatives cannot spawn or touch the filesystem at all.
-  target is ("wasm" | "wasm-gc" | "js" | "llvm")
-}
-
-///|
 /// Decode `mbtx` tool-call arguments. At least one of `source` and `filename`
 /// is required; both means save and run a writable script. `source` is a string
 /// holding a full `.mbtx` program (an optional leading `import { … }` block,
-/// then the program including its own `main`). `target` is an optional backend
-/// name defaulting to `wasm`, which is the backend moonrun's policy sandbox
-/// applies to — a snippet may not simply ask for an unsandboxed one, so the
-/// compute-only backends are the only alternatives offered. `cwd` is an
-/// optional working directory for the program (defaults to the workspace
+/// then the program including its own `main`). The backend is fixed to wasm;
+/// supplying the removed `target` field fails with migration guidance. `cwd`
+/// is an optional working directory for the program (defaults to the workspace
 /// root). Failures name the offending field.
 pub fn decode(arguments : Json) -> MbtxInput raise {
+  if arguments is { "target": _, .. } {
+    fail(
+      "arguments without target; mbtx always runs on wasm. Remove target and retry",
+    )
+  }
   // The local dispatcher does not enforce JSON Schema. Reject the removed
   // field explicitly so a stale caller cannot silently get the runtime-less
   // 300s foreground behavior while believing it requested a job.
@@ -123,15 +114,6 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         { "description": _, .. } => fail("arguments.description to be a string")
         _ => None
       }
-      let target = match arguments {
-        { "target": String(t), .. } => t
-        { "target": Null, .. } => "wasm"
-        { "target": _, .. } => fail("arguments.target to be a string")
-        _ => "wasm"
-      }
-      guard valid_target(target) else {
-        fail("arguments.target to be one of wasm, wasm-gc, js, llvm")
-      }
       let cwd = match arguments {
         { "cwd": String(c), .. } => Some(c)
         { "cwd": Null, .. } => None
@@ -159,7 +141,7 @@ pub fn decode(arguments : Json) -> MbtxInput raise {
         None | Some(Null) => None
         _ => fail("arguments.ptc to be a boolean")
       }
-      { program, args, description, target, cwd, warning, escalated, ptc, }
+      { program, args, description, cwd, warning, escalated, ptc, }
     }
     _ => fail("object arguments")
   }

@@ -5,7 +5,8 @@ pub fn capture_pdf_region(
   state : State,
   ctx : Ctx,
 ) -> @cmd.Cmd {
-  guard ctx.panel_open &&
+  guard ctx.owner is @interop.Host(owner) &&
+    ctx.panel_open &&
     active_pdf_document(state, ctx) is Some((path, document, sig)) &&
     document.status is PdfReady else {
     return @cmd.none
@@ -22,7 +23,7 @@ pub fn capture_pdf_region(
       unsupported_annotation=ui(ctx.locale, PdfCaptureUnsupportedAnnotation),
       emit.map(result => {
         PdfCaptureFinished(
-          owner=ctx.owner,
+          owner~,
           epoch=state.request_epoch,
           path~,
           sig~,
@@ -67,7 +68,7 @@ pub fn State::pending_pdf_capture(self : State, ctx : Ctx) -> PdfCaptureDraft? {
   let p = draft.preview
   if self.accepts_pdf_callback(
       ctx,
-      p.owner,
+      @interop.Host(p.owner),
       p.epoch,
       p.path,
       p.sig,

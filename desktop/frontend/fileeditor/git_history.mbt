@@ -194,17 +194,19 @@ fn refresh_git_graph(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
     ctx.checkout_ready() &&
-    !ctx.owner.session.is_empty() else {
+    !owner.session.is_empty() else {
     return (@cmd.none, state)
   }
   let generation = state.git_graph_generation + 1
   (
     request_git_history(
       dispatch,
-      ctx.owner,
+      owner,
       generation,
       false,
       None,
@@ -227,6 +229,8 @@ fn load_more_git_history(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
     ctx.checkout_ready() &&
@@ -245,7 +249,7 @@ fn load_more_git_history(
   (
     request_git_history(
       dispatch,
-      ctx.owner,
+      owner,
       generation,
       true,
       Some(snapshot),
@@ -274,6 +278,8 @@ fn select_git_commit(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   if state.git_graph_selected is Some(selected) && selected == commit {
     return (
       @cmd.none,
@@ -292,7 +298,7 @@ fn select_git_commit(
   (
     request_git_commit_changes(
       dispatch,
-      ctx.owner,
+      owner,
       generation,
       commit,
       workspace=ctx.workspace(),
@@ -313,6 +319,8 @@ fn retry_git_commit_changes(
   ctx : Ctx,
   commit : String,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   guard state.git_graph_selected is Some(selected_commit) &&
     selected_commit == commit &&
     state.git_graph is GitGraphReady(repository=true, commits~, ..) &&
@@ -323,7 +331,7 @@ fn retry_git_commit_changes(
   (
     request_git_commit_changes(
       dispatch,
-      ctx.owner,
+      owner,
       generation,
       commit,
       workspace=ctx.workspace(),
@@ -367,13 +375,15 @@ pub fn open_history_diff(
   ctx : Ctx,
   diff : @dock.GitHistoryDiff,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   guard ctx.placement_ready() && diff.kind == "file" else {
     return (@cmd.none, state)
   }
   let key = history_diff_key(diff)
   if state.history_docs.get(key) is Some(doc) {
     return (
-      @cmd.batch([show_history_doc(ctx.owner, doc), request_viewer_remeasure()]),
+      @cmd.batch([show_history_doc(owner, doc), request_viewer_remeasure()]),
       state,
     )
   }
@@ -396,7 +406,7 @@ pub fn open_history_diff(
     cmds.push(
       request_history_blob(
         dispatch,
-        ctx.owner,
+        owner,
         key,
         generation,
         HistoryOriginal,
@@ -409,7 +419,7 @@ pub fn open_history_diff(
   cmds.push(
     request_history_blob(
       dispatch,
-      ctx.owner,
+      owner,
       key,
       generation,
       HistoryModified,
@@ -428,13 +438,12 @@ pub fn activate_history_diff(
   ctx : Ctx,
   diff : @dock.GitHistoryDiff,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   match state.history_docs.get(history_diff_key(diff)) {
     Some(doc) =>
       (
-        @cmd.batch([
-          show_history_doc(ctx.owner, doc),
-          request_viewer_remeasure(),
-        ]),
+        @cmd.batch([show_history_doc(owner, doc), request_viewer_remeasure()]),
         state,
       )
     None => open_history_diff(dispatch, state, ctx, diff)

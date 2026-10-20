@@ -2287,7 +2287,9 @@ fn view(
     ),
     ..content,
   ]
-  let panel_available = !model.cloud_selected() &&
+  let panel_available = (
+      !model.cloud_selected() || file_ctx(model).cloud_files is Some(_)
+    ) &&
     (
       model.screen is Chat ||
       (
@@ -2295,17 +2297,18 @@ fn view(
         placement.checkout_root() is Some(_)
       )
     )
-  let panel_toggle_visible = !model.cloud_selected() &&
+  let panel_toggle_visible = if model.cloud_selected() {
+    file_ctx(model).cloud_files is Some(_)
+  } else {
+    file_panel_visible ||
     (
-      file_panel_visible ||
+      !model.narrow &&
       (
-        !model.narrow &&
-        (
-          model.screen is Codex ||
-          (model.screen is Chat && model.active_conversation() is Some(_))
-        )
+        model.screen is Codex ||
+        (model.screen is Chat && model.active_conversation() is Some(_))
       )
     )
+  }
   let panel_toggle_label = if file_panel_visible {
     shell_text(model.locale, HidePanel)
   } else if model.screen is Codex {

@@ -173,3 +173,29 @@ test "a scheme without an authority remains text" {
     content="1",
   )
 }
+
+///|
+test "Office citation fragments preserve encoded sheet and heading values" {
+  let paths : Array[String] = []
+  let open = path => {
+    paths.push(path)
+    @cmd.none
+  }
+  ignore(
+    @markdown.markdown_nodes(
+      "[Budget](</docs/My%20Budget.xlsx#sheet=Q1%20%26%20Q2&range=B2:D8>) [Heading](/docs/report.docx#heading=Revenue%2520growth) [PDF](file:///docs/report.pdf#page=2) [File](file:///docs/book.xlsx#sheet=Q1%26Q2&range=A1)",
+      open_file=open,
+    ),
+  )
+  assert_eq(paths, [
+    "/docs/My Budget.xlsx#sheet=Q1%20%26%20Q2&range=B2:D8", "/docs/report.docx#heading=Revenue%2520growth",
+    "/docs/report.pdf#page=2", "/docs/book.xlsx#sheet=Q1%26Q2&range=A1",
+  ])
+  ignore(
+    @markdown.markdown_nodes(
+      "[Blocked](javascript:report.pdf#page=2)",
+      open_file=open,
+    ),
+  )
+  assert_eq(paths.length(), 4)
+}

@@ -1,7 +1,7 @@
 ///|
 /// Run `arguments` through `mbtx`, expect a handoff, wait for the job, and
-/// check job_output reports the guest's policy-like text as ordinary output
-/// rather than as a refusal from a policy that was not active.
+/// check job_output reports a successful program's policy-like text as
+/// ordinary output rather than as a policy refusal.
 #callsite(autofill(loc))
 async fn assert_handoff_keeps_guest_marker(
   mbtx : @agent_tool.AgentToolDefinition,
@@ -220,41 +220,38 @@ async test "a handoff carries build warnings and the build-ok label" {
 }
 
 ///|
-/// The moonrun policy is wired only for the wasm backend. A compute-only
-/// backend printing the runtime's marker is ordinary guest output, not evidence
-/// of a policy that was never active.
-async test "a non-wasm handed-off job does not invent a policy refusal" {
+/// A successful program may print the policy's marker as data. The job-output
+/// path must preserve its success after automatic handoff.
+async test "a successful wasm handed-off job does not invent a policy refusal" {
   @async.with_task_group(group => {
     let (_, bg_runtime, mbtx) = mbtx_fixture(
       group,
-      prefix="openseek-js-job-",
+      prefix="openseek-wasm-job-",
       auto_background_after_ms=1,
     )
     let source =
-      #|fn main {
+      #|import { "moonbitlang/async" }
+      #|
+      #|async fn main {
+      #|  @async.sleep(100)
       #|  println("Sandbox policy blocked file write: example")
       #|}
-    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, {
-      "source": source,
-      "target": "js",
-    })
+    assert_handoff_keeps_guest_marker(mbtx, bg_runtime, { "source": source })
   })
 }
 
 ///|
-/// The same policy-active gate applies before handoff. Whether an ordinary
-/// non-wasm run crosses the grace period must not change how its output is
-/// classified.
-async test "a non-wasm inline run does not invent a policy refusal" {
+/// The success gate also applies before handoff. Crossing the grace period
+/// must not change how a successful program's output is classified.
+async test "a successful wasm inline run does not invent a policy refusal" {
   @async.with_task_group(group => {
     let (_, _, mbtx) = mbtx_fixture(
       group,
-      prefix="openseek-js-inline-",
+      prefix="openseek-wasm-inline-",
       auto_background_after_ms=60_000,
     )
     let action = run_async_tool(mbtx, {
       "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
-      "target": "js",
     })
     guard action is Respond(output) else { fail("expected Respond") }
     assert_false(output.is_error)

@@ -53,6 +53,7 @@ pub(all) struct TabChip {
 /// browser action hides that row (a remote console has no native views to
 /// host pages with).
 pub(all) struct LauncherActions {
+  host_tools : Bool
   browser : @cmd.Cmd?
   search : @cmd.Cmd
   files : @cmd.Cmd
@@ -71,7 +72,7 @@ fn LauncherActions::rows(
   popup~ : Bool = false,
 ) -> Array[@html.Html] {
   let entries : Array[(String, String, () -> @html.Html, @cmd.Cmd)] = []
-  if self.browser is Some(open_browser) {
+  if self.browser is Some(open_browser) && self.host_tools {
     entries.push(
       (
         ui(locale, BrowseLabel),
@@ -81,14 +82,16 @@ fn LauncherActions::rows(
       ),
     )
   }
-  entries.push(
-    (
-      ui(locale, SearchLabel),
-      ui(locale, SearchHint),
-      @icons.icon_search,
-      self.search,
-    ),
-  )
+  if self.host_tools {
+    entries.push(
+      (
+        ui(locale, SearchLabel),
+        ui(locale, SearchHint),
+        @icons.icon_search,
+        self.search,
+      ),
+    )
+  }
   entries.push(
     (
       ui(locale, FilesLabel),
@@ -97,33 +100,35 @@ fn LauncherActions::rows(
       self.files,
     ),
   )
-  entries.push(
-    (
-      ui(locale, ReviewLabel),
-      ui(locale, ReviewHint),
-      @icons.icon_diff_multiple,
-      self.review,
-    ),
-  )
-  entries.push(
-    ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
-  )
-  entries.push(
-    (
-      ui(locale, WorkflowsLabel),
-      ui(locale, WorkflowsHint),
-      @icons.icon_organization,
-      self.workflows,
-    ),
-  )
-  entries.push(
-    (
-      ui(locale, JobsLabel),
-      ui(locale, JobsHint),
-      @icons.icon_tasklist,
-      self.jobs,
-    ),
-  )
+  if self.host_tools {
+    entries.push(
+      (
+        ui(locale, ReviewLabel),
+        ui(locale, ReviewHint),
+        @icons.icon_diff_multiple,
+        self.review,
+      ),
+    )
+    entries.push(
+      ("GitHub", ui(locale, GithubHint), @icons.icon_github, self.github),
+    )
+    entries.push(
+      (
+        ui(locale, WorkflowsLabel),
+        ui(locale, WorkflowsHint),
+        @icons.icon_organization,
+        self.workflows,
+      ),
+    )
+    entries.push(
+      (
+        ui(locale, JobsLabel),
+        ui(locale, JobsHint),
+        @icons.icon_tasklist,
+        self.jobs,
+      ),
+    )
+  }
   let rows : Array[@html.Html] = []
   for entry in entries {
     let (label, hint, image, choose) = entry

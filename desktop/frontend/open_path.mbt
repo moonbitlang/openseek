@@ -8,6 +8,7 @@ priv struct FileOpenContext {
   range : @common.Range?
   annotation : String?
   return_to : @interop.ConversationKey?
+  office_target : @office_location.Target?
 }
 
 ///|
@@ -17,8 +18,9 @@ fn FileOpenContext::new(
   range? : @common.Range,
   annotation? : String,
   return_to? : @interop.ConversationKey,
+  office_target? : @office_location.Target,
 ) -> FileOpenContext {
-  { owner, generation, range, annotation, return_to, }
+  { owner, generation, range, annotation, return_to, office_target, }
 }
 
 ///|
@@ -39,26 +41,34 @@ fn request_open_path(
   let model = if return_to is Some(owner) && owner != active.owner {
     model
   } else {
-    let dock = @dock.sync(model.dock, active.owner)
+    let dock = @dock.sync(model.dock, @interop.Host(active.owner))
     {
       ..model,
       dock,
       file_panel: model.file_panel.prepare_owner(
-        active.owner,
+        @interop.Host(active.owner),
         @dock.file_paths(dock),
       ),
     }
   }
   let model = model.begin_editor_navigation()
+  let office = @office_location.parse(path)
   let context = FileOpenContext::new(
     active.owner,
     model.file_panel.file_link_generation,
     range?,
     annotation?,
     return_to?,
+    office_target?=office.map(reference => reference.target),
   )
   (
-    open_file(dispatch, context, cwd, path, preview_browser=model.is_desktop),
+    open_file(
+      dispatch,
+      context,
+      cwd,
+      office.map(reference => reference.path).unwrap_or(path),
+      preview_browser=model.is_desktop,
+    ),
     model,
   )
 }
@@ -113,6 +123,7 @@ fn finish_open_path(
         range,
         file_link_generation=context.generation,
         annotation?=context.annotation,
+        office_target?=context.office_target,
       )
     }
     Browser(path) => show_browser_path(dispatch, selected, path)
@@ -139,26 +150,19 @@ fn show_editor_at(
   range : @common.Range?,
   file_link_generation~ : Int32,
   annotation? : String,
+  office_target? : @office_location.Target,
 ) -> (@cmd.Cmd, Model) {
   let ctx = file_ctx(model)
   // Chip/transcript jumps call the file-editor package directly rather than
   // passing through its guarded message dispatcher. Keep them parked too: the
   // dock must not grow a loading tab, nor may a host read start, while checkout
   // placement is unresolved or missing.
-  guard ctx.placement is Some(placement) && placement.is_ready() else {
+  guard ctx.owner is @interop.Host(host) &&
+    ctx.placement is Some(placement) &&
+    placement.is_ready() else {
     return (@cmd.none, model)
   }
-  let owner = ctx.owner
-  let femit = dispatch.map(msg => FileEditor(msg))
-  // Park/restore the strip for a conversation switch up front, and re-root
-  // the file subsystem when its cached tree belongs to another conversation;
-  // otherwise `sync_file_panel`'s post-dispatch pass would see a session
-  // mismatch and wipe the freshly opened tab below. A re-rooted document
-  // table is seeded from the restored strip (identities only), exactly like
-  // `@fileeditor.sync`'s own re-root.
-  let dock = @dock.sync(model.dock, owner)
-  let panel = model.file_panel.prepare_owner(owner, @dock.file_paths(dock))
-  let resource = match @resource.of_path(ctx.owner.channel, path) {
+  let resource = match @resource.of_path(host.channel, path) {
     Some(resource) => Some(resource)
     None =>
       model
@@ -166,6 +170,42 @@ fn show_editor_at(
       .bind(relative => model.workspace_resource(relative))
   }
   guard resource is Some(resource) else { return (@cmd.none, model) }
+  show_editor_resource(
+    dispatch,
+    model,
+    resource,
+    range,
+    file_link_generation~,
+    annotation?,
+    office_target?,
+  )
+}
+
+///|
+fn show_editor_resource(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  resource : @common.Uri,
+  range : @common.Range?,
+  file_link_generation~ : Int32,
+  annotation? : String,
+  office_target? : @office_location.Target,
+) -> (@cmd.Cmd, Model) {
+  let ctx = file_ctx(model)
+  let owner = ctx.owner
+  let femit = dispatch.map(msg => FileEditor(msg))
+  // Park/restore the strip for a conversation switch up front, and re-root
+  // the file subsystem when its cached tree belongs to another conversation;
+  // otherwise `sync_file_panel`'s post-dispatch pass would see a session
+  // mismatch and wipe the freshly opened tab below. A re-rooted document
+  // table follows the restored strip, exactly like `@fileeditor.sync`'s own
+  // re-root, including settled Cloud documents retained in memory.
+  let dock = @dock.sync(model.dock, owner)
+  let panel = model.file_panel.prepare_owner(
+    owner,
+    @dock.file_paths(dock),
+    cloud_epoch?=ctx.cloud_files.map(files => files.epoch),
+  )
   let had_active = @dock.active_file(dock) is Some(_)
   // An explicit open while the picker is the active tab fulfills it, the
   // same as a pick from its tree.
@@ -191,6 +231,7 @@ fn show_editor_at(
     file_link_generation~,
     range~,
     annotation?,
+    office_target?,
     had_active~,
   )
   (cmd, { ..model, file_panel: panel, })
@@ -207,7 +248,7 @@ fn show_browser_path(
     active.owner.channel is Local else {
     return (@cmd.none, model)
   }
-  let dock = @dock.sync(model.dock, active.owner)
+  let dock = @dock.sync(model.dock, @interop.Host(active.owner))
   let url = @uri.file_url(path)
   let reuse = for tab in dock.tabs {
     if tab is Browser(id~) &&
@@ -233,7 +274,7 @@ fn show_browser_path(
       id,
       url,
       model.theme.is_dark(model.system_dark),
-      dock.owner,
+      dock.owner.bind(owner => owner.host()),
     ),
     {
       ..model,

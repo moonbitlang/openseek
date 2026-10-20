@@ -27,8 +27,17 @@ pub fn markdown_nodes(
 ) -> Array[@html.Html] {
   @js.Error_::wrap(() => {
     let doc = @cmark.Doc::from_string(source, strict=false)
-    let render = MarkdownRender::{ locale, defs: doc.defs, open_file, }
+    let render = MarkdownRender::{
+      locale,
+      defs: doc.defs,
+      open_file,
+      citations: [],
+      in_sources: false,
+    }
     let nodes = render.block_nodes(doc.block)
+    if !render.citations.is_empty() {
+      nodes.push(render.sources_node())
+    }
     @js.Value::cast_from(nodes)
   }) catch {
     _ => [@html.pre(class="markdown-fallback", source)]
@@ -43,6 +52,10 @@ priv struct MarkdownRender {
   defs : Map[String, @cmark.LabelDef]
   // How to make a file path clickable; `None` renders paths inertly.
   open_file : ((String) -> @cmd.Cmd)?
+  // Per-render state: repeated references share one entry, and message-local
+  // source actions never depend on document-global fragment IDs.
+  citations : Array[Citation]
+  in_sources : Bool
 }
 
 ///|
@@ -80,6 +93,11 @@ fn MarkdownRender::push_block(
     ThematicBreak(_) => out.push(@html.hr())
     ExtTable(node) => out.push(self.table(node.v))
     ExtFootnoteDefinition(node) => {
+      // Numbered definitions are collected when their references are rendered,
+      // then shown once at the end, in first-citation order.
+      if citation_number(node.v.label.key) is Some(_) {
+        return
+      }
       let children : Array[@html.Html] = [
         @html.span(class="footnote-label", node.v.label.key),
       ]
@@ -460,6 +478,10 @@ fn MarkdownRender::push_inline(
       }
     }
     Link(node) => {
+      if self.citation(node.v) is Some(citation) {
+        out.push(self.citation_node(citation))
+        return
+      }
       // The label is already inside an anchor. Leaving bare-URL detection on
       // here would turn `[https://label](https://target)` into nested anchors.
       let children = self.inline_nodes(node.v.text, linkify_urls=false)
@@ -733,6 +755,16 @@ fn MarkdownRender::file_destination(
   if FileReference(destination).local_file_uri_path() is Some(path) {
     return Some(path)
   }
+  if !@cmark.InlineLink::is_unsafe(destination) &&
+    is_local_path(destination) &&
+    @office_location.parse(destination) is Some(reference) &&
+    destination.rev_split_once("#") is Some((_, fragment)) {
+    // Decode the filesystem path once, preserving encoded fragment components
+    // for the location parser (a sheet name can itself contain '&' or '%').
+    return Some(
+      @uri.decode_component(reference.path) + "#" + fragment.to_owned(),
+    )
+  }
   if !@cmark.InlineLink::is_unsafe(destination) && is_local_path(destination) {
     // Decode URI destinations once here; prose and host paths stay literal.
     Some(@uri.decode_component(destination))
@@ -860,10 +892,16 @@ fn FileReference::local_file_uri_path(self : FileReference) -> String? {
     uri.query.is_empty() else {
     return None
   }
-  let position = if uri.fragment.is_empty() {
+  let fragment = match self.0.rev_split_once("#") {
+    Some((_, fragment)) => fragment.to_owned()
+    None => ""
+  }
+  let position = if fragment.is_empty() {
     ""
-  } else if uri.fragment.view() =~ re"^L[1-9][[:digit:]]*$" {
-    "#" + uri.fragment
+  } else if fragment.view() =~ re"^L[1-9][[:digit:]]*$" {
+    "#" + fragment
+  } else if @office_location.parse(uri.path + "#" + fragment) is Some(_) {
+    "#" + fragment
   } else {
     return None
   }
@@ -909,6 +947,9 @@ fn FileReference::position_path(self : FileReference) -> String? {
 ///|
 /// The suffix-free path, or the whole reference when it has no position.
 fn FileReference::path(self : FileReference) -> String {
+  if @office_location.parse(self.0) is Some(reference) {
+    return reference.path
+  }
   self.position_path().unwrap_or(self.0)
 }
 

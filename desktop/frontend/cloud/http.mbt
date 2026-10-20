@@ -1,5 +1,5 @@
 ///|
-const CloudOrigin = "https://cloud.moonbitlang.cn"
+pub const CloudOrigin = "https://cloud.moonbitlang.cn"
 
 ///|
 fn check_status(status : Int32) -> Unit raise CloudError {

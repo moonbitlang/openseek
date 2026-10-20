@@ -61,10 +61,10 @@ test "semantic review preferences survive owner replacement" {
     review_diff_ignore_tests: false,
   }
   let next_owner : @interop.ConversationKey = {
-    ..test_ctx().owner,
+    ..test_ctx().owner.host().unwrap(),
     session: "next-session",
   }
-  let prepared = configured.prepare_owner(next_owner, [])
+  let prepared = configured.prepare_owner(@interop.Host(next_owner), [])
   assert_true(prepared.review_diff_mode is ReviewDiffTree)
   assert_false(prepared.review_diff_ignore_comments)
   assert_false(prepared.review_diff_ignore_tests)

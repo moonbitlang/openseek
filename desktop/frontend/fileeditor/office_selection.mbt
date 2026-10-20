@@ -17,7 +17,7 @@ pub extend OfficeSelectionPreview with Eq::{equal, not_equal}
 pub fn State::accepts_office_callback(
   self : State,
   ctx : Ctx,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   epoch : Int32,
   path : @common.Uri,
   sig : String,
@@ -48,7 +48,7 @@ pub fn State::pending_office_selection(
     Some(generation) =>
       self.accepts_pdf_callback(
         ctx,
-        preview.owner,
+        @interop.Host(preview.owner),
         preview.epoch,
         preview.path,
         preview.sig,
@@ -62,7 +62,7 @@ pub fn State::pending_office_selection(
     None =>
       self.accepts_office_callback(
         ctx,
-        preview.owner,
+        @interop.Host(preview.owner),
         preview.epoch,
         preview.path,
         preview.sig,
@@ -88,6 +88,8 @@ pub fn State::offer_office_selection(
   ctx : Ctx,
   raw : String,
 ) -> Result[State, String] {
+  guard ctx.owner is @interop.Host(owner) else { return Ok(self) }
+
   guard ctx.panel_open &&
     self.owner == Some(ctx.owner) &&
     ctx.active_history_diff is None &&
@@ -114,7 +116,7 @@ pub fn State::offer_office_selection(
     return Err(ui(ctx.locale, OfficeSelectionFailed))
   }
   let preview : OfficeSelectionPreview = {
-    owner: ctx.owner,
+    owner,
     epoch: self.request_epoch,
     path,
     sig,

@@ -90,7 +90,10 @@ test "pending Office selections expire on file owner epoch panel or revision cha
       { ..ctx, active_file: Some(test_file("other.docx")), },
       { ..ctx, active_file: None, },
       { ..ctx, panel_open: false, },
-      { ..ctx, owner: { ..ctx.owner, session: "other", }, },
+      {
+        ..ctx,
+        owner: @interop.Host({ ..ctx.owner.host().unwrap(), session: "other", }),
+      },
     ] {
     let synced = state.sync_office_selection(changed)
     assert_true(synced.office_selection is None)

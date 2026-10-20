@@ -113,7 +113,7 @@ pub fn definition(
     name="web_search",
     concurrent_safe=true,
     description=(
-      #|Search the web for current information. Returns a list of source URLs with titles and snippets. Use it when the answer may have changed since your training data or lives outside this workspace — current releases, external documentation, error messages you do not recognize. Independent questions? Issue SEVERAL web_search calls in the same step — they run concurrently. Cite the relevant source URLs as markdown links in your answer.
+      #|Search the web for current information. Returns a list of source URLs with titles and snippets. Use it when the answer may have changed since your training data or lives outside this workspace — current releases, external documentation, error messages you do not recognize. Independent questions? Issue SEVERAL web_search calls in the same step — they run concurrently. Cite relevant sources using numbered Markdown footnotes: put [^1] after the supported claim and [^1]: [Source title](URL) at the end. Reuse a number for the same source and location. Cite only sources that support the claim.
     ),
     schema=JsonSchema({
       "type": "object",
@@ -415,7 +415,9 @@ fn format_output(outcome : SearchOutcome) -> String {
       "(Showing the first \{outcome.sources.length()} sources. Refine the query for more.)",
     )
   }
-  parts.push("Cite the relevant URLs above as markdown links in your answer.")
+  parts.push(
+    "Cite the relevant URLs above with numbered footnotes: claim[^1], then [^1]: [Title](URL) at the end. Reuse numbers for repeated sources.",
+  )
   parts.join("\n\n")
 }
 

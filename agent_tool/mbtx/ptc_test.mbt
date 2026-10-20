@@ -145,7 +145,6 @@ async test "PTC without a job runtime stays foreground and saves reusable origin
       for
         args in [
           ({ "ptc": true, "source": source, "escalated": true } : Json),
-          { "ptc": true, "source": source, "target": "native" },
           { "ptc": "yes", "source": source },
         ] {
         assert_true(dispatch(definition, args).is_error)

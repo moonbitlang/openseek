@@ -45,8 +45,8 @@ pub(all) enum DockTab {
 
 ///|
 /// A conversation's parked strip: identities and the active tab only,
-/// mirroring how fileeditor used to park its tab set. Restoring never brings
-/// content back by itself — the content subsystems reload on demand.
+/// mirroring how fileeditor used to park its tab set. Content stays in its
+/// owning subsystem, which restores cached documents or reloads on demand.
 pub(all) struct RememberedStrip {
   tabs : Array[DockTab]
   active : DockTab?
@@ -59,13 +59,13 @@ pub(all) struct RememberedStrip {
 pub(all) struct State {
   // Which conversation the live strip belongs to; `None` before the first
   // sync. Switching conversations parks the strip under this key.
-  owner : @interop.ConversationKey?
+  owner : @interop.ConversationIdentity?
   // The strip, in opening order, and the tab whose body is on screen.
   tabs : Array[DockTab]
   active : DockTab?
   // Strips parked by conversation switches, restored when their conversation
   // returns to the screen.
-  remembered : Map[@interop.ConversationKey, RememberedStrip]
+  remembered : Map[@interop.ConversationIdentity, RememberedStrip]
 } derive(Eq)
 
 ///|

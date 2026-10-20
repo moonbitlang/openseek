@@ -858,3 +858,16 @@
   color-scheme: light;
   color: #1f2937;
 }
+/* Citation targets are independent of text/cell selection and Agent feedback. */
+#openseek-office-surface .office-citation-target:is(td, .page) {
+  outline: 3px solid #e8a020;
+  outline-offset: -3px;
+  box-shadow: inset 0 0 0 2px #fff8;
+}
+#openseek-office-surface td.office-citation-target {
+  background-image: linear-gradient(#fbbf2440, #fbbf2440);
+}
+#openseek-office-surface .office-citation-highlight {
+  fill: #fbbf245c;
+  pointer-events: none;
+}

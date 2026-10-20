@@ -1,0 +1,7 @@
+import {
+  "openseek_desktop/uri",
+  "moonbitlang/core/string",
+  "moonbit-community/rabbita/js",
+}
+
+supported_targets = "js"

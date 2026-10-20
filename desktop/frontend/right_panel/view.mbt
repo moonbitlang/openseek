@@ -72,9 +72,11 @@ fn panel_view(
       }
     }
   })
+  let host_tools = input.file_ctx.owner.host() is Some(_)
   let launcher : @dock.LauncherActions = {
+    host_tools,
     // Browser tabs need this window's native views; a remote console has none.
-    browser: if input.is_desktop {
+    browser: if input.is_desktop && host_tools {
       Some(@cmd.batch([actions.browser_tab, actions.close_menu]))
     } else {
       None

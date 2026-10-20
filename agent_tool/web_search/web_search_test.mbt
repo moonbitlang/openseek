@@ -174,7 +174,7 @@ async test "web_search rejects blank and oversized queries locally" {
 ///
 ///     (Showing the first 8 sources. Refine the query for more.)
 ///
-///     Cite the relevant URLs above as markdown links in your answer.
+///     Cite the relevant URLs above with numbered footnotes: ...
 ///
 /// Only the SHAPE is stable, not the contents: which URLs surface, whether
 /// titles are present (a title-less source falls back to its hostname label,

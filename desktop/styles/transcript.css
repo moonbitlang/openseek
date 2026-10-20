@@ -890,6 +890,197 @@
   color: var(--color-text-secondary);
 }
 
+.msg-content.markdown .citation {
+  display: inline;
+  vertical-align: baseline;
+  font-size: inherit;
+  line-height: 0;
+}
+.msg-content.markdown .citation-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.55em;
+  min-height: 1.55em;
+  margin: 0 0.15em;
+  padding: 0 0.35em;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+  font-size: 0.75em;
+  font-weight: 500;
+  line-height: 1.4;
+  text-decoration: none;
+  vertical-align: 0.15em;
+}
+.msg-content.markdown :is(a, button).citation-link:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.msg-content.markdown .citation-link:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.msg-content.markdown .citation-sources {
+  margin-top: 1.2em;
+  font-size: var(--font-size-sm);
+}
+.msg-content.markdown .citation-sources-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  min-height: 34px;
+  padding: 5px 10px 5px 7px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  line-height: 1.4;
+  list-style: none;
+  cursor: pointer;
+}
+.msg-content.markdown .citation-sources-heading::-webkit-details-marker {
+  display: none;
+}
+.msg-content.markdown .citation-sources-heading:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.msg-content.markdown .citation-sources[open] > .citation-sources-heading {
+  margin-bottom: 10px;
+}
+.msg-content.markdown .citation-sources-heading:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+.msg-content.markdown .citation-sources-count {
+  min-width: 18px;
+  padding: 1px 4px;
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: center;
+}
+.msg-content.markdown .citation-sources-chevron {
+  display: flex;
+  color: var(--color-text-muted);
+}
+.msg-content.markdown .citation-sources[open] .citation-sources-chevron {
+  transform: rotate(180deg);
+}
+.msg-content.markdown .citation-source-previews {
+  display: flex;
+  padding-right: 2px;
+}
+.msg-content.markdown .citation-source-glyph {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
+}
+.msg-content.markdown .citation-source-glyph svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.msg-content.markdown .citation-source-previews .citation-source-glyph {
+  width: 23px;
+  height: 23px;
+  border: 2px solid var(--color-bg-surface);
+  border-radius: 50%;
+}
+.msg-content.markdown .citation-source-previews .citation-source-glyph + .citation-source-glyph {
+  margin-left: -7px;
+}
+.msg-content.markdown .citation-source-previews svg {
+  width: 13px;
+  height: 13px;
+}
+.msg-content.markdown ol.citation-source-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.msg-content.markdown li.citation-source {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 9px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-bg-surface);
+}
+.msg-content.markdown .citation-source-number {
+  min-width: 14px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.7;
+  text-align: center;
+}
+.msg-content.markdown .citation-source-content {
+  min-width: 0;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+.msg-content.markdown .citation-source-origin {
+  margin-bottom: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.msg-content.markdown .citation-source-copy {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.msg-content.markdown .citation-source-copy :is(a, button.file-link) {
+  position: relative;
+  z-index: 1;
+}
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child {
+  position: static;
+  z-index: auto;
+  display: block;
+  width: fit-content;
+  margin-bottom: 4px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  content: "";
+}
+.msg-content.markdown .citation-source:has(:is(a, button):hover) {
+  border-color: var(--color-text-muted);
+}
+.msg-content.markdown .citation-source:has(:focus-visible) {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.msg-content.markdown .citation-source-copy > p:first-child > :is(a, button.file-link):first-child:hover {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.msg-content.markdown .citation-source-copy > :first-child {
+  margin-top: 0;
+}
+.msg-content.markdown .citation-source-copy > :last-child {
+  margin-bottom: 0;
+}
+
 /* live streaming bubble: a blinking caret after the latest text */
 .msg.streaming .msg-content::after {
   content: "▍";

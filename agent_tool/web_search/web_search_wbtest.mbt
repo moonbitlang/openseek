@@ -70,7 +70,7 @@ test "parse_search_response joins citations, dedupes, and formats" {
       #|- [Example A](https://example.com/a) — MoonBit is a fast language. (January 5, 2026)
       #|- [example.org](https://example.org/b)
       #|
-      #|Cite the relevant URLs above as markdown links in your answer.
+      #|Cite the relevant URLs above with numbered footnotes: claim[^1], then [^1]: [Title](URL) at the end. Reuse numbers for repeated sources.
     ),
   )
 }

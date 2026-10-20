@@ -30,13 +30,7 @@ pub fn tabs_to_close(
 fn tab_menu_target(state : State, tab : DockTab) -> String {
   let owner = match state.owner {
     None => "unowned"
-    Some(owner) => {
-      let channel = match owner.channel {
-        Local => "local"
-        Remote(id) => "remote:\{id.length()}:\{id}"
-      }
-      "\{channel}:\{owner.session.length()}:\{owner.session}"
-    }
+    Some(owner) => owner.key()
   }
   let identity = match tab {
     File(path~) => "file:\{path.to_string()}"

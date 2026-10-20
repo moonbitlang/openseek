@@ -37,3 +37,21 @@ test "resource operations retain channel identity" {
   assert_eq(@resource.path_for(file, local_channel), Some("/work/src/a.mbt"))
   assert_true(@resource.path_for(file, remote) is None)
 }
+
+///|
+test "Cloud resource identity binds origin, account and session without a Host channel" {
+  let root = @resource.cloud_root("https://cloud.example", "Account", "session").unwrap()
+  let file = @resource.join_relative(root, Relative("src/a #.mbt"))
+  assert_true(@resource.channel(file) is None)
+  assert_eq(@resource.relative_to(file, root), Some(Relative("src/a #.mbt")))
+  assert_eq(@common.Uri::parse(file.to_string()), file)
+  for
+    other in [
+      @resource.cloud_root("https://other.example", "Account", "session").unwrap(),
+      @resource.cloud_root("https://cloud.example", "account", "session").unwrap(),
+      @resource.cloud_root("https://cloud.example", "Account", "other").unwrap(),
+    ] {
+    assert_false(@resource.contains(other, file))
+  }
+  assert_false(@resource.contains(@resource.of_path(Local, "/").unwrap(), file))
+}

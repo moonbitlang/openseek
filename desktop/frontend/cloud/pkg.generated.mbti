@@ -8,12 +8,19 @@ import {
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/transcript",
+  "openseek_desktop/protocol",
 }
 
 // Values
+pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+
 pub fn discard_legacy_credential() -> Unit
 
 pub async fn export_record(String, String) -> Result[String, Failure]
+
+pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, Failure]
+
+pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, Failure]
 
 pub async fn share(String, String, String) -> Result[String, Failure]
 

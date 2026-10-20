@@ -7,7 +7,11 @@ test "PDF-only dock retains the watcher without opening text documents" {
   ).unwrap()
   let ctx : @fileeditor.Ctx = {
     locale: English,
-    owner: { channel: @interop.ChannelId::Local, session: "preview-test", },
+    cloud_files: None,
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Local,
+      session: "preview-test",
+    }),
     request_epoch: 0,
     watch_namespace: "preview-test",
     model: "deepseek-v4-flash",
@@ -67,7 +71,10 @@ test "PDF-only dock retains the watcher without opening text documents" {
   ).unwrap()
   let remote = {
     ..ctx,
-    owner: { channel: @interop.ChannelId::Remote("device"), session: "remote", },
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Remote("device"),
+      session: "remote",
+    }),
     placement: Some(@interop.WorkspaceRoot(root=remote_root)),
   }
   assert_true(state.polled_files(remote) == [preview])

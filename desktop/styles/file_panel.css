@@ -266,6 +266,10 @@ button.panel-toggle:not(:disabled):hover {
   color: var(--color-text-secondary);
   background: var(--color-bg-surface);
 }
+.viewer-notice.has-action {
+  flex-direction: column;
+  gap: 12px;
+}
 .viewer-notice.diff-transition-shield {
   color: transparent;
   background: transparent;
