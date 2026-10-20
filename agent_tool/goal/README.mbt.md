@@ -41,7 +41,8 @@ goal state.
 
 ## Schema
 
-This checked example verifies the tool's public JSON argument contract:
+This checked example doubles as a readable snapshot of the tool's public JSON
+contract:
 
 ```mbt check
 ///|
@@ -49,25 +50,22 @@ test "goal tool schema" {
   let tool = @goal.definition()
   assert_eq(tool.name, "goal")
   assert_true(tool.control)
-  assert_true(
-    tool.schema.0
-    is {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string",
-          "enum": ["met", "continuing", "blocked"],
-          ..
-        },
-        "remaining": { "type": "string", .. },
-        "reason": { "type": "string", .. },
-        ..
+  json_inspect(tool.schema.0, content={
+    "type": "object",
+    "properties": {
+      "status": { "type": "string", "enum": ["met", "continuing", "blocked"] },
+      "remaining": {
+        "type": "string",
+        "description": "Required when status is \"continuing\": one or two lines on what is left to reach the goal.",
       },
-      "required": ["status"],
-      "additionalProperties": false,
-      ..
+      "reason": {
+        "type": "string",
+        "description": "Why the goal cannot proceed; required with status \"blocked\".",
+      },
     },
-  )
+    "required": ["status"],
+    "additionalProperties": false,
+  })
 }
 ```
 
