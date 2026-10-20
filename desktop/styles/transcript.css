@@ -1093,7 +1093,7 @@
    removed. Old text remounted by a Markdown structure change starts clear. */
 .msg.assistant .stream-fragment {
   opacity: 1;
-  transition: opacity 900ms ease-out;
+  transition: opacity 900ms ease-in-out;
 }
 
 @starting-style {
