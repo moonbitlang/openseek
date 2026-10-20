@@ -1754,11 +1754,21 @@ fn Model::overview_background(
     more_jobs=own_jobs && self.jobs.next_offset is Some(_),
     workflows=conv.workflows,
   )
+  // Each panel's link hides the side panel when it is the one on screen, as
+  // the titlebar's panel toggles do.
+  let active = if self.file_panel_visible() {
+    self.dock_state().active
+  } else {
+    None
+  }
+  fn link(shown : Bool, request : Msg) -> @conversation_overview.PanelLink {
+    { shown, toggle: dispatch(if shown { ToggleRightPanel } else { request }), }
+  }
   tasks.map(tasks => {
     tasks,
     now_ms: @interop.now_ms(),
-    open_jobs: dispatch(JobsRequested),
-    open_workflows: dispatch(WorkflowsRequested),
+    jobs: link(active is Some(Jobs), JobsRequested),
+    workflows: link(active is Some(Workflows), WorkflowsRequested),
   })
 }
 

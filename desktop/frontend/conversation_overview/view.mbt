@@ -34,14 +34,22 @@ pub(all) struct Changes {
 }
 
 ///|
-/// The background tasks card's input: what runs, and how to open the panels
-/// that list it in full.
+/// A side panel the background tasks card can show: whether it is on screen,
+/// and the command that shows it, or hides it when it is.
+pub(all) struct PanelLink {
+  shown : Bool
+  toggle : @cmd.Cmd
+}
+
+///|
+/// The background tasks card's input: what runs, and the panels that list it
+/// in full.
 pub(all) struct Background {
   tasks : BackgroundTasks
   /// Now, in milliseconds since the epoch, for the commands' elapsed time.
   now_ms : Double
-  open_jobs : @cmd.Cmd
-  open_workflows : @cmd.Cmd
+  jobs : PanelLink
+  workflows : PanelLink
 }
 
 ///|
@@ -142,8 +150,9 @@ pub fn view(
 
 ///|
 /// The background tasks card. Folded, it says how many tasks run; unfolded,
-/// what each is. Its button opens the panel that lists them in full: Jobs,
-/// unless every running task is a subagent only a workflow knows about.
+/// what each is. Its button shows the panel that lists them in full, and
+/// hides it again like the titlebar's panel toggles: Jobs, unless every
+/// running task is a subagent only a workflow knows about.
 fn background_card(
   locale : @i18n.Locale,
   state : State,
@@ -151,10 +160,12 @@ fn background_card(
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   let tasks = background.tasks
-  let (label, open) = if tasks.in_jobs {
-    (text(locale, OpenJobs), background.open_jobs)
+  let (link, label) = if tasks.in_jobs {
+    let link = background.jobs
+    (link, text(locale, if link.shown { HideJobs } else { OpenJobs }))
   } else {
-    (text(locale, OpenWorkflows), background.open_workflows)
+    let link = background.workflows
+    (link, text(locale, if link.shown { HideWorkflows } else { OpenWorkflows }))
   }
   card(
     locale,
@@ -171,11 +182,17 @@ fn background_card(
         )
       },
       @html.button(
-        class="conv-overview-mini",
+        class=if link.shown {
+          "conv-overview-mini active"
+        } else {
+          "conv-overview-mini"
+        },
         type_="button",
         title=label,
-        attrs=@html.Attrs::build().aria_label(label),
-        on_click=open,
+        attrs=@html.Attrs::build()
+          .aria_label(label)
+          .aria_pressed(link.shown.to_string()),
+        on_click=link.toggle,
         @icons.icon(@icons.icon_layout_sidebar_right),
       ),
     ],

@@ -23,8 +23,8 @@ pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, changes~ 
 pub(all) struct Background {
   tasks : BackgroundTasks
   now_ms : Double
-  open_jobs : @cmd.Cmd
-  open_workflows : @cmd.Cmd
+  jobs : PanelLink
+  workflows : PanelLink
 }
 
 pub(all) struct BackgroundTasks {
@@ -61,6 +61,11 @@ pub(all) struct Environment {
 
 pub(all) enum Msg {
   Toggled(Section)
+}
+
+pub(all) struct PanelLink {
+  shown : Bool
+  toggle : @cmd.Cmd
 }
 
 pub(all) struct RunningJob {

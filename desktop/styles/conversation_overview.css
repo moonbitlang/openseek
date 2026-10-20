@@ -157,6 +157,10 @@ main:has(> .conv-overview) {
   background: var(--color-hover-subtle);
   color: var(--color-text-primary);
 }
+.conv-overview-mini.active {
+  background: var(--color-accent-soft);
+  color: var(--color-accent-strong);
+}
 .conv-overview-mini:disabled {
   opacity: 0.5;
   cursor: default;

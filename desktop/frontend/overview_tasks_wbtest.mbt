@@ -97,8 +97,37 @@ test "the Jobs panel takes the listing over from the overview" {
   let dispatch = test_dispatch()
   let (_, shown) = update(dispatch, ToggleOverview, begun_model())
   assert_true(shown.jobs.watch is Summary)
-  let (_, panel) = update(dispatch, JobsRequested, shown)
+  guard shown.active_conversation() is Some(conv) else {
+    fail("the fixture has a conversation on screen")
+  }
+  let (_, listed) = update(
+    dispatch,
+    Jobs(
+      Listed(
+        shown.jobs.epoch,
+        0,
+        Ok({
+          jobs: [running_job("npm run dev")],
+          next_offset: None,
+          errors: [],
+          selected: None,
+        }),
+      ),
+    ),
+    shown,
+  )
+  guard listed.overview_background(dispatch, conv) is Some(background) else {
+    fail("a running job should show the background tasks card")
+  }
+  assert_false(background.jobs.shown)
+  let (_, panel) = update(dispatch, JobsRequested, listed)
   assert_true(panel.jobs.watch is Panel)
+  // With the Jobs panel on screen, the card's button hides it again.
+  guard panel.overview_background(dispatch, conv) is Some(background) else {
+    fail("the card stays while the job runs")
+  }
+  assert_true(background.jobs.shown)
+  assert_false(background.workflows.shown)
   // Closing the panel hands the listing back to the overview on screen.
   let (_, closed) = update(dispatch, ToggleRightPanel, panel)
   assert_false(closed.right_panel_open)

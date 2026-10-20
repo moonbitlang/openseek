@@ -13,7 +13,9 @@ priv enum UiMessage {
   Refresh
   BackgroundTasksTitle
   OpenJobs
+  HideJobs
   OpenWorkflows
+  HideWorkflows
 }
 
 ///|
@@ -74,6 +76,16 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, OpenJobs) => "打开后台任务"
     (TraditionalChinese, OpenJobs) => "開啟後臺任務"
     (Japanese, OpenJobs) => "バックグラウンドジョブを開く"
+    (English, HideJobs) => "Hide Jobs"
+    (Spanish, HideJobs) => "Ocultar Trabajos"
+    (SimplifiedChinese, HideJobs) => "隐藏后台任务"
+    (TraditionalChinese, HideJobs) => "隱藏後臺任務"
+    (Japanese, HideJobs) => "バックグラウンドジョブを隠す"
+    (English, HideWorkflows) => "Hide Workflows"
+    (Spanish, HideWorkflows) => "Ocultar Flujos de trabajo"
+    (SimplifiedChinese, HideWorkflows) => "隐藏工作流"
+    (TraditionalChinese, HideWorkflows) => "隱藏工作流"
+    (Japanese, HideWorkflows) => "ワークフローを隠す"
     (English, OpenWorkflows) => "Open Workflows"
     (Spanish, OpenWorkflows) => "Abrir Flujos de trabajo"
     (SimplifiedChinese, OpenWorkflows) => "打开工作流"

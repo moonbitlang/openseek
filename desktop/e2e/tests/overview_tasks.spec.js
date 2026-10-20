@@ -88,11 +88,21 @@ test('the overview lists what the conversation runs in the background', async ({
   await page.waitForTimeout(3500);
   expect(lists(app)).toBe(hidden);
 
-  // The card's button opens the Jobs panel, which lists every job.
+  // The card's button opens the Jobs panel, which lists every job, and hides
+  // it again like the titlebar's panel toggles.
   await page.getByRole('button', { name: 'Show overview', exact: true }).click();
-  await panel.getByRole('button', { name: 'Open Jobs', exact: true }).click();
+  const open = panel.getByRole('button', { name: 'Open Jobs', exact: true });
+  await expect(open).toHaveAttribute('aria-pressed', 'false');
+  await open.click();
   await expect(page.locator('.jobs-panel')).toBeVisible();
   await expect(page.locator('.jobs-panel')).toContainText('just test');
+  const hide = panel.getByRole('button', { name: 'Hide Jobs', exact: true });
+  await expect(hide).toHaveAttribute('aria-pressed', 'true');
+  await hide.click();
+  await expect(page.locator('.jobs-panel')).toBeHidden();
+  await expect(open).toBeVisible();
+  await open.click();
+  await expect(page.locator('.jobs-panel')).toBeVisible();
 
   // Once nothing runs, the card goes away.
   for (const view of app.jobs) {
