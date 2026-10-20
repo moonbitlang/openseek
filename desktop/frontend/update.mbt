@@ -1489,7 +1489,16 @@ fn sync_file_panel(
     file_panel: panel,
   })
   let (model, closing_cmd) = model.advance_side_chat_closing(dispatch)
-  (model, @cmd.batch([cmd, side_chat_cmd, closing_cmd]))
+  let shown = model.mounted_side_chat_owner()
+  let (shown_cmd, model) = match shown {
+    Some(owner) if model.shown_side_chat != shown =>
+      model.reload_side_chat(dispatch, owner)
+    _ => (@cmd.none, model)
+  }
+  (
+    { ..model, shown_side_chat: shown, },
+    @cmd.batch([cmd, side_chat_cmd, closing_cmd, shown_cmd]),
+  )
 }
 
 ///|
@@ -1544,7 +1553,8 @@ fn load_active_side_chat(
 }
 
 ///|
-/// Re-read a side chat the page already holds when its tab is chosen, as
+/// Re-read a side chat the page already holds when it comes back on screen —
+/// its tab chosen, the dock shown again, or its conversation returned to — as
 /// opening a conversation in the column does: what another client did while
 /// this page was away, or a read that gave up, is picked up then. A read in
 /// flight stays the only one.
@@ -6319,8 +6329,6 @@ fn update_msg(
               )
               cmds.push(cmd)
               (@cmd.batch(cmds), { ..model, file_panel: panel, })
-            } else if dock.active is Some(SideChat(owner~)) {
-              model.reload_side_chat(dispatch, owner)
             } else {
               (@cmd.none, model)
             }
@@ -7423,9 +7431,9 @@ fn update_device_msg(
       // finished run's verdict) exists only in the store. Reads happen
       // exactly where this client was absent: the conversations on screen —
       // the column's and the side chat in the dock — re-read now, every other
-      // one re-reads when opened (`OpenSession` always reloads, and so does
-      // choosing a side chat's tab). An in-flight user load keeps right of
-      // way.
+      // one re-reads when opened (`OpenSession` always reloads, and so does a
+      // side chat coming back on screen). An in-flight user load keeps right
+      // of way.
       let on_screen : Array[Conversation] = []
       if model.find_conversation(channel, model.active_session) is Some(conv) {
         on_screen.push(conv)

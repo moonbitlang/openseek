@@ -1527,6 +1527,9 @@ priv struct Model {
   composer_entry_changes : Array[@composer.EntryChange]
   // Side chats whose tab was closed and whose record is on its way out.
   closing_side_chats : Array[ClosingSideChat]
+  // The side chat the dock showed after the last message, so one coming back
+  // on screen is re-read.
+  shown_side_chat : @interop.ConversationKey?
   // Cmd/Ctrl+P/T unified Quick Open in the native window and browser console.
   // It is global UI for the focused conversation, not durable conversation
   // state. Owned by the `quick_open` package: this shell only opens it, fences
@@ -2762,6 +2765,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     project_menu_query: "",
     composer_entry_changes: [],
     closing_side_chats: [],
+    shown_side_chat: None,
     quick_open: @quick_open.State::empty(),
     git_request_generation: 0,
     git_details_open: false,
