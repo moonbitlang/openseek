@@ -11,46 +11,6 @@ data model, and the life of one agent turn — see
 
 ## Running without a checkout
 
-Native archives for Linux x64/arm64, macOS arm64 and Windows x64 are
-published independently by the **CLI release** workflow to OSS and S3.
-Downloads use `https://cli.moonbitlang.com/openseek/cli/releases/v<version>/`;
-the version comes from the root `moon.mod`. After publishing version 0.7.1, its files are
-[Linux x64](https://cli.moonbitlang.com/openseek/cli/releases/v0.7.1/openseek-linux-x64.tar.gz),
-[Linux arm64](https://cli.moonbitlang.com/openseek/cli/releases/v0.7.1/openseek-linux-arm64.tar.gz),
-[macOS arm64](https://cli.moonbitlang.com/openseek/cli/releases/v0.7.1/openseek-macos-arm64.tar.gz),
-[Windows x64](https://cli.moonbitlang.com/openseek/cli/releases/v0.7.1/openseek-windows-x64.tar.gz),
-and [SHA256SUMS](https://cli.moonbitlang.com/openseek/cli/releases/v0.7.1/SHA256SUMS).
-Each archive contains `bin/openseek`, `bin/openseek-app-server` (both with
-`.exe` on Windows), rg, and
-`share` documentation/workflows. Download your platform's archive and verify
-it against the release's `SHA256SUMS`, then extract the whole archive:
-
-```sh
-tar -xzf openseek-linux-x64.tar.gz
-./openseek-linux-x64/bin/openseek setup
-export PATH="$HOME/.openseek/bin:$HOME/.moon/bin:$PATH"
-```
-
-On Windows, extract `openseek-windows-x64.tar.gz`, run
-`.\openseek-windows-x64\bin\openseek.exe setup`, and add
-`%USERPROFILE%\.openseek\bin` and `%USERPROFILE%\.moon\bin` to PATH.
-Setup installs the bundled rg, replaces the complete `~/.openseek/share`
-resource directory, and copies the CLI and its app-server companion if missing.
-Changes to bundled resources
-are overwritten and files absent from the new archive are removed. Setup calls
-the official MoonBit installer if the toolchain is missing; its exit status
-determines success. Existing MoonBit tools are reused. Installing MoonBit needs
-curl, network access, and Bash (Unix) or PowerShell (Windows). Linux binaries
-require glibc 2.35+.
-Git and Codex remain user-installed. Other commands do not require setup.
-
-`openseek-app-server` serves the working-host API at `ws://127.0.0.1:<port>/host`, intended for SSH forwarding.
-Stdout announces the port, instance ID and protocol version as one JSON line;
-stdin EOF ends the service. The server uses the `openseek` executable beside it;
-`OPENSEEK_ENGINE` can select an engine for source builds. Clients initialize
-with that instance ID and protocol version before calling the host API. Browser-origin requests are
-rejected. Keep the listener and SSH forward bound to loopback.
-
 The root CLI package builds on both native and wasm, and mooncakes.io hosts a
 prebuilt wasm binary for every published version. `moonx` fetches and caches it,
 so the engine runs with no clone and no build:
