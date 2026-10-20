@@ -29,6 +29,6 @@ pub fn Failure::label(self : Failure) -> String {
 }
 
 ///|
-pub suberror RequestError {
+pub(all) suberror RequestError {
   RequestError(Failure)
 }

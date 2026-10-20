@@ -28,25 +28,29 @@ fn cloud_files_subscription(ctx : Ctx, emit : @cmd.Emit[Msg]) -> @sub.Sub {
       let client : Ref[@http.Client?] = Ref(None)
       @js.Promise::from_async(() => {
         while active.val {
-          let result = @cloud_client.watch_files(
-            files.token,
-            session,
-            opened => client.val = Some(opened),
-            () => active.val,
-            () => {
-              if active.val {
-                scheduler.add(
-                  emit(WorkspaceInvalidated(owner~, auth_epoch=files.epoch)),
-                )
-              }
-            },
-          )
+          let retry = try {
+            @cloud_client.watch_files(
+              files.token,
+              session,
+              opened => client.val = Some(opened),
+              () => active.val,
+              () => {
+                if active.val {
+                  scheduler.add(
+                    emit(WorkspaceInvalidated(owner~, auth_epoch=files.epoch)),
+                  )
+                }
+              },
+            )
+            true
+          } catch {
+            @cloud_client.RequestError(Unauthorized | Http(404)) => false
+            _ => true
+          }
           client.val = None
           guard active.val else { break }
-          match result {
-            Err(Unauthorized | Http(404)) => break
-            _ => @async.sleep(1500)
-          }
+          guard retry else { break }
+          @async.sleep(1500)
         }
       })
       |> ignore

@@ -38,39 +38,34 @@ pub async fn watch_files(
   opened : (@http.Client) -> Unit,
   active : () -> Bool,
   invalidated : () -> Unit,
-) -> Result[Unit, Failure] {
-  try {
-    let client = @http.Client(CloudOrigin, headers={
-      "Authorization": "Bearer " + token,
-      "Accept": "text/event-stream",
-    }) catch {
+) -> Unit {
+  let client = @http.Client(CloudOrigin, headers={
+    "Authorization": "Bearer " + token,
+    "Accept": "text/event-stream",
+  }) catch {
+    _ => raise RequestError(Unreachable)
+  }
+  defer client.close()
+  guard active() else { return }
+  opened(client)
+  guard active() else { return }
+  let response = client.get(
+    "/v1/sessions/\{@uri.encode_component(session)}/files/events",
+  ) catch {
+    _ => raise RequestError(Unreachable)
+  }
+  guard active() else { return }
+  check_status(response.code)
+  let parser = SseParser::new()
+  while active() {
+    let line = client.read_until("\n") catch {
       _ => raise RequestError(Unreachable)
     }
-    defer client.close()
-    guard active() else { return Ok(()) }
-    opened(client)
-    guard active() else { return Ok(()) }
-    let response = client.get(
-      "/v1/sessions/\{@uri.encode_component(session)}/files/events",
-    ) catch {
-      _ => raise RequestError(Unreachable)
+    guard active() else { break }
+    guard line is Some(line) else { break }
+    if parser.line(line) is Some((event, data)) &&
+      workspace_invalidated(event, data) {
+      invalidated()
     }
-    guard active() else { return Ok(()) }
-    check_status(response.code)
-    let parser = SseParser::new()
-    while active() {
-      let line = client.read_until("\n") catch {
-        _ => raise RequestError(Unreachable)
-      }
-      guard active() else { break }
-      guard line is Some(line) else { break }
-      if parser.line(line) is Some((event, data)) &&
-        workspace_invalidated(event, data) {
-        invalidated()
-      }
-    }
-    Ok(())
-  } catch {
-    RequestError(failure) => Err(failure)
   }
 }

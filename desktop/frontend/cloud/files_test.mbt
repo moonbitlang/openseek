@@ -25,16 +25,13 @@ async fn check_directory_requests() -> Unit {
   defer restore()
   let reply = @cloud.read_directory("test-token", "session/?", "")
   assert_true(
-    reply is Ok({ entries: [file, directory], }) &&
+    reply is { entries: [file, directory], } &&
     file.name == "hello.txt" &&
     !file.is_dir &&
     directory.name == "src" &&
     directory.is_dir,
   )
-  match @cloud.read_directory("test-token", "session/?", "src/hello world#?") {
-    Ok(_) => ()
-    Err(failure) => fail(failure.label())
-  }
+  ignore(@cloud.read_directory("test-token", "session/?", "src/hello world#?"))
   assert_eq(requests, [
     (
       @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/files?path=",
@@ -60,7 +57,7 @@ async fn check_file_index_requests() -> Unit {
   defer restore()
   assert_true(
     @cloud.read_file_index("test-token", "session/?")
-    is Ok(["index.html", "src/hello world#?.mbt"]),
+    is ["index.html", "src/hello world#?.mbt"],
   )
   assert_eq(requests, [
     (
@@ -72,7 +69,7 @@ async fn check_file_index_requests() -> Unit {
   {
     let restore = mock_file_http(200, (_, _, _) => "{\"files\":[]}")
     defer restore()
-    assert_true(@cloud.read_file_index("test-token", "session") is Ok([]))
+    assert_true(@cloud.read_file_index("test-token", "session") is [])
   }
   for
     body in [
@@ -82,7 +79,13 @@ async fn check_file_index_requests() -> Unit {
     let restore = mock_file_http(200, (_, _, _) => body)
     defer restore()
     assert_true(
-      @cloud.read_file_index("test-token", "session") is Err(Malformed),
+      try {
+        ignore(@cloud.read_file_index("test-token", "session"))
+        false
+      } catch {
+        @cloud.RequestError::RequestError(Malformed) => true
+        _ => false
+      },
     )
   }
 }
@@ -122,9 +125,9 @@ async fn check_file_variants() -> Unit {
         )
       Binary | Oversized => reply
     }
-    assert_true(
-      @cloud.read_file("test-token", "session", "src/hello.txt") is Ok(actual) &&
-      actual == expected,
+    assert_eq(
+      @cloud.read_file("test-token", "session", "src/hello.txt"),
+      expected,
     )
     assert_eq(requests, [
       (
@@ -142,6 +145,7 @@ async fn check_file_failures() -> Unit {
   let cases : Array[(Int32, String, (@cloud.Failure) -> Bool)] = [
     (401, "", failure => failure is Unauthorized),
     (403, "", failure => failure is Http(403)),
+    (409, "", failure => failure is Busy),
     (404, "", failure => failure is Http(404)),
     (500, "", failure => failure is Http(500)),
     (-1, "", failure => failure is Unreachable),
@@ -157,18 +161,34 @@ async fn check_file_failures() -> Unit {
     let restore = mock_file_http(status, (_, _, _) => body)
     defer restore()
     assert_true(
-      @cloud.read_file("test-token", "session", "file.txt") is Err(failure) &&
-      expected(failure),
+      try {
+        ignore(@cloud.read_file("test-token", "session", "file.txt"))
+        false
+      } catch {
+        @cloud.RequestError::RequestError(failure) => expected(failure)
+        _ => false
+      },
     )
     assert_true(
-      @cloud.read_file_index("test-token", "session") is Err(failure) &&
-      expected(failure),
+      try {
+        ignore(@cloud.read_file_index("test-token", "session"))
+        false
+      } catch {
+        @cloud.RequestError::RequestError(failure) => expected(failure)
+        _ => false
+      },
     )
   }
   let restore = mock_file_http(200, (_, _, _) => "{\"entries\":null}")
   defer restore()
   assert_true(
-    @cloud.read_directory("test-token", "session", "") is Err(Malformed),
+    try {
+      ignore(@cloud.read_directory("test-token", "session", ""))
+      false
+    } catch {
+      @cloud.RequestError::RequestError(Malformed) => true
+      _ => false
+    },
   )
 }
 
@@ -203,6 +223,75 @@ async fn check_large_file_request() -> Unit {
 }
 
 ///|
+async fn check_attachment_requests() -> Unit {
+  let requests = []
+  let source = @protocol.AttachmentBytes(name="report.pdf", data_base64="AA==")
+  {
+    let restore = mock_file_http(200, (url, method_, authorization) => {
+      requests.push((url, method_, authorization))
+      if url.has_suffix("/prepare") {
+        "{\"kind\":\"upload_required\",\"name\":\"report.pdf\"}"
+      } else {
+        "{\"path\":\".openseek/attachments/test/report.pdf\"}"
+      }
+    })
+    defer restore()
+    assert_true(
+      @cloud_client.prepare_attachment("test-token", "session/?", source)
+      is @protocol.AttachmentUploadRequired(name="report.pdf"),
+    )
+    assert_eq(
+      @cloud_client.import_attachment("test-token", "session/?", source).path,
+      ".openseek/attachments/test/report.pdf",
+    )
+  }
+  assert_eq(requests, [
+    (
+      @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/files/prepare",
+      "POST",
+      "Bearer test-token",
+    ),
+    (
+      @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/files/import",
+      "POST",
+      "Bearer test-token",
+    ),
+  ])
+  let cases : Array[(Int32, String, (@cloud.Failure) -> Bool)] = [
+    (401, "", failure => failure is Unauthorized),
+    (409, "", failure => failure is Busy),
+    (500, "", failure => failure is Http(500)),
+    (-1, "", failure => failure is Unreachable),
+    (200, "not JSON", failure => failure is Malformed),
+    (200, "{}", failure => failure is Malformed),
+  ]
+  for (status, body, expected) in cases {
+    let restore = mock_file_http(status, (_, _, _) => body)
+    defer restore()
+    assert_true(
+      try {
+        ignore(
+          @cloud_client.prepare_attachment("test-token", "session", source),
+        )
+        false
+      } catch {
+        @cloud_client.RequestError(failure) => expected(failure)
+        _ => false
+      },
+    )
+    assert_true(
+      try {
+        ignore(@cloud_client.import_attachment("test-token", "session", source))
+        false
+      } catch {
+        @cloud_client.RequestError(failure) => expected(failure)
+        _ => false
+      },
+    )
+  }
+}
+
+///|
 async test "Cloud workspace HTTP preserves request, content, and failure contracts" {
   // The async test runner schedules tests concurrently. Keep these fetch
   // substitutions in one test so each request observes its own transport.
@@ -211,4 +300,5 @@ async test "Cloud workspace HTTP preserves request, content, and failure contrac
   check_file_variants()
   check_file_failures()
   check_large_file_request()
+  check_attachment_requests()
 }

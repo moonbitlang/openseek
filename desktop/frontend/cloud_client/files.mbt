@@ -12,23 +12,15 @@ fn decode_file_index(json : Json) -> Array[String] raise RequestError {
 
 ///|
 /// Read one complete snapshot for the composer's existing file candidates.
-pub async fn read_file_index(
-  token : String,
-  session : String,
-) -> Result[Array[String], Failure] {
-  Ok(
-    decode_file_index(
-      request(
-        CloudOrigin,
-        "/v1/sessions/\{@uri.encode_component(session)}/files/index",
-        Get,
-        token~,
-      ),
+pub async fn read_file_index(token : String, session : String) -> Array[String] {
+  decode_file_index(
+    request(
+      CloudOrigin,
+      "/v1/sessions/\{@uri.encode_component(session)}/files/index",
+      Get,
+      token~,
     ),
-  ) catch {
-    RequestError(failure) => Err(failure)
-    _ => Err(Unreachable)
-  }
+  )
 }
 
 ///|
@@ -37,18 +29,15 @@ pub async fn read_directory(
   token : String,
   session : String,
   path : String,
-) -> Result[@protocol.ReadDirReply, Failure] {
+) -> @protocol.ReadDirReply {
   let json = request(
     CloudOrigin,
     "/v1/sessions/\{@uri.encode_component(session)}/files?path=\{@uri.encode_component(path)}",
     Get,
     token~,
-  ) catch {
-    RequestError(failure) => return Err(failure)
-    _ => return Err(Unreachable)
-  }
-  Ok(@json.from_json(json)) catch {
-    _ => Err(Malformed)
+  )
+  @json.from_json(json) catch {
+    _ => raise RequestError(Malformed)
   }
 }
 
@@ -68,8 +57,10 @@ fn file_content_path(
 fn validated_reply(
   json : Json,
   etag : String?,
-) -> @protocol.ReadFileReply raise {
-  let reply : @protocol.ReadFileReply = @json.from_json(json)
+) -> @protocol.ReadFileReply raise RequestError {
+  let reply : @protocol.ReadFileReply = @json.from_json(json) catch {
+    _ => raise RequestError(Malformed)
+  }
   match reply {
     Content(content~, absolute~, ..) => {
       guard etag is Some(sig) && !sig.is_empty() else {
@@ -94,22 +85,18 @@ pub async fn read_file(
   session : String,
   path : String,
   allow_large~ : Bool = false,
-) -> Result[@protocol.ReadFileReply, Failure] {
-  try {
-    let (response, data) = @http.request(
-      CloudOrigin + file_content_path(session, path, allow_large),
-      Get,
-      { "Authorization": "Bearer " + token },
-      "",
-    ) catch {
-      _ => raise RequestError(Unreachable)
-    }
-    check_status(response.code)
-    Ok(validated_reply(data.json(), response.headers.get("ETag")))
-  } catch {
-    RequestError(failure) => Err(failure)
-    _ => Err(Malformed)
+) -> @protocol.ReadFileReply {
+  let (response, data) = @http.request(
+    CloudOrigin + file_content_path(session, path, allow_large),
+    Get,
+    { "Authorization": "Bearer " + token },
+    "",
+  ) catch {
+    _ => raise RequestError(Unreachable)
   }
+  check_status(response.code)
+  let json = data.json() catch { _ => raise RequestError(Malformed) }
+  validated_reply(json, response.headers.get("ETag"))
 }
 
 ///|
@@ -120,22 +107,18 @@ pub async fn file_unchanged(
   session : String,
   path : String,
   etag : String,
-) -> Result[Bool, Failure] {
-  try {
-    let (response, _) = @http.request(
-      CloudOrigin + file_content_path(session, path, true),
-      Head,
-      { "Authorization": "Bearer " + token, "If-None-Match": etag },
-      "",
-    ) catch {
-      _ => raise RequestError(Unreachable)
-    }
-    if response.code == 304 {
-      return Ok(true)
-    }
-    check_status(response.code)
-    Ok(false)
-  } catch {
-    RequestError(failure) => Err(failure)
+) -> Bool {
+  let (response, _) = @http.request(
+    CloudOrigin + file_content_path(session, path, true),
+    Head,
+    { "Authorization": "Bearer " + token, "If-None-Match": etag },
+    "",
+  ) catch {
+    _ => raise RequestError(Unreachable)
   }
+  if response.code == 304 {
+    return true
+  }
+  check_status(response.code)
+  false
 }

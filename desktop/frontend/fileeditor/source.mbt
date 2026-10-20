@@ -69,21 +69,28 @@ fn State::accepts_surface_epoch(
 }
 
 ///|
+priv suberror SourceError {
+  SourceError(String)
+}
+
+///|
 async fn check_source(
   owner : @interop.ConversationIdentity,
   cloud : CloudFiles?,
   path : @common.Uri,
   sig : String,
-) -> Result[Bool, String] {
+) -> Bool {
   guard owner is @interop.Cloud(account~, session~) &&
     cloud is Some(cloud) &&
     @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
     @resource.relative_to(path, root) is Some(relative) else {
-    return Err("Cloud file no longer belongs to this conversation.")
+    raise SourceError("Cloud file no longer belongs to this conversation.")
   }
-  @cloud.file_unchanged(cloud.token, session, relative.0, sig).map_err(failure => {
-    failure.label()
-  })
+  @cloud.file_unchanged(cloud.token, session, relative.0, sig) catch {
+    @cloud.RequestError::RequestError(failure) =>
+      raise SourceError(failure.label())
+    _ => raise SourceError(@cloud.Failure::Unreachable.label())
+  }
 }
 
 ///|
@@ -92,30 +99,30 @@ async fn read_source(
   cloud : CloudFiles?,
   path : @common.Uri,
   allow_large~ : Bool = false,
-) -> Result[@protocol.ReadFileReply, String] {
+) -> @protocol.ReadFileReply {
   match owner {
     Host(owner) => {
       guard @resource.belongs_to(path, owner.channel) else {
-        return Err("file root moved to another host before file read")
+        raise SourceError("file root moved to another host before file read")
       }
-      Ok(
-        @interop.bridge_request(owner.channel, @commands.fs_read_file, {
-          path: path.path,
-          root: None,
-        }),
-      ) catch {
-        error => Err(@interop.bridge_error_text(error))
+      @interop.bridge_request(owner.channel, @commands.fs_read_file, {
+        path: path.path,
+        root: None,
+      }) catch {
+        error => raise SourceError(@interop.bridge_error_text(error))
       }
     }
     Cloud(account~, session~) => {
       guard cloud is Some(cloud) &&
         @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
         @resource.relative_to(path, root) is Some(relative) else {
-        return Err("Cloud file no longer belongs to this conversation.")
+        raise SourceError("Cloud file no longer belongs to this conversation.")
       }
-      @cloud.read_file(cloud.token, session, relative.0, allow_large~).map_err(failure => {
-        failure.label()
-      })
+      @cloud.read_file(cloud.token, session, relative.0, allow_large~) catch {
+        @cloud.RequestError::RequestError(failure) =>
+          raise SourceError(failure.label())
+        _ => raise SourceError(@cloud.Failure::Unreachable.label())
+      }
     }
   }
 }
@@ -142,28 +149,32 @@ async fn read_directory_source(
   cloud : CloudFiles?,
   root : @common.Uri,
   path : @pathx.Relative,
-) -> Result[@protocol.ReadDirReply, String] {
+) -> @protocol.ReadDirReply {
   match owner {
     Host(owner) => {
       guard @resource.belongs_to(root, owner.channel) else {
-        return Err("file root moved to another host before directory read")
+        raise SourceError(
+          "file root moved to another host before directory read",
+        )
       }
-      Ok(
-        @interop.bridge_request(owner.channel, @commands.fs_read_directory, {
-          path: @resource.join_relative(root, path).path,
-        }),
-      ) catch {
-        error => Err(@interop.bridge_error_text(error))
+      @interop.bridge_request(owner.channel, @commands.fs_read_directory, {
+        path: @resource.join_relative(root, path).path,
+      }) catch {
+        error => raise SourceError(@interop.bridge_error_text(error))
       }
     }
     Cloud(account~, session~) => {
       guard cloud is Some(cloud) &&
         @resource.cloud_root(@cloud.CloudOrigin, account, session) == Some(root) else {
-        return Err("Cloud directory no longer belongs to this conversation.")
+        raise SourceError(
+          "Cloud directory no longer belongs to this conversation.",
+        )
       }
-      @cloud.read_directory(cloud.token, session, path.0).map_err(failure => {
-        failure.label()
-      })
+      @cloud.read_directory(cloud.token, session, path.0) catch {
+        @cloud.RequestError::RequestError(failure) =>
+          raise SourceError(failure.label())
+        _ => raise SourceError(@cloud.Failure::Unreachable.label())
+      }
     }
   }
 }

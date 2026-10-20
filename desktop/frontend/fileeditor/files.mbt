@@ -22,9 +22,12 @@ fn read_directory(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = match read_directory_source(owner, cloud, root, path) {
-        Ok(reply) => reply
-        Err(message) => {
+      let reply = read_directory_source(owner, cloud, root, path) catch {
+        error => {
+          let message = match error {
+            SourceError(message) => message
+            _ => @interop.bridge_error_text(error)
+          }
           scheduler.add(dispatch(DirFailed(owner~, epoch~, path~, message~)))
           return
         }
@@ -65,9 +68,8 @@ fn list_files(
       }
       @cmd.custom_cmd(scheduler => {
         @js.Promise::from_async(() => {
-          let paths = match @cloud.read_file_index(cloud.token, session) {
-            Ok(paths) => paths
-            Err(_) => {
+          let paths = @cloud.read_file_index(cloud.token, session) catch {
+            _ => {
               scheduler.add(dispatch(FileIndexFailed(owner~, epoch~)))
               return
             }
@@ -124,24 +126,23 @@ fn read_file(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let source = if cached_sig is Some(sig) {
-        match check_source(owner, cloud, path, sig) {
-          Ok(unchanged) => {
-            scheduler.add(
-              dispatch(
-                FileVersionChecked(owner~, epoch~, path~, sig~, unchanged~),
-              ),
-            )
-            return
-          }
-          Err(message) => Err(message)
+      let reply = try {
+        if cached_sig is Some(sig) {
+          let unchanged = check_source(owner, cloud, path, sig)
+          scheduler.add(
+            dispatch(
+              FileVersionChecked(owner~, epoch~, path~, sig~, unchanged~),
+            ),
+          )
+          return
         }
-      } else {
         read_source(owner, cloud, path, allow_large~)
-      }
-      let reply = match source {
-        Ok(reply) => reply
-        Err(message) => {
+      } catch {
+        error => {
+          let message = match error {
+            SourceError(message) => message
+            _ => @interop.bridge_error_text(error)
+          }
           scheduler.add(
             dispatch(
               FileFailed(

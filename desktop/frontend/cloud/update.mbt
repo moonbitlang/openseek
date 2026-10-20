@@ -28,7 +28,8 @@ fn State::list(
     { ..self, sequence: request, list_request: request, },
     run(emit, () => {
       Listed(self.epoch, request, list_sessions(token)) catch {
-        CloudError(error) => ListFailed(self.epoch, request, error)
+        @cloud_client.RequestError(error) =>
+          ListFailed(self.epoch, request, error)
         _ => ListFailed(self.epoch, request, Unreachable)
       }
     }),
@@ -51,7 +52,8 @@ fn State::load(
     { ..next, sequence: request, },
     run(emit, () => {
       Loaded(self.epoch, id, request, load_history(token, id)) catch {
-        CloudError(error) => LoadFailed(self.epoch, id, request, error)
+        @cloud_client.RequestError(error) =>
+          LoadFailed(self.epoch, id, request, error)
         _ => LoadFailed(self.epoch, id, request, Unreachable)
       }
     }),
@@ -123,7 +125,8 @@ fn State::create(
           "id",
         ),
       ) catch {
-        CloudError(error) => CreateFailed(self.epoch, creation.request, error)
+        @cloud_client.RequestError(error) =>
+          CreateFailed(self.epoch, creation.request, error)
         _ => CreateFailed(self.epoch, creation.request, Unreachable)
       }
     }),
@@ -382,7 +385,8 @@ pub fn update(
             edit_session(token, id, edit)
             Edited(state.epoch, id, request)
           } catch {
-            CloudError(error) => EditFailed(state.epoch, id, request, error)
+            @cloud_client.RequestError(error) =>
+              EditFailed(state.epoch, id, request, error)
             _ => EditFailed(state.epoch, id, request, Unreachable)
           }
         }),
@@ -451,7 +455,8 @@ pub fn update(
             delete_session(token, id)
             Deleted(state.epoch, id, request)
           } catch {
-            CloudError(error) => DeleteFailed(state.epoch, id, request, error)
+            @cloud_client.RequestError(error) =>
+              DeleteFailed(state.epoch, id, request, error)
             _ => DeleteFailed(state.epoch, id, request, Unreachable)
           }
         }),
@@ -816,7 +821,7 @@ fn State::submit(
   let request = state.sequence + 1
   let stream = StreamLease::new()
   let prompt = prompt_content(draft) catch {
-    CloudError(failure) =>
+    @cloud_client.RequestError(failure) =>
       return (
         state.replace(id, { ..conversation, notice: Some(failure.label()), }),
         @cmd.none,
@@ -869,7 +874,8 @@ fn State::submit(
           })
           StreamEnded(state.epoch, id, request)
         } catch {
-          CloudError(error) => SendFailed(state.epoch, id, request, error)
+          @cloud_client.RequestError(error) =>
+            SendFailed(state.epoch, id, request, error)
           _ => SendFailed(state.epoch, id, request, Unreachable)
         }
       }

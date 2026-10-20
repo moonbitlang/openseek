@@ -29,7 +29,7 @@ test "Cloud model content keeps the original image bytes and leaves plain text a
       ignore(prompt_content(invalid))
       false
     } catch {
-      CloudError(InvalidImage) => true
+      @cloud_client.RequestError(InvalidImage) => true
       _ => false
     },
   )

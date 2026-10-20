@@ -66,11 +66,16 @@ fn prepare_attachment(
     @js.Promise::from_async(() => {
       if identity.owner is @interop.Cloud(session~, ..) &&
         request.cloud_access is Some(access) {
-        let result = @cloud_client.prepare_attachment(
-          access.token,
-          session,
-          request.source,
-        ).map_err(failure => failure.label())
+        let result = Ok(
+          @cloud_client.prepare_attachment(
+            access.token,
+            session,
+            request.source,
+          ),
+        ) catch {
+          @cloud_client.RequestError(failure) => Err(failure.label())
+          _ => Err(@cloud_client.Failure::Unreachable.label())
+        }
         scheduler.add(
           emit(AttachmentPrepared(identity, request.root, request.id, result)),
         )
@@ -116,13 +121,12 @@ fn import_attachment(
     @js.Promise::from_async(() => {
       if identity.owner is @interop.Cloud(session~, ..) &&
         request.cloud_access is Some(access) {
-        let result = @cloud_client.import_attachment(
-            access.token,
-            session,
-            request.source,
-          )
-          .map(reply => reply.path)
-          .map_err(failure => failure.label())
+        let result = Ok(
+          @cloud_client.import_attachment(access.token, session, request.source).path,
+        ) catch {
+          @cloud_client.RequestError(failure) => Err(failure.label())
+          _ => Err(@cloud_client.Failure::Unreachable.label())
+        }
         scheduler.add(
           emit(AttachmentImported(identity, request.root, request.id, result)),
         )

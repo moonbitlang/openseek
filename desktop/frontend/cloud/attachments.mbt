@@ -9,13 +9,13 @@ pub struct UploadedAttachment {
 pub extend UploadedAttachment with Eq::{equal, not_equal}
 
 ///|
-fn prompt_content(draft : @composer.Draft) -> @wire.Content raise CloudError {
+fn prompt_content(draft : @composer.Draft) -> @wire.Content raise RequestError {
   let parts : Array[@wire.ContentPart] = [Text(draft.prompt())]
   for image in draft.images {
     parts.push(
       Image(
         @wire.Image::from_data_url(image.url) catch {
-          _ => raise CloudError(InvalidImage)
+          _ => raise @cloud_client.RequestError(InvalidImage)
         },
       ),
     )
@@ -38,24 +38,17 @@ async fn prepare_submission(
   let mut draft = draft
   for source in attachments {
     let prepared = @cloud_client.prepare_attachment(token, session, source)
-    let prepared = match prepared {
-      Ok(reply) => reply
-      Err(failure) => raise CloudError(failure)
-    }
     let path = if prepared is @protocol.WorkspaceAttachment(path~) {
       path
     } else {
       match cached.iter().find_first(upload => upload.source == source) {
         Some(upload) => upload.path
-        None =>
-          match @cloud_client.import_attachment(token, session, source) {
-            Ok(reply) => {
-              cached.push({ source, path: reply.path, })
-              stored(source, reply.path)
-              reply.path
-            }
-            Err(failure) => raise CloudError(failure)
-          }
+        None => {
+          let reply = @cloud_client.import_attachment(token, session, source)
+          cached.push({ source, path: reply.path, })
+          stored(source, reply.path)
+          reply.path
+        }
       }
     }
     draft = match prepared {
@@ -66,7 +59,7 @@ async fn prepare_submission(
   }
   for image in draft.images {
     let image_data = @wire.Image::from_data_url(image.url) catch {
-      _ => raise CloudError(InvalidImage)
+      _ => raise @cloud_client.RequestError(InvalidImage)
     }
     let source = @protocol.AttachmentBytes(
       name=image.name,
@@ -76,13 +69,8 @@ async fn prepare_submission(
       continue
     }
     let reply = @cloud_client.import_attachment(token, session, source)
-    match reply {
-      Ok(reply) => {
-        cached.push({ source, path: reply.path, })
-        stored(source, reply.path)
-      }
-      Err(failure) => raise CloudError(failure)
-    }
+    cached.push({ source, path: reply.path, })
+    stored(source, reply.path)
   }
   draft
 }

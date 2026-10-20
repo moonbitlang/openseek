@@ -11,24 +11,24 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub fn check_status(Int32) -> Unit raise RequestError
 
-pub async fn file_unchanged(String, String, String, String) -> Result[Bool, Failure]
+pub async fn file_unchanged(String, String, String, String) -> Bool
 
-pub async fn import_attachment(String, String, @protocol.AttachmentSource) -> Result[@protocol.ImportAttachmentReply, Failure]
+pub async fn import_attachment(String, String, @protocol.AttachmentSource) -> @protocol.ImportAttachmentReply
 
-pub async fn prepare_attachment(String, String, @protocol.AttachmentSource) -> Result[@protocol.PrepareAttachmentReply, Failure]
+pub async fn prepare_attachment(String, String, @protocol.AttachmentSource) -> @protocol.PrepareAttachmentReply
 
-pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, Failure]
+pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply
 
-pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, Failure]
+pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol.ReadFileReply
 
-pub async fn read_file_index(String, String) -> Result[Array[String], Failure]
+pub async fn read_file_index(String, String) -> Array[String]
 
 pub async fn request(String, String, @http.RequestMethod, token? : String, body? : Json) -> Json
 
-pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Result[Unit, Failure]
+pub async fn watch_files(String, String, (@http.Client) -> Unit, () -> Bool, () -> Unit) -> Unit
 
 // Errors
-pub suberror RequestError {
+pub(all) suberror RequestError {
   RequestError(Failure)
 }
 

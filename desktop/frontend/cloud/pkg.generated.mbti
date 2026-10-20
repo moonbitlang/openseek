@@ -18,17 +18,17 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub fn discard_legacy_credential() -> Unit
 
-pub async fn export_record(String, String) -> Result[String, @cloud_client.Failure]
+pub async fn export_record(String, String) -> String
 
-pub async fn file_unchanged(String, String, String, String) -> Result[Bool, @cloud_client.Failure]
+pub async fn file_unchanged(String, String, String, String) -> Bool
 
-pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, @cloud_client.Failure]
+pub async fn read_directory(String, String, String) -> @protocol.ReadDirReply
 
-pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, @cloud_client.Failure]
+pub async fn read_file(String, String, String, allow_large? : Bool) -> @protocol.ReadFileReply
 
-pub async fn read_file_index(String, String) -> Result[Array[String], @cloud_client.Failure]
+pub async fn read_file_index(String, String) -> Array[String]
 
-pub async fn share(String, String, String) -> Result[String, @cloud_client.Failure]
+pub async fn share(String, String, String) -> String
 
 pub fn subscriptions(State) -> @sub.Sub
 
@@ -197,5 +197,7 @@ pub fn UploadedAttachment::not_equal(Self, Self) -> Bool
 
 // Type aliases
 pub using @cloud_client {type Failure}
+
+pub using @cloud_client {type RequestError}
 
 // Traits

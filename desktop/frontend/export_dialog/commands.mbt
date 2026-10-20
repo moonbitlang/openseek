@@ -54,11 +54,14 @@ fn Model::share(
             scheduler.add(
               emit(Progress({ generation, progress: Waiting(attempt=1), })),
             )
-            match @cloud.share(account.token, session, idempotency_key) {
-              Ok(url) => @protocol.Shared(url~)
-              Err(@cloud.Failure::Unauthorized) => raise AccountUnauthorized
-              Err(error) => raise ExportError(error.label())
+            let url = @cloud.share(account.token, session, idempotency_key) catch {
+              @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
+                raise AccountUnauthorized
+              @cloud.RequestError::RequestError(error) =>
+                raise ExportError(error.label())
+              _ => raise ExportError(@cloud.Failure::Unreachable.label())
             }
+            @protocol.Shared(url~)
           }
         }
       } catch {
@@ -146,10 +149,12 @@ async fn capture(
       guard account is Some(account) else {
         raise ExportError("Sign in to export Cloud history.")
       }
-      let events = match @cloud.export_record(account.token, session) {
-        Ok(events) => events
-        Err(@cloud.Failure::Unauthorized) => raise AccountUnauthorized
-        Err(error) => raise ExportError(error.label())
+      let events = @cloud.export_record(account.token, session) catch {
+        @cloud.RequestError::RequestError(@cloud.Failure::Unauthorized) =>
+          raise AccountUnauthorized
+        @cloud.RequestError::RequestError(error) =>
+          raise ExportError(error.label())
+        _ => raise ExportError(@cloud.Failure::Unreachable.label())
       }
       let exporter = @viz_export.StandaloneExport(
         asset("/assets/viz/index.html"),

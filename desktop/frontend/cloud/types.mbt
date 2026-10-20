@@ -202,58 +202,56 @@ pub(all) enum Msg {
 }
 
 ///|
-priv suberror CloudError {
-  CloudError(Failure)
-}
+pub using @cloud_client {type RequestError}
 
 ///|
-fn required_string(json : Json, key : String) -> String raise CloudError {
+fn required_string(json : Json, key : String) -> String raise RequestError {
   guard json is Object(fields) && fields.get(key) is Some(String(value)) else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   value
 }
 
 ///|
-fn required_number(json : Json, key : String) -> Double raise CloudError {
+fn required_number(json : Json, key : String) -> Double raise RequestError {
   guard json is Object(fields) && fields.get(key) is Some(Number(value, ..)) else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   value
 }
 
 ///|
-fn required_bool(json : Json, key : String) -> Bool raise CloudError {
+fn required_bool(json : Json, key : String) -> Bool raise RequestError {
   match json {
     Object(fields) =>
       match fields.get(key) {
         Some(True) => true
         Some(False) => false
-        _ => raise CloudError(Malformed)
+        _ => raise @cloud_client.RequestError(Malformed)
       }
-    _ => raise CloudError(Malformed)
+    _ => raise @cloud_client.RequestError(Malformed)
   }
 }
 
 ///|
-fn required_data(json : Json) -> Json raise CloudError {
+fn required_data(json : Json) -> Json raise RequestError {
   guard json is Object(fields) && fields.get("data") is Some(data) else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   data
 }
 
 ///|
-fn decode_sessions(json : Json) -> Array[Session] raise CloudError {
+fn decode_sessions(json : Json) -> Array[Session] raise RequestError {
   guard json is { "sessions": Array(items), .. } else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   items.map(item => {
     id: required_string(item, "id"),
     title: match item {
       { "title": String(title), .. } => Some(title)
       { "title": Null, .. } => None
-      _ => raise CloudError(Malformed)
+      _ => raise @cloud_client.RequestError(Malformed)
     },
     updated_at: Some(required_number(item, "updated_at")),
     generating: required_bool(item, "generating"),
@@ -265,9 +263,9 @@ fn decode_sessions(json : Json) -> Array[Session] raise CloudError {
 }
 
 ///|
-fn decode_history(json : Json) -> History raise CloudError {
+fn decode_history(json : Json) -> History raise RequestError {
   guard json is { "messages": Array(items), .. } else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   let messages = items.map(item => {
     task_id: required_string(item, "task_id"),
@@ -279,10 +277,10 @@ fn decode_history(json : Json) -> History raise CloudError {
 }
 
 ///|
-fn decode_event(json : Json) -> Event raise CloudError {
+fn decode_event(json : Json) -> Event raise RequestError {
   let seq = required_number(json, "seq")
   guard seq > 0 && seq == seq.to_int().to_double() else {
-    raise CloudError(Malformed)
+    raise @cloud_client.RequestError(Malformed)
   }
   {
     session_id: required_string(json, "session_id"),
