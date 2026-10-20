@@ -495,7 +495,7 @@ test "a row's menu opens it, copies its address, and removes an attached item" {
     )
     is None,
   )
-  let target = "conv-changes:attached:" + pull(2).url
+  let target = "conv-changes:pull_request:" + pull(2).url
   assert_eq(labels(menu(Some(checkout), state, target)), [
     ("Open on GitHub", true),
     ("Copy link", true),
@@ -515,10 +515,12 @@ test "a row's menu opens it, copies its address, and removes an attached item" {
   // The checkout's own pull request is its row, not an attached one; and an
   // item that is gone has no menu.
   assert_true(
-    menu(Some(checkout), state, "conv-changes:attached:" + pull(1).url) is None,
+    menu(Some(checkout), state, "conv-changes:pull_request:" + pull(1).url)
+    is None,
   )
   assert_true(
-    menu(Some(checkout), state, "conv-changes:attached:" + pull(9).url) is None,
+    menu(Some(checkout), state, "conv-changes:pull_request:" + pull(9).url)
+    is None,
   )
 }
 
@@ -571,4 +573,39 @@ test "a summary carries GitHub's line totals" {
     summarized.summary(pull(1).url)
     is Some({ additions: 1, deletions: 0, checks: None, .. }),
   )
+}
+
+///|
+test "a pull request and a branch at one address each have their own menu" {
+  let one = conversation("s-1")
+  let url = pull(1).url
+  let as_branch : @protocol.SessionArtifact = @json.from_json({
+    "type": "branch",
+    "url": Json(url),
+  }) catch {
+    error => abort(error.to_string())
+  }
+  let state = loaded(one, [pull(1), as_branch])
+  let mut removed : @session_changes.Msg? = None
+  let emit : @cmd.Emit[@session_changes.Msg] = Emit(msg => {
+    removed = Some(msg)
+    @cmd.none
+  })
+  guard @session_changes.menu(
+      one,
+      None,
+      state,
+      emit,
+      open_link=_ => @cmd.none,
+      "conv-changes:branch:" + url,
+    )
+    is Some(definition) else {
+    fail("the branch's row has no menu")
+  }
+  guard definition.entries is [.., Action(remove)] else {
+    fail("the menu ends without Remove")
+  }
+  ignore(remove.command)
+  // Building the command names the artifact it removes.
+  assert_true(removed is Some(Remove(_, artifact)) && artifact == as_branch)
 }

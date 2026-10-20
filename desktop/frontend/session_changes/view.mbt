@@ -91,7 +91,7 @@ const VisibleRows : Int32 = 5
 
 ///|
 /// Menu targets of the card's rows: the checkout's, and an attached item's by
-/// its address.
+/// its kind and address, which together are what tells two items apart.
 const MenuTarget : String = "conv-changes"
 
 ///|
@@ -100,8 +100,12 @@ fn checkout_target() -> String {
 }
 
 ///|
-fn attached_target(url : String) -> String {
-  MenuTarget + ":attached:" + url
+fn attached_target(artifact : @protocol.SessionArtifact) -> String {
+  let kind = match artifact.type_ {
+    PullRequest => "pull_request"
+    Branch => "branch"
+  }
+  MenuTarget + ":" + kind + ":" + artifact.url
 }
 
 ///|
@@ -225,7 +229,7 @@ pub fn menu(
     })
   }
   let found = attached(conversation, checkout, state).filter(artifact => {
-    attached_target(artifact.url) == target
+    attached_target(artifact) == target
   })
   guard found is [artifact, ..] else { return None }
   let entries = link_entries(locale, artifact.url, open_link~)
@@ -318,7 +322,7 @@ fn attached_row(
   artifact : @protocol.SessionArtifact,
   pull_request : PullRequest?,
 ) -> @html.Html {
-  let target = attached_target(artifact.url)
+  let target = attached_target(artifact)
   if pull_request is Some(pull_request) {
     return pull_request_row(locale, pull_request, url=artifact.url, target~, extra=[])
   }

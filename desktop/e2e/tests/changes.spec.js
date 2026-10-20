@@ -221,3 +221,27 @@ test('past five rows the rest of the changes wait behind show more', async ({ pa
   await expect(rows).toHaveCount(5);
   expect(app.pageErrors).toEqual([]);
 });
+
+test('a row menu closes when the overview scrolls its row away', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  await page.setViewportSize({ width: 1440, height: 420 });
+  app.sessionArtifacts['session-1'] = [1, 2, 3, 4, 5, 6, 7].map(number => ({
+    type: 'pull_request',
+    url: `${repo}/pull/${number}`,
+  }));
+  await app.install();
+  await app.goto();
+  await app.openSession();
+  const panel = await showOverview(page);
+  const card = changesCard(panel);
+  await card.getByRole('button', { name: 'Show 2 more' }).click();
+  const rows = card.locator('.conv-changes-row');
+  await rows.nth(1).getByRole('button', { name: 'More actions' }).click();
+  const remove = page.getByRole('menuitem', { name: 'Remove from this conversation' });
+  await expect(remove).toBeVisible();
+  await panel.evaluate(element => {
+    element.scrollTop += 120;
+  });
+  await expect(remove).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
