@@ -194,8 +194,8 @@ fn Conversation::overview_checkout(
   guard self.shows_git_chip() && self.branch is Some(branch) else {
     return None
   }
-  let pull_request = self
-    .settled_probe()
+  let probe = self.settled_probe()
+  let pull_request = probe
     .bind(probe => probe.pull_request)
     .map(pull_request => @session_changes.PullRequest::{
       number: pull_request.number,
@@ -207,10 +207,18 @@ fn Conversation::overview_checkout(
         PullRequestClosed => Closed
       },
       url: pull_request.url,
+      additions: pull_request.additions,
+      deletions: pull_request.deletions,
+      checks: pull_request.checks.map(checks => {
+        passed: checks.passed,
+        failed: checks.failed,
+        pending: checks.pending,
+      }),
     })
   Some({
     branch,
     pull_request,
+    compare_url: probe.bind(probe => probe.compare_url),
     diff: self.diffstat.map(stat => {
       added: stat.added,
       removed: stat.removed,
