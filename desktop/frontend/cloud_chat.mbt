@@ -374,7 +374,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       ]),
     ).unwrap(),
     run: if conversation is Some(value) && (value.sending || value.generating) {
-      Some({ stage: @composer.Working, started_ms: None, tokens: 0, })
+      Some(
+        conversation
+        .bind(value => value.run_heartbeat())
+        .unwrap_or({ stage: @composer.Working, started_ms: None, tokens: 0, }),
+      )
     } else {
       None
     },
@@ -395,6 +399,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     },
     presentation: {
       ..input.presentation,
+      context: if conversation is Some({ compacting: true, .. }) {
+        [@composer.CompactionNotice(queued=false)]
+      } else {
+        input.presentation.context
+      },
       status: [
         @composer.ModelStatus({
           id: "model",

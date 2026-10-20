@@ -3,6 +3,7 @@ import {
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/json",
+  "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/async/http",
   "moonbitlang/editor/base/browser" @base_browser,
   "openseek_desktop/frontend/interop",

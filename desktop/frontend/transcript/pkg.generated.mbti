@@ -68,6 +68,7 @@ pub(all) enum EngineEvent {
   McpServerFailed(server~ : String, error~ : String)
   McpToolsDropped(server~ : String, limit~ : Int32)
 }
+pub fn EngineEvent::ends_retry(Self) -> Bool
 
 pub(all) enum GoalMarker {
   GoalSet(String)

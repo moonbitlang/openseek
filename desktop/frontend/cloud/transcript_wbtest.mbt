@@ -258,3 +258,27 @@ test "downloaded assistant history decodes through the visualizer log parser" {
   assert_eq(parsed.errors.length(), 0)
   assert_eq(parsed.events.length(), 1)
 }
+
+///|
+test "Cloud history preserves reasoning-only assistant messages without a separate reasoning row" {
+  let history = decode_history({
+    "messages": [
+      {
+        "task_id": "task",
+        "kind": "assistant_message",
+        "data": { "content": "", "reasoning_content": "Consider the input" },
+        "created_at": 100,
+      },
+    ],
+    "generating": false,
+  })
+  let items = { ..Conversation::empty(), records: history.messages, }.items()
+  assert_eq(items.length(), 1)
+  assert_true(
+    items[0].kind
+    is Assistant(reasoning=Some("Consider the input"), prose=None, calls=[], ..),
+  )
+  let parsed = @session_log.parse_events(history_record(history))
+  assert_eq(parsed.errors.length(), 0)
+  assert_eq(parsed.events.length(), 1)
+}

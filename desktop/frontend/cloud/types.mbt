@@ -57,6 +57,11 @@ pub(all) struct Conversation {
   last_seq : Int32?
   // Provisional text belongs to this response stream, never to history.
   streaming_response : String?
+  streaming_reasoning : String?
+  reasoning_complete : Bool
+  heartbeat : @composer.RunHeartbeat?
+  retrying : @composer.RunStage?
+  compacting : Bool
   notice : String?
 } derive(Eq)
 
@@ -77,6 +82,11 @@ fn Conversation::empty() -> Conversation {
     task: None,
     last_seq: None,
     streaming_response: None,
+    streaming_reasoning: None,
+    reasoning_complete: false,
+    heartbeat: None,
+    retrying: None,
+    compacting: false,
     notice: None,
   }
 }

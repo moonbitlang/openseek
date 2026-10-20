@@ -241,3 +241,45 @@ pub fn decode_engine_event(event : @protocol.Event) -> EngineEvent? {
     | McpNoTools(..) => None
   }
 }
+
+///|
+/// Whether an engine event reports progress on the open step's model request,
+/// which ends a pending retry notice: the replacement attempt produced output
+/// or completed (a tool-only response has no deltas, so its usage report or
+/// tool result is the first sign), or the step moved on or the run ended.
+/// Events about other work in the same run say nothing about that request.
+pub fn EngineEvent::ends_retry(self : EngineEvent) -> Bool {
+  match self {
+    AssistantDelta(_)
+    | ReasoningDelta(_)
+    | ReasoningMessage(_)
+    | AssistantMessage(_)
+    | Usage(..)
+    | ToolResult(..)
+    | ToolCallDecodeError(..)
+    | AgentStep(_)
+    | AgentFinished(_)
+    | ContextYield(_)
+    | AgentAborted(_)
+    | MaxStepsExhausted
+    | AgentSetupFailed(_) => true
+    StreamRetry(..)
+    | BackgroundNotice(_)
+    | SubrunOpened(..)
+    | SubrunClosed(..)
+    | WorkflowOpened(..)
+    | WorkflowClosed(..)
+    | SteerApplied(..)
+    | SteerDropped(..)
+    | AutoCompactionFinished(_)
+    | CompactionStarted
+    | CompactionFinished(_)
+    | CompactionFailed(_)
+    | ApprovalRequested(..)
+    | ApprovalResolved(..)
+    | SessionAppendFailed(_)
+    | McpConfigFailed(..)
+    | McpServerFailed(..)
+    | McpToolsDropped(..) => false
+  }
+}

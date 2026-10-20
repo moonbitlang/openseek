@@ -265,6 +265,8 @@ fn Model::transcript_input(self : Model) -> @transcript_component.Input {
       root=None,
       items=@transcript_component.VisibleRow::history(conversation.items()),
       streaming_response=conversation.streaming_response,
+      streaming_reasoning?=conversation.streaming_reasoning,
+      reasoning_complete=conversation.reasoning_complete,
       // Deltas do not change the committed-event count, so the live bubble
       // keeps one identity until a semantic response/step boundary.
       streaming_identity=conversation.task.unwrap_or("idle") +

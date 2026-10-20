@@ -1102,48 +1102,6 @@ fn send_goal(
 }
 
 ///|
-/// Whether an engine event reports progress on the open step's model request,
-/// which ends a pending retry notice: the replacement attempt produced output
-/// or completed (a tool-only response has no deltas, so its usage report or
-/// tool result is the first sign), or the step moved on or the run ended.
-/// Events about other work in the same run say nothing about that request.
-fn ends_retry(event : @transcript.EngineEvent) -> Bool {
-  match event {
-    AssistantDelta(_)
-    | ReasoningDelta(_)
-    | ReasoningMessage(_)
-    | AssistantMessage(_)
-    | Usage(..)
-    | ToolResult(..)
-    | ToolCallDecodeError(..)
-    | AgentStep(_)
-    | AgentFinished(_)
-    | ContextYield(_)
-    | AgentAborted(_)
-    | MaxStepsExhausted
-    | AgentSetupFailed(_) => true
-    StreamRetry(..)
-    | BackgroundNotice(_)
-    | SubrunOpened(..)
-    | SubrunClosed(..)
-    | WorkflowOpened(..)
-    | WorkflowClosed(..)
-    | SteerApplied(..)
-    | SteerDropped(..)
-    | AutoCompactionFinished(_)
-    | CompactionStarted
-    | CompactionFinished(_)
-    | CompactionFailed(_)
-    | ApprovalRequested(..)
-    | ApprovalResolved(..)
-    | SessionAppendFailed(_)
-    | McpConfigFailed(..)
-    | McpServerFailed(..)
-    | McpToolsDropped(..) => false
-  }
-}
-
-///|
 /// Fold one engine event into its conversation. Returns the new conversation
 /// and, when the event reported a failure the durable record will never carry,
 /// the text to raise as a toast — the caller owns the dispatch a toast needs.
@@ -1154,7 +1112,7 @@ fn apply_engine_event(
 ) -> (String?, Conversation) {
   // A retry notice lasts until the engine reports progress on the request it
   // is retrying; events about other work in the run leave it in place.
-  let conv = if ends_retry(event) {
+  let conv = if event.ends_retry() {
     { ..conv, turn: { ..conv.turn, retrying: None, }, }
   } else {
     conv

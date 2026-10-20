@@ -85,6 +85,9 @@ fn append_item(
         body=Some(data.stringify(indent=2)),
       )
     }
+  } else if kind is ("compaction_failed" | "auto_compaction_failed") &&
+    data is { "error": String(error), .. } {
+    Failure(error)
   } else {
     Notice(
       label=kind,

@@ -497,9 +497,8 @@ pub fn update(
         state
       } else {
         state.replace(id, {
-          ..conversation,
+          ..conversation.clear_progress(),
           loading: true,
-          streaming_response: None,
           history_required: true,
           notice: None,
         })
@@ -520,10 +519,9 @@ pub fn update(
           !submission.known_tasks.contains(record.task_id)
         })
       let next = state.replace(id, {
-        ..conversation,
+        ..conversation.clear_progress(),
         records: history.messages,
         events: [],
-        streaming_response: None,
         loading: false,
         generating: history.generating,
         history_required: false,
@@ -640,15 +638,19 @@ pub fn update(
       let stream = StreamLease::new()
       let prompt = draft.prompt()
       let next = state.replace(id, {
-        ..conversation,
+        ..conversation.clear_progress(),
         request,
         sending: true,
+        heartbeat: Some({
+          stage: @composer.Starting,
+          started_ms: None,
+          tokens: 0,
+        }),
         stream: Some(stream),
         history_required: true,
         events: [],
         task: None,
         last_seq: None,
-        streaming_response: None,
         notice: None,
         pending: Some({
           content: prompt,
@@ -705,34 +707,15 @@ pub fn update(
             data: { "content": Json(submission.content) },
           },
         ]
-      } else if event.kind == "task_started" ||
-        event.kind == "assistant_delta" ||
-        event.kind == "stream_retry" ||
-        event.kind == "step" {
+      } else if event.is_live_progress() {
         conversation.events
       } else {
         conversation.events + [event]
       }
-      let streaming_response = match event.kind {
-        "assistant_delta" =>
-          match event.data {
-            { "content": String(content), .. } if !content.is_empty() =>
-              Some(conversation.streaming_response.unwrap_or("") + content)
-            _ => conversation.streaming_response
-          }
-        "task_started"
-        | "assistant_message"
-        | "tool_call"
-        | "tool_result"
-        | "step"
-        | "stream_retry"
-        | "task_finished" => None
-        _ => conversation.streaming_response
-      }
+      let conversation = conversation.live_progress(event)
       let next = state.replace(id, {
         ..conversation,
         events,
-        streaming_response,
         task: Some(event.task_id),
         last_seq: Some(event.seq),
         generating: event.kind != "task_finished",
@@ -765,10 +748,9 @@ pub fn update(
       }
       let (next, history) = state
         .replace(id, {
-          ..conversation,
+          ..conversation.clear_progress(),
           sending: false,
           stream: None,
-          streaming_response: None,
         })
         .load(id, token, emit)
       let (next, list) = next.list(token, emit)
@@ -782,10 +764,9 @@ pub fn update(
       }
       let configuration = error is ServiceNotConfigured
       let next = state.replace(id, {
-        ..conversation,
+        ..conversation.clear_progress(),
         sending: false,
         stream: None,
-        streaming_response: None,
         notice: Some(error.label()),
         history_required: if configuration {
           false
