@@ -4,12 +4,6 @@ import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 const hostPath = '/runtime/host-mcp.json';
 const userPath = '/home/user/.openseek/mcp.json';
 
-function mcpGroup(page) {
-  return page.locator('.settings-group', {
-    has: page.getByRole('heading', { name: 'MCP', exact: true }),
-  });
-}
-
 function statusRequests(app) {
   return app.requests.filter(request => request.method === 'mcp.status');
 }
@@ -22,7 +16,14 @@ function loaded(...paths) {
   return paths.map(path => ({ path, state: 'loaded' }));
 }
 
-test('Settings shows what the current conversation\'s engine holds of its MCP servers', async ({ page }, testInfo) => {
+async function openConnectors(page) {
+  await page.locator('.run-status-button').click();
+  const panel = page.locator('.connectors-menu');
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+test('the run status opens what the conversation\'s engine is connected to', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   app.mcpStatus = running({
     configs: loaded(hostPath, userPath),
@@ -68,43 +69,47 @@ test('Settings shows what the current conversation\'s engine holds of its MCP se
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const group = mcpGroup(page);
+  const panel = await openConnectors(page);
 
-  // The host's own server is listed like any other.
-  const seekmoon = group.locator('.mcp-item', { hasText: 'seekmoon' });
-  await expect(seekmoon.getByText('http · http://127.0.0.1:4321/mcp', { exact: true })).toBeVisible();
-  // Tools are listed by their short names; the full names are on hover.
-  await expect(seekmoon.getByText('browser_tabs, browser_open, browser_navigate', { exact: true })).toBeVisible();
-  const playwright = group.locator('.mcp-item', { hasText: 'playwright' });
-  await expect(playwright.getByText('stdio · npx', { exact: true })).toBeVisible();
-  await expect(playwright.locator('.mcp-detail')).toHaveAttribute('title', /mcp__playwright__browser_click — Perform click on a web page/);
-  await expect(group.getByText('Connected', { exact: true })).toHaveCount(2);
-  await expect(group.locator('.mcp-item', { hasText: 'docs' }).getByText('Failed', { exact: true })).toBeVisible();
-  await expect(group.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
-  await expect(group.getByText('Disconnected', { exact: true })).toBeVisible();
-  await expect(group.getByText('No tools', { exact: true })).toBeVisible();
-  await group.screenshot({ path: testInfo.outputPath('mcp-servers.png') });
+  await expect(panel.getByText('Connectors', { exact: true })).toBeVisible();
+  const seekmoon = panel.locator('.connectors-row', { hasText: 'seekmoon' });
+  await expect(seekmoon.getByText('3 tools', { exact: true })).toBeVisible();
+  // How a server is reached and its tools are on hover.
+  await expect(seekmoon).toHaveAttribute('title', /http · http:\/\/127\.0\.0\.1:4321\/mcp/);
+  const playwright = panel.locator('.connectors-row', { hasText: 'playwright' });
+  await expect(playwright).toHaveAttribute('title', /mcp__playwright__browser_click — Perform click on a web page/);
+  const docs = panel.locator('.connectors-row', { hasText: 'docs' });
+  await expect(docs.getByText('Failed', { exact: true })).toBeVisible();
+  await expect(docs.getByText('JSON-RPC error -32000: MCP endpoint exchange failed')).toBeVisible();
+  await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
+  await expect(panel.getByText('No tools', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('connectors.png') });
 
   // The question names the conversation on screen, whose engine is asked.
   expect(statusRequests(app).map(request => request.params)).toEqual([{ session: 'session-1' }]);
+
+  // A click elsewhere closes it; a click inside does not.
+  await panel.locator('.connectors-row', { hasText: 'notes' }).click();
+  await expect(panel).toBeVisible();
+  await page.locator('.transcript').click();
+  await expect(panel).toBeHidden();
   expect(app.pageErrors).toEqual([]);
 });
 
-test('MCP status says when there is no engine to ask, and asks again on reopen and refresh', async ({ page }, testInfo) => {
+test('the connectors panel says when there is no engine, and asks again on reopen and refresh', async ({ page }, testInfo) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const group = mcpGroup(page);
-  await expect(group.getByText('This conversation\'s engine is not running.', { exact: false })).toBeVisible();
-  await group.screenshot({ path: testInfo.outputPath('mcp-engine-not-running.png') });
+  let panel = await openConnectors(page);
+  await expect(panel.getByText('Not running. Servers connect with the next message.', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('connectors-stopped.png') });
   expect(statusRequests(app)).toHaveLength(1);
 
-  // Asking reads the engine's state and starts nothing, so every visit asks.
-  // A file the engine could not load is reported beside the ones it could.
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  // Asking reads the engine's state and starts nothing, so every opening
+  // asks. A file the engine could not load is listed by name.
+  await page.locator('.run-status-button').click();
+  await expect(panel).toBeHidden();
   app.mcpStatus = running({
     configs: [
       ...loaded(hostPath),
@@ -112,36 +117,36 @@ test('MCP status says when there is no engine to ask, and asks again on reopen a
     ],
     servers: [],
   });
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(group.getByText(`${userPath} could not be loaded`, { exact: true })).toBeVisible();
-  await expect(group.getByText('configuration is missing an `mcpServers` object')).toBeVisible();
-  await group.screenshot({ path: testInfo.outputPath('mcp-config-failed.png') });
+  panel = await openConnectors(page);
+  const config = panel.locator('.connectors-row', { hasText: 'mcp.json' });
+  await expect(config.getByText('configuration is missing an `mcpServers` object', { exact: false })).toBeVisible();
+  await expect(config).toHaveAttribute('title', new RegExp(userPath.replaceAll('.', '\\.')));
+  await page.screenshot({ path: testInfo.outputPath('connectors-config-failed.png') });
   expect(statusRequests(app)).toHaveLength(2);
 
-  app.mcpStatus = { engine: 'running', status: { configs: [], servers: [] } };
-  await group.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(group.getByText('started without an MCP configuration', { exact: false })).toBeVisible();
+  app.mcpStatus = running({ configs: [], servers: [] });
+  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(panel.getByText('No MCP servers configured.', { exact: true })).toBeVisible();
   expect(statusRequests(app)).toHaveLength(3);
 
   // A question the host could not answer is reported as that, not as an
   // engine that is not running.
   app.rpcErrors.set('mcp.status', 'the host did not answer');
-  await group.getByRole('button', { name: 'Refresh', exact: true }).click();
-  await expect(group.getByText('The status could not be read', { exact: true })).toBeVisible();
-  await expect(group.getByText('the host did not answer')).toBeVisible();
+  await panel.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(panel.getByText('The status could not be read', { exact: true })).toBeVisible();
+  await expect(panel.getByText('the host did not answer')).toBeVisible();
   expect(app.pageErrors).toEqual([]);
 });
 
-test('the MCP panel follows what the engine reports while Settings is open', async ({ page }) => {
+test('the connectors panel follows what the engine reports while it is open', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   // The engine has started and is still connecting its servers.
   app.mcpStatus = { engine: 'connecting' };
   await app.install();
   await app.goto();
   await app.openSession();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const group = mcpGroup(page);
-  await expect(group.getByText('is starting and has not finished connecting', { exact: false })).toBeVisible();
+  const panel = await openConnectors(page);
+  await expect(panel.getByText('Connecting…', { exact: true })).toBeVisible();
   expect(statusRequests(app)).toHaveLength(1);
 
   // The engine reports. The host keeps the report and forwards the event;
@@ -154,13 +159,13 @@ test('the MCP panel follows what the engine reports while Settings is open', asy
   const tools = [{ name: 'mcp__memory__recall', description: 'Recall a note' }];
   const memory = state => ({ name: 'memory', transport: 'stdio', target: 'memory-mcp', state, tools });
   report([memory('connected')]);
-  await expect(group.getByText('Connected', { exact: true })).toBeVisible();
+  await expect(panel.getByText('1 tool', { exact: true })).toBeVisible();
   expect(statusRequests(app)).toHaveLength(2);
 
   // The server exits; nobody touches Refresh.
   report([memory('lost')]);
-  await expect(group.getByText('Disconnected', { exact: true })).toBeVisible();
-  await expect(group.getByText('Connected', { exact: true })).toBeHidden();
+  await expect(panel.getByText('Disconnected', { exact: true })).toBeVisible();
+  await expect(panel.getByText('1 tool', { exact: true })).toBeHidden();
   expect(statusRequests(app)).toHaveLength(3);
 
   // Another conversation's engine is not this panel's business.
@@ -168,7 +173,7 @@ test('the MCP panel follows what the engine reports while Settings is open', asy
     session: 'another-session',
     event: { event: 'mcp_status', status: { configs: [], servers: [] } },
   });
-  await page.getByRole('button', { name: 'Skills', exact: true }).click();
+  await page.waitForTimeout(200);
   expect(statusRequests(app)).toHaveLength(3);
   expect(app.pageErrors).toEqual([]);
 });

@@ -522,6 +522,15 @@ fn main {
             ),
           )
         }
+        if model.connectors_open {
+          subs.push(
+            @dismiss.on_outside_click(
+              "connectors-dismiss",
+              trigger=".run-status-control",
+              emit.map((_ : Unit) => CloseConnectors),
+            ),
+          )
+        }
         match model.select_menu {
           Some(ProjectMenu) =>
             subs.push(

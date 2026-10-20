@@ -250,33 +250,6 @@ h2 {
   align-items: stretch;
 }
 
-/* The MCP group: one row per server or unusable file — name, a monospace
-   meta line like a skill's, one detail line — with the app's status dot and
-   label on the right (`.run-status`). */
-.mcp-item {
-  align-items: flex-start;
-}
-
-.mcp-meta {
-  color: var(--color-text-muted);
-  font-family: var(--font-family-mono);
-  font-size: var(--font-size-xs);
-  overflow-wrap: anywhere;
-}
-
-/* Tool lists and errors can run long; two lines, the rest on hover. */
-.mcp-detail {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-
-.mcp-status {
-  padding-top: 2px;
-  color: var(--color-text-secondary);
-}
-
 /* The bring-your-own-key guide inside the API group's card: prose plus
    numbered steps, with its own padding since the card's default is
    row-shaped. */

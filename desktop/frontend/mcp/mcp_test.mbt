@@ -19,13 +19,9 @@ fn answer() -> @protocol.McpStatusReply {
 }
 
 ///|
-test "opening Settings asks the current conversation's engine, every time" {
+test "opening the panel asks the conversation's engine, every time" {
   let one = conversation("s-1")
-  let (_, checking) = @mcp.update(
-    quiet(),
-    Opened(Some(one)),
-    @mcp.State::initial(),
-  )
+  let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
   assert_true(checking.phase is Checking)
   assert_true(checking.conversation == Some(one))
   let (_, loaded) = @mcp.update(
@@ -35,24 +31,23 @@ test "opening Settings asks the current conversation's engine, every time" {
   )
   assert_true(loaded.phase is Loaded(reply) && reply == answer())
   // The answer is the engine's latest report, and asking starts nothing, so
-  // reopening Settings asks again rather than showing an old answer.
-  let (_, reopened) = @mcp.update(quiet(), Opened(Some(one)), loaded)
-  assert_true(reopened.phase is Checking)
+  // reopening the panel asks again — with the last answer on show meanwhile.
+  let (_, reopened) = @mcp.update(quiet(), Opened(one), loaded)
+  assert_true(reopened.phase is Reloading(reply) && reply == answer())
   assert_true(reopened.serial != loaded.serial)
+  // A question already out is not asked twice.
+  let (_, again) = @mcp.update(quiet(), Opened(one), reopened)
+  assert_true(again == reopened)
 }
 
 ///|
 test "the answer to a superseded question is dropped" {
   let (_, first) = @mcp.update(
     quiet(),
-    Opened(Some(conversation("s-1"))),
+    Opened(conversation("s-1")),
     @mcp.State::initial(),
   )
-  let (_, second) = @mcp.update(
-    quiet(),
-    Opened(Some(conversation("s-2"))),
-    first,
-  )
+  let (_, second) = @mcp.update(quiet(), Opened(conversation("s-2")), first)
   let (_, stale) = @mcp.update(
     quiet(),
     Checked(serial=first.serial, Ok(answer())),
@@ -72,25 +67,12 @@ test "the answer to a superseded question is dropped" {
     settled,
   )
   assert_true(again == settled)
-  // Opening Settings with no conversation retires a question still out.
-  let (_, none) = @mcp.update(quiet(), Opened(None), second)
-  assert_true(none.phase is Unchecked)
-  let (_, late) = @mcp.update(
-    quiet(),
-    Checked(serial=second.serial, Ok(answer())),
-    none,
-  )
-  assert_true(late == none)
 }
 
 ///|
 test "refresh asks again, but never while a question is out" {
   let one = conversation("s-1")
-  let (_, checking) = @mcp.update(
-    quiet(),
-    Opened(Some(one)),
-    @mcp.State::initial(),
-  )
+  let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
   let (_, still) = @mcp.update(quiet(), Refresh(one), checking)
   assert_true(still == checking)
   let (_, failed) = @mcp.update(
@@ -108,38 +90,29 @@ test "refresh asks again, but never while a question is out" {
 test "an answer is shown only for the conversation whose engine gave it" {
   let one = conversation("s-1")
   let two = conversation("s-2")
-  let (_, checking) = @mcp.update(
-    quiet(),
-    Opened(Some(one)),
-    @mcp.State::initial(),
-  )
+  let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
   let (_, loaded) = @mcp.update(
     quiet(),
     Checked(serial=checking.serial, Ok(answer())),
     checking,
   )
-  assert_true(loaded.phase_for(Some(one)) is Loaded(_))
-  // Another conversation has its own engine, and no conversation has none.
-  assert_true(loaded.phase_for(Some(two)) is Unchecked)
-  assert_true(loaded.phase_for(None) is Unchecked)
+  assert_true(loaded.phase_for(one) is Loaded(_))
+  // Another conversation has its own engine.
+  assert_true(loaded.phase_for(two) is Unchecked)
   // The same session id on another host is another conversation.
   assert_true(
-    loaded.phase_for(Some({ channel: Remote("device-a"), session: "s-1", }))
+    loaded.phase_for({ channel: Remote("device-a"), session: "s-1", })
     is Unchecked,
   )
   let (_, asked) = @mcp.update(quiet(), Refresh(two), loaded)
-  assert_true(asked.phase_for(Some(two)) is Checking)
-  assert_true(asked.phase_for(Some(one)) is Unchecked)
+  assert_true(asked.phase_for(two) is Checking)
+  assert_true(asked.phase_for(one) is Unchecked)
 }
 
 ///|
 test "an engine's report makes the panel read again without blanking it" {
   let one = conversation("s-1")
-  let (_, checking) = @mcp.update(
-    quiet(),
-    Opened(Some(one)),
-    @mcp.State::initial(),
-  )
+  let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
   let (_, loaded) = @mcp.update(
     quiet(),
     Checked(serial=checking.serial, Ok(answer())),
@@ -164,11 +137,7 @@ test "an engine's report makes the panel read again without blanking it" {
 ///|
 test "a report supersedes a question that may have been answered before it" {
   let one = conversation("s-1")
-  let (_, checking) = @mcp.update(
-    quiet(),
-    Opened(Some(one)),
-    @mcp.State::initial(),
-  )
+  let (_, checking) = @mcp.update(quiet(), Opened(one), @mcp.State::initial())
   let (_, asked_again) = @mcp.update(quiet(), Changed(one), checking)
   assert_true(asked_again.phase is Checking)
   assert_true(asked_again.serial != checking.serial)
@@ -191,10 +160,10 @@ test "a report supersedes a question that may have been answered before it" {
 test "a report from an engine the panel is not showing changes nothing" {
   let one = conversation("s-1")
   let initial = @mcp.State::initial()
-  // Settings has never opened: there is nothing to keep current.
+  // The panel has never opened: there is nothing to keep current.
   let (_, untouched) = @mcp.update(quiet(), Changed(one), initial)
   assert_true(untouched == initial)
-  let (_, checking) = @mcp.update(quiet(), Opened(Some(one)), initial)
+  let (_, checking) = @mcp.update(quiet(), Opened(one), initial)
   let (_, loaded) = @mcp.update(
     quiet(),
     Checked(serial=checking.serial, Ok(answer())),

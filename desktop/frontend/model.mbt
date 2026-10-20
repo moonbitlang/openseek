@@ -1545,9 +1545,13 @@ priv struct Model {
   // view and root layout. The root owns the opaque state once so neither side
   // reports a second visibility copy back to the other.
   jobs : @jobs.State
-  // The Settings page's MCP panel: what the current conversation's engine
-  // last said it holds of its MCP servers.
+  // The connectors panel's data: what a conversation's engine last said it
+  // holds of its MCP servers.
   mcp : @mcp.State
+  // Whether the run status's connectors panel is open. Global UI for the
+  // conversation on screen, like `git_details_open`, and fenced the same way
+  // when that conversation changes.
+  connectors_open : Bool
   github : @github.State
   terminal : @terminal.State
   // The archive-discard confirmation, staged when the host refused an
@@ -2129,9 +2133,12 @@ priv enum Msg {
   OpenPathResolved(FileOpenContext, @protocol.OpenPathReply)
   // Open or close the composer git chip's details popover.
   ToggleGitDetails
+  // Open or close the run status's connectors panel.
+  ToggleConnectors
   // Clicks away from a transient menu, one per menu. Each is separate from
   // its toggle on purpose: a dismissal must never reopen what it closed.
   CloseGitDetails
+  CloseConnectors
   // The transcript component reports where its reader was as it leaves the
   // screen; the root remembers it for the conversation's next visit.
   TranscriptLeft(slot~ : String, scroll~ : @transcript_component.ScrollPosition)
@@ -2842,6 +2849,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     right_panel_expanded: false,
     jobs: @jobs.State::empty(),
     mcp: @mcp.State::initial(),
+    connectors_open: false,
     github: @github.State::empty(),
     terminal: @terminal.State::empty(),
     active_session: "",
@@ -3567,18 +3575,12 @@ fn Model::active_conversation(self : Model) -> Conversation? {
 }
 
 ///|
-/// What the Settings page's MCP panel is about: the OpenSeek conversation on
-/// screen behind Settings, whose engine is the one to ask. A Codex
-/// conversation leaves the last OpenSeek one loaded, but is not it.
-fn Model::mcp_subject(self : Model) -> @mcp.Subject {
-  if self.codex_work_selected() {
-    return CodexConversation
-  }
-  match self.active_conversation() {
-    Some(conv) =>
-      Conversation({ channel: conv.device, session: conv.session_id, })
-    None => NoConversation
-  }
+/// The conversation whose connectors panel the run status opens: the one on
+/// screen.
+fn Model::connectors_conversation(self : Model) -> @interop.ConversationKey? {
+  self
+  .active_conversation()
+  .map(conv => { channel: conv.device, session: conv.session_id, })
 }
 
 ///|

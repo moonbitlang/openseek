@@ -1,16 +1,17 @@
-// The Settings page's MCP panel: what the current conversation's engine holds
-// of its MCP servers. The host keeps no connections of its own — every
-// conversation's engine connects its servers when it starts, and reports
-// what came of it then and whenever it changes — so the panel asks the host
-// for that engine's latest report and shows it. Asking starts nothing, so
-// the panel asks every time Settings opens, again each time the engine of
-// the conversation on show reports, and again when its device reconnects,
-// since a report sent while the connection was down is not replayed.
+// A conversation's connectors: what its engine holds of its MCP servers,
+// shown in the panel its run status opens. The host keeps no connections of
+// its own — every conversation's engine connects its servers when it
+// starts, and reports what came of it then and whenever it changes — so the
+// panel asks the host for that engine's latest report and shows it. Asking
+// starts nothing, so the panel asks every time it opens, again each time the
+// engine of its conversation reports, and again when that device
+// reconnects, since a report sent while the connection was down is not
+// replayed.
 
 ///|
 pub(all) enum Msg {
-  /// The Settings page opened with this conversation current, or with none.
-  Opened(@interop.ConversationKey?)
+  /// The panel opened on this conversation.
+  Opened(@interop.ConversationKey)
   /// The user asked again about the conversation the panel is showing.
   Refresh(@interop.ConversationKey)
   /// This conversation's engine reported to the host, or the host may have
@@ -30,9 +31,9 @@ pub enum Phase {
   Checking
   /// The host answered.
   Loaded(@protocol.McpStatusReply)
-  /// The host answered, the engine has reported since, and the question is
-  /// out again. The last answer stays up until its replacement arrives, so a
-  /// change the user did not ask about does not blank the list.
+  /// The host answered, and the question is out again. The last answer stays
+  /// up until its replacement arrives, so reopening the panel or a change the
+  /// user did not ask about does not blank the list.
   Reloading(@protocol.McpStatusReply)
   /// The question itself failed — the host could not be reached, or could
   /// not answer. Distinct from an engine that is not running and from a
@@ -45,8 +46,8 @@ pub extend Phase with Eq::{equal, not_equal}
 
 ///|
 pub struct State {
-  /// The conversation the phase describes; `None` when Settings last opened
-  /// with no conversation current, and before it first opens.
+  /// The conversation the phase describes; `None` before the panel first
+  /// opens.
   conversation : @interop.ConversationKey?
   phase : Phase
   /// Counts questions, so the answer to a superseded one is recognized and
@@ -67,9 +68,9 @@ pub fn State::initial() -> State {
 /// conversation whose engine gave it: for any other, nothing has been asked.
 pub fn State::phase_for(
   self : State,
-  conversation : @interop.ConversationKey?,
+  conversation : @interop.ConversationKey,
 ) -> Phase {
-  if conversation is Some(_) && self.conversation == conversation {
+  if self.conversation == Some(conversation) {
     self.phase
   } else {
     Unchecked
@@ -83,18 +84,20 @@ pub fn update(
   state : State,
 ) -> (@cmd.Cmd, State) {
   match msg {
-    Opened(Some(conversation)) | Refresh(conversation) =>
-      // One question at a time per conversation; another conversation's
-      // supersedes it.
-      if state.conversation == Some(conversation) &&
-        state.phase is (Checking | Reloading(_)) {
-        (@cmd.none, state)
-      } else {
-        ask(emit, conversation, state, waiting=Checking)
+    // One question at a time per conversation; another conversation's
+    // supersedes it. Whatever was last answered for this conversation stays
+    // on show while it is asked again.
+    Opened(conversation) | Refresh(conversation) =>
+      match state.phase_for(conversation) {
+        Checking | Reloading(_) => (@cmd.none, state)
+        Loaded(reply) =>
+          ask(emit, conversation, state, waiting=Reloading(reply))
+        Unchecked | CheckFailed(_) =>
+          ask(emit, conversation, state, waiting=Checking)
       }
-    // A report from an engine the panel is not showing changes nothing here:
-    // its conversation is asked about when Settings opens on it. For the one
-    // on show, a question already out may have been answered before this
+    // A report from an engine the panel is not about changes nothing here:
+    // its conversation is asked about when the panel opens on it. For the one
+    // it is about, a question already out may have been answered before this
     // report, so it is superseded rather than awaited.
     Changed(conversation) => {
       guard state.conversation == Some(conversation) else {
@@ -106,13 +109,6 @@ pub fn update(
       }
       ask(emit, conversation, state, waiting~)
     }
-    // No conversation, no engine to ask. Advancing the serial retires any
-    // question still out for the conversation that was current before.
-    Opened(None) =>
-      (
-        @cmd.none,
-        { conversation: None, phase: Unchecked, serial: state.serial + 1, },
-      )
     Checked(serial~, result) => {
       guard serial == state.serial && state.phase is (Checking | Reloading(_)) else {
         return (@cmd.none, state)

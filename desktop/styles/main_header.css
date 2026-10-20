@@ -136,6 +136,119 @@ main {
   text-overflow: ellipsis;
 }
 
+/* The run status is also the button that opens the conversation's
+   connectors panel; it keeps the status's look and gains only a hover. */
+.run-status-control {
+  position: relative;
+  display: inline-flex;
+}
+.run-status-button {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 3px 6px;
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.run-status-button:hover,
+.run-status-button.open {
+  background: var(--color-bg-subtle);
+}
+
+/* Drops down from the status, right-aligned to it: the status sits near the
+   window's right edge. Same surface as the composer's git popover. */
+.connectors-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 300px;
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-overlay);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: normal;
+  z-index: var(--z-menu);
+}
+.connectors-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 4px 8px;
+}
+.connectors-title {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+.connectors-refresh {
+  --icon-size: var(--icon-sm);
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 3px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.connectors-refresh:hover:not(:disabled) {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-primary);
+}
+.connectors-refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.connectors-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+}
+.connectors-row:hover {
+  background: var(--color-bg-subtle);
+}
+.connectors-row > .run-dot {
+  margin-top: 6px;
+}
+.connectors-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.connectors-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+}
+/* Errors run long; two lines here, the rest on hover. */
+.connectors-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  overflow-wrap: anywhere;
+}
+.connectors-state {
+  flex: none;
+  color: var(--color-text-muted);
+}
+.connectors-note {
+  padding: 6px 8px;
+  color: var(--color-text-muted);
+}
+
 .run-dot {
   width: 7px;
   height: 7px;

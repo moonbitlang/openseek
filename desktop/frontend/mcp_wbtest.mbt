@@ -66,14 +66,14 @@ test "a server cut off by the MCP tool limit is reported" {
 }
 
 ///|
-test "opening Settings asks the current conversation's engine for its MCP state" {
+test "the run status opens the conversation's connectors and asks its engine" {
   let dispatch = test_dispatch()
   let model = test_model()
-  guard model.mcp_subject() is Conversation(current) else {
+  guard model.connectors_conversation() is Some(current) else {
     fail("the test model has a conversation on screen")
   }
-  let (_, opened) = update(dispatch, OpenSetup, model)
-  assert_true(opened.screen is Settings)
+  let (_, opened) = update(dispatch, ToggleConnectors, model)
+  assert_true(opened.connectors_open)
   assert_true(opened.mcp.phase is Checking)
   assert_true(opened.mcp.conversation == Some(current))
   // The answer is routed back into the panel.
@@ -83,29 +83,38 @@ test "opening Settings asks the current conversation's engine for its MCP state"
     opened,
   )
   assert_true(answered.mcp.phase is Loaded(Stopped))
-  // Still about that conversation while Settings covers it.
-  assert_true(answered.mcp_subject() is Conversation(shown) && shown == current)
+  // The same control closes it, and so does a click elsewhere; neither asks.
+  let (_, toggled) = update(dispatch, ToggleConnectors, answered)
+  assert_false(toggled.connectors_open)
+  assert_true(toggled.mcp == answered.mcp)
+  let (_, dismissed) = update(dispatch, CloseConnectors, answered)
+  assert_false(dismissed.connectors_open)
+  let (_, still_closed) = update(dispatch, CloseConnectors, dismissed)
+  assert_false(still_closed.connectors_open)
 }
 
 ///|
-test "Settings opened over a Codex conversation does not ask an OpenSeek engine" {
+test "the connectors panel closes when its conversation leaves the screen" {
   let dispatch = test_dispatch()
-  // The last OpenSeek conversation stays loaded behind the Codex screen, but
-  // Codex takes its servers from its own configuration.
-  let model = { ..test_model(), screen: Codex, }
-  assert_true(model.active_conversation() is Some(_))
-  assert_true(model.mcp_subject() is CodexConversation)
-  let (_, opened) = update(dispatch, OpenSetup, model)
-  assert_true(opened.mcp.phase is Unchecked)
-  assert_true(opened.mcp.conversation is None)
-  assert_true(opened.mcp_subject() is CodexConversation)
+  let (_, opened) = update(dispatch, ToggleConnectors, test_model())
+  assert_true(opened.connectors_open)
+  // Settings has no run status to hang the panel from.
+  let (_, settings) = update(dispatch, OpenSetup, opened)
+  assert_false(settings.connectors_open)
+  // A conversation that is no longer on screen closes it too.
+  let (_, switched) = update(
+    dispatch,
+    Mcp(Checked(serial=opened.mcp.serial, Ok(Connecting))),
+    { ..opened, active_session: "another-session", },
+  )
+  assert_false(switched.connectors_open)
 }
 
 ///|
 test "an engine's MCP report tells the panel showing its conversation to read again" {
   let dispatch = test_dispatch()
   let model = test_model()
-  guard model.mcp_subject() is Conversation(current) else {
+  guard model.connectors_conversation() is Some(current) else {
     fail("the test model has a conversation on screen")
   }
   // The report itself is the host's to keep; the page only learns that the
@@ -119,10 +128,10 @@ test "an engine's MCP report tells the panel showing its conversation to read ag
     fail("the report should reach the page as a change to read")
   }
   assert_eq(session, current.session)
-  // Before Settings has opened there is nothing to keep current.
+  // Before the panel has opened there is nothing to keep current.
   let (_, untouched) = update_dev(dispatch, McpChanged(session), model)
   assert_true(untouched.mcp == model.mcp)
-  let (_, opened) = update(dispatch, OpenSetup, model)
+  let (_, opened) = update(dispatch, ToggleConnectors, model)
   let (_, answered) = update(
     dispatch,
     Mcp(Checked(serial=opened.mcp.serial, Ok(Connecting))),
@@ -141,7 +150,7 @@ test "an engine's MCP report tells the panel showing its conversation to read ag
 ///|
 test "a reconnected device has the panel read its conversation again" {
   let dispatch = test_dispatch()
-  let (_, opened) = update(dispatch, OpenSetup, test_model())
+  let (_, opened) = update(dispatch, ToggleConnectors, test_model())
   let (_, answered) = update(
     dispatch,
     Mcp(Checked(serial=opened.mcp.serial, Ok(Connecting))),

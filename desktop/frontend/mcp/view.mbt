@@ -1,79 +1,48 @@
 ///|
-/// What the Settings page's MCP group is about: the OpenSeek conversation
-/// whose engine is asked, or why there is none to ask.
-pub(all) enum Subject {
-  /// An OpenSeek conversation is current; its engine is the one to ask.
-  Conversation(@interop.ConversationKey)
-  /// A Codex conversation is current. Codex takes its MCP servers from its
-  /// own configuration, which this panel does not show.
-  CodexConversation
-  /// No conversation is current.
-  NoConversation
-}
-
-///|
-/// The rows of the Settings page's MCP group for `subject`: the explanation
-/// with its refresh button, then that conversation's engine's latest report.
-pub fn rows(
+/// The connectors panel the run status of `conversation` opens: a heading
+/// with a refresh button, then what that conversation's engine last reported.
+pub fn panel(
   locale~ : @i18n.Locale = English,
-  subject : Subject,
+  conversation : @interop.ConversationKey,
   state : State,
   emit : @cmd.Emit[Msg],
-) -> Array[@html.Html] {
-  let conversation = match subject {
-    Conversation(conversation) => Some(conversation)
-    CodexConversation | NoConversation => None
-  }
+) -> @html.Html {
   let phase = state.phase_for(conversation)
-  let checking = phase is Checking
-  let refresh = match conversation {
-    Some(conversation) =>
-      @html.button(
-        class="button secondary",
-        disabled=checking,
-        on_click=emit(Refresh(conversation)),
-        text(locale, if checking { Refreshing } else { Refresh }),
-      )
-    // Nothing to ask about without a conversation.
-    None =>
-      @html.button(
-        class="button secondary",
-        disabled=true,
-        text(locale, Refresh),
-      )
-  }
+  let busy = phase is (Checking | Reloading(_))
   let rows : Array[@html.Html] = [
-    @settings.row(
-      text(locale, Servers),
-      [refresh],
-      desc=text(locale, Description),
-    ),
+    @html.div(class="connectors-head", [
+      @html.span(class="connectors-title", text(locale, Connectors)),
+      @html.button(
+        class="connectors-refresh",
+        type_="button",
+        title=text(locale, Refresh),
+        disabled=busy,
+        attrs=@html.Attrs::build().aria_label(text(locale, Refresh)),
+        on_click=emit(Refresh(conversation)),
+        @icons.icon(@icons.icon_sync),
+      ),
+    ]),
   ]
-  match subject {
-    Conversation(_) => ()
-    CodexConversation => {
-      rows.push(note(text(locale, CodexConversation)))
-      return rows
-    }
-    NoConversation => {
-      rows.push(note(text(locale, NoConversation)))
-      return rows
-    }
+  match phase {
+    Unchecked | Checking => rows.push(note(text(locale, Checking)))
+    CheckFailed(error) =>
+      rows.push(
+        item(
+          tone="danger",
+          name=text(locale, CheckFailed),
+          note=None,
+          detail=Some(error),
+          title=error,
+        ),
+      )
+    Loaded(Stopped) | Reloading(Stopped) =>
+      rows.push(note(text(locale, EngineStopped)))
+    Loaded(Connecting) | Reloading(Connecting) =>
+      rows.push(note(text(locale, EngineConnecting)))
+    Loaded(Running(status)) | Reloading(Running(status)) =>
+      status_rows(locale, status, rows)
   }
-  let reply = match phase {
-    Unchecked | Checking => return rows
-    CheckFailed(error) => {
-      rows.push(problem(text(locale, CheckFailed), error))
-      return rows
-    }
-    Loaded(reply) | Reloading(reply) => reply
-  }
-  match reply {
-    Stopped => rows.push(note(text(locale, EngineStopped)))
-    Connecting => rows.push(note(text(locale, EngineConnecting)))
-    Running(status) => status_rows(locale, status, rows)
-  }
-  rows
+  @html.div(class="connectors-menu", rows)
 }
 
 ///|
@@ -84,26 +53,24 @@ fn status_rows(
   status : @wire.McpStatus,
   rows : Array[@html.Html],
 ) -> Unit {
-  guard !status.configs.is_empty() else {
-    rows.push(note(text(locale, NotConfigured)))
-    return
-  }
-  let mut loaded = false
   for config in status.configs {
-    match config.state {
-      Loaded => loaded = true
-      Failed(error) =>
-        rows.push(
-          item(
-            title=text(locale, ConfigFailed(config.path)),
-            detail=error,
-            state=("danger", text(locale, Failed)),
-          ),
-        )
+    if config.state is Failed(error) {
+      rows.push(
+        item(
+          tone="danger",
+          name=file_name(config.path),
+          note=Some(text(locale, Failed)),
+          detail=Some(error),
+          title="\{config.path}\n\{error}",
+        ),
+      )
     }
   }
-  if loaded && status.servers.is_empty() {
-    rows.push(note(text(locale, NoServers)))
+  if status.servers.is_empty() {
+    if status.configs.all(config => config.state is Loaded) {
+      rows.push(note(text(locale, NotConfigured)))
+    }
+    return
   }
   for server in status.servers {
     rows.push(server_row(locale, server))
@@ -111,82 +78,51 @@ fn status_rows(
 }
 
 ///|
-/// A row that only says something: nothing to operate, nothing went wrong.
+/// The last segment of a configuration file's path: the panel is narrow, and
+/// the full path is in the row's tooltip.
+fn file_name(path : String) -> String {
+  match path.rev_find("/") {
+    Some(index) => path[index + 1:].to_owned()
+    None => path
+  }
+}
+
+///|
+/// A row that only says something: nothing went wrong, nothing listed.
 fn note(message : String) -> @html.Html {
-  @html.div(class="setting-row", [
-    @html.div(class="setting-text", [@html.div(class="setting-desc", message)]),
-  ])
+  @html.div(class="connectors-note", message)
 }
 
 ///|
-/// A row for something that went wrong while asking, with the error in the
-/// words of whoever reported it.
-fn problem(title : String, error : String) -> @html.Html {
-  @html.div(class="setting-row", [
-    @html.div(class="setting-text", [
-      @html.div(class="setting-name", title),
-      @html.div(class="setting-desc", error),
-    ]),
-  ])
-}
-
-///|
-/// One listed thing — a server or a configuration file — with an optional
-/// monospace meta line, a detail line, and its state on the right as the
-/// app's status dot and label. `state` is the dot's tone and the label.
+/// One listed thing — a server or a configuration file: the app's status dot,
+/// its name with an optional detail line under it, a short note on the
+/// right, and everything else on hover.
 fn item(
+  tone~ : String,
+  name~ : String,
+  note~ : String?,
+  detail~ : String?,
   title~ : String,
-  meta? : String,
-  detail~ : String,
-  detail_title? : String,
-  state~ : (String, String),
 ) -> @html.Html {
-  let (tone, label) = state
-  let lines : Array[@html.Html] = [@html.div(class="setting-name", title)]
-  if meta is Some(meta) {
-    lines.push(@html.div(class="mcp-meta", meta))
+  let text_lines : Array[@html.Html] = [
+    @html.span(class="connectors-name", name),
+  ]
+  if detail is Some(detail) {
+    text_lines.push(@html.span(class="connectors-detail", detail))
   }
-  lines.push(
-    @html.div(class="setting-desc mcp-detail", title?=detail_title, detail),
-  )
-  @html.div(class="setting-row mcp-item", [
-    @html.div(class="setting-text", lines),
-    @html.div(class="run-status mcp-status", [
-      @html.span(class="run-dot \{tone}", ""),
-      @html.span(class="run-text", label),
-    ]),
-  ])
-}
-
-///|
-/// A registered tool's name without the `mcp__<server>__` namespace every
-/// MCP tool carries, which the row it is listed under already says.
-fn short_tool_name(name : String) -> String {
-  guard name.strip_prefix("mcp__") is Some(rest) &&
-    rest.split_once("__") is Some((_, tool)) &&
-    !tool.is_empty() else {
-    return name
+  let children : Array[@html.Html] = [
+    @html.span(class="run-dot \{tone}", ""),
+    @html.div(class="connectors-text", text_lines),
+  ]
+  if note is Some(note) {
+    children.push(@html.span(class="connectors-state", note))
   }
-  tool.to_owned()
+  @html.div(class="connectors-row", title~, children)
 }
 
 ///|
-/// The tools a server registered, by their short names.
-fn tool_line(tools : Array[@wire.McpTool]) -> (String, String) {
-  let names = tools.map(tool => short_tool_name(tool.name))
-  let full = tools.map(tool => {
-    if tool.description.is_empty() {
-      tool.name
-    } else {
-      "\{tool.name} — \{tool.description}"
-    }
-  })
-  (names.join(", "), full.join("\n"))
-}
-
-///|
-/// One server: its name, how it is reached, and the state the engine found it
-/// in.
+/// One server and the state the engine found it in. How it is reached and
+/// its tools are on hover.
 fn server_row(
   locale : @i18n.Locale,
   server : @wire.McpServerStatus,
@@ -195,49 +131,62 @@ fn server_row(
     Stdio => "stdio"
     Http => "http"
   }
-  let meta = "\{transport} · \{server.target}"
+  let reached = "\{transport} · \{server.target}"
   match server.state {
-    Connected(tools) => {
-      let (detail, detail_title) = tool_line(tools)
+    Connected(tools) =>
       item(
-        title=server.name,
-        meta~,
-        detail~,
-        detail_title~,
-        state=("ok", text(locale, Connected)),
+        tone="ok",
+        name=server.name,
+        note=Some(text(locale, ToolCount(tools.length()))),
+        detail=None,
+        title="\{reached}\n\{tool_list(tools)}",
       )
-    }
     // The tools are still registered: these are the calls that now fail.
-    Lost(tools) => {
-      let (_, detail_title) = tool_line(tools)
+    Lost(tools) =>
       item(
-        title=server.name,
-        meta~,
-        detail=text(locale, LostReason),
-        detail_title~,
-        state=("warn", text(locale, Lost)),
+        tone="warn",
+        name=server.name,
+        note=Some(text(locale, Lost)),
+        detail=Some(text(locale, LostReason)),
+        title="\{reached}\n\{tool_list(tools)}",
       )
-    }
     NoTools =>
       item(
-        title=server.name,
-        meta~,
-        detail=text(locale, NoToolsReason),
-        state=("", text(locale, NoTools)),
+        tone="",
+        name=server.name,
+        note=Some(text(locale, NoTools)),
+        detail=None,
+        title="\{reached}\n\{text(locale, NoToolsReason)}",
       )
     Failed(error) =>
       item(
-        title=server.name,
-        meta~,
-        detail=error,
-        state=("danger", text(locale, Failed)),
+        tone="danger",
+        name=server.name,
+        note=Some(text(locale, Failed)),
+        detail=Some(error),
+        title="\{reached}\n\{error}",
       )
     Skipped =>
       item(
-        title=server.name,
-        meta~,
-        detail=text(locale, SkippedReason),
-        state=("", text(locale, Skipped)),
+        tone="",
+        name=server.name,
+        note=Some(text(locale, Skipped)),
+        detail=None,
+        title="\{reached}\n\{text(locale, SkippedReason)}",
       )
   }
+}
+
+///|
+/// A server's registered tools, one per line, with their descriptions.
+fn tool_list(tools : Array[@wire.McpTool]) -> String {
+  tools
+  .map(tool => {
+    if tool.description.is_empty() {
+      tool.name
+    } else {
+      "\{tool.name} — \{tool.description}"
+    }
+  })
+  .join("\n")
 }

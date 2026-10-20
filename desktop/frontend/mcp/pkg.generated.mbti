@@ -10,7 +10,7 @@ import {
 }
 
 // Values
-pub fn rows(locale? : @i18n.Locale, Subject, State, @cmd.Emit[Msg]) -> Array[@html.Html]
+pub fn panel(locale? : @i18n.Locale, @interop.ConversationKey, State, @cmd.Emit[Msg]) -> @html.Html
 
 pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 
@@ -18,7 +18,7 @@ pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 
 // Types and methods
 pub(all) enum Msg {
-  Opened(@interop.ConversationKey?)
+  Opened(@interop.ConversationKey)
   Refresh(@interop.ConversationKey)
   Changed(@interop.ConversationKey)
   Checked(serial~ : Int, Result[@protocol.McpStatusReply, String])
@@ -42,13 +42,7 @@ pub struct State {
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self
 pub fn State::not_equal(Self, Self) -> Bool
-pub fn State::phase_for(Self, @interop.ConversationKey?) -> Phase
-
-pub(all) enum Subject {
-  Conversation(@interop.ConversationKey)
-  CodexConversation
-  NoConversation
-}
+pub fn State::phase_for(Self, @interop.ConversationKey) -> Phase
 
 // Type aliases
 

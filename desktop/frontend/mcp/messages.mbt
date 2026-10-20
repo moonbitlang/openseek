@@ -2,19 +2,14 @@
 
 ///|
 priv enum UiMessage {
-  Servers
-  Description
+  Connectors
+  Checking
+  ToolCount(Int32)
   Refresh
-  Refreshing
-  NoConversation
-  CodexConversation
   EngineStopped
   EngineConnecting
   NotConfigured
-  NoServers
-  ConfigFailed(String)
   CheckFailed
-  Connected
   NoTools
   NoToolsReason
   Failed
@@ -27,102 +22,54 @@ priv enum UiMessage {
 ///|
 fn text(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
-    (English, Servers) => "Servers"
-    (Spanish, Servers) => "Servidores"
-    (SimplifiedChinese, Servers) => "服务器"
-    (TraditionalChinese, Servers) => "伺服器"
-    (Japanese, Servers) => "サーバー"
-    (English, Description) =>
-      "What this conversation's engine is connected to. Edits to mcp.json apply from its next message."
-    (Spanish, Description) =>
-      "A qué está conectado el motor de esta conversación. Los cambios en mcp.json se aplican a partir de su siguiente mensaje."
-    (SimplifiedChinese, Description) =>
-      "当前对话的引擎连接的服务器。对 mcp.json 的修改从下一条消息起生效。"
-    (TraditionalChinese, Description) =>
-      "目前對話的引擎連線的伺服器。對 mcp.json 的修改從下一則訊息起生效。"
-    (Japanese, Description) =>
-      "この会話のエンジンが接続しているサーバーです。mcp.json の変更は次のメッセージから適用されます。"
+    (English, Connectors) => "Connectors"
+    (Spanish, Connectors) => "Conectores"
+    (SimplifiedChinese, Connectors) => "连接器"
+    (TraditionalChinese, Connectors) => "連接器"
+    (Japanese, Connectors) => "コネクタ"
+    (English, Checking) => "Checking…"
+    (Spanish, Checking) => "Comprobando…"
+    (SimplifiedChinese, Checking) => "正在读取…"
+    (TraditionalChinese, Checking) => "正在讀取…"
+    (Japanese, Checking) => "確認中…"
+    (English, ToolCount(1)) => "1 tool"
+    (English, ToolCount(count)) => "\{count} tools"
+    (Spanish, ToolCount(1)) => "1 herramienta"
+    (Spanish, ToolCount(count)) => "\{count} herramientas"
+    (SimplifiedChinese, ToolCount(count)) => "\{count} 个工具"
+    (TraditionalChinese, ToolCount(count)) => "\{count} 個工具"
+    (Japanese, ToolCount(count)) => "\{count} 個のツール"
     (English, Refresh) => "Refresh"
     (Spanish, Refresh) => "Actualizar"
     (SimplifiedChinese, Refresh) => "刷新"
     (TraditionalChinese, Refresh) => "重新整理"
     (Japanese, Refresh) => "更新"
-    (English, Refreshing) => "Refreshing…"
-    (Spanish, Refreshing) => "Actualizando…"
-    (SimplifiedChinese, Refreshing) => "正在刷新…"
-    (TraditionalChinese, Refreshing) => "正在重新整理…"
-    (Japanese, Refreshing) => "更新中…"
-    (English, NoConversation) =>
-      "Open a conversation to see what its engine is connected to."
-    (Spanish, NoConversation) =>
-      "Abre una conversación para ver a qué está conectado su motor."
-    (SimplifiedChinese, NoConversation) =>
-      "打开一个对话即可查看它的引擎连接了哪些服务器。"
-    (TraditionalChinese, NoConversation) =>
-      "開啟一個對話即可查看它的引擎連線了哪些伺服器。"
-    (Japanese, NoConversation) =>
-      "会話を開くと、そのエンジンが接続しているサーバーを確認できます。"
-    (English, CodexConversation) =>
-      "Codex conversations take their MCP servers from Codex's own config.toml."
-    (Spanish, CodexConversation) =>
-      "Las conversaciones de Codex toman sus servidores MCP del config.toml propio de Codex."
-    (SimplifiedChinese, CodexConversation) =>
-      "Codex 对话使用 Codex 自己的 config.toml 中配置的 MCP 服务器。"
-    (TraditionalChinese, CodexConversation) =>
-      "Codex 對話使用 Codex 自己的 config.toml 中設定的 MCP 伺服器。"
-    (Japanese, CodexConversation) =>
-      "Codex の会話は、Codex 自身の config.toml の MCP サーバーを使用します。"
     (English, EngineStopped) =>
-      "This conversation's engine is not running. Its servers connect when its next message starts one."
+      "Not running. Servers connect with the next message."
     (Spanish, EngineStopped) =>
-      "El motor de esta conversación no está en ejecución. Sus servidores se conectan cuando su siguiente mensaje inicie uno."
+      "No está en ejecución. Los servidores se conectan con el siguiente mensaje."
     (SimplifiedChinese, EngineStopped) =>
-      "此对话的引擎尚未运行。发送下一条消息启动引擎时，会连接它的服务器。"
+      "引擎未运行，发送下一条消息时连接。"
     (TraditionalChinese, EngineStopped) =>
-      "此對話的引擎尚未執行。傳送下一則訊息啟動引擎時，會連線它的伺服器。"
+      "引擎未執行，傳送下一則訊息時連線。"
     (Japanese, EngineStopped) =>
-      "この会話のエンジンは実行されていません。次のメッセージでエンジンが起動すると、サーバーに接続します。"
-    (English, EngineConnecting) =>
-      "This conversation's engine is starting and has not finished connecting its servers yet."
-    (Spanish, EngineConnecting) =>
-      "El motor de esta conversación se está iniciando y aún no ha terminado de conectar sus servidores."
-    (SimplifiedChinese, EngineConnecting) =>
-      "此对话的引擎正在启动，尚未完成服务器连接。"
-    (TraditionalChinese, EngineConnecting) =>
-      "此對話的引擎正在啟動，尚未完成伺服器連線。"
-    (Japanese, EngineConnecting) =>
-      "この会話のエンジンは起動中で、サーバーへの接続がまだ完了していません。"
-    (English, NotConfigured) =>
-      "This conversation's engine started without an MCP configuration."
-    (Spanish, NotConfigured) =>
-      "El motor de esta conversación se inició sin configuración de MCP."
-    (SimplifiedChinese, NotConfigured) =>
-      "此对话的引擎启动时没有 MCP 配置。"
-    (TraditionalChinese, NotConfigured) =>
-      "此對話的引擎啟動時沒有 MCP 設定。"
+      "エンジンは停止中です。次のメッセージで接続します。"
+    (English, EngineConnecting) => "Connecting…"
+    (Spanish, EngineConnecting) => "Conectando…"
+    (SimplifiedChinese, EngineConnecting) => "正在连接…"
+    (TraditionalChinese, EngineConnecting) => "正在連線…"
+    (Japanese, EngineConnecting) => "接続中…"
+    (English, NotConfigured) => "No MCP servers configured."
+    (Spanish, NotConfigured) => "No hay servidores MCP configurados."
+    (SimplifiedChinese, NotConfigured) => "没有配置 MCP 服务器。"
+    (TraditionalChinese, NotConfigured) => "沒有設定 MCP 伺服器。"
     (Japanese, NotConfigured) =>
-      "この会話のエンジンは MCP 設定なしで起動しました。"
-    (English, NoServers) => "The configuration lists no servers."
-    (Spanish, NoServers) => "La configuración no contiene ningún servidor."
-    (SimplifiedChinese, NoServers) => "配置中没有任何服务器。"
-    (TraditionalChinese, NoServers) => "設定中沒有任何伺服器。"
-    (Japanese, NoServers) => "設定にサーバーがありません。"
-    (English, ConfigFailed(path)) => "\{path} could not be loaded"
-    (Spanish, ConfigFailed(path)) => "No se pudo cargar \{path}"
-    (SimplifiedChinese, ConfigFailed(path)) => "无法加载 \{path}"
-    (TraditionalChinese, ConfigFailed(path)) => "無法載入 \{path}"
-    (Japanese, ConfigFailed(path)) =>
-      "\{path} を読み込めませんでした"
+      "MCP サーバーは設定されていません。"
     (English, CheckFailed) => "The status could not be read"
     (Spanish, CheckFailed) => "No se pudo leer el estado"
     (SimplifiedChinese, CheckFailed) => "未能读取状态"
     (TraditionalChinese, CheckFailed) => "未能讀取狀態"
     (Japanese, CheckFailed) => "状態を読み取れませんでした"
-    (English, Connected) => "Connected"
-    (Spanish, Connected) => "Conectado"
-    (SimplifiedChinese, Connected) => "已连接"
-    (TraditionalChinese, Connected) => "已連線"
-    (Japanese, Connected) => "接続済み"
     (English, NoTools) => "No tools"
     (Spanish, NoTools) => "Sin herramientas"
     (SimplifiedChinese, NoTools) => "没有工具"
