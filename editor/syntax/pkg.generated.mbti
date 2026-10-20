@@ -9,7 +9,7 @@ import {
 // Values
 pub fn is_capitalized(StringView) -> Bool
 
-pub fn push_token(Array[LineToken], Int, Int, HighlightTag) -> Unit
+pub fn push_token(Array[LineToken], Int32, Int32, HighlightTag) -> Unit
 
 pub let tokenization_registry : TokenizationRegistry
 
@@ -45,8 +45,8 @@ pub fn HighlightTag::to_string(Self) -> String
 pub impl Show for HighlightTag
 
 pub(all) struct LineToken {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
   tag : HighlightTag
 } derive(Eq, @debug.Debug)
 pub fn LineToken::equal(Self, Self) -> Bool

@@ -12,7 +12,7 @@ import {
 // Values
 pub fn brief_basename(String) -> String
 
-pub fn brief_line(String, limit? : Int) -> String
+pub fn brief_line(String, limit? : Int32) -> String
 
 pub fn content_digest(String) -> String
 

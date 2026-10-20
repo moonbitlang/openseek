@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub const MaxTextChars : Int = 8_000
+pub const MaxTextChars : Int32 = 8_000
 
 pub async fn open(String) -> Unit
 
@@ -19,7 +19,7 @@ pub async fn read(String) -> Inbox?
 // Types and methods
 pub(all) struct Inbox {
   messages : Array[Message]
-  unreadable : Int
+  unreadable : Int32
 } derive(Eq, @debug.Debug)
 
 pub(all) struct Message {

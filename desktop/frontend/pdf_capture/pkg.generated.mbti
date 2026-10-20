@@ -17,14 +17,14 @@ pub(all) struct Capture {
   url : String
   source : Json
   regions : Array[Region]
-  rotation : Int
+  rotation : Int32
   text : String?
 } derive(Eq)
 pub fn Capture::equal(Self, Self) -> Bool
 pub fn Capture::not_equal(Self, Self) -> Bool
 
 pub(all) struct Region {
-  page : Int
+  page : Int32
   x : Double
   y : Double
   width : Double
@@ -32,7 +32,7 @@ pub(all) struct Region {
 } derive(Eq)
 pub fn Region::equal(Self, Self) -> Bool
 pub fn Region::not_equal(Self, Self) -> Bool
-pub fn Region::rotated(Self, Int) -> Self
+pub fn Region::rotated(Self, Int32) -> Self
 
 // Type aliases
 

@@ -43,8 +43,8 @@ pub(all) enum Msg {
   CheckAvailability
   Toggle
   Refresh
-  Loaded(Int, Result[@protocol.GithubReviewReply, String], Result[Array[@protocol.GithubDraft], Failure])
-  FileLoaded(Int, String, Result[@protocol.GithubReviewFileReply, String])
+  Loaded(Int32, Result[@protocol.GithubReviewReply, String], Result[Array[@protocol.GithubDraft], Failure])
+  FileLoaded(Int32, String, Result[@protocol.GithubReviewFileReply, String])
   Compose(@protocol.GithubDraftTarget)
   Edit(@protocol.GithubDraftTarget, String)
   Cancel(@protocol.GithubDraftTarget)
@@ -54,7 +54,7 @@ pub(all) enum Msg {
   DeleteConfirmed(String)
   Resolve(String, Bool)
   Expand(String)
-  Mutated(Int, @protocol.GithubReviewAction, @protocol.GithubDraft?, Result[@protocol.GithubReviewMutationReply, String], Result[Unit, Failure])
+  Mutated(Int32, @protocol.GithubReviewAction, @protocol.GithubDraft?, Result[@protocol.GithubReviewMutationReply, String], Result[Unit, Failure])
   StorageSaved(String, Result[Unit, Failure])
 }
 
@@ -63,12 +63,12 @@ pub(all) struct State {
   path : String?
   refresh_pending : Bool
   enabled : Bool
-  epoch : Int
+  epoch : Int32
   loading : Bool
   review : @protocol.GithubReview?
   file : Result[@protocol.GithubReviewFile?, String]?
   files : Array[(String, @protocol.GithubReviewFile?)]
-  file_epoch : Int
+  file_epoch : Int32
   file_loading : Bool
   error : String?
   drafts : Array[@protocol.GithubDraft]
@@ -76,11 +76,11 @@ pub(all) struct State {
   expanded : Array[String]
   deleting : String?
   busy : Bool
-  mutation_epoch : Int
+  mutation_epoch : Int32
   mutation_error : Failure?
   storage_error : Failure?
 } derive(Eq)
-pub fn State::comment_count(Self, String) -> Int
+pub fn State::comment_count(Self, String) -> Int32
 pub fn State::draft_body(Self, @protocol.GithubDraftTarget) -> String
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool

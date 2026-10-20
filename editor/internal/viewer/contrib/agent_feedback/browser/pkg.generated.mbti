@@ -19,9 +19,9 @@ pub(all) struct AgentFeedbackEditorInputContribution {
   mut pinned_range : @common.Range?
   mut anchor_position : @common.Position?
   mut prefer_below : Bool
-  mut hover_line_number : Int
+  mut hover_line_number : Int32
   mut hover_decoration_ids : Array[String]
-  mut lane_base_width : Int?
+  mut lane_base_width : Int32?
   mut mouse_down : Bool
   mut suppress_selection_change_once : Bool
 }
@@ -30,7 +30,7 @@ pub fn AgentFeedbackEditorInputContribution::reset_model_state(Self) -> Unit
 
 type AgentFeedbackEditorWidget
 pub fn AgentFeedbackEditorWidget::AgentFeedbackEditorWidget(localization? : @localization.Localization, AgentFeedbackEditorWidgetHost, String, Array[@agent_feedback.SessionEditorComment], Map[String, String], focused_reply? : String) -> Self
-pub fn AgentFeedbackEditorWidget::anchor_line(Self) -> Int
+pub fn AgentFeedbackEditorWidget::anchor_line(Self) -> Int32
 pub fn AgentFeedbackEditorWidget::collapse(Self) -> Unit
 pub fn AgentFeedbackEditorWidget::comment_ids(Self) -> Array[String]
 pub fn AgentFeedbackEditorWidget::contains_feedback(Self, String) -> Bool
@@ -43,14 +43,14 @@ pub fn AgentFeedbackEditorWidget::mark_disposed(Self) -> Unit
 pub fn AgentFeedbackEditorWidget::measured_header_height(Self) -> Double
 pub fn AgentFeedbackEditorWidget::measured_height(Self) -> Double
 pub fn AgentFeedbackEditorWidget::measured_width(Self) -> Double
-pub fn AgentFeedbackEditorWidget::set_anchor_line(Self, Int) -> Unit
+pub fn AgentFeedbackEditorWidget::set_anchor_line(Self, Int32) -> Unit
 pub fn AgentFeedbackEditorWidget::set_position(Self, Double, Double) -> Unit
 pub fn AgentFeedbackEditorWidget::widget_id(Self) -> String
 
 pub(all) struct AgentFeedbackEditorWidgetContribution {
   widgets : Array[AgentFeedbackEditorWidget]
   reply_drafts : Map[String, String]
-  mut widget_id_pool : Int
+  mut widget_id_pool : Int32
   mut highlight_decoration_ids : Array[String]
 }
 pub fn AgentFeedbackEditorWidgetContribution::AgentFeedbackEditorWidgetContribution() -> Self

@@ -30,14 +30,14 @@ pub(all) enum Msg {
   PickFile
   LinkChanged(String)
   ImportLink
-  Picked(Int, Result[String?, String])
-  WorkspaceChanged(Int, Workspace)
-  Imported(Int, @protocol.SessionImportReply)
+  Picked(Int32, Result[String?, String])
+  WorkspaceChanged(Int32, Workspace)
+  Imported(Int32, @protocol.SessionImportReply)
 }
 
 pub(all) struct Target {
   channel : @interop.ChannelId
-  connection_generation : Int
+  connection_generation : Int32
   workspace : Workspace
   worktree_of : String?
 } derive(Eq, @debug.Debug)

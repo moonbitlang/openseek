@@ -18,12 +18,12 @@ pub fn session_from_parse(ParsedLog, id~ : String, system_prompt~ : String) -> @
 // Types and methods
 pub enum HeaderParse {
   Header(SessionFileHeader)
-  UnsupportedVersion(Int)
+  UnsupportedVersion(Int32)
   NotHeader
 } derive(@debug.Debug)
 
 pub struct LineError {
-  line_number : Int
+  line_number : Int32
   content : String
   message : String
 } derive(Eq, @debug.Debug)

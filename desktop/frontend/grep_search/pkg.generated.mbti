@@ -48,12 +48,12 @@ pub(all) enum Msg {
   ToggleRegex
   ToggleDetails
   FixPattern
-  PatternRepairFinished(root~ : String, generation~ : Int, reply~ : @protocol.PatternRepairReply?)
+  PatternRepairFinished(root~ : String, generation~ : Int32, reply~ : @protocol.PatternRepairReply?)
   IncludeChanged(String)
   ExcludeChanged(String)
-  PatternChanged(Int, String)
+  PatternChanged(Int32, String)
   AddPattern
-  RemovePattern(Int)
+  RemovePattern(Int32)
   Submit
   Refresh
   ClearResults
@@ -64,11 +64,11 @@ pub(all) enum Msg {
   ToggleSemanticHit(String)
   ToggleSemanticGroup(pattern~ : String, path~ : String?)
   SetSemanticResultFilter(SemanticResultFilter)
-  RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int)
-  Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchTextReply)
-  SemanticLoaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, reply~ : @protocol.SearchSemanticReply)
-  SemanticProgress(root~ : String, session_key~ : String, generation~ : Int, matches~ : Array[@protocol.SemanticSearchHit], match_count~ : Int, file_count~ : Int)
-  RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int, code~ : String, message~ : String)
+  RequestStarted(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32)
+  Loaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, reply~ : @protocol.SearchTextReply)
+  SemanticLoaded(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, reply~ : @protocol.SearchSemanticReply)
+  SemanticProgress(root~ : String, session_key~ : String, generation~ : Int32, matches~ : Array[@protocol.SemanticSearchHit], match_count~ : Int32, file_count~ : Int32)
+  RequestFailed(owner~ : @interop.ConversationKey, root~ : String, generation~ : Int32, code~ : String, message~ : String)
 }
 
 type Page derive(Eq)

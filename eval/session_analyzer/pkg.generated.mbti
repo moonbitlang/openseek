@@ -17,10 +17,10 @@ pub struct EvalResult {
   session_id : String
   success : Bool
   reason : String
-  steps : Int
-  tool_results : Int
-  tool_errors : Int
-  runtime_notices : Int
+  steps : Int32
+  tool_results : Int32
+  tool_errors : Int32
+  runtime_notices : Int32
   finished : Bool
   finish_message : String
   terminal_status : String

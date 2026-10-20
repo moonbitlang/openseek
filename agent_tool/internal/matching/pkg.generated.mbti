@@ -2,9 +2,9 @@
 package "moonbitlang/openseek/agent_tool/internal/matching"
 
 // Values
-pub fn find_quote_normalized_match(String, String) -> Int?
+pub fn find_quote_normalized_match(String, String) -> Int32?
 
-pub fn normalize_content_for_matching(String) -> (String, Array[Int])
+pub fn normalize_content_for_matching(String) -> (String, Array[Int32])
 
 pub fn normalize_quotes(String) -> String
 

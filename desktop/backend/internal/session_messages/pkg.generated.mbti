@@ -30,7 +30,7 @@ pub fn Service::detach(Self, String) -> Unit
 pub fn Service::get(Self, String, String) -> Message raise MessageError
 pub fn Service::request(Self, String, String, String, String) -> (Message, Bool) raise
 pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
-pub async fn Service::wait(Self, Message, wait_ms? : Int, delivery_wait_ms? : Int) -> Json
+pub async fn Service::wait(Self, Message, wait_ms? : Int32, delivery_wait_ms? : Int32) -> Json
 
 // Type aliases
 

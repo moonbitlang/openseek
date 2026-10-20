@@ -60,14 +60,14 @@ pub struct DocumentSnapshot {
 } derive(@debug.Debug)
 pub fn DocumentSnapshot::DocumentSnapshot(@common.Uri, String, String, String, String) -> Self
 pub fn DocumentSnapshot::from_content(@common.Uri, DocumentContent) -> Self
-pub fn DocumentSnapshot::length(Self) -> Int
-pub fn DocumentSnapshot::line_at_offset(Self, Int) -> Int
-pub fn DocumentSnapshot::line_count(Self) -> Int
-pub fn DocumentSnapshot::line_end_offset(Self, Int) -> Int
-pub fn DocumentSnapshot::line_start_offset(Self, Int) -> Int
-pub fn DocumentSnapshot::line_text(Self, Int) -> String
-pub fn DocumentSnapshot::offset_at_position(Self, @common.Position) -> Int
-pub fn DocumentSnapshot::position_at_offset(Self, Int) -> @common.Position
+pub fn DocumentSnapshot::length(Self) -> Int32
+pub fn DocumentSnapshot::line_at_offset(Self, Int32) -> Int32
+pub fn DocumentSnapshot::line_count(Self) -> Int32
+pub fn DocumentSnapshot::line_end_offset(Self, Int32) -> Int32
+pub fn DocumentSnapshot::line_start_offset(Self, Int32) -> Int32
+pub fn DocumentSnapshot::line_text(Self, Int32) -> String
+pub fn DocumentSnapshot::offset_at_position(Self, @common.Position) -> Int32
+pub fn DocumentSnapshot::position_at_offset(Self, Int32) -> @common.Position
 pub fn DocumentSnapshot::slice(Self, @common.OffsetRange) -> String
 pub fn DocumentSnapshot::to_json(Self) -> Json
 pub fn DocumentSnapshot::to_repr(Self) -> @debug.Repr

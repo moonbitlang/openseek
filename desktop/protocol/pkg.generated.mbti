@@ -61,7 +61,7 @@ pub impl @json.FromJson for AccountUser
 pub(all) struct AgentErrorPayload {
   run_id : String?
   message : String?
-  exit_code : Int?
+  exit_code : Int32?
   diagnostics : String?
 } derive(Eq, @debug.Debug)
 pub fn AgentErrorPayload::equal(Self, Self) -> Bool
@@ -86,7 +86,7 @@ pub impl ToJson for AgentEventPayload
 pub impl @json.FromJson for AgentEventPayload
 
 pub(all) struct AppFocusedBrowserReply {
-  id : Int?
+  id : Int32?
 } derive(Eq, @debug.Debug)
 pub fn AppFocusedBrowserReply::equal(Self, Self) -> Bool
 pub fn AppFocusedBrowserReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -161,7 +161,7 @@ pub impl ToJson for ApprovalReply
 pub impl @json.FromJson for ApprovalReply
 
 pub(all) struct ApprovalSnapshot {
-  generation : Int
+  generation : Int32
   approvals : Array[PendingApprovalPayload]
 } derive(Eq, @debug.Debug)
 pub fn ApprovalSnapshot::equal(Self, Self) -> Bool
@@ -175,7 +175,7 @@ pub impl @json.FromJson for ApprovalSnapshot
 pub(all) struct ArchiveNeedsForceReply {
   worktree : String
   dirty_paths : Array[String]
-  dirty_path_count : Int
+  dirty_path_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn ArchiveNeedsForceReply::equal(Self, Self) -> Bool
 pub fn ArchiveNeedsForceReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -297,11 +297,11 @@ pub impl ToJson for BrowseDirectoryReply
 pub impl @json.FromJson for BrowseDirectoryReply
 
 pub(all) struct BrowserBoundsPayload {
-  id : Int
-  x : Int
-  y : Int
-  width : Int
-  height : Int
+  id : Int32
+  x : Int32
+  y : Int32
+  width : Int32
+  height : Int32
 } derive(Eq, @debug.Debug)
 pub fn BrowserBoundsPayload::equal(Self, Self) -> Bool
 pub fn BrowserBoundsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -328,7 +328,7 @@ pub impl ToJson for BrowserElement
 pub impl @json.FromJson for BrowserElement
 
 pub(all) struct BrowserIdPayload {
-  id : Int
+  id : Int32
 } derive(Eq, @debug.Debug)
 pub fn BrowserIdPayload::equal(Self, Self) -> Bool
 pub fn BrowserIdPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -339,7 +339,7 @@ pub impl ToJson for BrowserIdPayload
 pub impl @json.FromJson for BrowserIdPayload
 
 pub(all) struct BrowserOpenPayload {
-  id : Int
+  id : Int32
   url : String
   dark : Bool
   session : String?
@@ -354,7 +354,7 @@ pub impl ToJson for BrowserOpenPayload
 pub impl @json.FromJson for BrowserOpenPayload
 
 pub(all) struct BrowserPickPayload {
-  id : Int
+  id : Int32
   request : String
 } derive(Eq, @debug.Debug)
 pub fn BrowserPickPayload::equal(Self, Self) -> Bool
@@ -378,7 +378,7 @@ pub impl ToJson for BrowserPickReply
 pub impl @json.FromJson for BrowserPickReply
 
 pub(all) struct BrowserThemePayload {
-  id : Int
+  id : Int32
   dark : Bool
 } derive(Eq, @debug.Debug)
 pub fn BrowserThemePayload::equal(Self, Self) -> Bool
@@ -390,7 +390,7 @@ pub impl ToJson for BrowserThemePayload
 pub impl @json.FromJson for BrowserThemePayload
 
 pub(all) struct BrowserVisiblePayload {
-  id : Int
+  id : Int32
   visible : Bool
 } derive(Eq, @debug.Debug)
 pub fn BrowserVisiblePayload::equal(Self, Self) -> Bool
@@ -425,7 +425,7 @@ pub impl @json.FromJson for CancelReply
 
 pub(all) struct CancelSearchFilesPayload {
   cache_key : String
-  generation : Int
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchFilesPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -437,7 +437,7 @@ pub impl @json.FromJson for CancelSearchFilesPayload
 
 pub(all) struct CancelSearchSemanticPayload {
   session_key : String
-  generation : Int
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchSemanticPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchSemanticPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -449,7 +449,7 @@ pub impl @json.FromJson for CancelSearchSemanticPayload
 
 pub(all) struct CancelSearchTextPayload {
   session_key : String
-  generation : Int
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn CancelSearchTextPayload::equal(Self, Self) -> Bool
 pub fn CancelSearchTextPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -489,7 +489,7 @@ pub impl @json.FromJson for CheckUpdateReply
 pub(all) struct CheckoutRemoval {
   worktree : String
   dirty_paths : Array[String]
-  dirty_path_count : Int
+  dirty_path_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn CheckoutRemoval::equal(Self, Self) -> Bool
 pub fn CheckoutRemoval::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -656,7 +656,7 @@ pub impl ToJson for CodexLoginStartReply
 pub impl @json.FromJson for CodexLoginStartReply
 
 pub(all) struct CodexModelListPayload {
-  limit : Int
+  limit : Int32
   include_hidden : Bool
 } derive(Eq, @debug.Debug)
 pub fn CodexModelListPayload::equal(Self, Self) -> Bool
@@ -718,7 +718,7 @@ pub impl @json.FromJson for CodexServerRequestRespondPayload
 
 pub(all) struct CodexServerRequestsReply {
   data : Array[Json]
-  generation : Int
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn CodexServerRequestsReply::equal(Self, Self) -> Bool
 pub fn CodexServerRequestsReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -766,7 +766,7 @@ pub impl ToJson for CodexThreadArchivePayload
 pub impl @json.FromJson for CodexThreadArchivePayload
 
 pub(all) struct CodexThreadListPayload {
-  limit : Int
+  limit : Int32
   archived : Bool
   cursor : String?
 } derive(Eq, @debug.Debug)
@@ -907,7 +907,7 @@ pub(all) struct CompactPayload {
   session : String
   model : String?
   thinking : OpenSeekThinking?
-  max_steps : Int?
+  max_steps : Int32?
   workspace : String?
 } derive(Eq, @debug.Debug)
 pub fn CompactPayload::equal(Self, Self) -> Bool
@@ -1062,7 +1062,7 @@ pub(all) struct FinishedPayload {
   run_id : String
   status : String
   answer : String?
-  exit_code : Int?
+  exit_code : Int32?
 } derive(Eq, @debug.Debug)
 pub fn FinishedPayload::equal(Self, Self) -> Bool
 pub fn FinishedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1177,9 +1177,9 @@ pub impl ToJson for GitChangesReply
 pub impl @json.FromJson for GitChangesReply
 
 pub(all) struct GitChecks {
-  passed : Int
-  failed : Int
-  pending : Int
+  passed : Int32
+  failed : Int32
+  pending : Int32
 } derive(Eq, @debug.Debug)
 pub fn GitChecks::equal(Self, Self) -> Bool
 pub fn GitChecks::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1216,9 +1216,9 @@ pub impl ToJson for GitCommitChangesReply
 pub impl @json.FromJson for GitCommitChangesReply
 
 pub(all) struct GitDiffStat {
-  added : Int
-  removed : Int
-  files : Int
+  added : Int32
+  removed : Int32
+  files : Int32
   base : String?
   partial : Bool
 } derive(Eq, @debug.Debug)
@@ -1263,8 +1263,8 @@ pub(all) struct GitHistoryPayload {
   session : String
   workspace : String?
   snapshot : GitHistorySnapshot?
-  skip : Int
-  limit : Int
+  skip : Int32
+  limit : Int32
 } derive(Eq, @debug.Debug)
 pub fn GitHistoryPayload::equal(Self, Self) -> Bool
 pub fn GitHistoryPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1344,15 +1344,15 @@ pub impl ToJson for GitOriginalFileReply
 pub impl @json.FromJson for GitOriginalFileReply
 
 pub(all) struct GitPullRequest {
-  number : Int
+  number : Int32
   title : String
   state : String
   draft : Bool
   url : String
   base : String
-  additions : Int
-  deletions : Int
-  changed_files : Int
+  additions : Int32
+  deletions : Int32
+  changed_files : Int32
   checks : GitChecks?
 } derive(Eq, @debug.Debug)
 pub fn GitPullRequest::equal(Self, Self) -> Bool
@@ -1416,7 +1416,7 @@ pub fn GithubCheckoutChanges::to_repr(Self) -> @debug.Repr
 pub(all) struct GithubCheckoutPayload {
   cwd : String
   repository_url : String
-  number : Int
+  number : Int32
   changes : GithubCheckoutChanges
   update : Bool
 } derive(Eq, @debug.Debug)
@@ -1470,8 +1470,8 @@ pub impl @json.FromJson for GithubComment
 
 pub(all) struct GithubCommentableFile {
   path : String
-  left_lines : Array[Int]
-  right_lines : Array[Int]
+  left_lines : Array[Int32]
+  right_lines : Array[Int32]
 } derive(Eq, @debug.Debug)
 pub fn GithubCommentableFile::equal(Self, Self) -> Bool
 pub fn GithubCommentableFile::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1493,7 +1493,7 @@ pub impl ToJson for GithubDraft
 pub impl @json.FromJson for GithubDraft
 
 pub(all) enum GithubDraftTarget {
-  Line(path~ : String, side~ : String, line~ : Int, head~ : String)
+  Line(path~ : String, side~ : String, line~ : Int32, head~ : String)
   Thread(thread~ : String, comment~ : String)
 } derive(Eq)
 pub fn GithubDraftTarget::equal(Self, Self) -> Bool
@@ -1524,7 +1524,7 @@ pub impl ToJson for GithubDraftsKey
 pub impl @json.FromJson for GithubDraftsKey
 
 pub(all) struct GithubItem {
-  number : Int
+  number : Int32
   title : String
   url : String
   author : String?
@@ -1555,7 +1555,7 @@ pub impl @json.FromJson for GithubListKind
 pub(all) struct GithubListPayload {
   cwd : String
   kind : GithubListKind
-  limit : Int
+  limit : Int32
 } derive(Eq, @debug.Debug)
 pub fn GithubListPayload::equal(Self, Self) -> Bool
 pub fn GithubListPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1587,9 +1587,9 @@ pub(all) struct GithubPullRequestDetail {
   body_html : String
   base : String
   head : String
-  additions : Int
-  deletions : Int
-  changed_files : Int
+  additions : Int32
+  deletions : Int32
+  changed_files : Int32
   comments : Array[GithubComment]
   checks : Array[GithubCheck]
   created_at : String
@@ -1609,7 +1609,7 @@ pub impl @json.FromJson for GithubPullRequestDetail
 pub(all) struct GithubPullRequestPayload {
   cwd : String
   repository_url : String
-  number : Int
+  number : Int32
 } derive(Eq, @debug.Debug)
 pub fn GithubPullRequestPayload::equal(Self, Self) -> Bool
 pub fn GithubPullRequestPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1626,7 +1626,7 @@ pub(all) struct GithubReview {
   threads : Array[GithubReviewThread]
   commentable : Array[GithubCommentableFile]
 } derive(Eq, @debug.Debug)
-pub fn GithubReview::can_comment(Self, String, Bool, Int) -> Bool
+pub fn GithubReview::can_comment(Self, String, Bool, Int32) -> Bool
 pub fn GithubReview::equal(Self, Self) -> Bool
 pub fn GithubReview::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn GithubReview::not_equal(Self, Self) -> Bool
@@ -1636,7 +1636,7 @@ pub impl ToJson for GithubReview
 pub impl @json.FromJson for GithubReview
 
 pub(all) enum GithubReviewAction {
-  Post(path~ : String, side~ : String, line~ : Int, body~ : String, head~ : String)
+  Post(path~ : String, side~ : String, line~ : Int32, body~ : String, head~ : String)
   Reply(comment~ : String, body~ : String)
   Delete(comment~ : String)
   Resolve(thread~ : String, resolved~ : Bool)
@@ -1746,8 +1746,8 @@ pub(all) struct GithubReviewThread {
   id : String
   path : String
   side : String
-  line : Int?
-  original_line : Int?
+  line : Int32?
+  original_line : Int32?
   resolved : Bool
   outdated : Bool
   can_reply : Bool
@@ -1792,7 +1792,7 @@ pub(all) struct GoalPayload {
   auto : Bool?
   model : String?
   thinking : OpenSeekThinking?
-  max_steps : Int?
+  max_steps : Int32?
   workspace : String?
 } derive(Eq, @debug.Debug)
 pub fn GoalPayload::equal(Self, Self) -> Bool
@@ -1881,7 +1881,7 @@ pub impl @json.FromJson for InstalledSkillsReply
 pub(all) struct JobReadPayload {
   target : JobTarget
   offset : Int64?
-  limit : Int
+  limit : Int32
 } derive(Eq, @debug.Debug)
 pub fn JobReadPayload::equal(Self, Self) -> Bool
 pub fn JobReadPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -1947,7 +1947,7 @@ pub impl @json.FromJson for JobView
 
 pub(all) struct JobsListPayload {
   scope : JobsScope
-  offset : Int
+  offset : Int32
   selected : JobTarget?
 } derive(Eq, @debug.Debug)
 pub fn JobsListPayload::equal(Self, Self) -> Bool
@@ -1960,7 +1960,7 @@ pub impl @json.FromJson for JobsListPayload
 
 pub(all) struct JobsListReply {
   jobs : Array[JobView]
-  next_offset : Int?
+  next_offset : Int32?
   errors : Array[String]
   selected : JobView?
 } derive(Eq, @debug.Debug)
@@ -2012,7 +2012,7 @@ pub impl @json.FromJson for LoadSessionPayload
 
 pub(all) struct LoadSessionReply {
   session : SessionDocument
-  watermark : Int?
+  watermark : Int32?
   prediction : @openseek_protocol.PredictionRecord?
 } derive(Eq, @debug.Debug)
 pub fn LoadSessionReply::equal(Self, Self) -> Bool
@@ -2026,8 +2026,8 @@ pub impl @json.FromJson for LoadSessionReply
 pub(all) struct LspDiagnostic {
   range : LspRange
   message : String
-  severity : Int?
-  tags : Array[Int]?
+  severity : Int32?
+  tags : Array[Int32]?
 } derive(Eq, @debug.Debug)
 pub fn LspDiagnostic::array_from_wire(Json) -> Array[Self]
 pub fn LspDiagnostic::equal(Self, Self) -> Bool
@@ -2053,8 +2053,8 @@ pub(all) struct LspHoverPayload {
   session : String
   root : String
   path : String
-  line : Int
-  character : Int
+  line : Int32
+  character : Int32
 } derive(Eq, @debug.Debug)
 pub fn LspHoverPayload::equal(Self, Self) -> Bool
 pub fn LspHoverPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2068,10 +2068,10 @@ pub(all) struct LspHoverReply {
   value : String
   markdown : Bool
   has_range : Bool
-  start_line : Int
-  start_character : Int
-  end_line : Int
-  end_character : Int
+  start_line : Int32
+  start_character : Int32
+  end_line : Int32
+  end_character : Int32
 } derive(Eq, @debug.Debug)
 pub fn LspHoverReply::equal(Self, Self) -> Bool
 pub fn LspHoverReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2095,8 +2095,8 @@ pub impl ToJson for LspOpenPayload
 pub impl @json.FromJson for LspOpenPayload
 
 pub(all) struct LspPosition {
-  line : Int
-  character : Int
+  line : Int32
+  character : Int32
 } derive(Eq, @debug.Debug)
 pub fn LspPosition::equal(Self, Self) -> Bool
 pub fn LspPosition::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2153,8 +2153,8 @@ pub impl @json.FromJson for MaterializeSemanticSelectionPayload
 
 pub(all) struct MaterializeSemanticSelectionReply {
   path : String
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn MaterializeSemanticSelectionReply::equal(Self, Self) -> Bool
 pub fn MaterializeSemanticSelectionReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2239,10 +2239,10 @@ pub impl @json.FromJson for MoonIdeCodeLensReply
 
 pub(all) struct MoonIdeLocation {
   path : String
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   is_test : Bool?
 } derive(Eq, @debug.Debug)
 pub fn MoonIdeLocation::equal(Self, Self) -> Bool
@@ -2268,8 +2268,8 @@ pub(all) struct MoonIdeNavigationPayload {
   session : String
   root : String
   path : String
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
 } derive(Eq, @debug.Debug)
 pub fn MoonIdeNavigationPayload::equal(Self, Self) -> Bool
 pub fn MoonIdeNavigationPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2392,7 +2392,7 @@ pub(all) enum NotificationKind {
 } derive(Eq, Hash, @debug.Debug)
 pub fn NotificationKind::all() -> Array[Self]
 pub fn NotificationKind::equal(Self, Self) -> Bool
-pub fn NotificationKind::hash(Self) -> Int
+pub fn NotificationKind::hash(Self) -> Int32
 pub fn NotificationKind::hash_combine(Self, Hasher) -> Unit
 pub fn NotificationKind::not_equal(Self, Self) -> Bool
 pub fn NotificationKind::to_repr(Self) -> @debug.Repr
@@ -2422,8 +2422,8 @@ pub impl @json.FromJson for OpenPathDirectoryTarget
 
 pub(all) struct OpenPathEditorTarget {
   path : String
-  line : Int?
-  column : Int?
+  line : Int32?
+  column : Int32?
 } derive(Eq, @debug.Debug)
 pub fn OpenPathEditorTarget::equal(Self, Self) -> Bool
 pub fn OpenPathEditorTarget::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2482,7 +2482,7 @@ pub(all) struct PatternRepairPayload {
   root : String
   pattern : String
   instruction : String
-  generation : Int
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn PatternRepairPayload::equal(Self, Self) -> Bool
 pub fn PatternRepairPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2494,7 +2494,7 @@ pub impl @json.FromJson for PatternRepairPayload
 
 pub(all) struct PatternRepairReply {
   root : String
-  generation : Int
+  generation : Int32
   candidate_pattern : String?
   validation_status : PatternRepairStatus
   message : String
@@ -2717,7 +2717,7 @@ pub(all) struct RunSettlementPayload {
   session : String
   submission_id : String?
   status : String
-  exit_code : Int?
+  exit_code : Int32?
 } derive(Eq, @debug.Debug)
 pub fn RunSettlementPayload::equal(Self, Self) -> Bool
 pub fn RunSettlementPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2739,7 +2739,7 @@ pub impl ToJson for RunsPayload
 pub impl @json.FromJson for RunsPayload
 
 pub(all) struct RunsReply {
-  approval_generation : Int
+  approval_generation : Int32
   runs : Array[StartedPayload]
   settled : Array[RunSettlementPayload]
   approvals : Array[PendingApprovalPayload]
@@ -2834,7 +2834,7 @@ pub(all) struct ScheduleSpec {
   task : String
   model : String?
   timing : ScheduleTiming
-  timeout_minutes : Int
+  timeout_minutes : Int32
 } derive(Eq, @debug.Debug)
 pub fn ScheduleSpec::equal(Self, Self) -> Bool
 pub fn ScheduleSpec::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2846,7 +2846,7 @@ pub impl @json.FromJson for ScheduleSpec
 
 pub(all) enum ScheduleTiming {
   Once(Int64)
-  Every(Int)
+  Every(Int32)
 } derive(Eq, @debug.Debug)
 pub fn ScheduleTiming::equal(Self, Self) -> Bool
 pub fn ScheduleTiming::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2872,8 +2872,8 @@ pub(all) struct SearchFilesPayload {
   path : String
   cache_key : String
   query : String
-  max_results : Int
-  generation : Int
+  max_results : Int32
+  generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn SearchFilesPayload::equal(Self, Self) -> Bool
 pub fn SearchFilesPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2903,8 +2903,8 @@ pub(all) struct SearchSemanticPayload {
   include_glob : String
   exclude_glob : String
   session_key : String
-  generation : Int
-  max_results : Int
+  generation : Int32
+  max_results : Int32
 } derive(Eq, @debug.Debug)
 pub fn SearchSemanticPayload::equal(Self, Self) -> Bool
 pub fn SearchSemanticPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2916,10 +2916,10 @@ pub impl @json.FromJson for SearchSemanticPayload
 
 pub(all) struct SearchSemanticReply {
   root : String
-  generation : Int
+  generation : Int32
   matches : Array[SemanticSearchHit]
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
   cancelled : Bool
   partial : Bool
@@ -2942,8 +2942,8 @@ pub(all) struct SearchTextPayload {
   include_glob : String
   exclude_glob : String
   session_key : String
-  generation : Int
-  max_results : Int
+  generation : Int32
+  max_results : Int32
 } derive(Eq, @debug.Debug)
 pub fn SearchTextPayload::equal(Self, Self) -> Bool
 pub fn SearchTextPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -2955,10 +2955,10 @@ pub impl @json.FromJson for SearchTextPayload
 
 pub(all) struct SearchTextReply {
   root : String
-  generation : Int
+  generation : Int32
   matches : Array[TextSearchMatch]
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
   limit_hit : Bool
   cancelled : Bool
   error : TextSearchError?
@@ -2972,7 +2972,7 @@ pub impl ToJson for SearchTextReply
 pub impl @json.FromJson for SearchTextReply
 
 pub(all) struct SemanticContextLine {
-  line : Int
+  line : Int32
   text : String
   is_match : Bool
 } derive(Eq, @debug.Debug)
@@ -3000,10 +3000,10 @@ pub(all) struct SemanticSearchHit {
   path : String
   rule_id : String
   description : String?
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   matched_source : String
   source_context : Array[SemanticContextLine]
 } derive(Eq, @debug.Debug)
@@ -3018,10 +3018,10 @@ pub impl @json.FromJson for SemanticSearchHit
 pub(all) struct SemanticSearchProgressPayload {
   root : String
   session_key : String
-  generation : Int
+  generation : Int32
   matches : Array[SemanticSearchHit]
-  match_count : Int
-  file_count : Int
+  match_count : Int32
+  file_count : Int32
 } derive(Eq, @debug.Debug)
 pub impl ToJson for SemanticSearchProgressPayload
 pub impl @json.FromJson for SemanticSearchProgressPayload
@@ -3030,10 +3030,10 @@ pub(all) struct SemanticSelectionMatch {
   rule_id : String
   description : String?
   file : String
-  start_line : Int
-  start_column : Int
-  end_line : Int
-  end_column : Int
+  start_line : Int32
+  start_column : Int32
+  end_line : Int32
+  end_column : Int32
   matched_source : String
 } derive(Eq, @debug.Debug)
 pub fn SemanticSelectionMatch::equal(Self, Self) -> Bool
@@ -3073,7 +3073,7 @@ pub impl @json.FromJson for SessionChangedPayload
 
 pub(all) struct SessionCommitPayload {
   session : String
-  sequence : Int
+  sequence : Int32
   event : SessionEvent
   session_root : String
 } derive(Eq, @debug.Debug)
@@ -3135,7 +3135,7 @@ pub impl ToJson for SessionDeleteReply
 pub impl @json.FromJson for SessionDeleteReply
 
 pub(all) struct SessionDocument {
-  version : Int?
+  version : Int32?
   id : String?
   system_prompt : String?
   events : Array[SessionEvent]?
@@ -3151,15 +3151,15 @@ pub impl @json.FromJson for SessionDocument
 pub(all) struct SessionEditPayload {
   session : String
   workspace : String
-  through : Int?
+  through : Int32?
   model : String
   source_title : String
-  source_sequence : Int
+  source_sequence : Int32
   task : String
   images : Array[String]
   attachment_paths : Array[String]
   thinking : OpenSeekThinking?
-  max_steps : Int?
+  max_steps : Int32?
 } derive(Eq, @debug.Debug)
 pub fn SessionEditPayload::equal(Self, Self) -> Bool
 pub fn SessionEditPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3170,7 +3170,7 @@ pub impl ToJson for SessionEditPayload
 pub impl @json.FromJson for SessionEditPayload
 
 pub(all) struct SessionEvent {
-  sequence : Int
+  sequence : Int32
   ts : Double?
   item : SessionItem
 } derive(Eq, @debug.Debug)
@@ -3211,7 +3211,7 @@ pub impl @json.FromJson for SessionExportReply
 pub(all) struct SessionForkPayload {
   session : String
   workspace : String
-  through : Int
+  through : Int32
   model : String
   source_title : String
 } derive(Eq, @debug.Debug)
@@ -3394,7 +3394,7 @@ pub impl ToJson for SessionSearchReply
 pub impl @json.FromJson for SessionSearchReply
 
 pub(all) struct SessionSharePayload {
-  generation : Int
+  generation : Int32
   source : SessionExportPayload
   idempotency_key : String
   authorization : ShareAuthorization
@@ -3408,7 +3408,7 @@ pub impl ToJson for SessionSharePayload
 pub impl @json.FromJson for SessionSharePayload
 
 pub(all) struct SessionShareProgress {
-  generation : Int
+  generation : Int32
   progress : ShareProgress
 } derive(Eq, @debug.Debug)
 pub fn SessionShareProgress::equal(Self, Self) -> Bool
@@ -3445,8 +3445,8 @@ pub impl @json.FromJson for SessionSnapshot
 
 pub(all) struct SessionSummary {
   content : String
-  from_sequence : Int
-  to_sequence : Int
+  from_sequence : Int32
+  to_sequence : Int32
 } derive(Eq, @debug.Debug)
 pub fn SessionSummary::equal(Self, Self) -> Bool
 pub fn SessionSummary::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3565,7 +3565,7 @@ pub impl ToJson for SettingsSetPayload
 pub impl @json.FromJson for SettingsSetPayload
 
 pub(all) struct SettingsStatusPayload {
-  revision : Int
+  revision : Int32
   provider : String
   custom_api_url : String?
   has_deepseek_key : Bool
@@ -3595,9 +3595,9 @@ pub impl @json.FromJson for ShareAuthorization
 
 pub(all) enum ShareProgress {
   Preparing
-  Connecting(attempt~ : Int)
-  Uploading(attempt~ : Int)
-  Waiting(attempt~ : Int)
+  Connecting(attempt~ : Int32)
+  Uploading(attempt~ : Int32)
+  Waiting(attempt~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn ShareProgress::equal(Self, Self) -> Bool
 pub fn ShareProgress::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3662,7 +3662,7 @@ pub(all) struct StartPayload {
   submission_id : String?
   model : String?
   thinking : OpenSeekThinking?
-  max_steps : Int?
+  max_steps : Int32?
   session : String
   workspace : String?
 } derive(Eq, @debug.Debug)
@@ -3677,7 +3677,7 @@ pub impl @json.FromJson for StartPayload
 pub(all) struct StartReply {
   run_id : String
   status : String
-  exit_code : Int
+  exit_code : Int32
 } derive(Eq, @debug.Debug)
 pub fn StartReply::equal(Self, Self) -> Bool
 pub fn StartReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3692,7 +3692,7 @@ pub(all) struct StartedPayload {
   submission_id : String?
   engine : String?
   model : String?
-  max_steps : Int?
+  max_steps : Int32?
   session : String
   session_root : String?
 } derive(Eq, @debug.Debug)
@@ -3755,7 +3755,7 @@ pub impl @json.FromJson for SteerReply
 pub(all) struct SubrunProgressPayload {
   id : String
   session : String
-  steps : Int
+  steps : Int32
   activity : String
 } derive(Eq, @debug.Debug)
 pub fn SubrunProgressPayload::equal(Self, Self) -> Bool
@@ -3768,7 +3768,7 @@ pub impl @json.FromJson for SubrunProgressPayload
 
 pub(all) struct SymbolItem {
   name : String
-  kind : Int?
+  kind : Int32?
   container : String?
   path : String
   range : SymbolRange
@@ -3782,8 +3782,8 @@ pub impl ToJson for SymbolItem
 pub impl @json.FromJson for SymbolItem
 
 pub(all) struct SymbolPosition {
-  line : Int
-  col : Int
+  line : Int32
+  col : Int32
 } derive(Eq, @debug.Debug)
 pub fn SymbolPosition::equal(Self, Self) -> Bool
 pub fn SymbolPosition::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3807,7 +3807,7 @@ pub impl @json.FromJson for SymbolRange
 
 pub(all) struct TerminalAckPayload {
   id : String
-  sequence : Int
+  sequence : Int32
 } derive(Eq, @debug.Debug)
 pub fn TerminalAckPayload::equal(Self, Self) -> Bool
 pub fn TerminalAckPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3830,7 +3830,7 @@ pub impl @json.FromJson for TerminalClosePayload
 
 pub(all) struct TerminalExitPayload {
   id : String
-  code : Int
+  code : Int32
 } derive(Eq, @debug.Debug)
 pub fn TerminalExitPayload::equal(Self, Self) -> Bool
 pub fn TerminalExitPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3856,8 +3856,8 @@ pub impl @json.FromJson for TerminalInputPayload
 pub(all) struct TerminalOpenPayload {
   session : String
   workspace : String?
-  cols : Int
-  rows : Int
+  cols : Int32
+  rows : Int32
   command : String?
 } derive(Eq, @debug.Debug)
 pub fn TerminalOpenPayload::equal(Self, Self) -> Bool
@@ -3881,7 +3881,7 @@ pub impl @json.FromJson for TerminalOpenReply
 
 pub(all) struct TerminalOutputPayload {
   id : String
-  sequence : Int
+  sequence : Int32
   data : String
 } derive(Eq, @debug.Debug)
 pub fn TerminalOutputPayload::equal(Self, Self) -> Bool
@@ -3894,8 +3894,8 @@ pub impl @json.FromJson for TerminalOutputPayload
 
 pub(all) struct TerminalResizePayload {
   id : String
-  cols : Int
-  rows : Int
+  cols : Int32
+  rows : Int32
 } derive(Eq, @debug.Debug)
 pub fn TerminalResizePayload::equal(Self, Self) -> Bool
 pub fn TerminalResizePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3915,9 +3915,9 @@ pub fn TextSearchError::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TextSearchMatch {
   path : String
-  line_number : Int
+  line_number : Int32
   preview : String
-  preview_start_column : Int
+  preview_start_column : Int32
   ranges : Array[TextSearchRange]
 } derive(Eq, @debug.Debug)
 pub fn TextSearchMatch::equal(Self, Self) -> Bool
@@ -3929,8 +3929,8 @@ pub impl ToJson for TextSearchMatch
 pub impl @json.FromJson for TextSearchMatch
 
 pub(all) struct TextSearchRange {
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
 } derive(Eq, @debug.Debug)
 pub fn TextSearchRange::equal(Self, Self) -> Bool
 pub fn TextSearchRange::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -3986,8 +3986,8 @@ pub impl ToJson for UpdateDownloadFailedPayload
 pub impl @json.FromJson for UpdateDownloadFailedPayload
 
 pub(all) struct UpdateDownloadProgressPayload {
-  downloaded_bytes : Int
-  total_bytes : Int?
+  downloaded_bytes : Int32
+  total_bytes : Int32?
 } derive(Eq, @debug.Debug)
 pub fn UpdateDownloadProgressPayload::equal(Self, Self) -> Bool
 pub fn UpdateDownloadProgressPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -4035,7 +4035,7 @@ pub impl ToJson for UserQuestionAnswer
 pub impl @json.FromJson for UserQuestionAnswer
 
 pub(all) struct UserQuestionSnapshot {
-  generation : Int
+  generation : Int32
   requests : Array[PendingUserQuestion]
 } derive(Eq, @debug.Debug)
 pub fn UserQuestionSnapshot::equal(Self, Self) -> Bool
@@ -4069,9 +4069,9 @@ pub(all) struct WorkflowEntryPayload {
   label : String
   phase : String?
   status : String
-  steps : Int
-  prompt_tokens : Int
-  completion_tokens : Int
+  steps : Int32
+  prompt_tokens : Int32
+  completion_tokens : Int32
   cost_usd : Double?
   unaccounted : String?
   started_at : Double?
@@ -4111,7 +4111,7 @@ pub(all) struct WorkspaceSettingsPayload {
   workspace : String
   worktree_mode : Bool
   checkout_submodules : Bool
-  submodule_checkout_timeout_seconds : Int
+  submodule_checkout_timeout_seconds : Int32
 } derive(Eq, @debug.Debug)
 pub fn WorkspaceSettingsPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -4125,7 +4125,7 @@ pub(all) struct WorkspaceSettingsSetPayload {
   workspace : String
   worktree_mode : Bool?
   checkout_submodules : Bool?
-  submodule_checkout_timeout_seconds : Int?
+  submodule_checkout_timeout_seconds : Int32?
 } derive(Eq, @debug.Debug)
 pub fn WorkspaceSettingsSetPayload::equal(Self, Self) -> Bool
 pub fn WorkspaceSettingsSetPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError

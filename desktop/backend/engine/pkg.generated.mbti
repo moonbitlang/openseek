@@ -58,7 +58,7 @@ pub async fn load_session(EngineManager, @protocol.LoadSessionPayload) -> @proto
 
 pub fn mcp_status(EngineManager, @protocol.McpStatusPayload) -> @protocol.McpStatusReply
 
-pub async fn migrate_global_store() -> Int
+pub async fn migrate_global_store() -> Int32
 
 pub fn new_engine_actor(String, runtime_dir? : @pathx.Path, host_mcp? : @mcp.Server, moonbit? : @moonbit.ToolchainSource) -> EngineActor
 

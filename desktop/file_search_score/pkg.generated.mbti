@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn rank_paths(String, Array[String], Int) -> Array[String]
+pub fn rank_paths(String, Array[String], Int32) -> Array[String]
 
 // Errors
 
@@ -21,7 +21,7 @@ pub fn PathQuery::PathQuery(String) -> Self
 pub fn PathQuery::is_empty(Self) -> Bool
 pub fn PathQuery::key(Self) -> String
 pub fn PathQuery::matches(Self, String) -> Bool
-pub fn PathQuery::rank_paths(Self, Array[String], Int) -> Array[String]
+pub fn PathQuery::rank_paths(Self, Array[String], Int32) -> Array[String]
 
 // Type aliases
 

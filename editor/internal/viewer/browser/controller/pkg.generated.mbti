@@ -21,11 +21,11 @@ import {
 // Types and methods
 pub(all) struct MouseDispatchData {
   position : @common.Position
-  mouse_column : Int
+  mouse_column : Int32
   reveal_type : NavigationCommandRevealType
   started_on_line_numbers : Bool
   in_selection_mode : Bool
-  mouse_down_count : Int
+  mouse_down_count : Int32
   alt_key : Bool
   ctrl_key : Bool
   meta_key : Bool
@@ -61,9 +61,9 @@ pub(all) struct PointerHandlerHelper {
   get_last_render_data : () -> PointerHandlerLastRenderData
   render_now : () -> Unit
   should_suppress_mouse_down_on_view_zone : (String) -> Bool
-  get_position_from_dom_info : (@dom.Element, Int) -> @common.Position?
-  visible_range_for_position : (Int, Int) -> @view.HorizontalPosition?
-  get_line_width : (Int) -> Double
+  get_position_from_dom_info : (@dom.Element, Int32) -> @common.Position?
+  visible_range_for_position : (Int32, Int32) -> @view.HorizontalPosition?
+  get_line_width : (Int32) -> Double
   view_model : () -> @view_model.ViewModel?
   get_layout_info : () -> @config.EditorLayoutInfo
   get_font_info : () -> @config.FontInfo

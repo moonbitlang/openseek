@@ -13,9 +13,9 @@ pub fn decode_client_packet(String) -> ClientPacketDecodeResult
 
 pub fn decode_server_packet(String) -> ServerPacketDecodeResult
 
-pub fn negotiate_protocol_version(Int) -> ProtocolNegotiation
+pub fn negotiate_protocol_version(Int32) -> ProtocolNegotiation
 
-pub fn protocol_version() -> Int
+pub fn protocol_version() -> Int32
 
 // Errors
 
@@ -73,7 +73,7 @@ pub(all) struct DocumentPositionRequest {
   id : String
   uri : @common.Uri
   document_revision : String
-  offset : Int
+  offset : Int32
 } derive(@debug.Debug)
 pub fn DocumentPositionRequest::to_repr(Self) -> @debug.Repr
 
@@ -164,7 +164,7 @@ pub fn ProtocolErrorCode::to_repr(Self) -> @debug.Repr
 pub fn ProtocolErrorCode::to_string(Self) -> String
 
 pub enum ProtocolNegotiation {
-  ProtocolAccepted(Int)
+  ProtocolAccepted(Int32)
   ProtocolRejected(ProtocolError)
 } derive(@debug.Debug)
 pub fn ProtocolNegotiation::to_repr(Self) -> @debug.Repr
@@ -172,8 +172,8 @@ pub fn ProtocolNegotiation::to_repr(Self) -> @debug.Repr
 pub(all) struct ReferenceItem {
   uri : @common.Uri
   range : @common.Range
-  line : Int
-  column : Int
+  line : Int32
+  column : Int32
   line_text : String
   is_test : Bool?
 } derive(@debug.Debug)

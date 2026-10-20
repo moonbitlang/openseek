@@ -51,7 +51,7 @@ pub fn page_ws_origin() -> String?
 
 pub fn session_command_lane(ChannelId, String) -> String
 
-pub fn viewport_width() -> Int?
+pub fn viewport_width() -> Int32?
 
 pub fn ws_close(ChannelId) -> Unit
 
@@ -73,7 +73,7 @@ pub(all) enum ChannelId {
 pub fn ChannelId::device_id(Self) -> String
 pub fn ChannelId::equal(Self, Self) -> Bool
 pub fn ChannelId::from_uri_authority(String) -> Self?
-pub fn ChannelId::hash(Self) -> Int
+pub fn ChannelId::hash(Self) -> Int32
 pub fn ChannelId::hash_combine(Self, Hasher) -> Unit
 pub fn ChannelId::not_equal(Self, Self) -> Bool
 pub fn ChannelId::of_device(String) -> Self
@@ -100,7 +100,7 @@ pub(all) enum ConversationIdentity {
   Cloud(account~ : String, session~ : String)
 } derive(Eq, Hash, @debug.Debug)
 pub fn ConversationIdentity::equal(Self, Self) -> Bool
-pub fn ConversationIdentity::hash(Self) -> Int
+pub fn ConversationIdentity::hash(Self) -> Int32
 pub fn ConversationIdentity::hash_combine(Self, Hasher) -> Unit
 pub fn ConversationIdentity::host(Self) -> ConversationKey?
 pub fn ConversationIdentity::key(Self) -> String
@@ -113,7 +113,7 @@ pub(all) struct ConversationKey {
   session : String
 } derive(Eq, Hash, @debug.Debug)
 pub fn ConversationKey::equal(Self, Self) -> Bool
-pub fn ConversationKey::hash(Self) -> Int
+pub fn ConversationKey::hash(Self) -> Int32
 pub fn ConversationKey::hash_combine(Self, Hasher) -> Unit
 pub fn ConversationKey::not_equal(Self, Self) -> Bool
 pub fn ConversationKey::to_repr(Self) -> @debug.Repr

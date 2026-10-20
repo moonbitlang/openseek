@@ -2,7 +2,7 @@
 package "openseek_desktop/frontend/labels"
 
 // Values
-pub fn compact_count(Int) -> String
+pub fn compact_count(Int32) -> String
 
 // Errors
 

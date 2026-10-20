@@ -2,9 +2,9 @@
 package "moonbitlang/openseek/agent_tool/internal/line_offset"
 
 // Values
-pub fn line_end_offset(String, Int) -> Int
+pub fn line_end_offset(String, Int32) -> Int32
 
-pub fn line_start_offset(String, Int) -> Int
+pub fn line_start_offset(String, Int32) -> Int32
 
 // Errors
 

@@ -8,7 +8,7 @@ pub fn decode_header(String) -> String raise
 
 pub fn encode_header(String) -> String
 
-pub fn modern_error(Int) -> Bool
+pub fn modern_error(Int32) -> Bool
 
 pub fn parameter_header_names(Json) -> Array[String] raise
 

@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn comparability_advice(Comparability, introduced~ : Int) -> String
+pub fn comparability_advice(Comparability, introduced~ : Int32) -> String
 
 pub async fn gather_comparability(String, @auto_check.CheckErrors?, @auto_check.CheckErrors, Array[String]) -> Comparability
 
@@ -14,19 +14,19 @@ pub async fn gather_comparability(String, @auto_check.CheckErrors?, @auto_check.
 
 // Types and methods
 pub(all) struct Comparability {
-  before_count : Int?
-  remaining : Int
+  before_count : Int32?
+  remaining : Int32
   new_in_edited : Array[String]
   new_breaking : Array[String]
   new_in_dependents : Array[String]
-  new_independent : Int
-  unlocated : Int
-  unmapped_edits : Int
+  new_independent : Int32
+  unlocated : Int32
+  unmapped_edits : Int32
   module_manifest_edited : Bool
   graph_available : Bool
   truncated : Bool
 }
-pub fn Comparability::feedback(Self, delta~ : Int) -> Map[String, Json]
+pub fn Comparability::feedback(Self, delta~ : Int32) -> Map[String, Json]
 
 // Type aliases
 

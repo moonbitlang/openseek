@@ -179,10 +179,10 @@ async test "append_summary surfaces failed pre-build despite zero diagnostics" {
 }
 
 ///|
-/// The same failed pre-build under `check`: moon's JSON result calls the run
-/// a failure with no diagnostic and no message, which must read as `Failed`,
-/// never as a clean tree.
-async test "check names a failed pre-build that moon does not message" {
+/// The same failed pre-build under `check`: the run produces no diagnostic,
+/// but must still read as `Failed`, never as a clean tree, and the detail
+/// must point at the pre-build step that failed.
+async test "check names a failed pre-build without diagnostics" {
   @vfs.with_tmpdir(prefix="openseek-auto-check-prebuild-json-", dir => {
     @vfs.FileSystem({
       "moon.mod": "name = \"tmp/auto_check_prebuild_json\"\n",
@@ -205,7 +205,12 @@ async test "check names a failed pre-build that moon does not message" {
     }
     assert_true(code != 0)
     assert_eq(tally.error_count, 0)
-    assert_true(detail.contains("pre-build"), msg=detail)
+    // MoonBit 0.10.16 names the failing script and spells the stage
+    // "prebuild"; older toolchains fall back to our own "pre-build" sentence.
+    assert_true(
+      detail.contains("prebuild") || detail.contains("pre-build"),
+      msg=detail,
+    )
   })
 }
 

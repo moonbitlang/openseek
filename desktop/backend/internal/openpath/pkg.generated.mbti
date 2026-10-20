@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub const MaxEditorFileBytes : Int = 1048576
+pub const MaxEditorFileBytes : Int32 = 1048576
 
-pub const MaxOfficeFileBytes : Int = 20971520
+pub const MaxOfficeFileBytes : Int32 = 20971520
 
 // Errors
 
@@ -20,7 +20,7 @@ pub async fn Reference::resolve(Self) -> Resolution
 pub fn Reference::to_repr(Self) -> @debug.Repr
 
 pub(all) enum Resolution {
-  EditorPath(path~ : String, line~ : Int?, column~ : Int?)
+  EditorPath(path~ : String, line~ : Int32?, column~ : Int32?)
   BrowserPath(String)
   SystemPath(String)
   MissingPath(String)

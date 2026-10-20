@@ -12,8 +12,8 @@ pub let language_id_codec : LanguageIdCodec
 
 // Types and methods
 type LanguageIdCodec
-pub fn LanguageIdCodec::encode_language_id(Self, String) -> Int
-pub fn LanguageIdCodec::register(Self, String) -> Int
+pub fn LanguageIdCodec::encode_language_id(Self, String) -> Int32
+pub fn LanguageIdCodec::register(Self, String) -> Int32
 pub fn LanguageIdCodec::to_repr(Self) -> @debug.Repr
 pub impl @debug.Debug for LanguageIdCodec
 

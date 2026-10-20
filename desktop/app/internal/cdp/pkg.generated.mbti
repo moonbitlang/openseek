@@ -9,12 +9,12 @@ import {
 // Values
 pub fn devtools_highlight() -> HighlightConfig
 
-pub async fn list_targets(Int) -> Array[Target]
+pub async fn list_targets(Int32) -> Array[Target]
 
 // Errors
 pub suberror CDPError {
   Protocol(String)
-  CommandFailed(code~ : Int, message~ : String, data~ : Json?)
+  CommandFailed(code~ : Int32, message~ : String, data~ : Json?)
   JavaScriptException(String)
   MissingValue
   ConcurrentRead
@@ -22,7 +22,7 @@ pub suberror CDPError {
 pub fn CDPError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
-pub struct BackendNodeId(Int) derive(Eq, @debug.Debug)
+pub struct BackendNodeId(Int32) derive(Eq, @debug.Debug)
 pub fn BackendNodeId::equal(Self, Self) -> Bool
 pub fn BackendNodeId::not_equal(Self, Self) -> Bool
 pub fn BackendNodeId::to_repr(Self) -> @debug.Repr
@@ -38,9 +38,9 @@ pub(all) struct CallFunction {
 }
 
 pub(all) struct Color {
-  r : Int
-  g : Int
-  b : Int
+  r : Int32
+  g : Int32
+  b : Int32
   a : Double
 }
 
@@ -76,7 +76,7 @@ pub fn Evaluation::to_repr(Self) -> @debug.Repr
 pub(all) enum Event {
   InspectNodeRequested(BackendNodeId)
   InspectModeCanceled
-  BindingCalled(name~ : String, payload~ : String, execution_context_id~ : Int)
+  BindingCalled(name~ : String, payload~ : String, execution_context_id~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool

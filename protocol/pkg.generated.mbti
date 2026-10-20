@@ -7,9 +7,9 @@ import {
 }
 
 // Values
-pub const RunRequestVersion : Int = 1
+pub const RunRequestVersion : Int32 = 1
 
-pub const RunResultVersion : Int = 1
+pub const RunResultVersion : Int32 = 1
 
 pub fn job_id_from_storage(String) -> String
 
@@ -21,7 +21,7 @@ pub fn parse_run_request(Json) -> RunRequest raise RunRequestError
 
 pub fn parse_run_result(Json) -> RunResult raise RunResultError
 
-pub fn split_child_session_id(String) -> (String, Int)?
+pub fn split_child_session_id(String) -> (String, Int32)?
 
 pub fn valid_job_component(String) -> Bool
 
@@ -37,7 +37,7 @@ pub fn ImageError::not_equal(Self, Self) -> Bool
 pub fn ImageError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror RunRequestError {
-  UnsupportedVersion(Int)
+  UnsupportedVersion(Int32)
   Malformed(String)
   Unsupported(String)
 } derive(Eq, @debug.Debug)
@@ -46,7 +46,7 @@ pub fn RunRequestError::not_equal(Self, Self) -> Bool
 pub fn RunRequestError::to_repr(Self) -> @debug.Repr
 
 pub(all) suberror RunResultError {
-  UnsupportedVersion(Int)
+  UnsupportedVersion(Int32)
   Malformed(String)
 } derive(Eq, @debug.Debug)
 pub fn RunResultError::equal(Self, Self) -> Bool
@@ -97,8 +97,8 @@ pub impl @json.FromJson for ContentPart
 
 pub(all) enum Event {
   AgentSetupFailed(error~ : String)
-  AgentStep(step~ : Int)
-  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  AgentStep(step~ : Int32)
+  StreamRetry(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   AgentAborted(reason~ : String)
   AgentFinished(answer~ : String)
   MaxStepsExhausted
@@ -116,7 +116,7 @@ pub(all) enum Event {
   SteerDropped(content~ : Content, submission_id~ : String?)
   BackgroundNotice(content~ : String)
   JobChanged(kind~ : JobEventKind, job~ : JobRecord)
-  PredictionResult(source_sequence~ : Int, outcome~ : PredictionOutcome)
+  PredictionResult(source_sequence~ : Int32, outcome~ : PredictionOutcome)
   JobsSnapshot(request_id~ : String, jobs~ : Array[JobRecord])
   JobStopResult(request_id~ : String, generation~ : String, job_id~ : String, outcome~ : JobStopOutcome)
   GoalUpdated(goal~ : String?)
@@ -124,19 +124,19 @@ pub(all) enum Event {
   GoalUnblocked
   GoalCheck(content~ : String)
   GoalReminder(content~ : String)
-  GoalContinue(remaining~ : Int)
-  GoalBudgetExhausted(turns~ : Int)
+  GoalContinue(remaining~ : Int32)
+  GoalBudgetExhausted(turns~ : Int32)
   PlanReminder(content~ : String)
-  CompactionStarted(from_sequence~ : Int, to_sequence~ : Int)
-  CompactionFinished(from_sequence~ : Int, to_sequence~ : Int, summary~ : String)
+  CompactionStarted(from_sequence~ : Int32, to_sequence~ : Int32)
+  CompactionFinished(from_sequence~ : Int32, to_sequence~ : Int32, summary~ : String)
   CompactionFailed(error~ : String)
-  AutoCompactionStarted(from_sequence~ : Int, to_sequence~ : Int)
-  AutoCompactionFinished(from_sequence~ : Int, to_sequence~ : Int, summary~ : String)
+  AutoCompactionStarted(from_sequence~ : Int32, to_sequence~ : Int32)
+  AutoCompactionFinished(from_sequence~ : Int32, to_sequence~ : Int32, summary~ : String)
   AutoCompactionFailed(error~ : String)
-  ContextYield(to_sequence~ : Int, answer~ : String)
+  ContextYield(to_sequence~ : Int32, answer~ : String)
   SubrunStarted(id~ : String, kind~ : String, label~ : String)
-  SubrunFinished(id~ : String, status~ : String, steps~ : Int, prompt_tokens~ : Int, completion_tokens~ : Int, unaccounted~ : String?)
-  WorkflowStarted(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
+  SubrunFinished(id~ : String, status~ : String, steps~ : Int32, prompt_tokens~ : Int32, completion_tokens~ : Int32, unaccounted~ : String?)
+  WorkflowStarted(id~ : String, journal~ : String, events~ : String, first_child~ : Int32, child_count~ : Int32)
   WorkflowFinished(id~ : String)
   SessionStarted(session~ : String, session_root~ : String, workspace_root~ : String?)
   SessionError(error~ : String)
@@ -146,10 +146,10 @@ pub(all) enum Event {
   McpConfigIgnored(reason~ : String)
   McpConfigUnreadable(path~ : String, error~ : String)
   McpConfigInvalid(path~ : String, error~ : String)
-  McpToolsRegistered(servers~ : Int, tools~ : Int, names~ : Array[String])
+  McpToolsRegistered(servers~ : Int32, tools~ : Int32, names~ : Array[String])
   McpToolDuplicate(server~ : String, tool~ : String)
   McpToolRenamed(from~ : String, to~ : String)
-  McpToolsCapped(server~ : String, kept~ : Int)
+  McpToolsCapped(server~ : String, kept~ : Int32)
   McpServerSkippedOverCap(server~ : String)
   McpConnectFailed(server~ : String, error~ : String)
   McpListToolsFailed(server~ : String, error~ : String)
@@ -191,7 +191,7 @@ pub impl @json.FromJson for JobEventKind
 pub(all) struct JobRecord {
   generation : String
   id : String
-  revision : Int
+  revision : Int32
   command : String
   description : String?
   cwd : String?
@@ -203,7 +203,7 @@ pub(all) struct JobRecord {
   output_file : String?
   output_persistent : Bool
   output_bytes : Int64
-  output_chars : Int
+  output_chars : Int32
   output_truncated : Bool
   invalid_utf8 : Bool
   output_error : String?
@@ -223,7 +223,7 @@ pub impl @json.FromJson for JobRecord
 pub(all) enum JobState {
   Running
   Stopping
-  Exited(Int)
+  Exited(Int32)
   Stopped(String)
   Interrupted
 } derive(Eq, @debug.Debug)
@@ -328,7 +328,7 @@ pub fn McpTransport::not_equal(Self, Self) -> Bool
 pub fn McpTransport::to_repr(Self) -> @debug.Repr
 
 pub(all) enum PredictionOutcome {
-  Completed(text~ : String?, input_tokens~ : Int, output_tokens~ : Int)
+  Completed(text~ : String?, input_tokens~ : Int32, output_tokens~ : Int32)
   Skipped
   Cancelled
   Failed(String)
@@ -342,7 +342,7 @@ pub impl ToJson for PredictionOutcome
 pub impl @json.FromJson for PredictionOutcome
 
 pub(all) struct PredictionRecord {
-  source_sequence : Int
+  source_sequence : Int32
   outcome : PredictionOutcome
 } derive(Eq, @debug.Debug)
 pub fn PredictionRecord::equal(Self, Self) -> Bool
@@ -357,7 +357,7 @@ pub(all) struct RunRequest {
   request_id : String?
   kind : String?
   input : Json
-  max_steps : Int?
+  max_steps : Int32?
 } derive(Eq, @debug.Debug)
 pub fn RunRequest::equal(Self, Self) -> Bool
 pub fn RunRequest::not_equal(Self, Self) -> Bool
@@ -371,7 +371,7 @@ pub(all) struct RunResult {
   status : RunStatus
   session : String?
   usage : Usage?
-  steps : Int?
+  steps : Int32?
 } derive(Eq, @debug.Debug)
 pub fn RunResult::equal(Self, Self) -> Bool
 pub fn RunResult::not_equal(Self, Self) -> Bool
@@ -412,7 +412,7 @@ pub impl @json.FromJson for SubagentInfo
 
 pub(all) enum SubagentLaunch {
   Direct
-  Script(program~ : String, call~ : Int)
+  Script(program~ : String, call~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn SubagentLaunch::equal(Self, Self) -> Bool
 pub fn SubagentLaunch::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -452,7 +452,7 @@ pub impl ToJson for SubagentReport
 pub impl @json.FromJson for SubagentReport
 
 pub(all) enum SubagentUsage {
-  Known(steps~ : Int?, prompt_tokens~ : Int, completion_tokens~ : Int, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
+  Known(steps~ : Int32?, prompt_tokens~ : Int32, completion_tokens~ : Int32, cost_usd~ : Double?, source~ : SubagentUsageSource, unaccounted~ : String?)
   Unavailable(String)
 } derive(Eq, @debug.Debug)
 pub fn SubagentUsage::equal(Self, Self) -> Bool
@@ -485,11 +485,11 @@ pub impl ToJson for SubagentWorkspace
 pub impl @json.FromJson for SubagentWorkspace
 
 pub(all) struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(Eq, ToJson, @debug.Debug)
 pub fn Usage::equal(Self, Self) -> Bool
 pub fn Usage::not_equal(Self, Self) -> Bool

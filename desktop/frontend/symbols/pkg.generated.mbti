@@ -22,7 +22,7 @@ pub fn searching(@interop.ConversationKey, String, root~ : @common.Uri, loaded~ 
 // Types and methods
 pub(all) struct Symbol {
   name : String
-  kind : Int?
+  kind : Int32?
   container : String?
   path : String
   range : @common.Range

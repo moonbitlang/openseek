@@ -4,7 +4,7 @@ package "openseek_desktop/backend/internal/console_proxy"
 // Values
 pub const DefaultRelay : String = "https://seekmoon.moonbitlang.com"
 
-pub async fn serve(Upstream, bundle~ : String, port~ : Int, on_ready? : (String) -> Unit) -> Unit
+pub async fn serve(Upstream, bundle~ : String, port~ : Int32, on_ready? : (String) -> Unit) -> Unit
 
 // Errors
 

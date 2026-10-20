@@ -13,7 +13,7 @@ pub fn decode(Json) -> JobOutputInput raise
 // Types and methods
 pub struct JobOutputInput {
   job_id : String
-  offset : Int?
+  offset : Int32?
 } derive(@debug.Debug)
 
 // Type aliases

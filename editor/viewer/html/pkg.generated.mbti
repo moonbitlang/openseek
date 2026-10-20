@@ -20,9 +20,9 @@ pub fn numbered_source(String, tokenizer? : &@syntax.LineTokenizer) -> @moonbit-
 
 // Types and methods
 pub(all) enum DiffLine {
-  Context(String, old_line~ : Int?, new_line~ : Int?)
-  Added(String, line~ : Int?)
-  Removed(String, line~ : Int?)
+  Context(String, old_line~ : Int32?, new_line~ : Int32?)
+  Added(String, line~ : Int32?)
+  Removed(String, line~ : Int32?)
   Gap
 }
 

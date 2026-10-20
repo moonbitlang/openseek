@@ -98,7 +98,7 @@ pub fn Target::to_repr(Self) -> @debug.Repr
 
 pub(all) struct TextRun {
   bounds : Rect
-  index : Int
+  index : Int32
   text : String
   font : String
   marked_id : String?

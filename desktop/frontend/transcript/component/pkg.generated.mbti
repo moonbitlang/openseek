@@ -28,8 +28,8 @@ pub(all) struct Actions {
   jump : @cmd.Emit[@mention_context.Target]
   open_review_changes : @cmd.Emit[@mention_context.ReviewChanges]
   open_session : @cmd.Emit[String]
-  fork : @cmd.Emit[Int]
-  edit_user : @cmd.Emit[(Int, @composer.Draft)]
+  fork : @cmd.Emit[Int32]
+  edit_user : @cmd.Emit[(Int32, @composer.Draft)]
   choose_project : @cmd.Emit[@common.Uri]
   new_project : @cmd.Cmd
   toggle_project_menu : @cmd.Cmd
@@ -39,7 +39,7 @@ pub(all) struct Actions {
 }
 
 type Input derive(Eq)
-pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int, editable_users? : Array[Int], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
+pub fn Input::Input(locale? : @i18n.Locale, dark_mode? : Bool, minimal? : Bool, source~ : Source, focused? : @interop.ChannelId, identity? : String, active_session~ : String, can_fork? : Bool, fork_busy? : Bool, edit_busy? : Bool, forking? : Int32, editable_users? : Array[Int32], scroll? : ScrollPosition, project_label? : String, current_project~ : @common.Uri?, projects~ : Array[ProjectChoice], can_choose_project~ : Bool, project_menu_open~ : Bool, project_query~ : String, root~ : @common.Uri?, items~ : Array[VisibleRow], streaming_response~ : String?, streaming_reasoning? : String, reasoning_complete? : Bool, streaming_identity~ : String) -> Self
 pub fn Input::equal(Self, Self) -> Bool
 pub fn Input::not_equal(Self, Self) -> Bool
 

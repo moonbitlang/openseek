@@ -49,7 +49,7 @@ pub fn CodexWorktreeBinding::to_repr(Self) -> @debug.Repr
 
 pub enum ForkCheckout {
   WorkspaceRoot(@pathx.Absolute)
-  NewWorktree(dir~ : @pathx.Absolute, uncommitted~ : Array[String], omitted~ : Int)
+  NewWorktree(dir~ : @pathx.Absolute, uncommitted~ : Array[String], omitted~ : Int32)
 }
 pub fn ForkCheckout::dir(Self) -> @pathx.Absolute
 

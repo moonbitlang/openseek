@@ -28,7 +28,7 @@ type Tail
 pub fn Tail::Tail(@pathx.Absolute, String) -> Self
 pub fn Tail::document(Self) -> @protocol.SessionDocument
 pub async fn Tail::poll(Self) -> Array[@protocol.SessionEvent]
-pub fn Tail::watermark(Self) -> Int
+pub fn Tail::watermark(Self) -> Int32
 
 // Type aliases
 

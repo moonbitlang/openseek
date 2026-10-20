@@ -111,7 +111,7 @@ The public function is now listed in the generated interface:
 
 ```mooncram
 $ grep '^pub fn' pkg.generated.mbti
-pub fn answer() -> Int
+pub fn answer() -> Int32
 ```
 
 The compact function body has been formatted:

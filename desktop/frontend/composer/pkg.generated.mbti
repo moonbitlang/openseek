@@ -24,7 +24,7 @@ import {
 // Values
 pub fn component(@rabbita.Val[@i18n.Locale], @rabbita.Val[Input], @cmd.Emit[Action]) -> (@rabbita.Val[@html.Html], @cmd.Emit[QuoteReply])
 
-pub fn dirty_paths_preview(Array[String], Int) -> String
+pub fn dirty_paths_preview(Array[String], Int32) -> String
 
 pub fn focus_message_end() -> @cmd.Cmd
 
@@ -44,7 +44,7 @@ pub(all) enum Action {
   RootMentionRemoved(identity~ : Identity, mention~ : Mention)
   SlashCommand(identity~ : Identity, command~ : String)
   ShellCommandSubmitted(identity~ : Identity, command~ : String)
-  ShellTerminalRequested(identity~ : Identity, index~ : Int)
+  ShellTerminalRequested(identity~ : Identity, index~ : Int32)
   MentionOpened(identity~ : Identity, mention~ : Mention)
   GoalEditStarted(identity~ : Identity)
   GoalCancelled(identity~ : Identity)
@@ -130,10 +130,10 @@ pub fn Draft::with_review_changes(Self, @mention_context.ReviewChanges, adding~ 
 pub fn Draft::with_semantic_selection(Self, @mention_context.SemanticSearchReference?) -> Self
 
 pub(all) enum FileIndex {
-  FileIndexEmpty(epoch~ : Int)
-  FileIndexLoading(epoch~ : Int)
-  FileIndexReady(epoch~ : Int, truncated~ : Bool)
-  FileIndexFailed(epoch~ : Int)
+  FileIndexEmpty(epoch~ : Int32)
+  FileIndexLoading(epoch~ : Int32)
+  FileIndexReady(epoch~ : Int32, truncated~ : Bool)
+  FileIndexFailed(epoch~ : Int32)
 } derive(Eq, @debug.Debug)
 pub fn FileIndex::equal(Self, Self) -> Bool
 pub fn FileIndex::not_equal(Self, Self) -> Bool
@@ -148,12 +148,12 @@ pub fn FollowupChoice::not_equal(Self, Self) -> Bool
 pub fn FollowupChoice::to_repr(Self) -> @debug.Repr
 
 type GitChanges derive(Eq)
-pub fn GitChanges::GitChanges(added~ : Int, removed~ : Int, files~ : Int, partial~ : Bool, base? : String) -> Self
+pub fn GitChanges::GitChanges(added~ : Int32, removed~ : Int32, files~ : Int32, partial~ : Bool, base? : String) -> Self
 pub fn GitChanges::equal(Self, Self) -> Bool
 pub fn GitChanges::not_equal(Self, Self) -> Bool
 
 type GitChecks derive(Eq)
-pub fn GitChecks::GitChecks(passed~ : Int, failed~ : Int, pending~ : Int) -> Self
+pub fn GitChecks::GitChecks(passed~ : Int32, failed~ : Int32, pending~ : Int32) -> Self
 pub fn GitChecks::equal(Self, Self) -> Bool
 pub fn GitChecks::not_equal(Self, Self) -> Bool
 pub fn GitChecks::summary(locale? : @i18n.Locale, Self) -> String
@@ -173,7 +173,7 @@ pub fn GitPresentation::summary(locale? : @i18n.Locale, Self) -> String
 pub fn GitPresentation::tone(Self) -> String
 
 type GitPullRequest derive(Eq)
-pub fn GitPullRequest::GitPullRequest(number~ : Int, title~ : String, state~ : String, draft~ : Bool, url~ : String, checks? : GitChecks) -> Self
+pub fn GitPullRequest::GitPullRequest(number~ : Int32, title~ : String, state~ : String, draft~ : Bool, url~ : String, checks? : GitChecks) -> Self
 pub fn GitPullRequest::equal(Self, Self) -> Bool
 pub fn GitPullRequest::label(Self) -> String
 pub fn GitPullRequest::not_equal(Self, Self) -> Bool
@@ -196,7 +196,7 @@ pub fn GoalPending::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Identity {
   owner : @interop.ConversationIdentity
-  archive_generation : Int
+  archive_generation : Int32
 } derive(Eq, @debug.Debug)
 pub fn Identity::equal(Self, Self) -> Bool
 pub fn Identity::not_equal(Self, Self) -> Bool
@@ -216,15 +216,15 @@ pub(all) struct Input {
   goal : GoalInput
   run : RunHeartbeat?
   turn_id : String?
-  prediction_source : Int?
+  prediction_source : Int32?
   prediction : @openseek_protocol.PredictionRecord?
   slash_commands : Array[SlashCommand]
   shell_available : Bool
   history : Array[String]
   root : @common.Uri?
   installed_skills : Array[@skills.InstalledItem]
-  context_generation : Int
-  submission_sequence : Int
+  context_generation : Int32
+  submission_sequence : Int32
   retirements : Array[@interop.ConversationIdentity]
   file_candidates : Array[@pathx.Relative]
   open_files : Array[@pathx.Relative]
@@ -249,8 +249,8 @@ pub fn[T] Menu::Menu(Array[T], loading~ : Bool, draft_without_token~ : String) -
 pub fn[T] Menu::current(Self[T]) -> T?
 pub fn[T : Eq] Menu::equal(Self[T], Self[T]) -> Bool
 pub fn[T : Eq] Menu::not_equal(Self[T], Self[T]) -> Bool
-pub fn[T] Menu::selected(Self[T]) -> Int
-pub fn[T] Menu::shifted(Self[T], Int) -> Self[T]
+pub fn[T] Menu::selected(Self[T]) -> Int32
+pub fn[T] Menu::shifted(Self[T], Int32) -> Self[T]
 
 pub(all) struct MissingWorktreeNotice {
   name : String
@@ -349,7 +349,7 @@ pub(all) enum ReplyContent {
 pub(all) struct RunHeartbeat {
   stage : RunStage
   started_ms : Double?
-  tokens : Int
+  tokens : Int32
 } derive(Eq, @debug.Debug)
 pub fn RunHeartbeat::equal(Self, Self) -> Bool
 pub fn RunHeartbeat::not_equal(Self, Self) -> Bool
@@ -358,8 +358,8 @@ pub fn RunHeartbeat::to_repr(Self) -> @debug.Repr
 pub(all) enum RunStage {
   Starting
   Thinking
-  AtStep(Int)
-  Retrying(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  AtStep(Int32)
+  Retrying(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   Working
   Stopping
 } derive(Eq, @debug.Debug)

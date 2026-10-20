@@ -21,11 +21,11 @@ pub struct Marker {
   code : String?
   message : String
   source : String?
-  mut start_column : Int
-  start_line_number : Int
-  end_line_number : Int
-  end_column : Int
-  model_version_id : Int?
+  mut start_column : Int32
+  start_line_number : Int32
+  end_line_number : Int32
+  end_column : Int32
+  model_version_id : Int32?
   related_information : Array[RelatedInformation]?
   tags : Array[MarkerTag]?
   origin : String?
@@ -35,7 +35,7 @@ pub fn Marker::not_equal(Self, Self) -> Bool
 pub fn Marker::to_repr(Self) -> @debug.Repr
 
 type MarkerData derive(Eq, @debug.Debug)
-pub fn MarkerData::MarkerData(severity~ : MarkerSeverity, message~ : String, start_line_number~ : Int, start_column~ : Int, end_line_number~ : Int, end_column~ : Int, code? : String, source? : String, model_version_id? : Int, related_information? : Array[RelatedInformation], tags? : Array[MarkerTag], origin? : String) -> Self
+pub fn MarkerData::MarkerData(severity~ : MarkerSeverity, message~ : String, start_line_number~ : Int32, start_column~ : Int32, end_line_number~ : Int32, end_column~ : Int32, code? : String, source? : String, model_version_id? : Int32, related_information? : Array[RelatedInformation], tags? : Array[MarkerTag], origin? : String) -> Self
 pub fn MarkerData::equal(Self, Self) -> Bool
 pub fn MarkerData::not_equal(Self, Self) -> Bool
 pub fn MarkerData::to_repr(Self) -> @debug.Repr
@@ -66,7 +66,7 @@ pub fn MarkerService::clear_resource(Self, @common.Uri) -> Unit
 pub fn MarkerService::diagnostics_for_resource(Self, @common.Uri) -> Array[@language.Diagnostic]
 pub fn MarkerService::dispose(Self) -> Unit
 pub fn MarkerService::marker_service_handle(Self) -> MarkerServiceHandle
-pub fn MarkerService::markers_for_resource(Self, @common.Uri, limit? : Int) -> Array[Marker]
+pub fn MarkerService::markers_for_resource(Self, @common.Uri, limit? : Int32) -> Array[Marker]
 pub fn MarkerService::on_did_change_markers(Self, (Array[@common.Uri]) -> Unit) -> @common.Disposable
 pub fn MarkerService::remove_owner_resource(Self, String, @common.Uri) -> Unit
 pub fn MarkerService::set_diagnostics(Self, String, @common.Uri, Array[@language.Diagnostic]) -> Unit
@@ -94,10 +94,10 @@ pub fn MarkerTag::to_repr(Self) -> @debug.Repr
 pub(all) struct RelatedInformation {
   resource : @common.Uri
   message : String
-  start_line_number : Int
-  start_column : Int
-  end_line_number : Int
-  end_column : Int
+  start_line_number : Int32
+  start_column : Int32
+  end_line_number : Int32
+  end_column : Int32
 } derive(Eq, @debug.Debug)
 pub fn RelatedInformation::equal(Self, Self) -> Bool
 pub fn RelatedInformation::not_equal(Self, Self) -> Bool

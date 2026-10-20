@@ -25,7 +25,7 @@ pub fn Service::detach(Self, String) -> Unit
 pub fn Service::request(Self, String, @protocol.AskUserPayload) -> Request raise
 pub async fn Service::run(Self, async (String, String, String) -> Unit, (String, String) -> Unit) -> Unit
 pub fn Service::snapshot(Self) -> @protocol.UserQuestionSnapshot
-pub async fn Service::wait(Self, Request, wait_ms? : Int) -> Json
+pub async fn Service::wait(Self, Request, wait_ms? : Int32) -> Json
 
 // Type aliases
 

@@ -55,7 +55,7 @@ pub fn EditorScrollbar::content(Self) -> @dom.Element
 pub fn EditorScrollbar::scrollable(Self) -> @scrollbar.ScrollableElementDom
 
 pub struct HorizontalPosition {
-  left : Int
+  left : Int32
 } derive(Eq, @debug.Debug)
 pub fn HorizontalPosition::equal(Self, Self) -> Bool
 pub fn HorizontalPosition::not_equal(Self, Self) -> Bool
@@ -81,7 +81,7 @@ pub(all) enum PartFingerprint {
 pub fn PartFingerprint::collect(@dom.Element?, @dom.Element) -> Bytes
 pub fn PartFingerprint::equal(Self, Self) -> Bool
 pub fn PartFingerprint::not_equal(Self, Self) -> Bool
-pub fn PartFingerprint::to_int(Self) -> Int
+pub fn PartFingerprint::to_int(Self) -> Int32
 pub fn PartFingerprint::to_repr(Self) -> @debug.Repr
 
 pub struct View {
@@ -95,7 +95,7 @@ pub struct View {
   editor_scrollbar : EditorScrollbar
   // private fields
 }
-pub fn View::View(localization? : @localization.Localization, view_zones_configuration_reader? : () -> (Int, Double, Double)) -> Self
+pub fn View::View(localization? : @localization.Localization, view_zones_configuration_reader? : () -> (Int32, Double, Double)) -> Self
 pub fn View::add_disposable(Self, @common.Disposable) -> Unit
 pub fn View::apply_squiggly_theme(Self) -> Unit
 pub fn View::begin_view_event_batch(Self) -> Unit
@@ -105,15 +105,15 @@ pub fn View::emit_view_event(Self, ViewEvent) -> Unit
 pub fn View::emit_view_zones_changed_then(Self, () -> Unit) -> Unit
 pub fn View::end_view_event_batch(Self) -> Unit
 pub fn View::install_current_line_configuration_reader(Self, () -> (@editor_api.RenderLineHighlight, Bool, Bool, Double, Double)) -> Unit
-pub fn View::install_view_zones_context(Self, @view_model.ViewModel, @log.LogHandle, () -> (Int, Double, Double), () -> Unit) -> Unit
-pub fn View::is_line_rendered(Self, Int) -> Bool
-pub fn View::line_width(Self, Int, Int) -> Double
-pub fn View::measure_line_selection(Self, Int, Int, Int, keep_empty? : Bool) -> Array[(Double, Double)]
-pub fn View::offset_for_column(Self, Int, Int) -> Double
+pub fn View::install_view_zones_context(Self, @view_model.ViewModel, @log.LogHandle, () -> (Int32, Double, Double), () -> Unit) -> Unit
+pub fn View::is_line_rendered(Self, Int32) -> Bool
+pub fn View::line_width(Self, Int32, Int32) -> Double
+pub fn View::measure_line_selection(Self, Int32, Int32, Int32, keep_empty? : Bool) -> Array[(Double, Double)]
+pub fn View::offset_for_column(Self, Int32, Int32) -> Double
 pub fn View::render(Self, ViewContext, ViewRenderInput) -> Unit
 pub fn View::should_suppress_mouse_down_on_view_zone(Self, String) -> Bool
-pub fn View::view_zone_layout_infos(Self) -> Array[(String, Int, Double)]
-pub fn View::visible_range_for_position(Self, Int, Int) -> HorizontalPosition?
+pub fn View::view_zone_layout_infos(Self) -> Array[(String, Int32, Double)]
+pub fn View::visible_range_for_position(Self, Int32, Int32) -> HorizontalPosition?
 
 type ViewConfigurationChangedEvent
 pub fn ViewConfigurationChangedEvent::from_changed_options(Array[ViewConfigurationOption]) -> Self
@@ -144,9 +144,9 @@ pub fn ViewConfigurationOption::not_equal(Self, Self) -> Bool
 pub fn ViewConfigurationOption::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewContext {
-  measure_line_selection : (Int, Int, Int) -> Array[(Double, Double)]
-  measure_line_decorations : (Int, Int, Int) -> Array[(Double, Double)]
-  offset_for_column : (Int, Int) -> Double
+  measure_line_selection : (Int32, Int32, Int32) -> Array[(Double, Double)]
+  measure_line_decorations : (Int32, Int32, Int32) -> Array[(Double, Double)]
+  offset_for_column : (Int32, Int32) -> Double
   model_position_to_view_position : (@common.Position) -> @common.Position
 }
 
@@ -155,7 +155,7 @@ pub struct ViewCursorRenderData {
   position : @common.Position
   content_left : Double
   width : Double
-  height : Int
+  height : Int32
 }
 
 type ViewCursorStateChangedEvent
@@ -182,13 +182,13 @@ pub fn ViewFocusChangedEvent::ViewFocusChangedEvent(Bool) -> Self
 type ViewLines
 pub fn ViewLines::acquire_content_viewport_geometry(Self) -> @common.Disposable
 pub fn ViewLines::get_dom_node(Self) -> @dom.Element
-pub fn ViewLines::get_line_width(Self, Int) -> Double
-pub fn ViewLines::get_position_from_dom_info(Self, @view_model.ViewModel, @dom.Element, Int) -> @common.Position?
-pub fn ViewLines::install_geometry_readers(Self, (Int) -> Int, (Int) -> @view_layout.TextDirection) -> Unit
+pub fn ViewLines::get_line_width(Self, Int32) -> Double
+pub fn ViewLines::get_position_from_dom_info(Self, @view_model.ViewModel, @dom.Element, Int32) -> @common.Position?
+pub fn ViewLines::install_geometry_readers(Self, (Int32) -> Int32, (Int32) -> @view_layout.TextDirection) -> Unit
 pub fn ViewLines::install_live_configuration_reader(Self, () -> ViewLinesConfiguration) -> Unit
 
 type ViewLinesConfiguration derive(Eq, @debug.Debug)
-pub fn ViewLinesConfiguration::ViewLinesConfiguration(line_height? : Int, typical_halfwidth_character_width? : Double, is_viewport_wrapping? : Bool, can_use_layer_hinting? : Bool, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, stop_rendering_line_after? : Int, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, vertical_scrollbar_size? : Double) -> Self
+pub fn ViewLinesConfiguration::ViewLinesConfiguration(line_height? : Int32, typical_halfwidth_character_width? : Double, is_viewport_wrapping? : Bool, can_use_layer_hinting? : Bool, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, stop_rendering_line_after? : Int32, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, vertical_scrollbar_size? : Double) -> Self
 pub fn ViewLinesConfiguration::equal(Self, Self) -> Bool
 pub fn ViewLinesConfiguration::not_equal(Self, Self) -> Bool
 pub fn ViewLinesConfiguration::to_repr(Self) -> @debug.Repr
@@ -215,7 +215,7 @@ type ViewScrollChangedEvent
 pub fn ViewScrollChangedEvent::ViewScrollChangedEvent(Double, Bool, Bool, Bool, Bool) -> Self
 
 type ViewTokenChangeRange
-pub fn ViewTokenChangeRange::ViewTokenChangeRange(Int, Int) -> Self
+pub fn ViewTokenChangeRange::ViewTokenChangeRange(Int32, Int32) -> Self
 
 type ViewTokensChangedEvent
 pub fn ViewTokensChangedEvent::ViewTokensChangedEvent(Array[ViewTokenChangeRange]) -> Self

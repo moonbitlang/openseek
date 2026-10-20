@@ -36,7 +36,7 @@ pub(all) struct ProgramBinding {
 type Service
 pub async fn Service::close(Self) -> Unit
 pub fn Service::register(Self, on_trace? : (Json) -> Unit, on_image_output? : (@bgjobs.ImageOutput) -> Unit) -> Program raise
-pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int, trace_timeout_ms? : Int, image_directory? : async () -> String?, bind? : (String) -> ProgramBinding) -> Self
+pub async fn[X] Service::start(@async.TaskGroup[X], @agent_tool.Tools, call_timeout_ms? : Int32, trace_timeout_ms? : Int32, image_directory? : async () -> String?, bind? : (String) -> ProgramBinding) -> Self
 
 // Type aliases
 

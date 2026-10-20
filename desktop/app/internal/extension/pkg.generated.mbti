@@ -12,7 +12,7 @@ import {
 // Values
 pub fn browser_tools(BrowserViews) -> Array[@mcp.Tool]
 
-pub fn browser_view_id(String) -> Int?
+pub fn browser_view_id(String) -> Int32?
 
 pub fn localized_menu(String) -> @proton.MenuBar
 
@@ -20,7 +20,7 @@ pub async fn open_external(@protocol.ExternalLinkPayload, allow_file? : Bool) ->
 
 pub fn openseek_capability(@api.ApiState, DesktopBridgeActor, BrowserViews) -> @moonbit-community/proton/extension.RendererCapability
 
-pub fn view_event_json(Int, @proton.ViewEvent) -> Json?
+pub fn view_event_json(Int32, @proton.ViewEvent) -> Json?
 
 // Errors
 
@@ -30,7 +30,7 @@ pub async fn BrowserViews::BrowserViews() -> Self
 pub fn BrowserViews::page_attached(Self, async (Json) -> Unit) -> Unit
 pub fn BrowserViews::window_closed(Self) -> Unit
 pub fn BrowserViews::window_ready(Self, @proton.WindowHandle) -> Unit
-pub async fn[T] BrowserViews::with_cdp(Self, Int, async (@cdp.Connection) -> T) -> T
+pub async fn[T] BrowserViews::with_cdp(Self, Int32, async (@cdp.Connection) -> T) -> T
 
 type DesktopBridgeActor
 pub fn DesktopBridgeActor::DesktopBridgeActor(@api.ApiState) -> Self

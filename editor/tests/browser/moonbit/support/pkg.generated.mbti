@@ -6,13 +6,13 @@ pub fn now_ms() -> Double
 
 pub fn query_attribute(String, String) -> String?
 
-pub fn query_count(String) -> Int
+pub fn query_count(String) -> Int32
 
 pub fn query_text(String) -> String?
 
 pub fn report_json(String) -> Unit
 
-pub fn set_timeout(() -> Unit, Int) -> Unit
+pub fn set_timeout(() -> Unit, Int32) -> Unit
 
 // Errors
 
@@ -27,7 +27,7 @@ pub fn BrowserTestContext::assert_true(Self, Bool, String) -> Unit
 pub fn BrowserTestContext::fail(Self, String) -> Unit
 pub fn BrowserTestContext::finish(Self) -> Unit
 pub fn BrowserTestContext::metric(Self, String, Json) -> Unit
-pub fn BrowserTestContext::metric_int(Self, String, Int) -> Unit
+pub fn BrowserTestContext::metric_int(Self, String, Int32) -> Unit
 pub fn BrowserTestContext::metric_number(Self, String, Double) -> Unit
 pub fn BrowserTestContext::metric_string(Self, String, String) -> Unit
 pub fn BrowserTestContext::to_json(Self) -> Json

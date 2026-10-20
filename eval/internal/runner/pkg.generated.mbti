@@ -2,11 +2,11 @@
 package "moonbitlang/openseek/eval/internal/runner"
 
 // Values
-pub fn padded_index(Int) -> String
+pub fn padded_index(Int32) -> String
 
 pub async fn prepare_output_dir(String) -> Unit
 
-pub async fn[X] run_indexed_with_concurrency(Int, Int, async (Int) -> X) -> Array[X]
+pub async fn[X] run_indexed_with_concurrency(Int32, Int32, async (Int32) -> X) -> Array[X]
 
 // Errors
 

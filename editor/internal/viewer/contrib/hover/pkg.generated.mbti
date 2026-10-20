@@ -13,19 +13,19 @@ import {
 }
 
 // Values
-pub fn compare_hover_parts(HoverPart, HoverPart) -> Int
+pub fn compare_hover_parts(HoverPart, HoverPart) -> Int32
 
-pub fn compute_hover_positions(@common.Range, Array[HoverPositionPart], Int) -> (@common.Position, @common.Position)
+pub fn compute_hover_positions(@common.Range, Array[HoverPositionPart], Int32) -> (@common.Position, @common.Position)
 
-pub let hover_first_wait_ms : Int
+pub let hover_first_wait_ms : Int32
 
-pub let hover_loading_message_ms : Int
+pub let hover_loading_message_ms : Int32
 
 pub let hover_multi_cursor_modifier : MultiCursorModifier
 
 pub fn hover_part_range(HoverPart) -> @common.Range
 
-pub let hover_second_wait_ms : Int
+pub let hover_second_wait_ms : Int32
 
 pub let hover_sticky_debug : Bool
 
@@ -37,7 +37,7 @@ pub fn should_keep_current_hover(Bool, Bool, Bool) -> Bool
 
 pub fn should_keep_hover_widget_visible(Bool) -> Bool
 
-pub fn should_reschedule_hover(Bool, Bool, Int) -> Bool
+pub fn should_reschedule_hover(Bool, Bool, Int32) -> Bool
 
 pub fn should_show_hover(HoverEnabled, MultiCursorModifier, EventModifiers) -> Bool
 
@@ -66,12 +66,12 @@ pub fn EventModifiers::none() -> Self
 pub fn EventModifiers::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverAnchor {
-  HoverRangeAnchor(priority~ : Int, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?)
-  HoverForeignElementAnchor(priority~ : Int, owner~ : HoverParticipantOwner, injected_text_index~ : Int, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?, supports_marker_hover~ : Bool)
+  HoverRangeAnchor(priority~ : Int32, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?)
+  HoverForeignElementAnchor(priority~ : Int32, owner~ : HoverParticipantOwner, injected_text_index~ : Int32, range~ : @common.Range, initial_mouse_pos_x~ : Double?, initial_mouse_pos_y~ : Double?, supports_marker_hover~ : Bool)
 } derive(Eq, @debug.Debug)
 pub fn HoverAnchor::equal(Self, Self) -> Bool
 pub fn HoverAnchor::not_equal(Self, Self) -> Bool
-pub fn HoverAnchor::priority(Self) -> Int
+pub fn HoverAnchor::priority(Self) -> Int32
 pub fn HoverAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct HoverController {
@@ -87,33 +87,33 @@ pub fn HoverController::equal(Self, Self) -> Bool
 pub fn HoverController::highlight_decorations(Self) -> Array[@model.ModelDeltaDecoration]
 pub fn HoverController::is_complete(Self) -> Bool
 pub fn HoverController::not_equal(Self, Self) -> Bool
-pub fn HoverController::op_async_done_request(Self, HoverRequestStamp, @model.TextModel?, Int) -> Self
-pub fn HoverController::op_async_item_request(Self, HoverRequestStamp, @model.TextModel?, Int, Array[HoverPart]) -> Self
-pub fn HoverController::op_trigger_async_request(Self, HoverRequestStamp, @model.TextModel?, Int) -> (Bool, Self)
-pub fn HoverController::op_trigger_loading_request(Self, HoverRequestStamp, @model.TextModel?, Int) -> Self
-pub fn HoverController::op_trigger_sync_request(Self, HoverRequestStamp, @model.TextModel?, Int, Array[HoverPart]) -> Self
+pub fn HoverController::op_async_done_request(Self, HoverRequestStamp, @model.TextModel?, Int32) -> Self
+pub fn HoverController::op_async_item_request(Self, HoverRequestStamp, @model.TextModel?, Int32, Array[HoverPart]) -> Self
+pub fn HoverController::op_trigger_async_request(Self, HoverRequestStamp, @model.TextModel?, Int32) -> (Bool, Self)
+pub fn HoverController::op_trigger_loading_request(Self, HoverRequestStamp, @model.TextModel?, Int32) -> Self
+pub fn HoverController::op_trigger_sync_request(Self, HoverRequestStamp, @model.TextModel?, Int32, Array[HoverPart]) -> Self
 pub fn HoverController::request_stamp(Self, @model.TextModel, @language.CancellationToken) -> HoverRequestStamp
 pub fn HoverController::start_showing_or_update_hover(Self, HoverAnchor, Bool, show_at_position? : @common.Position, mode? : HoverStartMode, source? : HoverStartSource, should_focus? : Bool, live_widget_visible? : Bool) -> (HoverEffect, Self)
 pub fn HoverController::widget_view_with_loading(Self, HoverPart?) -> HoverWidgetView?
 
 type HoverDebouncer derive(Eq, @debug.Debug)
-pub fn HoverDebouncer::HoverDebouncer(default_delay_ms? : Int) -> Self
+pub fn HoverDebouncer::HoverDebouncer(default_delay_ms? : Int32) -> Self
 pub fn HoverDebouncer::cancel(Self) -> Self
 pub fn HoverDebouncer::equal(Self, Self) -> Bool
 pub fn HoverDebouncer::not_equal(Self, Self) -> Bool
-pub fn HoverDebouncer::schedule(Self, HoverOperationOptions, delay_ms? : Int) -> (Int, Self)
-pub fn HoverDebouncer::take(Self, Int) -> (HoverOperationOptions?, Self)
+pub fn HoverDebouncer::schedule(Self, HoverOperationOptions, delay_ms? : Int32) -> (Int32, Self)
+pub fn HoverDebouncer::take(Self, Int32) -> (HoverOperationOptions?, Self)
 
 pub(all) enum HoverEffect {
   HoverNoEffect
-  HoverScheduleDelayed(Int)
-  HoverRunAsyncAndSync(Int)
+  HoverScheduleDelayed(Int32)
+  HoverRunAsyncAndSync(Int32)
 }
 
 type HoverEnabled
 
 pub struct HoverOperation {
-  token : Int
+  token : Int32
   options : HoverOperationOptions?
   // private fields
 } derive(Eq, @debug.Debug)
@@ -131,7 +131,7 @@ pub fn HoverOperationOptions::not_equal(Self, Self) -> Bool
 pub fn HoverOperationOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) enum HoverPart {
-  MarkdownHover(range~ : @common.Range, contents~ : Array[@language.HoverContent], ordinal~ : Int)
+  MarkdownHover(range~ : @common.Range, contents~ : Array[@language.HoverContent], ordinal~ : Int32)
   MarkerHover(range~ : @common.Range, marker~ : @markers.Marker)
   LoadingHover(range~ : @common.Range, message~ : String)
 } derive(Eq, @debug.Debug)
@@ -161,14 +161,14 @@ pub(all) struct HoverPositionPart {
 
 type HoverRequestStamp
 pub fn HoverRequestStamp::cancellation_token(Self) -> @language.CancellationToken
-pub fn HoverRequestStamp::generation(Self) -> Int
-pub fn HoverRequestStamp::is_current(Self, @model.TextModel?, Int) -> Bool
+pub fn HoverRequestStamp::generation(Self) -> Int32
+pub fn HoverRequestStamp::is_current(Self, @model.TextModel?, Int32) -> Bool
 pub fn HoverRequestStamp::model(Self) -> @model.TextModel
 
 pub struct HoverSettings {
   enabled : HoverEnabled
   sticky : Bool
-  hiding_delay : Int
+  hiding_delay : Int32
 }
 pub fn HoverSettings::defaults() -> Self
 

@@ -19,7 +19,7 @@ pub(all) struct Capture {
   url : String
   source : Json
   regions : Array[Region]
-  rotation : Int?
+  rotation : Int32?
   text : String?
   sheet : String?
   range : String?
@@ -38,8 +38,8 @@ pub fn Format::name(Self) -> String
 pub fn Format::not_equal(Self, Self) -> Bool
 
 pub(all) struct Region {
-  index : Int
-  page : Int?
+  index : Int32
+  page : Int32?
   x : Double
   y : Double
   width : Double

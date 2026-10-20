@@ -76,7 +76,7 @@ pub(all) enum Model {
   Glm(GlmVariant)
 } derive(Eq, @debug.Debug)
 pub fn Model::api_key(Self, Map[String, Array[String]]) -> String?
-pub fn Model::context_window(Self) -> Int
+pub fn Model::context_window(Self) -> Int32
 pub fn Model::output(Self, &Logger) -> Unit
 pub fn Model::parse(String) -> Self raise
 pub fn Model::to_string(Self) -> String
@@ -119,11 +119,11 @@ pub struct ToolDefinition {
 pub fn ToolDefinition::ToolDefinition(String, String, Json, strict? : Bool) -> Self
 
 pub struct Usage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(ToJson, @debug.Debug)
 pub impl @json.FromJson for Usage
 

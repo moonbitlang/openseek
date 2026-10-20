@@ -12,8 +12,8 @@ import {
 
 // Types and methods
 pub struct ListPage {
-  offset : Int
-  limit : Int
+  offset : Int32
+  limit : Int32
 }
 pub fn ListPage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
 pub fn ListPage::page(Self, @protocol.SessionsReply) -> Json raise

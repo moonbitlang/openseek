@@ -21,7 +21,7 @@ pub(all) enum Message {
   Projects
   NewChat
   AddProject
-  ArchivedChats(Int)
+  ArchivedChats(Int32)
   ShowMore
   ShowMoreChats
   MoreActions

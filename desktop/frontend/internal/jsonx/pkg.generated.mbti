@@ -6,7 +6,7 @@ pub fn json_bool(Map[String, Json], String) -> Bool?
 
 pub fn json_first_text(Map[String, Json], String, String) -> String?
 
-pub fn json_int(Map[String, Json], String) -> Int?
+pub fn json_int(Map[String, Json], String) -> Int32?
 
 pub fn json_text(Map[String, Json], String) -> String?
 

@@ -71,15 +71,15 @@ pub fn Session::Session(SessionId, system_prompt~ : String, events? : @vector.Ve
 pub fn Session::append(Self, SessionItem, unix_ms? : Int64) -> Self
 pub fn Session::append_event(Self, SessionItem, unix_ms? : Int64) -> (Self, SessionEvent)
 pub fn Session::chat_messages(Self) -> Array[@deepseek.ChatMessage]
-pub fn Session::compact(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int, unix_ms? : Int64) -> Self raise
+pub fn Session::compact(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32, unix_ms? : Int64) -> Self raise
 pub fn Session::current_goal(Self) -> StandingGoal?
 pub fn Session::current_goal_baseline(Self) -> GoalBaseline?
 pub fn Session::events(Self) -> @vector.Vector[SessionEvent]
-pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int) -> Self raise
+pub fn Session::fork(Self, SessionId, system_prompt~ : String, through? : Int32) -> Self raise
 pub fn Session::id(Self) -> SessionId
-pub fn Session::last_sequence(Self) -> Int
+pub fn Session::last_sequence(Self) -> Int32
 pub fn Session::last_terminal(Self) -> TurnTerminal?
-pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> SessionItem raise
+pub fn Session::summary_item(Self, content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> SessionItem raise
 pub fn Session::system_prompt(Self) -> String
 pub impl ToJson for Session
 pub impl @json.FromJson for Session
@@ -87,7 +87,7 @@ pub impl @json.FromJson for Session
 type SessionEvent derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn SessionEvent::is_agent_step(Self) -> Bool
 pub fn SessionEvent::item(Self) -> SessionItem
-pub fn SessionEvent::sequence(Self) -> Int
+pub fn SessionEvent::sequence(Self) -> Int32
 pub fn SessionEvent::unix_ms(Self) -> Int64
 
 type SessionId derive(Eq, @debug.Debug)
@@ -107,23 +107,23 @@ pub(all) enum SessionItem {
 pub impl @json.FromJson for SessionItem
 
 type SessionSummary derive(Eq, ToJson, @debug.Debug, @json.FromJson)
-pub fn SessionSummary::SessionSummary(content~ : String, from_sequence~ : Int, to_sequence~ : Int) -> Self
+pub fn SessionSummary::SessionSummary(content~ : String, from_sequence~ : Int32, to_sequence~ : Int32) -> Self
 pub fn SessionSummary::content(Self) -> String
-pub fn SessionSummary::from_sequence(Self) -> Int
-pub fn SessionSummary::to_sequence(Self) -> Int
+pub fn SessionSummary::from_sequence(Self) -> Int32
+pub fn SessionSummary::to_sequence(Self) -> Int32
 
 type StandingGoal derive(@debug.Debug)
 pub fn StandingGoal::answered_since_set(Self) -> Bool
 pub fn StandingGoal::blocked(Self) -> Bool
-pub fn StandingGoal::set_sequence(Self) -> Int
+pub fn StandingGoal::set_sequence(Self) -> Int32
 pub fn StandingGoal::text(Self) -> String
 
 pub(all) struct TokenUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-  prompt_cache_hit_tokens : Int
-  prompt_cache_miss_tokens : Int
+  prompt_tokens : Int32
+  completion_tokens : Int32
+  total_tokens : Int32
+  prompt_cache_hit_tokens : Int32
+  prompt_cache_miss_tokens : Int32
 } derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 type ToolResult derive(Eq, ToJson, @debug.Debug, @json.FromJson)

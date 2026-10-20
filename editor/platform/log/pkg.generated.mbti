@@ -53,7 +53,7 @@ type MemoryLogger
 pub fn MemoryLogger::MemoryLogger() -> Self
 pub fn MemoryLogger::entries(Self) -> Array[LogEntry]
 pub fn MemoryLogger::flush(Self) -> Unit
-pub fn MemoryLogger::flush_count(Self) -> Int
+pub fn MemoryLogger::flush_count(Self) -> Int32
 pub fn MemoryLogger::log(Self, LogEntry) -> Unit
 pub impl Logger for MemoryLogger
 

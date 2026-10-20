@@ -34,7 +34,7 @@ pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum SettingsSnapshot {
   Unloaded
-  Loaded(worktree_mode~ : Bool, checkout_submodules~ : Bool, submodule_checkout_timeout_seconds~ : Int)
+  Loaded(worktree_mode~ : Bool, checkout_submodules~ : Bool, submodule_checkout_timeout_seconds~ : Int32)
 } derive(Eq)
 pub fn SettingsSnapshot::equal(Self, Self) -> Bool
 pub fn SettingsSnapshot::not_equal(Self, Self) -> Bool

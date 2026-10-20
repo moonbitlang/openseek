@@ -21,7 +21,7 @@ pub(all) enum Msg {
   Opened(@interop.ConversationKey)
   Refresh(@interop.ConversationKey)
   Changed(@interop.ConversationKey)
-  Checked(serial~ : Int, Result[@protocol.McpStatusReply, String])
+  Checked(serial~ : Int32, Result[@protocol.McpStatusReply, String])
 }
 
 pub enum Phase {
@@ -37,7 +37,7 @@ pub fn Phase::not_equal(Self, Self) -> Bool
 pub struct State {
   conversation : @interop.ConversationKey?
   phase : Phase
-  serial : Int
+  serial : Int32
 } derive(Eq)
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self

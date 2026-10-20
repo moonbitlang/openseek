@@ -51,7 +51,7 @@ pub fn SemanticReviewDiff::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SemanticReviewSection {
   key : String
-  identity : Int?
+  identity : Int32?
   kind : SemanticReviewSectionKind
   old_range : SemanticReviewSourceRange?
   new_range : SemanticReviewSourceRange?
@@ -77,8 +77,8 @@ pub fn SemanticReviewSectionKind::not_equal(Self, Self) -> Bool
 pub fn SemanticReviewSectionKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct SemanticReviewSourceRange {
-  start_line_number : Int
-  line_count : Int
+  start_line_number : Int32
+  line_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn SemanticReviewSourceRange::equal(Self, Self) -> Bool
 pub fn SemanticReviewSourceRange::not_equal(Self, Self) -> Bool

@@ -11,7 +11,7 @@ pub async fn capture(Geometry, SubtaskEntry) -> CaptureOutcome
 
 pub async fn discard(Geometry, SubtaskEntry) -> Result[SubtaskEntry, String]
 
-pub async fn git_require(Array[String], cwd~ : String, timeout_ms? : Int) -> Result[String, String]
+pub async fn git_require(Array[String], cwd~ : String, timeout_ms? : Int32) -> Result[String, String]
 
 pub async fn hand_off(Geometry, SubtaskEntry) -> Result[SubtaskEntry, String]
 

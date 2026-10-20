@@ -19,7 +19,7 @@ pub fn parse_moon_definition_output(String, String) -> Array[@language.Location]
 
 pub fn parse_moon_hover_output(String, @common.Position) -> @language.Hover?
 
-pub async fn run_native_editor_server(String, host? : String, port? : Int, asset_dir? : String, moon_command? : String, browse_root? : String, log? : (String) -> Unit) -> Unit
+pub async fn run_native_editor_server(String, host? : String, port? : Int32, asset_dir? : String, moon_command? : String, browse_root? : String, log? : (String) -> Unit) -> Unit
 
 // Errors
 
@@ -46,7 +46,7 @@ pub fn NativeServerHost::NativeServerHost() -> Self
 pub async fn NativeServerHost::read_directory(Self, String, String) -> @server.ServerHostResolveResult
 pub async fn NativeServerHost::read_text_file(Self, String, @workspace.SourcePath) -> @server.ServerHostReadResult
 pub fn NativeServerHost::watch_text_file(Self, String, @workspace.SourcePath, async (@workspace.FileChangeType) -> Unit, (async () -> Unit) -> Unit) -> @server.ServerWatch
-pub fn NativeServerHost::with_poll_interval(Int) -> Self
+pub fn NativeServerHost::with_poll_interval(Int32) -> Self
 pub impl @server.ServerHost for NativeServerHost
 
 // Type aliases

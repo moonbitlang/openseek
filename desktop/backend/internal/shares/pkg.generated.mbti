@@ -19,7 +19,7 @@ pub impl Show for ShareError
 // Types and methods
 type Snapshot
 pub fn Snapshot::Snapshot(title~ : String, html~ : String, json~ : String, key~ : String) -> Self raise ShareError
-pub async fn Snapshot::publish(Self, server_url~ : String, token~ : String, timeout_ms? : Int, on_progress? : async (@protocol.ShareProgress) -> Unit) -> @protocol.SessionShareReply
+pub async fn Snapshot::publish(Self, server_url~ : String, token~ : String, timeout_ms? : Int32, on_progress? : async (@protocol.ShareProgress) -> Unit) -> @protocol.SessionShareReply
 
 // Type aliases
 

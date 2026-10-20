@@ -56,14 +56,14 @@ pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::to_repr(Self) -> @debug.Repr
 
 pub(all) enum TurnKey {
-  Durable(Int)
-  Local(Int)
+  Durable(Int32)
+  Local(Int32)
 } derive(Eq, @debug.Debug)
 pub fn TurnKey::anchor(Self) -> String
 pub fn TurnKey::equal(Self, Self) -> Bool
 pub fn TurnKey::from_anchor(String) -> Self?
 pub fn TurnKey::not_equal(Self, Self) -> Bool
-pub fn TurnKey::of(@transcript.TranscriptItem, index~ : Int) -> Self
+pub fn TurnKey::of(@transcript.TranscriptItem, index~ : Int32) -> Self
 pub fn TurnKey::to_repr(Self) -> @debug.Repr
 
 // Type aliases

@@ -20,7 +20,7 @@ pub fn Model::Model() -> Self
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::not_equal(Self, Self) -> Bool
 pub fn Model::query(Self) -> String
-pub fn Model::selected(Self, Int) -> Int
+pub fn Model::selected(Self, Int32) -> Int32
 pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, Msg, Array[@conversation.Id]) -> (@cmd.Cmd, Self, @conversation.Id?)
 pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
@@ -28,7 +28,7 @@ pub fn Model::view(Self, @i18n.Locale, @cmd.Emit[Msg]) -> @html.Html
 pub(all) enum Msg {
   Changed(String)
   Clear
-  Move(Int)
+  Move(Int32)
   Pick
 }
 

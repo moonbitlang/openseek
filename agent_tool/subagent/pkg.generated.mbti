@@ -20,7 +20,7 @@ pub fn send_definition(@agent_subagent.Launcher, Array[Kind]) -> @agent_tool.Age
 // Types and methods
 pub(all) struct Kind {
   name : String
-  ceiling : Int
+  ceiling : Int32
   validate : (Json) -> Result[Json, String]
   takes_instructions : Bool
   changes_code : Bool

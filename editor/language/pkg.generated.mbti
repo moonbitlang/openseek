@@ -88,7 +88,7 @@ pub fn HoverContent::to_repr(Self) -> @debug.Repr
 type LanguageFilter derive(@debug.Debug)
 pub fn LanguageFilter::LanguageFilter(language? : String, scheme? : String, pattern? : String) -> Self
 pub fn LanguageFilter::matches(Self, @model.TextModel) -> Bool
-pub fn LanguageFilter::score(Self, @model.TextModel) -> Int
+pub fn LanguageFilter::score(Self, @model.TextModel) -> Int32
 pub fn LanguageFilter::to_repr(Self) -> @debug.Repr
 
 pub(all) enum LanguageSelector {
@@ -97,7 +97,7 @@ pub(all) enum LanguageSelector {
   LanguageSelectorList(Array[LanguageSelector])
 } derive(@debug.Debug)
 pub fn LanguageSelector::matches(Self, @model.TextModel) -> Bool
-pub fn LanguageSelector::score(Self, @model.TextModel) -> Int
+pub fn LanguageSelector::score(Self, @model.TextModel) -> Int32
 pub fn LanguageSelector::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Location {

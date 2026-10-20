@@ -32,7 +32,7 @@ pub(all) struct Id {
 pub fn Id::Id(source~ : String, channel~ : String, root~ : String) -> Self
 pub fn Id::channel(Self) -> String
 pub fn Id::equal(Self, Self) -> Bool
-pub fn Id::hash(Self) -> Int
+pub fn Id::hash(Self) -> Int32
 pub fn Id::hash_combine(Self, Hasher) -> Unit
 pub fn Id::key(Self) -> String
 pub fn Id::not_equal(Self, Self) -> Bool

@@ -8,11 +8,11 @@ import {
 // Values
 pub fn basename_or_authority(Uri) -> String
 
-pub fn compare(String, String) -> Int
+pub fn compare(String, String) -> Int32
 
-pub fn compare_substring(String, String, a_start? : Int, a_end? : Int, b_start? : Int, b_end? : Int) -> Int
+pub fn compare_substring(String, String, a_start? : Int32, a_end? : Int32, b_start? : Int32, b_end? : Int32) -> Int32
 
-pub fn compare_substring_ignore_case(String, String, a_start? : Int, a_end? : Int, b_start? : Int, b_end? : Int) -> Int
+pub fn compare_substring_ignore_case(String, String, a_start? : Int32, a_end? : Int32, b_start? : Int32, b_end? : Int32) -> Int32
 
 pub fn contains_rtl(String) -> Bool
 
@@ -30,21 +30,21 @@ pub let ext_uri_biased_ignore_path_case : ExtUri
 
 pub let ext_uri_ignore_path_case : ExtUri
 
-pub fn first_non_whitespace_index(String) -> Int
+pub fn first_non_whitespace_index(String) -> Int32
 
-pub fn is_full_width_character(Int) -> Bool
+pub fn is_full_width_character(Int32) -> Bool
 
-pub fn is_high_surrogate(Int) -> Bool
+pub fn is_high_surrogate(Int32) -> Bool
 
 pub let is_linux : Bool
 
-pub fn is_low_surrogate(Int) -> Bool
+pub fn is_low_surrogate(Int32) -> Bool
 
 pub let is_macintosh : Bool
 
 pub let is_windows : Bool
 
-pub fn last_non_whitespace_index(String) -> Int
+pub fn last_non_whitespace_index(String) -> Int32
 
 pub fn platform_is_win32() -> Bool
 
@@ -52,7 +52,7 @@ pub async fn run_async_tasks_sequentially(Array[async () -> Unit]) -> Unit
 
 pub let schemas_in_memory : String
 
-pub fn single_letter_hash(Int) -> String
+pub fn single_letter_hash(Int32) -> String
 
 pub fn split_lines(String) -> Array[String]
 
@@ -68,14 +68,14 @@ pub fn UriError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
 type CharacterClassifier
-pub fn CharacterClassifier::CharacterClassifier(Int) -> Self
-pub fn CharacterClassifier::get(Self, Int) -> Int
-pub fn CharacterClassifier::set(Self, Int, Int) -> Unit
+pub fn CharacterClassifier::CharacterClassifier(Int32) -> Self
+pub fn CharacterClassifier::get(Self, Int32) -> Int32
+pub fn CharacterClassifier::set(Self, Int32, Int32) -> Unit
 
 type CharacterSet
 pub fn CharacterSet::CharacterSet() -> Self
-pub fn CharacterSet::add(Self, Int) -> Unit
-pub fn CharacterSet::has(Self, Int) -> Bool
+pub fn CharacterSet::add(Self, Int32) -> Unit
+pub fn CharacterSet::has(Self, Int32) -> Bool
 
 type Disposable
 pub fn Disposable::dispose(Self) -> Unit
@@ -91,7 +91,7 @@ pub fn[T] Emitter::has_listeners(Self[T]) -> Bool
 type ExtUri
 pub fn ExtUri::basename(Self, Uri, suffix? : String) -> String
 pub fn ExtUri::basename_or_authority(Self, Uri) -> String
-pub fn ExtUri::compare(Self, Uri, Uri, ignore_fragment? : Bool) -> Int
+pub fn ExtUri::compare(Self, Uri, Uri, ignore_fragment? : Bool) -> Int32
 pub fn ExtUri::dirname(Self, Uri) -> Uri
 pub fn ExtUri::extname(Self, Uri) -> String
 pub fn ExtUri::get_comparison_key(Self, Uri, ignore_fragment? : Bool) -> String
@@ -108,17 +108,17 @@ pub fn ExtUri::remove_trailing_path_separator(Self, Uri, sep? : String) -> Uri
 pub fn ExtUri::resolve_path(Self, Uri, String) -> Uri
 
 pub(all) struct LineRange {
-  start_line_number : Int
-  end_line_number_exclusive : Int
+  start_line_number : Int32
+  end_line_number_exclusive : Int32
 } derive(Eq, @debug.Debug)
-pub fn LineRange::LineRange(Int, Int) -> Self
-pub fn LineRange::contains(Self, Int) -> Bool
+pub fn LineRange::LineRange(Int32, Int32) -> Self
+pub fn LineRange::contains(Self, Int32) -> Bool
 pub fn LineRange::equal(Self, Self) -> Bool
 pub fn LineRange::equals(Self, Self) -> Bool
 pub fn LineRange::is_empty(Self) -> Bool
 pub fn LineRange::join(Self, Self) -> Self
 pub fn LineRange::join_many(Array[Array[Self]]) -> Array[Self]
-pub fn LineRange::length(Self) -> Int
+pub fn LineRange::length(Self) -> Int32
 pub fn LineRange::not_equal(Self, Self) -> Bool
 pub fn LineRange::to_repr(Self) -> @debug.Repr
 pub fn LineRange::to_string(Self) -> String
@@ -135,36 +135,36 @@ pub fn[T] MicrotaskEmitter::event(Self[T], (T) -> Unit) -> Disposable
 pub fn[T] MicrotaskEmitter::fire(Self[T], T) -> Unit
 
 pub struct OffsetRange {
-  start : Int
-  end_exclusive : Int
+  start : Int32
+  end_exclusive : Int32
 } derive(Eq, @debug.Debug)
-pub fn OffsetRange::OffsetRange(Int, Int) -> Self
+pub fn OffsetRange::OffsetRange(Int32, Int32) -> Self
 pub fn OffsetRange::add_range(Self, Array[Self]) -> Unit
-pub fn OffsetRange::contains(Self, Int) -> Bool
-pub fn OffsetRange::empty_at(Int) -> Self
+pub fn OffsetRange::contains(Self, Int32) -> Bool
+pub fn OffsetRange::empty_at(Int32) -> Self
 pub fn OffsetRange::equal(Self, Self) -> Bool
 pub fn OffsetRange::equals(Self, Self) -> Bool
-pub fn OffsetRange::from_to(Int, Int) -> Self
+pub fn OffsetRange::from_to(Int32, Int32) -> Self
 pub fn OffsetRange::is_empty(Self) -> Bool
-pub fn OffsetRange::length(Self) -> Int
+pub fn OffsetRange::length(Self) -> Int32
 pub fn OffsetRange::not_equal(Self, Self) -> Bool
-pub fn OffsetRange::of_length(Int) -> Self
+pub fn OffsetRange::of_length(Int32) -> Self
 pub fn OffsetRange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct Position {
-  line_number : Int
-  column : Int
+  line_number : Int32
+  column : Int32
 } derive(Eq, @debug.Debug)
-pub fn Position::Position(Int, Int) -> Self
-pub fn Position::compare(Self, Self) -> Int
-pub fn Position::delta(Self, delta_line_number? : Int, delta_column? : Int) -> Self
+pub fn Position::Position(Int32, Int32) -> Self
+pub fn Position::compare(Self, Self) -> Int32
+pub fn Position::delta(Self, delta_line_number? : Int32, delta_column? : Int32) -> Self
 pub fn Position::equal(Self, Self) -> Bool
 pub fn Position::equals(Self, Self) -> Bool
 pub fn Position::is_before(Self, Self) -> Bool
 pub fn Position::is_before_or_equal(Self, Self) -> Bool
 pub fn Position::not_equal(Self, Self) -> Bool
 pub fn Position::to_repr(Self) -> @debug.Repr
-pub fn Position::with_(Self, line_number? : Int, column? : Int) -> Self
+pub fn Position::with_(Self, line_number? : Int32, column? : Int32) -> Self
 
 type Posix
 pub fn Posix::basename(String, suffix? : String) -> String
@@ -179,15 +179,15 @@ pub fn Posix::resolve(Array[String]) -> String
 pub fn Posix::sep() -> String
 
 pub(all) struct Range {
-  start_line_number : Int
-  start_column : Int
-  end_line_number : Int
-  end_column : Int
+  start_line_number : Int32
+  start_column : Int32
+  end_line_number : Int32
+  end_column : Int32
 } derive(Eq, @debug.Debug)
-pub fn Range::Range(Int, Int, Int, Int) -> Self
+pub fn Range::Range(Int32, Int32, Int32, Int32) -> Self
 pub fn Range::are_intersecting(Self, Self) -> Bool
 pub fn Range::are_intersecting_or_touching(Self, Self) -> Bool
-pub fn Range::compare_ranges_using_starts(Self, Self) -> Int
+pub fn Range::compare_ranges_using_starts(Self, Self) -> Int32
 pub fn Range::contains_position(Self, Position) -> Bool
 pub fn Range::contains_range(Self, Self) -> Bool
 pub fn Range::equal(Self, Self) -> Bool
@@ -198,7 +198,7 @@ pub fn Range::intersect_ranges(Self, Self) -> Self?
 pub fn Range::is_empty(Self) -> Bool
 pub fn Range::not_equal(Self, Self) -> Bool
 pub fn Range::plus_range(Self, Self) -> Self
-pub fn Range::set_end_position(Self, Int, Int) -> Self
+pub fn Range::set_end_position(Self, Int32, Int32) -> Self
 pub fn Range::strict_contains_range(Self, Self) -> Bool
 pub fn Range::to_repr(Self) -> @debug.Repr
 pub fn Range::to_string(Self) -> String
@@ -215,7 +215,7 @@ pub fn Uri::equal(Self, Self) -> Bool
 pub fn Uri::file(String) -> Self
 pub fn Uri::from(scheme~ : String, authority? : String, path? : String, query? : String, fragment? : String, strict? : Bool) -> Self raise UriError
 pub fn Uri::fs_path(Self) -> String
-pub fn Uri::hash(Self) -> Int
+pub fn Uri::hash(Self) -> Int32
 pub fn Uri::hash_combine(Self, Hasher) -> Unit
 pub fn Uri::join_path(Self, Array[String]) -> Self
 pub fn Uri::not_equal(Self, Self) -> Bool

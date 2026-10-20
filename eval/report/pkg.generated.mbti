@@ -18,14 +18,14 @@ pub fn Report::Report(title~ : String, summary? : Array[Metric], metric_columns?
 pub fn Report::all_passed(Self) -> Bool
 pub fn Report::html(Self) -> String
 pub fn Report::markdown(Self) -> String
-pub fn Report::successes(Self) -> Int
+pub fn Report::successes(Self) -> Int32
 pub async fn Report::write_files(Self, String) -> Unit
 
 pub struct ReportRow {
   success : Bool
   // private fields
 }
-pub fn ReportRow::ReportRow(index~ : Int, name~ : String, success~ : Bool, reason? : String, warnings? : String, metrics? : Array[Metric], details? : Array[Metric], log_path? : String) -> Self
+pub fn ReportRow::ReportRow(index~ : Int32, name~ : String, success~ : Bool, reason? : String, warnings? : String, metrics? : Array[Metric], details? : Array[Metric], log_path? : String) -> Self
 
 // Type aliases
 

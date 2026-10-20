@@ -2,11 +2,11 @@
 package "moonbitlang/openseek/agent_tool/internal/moon_check"
 
 // Values
-pub const MaxOutputChars : Int = 12000
+pub const MaxOutputChars : Int32 = 12000
 
-pub const TimeoutMs : Int = 30000
+pub const TimeoutMs : Int32 = 30000
 
-pub fn format_output(Int?, String, Bool) -> String
+pub fn format_output(Int32?, String, Bool) -> String
 
 pub async fn nearest_project_dir(String) -> String?
 

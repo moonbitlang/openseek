@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn definition(api_key~ : String, base_url? : String, model? : String, max_results? : Int, max_uses? : Int, max_tokens? : Int, timeout_ms? : Int) -> @agent_tool.AgentToolDefinition
+pub fn definition(api_key~ : String, base_url? : String, model? : String, max_results? : Int32, max_uses? : Int32, max_tokens? : Int32, timeout_ms? : Int32) -> @agent_tool.AgentToolDefinition
 
 // Errors
 

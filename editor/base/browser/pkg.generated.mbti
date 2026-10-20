@@ -44,7 +44,7 @@ pub fn local_storage_set(String, String) -> Result[Unit, StorageFailure]
 
 pub fn monotonic_now_ms() -> Double
 
-pub fn mouse_event_pointer_id(@dom.MouseEvent) -> Int
+pub fn mouse_event_pointer_id(@dom.MouseEvent) -> Int32
 
 pub fn native_selection_has_endpoint_in_matching_ancestor(@dom.Element, String) -> Bool
 
@@ -58,11 +58,11 @@ pub fn remove_style_property(@dom.Element, String) -> Unit
 
 pub fn resolve_url(String, base? : String) -> Result[(String, String), String]
 
-pub fn run_at_this_or_schedule_at_next_animation_frame(() -> Unit, priority? : Int) -> @common.Disposable
+pub fn run_at_this_or_schedule_at_next_animation_frame(() -> Unit, priority? : Int32) -> @common.Disposable
 
-pub fn schedule_at_next_animation_frame(() -> Unit, priority? : Int) -> @common.Disposable
+pub fn schedule_at_next_animation_frame(() -> Unit, priority? : Int32) -> @common.Disposable
 
-pub fn schedule_timeout(() -> Unit, Int) -> @common.Disposable
+pub fn schedule_timeout(() -> Unit, Int32) -> @common.Disposable
 
 pub fn set_style_property(@dom.Element, String, String) -> Unit
 
@@ -78,19 +78,19 @@ pub fn wall_clock_now_ms() -> Double
 type GlobalPointerMoveMonitor
 pub fn GlobalPointerMoveMonitor::GlobalPointerMoveMonitor() -> Self
 pub fn GlobalPointerMoveMonitor::dispose(Self) -> Unit
-pub fn GlobalPointerMoveMonitor::start_monitoring(Self, @dom.Element, Int, Int, (@dom.MouseEvent) -> Unit, (@dom.Event?) -> Unit) -> Unit
+pub fn GlobalPointerMoveMonitor::start_monitoring(Self, @dom.Element, Int32, Int32, (@dom.MouseEvent) -> Unit, (@dom.Event?) -> Unit) -> Unit
 pub fn GlobalPointerMoveMonitor::stop_monitoring(Self, Bool, browser_event? : @dom.Event) -> Unit
 
 pub struct RunOnceScheduler {
-  delay_ms : Int
+  delay_ms : Int32
   mut handle : @common.Disposable?
-  schedule_timeout : (() -> Unit, Int) -> @common.Disposable
+  schedule_timeout : (() -> Unit, Int32) -> @common.Disposable
 }
-pub fn RunOnceScheduler::RunOnceScheduler(Int) -> Self
+pub fn RunOnceScheduler::RunOnceScheduler(Int32) -> Self
 pub fn RunOnceScheduler::cancel(Self) -> Unit
 pub fn RunOnceScheduler::dispose(Self) -> Unit
 pub fn RunOnceScheduler::is_scheduled(Self) -> Bool
-pub fn RunOnceScheduler::new_with_timer(Int, (() -> Unit, Int) -> @common.Disposable) -> Self
+pub fn RunOnceScheduler::new_with_timer(Int32, (() -> Unit, Int32) -> @common.Disposable) -> Self
 pub fn RunOnceScheduler::schedule(Self, () -> Unit) -> Unit
 
 pub struct StandardMouseEvent {
@@ -98,9 +98,9 @@ pub struct StandardMouseEvent {
   left_button : Bool
   middle_button : Bool
   right_button : Bool
-  buttons : Int
+  buttons : Int32
   target : @dom.Element?
-  detail : Int
+  detail : Int32
   posx : Double
   posy : Double
   ctrl_key : Bool

@@ -15,7 +15,7 @@ import {
 
 // Types and methods
 type MarkdownDocumentView
-pub fn MarkdownDocumentView::MarkdownDocumentView(localization? : @localization.Localization, String, Int, String, @common.Uri, @markdown.MarkdownResourceKind, String, () -> Unit, (Bool) -> Unit, () -> Unit, show_unused? : Bool) -> Self
+pub fn MarkdownDocumentView::MarkdownDocumentView(localization? : @localization.Localization, String, Int32, String, @common.Uri, @markdown.MarkdownResourceKind, String, () -> Unit, (Bool) -> Unit, () -> Unit, show_unused? : Bool) -> Self
 pub fn MarkdownDocumentView::append_projected_range_spans(Self, @common.OffsetRange, String) -> Array[@dom.Element]
 pub fn MarkdownDocumentView::apply_marker_unused_visibility(Self, Bool) -> Unit
 pub fn MarkdownDocumentView::apply_theme(Self, String) -> Unit
@@ -29,9 +29,9 @@ pub fn MarkdownDocumentView::layout(Self, Double, Double) -> Unit
 pub fn MarkdownDocumentView::listen_semantic_dom(Self, String, (@dom.Event) -> Unit) -> Unit
 pub fn MarkdownDocumentView::overlay_mount(Self) -> @dom.Element
 pub fn MarkdownDocumentView::projection(Self) -> @markdown.MarkdownDocumentProjection
-pub fn MarkdownDocumentView::projection_generation(Self) -> Int
-pub fn MarkdownDocumentView::replace_source(Self, String, Int) -> Unit
-pub fn MarkdownDocumentView::reveal_source_offset(Self, Int, String) -> Unit
+pub fn MarkdownDocumentView::projection_generation(Self) -> Int32
+pub fn MarkdownDocumentView::replace_source(Self, String, Int32) -> Unit
+pub fn MarkdownDocumentView::reveal_source_offset(Self, Int32, String) -> Unit
 pub fn MarkdownDocumentView::root(Self) -> @dom.Element
 pub fn MarkdownDocumentView::scroll_height(Self) -> Double
 pub fn MarkdownDocumentView::scroll_left(Self) -> Double
@@ -41,16 +41,16 @@ pub fn MarkdownDocumentView::semantic_code_lines(Self) -> Array[MarkdownSemantic
 pub fn MarkdownDocumentView::semantic_pointer_hit(Self, Double, Double) -> MarkdownSemanticPointerHit?
 pub fn MarkdownDocumentView::set_hidden_root_elements(Self, Array[@common.OffsetRange]) -> Unit
 pub fn MarkdownDocumentView::set_scroll_position(Self, scroll_top? : Double, scroll_left? : Double) -> Unit
-pub fn MarkdownDocumentView::set_section_fold_toggle_handler(Self, (Int) -> Unit) -> Unit
-pub fn MarkdownDocumentView::set_toc_entries(Self, Array[MarkdownTocBarEntry], (Int) -> Unit) -> Unit
-pub fn MarkdownDocumentView::source_model_version(Self) -> Int
+pub fn MarkdownDocumentView::set_section_fold_toggle_handler(Self, (Int32) -> Unit) -> Unit
+pub fn MarkdownDocumentView::set_toc_entries(Self, Array[MarkdownTocBarEntry], (Int32) -> Unit) -> Unit
+pub fn MarkdownDocumentView::source_model_version(Self) -> Int32
 pub fn MarkdownDocumentView::source_selection(Self) -> MarkdownSourceSelection?
 pub fn MarkdownDocumentView::viewport(Self) -> @dom.Element
 pub fn MarkdownDocumentView::visible_source_ranges(Self) -> Array[@common.OffsetRange]
 
 pub(all) struct MarkdownSectionFoldControl {
   heading_source_range : @common.OffsetRange
-  section_index : Int
+  section_index : Int32
   collapsed : Bool
 } derive(Eq, @debug.Debug)
 pub fn MarkdownSectionFoldControl::equal(Self, Self) -> Bool
@@ -58,24 +58,24 @@ pub fn MarkdownSectionFoldControl::not_equal(Self, Self) -> Bool
 pub fn MarkdownSectionFoldControl::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSemanticCodeLineDom {
-  block_index : Int
+  block_index : Int32
   block_source_range : @common.OffsetRange
-  line_index : Int
+  line_index : Int32
   element : @dom.Element
   // private fields
 }
 
 pub struct MarkdownSemanticPointerHit {
   line : MarkdownSemanticCodeLineDom
-  source_offset : Int
+  source_offset : Int32
   pointer_x : Double
 }
 
 pub struct MarkdownSourceSelection {
   source_range : @common.OffsetRange
   selected_text : String
-  source_model_version : Int
-  projection_generation : Int
+  source_model_version : Int32
+  projection_generation : Int32
   prefer_below : Bool
   // private fields
 }
@@ -83,9 +83,9 @@ pub fn MarkdownSourceSelection::anchor_client_rect(Self) -> @dom.DOMRect
 pub fn MarkdownSourceSelection::same_dom_range(Self, Self) -> Bool
 
 pub(all) struct MarkdownTocBarEntry {
-  depth : Int
+  depth : Int32
   text : String
-  source_offset : Int
+  source_offset : Int32
 } derive(Eq, @debug.Debug)
 pub fn MarkdownTocBarEntry::equal(Self, Self) -> Bool
 pub fn MarkdownTocBarEntry::not_equal(Self, Self) -> Bool

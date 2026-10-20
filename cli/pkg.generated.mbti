@@ -10,9 +10,9 @@ pub fn agent_shared_options(global? : Bool) -> Array[@argparse.OptionArg]
 
 pub fn failure_message(StringView) -> StringView
 
-pub fn parse_positive_int(String, String) -> Int raise
+pub fn parse_positive_int(String, String) -> Int32 raise
 
-pub fn terminal_safe_line(String, limit? : Int) -> String
+pub fn terminal_safe_line(String, limit? : Int32) -> String
 
 pub fn value(@argparse.Matches, String) -> String raise
 

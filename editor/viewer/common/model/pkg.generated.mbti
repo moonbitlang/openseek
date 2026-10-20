@@ -10,11 +10,11 @@ import {
 }
 
 // Values
-pub fn compute_indent_level(String, Int) -> Int
+pub fn compute_indent_level(String, Int32) -> Int32
 
 pub fn default_token_color_map() -> Array[String]
 
-pub fn line_tokens_from_lexer_tokens(String, Array[@syntax.LineToken], @services.LanguageIdCodec, language_id? : Int) -> @tokens.LineTokens
+pub fn line_tokens_from_lexer_tokens(String, Array[@syntax.LineToken], @services.LanguageIdCodec, language_id? : Int32) -> @tokens.LineTokens
 
 // Errors
 
@@ -29,8 +29,8 @@ type DidChangeContentEmitter
 type DidChangeDecorationsEmitter
 
 type InjectedTextOptions derive(Eq, @debug.Debug)
-pub fn InjectedTextOptions::InjectedTextOptions(String, inline_class_name? : String, attached_index? : Int) -> Self
-pub fn InjectedTextOptions::attached_index(Self) -> Int
+pub fn InjectedTextOptions::InjectedTextOptions(String, inline_class_name? : String, attached_index? : Int32) -> Self
+pub fn InjectedTextOptions::attached_index(Self) -> Int32
 pub fn InjectedTextOptions::content(Self) -> String
 pub fn InjectedTextOptions::equal(Self, Self) -> Bool
 pub fn InjectedTextOptions::inline_class_name(Self) -> String?
@@ -53,8 +53,8 @@ pub fn MinimapPosition::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelContentChange {
   range : @common.Range
-  range_offset : Int
-  range_length : Int
+  range_offset : Int32
+  range_length : Int32
   text : String
 } derive(@debug.Debug)
 pub fn ModelContentChange::to_repr(Self) -> @debug.Repr
@@ -62,7 +62,7 @@ pub fn ModelContentChange::to_repr(Self) -> @debug.Repr
 pub struct ModelContentChangedEvent {
   changes : Array[ModelContentChange]
   eol : String
-  version_id : Int
+  version_id : Int32
   is_undoing : Bool
   is_redoing : Bool
   is_flush : Bool
@@ -72,7 +72,7 @@ pub fn ModelContentChangedEvent::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecoration {
   id : String
-  owner_id : Int
+  owner_id : Int32
   range : @common.Range
   options : ModelDecorationOptions
 } derive(@debug.Debug)
@@ -91,7 +91,7 @@ pub struct ModelDecorationOptions {
   message : String?
   inline_class_name : String?
   inline_class_name_affects_letter_spacing : Bool
-  z_index : Int
+  z_index : Int32
   is_whole_line : Bool
   show_if_collapsed : Bool
   should_fill_line_on_line_break : Bool
@@ -108,7 +108,7 @@ pub struct ModelDecorationOptions {
   before : InjectedTextOptions?
   after : InjectedTextOptions?
 } derive(@debug.Debug)
-pub fn ModelDecorationOptions::ModelDecorationOptions(String, message? : String, inline_class_name? : String, inline_class_name_affects_letter_spacing? : Bool, z_index? : Int, is_whole_line? : Bool, show_if_collapsed? : Bool, should_fill_line_on_line_break? : Bool, stickiness? : TrackedRangeStickiness, overview_ruler? : ModelDecorationOverviewRulerOptions, minimap? : ModelDecorationMinimapOptions, glyph_margin_class_name? : String, lines_decorations_class_name? : String, first_line_decoration_class_name? : String, margin_class_name? : String, after_content_class_name? : String, collapse_on_replace_edit? : Bool, description? : String, before? : InjectedTextOptions, after? : InjectedTextOptions) -> Self
+pub fn ModelDecorationOptions::ModelDecorationOptions(String, message? : String, inline_class_name? : String, inline_class_name_affects_letter_spacing? : Bool, z_index? : Int32, is_whole_line? : Bool, show_if_collapsed? : Bool, should_fill_line_on_line_break? : Bool, stickiness? : TrackedRangeStickiness, overview_ruler? : ModelDecorationOverviewRulerOptions, minimap? : ModelDecorationMinimapOptions, glyph_margin_class_name? : String, lines_decorations_class_name? : String, first_line_decoration_class_name? : String, margin_class_name? : String, after_content_class_name? : String, collapse_on_replace_edit? : Bool, description? : String, before? : InjectedTextOptions, after? : InjectedTextOptions) -> Self
 pub fn ModelDecorationOptions::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ModelDecorationOverviewRulerOptions {
@@ -146,16 +146,16 @@ pub fn ModelDeltaDecoration::to_repr(Self) -> @debug.Repr
 
 pub enum ModelRawChange {
   ModelRawFlush
-  ModelRawLineChanged(line_number~ : Int, line_number_post_edit~ : Int)
-  ModelRawLinesDeleted(from_line_number~ : Int, to_line_number~ : Int, last_untouched_line_post_edit~ : Int)
-  ModelRawLinesInserted(from_line_number~ : Int, from_line_number_post_edit~ : Int, count~ : Int)
+  ModelRawLineChanged(line_number~ : Int32, line_number_post_edit~ : Int32)
+  ModelRawLinesDeleted(from_line_number~ : Int32, to_line_number~ : Int32, last_untouched_line_post_edit~ : Int32)
+  ModelRawLinesInserted(from_line_number~ : Int32, from_line_number_post_edit~ : Int32, count~ : Int32)
   ModelRawEOLChanged
 } derive(@debug.Debug)
 pub fn ModelRawChange::to_repr(Self) -> @debug.Repr
 
 pub struct ModelRawContentChangedEvent {
   changes : Array[ModelRawChange]
-  version_id : Int
+  version_id : Int32
   is_undoing : Bool
   is_redoing : Bool
 } derive(@debug.Debug)
@@ -168,8 +168,8 @@ pub(all) struct ModelTokensChangedEvent {
 }
 
 pub(all) struct ModelTokensChangedRange {
-  from_line_number : Int
-  to_line_number : Int
+  from_line_number : Int32
+  to_line_number : Int32
 }
 
 pub(all) enum OverviewRulerLane {
@@ -208,7 +208,7 @@ pub struct TextModel {
   uri : @common.Uri
   display_name : String
   language_id : String
-  version : Int
+  version : Int32
   revision : String
   mut snapshot : TextSnapshot
   tokenization : TokenizationTextModelPart
@@ -216,30 +216,30 @@ pub struct TextModel {
   on_did_change_decorations : DidChangeDecorationsEmitter
   // private fields
 }
-pub fn TextModel::TextModel(@common.Uri, String, String, Int, String, String) -> Self
-pub fn[T] TextModel::change_decorations(Self, (ModelDecorationsChangeAccessor) -> T, owner_id? : Int) -> T
-pub fn TextModel::delta_decorations(Self, Array[String], Array[ModelDeltaDecoration], owner_id? : Int) -> Array[String]
+pub fn TextModel::TextModel(@common.Uri, String, String, Int32, String, String) -> Self
+pub fn[T] TextModel::change_decorations(Self, (ModelDecorationsChangeAccessor) -> T, owner_id? : Int32) -> T
+pub fn TextModel::delta_decorations(Self, Array[String], Array[ModelDeltaDecoration], owner_id? : Int32) -> Array[String]
 pub fn TextModel::dispose(Self) -> Unit
 pub fn TextModel::get_decoration_range(Self, String) -> @common.Range?
-pub fn TextModel::get_decorations_in_range(Self, @common.Range, owner_id? : Int, filter_out_validation? : Bool, filter_font_decorations? : Bool, only_margin_decorations? : Bool) -> Array[ModelDecoration]
+pub fn TextModel::get_decorations_in_range(Self, @common.Range, owner_id? : Int32, filter_out_validation? : Bool, filter_font_decorations? : Bool, only_margin_decorations? : Bool) -> Array[ModelDecoration]
 pub fn TextModel::get_full_model_range(Self) -> @common.Range
-pub fn TextModel::get_injected_text_decorations(Self, owner_id? : Int) -> Array[ModelDecoration]
+pub fn TextModel::get_injected_text_decorations(Self, owner_id? : Int32) -> Array[ModelDecoration]
 pub fn TextModel::get_language_id(Self) -> String
-pub fn TextModel::get_line_content(Self, Int) -> String
-pub fn TextModel::get_line_count(Self) -> Int
-pub fn TextModel::get_line_decorations(Self, Int, owner_id? : Int, filter_out_validation? : Bool, filter_font_decorations? : Bool) -> Array[ModelDecoration]
-pub fn TextModel::get_line_first_non_whitespace_column(Self, Int) -> Int
-pub fn TextModel::get_line_last_non_whitespace_column(Self, Int) -> Int
-pub fn TextModel::get_line_max_column(Self, Int) -> Int
-pub fn TextModel::get_line_min_column(Self, Int) -> Int
+pub fn TextModel::get_line_content(Self, Int32) -> String
+pub fn TextModel::get_line_count(Self) -> Int32
+pub fn TextModel::get_line_decorations(Self, Int32, owner_id? : Int32, filter_out_validation? : Bool, filter_font_decorations? : Bool) -> Array[ModelDecoration]
+pub fn TextModel::get_line_first_non_whitespace_column(Self, Int32) -> Int32
+pub fn TextModel::get_line_last_non_whitespace_column(Self, Int32) -> Int32
+pub fn TextModel::get_line_max_column(Self, Int32) -> Int32
+pub fn TextModel::get_line_min_column(Self, Int32) -> Int32
 pub fn TextModel::get_lines_content(Self) -> Array[String]
-pub fn TextModel::get_offset_at(Self, @common.Position) -> Int
-pub fn TextModel::get_position_at(Self, Int) -> @common.Position
+pub fn TextModel::get_offset_at(Self, @common.Position) -> Int32
+pub fn TextModel::get_position_at(Self, Int32) -> @common.Position
 pub fn TextModel::get_value(Self) -> String
 pub fn TextModel::get_value_in_range(Self, @common.Range) -> String
-pub fn TextModel::get_version_id(Self) -> Int
+pub fn TextModel::get_version_id(Self) -> Int32
 pub fn TextModel::get_word_at_position(Self, @common.Position) -> WordAtPosition?
-pub fn TextModel::identity(Self) -> Int
+pub fn TextModel::identity(Self) -> Int32
 pub fn TextModel::is_disposed(Self) -> Bool
 pub fn TextModel::on_before_attached(Self, scheduler? : TokenizationScheduler) -> AttachedViewImpl
 pub fn TextModel::on_before_detached(Self, AttachedViewImpl) -> Unit
@@ -248,7 +248,7 @@ pub fn TextModel::on_did_change_decorations(Self, (ModelDecorationsChangedEvent)
 pub fn TextModel::on_did_change_tokens(Self, (ModelTokensChangedEvent) -> Unit) -> @common.Disposable
 pub fn TextModel::on_will_dispose(Self, () -> Unit) -> @common.Disposable
 pub fn TextModel::register_view_model(Self, (InternalModelContentChangeEvent) -> Unit, (InternalModelContentChangeEvent) -> Unit) -> @common.Disposable
-pub fn TextModel::remove_all_decorations_with_owner_id(Self, Int) -> Unit
+pub fn TextModel::remove_all_decorations_with_owner_id(Self, Int32) -> Unit
 pub fn TextModel::same(Self, Self) -> Bool
 pub fn TextModel::set_value(Self, String) -> Unit
 pub fn TextModel::snapshot(Self) -> TextSnapshot
@@ -260,13 +260,13 @@ pub impl @debug.Debug for TextModel
 type TextSnapshot derive(@debug.Debug)
 pub fn TextSnapshot::TextSnapshot(String) -> Self
 pub fn TextSnapshot::equals(Self, Self) -> Bool
-pub fn TextSnapshot::get_line_content(Self, Int) -> String
-pub fn TextSnapshot::get_line_first_non_whitespace_column(Self, Int) -> Int
-pub fn TextSnapshot::get_line_max_column(Self, Int) -> Int
-pub fn TextSnapshot::get_offset_at(Self, Int, Int) -> Int
+pub fn TextSnapshot::get_line_content(Self, Int32) -> String
+pub fn TextSnapshot::get_line_first_non_whitespace_column(Self, Int32) -> Int32
+pub fn TextSnapshot::get_line_max_column(Self, Int32) -> Int32
+pub fn TextSnapshot::get_offset_at(Self, Int32, Int32) -> Int32
 pub fn TextSnapshot::get_value(Self) -> String
-pub fn TextSnapshot::line_count(Self) -> Int
-pub fn TextSnapshot::line_text(Self, Int) -> String
+pub fn TextSnapshot::line_count(Self) -> Int32
+pub fn TextSnapshot::line_text(Self, Int32) -> String
 pub fn TextSnapshot::offset_range_of(Self, @common.Range) -> @common.OffsetRange
 pub fn TextSnapshot::range_of(Self, @common.OffsetRange) -> @common.Range
 pub fn TextSnapshot::slice(Self, @common.OffsetRange) -> String
@@ -276,11 +276,11 @@ type TokenizationIdleDeadline
 pub fn TokenizationIdleDeadline::TokenizationIdleDeadline(() -> Double) -> Self
 
 type TokenizationScheduler
-pub fn TokenizationScheduler::TokenizationScheduler(idle~ : ((TokenizationIdleDeadline) -> Unit) -> @common.Disposable, zero_timeout~ : (() -> Unit) -> @common.Disposable, delay~ : (Int, () -> Unit) -> @common.Disposable, now~ : () -> Double) -> Self
+pub fn TokenizationScheduler::TokenizationScheduler(idle~ : ((TokenizationIdleDeadline) -> Unit) -> @common.Disposable, zero_timeout~ : (() -> Unit) -> @common.Disposable, delay~ : (Int32, () -> Unit) -> @common.Disposable, now~ : () -> Double) -> Self
 
 type TokenizationTextModelPart
-pub fn TokenizationTextModelPart::get_line_tokens(Self, Int) -> @tokens.LineTokens
-pub fn TokenizationTextModelPart::token_count(Self) -> Int
+pub fn TokenizationTextModelPart::get_line_tokens(Self, Int32) -> @tokens.LineTokens
+pub fn TokenizationTextModelPart::token_count(Self) -> Int32
 
 pub(all) enum TrackedRangeStickiness {
   AlwaysGrowsWhenTypingAtEdges
@@ -293,8 +293,8 @@ pub fn TrackedRangeStickiness::not_equal(Self, Self) -> Bool
 pub fn TrackedRangeStickiness::to_repr(Self) -> @debug.Repr
 
 pub(all) struct VisibleLineRange {
-  start_line_number : Int
-  end_line_number : Int
+  start_line_number : Int32
+  end_line_number : Int32
 } derive(Eq, @debug.Debug)
 pub fn VisibleLineRange::equal(Self, Self) -> Bool
 pub fn VisibleLineRange::not_equal(Self, Self) -> Bool
@@ -302,8 +302,8 @@ pub fn VisibleLineRange::to_repr(Self) -> @debug.Repr
 
 pub struct WordAtPosition {
   word : String
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
 } derive(Eq, @debug.Debug)
 pub fn WordAtPosition::equal(Self, Self) -> Bool
 pub fn WordAtPosition::not_equal(Self, Self) -> Bool

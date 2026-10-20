@@ -36,8 +36,8 @@ pub fn CursorState::to_repr(Self) -> @debug.Repr
 pub struct CursorStateChange {
   old_selections : Array[@core.Selection]?
   selections : Array[@core.Selection]
-  old_model_version_id : Int
-  model_version_id : Int
+  old_model_version_id : Int32
+  model_version_id : Int32
   source : String
   reason : @editor_api.CursorChangeReason
   reached_max_cursor_count : Bool
@@ -74,14 +74,14 @@ pub struct SingleCursorState {
   selection_start_start : @common.Position
   selection_start_end : @common.Position
   selection_start_kind : SelectionStartKind
-  selection_start_leftover_visible_columns : Int
+  selection_start_leftover_visible_columns : Int32
   position : @common.Position
-  leftover_visible_columns : Int
+  leftover_visible_columns : Int32
 } derive(Eq, @debug.Debug)
-pub fn SingleCursorState::SingleCursorState(@common.Position, @common.Position, SelectionStartKind, @common.Position, selection_start_leftover_visible_columns? : Int, leftover_visible_columns? : Int) -> Self
+pub fn SingleCursorState::SingleCursorState(@common.Position, @common.Position, SelectionStartKind, @common.Position, selection_start_leftover_visible_columns? : Int32, leftover_visible_columns? : Int32) -> Self
 pub fn SingleCursorState::equal(Self, Self) -> Bool
 pub fn SingleCursorState::has_selection(Self) -> Bool
-pub fn SingleCursorState::moved(Self, Bool, @common.Position, leftover_visible_columns? : Int) -> Self
+pub fn SingleCursorState::moved(Self, Bool, @common.Position, leftover_visible_columns? : Int32) -> Self
 pub fn SingleCursorState::not_equal(Self, Self) -> Bool
 pub fn SingleCursorState::selection(Self) -> @core.Selection
 pub fn SingleCursorState::to_repr(Self) -> @debug.Repr

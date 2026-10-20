@@ -27,13 +27,13 @@ type Request
 pub fn Request::Request(@interop.ChannelId, String, @common.Uri?) -> Self
 pub fn Request::retire(Self) -> @cmd.Cmd
 pub fn Request::run(Self, (Array[@pathx.Relative], Bool) -> @cmd.Cmd, () -> @cmd.Cmd) -> @cmd.Cmd
-pub fn Request::searching(Self, String, epoch~ : Int, loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd, failed~ : () -> @cmd.Cmd) -> @sub.Sub
+pub fn Request::searching(Self, String, epoch~ : Int32, loaded~ : (Array[@pathx.Relative], Bool) -> @cmd.Cmd, failed~ : () -> @cmd.Cmd) -> @sub.Sub
 
 pub struct Search {
   candidates : Array[@pathx.Relative]
 }
 pub fn Search::Search(Array[@pathx.Relative], Array[@pathx.Relative], @pathx.Relative?) -> Self
-pub fn Search::rank(Self, String, limit? : Int) -> Array[Match]
+pub fn Search::rank(Self, String, limit? : Int32) -> Array[Match]
 
 // Type aliases
 

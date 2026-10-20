@@ -9,13 +9,13 @@ import {
 }
 
 // Values
-pub let default_audit_max_steps : Int
+pub let default_audit_max_steps : Int32
 
-pub let default_review_max_steps : Int
+pub let default_review_max_steps : Int32
 
-pub async fn run_goal_audit(goal~ : String, baseline~ : @agent_session.GoalBaseline?, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ReviewReport?
+pub async fn run_goal_audit(goal~ : String, baseline~ : @agent_session.GoalBaseline?, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int32, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int32, retry_backoff_ms? : Int32, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ReviewReport?
 
-pub async fn run_review(base~ : String, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int, retry_backoff_ms? : Int, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ReviewReport?
+pub async fn run_review(base~ : String, api_key~ : String, model~ : @deepseek.Model, max_steps~ : Int32, thinking? : @deepseek.ThinkingMode, api_url? : String, retry_attempts? : Int32, retry_backoff_ms? : Int32, workspace_root? : String, session_id? : String, append_item? : async (@agent_session.Session, @agent_session.SessionItem) -> @agent_session.Session, scratch_dir? : String) -> ReviewReport?
 
 // Errors
 
@@ -24,7 +24,7 @@ type Finding derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 
 type ReviewReport derive(Eq, ToJson, @debug.Debug, @json.FromJson)
 pub fn ReviewReport::digest(Self) -> String
-pub fn ReviewReport::finding_count(Self) -> Int
+pub fn ReviewReport::finding_count(Self) -> Int32
 pub fn ReviewReport::has_blockers(Self) -> Bool
 pub fn ReviewReport::parse(Json) -> Result[Self, String]
 pub fn ReviewReport::to_json_string(Self) -> String

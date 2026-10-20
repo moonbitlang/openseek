@@ -59,8 +59,8 @@ pub fn AgentFeedbackKind::not_equal(Self, Self) -> Bool
 pub fn AgentFeedbackKind::to_repr(Self) -> @debug.Repr
 
 pub(all) struct AgentFeedbackNavigationBearing {
-  active_idx : Int
-  total_count : Int
+  active_idx : Int32
+  total_count : Int32
 } derive(Eq, @debug.Debug)
 pub fn AgentFeedbackNavigationBearing::equal(Self, Self) -> Bool
 pub fn AgentFeedbackNavigationBearing::not_equal(Self, Self) -> Bool
@@ -79,9 +79,9 @@ pub fn AgentFeedbackState::to_repr(Self) -> @debug.Repr
 pub(all) struct AgentFeedbackSubmittedEvent {
   resource : @common.Uri
   items : Array[AgentFeedback]
-  user_count : Int
-  agent_review_count : Int
-  reply_count : Int
+  user_count : Int32
+  agent_review_count : Int32
+  reply_count : Int32
 } derive(@debug.Debug)
 pub fn AgentFeedbackSubmittedEvent::to_repr(Self) -> @debug.Repr
 

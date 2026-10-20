@@ -11,7 +11,7 @@ import {
 // Values
 pub fn command() -> String
 
-pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, home~ : @pathx.Path?, handshake_timeout_ms? : Int) -> Connection
+pub async fn[X] connect(@async.TaskGroup[X], command~ : String, notification_handler~ : (String, Json) -> Unit, request_handler~ : (@jsonrpc.PeerRequest) -> Bool raise, on_closed~ : () -> Unit, version~ : String, home~ : @pathx.Path?, handshake_timeout_ms? : Int32) -> Connection
 
 pub fn home_dir(@pathx.Path) -> @pathx.Path
 
@@ -19,7 +19,7 @@ pub async fn prepared_home(@pathx.Path) -> @pathx.Path
 
 // Errors
 pub(all) suberror CodexError {
-  JsonRpc(method_~ : String, code~ : Int, message~ : String, data~ : Json?)
+  JsonRpc(method_~ : String, code~ : Int32, message~ : String, data~ : Json?)
   TransportClosed(method_~ : String)
   RequestFailed(method_~ : String, detail~ : String)
   Unavailable(String)
@@ -53,7 +53,7 @@ type Connection
 pub fn Connection::is_closed(Self) -> Bool
 pub async fn Connection::request(Self, method_~ : String, params~ : Json) -> Json
 pub async fn Connection::respond(Self, @jsonrpc.PeerRequest, Json) -> Unit
-pub async fn Connection::respond_error(Self, @jsonrpc.PeerRequest, code~ : Int, message~ : String) -> Unit
+pub async fn Connection::respond_error(Self, @jsonrpc.PeerRequest, code~ : Int32, message~ : String) -> Unit
 pub fn Connection::shutdown(Self) -> Unit
 
 type ProjectCatalog

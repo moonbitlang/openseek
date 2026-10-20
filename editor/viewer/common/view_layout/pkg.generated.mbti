@@ -20,49 +20,49 @@ pub fn should_render_line_highlight_in_content(@editor_api.RenderLineHighlight, 
 
 pub fn should_render_line_highlight_in_margin(@editor_api.RenderLineHighlight, Bool, Bool) -> Bool
 
-pub fn view_line_span_of_model_line(Int, Int, (Int) -> Int) -> (Int, Int)
+pub fn view_line_span_of_model_line(Int32, Int32, (Int32) -> Int32) -> (Int32, Int32)
 
 // Errors
 
 // Types and methods
 pub struct CharacterMapping {
-  length : Int
+  length : Int32
   entries : Array[CharacterMappingEntry]
 } derive(Eq, @debug.Debug)
-pub fn CharacterMapping::CharacterMapping(Int) -> Self
-pub fn CharacterMapping::column_horizontal_offset(Self, Int, space_width~ : Double) -> Double
+pub fn CharacterMapping::CharacterMapping(Int32) -> Self
+pub fn CharacterMapping::column_horizontal_offset(Self, Int32, space_width~ : Double) -> Double
 pub fn CharacterMapping::equal(Self, Self) -> Bool
-pub fn CharacterMapping::get_column(Self, DomPosition, Int) -> Int
-pub fn CharacterMapping::get_dom_position(Self, Int) -> DomPosition
-pub fn CharacterMapping::get_horizontal_offset(Self, Int) -> Int
+pub fn CharacterMapping::get_column(Self, DomPosition, Int32) -> Int32
+pub fn CharacterMapping::get_dom_position(Self, Int32) -> DomPosition
+pub fn CharacterMapping::get_horizontal_offset(Self, Int32) -> Int32
 pub fn CharacterMapping::inflate(Self) -> Array[CharacterMappingEntry]
 pub fn CharacterMapping::not_equal(Self, Self) -> Bool
-pub fn CharacterMapping::set_column_info(Self, Int, Int, Int, Int) -> Unit
+pub fn CharacterMapping::set_column_info(Self, Int32, Int32, Int32, Int32) -> Unit
 pub fn CharacterMapping::to_repr(Self) -> @debug.Repr
 
 pub struct CharacterMappingEntry {
-  part_index : Int
-  char_index : Int
-  visible_column : Int
+  part_index : Int32
+  char_index : Int32
+  visible_column : Int32
 } derive(Eq, @debug.Debug)
 pub fn CharacterMappingEntry::equal(Self, Self) -> Bool
 pub fn CharacterMappingEntry::not_equal(Self, Self) -> Bool
 pub fn CharacterMappingEntry::to_repr(Self) -> @debug.Repr
 
 pub struct ConstantTimePrefixSumComputer {
-  mut values : Array[Int]
+  mut values : Array[Int32]
   mut is_valid : Bool
-  mut valid_end_index : Int
-  mut prefix_sum : Array[Int]
-  mut index_by_sum : Array[Int]
+  mut valid_end_index : Int32
+  mut prefix_sum : Array[Int32]
+  mut index_by_sum : Array[Int32]
 }
-pub fn ConstantTimePrefixSumComputer::ConstantTimePrefixSumComputer(ArrayView[Int]) -> Self
-pub fn ConstantTimePrefixSumComputer::get_index_of(Self, Int) -> PrefixSumIndexOfResult
-pub fn ConstantTimePrefixSumComputer::get_prefix_sum(Self, Int) -> Int
-pub fn ConstantTimePrefixSumComputer::get_total_sum(Self) -> Int
-pub fn ConstantTimePrefixSumComputer::insert_values(Self, Int, Array[Int]) -> Unit
-pub fn ConstantTimePrefixSumComputer::remove_values(Self, Int, Int) -> Unit
-pub fn ConstantTimePrefixSumComputer::set_value(Self, Int, Int) -> Unit
+pub fn ConstantTimePrefixSumComputer::ConstantTimePrefixSumComputer(ArrayView[Int32]) -> Self
+pub fn ConstantTimePrefixSumComputer::get_index_of(Self, Int32) -> PrefixSumIndexOfResult
+pub fn ConstantTimePrefixSumComputer::get_prefix_sum(Self, Int32) -> Int32
+pub fn ConstantTimePrefixSumComputer::get_total_sum(Self) -> Int32
+pub fn ConstantTimePrefixSumComputer::insert_values(Self, Int32, Array[Int32]) -> Unit
+pub fn ConstantTimePrefixSumComputer::remove_values(Self, Int32, Int32) -> Unit
+pub fn ConstantTimePrefixSumComputer::set_value(Self, Int32, Int32) -> Unit
 
 pub(all) struct ContentSizeChange {
   old_content_width : Double
@@ -75,18 +75,18 @@ pub fn ContentSizeChange::not_equal(Self, Self) -> Bool
 pub fn ContentSizeChange::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DecorationSegment {
-  start_offset : Int
-  end_offset : Int
+  start_offset : Int32
+  end_offset : Int32
   class_name : String
-  metadata : Int
+  metadata : Int32
 } derive(Eq, @debug.Debug)
 pub fn DecorationSegment::equal(Self, Self) -> Bool
 pub fn DecorationSegment::not_equal(Self, Self) -> Bool
 pub fn DecorationSegment::to_repr(Self) -> @debug.Repr
 
 pub(all) struct DomPosition {
-  part_index : Int
-  char_index : Int
+  part_index : Int32
+  char_index : Int32
 } derive(Eq, @debug.Debug)
 pub fn DomPosition::equal(Self, Self) -> Bool
 pub fn DomPosition::not_equal(Self, Self) -> Bool
@@ -125,13 +125,13 @@ pub fn EditorScrollable::validate_scroll_position(Self, ScrollPositionUpdate) ->
 
 pub struct EditorWhitespace {
   id : String
-  mut after_line_number : Int
-  ordinal : Int
-  mut height : Int
-  mut min_width : Int
+  mut after_line_number : Int32
+  ordinal : Int32
+  mut height : Int32
+  mut min_width : Int32
   mut prefix_sum : Double
 } derive(Eq, @debug.Debug)
-pub fn EditorWhitespace::EditorWhitespace(String, Int, Int, Int, Int) -> Self
+pub fn EditorWhitespace::EditorWhitespace(String, Int32, Int32, Int32, Int32) -> Self
 pub fn EditorWhitespace::equal(Self, Self) -> Bool
 pub fn EditorWhitespace::not_equal(Self, Self) -> Bool
 pub fn EditorWhitespace::to_repr(Self) -> @debug.Repr
@@ -167,13 +167,13 @@ pub fn InlineDecorationType::not_equal(Self, Self) -> Bool
 pub fn InlineDecorationType::to_repr(Self) -> @debug.Repr
 
 pub struct LineDecoration {
-  start_column : Int
-  end_column : Int
+  start_column : Int32
+  end_column : Int32
   class_name : String
   decoration_type : InlineDecorationType
 } derive(Eq, @debug.Debug)
-pub fn LineDecoration::LineDecoration(Int, Int, String, decoration_type? : InlineDecorationType) -> Self
-pub fn LineDecoration::compare(Self, Self) -> Int
+pub fn LineDecoration::LineDecoration(Int32, Int32, String, decoration_type? : InlineDecorationType) -> Self
+pub fn LineDecoration::compare(Self, Self) -> Int32
 pub fn LineDecoration::equal(Self, Self) -> Bool
 pub fn LineDecoration::not_equal(Self, Self) -> Bool
 pub fn LineDecoration::to_repr(Self) -> @debug.Repr
@@ -183,12 +183,12 @@ pub struct LineDecorationsNormalizer {
 pub fn LineDecorationsNormalizer::normalize(String, Array[LineDecoration]) -> Array[DecorationSegment]
 
 pub struct LinePart {
-  end_index : Int
+  end_index : Int32
   class_name : String
-  metadata : Int
+  metadata : Int32
   contains_rtl : Bool
 } derive(Eq, @debug.Debug)
-pub fn LinePart::LinePart(Int, String, metadata? : Int, contains_rtl? : Bool) -> Self
+pub fn LinePart::LinePart(Int32, String, metadata? : Int32, contains_rtl? : Bool) -> Self
 pub fn LinePart::equal(Self, Self) -> Bool
 pub fn LinePart::is_pseudo_after(Self) -> Bool
 pub fn LinePart::is_pseudo_before(Self) -> Bool
@@ -197,78 +197,78 @@ pub fn LinePart::not_equal(Self, Self) -> Bool
 pub fn LinePart::to_repr(Self) -> @debug.Repr
 
 pub(all) struct LineWindow {
-  start : Int
-  end : Int
+  start : Int32
+  end : Int32
 } derive(Eq, @debug.Debug)
 pub fn LineWindow::equal(Self, Self) -> Bool
 pub fn LineWindow::not_equal(Self, Self) -> Bool
 pub fn LineWindow::to_repr(Self) -> @debug.Repr
 
 type LinesLayout
-pub fn LinesLayout::LinesLayout(Int, Int, Int, Int) -> Self
+pub fn LinesLayout::LinesLayout(Int32, Int32, Int32, Int32) -> Self
 pub fn LinesLayout::change_whitespace(Self, (WhitespaceChangeAccessor) -> Unit raise?) -> Bool raise?
-pub fn LinesLayout::find_insertion_index(Array[EditorWhitespace], Int, Int) -> Int
-pub fn LinesLayout::get_after_line_number_for_whitespace_index(Self, Int) -> Int
-pub fn LinesLayout::get_first_whitespace_index_after_line_number(Self, Int) -> Int
-pub fn LinesLayout::get_height_for_whitespace_index(Self, Int) -> Int
-pub fn LinesLayout::get_id_for_whitespace_index(Self, Int) -> String
-pub fn LinesLayout::get_line_height_for_line_number(Self, Int) -> Int
-pub fn LinesLayout::get_line_number_at_or_after_vertical_offset(Self, Double) -> Int
+pub fn LinesLayout::find_insertion_index(Array[EditorWhitespace], Int32, Int32) -> Int32
+pub fn LinesLayout::get_after_line_number_for_whitespace_index(Self, Int32) -> Int32
+pub fn LinesLayout::get_first_whitespace_index_after_line_number(Self, Int32) -> Int32
+pub fn LinesLayout::get_height_for_whitespace_index(Self, Int32) -> Int32
+pub fn LinesLayout::get_id_for_whitespace_index(Self, Int32) -> String
+pub fn LinesLayout::get_line_height_for_line_number(Self, Int32) -> Int32
+pub fn LinesLayout::get_line_number_at_or_after_vertical_offset(Self, Double) -> Int32
 pub fn LinesLayout::get_lines_total_height(Self) -> Double
 pub fn LinesLayout::get_lines_viewport_data(Self, Double, Double) -> PartialViewLinesViewportData
-pub fn LinesLayout::get_vertical_offset_after_line_number(Self, Int, include_view_zones? : Bool) -> Double
-pub fn LinesLayout::get_vertical_offset_for_line_number(Self, Int, include_view_zones? : Bool) -> Double
-pub fn LinesLayout::get_vertical_offset_for_whitespace_index(Self, Int) -> Double
-pub fn LinesLayout::get_whitespace_accumulated_height_before_line_number(Self, Int) -> Double
+pub fn LinesLayout::get_vertical_offset_after_line_number(Self, Int32, include_view_zones? : Bool) -> Double
+pub fn LinesLayout::get_vertical_offset_for_line_number(Self, Int32, include_view_zones? : Bool) -> Double
+pub fn LinesLayout::get_vertical_offset_for_whitespace_index(Self, Int32) -> Double
+pub fn LinesLayout::get_whitespace_accumulated_height_before_line_number(Self, Int32) -> Double
 pub fn LinesLayout::get_whitespace_at_vertical_offset(Self, Double) -> ViewWhitespaceViewportData?
-pub fn LinesLayout::get_whitespace_index_at_or_after_vertical_offset(Self, Double) -> Int
-pub fn LinesLayout::get_whitespace_min_width(Self) -> Int
+pub fn LinesLayout::get_whitespace_index_at_or_after_vertical_offset(Self, Double) -> Int32
+pub fn LinesLayout::get_whitespace_min_width(Self) -> Int32
 pub fn LinesLayout::get_whitespace_viewport_data(Self, Double, Double) -> Array[ViewWhitespaceViewportData]
 pub fn LinesLayout::get_whitespaces(Self) -> Array[EditorWhitespace]
-pub fn LinesLayout::get_whitespaces_accumulated_height(Self, Int) -> Double
-pub fn LinesLayout::get_whitespaces_count(Self) -> Int
+pub fn LinesLayout::get_whitespaces_accumulated_height(Self, Int32) -> Double
+pub fn LinesLayout::get_whitespaces_count(Self) -> Int32
 pub fn LinesLayout::get_whitespaces_total_height(Self) -> Double
 pub fn LinesLayout::has_whitespace(Self) -> Bool
 pub fn LinesLayout::is_after_lines(Self, Double) -> Bool
 pub fn LinesLayout::is_in_bottom_padding(Self, Double) -> Bool
 pub fn LinesLayout::is_in_top_padding(Self, Double) -> Bool
-pub fn LinesLayout::on_flushed(Self, Int) -> Unit
-pub fn LinesLayout::on_lines_deleted(Self, Int, Int) -> Unit
-pub fn LinesLayout::on_lines_inserted(Self, Int, Int) -> Unit
-pub fn LinesLayout::set_default_line_height(Self, Int) -> Unit
-pub fn LinesLayout::set_padding(Self, Int, Int) -> Unit
+pub fn LinesLayout::on_flushed(Self, Int32) -> Unit
+pub fn LinesLayout::on_lines_deleted(Self, Int32, Int32) -> Unit
+pub fn LinesLayout::on_lines_inserted(Self, Int32, Int32) -> Unit
+pub fn LinesLayout::set_default_line_height(Self, Int32) -> Unit
+pub fn LinesLayout::set_padding(Self, Int32, Int32) -> Unit
 
 pub struct PartialViewLinesViewportData {
-  big_numbers_delta : Int
-  start_line_number : Int
-  end_line_number : Int
+  big_numbers_delta : Int32
+  start_line_number : Int32
+  end_line_number : Int32
   relative_vertical_offset : Array[Double]
-  centered_line_number : Int
-  completely_visible_start_line_number : Int
-  completely_visible_end_line_number : Int
-  line_height : Int
+  centered_line_number : Int32
+  completely_visible_start_line_number : Int32
+  completely_visible_end_line_number : Int32
+  line_height : Int32
 } derive(Eq, @debug.Debug)
 pub fn PartialViewLinesViewportData::equal(Self, Self) -> Bool
 pub fn PartialViewLinesViewportData::not_equal(Self, Self) -> Bool
 pub fn PartialViewLinesViewportData::to_repr(Self) -> @debug.Repr
 
 pub struct PrefixSumComputer {
-  mut values : Array[Int]
-  mut prefix_sum : Array[Int]
-  mut prefix_sum_valid_index : Int
+  mut values : Array[Int32]
+  mut prefix_sum : Array[Int32]
+  mut prefix_sum_valid_index : Int32
 }
-pub fn PrefixSumComputer::PrefixSumComputer(ArrayView[Int]) -> Self
-pub fn PrefixSumComputer::get_count(Self) -> Int
-pub fn PrefixSumComputer::get_index_of(Self, Int) -> PrefixSumIndexOfResult
-pub fn PrefixSumComputer::get_prefix_sum(Self, Int) -> Int
-pub fn PrefixSumComputer::get_total_sum(Self) -> Int
-pub fn PrefixSumComputer::insert_values(Self, Int, Array[Int]) -> Bool
-pub fn PrefixSumComputer::remove_values(Self, Int, Int) -> Bool
-pub fn PrefixSumComputer::set_value(Self, Int, Int) -> Bool
+pub fn PrefixSumComputer::PrefixSumComputer(ArrayView[Int32]) -> Self
+pub fn PrefixSumComputer::get_count(Self) -> Int32
+pub fn PrefixSumComputer::get_index_of(Self, Int32) -> PrefixSumIndexOfResult
+pub fn PrefixSumComputer::get_prefix_sum(Self, Int32) -> Int32
+pub fn PrefixSumComputer::get_total_sum(Self) -> Int32
+pub fn PrefixSumComputer::insert_values(Self, Int32, Array[Int32]) -> Bool
+pub fn PrefixSumComputer::remove_values(Self, Int32, Int32) -> Bool
+pub fn PrefixSumComputer::set_value(Self, Int32, Int32) -> Bool
 
 pub(all) struct PrefixSumIndexOfResult {
-  index : Int
-  remainder : Int
+  index : Int32
+  remainder : Int32
 } derive(Eq, @debug.Debug)
 pub fn PrefixSumIndexOfResult::equal(Self, Self) -> Bool
 pub fn PrefixSumIndexOfResult::not_equal(Self, Self) -> Bool
@@ -281,15 +281,15 @@ pub struct RenderLineInput {
   continues_with_wrapped_line : Bool
   is_basic_ascii : Bool
   contains_rtl : Bool
-  faux_indent_length : Int
+  faux_indent_length : Int32
   line_tokens : Array[LinePart]
   line_decorations : Array[LineDecoration]
-  tab_size : Int
-  start_visible_column : Int
+  tab_size : Int32
+  start_visible_column : Int32
   space_width : Double
   render_space_width : Double
-  render_space_char_code : Int
-  stop_rendering_line_after : Int
+  render_space_char_code : Int32
+  stop_rendering_line_after : Int32
   render_whitespace : @editor_api.RenderWhitespace
   render_control_characters : Bool
   font_ligatures : Bool
@@ -299,7 +299,7 @@ pub struct RenderLineInput {
   render_new_line_when_empty : Bool
 } derive(Eq, @debug.Debug)
 pub fn RenderLineInput::equal(Self, Self) -> Bool
-pub fn RenderLineInput::from_view_line(ViewLineRenderingData, line_decorations? : Array[LineDecoration], use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, faux_indent_length? : Int, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, stop_rendering_line_after? : Int, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, selections_on_line? : Array[@common.OffsetRange], vertical_scrollbar_size? : Double, render_new_line_when_empty? : Bool) -> Self
+pub fn RenderLineInput::from_view_line(ViewLineRenderingData, line_decorations? : Array[LineDecoration], use_monospace_optimizations? : Bool, can_use_halfwidth_rightwards_arrow? : Bool, faux_indent_length? : Int32, space_width? : Double, middot_width? : Double, wsmiddot_width? : Double, stop_rendering_line_after? : Int32, render_whitespace? : @editor_api.RenderWhitespace, render_control_characters? : Bool, font_ligatures? : Bool, selections_on_line? : Array[@common.OffsetRange], vertical_scrollbar_size? : Double, render_new_line_when_empty? : Bool) -> Self
 pub fn RenderLineInput::not_equal(Self, Self) -> Bool
 pub fn RenderLineInput::to_repr(Self) -> @debug.Repr
 
@@ -511,12 +511,12 @@ pub struct ViewLayout {
   scrollable : EditorScrollable
   // private fields
 }
-pub fn ViewLayout::ViewLayout(line_height~ : Int, line_count? : Int, smooth_scrolling? : Bool, is_viewport_wrapping? : Bool, vertical_scrollbar_width? : Double, horizontal_scrollbar_height? : Double, schedule_at_next_animation_frame? : (() -> Unit) -> @common.Disposable, now? : () -> Double) -> Self
-pub fn ViewLayout::big_numbers_delta_for_window(Self, LineWindow) -> Int
+pub fn ViewLayout::ViewLayout(line_height~ : Int32, line_count? : Int32, smooth_scrolling? : Bool, is_viewport_wrapping? : Bool, vertical_scrollbar_width? : Double, horizontal_scrollbar_height? : Double, schedule_at_next_animation_frame? : (() -> Unit) -> @common.Disposable, now? : () -> Double) -> Self
+pub fn ViewLayout::big_numbers_delta_for_window(Self, LineWindow) -> Int32
 pub fn ViewLayout::change_whitespace(Self, (WhitespaceChangeAccessor) -> Unit raise?) -> Bool raise?
-pub fn ViewLayout::completely_visible_line_range(Self) -> (Int, Int)
+pub fn ViewLayout::completely_visible_line_range(Self) -> (Int32, Int32)
 pub fn ViewLayout::compute_scroll_left_to_reveal(Self, Array[(Double, Double)], vertical_scrollbar_width~ : Double, minimal_reveal? : Bool) -> Double?
-pub fn ViewLayout::compute_scroll_top_to_reveal_range(Self, Int, Int, VerticalRevealType, source? : String, minimal_reveal? : Bool) -> Double
+pub fn ViewLayout::compute_scroll_top_to_reveal_range(Self, Int32, Int32, VerticalRevealType, source? : String, minimal_reveal? : Bool) -> Double
 pub fn ViewLayout::delta_scroll_now(Self, Double, Double) -> Unit
 pub fn ViewLayout::dimensions(Self) -> ScrollDimensions
 pub fn ViewLayout::dispose(Self) -> Unit
@@ -527,14 +527,14 @@ pub fn ViewLayout::get_current_scroll_left(Self) -> Double
 pub fn ViewLayout::get_current_scroll_top(Self) -> Double
 pub fn ViewLayout::get_current_viewport(Self) -> Viewport
 pub fn ViewLayout::get_future_viewport(Self) -> Viewport
-pub fn ViewLayout::get_line_height_for_line_number(Self, Int) -> Int
+pub fn ViewLayout::get_line_height_for_line_number(Self, Int32) -> Int32
 pub fn ViewLayout::get_lines_viewport_data(Self) -> PartialViewLinesViewportData
 pub fn ViewLayout::get_lines_viewport_data_at_scroll_top(Self, Double) -> PartialViewLinesViewportData
 pub fn ViewLayout::get_scroll_height(Self) -> Double
 pub fn ViewLayout::get_scroll_width(Self) -> Double
 pub fn ViewLayout::get_scrollable(Self) -> Scrollable
-pub fn ViewLayout::get_vertical_offset_after_line_number(Self, Int, include_view_zones? : Bool) -> Double
-pub fn ViewLayout::get_vertical_offset_for_line_number(Self, Int, include_view_zones? : Bool) -> Double
+pub fn ViewLayout::get_vertical_offset_after_line_number(Self, Int32, include_view_zones? : Bool) -> Double
+pub fn ViewLayout::get_vertical_offset_for_line_number(Self, Int32, include_view_zones? : Bool) -> Double
 pub fn ViewLayout::get_whitespace_at_vertical_offset(Self, Double) -> ViewWhitespaceViewportData?
 pub fn ViewLayout::get_whitespace_viewport_data(Self) -> Array[ViewWhitespaceViewportData]
 pub fn ViewLayout::get_whitespaces(Self) -> Array[EditorWhitespace]
@@ -542,42 +542,42 @@ pub fn ViewLayout::has_pending_scroll_animation(Self) -> Bool
 pub fn ViewLayout::is_after_lines(Self, Double) -> Bool
 pub fn ViewLayout::is_in_bottom_padding(Self, Double) -> Bool
 pub fn ViewLayout::is_in_top_padding(Self, Double) -> Bool
-pub fn ViewLayout::line_at_vertical_offset(Self, Double) -> Int
-pub fn ViewLayout::line_count(Self) -> Int
-pub fn ViewLayout::line_height(Self) -> Int
+pub fn ViewLayout::line_at_vertical_offset(Self, Double) -> Int32
+pub fn ViewLayout::line_count(Self) -> Int32
+pub fn ViewLayout::line_height(Self) -> Int32
 pub fn ViewLayout::on_did_content_size_change(Self, (ContentSizeChange) -> Unit) -> @common.Disposable
 pub fn ViewLayout::on_did_scroll(Self, (ScrollChange) -> Unit) -> @common.Disposable
-pub fn ViewLayout::on_flushed(Self, Int) -> Unit
+pub fn ViewLayout::on_flushed(Self, Int32) -> Unit
 pub fn ViewLayout::on_height_maybe_changed(Self) -> ScrollChange?
 pub fn ViewLayout::position(Self) -> ScrollPosition
-pub fn ViewLayout::relative_vertical_offset_for_line(Self, LineWindow, Int) -> Double
+pub fn ViewLayout::relative_vertical_offset_for_line(Self, LineWindow, Int32) -> Double
 pub fn ViewLayout::save_state(Self) -> SavedScrollState
 pub fn ViewLayout::scroll_by(Self, delta_left? : Double, delta_top? : Double) -> ScrollChange?
 pub fn ViewLayout::scroll_to(Self, scroll_top~ : Double, scroll_left? : Double) -> ScrollChange?
 pub fn ViewLayout::scroll_to_smooth(Self, scroll_top~ : Double, scroll_left? : Double) -> Unit
 pub fn ViewLayout::set_content_width(Self, Double) -> ScrollChange?
 pub fn ViewLayout::set_is_viewport_wrapping(Self, Bool) -> ScrollChange?
-pub fn ViewLayout::set_line_count(Self, Int) -> ScrollChange?
-pub fn ViewLayout::set_line_height(Self, Int) -> ScrollChange?
+pub fn ViewLayout::set_line_count(Self, Int32) -> ScrollChange?
+pub fn ViewLayout::set_line_height(Self, Int32) -> ScrollChange?
 pub fn ViewLayout::set_max_line_width(Self, Double) -> ScrollChange?
 pub fn ViewLayout::set_smooth_scrolling(Self, Bool) -> Unit
 pub fn ViewLayout::set_viewport_size(Self, width~ : Double, height~ : Double) -> ScrollChange?
 pub fn ViewLayout::validate_scroll_position(Self, ScrollPositionUpdate) -> ScrollPosition
-pub fn ViewLayout::vertical_offset_for_line(Self, Int) -> Double
+pub fn ViewLayout::vertical_offset_for_line(Self, Int32) -> Double
 pub fn ViewLayout::visible_window(Self) -> LineWindow
 pub fn ViewLayout::window_origin(Self, LineWindow) -> Double
 
 pub(all) struct ViewLineRenderingData {
-  min_column : Int
-  max_column : Int
+  min_column : Int32
+  max_column : Int32
   content : String
   continues_with_wrapped_line : Bool
   contains_rtl : Bool
   is_basic_ascii : Bool
   tokens : Array[LinePart]
   inline_decorations : Array[InlineDecoration]
-  tab_size : Int
-  start_visible_column : Int
+  tab_size : Int32
+  start_visible_column : Int32
   text_direction : TextDirection
   has_variable_fonts : Bool
 } derive(Eq, @debug.Debug)
@@ -587,9 +587,9 @@ pub fn ViewLineRenderingData::to_repr(Self) -> @debug.Repr
 
 pub struct ViewWhitespaceViewportData {
   id : String
-  after_line_number : Int
+  after_line_number : Int32
   vertical_offset : Double
-  height : Int
+  height : Int32
 } derive(Eq, @debug.Debug)
 pub fn ViewWhitespaceViewportData::equal(Self, Self) -> Bool
 pub fn ViewWhitespaceViewportData::not_equal(Self, Self) -> Bool
@@ -606,26 +606,26 @@ pub fn Viewport::not_equal(Self, Self) -> Bool
 pub fn Viewport::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ViewportData {
-  start_line_number : Int
-  end_line_number : Int
+  start_line_number : Int32
+  end_line_number : Int32
   relative_vertical_offset : Array[Double]
-  line_height : Int
+  line_height : Int32
   visible_range : @common.Range
-  big_numbers_delta : Int
+  big_numbers_delta : Int32
   lines : Array[ViewLineRenderingData]
   line_decorations : Array[Array[LineDecoration]]
   view_zones : Array[ViewWhitespaceViewportData]
 } derive(Eq, @debug.Debug)
-pub fn ViewportData::decorations_for_line(Self, Int) -> Array[LineDecoration]
+pub fn ViewportData::decorations_for_line(Self, Int32) -> Array[LineDecoration]
 pub fn ViewportData::decorations_in_viewport(Self) -> Array[LineDecoration]
 pub fn ViewportData::equal(Self, Self) -> Bool
-pub fn ViewportData::line_data(Self, Int) -> ViewLineRenderingData?
+pub fn ViewportData::line_data(Self, Int32) -> ViewLineRenderingData?
 pub fn ViewportData::not_equal(Self, Self) -> Bool
 pub fn ViewportData::to_repr(Self) -> @debug.Repr
 
 type WhitespaceChangeAccessor
-pub fn WhitespaceChangeAccessor::change_one_whitespace(Self, String, Int, Double, new_min_width? : Double) -> Unit
-pub fn WhitespaceChangeAccessor::insert_whitespace(Self, Int, Int, Double, Double) -> String
+pub fn WhitespaceChangeAccessor::change_one_whitespace(Self, String, Int32, Double, new_min_width? : Double) -> Unit
+pub fn WhitespaceChangeAccessor::insert_whitespace(Self, Int32, Int32, Double, Double) -> String
 pub fn WhitespaceChangeAccessor::remove_whitespace(Self, String) -> Unit
 
 // Type aliases

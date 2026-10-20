@@ -33,12 +33,12 @@ pub(all) enum Msg {
   Download
   Share
   SignIn
-  Downloaded(generation~ : Int, Result[@protocol.SessionExportReply, String])
+  Downloaded(generation~ : Int32, Result[@protocol.SessionExportReply, String])
   Progress(@protocol.SessionShareProgress)
   HostProgress(@interop.ChannelId, @protocol.SessionShareProgress)
-  Published(generation~ : Int, @protocol.SessionShareReply)
-  SignedIn(generation~ : Int, Result[Unit, String])
-  ClipboardFinished(generation~ : Int, Result[Unit, String])
+  Published(generation~ : Int32, @protocol.SessionShareReply)
+  SignedIn(generation~ : Int32, Result[Unit, String])
+  ClipboardFinished(generation~ : Int32, Result[Unit, String])
 }
 
 // Type aliases

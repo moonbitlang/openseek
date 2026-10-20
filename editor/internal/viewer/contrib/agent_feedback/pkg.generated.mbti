@@ -10,7 +10,7 @@ import {
 // Values
 pub fn get_session_editor_comments(Array[@agent_feedback_api.AgentFeedback]) -> Array[SessionEditorComment]
 
-pub fn group_nearby_session_editor_comments(Array[SessionEditorComment], line_threshold? : Int) -> Array[Array[SessionEditorComment]]
+pub fn group_nearby_session_editor_comments(Array[SessionEditorComment], line_threshold? : Int32) -> Array[Array[SessionEditorComment]]
 
 // Errors
 

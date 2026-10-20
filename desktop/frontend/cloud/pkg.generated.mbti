@@ -19,7 +19,7 @@ pub async fn share(String, String, String) -> Result[String, Failure]
 
 pub fn subscriptions(State) -> @sub.Sub
 
-pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int) -> (State, @cmd.Cmd, String?)
+pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int32) -> (State, @cmd.Cmd, String?)
 
 // Errors
 
@@ -27,17 +27,17 @@ pub fn update(State, Msg, @cmd.Emit[Msg], token? : String, navigation~ : Int) ->
 pub(all) struct Conversation {
   records : Array[Record]
   events : Array[Event]
-  request : Int
+  request : Int32
   loading : Bool
   sending : Bool
   generating : Bool
   history_required : Bool
-  submission_sequence : Int
+  submission_sequence : Int32
   initial_submission : String?
   pending : Submission?
   stream : StreamLease?
   task : String?
-  last_seq : Int?
+  last_seq : Int32?
   streaming_response : String?
   notice : String?
 } derive(Eq)
@@ -47,8 +47,8 @@ pub fn Conversation::not_equal(Self, Self) -> Bool
 
 pub struct Creation {
   id : String
-  request : Int
-  navigation : Int
+  request : Int32
+  navigation : Int32
   submission : @composer.Draft?
 } derive(Eq)
 pub fn Creation::equal(Self, Self) -> Bool
@@ -57,7 +57,7 @@ pub fn Creation::not_equal(Self, Self) -> Bool
 pub(all) struct Event {
   session_id : String
   task_id : String
-  seq : Int
+  seq : Int32
   kind : String
   data : Json
 } derive(Eq)
@@ -67,7 +67,7 @@ pub fn Event::not_equal(Self, Self) -> Bool
 pub(all) enum Failure {
   Unauthorized
   Busy
-  Http(Int)
+  Http(Int32)
   Unreachable
   Malformed
   ServiceNotConfigured
@@ -82,9 +82,9 @@ pub(all) struct History {
 }
 
 pub(all) struct MetadataSave {
-  request : Int
+  request : Int32
   edit : SessionEdit
-  navigation : Int
+  navigation : Int32
 } derive(Eq)
 pub fn MetadataSave::equal(Self, Self) -> Bool
 pub fn MetadataSave::not_equal(Self, Self) -> Bool
@@ -95,22 +95,22 @@ pub(all) enum Msg {
   Create
   Open(String)
   Delete(String)
-  Deleted(Int, String, Int)
-  DeleteFailed(Int, String, Int, Failure)
+  Deleted(Int32, String, Int32)
+  DeleteFailed(Int32, String, Int32, Failure)
   Edit(account~ : String, session~ : String, edit~ : SessionEdit)
-  Edited(Int, String, Int)
-  EditFailed(Int, String, Int, Failure)
+  Edited(Int32, String, Int32)
+  EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
-  Listed(Int, Int, Array[Session])
-  ListFailed(Int, Int, Failure)
-  Created(Int, Int, String)
-  CreateFailed(Int, Int, Failure)
-  Loaded(Int, String, Int, History)
-  LoadFailed(Int, String, Int, Failure)
-  StreamEvent(Int, String, Int, Event)
-  StreamEnded(Int, String, Int)
-  SendFailed(Int, String, Int, Failure)
-  Poll(Int, String, Int)
+  Listed(Int32, Int32, Array[Session])
+  ListFailed(Int32, Int32, Failure)
+  Created(Int32, Int32, String)
+  CreateFailed(Int32, Int32, Failure)
+  Loaded(Int32, String, Int32, History)
+  LoadFailed(Int32, String, Int32, Failure)
+  StreamEvent(Int32, String, Int32, Event)
+  StreamEnded(Int32, String, Int32)
+  SendFailed(Int32, String, Int32, Failure)
+  Poll(Int32, String, Int32)
 }
 
 pub(all) struct Record {
@@ -141,13 +141,13 @@ pub fn SessionEdit::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   user_id : String?
-  epoch : Int
+  epoch : Int32
   needs_sign_in : Bool
   sessions : Array[Session]
   conversations : Map[String, Conversation]
-  sequence : Int
-  list_request : Int
-  deletions : Map[String, Int]
+  sequence : Int32
+  list_request : Int32
+  deletions : Map[String, Int32]
   metadata_saves : Map[String, MetadataSave]
   retired : Array[String]
   creation : Creation?

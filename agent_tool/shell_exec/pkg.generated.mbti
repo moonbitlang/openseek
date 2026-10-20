@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub let default_hard_cap : Int
+pub let default_hard_cap : Int32
 
 // Errors
 
@@ -16,7 +16,7 @@ pub let default_hard_cap : Int
 pub enum ExecStatus {
   Running
   Backgrounded
-  Exited(Int)
+  Exited(Int32)
   Killed
 } derive(Eq, @debug.Debug)
 
@@ -24,7 +24,7 @@ type ShellExecution
 pub fn ShellExecution::background(Self) -> Bool
 pub fn ShellExecution::cwd(Self) -> String?
 pub async fn ShellExecution::discard(Self) -> Unit
-pub fn ShellExecution::exit_code(Self) -> Int?
+pub fn ShellExecution::exit_code(Self) -> Int32?
 pub fn ShellExecution::finished_at_ms(Self) -> Int64?
 pub fn ShellExecution::had_invalid_utf8(Self) -> Bool
 pub fn ShellExecution::head(Self) -> String
@@ -39,12 +39,12 @@ pub fn ShellExecution::output_error(Self) -> String?
 pub fn ShellExecution::output_truncated(Self) -> Bool
 pub fn ShellExecution::over_inline_cap(Self) -> Bool
 pub async fn ShellExecution::read_all(Self) -> String
-pub async fn ShellExecution::read_tail(Self, Int) -> String
+pub async fn ShellExecution::read_tail(Self, Int32) -> String
 pub fn ShellExecution::request_stop(Self) -> Unit
-pub fn ShellExecution::seq(Self) -> Int
-pub fn ShellExecution::size(Self) -> Int
+pub fn ShellExecution::seq(Self) -> Int32
+pub fn ShellExecution::size(Self) -> Int32
 pub fn ShellExecution::spill_path(Self) -> String?
-pub async fn[X] ShellExecution::start(@agent_runtime.AgentTaskScope[X], program~ : String, args~ : Array[String], cwd? : String, stdin? : &@process.ProcessInput, inline_cap? : Int, hard_cap? : Int, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String]) -> Self
+pub async fn[X] ShellExecution::start(@agent_runtime.AgentTaskScope[X], program~ : String, args~ : Array[String], cwd? : String, stdin? : &@process.ProcessInput, inline_cap? : Int32, hard_cap? : Int32, spill_path? : String, kill_when_full? : Bool, kill_at_hard_cap? : Bool, cancel_handler? : @process.CancellationHandler, extra_env? : Map[String, String]) -> Self
 pub fn ShellExecution::started_at_ms(Self) -> Int64
 pub fn ShellExecution::status(Self) -> ExecStatus
 pub async fn ShellExecution::stop(Self) -> Bool

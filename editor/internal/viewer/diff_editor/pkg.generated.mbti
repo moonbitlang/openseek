@@ -78,7 +78,7 @@ pub struct DiffEditorViewModel {
   mut options : @diff.DocumentDiffOptions
   mut state : DiffEditorViewModelState
   mut current_diff : @diff.DocumentDiff?
-  mut generation : Int
+  mut generation : Int32
   immediate : @browser.RunOnceScheduler
   content_debounce : @browser.RunOnceScheduler
   did_change_model : @common.Emitter[Unit]
@@ -86,7 +86,7 @@ pub struct DiffEditorViewModel {
   mut disposed : Bool
   // private fields
 }
-pub fn DiffEditorViewModel::DiffEditorViewModel(&@diff.DocumentDiffProvider, options? : @diff.DocumentDiffOptions, schedule_timeout? : (() -> Unit, Int) -> @common.Disposable) -> Self
+pub fn DiffEditorViewModel::DiffEditorViewModel(&@diff.DocumentDiffProvider, options? : @diff.DocumentDiffOptions, schedule_timeout? : (() -> Unit, Int32) -> @common.Disposable) -> Self
 pub fn DiffEditorViewModel::dispose(Self) -> Unit
 pub fn DiffEditorViewModel::get_diff(Self) -> @diff.DocumentDiff?
 pub fn DiffEditorViewModel::get_failure_diagnostic(Self) -> String?
@@ -140,13 +140,13 @@ pub struct DiffEditorWidget {
   did_change_content_height : @common.Emitter[Double]
   did_reveal_change : @common.Emitter[DiffEditorRevealEvent]
   mut last_published_content_height : Double?
-  mut pending_reveal_first_diff_generation : Int?
-  mut pending_reveal_last_diff_generation : Int?
-  mut reconciling_generation : Int
+  mut pending_reveal_first_diff_generation : Int32?
+  mut pending_reveal_last_diff_generation : Int32?
+  mut reconciling_generation : Int32
   mut is_reconciling : Bool
   layout_render_waiters : Array[@common.Disposable]
-  mut layout_render_generation : Int
-  mut layout_render_remaining : Int
+  mut layout_render_generation : Int32
+  mut layout_render_remaining : Int32
   mut pending_layout_modified_viewport : @code_editor_widget.StableCodeEditorViewportState?
   mut has_valid_layout_box : Bool
   mut inline_original_strip_width : Double
@@ -160,10 +160,10 @@ pub struct DiffEditorWidget {
 pub fn DiffEditorWidget::create(@dom.Element, services? : @code_editor_widget.CodeEditorServices, editor_options? : @code_editor_widget.CodeEditorOptions, options? : DiffEditorOptions, &@diff.DocumentDiffProvider) -> Self
 pub fn DiffEditorWidget::dispose(Self) -> Unit
 pub fn DiffEditorWidget::focus(Self) -> Unit
-pub fn DiffEditorWidget::get_active_hunk_index(Self) -> Int?
+pub fn DiffEditorWidget::get_active_hunk_index(Self) -> Int32?
 pub fn DiffEditorWidget::get_content_height(Self) -> Double
 pub fn DiffEditorWidget::get_diff(Self) -> @diff.DocumentDiff?
-pub fn DiffEditorWidget::get_hunk_viewport_bounds(Self, Int) -> (Double, Double)?
+pub fn DiffEditorWidget::get_hunk_viewport_bounds(Self, Int32) -> (Double, Double)?
 pub fn DiffEditorWidget::get_hunks(Self) -> Array[DiffHunk]
 pub fn DiffEditorWidget::get_layout(Self) -> DiffEditorLayout
 pub fn DiffEditorWidget::get_max_scroll_left(Self) -> Double
@@ -171,7 +171,7 @@ pub fn DiffEditorWidget::get_model(Self) -> DiffEditorModelData?
 pub fn DiffEditorWidget::get_modified_vertical_reveal_bounds(Self, @common.Range) -> (Double, Double)?
 pub fn DiffEditorWidget::is_diff_up_to_date(Self) -> Bool
 pub fn DiffEditorWidget::layout(Self) -> Unit
-pub fn DiffEditorWidget::on_did_change_active_hunk(Self, (Int?) -> Unit) -> @common.Disposable
+pub fn DiffEditorWidget::on_did_change_active_hunk(Self, (Int32?) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_change_content_height(Self, (Double) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_reveal_change(Self, (DiffEditorRevealEvent) -> Unit) -> @common.Disposable
 pub fn DiffEditorWidget::on_did_update_diff(Self, () -> Unit) -> @common.Disposable
@@ -181,10 +181,10 @@ pub fn DiffEditorWidget::reveal_next_change(Self) -> Bool
 pub fn DiffEditorWidget::reveal_next_change_without_wrap(Self) -> Bool
 pub fn DiffEditorWidget::reveal_previous_change(Self) -> Bool
 pub fn DiffEditorWidget::reveal_previous_change_without_wrap(Self) -> Bool
-pub fn DiffEditorWidget::select_hunk(Self, Int) -> Unit
+pub fn DiffEditorWidget::select_hunk(Self, Int32) -> Unit
 pub fn DiffEditorWidget::set_diff_provider(Self, &@diff.DocumentDiffProvider) -> Unit
-pub fn DiffEditorWidget::set_hunk_action_renderer(Self, ((Int) -> @dom.Element?)?) -> Unit
-pub fn DiffEditorWidget::set_line_action(Self, ((Bool, Int) -> Unit)?, allowed? : (Bool, Int) -> Bool) -> Unit
+pub fn DiffEditorWidget::set_hunk_action_renderer(Self, ((Int32) -> @dom.Element?)?) -> Unit
+pub fn DiffEditorWidget::set_line_action(Self, ((Bool, Int32) -> Unit)?, allowed? : (Bool, Int32) -> Bool) -> Unit
 pub fn DiffEditorWidget::set_line_widgets(Self, Array[DiffLineWidget]) -> Unit
 pub fn DiffEditorWidget::set_model(Self, DiffEditorModelData?) -> DiffEditorModelData?
 pub fn DiffEditorWidget::set_scroll_left(Self, Double) -> Unit
@@ -197,7 +197,7 @@ pub(all) struct DiffHunk {
 
 pub(all) struct DiffLineWidget {
   original : Bool
-  line : Int
+  line : Int32
   node : @dom.Element
   on_layout : ((Double, Double, Double)?) -> Unit
 }
@@ -222,7 +222,7 @@ pub fn DiffWordWrap::to_repr(Self) -> @debug.Repr
 type InlineDeletedZone
 
 pub(all) struct ManagedAlignmentSpacer {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
 } derive(Eq, @debug.Debug)
 pub fn ManagedAlignmentSpacer::equal(Self, Self) -> Bool
@@ -237,7 +237,7 @@ pub fn ManagedAlignmentSpacers::modified(Self) -> Array[ManagedAlignmentSpacer]
 pub fn ManagedAlignmentSpacers::original(Self) -> Array[ManagedAlignmentSpacer]
 
 pub(all) struct PaneForeignZoneHeight {
-  after_line_number : Int
+  after_line_number : Int32
   height_in_px : Double
 } derive(Eq, @debug.Debug)
 pub fn PaneForeignZoneHeight::equal(Self, Self) -> Bool
@@ -248,19 +248,19 @@ pub struct PaneGeometrySnapshot {
   line_height : Double
   viewport_width : Double
   line_heights : Array[Double]
-  line_max_columns : Array[Int]?
+  line_max_columns : Array[Int32]?
   foreign_zone_heights : Array[PaneForeignZoneHeight]
   cumulative_pixels : Array[Double]
 }
-pub fn PaneGeometrySnapshot::PaneGeometrySnapshot(Int, Double, model_line_heights? : Array[PaneModelLineHeight], hidden_lines? : Array[@common.LineRange], foreign_zone_heights? : Array[PaneForeignZoneHeight], line_max_columns? : Array[Int], viewport_width? : Double) -> Self
+pub fn PaneGeometrySnapshot::PaneGeometrySnapshot(Int32, Double, model_line_heights? : Array[PaneModelLineHeight], hidden_lines? : Array[@common.LineRange], foreign_zone_heights? : Array[PaneForeignZoneHeight], line_max_columns? : Array[Int32], viewport_width? : Double) -> Self
 pub fn PaneGeometrySnapshot::content_height(Self) -> Double
 pub fn PaneGeometrySnapshot::foreign_zone_heights(Self) -> Array[PaneForeignZoneHeight]
-pub fn PaneGeometrySnapshot::line_count(Self) -> Int
+pub fn PaneGeometrySnapshot::line_count(Self) -> Int32
 pub fn PaneGeometrySnapshot::line_height(Self) -> Double
 pub fn PaneGeometrySnapshot::viewport_width(Self) -> Double
 
 pub(all) struct PaneModelLineHeight {
-  line_number : Int
+  line_number : Int32
   height_in_px : Double
 } derive(Eq, @debug.Debug)
 pub fn PaneModelLineHeight::equal(Self, Self) -> Bool

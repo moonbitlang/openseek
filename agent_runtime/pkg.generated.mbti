@@ -8,7 +8,7 @@ import {
 }
 
 // Values
-pub let default_agent_event_capacity : Int
+pub let default_agent_event_capacity : Int32
 
 // Errors
 

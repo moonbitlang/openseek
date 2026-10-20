@@ -9,11 +9,11 @@ import {
 }
 
 // Values
-pub async fn[X] build(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[@agent_tool.AgentToolDefinition]
+pub async fn[X] build(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[@agent_tool.AgentToolDefinition]
 
-pub async fn[X] build_grouped(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[(String, Array[@agent_tool.AgentToolDefinition])]
+pub async fn[X] build_grouped(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[(String, Array[@agent_tool.AgentToolDefinition])]
 
-pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int) -> Array[ServerEntry]
+pub async fn[X] connect(@agent_runtime.AgentTaskScope[X], Array[@config.McpServer], client_name~ : String, client_version~ : String, workspace_root? : String, discovery_timeout_ms? : Int32) -> Array[ServerEntry]
 
 pub fn tool_name(String, String) -> String
 

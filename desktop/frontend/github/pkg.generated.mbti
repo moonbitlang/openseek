@@ -27,7 +27,7 @@ pub fn update(@cmd.Emit[Msg], Msg, State) -> (@cmd.Cmd, State)
 // Types and methods
 pub(all) struct Checkout {
   repository_url : String
-  number : Int
+  number : Int32
   url : String
   updating : Bool
   phase : CheckoutPhase
@@ -84,29 +84,29 @@ pub(all) enum Msg {
   CloseDetail
   Checkout(String, @protocol.GithubItem)
   UpdatePullRequest(String)
-  CheckedOut(Int, Result[@protocol.GithubCheckoutReply, String])
+  CheckedOut(Int32, Result[@protocol.GithubCheckoutReply, String])
   ConfirmCheckout(@protocol.GithubCheckoutChanges)
   DismissCheckout
   ToggleCheckoutDetails
-  CurrentLoaded(Int, Result[@protocol.GithubCheckoutStatus, String])
-  DetailLoaded(Int, Result[@protocol.GithubPullRequestDetail, String])
-  Listed(Int, @protocol.GithubListKind, Result[@protocol.GithubListReply, String])
+  CurrentLoaded(Int32, Result[@protocol.GithubCheckoutStatus, String])
+  DetailLoaded(Int32, Result[@protocol.GithubPullRequestDetail, String])
+  Listed(Int32, @protocol.GithubListKind, Result[@protocol.GithubListReply, String])
 }
 
 pub(all) struct State {
   scope : CheckoutScope?
   active : Bool
-  epoch : Int
+  epoch : Int32
   pulls_expanded : Bool
   created : Group
   all_open : Group
   issues : Group
   detail : Detail?
-  detail_epoch : Int
+  detail_epoch : Int32
   checkout : Checkout?
-  checkout_epoch : Int
+  checkout_epoch : Int32
   current : Result[@protocol.GithubCheckoutStatus, String]?
-  current_epoch : Int
+  current_epoch : Int32
   current_loading : Bool
   current_active : Bool
   review_pending : Bool

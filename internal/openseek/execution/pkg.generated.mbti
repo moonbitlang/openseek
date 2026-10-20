@@ -21,7 +21,7 @@ pub fn approval_policy(@argparse.Matches, interactive~ : Bool, delegated? : Bool
 
 pub fn build_extra_tools(McpRegistry, model~ : @deepseek.Model, api_key~ : String, deepseek_api_key? : String, api_url? : String) -> Array[@agent_tool.AgentToolDefinition]
 
-pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, review_deadline_ms? : Int, child_session? : @agent_subrun.ChildSession) -> async (String, @agent_session.GoalBaseline?) -> String?
+pub fn build_goal_met_gate(self_exe~ : String, model~ : @deepseek.Model, api_url~ : String?, workspace_root~ : String, review_deadline_ms? : Int32, child_session? : @agent_subrun.ChildSession) -> async (String, @agent_session.GoalBaseline?) -> String?
 
 pub async fn[X] connect_mcp(@agent_runtime.AgentTaskScope[X], Array[String], workspace_root~ : String) -> McpRegistry
 

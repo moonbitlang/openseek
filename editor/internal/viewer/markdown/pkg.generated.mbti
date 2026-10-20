@@ -13,9 +13,9 @@ pub const MarkdownSourceOwnerAttribute : String = "data-markdown-source-owner"
 
 pub const MarkdownSourceStartAttribute : String = "data-markdown-source-start"
 
-pub fn markdown_default_collapsed_sections(MarkdownDocumentProjection, String, min_depth? : Int, min_rendered_elements? : Int, min_body_lines? : Int) -> Array[Int]
+pub fn markdown_default_collapsed_sections(MarkdownDocumentProjection, String, min_depth? : Int32, min_rendered_elements? : Int32, min_body_lines? : Int32) -> Array[Int32]
 
-pub fn markdown_section_at_source_offset(Array[MarkdownSection], Int) -> MarkdownSection?
+pub fn markdown_section_at_source_offset(Array[MarkdownSection], Int32) -> MarkdownSection?
 
 pub fn markdown_section_keys(Array[MarkdownSection], MarkdownDocumentProjection, String) -> Array[String]
 
@@ -35,7 +35,7 @@ pub fn render_package_dep_diagram_svg(String) -> String?
 
 pub fn render_tokenized_code_block(MarkdownCodeBlock, String?) -> String
 
-pub fn render_tokenized_code_lines(MarkdownCodeBlock, String?, (Int, MarkdownCodeLine, String) -> String) -> String
+pub fn render_tokenized_code_lines(MarkdownCodeBlock, String?, (Int32, MarkdownCodeLine, String) -> String) -> String
 
 pub fn render_uml_diagram_svg(String) -> String?
 
@@ -43,7 +43,7 @@ pub fn render_uml_diagram_svg(String) -> String?
 
 // Types and methods
 pub struct MarkdownBlockAnchor {
-  index : Int
+  index : Int32
   source_range : @common.OffsetRange
   is_root_element : Bool
   // private fields
@@ -53,14 +53,14 @@ pub fn MarkdownBlockAnchor::not_equal(Self, Self) -> Bool
 pub fn MarkdownBlockAnchor::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeBlock {
-  block_index : Int
-  node_id : Int?
+  block_index : Int32
+  node_id : Int32?
   language_id : String?
   block_source_range : @common.OffsetRange
   code_lines : Array[MarkdownCodeLine]
   // private fields
 } derive(Eq, @debug.Debug)
-pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine], node_id? : Int) -> Self
+pub fn MarkdownCodeBlock::MarkdownCodeBlock(Int32, String, String?, String?, String?, @common.OffsetRange, Array[MarkdownCodeLine], node_id? : Int32) -> Self
 pub fn MarkdownCodeBlock::equal(Self, Self) -> Bool
 pub fn MarkdownCodeBlock::is_moonbit_check_fence(Self, MarkdownResourceKind) -> Bool
 pub fn MarkdownCodeBlock::not_equal(Self, Self) -> Bool
@@ -69,13 +69,13 @@ pub fn MarkdownCodeBlock::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownCodeLine {
   displayed_text : String
-  source_line_number : Int
+  source_line_number : Int32
   source_range : @common.OffsetRange
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownCodeLine::equal(Self, Self) -> Bool
 pub fn MarkdownCodeLine::not_equal(Self, Self) -> Bool
-pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(Self, Int) -> Int?
+pub fn MarkdownCodeLine::source_offset_at_displayed_boundary(Self, Int32) -> Int32?
 pub fn MarkdownCodeLine::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownDocumentProjection {
@@ -87,7 +87,7 @@ pub fn MarkdownDocumentProjection::not_equal(Self, Self) -> Bool
 pub fn MarkdownDocumentProjection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownProjectedCodeRange {
-  line_index : Int
+  line_index : Int32
   displayed_range : @common.OffsetRange
 } derive(Eq, @debug.Debug)
 pub fn MarkdownProjectedCodeRange::equal(Self, Self) -> Bool
@@ -112,7 +112,7 @@ pub fn MarkdownResourceKind::not_equal(Self, Self) -> Bool
 pub fn MarkdownResourceKind::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownSection {
-  heading_anchor_index : Int
+  heading_anchor_index : Int32
   source_range : @common.OffsetRange
   body_source_range : @common.OffsetRange?
   // private fields
@@ -124,9 +124,9 @@ pub fn MarkdownSection::not_equal(Self, Self) -> Bool
 pub fn MarkdownSection::to_repr(Self) -> @debug.Repr
 
 pub struct MarkdownTocEntry {
-  depth : Int
+  depth : Int32
   text : String
-  source_offset : Int
+  source_offset : Int32
   // private fields
 } derive(Eq, @debug.Debug)
 pub fn MarkdownTocEntry::equal(Self, Self) -> Bool

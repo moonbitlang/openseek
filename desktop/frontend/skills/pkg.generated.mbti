@@ -81,8 +81,8 @@ pub(all) enum Msg {
   ActionDone(channel~ : @interop.ChannelId, action~ : PendingSkillAction, error~ : String?)
   PreviewMarket(MarketItem)
   PreviewInstalled(InstalledItem)
-  PreviewLoaded(channel~ : @interop.ChannelId, request~ : Int, target~ : PreviewTarget, content~ : String)
-  PreviewFailed(channel~ : @interop.ChannelId, request~ : Int, target~ : PreviewTarget, message~ : String)
+  PreviewLoaded(channel~ : @interop.ChannelId, request~ : Int32, target~ : PreviewTarget, content~ : String)
+  PreviewFailed(channel~ : @interop.ChannelId, request~ : Int32, target~ : PreviewTarget, message~ : String)
   BackToList
   SkillsScrolled(Double)
 }

@@ -32,7 +32,7 @@ pub async fn settings(String) -> @protocol.WorkspaceSettingsPayload
 
 pub fn store_root(@pathx.Absolute) -> @pathx.Absolute
 
-pub async fn update_settings(String, (@protocol.WorkspaceSettingsPayload) -> Unit, worktree_mode? : Bool, checkout_submodules? : Bool, submodule_checkout_timeout_seconds? : Int) -> @protocol.WorkspaceSettingsPayload
+pub async fn update_settings(String, (@protocol.WorkspaceSettingsPayload) -> Unit, worktree_mode? : Bool, checkout_submodules? : Bool, submodule_checkout_timeout_seconds? : Int32) -> @protocol.WorkspaceSettingsPayload
 
 // Errors
 pub suberror WorkspaceError {

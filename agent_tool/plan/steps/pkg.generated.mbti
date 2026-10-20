@@ -6,9 +6,9 @@ import {
 }
 
 // Values
-pub const MAX_STEPS : Int = 20
+pub const MAX_STEPS : Int32 = 20
 
-pub const MAX_TITLE_CHARS : Int = 120
+pub const MAX_TITLE_CHARS : Int32 = 120
 
 pub fn decode(Json) -> PlanInput raise
 

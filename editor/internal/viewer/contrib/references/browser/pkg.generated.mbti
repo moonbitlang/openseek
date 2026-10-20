@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub let references_peek_height_in_lines : Int
+pub let references_peek_height_in_lines : Int32
 
 // Errors
 
@@ -58,7 +58,7 @@ pub fn ReferencesPeekWidget::dispose(Self) -> Unit
 pub fn ReferencesPeekWidget::focus(Self) -> Unit
 pub fn ReferencesPeekWidget::get_dom_node(Self) -> @dom.Element
 pub fn ReferencesPeekWidget::get_preview_host(Self) -> @dom.Element
-pub fn ReferencesPeekWidget::set_group_previews(Self, Int, Array[@references.ReferenceRowPreview]) -> Unit
+pub fn ReferencesPeekWidget::set_group_previews(Self, Int32, Array[@references.ReferenceRowPreview]) -> Unit
 pub fn ReferencesPeekWidget::set_results(Self, @references.ReferencesModel, @references.ReferenceItem?) -> Unit
 pub fn ReferencesPeekWidget::set_selected(Self, @references.ReferenceItem) -> Unit
 pub fn ReferencesPeekWidget::show_empty(Self) -> Unit

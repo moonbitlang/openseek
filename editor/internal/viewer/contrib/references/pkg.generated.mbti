@@ -14,7 +14,7 @@ import {
 
 // Types and methods
 pub(all) struct ReferenceGroup {
-  group_index : Int
+  group_index : Int32
   uri : @common.Uri
   uri_string : String
   references : Array[ReferenceItem]
@@ -25,9 +25,9 @@ pub fn ReferenceGroup::not_equal(Self, Self) -> Bool
 pub fn ReferenceGroup::to_repr(Self) -> @debug.Repr
 
 pub(all) struct ReferenceItem {
-  flat_index : Int
-  group_index : Int
-  index_in_group : Int
+  flat_index : Int32
+  group_index : Int32
+  index_in_group : Int32
   uri : @common.Uri
   uri_string : String
   range : @common.Range
@@ -81,25 +81,25 @@ pub fn ReferencesPeekMode::to_repr(Self) -> @debug.Repr
 
 pub(all) enum ReferencesPeekPhase {
   PeekClosed
-  PeekLoadingDefinitions(Int)
-  PeekLoadingReferences(Int)
-  PeekLoadingPreview(Int, Int)
-  PeekShown(Int, Int)
-  PeekUnavailable(Int, Int)
+  PeekLoadingDefinitions(Int32)
+  PeekLoadingReferences(Int32)
+  PeekLoadingPreview(Int32, Int32)
+  PeekShown(Int32, Int32)
+  PeekUnavailable(Int32, Int32)
 } derive(Eq, @debug.Debug)
 pub fn ReferencesPeekPhase::equal(Self, Self) -> Bool
 pub fn ReferencesPeekPhase::not_equal(Self, Self) -> Bool
 pub fn ReferencesPeekPhase::to_repr(Self) -> @debug.Repr
 
 pub struct ReferencesSessionKey {
-  model_identity : Int
-  model_generation : Int
-  model_version_id : Int
+  model_identity : Int32
+  model_generation : Int32
+  model_version_id : Int32
   anchor : @common.Position
 } derive(Eq, @debug.Debug)
 pub fn ReferencesSessionKey::equal(Self, Self) -> Bool
-pub fn ReferencesSessionKey::from_model(@model.TextModel, Int, @common.Position) -> Self
-pub fn ReferencesSessionKey::is_current(Self, @model.TextModel, Int) -> Bool
+pub fn ReferencesSessionKey::from_model(@model.TextModel, Int32, @common.Position) -> Self
+pub fn ReferencesSessionKey::is_current(Self, @model.TextModel, Int32) -> Bool
 pub fn ReferencesSessionKey::not_equal(Self, Self) -> Bool
 pub fn ReferencesSessionKey::to_repr(Self) -> @debug.Repr
 

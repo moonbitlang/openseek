@@ -20,22 +20,22 @@ pub fn symbol_navigation_context_commands(@languages.LanguageHandle, @model.Text
 // Types and methods
 type DefinitionAction
 pub fn DefinitionAction::DefinitionAction(SymbolNavigationAction) -> Self
-pub fn DefinitionAction::begin(Self, SymbolNavigationAnchor) -> Int?
+pub fn DefinitionAction::begin(Self, SymbolNavigationAnchor) -> Int32?
 pub async fn DefinitionAction::run(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig) -> Unit noraise
-pub async fn DefinitionAction::run_reserved(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig, Int) -> Unit noraise
+pub async fn DefinitionAction::run_reserved(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig, Int32) -> Unit noraise
 
 type DefinitionLinkResolver
 pub fn DefinitionLinkResolver::DefinitionLinkResolver(@languages.LanguageHandle, is_anchor_current~ : (SymbolNavigationAnchor) -> Bool, async (Array[async () -> Unit]) -> Unit) -> Self
-pub fn DefinitionLinkResolver::begin(Self, SymbolNavigationAnchor) -> Int?
+pub fn DefinitionLinkResolver::begin(Self, SymbolNavigationAnchor) -> Int32?
 pub fn DefinitionLinkResolver::cancel(Self) -> Unit
 pub fn DefinitionLinkResolver::dispose(Self) -> Unit
-pub async fn DefinitionLinkResolver::resolve_reserved(Self, SymbolNavigationAnchor, Int) -> Array[@language.Location] noraise
+pub async fn DefinitionLinkResolver::resolve_reserved(Self, SymbolNavigationAnchor, Int32) -> Array[@language.Location] noraise
 
 type ReferencesAction
 pub fn ReferencesAction::ReferencesAction(SymbolNavigationAction) -> Self
-pub fn ReferencesAction::begin(Self, SymbolNavigationAnchor) -> Int?
+pub fn ReferencesAction::begin(Self, SymbolNavigationAnchor) -> Int32?
 pub async fn ReferencesAction::run(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig) -> Unit noraise
-pub async fn ReferencesAction::run_reserved(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig, Int) -> Unit noraise
+pub async fn ReferencesAction::run_reserved(Self, SymbolNavigationAnchor, SymbolNavigationActionConfig, Int32) -> Unit noraise
 
 type SymbolNavigationAction
 pub fn SymbolNavigationAction::SymbolNavigationAction(localization? : @localization.Localization, @languages.LanguageHandle, SymbolNavigationActionHost, async (Array[async () -> Unit]) -> Unit) -> Self
@@ -60,13 +60,13 @@ pub(all) struct SymbolNavigationActionHost {
 }
 
 type SymbolNavigationAnchor
-pub fn SymbolNavigationAnchor::from_model(@model.TextModel, @common.Position, @common.Range, Int) -> Self
+pub fn SymbolNavigationAnchor::from_model(@model.TextModel, @common.Position, @common.Range, Int32) -> Self
 pub fn SymbolNavigationAnchor::model(Self) -> @model.TextModel
 pub fn SymbolNavigationAnchor::model_is_current(Self) -> Bool
 pub fn SymbolNavigationAnchor::position(Self) -> @common.Position
 pub fn SymbolNavigationAnchor::range(Self) -> @common.Range
 pub fn SymbolNavigationAnchor::same_snapshot(Self, Self) -> Bool
-pub fn SymbolNavigationAnchor::surface_generation(Self) -> Int
+pub fn SymbolNavigationAnchor::surface_generation(Self) -> Int32
 
 pub(all) enum SymbolNavigationCommand {
   RevealDefinition

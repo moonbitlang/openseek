@@ -41,7 +41,7 @@ pub fn MarkdownViewerServices::preview_factory(Self) -> @browser.ReferencesPeekP
 pub fn MarkdownViewerServices::text_model_resolver(Self) -> @navigation_api.TextModelResolverHandle?
 
 type MarkdownViewerWidget
-pub fn MarkdownViewerWidget::collapsed_sections(Self) -> Array[Int]
+pub fn MarkdownViewerWidget::collapsed_sections(Self) -> Array[Int32]
 pub fn MarkdownViewerWidget::create(@dom.Element, services? : MarkdownViewerServices, options? : MarkdownViewerWidgetOptions) -> Self
 pub fn MarkdownViewerWidget::dispose(Self) -> Unit
 pub fn MarkdownViewerWidget::focus(Self) -> Unit
@@ -60,10 +60,10 @@ pub fn MarkdownViewerWidget::on_did_change_model_content(Self, (@model.ModelCont
 pub fn MarkdownViewerWidget::on_did_dispose(Self, () -> Unit) -> @common.Disposable
 pub fn MarkdownViewerWidget::on_did_scroll(Self, () -> Unit) -> @common.Disposable
 pub fn MarkdownViewerWidget::restore_view_state(Self, MarkdownViewerWidgetViewState?) -> Unit
-pub fn MarkdownViewerWidget::reveal_source_offset(Self, Int) -> Unit
+pub fn MarkdownViewerWidget::reveal_source_offset(Self, Int32) -> Unit
 pub fn MarkdownViewerWidget::save_view_state(Self) -> MarkdownViewerWidgetViewState?
 pub fn MarkdownViewerWidget::set_model(Self, MarkdownViewerWidgetModel?) -> MarkdownViewerWidgetModel?
-pub fn MarkdownViewerWidget::toggle_section_at(Self, Int) -> Bool
+pub fn MarkdownViewerWidget::toggle_section_at(Self, Int32) -> Bool
 pub fn MarkdownViewerWidget::update_options(Self, MarkdownViewerWidgetOptions) -> Unit
 
 pub(all) struct MarkdownViewerWidgetModel {

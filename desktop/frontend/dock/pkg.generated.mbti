@@ -13,7 +13,7 @@ import {
 }
 
 // Values
-pub fn active_browser(State) -> Int?
+pub fn active_browser(State) -> Int32?
 
 pub fn active_file(State) -> @common.Uri?
 
@@ -25,9 +25,9 @@ pub fn history_diffs(State) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html
 
-pub fn open_browser(State, Int) -> State
+pub fn open_browser(State, Int32) -> State
 
-pub fn open_browser_for(State, @interop.ConversationKey, Int) -> State
+pub fn open_browser_for(State, @interop.ConversationKey, Int32) -> State
 
 pub fn open_file(State, @common.Uri) -> State
 
@@ -66,7 +66,7 @@ pub(all) enum CloseSelection {
 pub(all) enum DockTab {
   File(path~ : @common.Uri)
   GitDiff(diff~ : GitHistoryDiff)
-  Browser(id~ : Int)
+  Browser(id~ : Int32)
   FilePicker
   Workflows
   Github

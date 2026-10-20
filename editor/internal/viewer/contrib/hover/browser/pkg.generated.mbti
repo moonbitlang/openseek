@@ -24,7 +24,7 @@ pub fn hover_on_event(@hover.HoverController, EditorEvent, EditorContext, sticky
 pub(all) struct ContentHoverController {
   mut hover : @hover.HoverController
   mut hover_react_pending : Bool
-  mut hover_react_token : Int
+  mut hover_react_token : Int32
   mut hover_pending_target : @moonbitlang/editor/viewer/browser.MouseTarget?
   mut hover_async_debouncer : @hover.HoverDebouncer
   mut hover_sync_debouncer : @hover.HoverDebouncer
@@ -37,18 +37,18 @@ pub(all) struct ContentHoverController {
   mut hover_mouse_posy : Double
   mut hover_last_modifiers : @hover.EventModifiers
   hover_mouse_closer : @hover.MouseCloserState
-  mut hover_notified_token : Int
+  mut hover_notified_token : Int32
   mut hover_decoration_ids : Array[String]
   mut hover_decoration_range : @common.Range?
   // private fields
 }
 pub fn ContentHoverController::ContentHoverController() -> Self
-pub fn ContentHoverController::begin_request(Self, @language.CancellationTokenSource, Int) -> Unit
+pub fn ContentHoverController::begin_request(Self, @language.CancellationTokenSource, Int32) -> Unit
 pub fn ContentHoverController::cancel_all_timers(Self) -> Unit
 pub fn ContentHoverController::cancel_operation_timers(Self) -> Unit
 pub fn ContentHoverController::cancel_react(Self) -> Unit
 pub fn ContentHoverController::cancel_request(Self) -> Unit
-pub fn ContentHoverController::finish_request(Self, Int) -> Unit
+pub fn ContentHoverController::finish_request(Self, Int32) -> Unit
 pub fn ContentHoverController::install_async_timer(Self, @common.Disposable) -> Unit
 pub fn ContentHoverController::install_loading_timer(Self, @common.Disposable) -> Unit
 pub fn ContentHoverController::install_react_timer(Self, @common.Disposable) -> Unit
@@ -106,7 +106,7 @@ pub(all) enum EditorEvent {
 }
 
 type MarkdownDocumentHoverBridge
-pub fn MarkdownDocumentHoverBridge::MarkdownDocumentHoverBridge(@markdown_document.MarkdownDocumentView, @model.TextModel, @hover.ContentHoverComputer, @markers.MarkerDecorationsHandle, Int, () -> Bool, (async () -> Unit noraise) -> Unit) -> Self
+pub fn MarkdownDocumentHoverBridge::MarkdownDocumentHoverBridge(@markdown_document.MarkdownDocumentView, @model.TextModel, @hover.ContentHoverComputer, @markers.MarkerDecorationsHandle, Int32, () -> Bool, (async () -> Unit noraise) -> Unit) -> Self
 pub fn MarkdownDocumentHoverBridge::activate(Self) -> Unit
 pub fn MarkdownDocumentHoverBridge::after_projection_replaced(Self) -> Unit
 pub fn MarkdownDocumentHoverBridge::before_projection_replaced(Self) -> Unit

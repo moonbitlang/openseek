@@ -2,9 +2,9 @@
 package "openseek_desktop/backend/entropy"
 
 // Values
-pub fn random_bytes(Int) -> Bytes?
+pub fn random_bytes(Int32) -> Bytes?
 
-pub fn random_hex(Int) -> String?
+pub fn random_hex(Int32) -> String?
 
 // Errors
 

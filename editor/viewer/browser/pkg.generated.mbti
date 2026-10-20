@@ -39,9 +39,9 @@ pub struct EditorDomMouseEvent {
   left_button : Bool
   middle_button : Bool
   right_button : Bool
-  buttons : Int
+  buttons : Int32
   target : @dom.Element?
-  mut detail : Int
+  mut detail : Int32
   posx : Double
   posy : Double
   ctrl_key : Bool
@@ -58,7 +58,7 @@ pub fn EditorDomMouseEvent::EditorDomMouseEvent(@dom.MouseEvent, Bool, @dom.Elem
 pub fn EditorDomMouseEvent::editor_pos(Self) -> EditorPagePosition
 pub fn EditorDomMouseEvent::prevent_default(Self) -> Unit
 pub fn EditorDomMouseEvent::relative_pos(Self) -> CoordinatesRelativeToEditor
-pub fn EditorDomMouseEvent::set_detail(Self, Int) -> Unit
+pub fn EditorDomMouseEvent::set_detail(Self, Int32) -> Unit
 pub fn EditorDomMouseEvent::stop_propagation(Self) -> Unit
 
 pub(all) struct EditorMouseEvent {
@@ -73,7 +73,7 @@ pub fn EditorMouseEventFactory::on_mouse_down(Self, @dom.Element, (EditorDomMous
 pub fn EditorMouseEventFactory::on_mouse_leave(Self, @dom.Element, (EditorDomMouseEvent) -> Unit) -> @common.Disposable
 pub fn EditorMouseEventFactory::on_mouse_move(Self, @dom.Element, (EditorDomMouseEvent) -> Unit) -> @common.Disposable
 pub fn EditorMouseEventFactory::on_mouse_up(Self, @dom.Element, (EditorDomMouseEvent) -> Unit) -> @common.Disposable
-pub fn EditorMouseEventFactory::on_pointer_down(Self, @dom.Element, (EditorDomMouseEvent, Int) -> Unit) -> @common.Disposable
+pub fn EditorMouseEventFactory::on_pointer_down(Self, @dom.Element, (EditorDomMouseEvent, Int32) -> Unit) -> @common.Disposable
 
 pub struct EditorPagePosition {
   x : Double
@@ -88,22 +88,22 @@ pub fn EditorPagePosition::to_repr(Self) -> @debug.Repr
 type GlobalEditorPointerMoveMonitor
 pub fn GlobalEditorPointerMoveMonitor::GlobalEditorPointerMoveMonitor(@dom.Element) -> Self
 pub fn GlobalEditorPointerMoveMonitor::dispose(Self) -> Unit
-pub fn GlobalEditorPointerMoveMonitor::start_monitoring(Self, @dom.Element, Int, Int, (EditorDomMouseEvent) -> Unit, (@dom.Event?) -> Unit) -> Unit
+pub fn GlobalEditorPointerMoveMonitor::start_monitoring(Self, @dom.Element, Int32, Int32, (EditorDomMouseEvent) -> Unit, (@dom.Event?) -> Unit) -> Unit
 pub fn GlobalEditorPointerMoveMonitor::stop_monitoring(Self) -> Unit
 
 pub(all) enum MouseTarget {
-  MouseTargetUnknown(element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position?, range~ : @common.Range?)
-  MouseTargetMargin(type_~ : MouseTargetType, element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetMarginData)
-  MouseTargetViewZone(type_~ : MouseTargetType, element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetViewZoneData)
-  MouseTargetContentText(element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetContentTextData)
-  MouseTargetContentEmpty(element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetContentEmptyData)
-  MouseTargetContentWidget(element~ : @dom.Element?, mouse_column~ : Int, detail~ : String)
-  MouseTargetScrollbar(element~ : @dom.Element?, mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range)
-  MouseTargetOverlayWidget(element~ : @dom.Element?, mouse_column~ : Int, detail~ : String)
-  MouseTargetOutsideEditor(mouse_column~ : Int, position~ : @common.Position, range~ : @common.Range, outside_position~ : OutsidePosition, outside_distance~ : Double)
+  MouseTargetUnknown(element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position?, range~ : @common.Range?)
+  MouseTargetMargin(type_~ : MouseTargetType, element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetMarginData)
+  MouseTargetViewZone(type_~ : MouseTargetType, element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetViewZoneData)
+  MouseTargetContentText(element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetContentTextData)
+  MouseTargetContentEmpty(element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range, detail~ : MouseTargetContentEmptyData)
+  MouseTargetContentWidget(element~ : @dom.Element?, mouse_column~ : Int32, detail~ : String)
+  MouseTargetScrollbar(element~ : @dom.Element?, mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range)
+  MouseTargetOverlayWidget(element~ : @dom.Element?, mouse_column~ : Int32, detail~ : String)
+  MouseTargetOutsideEditor(mouse_column~ : Int32, position~ : @common.Position, range~ : @common.Range, outside_position~ : OutsidePosition, outside_distance~ : Double)
 }
 pub fn MouseTarget::element(Self) -> @dom.Element?
-pub fn MouseTarget::mouse_column(Self) -> Int
+pub fn MouseTarget::mouse_column(Self) -> Int32
 pub fn MouseTarget::position(Self) -> @common.Position?
 pub fn MouseTarget::range(Self) -> @common.Range?
 pub fn MouseTarget::type_(Self) -> MouseTargetType
@@ -157,7 +157,7 @@ pub(all) struct MouseTargetViewZoneData {
   position_before : @common.Position?
   position_after : @common.Position?
   position : @common.Position
-  after_line_number : Int
+  after_line_number : Int32
 } derive(Eq, @debug.Debug)
 pub fn MouseTargetViewZoneData::equal(Self, Self) -> Bool
 pub fn MouseTargetViewZoneData::not_equal(Self, Self) -> Bool
@@ -193,12 +193,12 @@ pub(all) struct PartialEditorMouseEvent {
 }
 
 pub(all) struct ViewZone {
-  mut after_line_number : Int
-  mut after_column : Int?
+  mut after_line_number : Int32
+  mut after_column : Int32?
   mut after_column_affinity : @model.PositionAffinity?
   mut show_in_hidden_areas : Bool?
   mut ignore_hidden_area_source : String?
-  mut ordinal : Int?
+  mut ordinal : Int32?
   mut suppress_mouse_down : Bool?
   mut height_in_lines : Double?
   mut height_in_px : Double?
@@ -209,7 +209,7 @@ pub(all) struct ViewZone {
   mut on_dom_node_layout : ((Bool, Double) -> Unit raise)?
   mut on_computed_height : ((Double) -> Unit raise)?
 }
-pub fn ViewZone::ViewZone(Int, @dom.Element, after_column? : Int, after_column_affinity? : @model.PositionAffinity, show_in_hidden_areas? : Bool, ignore_hidden_area_source? : String, ordinal? : Int, suppress_mouse_down? : Bool, height_in_lines? : Double, height_in_px? : Double, min_width_in_px? : Double, margin_dom_node? : @dom.Element, on_dom_node_top? : (Double) -> Unit raise, on_dom_node_layout? : (Bool, Double) -> Unit raise, on_computed_height? : (Double) -> Unit raise) -> Self
+pub fn ViewZone::ViewZone(Int32, @dom.Element, after_column? : Int32, after_column_affinity? : @model.PositionAffinity, show_in_hidden_areas? : Bool, ignore_hidden_area_source? : String, ordinal? : Int32, suppress_mouse_down? : Bool, height_in_lines? : Double, height_in_px? : Double, min_width_in_px? : Double, margin_dom_node? : @dom.Element, on_dom_node_top? : (Double) -> Unit raise, on_dom_node_layout? : (Bool, Double) -> Unit raise, on_computed_height? : (Double) -> Unit raise) -> Self
 
 type ViewZoneChangeAccessor
 pub fn ViewZoneChangeAccessor::add_zone(Self, ViewZone) -> String

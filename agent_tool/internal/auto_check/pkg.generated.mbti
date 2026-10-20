@@ -28,8 +28,8 @@ pub async fn package_graph(String) -> PackageGraph?
 
 // Types and methods
 pub(all) struct CheckErrors {
-  error_count : Int
-  warning_count : Int
+  error_count : Int32
+  warning_count : Int32
   errors : Array[ErrorSite]
   warnings : Array[ErrorSite]
   truncated : Bool
@@ -42,14 +42,14 @@ pub fn CheckErrors::to_json(Self) -> Json
 pub(all) enum CheckOutcome {
   NotApplicable
   Unavailable(String)
-  Failed(Int, CheckErrors, String)
+  Failed(Int32, CheckErrors, String)
   Checked(CheckErrors)
 }
 
 pub(all) struct ErrorSite {
   path : String?
   loc : String
-  code : Int?
+  code : Int32?
   message : String
 } derive(Eq, @debug.Debug)
 pub fn ErrorSite::identity(Self) -> String
@@ -64,10 +64,10 @@ pub(all) struct Introduced {
 
 pub(all) struct PackageGraph {
   dirs : Array[String?]
-  edges : Array[(Int, Int)]
+  edges : Array[(Int32, Int32)]
 } derive(@debug.Debug)
-pub fn PackageGraph::depends_on(Self, Int, Array[Int]) -> Bool
-pub fn PackageGraph::package_of(Self, String) -> Int?
+pub fn PackageGraph::depends_on(Self, Int32, Array[Int32]) -> Bool
+pub fn PackageGraph::package_of(Self, String) -> Int32?
 
 pub(all) struct ParseGate {
   errors : Array[ParseGateError]

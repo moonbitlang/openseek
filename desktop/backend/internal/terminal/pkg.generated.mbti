@@ -2,7 +2,7 @@
 package "openseek_desktop/backend/internal/terminal"
 
 // Values
-pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int) -> Unit
+pub fn ack_terminal(TerminalState, id~ : String, sequence~ : Int32) -> Unit
 
 pub fn close_all_terminals(TerminalState) -> Unit
 
@@ -10,9 +10,9 @@ pub fn close_terminal(TerminalState, id~ : String) -> Unit
 
 pub fn new_terminal_state() -> TerminalState
 
-pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int, rows~ : Int, command? : Array[String]) -> String
+pub async fn open_terminal(TerminalState, cwd~ : String, cols~ : Int32, rows~ : Int32, command? : Array[String]) -> String
 
-pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int, rows~ : Int) -> Unit raise
+pub fn resize_terminal(TerminalState, id~ : String, cols~ : Int32, rows~ : Int32) -> Unit raise
 
 pub async fn run_terminal_pump(TerminalState, async (TerminalPush) -> Unit) -> Unit
 
@@ -25,8 +25,8 @@ pub suberror TerminalError {
 
 // Types and methods
 pub(all) enum TerminalPush {
-  Output(id~ : String, sequence~ : Int, data~ : Bytes)
-  Exited(id~ : String, code~ : Int)
+  Output(id~ : String, sequence~ : Int32, data~ : Bytes)
+  Exited(id~ : String, code~ : Int32)
 }
 
 type TerminalState

@@ -7,15 +7,15 @@ import {
 }
 
 // Values
-pub fn column_from_visible_column(String, Int, Int) -> Int
+pub fn column_from_visible_column(String, Int32, Int32) -> Int32
 
 pub let editor_horizontal_scrollbar_size : Double
 
 pub let editor_vertical_scrollbar_size : Double
 
-pub fn to_statusbar_column(String, Int, Int) -> Int
+pub fn to_statusbar_column(String, Int32, Int32) -> Int32
 
-pub fn visible_column_from_column(String, Int, Int) -> Int
+pub fn visible_column_from_column(String, Int32, Int32) -> Int32
 
 // Errors
 
@@ -30,8 +30,8 @@ pub fn Selection::get_position(Self) -> @common.Position
 pub fn Selection::get_selection_start(Self) -> @common.Position
 pub fn Selection::is_empty(Self) -> Bool
 pub fn Selection::not_equal(Self, Self) -> Bool
-pub fn Selection::set_end_position(Self, Int, Int) -> Self
-pub fn Selection::set_start_position(Self, Int, Int) -> Self
+pub fn Selection::set_end_position(Self, Int32, Int32) -> Self
+pub fn Selection::set_start_position(Self, Int32, Int32) -> Self
 pub fn Selection::start(Self) -> @common.Position
 pub fn Selection::to_repr(Self) -> @debug.Repr
 

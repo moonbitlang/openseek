@@ -34,17 +34,17 @@ pub fn Input::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
   ValueChanged(String)
-  FilesDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
-  FileCacheLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int)
-  FileCacheRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int)
-  FilesLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int, files~ : Array[@pathx.Relative], from_cache~ : Bool, limit_hit~ : Bool)
-  FilesRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int)
-  SymbolsDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
-  SymbolsLoaded(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int, items~ : Array[@symbols.Symbol])
-  SymbolsRequestFailed(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int)
-  Move(Int)
-  Select(Int)
-  Pick(Int)
+  FilesDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int32)
+  FileCacheLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int32)
+  FileCacheRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, generation~ : Int32)
+  FilesLoaded(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int32, files~ : Array[@pathx.Relative], from_cache~ : Bool, limit_hit~ : Bool)
+  FilesRequestFailed(owner~ : @interop.ConversationKey, cache_key~ : String, query~ : String, generation~ : Int32)
+  SymbolsDue(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int32)
+  SymbolsLoaded(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int32, items~ : Array[@symbols.Symbol])
+  SymbolsRequestFailed(owner~ : @interop.ConversationKey, query~ : String, generation~ : Int32)
+  Move(Int32)
+  Select(Int32)
+  Pick(Int32)
   Dismiss
 }
 

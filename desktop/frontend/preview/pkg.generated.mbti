@@ -16,7 +16,7 @@ pub fn annotation_button(locale~ : @i18n.Locale, Annotation, @cmd.Emit[Annotatio
 
 pub fn annotation_view(locale~ : @i18n.Locale, Annotation, @cmd.Emit[AnnotationMsg]) -> @html.Html
 
-pub fn close_page(State, Int) -> State
+pub fn close_page(State, Int32) -> State
 
 pub fn failure_view(PageState) -> @html.Html
 
@@ -26,13 +26,13 @@ pub fn is_loopback(String) -> Bool
 
 pub fn is_web_url(String) -> Bool
 
-pub fn navigate(State, Int, String) -> State
+pub fn navigate(State, Int32, String) -> State
 
 pub fn normalize_url(String) -> String?
 
-pub fn open_page(State, url? : String) -> (State, Int)
+pub fn open_page(State, url? : String) -> (State, Int32)
 
-pub fn page(State, Int) -> PageState?
+pub fn page(State, Int32) -> PageState?
 
 pub fn page_label(PageState, locale? : @i18n.Locale) -> String
 
@@ -62,12 +62,12 @@ pub fn FileObservation::equal(Self, Self) -> Bool
 pub fn FileObservation::not_equal(Self, Self) -> Bool
 
 pub(all) enum Msg {
-  InputChanged(id~ : Int, value~ : String)
-  Navigated(id~ : Int, url~ : String)
-  LoadingChanged(id~ : Int, loading~ : Bool)
-  TitleUpdated(id~ : Int, title~ : String)
-  LoadFailed(id~ : Int, url~ : String, text~ : String)
-  ReloadFailed(id~ : Int, url~ : String, message~ : String)
+  InputChanged(id~ : Int32, value~ : String)
+  Navigated(id~ : Int32, url~ : String)
+  LoadingChanged(id~ : Int32, loading~ : Bool)
+  TitleUpdated(id~ : Int32, title~ : String)
+  LoadFailed(id~ : Int32, url~ : String, text~ : String)
+  ReloadFailed(id~ : Int32, url~ : String, message~ : String)
 }
 
 pub(all) struct PageState {
@@ -81,18 +81,18 @@ pub fn PageState::equal(Self, Self) -> Bool
 pub fn PageState::not_equal(Self, Self) -> Bool
 
 pub(all) struct Rect {
-  x : Int
-  y : Int
-  width : Int
-  height : Int
+  x : Int32
+  y : Int32
+  width : Int32
+  height : Int32
 } derive(Eq)
 pub fn Rect::equal(Self, Self) -> Bool
 pub fn Rect::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
-  pages : Map[Int, PageState]
-  next_id : Int
-  files : Map[Int, FileObservation]
+  pages : Map[Int32, PageState]
+  next_id : Int32
+  files : Map[Int32, FileObservation]
 } derive(Eq)
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
@@ -100,7 +100,7 @@ pub fn State::files_to_check(Self) -> Array[@common.Uri]
 pub fn State::local_files(Self) -> Array[@common.Uri]
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::observe_file(Self, @common.Uri, @protocol.FileSignature) -> Self
-pub fn State::take_file_reloads(Self) -> (Self, Array[Int])
+pub fn State::take_file_reloads(Self) -> (Self, Array[Int32])
 
 pub(all) struct ToolbarActions {
   input : @cmd.Emit[String]

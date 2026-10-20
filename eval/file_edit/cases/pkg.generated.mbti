@@ -6,7 +6,7 @@ import {
 }
 
 // Values
-pub fn case_for_trial(Int) -> EvalCase
+pub fn case_for_trial(Int32) -> EvalCase
 
 pub fn eval_cases() -> Array[EvalCase]
 

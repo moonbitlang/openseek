@@ -21,15 +21,15 @@ pub struct MarkdownCommentDom {
   margin : @dom.Element
   // private fields
 }
-pub fn MarkdownCommentDom::MarkdownCommentDom(localization? : @localization.Localization, Int, Int) -> Self
+pub fn MarkdownCommentDom::MarkdownCommentDom(localization? : @localization.Localization, Int32, Int32) -> Self
 pub fn MarkdownCommentDom::disable_folding(Self) -> Unit
 pub fn MarkdownCommentDom::enable_folding(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable
 pub fn MarkdownCommentDom::enable_source_toggle(Self, @ref.Ref[Bool], () -> Unit) -> @common.Disposable
 pub fn MarkdownCommentDom::expose_accessible_content(Self) -> Unit
-pub fn MarkdownCommentDom::observe_size(Self, (Int) -> Unit) -> MarkdownCommentSizeObserver
+pub fn MarkdownCommentDom::observe_size(Self, (Int32) -> Unit) -> MarkdownCommentSizeObserver
 pub fn MarkdownCommentDom::observe_viewport_width(Self, () -> Unit) -> MarkdownCommentViewportObserver
 pub fn MarkdownCommentDom::pin_to_content_viewport(Self) -> Unit
-pub fn MarkdownCommentDom::set_margin_fold_lane_width(Self, Int) -> Unit
+pub fn MarkdownCommentDom::set_margin_fold_lane_width(Self, Int32) -> Unit
 
 type MarkdownCommentSizeObserver
 pub fn MarkdownCommentSizeObserver::dispose(Self) -> Unit

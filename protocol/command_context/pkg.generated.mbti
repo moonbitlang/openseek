@@ -17,7 +17,7 @@ pub struct ShellCommand {
 }
 
 pub(all) struct ShellOutput {
-  exit_code : Int?
+  exit_code : Int32?
   text : String
   output_limit_reached : Bool
 }

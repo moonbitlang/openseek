@@ -17,11 +17,11 @@ pub struct EditInput {
   new_string : String
   replace_all : Bool
   replace_all_preview : Bool
-  start_line : Int
-  end_line : Int?
+  start_line : Int32
+  end_line : Int32?
   revert_on_parse_errors : Bool
-  revert_if_error_delta_greater_or_equal : Int?
-  revert_if_warning_delta_greater_or_equal : Int?
+  revert_if_error_delta_greater_or_equal : Int32?
+  revert_if_warning_delta_greater_or_equal : Int32?
 } derive(@debug.Debug)
 
 // Type aliases

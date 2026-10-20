@@ -12,7 +12,7 @@ import {
 // Values
 pub fn apply_goal_marker(GoalStanding?, GoalMarker) -> GoalStanding?
 
-pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double, sequence? : Int) -> Bool
+pub fn apply_session_item(Array[TranscriptItem], @protocol.SessionItem, ts? : Double, sequence? : Int32) -> Bool
 
 pub fn decode_engine_event(@openseek_protocol.Event) -> EngineEvent?
 
@@ -36,19 +36,19 @@ pub fn subrun_parent(String) -> String?
 
 // Types and methods
 pub(all) enum EngineEvent {
-  AgentStep(Int?)
-  StreamRetry(attempt~ : Int, max_attempts~ : Int, reason~ : String)
+  AgentStep(Int32?)
+  StreamRetry(attempt~ : Int32, max_attempts~ : Int32, reason~ : String)
   AssistantDelta(String)
   ReasoningDelta(String)
   ReasoningMessage(String)
   AssistantMessage(String)
   BackgroundNotice(String)
-  Usage(prompt_tokens~ : Int, completion_tokens~ : Int)
+  Usage(prompt_tokens~ : Int32, completion_tokens~ : Int32)
   ToolResult(tool_name~ : String, is_error~ : Bool, content~ : String, brief~ : String?)
   ToolCallDecodeError(tool_name~ : String, reason~ : String)
   SubrunOpened(id~ : String, kind~ : String, label~ : String)
-  SubrunClosed(id~ : String, status~ : String, steps~ : Int, tokens~ : Int, unaccounted~ : String?)
-  WorkflowOpened(id~ : String, journal~ : String, events~ : String, first_child~ : Int, child_count~ : Int)
+  SubrunClosed(id~ : String, status~ : String, steps~ : Int32, tokens~ : Int32, unaccounted~ : String?)
+  WorkflowOpened(id~ : String, journal~ : String, events~ : String, first_child~ : Int32, child_count~ : Int32)
   WorkflowClosed(id~ : String)
   AgentFinished(String)
   ContextYield(String)
@@ -66,7 +66,7 @@ pub(all) enum EngineEvent {
   SessionAppendFailed(String)
   McpConfigFailed(path~ : String, error~ : String)
   McpServerFailed(server~ : String, error~ : String)
-  McpToolsDropped(server~ : String, limit~ : Int)
+  McpToolsDropped(server~ : String, limit~ : Int32)
 }
 
 pub(all) enum GoalMarker {
@@ -87,7 +87,7 @@ pub fn GoalStanding::not_equal(Self, Self) -> Bool
 
 pub(all) enum ItemKind {
   User(content~ : @deepseek.Content)
-  Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool, end_sequence~ : Int?)
+  Assistant(reasoning~ : String?, prose~ : String?, calls~ : Array[ToolCall], replay~ : Bool, finished~ : Bool, end_sequence~ : Int32?)
   Answer(String)
   TurnEnd
   Failure(String)
@@ -110,9 +110,9 @@ pub fn SessionListItem::not_equal(Self, Self) -> Bool
 pub struct SessionLoadView {
   prediction : @openseek_protocol.PredictionRecord?
   items : Array[TranscriptItem]
-  watermark : Int
+  watermark : Int32
   goal : GoalStanding?
-  goal_markers : Array[(Int, GoalMarker)]
+  goal_markers : Array[(Int32, GoalMarker)]
 }
 
 pub struct SessionTreeRow {
@@ -149,10 +149,10 @@ pub(all) enum TraceOrigin {
 pub(all) struct TranscriptItem {
   kind : ItemKind
   ts : Double?
-  sequence : Int?
+  sequence : Int32?
 } derive(Eq)
 pub fn TranscriptItem::equal(Self, Self) -> Bool
-pub fn TranscriptItem::fork_through(Self) -> Int?
+pub fn TranscriptItem::fork_through(Self) -> Int32?
 pub fn TranscriptItem::not_equal(Self, Self) -> Bool
 pub fn TranscriptItem::text(Self) -> String?
 

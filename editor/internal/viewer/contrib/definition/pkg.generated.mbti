@@ -22,7 +22,7 @@ pub(all) enum DefinitionLinkState {
 }
 
 pub(all) struct DefinitionRequestStamp {
-  sequence : Int
+  sequence : Int32
   target : DefinitionTargetFingerprint
 } derive(Eq, @debug.Debug)
 pub fn DefinitionRequestStamp::equal(Self, Self) -> Bool
@@ -31,8 +31,8 @@ pub fn DefinitionRequestStamp::to_repr(Self) -> @debug.Repr
 
 type DefinitionTargetFingerprint derive(Eq, @debug.Debug)
 pub fn DefinitionTargetFingerprint::equal(Self, Self) -> Bool
-pub fn DefinitionTargetFingerprint::from_model(@model.TextModel, Int, @common.Position, @model.WordAtPosition) -> Self
-pub fn DefinitionTargetFingerprint::is_current(Self, @model.TextModel, Int) -> Bool
+pub fn DefinitionTargetFingerprint::from_model(@model.TextModel, Int32, @common.Position, @model.WordAtPosition) -> Self
+pub fn DefinitionTargetFingerprint::is_current(Self, @model.TextModel, Int32) -> Bool
 pub fn DefinitionTargetFingerprint::not_equal(Self, Self) -> Bool
 pub fn DefinitionTargetFingerprint::position(Self) -> @common.Position
 pub fn DefinitionTargetFingerprint::same_word(Self, Self) -> Bool

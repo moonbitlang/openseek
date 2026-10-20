@@ -28,7 +28,7 @@ pub struct BareFontInfo {
   font_size : Double
   font_feature_settings : String
   font_variation_settings : String
-  line_height : Int
+  line_height : Int32
   letter_spacing : Double
 } derive(Eq, @debug.Debug)
 pub fn BareFontInfo::create(font_family~ : String, font_weight~ : String, font_size~ : Double, font_feature_settings~ : String, font_variation_settings~ : String, line_height~ : Double, letter_spacing~ : Double, pixel_ratio~ : Double) -> Self
@@ -74,7 +74,7 @@ pub(all) struct FontInfo {
   font_size : Double
   font_feature_settings : String
   font_variation_settings : String
-  line_height : Int
+  line_height : Int32
   letter_spacing : Double
   is_trusted : Bool
   is_monospace : Bool
