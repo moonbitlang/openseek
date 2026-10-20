@@ -63,6 +63,7 @@ priv enum UiMessage {
   WaitingPlacement
   MissingCheckout
   NoConversation
+  PreviewAnyway
   ExplorerViews
   WorkspaceFiles
   FilesLabel
@@ -204,6 +205,11 @@ priv enum UiMessage {
 ///|
 fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
   match (locale, message) {
+    (English, PreviewAnyway) => "Preview anyway"
+    (SimplifiedChinese, PreviewAnyway) => "仍要预览"
+    (TraditionalChinese, PreviewAnyway) => "仍要預覽"
+    (Japanese, PreviewAnyway) => "それでもプレビュー"
+    (Spanish, PreviewAnyway) => "Previsualizar de todos modos"
     (English, ExcelCopyTable) => "Copy table"
     (SimplifiedChinese, ExcelCopyTable) => "复制表格"
     (TraditionalChinese, ExcelCopyTable) => "複製表格"

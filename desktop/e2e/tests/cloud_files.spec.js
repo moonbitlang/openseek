@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
 import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 class CloudFilesHarness extends CloudHarness {
@@ -7,6 +8,7 @@ class CloudFilesHarness extends CloudHarness {
     this.fileRequests = [];
     this.directories = new Map();
     this.contents = new Map();
+    this.largePreviews = new Map();
     this.fileStatus = 200;
     this.holdRead = null;
     for (const session of [sessionA, sessionB]) {
@@ -28,8 +30,10 @@ class CloudFilesHarness extends CloudHarness {
     const session = decodeURIComponent(match[1]);
     const path = url.searchParams.get('path') || '';
     const content = Boolean(match[2]);
-    this.fileRequests.push({ session, path, content, headers: await route.request().allHeaders() });
-    const body = content ? this.contents.get(`${session}:${path}`) : { entries: this.directories.get(`${session}:${path}`) || [] };
+    const allowLarge = url.searchParams.get('allow_large');
+    this.fileRequests.push({ session, path, content, allowLarge, headers: await route.request().allHeaders() });
+    const body = content ? (allowLarge === 'true' && this.largePreviews.has(`${session}:${path}`)
+      ? this.largePreviews.get(`${session}:${path}`) : this.contents.get(`${session}:${path}`)) : { entries: this.directories.get(`${session}:${path}`) || [] };
     const status = this.fileStatus;
     if (this.fileOffline) return route.abort('failed');
     if (content && this.holdRead) await this.holdRead;
@@ -186,4 +190,61 @@ test('Cloud directory and file errors are visible and retry without Host fallbac
   await file(page, 'hello #.mbt').click();
   await expect(source(page)).toContainText('Cloud text');
   expect(fileHostRequests(cloud)).toEqual([]);
+});
+
+
+test('Cloud oversized previews require a fresh explicit click for each unrestricted read', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'large.txt', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:large.txt`, { kind: 'oversized' });
+  cloud.largePreviews.set(`${sessionA}:large.txt`, {
+    kind: 'content', content: 'Explicitly requested large preview.', sig: 'large', absolute: '/large.txt',
+  });
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await file(page, 'large.txt').click();
+  const preview = page.getByRole('button', { name: 'Preview anyway', exact: true });
+  const reads = () => cloud.fileRequests.filter(request => request.content);
+  await expect(page.locator('.viewer-notice')).toContainText('too large to preview');
+  await expect(preview).toBeVisible();
+  expect(reads().map(request => request.allowLarge)).toEqual([null]);
+  await page.screenshot({ path: testInfo.outputPath('cloud-large-file.png'), fullPage: true });
+  await preview.click();
+  await expect(source(page)).toContainText('Explicitly requested large preview.');
+  await expect(preview).toHaveCount(0);
+  expect(reads().map(request => request.allowLarge)).toEqual([null, 'true']);
+  await showTree(page);
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await expect(preview).toBeVisible();
+  expect(reads().at(-1).allowLarge).toBeNull();
+  await preview.click();
+  await expect(source(page)).toContainText('Explicitly requested large preview.');
+  await page.locator('#task').fill('Update the file');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect(preview).toBeVisible();
+  expect(reads().at(-1).allowLarge).toBeNull();
+  await preview.click();
+  await expect(source(page)).toContainText('Explicitly requested large preview.');
+  await page.locator('.editor-tab.active').getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.dock-launcher').getByRole('button', { name: /^Files / }).click();
+  await file(page, 'large.txt').click();
+  await expect(preview).toBeVisible();
+  expect(reads().at(-1).allowLarge).toBeNull();
+  expect(fileHostRequests(cloud)).toEqual([]);
+});
+
+test('Host oversized notices keep their existing behavior without the Cloud override', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.directoryEntries['/workspace'] = [{ name: 'large.txt', is_dir: false }];
+  const original = app.replyFor.bind(app);
+  app.replyFor = request => request.method === 'fs.read_file'
+    ? { kind: 'oversized' } : original(request);
+  await app.install(); await app.goto(); await app.openSession();
+  await app.openReview({ waitForHistory: false });
+  await page.getByRole('tab', { name: 'Files', exact: true }).click();
+  await file(page, 'large.txt').click();
+  await expect(page.locator('.viewer-notice')).toContainText('too large to preview');
+  await expect(page.getByRole('button', { name: 'Preview anyway', exact: true })).toHaveCount(0);
 });

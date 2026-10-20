@@ -116,10 +116,41 @@ async fn check_file_failures() -> Unit {
 }
 
 ///|
+async fn check_large_file_request() -> Unit {
+  let urls = []
+  let restore = mock_file_http(200, (url, _, _) => {
+    urls.push(url)
+    "{\"kind\":\"oversized\"}"
+  })
+  defer restore()
+  ignore(@cloud.read_file("test-token", "session", "large file.txt"))
+  ignore(
+    @cloud.read_file(
+      "test-token",
+      "session",
+      "large file.txt",
+      allow_large=true,
+    ),
+  )
+  ignore(
+    @cloud.read_file(
+      "test-token",
+      "session",
+      "large file.txt",
+      allow_large=false,
+    ),
+  )
+  let path = @cloud.CloudOrigin +
+    "/v1/sessions/session/files/content?path=large%20file.txt"
+  assert_eq(urls, [path, path + "&allow_large=true", path])
+}
+
+///|
 async test "Cloud workspace HTTP preserves request, content, and failure contracts" {
   // The async test runner schedules tests concurrently. Keep these fetch
   // substitutions in one test so each request observes its own transport.
   check_directory_requests()
   check_file_variants()
   check_file_failures()
+  check_large_file_request()
 }

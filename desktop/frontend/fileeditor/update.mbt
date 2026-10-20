@@ -2569,6 +2569,34 @@ fn update_inner(
     }
   }
   match msg {
+    PreviewLargeFile(owner~, epoch~, path~) => {
+      guard owner == ctx.owner &&
+        epoch == state.request_epoch &&
+        state.large_preview_file(ctx) is Some((current, doc)) &&
+        current == path else {
+        return (@cmd.none, state)
+      }
+      let generation = state.file_link_generation + 1
+      let docs = state.docs.copy()
+      docs[path] = { ..doc, state: TabLoading, }
+      (
+        @cmd.batch([
+          clear_document(),
+          read_file(
+            dispatch,
+            owner,
+            epoch,
+            path,
+            doc.name,
+            range=None,
+            cloud?=ctx.cloud_files,
+            allow_large=true,
+            file_link_generation=generation,
+          ),
+        ]),
+        { ..state, docs, error: None, file_link_generation: generation, },
+      )
+    }
     ExcelSelectionCopyRequested(preview, format) =>
       state.copy_excel_selection(ctx, dispatch, preview, format)
     ExcelSelectionCleared(preview) =>

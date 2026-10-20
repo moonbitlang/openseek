@@ -103,3 +103,54 @@ test "Cloud manual and run-finish refreshes retire old reads and keep background
   )
   assert_true(unchanged == state)
 }
+
+///|
+test "large preview clicks require the current Cloud size notice and retire on loading" {
+  let ctx = cloud_ctx("account", "session", 1)
+  let path = ctx.resource(Relative("large.txt")).unwrap()
+  let ctx = { ..ctx, open_files: [path], active_file: Some(path), }
+  let (state, _) = sync(test_emit(), State::empty(), ctx)
+  let state = {
+    ..state,
+    docs: Map([
+      (
+        path,
+        { name: "large.txt", state: TabOversized, review: None, stale: false, },
+      ),
+    ]),
+  }
+  let click = PreviewLargeFile(
+    owner=ctx.owner,
+    epoch=state.request_epoch,
+    path~,
+  )
+  assert_true(state.large_preview_file(ctx) is Some(_))
+  let (_, loading) = update(test_emit(), click, state, ctx)
+  assert_true(loading.docs.get(path) is Some({ state: TabLoading, .. }))
+  assert_eq(loading.file_link_generation, state.file_link_generation + 1)
+  assert_true(loading.large_preview_file(ctx) is None)
+  let (_, repeated) = update(test_emit(), click, loading, ctx)
+  assert_true(repeated == loading)
+  for
+    invalid in [
+      PreviewLargeFile(owner=ctx.owner, epoch=state.request_epoch - 1, path~),
+      PreviewLargeFile(
+        owner=@interop.Cloud(account="other", session="session"),
+        epoch=state.request_epoch,
+        path~,
+      ),
+    ] {
+    let (_, ignored) = update(test_emit(), invalid, state, ctx)
+    assert_true(ignored == state)
+  }
+  let host = { ..test_ctx(), active_file: Some(path), }
+  let host_state = { ..state, owner: Some(host.owner), }
+  assert_true(host_state.large_preview_file(host) is None)
+  let (_, ignored) = update(
+    test_emit(),
+    PreviewLargeFile(owner=host.owner, epoch=host_state.request_epoch, path~),
+    host_state,
+    host,
+  )
+  assert_true(ignored == host_state)
+}

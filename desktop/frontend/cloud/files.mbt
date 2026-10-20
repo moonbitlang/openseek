@@ -25,10 +25,12 @@ pub async fn read_file(
   token : String,
   session : String,
   path : String,
+  allow_large~ : Bool = false,
 ) -> Result[@protocol.ReadFileReply, Failure] {
+  let query = if allow_large { "&allow_large=true" } else { "" }
   let json = request(
     CloudOrigin,
-    "/v1/sessions/\{@uri.encode_component(session)}/files/content?path=\{@uri.encode_component(path)}",
+    "/v1/sessions/\{@uri.encode_component(session)}/files/content?path=\{@uri.encode_component(path)}\{query}",
     Get,
     token~,
   ) catch {

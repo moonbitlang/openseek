@@ -18,6 +18,7 @@ async fn read_source(
   owner : @interop.ConversationIdentity,
   cloud : CloudFiles?,
   path : @common.Uri,
+  allow_large~ : Bool = false,
 ) -> Result[@protocol.ReadFileReply, String] {
   match owner {
     Host(owner) => {
@@ -39,11 +40,27 @@ async fn read_source(
         @resource.relative_to(path, root) is Some(relative) else {
         return Err("Cloud file no longer belongs to this conversation.")
       }
-      @cloud.read_file(cloud.token, session, relative.0).map_err(failure => {
+      @cloud.read_file(cloud.token, session, relative.0, allow_large~).map_err(failure => {
         failure.label()
       })
     }
   }
+}
+
+///|
+/// Only the currently displayed Cloud size notice can authorize one read.
+fn State::large_preview_file(self : State, ctx : Ctx) -> (@common.Uri, Doc)? {
+  guard ctx.owner is @interop.Cloud(..) &&
+    ctx.cloud_files is Some(_) &&
+    ctx.panel_open &&
+    self.owner == Some(ctx.owner) &&
+    ctx.active_history_diff is None &&
+    ctx.active_file is Some(path) &&
+    self.docs.get(path)
+    is Some({ state: TabOversized, review: None, stale: false, .. } as doc) else {
+    return None
+  }
+  Some((path, doc))
 }
 
 ///|

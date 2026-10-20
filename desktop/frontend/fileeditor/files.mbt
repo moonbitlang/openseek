@@ -76,6 +76,7 @@ fn read_file(
   range~ : @common.Range?,
   annotation? : String,
   cloud? : CloudFiles,
+  allow_large~ : Bool = false,
 ) -> @cmd.Cmd {
   if owner is @interop.Host(host) && !@resource.belongs_to(path, host.channel) {
     // Settle the request through the same typed failure path as an async
@@ -95,7 +96,7 @@ fn read_file(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = match read_source(owner, cloud, path) {
+      let reply = match read_source(owner, cloud, path, allow_large~) {
         Ok(reply) => reply
         Err(message) => {
           scheduler.add(

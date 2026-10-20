@@ -493,7 +493,7 @@ pub fn body_view(
         package_diagram_host,
         diff_editor_host,
         semantic_review_host,
-        viewer_notice(locale~, state, ctx),
+        viewer_notice(locale~, dispatch, state, ctx),
         github_review_line_layer(locale~, dispatch, state, ctx),
         office_selection_preview_view(state, ctx),
         pdf_capture_feedback_view(state, ctx),
@@ -530,6 +530,7 @@ fn active_office_surface(
 /// highlighted source document. Always in the DOM; blank and hidden otherwise.
 fn viewer_notice(
   locale~ : @i18n.Locale = English,
+  dispatch : @cmd.Emit[Msg],
   state : State,
   ctx : Ctx,
 ) -> @html.Html {
@@ -599,9 +600,27 @@ fn viewer_notice(
       }
     None => ""
   }
+  let content = [@html.span(text)]
+  let preview = state.large_preview_file(ctx)
+  if preview is Some((path, _)) {
+    content.push(
+      @html.button(
+        type_="button",
+        class="button secondary small",
+        on_click=dispatch(
+          PreviewLargeFile(owner=ctx.owner, epoch=state.request_epoch, path~),
+        ),
+        ui(locale, PreviewAnyway),
+      ),
+    )
+  }
   @html.div(
     class=if !text.is_empty() {
-      "viewer-notice"
+      if preview is Some(_) {
+        "viewer-notice has-action"
+      } else {
+        "viewer-notice"
+      }
     } else if diff_pending {
       // Preserve the last complete diff for a fast replacement without
       // letting clicks or selection reach that now-stale comparison. If the
@@ -610,7 +629,7 @@ fn viewer_notice(
     } else {
       "viewer-notice hidden"
     },
-    text,
+    content,
   )
 }
 

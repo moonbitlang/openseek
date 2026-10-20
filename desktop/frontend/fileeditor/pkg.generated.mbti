@@ -394,6 +394,7 @@ pub(all) enum Msg {
   ChangeTreeReviewToggled(ChangeTreeItem)
   ToggleGitGraphSection
   FileSelected(path~ : @pathx.Relative, name~ : String)
+  PreviewLargeFile(owner~ : @interop.ConversationIdentity, epoch~ : Int, path~ : @common.Uri)
   ChangedFileSelected(ChangedFile)
   ChangedFileNavigated(ChangedFile, Bool)
   ReviewDiffFileBoundary(Bool)
