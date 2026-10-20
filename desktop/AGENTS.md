@@ -9,11 +9,15 @@
 - The relay serves one current browser frontend to every host. When a host
   command, reply or event changes incompatibly, increment
   `HostProtocolRevision` in `protocol/desktop_messages.mbt` (and the E2E
-  harness's `hostProtocol`). The host sends it in every `agent.connected`;
-  a browser sends a mismatched host no request, closes the socket without
-  retrying and shows the host as unavailable on every non-Cloud page. Keep
-  `agent.connected` decodable for every host: add fields, but never require
-  one beyond `protocol`.
+  harness's `hostProtocol`). The host sends it in every `agent.connected`.
+  A browser starts its automatic resync only after a matching revision; on a
+  mismatch it closes the socket without retrying and shows the host as
+  unavailable on every non-Cloud page. Requests are not gated at the
+  transport, so a manual read in the moment between the socket opening and
+  `agent.connected` (opening Skills or Scheduled, say) can still reach a
+  mismatched host before the gate covers the page. Keep `agent.connected`
+  decodable for every host: add fields, but never require one beyond
+  `protocol`.
 
 ## Module Boundary
 

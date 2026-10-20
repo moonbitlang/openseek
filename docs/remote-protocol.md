@@ -75,10 +75,12 @@ served from and spliced through to the host. A browser page takes its one
 `<device>` from the page route (or the legacy `?device=` entry query) and verifies it against
 `GET /v2/devices`; other roster devices need their own page/tab. The host's
 first notification, `agent.connected`, carries its `protocol` revision. A page
-sends the host no request until that revision matches its own; a host built
-for another revision (or one that predates the field) has its socket closed
-without retrying, and every page except Cloud shows it as unavailable. There
-is no compatibility layer for older hosts. Frames are
+starts its automatic resync only once that revision matches its own; a host
+built for another revision (or one that predates the field) has its socket
+closed without retrying, and every page except Cloud shows it as unavailable.
+Requests are not gated at the transport, so a manual read made in the moment
+before `agent.connected` arrives can still reach such a host. There is no
+compatibility layer for older hosts. Frames are
 JSON text, shaped as **JSON-RPC 2.0**:
 
 ```jsonc
