@@ -17,11 +17,33 @@ fn Model::dock_owner(self : Model) -> @interop.ConversationIdentity {
 }
 
 ///|
+/// The conversation whose strip holds `owner`'s tabs. A side chat is read in
+/// its conversation's dock and has no strip of its own, so a tab opened for
+/// it — a file, a browser page — lands in that dock.
+fn dock_home(
+  owner : @interop.ConversationIdentity,
+) -> @interop.ConversationIdentity {
+  match owner {
+    Host(key) => Host(dock_home_key(key))
+    Cloud(..) => owner
+  }
+}
+
+///|
+/// `dock_home` for a Host conversation.
+fn dock_home_key(key : @interop.ConversationKey) -> @interop.ConversationKey {
+  match @protocol.split_side_chat_id(key.session) {
+    Some(parent) => { ..key, session: parent, }
+    None => key
+  }
+}
+
+///|
 fn Model::dock_state_for(
   self : Model,
   owner : @interop.ConversationIdentity,
 ) -> @dock.DockState {
-  self.docks.get(owner).unwrap_or_else(@dock.DockState::empty)
+  self.docks.get(dock_home(owner)).unwrap_or_else(@dock.DockState::empty)
 }
 
 ///|
@@ -38,7 +60,7 @@ fn Model::with_dock_state_for(
   dock : @dock.DockState,
 ) -> Model {
   let docks = self.docks.copy()
-  docks[owner] = dock
+  docks[dock_home(owner)] = dock
   { ..self, docks, }
 }
 

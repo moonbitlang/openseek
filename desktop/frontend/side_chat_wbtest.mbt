@@ -26,8 +26,9 @@ test "a side chat file mention opens in the visible parent dock" {
     side_chat_owner(),
     pending.file_panel.file_link_generation,
     return_to=parent,
-    destination=parent,
   )
+  // Its tab belongs in the parent's dock.
+  assert_true(context.destination == parent)
   let replies : Array[@protocol.OpenPathReply] = [
     Editor({ path: target.path, line: None, column: None, }),
     Directory({ path: "src", }),
@@ -56,9 +57,8 @@ test "a side chat file mention opens in the visible parent dock" {
     assert_true(
       opened.dock_state().tabs.contains(SideChat(owner=side_chat_owner())),
     )
-    assert_true(
-      opened.dock_state_for(@interop.Host(side_chat_owner())).tabs.is_empty(),
-    )
+    // A side chat has no strip of its own.
+    assert_true(opened.docks.get(@interop.Host(side_chat_owner())) is None)
   }
   assert_true(
     pending.dock_state().active == Some(SideChat(owner=side_chat_owner())),
@@ -585,4 +585,26 @@ test "a reconnect re-reads the side chat in the dock" {
   assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
   let (_, reconnected) = update_dev(test_dispatch(), BridgeReady, shown)
   assert_true(side_chat_sync(reconnected) is Some(Reloading(..)))
+}
+
+///|
+test "a page the side chat's agent opens is a tab in its conversation's dock" {
+  let model = side_chat_model()
+  let (_, opened) = update(
+    test_dispatch(),
+    BrowserOpenRequested(
+      request="browser-1",
+      session=SideChatId,
+      url="https://example.com/",
+    ),
+    model,
+  )
+  // The tab joins the strip on screen, beside the side chat's own tab, and
+  // nothing keeps a strip under the side chat.
+  assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
+  assert_true(
+    opened.dock_state().tabs.contains(SideChat(owner=side_chat_owner())),
+  )
+  assert_true(opened.docks.get(@interop.Host(side_chat_owner())) is None)
+  assert_true(opened.right_panel_open)
 }

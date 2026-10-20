@@ -36,8 +36,8 @@ fn open_cloud_file(
 }
 
 ///|
-/// The host resolves paths for `owner`; `destination` owns the resulting
-/// dock tab. `return_to` keeps the visible conversation through an ordinary
+/// The host resolves paths for `owner`; `destination`, its `dock_home`, owns
+/// the resulting dock tab. `return_to` keeps the visible conversation through an ordinary
 /// background composer action.
 priv struct FileOpenContext {
   owner : @interop.ConversationKey
@@ -56,12 +56,11 @@ fn FileOpenContext::new(
   range? : @common.Range,
   annotation? : String,
   return_to? : @interop.ConversationKey,
-  destination? : @interop.ConversationKey,
   office_target? : @office_location.Target,
 ) -> FileOpenContext {
   {
     owner,
-    destination: destination.unwrap_or(owner),
+    destination: dock_home_key(owner),
     generation,
     range,
     annotation,
@@ -79,7 +78,6 @@ fn request_open_path(
   annotation? : String,
   return_to? : @interop.ConversationKey,
   source? : ActiveCheckout,
-  destination? : @interop.ConversationKey,
 ) -> (@cmd.Cmd, Model) {
   let source = if source is Some(_) { source } else { model.active_checkout() }
   guard source is Some(active) &&
@@ -88,7 +86,7 @@ fn request_open_path(
     placement.checkout_root() is Some(cwd) else {
     return (@cmd.none, model)
   }
-  let destination = destination.unwrap_or(active.owner)
+  let destination = dock_home_key(active.owner)
   let model = if return_to is Some(owner) && owner != destination {
     model
   } else {
@@ -109,7 +107,6 @@ fn request_open_path(
     range?,
     annotation?,
     return_to?,
-    destination~,
     office_target?=office.map(reference => reference.target),
   )
   (
