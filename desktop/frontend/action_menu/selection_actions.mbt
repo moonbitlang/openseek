@@ -2,8 +2,9 @@
 // a small composer that keeps the quote in view while a comment is typed; the
 // result is handed to the composer of the transcript the text was selected
 // in, either to be sent at once or batched into the message being written
-// there. The reply stays open until that composer takes it. Pointer-only by
-// design.
+// there. The reply stays open until that composer takes it. Where the screen
+// allows it, "Side chat" hands the selection on to start one instead.
+// Pointer-only by design.
 
 ///|
 /// A reply quoting the selected text, for the composer `target` names.
@@ -20,11 +21,13 @@ pub(all) struct QuoteReply[T] {
 }
 
 ///|
-/// The composer a reply to text selected in one quote source goes to.
-/// `source` is the source's `data-context-quote` value.
+/// What text selected in one quote source can be handed to: the composer a
+/// reply goes to, and whether a side chat can start from it. `source` is the
+/// source's `data-context-quote` value.
 pub(all) struct SelectionTarget[T] {
   source : String
   target : T
+  side_chat : Bool
 } derive(Eq)
 
 ///|
@@ -84,6 +87,7 @@ priv enum SelectionMsg {
   CopyFinished(Int32, Result[Unit, String])
   CopyExpired(Int32)
   ReplyStarted
+  SideChatStarted
   CommentChanged(String)
   BatchToggled
   Submitted
@@ -345,6 +349,7 @@ fn[T : Eq] SelectionState::update(
   msg : SelectionMsg,
   emit : @cmd.Emit[SelectionMsg],
   deliver : (QuoteReply[T]) -> @cmd.Cmd,
+  side_chat? : (T, String) -> @cmd.Cmd,
 ) -> (SelectionState[T], @cmd.Cmd) {
   let unpin = @cmd.custom_cmd(_ => clear_selection_highlight(QuoteHighlight))
   // The composer the open surface's source names now. A surface whose source
@@ -368,6 +373,21 @@ fn[T : Eq] SelectionState::update(
         },
         unpin,
       )
+    (
+      SideChatStarted,
+      Some({ stage: Offered | Copying | CopyFailed, .. } as open),
+    ) => {
+      guard side_chat is Some(start) &&
+        target_for(targets, open.anchor.source) is Some(found) &&
+        found.target == open.target &&
+        found.side_chat else {
+        return (self, @cmd.none)
+      }
+      (
+        { ..self, open: None, },
+        @cmd.batch([unpin, start(open.target, open.anchor.text)]),
+      )
+    }
     (Closed, Some(_)) | (Delivered, Some({ stage: Replying(..), .. })) =>
       ({ ..self, open: None, }, unpin)
     (CopyStarted, Some({ stage: Offered | CopyFailed, .. } as open)) => {
@@ -486,11 +506,13 @@ fn selection_surface_attrs(
 ///|
 /// Own the floating reply for text selected inside a quote source. `targets`
 /// names, per quote source on screen, the composer a reply from it goes to;
-/// `deliver` hands a finished reply to it.
+/// `deliver` hands a finished reply to it. With `side_chat`, a source that
+/// allows it also offers to start a side chat from the selected text.
 pub fn[T : Eq] selection_component(
   locale : @rabbita.Val[@i18n.Locale],
   targets : @rabbita.Val[Array[SelectionTarget[T]]],
   deliver : (QuoteReply[T]) -> @cmd.Cmd,
+  side_chat? : (T, String) -> @cmd.Cmd,
 ) -> @rabbita.Val[@html.Html] {
   let (state, emit) = @rabbita.create_state_with_input(
     input=targets,
@@ -501,7 +523,7 @@ pub fn[T : Eq] selection_component(
       )
     },
     update=(state, targets, msg, emit) => {
-      state.update(targets, msg, emit, deliver)
+      state.update(targets, msg, emit, deliver, side_chat?)
     },
     subscriptions=(state, _, emit) => {
       selection_subscription(emit, state.watch())
@@ -538,28 +560,51 @@ pub fn[T : Eq] selection_component(
             ui(locale, SelectionActions),
           ),
           [
-            @html.div(class="selection-actions-buttons", [
-              @html.button(
-                class="action-menu-item",
-                type_="button",
-                title=ui(locale, CopySelected),
-                disabled=open.stage is Copying,
-                on_click=emit(CopyStarted),
-                ui(locale, CopyLabel),
-              ),
-              @html.div(
-                class="selection-actions-separator",
-                attrs=@html.Attrs::build().aria_hidden("true"),
-                @html.nothing,
-              ),
-              @html.button(
-                class="action-menu-item",
-                type_="button",
-                title=ui(locale, ReplyHint),
-                attrs=@html.Attrs::build().on_click(_ => emit(ReplyStarted)),
-                ui(locale, ReplyLabel),
-              ),
-            ]),
+            @html.div(
+              class="selection-actions-buttons",
+              [
+                @html.button(
+                  class="action-menu-item",
+                  type_="button",
+                  title=ui(locale, CopySelected),
+                  disabled=open.stage is Copying,
+                  on_click=emit(CopyStarted),
+                  ui(locale, CopyLabel),
+                ),
+                @html.div(
+                  class="selection-actions-separator",
+                  attrs=@html.Attrs::build().aria_hidden("true"),
+                  @html.nothing,
+                ),
+                @html.button(
+                  class="action-menu-item",
+                  type_="button",
+                  title=ui(locale, ReplyHint),
+                  attrs=@html.Attrs::build().on_click(_ => emit(ReplyStarted)),
+                  ui(locale, ReplyLabel),
+                ),
+                ..if side_chat is Some(_) && found.side_chat {
+                  [
+                    @html.div(
+                      class="selection-actions-separator",
+                      attrs=@html.Attrs::build().aria_hidden("true"),
+                      @html.nothing,
+                    ),
+                    @html.button(
+                      class="action-menu-item",
+                      type_="button",
+                      title=ui(locale, SideChatHint),
+                      attrs=@html.Attrs::build().on_click(_ => {
+                        emit(SideChatStarted)
+                      }),
+                      ui(locale, SideChatLabel),
+                    ),
+                  ]
+                } else {
+                  []
+                },
+              ],
+            ),
             if open.stage is CopyFailed {
               @html.div(
                 class="selection-copy-error",

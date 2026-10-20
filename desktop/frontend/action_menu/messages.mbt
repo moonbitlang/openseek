@@ -23,6 +23,8 @@ priv enum UiMessage {
   CopyFailure
   ReplyLabel
   ReplyHint
+  SideChatLabel
+  SideChatHint
   ReplyDialog
   BatchLabel
   BatchHint
@@ -146,6 +148,21 @@ fn ui(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, ReplyHint) => "引用选中文本并回复"
     (TraditionalChinese, ReplyHint) => "引用選中文字並回覆"
     (Japanese, ReplyHint) => "選択したテキストを引用して返信"
+    (English, SideChatLabel) => "Side chat"
+    (Spanish, SideChatLabel) => "Chat lateral"
+    (SimplifiedChinese, SideChatLabel) => "侧边对话"
+    (TraditionalChinese, SideChatLabel) => "側邊對話"
+    (Japanese, SideChatLabel) => "サイドチャット"
+    (English, SideChatHint) =>
+      "Ask about the selected text in a side chat, without changing this conversation"
+    (Spanish, SideChatHint) =>
+      "Preguntar sobre el texto seleccionado en un chat lateral, sin cambiar esta conversación"
+    (SimplifiedChinese, SideChatHint) =>
+      "在侧边对话中询问选中文本，不影响当前对话"
+    (TraditionalChinese, SideChatHint) =>
+      "在側邊對話中詢問選取文字，不影響目前對話"
+    (Japanese, SideChatHint) =>
+      "この会話を変えずに、選択したテキストについてサイドチャットで質問"
     (English, ReplyDialog) => "Reply to selection"
     (Spanish, ReplyDialog) => "Responder a la selección"
     (SimplifiedChinese, ReplyDialog) => "回复选中内容"

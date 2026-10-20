@@ -57,6 +57,12 @@ extern "js" fn reveal_message_end(id : String) -> Unit =
   #| }
 
 ///|
+/// A fresh draft that opens with `text` quoted, ready for a question about it.
+pub fn quoted_draft(text : String) -> String {
+  quote_insertion("", text, "")
+}
+
+///|
 /// What replying to `text` with `comment` writes after a draft holding
 /// `existing`: a Markdown block quote in its own paragraph, the comment when
 /// there is one, then a blank line for whatever follows.

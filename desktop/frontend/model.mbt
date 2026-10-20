@@ -2066,6 +2066,9 @@ priv enum Msg {
     draft~ : @composer.Draft
   )
   ForkRequested(slot~ : String, through~ : Int32)
+  // Start a side chat of `owner`, the conversation in the column, from text
+  // selected in its transcript.
+  SideChatRequested(owner~ : @interop.ConversationKey, quote~ : String)
   // Deleting a closed side chat's record failed; its tab comes back.
   SideChatCloseFailed(chat~ : @interop.ConversationKey, message~ : String)
   ForkCompleted(
