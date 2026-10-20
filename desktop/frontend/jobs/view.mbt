@@ -273,29 +273,36 @@ pub fn panel(
         )
       }
       rows.push(
-        @html.div(
-          class="jobs-group",
-          attrs=@html.Attrs::build().role("group").aria_label(title),
-          if terminal {
+        if terminal {
+          @rui.collapsible_root(
+            open=state.history_expanded,
+            class="jobs-group",
+            attrs=@html.Attrs::build().role("group").aria_label(title),
             [
-              @html.button(
-                class="jobs-group-title jobs-history-toggle",
-                attrs=@html.Attrs::build()
-                  .aria_expanded(state.history_expanded.to_string())
-                  .aria_controls("jobs-history-content"),
-                on_click=emit(ToggleHistory),
-                label,
+              @rui.collapsible_trigger(
+                open=state.history_expanded,
+                id="jobs-history-toggle",
+                class="jobs-history-toggle",
+                controls="jobs-history-content",
+                on_open_change=_ => emit(ToggleHistory),
+                "\{title} · \{group.length()}",
               ),
-              @html.div(
+              @rui.collapsible_content(
+                open=state.history_expanded,
                 id="jobs-history-content",
-                hidden=!state.history_expanded,
+                class="jobs-history-content",
+                labelledby="jobs-history-toggle",
                 content,
               ),
-            ]
-          } else {
-            [@html.h4(class="jobs-group-title", label), ..content]
-          },
-        ),
+            ],
+          )
+        } else {
+          @html.div(
+            class="jobs-group",
+            attrs=@html.Attrs::build().role("group").aria_label(title),
+            [@html.h4(class="jobs-group-title", label), ..content],
+          )
+        },
       )
     }
     body.push(
