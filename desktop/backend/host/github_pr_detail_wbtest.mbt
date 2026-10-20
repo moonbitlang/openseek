@@ -33,4 +33,17 @@ test "an enterprise token goes only to the host it was set for" {
     assert_eq(stripped.get("GH_TOKEN"), Some("dotcom-token"))
     assert_eq(stripped.get("PATH"), Some("/usr/bin"))
   }
+  // Windows keeps whatever casing the variables were set with.
+  let windows = github_pr_detail_environment("attacker.example", {
+    "gh_enterprise_token": "gh-token",
+    "Github_Enterprise_Token": "github-token",
+    "Gh_Host": "ghe.example.com",
+  })
+  assert_true(windows.get("gh_enterprise_token") is None)
+  assert_true(windows.get("Github_Enterprise_Token") is None)
+  let windows = github_pr_detail_environment("ghe.example.com", {
+    "gh_enterprise_token": "gh-token",
+    "Gh_Host": "GHE.example.com",
+  })
+  assert_eq(windows.get("gh_enterprise_token"), Some("gh-token"))
 }

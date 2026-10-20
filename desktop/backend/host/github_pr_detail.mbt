@@ -50,15 +50,25 @@ async fn github_pr_detail_op(
 /// whichever GitHub Enterprise Server host a command targets, so a lookup of
 /// any other host than the `GH_HOST` that token was set for goes without it.
 /// Credentials `gh` stored itself are kept per host and never leave theirs,
-/// and `GH_TOKEN` goes only to github.com and its `ghe.com` tenants.
+/// and `GH_TOKEN` goes only to github.com and its `ghe.com` tenants. Names
+/// match case-insensitively because Windows preserves arbitrary key casing.
 fn github_pr_detail_environment(
   host : String,
   env : Map[String, String],
 ) -> Map[String, String] {
-  let intended = env.get("GH_HOST").map(intended => intended.to_lower())
-  if intended != Some(host.to_lower()) {
-    env.remove("GH_ENTERPRISE_TOKEN")
-    env.remove("GITHUB_ENTERPRISE_TOKEN")
+  let mut intended = false
+  let tokens : Array[String] = []
+  for name, value in env {
+    match name.to_upper() {
+      "GH_HOST" => intended = value.to_lower() == host.to_lower()
+      "GH_ENTERPRISE_TOKEN" | "GITHUB_ENTERPRISE_TOKEN" => tokens.push(name)
+      _ => ()
+    }
+  }
+  if !intended {
+    for name in tokens {
+      env.remove(name)
+    }
   }
   env
 }
