@@ -62,25 +62,24 @@ main:has(> .conv-overview) {
     padding-inline-end: calc(24px + var(--conv-overview-width));
   }
 
-  /* The rail runs from the transcript row to the pane's bottom edge (an
-     absolutely positioned item's `auto` end line), and stops short of the
-     transcript's scrollbar: past the lane it takes, or past the overlay bar
-     that takes none. Only the cards catch the pointer, so the wheel over the
-     rest of the rail still scrolls the transcript. */
+  /* The rail hangs from the transcript row, as tall as its cards and at
+     most down to the pane's bottom edge (an absolutely positioned item's
+     `auto` end line), where it scrolls. Below its cards the transcript is
+     uncovered, so the wheel there scrolls the transcript. It stops short of
+     the transcript's scrollbar: past the lane the bar takes, or past the
+     overlay bar that takes none. */
   .conv-overview {
     --conv-overview-edge: max(14px, calc(var(--scrollbar-lane) + 6px));
     grid-row: 2 / auto;
     top: 0;
     right: var(--conv-overview-edge);
-    bottom: 0;
     width: calc(var(--conv-overview-width) - var(--conv-overview-edge));
-    max-height: none;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-width: none;
     padding: 12px 0 16px;
-    pointer-events: none;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -89,7 +88,6 @@ main:has(> .conv-overview) {
 
   .conv-overview-card,
   .conv-overview-card:last-child {
-    pointer-events: auto;
     padding: 10px 12px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);

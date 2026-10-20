@@ -230,7 +230,7 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   expect(stream.x + stream.width).toBeLessThanOrEqual(rail.x + 1);
   expect(transcript.x + transcript.width).toBeGreaterThan(rail.x + rail.width);
   expect(composer.x + composer.width).toBeLessThanOrEqual(rail.x + 1);
-  // The wheel over the rail's empty space below the cards scrolls the
+  // The rail is as tall as its cards: the wheel below it scrolls the
   // transcript. The fixture conversation fits on screen, so it is lengthened
   // for this check.
   const scroller = page.locator('.transcript');
@@ -240,9 +240,8 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   });
   const bottom = await scroller.evaluate((el) => el.scrollTop);
   expect(bottom).toBeGreaterThan(0);
-  const cards = await panel.locator('.conv-overview-card').last().boundingBox();
   const below = transcript.y + transcript.height - 30;
-  expect(below).toBeGreaterThan(cards.y + cards.height);
+  expect(below).toBeGreaterThan(rail.y + rail.height);
   await page.mouse.move(rail.x + rail.width / 2, below);
   await page.mouse.wheel(0, -200);
   await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBeLessThan(bottom);
@@ -250,6 +249,21 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await page.screenshot({ path: testInfo.outputPath('overview-rail-scrollbar.png') });
   await scroller.evaluate((el) => { el.querySelector('.stream').style.paddingBottom = ''; });
   await page.screenshot({ path: testInfo.outputPath('overview-rail.png') });
+
+  // Cards taller than the pane scroll inside the rail, which stops at the
+  // pane's bottom edge and takes the pointer itself, its scrollbar included.
+  const first = panel.locator('.conv-overview-card').first();
+  await first.evaluate((el) => { el.style.minHeight = '2000px'; });
+  const tall = await panel.boundingBox();
+  expect(tall.y + tall.height).toBeLessThanOrEqual(900 + 1);
+  expect(await panel.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+  const firstBox = await first.boundingBox();
+  const gap = { x: tall.x + tall.width / 2, y: firstBox.y - 4 };
+  expect(await panel.evaluate((el, { x, y }) => document.elementFromPoint(x, y) === el, gap)).toBe(true);
+  await page.mouse.move(tall.x + tall.width / 2, tall.y + tall.height / 2);
+  await page.mouse.wheel(0, 200);
+  await expect.poll(() => panel.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  await first.evaluate((el) => { el.style.minHeight = ''; });
 
   // Without room, the same overview covers the transcript's right edge but
   // stops above the composer, which stays usable.
