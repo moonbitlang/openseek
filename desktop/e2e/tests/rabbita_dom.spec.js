@@ -1486,12 +1486,12 @@ test('deleting a live chat asks the host what goes with it and confirms once', a
   ]);
   await expect(page.locator('.modal-backdrop')).toHaveCount(0);
 
-  // Deletion keeps the requested identity visible as an unavailable target.
-  // It does not silently navigate to a different conversation.
+  // Deleting the chat on screen replaces its entry with a fresh draft
+  // instead of leaving an unavailable target behind.
   await expect(stored).toHaveCount(0);
   await expect(page.getByText('Browser result', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('This destination no longer exists or is no longer attached.')).toBeVisible();
-  await expect(page).toHaveURL(/\/chat\/session\/session-1$/);
+  await expect(page.getByText('This destination no longer exists or is no longer attached.')).toHaveCount(0);
+  await expect(page).toHaveURL(/\/chat\/new$/);
   await expect(page.locator('.section-heading', { hasText: 'Archived chats (' })).toHaveCount(0);
   expect(sent('session.archive')).toEqual([]);
   expect(app.pageErrors).toEqual([]);
