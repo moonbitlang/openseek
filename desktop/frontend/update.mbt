@@ -5238,7 +5238,7 @@ fn update_msg(
                   deletes_in_flight: model.confirm_delete(
                     confirm.channel,
                     confirm.key,
-                    LiveRecord,
+                    dev.sessions,
                   ),
                 },
               )
@@ -5262,7 +5262,7 @@ fn update_msg(
               deletes_in_flight: model.confirm_delete(
                 confirm.channel,
                 confirm.key,
-                ArchivedRecord,
+                dev.archived,
               ),
             },
           )

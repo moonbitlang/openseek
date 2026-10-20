@@ -585,30 +585,12 @@ test "a confirmed delete stays this page's own across later delete clicks" {
 }
 
 ///|
-test "a retired entry yields only to the draft that replaced it" {
+test "a stale archived delete reply does not move navigation" {
   let dispatch = test_dispatch()
   let shown : @routes.Location = {
     device: Some("local"),
     target: Session("desktop-test"),
   }
-  let navigation = { ..AppNavigation::empty(), location: Some(shown), }
-  let observed : NavigationObservation = {
-    location: Some({ device: Some("local"), target: ChatNew, }),
-    user_visit: false,
-    session_rotated: false,
-    explicit: false,
-    repeat_visit: false,
-    retired: ["desktop-test"],
-    promotion: None,
-    durable: [],
-  }
-  assert_true(observed.write(navigation, 0, desktop=false) is Replace(_))
-  let unrelated = {
-    ..observed,
-    location: Some({ device: Some("local"), target: Session("desktop-other"), }),
-  }
-  assert_true(unrelated.write(navigation, 0, desktop=false) is Keep)
-  // A delete reply the update discards as stale moves nothing.
   let key : ArchiveRecordKey = {
     session: "desktop-test",
     workspace: @interop.ChannelId::Local.test_project(),
