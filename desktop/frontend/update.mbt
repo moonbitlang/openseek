@@ -1544,6 +1544,35 @@ fn load_active_side_chat(
 }
 
 ///|
+/// Re-read a side chat the page already holds when its tab is chosen, as
+/// opening a conversation in the column does: what another client did while
+/// this page was away, or a read that gave up, is picked up then. A read in
+/// flight stays the only one.
+fn Model::reload_side_chat(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  owner : @interop.ConversationKey,
+) -> (@cmd.Cmd, Model) {
+  guard self.find_conversation(owner.channel, owner.session) is Some(conv) &&
+    self.can_reload_transcript(conv) else {
+    return (@cmd.none, self)
+  }
+  let (model, generation) = self.begin_transcript_reload(conv)
+  guard generation is Some(generation) else { return (@cmd.none, model) }
+  (
+    session_snapshot_command(
+      dispatch,
+      owner.channel,
+      model,
+      owner.session,
+      generation,
+      false,
+    ),
+    model,
+  )
+}
+
+///|
 /// Whether a full-screen surface is drawn over the window. Every overlay
 /// `view.mbt` appends after the shell (see its trailing `children.push`
 /// block) belongs here: native views z-order above all HTML, so an overlay
@@ -6295,6 +6324,8 @@ fn update_msg(
               )
               cmds.push(cmd)
               (@cmd.batch(cmds), { ..model, file_panel: panel, })
+            } else if dock.active is Some(SideChat(owner~)) {
+              model.reload_side_chat(dispatch, owner)
             } else {
               (@cmd.none, model)
             }
@@ -7395,38 +7426,47 @@ fn update_device_msg(
       // The resync's other half: whatever landed while this client was away
       // (another client's prompts, items a still-running turn completed, a
       // finished run's verdict) exists only in the store. Reads happen
-      // exactly where this client was absent: the conversation on screen
-      // re-reads now, every other one re-reads when opened (`OpenSession`
-      // always reloads). An in-flight user load keeps right of way.
+      // exactly where this client was absent: the conversations on screen —
+      // the column's and the side chat in the dock — re-read now, every other
+      // one re-reads when opened (`OpenSession` always reloads, and so does
+      // choosing a side chat's tab). An in-flight user load keeps right of
+      // way.
+      let on_screen : Array[Conversation] = []
+      if model.find_conversation(channel, model.active_session) is Some(conv) {
+        on_screen.push(conv)
+      }
+      if model.mounted_side_chat() is Some(conv) && conv.device == channel {
+        on_screen.push(conv)
+      }
       let model = if channel == model.focused {
-        match model.find_conversation(channel, model.active_session) {
-          Some(conv) if (
+        on_screen.fold(init=model, (model, conv) => {
+          guard (
               model.can_reload_transcript(conv) || conv.sync is Reloading(..)
             ) &&
-            model.loading_conversation is None => {
-            // A real engine pump can restart while the transport remains
-            // open. If an older read is already in flight, it may carry a
-            // pre-ready cut, so require one follow-up generation rather than
-            // treating the old single-flight request as sufficient.
-            let (model, generation) = model.ensure_transcript_reload_after_current(
-              conv,
-            )
-            if generation is Some(generation) {
-              commands.push(
-                session_snapshot_command(
-                  dispatch,
-                  channel,
-                  model,
-                  conv.session_id,
-                  generation,
-                  false,
-                ),
-              )
-            }
-            model
+            model.loading_conversation is None else {
+            return model
           }
-          _ => model
-        }
+          // A real engine pump can restart while the transport remains
+          // open. If an older read is already in flight, it may carry a
+          // pre-ready cut, so require one follow-up generation rather than
+          // treating the old single-flight request as sufficient.
+          let (model, generation) = model.ensure_transcript_reload_after_current(
+            conv,
+          )
+          if generation is Some(generation) {
+            commands.push(
+              session_snapshot_command(
+                dispatch,
+                channel,
+                model,
+                conv.session_id,
+                generation,
+                false,
+              ),
+            )
+          }
+          model
+        })
       } else {
         model
       }
