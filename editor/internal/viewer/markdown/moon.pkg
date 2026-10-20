@@ -1,7 +1,7 @@
 import {
   "Milky2018/diago",
-  "kokic/uml/api" @uml,
-  "kokic/uml/style" @uml_style,
+  "moonbit-community/uml/api" @uml,
+  "moonbit-community/uml/style" @uml_style,
   "moonbit-community/cmark/cmark_base",
   "moonbit-community/cmark/cmark",
   "moonbit-community/cmark/cmark_html",
