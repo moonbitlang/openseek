@@ -205,9 +205,8 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   const panel = overview(page);
   await expect(panel).toBeVisible();
   // The browser console runs the conversation on a remote device, named by
-  // the roster; Remote Control is the desktop window's own setting.
+  // the roster.
   await expect(panel.getByText('Test Mac', { exact: true })).toBeVisible();
-  await expect(panel.getByRole('switch')).toHaveCount(0);
 
   // The overview never takes the transcript's place: the conversation keeps
   // its row, from the titlebar down to the composer, with its messages.

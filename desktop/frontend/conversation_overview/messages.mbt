@@ -9,9 +9,6 @@ priv enum UiMessage {
   ConnectorsTitle
   ThisComputer
   WorktreeTag
-  RemoteControlLabel
-  RemoteManaged
-  RemoteSignedOut
   Refresh
 }
 
@@ -53,27 +50,6 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, WorktreeTag) => "工作树"
     (TraditionalChinese, WorktreeTag) => "工作樹"
     (Japanese, WorktreeTag) => "ワークツリー"
-    (English, RemoteControlLabel) => "Remote control"
-    (Spanish, RemoteControlLabel) => "Control remoto"
-    (SimplifiedChinese, RemoteControlLabel) => "远程控制"
-    (TraditionalChinese, RemoteControlLabel) => "遠端控制"
-    (Japanese, RemoteControlLabel) => "リモート操作"
-    (English, RemoteManaged) => "Set by the environment this app started in"
-    (Spanish, RemoteManaged) =>
-      "Lo define el entorno en el que se inició la app"
-    (SimplifiedChinese, RemoteManaged) =>
-      "由启动应用时的环境变量设置"
-    (TraditionalChinese, RemoteManaged) =>
-      "由啟動應用程式時的環境變數設定"
-    (Japanese, RemoteManaged) =>
-      "アプリ起動時の環境変数で設定されています"
-    (English, RemoteSignedOut) => "Sign in from Settings to turn this on"
-    (Spanish, RemoteSignedOut) =>
-      "Inicia sesión en Configuración para activarlo"
-    (SimplifiedChinese, RemoteSignedOut) => "在设置中登录后才能开启"
-    (TraditionalChinese, RemoteSignedOut) => "在設定中登入後才能開啟"
-    (Japanese, RemoteSignedOut) =>
-      "設定でサインインすると有効にできます"
     (English, Refresh) => "Refresh"
     (Spanish, Refresh) => "Actualizar"
     (SimplifiedChinese, Refresh) => "刷新"

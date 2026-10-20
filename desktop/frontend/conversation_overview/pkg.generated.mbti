@@ -13,7 +13,7 @@ pub fn toggle(locale? : @i18n.Locale, Bool, @cmd.Cmd) -> @html.Html
 
 pub fn update(Msg, State) -> State
 
-pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, connectors~ : Connectors, @cmd.Emit[Msg], set_remote~ : (Bool) -> @cmd.Cmd) -> @html.Html
+pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, connectors~ : Connectors, @cmd.Emit[Msg]) -> @html.Html
 
 // Errors
 
@@ -30,17 +30,10 @@ pub(all) struct Environment {
   path : String
   branch : String?
   worktree : String?
-  remote : RemoteControl?
 }
 
 pub(all) enum Msg {
   Toggled(Section)
-}
-
-pub(all) enum RemoteControl {
-  Managed
-  SignedOut
-  Switch(enabled~ : Bool, busy~ : Bool)
 }
 
 pub(all) enum Section {

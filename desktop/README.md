@@ -163,8 +163,7 @@ the composer.
 The titlebar's overview control shows or hides a column of cards about the
 OpenSeek conversation on screen: its **Environment** — the device it runs
 on, its project, the checked-out branch and whether the conversation has a
-worktree of its own, and on the desktop the device's Remote Control setting,
-the same one Settings changes — and its **Connectors** (see MCP servers).
+worktree of its own — and its **Connectors** (see MCP servers).
 Showing it is a window preference kept across conversations and launches.
 Where the main pane has room for a 600px conversation beside it, the
 overview is a rail to the right of the transcript and the composer; where it

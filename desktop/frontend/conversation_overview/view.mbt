@@ -11,21 +11,6 @@ pub(all) struct Environment {
   branch : String?
   /// The worktree the conversation runs in, when it has one of its own.
   worktree : String?
-  /// The device's Remote Control setting; `None` where the window cannot
-  /// change it (a browser console).
-  remote : RemoteControl?
-}
-
-///|
-/// Remote Control is a device setting shared with Settings, shown here so
-/// the user can see whether this conversation is reachable from elsewhere.
-pub(all) enum RemoteControl {
-  /// Turned on by the environment the host was started in.
-  Managed
-  /// Needs a signed-in account first; Settings has the sign-in.
-  SignedOut
-  /// The user can turn it on or off; `busy` while a sign-in is in flight.
-  Switch(enabled~ : Bool, busy~ : Bool)
 }
 
 ///|
@@ -77,7 +62,6 @@ pub fn view(
   environment~ : Environment,
   connectors~ : Connectors,
   emit : @cmd.Emit[Msg],
-  set_remote~ : (Bool) -> @cmd.Cmd,
 ) -> @html.Html {
   @html.aside(
     class="conv-overview",
@@ -89,7 +73,7 @@ pub fn view(
         state,
         emit,
         aside=[],
-        environment_rows(locale, environment, set_remote),
+        environment_rows(locale, environment),
       ),
       card(
         locale,
@@ -165,12 +149,10 @@ fn refresh_button(locale : @i18n.Locale, refresh : @cmd.Cmd?) -> @html.Html {
 }
 
 ///|
-/// The environment's rows. Every row keeps its position, absent or not, so a
-/// branch arriving never rebuilds the Remote Control switch below it.
+/// The environment's rows.
 fn environment_rows(
   locale : @i18n.Locale,
   environment : Environment,
-  set_remote : (Bool) -> @cmd.Cmd,
 ) -> Array[@html.Html] {
   [
     row(@icons.icon_vm, [
@@ -201,44 +183,7 @@ fn environment_rows(
     } else {
       @html.nothing
     },
-    if environment.remote is Some(remote) {
-      remote_row(locale, remote, set_remote)
-    } else {
-      @html.nothing
-    },
   ]
-}
-
-///|
-fn remote_row(
-  locale : @i18n.Locale,
-  remote : RemoteControl,
-  set_remote : (Bool) -> @cmd.Cmd,
-) -> @html.Html {
-  let (enabled, disabled, note) = match remote {
-    Managed => (true, true, Some(text(locale, RemoteManaged)))
-    SignedOut => (false, true, Some(text(locale, RemoteSignedOut)))
-    Switch(enabled~, busy~) => (enabled, busy, None)
-  }
-  let label = text(locale, RemoteControlLabel)
-  row(@icons.icon_remote, title=note.unwrap_or(label), [
-    @html.span(class="conv-overview-row-text", label),
-    @html.button(
-      class=if enabled {
-        "conv-overview-switch on"
-      } else {
-        "conv-overview-switch"
-      },
-      type_="button",
-      disabled~,
-      attrs=@html.Attrs::build()
-        .role("switch")
-        .aria_checked(enabled.to_string())
-        .aria_label(label),
-      on_click=set_remote(!enabled),
-      @html.nothing,
-    ),
-  ])
 }
 
 ///|

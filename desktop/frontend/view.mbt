@@ -1717,23 +1717,6 @@ fn Model::overview_environment(
   conv : Conversation,
 ) -> @conversation_overview.Environment {
   let project = conv.project()
-  let remote = if self.is_desktop {
-    let status = self.remote_access
-    Some(
-      if status.map_or(false, status => status.managed_by_env) {
-        @conversation_overview.Managed
-      } else if self.account is None {
-        @conversation_overview.SignedOut
-      } else {
-        @conversation_overview.Switch(
-          enabled=status.map_or(false, status => status.device_url is Some(_)),
-          busy=self.remote_connecting,
-        )
-      },
-    )
-  } else {
-    None
-  }
   {
     device: self.device_name(conv.device),
     project: @resource.label(project),
@@ -1743,7 +1726,6 @@ fn Model::overview_environment(
       Worktree(name~, ..) => Some(name)
       Project(..) => None
     },
-    remote,
   }
 }
 
@@ -1773,7 +1755,6 @@ fn overview_view(
       },
     },
     dispatch.map(msg => Overview(msg)),
-    set_remote=enabled => dispatch(RemoteAccessSet(enabled)),
   )
 }
 
