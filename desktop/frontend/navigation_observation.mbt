@@ -148,8 +148,20 @@ fn observe_navigation(
     FromDevice(channel, SessionsChanged(change="deleted", key~, ..)) if channel ==
       previous.focused &&
       previous.deletes_in_flight.contains((channel, key)) => [key.session]
-    FromDevice(channel, ArchivedDeleted(sessions~, ..)) if channel ==
-      previous.focused => sessions
+    // Only a reply the update accepts removed anything; a stale one is
+    // discarded there and must not move navigation either.
+    FromDevice(
+      channel,
+      ArchivedDeleted(
+        sessions~,
+        connection_generation~,
+        request_generation~,
+        ..
+      )
+    ) if channel == previous.focused &&
+      previous.device_state(channel) is Some(dev) &&
+      connection_generation == dev.connection_generation &&
+      request_generation == dev.archived_request_generation => sessions
     _ => []
   }
   let durable : Array[(@routes.Location, @routes.Location)] = []

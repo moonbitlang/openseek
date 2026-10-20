@@ -583,3 +583,68 @@ test "a confirmed delete stays this page's own across later delete clicks" {
     staged.delete_confirm is Some(HostDelete({ key: k, .. })) && k == key,
   )
 }
+
+///|
+test "a retired entry yields only to the draft that replaced it" {
+  let dispatch = test_dispatch()
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session("desktop-test"),
+  }
+  let navigation = { ..AppNavigation::empty(), location: Some(shown), }
+  let observed : NavigationObservation = {
+    location: Some({ device: Some("local"), target: ChatNew, }),
+    user_visit: false,
+    session_rotated: false,
+    explicit: false,
+    repeat_visit: false,
+    retired: ["desktop-test"],
+    promotion: None,
+    durable: [],
+  }
+  assert_true(observed.write(navigation, 0, desktop=false) is Replace(_))
+  let unrelated = {
+    ..observed,
+    location: Some({ device: Some("local"), target: Session("desktop-other"), }),
+  }
+  assert_true(unrelated.write(navigation, 0, desktop=false) is Keep)
+  // A delete reply the update discards as stale moves nothing.
+  let key : ArchiveRecordKey = {
+    session: "desktop-test",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let base = {
+    ..test_model()
+    .replace_conversation({ ..test_conversation(), record: ArchivedRecord, })
+    .with_dev(dev => {
+      ..dev,
+      archived: [placed_archived_item("desktop-test")],
+      archived_request_generation: 2,
+    }),
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let dev = base.dev()
+  let reply = request_generation => {
+    on_home(
+      ArchivedDeleted(
+        key~,
+        sessions=["desktop-test"],
+        items=[],
+        connection_generation=dev.connection_generation,
+        request_generation~,
+        fresh_session="fresh",
+      ),
+    )
+  }
+  assert_true(observe_navigation(reply(1), base, base).retired.is_empty())
+  assert_true(
+    observe_navigation(reply(2), base, base).retired == ["desktop-test"],
+  )
+  let (_, stale) = update(dispatch, reply(1), base)
+  assert_true(stale.navigation.location == Some(shown))
+}

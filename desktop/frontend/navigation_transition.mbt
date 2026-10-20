@@ -27,7 +27,9 @@ fn NavigationObservation::write(
   } else if navigation.location is Some(current) &&
     current != location &&
     current.target is (Session(id) | ChatDraft(id)) &&
-    self.retired.contains(id) {
+    self.retired.contains(id) &&
+    // Only the draft that replaced the deleted selection takes its entry.
+    location.target is (ChatNew | ChatDraft(_)) {
     Replace(location)
   } else {
     Keep
