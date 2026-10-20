@@ -4,15 +4,16 @@ Compile and run a **self-contained MoonBit program** and return its merged
 stdout/stderr and exit status. It is the agent's way to *script in MoonBit* —
 for automation (read and transform files, parse JSON, compute) and for probing
 how a language feature behaves — instead of reaching for shell `python`/`node`.
-The tool compiles only to wasm and runs under moonrun's policy, making it the
-sandboxed automation surface.
+The default wasm backend runs under moonrun's policy. Other supported backends
+automatically require user approval because that policy does not apply to them.
 
 ## How it works
 
 The `source` is a `.mbtx` **single-file script** — MoonBit's own one-file
 program format. Alternatively, `filename` loads a saved script. The tool
-stages the program outside the working tree and runs it in **two phases**. The
-BUILD runs first, synchronously: `moon run <file>.mbtx --target wasm --build-only --target-dir
+stages the program outside the working tree and, for the
+default wasm target, runs it in **two phases**. The BUILD runs first,
+synchronously: `moon run <file>.mbtx --target wasm --build-only --target-dir
 <dir>`, bounded by its own wall clock (20s by default) so a hung dependency
 download cannot hold the turn. A nonzero exit here is reported immediately as
 `BUILD failed (exit N)` — a build failure **by construction**, since the run
@@ -27,7 +28,9 @@ directory, so relative reads reach workspace files while build artifacts stay
 out of your `_build`. A failure there is labeled `at RUNTIME — … from the
 run, not the build`. Compiler diagnostics are rewritten to stable
 `source:LINE:COL` locations (or the supplied filename), and build output (warnings under
-`warning: "on"`) is kept apart from program output by construction.
+`warning: "on"`) is kept apart from program output by construction. The
+non-wasm targets keep the single-shot `moon run` and their reports claim no
+stage.
 
 ## Build cache
 
@@ -113,9 +116,15 @@ with `args=["--help"]`. No standalone `read` tool is registered.
 - `args` (array of strings, optional, default `[]`): script arguments passed
   verbatim, without shell expansion or splitting. Works with inline, saved,
   and save-and-run scripts. Import `moonbitlang/core/env` and read
-  `@env.args()[1:]` (excluding the executable name). For reuse, call
+  `@env.args()[1:]` on wasm (excluding the executable name). For reuse, call
   `{"filename":"scripts/check.mbtx","args":["--deny-warn"]}` and vary
   `args` on subsequent runs. Explicit `null` and non-string elements are rejected.
+- `target` (string, optional, default `wasm`): one of `wasm`, `wasm-gc`, `js`,
+  or `llvm`. The default wasm backend is the policy-bound command/IO surface;
+  every non-wasm run automatically requests approval, even when `escalated`
+  is omitted or false. Without an approval channel, non-wasm calls are refused
+  before saving, building, or running. Explicit native FFI and the `native`
+  backend are unsupported.
 - `cwd` (string, optional, default workspace root): the working directory the
   program runs in. A relative `cwd` resolves against the workspace root.
 - `escalated` (boolean, optional, default `false`): ask the user to run this
@@ -130,10 +139,6 @@ with `args=["--help"]`. No standalone `read` tool is registered.
   is `error` (such as `partial_match`) are maintained as explicit mnemonic
   exceptions and still fail compilation with warnings off.
 
-The `target` argument was removed because `mbtx` always runs on wasm. Calls
-that still include it are rejected before saving, building, running, or
-requesting approval; remove `target` and retry.
-
 Only **dependency resolution** is isolated: a local-package import resolves to
 the **published registry snapshot** (not your uncommitted edits), and a
 third-party import resolves to its **latest** registry version, which can differ
@@ -144,8 +149,7 @@ from a snippet (`@shell.Cmd("moon", ["test", ...])`).
 
 ## Sandbox policy and source-file protection
 
-The wasm run carries a moonrun policy on every platform. Explicit native FFI
-is refused. The snippet
+The default wasm run carries a moonrun policy on every platform. The snippet
 may read anywhere but may write only inside its own `@fs.tmpdir()` and any
 caller-provided scratch lab; changing other workspace files belongs to the file
 tools. Process spawning is checked against the implementation's allowlist; the
@@ -177,29 +181,32 @@ filesystem fault.
 
 ## Escalation
 
-`definition` takes an optional `ask_approval` channel. Its presence is the
-whole switch: with one wired, the schema grows an `escalated` boolean and the
-description grows a paragraph about it; without one, neither exists.
+`definition` takes an optional `approval` channel. Every non-wasm target
+requires a grant through it; without a channel, the call is refused. For wasm,
+the channel also enables the optional `escalated` boolean and its description.
 
-A call with `escalated: true` resolves the question **before** anything is
-created or spawned, and after every cheap check — a snippet with a bad `cwd`
+A call using a non-wasm target or `escalated: true` resolves the question
+**before** compilation or execution, and after every cheap check — a snippet with a bad `cwd`
 fails on the `cwd` rather than spending someone's attention on a prompt for a
 run that was never going to happen. A grant applies to that one call and
 nothing else: there is no session-scoped permission and no remembered rule, so
 the next escalating call asks again.
 
-What a grant changes is exactly one thing: the generated policy file is still
-written and simply not passed to `moonrun`. Widening the document instead was
+For wasm, a grant means the generated policy file is still written and simply
+not passed to `moonrun`. Widening the document instead was
 not available — its `fs.write` roots are canonicalized existing paths with no
 wildcard, and "any program" has no spelling in `process.allow` short of
 enumerating one — so *no policy* is both the honest description of what was
-approved and the only thing the runtime can express. Only the wasm backend is
-available, including for escalated runs.
+approved and the only thing the runtime can express. Non-wasm backends run
+without that policy, so each invocation needs approval. The `target` list does
+not widen: `native` stays refused whatever the answer.
 
 The three ways of not being granted are three different replies, because what
 the model should do next differs for each — a person's refusal is final for the
 task, a withdrawn request decided nothing, and an absent channel means the
-argument is unusable here and the snippet should be retried without it.
+requested execution cannot run here. A cancelled request may be retried on
+wasm without `escalated`; changing a non-wasm call's `escalated` field to false
+does not bypass approval.
 
 ```mbt check
 ///|
@@ -305,13 +312,18 @@ async test "mbtx reads a workspace file" {
 }
 ```
 
-The tool always uses the wasm backend:
+Another supported backend can be selected with approval:
 
 ```mbt check
 ///|
-async test "mbtx runs on wasm without a target argument" {
-  let action = match @mbtx.definition(workspace_root=".").execute {
-    Async(execute) => execute({ "source": "fn main { println(6 * 7) }" })
+async test "mbtx accepts an explicit target" {
+  let definition = @mbtx.definition(
+    workspace_root=".",
+    approval=ApprovalChannel(_ => AllowedOnce),
+  )
+  let action = match definition.execute {
+    Async(execute) =>
+      execute({ "source": "fn main { println(6 * 7) }", "target": "js" })
     Sync(_) => fail("mbtx is async")
   }
   debug_inspect(

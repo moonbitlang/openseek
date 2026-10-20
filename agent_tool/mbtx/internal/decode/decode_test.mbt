@@ -1,7 +1,8 @@
 ///|
-test "decode reads source" {
+test "decode reads source with the default wasm target" {
   let input = @decode.decode({ "source": "fn main { println(1) }" })
   assert_true(input.program is Source("fn main { println(1) }"))
+  assert_eq(input.target, "wasm")
 }
 
 ///|
@@ -17,18 +18,21 @@ test "decode rejects the removed background flag with migration guidance" {
 }
 
 ///|
-test "decode tells stale callers to remove target" {
-  try
-    @decode.decode({ "source": "fn main { println(1) }", "target": "wasm" })
-  catch {
-    error => {
-      let message = "\{error}"
-      assert_true(message.contains("mbtx always runs on wasm"))
-      assert_true(message.contains("remove target and retry"))
-    }
-  } noraise {
-    _ => fail("accepted removed target")
+test "decode refuses the unsupported native target" {
+  let refused = try {
+    @decode.decode({ "source": "fn main {  }", "target": "native" }) |> ignore
+    "accepted"
+  } catch {
+    error => "\{error}"
   }
+  assert_false(refused == "accepted")
+  assert_true(refused.contains("wasm"))
+}
+
+///|
+test "decode accepts an explicit js target" {
+  let input = @decode.decode({ "source": "fn main {  }", "target": "js" })
+  assert_eq(input.target, "js")
 }
 
 ///|
@@ -49,7 +53,7 @@ test "decode defaults warning to off and reads on/off" {
 
 ///|
 /// Argument shapes `decode` must refuse. Migration guidance is checked
-/// separately by the removed-field tests.
+/// separately by the removed-background-field test.
 test "decode rejects malformed arguments" {
   let malformed : Array[Json] = [
     {},
@@ -66,6 +70,7 @@ test "decode rejects malformed arguments" {
     { "source": "x", "warning": "loud" },
     { "source": "x", "cwd": 3 },
     { "source": "x", "description": 3 },
+    { "source": "x", "target": "banana" },
     { "code": "x" },
     Json("x"),
   ]
@@ -109,6 +114,7 @@ test "decode accepts filename with unchanged execution options" {
   })
   assert_true(input.program is File("scripts/check.mbtx"))
   assert_eq(input.cwd, Some("sub"))
+  assert_eq(input.target, "wasm")
   assert_true(input.warning)
 }
 
