@@ -55,7 +55,7 @@ pub fn Model::view(
           @html.nothing
         } else {
           @html.button(
-            class="button secondary",
+            class="button secondary export-download",
             disabled=busy,
             on_click=emit(Download),
             if content.operation is Downloading {
