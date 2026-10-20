@@ -590,6 +590,9 @@ pub(all) struct State {
   // Advancing this value on either boundary rejects reads, listings, and
   // stats that outlived the checkout they addressed.
   request_epoch : Int32
+  // Cached Cloud surfaces outlive content revalidation, but never an owner
+  // or credential switch. Their callbacks use this separate incarnation.
+  cloud_surface_epoch : Int32
   // Page-lifetime navigation token. Transcript file-link clicks capture it;
   // every competing editor navigation advances it, so a slower older click
   // cannot move the viewer after a newer user action has taken precedence.
@@ -745,6 +748,7 @@ pub fn State::empty() -> State {
     review_navigation_display: None,
     changes_generation: 0,
     request_epoch: 0,
+    cloud_surface_epoch: 0,
     file_link_generation: 0,
     changes_head: None,
     changes_head_known: false,
@@ -1358,6 +1362,13 @@ pub(all) enum Msg {
   WorkspaceInvalidated(
     owner~ : @interop.ConversationIdentity,
     auth_epoch~ : Int32
+  )
+  FileVersionChecked(
+    owner~ : @interop.ConversationIdentity,
+    epoch~ : Int32,
+    path~ : @common.Uri,
+    sig~ : String,
+    unchanged~ : Bool
   )
   // Files outside the checkout, or whose watcher failed, share one stat tick.
   RefreshExternalFiles

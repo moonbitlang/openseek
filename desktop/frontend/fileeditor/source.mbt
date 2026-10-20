@@ -28,6 +28,65 @@ fn Ctx::host_ready(self : Ctx) -> Bool {
 }
 
 ///|
+fn Doc::cloud_signature(
+  self : Doc,
+  owner : @interop.ConversationIdentity,
+) -> String? {
+  guard owner is @interop.Cloud(..) else { return None }
+  match self.state {
+    TabLoaded(sig~, ..)
+    | TabOffice(sig~, ..)
+    | TabPdf(sig~, ..)
+    | TabImage(sig~, ..) => Some(sig)
+    _ => None
+  }
+}
+
+///|
+fn State::surface_epoch(
+  self : State,
+  owner : @interop.ConversationIdentity,
+) -> Int32 {
+  match owner {
+    Host(_) => self.request_epoch
+    Cloud(..) => self.cloud_surface_epoch
+  }
+}
+
+///|
+fn State::accepts_surface_epoch(
+  self : State,
+  ctx : Ctx,
+  owner : @interop.ConversationIdentity,
+  epoch : Int32,
+) -> Bool {
+  self.surface_epoch(owner) == epoch &&
+  (match owner {
+    Host(_) => true
+    Cloud(..) =>
+      ctx.cloud_files is Some(files) && self.cloud_epoch == Some(files.epoch)
+  })
+}
+
+///|
+async fn check_source(
+  owner : @interop.ConversationIdentity,
+  cloud : CloudFiles?,
+  path : @common.Uri,
+  sig : String,
+) -> Result[Bool, String] {
+  guard owner is @interop.Cloud(account~, session~) &&
+    cloud is Some(cloud) &&
+    @resource.cloud_root(@cloud.CloudOrigin, account, session) is Some(root) &&
+    @resource.relative_to(path, root) is Some(relative) else {
+    return Err("Cloud file no longer belongs to this conversation.")
+  }
+  @cloud.file_unchanged(cloud.token, session, relative.0, sig).map_err(failure => {
+    failure.label()
+  })
+}
+
+///|
 async fn read_source(
   owner : @interop.ConversationIdentity,
   cloud : CloudFiles?,
@@ -177,6 +236,7 @@ fn refresh_cloud_files(
         doc.name,
         range=None,
         cloud?=ctx.cloud_files,
+        cached_sig?=doc.cloud_signature(ctx.owner),
       ),
     )
   }

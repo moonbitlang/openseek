@@ -24,7 +24,7 @@ pub fn capture_pdf_region(
       emit.map(result => {
         PdfCaptureFinished(
           owner~,
-          epoch=state.request_epoch,
+          epoch=state.surface_epoch(ctx.owner),
           path~,
           sig~,
           generation=document.generation,

@@ -104,6 +104,7 @@ fn read_file(
   annotation? : String,
   cloud? : CloudFiles,
   allow_large~ : Bool = false,
+  cached_sig? : String,
 ) -> @cmd.Cmd {
   if owner is @interop.Host(host) && !@resource.belongs_to(path, host.channel) {
     // Settle the request through the same typed failure path as an async
@@ -123,7 +124,22 @@ fn read_file(
   }
   @cmd.custom_cmd(scheduler => {
     @js.Promise::from_async(() => {
-      let reply = match read_source(owner, cloud, path, allow_large~) {
+      let source = if cached_sig is Some(sig) {
+        match check_source(owner, cloud, path, sig) {
+          Ok(unchanged) => {
+            scheduler.add(
+              dispatch(
+                FileVersionChecked(owner~, epoch~, path~, sig~, unchanged~),
+              ),
+            )
+            return
+          }
+          Err(message) => Err(message)
+        }
+      } else {
+        read_source(owner, cloud, path, allow_large~)
+      }
+      let reply = match source {
         Ok(reply) => reply
         Err(message) => {
           scheduler.add(

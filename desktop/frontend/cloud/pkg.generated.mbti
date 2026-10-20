@@ -20,6 +20,8 @@ pub fn discard_legacy_credential() -> Unit
 
 pub async fn export_record(String, String) -> Result[String, @cloud_client.Failure]
 
+pub async fn file_unchanged(String, String, String, String) -> Result[Bool, @cloud_client.Failure]
+
 pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, @cloud_client.Failure]
 
 pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, @cloud_client.Failure]

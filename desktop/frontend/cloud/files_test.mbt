@@ -9,7 +9,8 @@ extern "js" fn mock_file_http(
   #|     if (status < 0) throw new TypeError("offline");
   #|     const body = respond(String(url), options.method,
   #|       new Headers(options.headers).get("Authorization") || "");
-  #|     return new Response(body, {status});
+  #|     const sig = (() => { try { return JSON.parse(body).sig; } catch { return undefined; } })();
+  #|     return new Response(body, {status, headers: sig ? {ETag: JSON.stringify(sig)} : {}});
   #|   };
   #|   return () => { globalThis.fetch = previous; };
   #| }
@@ -106,9 +107,24 @@ async fn check_file_variants() -> Unit {
       reply.to_json().stringify()
     })
     defer restore()
+    let expected = match reply {
+      Content(content~, absolute~, sig~) =>
+        @protocol.Content(
+          content~,
+          absolute~,
+          sig=Json::string(sig).stringify(),
+        )
+      BinaryContent(data_base64~, media_type~, sig~) =>
+        @protocol.BinaryContent(
+          data_base64~,
+          media_type~,
+          sig=Json::string(sig).stringify(),
+        )
+      Binary | Oversized => reply
+    }
     assert_true(
       @cloud.read_file("test-token", "session", "src/hello.txt") is Ok(actual) &&
-      actual == reply,
+      actual == expected,
     )
     assert_eq(requests, [
       (

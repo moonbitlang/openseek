@@ -45,7 +45,7 @@ pub fn State::accepts_office_callback(
   ctx.panel_open &&
   self.owner == Some(owner) &&
   ctx.owner == owner &&
-  self.request_epoch == epoch &&
+  self.accepts_surface_epoch(ctx, owner, epoch) &&
   ctx.active_file == Some(path) &&
   ctx.active_history_diff is None &&
   (match self.docs.get(path) {
@@ -137,7 +137,7 @@ pub fn State::offer_office_selection(
   }
   let preview : OfficeSelectionPreview = {
     owner,
-    epoch: self.request_epoch,
+    epoch: self.surface_epoch(ctx.owner),
     path,
     sig,
     pdf_generation,

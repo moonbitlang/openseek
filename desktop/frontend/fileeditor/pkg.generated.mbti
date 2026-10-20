@@ -436,6 +436,7 @@ pub(all) enum Msg {
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
   RunSettled(owner~ : @interop.ConversationIdentity)
   WorkspaceInvalidated(owner~ : @interop.ConversationIdentity, auth_epoch~ : Int32)
+  FileVersionChecked(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, unchanged~ : Bool)
   RefreshExternalFiles
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
@@ -747,6 +748,7 @@ pub(all) struct State {
   review_navigation_display : ReviewNavigationDisplay?
   changes_generation : Int32
   request_epoch : Int32
+  cloud_surface_epoch : Int32
   file_link_generation : Int32
   changes_head : String?
   changes_head_known : Bool

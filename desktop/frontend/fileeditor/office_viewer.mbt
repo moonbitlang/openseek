@@ -84,7 +84,7 @@ fn show_office_document(
       dispatch(
         OfficeSelectionChanged(
           owner~,
-          epoch=state.request_epoch,
+          epoch=state.surface_epoch(owner),
           path~,
           sig~,
           selection~,

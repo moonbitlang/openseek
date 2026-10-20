@@ -295,6 +295,7 @@ fn show_tab_impl(
         doc.name,
         review_generation?=doc.review_generation(),
         range=None,
+        cached_sig?=doc.cloud_signature(ctx.owner),
       ),
     ])
   } else {
@@ -2140,6 +2141,7 @@ pub fn sync(
         github_review: state.github_review,
         owner: Some(ctx.owner),
         cloud_epoch,
+        cloud_surface_epoch: state.cloud_surface_epoch + 1,
         cloud_documents,
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
@@ -4106,6 +4108,33 @@ fn update_inner(
       let history_docs = state.history_docs.copy()
       history_docs[key] = doc
       (@cmd.none, { ..state, history_docs, })
+    }
+    FileVersionChecked(owner~, epoch~, path~, sig~, unchanged~) => {
+      guard ctx.owner == owner &&
+        state.owner == Some(owner) &&
+        state.cloud_epoch == ctx.cloud_files.map(files => files.epoch) &&
+        state.request_epoch == epoch &&
+        state.docs.get(path) is Some(doc) &&
+        doc.cloud_signature(owner) == Some(sig) else {
+        return (@cmd.none, state)
+      }
+      if !unchanged {
+        return (
+          read_file(
+            dispatch,
+            owner,
+            epoch,
+            path,
+            doc.name,
+            range=None,
+            cloud?=ctx.cloud_files,
+          ),
+          state,
+        )
+      }
+      let docs = state.docs.copy()
+      docs[path] = { ..doc, stale: false, }
+      (@cmd.none, { ..state, docs, })
     }
     FileLoaded(
       owner~,

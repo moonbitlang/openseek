@@ -87,7 +87,7 @@ pub fn State::start_office_region(
   let request : OfficeRegionRequest = {
     id: self.office_region_id + 1L,
     owner,
-    epoch: self.request_epoch,
+    epoch: self.surface_epoch(ctx.owner),
     path,
     sig,
     pdf_generation,
