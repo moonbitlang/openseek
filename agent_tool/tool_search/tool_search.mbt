@@ -45,7 +45,7 @@ priv struct Entry {
 /// Keywords whose value is one subschema.
 let single_subschema_keywords : Array[String] = [
   "items", "additionalProperties", "additionalItems", "contains", "not", "if", "then",
-  "else", "propertyNames", "unevaluatedItems", "unevaluatedProperties",
+  "else", "propertyNames", "unevaluatedItems", "unevaluatedProperties", "contentSchema",
 ]
 
 ///|
@@ -63,8 +63,9 @@ let named_subschema_keywords : Array[String] = [
 ]
 
 ///|
+/// `dependencies` mixes schemas with arrays of names; only its schemas count.
 let keyed_subschema_keywords : Array[String] = [
-  "patternProperties", "dependentSchemas",
+  "patternProperties", "dependentSchemas", "dependencies",
 ]
 
 ///|

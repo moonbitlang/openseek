@@ -305,6 +305,17 @@ test "fields in tuple items and conditional branches are searchable" {
       "if": { "properties": { "kind": { "const": "a" } } },
       "then": { "properties": { "timezone": { "type": "string" } } },
     }),
+    mcp_tool("mcp__t__deps", "Dependent.", {
+      "type": "object",
+      "dependencies": {
+        "a": ["b"],
+        "c": { "properties": { "workspace": { "type": "string" } } },
+      },
+    }),
+    mcp_tool("mcp__t__blob", "Encoded.", {
+      "type": "string",
+      "contentSchema": { "properties": { "checksum": { "type": "string" } } },
+    }),
     mcp_tool("mcp__t__plain", "Plain.", {
       "type": "object",
       "default": { "repository": "ignored" },
@@ -318,6 +329,8 @@ test "fields in tuple items and conditional branches are searchable" {
       ("repository", "mcp__t__pair"),
       ("branch", "mcp__t__legacy"),
       ("timezone", "mcp__t__cond"),
+      ("workspace", "mcp__t__deps"),
+      ("checksum", "mcp__t__blob"),
     ] {
     let (query, name) = pair
     guard run({ "query": query }) is Respond(output) else {
