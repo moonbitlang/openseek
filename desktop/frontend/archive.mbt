@@ -38,6 +38,44 @@ priv enum DeleteTarget {
 } derive(Eq)
 
 ///|
+/// Whether a confirmed delete of `root` on `root_channel` removes `key`: the
+/// host deletes the record together with every sub-run transcript descended
+/// from it. Walk the structural `-sr-N` suffixes as the host does, so an
+/// unrelated id that merely shares a prefix is not taken for a descendant.
+fn removes_in_family(
+  root_channel : @interop.ChannelId,
+  root : ArchiveRecordKey,
+  channel : @interop.ChannelId,
+  key : ArchiveRecordKey,
+) -> Bool {
+  guard root_channel == channel && root.workspace == key.workspace else {
+    return false
+  }
+  let mut current = key.session
+  for ;; {
+    if current == root.session {
+      return true
+    }
+    guard @transcript.subrun_parent(current) is Some(parent) else {
+      return false
+    }
+    current = parent
+  }
+}
+
+///|
+/// Whether this page confirmed a delete that removes `key`.
+fn Model::owns_deletion(
+  self : Model,
+  channel : @interop.ChannelId,
+  key : ArchiveRecordKey,
+) -> Bool {
+  self.deletes_in_flight.any(entry => {
+    removes_in_family(entry.0, entry.1, channel, key)
+  })
+}
+
+///|
 /// End one confirmed delete of `key`. Deleting the same chat again while an
 /// earlier delete is out adds a separate entry, so each settles only itself.
 fn Model::settle_delete(
@@ -223,7 +261,10 @@ fn delete_archived_session(
         error => {
           scheduler.add(
             device_dispatch(
-              DeleteFailed(@interop.bridge_error_text(error), deleting=None),
+              DeleteFailed(
+                @interop.bridge_error_text(error),
+                deleting=Some(key),
+              ),
             ),
           )
           return

@@ -147,7 +147,7 @@ fn observe_navigation(
   let retired : Array[String] = match message {
     FromDevice(channel, SessionsChanged(change="deleted", key~, ..)) if channel ==
       previous.focused &&
-      previous.deletes_in_flight.contains((channel, key)) => [key.session]
+      previous.owns_deletion(channel, key) => [key.session]
     // Only a reply the update accepts removed anything; a stale one is
     // discarded there and must not move navigation either.
     FromDevice(

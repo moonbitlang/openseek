@@ -5255,6 +5255,11 @@ fn update_msg(
             {
               ..model.replace_device({ ..dev, archived_request_generation, }),
               delete_confirm: None,
+              // The host can announce the deletion before this reply, which
+              // the announcement then makes stale.
+              deletes_in_flight: model.deletes_in_flight
+              .copy()
+              ..push((confirm.channel, confirm.key)),
             },
           )
         }
@@ -8419,6 +8424,7 @@ fn update_device_msg(
         request_generation == dev.archived_request_generation else {
         return (@cmd.none, model)
       }
+      let model = model.settle_delete(channel, key)
       // Install the permanent tombstone before folding the unversioned list
       // reply. The ordinary ArchivedLoaded reconciliation then rejects both
       // this stale row and any later live-list copy of it.

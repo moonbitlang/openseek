@@ -1575,9 +1575,10 @@ priv struct Model {
   // answer overtaken by a later click must not put another chat's dialog
   // under the user's pointer.
   delete_pending : (@interop.ChannelId, ArchiveRecordKey)?
-  // Confirmed live deletes still out with the host, one entry per request.
-  // They outlive later clicks, so a deletion the host announces for one of
-  // them is known to be this page's own.
+  // Confirmed live and archived deletes still out with the host, one entry
+  // per request, keyed by the conversation the user chose. They outlive later
+  // clicks, so a deletion the host announces for that conversation or one of
+  // its sub-run descendants is known to be this page's own.
   deletes_in_flight : Array[(@interop.ChannelId, ArchiveRecordKey)]
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
@@ -2542,8 +2543,8 @@ priv enum DeviceMsg {
     fresh_session~ : String
   )
   ArchiveFailed(String)
-  // A refused delete. `deleting` names the confirmed live delete it ends; a
-  // refused check or archived delete ends none.
+  // A refused delete. `deleting` names the confirmed delete it ends; a
+  // refused check ends none.
   DeleteFailed(String, deleting~ : ArchiveRecordKey?)
   // A rebuild of a missing worktree failed. The canonical rows still arrive
   // as `worktree.changed`, so this only reports the refusal.

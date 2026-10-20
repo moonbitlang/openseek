@@ -648,3 +648,151 @@ test "a retired entry yields only to the draft that replaced it" {
   let (_, stale) = update(dispatch, reply(1), base)
   assert_true(stale.navigation.location == Some(shown))
 }
+
+///|
+test "an archived delete announced before its reply is this page's own" {
+  let dispatch = test_dispatch()
+  let key : ArchiveRecordKey = {
+    session: "desktop-test",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session("desktop-test"),
+  }
+  let base = {
+    ..test_model()
+    .replace_conversation({ ..test_conversation(), record: ArchivedRecord, })
+    .with_dev(dev => {
+      ..dev,
+      archived: [placed_archived_item("desktop-test")],
+    }),
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let (_, staged) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
+    base,
+  )
+  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  let request_generation = confirmed.dev().archived_request_generation
+  // The host announces the deletion while committing it, before replying.
+  let (_, announced) = update_dev(
+    dispatch,
+    SessionsChanged(change="deleted", key~, fresh_session=Some("fresh")),
+    confirmed,
+  )
+  assert_true(announced.navigation.location is Some({ target: ChatNew, .. }))
+  assert_true(announced.deletes_in_flight.is_empty())
+  // The reply the announcement made stale moves nothing.
+  let (_, replied) = update_dev(
+    dispatch,
+    ArchivedDeleted(
+      key~,
+      sessions=["desktop-test"],
+      items=[],
+      connection_generation=confirmed.dev().connection_generation,
+      request_generation~,
+      fresh_session="later",
+    ),
+    announced,
+  )
+  assert_true(replied.navigation.location == announced.navigation.location)
+  assert_eq(replied.active_session, "fresh")
+  // A refused archived delete ends its entry, so a later deletion from
+  // elsewhere keeps the unavailable target.
+  let (_, refused) = update_dev(
+    dispatch,
+    DeleteFailed("busy", deleting=Some(key)),
+    confirmed,
+  )
+  assert_true(refused.deletes_in_flight.is_empty())
+}
+
+///|
+test "deleting a family from this page retires its shown descendant" {
+  let dispatch = test_dispatch()
+  let parent : ArchiveRecordKey = {
+    session: "desktop-parent",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let child : ArchiveRecordKey = { ..parent, session: "desktop-parent-sr-1", }
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session(child.session),
+  }
+  let base = {
+    ..test_model()
+    .replace_conversation(
+      empty_conversation(
+        @interop.ChannelId::Local,
+        child.session,
+        @interop.ChannelId::Local.test_project(),
+      ),
+    )
+    .with_dev(dev => {
+      ..dev,
+      sessions: [
+        placed_archived_item(parent.session),
+        placed_archived_item(child.session),
+      ],
+    }),
+    active_session: child.session,
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let (_, asked) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, parent, LiveRecord),
+    base,
+  )
+  let (_, staged) = update_dev(
+    dispatch,
+    DeleteChecked(key=parent, checkout=None),
+    asked,
+  )
+  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  // The host announces each descendant before the parent.
+  let (_, child_gone) = update_dev(
+    dispatch,
+    SessionsChanged(change="deleted", key=child, fresh_session=Some("fresh")),
+    confirmed,
+  )
+  assert_true(child_gone.navigation.location is Some({ target: ChatNew, .. }))
+  assert_eq(child_gone.deletes_in_flight.length(), 1)
+  let (_, parent_gone) = update_dev(
+    dispatch,
+    SessionsChanged(change="deleted", key=parent, fresh_session=Some("later")),
+    child_gone,
+  )
+  assert_true(parent_gone.deletes_in_flight.is_empty())
+  assert_true(parent_gone.navigation.location == child_gone.navigation.location)
+  // Descent follows the `-sr-N` structure, not a textual prefix.
+  assert_true(
+    removes_in_family(Local, parent, Local, {
+      ..parent,
+      session: "desktop-parent-sr-1-sr-2",
+    }),
+  )
+  assert_false(
+    removes_in_family(Local, parent, Local, {
+      ..parent,
+      session: "desktop-parent-sr-other",
+    }),
+  )
+  assert_false(
+    removes_in_family(Local, parent, Local, {
+      ..parent,
+      session: "desktop-parent-copy",
+    }),
+  )
+}
