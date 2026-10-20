@@ -9,19 +9,27 @@ main {
   --conv-overview-width: 300px;
 }
 
+/* The overview is positioned against its grid area instead of being placed
+   in the grid: an in-flow item would take the transcript's cell and push the
+   transcript into an auto-height row. Absolutely positioned, it leaves the
+   conversation's rows as they are and still lines up with them. */
+main:has(> .conv-overview) {
+  position: relative;
+}
+
 /* Narrow: a panel over the transcript row. It stays out of the composer's
    row, so the composer remains usable while the overview is open. */
 .conv-overview {
+  position: absolute;
   grid-column: 1;
-  grid-row: 2;
-  justify-self: end;
-  align-self: stretch;
+  grid-row: 2 / 3;
+  top: 6px;
+  right: 8px;
+  bottom: 6px;
   z-index: 20;
   box-sizing: border-box;
   width: var(--conv-overview-width);
   max-width: calc(100% - 16px);
-  min-height: 0;
-  margin: 6px 8px;
   padding: 2px 14px;
   overflow-y: auto;
   border: 1px solid var(--color-border);
@@ -47,13 +55,17 @@ main {
     margin-inline-end: var(--conv-overview-width);
   }
 
+  /* The rail runs from the transcript row to the pane's bottom edge (an
+     absolutely positioned item's `auto` end line). */
   .conv-overview {
-    grid-row: 2 / span 3;
+    grid-row: 2 / auto;
+    top: 0;
+    right: 0;
+    bottom: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
     max-width: none;
-    margin: 0;
     padding: 12px 14px 16px 0;
     border: 0;
     border-radius: 0;

@@ -209,11 +209,23 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   await expect(panel.getByText('Test Mac', { exact: true })).toBeVisible();
   await expect(panel.getByRole('switch')).toHaveCount(0);
 
+  // The overview never takes the transcript's place: the conversation keeps
+  // its row, from the titlebar down to the composer, with its messages.
+  const message = page.locator('.transcript .msg-content', { hasText: 'Show the browser fixture' });
+  const keepsItsRow = async () => {
+    await expect(message).toBeVisible();
+    const topbar = await page.locator('.topbar').boundingBox();
+    const transcript = await page.locator('.transcript').boundingBox();
+    const composer = await page.locator('.composer').first().boundingBox();
+    expect(transcript.y).toBeLessThanOrEqual(topbar.y + topbar.height + 1);
+    expect(transcript.height).toBeGreaterThan(composer.y - transcript.y - 200);
+    return { transcript, composer };
+  };
+
   // With room for both, the transcript and the composer end where the rail
   // begins: nothing of the conversation is under it.
   const rail = await panel.boundingBox();
-  const transcript = await page.locator('.transcript').boundingBox();
-  const composer = await page.locator('.composer').first().boundingBox();
+  const { transcript, composer } = await keepsItsRow();
   expect(transcript.x + transcript.width).toBeLessThanOrEqual(rail.x + 1);
   expect(composer.x + composer.width).toBeLessThanOrEqual(rail.x + 1);
   await page.screenshot({ path: testInfo.outputPath('overview-rail.png') });
@@ -222,6 +234,7 @@ test('the overview is a rail beside a wide conversation and a panel over a narro
   // stops above the composer, which stays usable.
   await page.setViewportSize({ width: 960, height: 900 });
   await expect(panel).toBeVisible();
+  await keepsItsRow();
   const over = await panel.boundingBox();
   const narrowTranscript = await page.locator('.transcript').boundingBox();
   const narrowComposer = await page.locator('.composer').first().boundingBox();
