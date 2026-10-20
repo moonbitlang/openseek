@@ -332,8 +332,20 @@ pub fn body_view(
     }
   }
   let office_document = active_office_surface(state, ctx)
+  let image = if !use_diff_surface {
+    ctx.active_file.bind(path => {
+      match state.docs.get(path) {
+        Some({ name, state: TabImage(url~, ..), .. }) => Some((name, url))
+        _ => None
+      }
+    })
+  } else {
+    None
+  }
+  let use_image_surface = image is Some(_)
   let use_office_surface = !use_diff_surface && office_document is Some(_)
   let use_markdown_surface = !use_diff_surface &&
+    !use_image_surface &&
     !use_office_surface &&
     (match ctx.active_file {
       Some(path) =>
@@ -343,10 +355,12 @@ pub fn body_view(
       None => false
     })
   let use_mbti_surface = !use_diff_surface &&
+    !use_image_surface &&
     !use_markdown_surface &&
     !use_office_surface &&
     uses_mbti_diagram_surface(state, ctx)
   let use_package_surface = !use_diff_surface &&
+    !use_image_surface &&
     !use_markdown_surface &&
     !use_mbti_surface &&
     !use_office_surface &&
@@ -365,6 +379,7 @@ pub fn body_view(
       .id(ViewerHostId)
       .class(
         if use_diff_surface ||
+          use_image_surface ||
           use_office_surface ||
           use_markdown_surface ||
           use_mbti_surface ||
@@ -381,6 +396,17 @@ pub fn body_view(
     match office_document {
       Some(config) => config
       None => empty_office_surface_config(state)
+    },
+  )
+  let image_surface = @html.div(
+    class=if use_image_surface {
+      "viewer-host file-image-preview"
+    } else {
+      "viewer-host file-image-preview moonbit-viewer-surface-hidden"
+    },
+    match image {
+      Some((name, url)) => [@html.img(src=url, alt=name)]
+      None => []
     },
   )
   let markdown_viewer_host = @html.div(
@@ -487,6 +513,7 @@ pub fn body_view(
         office_pages_view(locale~, dispatch, state, ctx),
         viewer_host,
         office_surface,
+        image_surface,
         pdf_password_dialog(locale~, dispatch, state, ctx),
         markdown_viewer_host,
         mbti_diagram_host,
@@ -595,7 +622,7 @@ fn viewer_notice(
                 PdfReady | PdfPasswordRequired(_) => ""
               }
             TabLoading => ui(locale, LoadingFile)
-            TabLoaded(..) | TabOffice(..) => ""
+            TabLoaded(..) | TabOffice(..) | TabImage(..) => ""
           }
         None => ""
       }

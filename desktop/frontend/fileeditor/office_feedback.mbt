@@ -18,7 +18,27 @@ pub fn show_office_feedback(
   emit : @cmd.Emit[Msg],
   preview : OfficeSelectionPreview,
 ) -> @cmd.Cmd {
+  office_feedback_command(
+    emit,
+    preview,
+    None,
+    (preview, text, apply) => {
+      emit(OfficeFeedbackSubmitted(preview, text, apply~))
+    },
+    Ref(true),
+  )
+}
+
+///|
+fn office_feedback_command(
+  emit : @cmd.Emit[Msg],
+  preview : OfficeSelectionPreview,
+  text : String?,
+  submit : (OfficeSelectionPreview, String, Bool) -> @cmd.Cmd,
+  alive : Ref[Bool],
+) -> @cmd.Cmd {
   @cmd.custom_cmd(kind=@cmd.after_render, scheduler => {
+    guard alive.val else { return }
     guard @dom.document().get_element_by_id(OfficeFeedbackHostId).to_option()
       is Some(host) else {
       return
@@ -65,7 +85,9 @@ pub fn show_office_feedback(
       layout_source=surface,
       on_submit=(text, apply) => {
         if target.val is Some(preview) {
-          scheduler.add(emit(OfficeFeedbackSubmitted(preview, text, apply~)))
+          if alive.val {
+            scheduler.add(submit(preview, text, apply))
+          }
         }
       },
       on_change=text => {
@@ -80,8 +102,56 @@ pub fn show_office_feedback(
       },
     )
     office_feedback_mount.val = Some({ host, input, target, })
-    input.show(anchor, selection_rects~, prefer_below~)
+    input.show(anchor, selection_rects~, prefer_below~, text?)
   })
+}
+
+///|
+priv suberror OfficeFeedbackSubscription {
+  OfficeFeedbackSubscription(
+    @cmd.Emit[Msg],
+    OfficeSelectionPreview,
+    String,
+    (String, Bool) -> @cmd.Cmd
+  )
+}
+
+///|
+pub fn office_feedback_subscription(
+  emit : @cmd.Emit[Msg],
+  preview : OfficeSelectionPreview,
+  comment : String,
+  submit : (String, Bool) -> @cmd.Cmd,
+) -> @sub.Sub {
+  @sub.custom_sub(
+    "office-composer-feedback",
+    @sub.Local,
+    OfficeFeedbackSubscription(emit, preview, comment, submit),
+    (payload, scheduler) => {
+      guard payload
+        is OfficeFeedbackSubscription(emit, preview, comment, submit) else {
+        return None
+      }
+      let alive = Ref(true)
+      dispose_office_feedback()
+      scheduler.add(
+        office_feedback_command(
+          emit,
+          preview,
+          Some(comment),
+          (_, text, send) => submit(text, send),
+          alive,
+        ),
+      )
+      Some({
+        unload: _ => {
+          alive.val = false
+          dispose_office_feedback()
+        },
+        update_tagger: _ => (),
+      })
+    },
+  )
 }
 
 ///|

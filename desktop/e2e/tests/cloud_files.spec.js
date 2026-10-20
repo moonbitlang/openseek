@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { DesktopBrowserHarness } from './support/desktop_browser_harness.js';
-import { CloudHarness, authOrigin, sessionA, sessionB } from './support/cloud_harness.js';
+import { CloudHarness, authOrigin, cloudOrigin, sessionA, sessionB } from './support/cloud_harness.js';
 
 class CloudFilesHarness extends CloudHarness {
   constructor(page, options) {
@@ -61,7 +62,7 @@ async function openFiles(page, cloud) {
   const launcher = page.locator('.dock-launcher');
   await expect(launcher.getByRole('button')).toHaveCount(1);
   await launcher.getByRole('button', { name: /^Files / }).click();
-  await expect(file(page, 'src')).toBeVisible();
+  await expect(tree(page).getByRole('treeitem').first()).toBeVisible();
 }
 
 async function openText(page) {
@@ -79,6 +80,114 @@ function fileHostRequests(cloud) {
   return [...cloud.hostRequests, ...cloud.device.requests].filter(request =>
     /^(fs\.|lsp\.|git\.|moon\.|file\.|host\.open_path$)/.test(request.method));
 }
+
+test('Cloud raster files reuse the file panel and restore the cached image after a text tab', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  const png = readFileSync(new URL('../../../deepseek/client/testdata/two-colors.png', import.meta.url)).toString('base64');
+  cloud.directories.set(`${sessionA}:`, [{ name: 'picture.png', is_dir: false }, { name: 'src', is_dir: true }]);
+  cloud.contents.set(`${sessionA}:picture.png`, { kind: 'binary_content', data_base64: png, media_type: 'image/png', sig: 'image:1' });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'picture.png').click();
+  const image = page.locator('.file-image-preview img');
+  await expect(image).toBeVisible();
+  await expect(image).toHaveAttribute('src', `data:image/png;base64,${png}`);
+  await expect(image).toHaveAttribute('alt', 'picture.png');
+  await expect.poll(() => image.evaluate(image => image.naturalWidth)).toBeGreaterThan(0);
+  await page.screenshot({ path: testInfo.outputPath('cloud-image-preview.png'), fullPage: true });
+  await showTree(page);
+  await openText(page);
+  await expect(image).toHaveCount(0);
+  const reads = cloud.fileRequests.filter(request => request.content && request.path === 'picture.png').length;
+  await showTree(page); await file(page, 'picture.png').click();
+  await expect(image).toBeVisible();
+  expect(cloud.fileRequests.filter(request => request.content && request.path === 'picture.png')).toHaveLength(reads);
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud Office selections reuse the existing feedback composer and send relative file references', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'book1.xlsx', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:book1.xlsx`, { kind: 'binary_content', ...cloud.device.officeFiles['docs/book1.xlsx'] });
+  await cloud.install(); await cloud.goto(); await openFiles(page, cloud);
+  await file(page, 'book1.xlsx').click();
+  const cells = page.locator('.sheet-document td[data-cell]');
+  await expect(cells.first()).toBeVisible();
+  await cells.first().click();
+  const feedback = page.locator('.office-selection-preview');
+  await expect(feedback.locator('textarea')).toBeVisible();
+  await page.locator('#task').fill('Existing Cloud draft');
+  await feedback.locator('textarea').fill('Explain this cell');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('textarea').press('Enter');
+  await expect(feedback).toBeHidden();
+  await expect(page.locator('.composer .mention-chip')).toContainText('book1.xlsx');
+  await expect(page.locator('#task')).toHaveValue('Existing Cloud draft');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  const content = JSON.parse(send.body).content;
+  const selection = JSON.parse(content.match(/<office_selection>([\s\S]*?)<\/office_selection>/)[1]);
+  expect(selection.source.file).toBe('book1.xlsx');
+  if (selection.source.reference?.file) expect(selection.source.reference.file).toBe('book1.xlsx');
+  expect(selection.comment).toBe('Explain this cell');
+  expect(content).toContain('Existing Cloud draft');
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
+test('Cloud PDF text and region feedback reuse the current PDF surface, capture and image input', async ({ page }, testInfo) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'report.pdf', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:report.pdf`, { kind: 'binary_content', ...cloud.device.officeFiles['docs/report.pdf'] });
+  await cloud.install();
+  await page.route(`${cloudOrigin}/v1/sessions/${sessionA}/files/import`, async route => {
+    const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    return route.fulfill({ headers, contentType: 'application/json', body: JSON.stringify({ path: '.openseek/attachments/fixture/capture.png' }) });
+  });
+  await cloud.goto(); await openFiles(page, cloud); await file(page, 'report.pdf').click();
+  await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
+  const text = page.locator('.textLayer [data-pdf-item]').first();
+  await text.evaluate(element => {
+    const range = document.createRange(); range.selectNodeContents(element);
+    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  const feedback = page.locator('.office-selection-preview');
+  await expect(feedback.locator('textarea')).toBeVisible();
+  await feedback.locator('textarea').fill('Explain this passage');
+  await feedback.getByRole('checkbox').check();
+  await feedback.locator('textarea').press('Enter');
+  await expect(feedback).toBeHidden();
+  const bounds = await page.locator('.pdfViewer canvas').first().boundingBox();
+  await page.getByRole('button', { name: 'Capture region', exact: true }).click();
+  await expect(page.locator('.pdf-region-capture')).toBeVisible();
+  await page.mouse.move(bounds.x + 30, bounds.y + 30); await page.mouse.down();
+  await page.mouse.move(bounds.x + 210, bounds.y + 120, { steps: 8 }); await page.mouse.up();
+  const capture = page.locator('.pdf-capture-feedback');
+  await expect(capture.locator('textarea')).toBeVisible();
+  await capture.locator('textarea').fill('Explain this region');
+  await capture.getByRole('checkbox').check();
+  await capture.locator('.agent-feedback-input-action').click();
+  await expect(capture).toBeHidden();
+  await expect(page.locator('.composer-image')).toHaveCount(1);
+  await page.locator('#task').fill('Keep the PDF context');
+  await page.screenshot({ path: testInfo.outputPath('cloud-pdf-capture.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const send = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  const content = JSON.parse(send.body).content;
+  expect(content[1]).toMatchObject({ type: 'image', media_type: 'image/png' });
+  const selections = [...content[0].text.matchAll(/<office_selection>([\s\S]*?)<\/office_selection>/g)].map(match => JSON.parse(match[1]));
+  expect(selections).toHaveLength(2);
+  expect(selections.every(selection => selection.source.file === 'report.pdf')).toBe(true);
+  const selectedText = selections.find(selection => selection.source.readable);
+  expect(selectedText.source.reference.file).toBe('report.pdf');
+  expect(content[0].text).toContain('Keep the PDF context');
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
 
 test('Cloud file links and mentions reuse source previews and the composer envelope', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
@@ -205,7 +314,7 @@ test('Cloud keeps Office and PDF previews in existing tabs and unsupported binar
   await expect(page.locator('.sheet-document table').first()).toBeVisible();
   await showTree(page); await file(page, 'report.pdf').click();
   await expect(page.locator('#openseek-office-surface')).toHaveAttribute('data-pdf-painted', 'true');
-  await expect(page.getByRole('button', { name: 'Capture region', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Capture region', exact: true })).toBeEnabled();
   await showTree(page); await file(page, 'image.png').click();
   await expect(page.locator('.viewer-notice')).toBeVisible();
   await expect(page.locator('.viewer-notice')).toContainText(/binary/i);

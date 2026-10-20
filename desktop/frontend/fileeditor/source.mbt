@@ -9,6 +9,20 @@ pub(all) struct CloudFiles {
 pub extend CloudFiles with Eq::{equal, not_equal}
 
 ///|
+/// Cloud document URIs use a virtual `/` root; model references use paths
+/// relative to that session's workspace. Host references keep their path.
+fn reference_file(
+  owner : @interop.ConversationIdentity,
+  path : @common.Uri,
+) -> String {
+  match owner {
+    Host(_) => path.path
+    Cloud(..) =>
+      path.path.strip_prefix("/").unwrap_or(path.path.view()).to_owned()
+  }
+}
+
+///|
 fn Ctx::host_ready(self : Ctx) -> Bool {
   self.owner is @interop.Host(_) && self.checkout_ready()
 }

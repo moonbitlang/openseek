@@ -2,7 +2,7 @@
 /// A capture request pins both the document identity and its owning chat.
 pub(all) struct OfficeRegionRequest {
   id : Int64
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -31,7 +31,7 @@ pub fn State::accepts_office_region(
     Some(generation) =>
       self.accepts_pdf_callback(
         ctx,
-        @interop.Host(request.owner),
+        request.owner,
         request.epoch,
         request.path,
         request.sig,
@@ -40,7 +40,7 @@ pub fn State::accepts_office_region(
     None =>
       self.accepts_office_callback(
         ctx,
-        @interop.Host(request.owner),
+        request.owner,
         request.epoch,
         request.path,
         request.sig,
@@ -64,7 +64,7 @@ pub fn State::start_office_region(
   ctx : Ctx,
   emit : @cmd.Emit[Msg],
 ) -> (@cmd.Cmd, State) {
-  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, self) }
+  let owner = ctx.owner
 
   guard ctx.panel_open && ctx.active_file is Some(path) else {
     return (@cmd.none, self)
@@ -166,7 +166,7 @@ pub fn OfficeRegionPreview::materialized_selection(
     "mode": "full",
     "selection": Json::object(selection),
     "source": {
-      "file": Json(self.request.path.path),
+      "file": Json(reference_file(self.request.owner, self.request.path)),
       "format": Json(capture.format.name()),
       "capture": capture.source,
       "readable": false,

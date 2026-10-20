@@ -1,6 +1,6 @@
 ///|
 pub(all) struct OfficeSelectionPreview {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -12,6 +12,26 @@ pub(all) struct OfficeSelectionPreview {
 
 ///|
 pub extend OfficeSelectionPreview with Eq::{equal, not_equal}
+
+///|
+pub fn OfficeSelectionPreview::materialized_selection(
+  self : OfficeSelectionPreview,
+  comment : String,
+) -> String? {
+  let value = @json.parse(self.materialized) catch { _ => return None }
+  guard value is Object(fields) && fields.get("source") is Some(Object(source)) else {
+    return None
+  }
+  source["file"] = Json(reference_file(self.owner, self.path))
+  if source.get("reference") is Some(Object(reference)) &&
+    reference.get("file") is Some(String(_)) {
+    reference["file"] = source["file"]
+  }
+  if !comment.trim().is_empty() {
+    fields["comment"] = Json(comment.trim().to_owned())
+  }
+  Some(value.stringify())
+}
 
 ///|
 pub fn State::accepts_office_callback(
@@ -48,7 +68,7 @@ pub fn State::pending_office_selection(
     Some(generation) =>
       self.accepts_pdf_callback(
         ctx,
-        @interop.Host(preview.owner),
+        preview.owner,
         preview.epoch,
         preview.path,
         preview.sig,
@@ -62,7 +82,7 @@ pub fn State::pending_office_selection(
     None =>
       self.accepts_office_callback(
         ctx,
-        @interop.Host(preview.owner),
+        preview.owner,
         preview.epoch,
         preview.path,
         preview.sig,
@@ -88,7 +108,7 @@ pub fn State::offer_office_selection(
   ctx : Ctx,
   raw : String,
 ) -> Result[State, String] {
-  guard ctx.owner is @interop.Host(owner) else { return Ok(self) }
+  let owner = ctx.owner
 
   guard ctx.panel_open &&
     self.owner == Some(ctx.owner) &&

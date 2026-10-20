@@ -266,13 +266,18 @@ fn FileContent::from_reply(reply : @protocol.ReadFileReply) -> FileContent {
   match reply {
     @protocol.Binary => Binary
     @protocol.Oversized => Oversized
-    // Office packages and PDFs render in this panel. Raster images continue
-    // to use the transcript-only BinaryContent path.
+    // All supported binary previews use the original bytes from this read.
     @protocol.BinaryContent(data_base64~, media_type~, sig~) =>
       if is_office_media_type(media_type) {
         Office(data_base64~, media_type~, sig~)
       } else {
-        Binary
+        let image = Some(@wire.Image::from_base64(media_type~, data_base64)) catch {
+          _ => None
+        }
+        match image {
+          Some(image) => Raster(url=image.data_url(), sig~)
+          None => Binary
+        }
       }
     // The host echoes the requested path as `absolute`; the document key
     // already names it, so the echo is not read.
@@ -561,5 +566,39 @@ test "typed file replies map to viewer content" {
       media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       sig="1:2"
     ),
+  )
+}
+
+///|
+test "raster previews accept only the shared validated image formats" {
+  assert_true(
+    FileContent::from_reply(
+      @protocol.BinaryContent(
+        data_base64="iVBORw0KGgo=",
+        media_type="image/png",
+        sig="image:1",
+      ),
+    )
+    is Raster(url="data:image/png;base64,iVBORw0KGgo=", sig="image:1"),
+  )
+  assert_true(
+    FileContent::from_reply(
+      @protocol.BinaryContent(
+        data_base64="dGV4dA==",
+        media_type="image/png",
+        sig="image:2",
+      ),
+    )
+    is Binary,
+  )
+  assert_true(
+    FileContent::from_reply(
+      @protocol.BinaryContent(
+        data_base64="PHN2Zy8+",
+        media_type="image/svg+xml",
+        sig="image:3",
+      ),
+    )
+    is Binary,
   )
 }

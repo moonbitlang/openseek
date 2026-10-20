@@ -3416,10 +3416,7 @@ fn update_msg(
       ) else {
         return (@cmd.none, model)
       }
-      match owner {
-        Host(host) => offer_office_selection(dispatch, model, host, selection)
-        Cloud(..) => (@cmd.none, model)
-      }
+      offer_office_selection(dispatch, model, owner, selection)
     }
     FileEditor(@fileeditor.OfficeFeedbackSubmitted(preview, text, apply~)) => {
       guard model.file_panel.pending_office_selection(file_ctx(model)) ==
@@ -3548,12 +3545,7 @@ fn update_msg(
       guard ctx.panel_open &&
         owns_office_selection(model, owner) &&
         model.file_panel.accepts_pdf_callback(
-          ctx,
-          @interop.Host(owner),
-          epoch,
-          path,
-          sig,
-          generation,
+          ctx, owner, epoch, path, sig, generation,
         ) else {
         return (@cmd.none, model)
       }
@@ -3626,10 +3618,7 @@ fn update_msg(
       ) else {
         return (@cmd.none, model)
       }
-      match owner {
-        Host(host) => offer_office_selection(dispatch, model, host, selection)
-        Cloud(..) => (@cmd.none, model)
-      }
+      offer_office_selection(dispatch, model, owner, selection)
     }
     // The host classifies tree selections before the dock opens their viewer.
     FileEditor(FileSelected(path~, ..)) =>

@@ -781,7 +781,9 @@ fn State::submit(
     guard creation.submission is None &&
       token is Some(_) &&
       (!draft.is_blank() || !attachments.is_empty()) &&
-      draft.mentions.all(mention => mention.ref_ is File(..)) else {
+      draft.mentions.all(mention => {
+        mention.ref_ is (File(..) | OfficeSelection(..))
+      }) else {
       return (state, @cmd.none, None)
     }
     let request = state.sequence + 1
@@ -806,7 +808,9 @@ fn State::submit(
     state.conversations.get(id) is Some(conversation) &&
     state.can_send(id) &&
     (!draft.is_blank() || !attachments.is_empty()) &&
-    draft.mentions.all(mention => mention.ref_ is File(..)) else {
+    draft.mentions.all(mention => {
+      mention.ref_ is (File(..) | OfficeSelection(..))
+    }) else {
     return (state, @cmd.none, None)
   }
   let request = state.sequence + 1

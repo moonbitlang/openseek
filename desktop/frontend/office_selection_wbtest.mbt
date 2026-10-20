@@ -192,7 +192,10 @@ test "cancel and stale Office confirmation leave the composer unchanged" {
   // Identical text in another owner still cannot approve this owner's preview.
   let previous_owner = {
     ..current,
-    owner: { ..current.owner, session: "previous", },
+    owner: @interop.Host({
+      ..current.owner.host().unwrap(),
+      session: "previous",
+    }),
   }
   let (_, unchanged) = update(
     test_dispatch(),

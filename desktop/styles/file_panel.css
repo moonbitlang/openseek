@@ -1,5 +1,19 @@
 
 /* ---------- files panel ---------- */
+.file-image-preview {
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 16px;
+}
+
+.file-image-preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
 /* Shared icon button styling for panel controls. */
 .panel-toggle {
   display: grid;

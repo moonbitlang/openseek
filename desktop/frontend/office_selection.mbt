@@ -1,8 +1,12 @@
 ///|
 fn owns_office_selection(
   model : Model,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
 ) -> Bool {
+  if owner is @interop.Cloud(..) {
+    return model.screen is Chat && model.cloud_identity() == Some(owner)
+  }
+  guard owner is @interop.Host(owner) else { return false }
   if model.screen is Codex {
     owner.channel == model.focused &&
     model.codex.active_id() == Some(owner.session)
@@ -20,19 +24,23 @@ fn owns_office_selection(
 fn offer_office_selection(
   dispatch : @cmd.Emit[Msg],
   model : Model,
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   selection : String,
 ) -> (@cmd.Cmd, Model) {
   guard owns_office_selection(model, owner) else { return (@cmd.none, model) }
   match model.file_panel.offer_office_selection(file_ctx(model), selection) {
     Ok(file_panel) => {
-      let command = match file_panel.pending_office_selection(file_ctx(model)) {
-        Some(preview) =>
+      let command = if owner is @interop.Host(_) {
+        file_panel
+        .pending_office_selection(file_ctx(model))
+        .map_or(@cmd.none, preview => {
           @fileeditor.show_office_feedback(
             dispatch.map(message => FileEditor(message)),
             preview,
           )
-        None => @cmd.none
+        })
+      } else {
+        @cmd.none
       }
       (command, { ..model, file_panel, })
     }
@@ -54,6 +62,7 @@ fn confirm_office_selection(
     owns_office_selection(model, preview.owner) else {
     return (@cmd.none, model)
   }
+  guard preview.owner is @interop.Host(_) else { return (@cmd.none, model) }
   let materialized = if comment is Some(text) && !text.trim().is_empty() {
     let value = @json.parse(preview.materialized) catch {
       _ => return (@cmd.none, model)

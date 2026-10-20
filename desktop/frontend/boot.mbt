@@ -825,9 +825,89 @@ fn main {
         }
       },
     )
+    // Cloud selections use the same Office feedback surface and the existing
+    // direct composer delivery, so pending typing keeps its single owner.
+    let cloud_office_feedback_input = state
+      .map(model => {
+        (
+          if model.screen is Chat && model.cloud_identity() is Some(_) {
+            model.file_panel.pending_office_selection(file_ctx(model))
+          } else {
+            None
+          },
+          model.file_panel.office_selection_comment.unwrap_or(""),
+        )
+      })
+      .map2(quote_target, (selection, target) => {
+        (selection.0, selection.1, target)
+      })
+    let cloud_office_feedback = cloud_office_feedback_input.switch_by(
+      slot => {
+        guard slot is (Some(_), _, Some(_)) else {
+          return @rabbita.Val::constant(@html.nothing)
+        }
+        let (mounted, _) = @rabbita.create_state_with_input(
+          input=cloud_office_feedback_input,
+          init=(_ : @cmd.Emit[(String, Bool)], _) => ((), @cmd.none),
+          update=(_, slot, reply, _) => {
+            guard slot is (Some(preview), _, Some(target)) else {
+              return ((), @cmd.none)
+            }
+            let (deliver, identity) = match target {
+              ChatComposer(identity) => (composer_quote, identity)
+              CodexComposer(identity) => (codex_composer_quote, identity)
+            }
+            let (comment, send) = reply
+            guard preview.owner == identity.owner &&
+              preview.materialized_selection(comment) is Some(materialized) else {
+              return ((), @cmd.none)
+            }
+            (
+              (),
+              deliver({
+                identity,
+                content: @composer.OfficeSelection(materialized),
+                images: [],
+                send,
+                accepted: emit(
+                  FileEditor(@fileeditor.OfficeSelectionDismissed(preview)),
+                ),
+                declined: @cmd.none,
+              }),
+            )
+          },
+          subscriptions=(_, slot, reply_emit) => {
+            guard slot is (Some(preview), comment, Some(_)) else {
+              return @sub.none
+            }
+            @fileeditor.office_feedback_subscription(
+              emit.map(message => FileEditor(message)),
+              preview,
+              comment,
+              (text, send) => reply_emit((text, send)),
+            )
+          },
+        )
+        mounted.map(_ => @html.nothing)
+      },
+      by=slot => {
+        match slot {
+          (Some(preview), _, Some(_)) =>
+            preview.owner.key() +
+            ":" +
+            preview.epoch.to_string() +
+            ":" +
+            preview.materialized
+          _ => "closed"
+        }
+      },
+    )
+    let file_feedback = pdf_feedback.map2(cloud_office_feedback, (_, _) => {
+      @html.nothing
+    })
     let context_menu_html = @rabbita.Val::map3(
       context_menu_html,
-      pdf_feedback,
+      file_feedback,
       @action_menu.selection_component(
         state.map(model => model.locale),
         quote_target,

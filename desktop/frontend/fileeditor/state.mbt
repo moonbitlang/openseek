@@ -27,6 +27,7 @@ pub(all) enum FileContent {
   // contract cannot carry ZIP bytes in a String. The renderer consumes them
   // for `.docx`, `.xlsx`, and `.pdf` files.
   Office(data_base64~ : String, media_type~ : String, sig~ : String)
+  Raster(url~ : String, sig~ : String)
   // `sig` is the file's mtime signature, stat'ed by the host from the same
   // handle it read — the baseline `stat_files` results are compared against.
   Content(content~ : String, sig~ : String)
@@ -52,6 +53,7 @@ pub(all) enum TabState {
   // bytes and the runtime state on this tab; other tabs never receive events
   // from its asynchronous loader.
   TabPdf(document~ : PdfDocument, sig~ : String)
+  TabImage(url~ : String, sig~ : String)
   TabBinary
   TabOversized
   // The host could not read this file. Unlike `TabDeleted`, this keeps the
@@ -1038,7 +1040,7 @@ pub(all) enum Msg {
   OfficeRegionDismissed(OfficeRegionPreview)
   PdfCaptureRequested
   PdfCaptureFinished(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     path~ : @common.Uri,
     sig~ : String,

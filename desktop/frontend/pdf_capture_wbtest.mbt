@@ -44,7 +44,7 @@ fn captured(
 ) -> Msg {
   FileEditor(
     @fileeditor.PdfCaptureFinished(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       path~,
       sig="pdf:1",

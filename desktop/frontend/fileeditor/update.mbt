@@ -60,7 +60,7 @@ fn Doc::diff_content(self : Doc) -> (String, String)? {
   }
   let modified = match self.state {
     TabLoaded(content~, ..) => content
-    TabOffice(..) | TabPdf(..) => return None
+    TabOffice(..) | TabPdf(..) | TabImage(..) => return None
     TabDeleted => ""
     TabLoading
     | TabBinary
@@ -274,7 +274,8 @@ fn show_tab_impl(
           )
         _ => clear_document()
       }
-    TabBinary | TabOversized | TabUnavailable(_) => clear_document()
+    TabBinary | TabOversized | TabUnavailable(_) | TabImage(..) =>
+      clear_document()
   }
   // A document that went stale in the background (or was deleted and
   // reappeared) shows what it has and reloads in the same breath; the reply
@@ -4148,6 +4149,7 @@ fn update_inner(
         let previous = doc.state
         let doc_state = match file {
           Content(content~, sig~) => TabState::TabLoaded(content~, sig~)
+          Raster(url~, sig~) => TabImage(url~, sig~)
           Office(data_base64~, media_type~, sig~) =>
             if media_type == "application/pdf" {
               match
@@ -4254,7 +4256,8 @@ fn update_inner(
               ])
             // The notice overlay (rendered from the tab's new state) covers
             // the viewer; drop whatever document it was showing.
-            TabBinary | TabOversized | TabReadFailed(_) => clear_document()
+            TabBinary | TabOversized | TabReadFailed(_) | TabImage(..) =>
+              clear_document()
             TabLoading | TabDeleted | TabUnavailable(_) => clear_document()
           }
         } else {
@@ -4625,8 +4628,11 @@ fn update_inner(
               // deletion row reviews HEAD rather than whatever now sits at
               // its path.
               let affected = match doc.state {
-                TabLoaded(..) | TabOffice(..) | TabPdf(..) | TabReadFailed(_) =>
-                  true
+                TabLoaded(..)
+                | TabOffice(..)
+                | TabPdf(..)
+                | TabImage(..)
+                | TabReadFailed(_) => true
                 TabDeleted =>
                   doc.review
                   .map(review => review.selected.has_working_tree_file())
@@ -4672,7 +4678,8 @@ fn update_inner(
           let changed = match doc.state {
             // The loaded baseline says whether the disk moved on.
             TabLoaded(sig~, ..) => sig != current_sig
-            TabOffice(sig~, ..) | TabPdf(sig~, ..) => sig != current_sig
+            TabOffice(sig~, ..) | TabPdf(sig~, ..) | TabImage(sig~, ..) =>
+              sig != current_sig
             // A deleted file whose signature came back ordinarily reappeared.
             // A selected deletion row is different: porcelain can also carry
             // a same-path untracked row, so the current filesystem object is

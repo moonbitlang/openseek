@@ -45,9 +45,9 @@ pub fn RegionFeedbackPreview::url(self : RegionFeedbackPreview) -> String {
 pub fn RegionFeedbackPreview::key(self : RegionFeedbackPreview) -> String {
   match self {
     Pdf(p) =>
-      "pdf:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:\{p.id}"
+      "pdf:\{p.owner.key()}:\{p.path.to_string()}:\{p.epoch}:\{p.generation}:\{p.id}"
     Office({ request: p, .. }) =>
-      "office:\{p.owner.session}:\{p.path.to_string()}:\{p.epoch}:\{p.id}"
+      "office:\{p.owner.key()}:\{p.path.to_string()}:\{p.epoch}:\{p.id}"
   }
 }
 

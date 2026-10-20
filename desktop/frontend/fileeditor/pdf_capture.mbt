@@ -5,8 +5,8 @@ pub fn capture_pdf_region(
   state : State,
   ctx : Ctx,
 ) -> @cmd.Cmd {
-  guard ctx.owner is @interop.Host(owner) &&
-    ctx.panel_open &&
+  let owner = ctx.owner
+  guard ctx.panel_open &&
     active_pdf_document(state, ctx) is Some((path, document, sig)) &&
     document.status is PdfReady else {
     return @cmd.none
@@ -48,7 +48,7 @@ pub fn capture_submission_declined_message(locale : @i18n.Locale) -> String {
 ///|
 pub(all) struct PdfCapturePreview {
   id : Int64
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -68,7 +68,7 @@ pub fn State::pending_pdf_capture(self : State, ctx : Ctx) -> PdfCaptureDraft? {
   let p = draft.preview
   if self.accepts_pdf_callback(
       ctx,
-      @interop.Host(p.owner),
+      p.owner,
       p.epoch,
       p.path,
       p.sig,
@@ -131,7 +131,7 @@ pub fn PdfCapturePreview::materialized_selection(
     "mode": "full",
     "selection": Json::object(selection),
     "source": {
-      "file": self.path.path,
+      "file": reference_file(self.owner, self.path),
       "format": "pdf",
       "capture": self.capture.source,
       "readable": false,

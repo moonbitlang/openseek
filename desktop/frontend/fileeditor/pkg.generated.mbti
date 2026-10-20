@@ -58,6 +58,8 @@ pub fn forget_cloud_files(State, String, session? : String) -> (State, @cmd.Cmd)
 
 pub fn mount_cmds(@cmd.Emit[Msg]) -> @cmd.Cmd
 
+pub fn office_feedback_subscription(@cmd.Emit[Msg], OfficeSelectionPreview, String, (String, Bool) -> @cmd.Cmd) -> @sub.Sub
+
 pub fn open_changed_document(@cmd.Emit[Msg], State, Ctx, ChangedFile, had_active~ : Bool) -> (@cmd.Cmd, State)
 
 pub fn open_document(@cmd.Emit[Msg], State, Ctx, @common.Uri, name~ : String, file_link_generation? : Int32, range~ : @common.Range?, annotation? : String, had_active~ : Bool) -> (@cmd.Cmd, State)
@@ -236,6 +238,7 @@ pub(all) enum FileContent {
   Binary
   Oversized
   Office(data_base64~ : String, media_type~ : String, sig~ : String)
+  Raster(url~ : String, sig~ : String)
   Content(content~ : String, sig~ : String)
 }
 
@@ -356,7 +359,7 @@ pub(all) enum Msg {
   OfficeRegionSubmissionDeclined(OfficeRegionPreview)
   OfficeRegionDismissed(OfficeRegionPreview)
   PdfCaptureRequested
-  PdfCaptureFinished(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, result~ : Result[@pdf_capture.Capture, String])
+  PdfCaptureFinished(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, result~ : Result[@pdf_capture.Capture, String])
   PdfCaptureFeedbackChanged(PdfCapturePreview, String)
   PdfCaptureBatchChanged(PdfCapturePreview, Bool)
   PdfCaptureSubmissionDeclined(PdfCapturePreview)
@@ -470,7 +473,7 @@ pub fn OfficeRegionPreview::not_equal(Self, Self) -> Bool
 
 pub(all) struct OfficeRegionRequest {
   id : Int64
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -480,7 +483,7 @@ pub fn OfficeRegionRequest::equal(Self, Self) -> Bool
 pub fn OfficeRegionRequest::not_equal(Self, Self) -> Bool
 
 pub(all) struct OfficeSelectionPreview {
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -490,6 +493,7 @@ pub(all) struct OfficeSelectionPreview {
   excel_table : ExcelSelectionTable?
 } derive(Eq)
 pub fn OfficeSelectionPreview::equal(Self, Self) -> Bool
+pub fn OfficeSelectionPreview::materialized_selection(Self, String) -> String?
 pub fn OfficeSelectionPreview::not_equal(Self, Self) -> Bool
 
 pub(all) struct OfficeZoomPreference {
@@ -516,7 +520,7 @@ pub fn PdfCaptureDraft::not_equal(Self, Self) -> Bool
 
 pub(all) struct PdfCapturePreview {
   id : Int64
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
   epoch : Int32
   path : @common.Uri
   sig : String
@@ -796,6 +800,7 @@ pub(all) enum TabState {
   TabLoaded(content~ : String, sig~ : String)
   TabOffice(document~ : @viewer.RenderedDocument, sig~ : String)
   TabPdf(document~ : PdfDocument, sig~ : String)
+  TabImage(url~ : String, sig~ : String)
   TabBinary
   TabOversized
   TabReadFailed(String)
