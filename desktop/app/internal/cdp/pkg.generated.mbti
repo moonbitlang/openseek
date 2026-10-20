@@ -22,6 +22,27 @@ pub suberror CDPError {
 pub fn CDPError::to_repr(Self) -> @debug.Repr
 
 // Types and methods
+pub struct AxNode {
+  id : AxNodeId
+  ignored : Bool
+  role : String?
+  name : String?
+  value : Json?
+  properties : Map[String, Json]
+  children : Array[AxNodeId]
+  dom_node : BackendNodeId?
+} derive(Eq, @debug.Debug)
+pub fn AxNode::equal(Self, Self) -> Bool
+pub fn AxNode::not_equal(Self, Self) -> Bool
+pub fn AxNode::to_repr(Self) -> @debug.Repr
+
+pub struct AxNodeId(String) derive(Eq, Hash, @debug.Debug)
+pub fn AxNodeId::equal(Self, Self) -> Bool
+pub fn AxNodeId::hash(Self) -> Int32
+pub fn AxNodeId::hash_combine(Self, Hasher) -> Unit
+pub fn AxNodeId::not_equal(Self, Self) -> Bool
+pub fn AxNodeId::to_repr(Self) -> @debug.Repr
+
 pub struct BackendNodeId(Int32) derive(Eq, @debug.Debug)
 pub fn BackendNodeId::equal(Self, Self) -> Bool
 pub fn BackendNodeId::not_equal(Self, Self) -> Bool
@@ -45,6 +66,7 @@ pub(all) struct Color {
 }
 
 type Connection
+pub async fn Connection::accessibility_tree(Self) -> Array[AxNode]
 pub async fn Connection::add_binding(Self, String) -> Unit
 pub async fn Connection::bring_to_front(Self) -> Unit
 pub async fn Connection::call_function_on(Self, CallFunction) -> Evaluation

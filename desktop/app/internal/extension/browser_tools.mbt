@@ -130,6 +130,22 @@ pub fn browser_tools(views : BrowserViews) -> Array[@mcp.Tool] {
       },
       call: call => views.navigate_tab(call.session, call.arguments).stringify(),
     },
+    {
+      name: "browser_snapshot",
+      description: "Read what one of this conversation's browser tabs shows, as the page's accessibility tree: one line per element with its role, name, and state, indented under the element it sits in. Elements that can be clicked or typed into carry a `ref`, which names the element until the page loads another document. Content inside frames is not included. Answers with the page as it stands, even while it is still loading.",
+      input_schema: {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "integer",
+            "description": "The tab's id, from browser_tabs or browser_open.",
+          },
+        },
+        "required": ["tab"],
+        "additionalProperties": false,
+      },
+      call: call => views.snapshot_tab(call.session, call.arguments),
+    },
   ]
 }
 
@@ -405,14 +421,21 @@ fn optional_text(
 }
 
 ///|
-/// The tab and destination a `browser_navigate` call names.
-fn navigation(arguments : Json) -> (Int32, Navigation) raise @mcp.ToolError {
+/// The tab a call names, refused with `needs` when it names none.
+fn tab_argument(arguments : Json, needs : String) -> Int32 raise @mcp.ToolError {
   guard arguments is { "tab": Number(tab, ..), .. } &&
     tab.to_int().to_double() == tab else {
-    raise ToolError(
-      "browser_navigate needs `tab`, the id of the tab to navigate.",
-    )
+    raise ToolError(needs)
   }
+  tab.to_int()
+}
+
+///|
+/// The tab and destination a `browser_navigate` call names.
+fn navigation(arguments : Json) -> (Int32, Navigation) raise @mcp.ToolError {
+  let tab = tab_argument(
+    arguments, "browser_navigate needs `tab`, the id of the tab to navigate.",
+  )
   let url = optional_text(arguments, "url")
   let action = optional_text(arguments, "action")
   let destination = match (url, action) {
@@ -427,7 +450,7 @@ fn navigation(arguments : Json) -> (Int32, Navigation) raise @mcp.ToolError {
         "browser_navigate needs exactly one of `url` (an address to load) and `action` (back, forward, or reload).",
       )
   }
-  (tab.to_int(), destination)
+  (tab, destination)
 }
 
 ///|

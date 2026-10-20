@@ -256,7 +256,9 @@ The app offers browser tools and session artifacts to the OpenSeek agents
 it runs. An agent works with the Browser tabs of its own conversation:
 `browser_tabs` lists them, `browser_open` opens a new one on an address, and
 `browser_navigate` loads an address in one, steps back or forward in its
-history, or reloads it. The engine connects directly to the host over MCP
+history, or reloads it, and `browser_snapshot` reads what one shows as the
+page's accessibility tree, with a `ref` on each element that can be clicked
+or typed into. The engine connects directly to the host over MCP
 Streamable HTTP and registers these tools automatically, including for scheduled
 runs. No user configuration is required. To customize the host entry, put an
 override like this in `~/.openseek/mcp.json`:

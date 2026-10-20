@@ -19,10 +19,15 @@ decodes the JavaScript value into the caller's type, distinguishing a JSON null,
 a missing value, a script exception, and a CDP command error. They do not await
 Promises. This is a bounded subset, not a complete generated CDP SDK.
 
+`accessibility_tree` returns the main frame's accessibility tree as `AxNode`s,
+keeping only each `AXValue`'s own value; frames' documents are not included.
+
 The owner serializes commands and event reads and closes the connection.
 Overlapping reads are rejected. Events received before a command reply are
 queued, and unknown events are ignored. Existing limits remain: five seconds
-per command, two MiB per received message, and sixteen queued relevant events.
+per command, two MiB per received message (32 MiB for an accessibility tree,
+which runs to several megabytes on a long page), and sixteen queued relevant
+events.
 Interrupted reads or writes (including cancellation and timeout) close the
 connection because a partially consumed WebSocket frame cannot safely be resumed;
 the caller must reconnect. A fully received CDP command error keeps it usable.
@@ -31,4 +36,5 @@ snapshots belong to the host integration, added separately in PR #1910.
 
 Protocol references: [Runtime](https://chromedevtools.github.io/devtools-protocol/tot/Runtime/),
 [DOM](https://chromedevtools.github.io/devtools-protocol/tot/DOM/),
+[Accessibility](https://chromedevtools.github.io/devtools-protocol/tot/Accessibility/),
 and [Overlay](https://chromedevtools.github.io/devtools-protocol/tot/Overlay/).

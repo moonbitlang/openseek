@@ -19,12 +19,20 @@ pub fn Connection::close(self : Connection) -> Unit {
 }
 
 ///|
-async fn Connection::read(self : Connection) -> Incoming {
+/// The most a received message may hold, unless a command allows more.
+const MaxMessageBytes : Int32 = 2 * 1024 * 1024
+
+///|
+/// Read one message of at most `max_bytes`.
+async fn Connection::read(
+  self : Connection,
+  max_bytes~ : Int32 = MaxMessageBytes,
+) -> Incoming {
   let message = self.socket.recv()
   let buffer = @buffer.Buffer()
   while message.read_some(max_len=65536) is Some(chunk) {
     buffer.write_bytes(chunk)
-    guard buffer.length() <= 2 * 1024 * 1024 else {
+    guard buffer.length() <= max_bytes else {
       raise Protocol("CDP response is too large")
     }
   }
@@ -36,6 +44,7 @@ async fn Connection::request(
   self : Connection,
   method_ : String,
   params : Json,
+  max_bytes? : Int32,
 ) -> Json {
   guard !self.reading else { raise ConcurrentRead }
   self.reading = true
@@ -57,7 +66,7 @@ async fn Connection::request(
     }
     self.socket.send_text(message.stringify())
     for ;; {
-      match self.read() {
+      match self.read(max_bytes?) {
         Reply(reply_id, result) if reply_id == id => return result
         Notification(Some(event)) => {
           guard self.events.length() < 16 else {
