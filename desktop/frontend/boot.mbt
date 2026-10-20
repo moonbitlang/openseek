@@ -731,17 +731,20 @@ fn main {
         },
         by=owner => owner.map_or("", side_chat_slot_key),
       )
+    // A question its agent asks sits between them, as in the column.
     let side_chat_html = state
-      .map(model => model.mounted_side_chat_owner() is Some(_))
+      .map(model => {
+        model.mounted_side_chat().map(conv => model.question_region(emit, conv))
+      })
       .map3(side_chat_transcript, side_chat_composer, (
-        mounted,
+        questions,
         transcript,
         composer,
       ) => {
-        if mounted {
-          @html.div(class="side-chat", [transcript, composer])
-        } else {
-          @html.nothing
+        match questions {
+          Some(questions) =>
+            @html.div(class="side-chat", [transcript, questions, composer])
+          None => @html.nothing
         }
       })
     let right_panel_input = state.map(model => model.right_panel_input())

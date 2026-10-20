@@ -2294,6 +2294,32 @@ fn conversation_load_failed_view(
 }
 
 ///|
+/// The questions an agent asked in `conv`, answered beside its transcript —
+/// the column's conversation, or the side chat in the dock.
+fn Model::question_region(
+  self : Model,
+  dispatch : @cmd.Emit[Msg],
+  conv : Conversation,
+) -> @html.Html {
+  guard self.device_state(conv.device) is Some(device) &&
+    !conv.is_archived_read_only() else {
+    return @html.div(class="user-question-region", @html.nothing)
+  }
+  device.questions.view(
+    conv.session_id,
+    self.locale,
+    device.bridge is Connected,
+    dispatch.map(msg => {
+      UserQuestions(
+        channel=conv.device,
+        connection_generation=device.connection_generation,
+        msg,
+      )
+    }),
+  )
+}
+
+///|
 fn view(
   dispatch : @cmd.Emit[Msg],
   toggle_terminal : @cmd.Cmd,
@@ -2450,23 +2476,7 @@ fn view(
           Transcript(conversation=conv, ..) =>
             [
               transcript_html,
-              if model.device_state(conv.device) is Some(device) &&
-                !conv.is_archived_read_only() {
-                device.questions.view(
-                  conv.session_id,
-                  model.locale,
-                  device.bridge is Connected,
-                  dispatch.map(msg => {
-                    UserQuestions(
-                      channel=conv.device,
-                      connection_generation=device.connection_generation,
-                      msg,
-                    )
-                  }),
-                )
-              } else {
-                @html.div(class="user-question-region", @html.nothing)
-              },
+              model.question_region(dispatch, conv),
               if conv.is_archived_read_only() {
                 archived_read_only_view(
                   locale=model.locale,

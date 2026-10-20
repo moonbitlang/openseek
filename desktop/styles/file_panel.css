@@ -3731,7 +3731,7 @@ summary.github-checks-summary::-webkit-details-marker { display: none; }
 }
 .side-chat-pane .side-chat {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   flex: 1;
   min-height: 0;
   min-width: 0;

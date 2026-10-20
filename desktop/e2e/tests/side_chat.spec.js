@@ -16,12 +16,22 @@ const sideHistory = [
   event(4, 'terminal', { kind: 'finished', message: 'Tokens are lexemes.' }),
 ];
 
-async function setup(page) {
+async function setup(page, { questions = [] } = {}) {
   const app = new DesktopBrowserHarness(page);
+  let questionGeneration = 1;
+  let questionRequests = questions;
+  const questionSnapshot = () => ({ generation: questionGeneration, requests: questionRequests });
   app.liveSessions.push({ id: 'session-1-sc-0a1b2c3d', title: 'Rabbita browser fixture', updated_at_ms: 2 });
   app.sessionEvents = mainHistory;
   const original = app.replyFor.bind(app);
   app.replyFor = request => {
+    if (request.method === 'user_questions.list') return questionSnapshot();
+    if (request.method === 'user_questions.answer') {
+      questionRequests = questionRequests.filter(item => item.id !== request.params.id);
+      questionGeneration++;
+      app.notify('user_questions.changed', questionSnapshot());
+      return questionSnapshot();
+    }
     if (request.method === 'session.load' && request.params.session === 'session-1-sc-0a1b2c3d') {
       return {
         session: { version: 1, id: 'session-1-sc-0a1b2c3d', events: sideHistory },
@@ -209,5 +219,27 @@ test('closing a side chat tab deletes the side chat', async ({ page }) => {
     .toBe('session-1-sc-0a1b2c3d');
   await expect(tab).toHaveCount(0);
   await expect(page.locator('#side-chat-transcript')).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a question asked in the side chat is answered in its pane', async ({ page }) => {
+  const app = await setup(page, {
+    questions: [{
+      id: 'question-1',
+      session: 'session-1-sc-0a1b2c3d',
+      questions: [{ id: 'scope', title: 'Which scope?', options: ['Keep scope', 'Expand scope'] }],
+    }],
+  });
+  // The column's conversation asked nothing.
+  await expect(page.locator('#transcript ~ .user-question-region .user-question-card')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Show panel', exact: true }).click();
+  await page.locator('.editor-tab', { hasText: 'Side chat 1' }).click();
+  const card = page.locator('.side-chat .user-question-card');
+  await expect(card).toContainText('Which scope?');
+  await card.getByRole('button', { name: 'Keep scope', exact: true }).click();
+  await card.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => app.requests.find(r => r.method === 'user_questions.answer')?.params)
+    .toMatchObject({ session: 'session-1-sc-0a1b2c3d', id: 'question-1', answers: { scope: 'Keep scope' } });
+  await expect(card).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });
