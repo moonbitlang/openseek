@@ -64,6 +64,17 @@ fn trigger_id(target : String) -> String {
 }
 
 ///|
+/// The element the menu for `target` was opened from, by button or by
+/// context menu.
+fn trigger_element(target : String) -> @dom.Element? {
+  let document = @dom.document()
+  match document.get_element_by_id(trigger_id(target)).to_option() {
+    Some(element) => Some(element)
+    None => document.get_element_by_id(target + ":context-trigger").to_option()
+  }
+}
+
+///|
 fn item_id(target : String, index : Int32) -> String {
   menu_id(target) + ":item:\{index}"
 }
@@ -635,6 +646,21 @@ fn dismiss_subscription(
         target.add_event_listener("scroll", scroll_listener)
         scroll_target = Some(target)
       }
+      // The menu is placed once, beside its trigger: a container holding the
+      // trigger that scrolls carries the trigger away, so the menu goes too.
+      let ancestor_scroll_listener : @dom.Listener = event => {
+        guard event.target().to_node() is Some(container) &&
+          trigger_element(owner) is Some(trigger) &&
+          container.contains(trigger.as_node()) else {
+          return
+        }
+        scheduler.add(emit(()))
+      }
+      document.add_event_listener_with_options(
+        "scroll",
+        ancestor_scroll_listener,
+        capture=true,
+      )
       Some({
         unload: _ => {
           document.remove_event_listener_with_options(
@@ -653,6 +679,11 @@ fn dismiss_subscription(
           if scroll_target is Some(target) {
             target.remove_event_listener("scroll", scroll_listener)
           }
+          document.remove_event_listener_with_options(
+            "scroll",
+            ancestor_scroll_listener,
+            capture=true,
+          )
         },
         update_tagger: payload => {
           guard payload is DismissSubscription(next_owner, next_emit) &&
