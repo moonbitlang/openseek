@@ -591,8 +591,10 @@ fn dismiss_subscription(
   emit : @cmd.Emit[Unit],
   dismiss_on_context~ : Bool = true,
 ) -> @sub.Sub {
+  // Keyed by target: another menu opening in this one's place gets listeners
+  // of its own, bound to its own trigger.
   @sub.custom_sub(
-    "action-menu-dismiss",
+    "action-menu-dismiss:" + target_key,
     Local,
     DismissSubscription(target_key, emit),
     (payload, scheduler) => {
