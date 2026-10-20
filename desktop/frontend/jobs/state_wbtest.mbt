@@ -591,3 +591,38 @@ test "a summary lists the jobs but never reads their output" {
   let (_, reading) = update(emit, Poll, { ..panel, listing: false, })
   assert_true(reading.reading)
 }
+
+///|
+test "first-page polling drops loaded history once a live row leaves it" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let newest = fixture_job("newest", Exited(0))
+  let old = fixture_job("old", Running)
+  let older = [
+    for index in 0..<100 => fixture_job("older-\{index}", Exited(0))
+  ]
+  let state = {
+    ..State::empty(),
+    watch: Panel,
+    jobs: [old, newest, ..older],
+    selected: Some(("runtime", "newest")),
+    next_offset: Some(200),
+  }
+  // The first page still lists the running job, so loaded pages stay.
+  let reply : @protocol.JobsListReply = {
+    jobs: [old, newest],
+    selected: None,
+    next_offset: Some(100),
+    errors: [],
+  }
+  let (_, kept) = update(emit, Listed(0, 0, Ok(reply)), state)
+  assert_eq(kept.jobs.length(), 102)
+  assert_eq(kept.next_offset, Some(200))
+  // Once it settles it moves back to a later page the client already read.
+  let (_, reset) = update(
+    emit,
+    Listed(0, 0, Ok({ ..reply, jobs: [newest], })),
+    kept,
+  )
+  assert_eq(reset.jobs.map(view => view.job.id), ["newest"])
+  assert_eq(reset.next_offset, Some(100))
+}
