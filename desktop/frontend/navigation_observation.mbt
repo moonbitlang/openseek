@@ -7,6 +7,7 @@ priv struct NavigationObservation {
   session_rotated : Bool
   explicit : Bool
   repeat_visit : Bool
+  retired : Array[String]
   promotion : (@routes.Location, @routes.Location)?
   durable : Array[(@routes.Location, @routes.Location)]
 }
@@ -140,6 +141,17 @@ fn observe_navigation(
     cloud_opened ||
     fork_opened ||
     (message is SessionRotated(_) && previous.navigation.new_chat_requested)
+  // Conversations this page itself deleted. Their replacement draft takes
+  // over the current entry; a delete from elsewhere is only observed through
+  // the missing target.
+  let retired : Array[String] = match message {
+    FromDevice(channel, SessionsChanged(change="deleted", key~, ..)) if channel ==
+      previous.focused &&
+      previous.delete_pending == Some((channel, key)) => [key.session]
+    FromDevice(channel, ArchivedDeleted(sessions~, ..)) if channel ==
+      previous.focused => sessions
+    _ => []
+  }
   let durable : Array[(@routes.Location, @routes.Location)] = []
   if next.console.page_device is Some(device) {
     for conv in next.conversations {
@@ -169,6 +181,7 @@ fn observe_navigation(
     | OpenSessionHere(_)
     | CodexDraftRotated(..)
     | CodexOpenThread(_)),
+    retired,
     promotion,
     durable,
   }

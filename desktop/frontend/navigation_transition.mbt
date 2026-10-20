@@ -24,6 +24,11 @@ fn NavigationObservation::write(
   } else if self.session_rotated &&
     navigation.location is Some({ target: Chat | ChatNew, .. }) {
     Replace(location)
+  } else if navigation.location is Some(current) &&
+    current != location &&
+    current.target is (Session(id) | ChatDraft(id)) &&
+    self.retired.contains(id) {
+    Replace(location)
   } else {
     Keep
   }

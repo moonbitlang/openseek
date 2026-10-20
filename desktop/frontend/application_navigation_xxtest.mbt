@@ -331,6 +331,7 @@ test "navigation write policy distinguishes foreground visits and background ide
     session_rotated: false,
     explicit: false,
     repeat_visit: false,
+    retired: [],
     promotion: None,
     durable: [],
   }
@@ -355,6 +356,7 @@ test "blank draft addressing does not turn an explicit visit into replacement" {
     session_rotated: false,
     explicit: false,
     repeat_visit: false,
+    retired: [],
     promotion: None,
     durable: [],
   }
@@ -368,4 +370,107 @@ test "blank draft addressing does not turn an explicit visit into replacement" {
   assert_false(
     { ..observed, session_rotated: true, }.addresses_blank(navigation),
   )
+}
+
+///|
+test "deleting the shown conversation from this page returns to a draft" {
+  let dispatch = test_dispatch()
+  let key : ArchiveRecordKey = {
+    session: "desktop-test",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session("desktop-test"),
+  }
+  // The browser page and the desktop window share this navigation.
+  for desktop in [false, true] {
+    let base = {
+      ..test_model().with_dev(dev => {
+        ..dev,
+        sessions: [placed_archived_item("desktop-test")],
+      }),
+      is_desktop: desktop,
+      navigation: {
+        ..AppNavigation::empty(),
+        location: Some(shown),
+        phase: Active,
+        history: @navigation.History::empty().visit(shown, replace=true),
+      },
+    }
+    let deleted = SessionsChanged(
+      change="deleted",
+      key~,
+      fresh_session=Some("fresh"),
+    )
+    // Another client's delete keeps the requested identity and its
+    // unavailable state.
+    let (_, remote) = update_dev(dispatch, deleted, base)
+    assert_true(remote.navigation.location == Some(shown))
+    assert_true(!(remote.navigation.phase is Active))
+    let (_, asked) = update(
+      dispatch,
+      DeleteSession(@interop.ChannelId::Local, key, LiveRecord),
+      base,
+    )
+    let (_, staged) = update_dev(
+      dispatch,
+      DeleteChecked(key~, checkout=None),
+      asked,
+    )
+    let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+    let (_, own) = update_dev(dispatch, deleted, confirmed)
+    assert_true(own.navigation.location is Some({ target: ChatNew, .. }))
+    assert_true(own.navigation.phase is Active)
+    assert_eq(own.active_session, "fresh")
+    assert_true(own.active_conversation() is Some(conv) && conv.draft_empty())
+    assert_true(own.navigation.history.current() == own.navigation.location)
+  }
+}
+
+///|
+test "deleting the shown archived conversation returns to a draft" {
+  let dispatch = test_dispatch()
+  let key : ArchiveRecordKey = {
+    session: "desktop-test",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session("desktop-test"),
+  }
+  let item = placed_archived_item("desktop-test")
+  let base = {
+    ..test_model()
+    .replace_conversation({ ..test_conversation(), record: ArchivedRecord, })
+    .with_dev(dev => { ..dev, archived: [item], }),
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let (_, staged) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, key, ArchivedRecord),
+    base,
+  )
+  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  let dev = confirmed.dev()
+  let (_, deleted) = update_dev(
+    dispatch,
+    ArchivedDeleted(
+      key~,
+      sessions=["desktop-test"],
+      items=[],
+      connection_generation=dev.connection_generation,
+      request_generation=dev.archived_request_generation,
+      fresh_session="fresh",
+    ),
+    confirmed,
+  )
+  assert_true(deleted.navigation.location is Some({ target: ChatNew, .. }))
+  assert_true(deleted.navigation.phase is Active)
+  assert_eq(deleted.active_session, "fresh")
 }
