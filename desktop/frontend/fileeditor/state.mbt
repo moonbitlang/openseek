@@ -258,8 +258,8 @@ pub(all) struct WatchedPaths {
 } derive(Eq)
 
 ///|
-/// A lazily requested snapshot of one concrete workspace root. Host search and
-/// Cloud directory traversal share the directory-exclusion policy;
+/// A lazily requested snapshot of one concrete workspace root. Host and Cloud
+/// file indexes provide workspace-relative paths;
 /// owner/root transitions reset it with the rest of the file-panel cache.
 pub enum FileIndex {
   // No consumer has requested this workspace root yet.

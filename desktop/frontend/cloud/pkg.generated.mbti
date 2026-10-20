@@ -22,6 +22,8 @@ pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirR
 
 pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, Failure]
 
+pub async fn read_file_index(String, String) -> Result[Array[String], Failure]
+
 pub async fn share(String, String, String) -> Result[String, Failure]
 
 pub fn subscriptions(State) -> @sub.Sub

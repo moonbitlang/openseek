@@ -7,11 +7,13 @@ class CloudFilesHarness extends CloudHarness {
     super(page, options);
     this.fileRequests = [];
     this.directories = new Map();
+    this.indexes = new Map();
     this.contents = new Map();
     this.largePreviews = new Map();
     this.fileStatus = 200;
     this.holdRead = null;
     for (const session of [sessionA, sessionB]) {
+      this.indexes.set(session, ['src/hello #.mbt']);
       this.directories.set(`${session}:`, [{ name: 'src', is_dir: true }]);
       this.directories.set(`${session}:src`, [{ name: 'hello #.mbt', is_dir: false }]);
       this.contents.set(`${session}:src/hello #.mbt`, {
@@ -23,17 +25,25 @@ class CloudFilesHarness extends CloudHarness {
 
   async cloudRequest(route) {
     const url = new URL(route.request().url());
-    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content)?$/);
+    const match = url.pathname.match(/^\/v1\/sessions\/([^/]+)\/files(\/content|\/index)?$/);
     if (!match) return super.cloudRequest(route);
     const headers = { 'Access-Control-Allow-Origin': authOrigin, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, OPTIONS' };
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     const session = decodeURIComponent(match[1]);
     const path = url.searchParams.get('path') || '';
-    const content = Boolean(match[2]);
+    const content = match[2] === '/content';
+    const index = match[2] === '/index';
     const allowLarge = url.searchParams.get('allow_large');
-    this.fileRequests.push({ session, path, content, allowLarge, headers: await route.request().allHeaders() });
-    const body = content ? (allowLarge === 'true' && this.largePreviews.has(`${session}:${path}`)
-      ? this.largePreviews.get(`${session}:${path}`) : this.contents.get(`${session}:${path}`)) : { entries: this.directories.get(`${session}:${path}`) || [] };
+    this.fileRequests.push({ session, path, content, index, allowLarge, headers: await route.request().allHeaders() });
+    let body;
+    if (index) {
+      body = { files: this.indexes.get(session) || [] };
+    } else if (content) {
+      body = allowLarge === 'true' && this.largePreviews.has(`${session}:${path}`)
+        ? this.largePreviews.get(`${session}:${path}`) : this.contents.get(`${session}:${path}`);
+    } else {
+      body = { entries: this.directories.get(`${session}:${path}`) || [] };
+    }
     const status = this.fileStatus;
     if (this.fileOffline) return route.abort('failed');
     if (content && this.holdRead) await this.holdRead;
@@ -72,6 +82,7 @@ function fileHostRequests(cloud) {
 
 test('Cloud file links and mentions reuse source previews and the composer envelope', async ({ page }) => {
   const cloud = new CloudFilesHarness(page);
+  cloud.indexes.set(sessionA, ['src/index.html']);
   cloud.directories.set(`${sessionA}:`, [{ name: 'src', is_dir: true }, { name: '.git', is_dir: true }]);
   cloud.directories.set(`${sessionA}:src`, [{ name: 'index.html', is_dir: false }]);
   cloud.contents.set(`${sessionA}:src/index.html`, {
@@ -90,14 +101,28 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await expect(source(page)).toContainText('<h1>Cloud source</h1>');
   await expect(page.locator('.composer-attach')).toHaveCount(0);
   const input = page.locator('#task');
+  const directories = () => cloud.fileRequests.filter(request => !request.content && !request.index);
+  const indexes = () => cloud.fileRequests.filter(request => request.index);
+  const directoryReads = directories().length;
   await input.fill('@index');
   await expect(page.locator('.completion-item .completion-label')).toHaveText(['index.html']);
+  expect(indexes()).toHaveLength(1);
+  expect(directories()).toHaveLength(directoryReads);
+  await input.fill('@src/index');
+  await expect(page.locator('.completion-item .completion-label')).toHaveText(['index.html']);
+  expect(indexes()).toHaveLength(1);
   await input.press('Enter');
-  expect(cloud.fileRequests.filter(request => !request.content).map(request => request.path)).not.toContain('.git');
   const chip = page.locator('.composer .mention-chip');
   await expect(chip).toContainText('index.html');
   await chip.locator('.mention-jump').click();
   await expect(source(page)).toContainText('<h1>Cloud source</h1>');
+  await showTree(page);
+  const directory = file(page, 'src');
+  await expect(directory).toBeVisible();
+  if (await directory.getAttribute('aria-expanded') !== 'true') await directory.click();
+  await expect(file(page, 'index.html')).toBeVisible();
+  expect(directories().map(request => request.path)).toEqual(expect.arrayContaining(['', 'src']));
+  expect(indexes()).toHaveLength(1);
   await input.fill('Update the heading');
   await page.getByRole('button', { name: 'Send', exact: true }).click();
   await expect.poll(() => cloud.postCount).toBe(1);
@@ -107,6 +132,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await input.press('ArrowUp');
   await expect(input).toHaveValue('Update the heading');
   await expect(chip).toContainText('index.html');
+  await expect.poll(() => indexes().length).toBe(2);
   expect(fileHostRequests(cloud)).toEqual([]);
   expect(cloud.device.pageErrors).toEqual([]);
 });
@@ -226,6 +252,7 @@ test('Cloud directory and file errors are visible and retry without Host fallbac
   cloud.fileStatus = 200;
   await page.getByRole('tab', { name: 'Files', exact: true }).click();
   await file(page, 'src').click();
+  await expect(file(page, 'hello #.mbt')).toBeVisible();
   cloud.fileStatus = 404;
   await file(page, 'hello #.mbt').click();
   await expect(page.locator('.viewer-notice')).toContainText('HTTP 404');

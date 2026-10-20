@@ -57,33 +57,22 @@ fn list_files(
         },
         () => dispatch(FileIndexFailed(owner~, epoch~)),
       )
-    Cloud(..) => {
-      guard root is Some(root) && cloud is Some(_) else { return @cmd.none }
+    Cloud(account~, session~) => {
+      guard root is Some(root) &&
+        cloud is Some(cloud) &&
+        @resource.cloud_root(@cloud.CloudOrigin, account, session) == Some(root) else {
+        return @cmd.none
+      }
       @cmd.custom_cmd(scheduler => {
         @js.Promise::from_async(() => {
-          let pending = [@pathx.Relative::root()]
-          let files = []
-          while pending.pop() is Some(directory) {
-            let reply = match
-              read_directory_source(owner, cloud, root, directory) {
-              Ok(reply) => reply
-              Err(_) => {
-                scheduler.add(dispatch(FileIndexFailed(owner~, epoch~)))
-                return
-              }
-            }
-            for entry in reply.entries {
-              if FileEntry::from_reply(entry, directory) is Some(entry) {
-                if entry.is_dir {
-                  if !@file_search_policy.excludes_directory(entry.path.0) {
-                    pending.push(entry.path)
-                  }
-                } else {
-                  files.push(entry.path)
-                }
-              }
+          let paths = match @cloud.read_file_index(cloud.token, session) {
+            Ok(paths) => paths
+            Err(_) => {
+              scheduler.add(dispatch(FileIndexFailed(owner~, epoch~)))
+              return
             }
           }
+          let files = paths.map(path => @pathx.Relative(path))
           scheduler.add(
             dispatch(FilesIndexed(owner~, epoch~, files~, truncated=false)),
           )

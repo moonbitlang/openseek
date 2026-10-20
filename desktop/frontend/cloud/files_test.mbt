@@ -50,6 +50,43 @@ async fn check_directory_requests() -> Unit {
 }
 
 ///|
+async fn check_file_index_requests() -> Unit {
+  let requests = []
+  let restore = mock_file_http(200, (url, method_, authorization) => {
+    requests.push((url, method_, authorization))
+    "{\"files\":[\"index.html\",\"src/hello world#?.mbt\"],\"future\":null}"
+  })
+  defer restore()
+  assert_true(
+    @cloud.read_file_index("test-token", "session/?")
+    is Ok(["index.html", "src/hello world#?.mbt"]),
+  )
+  assert_eq(requests, [
+    (
+      @cloud.CloudOrigin + "/v1/sessions/session%2F%3F/files/index",
+      "GET",
+      "Bearer test-token",
+    ),
+  ])
+  {
+    let restore = mock_file_http(200, (_, _, _) => "{\"files\":[]}")
+    defer restore()
+    assert_true(@cloud.read_file_index("test-token", "session") is Ok([]))
+  }
+  for
+    body in [
+      "not JSON", "null", "{}", "{\"files\":null}", "{\"files\":\"index.html\"}",
+      "{\"files\":{}}", "{\"files\":[\"index.html\",null]}", "{\"files\":[123]}",
+    ] {
+    let restore = mock_file_http(200, (_, _, _) => body)
+    defer restore()
+    assert_true(
+      @cloud.read_file_index("test-token", "session") is Err(Malformed),
+    )
+  }
+}
+
+///|
 async fn check_file_variants() -> Unit {
   let replies : Array[@protocol.ReadFileReply] = [
     Content(content="hello 🌙", absolute="/src/hello.txt", sig="text-sig"),
@@ -107,6 +144,10 @@ async fn check_file_failures() -> Unit {
       @cloud.read_file("test-token", "session", "file.txt") is Err(failure) &&
       expected(failure),
     )
+    assert_true(
+      @cloud.read_file_index("test-token", "session") is Err(failure) &&
+      expected(failure),
+    )
   }
   let restore = mock_file_http(200, (_, _, _) => "{\"entries\":null}")
   defer restore()
@@ -150,6 +191,7 @@ async test "Cloud workspace HTTP preserves request, content, and failure contrac
   // The async test runner schedules tests concurrently. Keep these fetch
   // substitutions in one test so each request observes its own transport.
   check_directory_requests()
+  check_file_index_requests()
   check_file_variants()
   check_file_failures()
   check_large_file_request()
