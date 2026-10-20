@@ -68,11 +68,10 @@ fn MarkdownRender::text_offset(
   guard first >= 0 && end >= first && end <= stream.source.length() else {
     return None
   }
-  if stream.source.view(start_offset=first, end_offset=end) == node.v.view() {
-    Some(first)
-  } else {
-    None
+  guard stream.source.view(start_offset=first, end_offset=end) == node.v.view() else {
+    return None
   }
+  Some(first)
 }
 
 ///|
