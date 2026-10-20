@@ -39,6 +39,13 @@ pub fn Diff::equal(Self, Self) -> Bool
 pub fn Diff::not_equal(Self, Self) -> Bool
 pub fn Diff::to_repr(Self) -> @debug.Repr
 
+pub struct Lookup {
+  generation : Int32
+  summary : PullRequest?
+} derive(Eq)
+pub fn Lookup::equal(Self, Self) -> Bool
+pub fn Lookup::not_equal(Self, Self) -> Bool
+
 pub(all) enum Msg {
   Opened(@interop.ConversationKey)
   Changed(@interop.ConversationKey)
@@ -84,14 +91,14 @@ pub struct State {
   serial : Int32
   removing : Array[@protocol.SessionArtifact]
   remove_error : String?
-  summaries : Map[String, PullRequest]
-  looked_up : Map[String, Int32]
+  lookups : Map[String, Lookup]
   generation : Int32
 } derive(Eq)
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self
 pub fn State::not_equal(Self, Self) -> Bool
 pub fn State::phase_for(Self, @interop.ConversationKey) -> Phase
+pub fn State::summary(Self, String) -> PullRequest?
 
 // Type aliases
 

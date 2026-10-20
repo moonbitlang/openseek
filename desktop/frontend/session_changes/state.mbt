@@ -79,12 +79,8 @@ pub struct State {
   /// Why the last removal for the conversation failed, until the next one
   /// succeeds or the overview moves to another conversation.
   remove_error : String?
-  /// What GitHub last said about each attached pull request, by address.
-  summaries : Map[String, PullRequest]
-  /// The generation each address was last looked up in. A lookup is answered
-  /// only while it is still its address's latest, and an address is looked up
-  /// at most once per generation.
-  looked_up : Map[String, Int32]
+  /// Each attached pull request's lookups, by address.
+  lookups : Map[String, Lookup]
   /// Counts the overview's arrivals and the list's changes, the moments every
   /// attached pull request is looked up again.
   generation : Int32
@@ -94,6 +90,27 @@ pub struct State {
 pub extend State with Eq::{equal, not_equal}
 
 ///|
+/// One address's lookups. An address is looked up at most once per
+/// generation, and a lookup is answered only while it is still its address's
+/// latest.
+pub struct Lookup {
+  /// The generation the address was last looked up in, answered or not.
+  generation : Int32
+  /// What GitHub last said about it: absent until a lookup finds a pull
+  /// request, cleared when one finds none, and kept when one fails.
+  summary : PullRequest?
+} derive(Eq)
+
+///|
+pub extend Lookup with Eq::{equal, not_equal}
+
+///|
+/// What GitHub last said about the pull request at `url`.
+pub fn State::summary(self : State, url : String) -> PullRequest? {
+  self.lookups.get(url).bind(lookup => lookup.summary)
+}
+
+///|
 pub fn State::initial() -> State {
   {
     conversation: None,
@@ -101,8 +118,7 @@ pub fn State::initial() -> State {
     serial: 0,
     removing: [],
     remove_error: None,
-    summaries: {},
-    looked_up: {},
+    lookups: {},
     generation: 0,
   }
 }
@@ -222,17 +238,18 @@ pub fn update(
     // An answer a later lookup of the same address superseded is dropped. A
     // failed lookup keeps what an earlier one found.
     Summarized(url~, generation~, result) => {
-      guard state.looked_up.get(url) == Some(generation) else {
+      guard state.lookups.get(url) is Some(lookup) &&
+        lookup.generation == generation else {
         return (@cmd.none, state)
       }
       match result {
         Ok(found) => {
-          let summaries = state.summaries.copy()
-          match found.bind(PullRequest::from_reply) {
-            Some(summary) => summaries[url] = summary
-            None => summaries.remove(url)
+          let lookups = state.lookups.copy()
+          lookups[url] = {
+            ..lookup,
+            summary: found.bind(PullRequest::from_reply),
           }
-          (@cmd.none, { ..state, summaries, })
+          (@cmd.none, { ..state, lookups, })
         }
         Err(_) => (@cmd.none, state)
       }
@@ -255,15 +272,18 @@ fn look_up(
   state : State,
 ) -> (@cmd.Cmd, State) {
   let generation = state.generation
-  let looked_up = state.looked_up.copy()
+  let lookups = state.lookups.copy()
   let commands : Array[@cmd.Cmd] = []
   for artifact in artifacts {
+    guard artifact.type_ is PullRequest else { continue }
     let url = artifact.url
-    guard artifact.type_ is PullRequest &&
-      looked_up.get(url) != Some(generation) else {
-      continue
+    // A new lookup keeps what the last one found until it answers.
+    let summary = match lookups.get(url) {
+      Some(lookup) if lookup.generation == generation => continue
+      Some(lookup) => lookup.summary
+      None => None
     }
-    looked_up[url] = generation
+    lookups[url] = { generation, summary, }
     commands.push(
       @cmd.attempt(
         result => {
@@ -289,7 +309,7 @@ fn look_up(
       ),
     )
   }
-  (@cmd.batch(commands), { ..state, looked_up, })
+  (@cmd.batch(commands), { ..state, lookups, })
 }
 
 ///|

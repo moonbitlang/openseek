@@ -142,7 +142,7 @@ pub fn rows(
       Some(emit(Remove(conversation, artifact)))
     }
     let pull_request = if artifact.type_ is PullRequest {
-      state.summaries.get(artifact.url)
+      state.summary(artifact.url)
     } else {
       None
     }

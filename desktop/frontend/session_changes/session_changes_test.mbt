@@ -317,8 +317,11 @@ test "each attached pull request is looked up once per generation" {
   let state = loaded(one, [pull(1), branch("feature")])
   let url = pull(1).url
   // Branches have nothing to look up.
-  assert_true(state.looked_up.get(url) == Some(state.generation))
-  assert_true(state.looked_up.get(branch("feature").url) is None)
+  assert_true(
+    state.lookups.get(url).map(lookup => lookup.generation) ==
+    Some(state.generation),
+  )
+  assert_true(state.lookups.get(branch("feature").url) is None)
   let (_, described) = @session_changes.update(
     quiet(),
     Summarized(
@@ -329,7 +332,7 @@ test "each attached pull request is looked up once per generation" {
     state,
   )
   assert_true(
-    described.summaries.get(url)
+    described.summary(url)
     is Some({ number: 1, title: "Pull request 1", state: Draft, .. }),
   )
   // A removal reads the list again within the same generation: what is
@@ -350,7 +353,10 @@ test "each attached pull request is looked up once per generation" {
     removed,
   )
   assert_true(relisted.generation == state.generation)
-  assert_true(relisted.looked_up.get(pull(2).url) == Some(state.generation))
+  assert_true(
+    relisted.lookups.get(pull(2).url).map(lookup => lookup.generation) ==
+    Some(state.generation),
+  )
   // A change to the list looks every pull request up again, keeping what
   // the last lookup said until the new one answers.
   let (_, changed) = @session_changes.update(quiet(), Changed(one), relisted)
@@ -360,8 +366,11 @@ test "each attached pull request is looked up once per generation" {
     changed,
   )
   assert_true(refreshed.generation != state.generation)
-  assert_true(refreshed.looked_up.get(url) == Some(refreshed.generation))
-  assert_true(refreshed.summaries.get(url) == described.summaries.get(url))
+  assert_true(
+    refreshed.lookups.get(url).map(lookup => lookup.generation) ==
+    Some(refreshed.generation),
+  )
+  assert_true(refreshed.summary(url) == described.summary(url))
   // So does the overview coming back.
   let (_, reopened) = @session_changes.update(quiet(), Opened(one), refreshed)
   assert_true(reopened.generation != refreshed.generation)
@@ -397,13 +406,13 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
     Summarized(url~, generation=second, Err("gh is not signed in")),
     asked,
   )
-  assert_true(failed.summaries.get(url) is Some({ state: Open, .. }))
+  assert_true(failed.summary(url) is Some({ state: Open, .. }))
   let (_, merged) = @session_changes.update(
     quiet(),
     Summarized(url~, generation=second, described(1, "merged")),
     asked,
   )
-  assert_true(merged.summaries.get(url) is Some({ state: Merged, .. }))
+  assert_true(merged.summary(url) is Some({ state: Merged, .. }))
   // GitHub having nothing to say, or saying it in words this build does not
   // know, takes the row back to its bare address.
   let (_, nothing) = @session_changes.update(
@@ -411,13 +420,13 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
     Summarized(url~, generation=second, Ok(None)),
     merged,
   )
-  assert_true(nothing.summaries.get(url) is None)
+  assert_true(nothing.summary(url) is None)
   let (_, unknown) = @session_changes.update(
     quiet(),
     Summarized(url~, generation=second, described(1, "queued")),
     merged,
   )
-  assert_true(unknown.summaries.get(url) is None)
+  assert_true(unknown.summary(url) is None)
   // The summary counts the same rows either way.
   assert_true(
     @session_changes.summary(one, None, merged) ==
