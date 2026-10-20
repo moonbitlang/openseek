@@ -7,6 +7,10 @@ test('one connection notice replaces pending inventory failures and preserves th
   const app = new DesktopBrowserHarness(page);
   await app.install();
   await app.goto();
+  // Startup shows "Open a project" until workspace.list answers, then moves
+  // to New chat. On a narrow layout that screen change closes the drawer, so
+  // open it only once startup has settled.
+  await page.getByRole('heading', { name: 'New chat', exact: true }).waitFor();
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
   await page.locator('#task').fill('Keep this unsent draft');
