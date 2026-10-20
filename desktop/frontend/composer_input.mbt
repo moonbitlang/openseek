@@ -404,6 +404,17 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
 }
 
 ///|
+/// The dock's composer: the active side-chat tab's, shown or not, so a draft
+/// typed there is still in the composer when its tab comes back. With no
+/// side-chat tab active it is dormant, like the column's with no conversation.
+fn Model::dock_composer_input(self : Model) -> @composer.Input {
+  match self.dock_state().active {
+    Some(SideChat(owner~)) => self.side_chat_composer_input(owner)
+    _ => self.dormant_composer_input()
+  }
+}
+
+///|
 /// The composer of side chat `owner` in the dock. While its branch is being
 /// disposed the conversation may already be gone; the composer is then
 /// dormant under that owner, which no longer names a conversation.

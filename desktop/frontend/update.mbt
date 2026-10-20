@@ -3064,10 +3064,19 @@ fn update_msg(
           guard model.conversation_for_composer_action(identity) is Some(conv) else {
             return (@cmd.none, model)
           }
+          // The file index belongs to the file panel, which follows the
+          // column's conversation. The side chat in the dock works in that
+          // conversation's checkout, so its completions use the same index.
+          let owner : @interop.ConversationKey = if model.mounted_side_chat_owner() ==
+            Some({ channel: conv.device, session: conv.session_id, }) {
+            { channel: model.focused, session: model.active_session, }
+          } else {
+            { channel: conv.device, session: conv.session_id, }
+          }
           let (command, indexed) = update_msg(
             dispatch,
             FileEditor(@fileeditor.EnsureFileIndex),
-            { ..model, focused: conv.device, active_session: conv.session_id, },
+            { ..model, focused: owner.channel, active_session: owner.session, },
           )
           (
             command,
