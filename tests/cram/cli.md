@@ -5,7 +5,7 @@ builds the native executable packages first, then exposes their executables
 on `PATH` as `openseek.exe`.
 
 `openseek` is the headless automation CLI: a subcommand tree under `run`,
-`serve`, `mcp`, and `sessions` (the interactive terminal UI
+`serve`, `app-server`, `mcp`, and `sessions` (the interactive terminal UI
 is the separate `openseek_tui` binary, maintained in its own repository). Every
 command here is offline: it either prints help or fails argument validation
 before the agent contacts DeepSeek, so the suite needs no API key and makes no
@@ -25,11 +25,12 @@ Usage: openseek [options] <command>
 DeepSeek-backed MoonBit coding agent (headless automation CLI).
 
 Commands:
-  setup     Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
-  run       Run one task headlessly; print its answer on stdout and its progress on stderr.
-  serve     Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
-  mcp       List configured MCP servers and the tools they expose.
-  sessions  Manage durable sessions.
+  app-server  Serve the working-host API on loopback TCP for SSH forwarding.
+  setup       Install bundled rg and missing dependencies in ~/.moon and ~/.openseek.
+  run         Run one task headlessly; print its answer on stdout and its progress on stderr.
+  serve       Session server: read JSONL commands (prompt/steer/cancel/compact/goal) from stdin.
+  mcp         List configured MCP servers and the tools they expose.
+  sessions    Manage durable sessions.
 
 Options:
   -h, --help                             Show help information.

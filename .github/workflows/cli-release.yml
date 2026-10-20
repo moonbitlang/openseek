@@ -56,10 +56,10 @@ jobs:
       - name: Build and package the native CLI
         run: |
           # The CLI needs these workspace modules, without Desktop's Proton prebuild.
-          printf 'members = [".", "./protocol", "./tools_sdk", "./editor"]\n' > moon.work
+          printf 'members = [".", "./protocol", "./tools_sdk", "./editor", "./desktop", "./desktop/backend"]\n' > moon.work
           moon update
           moon test installation --target native
-          moon build . --target native --release
+          moon build . desktop/backend/server --target native --release
           moon run scripts/package-cli.mbtx '${{ matrix.platform }}' dist/cli
       - uses: actions/upload-artifact@v4
         with:

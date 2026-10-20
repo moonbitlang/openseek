@@ -1,4 +1,7 @@
 import {
+  "moonbitlang/async/process",
+  "moonbitlang/async/fs",
+  "moonbitlang/x/path",
   "moonbitlang/openseek/installation",
   "moonbitlang/openseek/cli",
   "moonbitlang/async/stdio",

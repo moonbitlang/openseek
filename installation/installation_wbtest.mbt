@@ -263,3 +263,31 @@ async test "a missing resource source fails before installing MoonBit or deletin
     "fixture license",
   )
 }
+
+///|
+async test "setup installs the app-server companion and repairs its absence" {
+  if @async.platform is Windows {
+    return
+  }
+  let home = @fs.tmpdir(prefix="openseek-setup-companion-")
+  defer @fs.rmdir(home, recursive=true)
+  let cli = fixture_distribution(home)
+  let companion = home + "/download/bin/openseek-app-server"
+  executable(companion, "fixture-server")
+  install(home, cli, available=isolated_available, toolchain=fixture_toolchain)
+  let installed = home + "/.openseek/bin/openseek-app-server"
+  assert_eq(command(installed, []), "fixture-server\n")
+  @fs.remove(installed)
+  install(home, cli, available=isolated_available, toolchain=_ => {
+    fail("SDK already prepared")
+  })
+  assert_eq(command(installed, []), "fixture-server\n")
+  // Re-running setup from the installed distribution must not truncate itself.
+  install(
+    home,
+    home + "/.openseek/bin/openseek",
+    available=isolated_available,
+    toolchain=_ => fail("SDK already prepared"),
+  )
+  assert_eq(command(installed, []), "fixture-server\n")
+}

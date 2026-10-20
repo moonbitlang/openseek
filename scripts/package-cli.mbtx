@@ -68,9 +68,14 @@ async fn main {
       "_build/native/release/build/moonbitlang/openseek/openseek.exe",
     ),
   )
+  @fs.write_file(
+    "\{root}/bin/openseek-app-server\{suffix}",
+    @fs.read_file("_build/native/release/build/openseek_desktop/backend/server/server.exe"),
+  )
   @fs.write_file("\{root}/bin/rg\{suffix}", @fs.read_file("\{rg}/rg\{suffix}"))
   if !windows {
     @fs.chmod("\{root}/bin/openseek", 0o755)
+    @fs.chmod("\{root}/bin/openseek-app-server", 0o755)
     @fs.chmod("\{root}/bin/rg", 0o755)
   }
   copy_tree("share", "\{root}/share")

@@ -139,6 +139,15 @@ async fn install(
   if needs_cli {
     copy_file(source_cli, bin + "/" + cli_name, executable=true)
   }
+  let companion = executable_name("openseek-app-server")
+  if @fs.exists(source + "/bin/" + companion) &&
+    (needs_cli || !@fs.exists(bin + "/" + companion)) {
+    copy_file(
+      source + "/bin/" + companion,
+      bin + "/" + companion,
+      executable=true,
+    )
+  }
 }
 
 ///|

@@ -3,11 +3,14 @@ package "openseek_desktop/backend/remote"
 
 import {
   "moonbitlang/async/http",
+  "moonbitlang/async/io",
   "openseek_desktop/backend/api",
 }
 
 // Values
 pub const LocalConsoleDevice : String = "host"
+
+pub async fn serve_app_server(@api.ApiState, &@io.Reader, &@io.Writer) -> Unit
 
 // Errors
 
