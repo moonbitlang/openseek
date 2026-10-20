@@ -126,7 +126,7 @@ fn DocumentSnapshot::line_end_offset_impl(
   } else {
     self.length()
   }
-  if raw_end > self.line_starts[line] && self.text[raw_end - 1].to_int() == 13 {
+  if raw_end > self.line_starts[line] && self.text[raw_end - 1] == '\r' {
     raw_end - 1
   } else {
     raw_end
@@ -229,9 +229,9 @@ fn build_line_starts(text : String) -> Array[Int32] {
   let len = text.length()
   let mut i = 0
   while i < len {
-    let code = text[i].to_int()
-    if code == 13 {
-      if i + 1 < len && text[i + 1].to_int() == 10 {
+    let code = text[i]
+    if code == '\r' {
+      if i + 1 < len && text[i + 1] == '\n' {
         // \r\n... case
         starts.push(i + 2)
         i += 2
@@ -241,7 +241,7 @@ fn build_line_starts(text : String) -> Array[Int32] {
         i += 1
       }
     } else {
-      if code == 10 {
+      if code == '\n' {
         starts.push(i + 1)
       }
       i += 1

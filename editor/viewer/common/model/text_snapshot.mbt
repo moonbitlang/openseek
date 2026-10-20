@@ -253,7 +253,7 @@ fn TextSnapshot::get_line_char_code(
 ) -> Int32 {
   let content = self.line_text(line - 1)
   if line >= 1 && line < self.line_count() && index == content.length() {
-    return 10
+    return '\n'.to_int()
   }
   content[index].to_int()
 }
@@ -296,29 +296,30 @@ fn TextSnapshot::get_line_last_non_whitespace_column(
 /// beside an EOL are retained exactly once on both JS and native targets.
 fn normalize_eol(text : String) -> String {
   let len = text.length()
+  // Fast path: with no CR there is nothing to rewrite, so the snapshot keeps
+  // the source string instead of allocating a copy.
+  let mut i = 0
+  while i < len && text[i] != '\r' {
+    i += 1
+  }
+  if i == len {
+    return text
+  }
   let sb = StringBuilder()
   let mut segment_start = 0
-  let mut i = 0
-  let mut changed = false
   while i < len {
-    if text[i].to_int() == 13 {
-      changed = true
+    if text[i] == '\r' {
       if segment_start < i {
         sb.write_string(code_unit_slice(text, segment_start, i))
       }
       sb.write_string("\n")
-      if i + 1 < len && text[i + 1].to_int() == 10 {
-        i += 2
-      } else {
-        i += 1
-      }
+      // CRLF collapses to one LF; a lone CR also becomes one LF.
+      let crlf = i + 1 < len && text[i + 1] == '\n'
+      i += if crlf { 2 } else { 1 }
       segment_start = i
     } else {
       i += 1
     }
-  }
-  if !changed {
-    return text
   }
   if segment_start < len {
     sb.write_string(code_unit_slice(text, segment_start, len))
@@ -343,7 +344,7 @@ fn code_unit_slice(text : String, start : Int32, end : Int32) -> String {
 fn build_line_starts(text : String) -> Array[Int32] {
   let starts = [0]
   for i in 0..<text.length() {
-    if text[i].to_int() == 10 {
+    if text[i] == '\n' {
       starts.push(i + 1)
     }
   }
