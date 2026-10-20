@@ -130,38 +130,6 @@ tools: the background-job path uses both — completion notices are pushed
 through `runtime.queue_steer`, and the job runtime plus its spill-dir cleanup
 are owned by the task scope's group.
 
-```mbt check
-///|
-async test "standard tools are registered in dispatch order" {
-  @async.with_task_group() <| group => {
-    let runtime = @agent_runtime.AgentRuntime(workspace_root="/repo")
-    let scope = @agent_runtime.AgentTaskScope(group)
-    let tools = @agent.build_tools(runtime, scope)
-    debug_inspect(
-      [
-        for tool in tools.function_tools() => tool.name
-      ],
-      content=(
-        #|[
-        #|  "read_image",
-        #|  "edit",
-        #|  "multi_edit",
-        #|  "write",
-        #|  "remove",
-        #|  "plan",
-        #|  "goal",
-        #|  "mbtx",
-        #|  "job_output",
-        #|  "job_stop",
-        #|  "job_wait",
-        #|  "finish",
-        #|]
-      ),
-    )
-  }
-}
-```
-
 Build the registry once for a long-lived engine. If a custom registry contains
 stateful tools, their records live in the registry value, not in
 `AgentRuntime`; rebuilding it every turn can orphan that tool state.

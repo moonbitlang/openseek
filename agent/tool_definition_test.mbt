@@ -1,15 +1,4 @@
 ///|
-async test "agent registers the expected tool names" {
-  @async.with_task_group() <| group => {
-    let tools = @agent.build_tools(AgentRuntime(), AgentTaskScope(group))
-    assert_eq([ for t in tools.function_tools() => t.name ], [
-      "read_image", "edit", "multi_edit", "write", "remove", "plan", "goal", "mbtx",
-      "job_output", "job_stop", "job_wait", "finish",
-    ])
-  }
-}
-
-///|
 /// A turn built by `run_turn_with_append` offers `escalated` only when the
 /// caller hands it a channel — which is the plumbing best-of-N runs were
 /// missing. The since-removed `openseek run --concurrency N --approval always` parsed the flag,

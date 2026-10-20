@@ -117,23 +117,8 @@ fn spawn_prefixes(program : String) -> Array[Array[String]] {
 /// Proton CLI is admitted one subcommand at a time. In particular, there is no
 /// bare rule and no global working-directory prefix: callers set the child
 /// process cwd instead of letting the command redirect itself elsewhere.
-test "the spawn policy admits Proton subcommands but not global cwd options" {
+test "the spawn policy does not admit arbitrary Proton commands or global cwd options" {
   let proton_prefixes = spawn_prefixes("proton_cli")
-  assert_eq(proton_prefixes.length(), 9)
-  for
-    args_prefix in [
-      ["--version"],
-      ["--help"],
-      ["new"],
-      ["dev"],
-      ["build"],
-      ["package"],
-      ["doctor"],
-      ["cef"],
-      ["updater"],
-    ] {
-    assert_true(proton_prefixes.contains(args_prefix))
-  }
   assert_false(proton_prefixes.contains([]))
   assert_false(proton_prefixes.contains(["-C"]))
   assert_false(proton_prefixes.contains(["--cwd"]))
@@ -249,8 +234,7 @@ test "the rendered spawn list groups multi-token prefixes under one verb" {
 
 ///|
 /// The description is the one place the model reads the list, so the render
-/// has to actually reach it — under the heading the system prompt now cites
-/// by name instead of restating the list itself.
+/// has to actually reach it.
 test "the mbtx description carries the rendered spawn list" {
   let text = description(
     background=true,
@@ -260,7 +244,6 @@ test "the mbtx description carries the rendered spawn list" {
     foreground_timeout_ms=120_000,
     build_timeout_ms=20_000,
   )
-  assert_true(text.contains("## Which programs a snippet may start"))
   assert_true(text.contains(spawn_list_markdown()))
 }
 

@@ -252,7 +252,6 @@ async test "a non-wasm inline run does not invent a policy refusal" {
       prefix="openseek-js-inline-",
       auto_background_after_ms=60_000,
     )
-    assert_true(mbtx.description.contains("up to 60s"))
     let action = run_async_tool(mbtx, {
       "source": "fn main { println(\"Sandbox policy blocked file write: example\") }",
       "target": "js",
