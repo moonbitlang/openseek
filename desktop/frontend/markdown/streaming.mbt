@@ -100,10 +100,10 @@ fn MarkdownRender::text_nodes(
     }
   }
   let out : Array[@html.Html] = []
-  let mut boundary = match stream.ends.binary_search(first) {
-    Ok(index) => index + 1
-    Err(index) => index
-  }
+  let position = stream.ends.binary_search(first)
+  let mut boundary = position
+    .map(index => index + 1)
+    .unwrap_or_else(() => position.unwrap_err())
   let mut start = 0
   // Iterate scalar boundaries rather than slicing at an arbitrary incoming
   // UTF-16 offset, so a fragment boundary cannot split a surrogate pair.
