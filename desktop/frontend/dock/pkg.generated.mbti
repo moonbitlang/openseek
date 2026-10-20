@@ -19,6 +19,8 @@ pub fn active_file(DockState) -> @common.Uri?
 
 pub fn active_history_diff(DockState) -> GitHistoryDiff?
 
+pub fn add_side_chat(DockState, @interop.ConversationKey) -> DockState
+
 pub fn file_paths(DockState) -> Array[@common.Uri]
 
 pub fn history_diffs(DockState) -> Array[GitHistoryDiff]

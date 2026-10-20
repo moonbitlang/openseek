@@ -137,6 +137,23 @@ pub fn open_side_chat(
 }
 
 ///|
+/// Add side chat `chat`'s tab without taking the screen from the tab on it.
+pub fn add_side_chat(
+  state : DockState,
+  chat : @interop.ConversationKey,
+) -> DockState {
+  let chats = state.tabs.filter_map(tab => {
+    if tab is SideChat(owner~) {
+      Some(owner)
+    } else {
+      None
+    }
+  })
+  guard !chats.contains(chat) else { return state }
+  reconcile_side_chats(state, [..chats, chat])
+}
+
+///|
 /// Make this strip's side-chat tabs match `chats`, the side chats of the
 /// strip's conversation that exist: a side chat's tab lives exactly as long
 /// as its record. A missing tab is appended without taking the screen — this
