@@ -1190,10 +1190,12 @@ fn assistant_message_view(
       ),
     ])
   } else {
-    let nodes = streaming_markdown.filter(_ => streaming).map_or_else(
-      () => @markdown.markdown_nodes(locale~, content, open_file=on_open),
-      markdown => markdown.nodes(locale~, content, open_file=on_open),
-    )
+    let nodes = streaming_markdown
+      .filter(_ => streaming)
+      .map_or_else(
+        () => @markdown.markdown_nodes(locale~, content, open_file=on_open),
+        markdown => markdown.nodes(locale~, content, open_file=on_open),
+      )
     @html.div(class="msg-content markdown", nodes)
   }
   let children = [speaker_label(assistant_name), body]
