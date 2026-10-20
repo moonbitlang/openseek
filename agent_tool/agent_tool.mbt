@@ -50,6 +50,9 @@ pub struct AgentToolDefinition {
   name : String
   description : String
   schema : JsonSchema
+  /// The JSON Schema of the result's `data`, when the tool declares one.
+  /// Programs read `data`, so the shape helps whoever writes them.
+  output_schema : JsonSchema?
   execute : ToolExecutor
   /// This flag grants context-ceiling execution, not every Control action.
   /// In particular, WaitJobs needs another model step and must leave it false.
@@ -96,6 +99,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
   name~ : String,
   description~ : String,
   schema~ : JsonSchema,
+  output_schema? : JsonSchema,
   execute~ : ToolExecutor,
   control~ : Bool = false,
   concurrent_safe~ : Bool = false,
@@ -108,6 +112,7 @@ pub fn AgentToolDefinition::AgentToolDefinition(
     name,
     description,
     schema,
+    output_schema,
     execute,
     control,
     concurrent_safe,

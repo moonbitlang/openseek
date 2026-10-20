@@ -3,9 +3,14 @@
 // `@agent_tool.AgentToolDefinition` whose executor proxies a `tools/call`.
 
 ///|
-/// Cap on the characters of a single tool result forwarded to the model, so a
-/// large MCP payload cannot blow up the context; the tail is dropped with a note.
-const MaxToolOutputChars : Int32 = 50000
+/// Cap on a single tool result's JSON-encoded length, so a large MCP payload
+/// cannot blow up the context. Results also reach PTC scripts, whose replies
+/// are limited to 64K characters once serialized (`MaxReplyChars` in
+/// `agent_tool/ptc`, which replaces a larger reply with an error after the
+/// call already ran). Bounding the escaped text below that, with room for the
+/// reply envelope and the truncation note, keeps every accepted result
+/// deliverable; the tail is dropped with a note.
+const MaxToolOutputChars : Int32 = 60000
 
 ///|
 /// The deadline for a connected server to answer `tools/list` (including
@@ -205,6 +210,7 @@ pub async fn[X] connect(
           name~,
           description=tool.description,
           schema=tool.schema,
+          output_schema?=tool.output_schema,
           execute=tool.execute,
           program_callable=tool.is_program_callable(),
         ),
@@ -316,10 +322,16 @@ fn bridge_tool(
   } else {
     { "type": "object" }
   }
+  // The result's shape is a help, not a contract the host relies on: an
+  // oversized one is dropped rather than replaced.
+  let output_schema = tool.output_schema.filter(schema => {
+    schema.stringify().length() <= MaxSchemaChars
+  })
   AgentToolDefinition(
     name=tool_name(server, tool.name),
     description~,
     schema=JsonSchema(schema),
+    output_schema?=output_schema.map(schema => JsonSchema(schema)),
     execute=Async(args => call_tool(client, tool.name, args)),
     // This host-owned proxy completes through MCP transport tasks, without
     // agent-loop dispatch. Enable PTC independently of server annotations;
@@ -329,7 +341,8 @@ fn bridge_tool(
 }
 
 ///|
-/// Proxy a tool call to the MCP server and map the result into a tool action.
+/// Proxy a tool call to the MCP server and map the result into a tool action:
+/// the rendered text as content and any `structuredContent` as data.
 /// A JSON-RPC / transport failure becomes an error response (rather than
 /// aborting the loop); a tool-level failure is surfaced via `is_error`.
 async fn call_tool(
@@ -344,7 +357,7 @@ async fn call_tool(
       // The assembled text carries server-supplied strings (the tool name and
       // error message): cap the whole response so it cannot bypass the
       // context-size protection.
-      let (message, _) = cap_chars(
+      let (message, _) = cap_serialized(
         "MCP tool `\{tool}` call failed: \{error}",
         MaxToolOutputChars,
       )
@@ -352,23 +365,63 @@ async fn call_tool(
     }
   }
   guard outcome is Some(result) else {
-    let (message, _) = cap_chars(
+    let (message, _) = cap_serialized(
       "MCP tool `\{tool}` timed out after \{CallTimeoutMs / 1000}s",
       MaxToolOutputChars,
     )
     return @agent_tool.respond(message, is_error=true)
   }
-  let (content, truncated) = cap_chars(result.render_text(), MaxToolOutputChars)
+  // The text is what a direct call's model reads, so it keeps the budget. A
+  // structured result also rides along as `data` for scripts, but only whole
+  // and beside the text: the text renders it too, so leaving it out loses
+  // nothing a reader could not find.
+  let (content, truncated) = cap_serialized(
+    result.render_text(),
+    MaxToolOutputChars,
+  )
   let text = if truncated {
-    "\{content}\n<system>truncated=true shown_chars=\{MaxToolOutputChars} max_output_chars=\{MaxToolOutputChars}</system>"
+    "\{content}\n<system>truncated=true shown_chars=\{content.char_length()} max_output_chars=\{MaxToolOutputChars}</system>"
   } else {
     content
   }
+  let data = result.structured_content.filter(value => {
+    Json(text).stringify().length() + value.stringify().length() <=
+    MaxToolOutputChars
+  })
   @agent_tool.respond(
     text,
     is_error=result.is_error,
     brief=@agent_tool.brief_line(text),
+    data?,
   )
+}
+
+///|
+/// Truncate `text` to its longest prefix of whole characters whose JSON string
+/// encoding is at most `limit` characters long, reporting whether anything was
+/// dropped. Escaping (quotes, backslashes, control characters) can make the
+/// encoding several times longer than the text, so the cut is searched against
+/// the real encoding rather than estimated.
+fn cap_serialized(text : String, limit : Int32) -> (String, Bool) {
+  fn fits(prefix : String) -> Bool {
+    Json(prefix).stringify().length() <= limit
+  }
+
+  if fits(text) {
+    return (text, false)
+  }
+  // A longer prefix never encodes shorter, so the kept length is monotone.
+  let mut fitting = 0
+  let mut too_long = text.char_length()
+  while too_long - fitting > 1 {
+    let middle = fitting + (too_long - fitting) / 2
+    if fits(cap_chars(text, middle).0) {
+      fitting = middle
+    } else {
+      too_long = middle
+    }
+  }
+  (cap_chars(text, fitting).0, true)
 }
 
 ///|

@@ -28,6 +28,9 @@ pub struct McpTool {
   /// The tool's JSON Schema for arguments, forwarded to the model unchanged.
   /// Defaults to an open object schema when the server omits `inputSchema`.
   input_schema : Json
+  /// The JSON Schema of the tool's `structuredContent`, when the server
+  /// declares one (`outputSchema`, since 2025-06-18) as an object.
+  output_schema : Json?
 } derive(Eq, Debug)
 
 ///|
@@ -112,7 +115,11 @@ fn decode_tool(entry : Json) -> McpTool raise {
     { "inputSchema": schema, .. } => schema
     _ => { "type": "object" }
   }
-  { name, description, input_schema, }
+  let output_schema = match entry {
+    { "outputSchema": Object(_) as schema, .. } => Some(schema)
+    _ => None
+  }
+  { name, description, input_schema, output_schema, }
 }
 
 ///|

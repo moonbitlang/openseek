@@ -49,6 +49,7 @@ pub struct McpTool {
   name : String
   description : String
   input_schema : Json
+  output_schema : Json?
 } derive(Eq, @debug.Debug)
 
 // Type aliases

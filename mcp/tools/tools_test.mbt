@@ -56,8 +56,23 @@ fn server_reply(request : Json) -> Json? {
                 "type": "object",
                 "properties": { "text": { "type": "string" } },
               },
+              "outputSchema": {
+                "type": "object",
+                "properties": { "echo": { "type": "string" } },
+              },
             },
           ],
+        }),
+      )
+    {
+      "method": "tools/call",
+      "params": { "arguments": { "structured": structured, .. }, .. },
+      ..
+    } =>
+      Some(
+        ok(request, {
+          "content": [{ "type": "text", "text": "status: ok" }],
+          "structuredContent": structured,
         }),
       )
     { "method": "tools/call", .. } => {
@@ -117,6 +132,10 @@ async test "tools_for_client bridges tools with namespaced names and schemas" {
     assert_false(tools[0].is_control())
     assert_false(tools[0].is_concurrent_safe())
     assert_true(tools[0].is_program_callable())
+    assert_true(
+      tools[0].output_schema
+      is Some(JsonSchema({ "properties": { "echo": _, .. }, .. })),
+    )
   })
 }
 
@@ -137,6 +156,68 @@ async test "a bridged tool proxies tools/call and returns the result" {
     assert_false(output.is_error)
     assert_true(output.content.contains("echoed"))
     assert_true(output.content.contains("hi"))
+  })
+}
+
+///|
+async test "a structured result reaches scripts as data beside its text" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let rpc = @jsonrpc.Client(transport)
+    wire(group, transport, rpc)
+    let tools = @tools.tools_for_client("srv", McpClient(rpc))
+    guard tools[0].execute is Async(exec) else {
+      fail("expected an async executor")
+    }
+    let structured : Json = { "repo": "alpha", "open": 7 }
+    guard exec({ "structured": structured }) is Respond(output) else {
+      fail("expected a respond action")
+    }
+    assert_eq(output.data, Some(structured))
+    assert_true(output.content.contains("status: ok"))
+    assert_true(output.content.contains(structured.stringify()))
+  })
+}
+
+///|
+async test "a large structured result keeps the text whole and leaves data out" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let rpc = @jsonrpc.Client(transport)
+    wire(group, transport, rpc)
+    let tools = @tools.tools_for_client("srv", McpClient(rpc))
+    guard tools[0].execute is Async(exec) else {
+      fail("expected an async executor")
+    }
+    // Text and data both fit alone, not together: the text, which a direct
+    // call's model reads, wins.
+    let structured : Json = { "blob": "x".repeat(40000) }
+    guard exec({ "structured": structured }) is Respond(output) else {
+      fail("expected a respond action")
+    }
+    assert_true(output.data is None)
+    assert_true(output.content.contains(structured.stringify()))
+    assert_false(output.content.contains("truncated=true"))
+  })
+}
+
+///|
+async test "a structured result over the reply budget stays text only" {
+  @async.with_task_group(group => {
+    let transport = new_transport()
+    let rpc = @jsonrpc.Client(transport)
+    wire(group, transport, rpc)
+    let tools = @tools.tools_for_client("srv", McpClient(rpc))
+    guard tools[0].execute is Async(exec) else {
+      fail("expected an async executor")
+    }
+    let structured : Json = { "blob": "x".repeat(70000) }
+    guard exec({ "structured": structured }) is Respond(output) else {
+      fail("expected a respond action")
+    }
+    assert_true(output.data is None)
+    assert_true(output.content.contains("truncated=true"))
+    assert_true(Json(output.content).stringify().length() < 65536)
   })
 }
 

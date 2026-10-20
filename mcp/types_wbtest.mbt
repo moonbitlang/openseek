@@ -22,10 +22,17 @@ test "decode_tool reads all fields" {
     "name": "search",
     "description": "Search the web",
     "inputSchema": { "type": "object", "required": ["q"] },
+    "outputSchema": {
+      "type": "object",
+      "properties": { "hits": { "type": "array" } },
+    },
   })
   assert_eq(tool.name, "search")
   assert_eq(tool.description, "Search the web")
   assert_true(tool.input_schema is { "type": "object", .. })
+  assert_true(
+    tool.output_schema is Some({ "properties": { "hits": _, .. }, .. }),
+  )
 }
 
 ///|
@@ -34,6 +41,13 @@ test "decode_tool defaults a missing description and schema" {
   assert_eq(tool.name, "bare")
   assert_eq(tool.description, "")
   assert_true(tool.input_schema is { "type": "object", .. })
+  assert_true(tool.output_schema is None)
+}
+
+///|
+test "decode_tool ignores an output schema that is not an object" {
+  let tool = decode_tool({ "name": "odd", "outputSchema": "string" })
+  assert_true(tool.output_schema is None)
 }
 
 ///|

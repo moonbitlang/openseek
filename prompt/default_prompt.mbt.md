@@ -176,7 +176,8 @@ JSON object the direct tool takes, forwarded unchanged: validation and
 defaults stay in the host. `read_image`, `edit`, `multi_edit`, `write`, `remove`,
 `web_search` (when registered), and registered MCP tools are callable. For MCP,
 use the exact exposed `mcp__...` tool name, including any collision suffix,
-and its advertised arguments. `finish`,
+and its advertised arguments. A structured MCP result arrives as `data`;
+otherwise parse `content`. `finish`,
 `goal`, `plan`, the job controls, and a recursive `mbtx` are not.
 
 Reach for them when computation or filtering saves model round trips — read
