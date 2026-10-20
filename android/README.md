@@ -141,8 +141,10 @@ On a test emulator with the Connect debug APK running:
 ANDROID_SERIAL=emulator-5580 node android/smoke.mjs
 ```
 
-The Android smoke uses demo account/host responses, verifies real keyboard
-insets, Back and sending/stopping, then
+The Android smoke uses demo account/host responses, chooses the demo device
+from the sidebar's device selector, checks that the device page is still the
+APK's bundled document, verifies real keyboard insets, Back and
+sending/stopping, then
 reloads the real entry page. It preserves application data and credentials.
 These fixture checks do not establish an end-to-end run on your real computer;
 that requires signing into GitHub and choosing your online device.

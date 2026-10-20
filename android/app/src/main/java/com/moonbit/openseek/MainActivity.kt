@@ -42,6 +42,10 @@ class MainActivity : ComponentActivity() {
                     "location.reload();", null
             )
         } else {
+            // The frontend marked a sign-in as pending before its navigation,
+            // which this activity took over. Reload it so Sign in works again
+            // after a cancellation, denial or failed exchange.
+            if (ConsoleOrigin.contains(webView.url)) webView.reload()
             result.data?.getStringExtra("error")?.let { message ->
                 AlertDialog.Builder(this).setTitle("Unable to sign in").setMessage(message)
                     .setPositiveButton("OK", null).show()
