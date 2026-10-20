@@ -110,7 +110,13 @@ fn Model::finish_fork(
         )
         .with_approval(pending.source.channel, reply.session, pending.approval)
       if pending.kind is SideChat(quote~, ..) {
-        return model.open_new_side_chat(emit, pending, reply.session, quote)
+        return model.open_new_side_chat(
+          emit,
+          pending,
+          reply.session,
+          quote,
+          foreground=should_open,
+        )
       }
       if pending.is_edit() {
         let conv = model
@@ -228,7 +234,8 @@ fn Model::request_side_chat(
 /// A side chat was made: hold it, read its copied history, and open its tab
 /// in its conversation's dock with the quote waiting in its draft. Nothing
 /// navigates — the conversation stays in the column. When that conversation
-/// is on screen the dock opens on the side chat and its composer takes the
+/// is still the one the page is showing (`foreground`, as an ordinary fork
+/// decides it), the dock opens on the side chat and its composer takes the
 /// focus; otherwise the tab waits in that conversation's strip.
 fn Model::open_new_side_chat(
   self : Model,
@@ -236,6 +243,7 @@ fn Model::open_new_side_chat(
   pending : ConversationFork,
   session : String,
   quote : String,
+  foreground~ : Bool,
 ) -> (@cmd.Cmd, Model) {
   let channel = pending.source.channel
   let chat : @interop.ConversationKey = { channel, session, }
@@ -268,9 +276,16 @@ fn Model::open_new_side_chat(
     .replace_conversation(conv)
     .begin_transcript_reload(conv)
   let owner = @interop.Host(parent)
-  let dock = @dock.open_side_chat(model.dock_state_for(owner), chat)
+  // A parked strip comes back showing the new side chat. A strip still on
+  // screen while the page moves elsewhere keeps the tab it shows; the side
+  // chat's tab joins beside it.
+  let dock = if foreground || model.dock_owner() != owner {
+    @dock.open_side_chat(model.dock_state_for(owner), chat)
+  } else {
+    @dock.add_side_chat(model.dock_state_for(owner), chat)
+  }
   let model = model.with_dock_state_for(owner, dock)
-  let on_screen = model.screen is Chat && model.dock_owner() == owner
+  let on_screen = foreground && model.dock_owner() == owner
   let model = if on_screen {
     // Like opening any dock tab from the column: the panel shows it, and a
     // pending editor navigation is no longer the newest.

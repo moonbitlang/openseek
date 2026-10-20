@@ -406,3 +406,18 @@ test "opening a side chat appends it and reactivates an existing tab" {
   assert_true(again.tabs == another.tabs)
   assert_true(again.active == Some(side_chat("chat-sc-1")))
 }
+
+///|
+test "adding a side chat keeps the tab on screen and every other side chat" {
+  let opened = @dock.DockState::empty()
+    |> @dock.open_file(work_file("a.mbt"))
+    |> @dock.open_side_chat(side_chat_key("chat-sc-1"))
+  let state = @dock.update(TabActivated(file_tab("a.mbt")), opened)
+  let added = @dock.add_side_chat(state, side_chat_key("chat-sc-2"))
+  assert_true(
+    added.tabs ==
+    [file_tab("a.mbt"), side_chat("chat-sc-1"), side_chat("chat-sc-2")],
+  )
+  assert_true(added.active == Some(file_tab("a.mbt")))
+  assert_true(@dock.add_side_chat(added, side_chat_key("chat-sc-1")) == added)
+}

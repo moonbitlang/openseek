@@ -1094,3 +1094,78 @@ test "a side chat restored before a runs request fails is made once it does" {
   }
   assert_true(side.run is NoRun(..))
 }
+
+///|
+test "a side chat completed after choosing another conversation stays in the background" {
+  let model = {
+    ..side_chat_source_model().with_listed(["desktop-test", "second"]),
+    right_panel_open: false,
+  }
+  // The same completion over an open panel showing another tab.
+  let open = { ..model, right_panel_open: true, }.with_dock_state({
+    tabs: [FilePicker],
+    active: Some(FilePicker),
+  })
+  let owner : @interop.ConversationKey = {
+    channel: @interop.ChannelId::Local,
+    session: "desktop-test",
+  }
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    model,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  // The other conversation is still loading, so the column has not moved yet.
+  let (_, choosing) = update(
+    test_dispatch(),
+    OpenSession(Local, "second"),
+    requested,
+  )
+  assert_eq(choosing.active_session, "desktop-test")
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    choosing,
+  )
+  // The tab waits in its conversation's strip; the panel stays hidden.
+  assert_false(completed.right_panel_open)
+  assert_true(
+    completed.dock_state_for(@interop.Host(owner)).tabs.contains(
+      SideChat(owner=side_chat_owner()),
+    ),
+  )
+  assert_true(completed.navigation == choosing.navigation)
+  let (_, requested) = update(
+    test_dispatch(),
+    SideChatRequested(owner~, quote="the parser"),
+    open,
+  )
+  guard requested.conversation_fork is Some(pending) else {
+    fail("a side chat must be forking")
+  }
+  let (_, choosing) = update(
+    test_dispatch(),
+    OpenSession(Local, "second"),
+    requested,
+  )
+  let (_, completed) = update(
+    test_dispatch(),
+    ForkCompleted(
+      pending,
+      Ok({ session: SideChatId, title: "Title", }),
+      fresh_session="desktop-unused",
+    ),
+    choosing,
+  )
+  // The tab on screen stays; the side chat's tab joins beside it.
+  let dock = completed.dock_state_for(@interop.Host(owner))
+  assert_true(dock.active == Some(FilePicker))
+  assert_true(dock.tabs == [FilePicker, SideChat(owner=side_chat_owner())])
+}
