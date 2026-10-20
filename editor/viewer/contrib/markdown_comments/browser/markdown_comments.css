@@ -14,7 +14,7 @@
   color: var(--vscode-descriptionForeground, var(--vscode-editor-foreground));
   background: var(--vscode-editor-background);
   font-family: var(--ui-font-family, var(--editor-font-family));
-  font-size: calc(var(--editor-font-size) * 0.92);
+  font-size: var(--editor-font-size);
   line-height: 1.5;
 }
 
