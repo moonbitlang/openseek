@@ -778,21 +778,69 @@ test "deleting a family from this page retires its shown descendant" {
   assert_true(parent_gone.navigation.location == child_gone.navigation.location)
   // Descent follows the `-sr-N` structure, not a textual prefix.
   assert_true(
-    removes_in_family(Local, parent, Local, {
-      ..parent,
-      session: "desktop-parent-sr-1-sr-2",
-    }),
+    is_subrun_descendant("desktop-parent-sr-1-sr-2", "desktop-parent"),
   )
   assert_false(
-    removes_in_family(Local, parent, Local, {
-      ..parent,
-      session: "desktop-parent-sr-other",
-    }),
+    is_subrun_descendant("desktop-parent-sr-other", "desktop-parent"),
   )
-  assert_false(
-    removes_in_family(Local, parent, Local, {
-      ..parent,
-      session: "desktop-parent-copy",
+  assert_false(is_subrun_descendant("desktop-parent-copy", "desktop-parent"))
+  assert_false(is_subrun_descendant("desktop-parent", "desktop-parent"))
+}
+
+///|
+test "a live family delete does not own a descendant archived apart" {
+  let dispatch = test_dispatch()
+  let parent : ArchiveRecordKey = {
+    session: "desktop-parent",
+    workspace: @interop.ChannelId::Local.test_project(),
+  }
+  let child : ArchiveRecordKey = { ..parent, session: "desktop-parent-sr-1", }
+  let shown : @routes.Location = {
+    device: Some("local"),
+    target: Session(child.session),
+  }
+  let base = {
+    ..test_model()
+    .replace_conversation({
+      ..empty_conversation(
+        @interop.ChannelId::Local,
+        child.session,
+        @interop.ChannelId::Local.test_project(),
+      ),
+      record: ArchivedRecord,
+    })
+    .with_dev(dev => {
+      ..dev,
+      sessions: [placed_archived_item(parent.session)],
+      archived: [placed_archived_item(child.session)],
     }),
+    active_session: child.session,
+    navigation: {
+      ..AppNavigation::empty(),
+      location: Some(shown),
+      phase: Active,
+      history: @navigation.History::empty().visit(shown, replace=true),
+    },
+  }
+  let (_, asked) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, parent, LiveRecord),
+    base,
   )
+  let (_, staged) = update_dev(
+    dispatch,
+    DeleteChecked(key=parent, checkout=None),
+    asked,
+  )
+  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  assert_true(confirmed.owns_deletion(Local, parent))
+  assert_false(confirmed.owns_deletion(Local, child))
+  // Another client deletes the archived child while the parent's delete is
+  // out: the shown entry keeps its unavailable target.
+  let (_, elsewhere) = update_dev(
+    dispatch,
+    SessionsChanged(change="deleted", key=child, fresh_session=Some("fresh")),
+    confirmed,
+  )
+  assert_true(elsewhere.navigation.location == Some(shown))
 }

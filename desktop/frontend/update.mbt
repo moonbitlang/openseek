@@ -5235,9 +5235,11 @@ fn update_msg(
                   delete_confirm: None,
                   // The delete can still come back to be confirmed again.
                   delete_pending: Some((confirm.channel, confirm.key)),
-                  deletes_in_flight: model.deletes_in_flight
-                  .copy()
-                  ..push((confirm.channel, confirm.key)),
+                  deletes_in_flight: model.confirm_delete(
+                    confirm.channel,
+                    confirm.key,
+                    LiveRecord,
+                  ),
                 },
               )
             ArchivedChat(sessions~) => sessions
@@ -5257,9 +5259,11 @@ fn update_msg(
               delete_confirm: None,
               // The host can announce the deletion before this reply, which
               // the announcement then makes stale.
-              deletes_in_flight: model.deletes_in_flight
-              .copy()
-              ..push((confirm.channel, confirm.key)),
+              deletes_in_flight: model.confirm_delete(
+                confirm.channel,
+                confirm.key,
+                ArchivedRecord,
+              ),
             },
           )
         }
@@ -8596,7 +8600,7 @@ fn update_device_msg(
             delete_confirm: confirm,
             // Every delete of this chat is settled by its removal.
             deletes_in_flight: next.deletes_in_flight.filter(entry => {
-              entry != (channel, key)
+              entry.channel != channel || entry.key != key
             }),
           },
         )

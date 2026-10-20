@@ -38,41 +38,67 @@ priv enum DeleteTarget {
 } derive(Eq)
 
 ///|
-/// Whether a confirmed delete of `root` on `root_channel` removes `key`: the
-/// host deletes the record together with every sub-run transcript descended
-/// from it. Walk the structural `-sr-N` suffixes as the host does, so an
-/// unrelated id that merely shares a prefix is not taken for a descendant.
-fn removes_in_family(
-  root_channel : @interop.ChannelId,
-  root : ArchiveRecordKey,
-  channel : @interop.ChannelId,
-  key : ArchiveRecordKey,
-) -> Bool {
-  guard root_channel == channel && root.workspace == key.workspace else {
-    return false
-  }
-  let mut current = key.session
-  for ;; {
-    if current == root.session {
+/// One confirmed delete still out with the host: the conversation the user
+/// chose and the store it is deleted from.
+priv struct ConfirmedDelete {
+  channel : @interop.ChannelId
+  key : ArchiveRecordKey
+  record : ConversationRecord
+} derive(Eq)
+
+///|
+/// Whether `candidate` is a sub-run transcript descended from `ancestor`.
+/// Walk the structural `-sr-N` suffixes as the host does, so an unrelated id
+/// that merely shares a prefix is not taken for a descendant.
+fn is_subrun_descendant(candidate : String, ancestor : String) -> Bool {
+  let mut current = candidate
+  while @transcript.subrun_parent(current) is Some(parent) {
+    if parent == ancestor {
       return true
-    }
-    guard @transcript.subrun_parent(current) is Some(parent) else {
-      return false
     }
     current = parent
   }
+  false
 }
 
 ///|
-/// Whether this page confirmed a delete that removes `key`.
+/// Whether this page confirmed a delete that removes `key`. The host deletes
+/// the chosen record with its sub-run descendants in the same store only, so
+/// a descendant counts while this page lists it in that store; one archived
+/// apart from a live parent is not part of the parent's delete.
 fn Model::owns_deletion(
   self : Model,
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
 ) -> Bool {
   self.deletes_in_flight.any(entry => {
-    removes_in_family(entry.0, entry.1, channel, key)
+    guard entry.channel == channel && entry.key.workspace == key.workspace else {
+      return false
+    }
+    if entry.key.session == key.session {
+      return true
+    }
+    guard is_subrun_descendant(key.session, entry.key.session) &&
+      self.device_state(channel) is Some(dev) else {
+      return false
+    }
+    let listed = match entry.record {
+      LiveRecord => dev.sessions
+      ArchivedRecord => dev.archived
+    }
+    listed.any(item => key.matches(item))
   })
+}
+
+///|
+/// Record a confirmed delete of `key` from `record`'s store.
+fn Model::confirm_delete(
+  self : Model,
+  channel : @interop.ChannelId,
+  key : ArchiveRecordKey,
+  record : ConversationRecord,
+) -> Array[ConfirmedDelete] {
+  self.deletes_in_flight.copy()..push({ channel, key, record, })
 }
 
 ///|
@@ -84,7 +110,8 @@ fn Model::settle_delete(
   key : ArchiveRecordKey,
 ) -> Model {
   let deletes = self.deletes_in_flight.copy()
-  if deletes.search((channel, key)) is Some(index) {
+  if deletes.search_by(entry => entry.channel == channel && entry.key == key)
+    is Some(index) {
     deletes.remove(index) |> ignore
   }
   { ..self, deletes_in_flight: deletes, }

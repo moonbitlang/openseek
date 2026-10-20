@@ -1579,7 +1579,7 @@ priv struct Model {
   // per request, keyed by the conversation the user chose. They outlive later
   // clicks, so a deletion the host announces for that conversation or one of
   // its sub-run descendants is known to be this page's own.
-  deletes_in_flight : Array[(@interop.ChannelId, ArchiveRecordKey)]
+  deletes_in_flight : Array[ConfirmedDelete]
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
   conversation_fork : ConversationFork?
