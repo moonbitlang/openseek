@@ -107,7 +107,7 @@ test('the connectors panel says when there is no engine, and asks again on reope
   expect(statusRequests(app)).toHaveLength(1);
 
   // Asking reads the engine's state and starts nothing, so every opening
-  // asks. A file the engine could not load is listed by name.
+  // asks. A file the engine could not load is listed by its full path.
   await page.locator('.run-status-button').click();
   await expect(panel).toBeHidden();
   app.mcpStatus = running({
@@ -118,7 +118,8 @@ test('the connectors panel says when there is no engine, and asks again on reope
     servers: [],
   });
   panel = await openConnectors(page);
-  const config = panel.locator('.connectors-row', { hasText: 'mcp.json' });
+  const config = panel.locator('.connectors-row', { hasText: userPath });
+  await expect(config.locator('.connectors-name')).toHaveText(userPath);
   await expect(config.getByText('configuration is missing an `mcpServers` object', { exact: false })).toBeVisible();
   await expect(config).toHaveAttribute('title', new RegExp(userPath.replaceAll('.', '\\.')));
   await page.screenshot({ path: testInfo.outputPath('connectors-config-failed.png') });

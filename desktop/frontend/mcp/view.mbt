@@ -58,7 +58,7 @@ fn status_rows(
       rows.push(
         item(
           tone="danger",
-          name=file_name(config.path),
+          name=config.path,
           note=Some(text(locale, Failed)),
           detail=Some(error),
           title="\{config.path}\n\{error}",
@@ -74,16 +74,6 @@ fn status_rows(
   }
   for server in status.servers {
     rows.push(server_row(locale, server))
-  }
-}
-
-///|
-/// The last segment of a configuration file's path: the panel is narrow, and
-/// the full path is in the row's tooltip.
-fn file_name(path : String) -> String {
-  match path.rev_find("/") {
-    Some(index) => path[index + 1:].to_owned()
-    None => path
   }
 }
 
