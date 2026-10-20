@@ -922,7 +922,8 @@ fn open_explorer(
     screen,
     right_panel_open: true,
     right_panel_menu_open: false,
-  }.with_dock_state(@dock.open_picker(model.dock_state()))
+  }
+  let next = next.with_dock_state(@dock.open_picker(next.dock_state()))
   let (cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
     @fileeditor.ExplorerModeSelected(mode),
