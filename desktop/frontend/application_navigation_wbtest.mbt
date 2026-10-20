@@ -541,4 +541,20 @@ test "a refused delete request settles only itself" {
     second,
   )
   assert_true(settled.delete_pending is None)
+  // Repeating the click while its request is out sends nothing new, also
+  // while the confirmed delete is in flight.
+  let (_, repeated) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
+    second,
+  )
+  assert_true(repeated.delete_pending == Some(Checking(Local, other)))
+  let (_, confirmed) = update(dispatch, ConfirmDeleteSession, staged)
+  assert_true(confirmed.delete_pending == Some(Deleting(Local, other)))
+  let (_, repeated) = update(
+    dispatch,
+    DeleteSession(@interop.ChannelId::Local, other, LiveRecord),
+    confirmed,
+  )
+  assert_true(repeated.delete_pending == Some(Deleting(Local, other)))
 }

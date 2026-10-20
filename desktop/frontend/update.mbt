@@ -5568,6 +5568,12 @@ fn update_msg(
         guard dev.sessions.any(item => key.matches(item)) else {
           return (@cmd.none, model)
         }
+        // A request about this chat is already out; its answer opens the
+        // dialog. A second one would share its identity, so the earlier
+        // request's refusal could settle the later click.
+        if model.delete_pending is Some(pending) && pending.is_for(channel, key) {
+          return (@cmd.none, model)
+        }
         // A live chat may take a worktree checkout with it. Only the host
         // knows; the dialog opens on its answer.
         return (
