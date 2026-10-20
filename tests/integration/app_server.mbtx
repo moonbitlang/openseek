@@ -1,0 +1,52 @@
+///|
+import {
+  "moonbitlang/async@0.22.5",
+  "moonbitlang/async@0.22.5/fs",
+  "moonbitlang/async@0.22.5/process",
+  "moonbitlang/core/env",
+}
+
+///|
+// Exercise the real CLI's companion launch, with a tiny companion that starts
+// the exported engine from another workspace, as the backend does.
+async fn main {
+  guard @env.args() is [_, executable] else {
+    fail("Usage: moon run tests/integration/app_server.mbtx <native-cli>")
+  }
+  if @async.platform is Windows {
+    println("app-server launch: Unix shell companion fixture skipped on Windows")
+    return
+  }
+  let executable = @fs.realpath(executable)
+  let root = @fs.tmpdir(prefix="openseek-app-server-launch-")
+  defer @fs.rmdir(root, recursive=true)
+  let root = @fs.realpath(root)
+  @fs.mkdir(root + "/bin")
+  @fs.mkdir(root + "/workspace")
+  @fs.write_file(root + "/bin/openseek", @fs.read_file(executable))
+  @fs.chmod(root + "/bin/openseek", 0o755)
+  @fs.write_file(root + "/bin/openseek-app-server", (
+    #|#!/bin/sh
+    #|set -eu
+    #|cd "$WORKSPACE"
+    #|exec "$OPENSEEK_ENGINE" --help
+    #|
+  ))
+  @fs.chmod(root + "/bin/openseek-app-server", 0o755)
+  for program in ["./bin/openseek", "openseek"] {
+    let (code, stdout, stderr) = @process.collect_output(
+      "/bin/sh",
+      ["-c", "exec \"$1\" app-server", "sh", program],
+      cwd=root,
+      inherit_env=false,
+      extra_env={
+        "HOME": root,
+        "PATH": root + "/bin:/usr/bin:/bin",
+        "WORKSPACE": root + "/workspace",
+      },
+    )
+    assert_eq(code, 0, msg=stderr.text())
+    assert_true(stdout.text().contains("Usage: openseek"))
+  }
+  println("app-server launch: relative path and PATH survive workspace changes")
+}

@@ -1,4 +1,5 @@
 import {
+  "moonbitlang/openseek/env" @executable,
   "moonbitlang/async/process",
   "moonbitlang/async/fs",
   "moonbitlang/x/path",

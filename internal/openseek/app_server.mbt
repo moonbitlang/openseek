@@ -2,8 +2,9 @@
 /// The native companion ships alongside the portable CLI. Application RPC
 /// stays on TCP; inherited stdio is only endpoint discovery and owner lifetime.
 async fn run_app_server() -> Unit {
-  let suffix = if @env.args()[0].has_suffix(".exe") { ".exe" } else { "" }
-  let sibling = @path.Path(@env.args()[0])
+  let executable = @executable.current_exe()
+  let suffix = if executable.has_suffix(".exe") { ".exe" } else { "" }
+  let sibling = @path.Path(executable)
     .dirname()
     .join(Path("openseek-app-server" + suffix))
     .to_string()
@@ -22,7 +23,7 @@ async fn run_app_server() -> Unit {
     extra_env=Map([
       (
         "OPENSEEK_ENGINE",
-        @env.get_env_var("OPENSEEK_ENGINE").unwrap_or(@env.args()[0]),
+        @env.get_env_var("OPENSEEK_ENGINE").unwrap_or(executable),
       ),
     ]),
     stdin=@stdio.stdin,

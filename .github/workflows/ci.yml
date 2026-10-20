@@ -266,10 +266,11 @@ jobs:
         if: matrix.target == 'native'
         run: moon cram test tests/cram
 
-      - name: Background turn lifecycle and subagents (offline CLI)
+      - name: App-server launch, turn lifecycle and subagents (offline CLI)
         if: matrix.target == 'native'
         run: |
           moon build . --target native
+          moon run tests/integration/app_server.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
           moon run tests/integration/turn_finish.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
           moon run tests/integration/subagents.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe
           moon run tests/integration/review_workflow.mbtx _build/native/debug/build/moonbitlang/openseek/openseek.exe

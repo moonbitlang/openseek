@@ -11,12 +11,11 @@ pub async fn serve_app_server(
   let instance = @uuid.mint()
   @async.with_task_group(group => {
     state.start_services(group)
-    announce.write(
-      (
-        { "port": server.addr.port(), "instance": instance, "protocol": 1 } :
-        Json).stringify() +
-      "\n",
-    )
+    let announcement = AppServerAnnouncement::{
+      port: server.addr.port(),
+      instance,
+    }
+    announce.write(@json.to_json(announcement).stringify() + "\n")
     group.spawn_bg(() => {
       while lifetime.read_some(max_len=4096) is Some(_) {
         ()
@@ -49,25 +48,17 @@ pub async fn serve_app_server(
             }
             body.write_bytes(bytes)
           }
-          guard @json.parse(@utf8.decode(body.to_bytes()))
-            is {
-              "jsonrpc": "2.0",
-              "id": id,
-              "method": "initialize",
-              "params": { "protocol": 1, "instance": String(expected), .. },
-              ..
-            } &&
-            expected == instance else {
+          let request : AppServerInitializeRequest = @json.from_json(
+            @json.parse(@utf8.decode(body.to_bytes())),
+          )
+          guard request.instance == instance else {
             raise @host.HostError("App-server identity or protocol changed")
           }
-          ws.send_text(
-            (
-              {
-                "jsonrpc": "2.0",
-                "id": id,
-                "result": { "protocol": 1, "instance": instance },
-              } : Json).stringify(),
-          )
+          let response = AppServerInitializeResponse::{
+            id: request.id,
+            instance,
+          }
+          ws.send_text(@json.to_json(response).stringify())
         })
         WsClientActor(state).serve(ws)
       })
