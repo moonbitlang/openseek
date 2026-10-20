@@ -31,12 +31,19 @@ fn TranscriptSlot::key(self : TranscriptSlot) -> String {
 ///|
 /// A page is gated on both its account session and its page device. Until
 /// both exist the view shows the gate instead of the console frame, so no
-/// transcript is on screen either. The desktop window has both from the
-/// first render and is never gated.
+/// transcript is on screen either. A host built for another protocol
+/// revision gates every page the same way. The desktop window has both from
+/// the first render and is never gated.
 fn Model::is_console_gated(self : Model) -> Bool {
   self.console.page_device is None ||
   !(self.console.auth is AuthSignedIn(..)) ||
-  self.focused_device() is None
+  self.focused_device() is None ||
+  self.host_incompatible()
+}
+
+///|
+fn Model::host_incompatible(self : Model) -> Bool {
+  self.focused_device() is Some(dev) && dev.bridge is HostIncompatible
 }
 
 ///|

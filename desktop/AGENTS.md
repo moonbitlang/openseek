@@ -9,8 +9,11 @@
 - The relay serves one current browser frontend to every host. When a host
   command, reply or event changes incompatibly, increment
   `HostProtocolRevision` in `protocol/desktop_messages.mbt` (and the E2E
-  harness's `hostProtocol`); browsers then report older hosts as unavailable
-  instead of driving them.
+  harness's `hostProtocol`). A browser asks `app.info` alongside its first
+  requests, not before them: an older host may already have answered (or
+  failed to decode) those, but on a mismatch the page closes the socket
+  without retrying and shows the host as unavailable on every non-Cloud
+  page.
 
 ## Module Boundary
 

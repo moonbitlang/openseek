@@ -1914,14 +1914,21 @@ fn onboarding_view(dispatch : @cmd.Emit[Msg], model : Model) -> @html.Html {
 ///|
 /// The console's full-screen gate. A missing `?device=` stops before sign-in;
 /// authentication gets its own progress/retry states, and a signed-in page
-/// stays here until its one query-selected device is available.
+/// stays here until its one query-selected device is available. A host built
+/// for another protocol revision stays here until the page is reloaded.
 fn console_gate_view(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
   console : ConsoleState,
+  host_incompatible~ : Bool = false,
 ) -> @html.Html {
   let card : Array[@html.Html] = []
-  if console.page_device is Some(id) {
+  if console.page_device is Some(_) &&
+    console.auth is AuthSignedIn(..) &&
+    host_incompatible {
+    card.push(@html.h2(shell_text(locale, DeviceUnavailable)))
+    card.push(@html.p(shell_text(locale, HostIncompatibleNotice)))
+  } else if console.page_device is Some(id) {
     match console.auth {
       AuthChecking => {
         card.push(
@@ -2205,7 +2212,14 @@ fn view(
     // column is; the transcript component's lifetime follows the same value.
     Chat =>
       if host_gated {
-        [console_gate_view(locale=model.locale, dispatch, model.console)]
+        [
+          console_gate_view(
+            locale=model.locale,
+            dispatch,
+            model.console,
+            host_incompatible=model.host_incompatible(),
+          ),
+        ]
       } else {
         match model.chat_column() {
           CloudTranscript(..) =>
@@ -2304,6 +2318,20 @@ fn view(
     Schedules => [schedules_page(dispatch, model)]
     Skills => [skills_html]
     Settings => [settings_page(dispatch, model)]
+  }
+  // An incompatible host can drive no page. Show why wherever the page is,
+  // not only in a conversation header; Cloud pages do not need the host.
+  let content = if host_gated && model.host_incompatible() {
+    [
+      console_gate_view(
+        locale=model.locale,
+        dispatch,
+        model.console,
+        host_incompatible=true,
+      ),
+    ]
+  } else {
+    content
   }
   // The app is `sidebar | content`; `content` itself splits into the
   // conversation (left) and the editor (right) as two independent parts, so

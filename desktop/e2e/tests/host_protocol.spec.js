@@ -14,6 +14,18 @@ test('a host built for another protocol revision is reported once and not retrie
   expect(app.pageErrors).toEqual([]);
 });
 
+test('an incompatible host is reported on Settings, not only in a conversation', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.hostProtocol = 0;
+  await app.install();
+  await page.goto('/device/device-a/settings');
+  const gate = page.getByRole('main');
+  await expect(gate.getByRole('heading', { name: 'Device unavailable', exact: true })).toBeVisible();
+  await expect(gate.getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Account · Remote access', exact: true })).toHaveCount(0);
+  expect(app.pageErrors).toEqual([]);
+});
+
 test('a host on the current protocol revision stays connected', async ({ page }) => {
   const app = new DesktopBrowserHarness(page);
   await app.install();

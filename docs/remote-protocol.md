@@ -74,10 +74,11 @@ Everything else — commands, queries, and host-pushed events — travels over
 served from and spliced through to the host. A browser page takes its one
 `<device>` from the page route (or the legacy `?device=` entry query) and verifies it against
 `GET /v2/devices`; other roster devices need their own page/tab. Once the
-socket is up, the page asks `app.info` for the host's `protocol` revision; a
-host built for another revision (or one that predates the field) is shown as
-unavailable and its socket is closed without retrying. There is no
-compatibility layer for older hosts. Frames are
+socket is up, the page asks `app.info` for the host's `protocol` revision
+alongside its first requests. A host built for another revision (or one that
+predates the field) has its socket closed without retrying, and every page
+except Cloud shows it as unavailable, whatever those first requests returned.
+There is no compatibility layer for older hosts. Frames are
 JSON text, shaped as **JSON-RPC 2.0**:
 
 ```jsonc

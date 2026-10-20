@@ -60,5 +60,9 @@ test "a browser marks a host on another protocol revision incompatible" {
   let incompatible = check(Some(0), 3)
   assert_true(incompatible.bridge_state() is HostIncompatible)
   assert_true(incompatible.display_status() is Unavailable(_))
+  // Every non-Cloud page shows the gate, not only a conversation header.
+  assert_true(incompatible.host_incompatible())
+  assert_true(incompatible.is_console_gated())
+  assert_false(model.host_incompatible())
   assert_true(check(None, 3).bridge_state() is HostIncompatible)
 }
