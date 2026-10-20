@@ -66,6 +66,11 @@ You can browse and install extra skills here:
   for browser behavior, run `just editor-test-browser` as well. For changes
   limited to documentation, check the diff and referenced paths or commands.
 
+- `desktop/app` is outside the root workspace and builds in its own
+  `desktop/app/moon.work`, so the root gates do not cover it. For changes
+  that reach the window host, also run `just desktop-app-check` and
+  `just desktop-app-test`.
+
 - For editor UI work, follow `editor/AGENTS.md` for the preview loop and
   OpenSeek integration requirements.
 

@@ -16,6 +16,22 @@ build-scripts-check:
     node --check scripts/release.mjs
     node --test scripts/release.test.mjs
 
+# The window host's package directories. Moon path arguments select single
+# packages, not subtrees, and the workspace's other members are covered by the
+# root gates, so list the host's own packages here.
+app_packages := ". internal/cdp internal/extension"
+
+# Check the Proton window host in its own workspace (app/moon.work). The root
+# workspace leaves it out, so this is the only Moon gate that needs Proton.
+app-check:
+    moon -C app check {{ app_packages }} --target native --deny-warn
+    moon -C app fmt --check {{ app_packages }}
+    moon -C app info {{ app_packages }}
+
+# Run the Proton window host's tests in its own workspace.
+app-test:
+    moon -C app test {{ app_packages }} --target native
+
 # Build the current host's debug package through its historical Moon command.
 package:
     {{ if os() == "macos" { "moon run package/macos --target native -- --no-open" } else if os() == "linux" { "moon run package/linux --target native" } else { "moon run package/windows --target native" } }}

@@ -31,10 +31,13 @@ binary drives the same tools as the native one.
 
 ## Monorepo development
 
-The root [`moon.work`](moon.work) develops OpenSeek, the desktop app, and the
-[`moonbitlang/editor`](editor/README.md) source together. The editor keeps its
-smaller `editor/moon.work` as a scoped entry point for editor-only builds and
+The root [`moon.work`](moon.work) develops OpenSeek, the desktop modules, and
+the [`moonbitlang/editor`](editor/README.md) source together. The editor keeps
+its smaller `editor/moon.work` as a scoped entry point for editor-only builds and
 browser tests; root Moon commands are the integration gate across both projects.
+The Desktop window host (`desktop/app`) is the only module that depends on
+Proton, so it is left out of the root workspace and builds in its own
+`desktop/app/moon.work`; root commands therefore need no Proton runtime.
 
 A fresh checkout needs the MoonBit toolchain and `just`. Recipes use Windows
 PowerShell on Windows and the default POSIX shell on macOS/Linux. The root
@@ -47,7 +50,12 @@ just build              # native + JS MoonBit builds
 just editor-build       # editor web distribution and server
 just editor-test        # editor-only tests on every supported target
 just editor-test-browser
+just desktop-app-check  # Proton window host, in desktop/app/moon.work
+just desktop-app-test
 ```
+
+The `desktop-app-*` recipes need Proton's CEF runtime; install it once with
+`just cef-setup`.
 
 The CLI lifecycle test (`just test-turn-finish`, also included in `just test`)
 runs as a standalone MoonBit script and needs no Python runtime.

@@ -13,6 +13,11 @@
   independent of Proton and window toolkits. Code that needs Proton belongs in
   `desktop/app`; when shared code needs a fact only Proton knows, the window
   host passes it in as a value (`@resources.Resources`).
+- `desktop/app` is the only module that depends on Proton. It is left out of
+  the root `moon.work` and builds in its own `desktop/app/moon.work`, so root
+  Moon commands (and the CI rows that run them) need no Proton runtime. Keep
+  Proton imports in this module; `proton_contract` is the exception, being
+  target-neutral types with no native setup.
 - `desktop/app` is a thin host of the backend. Put services required by every
   backend host in `desktop/backend` (`ApiState::start_services`); keep window
   initialization in the app's entry point.

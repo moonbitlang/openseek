@@ -4,14 +4,15 @@
 /// layout instead of reconstructing parent-directory counts independently.
 struct Layout {
   checkout_root : @path.Path
-  build_root : @path.Path
 }
 
 ///|
 /// Recognize
-/// `_build/native/<profile>/build/openseek_desktop/app/<executable>` and
-/// return the checkout and profile build roots it identifies. Installed
-/// executables deliberately do not match this layout.
+/// `desktop/app/_build/native/<profile>/build/openseek_desktop/app/<executable>`
+/// and return the checkout it identifies. The window host builds in its own
+/// `desktop/app/moon.work`, so its `_build` sits beside that workspace file
+/// rather than at the checkout root. Installed executables deliberately do
+/// not match this layout.
 pub fn Layout::detect(executable : String) -> Layout? {
   let command_dir = @path.Path(executable).dirname().resolve()
   guard command_dir.basename() == "app" else { return None }
@@ -27,38 +28,11 @@ pub fn Layout::detect(executable : String) -> Layout? {
   guard native.basename() == "native" else { return None }
   let moon_build = native.dirname()
   guard moon_build.basename() == "_build" else { return None }
-  { checkout_root: moon_build.dirname(), build_root, } |> Some
-}
-
-///|
-/// Return the checked-in HTML document used by the unbundled frontend.
-pub fn Layout::frontend_entry(self : Layout) -> String {
-  self.checkout_root.join("desktop-dev.html").normalize().to_string()
-}
-
-///|
-/// Return the checked-in HTML shell used by the session visualizer.
-pub fn Layout::viz_shell(self : Layout) -> String {
-  self.checkout_root.join("web/index.html").normalize().to_string()
-}
-
-///|
-/// Return the visualizer bundle built in the JS profile matching this host.
-pub fn Layout::viz_bundle(self : Layout) -> String {
-  let profile = self.build_root.dirname().basename()
-  self.checkout_root
-  .join("_build")
-  .join("js")
-  .join(Path(profile.to_owned()))
-  .join("build/moonbitlang/openseek-viz-app/openseek-viz-app.js")
-  .normalize()
-  .to_string()
-}
-
-///|
-/// Return the engine output directory in the same native profile as the host.
-pub fn Layout::engine_dir(self : Layout) -> String {
-  self.build_root.join("moonbitlang/openseek").normalize().to_string()
+  let workspace = moon_build.dirname()
+  guard workspace.basename() == "app" else { return None }
+  let desktop = workspace.dirname()
+  guard desktop.basename() == "desktop" else { return None }
+  { checkout_root: desktop.dirname(), } |> Some
 }
 
 ///|

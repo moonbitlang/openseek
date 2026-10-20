@@ -330,10 +330,12 @@ class Build {
     const env = this.command === "macos" ? { MACOSX_DEPLOYMENT_TARGET: "12.0" } : {};
     await this.proton(["cef", "setup"], env);
     if (this.command === "macos") {
-      await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0"), ...release], { cwd: this.app, env });
+      // The window host has its own workspace (desktop/app/moon.work), so it
+      // gets its own target directory rather than sharing the engine's.
+      await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", join(this.desktop, "target/moonbuild/macos-12.0-app"), ...release], { cwd: this.app, env });
       await this.commandRun("moon", ["build", ".", "--target", "native", "--target-dir", "desktop/target/moonbuild/macos-12.0", ...release], { cwd: this.repo, env });
-      const host = join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/openseek_desktop/app/app.exe`);
-      const expected = join(this.repo, `_build/native/${profile}/build/openseek_desktop/app/app.exe`);
+      const host = join(this.desktop, `target/moonbuild/macos-12.0-app/native/${profile}/build/openseek_desktop/app/app.exe`);
+      const expected = join(this.app, `_build/native/${profile}/build/openseek_desktop/app/app.exe`);
       await mkdir(dirname(expected), { recursive: true });
       await cp(host, expected);
       return join(this.desktop, `target/moonbuild/macos-12.0/native/${profile}/build/moonbitlang/openseek/openseek.exe`);

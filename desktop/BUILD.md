@@ -125,8 +125,10 @@ directories remain Proton details:
 - Linux: `usr/Resources/seekmoon/`
 - Windows: `Resources/seekmoon/`
 
-On macOS, native package objects use `target/moonbuild/macos-12.0` so
-`MACOSX_DEPLOYMENT_TARGET=12.0` cannot reuse an incompatible Moon cache entry.
+On macOS, native package objects use `target/moonbuild/macos-12.0` (engine)
+and `target/moonbuild/macos-12.0-app` (window host, which builds in its own
+`app/moon.work`) so `MACOSX_DEPLOYMENT_TARGET=12.0` cannot reuse an
+incompatible Moon cache entry.
 On Windows, only the staged engine copy has its PE subsystem changed to GUI.
 
 Downloaded archives stay under `desktop/target/`. Generated browser assets are

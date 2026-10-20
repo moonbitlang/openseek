@@ -377,8 +377,11 @@ git clone <this-repo>
 ```
 
 Proton is an ordinary registry dependency (`moonbit-community/proton` in
-`backend/moon.mod`), so a plain clone is complete — `moon` resolves it like
-any other package.
+`app/moon.mod`), so a plain clone is complete — `moon` resolves it like
+any other package. Only the window host depends on it, and that module builds
+in its own `app/moon.work` instead of the root workspace, so the root gates
+never run Proton's prebuild. Check and test the host with
+`just desktop-app-check` and `just desktop-app-test`.
 
 The desktop frontend imports the `moonbitlang/editor` workspace member from
 `../editor`. Packaging reads its reusable CSS and codicon font from that same

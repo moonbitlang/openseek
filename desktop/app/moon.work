@@ -1,0 +1,8 @@
+members = [
+  ".",
+  "../..",
+  "../../protocol",
+  "../../editor",
+  "..",
+  "../backend",
+]

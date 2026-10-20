@@ -2,7 +2,9 @@
 async test "development state stays inside the detected checkout" {
   let root : @pathx.Path = @fs.tmpdir(prefix="openseek-development-state-")
   defer @fs.rmdir(root.to_string(), recursive=true)
-  let command_dir = root.join("_build/native/debug/build/openseek_desktop/app")
+  let command_dir = root.join(
+    "desktop/app/_build/native/debug/build/openseek_desktop/app",
+  )
   @fs.mkdir(command_dir.to_string(), recursive=true)
   let executable = command_dir.join("app.exe").to_string()
   let expected = root.join("desktop/target/dev-state").to_string()

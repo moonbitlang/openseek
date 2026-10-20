@@ -95,6 +95,14 @@ editor-test-browser:
 desktop-test-browser:
     just --justfile desktop/justfile test-browser
 
+# Check the Proton window host, which builds in its own desktop/app/moon.work.
+desktop-app-check:
+    just --justfile desktop/justfile app-check
+
+# Run the Proton window host's tests in its own workspace.
+desktop-app-test:
+    just --justfile desktop/justfile app-test
+
 # Parse Desktop's checked-in build scripts.
 desktop-build-scripts-check:
     just --justfile desktop/justfile build-scripts-check

@@ -34,35 +34,6 @@ jobs:
       - name: update MoonBit dependencies
         run: moon update
 
-      # Publishing embeds a release build of cmd/viz_app, and building any JS
-      # target in this workspace runs Desktop's Proton prebuild. Mirror the
-      # viz-e2e job in ci.yml: pinned Proton, its pkg-config metadata, and the
-      # CEF runtime.
-      - name: resolve pinned Proton version
-        id: proton
-        run: |
-          version="$(sed -n 's/.*"moonbit-community\/proton@\([^"]*\)".*/\1/p' desktop/app/moon.mod)"
-          test -n "$version"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-
-      - name: restore Proton runtime
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            ~/.proton/store
-            ~/.proton/helpers
-          key: proton-runtime-${{ runner.os }}-${{ runner.arch }}-${{ steps.proton.outputs.version }}
-
-      - name: install Proton Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes libgtk-3-dev libx11-dev
-
-      - name: assemble Proton CEF runtime
-        run: >-
-          moonx "moonbit-community/proton_cli@${{ steps.proton.outputs.version }}"
-          cef setup
-
       # Build exactly what would be published, on its own against the registry,
       # before anything is uploaded.
       - name: prepublish check

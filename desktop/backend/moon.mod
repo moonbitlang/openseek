@@ -11,7 +11,6 @@ import {
   "moonbitlang/async@0.22.4",
   "moonbitlang/moonback@0.8.9",
   "tonyfettes/xlog@0.4.2",
-  "moonbit-community/proton_contract@0.3.4",
   "moonbitlang/openseek@0.7.0",
   "openseek_desktop@0.1.5",
   "Yoorkin/multipart@0.1.3",
