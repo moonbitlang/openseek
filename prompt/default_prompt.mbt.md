@@ -664,9 +664,10 @@ example rather than guessing the flags.
 - Packages are directories with `moon.pkg`. Files inside one package share a
   flat namespace; file names do not create modules.
 - `moon.pkg` is the package manifest: keep package imports, import aliases,
-  test/wbtest imports, `supported_targets`, and package options such as
-  `"is-main"` there. Do not put package imports or aliases in `moon.mod`; do
-  not put module dependency versions in `moon.pkg`.
+  test/wbtest imports, `supported_targets`, and package declarations such as
+  `pkgtype(kind: "executable")` there. The legacy `"is-main"` option is
+  deprecated; use `pkgtype` instead. Do not put package imports or aliases in
+  `moon.mod`; do not put module dependency versions in `moon.pkg`.
 - Treat files like Go package files: splitting a package into small focused
   `.mbt` files does not affect visibility, and is preferred when it avoids
   large fragile edits.
@@ -706,7 +707,7 @@ version = "0.1.0"
 preferred_target = "native"
 
 import {
-  "moonbitlang/async@0.19.1", // import modules(`username/modulename`) with version
+  "moonbitlang/async@0.22.5", // import modules(`username/modulename`) with version
 }
 warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
 ```
@@ -753,7 +754,7 @@ Rabbita APIs. It covers the Warren frontend workflow and the
 - `moon ide doc` accepts several queries per call and `*` globs in any
   position (`"String::*rev*"`, `"@string.*parse*"`, `"*parse*"`). When
   unsure of a name, batch candidates with a bare glob in one call —
-  `moon ide doc "parse_float" "*parse*" "@strconv"` — misses report
+  `moon ide doc "parse_float" "*parse*" "@string"` — misses report
   `No results found` inline while the others return. Globs can omit
   deprecated symbols, so an empty package glob does not prove absence:
   widen to a bare glob across packages. On a miss, never retry
@@ -765,6 +766,9 @@ Rabbita APIs. It covers the Warren frontend workflow and the
   file.mbt:line:col` for types.
 - Use the `mbtx` tool for quick core-language probes and MoonBit
   automation; there is no `python`/`node` to fall back to.
+- Prefer `Int32` over `Int` for 32-bit integers. They are aliases today, but
+  the current toolchain names the type and its APIs `Int32`; use `Int32` in
+  new annotations and when parsing integers.
 - Syntax the compiler rejects, each shown working in the verified example
   below: parameters and `self` are never `mut`, a mutable local is
   `let mut` (there is no `var`), and only a struct field you assign is
@@ -785,10 +789,9 @@ functions directly from functions marked `raise` and handle errors only at a
 real boundary, such as a CLI path that needs its own stderr text. Use
 `fail("message")` for a one-off internal failure and a small `suberror` for
 user-facing errors; never encode failure as `null`, `()`, or another
-success sentinel. `async fn` raises by default, so never write
-`async fn main raise`; mark an async helper `noraise` when it must not raise.
-In tests, call raising functions directly and let a raise fail the test. The
-verified example, compiled and run by CI:
+success sentinel. `async fn` raises by default; mark an async helper `noraise`
+when it must not. In tests, call raising functions directly and let a raise
+fail the test. The verified example, compiled and run by CI:
 
 [share/examples/checked_errors.mbtx](../share/examples/checked_errors.mbtx)
 
@@ -810,9 +813,9 @@ verified example, compiled and run by CI:
 - Slices are zero-copy `StringView`s whose offsets clamp instead of
   panicking; `map[key]` panics when the key is missing, `map.get(key)`
   returns `T?`. Parse with `@string.from_str` and an annotation on the
-  binding, `let n : Int = @string.from_str(text)` (import
+  binding, `let n : Int32 = @string.from_str(text)` (import
   `moonbitlang/core/string`); it raises on bad input. Do not write
-  `@string.from_str[:Int](text)` or `@string.from_str[Int](text)`.
+  `@string.from_str[:Int32](text)` or `@string.from_str[Int32](text)`.
 
 The verified example, compiled and run by CI:
 

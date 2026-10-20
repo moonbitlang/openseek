@@ -376,7 +376,7 @@ fn default_prompt() -> String {
     #|      "usage: ptc_guarded_edit.mbtx <path> <old_string> <new_string> [<start_line>]",
     #|    )
     #|  }
-    #|  let start_line : Int = match args {
+    #|  let start_line : Int32 = match args {
     #|    [_, _, _, line, ..] =>
     #|      @string.from_str(line) catch { _ => fail("start_line must be an integer") }
     #|    _ => 1
@@ -928,9 +928,10 @@ fn default_prompt() -> String {
     #|- Packages are directories with `moon.pkg`. Files inside one package share a
     #|  flat namespace; file names do not create modules.
     #|- `moon.pkg` is the package manifest: keep package imports, import aliases,
-    #|  test/wbtest imports, `supported_targets`, and package options such as
-    #|  `"is-main"` there. Do not put package imports or aliases in `moon.mod`; do
-    #|  not put module dependency versions in `moon.pkg`.
+    #|  test/wbtest imports, `supported_targets`, and package declarations such as
+    #|  `pkgtype(kind: "executable")` there. The legacy `"is-main"` option is
+    #|  deprecated; use `pkgtype` instead. Do not put package imports or aliases in
+    #|  `moon.mod`; do not put module dependency versions in `moon.pkg`.
     #|- Treat files like Go package files: splitting a package into small focused
     #|  `.mbt` files does not affect visibility, and is preferred when it avoids
     #|  large fragile edits.
@@ -970,7 +971,7 @@ fn default_prompt() -> String {
     #|preferred_target = "native"
     #|
     #|import {
-    #|  "moonbitlang/async@0.19.1", // import modules(`username/modulename`) with version
+    #|  "moonbitlang/async@0.22.5", // import modules(`username/modulename`) with version
     #|}
     #|warnings = "+test_unqualified_package" // `moon explain --diagnostic test_unqualified_package` to learn more
     #|```
@@ -1017,7 +1018,7 @@ fn default_prompt() -> String {
     #|- `moon ide doc` accepts several queries per call and `*` globs in any
     #|  position (`"String::*rev*"`, `"@string.*parse*"`, `"*parse*"`). When
     #|  unsure of a name, batch candidates with a bare glob in one call —
-    #|  `moon ide doc "parse_float" "*parse*" "@strconv"` — misses report
+    #|  `moon ide doc "parse_float" "*parse*" "@string"` — misses report
     #|  `No results found` inline while the others return. Globs can omit
     #|  deprecated symbols, so an empty package glob does not prove absence:
     #|  widen to a bare glob across packages. On a miss, never retry
@@ -1029,6 +1030,9 @@ fn default_prompt() -> String {
     #|  file.mbt:line:col` for types.
     #|- Use the `mbtx` tool for quick core-language probes and MoonBit
     #|  automation; there is no `python`/`node` to fall back to.
+    #|- Prefer `Int32` over `Int` for 32-bit integers. They are aliases today, but
+    #|  the current toolchain names the type and its APIs `Int32`; use `Int32` in
+    #|  new annotations and when parsing integers.
     #|- Syntax the compiler rejects, each shown working in the verified example
     #|  below: parameters and `self` are never `mut`, a mutable local is
     #|  `let mut` (there is no `var`), and only a struct field you assign is
@@ -1043,7 +1047,7 @@ fn default_prompt() -> String {
     #|///|
     #|/// Parameters including `self` are never `mut`: a function that needs a changed
     #|/// value rebinds a local with `let mut`.
-    #|fn collatz_steps(start : Int) -> Int {
+    #|fn collatz_steps(start : Int32) -> Int32 {
     #|  let mut value = start
     #|  let mut steps = 0
     #|  while value != 1 {
@@ -1057,8 +1061,8 @@ fn default_prompt() -> String {
     #|/// Only a struct field that is assigned is marked `mut`; a method assigns it
     #|/// through `self`, which itself is never `mut`.
     #|struct Counter {
-    #|  mut count : Int
-    #|  step : Int
+    #|  mut count : Int32
+    #|  step : Int32
     #|}
     #|
     #|///|
@@ -1086,7 +1090,7 @@ fn default_prompt() -> String {
     #|  // A bare `{}` is ambiguous (empty map, block, struct, or JSON object) and
     #|  // an error under deny-warn: an empty map is `Map([])`, and the no-op
     #|  // expression is `()`.
-    #|  let empty : Map[String, Int] = Map([])
+    #|  let empty : Map[String, Int32] = Map([])
     #|  assert_eq(empty.length(), 0)
     #|  if pending {
     #|    ()
@@ -1122,10 +1126,9 @@ fn default_prompt() -> String {
     #|real boundary, such as a CLI path that needs its own stderr text. Use
     #|`fail("message")` for a one-off internal failure and a small `suberror` for
     #|user-facing errors; never encode failure as `null`, `()`, or another
-    #|success sentinel. `async fn` raises by default, so never write
-    #|`async fn main raise`; mark an async helper `noraise` when it must not raise.
-    #|In tests, call raising functions directly and let a raise fail the test. The
-    #|verified example, compiled and run by CI:
+    #|success sentinel. `async fn` raises by default; mark an async helper `noraise`
+    #|when it must not. In tests, call raising functions directly and let a raise
+    #|fail the test. The verified example, compiled and run by CI:
     #|
     #|```mbtx
     #|///|
@@ -1147,14 +1150,14 @@ fn default_prompt() -> String {
     #|///|
     #|/// `raise ParseError` names the exact error this function may let escape.
     #|/// A helper that raises a broader error is caught and translated, as the
-    #|/// `from_str` call shows. The success path stays direct: an `Int`, not a
+    #|/// `from_str` call shows. The success path stays direct: an `Int32`, not a
     #|/// wrapper around success and failure.
-    #|fn parse_count(text : String) -> Int raise ParseError {
+    #|fn parse_count(text : String) -> Int32 raise ParseError {
     #|  let trimmed = text.trim()
     #|  if trimmed.is_empty() {
     #|    raise InvalidInput("empty input")
     #|  }
-    #|  let n : Int = @string.from_str(trimmed) catch {
+    #|  let n : Int32 = @string.from_str(trimmed) catch {
     #|    _ => raise InvalidInput("not an integer: \{trimmed}")
     #|  }
     #|  n
@@ -1163,7 +1166,7 @@ fn default_prompt() -> String {
     #|///|
     #|/// Plain `raise` is enough for an ordinary failing helper, and `fail` raises
     #|/// a one-off failure with a message.
-    #|fn require_positive(n : Int) -> Int raise {
+    #|fn require_positive(n : Int32) -> Int32 raise {
     #|  if n <= 0 {
     #|    fail("expected a positive count, got \{n}")
     #|  }
@@ -1173,7 +1176,7 @@ fn default_prompt() -> String {
     #|///|
     #|/// A function marked `raise` calls raising helpers directly; nothing is
     #|/// wrapped or unwrapped between the layers.
-    #|fn count_from(text : String) -> Int raise {
+    #|fn count_from(text : String) -> Int32 raise {
     #|  require_positive(parse_count(text))
     #|}
     #|
@@ -1191,9 +1194,8 @@ fn default_prompt() -> String {
     #|}
     #|
     #|///|
-    #|/// A sync `main` that calls raising functions is `fn main raise`. An
-    #|/// `async fn main` raises by default and must not be written with `raise`;
-    #|/// an async helper that must not raise is marked `noraise`.
+    #|/// A sync `main` that calls raising functions is `fn main raise`; an async
+    #|/// `main` raises by default, and `noraise` marks an async helper that must not.
     #|fn main raise {
     #|  assert_eq(parse_count(" 42 "), 42)
     #|  assert_eq(describe("7"), "count = 7")
@@ -1222,9 +1224,9 @@ fn default_prompt() -> String {
     #|- Slices are zero-copy `StringView`s whose offsets clamp instead of
     #|  panicking; `map[key]` panics when the key is missing, `map.get(key)`
     #|  returns `T?`. Parse with `@string.from_str` and an annotation on the
-    #|  binding, `let n : Int = @string.from_str(text)` (import
+    #|  binding, `let n : Int32 = @string.from_str(text)` (import
     #|  `moonbitlang/core/string`); it raises on bad input. Do not write
-    #|  `@string.from_str[:Int](text)` or `@string.from_str[Int](text)`.
+    #|  `@string.from_str[:Int32](text)` or `@string.from_str[Int32](text)`.
     #|
     #|The verified example, compiled and run by CI:
     #|
@@ -1239,7 +1241,7 @@ fn default_prompt() -> String {
     #|///|
     #|fn main raise {
     #|  // Interpolation is `\{expr}` and takes any `Show` value; `"n: " + n` needs
-    #|  // a `String` on both sides, so with an `Int` it is a type error.
+    #|  // a `String` on both sides, so with an `Int32` it is a type error.
     #|  let n = 3
     #|  assert_eq("n: \{n}", "n: 3")
     #|  // Multi-line literals: `#|` lines keep text literally, `$|` lines interpolate.
@@ -1268,7 +1270,7 @@ fn default_prompt() -> String {
     #|  assert_eq(s.split("=").collect(), ["name", "value"])
     #|  // Typed parsing: `from_str` picks the type from the annotated binding and
     #|  // raises on bad input.
-    #|  let parsed : Int = @string.from_str("42")
+    #|  let parsed : Int32 = @string.from_str("42")
     #|  assert_eq(parsed, 42)
     #|  // `String` orders SHORTLEX (length first, then code units), so the default
     #|  // sort is deterministic but not dictionary order.

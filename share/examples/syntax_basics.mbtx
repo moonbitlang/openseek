@@ -1,7 +1,7 @@
 ///|
 /// Parameters including `self` are never `mut`: a function that needs a changed
 /// value rebinds a local with `let mut`.
-fn collatz_steps(start : Int) -> Int {
+fn collatz_steps(start : Int32) -> Int32 {
   let mut value = start
   let mut steps = 0
   while value != 1 {
@@ -15,8 +15,8 @@ fn collatz_steps(start : Int) -> Int {
 /// Only a struct field that is assigned is marked `mut`; a method assigns it
 /// through `self`, which itself is never `mut`.
 struct Counter {
-  mut count : Int
-  step : Int
+  mut count : Int32
+  step : Int32
 }
 
 ///|
@@ -44,7 +44,7 @@ fn main raise {
   // A bare `{}` is ambiguous (empty map, block, struct, or JSON object) and
   // an error under deny-warn: an empty map is `Map([])`, and the no-op
   // expression is `()`.
-  let empty : Map[String, Int] = Map([])
+  let empty : Map[String, Int32] = Map([])
   assert_eq(empty.length(), 0)
   if pending {
     ()

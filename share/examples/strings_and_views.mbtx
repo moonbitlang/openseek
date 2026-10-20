@@ -8,7 +8,7 @@ import {
 ///|
 fn main raise {
   // Interpolation is `\{expr}` and takes any `Show` value; `"n: " + n` needs
-  // a `String` on both sides, so with an `Int` it is a type error.
+  // a `String` on both sides, so with an `Int32` it is a type error.
   let n = 3
   assert_eq("n: \{n}", "n: 3")
   // Multi-line literals: `#|` lines keep text literally, `$|` lines interpolate.
@@ -37,7 +37,7 @@ fn main raise {
   assert_eq(s.split("=").collect(), ["name", "value"])
   // Typed parsing: `from_str` picks the type from the annotated binding and
   // raises on bad input.
-  let parsed : Int = @string.from_str("42")
+  let parsed : Int32 = @string.from_str("42")
   assert_eq(parsed, 42)
   // `String` orders SHORTLEX (length first, then code units), so the default
   // sort is deterministic but not dictionary order.
