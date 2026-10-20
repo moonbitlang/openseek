@@ -618,6 +618,14 @@ pub fn endpoints(
         },
       )
     }),
+    Endpoint(@commands.session_artifacts_list, payload => {
+      @engine.session_artifacts_list(state.manager, payload.session)
+    }),
+    Endpoint(@commands.session_artifacts_remove, payload => {
+      state.save_session_artifacts(payload.session, artifacts => {
+        artifacts.without(payload.artifact)
+      })
+    }),
     Endpoint(@commands.session_rename, payload => {
       @engine.rename_session(state.manager, payload)
       publish_session_changed(

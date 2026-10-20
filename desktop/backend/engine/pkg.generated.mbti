@@ -74,6 +74,10 @@ pub async fn rename_session(EngineManager, @protocol.SessionRenamePayload) -> Un
 
 pub async fn search_sessions(@protocol.SessionSearchPayload) -> @protocol.SessionSearchReply
 
+pub async fn session_artifacts_list(EngineManager, String) -> @protocol.SessionArtifacts
+
+pub async fn session_artifacts_update(EngineManager, String, (@protocol.SessionArtifacts) -> @protocol.SessionArtifacts, () -> Unit) -> @protocol.SessionArtifacts
+
 pub async fn settings_status(EngineManager) -> @protocol.SettingsStatusPayload
 
 pub async fn start_run(EventSink, EngineManager, @protocol.StartPayload) -> @protocol.StartReply

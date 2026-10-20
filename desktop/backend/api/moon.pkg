@@ -31,6 +31,9 @@ import {
 
 import {
   "moonbitlang/async/fs",
+  "openseek_desktop/backend/internal/fsx",
+  "moonbitlang/core/env" @sys,
+  "moonbitlang/openseek/mcp/streamhttp",
 } for "test"
 
 warnings = "+test_unqualified_package+unnecessary_annotation+unnecessary_view_op+ambiguous_range_direction+unqualified_local_using"

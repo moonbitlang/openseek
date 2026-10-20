@@ -237,8 +237,8 @@ read this file — Codex takes its MCP servers from its own `config.toml`.
 
 ### The app's own tools
 
-The app offers tools of its own to the agents it runs, starting with the
-dock's browser. An agent works with the Browser tabs of its own conversation:
+The app offers browser tools and session artifacts to the OpenSeek agents
+it runs. An agent works with the Browser tabs of its own conversation:
 `browser_tabs` lists them, `browser_open` opens a new one on an address, and
 `browser_navigate` loads an address in one, steps back or forward in its
 history, or reloads it. The engine connects directly to the host over MCP
@@ -268,7 +268,34 @@ tools, add
 `"X-SeekMoon-Tool-Groups": "browser"` to `headers`; multiple groups are comma
 separated. Replace older `"command": "seekmoon", "args": ["mcp"]` entries
 with the HTTP entry above; the relay executable is no longer packaged.
-See `backend/mcp/README.md`.
+To include session artifacts with browser tools, use
+`"X-SeekMoon-Tool-Groups": "browser,artifacts"`; omitting the header exposes all
+available groups. See the [host MCP reference](backend/mcp/README.md).
+
+### Attach pull requests and remote branches
+
+With the host MCP entry configured, an OpenSeek agent can attach PR and
+remote branch URLs to its current conversation:
+
+- `artifacts_list({})` reads the saved `{ "artifacts": [{ "type": "pull_request", "url": "…" }] }` list.
+- `artifacts_attach({ "type": "pull_request", "url": "https://github.com/example/project/pull/42" })`
+  appends one artifact and returns the saved list. Use `"type": "branch"` for
+  remote branch URLs. Both fields are required.
+
+The agent sees these as `mcp__seekmoon__artifacts_list` and
+`mcp__seekmoon__artifacts_attach`. The host's token selects the conversation.
+Attach checks basic HTTPS syntax and deduplicates by type and normalized URL,
+without checking remote existence or changing the checkout. Concurrent
+attachments append to the latest saved list under a shared lock. A conversation
+must already have a durable record to attach artifacts. Agents cannot detach,
+clear, or replace the list. Unpublished local branches cannot be attached by name.
+
+Artifacts are stored in `artifacts.json` beside the transcript, survive
+restart, and follow the conversation through archive and restore. This
+feature applies to OpenSeek conversations; the Codex MCP configuration is
+unchanged. Authenticated frontend clients can list and remove artifacts
+through the separate
+[session protocol commands](../docs/remote-protocol.md#session-artifacts).
 
 ## API endpoint
 

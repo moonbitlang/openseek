@@ -1017,3 +1017,15 @@ pub let session_import : Command[
   @protocol.SessionImportPayload,
   @protocol.SessionImportReply,
 ] = Command("session.import")
+
+///|
+pub let session_artifacts_list : Command[
+  @protocol.SessionArtifactsChangedPayload,
+  @protocol.SessionArtifacts,
+] = Command("session.artifacts_list")
+
+///|
+pub let session_artifacts_remove : Command[
+  @protocol.SessionArtifactRemovePayload,
+  @protocol.SessionArtifacts,
+] = Command("session.artifacts_remove")

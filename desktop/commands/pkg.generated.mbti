@@ -245,6 +245,10 @@ pub let schedules_save : Command[@protocol.ScheduleSavePayload, @protocol.Schedu
 
 pub let session_archive : Command[@protocol.SessionPayload, @protocol.ArchiveReply]
 
+pub let session_artifacts_list : Command[@protocol.SessionArtifactsChangedPayload, @protocol.SessionArtifacts]
+
+pub let session_artifacts_remove : Command[@protocol.SessionArtifactRemovePayload, @protocol.SessionArtifacts]
+
 pub let session_delete : Command[@protocol.SessionDeletePayload, @protocol.SessionDeleteReply]
 
 pub let session_delete_archived : Command[@protocol.ArchivedSessionPayload, @protocol.SessionsReply]

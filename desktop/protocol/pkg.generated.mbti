@@ -2334,6 +2334,7 @@ pub(all) enum Notification {
   WorkspaceSettingsChanged(WorkspaceSettingsPayload)
   WorktreeChanged(WorktreeChangedPayload)
   SettingsChanged(SettingsStatusPayload)
+  SessionArtifactsChanged(SessionArtifactsChangedPayload)
   SkillsChanged
   UpdateDownloadProgress(UpdateDownloadProgressPayload)
   UpdateDownloaded(UpdateDownloadedPayload)
@@ -2375,6 +2376,7 @@ pub(all) enum NotificationKind {
   WorkspaceSettingsChanged
   WorktreeChanged
   SettingsChanged
+  SessionArtifactsChanged
   SkillsChanged
   UpdateDownloadProgress
   UpdateDownloaded
@@ -3043,6 +3045,67 @@ pub fn SemanticSelectionMatch::to_json(Self) -> Json
 pub fn SemanticSelectionMatch::to_repr(Self) -> @debug.Repr
 pub impl ToJson for SemanticSelectionMatch
 pub impl @json.FromJson for SemanticSelectionMatch
+
+pub struct SessionArtifact {
+  type_ : SessionArtifactType
+  url : String
+} derive(Eq, @debug.Debug)
+pub fn SessionArtifact::equal(Self, Self) -> Bool
+pub fn SessionArtifact::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionArtifact::not_equal(Self, Self) -> Bool
+pub fn SessionArtifact::to_json(Self) -> Json
+pub fn SessionArtifact::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionArtifact
+pub impl @json.FromJson for SessionArtifact
+
+pub(all) struct SessionArtifactRemovePayload {
+  session : String
+  artifact : SessionArtifact
+} derive(Eq, @debug.Debug)
+pub fn SessionArtifactRemovePayload::equal(Self, Self) -> Bool
+pub fn SessionArtifactRemovePayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionArtifactRemovePayload::not_equal(Self, Self) -> Bool
+pub fn SessionArtifactRemovePayload::to_json(Self) -> Json
+pub fn SessionArtifactRemovePayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionArtifactRemovePayload
+pub impl @json.FromJson for SessionArtifactRemovePayload
+
+pub(all) enum SessionArtifactType {
+  PullRequest
+  Branch
+} derive(Eq, @debug.Debug)
+pub fn SessionArtifactType::equal(Self, Self) -> Bool
+pub fn SessionArtifactType::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionArtifactType::not_equal(Self, Self) -> Bool
+pub fn SessionArtifactType::to_json(Self) -> Json
+pub fn SessionArtifactType::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionArtifactType
+pub impl @json.FromJson for SessionArtifactType
+
+pub struct SessionArtifacts {
+  artifacts : Array[SessionArtifact]
+} derive(Eq, @debug.Debug)
+pub fn SessionArtifacts::attach(Self, SessionArtifact) -> Self
+pub fn SessionArtifacts::empty() -> Self
+pub fn SessionArtifacts::equal(Self, Self) -> Bool
+pub fn SessionArtifacts::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionArtifacts::not_equal(Self, Self) -> Bool
+pub fn SessionArtifacts::to_json(Self) -> Json
+pub fn SessionArtifacts::to_repr(Self) -> @debug.Repr
+pub fn SessionArtifacts::without(Self, SessionArtifact) -> Self
+pub impl ToJson for SessionArtifacts
+pub impl @json.FromJson for SessionArtifacts
+
+pub(all) struct SessionArtifactsChangedPayload {
+  session : String
+} derive(Eq, @debug.Debug)
+pub fn SessionArtifactsChangedPayload::equal(Self, Self) -> Bool
+pub fn SessionArtifactsChangedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
+pub fn SessionArtifactsChangedPayload::not_equal(Self, Self) -> Bool
+pub fn SessionArtifactsChangedPayload::to_json(Self) -> Json
+pub fn SessionArtifactsChangedPayload::to_repr(Self) -> @debug.Repr
+pub impl ToJson for SessionArtifactsChangedPayload
+pub impl @json.FromJson for SessionArtifactsChangedPayload
 
 pub(all) struct SessionAssistantMessage {
   content : String
