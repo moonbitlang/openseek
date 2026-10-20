@@ -17,15 +17,16 @@ main:has(> .conv-overview) {
   position: relative;
 }
 
-/* Narrow: a panel over the transcript row. It stays out of the composer's
-   row, so the composer remains usable while the overview is open. */
+/* Narrow: a panel over the transcript row, as tall as its cards. It never
+   reaches past the transcript row, so the composer remains usable while the
+   overview is open; longer content scrolls inside the panel. */
 .conv-overview {
   position: absolute;
   grid-column: 1;
   grid-row: 2 / 3;
   top: 6px;
   right: 8px;
-  bottom: 6px;
+  max-height: calc(100% - 12px);
   z-index: 20;
   box-sizing: border-box;
   width: var(--conv-overview-width);
@@ -62,6 +63,7 @@ main:has(> .conv-overview) {
     top: 0;
     right: 0;
     bottom: 0;
+    max-height: none;
     display: flex;
     flex-direction: column;
     gap: 10px;
