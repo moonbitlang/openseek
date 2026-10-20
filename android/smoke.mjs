@@ -21,8 +21,8 @@ const output = fileURLToPath(new URL('./app/build/smoke/', import.meta.url));
 mkdirSync(output, { recursive: true });
 const check = (ok, label) => { if (!ok) throw new Error(label); };
 try {
-  // A saved frontend preference may open Cloud before device selection. Keep
-  // unmocked requests off the network; the harness below owns every API reply.
+  // Keep unmocked requests off the network; the harness below owns every API
+  // reply.
   const assets = new URL('.', home);
   await page.route('**/*', route => {
     const url = new URL(route.request().url());
@@ -31,13 +31,21 @@ try {
   });
   const app = new DesktopBrowserHarness(page);
   await app.install();
-  // Follow the frontend's own device entry without constructing a route.
+  // The APK answers the frontend's document paths with its bundled document.
+  // Let those navigations through to it instead of the desktop harness's
+  // /dist/browser document, which only the desktop test server has.
+  await page.route(url => url.origin === assets.origin &&
+    (url.pathname === '/cloud' || url.pathname.startsWith('/cloud/') || url.pathname.startsWith('/device/')),
+  route => route.continue());
+  // The entry lands on Cloud; choose the device from the sidebar's selector,
+  // which loads that device's page.
   await page.goto(home);
-  const chooseDevice = page.getByRole('link', { name: 'Choose a device', exact: true });
-  const onlineDevice = page.getByRole('link', { name: 'Test Mac Online' });
-  await onlineDevice.or(chooseDevice).first().waitFor();
-  if (!await onlineDevice.isVisible()) await chooseDevice.click();
-  await onlineDevice.click();
+  await page.waitForURL(url => url.pathname === '/cloud');
+  await page.locator('.sidebar-toggle').click();
+  await page.getByRole('button', { name: 'Choose a device', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Test Mac', exact: true }).click();
+  await page.waitForURL(url => url.pathname.startsWith('/device/device-a/'));
+  check(await page.evaluate(() => document.body.classList.contains('android-connect')), 'device page left the bundled document');
   await page.getByRole('main').waitFor();
   await page.locator('.sidebar-toggle').click();
   await app.openSession();
@@ -61,7 +69,7 @@ try {
   run('shell', 'input', 'keyevent', '4');
   await page.waitForFunction(() => document.querySelector('.app.sidebar-collapsed'));
   check(app.pageErrors.length === 0, `page errors: ${app.pageErrors.join('; ')}`);
-  console.log('PASS: bundled entry, device selection, real IME, send/stop, Back');
+  console.log('PASS: bundled entry and device page, device selector, real IME, send/stop, Back');
 } finally {
   await page.unrouteAll({ behavior: 'wait' });
   // Reload disposes every fixture socket and restores the real application entry.
