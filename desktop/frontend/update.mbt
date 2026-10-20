@@ -1488,7 +1488,8 @@ fn sync_file_panel(
     ..model,
     file_panel: panel,
   })
-  (model, @cmd.batch([cmd, side_chat_cmd]))
+  let (model, closing_cmd) = model.advance_side_chat_closing(dispatch)
+  (model, @cmd.batch([cmd, side_chat_cmd, closing_cmd]))
 }
 
 ///|
@@ -5754,6 +5755,13 @@ fn update_msg(
       model.edit_user_message(dispatch, slot, sequence, draft)
     ForkRequested(slot~, through~) =>
       model.request_fork(dispatch, slot, through)
+    SideChatCloseFailed(chat~, message~) =>
+      {
+        ..model,
+        closing_side_chats: model.closing_side_chats.filter(closing => {
+          closing.chat != chat
+        }),
+      }.notify_error(dispatch, message)
     ForkCompleted(pending, result, fresh_session~) =>
       model.finish_fork(dispatch, pending, result, fresh_session~)
     // A transcript link naming a session on the device already focused. It
@@ -6319,7 +6327,13 @@ fn update_msg(
             } else {
               model
             }
-            match tab {
+            // A side chat's tab is the side chat: closing it deletes it.
+            let (close_side_chat, model) = if tab is SideChat(owner~) {
+              model.close_side_chat(dispatch, owner)
+            } else {
+              (@cmd.none, model)
+            }
+            let (cmd, model) = match tab {
               File(path~) => {
                 let (cmd, panel) = @fileeditor.close_document(
                   femit,
@@ -6434,6 +6448,7 @@ fn update_msg(
                   (@cmd.none, model)
                 }
             }
+            (@cmd.batch([close_side_chat, cmd]), model)
           } else {
             (@cmd.none, model)
           }
@@ -7838,10 +7853,16 @@ fn update_device_msg(
       }
       // Stop was optimistic. If delivery failed, hand the control back while
       // a runs snapshot determines whether the engine is in fact still live.
-      let retryable = model.replace_conversation({
-        ..conv,
-        run: Open(run_id~, stage=AtStep(None)),
-      })
+      // A side chat closed with its turn running gets its tab back for that.
+      let retryable = model
+        .replace_conversation({
+          ..conv,
+          run: Open(run_id~, stage=AtStep(None)),
+        })
+        .reopen_side_chat_after_cancel_failure({
+          channel: conv.device,
+          session: conv.session_id,
+        })
       let (notice, notified) = retryable.notify_error(dispatch, message)
       (
         @cmd.batch([

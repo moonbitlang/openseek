@@ -1295,8 +1295,9 @@ fn transcript_view(
     attrs=@html.Attrs::build()
       .id(transcript_root_id(input.surface))
       .class("transcript")
-      // Text selected here gets the shell's floating reply.
-      .data_set("context-quote", "")
+      // Text selected here gets the shell's floating reply, addressed to the
+      // composer on the same surface.
+      .data_set("context-quote", input.surface.quote_source())
       .data_set("transcript-session", input.active_session)
       .data_set(
         "transcript-theme",

@@ -58,6 +58,7 @@ pub fn Input::not_equal(Self, Self) -> Bool
 pub(all) struct SideChatTab {
   owner : @interop.ConversationKey
   number : Int32
+  mark : @dock.TabMark
 } derive(Eq)
 pub fn SideChatTab::equal(Self, Self) -> Bool
 pub fn SideChatTab::not_equal(Self, Self) -> Bool

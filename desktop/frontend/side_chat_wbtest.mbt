@@ -402,3 +402,127 @@ test "a restored side chat waits for its worktree registry" {
   assert_true(placed.workspace is Worktree(name="shared", ..))
   assert_eq(loaded.conversation_root(placed), Some(worktree))
 }
+
+///|
+test "closing an idle side chat's tab deletes it, and a failed delete brings it back" {
+  let model = side_chat_model()
+  let idle = model.replace_conversation({
+    ..empty_conversation(
+      @interop.ChannelId::Local,
+      SideChatId,
+      @interop.ChannelId::Local.test_project(),
+    ),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    idle,
+  )
+  // The tab is gone at once, though the listing still has the record.
+  assert_true(closed.dock_state().tabs.is_empty())
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Deleting, }],
+  )
+  let (_, failed) = update(
+    test_dispatch(),
+    SideChatCloseFailed(chat=side_chat_owner(), message="kept"),
+    closed,
+  )
+  assert_true(failed.closing_side_chats.is_empty())
+  assert_true(failed.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  // A deleted record leaves the listing, and the closing entry with it.
+  let (_, deleted) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.with_listed(["desktop-test"]),
+  )
+  assert_true(deleted.closing_side_chats.is_empty())
+  assert_true(deleted.dock_state().tabs.is_empty())
+}
+
+///|
+test "a running side chat is stopped before it is deleted" {
+  let model = side_chat_model()
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    model,
+  )
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Stopping, }],
+  )
+  guard closed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(stage=Cancelling, ..))
+  // Its turn ends: now it is deleted.
+  let (_, ended) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.replace_conversation({ ..side, run: NoRun(ended=None), }),
+  )
+  assert_true(
+    ended.closing_side_chats == [{ chat: side_chat_owner(), stage: Deleting, }],
+  )
+  assert_true(ended.dock_state().tabs.is_empty())
+}
+
+///|
+test "a side chat closed while its turn starts is stopped once the run opens" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let starting = model.replace_conversation({
+    ..side,
+    run: Starting(submission_id="s1"),
+  })
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    starting,
+  )
+  assert_true(
+    closed.closing_side_chats == [{ chat: side_chat_owner(), stage: Stopping, }],
+  )
+  // Its run opens: now it can be, and is, stopped.
+  let (_, opened) = update(
+    test_dispatch(),
+    CloseSelectMenu,
+    closed.replace_conversation({
+      ..side,
+      run: Open(run_id="r9", stage=Opened),
+    }),
+  )
+  guard opened.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(stopping) else {
+    fail("the side chat must be held")
+  }
+  assert_true(stopping.run is Open(run_id="r9", stage=Cancelling))
+  assert_true(opened.dock_state().tabs.is_empty())
+}
+
+///|
+test "a side chat whose stop failed gets its tab back" {
+  let model = side_chat_model()
+  let (_, closed) = update(
+    test_dispatch(),
+    Dock(TabClosed(SideChat(owner=side_chat_owner()))),
+    model,
+  )
+  assert_true(closed.dock_state().tabs.is_empty())
+  let (_, failed) = update_dev(
+    test_dispatch(),
+    CancelFailed(run_id="r7", message="cancel transport failed"),
+    closed,
+  )
+  assert_true(failed.closing_side_chats.is_empty())
+  assert_true(failed.dock_state().tabs == [SideChat(owner=side_chat_owner())])
+  guard failed.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  assert_true(side.run is Open(run_id="r7", stage=AtStep(None)))
+}
