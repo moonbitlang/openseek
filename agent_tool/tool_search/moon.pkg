@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/openseek/agent_tool",
+  "moonbitlang/openseek/internal/bm25",
+}
+
+warnings = "+unnecessary_annotation"
+
+supported_targets = "+wasm+native"

@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "moonbitlang/openseek/agent_tool/tool_search"
+
+import {
+  "moonbitlang/openseek/agent_tool",
+}
+
+// Values
+pub fn definition(Array[Source]) -> @agent_tool.AgentToolDefinition
+
+// Errors
+
+// Types and methods
+type Source
+pub fn Source::Source(name~ : String, instructions? : String, tools~ : Array[@agent_tool.AgentToolDefinition]) -> Self
+
+// Type aliases
+
+// Traits
