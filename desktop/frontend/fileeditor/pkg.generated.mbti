@@ -377,8 +377,8 @@ pub(all) enum Msg {
   EnsureFileIndex
   DirLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, entries~ : Array[FileEntry])
   DirFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, message~ : String)
-  FilesIndexed(owner~ : @interop.ConversationKey, epoch~ : Int32, files~ : Array[@pathx.Relative], truncated~ : Bool)
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int32)
+  FilesIndexed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, files~ : Array[@pathx.Relative], truncated~ : Bool)
+  FileIndexFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32)
   ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
   ChangesFailed(owner~ : @interop.ConversationKey, generation~ : Int32, message~ : String)
   ChangesPollDue

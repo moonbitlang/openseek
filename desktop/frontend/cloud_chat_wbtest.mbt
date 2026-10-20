@@ -298,8 +298,9 @@ test "Cloud uses the existing composer and transcript without a host workspace" 
     input.identity.owner
     is @interop.Cloud(account="fixture-user", session="cloud-a"),
   )
-  assert_true(input.file_index is @composer.FileIndexEmpty(epoch=7))
-  assert_true(input.root is None)
+  assert_true(input.file_index is @composer.FileIndexEmpty(epoch=99))
+  assert_eq(input.root, file_ctx(model).root())
+  assert_true(input.root is Some({ scheme: "openseek-cloud", .. }))
   assert_true(!input.shell_available && !input.presentation.images_enabled)
   assert_true(
     input.slash_commands.is_empty() && input.installed_skills.is_empty(),

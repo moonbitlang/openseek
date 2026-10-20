@@ -70,6 +70,47 @@ function fileHostRequests(cloud) {
     /^(fs\.|lsp\.|git\.|moon\.|file\.|host\.open_path$)/.test(request.method));
 }
 
+test('Cloud file links and mentions reuse source previews and the composer envelope', async ({ page }) => {
+  const cloud = new CloudFilesHarness(page);
+  cloud.directories.set(`${sessionA}:`, [{ name: 'src', is_dir: true }, { name: '.git', is_dir: true }]);
+  cloud.directories.set(`${sessionA}:src`, [{ name: 'index.html', is_dir: false }]);
+  cloud.contents.set(`${sessionA}:src/index.html`, {
+    kind: 'content', content: '<h1>Cloud source</h1>', sig: 'html', absolute: '/src/index.html',
+  });
+  cloud.histories.set(sessionA, { messages: [{
+    task_id: 'initial', kind: 'assistant_message', created_at: 100,
+    data: { content: '[Open HTML](src/index.html)\n\n```openseek-file\nsrc/index.html\n```' },
+  }], generating: false });
+  await cloud.install(); await cloud.goto(); await cloud.open();
+  expect(cloud.fileRequests).toEqual([]);
+  await page.getByRole('button', { name: 'Open HTML', exact: true }).click();
+  await expect(source(page)).toContainText('<h1>Cloud source</h1>');
+  await expect(source(page).locator('h1')).toHaveCount(0);
+  await page.locator('.workspace-file-card').click();
+  await expect(source(page)).toContainText('<h1>Cloud source</h1>');
+  await expect(page.locator('.composer-attach')).toHaveCount(0);
+  const input = page.locator('#task');
+  await input.fill('@index');
+  await expect(page.locator('.completion-item .completion-label')).toHaveText(['index.html']);
+  await input.press('Enter');
+  expect(cloud.fileRequests.filter(request => !request.content).map(request => request.path)).not.toContain('.git');
+  const chip = page.locator('.composer .mention-chip');
+  await expect(chip).toContainText('index.html');
+  await chip.locator('.mention-jump').click();
+  await expect(source(page)).toContainText('<h1>Cloud source</h1>');
+  await input.fill('Update the heading');
+  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  await expect.poll(() => cloud.postCount).toBe(1);
+  const request = cloud.requests.find(request => request.method === 'POST' && request.path.endsWith('/messages'));
+  expect(JSON.parse(request.body).content).toBe('Update the heading\n\n<user_mentions>\n<file path="src/index.html"/>\n</user_mentions>');
+  await expect(page.getByRole('button', { name: 'Send', exact: true })).toBeVisible();
+  await input.press('ArrowUp');
+  await expect(input).toHaveValue('Update the heading');
+  await expect(chip).toContainText('index.html');
+  expect(fileHostRequests(cloud)).toEqual([]);
+  expect(cloud.device.pageErrors).toEqual([]);
+});
+
 test('Cloud browses nested text files through the existing read-only Files pane', async ({ page }, testInfo) => {
   const cloud = new CloudFilesHarness(page);
   await cloud.install(); await cloud.goto(); await openFiles(page, cloud);

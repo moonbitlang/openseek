@@ -310,7 +310,7 @@ fn Input::completion(
       })
     }
     Files => {
-      guard owner.host() is Some(_) && self.root is Some(_) else { return None }
+      guard self.root is Some(_) else { return None }
       let items = files.map(file => CompletionItem::{
         label: file.name,
         detail: file.path.0,

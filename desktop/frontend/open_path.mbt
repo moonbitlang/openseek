@@ -1,4 +1,39 @@
 ///|
+/// Cloud links name workspace files, never paths on the browser's Host.
+/// Reuse the file-card path contract and the existing source preview.
+fn open_cloud_file(
+  dispatch : @cmd.Emit[Msg],
+  model : Model,
+  owner : @interop.ConversationIdentity,
+  path : String,
+  range : @common.Range?,
+) -> (@cmd.Cmd, Model) {
+  let ctx = file_ctx(model)
+  guard model.cloud_identity() == Some(owner) &&
+    !path.contains("://") &&
+    ctx.owner == owner &&
+    ctx.cloud_files is Some(_) &&
+    ctx.root() is Some(root) &&
+    @workspace_file_ref.parse(
+      @workspace_file_ref.FenceLanguage,
+      path,
+      closed=true,
+    )
+    is Some(reference) else {
+    return (@cmd.none, model)
+  }
+  let resource = @resource.join_relative(root, Relative(reference.path))
+  let model = model.begin_editor_navigation()
+  show_editor_resource(
+    dispatch,
+    model,
+    resource,
+    range,
+    file_link_generation=model.file_panel.file_link_generation,
+  )
+}
+
+///|
 /// Navigation data stays in the frontend while the host classifies the file.
 /// A composer action may target a parked conversation; return_to records the
 /// conversation that must remain on screen when that reply arrives.

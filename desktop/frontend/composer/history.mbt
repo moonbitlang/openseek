@@ -9,9 +9,10 @@
 fn Entry::recalled_back(self : Entry, input : Input) -> Int32? {
   guard self.history_back is Some(back) &&
     back <= input.history.length() &&
-    self.draft.task == input.history[input.history.length() - back] &&
-    self.draft.mentions.is_empty() &&
-    self.draft.images.is_empty() else {
+    Draft::from_content(
+      @deepseek.Content([Text(input.history[input.history.length() - back])]),
+    ) ==
+    Some(self.draft) else {
     return None
   }
   Some(back)
@@ -55,7 +56,9 @@ fn Entry::history_moved(self : Entry, input : Input, delta : Int32) -> Entry? {
   }
   Some({
     ..self,
-    draft: { task: input.history[count - back], mentions: [], images: [], },
+    draft: Draft::from_content(
+      @deepseek.Content([Text(input.history[count - back])]),
+    ).unwrap(),
     completion: None,
     pending_submission: None,
     history_back: Some(back),

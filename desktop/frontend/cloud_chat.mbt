@@ -364,10 +364,11 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   Some({
     ..input,
     identity: { ..input.identity, owner, },
-    draft: {
-      ..input.draft,
-      task: conversation.bind(value => value.initial_submission).unwrap_or(""),
-    },
+    draft: @composer.Draft::from_content(
+      Content([
+        Text(conversation.bind(value => value.initial_submission).unwrap_or("")),
+      ]),
+    ).unwrap(),
     run: if conversation is Some(value) && (value.sending || value.generating) {
       Some({ stage: @composer.Working, started_ms: None, tokens: 0, })
     } else {
@@ -375,11 +376,19 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     },
     turn_id: conversation.bind(value => value.task),
     history,
+    root: file_ctx(self).root(),
+    file_candidates: self.file_search().candidates,
+    open_files: self.live_editor_files(),
+    active_file: self.active_workspace_file(),
     installed_skills: [],
     submission_sequence: conversation.map_or(0, value => {
       value.submission_sequence
     }),
-    file_index: @composer.FileIndexEmpty(epoch=self.composer_context_generation),
+    file_index: if self.file_panel.owner == Some(owner) {
+      self.composer_file_index()
+    } else {
+      @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
+    },
     presentation: {
       ..input.presentation,
       status: [

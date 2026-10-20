@@ -258,8 +258,8 @@ pub(all) struct WatchedPaths {
 } derive(Eq)
 
 ///|
-/// A lazily requested snapshot of one concrete workspace root. The Host walks
-/// the root recursively, pruning churn directories and capping the result;
+/// A lazily requested snapshot of one concrete workspace root. Host search and
+/// Cloud directory traversal share the directory-exclusion policy;
 /// owner/root transitions reset it with the rest of the file-panel cache.
 pub enum FileIndex {
   // No consumer has requested this workspace root yet.
@@ -1085,14 +1085,14 @@ pub(all) enum Msg {
   // A workspace snapshot reply. The owner/epoch pair rejects a result that
   // outlived a conversation or concrete-root transition.
   FilesIndexed(
-    owner~ : @interop.ConversationKey,
+    owner~ : @interop.ConversationIdentity,
     epoch~ : Int32,
     files~ : Array[@pathx.Relative],
     truncated~ : Bool
   )
   // A request failed or was cancelled. A failed background refresh keeps the
   // previously ready snapshot; only an initial fetch becomes IndexFailed.
-  FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int32)
+  FileIndexFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32)
   // A `git.changes` reply. `head` carries the immutable comparison when the
   // host can identify one: a task or branch baseline when present, otherwise
   // resolved HEAD. `None` means no commit exists or a legacy host omitted the

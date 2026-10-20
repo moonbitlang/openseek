@@ -1463,7 +1463,7 @@ fn FileIndex::invalidate(self : FileIndex) -> (FileIndex, Bool) {
 }
 
 ///|
-/// Settle a successful Host scan. The Bool asks the caller to spend a watcher
+/// Settle a successful workspace scan. The Bool asks the caller to spend a watcher
 /// event that arrived while the completed request was running.
 fn FileIndex::loaded(
   self : FileIndex,
@@ -3404,28 +3404,32 @@ fn update_inner(
     }
     EnsureFileIndex =>
       if state.owner != Some(ctx.owner) ||
-        state.placement.is_parked() ||
+        (ctx.owner.host() is Some(_) && state.placement.is_parked()) ||
         ctx.root() is None ||
         !ctx.checkout_ready() ||
         ctx.owner.session().is_empty() {
         (@cmd.none, state)
       } else if state.index is IndexEmpty || state.index is IndexFailed {
         (
-          ctx.owner
-          .host()
-          .map_or(@cmd.none, host => {
-            list_files(dispatch, host, ctx.request_epoch, root=ctx.root())
-          }),
+          list_files(
+            dispatch,
+            ctx.owner,
+            ctx.request_epoch,
+            root=ctx.root(),
+            cloud?=ctx.cloud_files,
+          ),
           { ..state, index: IndexLoading(refresh_again=false), },
         )
       } else if state.index
         is IndexReady(files~, truncated~, refreshing=false, refresh_again=true) {
         (
-          ctx.owner
-          .host()
-          .map_or(@cmd.none, host => {
-            list_files(dispatch, host, ctx.request_epoch, root=ctx.root())
-          }),
+          list_files(
+            dispatch,
+            ctx.owner,
+            ctx.request_epoch,
+            root=ctx.root(),
+            cloud?=ctx.cloud_files,
+          ),
           {
             ..state,
             index: IndexReady(
@@ -3534,26 +3538,36 @@ fn update_inner(
         )
       }
     FilesIndexed(owner~, epoch~, files~, truncated~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.request_epoch != epoch {
+      if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
         let (index, retry) = state.index.loaded(files, truncated)
         let cmd = if retry {
-          list_files(dispatch, owner, epoch, root=ctx.root())
+          list_files(
+            dispatch,
+            owner,
+            epoch,
+            root=ctx.root(),
+            cloud?=ctx.cloud_files,
+          )
         } else {
           @cmd.none
         }
         (cmd, { ..state, index, })
       }
     FileIndexFailed(owner~, epoch~) =>
-      if state.owner != Some(@interop.Host(owner)) ||
-        state.request_epoch != epoch {
+      if state.owner != Some(owner) || state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
         let (index, retry) = state.index.failed()
         let cmd = if retry {
-          list_files(dispatch, owner, epoch, root=ctx.root())
+          list_files(
+            dispatch,
+            owner,
+            epoch,
+            root=ctx.root(),
+            cloud?=ctx.cloud_files,
+          )
         } else {
           @cmd.none
         }
@@ -4290,7 +4304,12 @@ fn update_inner(
           package_graphs: Map([]),
         }
         let index_cmd = if start_index_refresh {
-          list_files(dispatch, owner, state.request_epoch, root=ctx.root())
+          list_files(
+            dispatch,
+            @interop.Host(owner),
+            state.request_epoch,
+            root=ctx.root(),
+          )
         } else {
           @cmd.none
         }
@@ -4493,7 +4512,12 @@ fn update_inner(
         }
         if start_refresh {
           cmds.push(
-            list_files(dispatch, owner, state.request_epoch, root=ctx.root()),
+            list_files(
+              dispatch,
+              @interop.Host(owner),
+              state.request_epoch,
+              root=ctx.root(),
+            ),
           )
         }
         let package_graphs = if package_graph_changed {
@@ -4850,7 +4874,12 @@ fn update_inner(
         // an observation gap even though it remains useful for reads.
         let (index, start_index_refresh) = state.index.invalidate()
         let cmd = if start_index_refresh {
-          list_files(dispatch, owner, state.request_epoch, root=ctx.root())
+          list_files(
+            dispatch,
+            @interop.Host(owner),
+            state.request_epoch,
+            root=ctx.root(),
+          )
         } else {
           @cmd.none
         }
@@ -4990,7 +5019,7 @@ test "file index requests retry failures and fence stale replies" {
   let (_, stale) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch + 1,
       files=[Relative("stale.mbt")],
       truncated=false,
@@ -5001,7 +5030,7 @@ test "file index requests retry failures and fence stale replies" {
   assert_true(stale == loading)
   let (_, failed) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
     loading,
     ctx,
   )
@@ -5011,7 +5040,7 @@ test "file index requests retry failures and fence stale replies" {
   let (_, ready) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       files=[Relative("src/main.mbt")],
       truncated=true,
@@ -5030,7 +5059,7 @@ test "file index requests retry failures and fence stale replies" {
   )
   let (_, refresh_failed) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
     ready,
     ctx,
   )
@@ -5046,7 +5075,7 @@ test "file index requests retry failures and fence stale replies" {
   }
   let (_, stale) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
     refreshing,
     ctx,
   )
@@ -5074,7 +5103,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, following_up) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       files=[Relative("src/old.mbt")],
       truncated=false,
@@ -5088,7 +5117,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, settled) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       files=[Relative("src/old.mbt"), Relative("src/new.mbt")],
       truncated=false,
@@ -5136,7 +5165,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   let (_, following_up) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       files=[Relative("src/new.mbt")],
       truncated=false,
@@ -5156,7 +5185,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   let (_, settled) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner.host().unwrap(),
+      owner=ctx.owner,
       epoch=ctx.request_epoch,
       files=[Relative("src/new.mbt"), Relative("src/last.mbt")],
       truncated=false,
@@ -6104,7 +6133,7 @@ test "FileLoaded settles content into its document, active or not" {
   let (_, old_index) = update(
     emit,
     FilesIndexed(
-      owner=test_ctx().owner.host().unwrap(),
+      owner=test_ctx().owner,
       epoch=1,
       files=[Relative("stale.mbt")],
       truncated=false,

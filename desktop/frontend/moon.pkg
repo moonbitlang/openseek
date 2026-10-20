@@ -5,6 +5,7 @@ import {
   "openseek_desktop/frontend/session_search",
   "openseek_desktop/frontend/navigation",
   "openseek_desktop/frontend/cloud",
+  "moonbitlang/openseek/workspace_file_ref",
   "openseek_desktop/frontend/navigation/browser" @navigation_browser,
   "moonbit-community/rabbita/nav",
   "openseek_desktop/frontend/page_shell",

@@ -15,6 +15,24 @@ fn Model::moved(self : Model, input : Input, delta : Int32) -> Model {
 }
 
 ///|
+test "history recall restores file chips and can step away from them" {
+  let draft : Draft = {
+    task: "Change the title",
+    mentions: [{ ref_: File(path="index.html"), range: None, }],
+    images: [],
+  }
+  let input = { ..Input::fixture(""), history: ["earlier", draft.prompt()], }
+  let latest = Model(input).moved(input, -1)
+  assert_true(latest.active(input).draft == draft)
+  assert_eq(
+    latest.active(input).history_label(English, input),
+    Some("History 2/2"),
+  )
+  assert_eq(latest.moved(input, -1).active(input).draft.task, "earlier")
+  assert_true(latest.moved(input, 1).active(input).draft.is_blank())
+}
+
+///|
 test "Up recalls the latest prompt, then older ones, and stops at the oldest" {
   let input = Input::history_fixture("")
   let mut model = Model(input)

@@ -323,7 +323,7 @@ pub fn update(
         ..Conversation::empty(),
         loading: false,
         history_required: false,
-        initial_submission: Some(draft.task),
+        initial_submission: Some(draft.prompt()),
       }
       let (next, command) = { ..state, sessions, creation: None, }
         .replace(id, ready)
@@ -606,9 +606,9 @@ pub fn update(
         state.creation is Some(creation) {
         guard creation.submission is None &&
           token is Some(_) &&
-          !draft.task.is_blank() &&
+          !draft.is_blank() &&
           draft.images.is_empty() &&
-          draft.mentions.is_empty() else {
+          draft.mentions.all(mention => mention.ref_ is File(..)) else {
           return (state, @cmd.none, None)
         }
         let request = state.sequence + 1
@@ -631,13 +631,14 @@ pub fn update(
         token is Some(token) &&
         state.conversations.get(id) is Some(conversation) &&
         state.can_send(id) &&
-        !draft.task.is_blank() &&
-        draft.mentions.is_empty() &&
+        !draft.is_blank() &&
+        draft.mentions.all(mention => mention.ref_ is File(..)) &&
         draft.images.is_empty() else {
         return (state, @cmd.none, None)
       }
       let request = state.sequence + 1
       let stream = StreamLease::new()
+      let prompt = draft.prompt()
       let next = state.replace(id, {
         ..conversation,
         request,
@@ -650,7 +651,7 @@ pub fn update(
         streaming_response: None,
         notice: None,
         pending: Some({
-          content: draft.task,
+          content: prompt,
           known_tasks: conversation.records
           .filter(record => record.kind == "user")
           .map(record => record.task_id),
@@ -663,7 +664,7 @@ pub fn update(
               guard stream.active else {
                 return StreamEnded(state.epoch, id, request)
               }
-              send_message(token, id, draft.task, stream, event => {
+              send_message(token, id, prompt, stream, event => {
                 scheduler.add(
                   emit(StreamEvent(state.epoch, id, request, event)),
                 )

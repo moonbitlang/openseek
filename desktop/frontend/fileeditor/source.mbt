@@ -109,6 +109,14 @@ fn refresh_cloud_files(
     return (@cmd.none, state)
   }
   let epoch = state.request_epoch + 1
+  // This refresh advances the request epoch, retiring any earlier scan.
+  // Restart an active index in the new epoch while retaining ready paths.
+  let index = match state.index {
+    IndexLoading(..) => IndexLoading(refresh_again=false)
+    IndexReady(files~, truncated~, ..) =>
+      IndexReady(files~, truncated~, refreshing=true, refresh_again=false)
+    index => index
+  }
   let directories = if ctx.panel_open {
     [@pathx.Relative::root(), ..state.expanded.filter(path => !path.is_root())]
   } else {
@@ -124,6 +132,17 @@ fn refresh_cloud_files(
       cloud?=ctx.cloud_files,
     )
   })
+  if index is (IndexLoading(..) | IndexReady(refreshing=true, ..)) {
+    commands.push(
+      list_files(
+        dispatch,
+        ctx.owner,
+        epoch,
+        root=Some(root),
+        cloud?=ctx.cloud_files,
+      ),
+    )
+  }
   let children = state.children.copy()
   for path in children.keys().to_array() {
     if !directories.contains(path) {
@@ -152,6 +171,7 @@ fn refresh_cloud_files(
     {
       ..state,
       request_epoch: epoch,
+      index,
       docs,
       children,
       loading: directories,

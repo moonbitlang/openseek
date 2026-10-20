@@ -296,7 +296,10 @@ fn Entry::view(
   let image_emit = emit.map(event => {
     ImageRead(self.identity(), self.root, event)
   })
-  let can_attach = (input.presentation.images_enabled || input.root is Some(_)) &&
+  let can_attach = (
+      input.presentation.images_enabled ||
+      (input.identity.owner.host() is Some(_) && input.root is Some(_))
+    ) &&
     !input.presentation.disabled &&
     !goal_mode &&
     shell_command is None

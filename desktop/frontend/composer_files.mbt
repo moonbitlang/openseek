@@ -16,6 +16,9 @@ fn Model::live_editor_files(self : Model) -> Array[@pathx.Relative] {
 /// The shared index provides paths while open tabs remain immediately useful
 /// during index refreshes.
 fn Model::file_search(self : Model) -> @files.Search {
+  if self.cloud_selected() && self.file_panel.owner != self.cloud_identity() {
+    return @files.Search([], [], None)
+  }
   let indexed = match self.file_panel.index {
     @fileeditor.IndexReady(files~, ..) => files
     _ => []
@@ -29,6 +32,9 @@ fn Model::workspace_relative(
   self : Model,
   file : @common.Uri,
 ) -> @pathx.Relative? {
+  if self.cloud_selected() {
+    return file_ctx(self).root().bind(root => @resource.relative_to(file, root))
+  }
   self
   .active_checkout()
   .bind(active => active.placement)

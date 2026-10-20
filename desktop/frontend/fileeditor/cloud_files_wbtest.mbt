@@ -9,6 +9,76 @@ fn cloud_ctx(account : String, session : String, epoch : Int32) -> Ctx {
 }
 
 ///|
+test "Cloud file indexes reject retired owners and restart after refresh epochs" {
+  let ctx = cloud_ctx("account", "session", 1)
+  let emit = test_emit()
+  let (state, _) = sync(emit, State::empty(), ctx)
+  let (_, loading) = update(emit, EnsureFileIndex, state, ctx)
+  assert_true(loading.index is IndexLoading(..))
+  let reply = FilesIndexed(
+    owner=ctx.owner,
+    epoch=loading.request_epoch,
+    files=[Relative("index.html")],
+    truncated=false,
+  )
+  let (_, refreshed) = update(emit, RunSettled(owner=ctx.owner), loading, ctx)
+  let (_, ignored) = update(emit, reply, refreshed, ctx)
+  assert_true(ignored.index is IndexLoading(..))
+  let (_, ready) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=refreshed.request_epoch,
+      files=[Relative("new.html")],
+      truncated=false,
+    ),
+    refreshed,
+    ctx,
+  )
+  assert_true(
+    ready.index
+    is IndexReady(files=[Relative("new.html")], refreshing=false, ..),
+  )
+  let (_, refreshing) = update(emit, RunSettled(owner=ctx.owner), ready, ctx)
+  let (_, restarted) = update(
+    emit,
+    RunSettled(owner=ctx.owner),
+    refreshing,
+    ctx,
+  )
+  let (_, settled) = update(
+    emit,
+    FilesIndexed(
+      owner=ctx.owner,
+      epoch=restarted.request_epoch,
+      files=[Relative("latest.html")],
+      truncated=false,
+    ),
+    restarted,
+    ctx,
+  )
+  assert_true(
+    settled.index
+    is IndexReady(
+      files=[Relative("latest.html")],
+      refreshing=false,
+      refresh_again=false,
+      ..
+    ),
+  )
+  for
+    next in [
+      cloud_ctx("other-account", "session", 2),
+      cloud_ctx("account", "other-session", 1),
+      cloud_ctx("account", "session", 3),
+    ] {
+    let (next_state, _) = sync(emit, loading, next)
+    let (_, ignored) = update(emit, reply, next_state, next)
+    assert_true(ignored.index is IndexEmpty)
+  }
+}
+
+///|
 test "Cloud file state fences session switches and account lifecycle changes" {
   let emit = test_emit()
   let a = cloud_ctx("account-a", "session", 1)
