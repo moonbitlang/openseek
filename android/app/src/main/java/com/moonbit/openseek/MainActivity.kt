@@ -82,13 +82,21 @@ class MainActivity : ComponentActivity() {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false)
         // Reserve this path for the APK's own frontend. API calls retain the
         // real HTTPS origin, its cookies and the shared account-token and Connect-ticket protocol.
+        // The frontend's own document routes (/cloud, /device/...) are answered
+        // with the same bundled document below, never fetched from the server.
         val assets = WebViewAssetLoader.Builder()
             .setDomain(ConsoleOrigin.HOST)
             .addPathHandler(ConsoleOrigin.ASSET_PATH, WebViewAssetLoader.AssetsPathHandler(this))
             .build()
         webView.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                assets.shouldInterceptRequest(request.url)
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                val url = request.url
+                if (request.isForMainFrame && request.method == "GET" &&
+                    ConsoleOrigin.contains(url.toString()) && ConsoleOrigin.servesDocument(url.path)) {
+                    return WebResourceResponse("text/html", "utf-8", this@MainActivity.assets.open("index.html"))
+                }
+                return assets.shouldInterceptRequest(url)
+            }
 
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val uri = request.url

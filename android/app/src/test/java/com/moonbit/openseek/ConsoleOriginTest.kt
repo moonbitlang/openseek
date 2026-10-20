@@ -17,6 +17,17 @@ class ConsoleOriginTest {
         assertTrue(ConsoleOrigin.contains("HTTPS://SEEKMOON.MOONBITLANG.COM/another-route"))
     }
 
+    @Test fun applicationDocumentsAreTheFrontendsCloudAndDevicePages() {
+        for (path in listOf("/cloud", "/cloud/session/s1", "/cloud/draft/d1", "/device/device-a/chat",
+            "/device/device-a/chat/session/session-1")) {
+            assertTrue(path, ConsoleOrigin.servesDocument(path))
+        }
+        for (path in listOf(null, "/", "/cloudy", "/console/android/index.html",
+            "/console/android/frontend.js", "/v2/devices", "/v2/auth/login")) {
+            assertFalse(path, ConsoleOrigin.servesDocument(path))
+        }
+    }
+
     @Test fun onlyTheApplicationHttpsOriginIsAccepted() {
         for (url in listOf(
             null,

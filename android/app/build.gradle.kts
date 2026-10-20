@@ -60,7 +60,10 @@ val bundleConsole by tasks.registering(Sync::class) {
     into(layout.buildDirectory.dir("generated/consoleAssets"))
     doLast {
         val entry = destinationDir.resolve("index.html")
+        // Application paths such as /cloud are answered with this same document,
+        // so its relative resources must resolve under the APK's asset mount.
         entry.writeText(entry.readText()
+            .replace("<head>", "<head><base href=\"/console/android/\">")
             .replace("</head>", "<link rel=\"stylesheet\" href=\"/console/android/conversation.css\" /></head>")
             .replace("<body>", "<body class=\"android-connect\">"))
     }
