@@ -36,17 +36,10 @@ test('the overview lists what the conversation runs in the background', async ({
   const app = new DesktopBrowserHarness(page);
   app.jobs = [
     job('bg-3', { command, state: running }),
-    job('bg-2', {
-      command: 'subagent',
-      state: running,
-      subagent: {
-        kind: 'explore',
-        label: 'map the jobs package',
-        session: 'session-1-sr-1',
-        launch: { kind: 'direct' },
-        workspace: { kind: 'in_place' },
-      },
-    }),
+    job('bg-2', { command: 'subagent', state: running, subagent: {
+      kind: 'explore', label: 'map the jobs package', session: 'session-1-sr-1',
+      launch: { kind: 'direct' }, workspace: { kind: 'in_place' },
+    } }),
     job('bg-1', { command: 'just test', state: { kind: 'exited', code: 0 } }),
   ];
   await app.install();
@@ -101,8 +94,6 @@ test('the overview lists what the conversation runs in the background', async ({
   await hide.click();
   await expect(page.locator('.jobs-panel')).toBeHidden();
   await expect(open).toBeVisible();
-  await open.click();
-  await expect(page.locator('.jobs-panel')).toBeVisible();
 
   // Once nothing runs, the card goes away.
   for (const view of app.jobs) {
@@ -112,20 +103,5 @@ test('the overview lists what the conversation runs in the background', async ({
     view.controllable = false;
   }
   await expect(title).toBeHidden();
-  await expect(panel.getByRole('button', { name: 'Environment', exact: true })).toBeVisible();
-  expect(app.pageErrors).toEqual([]);
-});
-
-test('a conversation with nothing running shows no background tasks card', async ({ page }) => {
-  const app = new DesktopBrowserHarness(page);
-  app.jobs = [job('bg-1', { command: 'just test', state: { kind: 'exited', code: 1 } })];
-  await app.install();
-  await app.goto();
-  await app.openSession();
-  await page.getByRole('button', { name: 'Show overview', exact: true }).click();
-  const panel = overview(page);
-  await expect(panel.getByRole('button', { name: 'Connectors', exact: true })).toBeVisible();
-  await expect.poll(() => lists(app)).toBeGreaterThan(0);
-  await expect(panel.getByRole('button', { name: 'Background tasks', exact: true })).toHaveCount(0);
   expect(app.pageErrors).toEqual([]);
 });

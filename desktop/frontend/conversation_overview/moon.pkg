@@ -9,7 +9,3 @@ import {
 }
 
 supported_targets = "js"
-
-import {
-  "moonbitlang/openseek_protocol" @wire,
-} for "test"

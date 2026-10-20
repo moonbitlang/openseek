@@ -1,14 +1,15 @@
 ///|
+/// A job running `command`, or a subagent job for the child `agent` names
+/// (its session and label).
 fn job(
-  id : String,
   command : String,
   running~ : Bool,
-  subagent? : @wire.SubagentInfo,
+  agent? : (String, String),
 ) -> @protocol.JobView {
   {
     job: {
       generation: "runtime",
-      id,
+      id: command,
       revision: 1,
       command,
       description: None,
@@ -20,11 +21,7 @@ fn job(
       },
       started_at_ms: 1000L,
       backgrounded_at_ms: 1000L,
-      finished_at_ms: if running {
-        None
-      } else {
-        Some(2000L)
-      },
+      finished_at_ms: None,
       last_output_at_ms: None,
       output_file: None,
       output_persistent: false,
@@ -36,7 +33,16 @@ fn job(
       persistence_error: None,
       cleanup_error: None,
       data: None,
-      subagent,
+      subagent: agent.map(agent => {
+        kind: "explore",
+        label: agent.1,
+        session: agent.0,
+        launch: Direct,
+        outcome: None,
+        usage: None,
+        report: None,
+        workspace: InPlace,
+      }),
     },
     output_path: None,
     controllable: running,
@@ -45,26 +51,12 @@ fn job(
 }
 
 ///|
-fn subagent(session : String, label : String) -> @wire.SubagentInfo {
-  {
-    kind: "explore",
-    label,
-    session,
-    launch: Direct,
-    outcome: None,
-    usage: None,
-    report: None,
-    workspace: InPlace,
-  }
-}
-
-///|
-/// A workflow of `session` whose children `sr-1` and `sr-2` have started.
-fn workflow(session : String) -> Array[@workflow.Run] {
+/// A workflow of `parent` whose children `sr-1` and `sr-2` have started.
+fn workflow() -> Array[@workflow.Run] {
   let runs = @workflow.opened(
     [],
     id="wf-1",
-    session~,
+    session="parent",
     first_child=1,
     child_count=2,
   )
@@ -73,33 +65,25 @@ fn workflow(session : String) -> Array[@workflow.Run] {
 }
 
 ///|
-test "the card has nothing to show while nothing runs" {
-  assert_true(
-    @conversation_overview.BackgroundTasks::from_listing(
-      jobs=[job("1", "make", running=false)],
-      more_jobs=false,
-      workflows=[],
-    )
-    is None,
+fn summarize(
+  jobs : Array[@protocol.JobView],
+  more_jobs~ : Bool = false,
+  workflows~ : Array[@workflow.Run] = [],
+) -> @conversation_overview.BackgroundTasks? {
+  @conversation_overview.BackgroundTasks::from_listing(
+    jobs~,
+    more_jobs~,
+    workflows~,
   )
 }
 
 ///|
 test "running commands and subagents are listed, ended ones counted" {
-  guard @conversation_overview.BackgroundTasks::from_listing(
-      jobs=[
-        job("3", "npm run dev", running=true),
-        job(
-          "2",
-          "subagent",
-          running=true,
-          subagent=subagent("parent-sr-9", "map the code"),
-        ),
-        job("1", "make", running=false),
-      ],
-      more_jobs=true,
-      workflows=[],
-    )
+  guard summarize(more_jobs=true, [
+      job("npm run dev", running=true),
+      job("subagent", running=true, agent=("parent-sr-9", "map the code")),
+      job("make", running=false),
+    ])
     is Some(tasks) else {
     fail("a running job should show the card")
   }
@@ -109,30 +93,22 @@ test "running commands and subagents are listed, ended ones counted" {
   assert_eq(tasks.finished, 1)
   assert_true(tasks.more_finished)
   assert_true(tasks.in_jobs)
+  // With nothing running, there is no card.
+  assert_true(summarize([job("make", running=false)]) is None)
 }
 
 ///|
 test "a workflow's subagent that is also a job is one task" {
-  let runs = workflow("parent")
-  let runs = @workflow.child_closed(
-    runs,
+  let workflows = @workflow.child_closed(
+    workflow(),
     id="sr-2",
     status="ok",
     steps=3,
     tokens=10,
   )
-  guard @conversation_overview.BackgroundTasks::from_listing(
-      jobs=[
-        job(
-          "1",
-          "subagent",
-          running=true,
-          subagent=subagent("parent-sr-1", "a"),
-        ),
-      ],
-      more_jobs=false,
-      workflows=runs,
-    )
+  guard summarize(workflows~, [
+      job("subagent", running=true, agent=("parent-sr-1", "a")),
+    ])
     is Some(tasks) else {
     fail("a running subagent should show the card")
   }
@@ -144,23 +120,13 @@ test "a workflow's subagent that is also a job is one task" {
 
 ///|
 test "subagents only a workflow knows about open the workflows panel" {
-  guard @conversation_overview.BackgroundTasks::from_listing(
-      jobs=[],
-      more_jobs=false,
-      workflows=workflow("parent"),
-    )
-    is Some(tasks) else {
+  guard summarize(workflows=workflow(), []) is Some(tasks) else {
     fail("running workflow children should show the card")
   }
   assert_eq(tasks.subagents, ["review: a", "review: b"])
   assert_false(tasks.in_jobs)
   // A closed run's unfinished children will not finish: nothing runs.
   assert_true(
-    @conversation_overview.BackgroundTasks::from_listing(
-      jobs=[],
-      more_jobs=false,
-      workflows=@workflow.closed(workflow("parent"), id="wf-1"),
-    )
-    is None,
+    summarize(workflows=@workflow.closed(workflow(), id="wf-1"), []) is None,
   )
 }
