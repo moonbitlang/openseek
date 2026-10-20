@@ -7207,13 +7207,6 @@ fn update_device_msg(
           dispatch, channel, connection_generation, projects_request_generation,
         ),
       ]
-      // A browser drives whichever host build it reached; refuse one built
-      // for another protocol revision instead of decoding its replies.
-      if !model.is_desktop {
-        commands.push(
-          check_host_protocol(dispatch, channel, connection_generation),
-        )
-      }
       // The focused-scoped half: the host-settings mirror and installed
       // skills (they feed the composer's `$` completion, so
       // they load on connect rather than when the Skills page opens) follow
@@ -7362,13 +7355,13 @@ fn update_device_msg(
     }
     BridgeUnavailable(message) =>
       (@cmd.none, model.replace_device({ ..dev, bridge: BridgeLost(message), }))
-    HostProtocolChecked(connection_generation~, protocol~) => {
-      guard connection_generation == dev.connection_generation &&
-        protocol != Some(@protocol.HostProtocolRevision) else {
-        return (@cmd.none, model)
+    // The desktop window and its host ship as one build and are never gated.
+    HostMismatched =>
+      if model.is_desktop {
+        update_device_msg(dispatch, channel, BridgeReady, model)
+      } else {
+        (@cmd.none, model.replace_device({ ..dev, bridge: HostIncompatible, }))
       }
-      (@cmd.none, model.replace_device({ ..dev, bridge: HostIncompatible, }))
-    }
     ChannelDown(websocket_epoch~) => {
       // A close callback may already be queued when sign-out retires a
       // device. If the same relay id is later re-added, it owns a new epoch

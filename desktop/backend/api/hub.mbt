@@ -311,7 +311,7 @@ test "a real engine connection retires old active runs before readiness" {
   guard hub.runs().runs is [_] else {
     fail("expected one active run before reconnect")
   }
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ protocol: Some(@protocol.HostProtocolRevision), })
   guard hub.runs().runs is [] else {
     fail("old active run survived a new engine pump")
   }

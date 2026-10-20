@@ -596,7 +596,8 @@ export class DesktopBrowserHarness {
       socket.send(JSON.stringify({
         jsonrpc: '2.0',
         method: 'agent.connected',
-        params: { stage: 'serving' },
+        // The handshake: this host's `HostProtocolRevision`.
+        params: this.connectedParams ?? { protocol: this.hostProtocol },
       }));
     });
   }
@@ -642,7 +643,7 @@ export class DesktopBrowserHarness {
       case 'mcp.status':
         return this.mcpStatus;
       case 'app.info':
-        return { version: '0.0.0-fixture', protocol: this.hostProtocol };
+        return { version: '0.0.0-fixture' };
       case 'settings.get':
         return this.hostSettings;
       case 'settings.set': {

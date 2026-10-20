@@ -11,6 +11,18 @@ test('a host built for another protocol revision is reported once and not retrie
   // A dropped connection would request a new ticket within its backoff.
   await page.waitForTimeout(2000);
   expect(app.ticketRequests.length).toBe(tickets);
+  // The handshake decides before the page sends the host any request.
+  expect(app.requests.map(request => request.method)).toEqual([]);
+  expect(app.pageErrors).toEqual([]);
+});
+
+test('a host from before the protocol revision is reported, not left connecting', async ({ page }) => {
+  const app = new DesktopBrowserHarness(page);
+  app.connectedParams = { ready: true };
+  await app.install();
+  await page.goto('/device/device-a/chat');
+  await expect(page.getByRole('main').getByText("This computer runs a SeekMoon version this page can't control.", { exact: false })).toBeVisible();
+  expect(app.requests.map(request => request.method)).toEqual([]);
   expect(app.pageErrors).toEqual([]);
 });
 

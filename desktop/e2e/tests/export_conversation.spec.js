@@ -75,7 +75,7 @@ class ExportHarness extends DesktopBrowserHarness {
           get: (_, method) => async params => {
             if (method === 'host.connect') {
               for (const callback of listeners.get('openseek.agent.connected') || []) {
-                callback({ payload: { stage: 'serving' } });
+                callback({ payload: { protocol: 1 } });
               }
             }
             return window.desktopRequest({ method, params });

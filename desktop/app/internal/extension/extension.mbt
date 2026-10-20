@@ -528,7 +528,9 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             PageConnected(context, reply) => {
               // Serialize readiness before subsequent delivery so the
               // frontend can use it as the resync boundary.
-              context.emit(connected_event, { stage: Accepted, })
+              context.emit(connected_event, {
+                protocol: Some(@protocol.HostProtocolRevision),
+              })
               connected = true
               reply.put(())
             }
@@ -568,7 +570,9 @@ pub async fn DesktopBridgeActor::run(self : DesktopBridgeActor) -> Unit {
             connected,
             target,
             pending,
-            Hub(AgentConnected({ stage: Accepted, })),
+            Hub(
+              AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+            ),
           )
         }
       }
@@ -605,9 +609,13 @@ async test "a full inbox preserves local events before the hub resync boundary" 
       for value in 0..<BridgeInboxCapacity {
         bridge.notify_browser_event(Json(value))
       }
-      state.publish(AgentConnected({ stage: Serving, }))
+      state.publish(
+        AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+      )
       // Further publications must not schedule extra recovery tasks/markers.
-      state.publish(AgentConnected({ stage: Serving, }))
+      state.publish(
+        AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+      )
       for value in 0..<BridgeInboxCapacity {
         assert_true(
           bridge.inbox.get() is Deliver(BrowserEvent(actual)) &&
@@ -618,9 +626,16 @@ async test "a full inbox preserves local events before the hub resync boundary" 
         fail("missing resync boundary after the full inbox")
       }
       paused.resume_delivery()
-      state.publish(AgentConnected({ stage: Accepted, }))
+      state.publish(
+        AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+      )
       assert_true(
-        bridge.inbox.get() is Deliver(Hub(AgentConnected({ stage: Accepted, }))),
+        bridge.inbox.get()
+        is Deliver(
+          Hub(
+            AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), })
+          )
+        ),
       )
       assert_true(bridge.inbox.try_get() is None)
     })

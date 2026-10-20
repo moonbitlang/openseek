@@ -1251,7 +1251,7 @@ async fn EngineActor::run_generation(
 
   manager.pump = Serving(sessions~)
   defer reset()
-  emit(sink, Connected({ stage: Serving, }))
+  emit(sink, Connected({ protocol: Some(@protocol.HostProtocolRevision), }))
   @async.with_task_group(group => {
     // A permanent deletion whose physical cleanup failed or was interrupted
     // leaves its condemned records under `archived/deleting`. Erase them once

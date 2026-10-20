@@ -47,7 +47,7 @@ test "a question does not outlive the engine that asked it" {
   // with the old one, so replaying it would offer an answer with nowhere to
   // go.
   hub.publish(ask)
-  hub.engine_connected({ stage: Serving, })
+  hub.engine_connected({ protocol: Some(@protocol.HostProtocolRevision), })
   guard hub.runs().approvals is [] else {
     fail("a question outlived the engine that asked it")
   }

@@ -1074,68 +1074,36 @@ pub(all) struct BrowserVisiblePayload {
 // Notification payloads.
 
 ///|
-/// How much of the host is up behind an `agent.connected`. Both spellings
-/// ask the client for the same thing — this connection is live, re-read your
-/// state — and differ only in whether a run can start yet.
-pub(all) enum ConnectedStage {
-  /// A transport accepted this client. The engine pump may still be between
-  /// generations, so a start can be refused until `Serving` follows.
-  Accepted
-  /// The engine pump entered a serving generation and accepts runs.
-  Serving
-} derive(Debug, Eq)
-
-///|
-pub impl ToJson for ConnectedStage with fn to_json(self) {
-  match self {
-    Accepted => "accepted"
-    Serving => "serving"
-  }
-}
-
-///|
-/// The stage is a bare string, and an unrecognized one is refused rather than
-/// read as the weaker of the two: a client acts on this field to decide
-/// whether a start can be refused, and a spelling this build does not know is
-/// a host it cannot reason about. Host and clients ship together, so a third
-/// stage arrives with the code that understands it.
-pub impl FromJson for ConnectedStage with fn from_json(json, path) {
-  guard json is String(stage) else {
-    raise JsonDecodeError((path, "expected connected stage"))
-  }
-  match stage {
-    "accepted" => Accepted
-    "serving" => Serving
-    _ => raise JsonDecodeError((path, "unknown connected stage"))
-  }
-}
-
-///|
-/// `agent.connected` is a signal rather than a description: every client
-/// answers it by re-reading its state. `stage` says how much of the host is
-/// up, which is all a client can act on beyond that.
+/// `agent.connected` is the host's handshake and its resync signal: a client
+/// answers it by re-reading its state. `protocol` is the `HostProtocolRevision`
+/// the host was built for; hosts that predate it send none.
 pub(all) struct ConnectedPayload {
-  stage : ConnectedStage
+  protocol : Int32?
 } derive(Debug, Eq)
 
 ///|
 pub impl ToJson for ConnectedPayload with fn to_json(self) {
-  { "stage": ToJson::to_json(self.stage) }
+  let object : Map[String, Json] = Map([])
+  if self.protocol is Some(revision) {
+    object["protocol"] = Json(revision)
+  }
+  Json::object(object)
 }
 
 ///|
-/// `stage` is the whole payload: a notification carrying none, or one this
-/// build cannot read, says nothing a client can act on, so it is refused
-/// rather than guessed at — `Notification::from_wire` drops it. Fields this
-/// build does not know are ignored, leaving the wire room to grow.
-pub impl FromJson for ConnectedPayload with fn from_json(json, path) {
-  guard json is Object(fields) else {
-    raise JsonDecodeError((path, "expected connected payload"))
+/// Every host's notification decodes, so a client can always compare
+/// revisions before it sends a request. Only an integral `protocol` is read;
+/// a missing or malformed one, and every other field (including the `stage`
+/// and `ready` of earlier hosts), leaves the revision absent.
+pub impl FromJson for ConnectedPayload with fn from_json(json, _path) {
+  let protocol = if json is Object(fields) &&
+    fields.get("protocol") is Some(Number(value, ..)) &&
+    value == value.to_int().to_double() {
+    Some(value.to_int())
+  } else {
+    None
   }
-  guard fields.get("stage") is Some(stage) else {
-    raise JsonDecodeError((path.add_key("stage"), "missing required field"))
-  }
-  { stage: @json.from_json(stage, path=path.add_key("stage")), }
+  { protocol, }
 }
 
 ///|
@@ -1439,10 +1407,11 @@ pub impl ToJson for SettingsStatusPayload with fn to_json(self) {
 }
 
 ///|
-/// The host protocol a frontend and host build agree on. The relay serves one
-/// current frontend to every host, with no compatibility layer for older
-/// ones: increment this whenever a host command, reply or event changes
-/// incompatibly, and a browser shows a mismatched host as unavailable.
+/// The host protocol a frontend and host build agree on, sent in every
+/// `agent.connected`. The relay serves one current frontend to every host,
+/// with no compatibility layer for older ones: increment this whenever a host
+/// command, reply or event changes incompatibly, and a browser shows a
+/// mismatched host as unavailable before sending it any request.
 pub const HostProtocolRevision : Int32 = 1
 
 ///|
@@ -1453,20 +1422,16 @@ pub(all) struct AppInfoReply {
   // A development build's console entry URL, the loopback origin the host
   // serves its own frontend on for the system browser. Absent in a release.
   console_url : String?
-  // `HostProtocolRevision` of the host build. Absent from hosts that predate
-  // it, which no current frontend can drive.
-  protocol : Int32?
 } derive(Debug, Eq)
 
 ///|
-/// `version` is required; `console_url` and `protocol` read as absent when
-/// missing or null. Unknown fields are ignored.
+/// `version` is required; `console_url` reads as absent when missing or
+/// null. Unknown fields are ignored.
 pub impl FromJson for AppInfoReply with fn from_json(json, path) {
   let object = JsonObject::decode(json, path, "app info reply")
   {
     version: object.required_string("version"),
     console_url: object.optional_string("console_url"),
-    protocol: object.optional_int("protocol"),
   }
 }
 
@@ -1476,9 +1441,6 @@ pub impl ToJson for AppInfoReply with fn to_json(self) {
   let object : Map[String, Json] = { "version": Json(self.version) }
   if self.console_url is Some(url) {
     object["console_url"] = Json(url)
-  }
-  if self.protocol is Some(protocol) {
-    object["protocol"] = Json(protocol)
   }
   Json::object(object)
 }
@@ -1823,18 +1785,6 @@ pub extend ConnectedPayload with Eq::{equal, not_equal}
 
 ///|
 pub extend ConnectedPayload with ToJson::{to_json}
-
-///|
-pub extend ConnectedStage with Debug::{to_repr}
-
-///|
-pub extend ConnectedStage with FromJson::{from_json}
-
-///|
-pub extend ConnectedStage with Eq::{equal, not_equal}
-
-///|
-pub extend ConnectedStage with ToJson::{to_json}
 
 ///|
 pub extend DiagnosticsPayload with Debug::{to_repr}

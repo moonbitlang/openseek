@@ -101,7 +101,6 @@ pub impl @json.FromJson for AppFocusedBrowserReply
 pub(all) struct AppInfoReply {
   version : String
   console_url : String?
-  protocol : Int32?
 } derive(Eq, @debug.Debug)
 pub fn AppInfoReply::equal(Self, Self) -> Bool
 pub fn AppInfoReply::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -933,7 +932,7 @@ pub impl ToJson for CompactReply
 pub impl @json.FromJson for CompactReply
 
 pub(all) struct ConnectedPayload {
-  stage : ConnectedStage
+  protocol : Int32?
 } derive(Eq, @debug.Debug)
 pub fn ConnectedPayload::equal(Self, Self) -> Bool
 pub fn ConnectedPayload::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
@@ -942,18 +941,6 @@ pub fn ConnectedPayload::to_json(Self) -> Json
 pub fn ConnectedPayload::to_repr(Self) -> @debug.Repr
 pub impl ToJson for ConnectedPayload
 pub impl @json.FromJson for ConnectedPayload
-
-pub(all) enum ConnectedStage {
-  Accepted
-  Serving
-} derive(Eq, @debug.Debug)
-pub fn ConnectedStage::equal(Self, Self) -> Bool
-pub fn ConnectedStage::from_json(Json, @json.JsonPath) -> Self raise @json.JsonDecodeError
-pub fn ConnectedStage::not_equal(Self, Self) -> Bool
-pub fn ConnectedStage::to_json(Self) -> Json
-pub fn ConnectedStage::to_repr(Self) -> @debug.Repr
-pub impl ToJson for ConnectedStage
-pub impl @json.FromJson for ConnectedStage
 
 pub(all) struct CreateDirectoryPayload {
   parent : String

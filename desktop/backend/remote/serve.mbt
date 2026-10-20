@@ -46,7 +46,9 @@ async fn WsClientActor::open_subscription(
 ) -> ClientSubscription {
   let out : @async.Queue[Outgoing] = Queue(kind=Blocking(OutboundQueueCapacity))
   // Install the readiness frame before the hub can write into this inbox.
-  out.put(Notify(AgentConnected({ stage: Accepted, })))
+  out.put(
+    Notify(AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), })),
+  )
   let notifications = self.state.subscribe(
     out,
     map=notification => {
@@ -460,7 +462,9 @@ async test "a full outbound queue rejects responses and retires its subscription
   // Readiness already occupies one slot. Overflow must wake the writer with
   // a connection failure, without escaping into the hub publisher.
   for _ in 0..<OutboundQueueCapacity {
-    state.publish(AgentConnected({ stage: Serving, }))
+    state.publish(
+      AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+    )
   }
   assert_true(disconnected)
   try subscription.out.get() catch {
@@ -469,7 +473,9 @@ async test "a full outbound queue rejects responses and retires its subscription
   } noraise {
     _ => fail("overflow did not close the stalled client's outbound queue")
   }
-  state.publish(AgentConnected({ stage: Serving, }))
+  state.publish(
+    AgentConnected({ protocol: Some(@protocol.HostProtocolRevision), }),
+  )
 }
 
 ///|

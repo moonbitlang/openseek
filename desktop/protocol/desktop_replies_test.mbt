@@ -298,57 +298,43 @@ test "durable tool result brief cannot hide a valid result" {
 }
 
 ///|
-test "agent connected names how much of the host is up" {
+test "agent connected carries the host protocol revision and always decodes" {
   guard @protocol.Notification::from_wire("agent.connected", {
-      "stage": "serving",
-    })
-    is Some(AgentConnected(serving)) else {
-    fail("serving connect did not decode")
-  }
-  assert_eq(serving.stage, Serving)
-  guard @protocol.Notification::from_wire("agent.connected", {
-      "stage": "accepted",
-    })
-    is Some(AgentConnected(accepted)) else {
-    fail("accepted connect did not decode")
-  }
-  assert_eq(accepted.stage, Accepted)
-  // A field this build does not know is not a reason to drop a connect.
-  guard @protocol.Notification::from_wire("agent.connected", {
-      "stage": "serving",
+      "protocol": 3,
       "roots": ["/work"],
     })
-    is Some(AgentConnected(extra)) else {
-    fail("an unknown field dropped the connect")
+    is Some(AgentConnected(current)) else {
+    fail("a current connect did not decode")
   }
-  assert_eq(extra.stage, Serving)
-  // The stage is the payload: a host that names none says nothing this
-  // client can act on, so the notification is refused rather than guessed at.
-  assert_true(
-    @protocol.Notification::from_wire("agent.connected", { "ready": true })
-    is None,
-  )
-  // Neither does a stage that is not a string, is null, or spells a stage
-  // this build cannot reason about. Reading an unknown one as `accepted`
-  // would be a guess about whether a run can start.
-  assert_true(
-    @protocol.Notification::from_wire("agent.connected", { "stage": 1 }) is None,
-  )
-  assert_true(
-    @protocol.Notification::from_wire("agent.connected", { "stage": null })
-    is None,
-  )
-  assert_true(
-    @protocol.Notification::from_wire("agent.connected", { "stage": "draining" })
-    is None,
-  )
-  @debug.assert_eq(
-    ({ stage: Serving, } : @protocol.ConnectedPayload).to_json(),
+  assert_eq(current.protocol, Some(3))
+  // Earlier hosts and malformed revisions still connect, with no revision a
+  // client could accept, so the page can report them instead of waiting.
+  let earlier_hosts : Array[Json] = [
     { "stage": "serving" },
+    { "stage": "draining" },
+    { "ready": true },
+    {},
+    { "protocol": "1" },
+    { "protocol": 1.5 },
+    { "protocol": null },
+    Json::null(),
+  ]
+  for params in earlier_hosts {
+    guard @protocol.Notification::from_wire("agent.connected", params)
+      is Some(AgentConnected(earlier)) else {
+      fail("an earlier host's connect was dropped: \{params.stringify()}")
+    }
+    assert_eq(earlier.protocol, None)
+  }
+  @debug.assert_eq(
+    (
+      { protocol: Some(@protocol.HostProtocolRevision), } :
+      @protocol.ConnectedPayload).to_json(),
+    { "protocol": Json(@protocol.HostProtocolRevision) },
   )
   @debug.assert_eq(
-    ({ stage: Accepted, } : @protocol.ConnectedPayload).to_json(),
-    { "stage": "accepted" },
+    ({ protocol: None, } : @protocol.ConnectedPayload).to_json(),
+    Json::object({}),
   )
 }
 

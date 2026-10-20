@@ -73,12 +73,12 @@ Everything else — commands, queries, and host-pushed events — travels over
 `GET /v2/devices/<device>/ws`, upgraded from the same origin the bundle was
 served from and spliced through to the host. A browser page takes its one
 `<device>` from the page route (or the legacy `?device=` entry query) and verifies it against
-`GET /v2/devices`; other roster devices need their own page/tab. Once the
-socket is up, the page asks `app.info` for the host's `protocol` revision
-alongside its first requests. A host built for another revision (or one that
-predates the field) has its socket closed without retrying, and every page
-except Cloud shows it as unavailable, whatever those first requests returned.
-There is no compatibility layer for older hosts. Frames are
+`GET /v2/devices`; other roster devices need their own page/tab. The host's
+first notification, `agent.connected`, carries its `protocol` revision. A page
+sends the host no request until that revision matches its own; a host built
+for another revision (or one that predates the field) has its socket closed
+without retrying, and every page except Cloud shows it as unavailable. There
+is no compatibility layer for older hosts. Frames are
 JSON text, shaped as **JSON-RPC 2.0**:
 
 ```jsonc
@@ -245,10 +245,10 @@ moment it exists; whatever a client missed while disconnected it recovers by
 re-reading state:
 
 1. Connect the WebSocket. The host sends `agent.connected` as the connection's
-   first notification — `{stage}`, where `stage` is `"accepted"` (the
-   transport took this client; the engine pump may still be between
-   generations) or `"serving"` (the pump entered a serving generation and
-   accepts runs). Both mean the same thing to a client: re-read your state.
+   first notification — `{protocol}`, its `HostProtocolRevision` — and again
+   when its engine pump enters a serving generation. Each means the same thing
+   to a client whose revision matches: re-read your state. Any other field is
+   ignored, so every host's `agent.connected` decodes.
    Every conversation belongs to a registered workspace, so a broadcast store
    root names its own project (`<project>/.openseek`) and needs no anchor
    value here. The host then starts forwarding the remote delivery stream.
@@ -505,7 +505,7 @@ still signs out a session whose issuer no longer matches the origin.
 
 | method | params | result |
 |---|---|---|
-| `app.info` | `{}` | `{version, console_url?, protocol?}` — the installed package version, a development build's loopback console URL, and the host's `HostProtocolRevision` (absent from hosts that predate it) |
+| `app.info` | `{}` | `{version, console_url?}` — the installed package version and a development build's loopback console URL |
 | `settings.get` | `{}` | the status shape below |
 | `settings.set` | `{provider?, custom_api_url?, deepseek_api_key?, glm_api_key?, custom_api_key?}` — absent fields stay unchanged; a present string field is trimmed and, when empty, **clears** the stored value; an unknown `provider` is refused. | the status shape below, post-write |
 | `mcp.status` | `{session}` | what that conversation's engine holds of its MCP servers: `{engine:"stopped"}` when it has no engine running, `{engine:"connecting"}` when its engine is running and has not reported yet, else `{engine:"running", status}`. `status` is the engine's latest `mcp_status` event on the serve protocol, kept by the host and returned unchanged: `{configs, servers}`, each config `{path, state:"loaded"}` or `{path, state:"failed", error}` in the order the engine was given them, each server `{name, transport:"stdio"\|"http", target, state, …}` with `state:"connected"` or `"lost"` plus `tools:[{name, description}]`, `"no_tools"`, `"failed"` plus `error`, or `"skipped"`; no configuration at all is `{configs:[], servers:[]}`. The request reads what the host kept: it starts nothing and does not ask the engine. An engine reports when it has connected its servers and again on every change — a connected server exiting. Each report also reaches connected clients as an `agent.event` carrying `mcp_status`, which is transient like every notification — a client that shows this state re-reads `mcp.status` when one arrives, and on reconnect. An engine that exits sends nothing more, so a client re-reading later gets `stopped` |

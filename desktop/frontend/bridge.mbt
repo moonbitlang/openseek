@@ -180,9 +180,12 @@ fn device_msg(
   notification : @protocol.Notification,
 ) -> DeviceMsg? {
   match notification {
-    // The payload's stage says how much of the host is up; every stage asks
-    // this client for the same resync, so the signal alone is the message.
-    AgentConnected(_) => Some(BridgeReady)
+    // The handshake. A host on this build's protocol revision is ready to be
+    // re-read; any other revision, or none, is a host this client must not
+    // drive, so it is refused before any request is sent.
+    AgentConnected({ protocol: Some(revision), }) if revision ==
+      @protocol.HostProtocolRevision => Some(BridgeReady)
+    AgentConnected(_) => Some(HostMismatched)
     UserQuestions(payload) => Some(QuestionsChanged(payload))
     AgentApprovals(payload) =>
       Some(

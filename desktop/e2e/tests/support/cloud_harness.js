@@ -180,7 +180,7 @@ export class CloudHarness {
       };
       window.__MoonBit__ = { getTitlebarArea: async () => null, app: events, events,
         openseek: new Proxy({}, { get: (_, method) => async params => {
-          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { stage: 'serving' } });
+          if (method === 'host.connect') for (const callback of listeners.get('openseek.agent.connected') || []) callback({ payload: { protocol: 1 } });
           return window.cloudHostRequest({ method, params });
         } }),
       };

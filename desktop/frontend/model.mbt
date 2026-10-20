@@ -2282,9 +2282,8 @@ priv enum DeviceMsg {
   ApprovalsChanged(ApprovalMirror)
   BridgeReady
   BridgeUnavailable(String)
-  // `app.info`'s protocol revision for one connection; `None` when the host
-  // predates it.
-  HostProtocolChecked(connection_generation~ : Int32, protocol~ : Int32?)
+  // `agent.connected` named another `HostProtocolRevision`, or none.
+  HostMismatched
   // The channel's WebSocket closed (or failed to open). The handler counts
   // the loss and schedules `ReconnectDue`, making the model's device list
   // the single authority over which reconnect loops keep running. The epoch
