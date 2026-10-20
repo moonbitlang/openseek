@@ -535,12 +535,13 @@ fn side_chat_behind_another_tab(model : Model, sync : TranscriptSync) -> Model {
     is Some(side) else {
     abort("the side chat must be held")
   }
-  model
-  .replace_conversation({ ..side, sync, })
-  .with_dock_state({
-    tabs: [SideChat(owner=side_chat_owner()), FilePicker],
-    active: Some(FilePicker),
-  })
+  let model = model
+    .replace_conversation({ ..side, sync, })
+    .with_dock_state({
+      tabs: [SideChat(owner=side_chat_owner()), FilePicker],
+      active: Some(SideChat(owner=side_chat_owner())),
+    })
+  update(test_dispatch(), Dock(TabActivated(FilePicker)), model).1
 }
 
 ///|
@@ -607,4 +608,23 @@ test "a page the side chat's agent opens is a tab in its conversation's dock" {
   )
   assert_true(opened.docks.get(@interop.Host(side_chat_owner())) is None)
   assert_true(opened.right_panel_open)
+}
+
+///|
+test "a side chat shown again after the dock was hidden is re-read" {
+  let model = side_chat_model()
+  guard model.find_conversation(@interop.ChannelId::Local, SideChatId)
+    is Some(side) else {
+    fail("the side chat must be held")
+  }
+  let (_, hidden) = update(
+    test_dispatch(),
+    ToggleRightPanel,
+    model.replace_conversation({ ..side, sync: Synced, }),
+  )
+  assert_true(hidden.mounted_side_chat_owner() is None)
+  assert_true(side_chat_sync(hidden) is Some(Synced))
+  let (_, shown) = update(test_dispatch(), ToggleRightPanel, hidden)
+  assert_true(shown.mounted_side_chat_owner() == Some(side_chat_owner()))
+  assert_true(side_chat_sync(shown) is Some(Reloading(..)))
 }
