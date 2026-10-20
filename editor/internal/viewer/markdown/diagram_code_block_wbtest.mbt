@@ -71,13 +71,14 @@ test "invalid uml falls through to the supplied tokenized renderer" {
     (
       #|```uml
       #|@startuml
+      #|@@@
       #|@enduml
       #|```
     ),
     code_block_renderer=render_tokenized_code_block,
   )
   assert_true(rendered.html.contains("monaco-tokenized-source"))
-  assert_true(rendered.html.contains("@startuml"))
+  assert_true(rendered.html.contains("@@@"))
   assert_false(rendered.html.contains("moonbit-viewer-markdown-diagram"))
   assert_true(rendered.has_code_block)
 }

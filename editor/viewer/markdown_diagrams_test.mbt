@@ -10,7 +10,15 @@ test "public Viewer UML renderer returns SVG only for valid diagrams" {
   }
   assert_true(svg.contains("<svg"))
   assert_true(svg.contains("--vscode-editor-foreground"))
-  assert_true(@viewer.render_uml_diagram_svg("@startuml\n@enduml") is None)
+  // UML 0.4.3 treats a bare `@startuml`/`@enduml` pair as a valid empty
+  // sequence diagram, so it renders a diagram with no content.
+  guard @viewer.render_uml_diagram_svg("@startuml\n@enduml") is Some(empty_svg) else {
+    fail("expected an empty UML SVG")
+  }
+  assert_true(empty_svg.contains("<svg"))
+  assert_true(empty_svg.contains("aria-label=\"Sequence diagram\""))
+  assert_false(empty_svg.contains("<g"))
+  assert_true(@viewer.render_uml_diagram_svg("@startuml\n@@@\n@enduml") is None)
 }
 
 ///|
