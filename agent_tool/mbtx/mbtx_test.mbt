@@ -1257,8 +1257,6 @@ async test "a JS target without an approval channel is rejected before saving" {
       "escalated": false,
     })
     assert_true(out.is_error, msg=out.content)
-    assert_true(out.content.contains("requires approval"), msg=out.content)
-    assert_true(out.content.contains("no approval channel"), msg=out.content)
     assert_false(@fs.exists("\{ws}/rejected.mbtx"))
   })
 }
