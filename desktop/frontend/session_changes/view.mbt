@@ -141,12 +141,12 @@ pub fn rows(
     } else {
       Some(emit(Remove(conversation, artifact)))
     }
-    let detail = if artifact.type_ is PullRequest {
-      state.details.get(artifact.url)
+    let pull_request = if artifact.type_ is PullRequest {
+      state.summaries.get(artifact.url)
     } else {
       None
     }
-    rows.push(attached_row(locale, artifact, detail, remove))
+    rows.push(attached_row(locale, artifact, pull_request, remove))
   }
   if state.phase_for(conversation) is CheckFailed(error) {
     rows.push(failure(text(locale, CheckFailed), error))
@@ -236,24 +236,24 @@ fn PullRequestState::look(
 ///|
 /// An attached item. The host keeps only its kind and address, so a pull
 /// request reads as its repository and number, and a branch as its name. Once
-/// GitHub has described a pull request, `detail` puts its title and state in
-/// place of the repository, as the checkout row shows its own.
+/// GitHub has summarized a pull request, `pull_request` puts its title and
+/// state in place of the repository, as the checkout row shows its own.
 fn attached_row(
   locale : @i18n.Locale,
   artifact : @protocol.SessionArtifact,
-  detail : PullRequest?,
+  pull_request : PullRequest?,
   remove : @cmd.Cmd?,
 ) -> @html.Html {
-  if detail is Some(detail) {
-    let (tone, image, state) = detail.state.look(locale)
+  if pull_request is Some(pull_request) {
+    let (tone, image, state) = pull_request.state.look(locale)
     return item(
       tone~,
       image~,
       href=Some(artifact.url),
-      title="#\{detail.number} \{detail.title}\n\{state}\n\{artifact.url}",
+      title="#\{pull_request.number} \{pull_request.title}\n\{state}\n\{artifact.url}",
       [
-        @html.span(class="conv-changes-number", "#\{detail.number}"),
-        @html.span(class="conv-changes-name", detail.title),
+        @html.span(class="conv-changes-number", "#\{pull_request.number}"),
+        @html.span(class="conv-changes-name", pull_request.title),
       ],
       aside=[],
       remove=Some(remove),

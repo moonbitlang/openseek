@@ -13,7 +13,7 @@ test "an enterprise token goes only to the host it was set for" {
     env
   }
 
-  let intended = github_pr_detail_environment(
+  let intended = github_pull_request_summary_environment(
     "GHE.Example.com",
     env(Some("ghe.example.com")),
   )
@@ -21,12 +21,12 @@ test "an enterprise token goes only to the host it was set for" {
   assert_eq(intended.get("GITHUB_ENTERPRISE_TOKEN"), Some("github-token"))
   for
     stripped in [
-      github_pr_detail_environment(
+      github_pull_request_summary_environment(
         "attacker.example",
         env(Some("ghe.example.com")),
       ),
-      github_pr_detail_environment("attacker.example", env(None)),
-      github_pr_detail_environment("github.com", env(None)),
+      github_pull_request_summary_environment("attacker.example", env(None)),
+      github_pull_request_summary_environment("github.com", env(None)),
     ] {
     assert_true(stripped.get("GH_ENTERPRISE_TOKEN") is None)
     assert_true(stripped.get("GITHUB_ENTERPRISE_TOKEN") is None)
@@ -34,14 +34,14 @@ test "an enterprise token goes only to the host it was set for" {
     assert_eq(stripped.get("PATH"), Some("/usr/bin"))
   }
   // Windows keeps whatever casing the variables were set with.
-  let windows = github_pr_detail_environment("attacker.example", {
+  let windows = github_pull_request_summary_environment("attacker.example", {
     "gh_enterprise_token": "gh-token",
     "Github_Enterprise_Token": "github-token",
     "Gh_Host": "ghe.example.com",
   })
   assert_true(windows.get("gh_enterprise_token") is None)
   assert_true(windows.get("Github_Enterprise_Token") is None)
-  let windows = github_pr_detail_environment("ghe.example.com", {
+  let windows = github_pull_request_summary_environment("ghe.example.com", {
     "gh_enterprise_token": "gh-token",
     "Gh_Host": "GHE.example.com",
   })
@@ -55,7 +55,7 @@ test "a pull request page's address names its pull request" {
       "https://github.com/o/r/pull/42", "https://github.com/o/r/pull/42?diff=split",
       "https://github.com/o/r/pull/42#issuecomment-123", "https://github.com/o/r/pull/42/files",
     ] {
-    guard github_pr_detail_identity(url) is Some(identity) else {
+    guard github_pull_request_summary_identity(url) is Some(identity) else {
       fail("\{url} names no pull request")
     }
     assert_eq(
@@ -68,6 +68,6 @@ test "a pull request page's address names its pull request" {
       "https://github.com/o/r/tree/topic", "https://github.com/o/r/pull/x", "https://github.com/o/r/pull/0",
       "https://github.com/o/r?x=/pull/1",
     ] {
-    assert_true(github_pr_detail_identity(url) is None)
+    assert_true(github_pull_request_summary_identity(url) is None)
   }
 }

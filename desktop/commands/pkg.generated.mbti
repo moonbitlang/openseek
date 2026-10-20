@@ -193,9 +193,9 @@ pub let github_drafts_set : Command[@protocol.GithubDrafts, @protocol.EmptyReply
 
 pub let github_list : Command[@protocol.GithubListPayload, @protocol.GithubListReply]
 
-pub let github_pr_detail : Command[@protocol.GithubPrDetailPayload, @protocol.GithubPrDetailReply]
-
 pub let github_pull_request : Command[@protocol.GithubPullRequestPayload, @protocol.GithubPullRequestDetail]
+
+pub let github_pull_request_summary : Command[@protocol.GithubPullRequestSummaryPayload, @protocol.GithubPullRequestSummaryReply]
 
 pub let github_review : Command[@protocol.GithubWorkspacePayload, @protocol.GithubReviewReply]
 

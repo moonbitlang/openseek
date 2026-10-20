@@ -36,7 +36,7 @@ pub(all) enum Msg {
   /// GitHub answered the lookup of the pull request at `url`, asked in
   /// generation `generation`. `Ok(None)` means the address is not a pull
   /// request GitHub knows how to describe.
-  Detailed(
+  Summarized(
     url~ : String,
     generation~ : Int32,
     Result[@protocol.GitPullRequest?, String]
@@ -80,7 +80,7 @@ pub struct State {
   /// succeeds or the overview moves to another conversation.
   remove_error : String?
   /// What GitHub last said about each attached pull request, by address.
-  details : Map[String, PullRequest]
+  summaries : Map[String, PullRequest]
   /// The generation each address was last looked up in. A lookup is answered
   /// only while it is still its address's latest, and an address is looked up
   /// at most once per generation.
@@ -101,7 +101,7 @@ pub fn State::initial() -> State {
     serial: 0,
     removing: [],
     remove_error: None,
-    details: {},
+    summaries: {},
     looked_up: {},
     generation: 0,
   }
@@ -221,18 +221,18 @@ pub fn update(
     }
     // An answer a later lookup of the same address superseded is dropped. A
     // failed lookup keeps what an earlier one found.
-    Detailed(url~, generation~, result) => {
+    Summarized(url~, generation~, result) => {
       guard state.looked_up.get(url) == Some(generation) else {
         return (@cmd.none, state)
       }
       match result {
         Ok(found) => {
-          let details = state.details.copy()
+          let summaries = state.summaries.copy()
           match found.bind(PullRequest::from_reply) {
-            Some(detail) => details[url] = detail
-            None => details.remove(url)
+            Some(summary) => summaries[url] = summary
+            None => summaries.remove(url)
           }
-          (@cmd.none, { ..state, details, })
+          (@cmd.none, { ..state, summaries, })
         }
         Err(_) => (@cmd.none, state)
       }
@@ -268,17 +268,23 @@ fn look_up(
       @cmd.attempt(
         result => {
           emit(
-            Detailed(
+            Summarized(
               url~,
               generation~,
               result
-              .map((reply : @protocol.GithubPrDetailReply) => reply.pull_request)
+              .map((reply : @protocol.GithubPullRequestSummaryReply) => {
+                reply.pull_request
+              })
               .map_err(@interop.bridge_error_text),
             ),
           )
         },
         () => {
-          @interop.bridge_request(channel, @commands.github_pr_detail, { url, })
+          @interop.bridge_request(
+            channel,
+            @commands.github_pull_request_summary,
+            { url, },
+          )
         },
       ),
     )

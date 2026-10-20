@@ -406,7 +406,7 @@ writes share the archive lock and revalidate the live record before committing.
 
 Clients can re-read `session.artifacts_list` after `session.artifacts_changed`.
 The notification carries no metadata; a client that wants an attached pull
-request's title and state asks `github.pr_detail` for its URL. Removing an
+request's title and state asks `github.pull_request_summary` for its URL. Removing an
 artifact changes only the association: it does not close a PR, delete a
 branch, or change a checkout.
 
@@ -589,7 +589,7 @@ Notifications:
 
 | method | params | result |
 |---|---|---|
-| `github.pr_detail` | `{url}` | `{pull_request?}` — what GitHub says about the pull request at `url`, read through the user's own `gh` CLI against the repository the URL names, with no checkout or session involved. `pull_request` has the shape `git.pull_request` answers with. The URL is untrusted data (an agent may have attached it), so the lookup drops `GH_ENTERPRISE_TOKEN`/`GITHUB_ENTERPRISE_TOKEN` unless the URL's host is `GH_HOST`. A URL that is not a pull request's answers `{}`; a missing `gh`, a failed or timed-out lookup, and unreadable output are errors |
+| `github.pull_request_summary` | `{url}` | `{pull_request?}` — what GitHub says about the pull request at `url`, read through the user's own `gh` CLI against the repository the URL names, with no checkout or session involved. `pull_request` has the shape `git.pull_request` answers with. The URL is untrusted data (an agent may have attached it), so the lookup drops `GH_ENTERPRISE_TOKEN`/`GITHUB_ENTERPRISE_TOKEN` unless the URL's host is `GH_HOST`. A URL that is not a pull request's answers `{}`; a missing `gh`, a failed or timed-out lookup, and unreadable output are errors |
 
 ### fs.* — host file access
 

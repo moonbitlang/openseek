@@ -45,7 +45,7 @@ pub(all) enum Msg {
   Listed(serial~ : Int32, Result[@protocol.SessionArtifacts, String])
   Remove(@interop.ConversationKey, @protocol.SessionArtifact)
   Removed(@interop.ConversationKey, @protocol.SessionArtifact, Result[@protocol.SessionArtifacts, String])
-  Detailed(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
+  Summarized(url~ : String, generation~ : Int32, Result[@protocol.GitPullRequest?, String])
 }
 
 pub enum Phase {
@@ -84,7 +84,7 @@ pub struct State {
   serial : Int32
   removing : Array[@protocol.SessionArtifact]
   remove_error : String?
-  details : Map[String, PullRequest]
+  summaries : Map[String, PullRequest]
   looked_up : Map[String, Int32]
   generation : Int32
 } derive(Eq)

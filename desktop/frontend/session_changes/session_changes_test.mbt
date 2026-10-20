@@ -321,7 +321,7 @@ test "each attached pull request is looked up once per generation" {
   assert_true(state.looked_up.get(branch("feature").url) is None)
   let (_, described) = @session_changes.update(
     quiet(),
-    Detailed(
+    Summarized(
       url~,
       generation=state.generation,
       described(1, "open", draft=true),
@@ -329,7 +329,7 @@ test "each attached pull request is looked up once per generation" {
     state,
   )
   assert_true(
-    described.details.get(url)
+    described.summaries.get(url)
     is Some({ number: 1, title: "Pull request 1", state: Draft, .. }),
   )
   // A removal reads the list again within the same generation: what is
@@ -361,7 +361,7 @@ test "each attached pull request is looked up once per generation" {
   )
   assert_true(refreshed.generation != state.generation)
   assert_true(refreshed.looked_up.get(url) == Some(refreshed.generation))
-  assert_true(refreshed.details.get(url) == described.details.get(url))
+  assert_true(refreshed.summaries.get(url) == described.summaries.get(url))
   // So does the overview coming back.
   let (_, reopened) = @session_changes.update(quiet(), Opened(one), refreshed)
   assert_true(reopened.generation != refreshed.generation)
@@ -375,7 +375,7 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
   let first = state.generation
   let (_, open) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=first, described(1, "open")),
+    Summarized(url~, generation=first, described(1, "open")),
     state,
   )
   let (_, changed) = @session_changes.update(quiet(), Changed(one), open)
@@ -388,36 +388,36 @@ test "a superseded lookup is dropped, and a failed one keeps the last answer" {
   // The earlier lookup answering late is not the latest word.
   let (_, stale) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=first, described(1, "closed")),
+    Summarized(url~, generation=first, described(1, "closed")),
     asked,
   )
   assert_true(stale == asked)
   let (_, failed) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=second, Err("gh is not signed in")),
+    Summarized(url~, generation=second, Err("gh is not signed in")),
     asked,
   )
-  assert_true(failed.details.get(url) is Some({ state: Open, .. }))
+  assert_true(failed.summaries.get(url) is Some({ state: Open, .. }))
   let (_, merged) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=second, described(1, "merged")),
+    Summarized(url~, generation=second, described(1, "merged")),
     asked,
   )
-  assert_true(merged.details.get(url) is Some({ state: Merged, .. }))
+  assert_true(merged.summaries.get(url) is Some({ state: Merged, .. }))
   // GitHub having nothing to say, or saying it in words this build does not
   // know, takes the row back to its bare address.
   let (_, nothing) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=second, Ok(None)),
+    Summarized(url~, generation=second, Ok(None)),
     merged,
   )
-  assert_true(nothing.details.get(url) is None)
+  assert_true(nothing.summaries.get(url) is None)
   let (_, unknown) = @session_changes.update(
     quiet(),
-    Detailed(url~, generation=second, described(1, "queued")),
+    Summarized(url~, generation=second, described(1, "queued")),
     merged,
   )
-  assert_true(unknown.details.get(url) is None)
+  assert_true(unknown.summaries.get(url) is None)
   // The summary counts the same rows either way.
   assert_true(
     @session_changes.summary(one, None, merged) ==

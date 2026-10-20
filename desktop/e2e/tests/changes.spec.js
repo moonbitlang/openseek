@@ -53,7 +53,7 @@ test('the changes card lists the checkout and what the agent attached, and remov
   ];
   // The host keeps only an attached pull request's address; GitHub has the
   // rest.
-  app.githubPrDetails[`${repo}/pull/2119`] = {
+  app.githubPullRequestSummaries[`${repo}/pull/2119`] = {
     number: 2119,
     title: 'Show session artifacts with the current checkout',
     state: 'closed',
@@ -91,7 +91,7 @@ test('the changes card lists the checkout and what the agent attached, and remov
   expect(requests(app, 'session.artifacts_list').map(request => request.params)).toEqual([{ session: 'session-1' }]);
   // Every attached pull request is looked up, the checkout's own included;
   // branches are not.
-  expect(requests(app, 'github.pr_detail').map(request => request.params.url).sort()).toEqual([
+  expect(requests(app, 'github.pull_request_summary').map(request => request.params.url).sort()).toEqual([
     `${repo}/pull/2119`,
     `${repo}/pull/2130`,
   ]);

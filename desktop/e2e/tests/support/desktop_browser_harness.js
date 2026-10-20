@@ -32,9 +32,9 @@ export class DesktopBrowserHarness {
     // `session.artifacts_list` reads them and `session.artifacts_remove`
     // edits them.
     this.sessionArtifacts = {};
-    // What `github.pr_detail` answers for each pull request address: by
+    // What `github.pull_request_summary` answers for each pull request address: by
     // default GitHub has nothing to say about it.
-    this.githubPrDetails = {};
+    this.githubPullRequestSummaries = {};
     this.textSearchMatches = [];
     this.semanticSearchMatches = [];
     this.textSearchMatchCount = undefined;
@@ -867,8 +867,8 @@ export class DesktopBrowserHarness {
         return this.gitBranch;
       case 'git.pull_request':
         return this.gitPullRequest;
-      case 'github.pr_detail': {
-        const pullRequest = this.githubPrDetails[request.params?.url];
+      case 'github.pull_request_summary': {
+        const pullRequest = this.githubPullRequestSummaries[request.params?.url];
         return pullRequest ? { pull_request: pullRequest } : {};
       }
       case 'session.artifacts_list':
