@@ -23,12 +23,14 @@ fn open_browser_tab(
   request? : String,
 ) -> (@cmd.Cmd, Model) {
   let (preview, id) = @preview.open_page(model.preview, url?)
-  let dock = if owner is Some(owner) {
-    @dock.open_browser_for(model.dock, owner, id)
+  // `owner` names the Host conversation for the native view; without one the
+  // tab joins the strip on screen, which may be a Cloud conversation's.
+  let (dock, target) = if owner is Some(owner) {
+    (@dock.open_browser_for(model.dock, owner, id), Some(@interop.Host(owner)))
   } else {
-    @dock.open_browser(model.dock, id)
+    (@dock.open_browser(model.dock, id), model.dock.owner)
   }
-  let on_screen = owner.map(owner => @interop.Host(owner)) == model.dock.owner
+  let on_screen = target == model.dock.owner
   let cmd = if url is Some(url) {
     browser_open(
       dispatch,

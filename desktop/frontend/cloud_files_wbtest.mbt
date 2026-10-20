@@ -179,3 +179,47 @@ test "deleting an inactive Cloud session clears its documents and dock bookmarks
   assert_false(deleted.dock.remembered.contains(owner))
   assert_true(deleted.cloud_identity() == model.cloud_identity())
 }
+
+///|
+test "a web link in a Cloud conversation reveals its tab in the Cloud dock" {
+  let model = {
+    ..integrated_cloud_model(),
+    right_panel_open: false,
+    right_panel_menu_open: true,
+  }
+  guard model.dock.owner is Some(@interop.Cloud(..) as cloud) else {
+    fail("the Cloud conversation owns the dock on screen")
+  }
+  let (_, opened) = update(
+    test_dispatch(),
+    ExternalLinkClicked("https://example.com/"),
+    model,
+  )
+  assert_true(opened.right_panel_open)
+  assert_false(opened.right_panel_menu_open)
+  assert_true(opened.dock.owner == Some(cloud))
+  guard @dock.active_browser(opened.dock) is Some(id) else {
+    fail("the link opens a browser tab")
+  }
+  assert_true(opened.dock.tabs.contains(Browser(id~)))
+  assert_true(
+    @preview.page(opened.preview, id).unwrap().url ==
+    Some("https://example.com/"),
+  )
+  // A Host conversation's agent page opens in that conversation's parked
+  // strip and leaves the Cloud screen as it is.
+  let (_, background) = update(
+    test_dispatch(),
+    BrowserOpenRequested(
+      request="r-1",
+      session="host-away",
+      url="https://example.org/",
+    ),
+    model,
+  )
+  assert_false(background.right_panel_open)
+  assert_true(background.right_panel_menu_open)
+  assert_true(background.dock.tabs == model.dock.tabs)
+  let away = @interop.Host({ channel: Local, session: "host-away", })
+  assert_true(background.dock.remembered.get(away) is Some({ tabs: [_], .. }))
+}
