@@ -457,9 +457,9 @@ pub fn ReconciledPlacement::reconcile(
 /// workspace-relative. `owner` records
 /// which conversation the cached tree and documents belong to, so switching
 /// Host channels, Cloud accounts or sessions never shares file contents.
-/// Strip membership, order, the active tab, and the
-/// parked per-conversation strips all live in the dock package — the open
-/// file list arrives through `Ctx`.
+/// Strip membership, order, and the active tab live in
+/// the root model's per-conversation dock states — the open file list arrives
+/// through `Ctx`.
 pub(all) struct State {
   owner : @interop.ConversationIdentity?
   cloud_epoch : Int32?

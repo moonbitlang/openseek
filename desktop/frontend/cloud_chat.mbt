@@ -204,13 +204,17 @@ fn update_cloud(
     _ => false
   }
   let mut file_panel = model.file_panel
-  let mut dock = model.dock
+  let docks = model.docks.copy()
   let file_commands : Array[@cmd.Cmd] = []
   if before.epoch != cloud.epoch && before.user_id is Some(account) {
     let (panel, clear) = @fileeditor.forget_cloud_files(file_panel, account)
     file_panel = panel
     file_commands.push(clear)
-    dock = @dock.forget_cloud_account(dock, account)
+    for owner in docks.keys().to_array() {
+      if owner is @interop.Cloud(account=current, ..) && current == account {
+        docks.remove(owner)
+      }
+    }
   }
   if before.user_id is Some(account) {
     for session in removed {
@@ -221,12 +225,12 @@ fn update_cloud(
       )
       file_panel = panel
       file_commands.push(clear)
-      dock = @dock.forget_cloud_session(dock, account, session)
+      docks.remove(@interop.Cloud(account~, session~))
     }
   }
   let next = {
     ..model,
-    dock,
+    docks,
     file_panel,
     screen: if message is @cloud.Create {
       Chat

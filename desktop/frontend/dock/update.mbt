@@ -13,12 +13,12 @@ pub(all) enum Msg {
 }
 
 ///|
-fn tab_index(state : State, tab : DockTab) -> Int32? {
+fn tab_index(state : DockState, tab : DockTab) -> Int32? {
   state.tabs.search_by(entry => entry == tab)
 }
 
 ///|
-pub fn update(msg : Msg, state : State) -> State {
+pub fn update(msg : Msg, state : DockState) -> DockState {
   match msg {
     TabActivated(tab) =>
       if tab_index(state, tab) is Some(_) {
@@ -40,7 +40,7 @@ pub fn update(msg : Msg, state : State) -> State {
           } else {
             state.active
           }
-          { ..state, tabs, active, }
+          { tabs, active, }
         }
         None => state
       }
@@ -50,7 +50,7 @@ pub fn update(msg : Msg, state : State) -> State {
 ///|
 /// Append `tab` unless the strip already holds it, then make it active — the
 /// shared body of the `open_*` entry points below.
-fn open_tab(state : State, tab : DockTab) -> State {
+fn open_tab(state : DockState, tab : DockTab) -> DockState {
   let tabs = if tab_index(state, tab) is Some(_) {
     state.tabs
   } else {
@@ -58,20 +58,20 @@ fn open_tab(state : State, tab : DockTab) -> State {
     tabs.push(tab)
     tabs
   }
-  { ..state, tabs, active: Some(tab), }
+  { tabs, active: Some(tab), }
 }
 
 ///|
 /// Open `path`'s file tab (appending one if it is not in the strip yet) and
 /// make it active — the strip half of a tree click or a chip jump.
-pub fn open_file(state : State, path : @common.Uri) -> State {
+pub fn open_file(state : DockState, path : @common.Uri) -> DockState {
   open_tab(state, DockTab::File(path~))
 }
 
 ///|
 /// Open one immutable historical comparison. Equality includes the commit, so
 /// the same path at two revisions stays independently inspectable.
-pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
+pub fn open_history_diff(state : DockState, diff : GitHistoryDiff) -> DockState {
   open_tab(state, DockTab::GitDiff(diff~))
 }
 
@@ -79,45 +79,21 @@ pub fn open_history_diff(state : State, diff : GitHistoryDiff) -> State {
 /// Open browser page `id`'s tab (appending one if it is not in the strip
 /// yet) and make it active. The caller owns the id: allocating the page and
 /// asking the host for its native view are the browser subsystem's business.
-pub fn open_browser(state : State, id : Int32) -> State {
+pub fn open_browser(state : DockState, id : Int32) -> DockState {
   open_tab(state, DockTab::Browser(id~))
-}
-
-///|
-/// Open browser page `id`'s tab in `owner`'s strip, whichever conversation
-/// is on screen. For the live strip this is `open_browser`. For another
-/// conversation's, the tab joins its parked strip as the active one, to be
-/// found there when that conversation returns; the strip on screen is left
-/// as it is.
-pub fn open_browser_for(
-  state : State,
-  owner : @interop.ConversationKey,
-  id : Int32,
-) -> State {
-  if state.owner == Some(@interop.Host(owner)) {
-    return open_browser(state, id)
-  }
-  let tab = DockTab::Browser(id~)
-  let tabs = match state.remembered.get(@interop.Host(owner)) {
-    Some(parked) => [..parked.tabs, tab]
-    None => [tab]
-  }
-  let remembered = state.remembered.copy()
-  remembered[@interop.Host(owner)] = { tabs, active: Some(tab), }
-  { ..state, remembered, }
 }
 
 ///|
 /// Open the transient file-picker tab, re-activating the existing one — at
 /// most one lives in the strip.
-pub fn open_picker(state : State) -> State {
+pub fn open_picker(state : DockState) -> DockState {
   open_tab(state, FilePicker)
 }
 
 ///|
 /// Open the workflows tab, re-activating the existing one — at most one
 /// lives in the strip.
-pub fn open_workflows(state : State) -> State {
+pub fn open_workflows(state : DockState) -> DockState {
   open_tab(state, Workflows)
 }
 
@@ -126,82 +102,26 @@ pub fn open_workflows(state : State) -> State {
 /// replaced in place by the selected tab — unless the tab is already open,
 /// in which case its existing tab activates and the picker closes. Without
 /// a picker this is a plain tab open.
-pub fn resolve_pick(state : State, tab : DockTab) -> State {
+pub fn resolve_pick(state : DockState, tab : DockTab) -> DockState {
   guard tab_index(state, FilePicker) is Some(picker_index) else {
     return open_tab(state, tab)
   }
   if tab_index(state, tab) is Some(_) {
     let tabs = state.tabs.filter(entry => !(entry is FilePicker))
-    { ..state, tabs, active: Some(tab), }
+    { tabs, active: Some(tab), }
   } else {
     let tabs = state.tabs.copy()
     tabs[picker_index] = tab
-    { ..state, tabs, active: Some(tab), }
+    { tabs, active: Some(tab), }
   }
 }
 
 ///|
-/// Reconcile the strip with the active conversation: when the conversation
-/// changed, park the current strip under its owner and restore the new
-/// conversation's parked strip (or an empty one). Pure — reloading the
-/// restored documents is the content subsystems' business, driven by their
-/// own sync against the fresh projection.
-pub fn sync(state : State, owner : @interop.ConversationIdentity) -> State {
-  if state.owner is Some(current) && current == owner {
-    return state
-  }
-  let remembered = state.remembered.copy()
-  if state.owner is Some(previous) && !previous.session().is_empty() {
-    remembered[previous] = { tabs: state.tabs, active: state.active, }
-  }
-  let (tabs, active) = match remembered.get(owner) {
-    Some(parked) => (parked.tabs.copy(), parked.active)
-    None => ([], (None : DockTab?))
-  }
-  { owner: Some(owner), tabs, active, remembered, }
-}
-
-///|
-/// Account credentials changed. Retire that account's file bookmarks as well
-/// as its live strip; Host strips and other owners keep their existing state.
-pub fn forget_cloud_account(state : State, account : String) -> State {
-  let remembered = state.remembered.copy()
-  for owner in remembered.keys().to_array() {
-    if owner is @interop.Cloud(account=current, ..) && current == account {
-      remembered.remove(owner)
-    }
-  }
-  if state.owner is Some(@interop.Cloud(account=current, ..)) &&
-    current == account {
-    { owner: None, tabs: [], active: None, remembered, }
-  } else {
-    { ..state, remembered, }
-  }
-}
-
-///|
-pub fn open_jobs(state : State) -> State {
+pub fn open_jobs(state : DockState) -> DockState {
   open_tab(state, Jobs)
 }
 
 ///|
-pub fn open_github(state : State) -> State {
+pub fn open_github(state : DockState) -> DockState {
   open_tab(state, Github)
-}
-
-///|
-/// Deleting a Cloud session also retires its open file bookmarks.
-pub fn forget_cloud_session(
-  state : State,
-  account : String,
-  session : String,
-) -> State {
-  let owner = @interop.Cloud(account~, session~)
-  let remembered = state.remembered.copy()
-  remembered.remove(owner)
-  if state.owner == Some(owner) {
-    { owner: None, tabs: [], active: None, remembered, }
-  } else {
-    { ..state, remembered, }
-  }
 }

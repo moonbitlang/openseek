@@ -3,7 +3,7 @@
 /// bookmark in the editor strip, but neither Quick Open nor a composer mention
 /// may offer it as a destination.
 fn Model::live_editor_files(self : Model) -> Array[@pathx.Relative] {
-  @dock.file_paths(self.dock)
+  @dock.file_paths(self.dock_state())
   .filter(path => {
     !(self.file_panel.docs.get(path) is Some(doc) &&
     doc.state is @fileeditor.TabDeleted)
@@ -56,5 +56,7 @@ fn Model::workspace_resource(
 
 ///|
 fn Model::active_workspace_file(self : Model) -> @pathx.Relative? {
-  @dock.active_file(self.dock).bind(file => self.workspace_relative(file))
+  @dock.active_file(self.dock_state()).bind(file => {
+    self.workspace_relative(file)
+  })
 }

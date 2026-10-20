@@ -13,49 +13,41 @@ import {
 }
 
 // Values
-pub fn active_browser(State) -> Int32?
+pub fn active_browser(DockState) -> Int32?
 
-pub fn active_file(State) -> @common.Uri?
+pub fn active_file(DockState) -> @common.Uri?
 
-pub fn active_history_diff(State) -> GitHistoryDiff?
+pub fn active_history_diff(DockState) -> GitHistoryDiff?
 
-pub fn file_paths(State) -> Array[@common.Uri]
+pub fn file_paths(DockState) -> Array[@common.Uri]
 
-pub fn forget_cloud_account(State, String) -> State
-
-pub fn forget_cloud_session(State, String, String) -> State
-
-pub fn history_diffs(State) -> Array[GitHistoryDiff]
+pub fn history_diffs(DockState) -> Array[GitHistoryDiff]
 
 pub fn launcher_pane(locale? : @i18n.Locale, LauncherActions) -> @html.Html
 
-pub fn open_browser(State, Int32) -> State
+pub fn open_browser(DockState, Int32) -> DockState
 
-pub fn open_browser_for(State, @interop.ConversationKey, Int32) -> State
+pub fn open_file(DockState, @common.Uri) -> DockState
 
-pub fn open_file(State, @common.Uri) -> State
+pub fn open_github(DockState) -> DockState
 
-pub fn open_github(State) -> State
+pub fn open_history_diff(DockState, GitHistoryDiff) -> DockState
 
-pub fn open_history_diff(State, GitHistoryDiff) -> State
+pub fn open_jobs(DockState) -> DockState
 
-pub fn open_jobs(State) -> State
+pub fn open_picker(DockState) -> DockState
 
-pub fn open_picker(State) -> State
+pub fn open_workflows(DockState) -> DockState
 
-pub fn open_workflows(State) -> State
+pub fn resolve_pick(DockState, DockTab) -> DockState
 
-pub fn resolve_pick(State, DockTab) -> State
+pub fn tab_menu(locale? : @i18n.Locale, DockState, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection], owner~ : @interop.ConversationIdentity) -> @action_menu.Definition?
 
-pub fn sync(State, @interop.ConversationIdentity) -> State
+pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], DockState, Array[TabChip], LauncherActions, owner~ : @interop.ConversationIdentity, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd) -> @html.Html
 
-pub fn tab_menu(locale? : @i18n.Locale, State, String, @cmd.Emit[Msg], @cmd.Emit[CloseSelection]) -> @action_menu.Definition?
+pub fn tabs_to_close(DockState, CloseSelection) -> Array[DockTab]
 
-pub fn tabs_bar(locale? : @i18n.Locale, @cmd.Emit[Msg], State, Array[TabChip], LauncherActions, menu_open~ : Bool, expanded~ : Bool, toggle_menu~ : @cmd.Cmd, close_menu~ : @cmd.Cmd, close_tabs~ : @cmd.Emit[CloseSelection], toggle_expanded~ : @cmd.Cmd) -> @html.Html
-
-pub fn tabs_to_close(State, CloseSelection) -> Array[DockTab]
-
-pub fn update(Msg, State) -> State
+pub fn update(Msg, DockState) -> DockState
 
 // Errors
 
@@ -66,6 +58,14 @@ pub(all) enum CloseSelection {
   ToLeft(DockTab)
   ToRight(DockTab)
 }
+
+pub(all) struct DockState {
+  tabs : Array[DockTab]
+  active : DockTab?
+} derive(Eq)
+pub fn DockState::empty() -> Self
+pub fn DockState::equal(Self, Self) -> Bool
+pub fn DockState::not_equal(Self, Self) -> Bool
 
 pub(all) enum DockTab {
   File(path~ : @common.Uri)
@@ -106,23 +106,6 @@ pub(all) enum Msg {
   TabActivated(DockTab)
   TabClosed(DockTab)
 }
-
-pub(all) struct RememberedStrip {
-  tabs : Array[DockTab]
-  active : DockTab?
-} derive(Eq)
-pub fn RememberedStrip::equal(Self, Self) -> Bool
-pub fn RememberedStrip::not_equal(Self, Self) -> Bool
-
-pub(all) struct State {
-  owner : @interop.ConversationIdentity?
-  tabs : Array[DockTab]
-  active : DockTab?
-  remembered : Map[@interop.ConversationIdentity, RememberedStrip]
-} derive(Eq)
-pub fn State::empty() -> Self
-pub fn State::equal(Self, Self) -> Bool
-pub fn State::not_equal(Self, Self) -> Bool
 
 pub(all) struct TabChip {
   tab : DockTab

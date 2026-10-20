@@ -2,7 +2,7 @@
 /// Durable dock, document, and browser data stays in its domain package. This
 /// value is the complete read-only input needed to render the right panel.
 struct Input {
-  dock : @dock.State
+  dock : @dock.DockState
   file_panel : @fileeditor.State
   preview : @preview.State
   annotation : @preview.Annotation
@@ -21,7 +21,7 @@ struct Input {
 
 ///|
 pub fn Input::Input(
-  dock~ : @dock.State,
+  dock~ : @dock.DockState,
   file_panel~ : @fileeditor.State,
   preview~ : @preview.State,
   annotation~ : @preview.Annotation,
@@ -105,6 +105,7 @@ pub fn component(
     (localized, target) => {
       let (input, locale) = localized
       @dock.tab_menu(
+        owner=input.file_ctx.owner,
         locale~,
         input.dock,
         target,

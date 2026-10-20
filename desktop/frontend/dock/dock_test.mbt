@@ -1,10 +1,10 @@
 // State-transition tests for the strip machine: opening, activating,
-// closing, and how a conversation switch parks and restores a strip. The
-// dock is command-free, so every assertion is on the returned state.
+// closing, and their projections. Conversation ownership is the root's;
+// the dock is command-free, so every assertion is on the returned state.
 
 ///|
-fn owner(session : String) -> @interop.ConversationKey {
-  { channel: @interop.ChannelId::Local, session, }
+fn owner(session : String) -> @interop.ConversationIdentity {
+  @interop.Host({ channel: @interop.ChannelId::Local, session, })
 }
 
 ///|
@@ -24,7 +24,7 @@ fn file_tab(path : String) -> @dock.DockTab raise {
 
 ///|
 test "bulk close selects relative to the clicked tab across tab kinds" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_browser(7)
     |> @dock.open_picker()
@@ -51,13 +51,13 @@ test "bulk close selects relative to the clicked tab across tab kinds" {
   assert_true(
     @dock.tabs_to_close(state, ToRight(file_tab("missing"))).is_empty(),
   )
-  let single = @dock.State::empty() |> @dock.open_picker()
+  let single = @dock.DockState::empty() |> @dock.open_picker()
   assert_true(@dock.tabs_to_close(single, Others(FilePicker)).is_empty())
 }
 
 ///|
 test "open_file appends in order and activates" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
@@ -70,7 +70,7 @@ test "open_file appends in order and activates" {
 
 ///|
 test "open_file re-activates an existing tab without duplicating it" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_file(work_file("a.mbt"))
@@ -80,7 +80,7 @@ test "open_file re-activates an existing tab without duplicating it" {
 
 ///|
 test "TabActivated switches to a present tab and ignores an absent one" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
   let activated = @dock.update(@dock.TabActivated(file_tab("a.mbt")), state)
@@ -94,7 +94,7 @@ test "TabActivated switches to a present tab and ignores an absent one" {
 
 ///|
 test "closing the active tab activates the right neighbor, else the left" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_file(work_file("c.mbt"))
@@ -115,7 +115,7 @@ test "closing the active tab activates the right neighbor, else the left" {
 
 ///|
 test "closing a background tab keeps the active tab" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
   let state = @dock.update(@dock.TabClosed(file_tab("a.mbt")), state)
@@ -127,43 +127,41 @@ test "closing a background tab keeps the active tab" {
 }
 
 ///|
-test "sync parks the strip and restores it when the conversation returns" {
-  let first = owner("alpha")
-  let second = owner("beta")
-  let state = @dock.sync(@dock.State::empty(), @interop.Host(first))
-    |> @dock.open_file(work_file("a.mbt"))
-    |> @dock.open_file(work_file("b.mbt"))
-  let state = @dock.update(@dock.TabActivated(file_tab("a.mbt")), state)
-  // Switch away: the strip parks and the panel starts empty.
-  let away = @dock.sync(state, @interop.Host(second))
-  assert_true(away.owner == Some(@interop.Host(second)))
-  assert_true(away.tabs.is_empty())
-  assert_true(away.active is None)
-  // A same-owner sync is a no-op.
-  assert_true(@dock.sync(away, @interop.Host(second)) == away)
-  // Switch back: identities and the active tab return.
-  let back = @dock.sync(away, @interop.Host(first))
-  assert_true(back.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
-  assert_true(back.active == Some(file_tab("a.mbt")))
+test "empty docks have no projections and ignore absent tab actions" {
+  let state = @dock.DockState::empty()
+  assert_true(state.tabs.is_empty())
+  assert_true(state.active is None)
+  assert_true(@dock.file_paths(state).is_empty())
+  assert_true(@dock.history_diffs(state).is_empty())
+  assert_true(@dock.active_file(state) is None)
+  assert_true(@dock.active_history_diff(state) is None)
+  assert_true(@dock.active_browser(state) is None)
+  assert_true(@dock.tabs_to_close(state, All).is_empty())
+  assert_true(@dock.update(TabActivated(Browser(id=7)), state) == state)
+  assert_true(@dock.update(TabClosed(Browser(id=7)), state) == state)
 }
 
 ///|
-test "sync does not park a strip owned by an empty session" {
-  let nameless = owner("")
-  let real = owner("alpha")
-  let state = @dock.sync(@dock.State::empty(), @interop.Host(nameless))
+test "tab transitions preserve earlier dock snapshots" {
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
-  let moved = @dock.sync(state, @interop.Host(real))
-  assert_true(moved.tabs.is_empty())
-  // Returning to the empty session restores nothing.
-  let back = @dock.sync(moved, @interop.Host(nameless))
-  assert_true(back.tabs.is_empty())
-  assert_true(back.active is None)
+    |> @dock.open_file(work_file("b.mbt"))
+  let opened = @dock.open_browser(state, 7)
+  let closed = @dock.update(TabClosed(file_tab("b.mbt")), state)
+  assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
+  assert_true(state.active == Some(file_tab("b.mbt")))
+  assert_true(
+    opened.tabs ==
+    [file_tab("a.mbt"), file_tab("b.mbt"), @dock.DockTab::Browser(id=7)],
+  )
+  assert_true(opened.active == Some(Browser(id=7)))
+  assert_true(closed.tabs == [file_tab("a.mbt")])
+  assert_true(closed.active == Some(file_tab("a.mbt")))
 }
 
 ///|
 test "open_browser appends and re-activates without duplicating" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_browser(7)
   assert_true(state.tabs == [file_tab("a.mbt"), @dock.DockTab::Browser(id=7)])
@@ -178,7 +176,7 @@ test "open_browser appends and re-activates without duplicating" {
 
 ///|
 test "open_picker keeps at most one picker tab" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
     |> @dock.open_file(work_file("b.mbt"))
@@ -192,7 +190,7 @@ test "open_picker keeps at most one picker tab" {
 
 ///|
 test "resolve_pick replaces the picker in place with a fresh file" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
   let state = @dock.resolve_pick(state, file_tab("b.mbt"))
@@ -210,7 +208,7 @@ test "resolve_pick replaces the picker in place with a fresh file" {
 
 ///|
 test "resolve_pick activates an already-open file and closes the picker" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_file(work_file("b.mbt"))
     |> @dock.open_picker
@@ -221,7 +219,7 @@ test "resolve_pick activates an already-open file and closes the picker" {
 
 ///|
 test "resolve_pick without a picker is a plain open" {
-  let state = @dock.State::empty() |> @dock.open_file(work_file("a.mbt"))
+  let state = @dock.DockState::empty() |> @dock.open_file(work_file("a.mbt"))
   let state = @dock.resolve_pick(state, file_tab("b.mbt"))
   assert_true(state.tabs == [file_tab("a.mbt"), file_tab("b.mbt")])
   assert_true(state.active == Some(file_tab("b.mbt")))
@@ -229,7 +227,7 @@ test "resolve_pick without a picker is a plain open" {
 
 ///|
 test "closing the picker activates a neighbor like any tab" {
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_file(work_file("a.mbt"))
     |> @dock.open_picker
   let state = @dock.update(TabClosed(@dock.DockTab::FilePicker), state)
@@ -238,17 +236,89 @@ test "closing the picker activates a neighbor like any tab" {
 }
 
 ///|
-test "park and restore keeps browser and picker tabs" {
-  let state = @dock.sync(@dock.State::empty(), @interop.Host(owner("s1")))
-    |> @dock.open_browser(3)
-    |> @dock.open_picker
-  let state = @dock.sync(state, @interop.Host(owner("s2")))
-  assert_true(state.tabs.is_empty())
-  let state = @dock.sync(state, @interop.Host(owner("s1")))
+test "singleton views re-activate without changing tab order" {
+  let state = @dock.DockState::empty()
+    |> @dock.open_workflows()
+    |> @dock.open_github()
+    |> @dock.open_jobs()
+    |> @dock.open_workflows()
+    |> @dock.open_github()
+    |> @dock.open_jobs()
   assert_true(
-    state.tabs == [@dock.DockTab::Browser(id=3), @dock.DockTab::FilePicker],
+    state.tabs ==
+    [@dock.DockTab::Workflows, @dock.DockTab::Github, @dock.DockTab::Jobs],
   )
-  assert_true(state.active == Some(@dock.DockTab::FilePicker))
+  assert_true(state.active == Some(@dock.DockTab::Jobs))
+  assert_true(@dock.active_browser(state) is None)
+  assert_true(@dock.active_file(state) is None)
+  assert_true(@dock.active_history_diff(state) is None)
+}
+
+///|
+test "tab menus resolve only targets from their explicit conversation owner" {
+  let state = @dock.DockState::empty() |> @dock.open_browser(7)
+  let dispatch : @cmd.Emit[@dock.Msg] = @cmd.Emit(_ => @cmd.none)
+  let close : @cmd.Emit[@dock.CloseSelection] = @cmd.Emit(_ => @cmd.none)
+  let target = "dock:host:local:alpha:browser:7"
+  assert_true(
+    @dock.tab_menu(state, target, dispatch, close, owner=owner("alpha"))
+    is Some(_),
+  )
+  assert_true(
+    @dock.tab_menu(state, target, dispatch, close, owner=owner("beta")) is None,
+  )
+  let remote = @interop.Host({
+    channel: @interop.ChannelId::Remote("host"),
+    session: "alpha",
+  })
+  assert_true(
+    @dock.tab_menu(state, target, dispatch, close, owner=remote) is None,
+  )
+  assert_true(
+    @dock.tab_menu(
+      state,
+      "dock:host:remote.host:alpha:browser:7",
+      dispatch,
+      close,
+      owner=remote,
+    )
+    is Some(_),
+  )
+}
+
+///|
+test "tab menus isolate Cloud accounts and Host conversations" {
+  let state = @dock.DockState::empty() |> @dock.open_picker()
+  let dispatch : @cmd.Emit[@dock.Msg] = @cmd.Emit(_ => @cmd.none)
+  let close : @cmd.Emit[@dock.CloseSelection] = @cmd.Emit(_ => @cmd.none)
+  let target = "dock:cloud:7:account:alpha:picker"
+  let cloud = @interop.Cloud(account="account", session="alpha")
+  assert_true(
+    @dock.tab_menu(state, target, dispatch, close, owner=cloud) is Some(_),
+  )
+  assert_true(
+    @dock.tab_menu(
+      state,
+      target,
+      dispatch,
+      close,
+      owner=@interop.Cloud(account="another", session="alpha"),
+    )
+    is None,
+  )
+  assert_true(
+    @dock.tab_menu(
+      state,
+      target,
+      dispatch,
+      close,
+      owner=@interop.Cloud(account="account", session="beta"),
+    )
+    is None,
+  )
+  assert_true(
+    @dock.tab_menu(state, target, dispatch, close, owner=owner("alpha")) is None,
+  )
 }
 
 ///|
@@ -266,7 +336,7 @@ test "historical diffs deduplicate exact commits and distinguish revisions" {
     commit: "2222222222222222222222222222222222222222",
     parent: Some("1111111111111111111111111111111111111111"),
   }
-  let state = @dock.State::empty()
+  let state = @dock.DockState::empty()
     |> @dock.open_history_diff(first)
     |> @dock.open_history_diff(first)
     |> @dock.open_history_diff(second)

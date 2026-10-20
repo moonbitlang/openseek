@@ -920,10 +920,9 @@ fn open_explorer(
   let next = {
     ..model,
     screen,
-    dock: @dock.open_picker(model.dock),
     right_panel_open: true,
     right_panel_menu_open: false,
-  }
+  }.with_dock_state(@dock.open_picker(model.dock_state()))
   let (cmd, file_panel) = @fileeditor.update(
     dispatch.map(msg => FileEditor(msg)),
     @fileeditor.ExplorerModeSelected(mode),
@@ -1531,7 +1530,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     .find_conversation(active.owner.channel, active.owner.session)
     .map(conv => conv.engine_model)
     .unwrap_or(model.default_model)
-  let file_body_visible = match model.dock.active {
+  let file_body_visible = match model.dock_state().active {
     Some(File(_)) | Some(GitDiff(_)) | Some(FilePicker) => true
     None | Some(Browser(_)) | Some(Workflows) | Some(Jobs) | Some(Github) =>
       false
@@ -1541,15 +1540,7 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // Both panel packages use the typed checkout state to park host work; the
     // stable owner lets an interrupted changed-file review resume after Repair
     // without ever treating the project root as a fallback checkout.
-    owner: if model.cloud_selected() {
-      match model.cloud_identity() {
-        Some(owner) => owner
-        None =>
-          model.cloud_draft_identity().unwrap_or(@interop.Host(active.owner))
-      }
-    } else {
-      @interop.Host(active.owner)
-    },
+    owner: model.dock_owner(),
     cloud_files: if model.cloud_selected() &&
       model.cloud_identity() is Some(@interop.Cloud(account~, ..)) &&
       model.cloud.user_id == Some(account) {
@@ -1582,12 +1573,12 @@ fn file_ctx(model : Model) -> @fileeditor.Ctx {
     // subsystem parks its workspace watches and Changes refreshes off-screen.
     panel_open: model.right_panel_open &&
     (model.screen is Codex || (model.screen is Chat && file_body_visible)),
-    open_files: @dock.file_paths(model.dock),
+    open_files: @dock.file_paths(model.dock_state()),
     preview_files: model.preview.local_files(),
     preview_rechecks: model.preview.files_to_check(),
-    active_file: @dock.active_file(model.dock),
-    open_history_diffs: @dock.history_diffs(model.dock),
-    active_history_diff: @dock.active_history_diff(model.dock),
+    active_file: @dock.active_file(model.dock_state()),
+    open_history_diffs: @dock.history_diffs(model.dock_state()),
+    active_history_diff: @dock.active_history_diff(model.dock_state()),
     github: model.github,
   }
 }
@@ -1619,22 +1610,13 @@ fn terminal_ctx(model : Model) -> @terminal.Ctx {
 }
 
 ///|
-/// Reconcile the dock strip, then the file subsystem, with the active
-/// conversation after every message (see `@dock.sync` /
-/// `@fileeditor.sync`). Order matters: the dock parks/restores the strip
-/// first, so the file sync sees the fresh projection and re-roots its
-/// document table from it. Centralizing it here keeps every
-/// conversation-switching handler from having to re-root the panel itself.
+/// Reconcile the file subsystem with the selected conversation's dock after
+/// every message. The dock map already retains every strip, so switching
+/// owners only changes this projection and re-roots the document table.
 fn sync_file_panel(
   dispatch : @cmd.Emit[Msg],
   model : Model,
 ) -> (Model, @cmd.Cmd) {
-  let ctx = file_ctx(model)
-  // Placement health is carried separately from identity, so a missing
-  // checkout keeps this conversation's strip while both content subsystems
-  // refuse host-backed work until Repair settles.
-  let dock = @dock.sync(model.dock, ctx.owner)
-  let model = { ..model, dock, }
   let (panel, cmd) = @fileeditor.sync(
     dispatch.map(msg => FileEditor(msg)),
     model.file_panel,
@@ -1698,7 +1680,7 @@ fn desired_browser_view(model : Model) -> Int32? {
     !covering_overlay(model) else {
     return None
   }
-  guard @dock.active_browser(model.dock) is Some(id) &&
+  guard @dock.active_browser(model.dock_state()) is Some(id) &&
     @preview.page(model.preview, id) is Some(page) &&
     page.url is Some(_) else {
     return None
@@ -1886,6 +1868,17 @@ fn update(
   let (navigation_cmd, model) = reconcile_navigation(
     dispatch, msg, previous, model,
   )
+  // The empty composer has no durable conversation. Its temporary tabs do
+  // not reappear after leaving it, matching the old strip-switch behavior.
+  let previous_owner = previous.dock_owner()
+  let model = if previous_owner.session().is_empty() &&
+    previous_owner != model.dock_owner() {
+    let docks = model.docks.copy()
+    docks.remove(previous_owner)
+    { ..model, docks, }
+  } else {
+    model
+  }
   // The native dialog must not cover the desktop's connection-lost screen.
   // Detaching a workspace or losing its device also dismisses it.
   let model = {
@@ -2035,7 +2028,7 @@ fn update(
     model.right_panel_open &&
     msg.opens_file_before_panel_reconciliation() &&
     model.file_panel.error is None &&
-    @dock.active_file(model.dock) is Some(_)
+    @dock.active_file(model.dock_state()) is Some(_)
   let (panel_visibility_cmd, model) = if panel_visibility_changed &&
     !file_opened_with_panel {
     let (command, file_panel) = @fileeditor.panel_toggle_cmds(
@@ -2092,7 +2085,7 @@ fn update(
     dispatch.map(msg => Github(msg)),
     model.github,
     checkout,
-    github_visible && model.dock.active is Some(Github),
+    github_visible && model.dock_state().active is Some(Github),
     review_active=github_visible &&
       ctx.panel_open &&
       ctx.active_history_diff is None &&
@@ -2115,7 +2108,7 @@ fn update(
   // already explicit root transitions, so close it here instead of observing a
   // rendered owner marker through the DOM.
   let model = if model.right_panel_menu_open &&
-    model.dock.owner != previous.dock.owner {
+    model.dock_owner() != previous.dock_owner() {
     { ..model, right_panel_menu_open: false, }
   } else {
     model
@@ -2152,7 +2145,7 @@ fn update(
   let model = { ..model, terminal, }
   let owner = model.jobs_owner()
   let active = model.file_panel_visible() &&
-    model.dock.active is Some(Jobs) &&
+    model.dock_state().active is Some(Jobs) &&
     owner is Some(owner) &&
     model.devices.any(dev => {
       dev.channel == owner.channel &&
@@ -2203,9 +2196,9 @@ fn update(
         @cmd.none
       },
       sync_dock_visibility(
-        model.dock.active != previous.dock.active ||
-        model.dock.tabs != previous.dock.tabs ||
-        model.dock.owner != previous.dock.owner ||
+        model.dock_state().active != previous.dock_state().active ||
+        model.dock_state().tabs != previous.dock_state().tabs ||
+        model.dock_owner() != previous.dock_owner() ||
         panel_visibility_changed ||
         msg.opens_file_before_panel_reconciliation() ||
         msg is Dock(TabActivated(_)),
@@ -2228,9 +2221,9 @@ fn close_dock_tabs(
   model : Model,
   selection : @dock.CloseSelection,
 ) -> (@cmd.Cmd, Model) {
-  let tabs = @dock.tabs_to_close(model.dock, selection)
+  let tabs = @dock.tabs_to_close(model.dock_state(), selection)
   guard !tabs.is_empty() else { return (@cmd.none, model) }
-  let active = model.dock.active
+  let active = model.dock_state().active
   let commands : Array[@cmd.Cmd] = []
   let mut next = model
   // Close background tabs first so the active tab does not promote and mount
@@ -3703,13 +3696,13 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
-      let had_active = @dock.active_file(model.dock) is Some(_)
-      let dock = if model.dock.active is Some(FilePicker) {
-        @dock.resolve_pick(model.dock, File(path=resource))
+      let had_active = @dock.active_file(model.dock_state()) is Some(_)
+      let dock = if model.dock_state().active is Some(FilePicker) {
+        @dock.resolve_pick(model.dock_state(), File(path=resource))
       } else {
-        @dock.open_file(model.dock, resource)
+        @dock.open_file(model.dock_state(), resource)
       }
-      let model = { ..model, dock, }
+      let model = model.with_dock_state(dock)
       let (cmd, panel) = @fileeditor.open_changed_document(
         dispatch.map(msg => FileEditor(msg)),
         model.file_panel,
@@ -3742,8 +3735,8 @@ fn update_msg(
         return (@cmd.none, model)
       }
       let model = model.begin_editor_navigation()
-      let dock = @dock.open_history_diff(model.dock, diff)
-      let model = { ..model, dock, }
+      let dock = @dock.open_history_diff(model.dock_state(), diff)
+      let model = model.with_dock_state(dock)
       let (cmd, panel) = @fileeditor.open_history_diff(
         dispatch.map(msg => FileEditor(msg)),
         model.file_panel,
@@ -4572,7 +4565,7 @@ fn update_msg(
       // resizes included (a rotation changes the host without crossing the
       // breakpoint).
       let cmds = if model.right_panel_open &&
-        @dock.active_file(model.dock) is Some(_) {
+        @dock.active_file(model.dock_state()) is Some(_) {
         [@fileeditor.request_viewer_remeasure()]
       } else {
         []
@@ -5927,7 +5920,7 @@ fn update_msg(
       // A direct visibility toggle has no later semantic action to fence old
       // editor replies. Actions such as OpenFile and JumpToLocation spend
       // their own navigation generation before opening the panel.
-      let model = if !opening || model.dock.active is Some(_) {
+      let model = if !opening || model.dock_state().active is Some(_) {
         model.begin_editor_navigation()
       } else {
         model
@@ -5957,7 +5950,7 @@ fn update_msg(
         right_panel_expanded: !model.right_panel_expanded,
         sidebar_open: model.right_panel_expanded && model.sidebar_open,
       }
-      let cmd = if @dock.active_file(model.dock) is Some(_) {
+      let cmd = if @dock.active_file(model.dock_state()) is Some(_) {
         @fileeditor.request_viewer_remeasure()
       } else {
         @cmd.none
@@ -6151,7 +6144,7 @@ fn update_msg(
         }
         // Only the Review navigation initiated by checkout may open a file.
         // A newer user selection wins while the snapshot is being fetched.
-        if next.dock.active is Some(FilePicker) &&
+        if next.dock_state().active is Some(FilePicker) &&
           next.file_panel.explorer_mode is ExplorerChanges &&
           files
           .iter()
@@ -6176,7 +6169,7 @@ fn update_msg(
       // The strip machine is pure; the cross-package effects of the
       // transition — showing or dropping documents, mounting hosts — are
       // commanded here off the before/after difference.
-      let before = model.dock
+      let before = model.dock_state()
       let dock = @dock.update(msg, before)
       // Only a real non-empty -> empty strip transition closes the panel.
       // An already-empty panel is the launcher surface, so a stale close must
@@ -6185,13 +6178,12 @@ fn update_msg(
       let model = if !before.tabs.is_empty() && dock.tabs.is_empty() {
         {
           ..model,
-          dock,
           right_panel_open: false,
           right_panel_menu_open: false,
           right_panel_expanded: false,
-        }
+        }.with_dock_state(dock)
       } else {
-        { ..model, dock, }
+        model.with_dock_state(dock)
       }
       let femit = dispatch.map(msg => FileEditor(msg))
       match msg {
@@ -6434,7 +6426,7 @@ fn update_msg(
       let (cmd, model) = open_browser_tab(
         dispatch,
         model,
-        model.dock.owner.bind(owner => owner.host()),
+        model.dock_owner().host(),
       )
       (@cmd.batch([cmd, focus_browser_address()]), model)
     }
@@ -6550,35 +6542,26 @@ fn update_msg(
     GithubRequested =>
       (
         @cmd.none,
-        {
-          ..model,
-          dock: @dock.open_github(model.dock),
-          right_panel_open: true,
-          right_panel_menu_open: false,
-        },
+        { ..model, right_panel_open: true, right_panel_menu_open: false, }.with_dock_state(
+          @dock.open_github(model.dock_state()),
+        ),
       )
     JobsRequested =>
       (
         @cmd.none,
-        {
-          ..model,
-          dock: @dock.open_jobs(model.dock),
-          right_panel_open: true,
-          right_panel_menu_open: false,
-        },
+        { ..model, right_panel_open: true, right_panel_menu_open: false, }.with_dock_state(
+          @dock.open_jobs(model.dock_state()),
+        ),
       )
     WorkflowsRequested =>
       (
         @cmd.none,
-        {
-          ..model,
-          dock: @dock.open_workflows(model.dock),
-          right_panel_open: true,
-          right_panel_menu_open: false,
-        },
+        { ..model, right_panel_open: true, right_panel_menu_open: false, }.with_dock_state(
+          @dock.open_workflows(model.dock_state()),
+        ),
       )
     BrowserAddressEdited(value) =>
-      match @dock.active_browser(model.dock) {
+      match @dock.active_browser(model.dock_state()) {
         Some(id) =>
           (
             @cmd.none,
@@ -6593,7 +6576,7 @@ fn update_msg(
         None => (@cmd.none, model)
       }
     BrowserNavigateSubmitted => {
-      guard @dock.active_browser(model.dock) is Some(id) &&
+      guard @dock.active_browser(model.dock_state()) is Some(id) &&
         @preview.page(model.preview, id) is Some(page) &&
         @preview.normalize_url(page.input) is Some(url) else {
         return (@cmd.none, model)
@@ -6617,7 +6600,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock.owner.bind(owner => owner.host()),
+            model.dock_owner().host(),
           ),
           { shown: None, rect: None, geo: None, },
         )
@@ -6630,7 +6613,7 @@ fn update_msg(
             id,
             url,
             model.theme.is_dark(model.system_dark),
-            model.dock.owner.bind(owner => owner.host()),
+            model.dock_owner().host(),
           ),
           model.browser_pane,
         )
@@ -6660,7 +6643,7 @@ fn update_msg(
         model,
       )
     BrowserOpenExternal => {
-      guard @dock.active_browser(model.dock) is Some(id) &&
+      guard @dock.active_browser(model.dock_state()) is Some(id) &&
         @preview.page(model.preview, id) is Some(page) &&
         page.url is Some(url) else {
         return (@cmd.none, model)
@@ -6705,7 +6688,7 @@ fn update_msg(
     }
     CloseActiveDockTab => {
       guard model.is_desktop else { return (@cmd.none, model) }
-      match model.dock.active {
+      match model.dock_state().active {
         Some(tab) => {
           let (cmd, model) = update_msg(dispatch, Dock(TabClosed(tab)), model)
           (@cmd.batch([cmd, focus_dock_after_render()]), model)
@@ -6930,7 +6913,7 @@ fn update_msg(
         // The scan is over this strip's tabs, not the global page map: a
         // parked conversation may hold the same URL, and matching its page
         // first would shadow this strip's own tab forever.
-        let reuse = for tab in model.dock.tabs {
+        let reuse = for tab in model.dock_state().tabs {
           if tab is Browser(id~) &&
             @preview.page(model.preview, id) is Some(page) &&
             page.url is Some(page_url) &&
@@ -6942,7 +6925,7 @@ fn update_msg(
         }
         match reuse {
           Some(id) => {
-            let dock = @dock.open_browser(model.dock, id)
+            let dock = @dock.open_browser(model.dock_state(), id)
             // The reuse matched this page's optimistic URL mirror, which can
             // drift from what the native view actually shows — a host op that
             // failed, or a reload's `close_all` that swept the view. Focusing
@@ -6956,25 +6939,19 @@ fn update_msg(
                 id,
                 url,
                 model.theme.is_dark(model.system_dark),
-                model.dock.owner.bind(owner => owner.host()),
+                model.dock_owner().host(),
               ),
               {
                 ..model,
                 preview: @preview.navigate(model.preview, id, url),
-                dock,
                 browser_pane: { shown: None, rect: None, geo: None, },
                 right_panel_open: true,
                 right_panel_menu_open: false,
-              },
+              }.with_dock_state(dock),
             )
           }
           None =>
-            open_browser_tab(
-              dispatch,
-              model,
-              model.dock.owner.bind(owner => owner.host()),
-              url~,
-            )
+            open_browser_tab(dispatch, model, model.dock_owner().host(), url~)
         }
       } else {
         (open_external_link(dispatch, url), model)
@@ -17322,23 +17299,13 @@ test "right-panel menu closes without reopening on a second dismissal" {
 
 ///|
 test "right-panel menu closes when the dock owner changes" {
-  let dispatch = test_dispatch()
   let model = desktop_model()
-  let stale_owner : @interop.ConversationKey = {
-    channel: @interop.Local,
-    session: "stale-panel-owner",
-  }
-  let stale = {
-    ..model,
-    right_panel_open: true,
-    right_panel_menu_open: true,
-    dock: { ..model.dock, owner: Some(@interop.Host(stale_owner)), },
-  }
-  // Any root message runs the centralized dock synchronization. The owner
-  // transition closes the menu directly, with no rendered marker or observer.
-  let (_, synced) = update(dispatch, CloseGitDetails, stale)
-  assert_false(synced.right_panel_menu_open)
-  assert_true(synced.dock.owner != Some(@interop.Host(stale_owner)))
+    .with_listed(["desktop-test", "other"])
+    .test_open_dock_conversation("desktop-test")
+  let menued = { ..model, right_panel_open: true, right_panel_menu_open: true, }
+  let switched = menued.test_open_dock_conversation("other")
+  assert_eq(switched.dock_owner().session(), "other")
+  assert_false(switched.right_panel_menu_open)
 }
 
 ///|
@@ -19187,35 +19154,23 @@ test "installed skills replies are scoped to their source device" {
 test "file editor context reports the file body actual visibility" {
   let model = test_model()
   let path = @pathx.Relative("src/main.mbt")
-  let file_model = {
-    ..model,
-    right_panel_open: true,
-    dock: {
-      ..model.dock,
-      tabs: [File(path=model.test_file(path.0))],
-      active: Some(File(path=model.test_file(path.0))),
-    },
-  }
+  let file_model = { ..model, right_panel_open: true, }.with_dock_state({
+    tabs: [File(path=model.test_file(path.0))],
+    active: Some(File(path=model.test_file(path.0))),
+  })
   assert_true(file_ctx(file_model).panel_open)
   assert_false(file_ctx({ ..file_model, right_panel_open: false, }).panel_open)
-  let picker_model = {
-    ..file_model,
-    dock: { ..file_model.dock, tabs: [FilePicker], active: Some(FilePicker), },
-  }
+  let picker_model = file_model.with_dock_state({
+    tabs: [FilePicker],
+    active: Some(FilePicker),
+  })
   assert_true(file_ctx(picker_model).panel_open)
-  let browser_model = {
-    ..file_model,
-    dock: {
-      ..file_model.dock,
-      tabs: [Browser(id=1)],
-      active: Some(Browser(id=1)),
-    },
-  }
+  let browser_model = file_model.with_dock_state({
+    tabs: [Browser(id=1)],
+    active: Some(Browser(id=1)),
+  })
   assert_false(file_ctx(browser_model).panel_open)
-  let launcher_model = {
-    ..file_model,
-    dock: { ..file_model.dock, tabs: [], active: None, },
-  }
+  let launcher_model = file_model.with_dock_state(@dock.DockState::empty())
   assert_false(file_ctx(launcher_model).panel_open)
   assert_false(file_ctx({ ..file_model, screen: Skills, }).panel_open)
   assert_false(file_ctx({ ..file_model, screen: Settings, }).panel_open)
@@ -19279,7 +19234,7 @@ test "JumpToMention opens the editor panel and selects the mention's file" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.right_panel_open)
-  assert_true(next.dock.tabs.is_empty())
+  assert_true(next.dock_state().tabs.is_empty())
   let next = next.test_resolve_editor("src/main.mbt")
   assert_true(next.right_panel_open)
   assert_true(next.active_workspace_file() is Some(Relative("src/main.mbt")))
@@ -19370,7 +19325,7 @@ test "directory reveal opens a picker without changing the manual tree preferenc
     assert_true(revealed.file_panel.expanded.contains(Relative("src")))
     assert_true(revealed.file_panel.expanded.contains(Relative("src/nested")))
     assert_false(revealed.file_panel.tree_open)
-    assert_true(revealed.dock.active is Some(FilePicker))
+    assert_true(revealed.dock_state().active is Some(FilePicker))
     let (_, settled) = update(dispatch, file_loaded, revealed)
     assert_true(settled.file_panel.docs[file].state is @fileeditor.TabPdf(..))
     assert_false(settled.file_panel.tree_open)
@@ -19404,7 +19359,7 @@ test "resolved transcript files and directories stay in the right panel" {
   )
   let (_, directory) = update(dispatch, directory_msg, directory_pending)
   assert_true(directory.right_panel_open)
-  assert_true(directory.dock.active is Some(FilePicker))
+  assert_true(directory.dock_state().active is Some(FilePicker))
   assert_true(
     @fileeditor.editor_classes(directory.file_panel, file_ctx(directory)).contains(
       "tree-open",
@@ -19432,7 +19387,7 @@ test "resolved transcript files and directories stay in the right panel" {
   )
   let (_, browser) = update(dispatch, browser_msg, pending)
   assert_true(browser.right_panel_open)
-  assert_true(@dock.active_browser(browser.dock) is Some(_))
+  assert_true(@dock.active_browser(browser.dock_state()) is Some(_))
   assert_eq(browser.preview.pages.length(), 1)
   let (_, reused) = update(dispatch, browser_msg, browser)
   assert_eq(reused.preview.pages.length(), 1)
@@ -19466,17 +19421,17 @@ test "resolved transcript files and directories stay in the right panel" {
       pending.file_panel.file_link_generation,
       repeated.file_panel.file_link_generation,
     )
-    assert_true(pending.dock == picker.dock)
+    assert_true(pending.dock_state() == picker.dock_state())
     let response = OpenPathResolved(
       FileOpenContext::new(owner, pending.file_panel.file_link_generation),
       Browser("/work/project/" + name),
     )
     let (_, opened) = update(dispatch, response, pending)
     let (_, replayed) = update(dispatch, response, pending)
-    assert_true(opened.dock == replayed.dock)
-    assert_false(opened.dock.tabs.contains(@dock.DockTab::FilePicker))
-    assert_eq(opened.dock.tabs.length(), 1)
-    assert_true(@dock.active_browser(opened.dock) is Some(_))
+    assert_true(opened.dock_state() == replayed.dock_state())
+    assert_false(opened.dock_state().tabs.contains(@dock.DockTab::FilePicker))
+    assert_eq(opened.dock_state().tabs.length(), 1)
+    assert_true(@dock.active_browser(opened.dock_state()) is Some(_))
   }
   // A mention from another conversation parks its result under that owner.
   let target_owner : @interop.ConversationKey = {
@@ -19510,11 +19465,11 @@ test "resolved transcript files and directories stay in the right panel" {
   let (_, parked) = update(dispatch, response, pending)
   let (_, replayed) = update(dispatch, response, pending)
   assert_eq(parked.active_session, background.active_session)
-  assert_true(parked.dock == replayed.dock)
-  assert_eq(parked.dock.owner, Some(@interop.Host(owner)))
-  assert_true(parked.dock.active is None)
+  assert_true(parked.dock_state() == replayed.dock_state())
+  assert_true(parked.dock_owner() == @interop.Host(owner))
+  assert_true(parked.dock_state().active is None)
   assert_true(
-    parked.dock.remembered.get(@interop.Host(target_owner))
+    parked.docks.get(@interop.Host(target_owner))
     is Some({ active: Some(Browser(..)), .. }),
   )
   let (_, obsolete) = update(
@@ -19597,14 +19552,12 @@ test "update is pure: a resolved transcript position opens its owning file" {
     panel_closed,
   )
   assert_false(after_closed_reply.right_panel_open)
-  assert_true(after_closed_reply.dock.active is None)
+  assert_true(after_closed_reply.dock_state().active is None)
   // Revealing an existing tab is also a newer dock navigation. The pending
   // reply cannot replace the file the user chose to bring back on screen.
-  let hidden_pending = {
-    ..latest_pending,
-    dock: @dock.open_file(latest_pending.dock, model.test_file("README.md")),
-    right_panel_open: false,
-  }
+  let hidden_pending = { ..latest_pending, right_panel_open: false, }.with_dock_state(
+    @dock.open_file(latest_pending.dock_state(), model.test_file("README.md")),
+  )
   let (_, panel_opened) = update(dispatch, ToggleRightPanel, hidden_pending)
   assert_true(panel_opened.right_panel_open)
   assert_eq(panel_opened.file_panel.file_link_generation, 3)
@@ -19623,7 +19576,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     after_opened_reply.active_workspace_file() is Some(Relative("README.md")),
   )
   assert_false(
-    after_opened_reply.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
+    after_opened_reply.dock_state().tabs.contains(
+      @dock.DockTab::File(path=main_file),
+    ),
   )
   // The first host reply is stale as soon as the second click happens.
   let (_, old_host_reply) = update(
@@ -19634,7 +19589,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     ),
     latest_pending,
   )
-  assert_true(old_host_reply.dock.active is None)
+  assert_true(old_host_reply.dock_state().active is None)
   let msg = OpenPathResolved(
     FileOpenContext::new(owner, 2),
     Editor({ path: "src/main.mbt", line: Some(2738), column: Some(17), }),
@@ -19812,7 +19767,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     pending_generation + 1,
   )
   assert_false(
-    inactive_closed.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
+    inactive_closed.dock_state().tabs.contains(
+      @dock.DockTab::File(path=main_file),
+    ),
   )
   let (_, after_inactive_reply) = update(
     dispatch,
@@ -19823,7 +19780,9 @@ test "update is pure: a resolved transcript position opens its owning file" {
     inactive_closed,
   )
   assert_false(
-    after_inactive_reply.dock.tabs.contains(@dock.DockTab::File(path=main_file)),
+    after_inactive_reply.dock_state().tabs.contains(
+      @dock.DockTab::File(path=main_file),
+    ),
   )
   // A later tree pick competes with the transcript request just like a newer
   // transcript click: it advances the same token before opening its document.
@@ -19860,7 +19819,7 @@ test "update is pure: a resolved transcript position opens its owning file" {
     ),
     latest_pending,
   )
-  assert_true(stale.dock.active is None)
+  assert_true(stale.dock_state().active is None)
   assert_false(stale.file_panel.docs.contains(main_file))
 }
 
@@ -19874,7 +19833,7 @@ test "JumpToMention is a no-op for a chip without a resolved location" {
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.right_panel_open)
-  assert_true(next.dock.active is None)
+  assert_true(next.dock_state().active is None)
 }
 
 ///|
@@ -20093,7 +20052,7 @@ test "original-revision diff comment chip does not navigate into the working fil
   })
   let (_, next) = update(dispatch, JumpToMention(0), model)
   assert_false(next.right_panel_open)
-  assert_true(next.dock.active is None)
+  assert_true(next.dock_state().active is None)
 }
 
 ///|
@@ -20316,7 +20275,7 @@ test "chip jumps relativize legacy absolute paths against the roots" {
   )
   let outside = outside.test_resolve_editor("/elsewhere/note.md")
   let external = @interop.ChannelId::Local.test_resource("/elsewhere/note.md")
-  assert_true(@dock.active_file(outside.dock) == Some(external))
+  assert_true(@dock.active_file(outside.dock_state()) == Some(external))
   assert_true(outside.file_panel.docs.contains(external))
   assert_true(outside.active_workspace_file() is None)
   assert_true(outside.file_panel.error is None)
@@ -20330,10 +20289,7 @@ test "RevealDirectory(\"\") opens the workspace breadcrumb picker" {
     channel: Local,
     session: "desktop-test",
   }
-  let dock = {
-    ..@dock.open_file(model.dock, model.test_file("README.md")),
-    owner: Some(@interop.Host(owner)),
-  }
+  let dock = @dock.open_file(model.dock_state(), model.test_file("README.md"))
   let panel = {
     ..model.file_panel,
     owner: Some(@interop.Host(owner)),
@@ -20343,7 +20299,9 @@ test "RevealDirectory(\"\") opens the workspace breadcrumb picker" {
   let (_, next) = update(
     dispatch,
     FileEditor(RevealDirectory(@pathx.Relative::root())),
-    { ..model, dock, file_panel: panel, right_panel_open: true, },
+    { ..model, file_panel: panel, right_panel_open: true, }.with_dock_state(
+      dock,
+    ),
   )
   // The active tab and docked explorer stay put while the picker opens.
   assert_true(next.active_workspace_file() is Some(Relative("README.md")))
@@ -22013,18 +21971,19 @@ test "launcher rows open Browser and all Explorer destinations" {
   assert_true(model.right_panel_menu_open)
   let (_, model) = update(dispatch, BrowserTabRequested, model)
   assert_false(model.right_panel_menu_open)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(1))
   let page = @preview.page(model.preview, 1).unwrap()
   assert_true(page.url is None)
   assert_false(page.loading)
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerFiles), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock_state().active == Some(@dock.DockTab::FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerFiles)
   assert_true(
-    model.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    model.dock_state().tabs ==
+    [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
   let (_, model) = update(dispatch, ExplorerRequested(ExplorerChanges), model)
-  assert_true(model.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(model.dock_state().active == Some(@dock.DockTab::FilePicker))
   assert_true(model.file_panel.explorer_mode is ExplorerChanges)
   assert_true(model.file_panel.changes is ChangeListLoading(_))
   // Files is an explicit destination even after Review selected Changes.
@@ -22049,11 +22008,12 @@ test "CloseDockTabs All keeps the empty launcher at the chosen panel size" {
     right_panel_expanded: true,
   }
   assert_true(
-    mixed.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    mixed.dock_state().tabs ==
+    [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
   let (_, closed) = update(dispatch, CloseDockTabs(All), mixed)
-  assert_true(closed.dock.tabs.is_empty())
-  assert_true(closed.dock.active is None)
+  assert_true(closed.dock_state().tabs.is_empty())
+  assert_true(closed.dock_state().active is None)
   assert_true(@preview.page(closed.preview, 1) is None)
   assert_true(closed.right_panel_open)
   assert_false(closed.right_panel_menu_open)
@@ -22075,22 +22035,24 @@ test "relative tab close preserves survivors and tears down only selected pages"
   let mixed = { ..second, right_panel_expanded: true, }
   let (_, left) = update(dispatch, CloseDockTabs(ToLeft(FilePicker)), mixed)
   assert_true(
-    left.dock.tabs == [@dock.DockTab::FilePicker, @dock.DockTab::Browser(id=2)],
+    left.dock_state().tabs ==
+    [@dock.DockTab::FilePicker, @dock.DockTab::Browser(id=2)],
   )
-  assert_true(left.dock.active == Some(@dock.DockTab::Browser(id=2)))
+  assert_true(left.dock_state().active == Some(@dock.DockTab::Browser(id=2)))
   assert_true(@preview.page(left.preview, 1) is None)
   assert_true(@preview.page(left.preview, 2) is Some(_))
   assert_true(left.right_panel_expanded)
   let (_, right) = update(dispatch, CloseDockTabs(ToRight(FilePicker)), mixed)
   assert_true(
-    right.dock.tabs == [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
+    right.dock_state().tabs ==
+    [@dock.DockTab::Browser(id=1), @dock.DockTab::FilePicker],
   )
-  assert_true(right.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(right.dock_state().active == Some(@dock.DockTab::FilePicker))
   assert_true(@preview.page(right.preview, 1) is Some(_))
   assert_true(@preview.page(right.preview, 2) is None)
   let (_, others) = update(dispatch, CloseDockTabs(Others(FilePicker)), mixed)
-  assert_true(others.dock.tabs == [@dock.DockTab::FilePicker])
-  assert_true(others.dock.active == Some(@dock.DockTab::FilePicker))
+  assert_true(others.dock_state().tabs == [@dock.DockTab::FilePicker])
+  assert_true(others.dock_state().active == Some(@dock.DockTab::FilePicker))
   assert_true(@preview.page(others.preview, 1) is None)
   assert_true(@preview.page(others.preview, 2) is None)
   assert_true(others.right_panel_open)
@@ -22110,11 +22072,12 @@ test "a tree pick fulfills the active picker in place" {
   )
   let model = model.test_resolve_editor("src/main.mbt")
   assert_true(
-    model.dock.tabs ==
+    model.dock_state().tabs ==
     [@dock.DockTab::File(path=model.test_file("src/main.mbt"))],
   )
   assert_true(
-    @dock.active_file(model.dock) == Some(model.test_file("src/main.mbt")),
+    @dock.active_file(model.dock_state()) ==
+    Some(model.test_file("src/main.mbt")),
   )
 }
 
@@ -22139,9 +22102,12 @@ test "a changed row opens the file tab in review mode" {
     model,
   )
   assert_true(
-    model.dock.tabs == [@dock.DockTab::File(path=model.test_file(path.0))],
+    model.dock_state().tabs ==
+    [@dock.DockTab::File(path=model.test_file(path.0))],
   )
-  assert_true(@dock.active_file(model.dock) == Some(model.test_file(path.0)))
+  assert_true(
+    @dock.active_file(model.dock_state()) == Some(model.test_file(path.0)),
+  )
   assert_true(
     model.file_panel.docs.get(model.test_file(path.0))
     is Some(
@@ -22189,7 +22155,9 @@ test "file rows and location jumps cannot open while checkout placement is missi
     FileEditor(FileSelected(path~, name="main.mbt")),
     model,
   )
-  assert_false(ordinary.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(
+    ordinary.dock_state().tabs.contains(@dock.DockTab::File(path=file)),
+  )
   assert_false(ordinary.file_panel.docs.contains(file))
   let (_, review) = update(
     dispatch,
@@ -22204,7 +22172,9 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(review.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(
+    review.dock_state().tabs.contains(@dock.DockTab::File(path=file)),
+  )
   assert_false(review.file_panel.docs.contains(file))
   let (_, jumped) = update(
     dispatch,
@@ -22215,7 +22185,9 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(jumped.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(
+    jumped.dock_state().tabs.contains(@dock.DockTab::File(path=file)),
+  )
   assert_false(jumped.file_panel.docs.contains(file))
   let (_, navigation) = update(
     dispatch,
@@ -22228,7 +22200,9 @@ test "file rows and location jumps cannot open while checkout placement is missi
     ),
     model,
   )
-  assert_false(navigation.dock.tabs.contains(@dock.DockTab::File(path=file)))
+  assert_false(
+    navigation.dock_state().tabs.contains(@dock.DockTab::File(path=file)),
+  )
   assert_false(navigation.file_panel.docs.contains(file))
 }
 
@@ -22351,9 +22325,7 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
   let model = desktop_model()
   // The root update keeps the dock on the active conversation, so the
   // conversation on screen is the model's to name.
-  guard model.dock.owner is Some(on_screen) else {
-    fail("the test model shows a conversation")
-  }
+  let on_screen = model.dock_owner().host().unwrap()
   let away : @interop.ConversationKey = { channel: Local, session: "s-away", }
   // The conversation on screen shows its agent's page the way a followed
   // link is shown.
@@ -22361,13 +22333,13 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
     dispatch,
     BrowserOpenRequested(
       request="r-1",
-      session=on_screen.session(),
+      session=on_screen.session,
       url="https://example.com/",
     ),
     model,
   )
   assert_true(shown.right_panel_open)
-  assert_true(@dock.active_browser(shown.dock) == Some(1))
+  assert_true(@dock.active_browser(shown.dock_state()) == Some(1))
   assert_true(
     @preview.page(shown.preview, 1).unwrap().url == Some("https://example.com/"),
   )
@@ -22382,17 +22354,17 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
     ),
     shown,
   )
-  assert_true(elsewhere.dock.tabs == shown.dock.tabs)
-  assert_true(@dock.active_browser(elsewhere.dock) == Some(1))
+  assert_true(elsewhere.dock_state().tabs == shown.dock_state().tabs)
+  assert_true(@dock.active_browser(elsewhere.dock_state()) == Some(1))
   assert_true(
     @preview.page(elsewhere.preview, 2).unwrap().url ==
     Some("https://example.org/"),
   )
-  let returned = @dock.sync(elsewhere.dock, @interop.Host(away))
+  let returned = elsewhere.dock_state_for(@interop.Host(away))
   assert_true(returned.tabs == [Browser(id=2)])
   assert_true(@dock.active_browser(returned) == Some(2))
   // And the first conversation's strip is intact when it comes back.
-  let back = @dock.sync(returned, on_screen)
+  let back = elsewhere.dock_state_for(@interop.Host(on_screen))
   assert_true(@dock.active_browser(back) == Some(1))
 }
 
@@ -22400,19 +22372,17 @@ test "a tab the host asks for opens in its conversation's strip, on screen or no
 test "user and agent tab creation share placement without sharing navigation priority" {
   let dispatch = test_dispatch()
   let model = desktop_model()
-  guard model.dock.owner is Some(owner) else {
-    fail("the test model shows a conversation")
-  }
+  let owner = model.dock_owner().host().unwrap()
   let url = "https://example.com/shared"
   let agent_open = BrowserOpenRequested(
     request="r-shared",
-    session=owner.session(),
+    session=owner.session,
     url~,
   )
   let (_, agent) = update(dispatch, agent_open, model)
   let (_, user) = update(dispatch, ExternalLinkClicked(url), model)
   assert_true(agent.preview == user.preview)
-  assert_true(agent.dock == user.dock)
+  assert_true(agent.dock_state() == user.dock_state())
   assert_true(agent.browser_pane == user.browser_pane)
   assert_eq(agent.right_panel_open, user.right_panel_open)
   assert_eq(agent.right_panel_menu_open, user.right_panel_menu_open)
@@ -22430,7 +22400,7 @@ test "user and agent tab creation share placement without sharing navigation pri
     let (_, first) = update(dispatch, msg, model)
     let (_, second) = update(dispatch, msg, model)
     assert_true(first.preview == second.preview)
-    assert_true(first.dock == second.dock)
+    assert_true(first.dock_state() == second.dock_state())
     assert_true(first.browser_pane == second.browser_pane)
     assert_eq(first.right_panel_open, second.right_panel_open)
     assert_eq(first.right_panel_menu_open, second.right_panel_menu_open)
@@ -22439,8 +22409,8 @@ test "user and agent tab creation share placement without sharing navigation pri
   // User links reuse a matching tab; an explicit MCP open still creates one.
   let (_, reused) = update(dispatch, ExternalLinkClicked(url), user)
   let (_, added) = update(dispatch, agent_open, user)
-  assert_eq(reused.dock.tabs.length(), 1)
-  assert_eq(added.dock.tabs.length(), 2)
+  assert_eq(reused.dock_state().tabs.length(), 1)
+  assert_eq(added.dock_state().tabs.length(), 2)
 }
 
 ///|
@@ -22480,7 +22450,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
   )
   assert_true(model.right_panel_open)
   assert_eq(model.file_panel.file_link_generation, generation + 1)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(1))
   assert_true(
     @preview.page(model.preview, 1).unwrap().url ==
     Some("http://127.0.0.1:5173/"),
@@ -22492,9 +22462,9 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("https://terminal.example/docs"),
     model,
   )
-  assert_eq(model.dock.tabs.length(), 2)
+  assert_eq(model.dock_state().tabs.length(), 2)
   assert_eq(model.file_panel.file_link_generation, generation + 2)
-  assert_true(@dock.active_browser(model.dock) == Some(2))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(2))
   assert_true(
     @preview.page(model.preview, 2).unwrap().url ==
     Some("https://terminal.example/docs"),
@@ -22506,9 +22476,9 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  assert_eq(model.dock.tabs.length(), 2)
+  assert_eq(model.dock_state().tabs.length(), 2)
   assert_eq(model.preview.pages.length(), 2)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(1))
   assert_true(
     @preview.page(model.preview, 1).unwrap().url ==
     Some("http://127.0.0.1:5173/"),
@@ -22521,8 +22491,8 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("https://github.com/moonbit"),
     model,
   )
-  assert_eq(model.dock.tabs.length(), 3)
-  assert_true(@dock.active_browser(model.dock) == Some(3))
+  assert_eq(model.dock_state().tabs.length(), 3)
+  assert_true(@dock.active_browser(model.dock_state()) == Some(3))
   assert_eq(model.file_panel.file_link_generation, generation + 4)
   // A non-web scheme keeps the system handler: no tab appears.
   let (_, model) = update(
@@ -22530,7 +22500,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("mailto:someone@example.com"),
     model,
   )
-  assert_eq(model.dock.tabs.length(), 3)
+  assert_eq(model.dock_state().tabs.length(), 3)
   assert_eq(model.file_panel.file_link_generation, generation + 4)
   // So does a link clicked on another screen, where the dock is not on
   // screen to show a tab — Settings' device-page link wants the browser the
@@ -22540,7 +22510,7 @@ test "web links open (and reuse) a dock browser tab; other schemes do not" {
     ExternalLinkClicked("https://openseek.test/d/abc"),
     { ..model, screen: Settings, },
   )
-  assert_eq(settings.dock.tabs.length(), 3)
+  assert_eq(settings.dock_state().tabs.length(), 3)
   assert_eq(settings.preview.pages.length(), 3)
   assert_eq(settings.file_panel.file_link_generation, generation + 4)
 }
@@ -22569,7 +22539,7 @@ test "Codex web links use the same dock browser route as OpenSeek" {
     model,
   )
   assert_true(model.right_panel_open)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(1))
   assert_true(
     @preview.page(model.preview, 1).unwrap().url ==
     Some("https://github.com/moonbit-community/pty/pull/18"),
@@ -22586,12 +22556,12 @@ test "same-URL reuse scans this strip, not the global page map" {
   let (foreign, _) = @preview.open_page(@preview.State::empty(), url~)
   let model = { ..desktop_model(), preview: foreign, }
   let (_, model) = update(dispatch, ExternalLinkClicked(url), model)
-  assert_eq(model.dock.tabs.length(), 1)
+  assert_eq(model.dock_state().tabs.length(), 1)
   assert_eq(model.preview.pages.length(), 2)
   // A repeat click re-activates this strip's tab instead of stacking a
   // duplicate per click.
   let (_, model) = update(dispatch, ExternalLinkClicked(url), model)
-  assert_eq(model.dock.tabs.length(), 1)
+  assert_eq(model.dock_state().tabs.length(), 1)
   assert_eq(model.preview.pages.length(), 2)
 }
 
@@ -22606,7 +22576,7 @@ test "a remote console routes loopback links to the system browser too" {
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  assert_true(model.dock.tabs.is_empty())
+  assert_true(model.dock_state().tabs.is_empty())
   assert_true(model.preview.pages.is_empty())
 }
 
@@ -22631,15 +22601,15 @@ test "re-clicking a chat link re-navigates the reused tab to the clicked URL" {
     ExternalLinkClicked("https://github.com/moonbit"),
     model,
   )
-  assert_true(@dock.active_browser(model.dock) == Some(2))
+  assert_true(@dock.active_browser(model.dock_state()) == Some(2))
   // Back to the first link: its tab re-activates AND re-navigates.
   let (_, model) = update(
     dispatch,
     ExternalLinkClicked("http://127.0.0.1:5173/"),
     model,
   )
-  assert_eq(model.dock.tabs.length(), 2)
-  assert_true(@dock.active_browser(model.dock) == Some(1))
+  assert_eq(model.dock_state().tabs.length(), 2)
+  assert_true(@dock.active_browser(model.dock_state()) == Some(1))
   let page = @preview.page(model.preview, 1).unwrap()
   assert_true(page.url == Some("http://127.0.0.1:5173/"))
   assert_eq(page.input, "http://127.0.0.1:5173/")
@@ -22736,8 +22706,8 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     desktop_model(),
   )
   assert_true(opened.right_panel_open)
-  assert_true(opened.dock.active is Some(@dock.DockTab::FilePicker))
-  assert_true(opened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(opened.dock_state().active is Some(@dock.DockTab::FilePicker))
+  assert_true(opened.dock_state().tabs == [@dock.DockTab::FilePicker])
   assert_true(opened.file_panel.explorer_mode is ExplorerSearch)
   assert_false(opened.file_panel.tree_open)
   let (_, reopened_picker) = update(
@@ -22745,7 +22715,7 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     ExplorerRequested(ExplorerSearch),
     opened,
   )
-  assert_true(reopened_picker.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened_picker.dock_state().tabs == [@dock.DockTab::FilePicker])
   let (_, edited) = update(
     dispatch,
     FileEditor(Search(@grep_search.QueryChanged("moon"))),
@@ -22762,7 +22732,7 @@ test "Search reuses the picker and keeps a request when its Explorer tab leaves"
     running,
   )
   let (_, reopened) = update(dispatch, ExplorerRequested(ExplorerSearch), files)
-  assert_true(reopened.dock.tabs == [@dock.DockTab::FilePicker])
+  assert_true(reopened.dock_state().tabs == [@dock.DockTab::FilePicker])
   assert_true(reopened.file_panel.explorer_mode is ExplorerSearch)
 }
 
@@ -22788,8 +22758,8 @@ test "a Search result fulfills the picker without pinning Search beside the file
     edited,
   )
   let selected = selected.test_resolve_editor(path.0)
-  assert_true(selected.dock.tabs == [@dock.DockTab::File(path=file)])
-  assert_true(@dock.active_file(selected.dock) == Some(file))
+  assert_true(selected.dock_state().tabs == [@dock.DockTab::File(path=file)])
+  assert_true(@dock.active_file(selected.dock_state()) == Some(file))
   assert_true(selected.file_panel.explorer_mode is ExplorerSearch)
   assert_false(selected.file_panel.tree_open)
   assert_true(
@@ -22805,7 +22775,7 @@ test "a Search result fulfills the picker without pinning Search beside the file
     selected,
   )
   assert_true(
-    picker.dock.tabs ==
+    picker.dock_state().tabs ==
     [@dock.DockTab::File(path=file), @dock.DockTab::FilePicker],
   )
   let (_, reused) = update(
@@ -22814,8 +22784,8 @@ test "a Search result fulfills the picker without pinning Search beside the file
     picker,
   )
   let reused = reused.test_resolve_editor(path.0)
-  assert_true(reused.dock.tabs == [@dock.DockTab::File(path=file)])
-  assert_true(@dock.active_file(reused.dock) == Some(file))
+  assert_true(reused.dock_state().tabs == [@dock.DockTab::File(path=file)])
+  assert_true(@dock.active_file(reused.dock_state()) == Some(file))
   assert_true(reused.file_panel.explorer_mode is ExplorerSearch)
 }
 
@@ -22941,7 +22911,7 @@ test "the launcher popup and final tab close both retire the shown view" {
   assert_true(closed_again == closed)
   assert_true(closed.browser_pane.shown is None)
   assert_true(@preview.page(closed.preview, 1) is None)
-  assert_true(closed.dock.tabs.is_empty())
+  assert_true(closed.dock_state().tabs.is_empty())
   assert_false(closed.right_panel_open)
   assert_false(closed.right_panel_menu_open)
   assert_false(closed.right_panel_expanded)

@@ -64,7 +64,7 @@ test "Cloud file chips and transcript links open session source previews" {
   )
   for action in actions {
     let (_, opened) = update(test_dispatch(), action, model)
-    assert_eq(@dock.active_file(opened.dock), Some(expected))
+    assert_eq(@dock.active_file(opened.dock_state()), Some(expected))
     assert_true(opened.right_panel_open)
     assert_eq(opened.file_panel.owner, Some(identity.owner))
     assert_true(opened.file_panel.docs.contains(expected))
@@ -81,7 +81,7 @@ test "Cloud file chips and transcript links open session source previews" {
       ),
       model,
     )
-    assert_true(ignored.dock == model.dock)
+    assert_true(ignored.docks == model.docks)
   }
   for
     path in [
@@ -91,6 +91,6 @@ test "Cloud file chips and transcript links open session source previews" {
       expected.to_string(),
     ] {
     let (_, ignored) = update(test_dispatch(), OpenFile(path), model)
-    assert_true(ignored.dock == model.dock)
+    assert_true(ignored.docks == model.docks)
   }
 }

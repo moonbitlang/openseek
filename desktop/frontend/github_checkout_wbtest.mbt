@@ -7,8 +7,7 @@ test "initial PR checkout refreshes cached Review and enables comments" {
     ] {
     let initial = desktop_model()
     let model = {
-      ..initial,
-      dock: @dock.open_github(initial.dock),
+      ..initial.with_dock_state(@dock.open_github(initial.dock_state())),
       github: {
         ..initial.github,
         active: true,
@@ -72,7 +71,7 @@ test "initial PR checkout refreshes cached Review and enables comments" {
       refreshing,
     )
     assert_eq(
-      @dock.active_file(opened.dock),
+      @dock.active_file(opened.dock_state()),
       Some(opened.test_file("src/new.mbt")),
     )
     assert_false(opened.github.review_pending)
@@ -119,9 +118,8 @@ test "PR checkout retires cached comments before discovery catches up" {
     expanded: ["old-thread"],
   }
   let model = {
-    ..initial,
+    ..initial.with_dock_state(@dock.open_github(initial.dock_state())),
     right_panel_open: true,
-    dock: @dock.open_github(initial.dock),
     github: {
       ..initial.github,
       scope,

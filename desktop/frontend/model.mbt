@@ -1666,11 +1666,9 @@ priv struct Model {
   // would describe the wrong checkout — which `update` fences, since a
   // keyboard switch produces no click for the dismissal listener to see.
   git_details_open : Bool
-  // The right panel's dock: the mixed tab strip's membership, order, active
-  // tab, and per-conversation parked strips. Owned by the `dock` package;
-  // the projection (open files, active file, panel visibility) feeds
-  // `file_ctx` every dispatch.
-  dock : @dock.State
+  // Every conversation's dock has one state. Selecting a conversation reads
+  // its entry without parking or restoring a separate live copy.
+  docks : Map[@interop.ConversationIdentity, @dock.DockState]
   // The file subsystem behind the dock's file tabs: the active
   // conversation's file tree and the document table the embedded viewer
   // shows from. Rooted at `conversation_root`; rebuilt when the active
@@ -2908,7 +2906,7 @@ fn initial_model(desktop~ : Bool) -> Model {
     quick_open: @quick_open.State::empty(),
     git_request_generation: 0,
     git_details_open: false,
-    dock: @dock.State::empty(),
+    docks: Map([]),
     file_panel: @fileeditor.State::empty(),
     pending_review_context: None,
     preview: @preview.State::empty(),

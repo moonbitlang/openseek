@@ -22,8 +22,7 @@ fn office_selection_model(
   }
   let path = model.test_file("report.docx")
   let model = {
-    ..model,
-    dock: @dock.open_file(model.dock, path),
+    ..model.with_dock_state(@dock.open_file(model.dock_state(), path)),
     right_panel_open: true,
   }
   let ctx = file_ctx(model)

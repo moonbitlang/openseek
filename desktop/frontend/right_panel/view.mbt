@@ -130,6 +130,7 @@ fn panel_view(
     [
       @fileeditor.resize_handle_view(),
       @dock.tabs_bar(
+        owner=input.file_ctx.owner,
         locale~,
         actions.dock,
         input.dock,

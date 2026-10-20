@@ -30,7 +30,7 @@ pub(all) enum DockTab {
   GitDiff(diff~ : GitHistoryDiff)
   // A browser page, rendered by a host-owned native web contents view; the
   // id keys the `preview` package's page state and the host's view. Page
-  // ids are global, so a parked strip's tabs keep naming their pages.
+  // ids are global, so each conversation's tabs keep naming their pages.
   Browser(id~ : Int32)
   // The transient open-a-file tab (at most one): the file view's tree with
   // a pick-a-file placeholder. Picking a file replaces it in place.
@@ -44,39 +44,25 @@ pub(all) enum DockTab {
 } derive(Eq)
 
 ///|
-/// A conversation's parked strip: identities and the active tab only,
-/// mirroring how fileeditor used to park its tab set. Content stays in its
-/// owning subsystem, which restores cached documents or reloads on demand.
-pub(all) struct RememberedStrip {
-  tabs : Array[DockTab]
-  active : DockTab?
-} derive(Eq)
-
-///|
-/// The dock's state. Invariant: `active` is `None` exactly when `tabs` is
-/// empty (an empty strip shows the panel's placeholder body; from M2 on, the
-/// launcher menu).
-pub(all) struct State {
-  // Which conversation the live strip belongs to; `None` before the first
-  // sync. Switching conversations parks the strip under this key.
-  owner : @interop.ConversationIdentity?
+/// One conversation's dock. The root stores it under that conversation's key;
+/// selecting another conversation does not move or copy either dock's tabs.
+/// `active` is `None` exactly when `tabs` is empty, and a present active tab
+/// belongs to `tabs`. An empty dock shows the launcher menu.
+pub(all) struct DockState {
   // The strip, in opening order, and the tab whose body is on screen.
   tabs : Array[DockTab]
   active : DockTab?
-  // Strips parked by conversation switches, restored when their conversation
-  // returns to the screen.
-  remembered : Map[@interop.ConversationIdentity, RememberedStrip]
 } derive(Eq)
 
 ///|
-pub fn State::empty() -> State {
-  { owner: None, tabs: [], active: None, remembered: Map([]), }
+pub fn DockState::empty() -> DockState {
+  { tabs: [], active: None, }
 }
 
 ///|
 /// The strip's file paths, in strip order — the projection the root update
 /// hands to fileeditor's `Ctx` for its stat/watch/reload sweeps.
-pub fn file_paths(state : State) -> Array[@common.Uri] {
+pub fn file_paths(state : DockState) -> Array[@common.Uri] {
   [
     for tab in state.tabs if tab is File(path~) => path
   ]
@@ -84,7 +70,7 @@ pub fn file_paths(state : State) -> Array[@common.Uri] {
 
 ///|
 /// The active tab's file path, when the active tab is a file.
-pub fn active_file(state : State) -> @common.Uri? {
+pub fn active_file(state : DockState) -> @common.Uri? {
   match state.active {
     Some(File(path~)) => Some(path)
     _ => None
@@ -92,14 +78,14 @@ pub fn active_file(state : State) -> @common.Uri? {
 }
 
 ///|
-pub fn history_diffs(state : State) -> Array[GitHistoryDiff] {
+pub fn history_diffs(state : DockState) -> Array[GitHistoryDiff] {
   [
     for tab in state.tabs if tab is GitDiff(diff~) => diff
   ]
 }
 
 ///|
-pub fn active_history_diff(state : State) -> GitHistoryDiff? {
+pub fn active_history_diff(state : DockState) -> GitHistoryDiff? {
   match state.active {
     Some(GitDiff(diff~)) => Some(diff)
     _ => None
@@ -108,7 +94,7 @@ pub fn active_history_diff(state : State) -> GitHistoryDiff? {
 
 ///|
 /// The active tab's browser page id, when the active tab is a browser page.
-pub fn active_browser(state : State) -> Int32? {
+pub fn active_browser(state : DockState) -> Int32? {
   match state.active {
     Some(Browser(id~)) => Some(id)
     _ => None
@@ -119,10 +105,7 @@ pub fn active_browser(state : State) -> Int32? {
 pub extend DockTab with Eq::{equal, not_equal}
 
 ///|
-pub extend RememberedStrip with Eq::{equal, not_equal}
-
-///|
-pub extend State with Eq::{equal, not_equal}
+pub extend DockState with Eq::{equal, not_equal}
 
 ///|
 pub extend GitHistoryDiff with Debug::{to_repr}

@@ -10,7 +10,7 @@ pub(all) enum CloseSelection {
 /// Resolve against the current strip, not the active tab or a captured index.
 /// A menu whose tab has gone away cannot close unrelated tabs.
 pub fn tabs_to_close(
-  state : State,
+  state : DockState,
   selection : CloseSelection,
 ) -> Array[DockTab] {
   let anchor = match selection {
@@ -27,11 +27,11 @@ pub fn tabs_to_close(
 }
 
 ///|
-fn tab_menu_target(state : State, tab : DockTab) -> String {
-  let owner = match state.owner {
-    None => "unowned"
-    Some(owner) => owner.key()
-  }
+fn tab_menu_target(
+  owner : @interop.ConversationIdentity,
+  tab : DockTab,
+) -> String {
+  let owner = owner.key()
   let identity = match tab {
     File(path~) => "file:\{path.to_string()}"
     GitDiff(diff~) => "history:\{diff.commit}:\{diff.path.0}"
@@ -47,14 +47,15 @@ fn tab_menu_target(state : State, tab : DockTab) -> String {
 ///|
 pub fn tab_menu(
   locale~ : @i18n.Locale = English,
-  state : State,
+  state : DockState,
   target : String,
   dispatch : @cmd.Emit[Msg],
   close : @cmd.Emit[CloseSelection],
+  owner~ : @interop.ConversationIdentity,
 ) -> @action_menu.Definition? {
   guard state.tabs
     .iter()
-    .find_first(tab => tab_menu_target(state, tab) == target)
+    .find_first(tab => tab_menu_target(owner, tab) == target)
     is Some(tab) else {
     return None
   }

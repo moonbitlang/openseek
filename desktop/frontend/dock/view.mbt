@@ -178,9 +178,10 @@ pub fn launcher_pane(
 pub fn tabs_bar(
   locale~ : @i18n.Locale = English,
   dispatch : @cmd.Emit[Msg],
-  state : State,
+  state : DockState,
   chips : Array[TabChip],
   actions : LauncherActions,
+  owner~ : @interop.ConversationIdentity,
   menu_open~ : Bool,
   expanded~ : Bool,
   toggle_menu~ : @cmd.Cmd,
@@ -200,7 +201,7 @@ pub fn tabs_bar(
       classes += " deleted"
     }
     let tab = chip.tab
-    let target = tab_menu_target(state, tab)
+    let target = tab_menu_target(owner, tab)
     tabs[target] = @html.div(
       class=classes,
       title=chip.title,

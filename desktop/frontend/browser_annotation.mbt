@@ -54,7 +54,7 @@ fn update_browser_annotation(
   match msg {
     Start => {
       guard model.is_desktop &&
-        @dock.active_browser(model.dock) is Some(id) &&
+        @dock.active_browser(model.dock_state()) is Some(id) &&
         @preview.page(model.preview, id) is Some(page) &&
         page.url is Some(_) else {
         return (@cmd.none, model)
