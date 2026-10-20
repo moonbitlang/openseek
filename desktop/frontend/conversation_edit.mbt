@@ -40,16 +40,9 @@ fn Model::message_edit_busy(self : Model, source : Conversation) -> Bool {
     // The edit deletes the source's whole family once the new message is
     // saved — its sub-runs and its side chats — and the host refuses that
     // while any of them is busy, so every member counts here.
-    let mut current = conv.session_id
-    while current != source.session_id {
-      let parent = if @transcript.subrun_parent(current) is Some(parent) {
-        parent
-      } else if @protocol.split_side_chat_id(current) is Some(parent) {
-        parent
-      } else {
-        return false
-      }
-      current = parent
+    guard conv.session_id == source.session_id ||
+      is_family_descendant(conv.session_id, source.session_id) else {
+      return false
     }
     conv.is_running() ||
     !(conv.compaction is NotCompacting) ||

@@ -51,12 +51,22 @@ priv struct ConfirmedDelete {
 } derive(Eq)
 
 ///|
-/// Whether `candidate` is a sub-run transcript descended from `ancestor`.
-/// Walk the structural `-sr-N` suffixes as the host does, so an unrelated id
-/// that merely shares a prefix is not taken for a descendant.
-fn is_subrun_descendant(candidate : String, ancestor : String) -> Bool {
+/// The conversation a sub-run or side chat was made from.
+fn family_parent(session : String) -> String? {
+  match @transcript.subrun_parent(session) {
+    Some(parent) => Some(parent)
+    None => @protocol.split_side_chat_id(session)
+  }
+}
+
+///|
+/// Whether `candidate` is in `ancestor`'s family: a sub-run or side chat
+/// descended from it. Walk the structural `-sr-N` and `-sc-<token>` suffixes
+/// as the host does, so an unrelated id that merely shares a prefix is not
+/// taken for a descendant.
+fn is_family_descendant(candidate : String, ancestor : String) -> Bool {
   let mut current = candidate
-  while @transcript.subrun_parent(current) is Some(parent) {
+  while family_parent(current) is Some(parent) {
     if parent == ancestor {
       return true
     }
@@ -81,9 +91,9 @@ fn Model::owns_deletion(
 
 ///|
 /// Record a confirmed delete of `key` from `record`'s store, whose rows
-/// `listed` holds. The host removes sub-run descendants from that store only,
-/// so a child archived apart from a live parent is not part of the parent's
-/// delete. A descendant opened from a transcript link can be on screen before
+/// `listed` holds. The host removes sub-run and side-chat descendants from that
+/// store only, so a child archived apart from a live parent is not part of the
+/// parent's delete. A descendant opened from a transcript link can be on screen before
 /// the catalog lists it, so opened conversations count as well.
 fn Model::confirm_delete(
   self : Model,
@@ -95,7 +105,7 @@ fn Model::confirm_delete(
   let family = [key.session]
   for item in listed {
     if item.workspace == key.workspace &&
-      is_subrun_descendant(item.id, key.session) {
+      is_family_descendant(item.id, key.session) {
       family.push(item.id)
     }
   }
@@ -103,7 +113,7 @@ fn Model::confirm_delete(
     if conv.device == channel &&
       conv.project() == key.workspace &&
       conv.record == record &&
-      is_subrun_descendant(conv.session_id, key.session) &&
+      is_family_descendant(conv.session_id, key.session) &&
       !family.contains(conv.session_id) {
       family.push(conv.session_id)
     }

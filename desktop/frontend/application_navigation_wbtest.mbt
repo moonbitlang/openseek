@@ -637,13 +637,39 @@ test "deleting a family from this page retires its shown descendant" {
   let parent_gone = announce_deletion(child_gone, parent)
   assert_true(parent_gone.deletes_in_flight.is_empty())
   assert_true(parent_gone.navigation == child_gone.navigation)
-  // Descent follows the `-sr-N` structure, not a textual prefix.
+  // Descent follows the `-sr-N` and `-sc-<token>` structure, not a textual
+  // prefix.
   assert_true(
-    is_subrun_descendant("desktop-parent-sr-1-sr-2", "desktop-parent"),
+    is_family_descendant("desktop-parent-sc-0a1b2c3d-sr-1", "desktop-parent"),
   )
   assert_false(
-    is_subrun_descendant("desktop-parent-sr-other", "desktop-parent"),
+    is_family_descendant("desktop-parent-sc-other", "desktop-parent"),
   )
-  assert_false(is_subrun_descendant("desktop-parent-copy", "desktop-parent"))
-  assert_false(is_subrun_descendant("desktop-parent", "desktop-parent"))
+  assert_true(
+    is_family_descendant("desktop-parent-sr-1-sr-2", "desktop-parent"),
+  )
+  assert_false(
+    is_family_descendant("desktop-parent-sr-other", "desktop-parent"),
+  )
+  assert_false(is_family_descendant("desktop-parent-copy", "desktop-parent"))
+  assert_false(is_family_descendant("desktop-parent", "desktop-parent"))
+}
+
+///|
+test "deleting a conversation from this page retires its shown side chat" {
+  let parent = deletion_key("desktop-parent")
+  let side_chat = deletion_key("desktop-parent-sc-0a1b2c3d")
+  let confirmed = confirm_host_delete(
+    deletion_model(side_chat.session, sessions=[
+      parent.session,
+      side_chat.session,
+    ]),
+    parent,
+  )
+  // The host deletes the side chat with its conversation: this page asked
+  // for that, so it moves on to a new draft.
+  let side_chat_gone = announce_deletion(confirmed, side_chat)
+  assert_true(shows_new_draft(side_chat_gone))
+  let parent_gone = announce_deletion(side_chat_gone, parent)
+  assert_true(parent_gone.deletes_in_flight.is_empty())
 }
