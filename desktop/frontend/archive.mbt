@@ -80,13 +80,16 @@ fn Model::owns_deletion(
 }
 
 ///|
-/// Record a confirmed delete of `key` from the store `listed` shows. The host
-/// removes sub-run descendants from that store only, so a child archived apart
-/// from a live parent is not part of the parent's delete.
+/// Record a confirmed delete of `key` from `record`'s store, whose rows
+/// `listed` holds. The host removes sub-run descendants from that store only,
+/// so a child archived apart from a live parent is not part of the parent's
+/// delete. A descendant opened from a transcript link can be on screen before
+/// the catalog lists it, so opened conversations count as well.
 fn Model::confirm_delete(
   self : Model,
   channel : @interop.ChannelId,
   key : ArchiveRecordKey,
+  record : ConversationRecord,
   listed : Array[@transcript.SessionListItem],
 ) -> Array[ConfirmedDelete] {
   let family = [key.session]
@@ -94,6 +97,15 @@ fn Model::confirm_delete(
     if item.workspace == key.workspace &&
       is_subrun_descendant(item.id, key.session) {
       family.push(item.id)
+    }
+  }
+  for conv in self.conversations {
+    if conv.device == channel &&
+      conv.project() == key.workspace &&
+      conv.record == record &&
+      is_subrun_descendant(conv.session_id, key.session) &&
+      !family.contains(conv.session_id) {
+      family.push(conv.session_id)
     }
   }
   self.deletes_in_flight.copy()..push({ channel, key, family, })

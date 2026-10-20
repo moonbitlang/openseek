@@ -5238,6 +5238,7 @@ fn update_msg(
                   deletes_in_flight: model.confirm_delete(
                     confirm.channel,
                     confirm.key,
+                    LiveRecord,
                     dev.sessions,
                   ),
                 },
@@ -5262,6 +5263,7 @@ fn update_msg(
               deletes_in_flight: model.confirm_delete(
                 confirm.channel,
                 confirm.key,
+                ArchivedRecord,
                 dev.archived,
               ),
             },
@@ -8428,7 +8430,6 @@ fn update_device_msg(
         request_generation == dev.archived_request_generation else {
         return (@cmd.none, model)
       }
-      let model = model.settle_delete(channel, key)
       // Install the permanent tombstone before folding the unversioned list
       // reply. The ordinary ArchivedLoaded reconciliation then rejects both
       // this stale row and any later live-list copy of it.

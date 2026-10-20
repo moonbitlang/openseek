@@ -1578,7 +1578,9 @@ priv struct Model {
   // Confirmed live and archived deletes still out with the host, one entry
   // per request, keyed by the conversation the user chose. They outlive later
   // clicks, so a deletion the host announces for that conversation or one of
-  // its sub-run descendants is known to be this page's own.
+  // its sub-run descendants is known to be this page's own. The host
+  // announces every deleted record, so the chosen one's announcement settles
+  // its entry; a refusal or a stop settles it otherwise.
   deletes_in_flight : Array[ConfirmedDelete]
   // Controlled sidebar editor for one live conversation title.
   conversation_rename : ConversationRename?
