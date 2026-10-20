@@ -11,6 +11,9 @@ priv enum UiMessage {
   ThisComputer
   WorktreeTag
   Refresh
+  BackgroundTasksTitle
+  OpenJobs
+  OpenWorkflows
 }
 
 ///|
@@ -61,5 +64,45 @@ fn text(locale : @i18n.Locale, message : UiMessage) -> String {
     (SimplifiedChinese, Refresh) => "刷新"
     (TraditionalChinese, Refresh) => "重新整理"
     (Japanese, Refresh) => "更新"
+    (English, BackgroundTasksTitle) => "Background tasks"
+    (Spanish, BackgroundTasksTitle) => "Tareas en segundo plano"
+    (SimplifiedChinese, BackgroundTasksTitle) => "后台任务"
+    (TraditionalChinese, BackgroundTasksTitle) => "後臺任務"
+    (Japanese, BackgroundTasksTitle) => "バックグラウンドタスク"
+    (English, OpenJobs) => "Open Jobs"
+    (Spanish, OpenJobs) => "Abrir Trabajos"
+    (SimplifiedChinese, OpenJobs) => "打开后台任务"
+    (TraditionalChinese, OpenJobs) => "開啟後臺任務"
+    (Japanese, OpenJobs) => "バックグラウンドジョブを開く"
+    (English, OpenWorkflows) => "Open Workflows"
+    (Spanish, OpenWorkflows) => "Abrir Flujos de trabajo"
+    (SimplifiedChinese, OpenWorkflows) => "打开工作流"
+    (TraditionalChinese, OpenWorkflows) => "開啟工作流"
+    (Japanese, OpenWorkflows) => "ワークフローを開く"
+  }
+}
+
+///|
+/// How many tasks are running, for the folded card.
+fn running_text(locale : @i18n.Locale, count : Int32) -> String {
+  match locale {
+    English => "\{count} running"
+    Spanish => "\{count} en ejecución"
+    SimplifiedChinese => "\{count} 个运行中"
+    TraditionalChinese => "\{count} 個執行中"
+    Japanese => "\{count} 件実行中"
+  }
+}
+
+///|
+/// How many tasks have ended; `more` when older ones are left unlisted.
+fn finished_text(locale : @i18n.Locale, count : Int32, more : Bool) -> String {
+  let count = if more { "\{count}+" } else { count.to_string() }
+  match locale {
+    English => "\{count} finished"
+    Spanish => "\{count} finalizadas"
+    SimplifiedChinese => "\{count} 个已完成"
+    TraditionalChinese => "\{count} 個已完成"
+    Japanese => "\{count} 件完了"
   }
 }

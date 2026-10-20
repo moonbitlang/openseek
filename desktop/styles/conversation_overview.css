@@ -191,6 +191,15 @@ main:has(> .conv-overview) {
 .conv-overview-row-sub {
   color: var(--color-text-faint);
 }
+.conv-overview-row > .conv-overview-row-sub {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.conv-overview-command {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-sm);
+}
 
 .conv-overview-tag {
   flex: none;

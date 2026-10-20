@@ -5,9 +5,25 @@ pub(all) struct Owner {
 } derive(Eq)
 
 ///|
+/// Who on screen reads the listing. The listing serves both readers; the
+/// selected job's output is the panel's alone.
+pub(all) enum Watch {
+  /// Nobody: no requests and no timer.
+  Unwatched
+  /// A summary of the conversation's jobs, such as the conversation
+  /// overview's card: the first page, at a slower pace, and no output reads.
+  Summary
+  /// The Jobs panel: the listing every second and the selected job's output.
+  Panel
+} derive(Eq)
+
+///|
+pub extend Watch with Eq::{equal, not_equal}
+
+///|
 pub(all) struct State {
   owner : Owner?
-  active : Bool
+  watch : Watch
   epoch : Int32
   jobs : Array[@protocol.JobView]
   history_expanded : Bool
@@ -37,7 +53,7 @@ pub(all) struct State {
 pub fn State::empty() -> State {
   {
     owner: None,
-    active: false,
+    watch: Unwatched,
     epoch: 0,
     jobs: [],
     history_expanded: false,
@@ -115,7 +131,9 @@ fn request_list(
   state : State,
   offset : Int32,
 ) -> (@cmd.Cmd, State) {
-  guard state.active && !state.listing && state.owner is Some(owner) else {
+  guard !(state.watch is Unwatched) &&
+    !state.listing &&
+    state.owner is Some(owner) else {
     return (@cmd.none, state)
   }
   let cmd = @cmd.attempt(
@@ -137,7 +155,7 @@ fn request_list(
 
 ///|
 fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
-  guard state.active &&
+  guard state.watch is Panel &&
     !state.reading &&
     state.read_budget > 0 &&
     state.owner is Some(owner) &&
@@ -175,22 +193,22 @@ fn request_read(emit : @cmd.Emit[Msg], state : State) -> (@cmd.Cmd, State) {
 }
 
 ///|
-/// Scope and visibility changes invalidate outstanding replies, including a
-/// reused session name on a different channel. Hidden panels have no polling.
+/// Scope and watcher changes invalidate outstanding replies, including a
+/// reused session name on a different channel. Unwatched jobs have no polling.
 pub fn reconcile(
   emit : @cmd.Emit[Msg],
   state : State,
   owner : Owner?,
-  active : Bool,
+  watch : Watch,
 ) -> (@cmd.Cmd, State) {
   if state.owner != owner {
-    let state = { ..State::empty(), owner, active, epoch: state.epoch + 1, }
+    let state = { ..State::empty(), owner, watch, epoch: state.epoch + 1, }
     return request_list(emit, state, 0)
   }
-  if state.active != active {
+  if state.watch != watch {
     let state = {
       ..state,
-      active,
+      watch,
       epoch: state.epoch + 1,
       listing: false,
       reading: false,
@@ -198,7 +216,7 @@ pub fn reconcile(
       reload_pending: false,
       manual_read: false,
       read_budget: 4,
-      read_error: if active {
+      read_error: if watch is Panel {
         None
       } else {
         state.read_error
@@ -212,10 +230,13 @@ pub fn reconcile(
 
 ///|
 pub fn subscriptions(state : State, emit : @cmd.Emit[Msg]) -> @sub.Sub {
-  if state.active && state.owner is Some(_) {
-    @sub.every(1000, emit(Poll))
-  } else {
-    @sub.none
+  guard state.owner is Some(_) else { return @sub.none }
+  match state.watch {
+    Panel => @sub.every(1000, emit(Poll))
+    // A summary also hears the engine's job changes; the timer only keeps
+    // what it shows from going stale between them.
+    Summary => @sub.every(3000, emit(Poll))
+    Unwatched => @sub.none
   }
 }
 

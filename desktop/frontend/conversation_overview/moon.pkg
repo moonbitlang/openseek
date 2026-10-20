@@ -1,9 +1,15 @@
 import {
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/icons",
+  "openseek_desktop/frontend/workflow",
+  "openseek_desktop/protocol",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
 }
 
 supported_targets = "js"
+
+import {
+  "moonbitlang/openseek_protocol" @wire,
+} for "test"

@@ -6,6 +6,8 @@ import {
   "moonbit-community/rabbita/html",
   "moonbitlang/core/debug",
   "openseek_desktop/frontend/i18n",
+  "openseek_desktop/frontend/workflow",
+  "openseek_desktop/protocol",
 }
 
 // Values
@@ -13,11 +15,31 @@ pub fn toggle(locale? : @i18n.Locale, Bool, @cmd.Cmd) -> @html.Html
 
 pub fn update(Msg, State) -> State
 
-pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, changes~ : Changes?, connectors~ : Connectors, @cmd.Emit[Msg]) -> @html.Html
+pub fn view(locale? : @i18n.Locale, State, environment~ : Environment, changes~ : Changes?, connectors~ : Connectors, background? : Background, @cmd.Emit[Msg]) -> @html.Html
 
 // Errors
 
 // Types and methods
+pub(all) struct Background {
+  tasks : BackgroundTasks
+  now_ms : Double
+  open_jobs : @cmd.Cmd
+  open_workflows : @cmd.Cmd
+}
+
+pub(all) struct BackgroundTasks {
+  jobs : Array[RunningJob]
+  subagents : Array[String]
+  finished : Int32
+  more_finished : Bool
+  in_jobs : Bool
+} derive(Eq, @debug.Debug)
+pub fn BackgroundTasks::equal(Self, Self) -> Bool
+pub fn BackgroundTasks::from_listing(jobs~ : Array[@protocol.JobView], more_jobs~ : Bool, workflows~ : Array[@workflow.Run]) -> Self?
+pub fn BackgroundTasks::not_equal(Self, Self) -> Bool
+pub fn BackgroundTasks::running(Self) -> Int32
+pub fn BackgroundTasks::to_repr(Self) -> @debug.Repr
+
 pub(all) struct Changes {
   summary : String
   rows : Array[@html.Html]
@@ -41,10 +63,19 @@ pub(all) enum Msg {
   Toggled(Section)
 }
 
+pub(all) struct RunningJob {
+  command : String
+  started_at_ms : Int64
+} derive(Eq, @debug.Debug)
+pub fn RunningJob::equal(Self, Self) -> Bool
+pub fn RunningJob::not_equal(Self, Self) -> Bool
+pub fn RunningJob::to_repr(Self) -> @debug.Repr
+
 pub(all) enum Section {
   Environment
   Changes
   Connectors
+  BackgroundTasks
 } derive(Eq, @debug.Debug)
 pub fn Section::equal(Self, Self) -> Bool
 pub fn Section::not_equal(Self, Self) -> Bool
@@ -54,6 +85,7 @@ pub struct State {
   environment_open : Bool
   changes_open : Bool
   connectors_open : Bool
+  tasks_open : Bool
 } derive(Eq)
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::initial() -> Self

@@ -34,6 +34,17 @@ pub(all) struct Changes {
 }
 
 ///|
+/// The background tasks card's input: what runs, and how to open the panels
+/// that list it in full.
+pub(all) struct Background {
+  tasks : BackgroundTasks
+  /// Now, in milliseconds since the epoch, for the commands' elapsed time.
+  now_ms : Double
+  open_jobs : @cmd.Cmd
+  open_workflows : @cmd.Cmd
+}
+
+///|
 /// The titlebar control that shows and hides the overview. One control owns
 /// both states, whether the overview is a rail or a panel over the
 /// conversation.
@@ -71,6 +82,7 @@ pub fn view(
   environment~ : Environment,
   changes~ : Changes?,
   connectors~ : Connectors,
+  background? : Background,
   emit : @cmd.Emit[Msg],
 ) -> @html.Html {
   @html.aside(
@@ -118,6 +130,85 @@ pub fn view(
         ],
         connectors.rows,
       ),
+      // Last, so the card coming and going never moves the others.
+      if background is Some(background) {
+        background_card(locale, state, background, emit)
+      } else {
+        @html.nothing
+      },
+    ],
+  )
+}
+
+///|
+/// The background tasks card. Folded, it says how many tasks run; unfolded,
+/// what each is. Its button opens the panel that lists them in full: Jobs,
+/// unless every running task is a subagent only a workflow knows about.
+fn background_card(
+  locale : @i18n.Locale,
+  state : State,
+  background : Background,
+  emit : @cmd.Emit[Msg],
+) -> @html.Html {
+  let tasks = background.tasks
+  let (label, open) = if tasks.in_jobs {
+    (text(locale, OpenJobs), background.open_jobs)
+  } else {
+    (text(locale, OpenWorkflows), background.open_workflows)
+  }
+  card(
+    locale,
+    BackgroundTasks,
+    state,
+    emit,
+    aside=[
+      if state.is_open(BackgroundTasks) {
+        @html.nothing
+      } else {
+        @html.span(
+          class="conv-overview-summary",
+          running_text(locale, tasks.running()),
+        )
+      },
+      @html.button(
+        class="conv-overview-mini",
+        type_="button",
+        title=label,
+        attrs=@html.Attrs::build().aria_label(label),
+        on_click=open,
+        @icons.icon(@icons.icon_layout_sidebar_right),
+      ),
+    ],
+    [
+      ..tasks.jobs.map(job => {
+        row(@icons.icon_terminal, title=job.command, [
+          @html.span(
+            class="conv-overview-row-text conv-overview-command",
+            job.command,
+          ),
+          @html.span(
+            class="conv-overview-row-sub",
+            elapsed(background.now_ms - job.started_at_ms.to_double()),
+          ),
+        ])
+      }),
+      ..tasks.subagents.map(title => {
+        row(@icons.icon_robot, title~, [
+          @html.span(class="conv-overview-row-text", title),
+        ])
+      }),
+      if tasks.finished > 0 {
+        row(@icons.icon_check, [
+          @html.span(class="conv-overview-row-text", [
+            @html.span(
+              class="conv-overview-row-sub",
+              finished_text(locale, tasks.finished, tasks.more_finished),
+            ),
+          ]),
+        ])
+      } else {
+        @html.nothing
+      },
     ],
   )
 }
@@ -138,6 +229,7 @@ fn card(
     Environment => text(locale, EnvironmentTitle)
     Changes => text(locale, ChangesTitle)
     Connectors => text(locale, ConnectorsTitle)
+    BackgroundTasks => text(locale, BackgroundTasksTitle)
   }
   @html.div(class="conv-overview-card", [
     @html.div(class="conv-overview-card-head", [

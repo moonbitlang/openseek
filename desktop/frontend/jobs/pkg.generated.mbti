@@ -14,7 +14,7 @@ import {
 // Values
 pub fn panel(locale? : @i18n.Locale, State, @cmd.Emit[Msg]) -> @html.Html
 
-pub fn reconcile(@cmd.Emit[Msg], State, Owner?, Bool) -> (@cmd.Cmd, State)
+pub fn reconcile(@cmd.Emit[Msg], State, Owner?, Watch) -> (@cmd.Cmd, State)
 
 pub fn subscriptions(State, @cmd.Emit[Msg]) -> @sub.Sub
 
@@ -47,7 +47,7 @@ pub fn Owner::not_equal(Self, Self) -> Bool
 
 pub(all) struct State {
   owner : Owner?
-  active : Bool
+  watch : Watch
   epoch : Int32
   jobs : Array[@protocol.JobView]
   history_expanded : Bool
@@ -75,6 +75,14 @@ pub(all) struct State {
 pub fn State::empty() -> Self
 pub fn State::equal(Self, Self) -> Bool
 pub fn State::not_equal(Self, Self) -> Bool
+
+pub(all) enum Watch {
+  Unwatched
+  Summary
+  Panel
+} derive(Eq)
+pub fn Watch::equal(Self, Self) -> Bool
+pub fn Watch::not_equal(Self, Self) -> Bool
 
 // Type aliases
 

@@ -12,13 +12,13 @@ test "scope and selection changes reject stale log replies" {
   let state = {
     ..State::empty(),
     owner: Some(owner),
-    active: true,
+    watch: Panel,
     epoch: 1,
     read_serial: 3,
     reading: true,
   }
   let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
-  let (_, switched) = reconcile(emit, state, Some(fixture_owner("two")), true)
+  let (_, switched) = reconcile(emit, state, Some(fixture_owner("two")), Panel)
   let page : @protocol.JobReadReply = {
     text: "stale",
     start_offset: 0L,
@@ -33,10 +33,10 @@ test "scope and selection changes reject stale log replies" {
   let (_, ignored) = update(emit, Read(1, 3, Ok(page)), paused)
   assert_eq(ignored.text, "")
   assert_true(ignored.cursor is None)
-  let (_, hidden) = reconcile(emit, state, Some(owner), false)
+  let (_, hidden) = reconcile(emit, state, Some(owner), Unwatched)
   let (_, ignored) = update(emit, Read(1, 3, Ok(page)), hidden)
   assert_eq(ignored.text, "")
-  assert_false(ignored.active)
+  assert_true(ignored.watch is Unwatched)
 }
 
 ///|
@@ -174,7 +174,7 @@ fn reading_fixture() -> State {
   {
     ..State::empty(),
     owner: Some(fixture_owner("one")),
-    active: true,
+    watch: Panel,
     jobs: [fixture_job("bg-1", Running)],
     selected: Some(("runtime", "bg-1")),
     reading: true,
@@ -262,7 +262,7 @@ test "reload queues behind an old read and can refresh a paused view" {
   let (_, paused) = update(emit, Pause, pending)
   assert_false(paused.reload_pending)
   assert_false(paused.manual_read)
-  let (_, hidden) = reconcile(emit, pending, pending.owner, false)
+  let (_, hidden) = reconcile(emit, pending, pending.owner, Unwatched)
   assert_false(hidden.reload_pending)
   assert_false(hidden.manual_read)
   assert_false(hidden.reading)
@@ -565,4 +565,29 @@ test "a worker's worktree state reads as words" {
     worktree_state(ended=true, Working).0,
     "Worktree: no result recorded (its engine stopped); handed over when a worker next starts",
   )
+}
+
+///|
+test "a summary lists the jobs but never reads their output" {
+  let emit : @cmd.Emit[Msg] = Emit(_ => @cmd.none)
+  let owner = fixture_owner("one")
+  let (_, summary) = reconcile(emit, State::empty(), Some(owner), Summary)
+  assert_true(summary.listing)
+  let reply : @protocol.JobsListReply = {
+    jobs: [fixture_job("bg-1", Running)],
+    next_offset: None,
+    errors: [],
+    selected: None,
+  }
+  let (_, listed) = update(emit, Listed(summary.epoch, 0, Ok(reply)), summary)
+  assert_eq(listed.jobs.length(), 1)
+  assert_true(listed.selected == Some(("runtime", "bg-1")))
+  assert_false(listed.reading)
+  let (_, polled) = update(emit, Poll, listed)
+  assert_true(polled.listing)
+  assert_false(polled.reading)
+  // The panel coming on screen reads the selected job's output.
+  let (_, panel) = reconcile(emit, listed, Some(owner), Panel)
+  let (_, reading) = update(emit, Poll, { ..panel, listing: false, })
+  assert_true(reading.reading)
 }

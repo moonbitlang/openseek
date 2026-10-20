@@ -2145,19 +2145,29 @@ fn update(
   )
   let model = { ..model, terminal, }
   let owner = model.jobs_owner()
-  let active = model.file_panel_visible() &&
-    model.dock_state().active is Some(Jobs) &&
-    owner is Some(owner) &&
+  let connected = owner is Some(owner) &&
     model.devices.any(dev => {
       dev.channel == owner.channel &&
       dev.bridge is Connected &&
       dev.reconnect_failures == 0
     })
+  // The Jobs panel reads the listing and the selected job's output; the
+  // overview's background tasks card reads only the listing.
+  let watch : @jobs.Watch = if !connected {
+    Unwatched
+  } else if model.file_panel_visible() &&
+    model.dock_state().active is Some(Jobs) {
+    Panel
+  } else if model.overview_jobs_owner() is Some(_) {
+    Summary
+  } else {
+    Unwatched
+  }
   let (jobs_cmd, jobs) = @jobs.reconcile(
     dispatch.map(msg => Jobs(msg)),
     model.jobs,
     owner,
-    active,
+    watch,
   )
   let model = { ..model, jobs, }
   let (preview, reloads) = model.preview.take_file_reloads()

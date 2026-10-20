@@ -14,3 +14,16 @@ fn Model::jobs_owner(self : Model) -> @jobs.Owner? {
     },
   })
 }
+
+///|
+/// The jobs owner when the overview describes its conversation, so the
+/// overview's card may read the jobs listing.
+fn Model::overview_jobs_owner(self : Model) -> @jobs.Owner? {
+  guard self.overview_conversation() is Some(conversation) &&
+    self.jobs_owner() is Some(owner) &&
+    owner.channel == conversation.channel &&
+    owner.scope.session == conversation.session else {
+    return None
+  }
+  Some(owner)
+}

@@ -1,8 +1,9 @@
 ///|
-test "the environment starts unfolded and the connectors as their summary" {
+test "the environment starts unfolded and the other cards as their summaries" {
   let state = @conversation_overview.State::initial()
   assert_true(state.is_open(Environment))
   assert_false(state.is_open(Connectors))
+  assert_false(state.is_open(BackgroundTasks))
 }
 
 ///|
@@ -17,6 +18,10 @@ test "a card's title folds and unfolds only that card" {
   assert_true(
     @conversation_overview.update(Toggled(Environment), folded) == unfolded,
   )
+  let tasks = @conversation_overview.update(Toggled(BackgroundTasks), folded)
+  assert_true(tasks.is_open(BackgroundTasks))
+  assert_true(tasks.is_open(Connectors))
+  assert_false(tasks.is_open(Environment))
 }
 
 ///|

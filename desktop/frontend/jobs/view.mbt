@@ -176,7 +176,7 @@ pub fn panel(
       ),
     )
   }
-  if state.owner is Some(_) && !state.active {
+  if state.owner is Some(_) && !(state.watch is Panel) {
     body.push(
       @html.div(class="jobs-error", ui(locale, DisconnectedDescription)),
     )
