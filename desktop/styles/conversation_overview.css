@@ -216,8 +216,9 @@ main:has(> .conv-overview) {
   padding: 1px 4px;
   border-radius: var(--radius-xs);
 }
+/* A whole row lights up like the sidebar's rows, not like a button. */
 .conv-changes-row:has(a.conv-changes-link):hover {
-  background: var(--color-hover-subtle);
+  background: var(--color-bg-subtle);
 }
 
 .conv-changes-error {
