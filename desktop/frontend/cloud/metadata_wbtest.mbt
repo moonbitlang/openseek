@@ -106,7 +106,8 @@ test "metadata responses are scoped to the save and account epoch" {
 
 ///|
 test "failed metadata keeps the saved values and permits a normal retry" {
-  for error in [Http(503), Busy, Unreachable, Unauthorized] {
+  let errors : Array[Failure] = [Http(503), Busy, Unreachable, Unauthorized]
+  for error in errors {
     let pending = metadata_update(
       deletion_state(),
       Edit(account="fixture", session="a", edit=Rename("Manual")),

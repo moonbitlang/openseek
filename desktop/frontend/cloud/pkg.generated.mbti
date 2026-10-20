@@ -5,6 +5,8 @@ import {
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/sub",
   "moonbitlang/async/http",
+  "moonbitlang/openseek_protocol",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/composer",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/transcript",
@@ -16,15 +18,15 @@ pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
 
 pub fn discard_legacy_credential() -> Unit
 
-pub async fn export_record(String, String) -> Result[String, Failure]
+pub async fn export_record(String, String) -> Result[String, @cloud_client.Failure]
 
-pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, Failure]
+pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, @cloud_client.Failure]
 
-pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, Failure]
+pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, @cloud_client.Failure]
 
-pub async fn read_file_index(String, String) -> Result[Array[String], Failure]
+pub async fn read_file_index(String, String) -> Result[Array[String], @cloud_client.Failure]
 
-pub async fn share(String, String, String) -> Result[String, Failure]
+pub async fn share(String, String, String) -> Result[String, @cloud_client.Failure]
 
 pub fn subscriptions(State) -> @sub.Sub
 
@@ -42,7 +44,9 @@ pub(all) struct Conversation {
   generating : Bool
   history_required : Bool
   submission_sequence : Int32
-  initial_submission : String?
+  initial_submission : @composer.Draft?
+  initial_attachments : Array[@protocol.AttachmentSource]
+  uploads : Array[UploadedAttachment]
   pending : Submission?
   stream : StreamLease?
   task : String?
@@ -65,6 +69,7 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   submission : @composer.Draft?
+  attachments : Array[@protocol.AttachmentSource]
 } derive(Eq)
 pub fn Creation::equal(Self, Self) -> Bool
 pub fn Creation::not_equal(Self, Self) -> Bool
@@ -78,18 +83,6 @@ pub(all) struct Event {
 } derive(Eq)
 pub fn Event::equal(Self, Self) -> Bool
 pub fn Event::not_equal(Self, Self) -> Bool
-
-pub(all) enum Failure {
-  Unauthorized
-  Busy
-  Http(Int32)
-  Unreachable
-  Malformed
-  ServiceNotConfigured
-  CredentialServiceUnavailable
-  SignInFailed(String)
-}
-pub fn Failure::label(Self) -> String
 
 pub(all) struct History {
   messages : Array[Record]
@@ -111,20 +104,23 @@ pub(all) enum Msg {
   Open(String)
   Delete(String)
   Deleted(Int32, String, Int32)
-  DeleteFailed(Int32, String, Int32, Failure)
+  DeleteFailed(Int32, String, Int32, @cloud_client.Failure)
   Edit(account~ : String, session~ : String, edit~ : SessionEdit)
   Edited(Int32, String, Int32)
-  EditFailed(Int32, String, Int32, Failure)
+  EditFailed(Int32, String, Int32, @cloud_client.Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  SubmitAttachments(@interop.ConversationIdentity, @composer.Draft, Array[@protocol.AttachmentSource])
   Listed(Int32, Int32, Array[Session])
-  ListFailed(Int32, Int32, Failure)
+  ListFailed(Int32, Int32, @cloud_client.Failure)
   Created(Int32, Int32, String)
-  CreateFailed(Int32, Int32, Failure)
+  CreateFailed(Int32, Int32, @cloud_client.Failure)
   Loaded(Int32, String, Int32, History)
-  LoadFailed(Int32, String, Int32, Failure)
+  LoadFailed(Int32, String, Int32, @cloud_client.Failure)
   StreamEvent(Int32, String, Int32, Event)
   StreamEnded(Int32, String, Int32)
-  SendFailed(Int32, String, Int32, Failure)
+  SendFailed(Int32, String, Int32, @cloud_client.Failure)
+  AttachmentStored(Int32, String, Int32, @protocol.AttachmentSource, String)
+  MessagePrepared(Int32, String, Int32, @composer.Draft, @openseek_protocol.Content)
   Poll(Int32, String, Int32)
 }
 
@@ -184,12 +180,20 @@ pub struct StreamLease {
 }
 
 pub struct Submission {
-  content : String
+  content : @openseek_protocol.Content
   known_tasks : Array[String]
 } derive(Eq)
 pub fn Submission::equal(Self, Self) -> Bool
 pub fn Submission::not_equal(Self, Self) -> Bool
 
+pub struct UploadedAttachment {
+  source : @protocol.AttachmentSource
+  path : String
+} derive(Eq)
+pub fn UploadedAttachment::equal(Self, Self) -> Bool
+pub fn UploadedAttachment::not_equal(Self, Self) -> Bool
+
 // Type aliases
+pub using @cloud_client {type Failure}
 
 // Traits

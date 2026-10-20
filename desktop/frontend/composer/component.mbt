@@ -79,6 +79,8 @@ priv struct Entry {
   symbol_cache : SymbolCache
   file_completion : FileCompletion
   root : @common.Uri?
+  cloud_access : @cloud_client.Access?
+  source_attachments : Array[@protocol.AttachmentSource]
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   turn_id : String?
@@ -111,6 +113,8 @@ fn Entry::Entry(input : Input) -> Entry {
     symbol_cache: SymbolCache(),
     file_completion: Local(files~, loading~, epoch=input.file_index.epoch()),
     root: input.root,
+    cloud_access: input.cloud_access,
+    source_attachments: input.staged_attachments,
     installed_skills: input.installed_skills,
     context_generation: input.context_generation,
     turn_id: input.turn_id,
@@ -120,8 +124,14 @@ fn Entry::Entry(input : Input) -> Entry {
     followup_menu_open: false,
     image_reads: 0,
     image_error: None,
-    attachment_requests: [],
-    attachment_sequence: 0,
+    attachment_requests: input.staged_attachments.mapi((index, source) => {
+      id: index + 1,
+      source,
+      root: input.root,
+      cloud_access: input.cloud_access,
+      phase: AttachmentStaged(name=attachment_name(source)),
+    }),
+    attachment_sequence: input.staged_attachments.length(),
     images_enabled: input.presentation.images_enabled,
     pending_submission: None,
     history_back: None,
@@ -163,6 +173,40 @@ fn Entry::file_completion_for(
 /// Reconcile root-authored recovery with local edits. Submission acknowledgement
 /// clears only the submitted editor: prompt and goal drafts are independent.
 fn Entry::reconciled(self : Entry, input : Input) -> Entry {
+  let self = if self.cloud_access != input.cloud_access {
+    let mut sequence = self.attachment_sequence
+    let requests = self.attachment_requests.map(request => {
+      sequence += 1
+      {
+        ..request,
+        id: sequence,
+        cloud_access: input.cloud_access,
+        phase: if request.phase is AttachmentStaged(_) {
+          request.phase
+        } else {
+          AttachmentConfirming(name=attachment_name(request.source))
+        },
+      }
+    })
+    {
+      ..self,
+      cloud_access: input.cloud_access,
+      attachment_sequence: sequence,
+      attachment_requests: requests,
+    }
+  } else {
+    self
+  }
+  let removed = self.source_attachments.filter(source => {
+    !input.staged_attachments.contains(source)
+  })
+  let self = {
+    ..self,
+    source_attachments: input.staged_attachments,
+    attachment_requests: self.attachment_requests.filter(request => {
+      !removed.contains(request.source)
+    }),
+  }
   let self = if self.turn_id == input.turn_id &&
     input.presentation.primary_action
     is Running(queue_available=true, submit=Steer | Queue, ..) {
@@ -181,8 +225,9 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
   let context_changed = self.context_generation != input.context_generation
   let skills_changed = self.installed_skills != input.installed_skills
   let acknowledged : Draft? = match self.pending_submission {
-    Some(PromptSubmission(sequence_before~, _)) if input.submission_sequence >
-      sequence_before => Some(incoming)
+    Some(PromptSubmission(sequence_before~, submitted)) if input.submission_sequence >
+      sequence_before =>
+      Some(self.draft.reconciled(source=submitted, incoming~))
     Some(GoalSubmission(sequence_before~, _)) if input.submission_sequence >
       sequence_before =>
       Some(self.draft.reconciled(source=self.source, incoming~))
@@ -205,6 +250,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
       },
       file_completion: self.file_completion_for(input, draft.task, input.root),
       root: input.root,
+      cloud_access: input.cloud_access,
       image_reads: if root_changed {
         0
       } else {
@@ -295,6 +341,7 @@ fn Entry::reconciled(self : Entry, input : Input) -> Entry {
     symbol_cache,
     file_completion,
     root: input.root,
+    cloud_access: input.cloud_access,
     image_reads: if root_changed {
       0
     } else {
@@ -403,13 +450,13 @@ priv enum Msg {
   ImageRead(Identity, @common.Uri?, @image_input.Event)
   AttachmentPrepared(
     Identity,
-    @common.Uri,
+    @common.Uri?,
     Int32,
     Result[@protocol.PrepareAttachmentReply, String]
   )
-  AttachmentConfirmed(Identity, @common.Uri, Int32)
-  AttachmentCancelled(Identity, @common.Uri, Int32)
-  AttachmentImported(Identity, @common.Uri, Int32, Result[String, String])
+  AttachmentConfirmed(Identity, @common.Uri?, Int32)
+  AttachmentCancelled(Identity, @common.Uri?, Int32)
+  AttachmentImported(Identity, @common.Uri?, Int32, Result[String, String])
   MentionJumped(Int32)
   GoalCancelled
   SubmitRequested
@@ -452,7 +499,7 @@ priv enum Msg {
 fn Entry::can_send(self : Entry, input : Input) -> Bool {
   !input.presentation.disabled &&
   self.image_reads == 0 &&
-  self.attachment_requests.is_empty() &&
+  self.attachment_requests.all(request => request.phase is AttachmentStaged(_)) &&
   (match input.presentation.primary_action {
     Send(available~) => available
     Running(steer_available~, ..) => steer_available
@@ -480,7 +527,7 @@ fn Entry::edited(
         ..self,
         goal_draft: Some(value),
         completion: None,
-        pending_submission: None,
+        pending_submission: self.pending_prompt(),
       },
       @cmd.none,
     )
@@ -490,10 +537,7 @@ fn Entry::edited(
   // A draft that is a shell command opens no completion menu: `@`, `#`, and
   // `$` are shell text there, not mentions.
   if input.shell_command(draft) is Some(_) {
-    return (
-      { ..self, draft, completion: None, pending_submission: None, },
-      @cmd.none,
-    )
+    return ({ ..self, draft, completion: None, }, @cmd.none)
   }
   let (files, files_loading) = input.completion_files(value)
   let file_completion = Local(
@@ -517,10 +561,16 @@ fn Entry::edited(
       action_emit(FileIndexEnsured(identity=self.identity()))
     _ => @cmd.none
   }
-  (
-    { ..self, draft, completion, file_completion, pending_submission: None, },
-    command,
-  )
+  ({ ..self, draft, completion, file_completion, }, command)
+}
+
+///|
+/// Goal edits must not discard the snapshot of a prompt awaiting admission.
+fn Entry::pending_prompt(self : Entry) -> PendingSubmission? {
+  match self.pending_submission {
+    Some(PromptSubmission(_, ..)) => self.pending_submission
+    _ => None
+  }
 }
 
 ///|
@@ -754,9 +804,7 @@ fn Model::update(
     AttachmentPrepared(identity, root, id, result) => {
       guard self.entries
         .iter()
-        .find_first(entry => {
-          entry.identity() == identity && entry.root == Some(root)
-        })
+        .find_first(entry => entry.identity() == identity && entry.root == root)
         is Some(target) &&
         target.attachment_requests
         .iter()
@@ -788,20 +836,17 @@ fn Model::update(
               ),
             }
           }
-        Err(message) =>
-          { ..target.without_attachment(id), image_error: Some(message), }
+        Err(message) => target.attachment_failed(id, message)
       }
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }
     AttachmentConfirmed(identity, root, id) => {
-      guard input.identity == identity && input.root == Some(root) else {
+      guard input.identity == identity && input.root == root else {
         return (self, @cmd.none)
       }
       guard self.entries
         .iter()
-        .find_first(entry => {
-          entry.identity() == identity && entry.root == Some(root)
-        })
+        .find_first(entry => entry.identity() == identity && entry.root == root)
         is Some(target) &&
         target.attachment_requests
         .iter()
@@ -811,6 +856,17 @@ fn Model::update(
         is Some(request) else {
         return (self, @cmd.none)
       }
+      if root is None && identity.owner is @interop.Cloud(..) {
+        return self.commit_entry_change(
+          target,
+          target.with_attachment_phase(
+            id,
+            AttachmentStaged(name=attachment_name(request.source)),
+          ),
+          @cmd.none,
+          action_emit,
+        )
+      }
       self.commit_entry_change(
         target,
         target.with_attachment_phase(id, AttachmentImporting),
@@ -819,19 +875,18 @@ fn Model::update(
       )
     }
     AttachmentCancelled(identity, root, id) => {
-      guard input.identity == identity && input.root == Some(root) else {
+      guard input.identity == identity && input.root == root else {
         return (self, @cmd.none)
       }
       guard self.entries
         .iter()
-        .find_first(entry => {
-          entry.identity() == identity && entry.root == Some(root)
-        })
+        .find_first(entry => entry.identity() == identity && entry.root == root)
         is Some(target) &&
         target.attachment_requests
         .iter()
         .any(request => {
-          request.id == id && request.phase is AttachmentConfirming(_)
+          request.id == id &&
+          request.phase is (AttachmentConfirming(_) | AttachmentStaged(_))
         }) else {
         return (self, @cmd.none)
       }
@@ -845,9 +900,7 @@ fn Model::update(
     AttachmentImported(identity, root, id, result) => {
       guard self.entries
         .iter()
-        .find_first(entry => {
-          entry.identity() == identity && entry.root == Some(root)
-        })
+        .find_first(entry => entry.identity() == identity && entry.root == root)
         is Some(target) &&
         target.attachment_requests
         .iter()
@@ -856,8 +909,7 @@ fn Model::update(
       }
       let next = match result {
         Ok(path) => target.without_attachment(id).attachment_reference(path)
-        Err(message) =>
-          { ..target.without_attachment(id), image_error: Some(message), }
+        Err(message) => target.attachment_failed(id, message)
       }
       self.commit_entry_change(target, next, @cmd.none, action_emit)
     }
@@ -1049,7 +1101,7 @@ fn Model::update(
           ..entry,
           goal_draft: None,
           completion: None,
-          pending_submission: None,
+          pending_submission: entry.pending_prompt(),
         },
         action_emit(GoalCancelled(identity=entry.identity())),
         action_emit,
@@ -1105,9 +1157,11 @@ fn Model::update(
         )
       } else {
         guard entry.can_send(input) &&
-          !entry.draft.is_blank() &&
+          (!entry.draft.is_blank() || !entry.attachment_requests.is_empty()) &&
           entry.image_reads == 0 &&
-          entry.attachment_requests.is_empty() else {
+          entry.attachment_requests.all(request => {
+            request.phase is AttachmentStaged(_)
+          }) else {
           return (self.with_entry(entry), @cmd.none)
         }
         (
@@ -1130,7 +1184,17 @@ fn Model::update(
                   choice~,
                 )
               None =>
-                DraftSubmitted(identity=entry.identity(), draft=entry.draft)
+                if entry.attachment_requests.is_empty() {
+                  DraftSubmitted(identity=entry.identity(), draft=entry.draft)
+                } else {
+                  DraftAttachmentsSubmitted(
+                    identity=entry.identity(),
+                    draft=entry.draft,
+                    attachments=entry.attachment_requests.map(request => {
+                      request.source
+                    }),
+                  )
+                }
             },
           ),
         )

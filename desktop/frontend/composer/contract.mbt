@@ -252,6 +252,9 @@ pub(all) struct Input {
   // composer recalls them with the arrow keys.
   history : Array[String]
   root : @common.Uri?
+  cloud_access : @cloud_client.Access?
+  // New Cloud sessions restore confirmed in-memory uploads with the draft.
+  staged_attachments : Array[@protocol.AttachmentSource]
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32
@@ -268,6 +271,11 @@ pub(all) struct Input {
 /// navigation, debounce ticks, and async replies remain private to the package.
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
+  DraftAttachmentsSubmitted(
+    identity~ : Identity,
+    draft~ : Draft,
+    attachments~ : Array[@protocol.AttachmentSource]
+  )
   FollowupSubmitted(
     identity~ : Identity,
     draft~ : Draft,
@@ -347,6 +355,7 @@ pub(all) enum Action {
 pub fn Action::identity(self : Action) -> Identity {
   match self {
     DraftSubmitted(identity~, ..)
+    | DraftAttachmentsSubmitted(identity~, ..)
     | FollowupSubmitted(identity~, ..)
     | DraftPresenceChanged(identity~, ..)
     | ReviewChangesRemoved(identity~, ..)

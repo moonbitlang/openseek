@@ -142,7 +142,7 @@ fn update_cloud(
   }
   let deleted = message
     is (@cloud.Deleted(_, _, _)
-    | @cloud.DeleteFailed(_, _, _, @cloud.Http(404)))
+    | @cloud.DeleteFailed(_, _, _, @cloud.Failure::Http(404)))
   let mut navigation = model.navigation
   if before.user_id is Some(account) {
     for session in removed {
@@ -368,11 +368,9 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
   Some({
     ..input,
     identity: { ..input.identity, owner, },
-    draft: @composer.Draft::from_content(
-      Content([
-        Text(conversation.bind(value => value.initial_submission).unwrap_or("")),
-      ]),
-    ).unwrap(),
+    draft: conversation
+    .bind(value => value.initial_submission)
+    .unwrap_or(input.draft),
     run: if conversation is Some(value) && (value.sending || value.generating) {
       Some(
         conversation
@@ -385,6 +383,13 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
     turn_id: conversation.bind(value => value.task),
     history,
     root: file_ctx(self).root(),
+    cloud_access: self.account.map(account => {
+      token: account.token,
+      epoch: self.cloud.epoch,
+    }),
+    staged_attachments: conversation.map_or([], value => {
+      value.initial_attachments
+    }),
     file_candidates: self.file_search().candidates,
     open_files: self.live_editor_files(),
     active_file: self.active_workspace_file(),
@@ -398,7 +403,7 @@ fn Model::cloud_composer_input(self : Model) -> @composer.Input? {
       @composer.FileIndexEmpty(epoch=self.file_panel.request_epoch)
     },
     presentation: {
-      ..input.presentation,
+      images_enabled: true,
       context: if conversation is Some({ compacting: true, .. }) {
         [@composer.CompactionNotice(queued=false)]
       } else {

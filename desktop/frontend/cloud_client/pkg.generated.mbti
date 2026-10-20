@@ -1,0 +1,54 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "openseek_desktop/frontend/cloud_client"
+
+import {
+  "moonbitlang/async/http",
+  "openseek_desktop/protocol",
+}
+
+// Values
+pub const CloudOrigin : String = "https://cloud.moonbitlang.cn"
+
+pub fn check_status(Int32) -> Unit raise RequestError
+
+pub async fn import_attachment(String, String, @protocol.AttachmentSource) -> Result[@protocol.ImportAttachmentReply, Failure]
+
+pub async fn prepare_attachment(String, String, @protocol.AttachmentSource) -> Result[@protocol.PrepareAttachmentReply, Failure]
+
+pub async fn read_directory(String, String, String) -> Result[@protocol.ReadDirReply, Failure]
+
+pub async fn read_file(String, String, String, allow_large? : Bool) -> Result[@protocol.ReadFileReply, Failure]
+
+pub async fn read_file_index(String, String) -> Result[Array[String], Failure]
+
+pub async fn request(String, String, @http.RequestMethod, token? : String, body? : Json) -> Json
+
+// Errors
+pub suberror RequestError {
+  RequestError(Failure)
+}
+
+// Types and methods
+pub(all) struct Access {
+  token : String
+  epoch : Int32
+} derive(Eq)
+pub fn Access::equal(Self, Self) -> Bool
+pub fn Access::not_equal(Self, Self) -> Bool
+
+pub(all) enum Failure {
+  Unauthorized
+  Busy
+  Http(Int32)
+  Unreachable
+  Malformed
+  ServiceNotConfigured
+  CredentialServiceUnavailable
+  SignInFailed(String)
+  InvalidImage
+}
+pub fn Failure::label(Self) -> String
+
+// Type aliases
+
+// Traits

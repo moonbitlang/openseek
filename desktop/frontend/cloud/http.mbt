@@ -1,13 +1,10 @@
 ///|
-pub const CloudOrigin = "https://cloud.moonbitlang.cn"
+pub using @cloud_client {CloudOrigin}
 
 ///|
 fn check_status(status : Int32) -> Unit raise CloudError {
-  match status {
-    200 | 201 | 204 => ()
-    401 => raise CloudError(Unauthorized)
-    409 => raise CloudError(Busy)
-    _ => raise CloudError(Http(status))
+  @cloud_client.check_status(status) catch {
+    @cloud_client.RequestError(failure) => raise CloudError(failure)
   }
 }
 
@@ -19,23 +16,9 @@ async fn request(
   token? : String,
   body? : Json,
 ) -> Json {
-  let headers : Map[@http.CaseInsensitiveString, String] = {
-    "Content-Type": "application/json",
-  }
-  if token is Some(token) {
-    headers["Authorization"] = "Bearer " + token
-  }
-  let (response, data) = @http.request(
-    origin + path,
-    method_,
-    headers,
-    body.map_or("", body => body.stringify()),
-  ) catch {
-    _ => raise CloudError(Unreachable)
-  }
-  check_status(response.code)
-  data.json() catch {
-    _ => raise CloudError(Malformed)
+  @cloud_client.request(origin, path, method_, token?, body?) catch {
+    @cloud_client.RequestError(failure) => raise CloudError(failure)
+    error => raise error
   }
 }
 
@@ -100,7 +83,7 @@ async fn edit_session(
 async fn send_message(
   token : String,
   session : String,
-  content : String,
+  content : @wire.Content,
   stream : StreamLease,
   event : (Event) -> Unit,
 ) -> Unit {
@@ -114,7 +97,7 @@ async fn send_message(
   defer client.close()
   guard stream.active else { return }
   stream.client = Some(client)
-  let body : Json = { "content": Json(content) }
+  let body : Json = { "content": content.to_json() }
   let response = client.post(
     "/v1/sessions/\{@uri.encode_component(session)}/messages",
     body.stringify(),

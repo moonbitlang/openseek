@@ -1,8 +1,10 @@
 import {
+  "openseek_desktop/frontend/cloud_client",
   "moonbit-community/rabbita/cmd",
   "moonbit-community/rabbita/js",
   "moonbit-community/rabbita/sub",
   "moonbitlang/core/json",
+  "moonbitlang/core/encoding/base64",
   "moonbitlang/openseek_protocol" @wire,
   "moonbitlang/async/http",
   "moonbitlang/editor/base/browser" @base_browser,

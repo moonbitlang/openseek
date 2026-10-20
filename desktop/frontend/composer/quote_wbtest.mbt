@@ -276,3 +276,65 @@ test "Office feedback batches mentions and images atomically with the live draft
   assert_eq(combined.mentions.length(), 2)
   assert_true(combined.images == [image, image])
 }
+
+///|
+test "selection feedback retains the pending snapshot until acknowledgement for Local and Cloud" {
+  for cloud in [false, true] {
+    let base = Input::fixture("")
+    let input = {
+      ..base,
+      identity: if cloud {
+        {
+          owner: @interop.Cloud(account="account", session="session"),
+          archive_generation: 0,
+        }
+      } else {
+        base.identity
+      },
+      presentation: { ..base.presentation, images_enabled: true, },
+    }
+    let old : Image = { name: "sent.png", url: "data:image/png;base64,YQ==", }
+    let next : Image = {
+      name: "capture.png",
+      url: "data:image/png;base64,Yg==",
+    }
+    let draft : Draft = {
+      task: "sent",
+      images: [old],
+      mentions: [{ ref_: File(path="sent.pdf"), range: None, }],
+    }
+    let model = Model(input).with_entry({ ..Entry(input), draft, })
+    let sending = model.update(
+        input,
+        SubmitRequested,
+        Msg::test_emit(),
+        Action::test_emit(),
+      ).0
+    let payload : Json = {
+      "schema": "office.selection.materialized.v1",
+      "selection": { "kind": "pdf-region", "pages": [2] },
+      "source": { "file": "/docs/slides.pdf" },
+      "comment": "Change this",
+    }
+    let quoted = sending.update(
+        input,
+        QuoteReplied({
+          identity: input.identity,
+          content: OfficeSelection(payload.stringify()),
+          images: [next],
+          send: false,
+          accepted: @cmd.none,
+          declined: @cmd.none,
+        }),
+        Msg::test_emit(),
+        Action::test_emit(),
+      ).0
+    assert_true(
+      quoted.active(input).pending_submission is Some(PromptSubmission(_, ..)),
+    )
+    let acknowledged = quoted.active({ ..input, submission_sequence: 1, }).draft
+    assert_eq(acknowledged.task, "")
+    assert_eq(acknowledged.images, [next])
+    assert_true(acknowledged.mentions is [{ ref_: OfficeSelection(..), .. }])
+  }
+}

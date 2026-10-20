@@ -14,6 +14,8 @@ fn Input::fixture(task : String) -> Input {
     shell_available: false,
     history: [],
     root: Some(@common.Uri::file("/workspace")),
+    cloud_access: None,
+    staged_attachments: [],
     installed_skills: [],
     context_generation: 0,
     submission_sequence: 0,
@@ -751,6 +753,90 @@ test "image-only drafts submit and preserve pictures until acknowledged" {
   assert_eq(once.active(base).draft.images, input.draft.images)
   let acknowledged = { ..base, submission_sequence: 1, }
   assert_true(once.active(acknowledged).draft.images.is_empty())
+}
+
+///|
+test "draft acknowledgement removes its snapshot once and retains later image reads for Local and Cloud" {
+  for cloud in [false, true] {
+    let base = Input::fixture("")
+    let input = if cloud {
+      {
+        ..base,
+        identity: {
+          owner: @interop.Cloud(account="account", session="session"),
+          archive_generation: 0,
+        },
+      }
+    } else {
+      base
+    }
+    let image : Image = { name: "same.png", url: "data:image/png;base64,YQ==", }
+    let submitted : Draft = {
+      task: "sent",
+      images: [image],
+      mentions: [{ ref_: File(path="sent.pdf"), range: None, }],
+    }
+    let model = Model(input).with_entry({ ..Entry(input), draft: submitted, })
+    let (sending, _) = model.update(
+      input,
+      SubmitRequested,
+      Msg::test_emit(),
+      Action::test_emit(),
+    )
+    let edited = sending.update(
+        input,
+        TextChanged("text-only next draft"),
+        Msg::test_emit(),
+        Action::test_emit(),
+      ).0
+    let text_only = edited.active({ ..input, submission_sequence: 1, }).draft
+    assert_eq(text_only.task, "text-only next draft")
+    assert_true(text_only.images.is_empty() && text_only.mentions.is_empty())
+    for
+      event in [
+        @image_input.Ready([("same.png", image.url)]),
+        @image_input.DocumentsReady(images=[("same.png", image.url)], documents=[]),
+      ] {
+      let (reading, _) = sending.update(
+        input,
+        ImageRead(input.identity, input.root, @image_input.Reading),
+        Msg::test_emit(),
+        Action::test_emit(),
+      )
+      let (added, _) = reading.update(
+        input,
+        ImageRead(input.identity, input.root, event),
+        Msg::test_emit(),
+        Action::test_emit(),
+      )
+      assert_eq(added.active(input).draft.images.length(), 2)
+      let acknowledged = { ..input, submission_sequence: 1, }
+      for edit_text in [false, true] {
+        let changed = if edit_text {
+          added.update(
+            input,
+            TextChanged("next draft"),
+            Msg::test_emit(),
+            Action::test_emit(),
+          ).0
+        } else {
+          added
+        }
+        let next = changed.active(acknowledged).draft
+        assert_eq(next.task, if edit_text { "next draft" } else { "" })
+        assert_true(next.mentions.is_empty())
+        assert_eq(next.images, [image])
+      }
+      let retired = { ..input, retirements: [input.identity.owner], }
+      let (ignored, _) = reading.update(
+        retired,
+        ImageRead(input.identity, input.root, event),
+        Msg::test_emit(),
+        Action::test_emit(),
+      )
+      assert_true(ignored.active(retired).draft.is_empty())
+    }
+  }
 }
 
 ///|

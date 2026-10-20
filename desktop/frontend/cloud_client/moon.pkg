@@ -1,0 +1,8 @@
+import {
+  "moonbitlang/async/http",
+  "moonbitlang/core/json",
+  "openseek_desktop/protocol",
+  "openseek_desktop/uri",
+}
+
+supported_targets = "js"

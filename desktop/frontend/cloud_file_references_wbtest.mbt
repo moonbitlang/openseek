@@ -14,7 +14,7 @@ test "Cloud sends file mentions and restores the first submission as chips" {
     model,
   )
   assert_eq(
-    sending.cloud.conversations["cloud-a"].pending.unwrap().content,
+    sending.cloud.conversations["cloud-a"].pending.unwrap().content.text(),
     draft.prompt(),
   )
   let (_, blank) = update(test_dispatch(), CloudAction(@cloud.Create), model)
@@ -34,7 +34,7 @@ test "Cloud sends file mentions and restores the first submission as chips" {
   )
   assert_true(created.composer_input().draft == draft)
   assert_eq(
-    created.cloud.conversations["new-cloud"].pending.unwrap().content,
+    created.cloud.conversations["new-cloud"].pending.unwrap().content.text(),
     draft.prompt(),
   )
 }

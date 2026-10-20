@@ -169,7 +169,8 @@ test "delete failures preserve the conversation and only 401 expires credentials
     navigation=0,
   )
   let request = pending.deletions["a"]
-  for error in [Busy, Http(503), Unreachable] {
+  let errors : Array[Failure] = [Busy, Http(503), Unreachable]
+  for error in errors {
     let (failed, _, _) = update(
       pending,
       DeleteFailed(2, "a", request, error),

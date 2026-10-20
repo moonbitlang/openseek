@@ -70,7 +70,7 @@ test "first Cloud submit creates once and sends its snapshot after creation" {
   let conversation = created.cloud.conversations["new-cloud"]
   assert_true(conversation.sending)
   assert_false(conversation.loading)
-  assert_eq(conversation.pending.unwrap().content, "First Cloud message")
+  assert_eq(conversation.pending.unwrap().content.text(), "First Cloud message")
   assert_eq(created.composer_input().draft.task, "First Cloud message")
   assert_true(
     created.composer_entry_retirements.contains(

@@ -246,7 +246,8 @@ export class CloudHarness {
     const body = request.postDataJSON();
     if (Object.keys(body).join(',') !== 'content') throw new Error('Cloud must send content without a model key');
     if (this.sendStatus !== 200) return this.sendErrorBody ? route.fulfill({ status: this.sendStatus, headers, contentType: 'text/plain', body: this.sendErrorBody }) : json({}, this.sendStatus);
-    if (!this.titles.get(session)) this.titles.set(session, body.content.trim().split('\n')[0].trim());
+    const text = typeof body.content === 'string' ? body.content : body.content.filter(part => part.type === 'text').map(part => part.text).join('');
+    if (!this.titles.get(session) && text.trim()) this.titles.set(session, text.trim().split('\n')[0].trim());
     const task = `fixture-task-${++this.taskCount}`;
     const data = this.streamEvents || [
       ['task_started', {}],

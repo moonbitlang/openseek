@@ -340,3 +340,137 @@ test "remote document selections retain bytes for confirmation instead of sendin
     is AttachmentConfirming(name="report.pdf"),
   )
 }
+
+///|
+test "blank Cloud confirms bytes locally and submits them without a workspace or file path" {
+  let input = {
+    ..Input::fixture(""),
+    identity: {
+      owner: @interop.Cloud(account="user", session="draft:1"),
+      archive_generation: 0,
+    },
+    root: None,
+    cloud_access: Some({ token: "fixture", epoch: 1, }),
+  }
+  let reading = attachment_step(
+    Model(input),
+    input,
+    ImageRead(input.identity, None, @image_input.Reading),
+  )
+  let chosen = attachment_step(
+    reading,
+    input,
+    ImageRead(
+      input.identity,
+      None,
+      @image_input.DocumentsReady(images=[], documents=[
+        {
+          name: "report.pdf",
+          data_base64: "JVBERg==",
+          native_path: Some("/private/browser/report.pdf"),
+        },
+      ]),
+    ),
+  )
+  let request = chosen.active(input).attachment_requests[0]
+  assert_true(
+    request.source is AttachmentBytes(name="report.pdf", data_base64="JVBERg=="),
+  )
+  assert_false(chosen.active(input).can_send(input))
+  let confirmed = attachment_step(
+    chosen,
+    input,
+    AttachmentConfirmed(input.identity, None, request.id),
+  )
+  assert_true(confirmed.active(input).can_send(input))
+  assert_true(
+    confirmed.active(input).attachment_requests[0].phase
+    is AttachmentStaged(name="report.pdf"),
+  )
+  let actions : Array[Action] = []
+  ignore(
+    confirmed.update(input, SubmitRequested, Msg::test_emit(), action => {
+      actions.push(action)
+      @cmd.none
+    }),
+  )
+  assert_true(
+    actions
+    is [
+      DraftAttachmentsSubmitted(
+        draft={ task: "", .. },
+        attachments=[AttachmentBytes(name="report.pdf", data_base64="JVBERg==")],
+        ..
+      ),
+    ],
+  )
+  let removed = attachment_step(
+    confirmed,
+    input,
+    AttachmentCancelled(input.identity, None, request.id),
+  )
+  assert_true(removed.active(input).attachment_requests.is_empty())
+}
+
+///|
+test "Cloud import failures keep the selected bytes for an explicit retry" {
+  let input = {
+    ..Input::fixture("inspect"),
+    identity: {
+      owner: @interop.Cloud(account="user", session="session"),
+      archive_generation: 0,
+    },
+    cloud_access: Some({ token: "fixture", epoch: 1, }),
+  }
+  let source = @protocol.AttachmentBytes(
+    name="report.pdf",
+    data_base64="JVBERg==",
+  )
+  let (entry, _) = Entry(input).prepare_attachments([source], Msg::test_emit())
+  let model = Model(input).with_entry(entry)
+  let confirmed = attachment_step(
+    model,
+    input,
+    AttachmentConfirmed(
+      input.identity,
+      input.root,
+      entry.attachment_requests[0].id,
+    ),
+  )
+  let failed = attachment_step(
+    confirmed,
+    input,
+    AttachmentImported(
+      input.identity,
+      input.root,
+      entry.attachment_requests[0].id,
+      Err("offline"),
+    ),
+  )
+  assert_eq(failed.active(input).attachment_requests[0].source, source)
+  assert_true(
+    failed.active(input).attachment_requests[0].phase
+    is AttachmentConfirming(name="report.pdf"),
+  )
+  assert_eq(failed.active(input).image_error, Some("offline"))
+  let refreshed = {
+    ..input,
+    cloud_access: Some({ token: "new-fixture", epoch: 2, }),
+  }
+  let stale = attachment_step(
+    confirmed,
+    refreshed,
+    AttachmentImported(
+      input.identity,
+      input.root,
+      entry.attachment_requests[0].id,
+      Ok("stale.pdf"),
+    ),
+  )
+  assert_true(stale.active(refreshed).draft.mentions.is_empty())
+  assert_eq(stale.active(refreshed).attachment_requests[0].source, source)
+  assert_true(
+    stale.active(refreshed).attachment_requests[0].phase
+    is AttachmentConfirming(_),
+  )
+}

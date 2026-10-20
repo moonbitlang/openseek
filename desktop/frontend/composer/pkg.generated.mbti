@@ -10,6 +10,7 @@ import {
   "moonbitlang/editor/base/common",
   "moonbitlang/openseek/deepseek",
   "moonbitlang/openseek_protocol",
+  "openseek_desktop/frontend/cloud_client",
   "openseek_desktop/frontend/i18n",
   "openseek_desktop/frontend/interop",
   "openseek_desktop/frontend/mention_context",
@@ -37,6 +38,7 @@ pub async fn stage_attachments(@interop.ChannelId, String, String, String, Array
 // Types and methods
 pub(all) enum Action {
   DraftSubmitted(identity~ : Identity, draft~ : Draft)
+  DraftAttachmentsSubmitted(identity~ : Identity, draft~ : Draft, attachments~ : Array[@protocol.AttachmentSource])
   FollowupSubmitted(identity~ : Identity, draft~ : Draft, choice~ : FollowupChoice)
   DraftPresenceChanged(identity~ : Identity, present~ : Bool, cleared_source~ : Draft?)
   ReviewChangesRemoved(identity~ : Identity, selections~ : Array[@mention_context.ReviewChanges])
@@ -222,6 +224,8 @@ pub(all) struct Input {
   shell_available : Bool
   history : Array[String]
   root : @common.Uri?
+  cloud_access : @cloud_client.Access?
+  staged_attachments : Array[@protocol.AttachmentSource]
   installed_skills : Array[@skills.InstalledItem]
   context_generation : Int32
   submission_sequence : Int32

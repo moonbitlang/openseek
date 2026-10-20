@@ -34,7 +34,7 @@ pub(all) struct Event {
 /// Only a submitted snapshot is retained here. The shared composer owns all
 /// editable drafts, their revisions, and delivery acknowledgement.
 pub struct Submission {
-  content : String
+  content : @wire.Content
   known_tasks : Array[String]
 } derive(Eq)
 
@@ -50,7 +50,9 @@ pub(all) struct Conversation {
   submission_sequence : Int32
   // Seed the shared composer after creation assigns a remote ID. Clear only
   // when the first prompt is admitted, not when its send fails.
-  initial_submission : String?
+  initial_submission : @composer.Draft?
+  initial_attachments : Array[@protocol.AttachmentSource]
+  uploads : Array[UploadedAttachment]
   pending : Submission?
   stream : StreamLease?
   task : String?
@@ -77,6 +79,8 @@ fn Conversation::empty() -> Conversation {
     history_required: true,
     submission_sequence: 0,
     initial_submission: None,
+    initial_attachments: [],
+    uploads: [],
     pending: None,
     stream: None,
     task: None,
@@ -98,6 +102,7 @@ pub struct Creation {
   request : Int32
   navigation : Int32
   submission : @composer.Draft?
+  attachments : Array[@protocol.AttachmentSource]
 } derive(Eq)
 
 ///|
@@ -162,32 +167,7 @@ pub fn State::empty() -> State {
 }
 
 ///|
-pub(all) enum Failure {
-  Unauthorized
-  Busy
-  Http(Int32)
-  Unreachable
-  Malformed
-  ServiceNotConfigured
-  CredentialServiceUnavailable
-  SignInFailed(String)
-}
-
-///|
-pub fn Failure::label(self : Failure) -> String {
-  match self {
-    Unauthorized => "Your account sign-in expired. Sign in again to continue."
-    Busy => "This conversation is already generating. Loading its history…"
-    Http(status) => "Cloud answered HTTP \{status}. Try again."
-    Unreachable => "Cloud is unreachable. Check your connection and try again."
-    Malformed => "Cloud returned an invalid response. Try again."
-    ServiceNotConfigured =>
-      "Cloud model credentials are not configured. Contact the service administrator."
-    SignInFailed(message) => message
-    CredentialServiceUnavailable =>
-      "The sign-in service is unavailable. Try again."
-  }
-}
+pub using @cloud_client {type Failure}
 
 ///|
 pub(all) enum Msg {
@@ -202,6 +182,11 @@ pub(all) enum Msg {
   Edited(Int32, String, Int32)
   EditFailed(Int32, String, Int32, Failure)
   Submit(@interop.ConversationIdentity, @composer.Draft)
+  SubmitAttachments(
+    @interop.ConversationIdentity,
+    @composer.Draft,
+    Array[@protocol.AttachmentSource]
+  )
   Listed(Int32, Int32, Array[Session])
   ListFailed(Int32, Int32, Failure)
   Created(Int32, Int32, String)
@@ -211,6 +196,8 @@ pub(all) enum Msg {
   StreamEvent(Int32, String, Int32, Event)
   StreamEnded(Int32, String, Int32)
   SendFailed(Int32, String, Int32, Failure)
+  AttachmentStored(Int32, String, Int32, @protocol.AttachmentSource, String)
+  MessagePrepared(Int32, String, Int32, @composer.Draft, @wire.Content)
   Poll(Int32, String, Int32)
 }
 

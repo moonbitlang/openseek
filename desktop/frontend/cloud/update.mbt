@@ -296,6 +296,7 @@ pub fn update(
           request,
           navigation,
           submission: None,
+          attachments: [],
         }),
         notice: None,
       }
@@ -323,14 +324,16 @@ pub fn update(
         ..Conversation::empty(),
         loading: false,
         history_required: false,
-        initial_submission: Some(draft.prompt()),
+        initial_submission: Some(draft),
+        initial_attachments: creation.attachments,
       }
       let (next, command) = { ..state, sessions, creation: None, }
         .replace(id, ready)
         .list(token, emit)
-      let (next, send, _) = update(
-        next,
-        Submit(@interop.Cloud(account~, session=id), draft),
+      let (next, send, _) = next.submit(
+        @interop.Cloud(account~, session=id),
+        draft,
+        creation.attachments,
         emit,
         token?,
         navigation~,
@@ -526,6 +529,11 @@ pub fn update(
         generating: history.generating,
         history_required: false,
         pending: None,
+        uploads: if accepted {
+          []
+        } else {
+          conversation.uploads
+        },
         // A successful read does not mean the failed send was admitted.
         notice: if conversation.pending is Some(_) && !accepted {
           conversation.notice
@@ -538,6 +546,11 @@ pub fn update(
           None
         } else {
           conversation.initial_submission
+        },
+        initial_attachments: if accepted {
+          []
+        } else {
+          conversation.initial_attachments
         },
       })
       let next = {
@@ -599,90 +612,10 @@ pub fn update(
       let (next, command) = state.load(id, token, emit)
       (next, command, None)
     }
-    Submit(owner, draft) => {
-      if state.draft_identity() == Some(owner) &&
-        state.creation is Some(creation) {
-        guard creation.submission is None &&
-          token is Some(_) &&
-          !draft.is_blank() &&
-          draft.images.is_empty() &&
-          draft.mentions.all(mention => mention.ref_ is File(..)) else {
-          return (state, @cmd.none, None)
-        }
-        let request = state.sequence + 1
-        let next = {
-          ..state,
-          sequence: request,
-          notice: None,
-          creation: Some({
-            ..creation,
-            request,
-            navigation,
-            submission: Some(draft),
-          }),
-        }
-        let (next, command) = next.create(token, emit)
-        return (next, command, None)
-      }
-      guard owner is @interop.Cloud(account~, session=id) &&
-        state.user_id == Some(account) &&
-        token is Some(token) &&
-        state.conversations.get(id) is Some(conversation) &&
-        state.can_send(id) &&
-        !draft.is_blank() &&
-        draft.mentions.all(mention => mention.ref_ is File(..)) &&
-        draft.images.is_empty() else {
-        return (state, @cmd.none, None)
-      }
-      let request = state.sequence + 1
-      let stream = StreamLease::new()
-      let prompt = draft.prompt()
-      let next = state.replace(id, {
-        ..conversation.clear_progress(),
-        request,
-        sending: true,
-        heartbeat: Some({
-          stage: @composer.Starting,
-          started_ms: None,
-          tokens: 0,
-        }),
-        stream: Some(stream),
-        history_required: true,
-        events: [],
-        task: None,
-        last_seq: None,
-        notice: None,
-        pending: Some({
-          content: prompt,
-          known_tasks: conversation.records
-          .filter(record => record.kind == "user")
-          .map(record => record.task_id),
-        }),
-      })
-      let command = @cmd.custom_cmd(scheduler => {
-        @js.Promise::from_async(() => {
-          let task : async () -> Msg = () => {
-            try {
-              guard stream.active else {
-                return StreamEnded(state.epoch, id, request)
-              }
-              send_message(token, id, prompt, stream, event => {
-                scheduler.add(
-                  emit(StreamEvent(state.epoch, id, request, event)),
-                )
-              })
-              StreamEnded(state.epoch, id, request)
-            } catch {
-              CloudError(error) => SendFailed(state.epoch, id, request, error)
-              _ => SendFailed(state.epoch, id, request, Unreachable)
-            }
-          }
-          scheduler.add(emit(task()))
-        })
-        |> ignore
-      })
-      ({ ..next, sequence: request, notice: None, }, command, None)
-    }
+    Submit(owner, draft) =>
+      state.submit(owner, draft, [], emit, token?, navigation~)
+    SubmitAttachments(owner, draft, attachments) =>
+      state.submit(owner, draft, attachments, emit, token?, navigation~)
     StreamEvent(epoch, id, request, event) => {
       guard epoch == state.epoch &&
         event.session_id == id &&
@@ -704,7 +637,7 @@ pub fn update(
           {
             ..event,
             kind: "user",
-            data: { "content": Json(submission.content) },
+            data: { "content": submission.content.to_json() },
           },
         ]
       } else if event.is_live_progress() {
@@ -723,6 +656,11 @@ pub fn update(
           None
         } else {
           conversation.pending
+        },
+        uploads: if admitted {
+          []
+        } else {
+          conversation.uploads
         },
         submission_sequence: conversation.submission_sequence +
         (if admitted { 1 } else { 0 }),
@@ -789,6 +727,151 @@ pub fn update(
       }
       (next, command, None)
     }
+    AttachmentStored(epoch, id, request, source, path) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.request == request &&
+        conversation.sending else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          uploads: [..conversation.uploads, { source, path, }],
+        }),
+        @cmd.none,
+        None,
+      )
+    }
+    MessagePrepared(epoch, id, request, draft, content) => {
+      guard epoch == state.epoch &&
+        state.conversations.get(id) is Some(conversation) &&
+        conversation.request == request &&
+        conversation.sending &&
+        conversation.pending is Some(pending) else {
+        return (state, @cmd.none, None)
+      }
+      (
+        state.replace(id, {
+          ..conversation,
+          pending: Some({ ..pending, content, }),
+          initial_submission: conversation.initial_submission.map(_ => draft),
+          initial_attachments: [],
+        }),
+        @cmd.none,
+        None,
+      )
+    }
   }
   (next, command, select)
+}
+
+///|
+fn State::submit(
+  self : State,
+  owner : @interop.ConversationIdentity,
+  draft : @composer.Draft,
+  attachments : Array[@protocol.AttachmentSource],
+  emit : @cmd.Emit[Msg],
+  token? : String,
+  navigation~ : Int32,
+) -> (State, @cmd.Cmd, String?) {
+  let state = self
+  if state.draft_identity() == Some(owner) && state.creation is Some(creation) {
+    guard creation.submission is None &&
+      token is Some(_) &&
+      (!draft.is_blank() || !attachments.is_empty()) &&
+      draft.mentions.all(mention => mention.ref_ is File(..)) else {
+      return (state, @cmd.none, None)
+    }
+    let request = state.sequence + 1
+    let next = {
+      ..state,
+      sequence: request,
+      notice: None,
+      creation: Some({
+        ..creation,
+        request,
+        navigation,
+        submission: Some(draft),
+        attachments,
+      }),
+    }
+    let (next, command) = next.create(token, emit)
+    return (next, command, None)
+  }
+  guard owner is @interop.Cloud(account~, session=id) &&
+    state.user_id == Some(account) &&
+    token is Some(token) &&
+    state.conversations.get(id) is Some(conversation) &&
+    state.can_send(id) &&
+    (!draft.is_blank() || !attachments.is_empty()) &&
+    draft.mentions.all(mention => mention.ref_ is File(..)) else {
+    return (state, @cmd.none, None)
+  }
+  let request = state.sequence + 1
+  let stream = StreamLease::new()
+  let prompt = prompt_content(draft) catch {
+    CloudError(failure) =>
+      return (
+        state.replace(id, { ..conversation, notice: Some(failure.label()), }),
+        @cmd.none,
+        None,
+      )
+  }
+  let next = state.replace(id, {
+    ..conversation.clear_progress(),
+    request,
+    sending: true,
+    heartbeat: Some({ stage: @composer.Starting, started_ms: None, tokens: 0, }),
+    stream: Some(stream),
+    history_required: true,
+    events: [],
+    task: None,
+    last_seq: None,
+    notice: None,
+    pending: Some({
+      content: prompt,
+      known_tasks: conversation.records
+      .filter(record => record.kind == "user")
+      .map(record => record.task_id),
+    }),
+  })
+  let command = @cmd.custom_cmd(scheduler => {
+    @js.Promise::from_async(() => {
+      let task : async () -> Msg = () => {
+        try {
+          guard stream.active else {
+            return StreamEnded(state.epoch, id, request)
+          }
+          let prepared = prepare_submission(
+            token,
+            id,
+            draft,
+            attachments,
+            conversation.uploads,
+            (source, path) => {
+              scheduler.add(
+                emit(AttachmentStored(state.epoch, id, request, source, path)),
+              )
+            },
+          )
+          let prompt = prompt_content(prepared)
+          scheduler.add(
+            emit(MessagePrepared(state.epoch, id, request, prepared, prompt)),
+          )
+          send_message(token, id, prompt, stream, event => {
+            scheduler.add(emit(StreamEvent(state.epoch, id, request, event)))
+          })
+          StreamEnded(state.epoch, id, request)
+        } catch {
+          CloudError(error) => SendFailed(state.epoch, id, request, error)
+          _ => SendFailed(state.epoch, id, request, Unreachable)
+        }
+      }
+      scheduler.add(emit(task()))
+    })
+    |> ignore
+  })
+  ({ ..next, sequence: request, notice: None, }, command, None)
 }

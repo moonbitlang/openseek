@@ -235,6 +235,8 @@ fn Model::composer_input(self : Model) -> @composer.Input {
     shell_available: conv.queue_edit is None,
     history: conv.sent_prompts(shell=conv.queue_edit is None),
     root: self.conversation_root(conv),
+    cloud_access: None,
+    staged_attachments: [],
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
     turn_id: match conv.run {
@@ -408,6 +410,8 @@ fn Model::dormant_composer_input(self : Model) -> @composer.Input {
     shell_available: false,
     history: [],
     root: None,
+    cloud_access: None,
+    staged_attachments: [],
     installed_skills: self.installed_skills,
     context_generation: self.composer_context_generation,
     turn_id: None,

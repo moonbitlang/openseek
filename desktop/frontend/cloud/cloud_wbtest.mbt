@@ -153,7 +153,8 @@ test "Busy cannot allow another send before authoritative history recovers" {
 ///|
 test "history recovery clears a send error only when the pending submission was admitted" {
   let emit : @cmd.Emit[Msg] = _ => @cmd.none
-  for error in [Http(422), Unreachable] {
+  let errors : Array[Failure] = [Http(422), Unreachable]
+  for error in errors {
     for admitted in [false, true] {
       let state = {
         ..State::empty(),

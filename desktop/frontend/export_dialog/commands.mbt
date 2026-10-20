@@ -56,7 +56,7 @@ fn Model::share(
             )
             match @cloud.share(account.token, session, idempotency_key) {
               Ok(url) => @protocol.Shared(url~)
-              Err(@cloud.Unauthorized) => raise AccountUnauthorized
+              Err(@cloud.Failure::Unauthorized) => raise AccountUnauthorized
               Err(error) => raise ExportError(error.label())
             }
           }
@@ -148,7 +148,7 @@ async fn capture(
       }
       let events = match @cloud.export_record(account.token, session) {
         Ok(events) => events
-        Err(@cloud.Unauthorized) => raise AccountUnauthorized
+        Err(@cloud.Failure::Unauthorized) => raise AccountUnauthorized
         Err(error) => raise ExportError(error.label())
       }
       let exporter = @viz_export.StandaloneExport(

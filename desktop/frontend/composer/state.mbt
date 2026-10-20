@@ -171,7 +171,11 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
       ..self,
       task,
       mentions: self.mentions.filter(mention => {
-        !(mention.ref_ is @mention_context.ReviewChanges(_))
+        !(mention.ref_ is @mention_context.ReviewChanges(_)) &&
+        (
+          !source.mentions.contains(mention) ||
+          incoming.mentions.contains(mention)
+        )
       }),
     }
     for mention in incoming.mentions {
@@ -194,8 +198,21 @@ fn Draft::reconciled(self : Draft, source~ : Draft, incoming~ : Draft) -> Draft 
   } else if self.images == source.images {
     incoming.images
   } else {
+    let images = self.images.copy()
+    let retained = incoming.images.copy()
+    for image in source.images {
+      // Remove each acknowledged occurrence once: adding the same image
+      // again while its first copy is sending still creates a new draft.
+      match retained.search_by(existing => existing == image) {
+        Some(index) => ignore(retained.remove(index))
+        None =>
+          if images.search_by(existing => existing == image) is Some(index) {
+            ignore(images.remove(index))
+          }
+      }
+    }
     [
-      ..self.images,
+      ..images,
       ..incoming.images.filter(image => {
         !source.images.contains(image) && !self.images.contains(image)
       }),

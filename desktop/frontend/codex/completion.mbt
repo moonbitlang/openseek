@@ -423,6 +423,8 @@ pub fn State::composer_input(
     root: self
     .active_placement(context.channel)
     .bind(placement => placement.checkout_root()),
+    cloud_access: None,
+    staged_attachments: [],
     installed_skills: self.installed_codex_skills(),
     context_generation: 0,
     turn_id: active_turn,
@@ -629,6 +631,7 @@ fn State::apply_composer_action(
     | @composer.ApprovalAnswered(..)
     | @composer.ApiSetupRequested(..)
     | @composer.FollowupSubmitted(..)
+    | @composer.DraftAttachmentsSubmitted(..)
     | @composer.QueuedInputEditRequested(..)
     | @composer.QueuedInputSteerRequested(..)
     | @composer.QueuedInputDeleteRequested(..)

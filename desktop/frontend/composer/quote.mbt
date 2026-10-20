@@ -130,7 +130,6 @@ fn Model::quote_replied(
       ..entry,
       draft: { ..draft, task, images: [..entry.draft.images, ..reply.images], },
       completion: None,
-      pending_submission: None,
     },
     @cmd.none,
     action_emit,

@@ -99,7 +99,7 @@ test('Cloud file links and mentions reuse source previews and the composer envel
   await expect(source(page).locator('h1')).toHaveCount(0);
   await page.locator('.workspace-file-card').click();
   await expect(source(page)).toContainText('<h1>Cloud source</h1>');
-  await expect(page.locator('.composer-attach')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Attach files', exact: true })).toBeVisible();
   const input = page.locator('#task');
   const directories = () => cloud.fileRequests.filter(request => !request.content && !request.index);
   const indexes = () => cloud.fileRequests.filter(request => request.index);

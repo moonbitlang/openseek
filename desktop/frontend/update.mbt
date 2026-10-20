@@ -2547,6 +2547,12 @@ fn update_msg(
               @cloud.Submit(identity.owner, draft),
               model,
             )
+          @composer.DraftAttachmentsSubmitted(identity~, draft~, attachments~) =>
+            return update_cloud(
+              dispatch,
+              @cloud.SubmitAttachments(identity.owner, draft, attachments),
+              model,
+            )
           @composer.MentionOpened(identity~, mention~) => {
             guard mention.ref_ is File(path~) else { return (@cmd.none, model) }
             return open_cloud_file(
@@ -2571,6 +2577,7 @@ fn update_msg(
         }
       }
       match action {
+        @composer.DraftAttachmentsSubmitted(..) => (@cmd.none, model)
         @composer.ModelMenuToggled(..)
         | @composer.ReasoningMenuToggled(..)
         | @composer.SelectMenuDismissed(..)
