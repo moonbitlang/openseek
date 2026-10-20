@@ -17,26 +17,12 @@ import {
   "moonbitlang/async/os_error",
 }
 
-// The bundled workflows run from this embedded copy; `share/workflow/` stays
-// the editable source and an installation's readable reference.
-dev_build(
-  rule: "mbtx_bundle",
-  input: [
-    "../../share/workflow/change-review.mbtx",
-    "../../share/workflow/check-json.mbtx",
-    "../../share/workflow/check-test.mbtx",
-    "../../share/workflow/check.mbtx",
-    "../../share/workflow/ci-watch.mbtx",
-    "../../share/workflow/fix-deprecations.mbtx",
-    "../../share/workflow/info-fmt.mbtx",
-    "../../share/workflow/read.mbtx",
-    "../../share/workflow/repo-map.mbtx",
-    "../../share/workflow/review.mbtx",
-    "../../share/workflow/rg.mbtx",
-    "../../share/workflow/test.mbtx",
-  ],
-  output: "generated_bundled_workflows.mbt",
-)
+// The bundled workflows run from the embedded copy in
+// `generated_bundled_workflows.mbt`; `share/workflow/` stays the editable
+// source and an installation's readable reference. `just bundle-workflows`
+// regenerates the copy and a test here fails while it is stale. It is not a
+// `dev_build`: inputs outside the package directory need `..`, and on Windows
+// moon joins them onto a `\\?\` package root, where `..` is invalid.
 
 warnings = "+unnecessary_annotation"
 

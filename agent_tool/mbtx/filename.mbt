@@ -82,7 +82,7 @@ async test "every share/workflow script is embedded verbatim and named in the hi
         .text()
         .replace_all(old="\r\n", new="\n"),
       ),
-      msg="stale embedded copy of \{name}; run moon check to regenerate",
+      msg="stale embedded copy of \{name}; run `just bundle-workflows`",
     )
     assert_true(
       bundled_workflow_hint.contains("@builtin/\{name}"),

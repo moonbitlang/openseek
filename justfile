@@ -75,6 +75,10 @@ prompt:
 check-prompt:
     moon run scripts/md_to_mbt_string -- --check prompt/default_prompt.mbt.md prompt/generated_default_prompt.mbt
 
+# Regenerate the embedded copy of the bundled `share/workflow` scripts.
+bundle-workflows:
+    moonx scripts/mbtx_bundle.mbtx agent_tool/mbtx/generated_bundled_workflows.mbt share/workflow
+
 # Import the latest markdown build (or a specified commit) and regenerate the prompt.
 update-docs commit="latest":
     moon run scripts/update-moonbit-docs.mbtx {{quote(commit)}}

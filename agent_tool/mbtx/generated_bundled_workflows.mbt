@@ -1,4 +1,4 @@
-// Generated from share/workflow/*.mbtx by moon dev_build. DO NOT EDIT.
+// Generated from share/workflow/*.mbtx by scripts/mbtx_bundle.mbtx. DO NOT EDIT.
 
 ///|
 /// The source of the bundled workflow `@builtin/<name>`, or `None`.
