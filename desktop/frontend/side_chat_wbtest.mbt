@@ -375,6 +375,18 @@ test "a restored side chat waits for its worktree registry" {
   assert_true(waiting.conversation_placement(side) is None)
   assert_true(waiting.conversation_root(side) is None)
   assert_true(waiting.side_chat_composer_input(side_chat_owner()).root is None)
+  // The column offers the retry; the dock, which could not act on it, does
+  // not repeat the notice.
+  assert_true(
+    waiting.composer_input_for(side, surface=Column).presentation.context.contains(
+      @composer.WorktreePlacementNotice,
+    ),
+  )
+  assert_false(
+    waiting.side_chat_composer_input(side_chat_owner()).presentation.context.contains(
+      @composer.WorktreePlacementNotice,
+    ),
+  )
   let (_, loaded) = update(
     dispatch,
     on_home(

@@ -118,8 +118,11 @@ fn Model::composer_input_for(
   // The BYOK reminder: readiness is otherwise folded silently into Send's
   // availability, and the top-bar status is owned by the run state — without
   // this notice a dismissed setup modal leaves a greyed Send with no
-  // explanation and no way back to the form.
-  if self.api_setup_banner_visible() {
+  // explanation and no way back to the form. Like the checkout notices
+  // below, it is the column's: its controls act on the window and on the
+  // conversation's checkout, which a side chat shares, so the dock does not
+  // repeat it.
+  if surface is Column && self.api_setup_banner_visible() {
     let text = if self.settings_status() is SetupRequired {
       shell_text(self.locale, NoEndpoint)
     } else if self.api_provider is Glm {
@@ -212,6 +215,7 @@ fn Model::composer_input_for(
     NotCompacting => ()
   }
   match checkout {
+    _ if surface is Dock => ()
     None => context.push(@composer.WorktreePlacementNotice)
     Some(@interop.MissingWorktree(name~, ..)) =>
       context.push(
