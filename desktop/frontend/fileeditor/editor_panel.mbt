@@ -1320,7 +1320,7 @@ fn after_render_effect(action : () -> Unit) -> @cmd.Cmd {
 /// after-render layout pass: a sibling host may have just left `display: none`,
 /// where its child widget could only measure Monaco's 5px minimum.
 fn show_file_in_viewer(
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   root~ : @common.Uri?,
   name : String,
   content : String,
@@ -1491,7 +1491,9 @@ fn show_file_in_viewer(
     // deleted preview or a notice document takes neither.
     viewer_state.document = Some(document)
     viewer_state.live = live
-    viewer_state.navigation = navigation_context_for_file(owner, root, document)
+    viewer_state.navigation = owner
+      .host()
+      .bind(host => navigation_context_for_file(host, root, document))
     // Commenting (select → inline input → composer chip) is for real files;
     // a notice document has nothing behind it to comment on.
     if viewer_state.services is Some(services) {
@@ -1515,7 +1517,10 @@ fn show_file_in_viewer(
       )
       // Code, rendered Markdown, and modified diff panes share the live
       // resource's feedback permission.
-      services.feedback.set_feedback_enabled(uri, live)
+      services.feedback.set_feedback_enabled(
+        uri,
+        live && owner.host() is Some(_),
+      )
       if live && !show_markdown {
         // A fresh document view starts with no bubbles (comments become
         // chips the moment they are filed, so anything lingering here is a
@@ -1542,7 +1547,9 @@ fn show_file_in_viewer(
     }
     match diff {
       Some((original, modified)) =>
-        show_diff_comparison(owner, name, uri, document, original, modified)
+        if owner is @interop.Host(host) {
+          show_diff_comparison(host, name, uri, document, original, modified)
+        }
       // The sibling comparison is intentionally parked when the source
       // surface is active or a replacement pair is still loading. CSS alone
       // selects the visible surface; keeping this bounded two-model cache

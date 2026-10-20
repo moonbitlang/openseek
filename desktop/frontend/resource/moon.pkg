@@ -2,6 +2,8 @@ import {
   "moonbitlang/editor/base/common",
   "openseek_desktop/frontend/pathx",
   "openseek_desktop/frontend/interop",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/x/crypto",
 }
 
 supported_targets = "js"

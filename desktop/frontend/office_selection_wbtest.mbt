@@ -209,7 +209,10 @@ test "cancel and stale Office confirmation leave the composer unchanged" {
   assert_true(cancelled.file_panel.office_selection is None)
   assert_true(cancelled.file_panel.office_selection_comment is None)
   assert_true(cancelled.active_conversation().unwrap().mentions.is_empty())
-  let other = { ..ctx, owner: { ..ctx.owner, session: "other", }, }
+  let other = {
+    ..ctx,
+    owner: @interop.Host({ ..ctx.owner.host().unwrap(), session: "other", }),
+  }
   let (_, stale) = update(
     test_dispatch(),
     root_office_selection(other, path, "Late passage"),

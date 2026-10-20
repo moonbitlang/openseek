@@ -100,7 +100,7 @@ test "PDF callbacks belong to the active file revision and runtime" {
   assert_false(
     state.accepts_pdf_callback(
       ctx,
-      { ..ctx.owner, session: "other", },
+      @interop.Host({ ..ctx.owner.host().unwrap(), session: "other", }),
       0,
       path,
       "pdf:1",

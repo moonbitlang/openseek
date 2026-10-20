@@ -94,16 +94,16 @@ pub fn open_browser_for(
   owner : @interop.ConversationKey,
   id : Int32,
 ) -> State {
-  if state.owner == Some(owner) {
+  if state.owner == Some(@interop.Host(owner)) {
     return open_browser(state, id)
   }
   let tab = DockTab::Browser(id~)
-  let tabs = match state.remembered.get(owner) {
+  let tabs = match state.remembered.get(@interop.Host(owner)) {
     Some(parked) => [..parked.tabs, tab]
     None => [tab]
   }
   let remembered = state.remembered.copy()
-  remembered[owner] = { tabs, active: Some(tab), }
+  remembered[@interop.Host(owner)] = { tabs, active: Some(tab), }
   { ..state, remembered, }
 }
 
@@ -146,12 +146,12 @@ pub fn resolve_pick(state : State, tab : DockTab) -> State {
 /// conversation's parked strip (or an empty one). Pure — reloading the
 /// restored documents is the content subsystems' business, driven by their
 /// own sync against the fresh projection.
-pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
+pub fn sync(state : State, owner : @interop.ConversationIdentity) -> State {
   if state.owner is Some(current) && current == owner {
     return state
   }
   let remembered = state.remembered.copy()
-  if state.owner is Some(previous) && !previous.session.is_empty() {
+  if state.owner is Some(previous) && !previous.session().is_empty() {
     remembered[previous] = { tabs: state.tabs, active: state.active, }
   }
   let (tabs, active) = match remembered.get(owner) {
@@ -159,6 +159,24 @@ pub fn sync(state : State, owner : @interop.ConversationKey) -> State {
     None => ([], (None : DockTab?))
   }
   { owner: Some(owner), tabs, active, remembered, }
+}
+
+///|
+/// Account credentials changed. Retire that account's file bookmarks as well
+/// as its live strip; Host strips and other owners keep their existing state.
+pub fn forget_cloud_account(state : State, account : String) -> State {
+  let remembered = state.remembered.copy()
+  for owner in remembered.keys().to_array() {
+    if owner is @interop.Cloud(account=current, ..) && current == account {
+      remembered.remove(owner)
+    }
+  }
+  if state.owner is Some(@interop.Cloud(account=current, ..)) &&
+    current == account {
+    { owner: None, tabs: [], active: None, remembered, }
+  } else {
+    { ..state, remembered, }
+  }
 }
 
 ///|

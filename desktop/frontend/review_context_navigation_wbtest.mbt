@@ -51,7 +51,7 @@ fn review_inventory_reply(
 ) -> Msg {
   FileEditor(
     @fileeditor.ChangesLoaded(
-      owner=file_ctx(model).owner,
+      owner=file_ctx(model).owner.host().unwrap(),
       generation=model.file_panel.changes_generation,
       repository=true,
       head=Some("baseline"),
@@ -105,14 +105,14 @@ test "the latest saved review jump wins and rejects unrelated inventory replies"
   for
     stale in [
       @fileeditor.ChangesLoaded(
-        owner={ ..owner, session: "another-session", },
+        owner={ ..owner.host().unwrap(), session: "another-session", },
         generation=last.file_panel.changes_generation,
         repository=true,
         head=Some("baseline"),
         files=[],
       ),
       @fileeditor.ChangesFailed(
-        owner~,
+        owner=owner.host().unwrap(),
         generation=last.file_panel.changes_generation - 1,
         message="obsolete failure",
       ),
@@ -211,7 +211,7 @@ test "saved review jumps distinguish a missing change from an inventory failure"
       test_dispatch(),
       FileEditor(
         @fileeditor.ChangesFailed(
-          owner=file_ctx(model).owner,
+          owner=file_ctx(model).owner.host().unwrap(),
           generation=model.file_panel.changes_generation,
           message="Git is unavailable",
         ),

@@ -196,6 +196,7 @@ fn explorer_tab(
   mode : ExplorerMode,
   title : String,
   children : Array[@html.Html],
+  single~ : Bool = false,
 ) -> @html.Html {
   let active = selected == mode
   @html.button(
@@ -209,7 +210,12 @@ fn explorer_tab(
       .aria_controls(ExplorerPanelId)
       .aria_selected(active.to_string())
       .on_keydown(event => {
-        match explorer_tab_key_target(mode, event.key()) {
+        match
+          (if single {
+            None
+          } else {
+            explorer_tab_key_target(mode, event.key())
+          }) {
           Some(target) => {
             event.prevent_default()
             @cmd.batch([
@@ -664,25 +670,29 @@ fn tree_pane(
       Some(errors.join("\n"))
     }
   }
-  let inventory = if ctx.placement is None {
+  let inventory = if !ctx.checkout_ready() && ctx.placement is None {
     [@html.div(class="file-panel-empty", ui(locale, WaitingPlacement))]
   } else if ctx.placement is Some(@interop.MissingWorktree(..)) {
     [@html.div(class="file-panel-empty", ui(locale, MissingCheckout))]
-  } else if ctx.owner.session.is_empty() {
+  } else if ctx.owner.session().is_empty() {
     [@html.div(class="file-panel-empty", ui(locale, NoConversation))]
   } else {
     match state.explorer_mode {
       ExplorerFiles => file_inventory(locale~, dispatch, state, ctx)
       ExplorerChanges => [review_git_layout(locale~, dispatch, state, ctx)]
       ExplorerSearch =>
-        [
-          state.search.explorer_view(
-            locale~,
-            ctx.search_input(),
-            dispatch.map(msg => Search(msg)),
-            (path, range) => dispatch(SearchMatchSelected(path~, range~)),
-          ),
-        ]
+        match ctx.search_input() {
+          Some(input) =>
+            [
+              state.search.explorer_view(
+                locale~,
+                input,
+                dispatch.map(msg => Search(msg)),
+                (path, range) => dispatch(SearchMatchSelected(path~, range~)),
+              ),
+            ]
+          None => []
+        }
     }
   }
   @html.div(class="file-tree-pane", [
@@ -709,29 +719,38 @@ fn tree_pane(
             @icons.icon(@icons.icon_folder),
             @html.span(class="visually-hidden", ui(locale, FilesLabel)),
           ],
+          single=ctx.owner.host() is None,
         ),
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerChanges,
-          ui(locale, ChangedFilesHint),
-          // Keep the name and count in the accessibility tree, as before.
-          [
-            @icons.icon(@icons.icon_diff_multiple),
-            @html.span(class="visually-hidden", ui(locale, ChangesLabel)),
-            change_count(state.changes),
-          ],
-        ),
-        explorer_tab(
-          dispatch,
-          state.explorer_mode,
-          ExplorerSearch,
-          ui(locale, SearchWorkspace),
-          [
-            @icons.icon(@icons.icon_search),
-            @html.span(class="visually-hidden", ui(locale, SearchLabel)),
-          ],
-        ),
+        if ctx.owner.host() is Some(_) {
+          explorer_tab(
+            dispatch,
+            state.explorer_mode,
+            ExplorerChanges,
+            ui(locale, ChangedFilesHint),
+            // Keep the name and count in the accessibility tree, as before.
+            [
+              @icons.icon(@icons.icon_diff_multiple),
+              @html.span(class="visually-hidden", ui(locale, ChangesLabel)),
+              change_count(state.changes),
+            ],
+          )
+        } else {
+          @html.nothing
+        },
+        if ctx.owner.host() is Some(_) {
+          explorer_tab(
+            dispatch,
+            state.explorer_mode,
+            ExplorerSearch,
+            ui(locale, SearchWorkspace),
+            [
+              @icons.icon(@icons.icon_search),
+              @html.span(class="visually-hidden", ui(locale, SearchLabel)),
+            ],
+          )
+        } else {
+          @html.nothing
+        },
       ],
     ),
     @html.div(
@@ -2090,7 +2109,8 @@ fn office_viewer_toolbar(
         type_="button",
         class="office-viewer-control",
         title=ui(locale, OfficeRegion),
-        disabled=state.office_region_request is Some(_) ||
+        disabled=ctx.owner.host() is None ||
+          state.office_region_request is Some(_) ||
           state.pending_region_feedback(ctx) is Some(_) ||
           state.has_pinned_office_selection(ctx),
         on_click=dispatch(OfficeRegionRequested),
@@ -2461,7 +2481,8 @@ fn mbti_view_toolbar(
 /// exact basename is `moon.mod`. Reviews and historical comparisons retain
 /// their source/diff surfaces even if their path names a module manifest.
 fn moon_mod_view_available(state : State, ctx : Ctx) -> Bool {
-  guard ctx.active_history_diff is None &&
+  guard ctx.owner.host() is Some(_) &&
+    ctx.active_history_diff is None &&
     ctx.active_file is Some(path) &&
     ctx.relative(path) is Some(_) else {
     return false

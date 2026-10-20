@@ -9,6 +9,23 @@
 pub const Scheme : String = "openseek"
 
 ///|
+/// Cloud files have no Host channel. The origin, account and session bind
+/// document identity; request epochs separately fence account lifecycles.
+pub fn cloud_root(
+  origin : String,
+  account : String,
+  session : String,
+) -> @common.Uri? {
+  let identity = "\{origin.length()}:\{origin}\{account.length()}:\{account}\{session.length()}:\{session}"
+  let authority = @crypto.bytes_to_hex_string(
+    @crypto.sha256(@utf8.encode(identity)),
+  )
+  Some(@common.Uri::from(scheme="openseek-cloud", authority~, path="/")) catch {
+    _ => None
+  }
+}
+
+///|
 /// Bind a protocol resource path to the channel whose backend produced it.
 /// The backend has already converted its native absolute path and rejected
 /// UNC; this boundary independently rejects non-rooted and double-rooted
@@ -78,8 +95,17 @@ pub fn join_relative(uri : @common.Uri, child : @pathx.Relative) -> @common.Uri 
 /// Whether `path` is this resource or a descendant of it. URI comparison
 /// requires the same scheme and device authority before inspecting segments.
 pub fn contains(root : @common.Uri, path : @common.Uri) -> Bool {
-  channel(root) is Some(_) &&
-  channel(path) is Some(_) &&
+  (
+    channel(root) is Some(_) ||
+    (
+      root.scheme == "openseek-cloud" &&
+      !root.authority.is_empty() &&
+      root.query.is_empty() &&
+      root.fragment.is_empty()
+    )
+  ) &&
+  path.query.is_empty() &&
+  path.fragment.is_empty() &&
   @common.ext_uri.is_equal_or_parent(path, root)
 }
 

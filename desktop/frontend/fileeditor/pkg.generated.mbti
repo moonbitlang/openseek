@@ -136,11 +136,19 @@ pub(all) struct ChangedFileReview {
 pub fn ChangedFileReview::equal(Self, Self) -> Bool
 pub fn ChangedFileReview::not_equal(Self, Self) -> Bool
 
+pub(all) struct CloudFiles {
+  epoch : Int32
+  token : String
+} derive(Eq)
+pub fn CloudFiles::equal(Self, Self) -> Bool
+pub fn CloudFiles::not_equal(Self, Self) -> Bool
+
 pub(all) struct Ctx {
   locale : @i18n.Locale
   model : String
   thinking : @protocol.OpenSeekThinking?
-  owner : @interop.ConversationKey
+  owner : @interop.ConversationIdentity
+  cloud_files : CloudFiles?
   request_epoch : Int32
   watch_namespace : String
   placement : @interop.CheckoutPlacement?
@@ -159,6 +167,7 @@ pub(all) struct Ctx {
 pub fn Ctx::equal(Self, Self) -> Bool
 pub fn Ctx::not_equal(Self, Self) -> Bool
 pub fn Ctx::observed_files(Self) -> Array[@common.Uri]
+pub fn Ctx::root(Self) -> @common.Uri?
 
 pub(all) struct Doc {
   name : String
@@ -318,7 +327,7 @@ pub(all) enum Msg {
   Search(@grep_search.Msg)
   SearchMatchSelected(path~ : String, range~ : @common.Range)
   SemanticSelectionChanged(owner~ : @interop.ConversationKey, reference~ : @mention_context.SemanticSearchReference?)
-  OfficeSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, sig~ : String, selection~ : String)
+  OfficeSelectionChanged(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, selection~ : String)
   OfficeSelectionConfirmed(OfficeSelectionPreview)
   OfficeFeedbackChanged(OfficeSelectionPreview, String)
   OfficeFeedbackSubmitted(OfficeSelectionPreview, String, apply~ : Bool)
@@ -330,11 +339,11 @@ pub(all) enum Msg {
   OfficeZoomChanged(String)
   OfficeFitWidth
   OfficePagesToggled
-  OfficeWidthFitted(@interop.ConversationKey, Int32, @common.Uri, Int32)
+  OfficeWidthFitted(@interop.ConversationIdentity, Int32, @common.Uri, Int32)
   OfficeSearchChanged(String)
   OfficeSystemFontsToggled
-  PdfStateChanged(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, event~ : String)
-  PdfSelectionChanged(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, selection~ : String)
+  PdfStateChanged(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, event~ : String)
+  PdfSelectionChanged(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, sig~ : String, generation~ : Int32, selection~ : String)
   OfficeRegionRequested
   OfficeRegionFinished(OfficeRegionRequest, Result[@office_capture.Capture, String]?)
   OfficeRegionFeedbackChanged(OfficeRegionPreview, String)
@@ -362,8 +371,8 @@ pub(all) enum Msg {
   DirExpand(@pathx.Relative)
   DirToggle(@pathx.Relative)
   EnsureFileIndex
-  DirLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @pathx.Relative, entries~ : Array[FileEntry])
-  DirFailed(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @pathx.Relative, message~ : String)
+  DirLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, entries~ : Array[FileEntry])
+  DirFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @pathx.Relative, message~ : String)
   FilesIndexed(owner~ : @interop.ConversationKey, epoch~ : Int32, files~ : Array[@pathx.Relative], truncated~ : Bool)
   FileIndexFailed(owner~ : @interop.ConversationKey, epoch~ : Int32)
   ChangesLoaded(owner~ : @interop.ConversationKey, generation~ : Int32, repository~ : Bool, head~ : String?, files~ : Array[ChangedFile])
@@ -412,11 +421,11 @@ pub(all) enum Msg {
   HistoryBlobLoaded(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, blob~ : @protocol.GitOriginalFileReply)
   HistoryBlobFailed(owner~ : @interop.ConversationKey, key~ : String, generation~ : Int32, side~ : HistoryDiffSide, message~ : String)
   OpenNavigationLocation(owner~ : @interop.ConversationKey, path~ : @pathx.Relative, range~ : @common.Range)
-  FileLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int32?, review_generation~ : Int32?, range~ : @common.Range?, annotation~ : String?)
-  FileFailed(owner~ : @interop.ConversationKey, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : String)
+  FileLoaded(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, name~ : String, file~ : FileContent, file_link_generation~ : Int32?, review_generation~ : Int32?, range~ : @common.Range?, annotation~ : String?)
+  FileFailed(owner~ : @interop.ConversationIdentity, epoch~ : Int32, path~ : @common.Uri, file_link_generation~ : Int32?, review_generation~ : Int32?, message~ : String)
   FileWatchFailed(channel~ : @interop.ChannelId, root~ : @common.Uri, generation~ : String, message~ : String)
   FsChanged(root~ : @common.Uri, generation~ : String, changes~ : Array[FileChange]?)
-  RunSettled(owner~ : @interop.ConversationKey)
+  RunSettled(owner~ : @interop.ConversationIdentity)
   RefreshExternalFiles
   StatsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, stats~ : Array[FileStat], recheck_diagnostics~ : Bool)
   DiagnosticsLoaded(owner~ : @interop.ConversationKey, epoch~ : Int32, absolute~ : @common.Uri, diagnostics~ : Array[@protocol.LspDiagnostic])
@@ -655,7 +664,8 @@ pub(all) struct SemanticReviewLiveDocument {
 } derive(Eq, @debug.Debug)
 
 pub(all) struct State {
-  owner : @interop.ConversationKey?
+  owner : @interop.ConversationIdentity?
+  cloud_epoch : Int32?
   placement : ReconciledPlacement
   tree_open : Bool
   office_zoom : Int32
@@ -740,9 +750,9 @@ pub(all) struct State {
   index : FileIndex
   error : String?
 } derive(Eq)
-pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationKey, Int32, @common.Uri, String) -> Bool
+pub fn State::accepts_office_callback(Self, Ctx, @interop.ConversationIdentity, Int32, @common.Uri, String) -> Bool
 pub fn State::accepts_office_region(Self, Ctx, OfficeRegionRequest) -> Bool
-pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationKey, Int32, @common.Uri, String, Int32) -> Bool
+pub fn State::accepts_pdf_callback(Self, Ctx, @interop.ConversationIdentity, Int32, @common.Uri, String, Int32) -> Bool
 pub fn State::accepts_review_context(Self, @mention_context.ReviewChanges) -> Bool
 pub fn State::dismiss_office_selection(Self, Ctx, OfficeSelectionPreview) -> (@cmd.Cmd, Self)
 pub fn State::dismiss_pdf_capture(Self, Ctx, PdfCapturePreview) -> (@cmd.Cmd, Self)
@@ -756,7 +766,7 @@ pub fn State::pending_office_selection(Self, Ctx) -> OfficeSelectionPreview?
 pub fn State::pending_pdf_capture(Self, Ctx) -> PdfCaptureDraft?
 pub fn State::pending_region_feedback(Self, Ctx) -> RegionFeedbackDraft?
 pub fn State::polled_files(Self, Ctx) -> Array[@common.Uri]
-pub fn State::prepare_owner(Self, @interop.ConversationKey, Array[@common.Uri]) -> Self
+pub fn State::prepare_owner(Self, @interop.ConversationIdentity, Array[@common.Uri]) -> Self
 pub fn State::retire_watcher(Self, @cmd.Emit[Msg], Ctx) -> (Self, @cmd.Cmd)
 pub fn State::start_office_region(Self, Ctx, @cmd.Emit[Msg]) -> (@cmd.Cmd, Self)
 pub fn State::with_review_context_reveal(Self, @mention_context.ReviewChanges) -> Self

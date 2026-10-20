@@ -151,11 +151,12 @@ const DiffLoadingDelayMilliseconds = 800
 ///|
 fn delayed_diff_loading(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   path : @common.Uri,
   doc : Doc,
 ) -> @cmd.Cmd {
-  guard doc.diff_pending_generation() is Some(generation) else {
+  guard owner is @interop.Host(owner) &&
+    doc.diff_pending_generation() is Some(generation) else {
     return @cmd.none
   }
   @cmd.delay(
@@ -208,6 +209,7 @@ fn show_tab_impl(
         clear_document(),
         read_file(
           dispatch,
+          cloud?=ctx.cloud_files,
           ctx.owner,
           ctx.request_epoch,
           path,
@@ -233,13 +235,11 @@ fn show_tab_impl(
         ctx.root() is Some(root) {
         @cmd.batch([
           show,
-          request_diagnostics(
-            dispatch,
-            ctx.owner,
-            ctx.request_epoch,
-            root,
-            path,
-          ),
+          ctx.owner
+          .host()
+          .map_or(@cmd.none, host => {
+            request_diagnostics(dispatch, host, ctx.request_epoch, root, path)
+          }),
         ])
       } else {
         show
@@ -287,6 +287,7 @@ fn show_tab_impl(
       show,
       read_file(
         dispatch,
+        cloud?=ctx.cloud_files,
         ctx.owner,
         ctx.request_epoch,
         path,
@@ -379,6 +380,7 @@ fn show_activated_tab(
       ),
       read_file(
         dispatch,
+        cloud?=ctx.cloud_files,
         ctx.owner,
         ctx.request_epoch,
         path,
@@ -564,6 +566,7 @@ pub fn open_document(
   }
   let read = read_file(
     dispatch,
+    cloud?=ctx.cloud_files,
     ctx.owner,
     ctx.request_epoch,
     path,
@@ -713,15 +716,19 @@ pub fn open_changed_document(
   if !missing_rename_source {
     let source = change.original_path.unwrap_or(change.path)
     cmds.push(
-      read_git_original(
-        dispatch,
-        ctx.owner,
-        path,
-        source,
-        generation,
-        revision=state.changes_head,
-        workspace=ctx.workspace(),
-      ),
+      ctx.owner
+      .host()
+      .map_or(@cmd.none, host => {
+        read_git_original(
+          dispatch,
+          host,
+          path,
+          source,
+          generation,
+          revision=state.changes_head,
+          workspace=ctx.workspace(),
+        )
+      }),
     )
   }
   if change.has_working_tree_file() {
@@ -760,6 +767,7 @@ pub fn open_changed_document(
     cmds.push(
       read_file(
         dispatch,
+        cloud?=ctx.cloud_files,
         ctx.owner,
         ctx.request_epoch,
         path,
@@ -918,6 +926,7 @@ fn reconcile_reviews_after_changes(
           cmds.push(
             read_file(
               dispatch,
+              cloud?=ctx.cloud_files,
               ctx.owner,
               ctx.request_epoch,
               path,
@@ -1040,15 +1049,19 @@ fn reconcile_reviews_after_changes(
         if !missing_rename_source {
           let source = change.original_path.unwrap_or(change.path)
           cmds.push(
-            read_git_original(
-              dispatch,
-              ctx.owner,
-              path,
-              source,
-              generation,
-              revision=head,
-              workspace=ctx.workspace(),
-            ),
+            ctx.owner
+            .host()
+            .map_or(@cmd.none, host => {
+              read_git_original(
+                dispatch,
+                host,
+                path,
+                source,
+                generation,
+                revision=head,
+                workspace=ctx.workspace(),
+              )
+            }),
           )
         }
         if has_working_file {
@@ -1071,6 +1084,7 @@ fn reconcile_reviews_after_changes(
           cmds.push(
             read_file(
               dispatch,
+              cloud?=ctx.cloud_files,
               ctx.owner,
               ctx.request_epoch,
               path,
@@ -1098,13 +1112,17 @@ fn reconcile_reviews_after_changes(
   }
   if !restat_paths.is_empty() {
     cmds.push(
-      stat_files(
-        dispatch,
-        ctx.owner,
-        state.request_epoch,
-        restat_paths,
-        recheck_diagnostics=true,
-      ),
+      ctx.owner
+      .host()
+      .map_or(@cmd.none, host => {
+        stat_files(
+          dispatch,
+          host,
+          state.request_epoch,
+          restat_paths,
+          recheck_diagnostics=true,
+        )
+      }),
     )
   }
   (cmds, docs, review_generation)
@@ -1492,6 +1510,7 @@ fn FileIndex::failed(self : FileIndex) -> (FileIndex, Bool) {
 /// while the panel is hidden, so empty directories and paths beyond the
 /// bounded result can still invalidate the cached path set.
 fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
+  guard ctx.owner is @interop.Host(owner) else { return None }
   guard ctx.root() is Some(root) else { return None }
   let index_live = self.index is IndexLoading(..) ||
     self.index is IndexReady(..)
@@ -1504,7 +1523,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
       previews.is_empty() &&
       !index_live
     ) ||
-    ctx.owner.session.is_empty() {
+    ctx.owner.session().is_empty() {
     return None
   }
   let files = ctx.open_files.filter_map(file => ctx.relative(file))
@@ -1542,7 +1561,7 @@ fn State::watched_paths(self : State, ctx : Ctx) -> WatchedPaths? {
   } else {
     []
   }
-  Some({ owner: ctx.owner, root, files, directories, recursive, })
+  Some({ owner, root, files, directories, recursive, })
 }
 
 ///|
@@ -1673,10 +1692,10 @@ fn changes_live(state : State, ctx : Ctx) -> Bool {
 /// asked separately: a retained inventory is not permission to keep addressing
 /// the host that lost it.
 fn changes_poll_wanted(state : State, ctx : Ctx) -> Bool {
-  ctx.checkout_ready() &&
+  ctx.host_ready() &&
   state.owner is Some(state_owner) &&
   state_owner == ctx.owner &&
-  !ctx.owner.session.is_empty() &&
+  !ctx.owner.session().is_empty() &&
   changes_live(state, ctx) &&
   state.changes is ChangeListReady(repository=true, refreshing=false, ..)
 }
@@ -1715,10 +1734,11 @@ pub fn subscriptions(
     changes_poll_subscription(state, ctx, dispatch),
     review_diff_navigation_subscription(state, ctx, dispatch),
     review_context_dismiss_subscription(),
-    state.search.subscription(
-      ctx.search_input(),
-      dispatch.map(msg => Search(msg)),
-    ),
+    match ctx.search_input() {
+      Some(input) =>
+        state.search.subscription(input, dispatch.map(msg => Search(msg)))
+      None => @sub.none
+    },
   ])
 }
 
@@ -1812,16 +1832,20 @@ fn refresh_unknown_head_reviews(
     docs[path] = { ..doc, review: Some({ ..review, generation, }), }
     background_review_requests[path] = generation
     cmds.push(
-      read_git_original(
-        dispatch,
-        ctx.owner,
-        path,
-        source,
-        generation,
-        background=true,
-        revision=None,
-        workspace=ctx.workspace(),
-      ),
+      ctx.owner
+      .host()
+      .map_or(@cmd.none, host => {
+        read_git_original(
+          dispatch,
+          host,
+          path,
+          source,
+          generation,
+          background=true,
+          revision=None,
+          workspace=ctx.workspace(),
+        )
+      }),
     )
   }
   (cmds, docs, review_generation, background_review_requests)
@@ -1837,9 +1861,11 @@ fn refresh_changes(
   state : State,
   ctx : Ctx,
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, state) }
+
   guard state.owner is Some(state_owner) &&
     state_owner == ctx.owner &&
-    !ctx.owner.session.is_empty() else {
+    !owner.session.is_empty() else {
     return (@cmd.none, state)
   }
   match state.changes {
@@ -1873,12 +1899,7 @@ fn refresh_changes(
       } else {
         let generation = state.changes_generation + 1
         (
-          list_changes(
-            dispatch,
-            ctx.owner,
-            generation,
-            workspace=ctx.workspace(),
-          ),
+          list_changes(dispatch, owner, generation, workspace=ctx.workspace()),
           {
             ..state,
             changes_generation: generation,
@@ -1894,7 +1915,7 @@ fn refresh_changes(
     ChangeListIdle | ChangeListFailed(_) => {
       let generation = state.changes_generation + 1
       (
-        list_changes(dispatch, ctx.owner, generation, workspace=ctx.workspace()),
+        list_changes(dispatch, owner, generation, workspace=ctx.workspace()),
         {
           ..state,
           changes: ChangeListLoading(refresh_again=false),
@@ -1915,6 +1936,8 @@ fn sync_package_graph(
   state : State,
   ctx : Ctx,
 ) -> (State, @cmd.Cmd) {
+  guard ctx.owner is @interop.Host(owner) else { return (state, @cmd.none) }
+
   guard ctx.checkout_ready() &&
     ctx.panel_open &&
     ctx.active_history_diff is None &&
@@ -1942,7 +1965,7 @@ fn sync_package_graph(
               show_package_graph_in_viewer(graph),
               read_package_graph(
                 dispatch,
-                ctx.owner,
+                owner,
                 ctx.request_epoch,
                 path,
                 generation,
@@ -1990,16 +2013,22 @@ pub fn sync(
   // `ReconciledPlacement`), so a conversation that comes back as a different
   // checkout — another client unbound its worktree while this connection was
   // down — reroots instead of restoring the previous checkout's documents.
+  let cloud_epoch = ctx.cloud_files.map(files => files.epoch)
   let placement_identity_changed = same_owner &&
-    (match (state.placement.identity(), ctx.placement) {
-      (Some(previous), Some(current)) => !previous.same_identity(current)
-      (None, _) | (Some(_), None) => false
-    })
-  let parking_existing_owner = !checkout_ready &&
+    (
+      state.cloud_epoch != cloud_epoch ||
+      (match (state.placement.identity(), ctx.placement) {
+        (Some(previous), Some(current)) => !previous.same_identity(current)
+        (None, _) | (Some(_), None) => false
+      })
+    )
+  let parking_existing_owner = ctx.owner.host() is Some(_) &&
+    !checkout_ready &&
     same_owner &&
     !placement_identity_changed &&
     !state.placement.is_parked()
-  let restoring_existing_owner = checkout_ready &&
+  let restoring_existing_owner = ctx.owner.host() is Some(_) &&
+    checkout_ready &&
     same_owner &&
     state.placement.is_parked() &&
     !placement_identity_changed
@@ -2011,7 +2040,7 @@ pub fn sync(
       owner_changed || placement_identity_changed || parking_existing_owner
     ) &&
     !(state.index is IndexEmpty) &&
-    state.owner is Some(old_owner) &&
+    state.owner is Some(@interop.Host(old_owner)) &&
     state.placement.identity().bind(value => value.checkout_root())
     is Some(old_root) {
     @files.Request(old_owner.channel, old_owner.session, Some(old_root)).retire()
@@ -2089,6 +2118,7 @@ pub fn sync(
       cmds.push(
         read_file(
           dispatch,
+          cloud?=ctx.cloud_files,
           ctx.owner,
           ctx.request_epoch,
           path,
@@ -2102,6 +2132,7 @@ pub fn sync(
         ..State::empty(),
         github_review: state.github_review,
         owner: Some(ctx.owner),
+        cloud_epoch,
         // A new incarnation must not inherit the identity it replaced, so this
         // reconciles from `PlacementUnknown` rather than the outgoing value.
         placement: PlacementUnknown.reconcile(ctx.placement),
@@ -2113,7 +2144,11 @@ pub fn sync(
         office_prefer_system_fonts: state.office_prefer_system_fonts,
         pdf_generation: state.pdf_generation,
         excel_copy_generation: state.excel_copy_generation,
-        explorer_mode: state.explorer_mode,
+        explorer_mode: if ctx.owner is @interop.Cloud(..) {
+          ExplorerFiles
+        } else {
+          state.explorer_mode
+        },
         search: state.search.reset_checkout(),
         review_diff_layout: state.review_diff_layout,
         review_diff_mode: state.review_diff_mode,
@@ -2301,7 +2336,7 @@ pub fn sync(
     (match state.watching {
       Some(watching) =>
         explorer_reopened ||
-        watching.owner != ctx.owner ||
+        @interop.Host(watching.owner) != ctx.owner ||
         ctx.root() != Some(watching.root) ||
         (
           explorer_is_visible &&
@@ -2399,7 +2434,7 @@ pub fn sync(
   }
   // Load as soon as the conversation has a concrete root: registered
   // projects and known worktrees can both load before a run.
-  if ctx.owner.session.is_empty() ||
+  if ctx.owner.session().is_empty() ||
     state.children.contains("") ||
     state.loading.contains("") {
     return with_watch(dispatch, state, ctx, pending_cmd)
@@ -2414,6 +2449,7 @@ pub fn sync(
       pending_cmd,
       read_directory(
         dispatch,
+        cloud?=ctx.cloud_files,
         ctx.owner,
         ctx.request_epoch,
         @pathx.Relative::root(),
@@ -2799,13 +2835,17 @@ fn update_inner(
       (@cmd.none, { ..state, tree_reveal: TreeRevealDirectoryPending(path), })
     RefreshExternalFiles =>
       (
-        stat_files(
-          dispatch,
-          ctx.owner,
-          ctx.request_epoch,
-          state.polled_files(ctx),
-          recheck_diagnostics=false,
-        ),
+        ctx.owner
+        .host()
+        .map_or(@cmd.none, host => {
+          stat_files(
+            dispatch,
+            host,
+            ctx.request_epoch,
+            state.polled_files(ctx),
+            recheck_diagnostics=false,
+          )
+        }),
         state,
       )
     ToggleTree => {
@@ -2862,7 +2902,7 @@ fn update_inner(
     }
     PackageGraphRequestLoaded(owner~, epoch~, path~, generation~, source~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.request_epoch == epoch &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
@@ -2874,7 +2914,7 @@ fn update_inner(
       }
     PackageGraphRequestFailed(owner~, epoch~, path~, generation~, message~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.request_epoch == epoch &&
         state.package_graphs.get(path) is Some(PackageGraphLoading(current)) &&
         current == generation {
@@ -2886,7 +2926,7 @@ fn update_inner(
       }
     DiffLoadingDue(owner~, path~, generation~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         ctx.active_file is Some(active) &&
         active == path &&
         state.docs.get(path) is Some(doc) &&
@@ -3133,7 +3173,11 @@ fn update_inner(
       )
     ToggleActiveReviewHunk => (@cmd.none, state.toggle_active_review_hunk(ctx))
     Search(msg) => {
-      let search = state.search.handle(msg, ctx.search_input())
+      guard ctx.search_input() is Some(input) &&
+        ctx.owner is @interop.Host(owner) else {
+        return (@cmd.none, state)
+      }
+      let search = state.search.handle(msg, input)
       let next = { ..state, search, }
       let highlights = ctx.active_file.bind(path => {
         next.editor_search_highlights(ctx, path)
@@ -3144,9 +3188,7 @@ fn update_inner(
       let reference = selection(search)
       let selection_command = if reference != selection(state.search) {
         @cmd.custom_cmd(scheduler => {
-          scheduler.add(
-            dispatch(SemanticSelectionChanged(owner=ctx.owner, reference~)),
-          )
+          scheduler.add(dispatch(SemanticSelectionChanged(owner~, reference~)))
         })
       } else {
         @cmd.none
@@ -3161,6 +3203,13 @@ fn update_inner(
     }
     SemanticSelectionChanged(..) => (@cmd.none, state)
     ExplorerModeSelected(mode) => {
+      if ctx.owner is @interop.Cloud(..) {
+        return if mode is ExplorerFiles {
+          refresh_cloud_files(dispatch, state, ctx)
+        } else {
+          (@cmd.none, state)
+        }
+      }
       let already_selected = state.explorer_mode == mode
       let selected = { ..state, explorer_mode: mode, }
       let search_highlights = if mode is ExplorerSearch {
@@ -3234,6 +3283,7 @@ fn update_inner(
           (
             read_directory(
               dispatch,
+              cloud?=ctx.cloud_files,
               ctx.owner,
               ctx.request_epoch,
               path,
@@ -3278,6 +3328,7 @@ fn update_inner(
         (
           read_directory(
             dispatch,
+            cloud?=ctx.cloud_files,
             ctx.owner,
             ctx.request_epoch,
             path,
@@ -3292,17 +3343,25 @@ fn update_inner(
         state.placement.is_parked() ||
         ctx.root() is None ||
         !ctx.checkout_ready() ||
-        ctx.owner.session.is_empty() {
+        ctx.owner.session().is_empty() {
         (@cmd.none, state)
       } else if state.index is IndexEmpty || state.index is IndexFailed {
         (
-          list_files(dispatch, ctx.owner, ctx.request_epoch, root=ctx.root()),
+          ctx.owner
+          .host()
+          .map_or(@cmd.none, host => {
+            list_files(dispatch, host, ctx.request_epoch, root=ctx.root())
+          }),
           { ..state, index: IndexLoading(refresh_again=false), },
         )
       } else if state.index
         is IndexReady(files~, truncated~, refreshing=false, refresh_again=true) {
         (
-          list_files(dispatch, ctx.owner, ctx.request_epoch, root=ctx.root()),
+          ctx.owner
+          .host()
+          .map_or(@cmd.none, host => {
+            list_files(dispatch, host, ctx.request_epoch, root=ctx.root())
+          }),
           {
             ..state,
             index: IndexReady(
@@ -3326,7 +3385,14 @@ fn update_inner(
       removed_directory_reads.remove(path)
       (
         if retry {
-          read_directory(dispatch, owner, epoch, path, root=ctx.root())
+          read_directory(
+            dispatch,
+            owner,
+            epoch,
+            path,
+            root=ctx.root(),
+            cloud?=ctx.cloud_files,
+          )
         } else {
           @cmd.none
         },
@@ -3404,7 +3470,8 @@ fn update_inner(
         )
       }
     FilesIndexed(owner~, epoch~, files~, truncated~) =>
-      if state.owner != Some(owner) || state.request_epoch != epoch {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
         let (index, retry) = state.index.loaded(files, truncated)
@@ -3416,7 +3483,8 @@ fn update_inner(
         (cmd, { ..state, index, })
       }
     FileIndexFailed(owner~, epoch~) =>
-      if state.owner != Some(owner) || state.request_epoch != epoch {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
         let (index, retry) = state.index.failed()
@@ -3438,7 +3506,7 @@ fn update_inner(
         (@cmd.none, state)
       }
     GitHeadObserved(owner~, head~) =>
-      if state.owner != Some(owner) {
+      if state.owner != Some(@interop.Host(owner)) {
         (@cmd.none, state)
       } else {
         let changed = state.git_actual_head_known &&
@@ -3459,7 +3527,8 @@ fn update_inner(
     GitHistoryRefreshRequested => refresh_git_graph(dispatch, state, ctx)
     GitHistoryLoadMoreRequested => load_more_git_history(dispatch, state, ctx)
     GitHistoryLoaded(owner~, generation~, append~, reply~) =>
-      if state.owner != Some(owner) || state.git_graph_generation != generation {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.git_graph_generation != generation {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -3506,7 +3575,8 @@ fn update_inner(
         )
       }
     GitHistoryFailed(owner~, generation~, append~, message~) =>
-      if state.owner != Some(owner) || state.git_graph_generation != generation {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.git_graph_generation != generation {
         (@cmd.none, state)
       } else if append {
         match state.git_graph {
@@ -3533,7 +3603,7 @@ fn update_inner(
     GitCommitSelected(commit) => select_git_commit(dispatch, state, ctx, commit)
     GitCommitChangesLoaded(owner~, generation~, reply~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.git_commit_files_generation == generation &&
         state.git_graph_selected is Some(selected_commit) &&
         selected_commit == reply.commit &&
@@ -3554,7 +3624,7 @@ fn update_inner(
       }
     GitCommitChangesFailed(owner~, generation~, commit~, message~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.git_commit_files_generation == generation &&
         state.git_graph_selected is Some(selected) &&
         selected == commit {
@@ -3571,7 +3641,8 @@ fn update_inner(
     GitCommitChangesRetry(commit) =>
       retry_git_commit_changes(dispatch, state, ctx, commit)
     ChangesLoaded(owner~, generation~, repository~, head~, files~) =>
-      if state.owner != Some(owner) || state.changes_generation != generation {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.changes_generation != generation {
         (@cmd.none, state)
       } else {
         let refresh_again = match state.changes {
@@ -3706,7 +3777,8 @@ fn update_inner(
         )
       }
     ChangesFailed(owner~, generation~, message~) =>
-      if state.owner != Some(owner) || state.changes_generation != generation {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.changes_generation != generation {
         (@cmd.none, state)
       } else {
         match state.changes {
@@ -3816,7 +3888,7 @@ fn update_inner(
         state.background_review_requests
       }
       guard state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation &&
@@ -3865,7 +3937,7 @@ fn update_inner(
         state.background_review_requests
       }
       guard state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.docs.get(path) is Some(doc) &&
         doc.review is Some(current_review) &&
         current_review.generation == generation else {
@@ -3903,7 +3975,7 @@ fn update_inner(
     }
     HistoryBlobLoaded(owner~, key~, generation~, side~, blob~) => {
       guard state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -3930,7 +4002,7 @@ fn update_inner(
     }
     HistoryBlobFailed(owner~, key~, generation~, side~, message~) => {
       guard state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.history_docs.get(key) is Some(doc) &&
         doc.generation == generation else {
         return (@cmd.none, state)
@@ -4063,13 +4135,17 @@ fn update_inner(
               if language_id(name) == "moonbit" && ctx.root() is Some(root) {
                 @cmd.batch([
                   show,
-                  request_diagnostics(
-                    dispatch,
-                    ctx.owner,
-                    ctx.request_epoch,
-                    root,
-                    path,
-                  ),
+                  ctx.owner
+                  .host()
+                  .map_or(@cmd.none, host => {
+                    request_diagnostics(
+                      dispatch,
+                      host,
+                      ctx.request_epoch,
+                      root,
+                      path,
+                    )
+                  }),
                 ])
               } else {
                 show
@@ -4116,8 +4192,14 @@ fn update_inner(
         (@cmd.none, state)
       }
     }
-    RunSettled(owner~) =>
-      if state.owner is Some(state_owner) && state_owner == owner {
+    RunSettled(owner=@interop.Cloud(..) as owner) =>
+      if owner == ctx.owner {
+        refresh_cloud_files(dispatch, state, ctx)
+      } else {
+        (@cmd.none, state)
+      }
+    RunSettled(owner=@interop.Host(owner)) =>
+      if state.owner is Some(state_owner) && state_owner == @interop.Host(owner) {
         // A completed agent run can write files outside the pruned watcher.
         // Git status alone cannot prove their content or path set is unchanged,
         // so review progress and a ready file index are conservatively
@@ -4190,8 +4272,8 @@ fn update_inner(
         (@cmd.none, state)
       }
     FsChanged(root~, generation~, changes~) =>
-      if state.owner is Some(owner) &&
-        owner.channel == ctx.owner.channel &&
+      if state.owner is Some(@interop.Host(owner)) &&
+        ctx.owner.host().map_or(false, host => owner.channel == host.channel) &&
         ctx.root() is Some(ctx_root) &&
         ctx_root == root &&
         generation == ctx.watch_identity(state.watch_generation) {
@@ -4331,7 +4413,8 @@ fn update_inner(
           cmds.push(
             read_directory(
               dispatch,
-              owner,
+              cloud?=ctx.cloud_files,
+              @interop.Host(owner),
               state.request_epoch,
               directory,
               root=ctx.root(),
@@ -4388,7 +4471,8 @@ fn update_inner(
         (@cmd.none, state)
       }
     StatsLoaded(owner~, epoch~, stats~, recheck_diagnostics~) =>
-      if state.owner != Some(owner) || state.request_epoch != epoch {
+      if state.owner != Some(@interop.Host(owner)) ||
+        state.request_epoch != epoch {
         (@cmd.none, state)
       } else {
         let docs = state.docs.copy()
@@ -4544,7 +4628,8 @@ fn update_inner(
               cmds.push(
                 read_file(
                   dispatch,
-                  owner,
+                  cloud?=ctx.cloud_files,
+                  @interop.Host(owner),
                   state.request_epoch,
                   stat.path,
                   doc.name,
@@ -4586,14 +4671,14 @@ fn update_inner(
       }
     DiagnosticsLoaded(owner~, epoch~, absolute~, diagnostics~) =>
       if state.owner is Some(state_owner) &&
-        state_owner == owner &&
+        state_owner == @interop.Host(owner) &&
         state.request_epoch == epoch {
         (apply_diagnostics(owner.channel, absolute, diagnostics), state)
       } else {
         (@cmd.none, state)
       }
     DiagnosticsPublished(channel~, absolute~, diagnostics~) =>
-      if state.owner is Some(owner) && owner.channel == channel {
+      if state.owner is Some(@interop.Host(owner)) && owner.channel == channel {
         (apply_diagnostics(channel, absolute, diagnostics), state)
       } else {
         (@cmd.none, state)
@@ -4691,7 +4776,7 @@ fn update_inner(
       }
     }
     FileWatchFailed(channel~, root~, generation~, message~) =>
-      if state.owner is Some(owner) &&
+      if state.owner is Some(@interop.Host(owner)) &&
         owner.channel == channel &&
         ctx.root() is Some(ctx_root) &&
         ctx_root == root &&
@@ -4738,7 +4823,11 @@ fn test_emit() -> @cmd.Emit[Msg] {
 fn test_ctx() -> Ctx {
   {
     locale: English,
-    owner: { channel: @interop.ChannelId::Local, session: "desktop-test", },
+    owner: @interop.Host({
+      channel: @interop.ChannelId::Local,
+      session: "desktop-test",
+    }),
+    cloud_files: None,
     request_epoch: 0,
     watch_namespace: "test-page",
     model: "deepseek-v4-flash",
@@ -4770,7 +4859,8 @@ fn Ctx::test_root(self : Ctx) -> @common.Uri raise {
 
 ///|
 fn Ctx::test_resource(self : Ctx, path : String) -> @common.Uri raise {
-  guard @resource.of_path(self.owner.channel, path) is Some(resource) else {
+  guard @resource.of_path(self.owner.host().unwrap().channel, path)
+    is Some(resource) else {
     fail("test resource path must be absolute")
   }
   resource
@@ -4840,7 +4930,7 @@ test "file index requests retry failures and fence stale replies" {
   let (_, stale) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch + 1,
       files=[Relative("stale.mbt")],
       truncated=false,
@@ -4851,7 +4941,7 @@ test "file index requests retry failures and fence stale replies" {
   assert_true(stale == loading)
   let (_, failed) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
     loading,
     ctx,
   )
@@ -4861,7 +4951,7 @@ test "file index requests retry failures and fence stale replies" {
   let (_, ready) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch,
       files=[Relative("src/main.mbt")],
       truncated=true,
@@ -4880,7 +4970,7 @@ test "file index requests retry failures and fence stale replies" {
   )
   let (_, refresh_failed) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
     ready,
     ctx,
   )
@@ -4896,7 +4986,7 @@ test "file index requests retry failures and fence stale replies" {
   }
   let (_, stale) = update(
     emit,
-    FileIndexFailed(owner=ctx.owner, epoch=ctx.request_epoch),
+    FileIndexFailed(owner=ctx.owner.host().unwrap(), epoch=ctx.request_epoch),
     refreshing,
     ctx,
   )
@@ -4924,7 +5014,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, following_up) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch,
       files=[Relative("src/old.mbt")],
       truncated=false,
@@ -4938,7 +5028,7 @@ test "watcher changes during the initial file index scan schedule one follow-up"
   let (_, settled) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch,
       files=[Relative("src/old.mbt"), Relative("src/new.mbt")],
       truncated=false,
@@ -4986,7 +5076,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   let (_, following_up) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch,
       files=[Relative("src/new.mbt")],
       truncated=false,
@@ -5006,7 +5096,7 @@ test "structural watcher bursts coalesce file index refreshes" {
   let (_, settled) = update(
     emit,
     FilesIndexed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       epoch=ctx.request_epoch,
       files=[Relative("src/new.mbt"), Relative("src/last.mbt")],
       truncated=false,
@@ -5076,7 +5166,7 @@ test "language request failures remain a pure no-op below the root toast owner" 
   let emit = test_emit()
   let state = owned_state()
   let msg = LanguageRequestFailed(
-    owner=test_ctx().owner,
+    owner=test_ctx().owner.host().unwrap(),
     message="definition failed",
   )
   let (_, first) = update(emit, msg, state, test_ctx())
@@ -5236,7 +5326,7 @@ test "changed-file review fences paired replies and Content opens retain compari
   let (_, ignored) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=file,
       generation=1,
@@ -5254,7 +5344,7 @@ test "changed-file review fences paired replies and Content opens retain compari
   let (_, reviewed) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=file,
       generation=2,
@@ -5437,7 +5527,7 @@ test "changed-file review preserves a stale cached working document until reload
   let (_, baseline_first) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=file,
       generation=1,
@@ -5540,7 +5630,7 @@ test "review failures settle precisely and missing rename sources stay unavailab
   let (_, failed) = update(
     emit,
     GitOriginalFailed(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=file,
       generation=1,
@@ -5616,7 +5706,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   let (_, preview) = update(
     emit,
     GitOriginalLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=test_file(deleted_path.0),
       generation=1,
@@ -5699,7 +5789,7 @@ test "deleted changes preview HEAD and working-file loads retain early baselines
   let (_, baseline_first) = update(
     emit,
     GitOriginalLoaded(
-      owner=live_ctx.owner,
+      owner=live_ctx.owner.host().unwrap(),
       background=false,
       path=test_file(live_path.0),
       generation=1,
@@ -5893,10 +5983,10 @@ test "FileLoaded settles content into its document, active or not" {
   let (_, other) = update(
     emit,
     FileLoaded(
-      owner={
+      owner=@interop.Host({
         channel: @interop.ChannelId::Remote("other"),
         session: "desktop-test",
-      },
+      }),
       epoch=0,
       path=test_file("a.mbt"),
       name="a.mbt",
@@ -5917,9 +6007,12 @@ test "FileLoaded settles content into its document, active or not" {
   let epoch_state = { ..state, request_epoch: 2, }
   let (_, old_epoch) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=1, stats=[
-      { path: test_file("a.mbt"), signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=1,
+      stats=[{ path: test_file("a.mbt"), signature: Missing, }],
+    ),
     epoch_state,
     ctx,
   )
@@ -5951,7 +6044,7 @@ test "FileLoaded settles content into its document, active or not" {
   let (_, old_index) = update(
     emit,
     FilesIndexed(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       epoch=1,
       files=[Relative("stale.mbt")],
       truncated=false,
@@ -5963,7 +6056,7 @@ test "FileLoaded settles content into its document, active or not" {
   let (_, old_watch_failure) = update(
     emit,
     FileWatchFailed(
-      channel=test_ctx().owner.channel,
+      channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(1),
       message="stale watcher",
@@ -5984,15 +6077,17 @@ test "sync re-roots the document table from the dock's projection" {
   // one; the table re-seeds from it, identities only.
   let other : Ctx = {
     ..test_ctx(),
-    owner: {
+    owner: @interop.Host({
       channel: @interop.ChannelId::Remote("other"),
       session: "desktop-test",
-    },
+    }),
     open_files: [test_file("a.mbt"), test_file("b.mbt")],
     active_file: Some(test_file("a.mbt")),
   }
   let (rerooted, _) = sync(emit, state, other)
-  assert_true(rerooted.owner is Some({ channel: Remote("other"), .. }))
+  assert_true(
+    rerooted.owner is Some(@interop.Host({ channel: Remote("other"), .. })),
+  )
   assert_false(rerooted.docs.contains(test_file("old.mbt")))
   assert_true(
     rerooted.docs.get(test_file("a.mbt")) is Some({ state: TabLoading, .. }),
@@ -6024,7 +6119,7 @@ test "a closed panel still re-roots when the conversation switches" {
       ),
     ]),
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [Relative("a.mbt")],
       directories: [],
@@ -6035,14 +6130,16 @@ test "a closed panel still re-roots when the conversation switches" {
   // The new conversation has nothing open and the panel is closed.
   let other : Ctx = {
     ..test_ctx(),
-    owner: {
+    owner: @interop.Host({
       channel: @interop.ChannelId::Remote("other"),
       session: "desktop-test",
-    },
+    }),
     panel_open: false,
   }
   let (parked, _) = sync(emit, state, other)
-  assert_true(parked.owner is Some({ channel: Remote("other"), .. }))
+  assert_true(
+    parked.owner is Some(@interop.Host({ channel: Remote("other"), .. })),
+  )
   assert_eq(parked.file_link_generation, 5)
   assert_true(parked.docs.is_empty())
   // Nothing left to track in the new conversation, so the watcher parks.
@@ -6121,7 +6218,7 @@ test "a placement change retains absolute document identities and fences old rep
       refresh_again=false,
     ),
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: old_workspace,
       files: [path],
       directories: [@pathx.Relative::root()],
@@ -6191,7 +6288,7 @@ test "a placement change retains absolute document identities and fences old rep
   let (_, after_old_changes) = update(
     emit,
     ChangesLoaded(
-      owner=worktree_ctx.owner,
+      owner=worktree_ctx.owner.host().unwrap(),
       generation=state.changes_generation,
       repository=true,
       head=Some("root-head"),
@@ -6255,7 +6352,7 @@ test "a missing checkout parks files and refuses editor actions until repair" {
       refresh_again=false,
     ),
     watching: Some({
-      owner: present.owner,
+      owner: present.owner.host().unwrap(),
       root: present.test_root(),
       files: [Relative("a.mbt")],
       directories: [@pathx.Relative::root()],
@@ -6504,7 +6601,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
     changes: ChangeListLoading(refresh_again=true),
     changes_generation: 1,
     watching: Some({
-      owner: present.owner,
+      owner: present.owner.host().unwrap(),
       root: present.test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -6526,7 +6623,7 @@ test "a missing checkout settles an in-flight Changes request for retry" {
   let (_, after_reply) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -6581,7 +6678,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
     review_generation: 3,
     docs,
     watching: Some({
-      owner: present.owner,
+      owner: present.owner.host().unwrap(),
       root: present.test_root(),
       files: [path],
       directories: [@pathx.Relative::root()],
@@ -6625,7 +6722,7 @@ test "checkout recovery restarts a review whose paired replies were parked" {
   let (_, restarted) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=3,
       repository=true,
       head=Some("same-head"),
@@ -6706,7 +6803,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
   let (_, failed_again) = update(
     emit,
     ChangesFailed(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=3,
       message="Git still unavailable",
     ),
@@ -6719,7 +6816,7 @@ test "hidden checkout recovery retries failed Changes once before parking" {
   let (_, restarted) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=3,
       repository=true,
       head=Some("same-head"),
@@ -6775,7 +6872,7 @@ test "ordinary Changes polls do not supersede healthy in-flight reviews" {
   let (_, polled) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -6807,7 +6904,7 @@ test "an unresolved placement parks files and refuses editor actions" {
     ..owned_state(),
     docs,
     watching: Some({
-      owner: present.owner,
+      owner: present.owner.host().unwrap(),
       root: present.test_root(),
       files: [Relative("a.mbt")],
       directories: [@pathx.Relative::root()],
@@ -6816,13 +6913,13 @@ test "an unresolved placement parks files and refuses editor actions" {
   }
   let unresolved : Ctx = {
     ..present,
-    owner: { ..present.owner, session: "", },
+    owner: @interop.Host({ ..present.owner.host().unwrap(), session: "", }),
     placement: None,
     open_files: [],
     active_file: None,
   }
   let (parked, _) = sync(emit, state, unresolved)
-  assert_true(parked.owner is Some({ session: "", .. }))
+  assert_true(parked.owner is Some(@interop.Host({ session: "", .. })))
   assert_true(parked.docs.is_empty())
   assert_true(parked.watching is None)
   let (_, refused_index) = update(emit, EnsureFileIndex, parked, unresolved)
@@ -6841,7 +6938,10 @@ test "Search Explorer selection survives a conversation owner switch" {
   let state = { ..owned_state(), explorer_mode: ExplorerSearch, }
   let next_ctx = {
     ..test_ctx(),
-    owner: { ..test_ctx().owner, session: "another-conversation", },
+    owner: @interop.Host({
+      ..test_ctx().owner.host().unwrap(),
+      session: "another-conversation",
+    }),
     open_files: [],
     active_file: None,
   }
@@ -6961,7 +7061,7 @@ test "reopening Changes refreshes after the explorer is hidden" {
       refresh_again=false,
     ),
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -6998,7 +7098,7 @@ test "showing a hidden explorer refreshes Changes before polling resumes" {
       refresh_again=false,
     ),
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -7031,7 +7131,7 @@ test "reopening Changes latches a follow-up for an in-flight refresh" {
     changes_generation: 1,
     explorer_was_visible: false,
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -7055,7 +7155,7 @@ test "reopening Changes latches a follow-up for the initial load" {
     changes_generation: 1,
     explorer_was_visible: false,
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -7091,7 +7191,7 @@ test "selecting Changes loads once and coalesces an in-flight refresh" {
   let (_, following_up) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -7184,7 +7284,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, ready) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -7235,7 +7335,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_generation) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=0,
       repository=true,
       head=None,
@@ -7249,7 +7349,7 @@ test "changed-file replies are owner-and-generation-fenced" {
   let (_, stale_idle_failure) = update(
     emit,
     ChangesFailed(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       message="stale git failure",
     ),
@@ -7286,7 +7386,7 @@ test "a settled Changes snapshot re-stats loaded reviews whose rows disappeared"
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -7303,9 +7403,12 @@ test "a settled Changes snapshot re-stats loaded reviews whose rows disappeared"
   // a committed deletion must replace the cached working source.
   let (_, deleted) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Missing, }],
+    ),
     settled,
     ctx,
   )
@@ -7335,9 +7438,13 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, unavailable) = update(
     test_emit(),
-    ChangesLoaded(owner=ctx.owner, generation=1, repository=true, head=None, files=[
-      symlink,
-    ]),
+    ChangesLoaded(
+      owner=ctx.owner.host().unwrap(),
+      generation=1,
+      repository=true,
+      head=None,
+      files=[symlink],
+    ),
     {
       ..owned_state(),
       explorer_mode: ExplorerChanges,
@@ -7355,9 +7462,12 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   )
   let (_, missing_unavailable) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Missing, }],
+    ),
     unavailable,
     ctx,
   )
@@ -7366,9 +7476,12 @@ test "a review that becomes a symlink clears its cached regular-file source" {
   // source that preceded it. An explicit ordinary reopen remains the retry.
   let (_, still_unavailable) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Present("4:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("4:0"), }],
+    ),
     missing_unavailable,
     ctx,
   )
@@ -7451,9 +7564,12 @@ test "a disappearing review row hands an active reload to an ordinary read" {
   }
   let (_, reloading) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Present("2:1"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("2:1"), }],
+    ),
     state,
     ctx,
   )
@@ -7463,7 +7579,13 @@ test "a disappearing review row hands an active reload to an ordinary read" {
   )
   let (_, settled) = update(
     test_emit(),
-    ChangesLoaded(owner=ctx.owner, generation=1, repository=true, head=None, files=[]),
+    ChangesLoaded(
+      owner=ctx.owner.host().unwrap(),
+      generation=1,
+      repository=true,
+      head=None,
+      files=[],
+    ),
     {
       ..reloading,
       changes: ChangeListLoading(refresh_again=false),
@@ -7542,9 +7664,12 @@ test "a newer review reload fences an older working-tree reply" {
   // flight. It receives its own token without invalidating the HEAD request.
   let (_, reloading) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Present("2:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("2:0"), }],
+    ),
     state,
     ctx,
   )
@@ -7607,9 +7732,12 @@ test "a newer review reload fences an older working-tree reply" {
   // that captured the file just before it disappeared cannot resurrect it.
   let (_, deleted) = update(
     test_emit(),
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Missing, }],
+    ),
     newest,
     ctx,
   )
@@ -7674,7 +7802,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, following_up) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -7706,7 +7834,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=2,
       repository=true,
       head=Some("new-head"),
@@ -7733,7 +7861,7 @@ test "only a final Changes snapshot reconciles reviews and moved HEAD refreshes 
   let (_, refreshed) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       path=file,
       generation=4,
       background=false,
@@ -7785,7 +7913,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
   let (_, refreshed) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -7824,7 +7952,7 @@ test "HEAD refresh restarts the generation-fenced working-tree read" {
   let (_, baseline_ready) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       background=false,
       path=file,
       generation=4,
@@ -7900,7 +8028,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -7937,7 +8065,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, coalesced) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=2,
       repository=true,
       head=None,
@@ -7955,7 +8083,7 @@ test "legacy Changes replies without HEAD refresh baseline-bearing reviews" {
   let (_, refreshed) = update(
     test_emit(),
     GitOriginalLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       path=file,
       generation=4,
       background=true,
@@ -8013,7 +8141,7 @@ test "unborn repository polls do not churn untracked reviews" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -8072,7 +8200,7 @@ test "legacy HEAD omission refreshes a missing baseline once tracking is proven"
   let (_, refreshed) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -8133,7 +8261,7 @@ test "Changes reconciliation preserves the selected duplicate-path row" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8200,7 +8328,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
   let (_, became_deleted) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8239,7 +8367,7 @@ test "moved HEAD normalizes reviewed tabs across the working-file boundary" {
   let (_, became_loading) = update(
     test_emit(),
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -8306,7 +8434,7 @@ test "a changed rename source refreshes its review without moving HEAD" {
   let (_, settled) = update(
     test_emit(),
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -8509,7 +8637,7 @@ test "a parked checkout stops the fallback poll until repair" {
   let (_, settled) = update(
     emit,
     ChangesLoaded(
-      owner=present.owner,
+      owner=present.owner.host().unwrap(),
       generation=restored.changes_generation,
       repository=true,
       head=Some("same-head"),
@@ -8538,7 +8666,7 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   let (_, loaded) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=4,
       repository=true,
       head=None,
@@ -8553,7 +8681,11 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   )
   let (_, failed_refresh) = update(
     emit,
-    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
+    ChangesFailed(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=4,
+      message="git failed",
+    ),
     refreshing,
     hidden,
   )
@@ -8569,7 +8701,11 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   }
   let (_, failed_load) = update(
     emit,
-    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
+    ChangesFailed(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=4,
+      message="git failed",
+    ),
     loading,
     hidden,
   )
@@ -8577,7 +8713,11 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
   assert_true(failed_load.changes is ChangeListIdle)
   let (_, failed_unlatched_load) = update(
     emit,
-    ChangesFailed(owner=test_ctx().owner, generation=4, message="git failed"),
+    ChangesFailed(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=4,
+      message="git failed",
+    ),
     { ..loading, changes: ChangeListLoading(refresh_again=false), },
     hidden,
   )
@@ -8589,10 +8729,12 @@ test "hidden explorer drops coalesced follow-ups when requests settle" {
 test "conversation re-roots retain the change request generation" {
   let state = {
     ..owned_state(),
-    owner: Some({
-      channel: @interop.ChannelId::Remote("previous"),
-      session: "previous-session",
-    }),
+    owner: Some(
+      @interop.Host({
+        channel: @interop.ChannelId::Remote("previous"),
+        session: "previous-session",
+      }),
+    ),
     explorer_mode: ExplorerChanges,
     changes_generation: 7,
   }
@@ -8658,7 +8800,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
   let (_, following_up) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=1,
       repository=true,
       head=None,
@@ -8680,7 +8822,7 @@ test "watcher refresh keeps the ready change snapshot visible" {
   let (_, settled) = update(
     emit,
     ChangesLoaded(
-      owner=test_ctx().owner,
+      owner=test_ctx().owner.host().unwrap(),
       generation=2,
       repository=true,
       head=None,
@@ -8839,7 +8981,7 @@ test "a hidden review accepts its file-only watch without a refresh loop" {
     ..owned_state(),
     explorer_was_visible: false,
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [path],
       directories: [],
@@ -8893,7 +9035,11 @@ test "change-list failures stay isolated from file errors and watcher retries" {
   }
   let (_, failed) = update(
     emit,
-    ChangesFailed(owner=test_ctx().owner, generation=1, message="git failed"),
+    ChangesFailed(
+      owner=test_ctx().owner.host().unwrap(),
+      generation=1,
+      message="git failed",
+    ),
     state,
     test_ctx(),
   )
@@ -8937,15 +9083,20 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   }
   let (_, next) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      // The active file changed: reloaded eagerly, so its document stays
-      // loaded (the baseline the scroll-keeping reload compares against).
-      { path: test_file("a.mbt"), signature: Present("9:0"), },
-      // A background file changed: only marked stale.
-      { path: test_file("b.mbt"), signature: Present("9:0"), },
-      // Deleted: the document flips to the deleted notice state.
-      { path: test_file("c.mbt"), signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[
+        // The active file changed: reloaded eagerly, so its document stays
+        // loaded (the baseline the scroll-keeping reload compares against).
+        { path: test_file("a.mbt"), signature: Present("9:0"), },
+        // A background file changed: only marked stale.
+        { path: test_file("b.mbt"), signature: Present("9:0"), },
+        // Deleted: the document flips to the deleted notice state.
+        { path: test_file("c.mbt"), signature: Missing, },
+      ],
+    ),
     state,
     ctx,
   )
@@ -8963,9 +9114,12 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   solo[test_file("b.mbt")] = loaded_doc("b.mbt")
   let (_, same) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: test_file("b.mbt"), signature: Present("9:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: test_file("b.mbt"), signature: Present("9:0"), }],
+    ),
     { ..next, docs: solo, },
     { ..ctx, active_file: None, },
   )
@@ -8991,9 +9145,12 @@ test "StatsLoaded marks deletions, reloads the active change, stales the rest" {
   }
   let (_, retryable) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: test_file(failed_path.0), signature: Present("10:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: test_file(failed_path.0), signature: Present("10:0"), }],
+    ),
     { ..owned_state(), docs: failed_docs, },
     { ..ctx, active_file: None, },
   )
@@ -9083,13 +9240,18 @@ test "a stat the host could not complete reads as a failed read, never a deletio
   let failed : @protocol.FileSignature = Failed("permission denied")
   let (_, next) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: test_file("a.mbt"), signature: failed, },
-      { path: test_file("b.mbt"), signature: failed, },
-      { path: test_file("c.mbt"), signature: failed, },
-      { path: test_file(gone_path.0), signature: failed, },
-      { path: test_file(reviewed_path.0), signature: failed, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[
+        { path: test_file("a.mbt"), signature: failed, },
+        { path: test_file("b.mbt"), signature: failed, },
+        { path: test_file("c.mbt"), signature: failed, },
+        { path: test_file(gone_path.0), signature: failed, },
+        { path: test_file(reviewed_path.0), signature: failed, },
+      ],
+    ),
     { ..owned_state(), docs, review_generation: 7, },
     ctx,
   )
@@ -9158,9 +9320,12 @@ test "StatsLoaded preserves a settled HEAD preview when its active file disappea
   let docs : Map[@common.Uri, Doc] = Map([(file, doc)])
   let (_, next) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: file, signature: Missing, },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Missing, }],
+    ),
     { ..owned_state(), docs, },
     { ..test_ctx(), open_files: [file], active_file: Some(file), },
   )
@@ -9192,9 +9357,12 @@ test "a deleted document whose file reappears reloads on the next stats" {
   let state = { ..owned_state(), docs, }
   let (_, next) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: test_file("a.mbt"), signature: Present("3:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: test_file("a.mbt"), signature: Present("3:0"), }],
+    ),
     state,
     { ..test_ctx(), open_files: [test_file("a.mbt")], },
   )
@@ -9233,9 +9401,12 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   let ctx = { ..test_ctx(), open_files: [file], active_file: Some(file), }
   let (_, reviewed) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=test_ctx().owner, epoch=0, stats=[
-      { path: file, signature: Present("3:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=test_ctx().owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("3:0"), }],
+    ),
     { ..owned_state(), docs, },
     ctx,
   )
@@ -9267,7 +9438,7 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   let (_, ordinary) = update(
     emit,
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("same-head"),
@@ -9288,9 +9459,12 @@ test "a selected deletion hands a clean restoration to an ordinary read" {
   )
   let (_, reloading) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Present("3:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("3:0"), }],
+    ),
     ordinary,
     ctx,
   )
@@ -9348,7 +9522,7 @@ test "a vanished review retries a failed ordinary read" {
   let (_, ordinary) = update(
     emit,
     ChangesLoaded(
-      owner=ctx.owner,
+      owner=ctx.owner.host().unwrap(),
       generation=1,
       repository=true,
       head=Some("new-head"),
@@ -9370,9 +9544,12 @@ test "a vanished review retries a failed ordinary read" {
   )
   let (_, reloading) = update(
     emit,
-    StatsLoaded(recheck_diagnostics=true, owner=ctx.owner, epoch=0, stats=[
-      { path: file, signature: Present("4:0"), },
-    ]),
+    StatsLoaded(
+      recheck_diagnostics=true,
+      owner=ctx.owner.host().unwrap(),
+      epoch=0,
+      stats=[{ path: file, signature: Present("4:0"), }],
+    ),
     ordinary,
     ctx,
   )
@@ -9580,7 +9757,7 @@ test "sync reconciles the watcher with the panel and its open files" {
   let (_, after_old_failure) = update(
     emit,
     FileWatchFailed(
-      channel=test_ctx().owner.channel,
+      channel=test_ctx().owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(attached_generation),
       message="replaced watcher stopped",
@@ -9628,7 +9805,7 @@ test "watcher failures are visible only in their owning conversation" {
   let (_, failed) = update(
     emit,
     FileWatchFailed(
-      channel=owner.channel,
+      channel=owner.host().unwrap().channel,
       root=test_ctx().test_root(),
       generation=test_ctx().watch_identity(0),
       message="File watching stopped",
@@ -9639,9 +9816,9 @@ test "watcher failures are visible only in their owning conversation" {
   assert_true(failed.watch_error is Some("File watching stopped"))
   let other : @interop.ConversationKey = {
     channel: @interop.ChannelId::Remote("other"),
-    session: owner.session,
+    session: owner.session(),
   }
-  let other_ctx : Ctx = { ..test_ctx(), owner: other, }
+  let other_ctx : Ctx = { ..test_ctx(), owner: @interop.Host(other), }
   let (_, unchanged) = update(
     emit,
     FileWatchFailed(
@@ -9670,7 +9847,7 @@ test "a recursive watcher failure stops retries and refreshes its index" {
       refresh_again=false,
     ),
     watching: Some({
-      owner: ctx.owner,
+      owner: ctx.owner.host().unwrap(),
       root: ctx.test_root(),
       files: [],
       directories: [],
@@ -9681,7 +9858,7 @@ test "a recursive watcher failure stops retries and refreshes its index" {
   let (_, failed) = update(
     emit,
     FileWatchFailed(
-      channel=ctx.owner.channel,
+      channel=ctx.owner.host().unwrap().channel,
       root=ctx.test_root(),
       generation=ctx.watch_identity(generation),
       message="File watching stopped",
@@ -9727,7 +9904,7 @@ test "a settled run retries one failed watcher activation" {
       refresh_again=false,
     ),
     watching: Some({
-      owner: ctx.owner,
+      owner: ctx.owner.host().unwrap(),
       root: ctx.test_root(),
       files: [],
       directories: [],
@@ -9752,7 +9929,7 @@ test "same-root conversation switch fences every old watcher push" {
   let state = {
     ..owned_state(),
     watching: Some({
-      owner: test_ctx().owner,
+      owner: test_ctx().owner.host().unwrap(),
       root: test_ctx().test_root(),
       files: [],
       directories: [@pathx.Relative::root()],
@@ -9761,10 +9938,10 @@ test "same-root conversation switch fences every old watcher push" {
     watch_generation: old_generation,
   }
   let next_owner : @interop.ConversationKey = {
-    channel: test_ctx().owner.channel,
+    channel: test_ctx().owner.host().unwrap().channel,
     session: "desktop-other",
   }
-  let next_ctx : Ctx = { ..test_ctx(), owner: next_owner, }
+  let next_ctx : Ctx = { ..test_ctx(), owner: @interop.Host(next_owner), }
   let (switched, _) = sync(emit, state, next_ctx)
   assert_eq(switched.watch_generation, old_generation + 1)
   assert_true(switched.watching is Some({ owner, .. }) && owner == next_owner)

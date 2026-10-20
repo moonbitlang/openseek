@@ -1,4 +1,5 @@
 import {
+  "openseek_desktop/frontend/cloud",
   "openseek_desktop/frontend/office_capture",
   "openseek_desktop/frontend/pdf_capture",
   "openseek_desktop/frontend/mention_context",

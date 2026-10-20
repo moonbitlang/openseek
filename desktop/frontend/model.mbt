@@ -3760,7 +3760,7 @@ fn Model::conversation_by_pending_steer(
 /// the current task supplies the identity and checkout needed by the host.
 /// Rendering and read acknowledgment must agree on whether it covers a chat.
 fn Model::file_panel_visible(self : Model) -> Bool {
-  !self.cloud_selected() &&
+  (!self.cloud_selected() || file_ctx(self).cloud_files is Some(_)) &&
   self.right_panel_open &&
   (
     self.screen is Chat ||

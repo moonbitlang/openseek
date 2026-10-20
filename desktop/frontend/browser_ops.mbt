@@ -28,7 +28,7 @@ fn open_browser_tab(
   } else {
     @dock.open_browser(model.dock, id)
   }
-  let on_screen = owner == model.dock.owner
+  let on_screen = owner.map(owner => @interop.Host(owner)) == model.dock.owner
   let cmd = if url is Some(url) {
     browser_open(
       dispatch,

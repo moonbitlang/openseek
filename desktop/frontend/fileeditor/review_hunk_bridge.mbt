@@ -35,7 +35,7 @@ fn current_review_hunk_bridge_target(
   guard ctx.active_file is Some(path) &&
     state.docs.get(path) is Some(doc) &&
     doc.review is Some(review) &&
-    state.owner is Some(owner) &&
+    state.owner is Some(@interop.Host(owner)) &&
     doc.visible_diff() is Some((original, modified)) &&
     viewer_state.document == Some(path) &&
     viewer_state.review_diff_inputs == Some((original, modified)) &&

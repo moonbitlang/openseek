@@ -1139,7 +1139,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     stale: false,
   }
   let review_dock = @dock.open_file(
-    { ..bound.dock, owner: Some(owner), },
+    { ..bound.dock, owner: Some(@interop.Host(owner)), },
     review_file,
   )
   let bound = {
@@ -1148,7 +1148,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     dock: review_dock,
     file_panel: {
       ..bound.file_panel,
-      owner: Some(owner),
+      owner: Some(@interop.Host(owner)),
       docs: review_docs,
       changes: ChangeListReady(
         repository=true,
@@ -1184,7 +1184,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     gone.conversation_placement(gone.active())
     is Some(@interop.MissingWorktree(name="wt", ..)),
   )
-  assert_true(file_ctx(gone).owner == owner)
+  assert_true(file_ctx(gone).owner == @interop.Host(owner))
   assert_false(gone.file_panel.review_recovery_pending)
   assert_true(gone.file_panel.placement.is_parked())
   assert_true(
@@ -1216,7 +1216,7 @@ test "a missing checkout stays bound while rebuild and archive remain reachable"
     ),
     gone,
   )
-  assert_true(file_ctx(restored).owner == owner)
+  assert_true(file_ctx(restored).owner == @interop.Host(owner))
   assert_false(restored.file_panel.review_recovery_pending)
   assert_false(restored.file_panel.placement.is_parked())
   assert_eq(restored.file_panel.request_epoch, missing_epoch)
@@ -1301,7 +1301,7 @@ test "a restored workspace conversation waits for placement before using root" {
   assert_true(terminal_ctx(unresolved).placement is None)
   // Placement is a separate typed fence; preserving the real identity lets
   // open review state survive while every host-backed action remains parked.
-  assert_eq(file_ctx(unresolved).owner.session, "desktop-test")
+  assert_eq(file_ctx(unresolved).owner.session(), "desktop-test")
   let generation = unresolved.dev().worktrees_request_generation
   let (_, retrying) = update(dispatch, RetryWorktreePlacement, unresolved)
   assert_eq(retrying.dev().worktrees_request_generation, generation + 1)
@@ -1320,7 +1320,7 @@ test "a restored workspace conversation waits for placement before using root" {
     loaded.conversation_placement(loaded.active())
     is Some(@interop.WorkspaceRoot(..)),
   )
-  assert_eq(file_ctx(loaded).owner.session, "desktop-test")
+  assert_eq(file_ctx(loaded).owner.session(), "desktop-test")
 }
 
 ///|

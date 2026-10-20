@@ -53,7 +53,7 @@ fn State::pending_excel_selection(
     preview.excel_table is Some(_) &&
     self.accepts_office_callback(
       ctx,
-      preview.owner,
+      @interop.Host(preview.owner),
       preview.epoch,
       preview.path,
       preview.sig,

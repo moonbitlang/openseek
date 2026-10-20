@@ -205,6 +205,11 @@ fn update_cloud(
   }
   let next = {
     ..model,
+    dock: if before.epoch != cloud.epoch && before.user_id is Some(account) {
+      @dock.forget_cloud_account(model.dock, account)
+    } else {
+      model.dock
+    },
     screen: if message is @cloud.Create {
       Chat
     } else {
@@ -289,6 +294,22 @@ fn update_cloud(
       _ => next.finish_conversation_rename(rename)
     }
     return (@cmd.batch([command, finish]), next)
+  }
+  if next.cloud_identity() is Some(owner) &&
+    before.user_id == next.cloud.user_id &&
+    before.conversations
+    .get(owner.session())
+    .map_or(false, conversation => conversation.generating) &&
+    next.cloud.conversations
+    .get(owner.session())
+    .map_or(false, conversation => !conversation.generating) {
+    let (refresh, panel) = @fileeditor.update(
+      dispatch.map(msg => FileEditor(msg)),
+      @fileeditor.RunSettled(owner~),
+      next.file_panel,
+      file_ctx(next),
+    )
+    return (@cmd.batch([command, refresh]), { ..next, file_panel: panel, })
   }
   (command, next)
 }

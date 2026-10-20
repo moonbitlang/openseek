@@ -26,8 +26,13 @@ test "editor Search highlights follow the Search inventory visibility boundary" 
     error: None,
   }
   let search = @grep_search.State::empty().handle(
-    @grep_search.Loaded(owner=ctx.owner, root=root.path, generation=0, reply~),
-    ctx.search_input(),
+    @grep_search.Loaded(
+      owner=ctx.owner.host().unwrap(),
+      root=root.path,
+      generation=0,
+      reply~,
+    ),
+    ctx.search_input().unwrap(),
   )
   let visible = { ..owned_state(), explorer_mode: ExplorerSearch, search, }
   guard visible.editor_search_highlights(ctx, file) is Some(highlights) else {

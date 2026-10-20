@@ -31,7 +31,7 @@ pub fn State::accepts_office_region(
     Some(generation) =>
       self.accepts_pdf_callback(
         ctx,
-        request.owner,
+        @interop.Host(request.owner),
         request.epoch,
         request.path,
         request.sig,
@@ -40,7 +40,7 @@ pub fn State::accepts_office_region(
     None =>
       self.accepts_office_callback(
         ctx,
-        request.owner,
+        @interop.Host(request.owner),
         request.epoch,
         request.path,
         request.sig,
@@ -64,6 +64,8 @@ pub fn State::start_office_region(
   ctx : Ctx,
   emit : @cmd.Emit[Msg],
 ) -> (@cmd.Cmd, State) {
+  guard ctx.owner is @interop.Host(owner) else { return (@cmd.none, self) }
+
   guard ctx.panel_open && ctx.active_file is Some(path) else {
     return (@cmd.none, self)
   }
@@ -84,7 +86,7 @@ pub fn State::start_office_region(
   }
   let request : OfficeRegionRequest = {
     id: self.office_region_id + 1L,
-    owner: ctx.owner,
+    owner,
     epoch: self.request_epoch,
     path,
     sig,

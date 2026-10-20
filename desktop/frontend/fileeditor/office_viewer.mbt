@@ -71,7 +71,7 @@ fn office_pinch_command(
 /// conversation and decides how to attach it to a composer.
 fn show_office_document(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   state : State,
   path : @common.Uri,
   document : @office_viewer.RenderedDocument,
@@ -161,7 +161,7 @@ fn office_zoom_preference(
 ///|
 fn office_fit_command(
   dispatch : @cmd.Emit[Msg],
-  owner : @interop.ConversationKey,
+  owner : @interop.ConversationIdentity,
   state : State,
   path : @common.Uri,
   document : @office_viewer.RenderedDocument,

@@ -66,7 +66,7 @@ fn pdf_viewer_toolbar(
     @html.button(
       type_="button",
       class="icon-button pdf-capture-button",
-      disabled=!ready || annotation_pending,
+      disabled=ctx.owner.host() is None || !ready || annotation_pending,
       title=ui(
         locale,
         if annotation_pending {

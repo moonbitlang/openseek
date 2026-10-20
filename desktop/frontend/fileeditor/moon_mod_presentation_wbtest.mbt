@@ -55,7 +55,7 @@ test "package graph replies accept only the current owner epoch path and generat
   )
   let (loading, _) = sync(test_emit(), state, ctx)
   let stale = PackageGraphRequestLoaded(
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch,
     path=test_file(path.0),
     generation=0,
@@ -65,7 +65,7 @@ test "package graph replies accept only the current owner epoch path and generat
   assert_true(after_stale == loading)
 
   let wrong_owner = PackageGraphRequestLoaded(
-    owner={ ..ctx.owner, session: "another-session", },
+    owner={ ..ctx.owner.host().unwrap(), session: "another-session", },
     epoch=ctx.request_epoch,
     path=test_file(path.0),
     generation=1,
@@ -74,7 +74,7 @@ test "package graph replies accept only the current owner epoch path and generat
   let (_, after_wrong_owner) = update(test_emit(), wrong_owner, loading, ctx)
   assert_true(after_wrong_owner == loading)
   let wrong_epoch = PackageGraphRequestLoaded(
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch + 1,
     path=test_file(path.0),
     generation=1,
@@ -83,7 +83,7 @@ test "package graph replies accept only the current owner epoch path and generat
   let (_, after_wrong_epoch) = update(test_emit(), wrong_epoch, loading, ctx)
   assert_true(after_wrong_epoch == loading)
   let wrong_path = PackageGraphRequestLoaded(
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch,
     path=test_file("nested/moon.mod"),
     generation=1,
@@ -93,7 +93,7 @@ test "package graph replies accept only the current owner epoch path and generat
   assert_true(after_wrong_path == loading)
 
   let current = PackageGraphRequestLoaded(
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch,
     path=test_file(path.0),
     generation=1,
@@ -106,7 +106,7 @@ test "package graph replies accept only the current owner epoch path and generat
   )
 
   let late_failure = PackageGraphRequestFailed(
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch,
     path=test_file(path.0),
     generation=1,

@@ -106,6 +106,7 @@ fn State::sync_tree_reveal(
         { ..state, expanded, loading, },
         read_directory(
           dispatch,
+          cloud?=ctx.cloud_files,
           ctx.owner,
           ctx.request_epoch,
           directory,

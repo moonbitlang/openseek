@@ -50,7 +50,7 @@ test "external documents share the document lifecycle without workspace membersh
   let background = { ..ctx, active_file: None, }
   let changed = StatsLoaded(
     recheck_diagnostics=false,
-    owner=ctx.owner,
+    owner=ctx.owner.host().unwrap(),
     epoch=ctx.request_epoch,
     stats=[{ path: file, signature: Present("2:0"), }],
   )

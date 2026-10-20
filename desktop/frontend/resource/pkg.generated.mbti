@@ -14,6 +14,8 @@ pub fn belongs_to(@common.Uri, @interop.ChannelId) -> Bool
 
 pub fn channel(@common.Uri) -> @interop.ChannelId?
 
+pub fn cloud_root(String, String, String) -> @common.Uri?
+
 pub fn contains(@common.Uri, @common.Uri) -> Bool
 
 pub fn join_relative(@common.Uri, @pathx.Relative) -> @common.Uri
